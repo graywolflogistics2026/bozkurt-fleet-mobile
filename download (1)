@@ -1,0 +1,20 @@
+# Legacy → Postgres mapping (quick reference)
+
+| Legacy (localStorage) | New table | Notes |
+|---|---|---|
+| DB.sett | settlements | unique (user, week_ending) |
+| DB.loads | loads | FK → settlements, cascade |
+| DB.fuel.tr / DB.fuel.re | fuel_purchases | fuel_type column; +state for IFTA |
+| DB.ded | deductions | source column encodes withheld vs out-of-pocket |
+| DB.maint | maintenance_records | engine_hours for APU |
+| DB.tolls.ez / dw | tolls | network column |
+| DB.reimb | reimbursements | |
+| DB.docs | documents | + storage_path (file archive) |
+| DB.assets.tr | trucks | multi-truck ready |
+| CAPITAL.draws + extraContributions | capital_transactions | unified; FK cascade replaces hand-coded cleanup |
+| CAPITAL.contribution ($60K) | profiles.initial_capital | |
+| gw_bizbal | profiles.business_balance | |
+| gw_health | truck_health_config.overrides + computed view | baselines derived from maintenance_records |
+| LOANS / CARDS | loans / credit_cards | |
+| BANK_STMTS / CHK_STMTS | bank_statements + bank_transactions | normalized |
+| gw_readonly, gw_autosave | profiles.settings jsonb | per-user now, not per-device |
