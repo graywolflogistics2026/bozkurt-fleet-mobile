@@ -56,6 +56,19 @@
      fleet-wide logic (active-truck context hides the picker and any
      fleet-only UI when count===1), never a separate code path that has to
      be kept in sync with the multi-truck one.
+  8. This app provides ESTIMATES, not tax/legal/financial advice.
+     (a) Every screen showing tax figures (Dashboard tax cards, tax
+     estimator, S-Corp preview, quarterly payments, per diem) must include a
+     persistent small-print line: "Estimates only — not tax advice. Verify
+     with your CPA." (b) UI copy must always say "Estimated" / "~" before
+     tax figures — never present a tax number as definitive. (c) AI Advisor
+     responses get an automatic footer: "General information, not
+     professional tax advice." (d) `profiles.tos_accepted_at`/`tos_version`
+     (docs/SCHEMA.sql, D12) gate all data entry on first launch until Terms
+     of Use are accepted, and re-prompt whenever `tos_version` changes
+     (PROMPTS.md Session 3) — see docs/TERMS_OF_USE_DRAFT.md (attorney-review
+     draft, not itself legal advice) and Settings > Legal (PROMPTS.md
+     Session 10) for the paired Privacy Policy.
 - All Anthropic API calls happen server-side (Supabase Edge Functions).
   The mobile app never holds the API key.
 - The AI extraction prompt in legacy/index.html is battle-tuned. Port it

@@ -121,6 +121,17 @@ No screen should hardcode "the truck" — every truck-scoped query goes
 through this context so Sessions 5/8 can add fleet-wide views later without
 retrofitting this screen (CLAUDE.md invariant: no code path may assume a
 single truck).
+
+**Terms of Use acceptance (owner decision 2026-07-04, D12):** first launch
+must show a full-scroll Terms of Use screen (content from
+docs/TERMS_OF_USE_DRAFT.md once attorney-reviewed) that requires the user to
+scroll to the bottom before an "Accept" button enables; this screen blocks
+all other navigation — no data entry, no auth-skip, until accepted. On
+accept, write `tos_accepted_at = now()` and `tos_version` (a constant bumped
+whenever the Terms change) to `profiles`. On every subsequent launch, compare
+the shipped `tos_version` against the stored one; if they differ (or either
+column is null), re-show the same blocking screen before anything else. This
+is a hard gate, not a dismissable banner — CLAUDE.md invariant #8.
 ```
 
 ## Session 4 — Data layer + one-time migration importer
@@ -400,6 +411,15 @@ Prepare for TestFlight/Play internal testing:
 - Crash reporting (sentry-expo)
 - Empty-state onboarding: first-launch flow that offers "import legacy
   backup" or "start fresh"
+
+**Settings > Legal (owner decision 2026-07-04, D12):** add a "Legal" section
+to Settings showing both documents together — Terms of Use (the same
+content shown/accepted at first launch, Session 3, sourced from
+docs/TERMS_OF_USE_DRAFT.md once attorney-reviewed) and the Privacy Policy
+page from this session — each as its own screen, plus the accepted
+`tos_version`/`tos_accepted_at` timestamp for the user's own reference. This
+is a read-only re-display, not a re-acceptance flow (re-acceptance only
+triggers automatically on version bump, per Session 3).
 ```
 
 ---

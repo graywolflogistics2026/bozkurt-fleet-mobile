@@ -1,6 +1,7 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-03): everything below has been run against the live DB.**
+**STATUS (2026-07-04): everything below (sections 1-5) has been run against
+the live DB.**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
 (re-)run to fold all of this into a proper follow-up migration file. When
@@ -196,6 +197,22 @@ create index on household_income (user_id, tax_year);
 
 - [x] household_members table + RLS run
 - [x] household_income table + RLS + index run
+
+## 5. Terms of Use acceptance (D12, docs/SCHEMA.sql) — ✅ APPLIED
+
+```sql
+alter table profiles
+  add column tos_accepted_at timestamptz,
+  add column tos_version     text;
+```
+
+No RLS change needed — `profiles` is already owner-scoped. `tos_accepted_at`
+NULL means the user has never accepted (first-launch flow in PROMPTS.md
+Session 3 must block all data entry until both columns are set); the app
+re-prompts and overwrites both columns whenever the shipped `tos_version`
+changes.
+
+- [x] 5a run (add tos_accepted_at, tos_version to profiles)
 
 ---
 

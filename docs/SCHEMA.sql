@@ -14,6 +14,11 @@ create table profiles (
   business_balance numeric(12,2) default 60000,  -- was gw_bizbal
   initial_capital  numeric(12,2) default 60000,  -- was CAPITAL.contribution
   settings     jsonb default '{}',           -- autosave, view_only, etc.
+  -- Terms of Use acceptance (added 2026-07-04, D12) — set on first-launch
+  -- acceptance and re-set whenever tos_version changes (PROMPTS.md Session 3).
+  -- NULL means "never accepted" and must block data entry.
+  tos_accepted_at timestamptz,
+  tos_version     text,
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );
@@ -436,4 +441,13 @@ create table bank_transactions (
 --        ai-import 'w2' docType. See that table's comment above (right
 --        after `documents`, which household_income.document_id references)
 --        and docs/DATA_MODEL.md.
+--   D12. (added 2026-07-04) Legal disclaimers & Terms of Use: this app
+--        produces ESTIMATES, not tax/legal/financial advice — every tax
+--        figure surfaced anywhere in the UI must say so (CLAUDE.md).
+--        profiles gets tos_accepted_at/tos_version so first-launch (PROMPTS.md
+--        Session 3) can require scrolling + accepting Terms of Use before any
+--        data entry, and re-prompt whenever tos_version changes. SQL applied
+--        live 2026-07-04 — see docs/PENDING_SQL.md section 5.
+--        See docs/TERMS_OF_USE_DRAFT.md (attorney-review draft) and
+--        PROMPTS.md Session 10 (Settings > Legal pairs ToS + Privacy Policy).
 -- ============================================================================
