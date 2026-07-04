@@ -398,6 +398,46 @@ Port the remaining features from legacy in priority order:
 5. Settings: profile/business info, view-only mode per device, export JSON
 Then a full audit session: run through docs/FEATURE_INVENTORY.md and produce
 PARITY.md marking each legacy feature done/partial/missing.
+
+**DESIGN NOTE (owner decision 2026-07-04, not implemented until this
+session): responsive layout — phone bottom tabs, wide-screen sidebar.**
+The (tabs) bottom bar (Session 3) is right for phones but wrong for tablet
+landscape and web/desktop, where legacy/index.html uses a persistent
+200px-wide left `#sidebar` (legacy/index.html:14,113-148). At a breakpoint
+(e.g. `useWindowDimensions().width >= 768`, matching legacy's `#sidebar`
+being a fixed-width flex sibling of `#main` rather than a bottom bar),
+switch from the Tabs navigator to a left sidebar nav — keep the exact same
+section grouping, order, and icon-to-item mapping as legacy's sidebar so
+users who know the web app aren't relearning navigation:
+- **Overview** — Dashboard (grid/four-squares icon)
+- **Revenue** — Loads (truck/trailer icon), Settlements (file icon),
+  Reimbursements (vertical-line/zigzag icon)
+- **Expenses** — Fuel (fuel pump icon), Maintenance (wrench icon),
+  Tolls & Fees (circle/line icon), Deductions (circle/line icon — legacy
+  reuses the tolls icon here verbatim, not a typo)
+- **Business** — Assets (building/shelves icon), Capital Account
+  (circle/dollar icon), Operating P&L (bar-chart icon)
+- **Intelligence** — Truck Health (heartbeat/zigzag icon), Cash Flow
+  (vertical-line/zigzag icon — same icon as Reimbursements, verbatim),
+  Scorecard (circle icon), Loan Center (card icon), Credit Cards (card
+  icon — same as Loan Center, verbatim), Bank Statement (file-with-lines
+  icon)
+- **Tools** — Asset Register (building/shelves icon — same as Assets,
+  verbatim), Accountant Pkg (file icon — same as Settlements, verbatim),
+  AI Advisor (circle/chat-bubble icon), Tax Estimator (file icon)
+- **System** — Settings (gear icon)
+
+Port each icon from its inline SVG in legacy/index.html (react-native-svg
+`<Path>` equivalents of the same `d`/shape attributes — don't redraw from
+scratch) rather than substituting a different icon set, so the visual
+vocabulary matches the legacy app exactly. The sidebar's own logo header
+("🐺 Bozkurt Fleet OS / Graywolf Logistics LLC"), user footer (initials
+avatar + name + company), and version string
+(legacy/index.html:114,146-147) should appear at the top/bottom of the
+wide-screen sidebar too. On phones, nothing changes from Session 3 — this
+is purely an additional wide-screen presentation of the same route tree,
+not a second set of screens to keep in sync (same invariant spirit as the
+active-truck n=1 rule: one navigation data source, two presentations).
 ```
 
 ## Session 10 — Store readiness (when you're ready to ship)
