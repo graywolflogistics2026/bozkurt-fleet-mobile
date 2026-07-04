@@ -279,6 +279,23 @@ replace it), the year-fallback
 banner (current year missing/unpublished → falls back to latest published),
 per-diem day counting, and CPM math using fixtures extracted from legacy
 logic.
+
+**BINDING UX DECISION (owner, 2026-07-04) — Dashboard is the hub.** Every
+stat card/section built above must be tappable and navigate to its detail
+screen, not just display a number:
+- Capital Account strip → Capital Account (already specified as tappable
+  above — this generalizes it to every other card)
+- Tax row cards (Est. Total Tax, Quarterly Payment, Weekly Tax Reserve,
+  Effective Rate) → Tax Estimator
+- Truck Health summary/alerts → Truck Health tab
+- Recent loads list → Cash Flow (or a future Loads detail screen once
+  built)
+- Business Balance card → the bank/loans area (Cash Flow / Loan Center)
+Add a visible chevron (›) affordance on every tappable card so it reads as
+navigable, not just informational. This is deliberate: with the Dashboard
+as a complete hub, most users should rarely need the More tab (see Session
+3's tab bar and Session 9's More-tab regrouping) — More exists for
+completeness, not as the primary way to reach these screens.
 ```
 
 ## Session 6 — Camera + AI import flow
@@ -437,7 +454,30 @@ avatar + name + company), and version string
 wide-screen sidebar too. On phones, nothing changes from Session 3 — this
 is purely an additional wide-screen presentation of the same route tree,
 not a second set of screens to keep in sync (same invariant spirit as the
-active-truck n=1 rule: one navigation data source, two presentations).
+active-truck n=1 rule: one navigation data source, two presentations). The
+phone tab bar's raised center Import button (below) is a phone-only
+affordance — the sidebar has no equivalent raised button; Import just
+appears as a normal Revenue-adjacent item in its ordered position (there
+isn't one in legacy's own grouping above, since legacy has no separate
+Import page — add it under **Revenue**, first item, since importing a
+settlement/receipt is the highest-frequency action per the Session 3/5
+decisions below).
+
+**BINDING UX DECISIONS (owner, 2026-07-04) — carried over from Session 3
+(tab bar, implemented) and Session 5 (Dashboard-as-hub), regrouping the
+More tab as part of this session's polish pass:**
+1. Tab bar: Dashboard · Deductions · **[+ Import]** (raised circular center
+   button — importing receipts/documents is the most frequent action) ·
+   Truck Health · More.
+2. Dashboard is the hub: every stat card/section is tappable (chevron
+   affordance) and navigates to its detail screen. Most users should
+   rarely need the More tab.
+3. More tab: replace the flat menu list from Session 3 with grouped,
+   icon-labeled sections:
+   - **Money** — Capital Account, Cash Flow, Loans
+   - **Truck** — Maintenance
+   - **System** — Settings, Legal (Terms of Use + Privacy Policy, Session
+     10's Settings > Legal)
 ```
 
 ## Session 10 — Store readiness (when you're ready to ship)

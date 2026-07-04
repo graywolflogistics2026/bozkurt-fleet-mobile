@@ -1,12 +1,16 @@
 import { Text, type ColorValue } from 'react-native';
 import { Tabs } from 'expo-router';
 import { TruckSwitcher } from '@/src/components/TruckSwitcher';
+import { CenterImportButton } from '@/src/components/CenterImportButton';
 import { colors } from '@/src/theme';
 
 function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
   return <Text style={{ fontSize: 20, color }}>{emoji}</Text>;
 }
 
+// Tab order (owner decision 2026-07-04): Dashboard · Deductions ·
+// [+ Import] (raised center button — importing is the most frequent
+// action) · Truck Health · More. See PROMPTS.md Sessions 5/9.
 export default function TabsLayout() {
   return (
     <Tabs
@@ -24,12 +28,15 @@ export default function TabsLayout() {
         options={{ title: 'Dashboard', tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} /> }}
       />
       <Tabs.Screen
-        name="import"
-        options={{ title: 'Import', tabBarIcon: ({ color }) => <TabIcon emoji="📥" color={color} /> }}
-      />
-      <Tabs.Screen
         name="deductions"
         options={{ title: 'Deductions', tabBarIcon: ({ color }) => <TabIcon emoji="🧾" color={color} /> }}
+      />
+      <Tabs.Screen
+        name="import"
+        options={{
+          title: 'Import',
+          tabBarButton: (props) => <CenterImportButton {...props} />,
+        }}
       />
       <Tabs.Screen
         name="truck-health"
