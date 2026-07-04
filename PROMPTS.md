@@ -420,6 +420,14 @@ page from this session — each as its own screen, plus the accepted
 `tos_version`/`tos_accepted_at` timestamp for the user's own reference. This
 is a read-only re-display, not a re-acceptance flow (re-acceptance only
 triggers automatically on version bump, per Session 3).
+
+**Pre-launch checklist:**
+- [ ] Re-enable "Confirm email" in Supabase Auth settings (Authentication >
+      Providers > Email). It was disabled during Session 3 development
+      (2026-07-04) to unblock sign-up/sign-in testing after email
+      rate-limiting corrupted a test auth user — this must be back on
+      before real users can create accounts, otherwise anyone can sign up
+      with an unowned email address.
 ```
 
 ---

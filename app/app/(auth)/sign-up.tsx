@@ -36,6 +36,7 @@ export default function SignUp() {
         onChangeText={setEmail}
         keyboardType="email-address"
         autoComplete="email"
+        autoCorrect={false}
         style={{ marginTop: 16 }}
       />
       <Field

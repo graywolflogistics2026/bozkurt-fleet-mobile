@@ -30,13 +30,13 @@ export function LegalFootnote({ children }: { children?: React.ReactNode }) {
   );
 }
 
-export function Field(props: TextInputProps) {
+export function Field({ style, ...props }: TextInputProps) {
   return (
     <TextInput
       placeholderTextColor={colors.muted}
-      style={styles.field}
       autoCapitalize="none"
       {...props}
+      style={[styles.field, style]}
     />
   );
 }
