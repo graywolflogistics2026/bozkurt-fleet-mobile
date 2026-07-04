@@ -1,0 +1,439 @@
+-- ============================================================================
+-- Bozkurt Fleet OS — Draft Postgres Schema (for review BEFORE Session 1)
+-- Derived 1:1 from the legacy localStorage model in legacy/index.html
+-- Every table: RLS enabled, user_id = auth.uid() policies (added in migration)
+-- ============================================================================
+
+-- ---------- Identity & profile ----------
+-- auth.users comes from Supabase Auth. profiles extends it.
+create table profiles (
+  user_id      uuid primary key references auth.users on delete cascade,
+  company_name text default 'Graywolf Logistics LLC',
+  owner_name   text,
+  home_state   text default 'TX',
+  business_balance numeric(12,2) default 60000,  -- was gw_bizbal
+  initial_capital  numeric(12,2) default 60000,  -- was CAPITAL.contribution
+  settings     jsonb default '{}',           -- autosave, view_only, etc.
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now()
+);
+
+-- ---------- Tax config (NEW, owner decision 2026-07-03) ----------
+-- filing_status moves here from profiles (see docs/DATA_MODEL.md) — the tax
+-- engine is product-ready, not single-user: tax_year picks which row of
+-- tax_year_data (below) this user's estimate is computed against, and the
+-- state/include_state_tax pair drives that row's state_tax jsonb (see
+-- PROMPTS.md Session 5) instead of assuming TX/no-state-tax for everyone.
+-- entity_type (added 2026-07-03, D8): 'sole_prop' and 'smllc' share the exact
+-- legacy math (Schedule C net-pay model, 15.3% SE tax on full net profit,
+-- tax-free draws up to basis) — smllc is a UI label only, never a branch in
+-- the tax math. 'scorp' branches the model: SE tax applies only to
+-- scorp_salary (via payroll, outside this app), remaining profit is
+-- distributions with NO SE tax; federal income tax brackets still apply the
+-- same way to total income. scorp_payroll_tax_handled is a plain
+-- acknowledgement flag ("yes, my payroll provider files 941/940s") shown
+-- next to the required "this app estimates, not files — get a CPA/payroll
+-- provider" notice; it does not change any calculation.
+create table tax_config (
+  user_id             uuid primary key references auth.users on delete cascade,
+  tax_year            int not null default 2026,
+  filing_status        text not null default 'mfj'
+                       check (filing_status in ('single','mfj','hoh')),
+  state                text not null default 'TX',
+  include_state_tax    boolean not null default true,
+  entity_type          text not null default 'sole_prop'
+                       check (entity_type in ('sole_prop','smllc','scorp')),
+  scorp_salary                numeric(12,2),        -- only meaningful when entity_type='scorp'
+  scorp_payroll_tax_handled   boolean default false  -- owner-attested, not verified
+);
+
+-- ---------- Tax year data (NEW, owner decision 2026-07-03, D10) ----------
+-- Server-side, centrally-updatable source of truth for every tax constant —
+-- REPLACES the earlier "app/src/tax/brackets/{year}.ts bundled in the app"
+-- approach (see CLAUDE.md invariant: no tax constant may live in app code).
+-- NOT user-scoped: one row per tax year, shared by every user. RLS is
+-- readable by all authenticated users; writable ONLY by service_role (an
+-- admin seeds/updates it via the Supabase SQL editor — see
+-- docs/ADMIN_RUNBOOK.md). The app fetches the current year's row on launch,
+-- caches it locally for offline use (PROMPTS.md Session 4), and falls back
+-- to the latest published row if the current year is missing/unpublished.
+create table tax_year_data (
+  tax_year            int primary key,
+  federal_brackets    jsonb not null,   -- {mfj:[[lo,hi,rate],...], single:[...], hoh:[...]}
+  standard_deduction  jsonb not null,   -- {mfj:30000, single:15000, hoh:22500}
+  se_tax              jsonb not null,   -- {rate:0.153, factor:0.9235, ss_wage_base:<verify each year>}
+  per_diem            jsonb not null,   -- {daily_rate:64, deductible_pct:100}
+  quarterly_deadlines jsonb not null,   -- [["Q1","2026-04-15"],["Q2","2026-06-15"],...]
+  state_tax           jsonb not null,   -- {no_tax:[...], flat:{...}, bracket:{...}, fallback_effective_rate:...}
+  published           boolean not null default false,  -- app ignores unpublished rows (see fallback above)
+  notes               text,
+  created_at          timestamptz default now(),
+  updated_at          timestamptz default now()
+);
+-- 2026 seed values (verbatim from legacy calcTax): federal_brackets.mfj/single/hoh
+-- use legacy's two bracket arrays (single === hoh, matching legacy's own
+-- simplification — do not "fix" that here either); standard_deduction
+-- {mfj:30000, single:15000, hoh:22500}; se_tax {rate:0.153, factor:0.9235} —
+-- legacy applies this UNCAPPED (no ss_wage_base cutoff), so ss_wage_base is
+-- carried in the schema for future years but must NOT change year-1 math
+-- unless the owner explicitly asks for the cap to be applied;
+-- per_diem {daily_rate:64, deductible_pct:100}; quarterly_deadlines the four
+-- 2026 IRS dates already in legacy. LIVE STATUS (2026-07-03): the 2026 row
+-- has been run, state_tax verified (SS wage base 184500; flat states incl.
+-- NC 3.99%, GA 4.99%, UT 4.45%, OH 2.75%/$26,050 exemption; CA per official
+-- FTB 2025 Schedule X/Y/Z; fallback_effective_rate 0.045), and published =
+-- true. See docs/ADMIN_RUNBOOK.md for the verified figures as the reference
+-- example, and docs/PENDING_SQL.md for the applied INSERT.
+
+-- ---------- Trucks (multi-truck ready; you have 1 today, "2. asset" gelince hazır) ----------
+create table trucks (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  unit_number  text,                          -- '830157'
+  vin          text,
+  year int, make text, model text,            -- 2023 International LT
+  engine       text,                          -- 'A26 12.4L'
+  current_odometer int,
+  fleet_mpg    numeric(4,1) default 8.9,
+  apu_hours    int,                           -- TriPac Evolution
+  is_active    boolean default true,
+  created_at   timestamptz default now()
+);
+
+-- ---------- Documents (archive + duplicate detection; was DB.docs) ----------
+create table documents (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  filename     text,
+  doc_type     text,                          -- settlement|fuel|maintenance|store|toll|loan|bankstmt|checking|other
+  doc_date     date,                          -- the document's OWN date
+  amount       numeric(12,2),
+  storage_path text,                          -- Supabase Storage: {month}/Payroll/Week-2/...
+  parsed_json  jsonb,                         -- D3: full raw AI extraction (audit trail, re-processable)
+  imported_at  timestamptz default now()
+);
+create index on documents (user_id, doc_type, doc_date, amount);  -- duplicate check
+
+-- ---------- Household (NEW, owner decision 2026-07-03, D11) ----------
+-- Supports the household side of the tax estimator (legacy calcTax's
+-- "Spouse Income" field) in a multi-tenant-ready way, and pairs with the
+-- ai-import 'w2' docType (supabase/functions/ai-import/index.ts): an
+-- imported W-2 can be attached to a household_income row via document_id.
+-- household_members holds each person in the filer's household whose
+-- income feeds the estimate (today: mainly 'spouse', for MFJ households —
+-- 'child'/'other' are allowed for future dependent-income edge cases but
+-- aren't used by the estimator yet). household_income is one row per
+-- member per tax_year per income source; income_type defaults to
+-- 'w2_wages' (what the w2 docType produces) with 'self_employment'/'other'
+-- for manual entries the estimator doesn't yet have a dedicated import for.
+create table household_members (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users on delete cascade,
+  name       text not null,
+  relation   text not null check (relation in ('spouse','child','other')),
+  created_at timestamptz default now()
+);
+
+create table household_income (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users on delete cascade,
+  member_id        uuid not null references household_members on delete cascade,
+  tax_year         int not null default 2026,
+  income_type      text not null default 'w2_wages'
+                   check (income_type in ('w2_wages','self_employment','other')),
+  annual_amount    numeric(12,2) not null default 0,
+  federal_withheld numeric(12,2) not null default 0,
+  document_id      uuid references documents on delete set null,
+  created_at       timestamptz default now()
+);
+create index on household_income (user_id, tax_year);
+
+-- ---------- Settlements (was DB.sett) ----------
+create table settlements (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  truck_id     uuid references trucks,
+  document_id  uuid references documents,
+  week_ending  date not null,
+  gross        numeric(12,2) not null default 0,
+  net          numeric(12,2) not null default 0,
+  miles        int default 0,
+  created_at   timestamptz default now(),
+  unique (user_id, week_ending)               -- one settlement per week
+);
+
+-- ---------- Loads (was DB.loads; feeds best/worst lane analysis) ----------
+create table loads (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users,
+  settlement_id uuid references settlements on delete cascade,
+  load_date     date,
+  order_number  text,
+  origin        text,
+  destination   text,
+  loaded_miles  int default 0,
+  empty_miles   int default 0,
+  revenue       numeric(12,2) default 0
+);
+
+-- ---------- Fuel (was DB.fuel.tr / DB.fuel.re; +state = IFTA-ready) ----------
+create table fuel_purchases (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  settlement_id uuid references settlements on delete cascade,  -- D6: matches legacy deleteSett()
+  fuel_type    text not null check (fuel_type in ('tractor','reefer')),
+  purchase_date date,
+  location     text,
+  state        text,                          -- NEW: 2-letter code → IFTA quarterly report
+  gallons      numeric(8,3),
+  amount       numeric(12,2),
+  discount     numeric(12,2) default 0
+);
+
+-- ---------- Deductions (was DB.ded — the tax heart) ----------
+create table deductions (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  settlement_id uuid references settlements on delete cascade,  -- set for withheld items
+  document_id  uuid references documents on delete set null,
+  ded_date     date,
+  code         text,                          -- EQUIP|LEGAL|INS|LIC|OTHER|...
+  description  text,
+  amount       numeric(12,2) not null,
+  category     text,                          -- Software & Subscriptions | Legal & Accounting Fees | ...
+  store        text,
+  payment_method text,                        -- Business Credit|Business Debit|Personal Card|Cash|Settlement Withheld
+  source       text default 'manual'          -- settlement|import|manual
+                check (source in ('settlement','import','manual')),
+  created_at   timestamptz default now()
+);
+-- Tax rule (net-pay model): deductible = rows where source != 'settlement'.
+-- Withheld rows are display-only; already reflected in settlements.net.
+
+-- ---------- Capital transactions (UNIFIED: was CAPITAL.draws + extraContributions) ----------
+create table capital_transactions (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  tx_type      text not null check (tx_type in ('contribution','draw')),
+  amount       numeric(12,2) not null,
+  tx_date      date not null,
+  note         text,
+  linked_deduction_id uuid references deductions on delete cascade,
+  -- ^ personal-payment purchases: contribution auto-created, cascades on delete.
+  --   Postgres FK does the cascade the web app had to hand-code. NULL for manual draws.
+  created_at   timestamptz default now()
+);
+-- Tax-free remaining = profiles.initial_capital + sum(contributions) - sum(draws)
+
+-- ---------- Maintenance (was DB.maint; feeds Truck Health) ----------
+create table maintenance_records (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  truck_id     uuid references trucks,
+  document_id  uuid references documents on delete set null,
+  service_date date,
+  service_type text,                          -- oil|fuel|dpf|def|coolant_ext|coolant|trans|diff|airfilter|airdryer|chassis|apu|valve|general|repair
+  description  text,
+  odometer     int,
+  engine_hours int,                           -- APU services
+  cost         numeric(12,2) default 0,
+  vendor       text,
+  invoice_number text
+);
+
+-- ---------- Maintenance intervals (per-truck, user-editable — NEW, owner decision 2026-07-03) ----------
+-- Every truck is different; each owner tunes their own service schedule. The legacy
+-- JS constants (oil 50,000 mi fixed; fuel filter bundled with oil; DPF mpg-tiered;
+-- trans 500k synthetic/250k conventional; diff 500k synthetic/100k conventional;
+-- air filter 100k; air dryer 250k; chassis 30k; APU 2,000 engine hrs; coolant extender
+-- 300k / full replace 600k; DEF filter 300k) become SEED DEFAULTS copied into this table
+-- when a truck row is created (app-level insert or an AFTER INSERT trigger on trucks —
+-- decide in Session 1). From then on every row is a plain user-editable setting; there
+-- are no interval constants left in application code.
+create table maintenance_intervals (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users,
+  truck_id      uuid not null references trucks on delete cascade,
+  category      text not null,                 -- oil|fuel|dpf|def|coolant_ext|coolant|trans|diff|airfilter|airdryer|chassis|apu|valve|general
+  tracking_mode text not null default 'miles'
+                check (tracking_mode in ('miles','hours','mpg_based')),
+  interval_miles int,                           -- used when tracking_mode in ('miles','mpg_based')
+  interval_hours int,                           -- used when tracking_mode = 'hours' (APU only, today)
+  bundled_with_category text,                   -- e.g. the 'fuel' row has bundled_with_category='oil':
+                                                 -- always serviced together, so its baseline also
+                                                 -- advances from 'oil' maintenance_records even when
+                                                 -- no 'fuel' record was ever logged (was
+                                                 -- MAINT_BUNDLE_MAP in legacy JS)
+  enabled       boolean not null default true,  -- false hides the category from Truck Health
+                                                 -- entirely (e.g. an owner who doesn't track Valve Lash)
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now(),
+  unique (truck_id, category)
+);
+-- Seed defaults for a new truck (ported 1:1 from legacy/index.html, mpg_based rows resolved
+-- against the truck's fleet_mpg at creation time using the same tiers as legacy dpfMi()):
+--   oil          miles  50000                              hrs:-
+--   fuel         miles  50000   bundled_with_category='oil'
+--   dpf          mpg_based  350000/500000/600000 (mpg <5.5 / <6.5 / >=6.5 at creation time)
+--   def          miles  300000
+--   coolant_ext  miles  300000
+--   coolant      miles  600000
+--   trans        miles  500000  (synthetic default; 250000 if the owner runs conventional fluid)
+--   diff         miles  500000  (synthetic default; 100000 if conventional)
+--   airfilter    miles  100000
+--   airdryer     miles  250000
+--   chassis      miles  30000
+--   apu          hours  2000    tracking_mode='hours'
+-- Fluid-type (synthetic/conventional) is no longer a separate stored flag — it's just
+-- reflected directly in whatever interval_miles the owner sets for trans/diff.
+
+-- ---------- Truck health config (was gw_health; MANUAL BASELINE overrides only) ----------
+-- Interval LENGTHS now live entirely in maintenance_intervals (above) — this table no
+-- longer stores anything interval-related (no fluid-type flag, no interval overrides).
+-- It exists only for a manual "I know this was actually last serviced at odometer X /
+-- hour Y" baseline override when no matching maintenance_records row exists to derive
+-- it from (e.g. legacy's hardcoded chassis-lube floor at a specific odometer reading —
+-- that becomes one explicit override row here instead of a code constant).
+create table truck_health_config (
+  truck_id     uuid primary key references trucks on delete cascade,
+  user_id      uuid not null references auth.users,
+  overrides    jsonb default '{}',            -- { "<category>": { "odometer": n } | { "hours": n } }
+  updated_at   timestamptz default now()
+);
+
+-- ---------- Tolls (was DB.tolls.ez / DB.tolls.dw) ----------
+create table tolls (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  network      text check (network in ('ezpass','drivewyze','other')),
+  toll_date    date,
+  amount       numeric(12,2),
+  plaza        text
+);
+
+-- ---------- Reimbursements (was DB.reimb) ----------
+create table reimbursements (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  reimb_date   date,
+  description  text,
+  reference    text,
+  amount       numeric(12,2)
+);
+
+-- ---------- Loans & credit cards (was LOANS / CARDS) ----------
+create table loans (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  name         text, lender text,
+  original_amount numeric(12,2), balance numeric(12,2),
+  payment      numeric(12,2), frequency text, apr numeric(5,2),
+  next_due     date
+);
+
+create table credit_cards (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  name         text, last_four text,
+  credit_limit numeric(12,2), balance numeric(12,2),
+  apr numeric(5,2), due_day int
+);
+
+-- ---------- Bank & checking statements (was BANK_STMTS / CHK_STMTS, normalized) ----------
+create table bank_statements (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users,
+  account_type text check (account_type in ('card','checking')),
+  statement_month text,                       -- 'June 2026'
+  document_id  uuid references documents on delete set null,
+  unique (user_id, account_type, statement_month)   -- month-level duplicate guard
+);
+
+create table bank_transactions (
+  id           uuid primary key default gen_random_uuid(),
+  statement_id uuid not null references bank_statements on delete cascade,
+  user_id      uuid not null references auth.users,
+  tx_date      date,
+  description  text,
+  category     text,
+  tx_type      text check (tx_type in ('charge','payment','deposit','withdrawal')),
+  amount       numeric(12,2),
+  deductible   boolean default false
+);
+
+-- ============================================================================
+-- DECISIONS (final — 2026-07-03, owner-approved):
+--   D1. IFTA: fuel_purchases.state stays; AI import extracts state from fuel
+--       receipts/settlement fuel lines from day one. IFTA quarterly report
+--       becomes a Phase-3 feature reading this column.
+--   D2. Truck health baselines are COMPUTED from maintenance_records
+--       (highest-odometer-wins, with bundled_with_category cascading e.g.
+--       oil → fuel) via a view/function; only baseline overrides with no
+--       backing maintenance record live in truck_health_config.overrides.
+--       Interval LENGTHS are per-truck, user-editable rows in
+--       maintenance_intervals, seeded from the legacy constants when a truck
+--       is created (owner decision 2026-07-03 — see that table's comment).
+--       The health view/function reads: maintenance_intervals (enabled rows
+--       only) joined to the computed maintenance_records baseline (falling
+--       back to truck_health_config.overrides when no record exists) to
+--       produce remaining-life per category. Single source of truth for
+--       intervals; no interval constants remain in application code.
+--   D3. documents.parsed_json (jsonb) stores the FULL raw AI extraction for
+--       every import (settlements and all other types reference it via
+--       document_id) — full audit trail, re-processable if logic improves.
+--   D4. Multi-truck from day one: truck_id on settlements, maintenance,
+--       fuel, health. UI shows a truck picker only when count > 1.
+--   D5. Backups: JSON snapshots to a private Storage bucket `backups/`
+--       (one per import + daily), NOT a database table.
+--   D6. (added 2026-07-03, amends the original draft) fuel_purchases
+--       .settlement_id is ON DELETE CASCADE, not SET NULL — matches legacy's
+--       deleteSett(), which hard-deletes that week's fuel rows along with the
+--       settlement ("this import was wrong, remove everything it created").
+--       SET NULL would leave orphaned fuel rows that double-count in fuel
+--       totals and CPM. Storage path convention is also finalized:
+--       `{user_id}/{month}/Payroll/Week-N/...` and
+--       `{user_id}/{month}/Equipment-Deductions/{store}/...` — see CLAUDE.md.
+--   D7. (added 2026-07-03) Tax engine made product-ready, not single-user:
+--       profiles.filing_status moves to a new tax_config table (tax_year,
+--       filing_status, state, include_state_tax) so the estimator can be
+--       re-run per year and against per-year data (see PROMPTS.md Session 5
+--       and CLAUDE.md). Federal brackets/deadlines move out of
+--       profiles/app code entirely into versioned per-year data — superseded
+--       by D10 below, which moves that data server-side into tax_year_data
+--       instead of an app-bundled module.
+--   D8. (added 2026-07-03) tax_config gets entity_type (sole_prop|smllc|
+--       scorp) + scorp_salary + scorp_payroll_tax_handled. sole_prop/smllc
+--       are the SAME computation path (legacy math, unchanged) — smllc is
+--       purely a UI label. scorp branches SE tax to apply only to
+--       scorp_salary, with the remainder as SE-tax-free distributions; the
+--       Capital Account page relabels draws as "Distributions" for scorp
+--       users. See PROMPTS.md Sessions 5 & 7 and CLAUDE.md.
+--   D9. (added 2026-07-03) Fleet scalability (1→100 trucks) needed NO schema
+--       change — truck_id already flows through settlements, fuel,
+--       maintenance, and health (D4). The gap was entirely in the app layer:
+--       an active-truck context, per-truck vs. fleet-wide dashboard stats,
+--       and truck matching during import. See PROMPTS.md Sessions 3/5/8 and
+--       the new CLAUDE.md invariant (no code path may assume a single truck).
+--   D10. (added 2026-07-03) Tax data made centrally updatable, supersedes the
+--        "app/src/tax/brackets/{year}.ts bundled module" part of D7: a new
+--        tax_year_data table (NOT user-scoped — one row per year, shared)
+--        holds every tax constant (federal brackets, standard deduction,
+--        SE-tax rate/factor, per diem, quarterly deadlines, state tax
+--        tables), readable by all authenticated users, writable only by
+--        service_role. An admin seeds/updates it directly in the Supabase
+--        SQL editor (docs/ADMIN_RUNBOOK.md) — no app release needed to roll
+--        over to a new tax year or correct a figure. The app fetches +
+--        caches the current year's row and falls back to the latest
+--        published year with a banner if the current year isn't published
+--        yet (see PROMPTS.md Sessions 4/5 and CLAUDE.md).
+--        LIVE (2026-07-03): the 2026 row has been run and published=true,
+--        with state_tax verified (see docs/ADMIN_RUNBOOK.md for the figures
+--        used as the reference example for future years).
+--   D11. (added 2026-07-03, applied retroactively — the SQL had already been
+--        run live before it was documented here) household_members +
+--        household_income: supports the household side of the tax estimator
+--        (legacy calcTax's "Spouse Income" field) and pairs with the
+--        ai-import 'w2' docType. See that table's comment above (right
+--        after `documents`, which household_income.document_id references)
+--        and docs/DATA_MODEL.md.
+-- ============================================================================
