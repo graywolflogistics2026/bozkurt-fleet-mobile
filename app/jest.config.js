@@ -8,7 +8,11 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: ['<rootDir>/src/tax/**/*.test.ts', '<rootDir>/src/stats/**/*.test.ts'],
+  testMatch: [
+    '<rootDir>/src/tax/**/*.test.ts',
+    '<rootDir>/src/stats/**/*.test.ts',
+    '<rootDir>/src/import/**/*.test.ts',
+  ],
   // Mirrors tsconfig.json's "@/*" path alias — ts-jest doesn't read tsconfig
   // paths for module resolution on its own.
   moduleNameMapper: {

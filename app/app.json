@@ -34,7 +34,19 @@
           "backgroundColor": "#0f1117"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Bozkurt Fleet OS uses your camera to photograph settlements, receipts, and maintenance invoices for AI-assisted import."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Bozkurt Fleet OS accesses your photo library so you can import a saved photo of a settlement, receipt, or invoice."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

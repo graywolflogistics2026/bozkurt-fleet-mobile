@@ -185,6 +185,9 @@ create table loads (
 create table fuel_purchases (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users,
+  truck_id     uuid references trucks,  -- added retroactively, PENDING_SQL.md §6 (Session 6 — an
+                                         -- original oversight: settlements/maintenance_records both
+                                         -- had truck_id from the start, fuel_purchases didn't)
   settlement_id uuid references settlements on delete cascade,  -- D6: matches legacy deleteSett()
   fuel_type    text not null check (fuel_type in ('tractor','reefer')),
   purchase_date date,

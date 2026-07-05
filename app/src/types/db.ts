@@ -77,6 +77,7 @@ export type LoadUpdate = Partial<Omit<Load, 'id' | 'user_id' | 'created_at' | 'u
 export type FuelPurchase = {
   id: string;
   user_id: string;
+  truck_id: string | null; // added retroactively, docs/PENDING_SQL.md §6 (Session 6)
   settlement_id: string | null;
   fuel_type: 'tractor' | 'reefer';
   purchase_date: string | null;

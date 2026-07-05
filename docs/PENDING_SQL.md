@@ -223,6 +223,28 @@ changes.
 
 - [x] 5a run (add tos_accepted_at, tos_version to profiles)
 
+## 6. fuel_purchases.truck_id (PROMPTS.md Session 6 — fleet scalability) — ⏳ PENDING (not yet run)
+
+`docs/SCHEMA.sql`'s original draft gave `settlements` and `maintenance_records`
+a `truck_id` column but left it off `fuel_purchases` — an oversight caught
+while wiring Session 6's AI-import truck tagging, which PROMPTS.md Session 6
+requires for all three tables ("settlements, fuel_purchases, and
+maintenance_records rows created by an import must be tagged with
+truck_id"). Without this column, fuel costs can never be attributed to a
+specific truck in a multi-truck fleet, which conflicts with CLAUDE.md
+invariant #7 (no code path may assume a single truck).
+
+```sql
+alter table fuel_purchases add column truck_id uuid references trucks;
+create index on fuel_purchases (truck_id);
+```
+
+Nullable, no backfill needed for existing rows (same as `settlements`/
+`maintenance_records`.truck_id) — a single-truck account can leave it null
+or backfill it later; the app treats null the same as "unknown truck."
+
+- [ ] 6a run (add truck_id + index to fuel_purchases)
+
 ---
 
 ## Also still open (not part of any pass above)
