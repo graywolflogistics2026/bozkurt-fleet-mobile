@@ -127,7 +127,7 @@ insert into tax_year_data (
     "no_tax": ["TX","FL","TN","WA","NV","SD","WY","AK","NH"],
     "flat": {"NC": 0.0399, "GA": 0.0499, "UT": 0.0445, "OH": 0.0275, "IL": 0.0495, "PA": 0.0307},
     "flat_adjustments": {"OH": {"exempt_below": 26050}, "MA": {"surtax_rate": 0.04, "surtax_over": 1000000}},
-    "bracket": {"CA": "see docs/ADMIN_RUNBOOK.md for the full Schedule X/Y/Z tables"},
+    "bracket": {"CA": "<superseded — see note below; live row holds the full numeric Schedule X/Y/Z arrays>"},
     "fallback_effective_rate": 0.045
   }'::jsonb,
   true,
@@ -150,6 +150,15 @@ update tax_year_data set published = true where tax_year = 2026;
    verified and present in the live `flat` map per Tax Foundation 2026 (now
    reflected above). The original PROMPTS.md Session 5 "CA, GA, IL, NC, PA
    are bracket states" list was simply wrong — corrected there too.
+3. (added 2026-07-05) CA `bracket` placeholder — resolved. The literal
+   INSERT shown above (this file is a historical log of what was run, not
+   living documentation — see the STATUS note at the top) still shows the
+   placeholder string used when this row was first seeded; the LIVE row
+   was subsequently updated with the full numeric official FTB Schedule X
+   (single) / Y (MFJ) / Z (HoH) bracket arrays and is confirmed correct —
+   see docs/ADMIN_RUNBOOK.md. Don't take the snippet above as current fact;
+   it's preserved as-is for the historical record per this file's own
+   stated purpose.
 
 Note: `flat_adjustments.MA` implies MA also has its own bare-rate entry in
 `flat` (the surtax applies on top of it) — that entry isn't reproduced

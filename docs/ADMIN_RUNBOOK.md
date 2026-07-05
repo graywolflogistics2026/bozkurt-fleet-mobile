@@ -131,15 +131,17 @@ states, official FTB 2025 Schedule X/Y/Z for CA):**
     logic). The state-tax module must apply `flat_adjustments` for a state
     as a second pass over the flat-rate result, not as a replacement.
 - `bracket`:
-  - `CA`: official 2025 FTB Schedule X (single) / Y (MFJ) / Z (HoH) — the
-    ONLY state, as of 2026, that's still genuinely progressive.
-    California's brackets range from 1% to 12.3% (plus a separate 1%
-    Mental Health Services surcharge above $1M that the app does not yet
-    model). **Transcribe the exact bracket thresholds directly from the
-    live `tax_year_data` row or the FTB publication** — they are
-    inflation-indexed and shift slightly every year, so no copy of them
-    outside the database (including this runbook) should be treated as
-    authoritative once a newer year exists.
+  - `CA`: the LIVE 2026 row holds the full numeric official FTB Schedule X
+    (single) / Y (MFJ) / Z (HoH) bracket arrays — confirmed present and
+    correctly shaped (verified directly against the live row, not this
+    runbook) — the ONLY state, as of 2026, that's still genuinely
+    progressive. California's brackets range from 1% to 12.3% (plus a
+    separate 1% Mental Health Services surcharge above $1M that the app
+    does not yet model). This runbook deliberately does NOT reproduce the
+    exact thresholds here — they're inflation-indexed and shift slightly
+    every year, so for any FUTURE year, transcribe them fresh from the live
+    `tax_year_data` row or the FTB publication rather than copying last
+    year's numbers (from here or anywhere else) forward.
 - `fallback_effective_rate`: 0.045 — the generic approximation used for
   every state not explicitly listed above.
 

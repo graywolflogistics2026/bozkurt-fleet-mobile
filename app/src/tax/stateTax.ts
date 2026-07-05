@@ -3,11 +3,12 @@ import type { BracketTable, FilingStatus, StateTaxResult } from '@/src/tax/types
 import { calcFederalTax } from '@/src/tax/federalTax';
 
 // state_tax.bracket entries SHOULD be a BracketTable (docs/SCHEMA.sql,
-// PROMPTS.md Session 5), but the live 2026 row currently holds a
-// placeholder STRING for CA pending verification (see docs/ADMIN_RUNBOOK.md
-// — "transcribe the exact bracket thresholds directly from the live row").
-// Never crash on that: an unverified/malformed bracket entry falls back to
-// fallback_effective_rate, same as any other ungraduated state.
+// PROMPTS.md Session 5) — the live 2026 row's CA entry is confirmed to be
+// one (verified against the live row 2026-07-05, see docs/ADMIN_RUNBOOK.md).
+// This guard is defensive for FUTURE years/states an admin seeds before
+// finishing verification, not evidence of a current gap: never crash on a
+// malformed bracket entry, just fall back to fallback_effective_rate like
+// any other ungraduated state.
 function isBracketTable(value: unknown): value is BracketTable {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
