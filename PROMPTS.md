@@ -298,6 +298,19 @@ as a complete hub, most users should rarely need the More tab (see Session
 completeness, not as the primary way to reach these screens.
 ```
 
+**Implementation note (2026-07-05) — per diem day-counting is an
+approximation, not legacy's exact method.** Legacy's `calcPerDiemDays()`
+sums (deliveryDate − pickupDate) per load from `DB.loads`. The Postgres
+`loads` table (docs/SCHEMA.sql) only kept a single `load_date` column, not
+that pickup/delivery pair, so the exact per-load method can't be
+reproduced from the current schema. `app/src/tax/perDiem.ts` instead
+approximates per diem as 7 days × settlement count (one settlement = one
+full week OTR) — reasonable given the weekly settlement cadence, but not
+what legacy actually computes. If exact day-counting is ever wanted, a
+future migration would need to add `pickup_date`/`delivery_date` back to
+`loads` and the importer (Session 4) would need a pass to backfill them
+from already-imported legacy backups where available.
+
 ## Session 6 — Camera + AI import flow
 
 ```

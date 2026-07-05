@@ -16,6 +16,7 @@ export default function MoreLayout() {
       <Stack.Screen name="cash-flow" options={{ title: 'Cash Flow' }} />
       <Stack.Screen name="maintenance" options={{ title: 'Maintenance' }} />
       <Stack.Screen name="loans" options={{ title: 'Loans' }} />
+      <Stack.Screen name="tax-estimator" options={{ title: 'Tax Estimator' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="import-legacy" options={{ title: 'Import Legacy Backup' }} />
     </Stack>

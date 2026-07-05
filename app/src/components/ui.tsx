@@ -18,6 +18,22 @@ export function Card({ children }: { children: React.ReactNode }) {
   return <View style={styles.card}>{children}</View>;
 }
 
+// BINDING UX DECISION (owner, 2026-07-04) — Dashboard is the hub: every
+// stat card/section navigates somewhere, with a visible chevron affordance
+// so it reads as tappable rather than purely informational (PROMPTS.md
+// Session 5).
+export function TappableCard({ onPress, children }: { onPress: () => void; children: React.ReactNode }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, styles.tappableCard, pressed && styles.buttonPressed]}
+    >
+      <View style={{ flex: 1 }}>{children}</View>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
 export function MutedText({ children }: { children: React.ReactNode }) {
   return <Text style={styles.muted}>{children}</Text>;
 }
@@ -105,6 +121,16 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: spacing.md,
     marginBottom: spacing.md,
+  },
+  tappableCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chevron: {
+    color: colors.muted,
+    fontSize: 22,
+    marginLeft: spacing.sm,
+    fontWeight: '300',
   },
   muted: {
     color: colors.muted,

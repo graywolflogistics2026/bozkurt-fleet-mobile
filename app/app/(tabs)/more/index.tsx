@@ -5,6 +5,7 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 
 const MENU_ITEMS = [
   { href: '/(tabs)/more/capital-account', label: 'Capital Account', emoji: '💰' },
+  { href: '/(tabs)/more/tax-estimator', label: 'Tax Estimator', emoji: '🧮' },
   { href: '/(tabs)/more/cash-flow', label: 'Cash Flow', emoji: '🏦' },
   { href: '/(tabs)/more/maintenance', label: 'Maintenance', emoji: '🔧' },
   { href: '/(tabs)/more/loans', label: 'Loans', emoji: '📄' },
