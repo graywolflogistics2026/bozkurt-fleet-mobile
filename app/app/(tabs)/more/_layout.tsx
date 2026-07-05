@@ -17,6 +17,7 @@ export default function MoreLayout() {
       <Stack.Screen name="maintenance" options={{ title: 'Maintenance' }} />
       <Stack.Screen name="loans" options={{ title: 'Loans' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+      <Stack.Screen name="import-legacy" options={{ title: 'Import Legacy Backup' }} />
     </Stack>
   );
 }

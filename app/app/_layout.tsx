@@ -3,20 +3,27 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { ActiveTruckProvider } from '@/src/context/ActiveTruckContext';
+import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { colors } from '@/src/theme';
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <ActiveTruckProvider>
-          <StatusBar style="light" />
-          <RootLayoutNav />
-        </ActiveTruckProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister: asyncStoragePersister }}
+    >
+      <SafeAreaProvider>
+        <AuthProvider>
+          <ActiveTruckProvider>
+            <StatusBar style="light" />
+            <RootLayoutNav />
+          </ActiveTruckProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </PersistQueryClientProvider>
   );
 }
 
