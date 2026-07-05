@@ -1,5 +1,5 @@
 import { supabase } from '@/src/lib/supabase';
-import { importIdempotent } from '@/src/data/legacyImport/idempotent';
+import { importIdempotent, type ImportOutcome } from '@/src/data/legacyImport/idempotent';
 import type {
   LegacyBackupPayload,
   LegacyCapitalContribution,
@@ -12,6 +12,7 @@ import type {
   LegacyLoan,
   LegacyMaintenance,
   LegacyReimbursement,
+  LegacySettlement,
   LegacyToll,
 } from '@/src/data/legacyImport/types';
 import type {
@@ -27,9 +28,9 @@ import type {
   TruckInsert,
 } from '@/src/types/db';
 
-export type LegacyImportEntityResult = { label: string; inserted: number; skipped: number };
+export type LegacyImportEntityResult = { label: string; inserted: number; skipped: number; failed: number; firstError: string | null };
 export type LegacyImportResult = {
-  truckId: string;
+  truckId: string | null;
   truckCreated: boolean;
   entities: LegacyImportEntityResult[];
   warnings: string[];
@@ -58,6 +59,29 @@ const STEPS = [
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
   return Number.isFinite(n) ? (n as number) : fallback;
+}
+
+function errorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
+  return String(err);
+}
+
+// Runs one entity's import; if it throws for any reason (a bug, an
+// unexpected shape, a network blip), that failure is captured as this
+// entity's result instead of propagating up and aborting every step after
+// it — the exact "one entity's error aborting/skipping others" failure mode
+// that made the previous run under-report silently.
+async function runEntity(
+  label: string,
+  totalInputRows: number,
+  fn: () => Promise<{ inserted: number; skipped: number; failed?: number; firstError?: string | null }>
+): Promise<LegacyImportEntityResult> {
+  try {
+    const r = await fn();
+    return { label, inserted: r.inserted, skipped: r.skipped, failed: r.failed ?? 0, firstError: r.firstError ?? null };
+  } catch (err) {
+    return { label, inserted: 0, skipped: 0, failed: totalInputRows, firstError: errorMessage(err) };
+  }
 }
 
 // ---------- 1. Truck (must exist first — trigger seeds maintenance_intervals) ----------
@@ -92,11 +116,6 @@ async function ensureTruck(userId: string, health: LegacyHealth | undefined) {
   return { truckId: created.id as string, created: true };
 }
 
-// Only applied right after truck creation — the DB trigger just seeded
-// synthetic-fluid defaults (500k/500k); a freshly-created truck's intervals
-// are still the untouched seed, so it's safe to correct them here without
-// clobbering later owner edits (CLAUDE.md invariant #4: user-editable, not
-// re-asserted on every re-import).
 async function applyFluidTypeOverrides(truckId: string, health: LegacyHealth | undefined) {
   if (!health) return;
   if (health.transSynthetic === false) {
@@ -107,54 +126,111 @@ async function applyFluidTypeOverrides(truckId: string, health: LegacyHealth | u
   }
 }
 
-// ---------- 2. Settlements (upsert on the unique (user_id, week_ending)) ----------
-async function importSettlements(userId: string, truckId: string, sett: NonNullable<LegacyBackupPayload['DB']>['sett']) {
-  const validSett = (sett ?? []).filter((s) => !!s.weekEnding);
-  if (validSett.length === 0) return { dateToSettlementId: new Map<string, string>(), inserted: 0, skipped: 0 };
+// ---------- 2. Settlements ----------
+// Legacy itself tolerates a missing weekEnding and falls back to the
+// settlement's import `date` in several places (e.g. the CPM chart sort at
+// legacy/index.html:1436 — `new Date(a.weekEnding||a.date)`). The importer
+// must do the same: treating a missing weekEnding as "no settlement" was
+// silently dropping every row whose weekEnding the AI extraction never
+// filled in, which is exactly what produced a reported "success" with 0
+// settlements imported.
+async function importSettlements(userId: string, truckId: string | null, sett: LegacySettlement[]) {
+  const dateToSettlementId = new Map<string, string>();
+
+  const withWeek = sett.map((s) => ({ s, week: s.weekEnding || s.date || null }));
+  const missingBoth = withWeek.filter((x) => !x.week).length;
+  const usable = withWeek.filter((x): x is { s: LegacySettlement; week: string } => !!x.week);
+
+  if (usable.length === 0) {
+    return {
+      dateToSettlementId,
+      inserted: 0,
+      skipped: 0,
+      failed: missingBoth,
+      firstError: missingBoth > 0 ? 'Settlement has neither weekEnding nor date — cannot key it.' : null,
+    };
+  }
+
+  // Two rows resolving to the same week in a single upsert() statement make
+  // Postgres reject the WHOLE statement ("ON CONFLICT DO UPDATE command
+  // cannot affect row a second time") — dedupe first so one repeated week
+  // can't sink every other settlement in the batch.
+  const dedupedByWeek = new Map<string, LegacySettlement>();
+  for (const { s, week } of usable) {
+    if (!dedupedByWeek.has(week)) dedupedByWeek.set(week, s);
+  }
+  const collapsedDuplicates = usable.length - dedupedByWeek.size;
 
   const { data: existing, error: existingError } = await supabase
     .from('settlements')
     .select('week_ending')
     .eq('user_id', userId);
-  if (existingError) throw existingError;
+  if (existingError) {
+    return { dateToSettlementId, inserted: 0, skipped: 0, failed: usable.length, firstError: errorMessage(existingError) };
+  }
   const existingWeeks = new Set((existing ?? []).map((r) => r.week_ending as string));
 
-  const rows = validSett.map((s) => ({
+  const entries = Array.from(dedupedByWeek.entries());
+  const toRow = (week: string, s: LegacySettlement) => ({
     user_id: userId,
     truck_id: truckId,
-    week_ending: s.weekEnding,
+    week_ending: week,
     gross: num(s.gross),
     net: num(s.net),
     miles: num(s.miles),
-  }));
+  });
+  const rows = entries.map(([week, s]) => toRow(week, s));
+
+  let inserted = 0;
+  let failed = 0;
+  let firstError: string | null = null;
 
   const { data, error } = await supabase
     .from('settlements')
     .upsert(rows, { onConflict: 'user_id,week_ending' })
     .select('id, week_ending');
-  if (error) throw error;
 
-  const idByWeek = new Map<string, string>();
-  for (const row of data ?? []) idByWeek.set(row.week_ending as string, row.id as string);
-
-  // Loads/fuel/tolls/deductions in the legacy record carry the settlement's
-  // import `date`, not `weekEnding` (legacy handleFile() stamps all of them
-  // with the same d.date in one synchronous pass) — key the lookup that way.
-  const dateToSettlementId = new Map<string, string>();
-  for (const s of validSett) {
-    const id = idByWeek.get(s.weekEnding);
-    if (id) dateToSettlementId.set(s.date ?? s.weekEnding, id);
+  if (!error) {
+    for (const row of data ?? []) {
+      const week = row.week_ending as string;
+      const legacyS = dedupedByWeek.get(week);
+      dateToSettlementId.set(legacyS?.date ?? week, row.id as string);
+      if (!existingWeeks.has(week)) inserted++;
+    }
+  } else {
+    // Bulk upsert failed — fall back row-by-row so one bad settlement
+    // doesn't take every other one down with it.
+    for (const [week, s] of entries) {
+      const { data: single, error: rowError } = await supabase
+        .from('settlements')
+        .upsert(toRow(week, s), { onConflict: 'user_id,week_ending' })
+        .select('id, week_ending')
+        .single();
+      if (rowError || !single) {
+        failed++;
+        if (!firstError) firstError = errorMessage(rowError ?? new Error('upsert returned no row'));
+        continue;
+      }
+      dateToSettlementId.set(s.date ?? week, single.id as string);
+      if (!existingWeeks.has(week)) inserted++;
+    }
   }
 
-  const inserted = validSett.filter((s) => !existingWeeks.has(s.weekEnding)).length;
-  return { dateToSettlementId, inserted, skipped: validSett.length - inserted };
+  const alreadyExisted = dedupedByWeek.size - inserted - failed;
+  return {
+    dateToSettlementId,
+    inserted,
+    skipped: alreadyExisted + collapsedDuplicates,
+    failed: failed + missingBoth,
+    firstError: firstError ?? (missingBoth > 0 ? `${missingBoth} settlement(s) had neither weekEnding nor date.` : null),
+  };
 }
 
 // ---------- 3. Loads ----------
 function loadKey(row: Record<string, unknown>): string {
   return [row.settlement_id ?? 'none', row.load_date ?? '', row.order_number ?? '', num(row.revenue)].join('|');
 }
-async function importLoads(userId: string, loads: LegacyLoad[], dateToSettlementId: Map<string, string>) {
+async function importLoads(userId: string, loads: LegacyLoad[], dateToSettlementId: Map<string, string>): Promise<ImportOutcome> {
   const rows: LoadInsert[] = loads.map((l) => ({
     user_id: userId,
     settlement_id: dateToSettlementId.get(l.date ?? '') ?? null,
@@ -184,7 +260,7 @@ async function importFuel(
   tractorFuel: LegacyFuel[],
   reeferFuel: LegacyFuel[],
   dateToSettlementId: Map<string, string>
-) {
+): Promise<ImportOutcome> {
   const toRow = (f: LegacyFuel, fuel_type: 'tractor' | 'reefer'): FuelPurchaseInsert => ({
     user_id: userId,
     settlement_id: dateToSettlementId.get(f.date ?? '') ?? null,
@@ -251,10 +327,16 @@ async function importDeductions(userId: string, ded: LegacyDeduction[], dateToSe
 }
 
 // ---------- 6. Maintenance records ----------
+// Key includes `description`, not just service_type+odometer: same-day
+// bundled services (e.g. oil + fuel filter both logged the same day at the
+// same odometer) previously collapsed into one another whenever their
+// service_type came out identical (undetected type falling back to
+// 'general' for both, or the same category used for genuinely distinct
+// line items) — description is what actually distinguishes them.
 function maintKey(row: Record<string, unknown>): string {
-  return [row.truck_id, row.service_date ?? '', row.service_type ?? '', num(row.odometer)].join('|');
+  return [row.truck_id, row.service_date ?? '', row.service_type ?? '', num(row.odometer), row.description ?? ''].join('|');
 }
-async function importMaintenance(userId: string, truckId: string, maint: LegacyMaintenance[]) {
+async function importMaintenance(userId: string, truckId: string | null, maint: LegacyMaintenance[]): Promise<ImportOutcome> {
   const rows: MaintenanceRecordInsert[] = maint.map((m) => ({
     user_id: userId,
     truck_id: truckId,
@@ -270,7 +352,7 @@ async function importMaintenance(userId: string, truckId: string, maint: LegacyM
   return importIdempotent({
     table: 'maintenance_records',
     userId,
-    selectColumns: 'id,truck_id,service_date,service_type,odometer',
+    selectColumns: 'id,truck_id,service_date,service_type,odometer,description',
     rows,
     keyOf: maintKey,
   });
@@ -280,7 +362,7 @@ async function importMaintenance(userId: string, truckId: string, maint: LegacyM
 function tollKey(row: Record<string, unknown>): string {
   return [row.toll_date ?? '', num(row.amount).toFixed(2), row.network ?? ''].join('|');
 }
-async function importTolls(userId: string, ezpass: LegacyToll[], drivewyze: LegacyToll[]) {
+async function importTolls(userId: string, ezpass: LegacyToll[], drivewyze: LegacyToll[]): Promise<ImportOutcome> {
   const toRow = (t: LegacyToll, network: 'ezpass' | 'drivewyze'): TollInsert => ({
     user_id: userId,
     network,
@@ -296,7 +378,7 @@ async function importTolls(userId: string, ezpass: LegacyToll[], drivewyze: Lega
 function reimbKey(row: Record<string, unknown>): string {
   return [row.reimb_date ?? '', num(row.amount).toFixed(2), row.description ?? ''].join('|');
 }
-async function importReimbursements(userId: string, reimb: LegacyReimbursement[]) {
+async function importReimbursements(userId: string, reimb: LegacyReimbursement[]): Promise<ImportOutcome> {
   const rows: ReimbursementInsert[] = reimb.map((r) => ({
     user_id: userId,
     reimb_date: r.date ?? null,
@@ -313,15 +395,22 @@ async function importReimbursements(userId: string, reimb: LegacyReimbursement[]
   });
 }
 
-// ---------- 9/10. Loans & credit cards (upsert-by-name — legacy's own restore fully replaces the list; ours updates in place instead so re-importing a newer backup refreshes balances without duplicating rows) ----------
+// ---------- 9/10. Loans & credit cards (upsert-by-name) ----------
 async function importLoans(userId: string, loans: LegacyLoan[]) {
-  if (loans.length === 0) return { inserted: 0, skipped: 0 };
+  if (loans.length === 0) return { inserted: 0, skipped: 0, failed: 0, firstError: null };
   const { data: existing, error } = await supabase.from('loans').select('id, name').eq('user_id', userId);
-  if (error) throw error;
+  if (error) return { inserted: 0, skipped: 0, failed: loans.length, firstError: errorMessage(error) };
   const idByName = new Map((existing ?? []).map((r) => [r.name as string, r.id as string]));
   let inserted = 0;
   let updated = 0;
+  let failed = 0;
+  let firstError: string | null = null;
   for (const l of loans) {
+    if (!l.name) {
+      failed++;
+      if (!firstError) firstError = 'Loan record missing name.';
+      continue;
+    }
     const row: LoanInsert = {
       user_id: userId,
       name: l.name,
@@ -334,27 +423,35 @@ async function importLoans(userId: string, loans: LegacyLoan[]) {
       next_due: l.due || null,
     };
     const existingId = idByName.get(l.name);
-    if (existingId) {
-      const { error: updateError } = await supabase.from('loans').update(row).eq('id', existingId);
-      if (updateError) throw updateError;
-      updated++;
-    } else {
-      const { error: insertError } = await supabase.from('loans').insert(row);
-      if (insertError) throw insertError;
-      inserted++;
+    const { error: writeError } = existingId
+      ? await supabase.from('loans').update(row).eq('id', existingId)
+      : await supabase.from('loans').insert(row);
+    if (writeError) {
+      failed++;
+      if (!firstError) firstError = errorMessage(writeError);
+      continue;
     }
+    if (existingId) updated++;
+    else inserted++;
   }
-  return { inserted, skipped: updated };
+  return { inserted, skipped: updated, failed, firstError };
 }
 
 async function importCreditCards(userId: string, cards: LegacyCard[]) {
-  if (cards.length === 0) return { inserted: 0, skipped: 0 };
+  if (cards.length === 0) return { inserted: 0, skipped: 0, failed: 0, firstError: null };
   const { data: existing, error } = await supabase.from('credit_cards').select('id, name').eq('user_id', userId);
-  if (error) throw error;
+  if (error) return { inserted: 0, skipped: 0, failed: cards.length, firstError: errorMessage(error) };
   const idByName = new Map((existing ?? []).map((r) => [r.name as string, r.id as string]));
   let inserted = 0;
   let updated = 0;
+  let failed = 0;
+  let firstError: string | null = null;
   for (const c of cards) {
+    if (!c.name) {
+      failed++;
+      if (!firstError) firstError = 'Credit card record missing name.';
+      continue;
+    }
     const row: CreditCardInsert = {
       user_id: userId,
       name: c.name,
@@ -364,37 +461,40 @@ async function importCreditCards(userId: string, cards: LegacyCard[]) {
       due_day: c.dueday ? parseInt(c.dueday, 10) || null : null,
     };
     const existingId = idByName.get(c.name);
-    if (existingId) {
-      const { error: updateError } = await supabase.from('credit_cards').update(row).eq('id', existingId);
-      if (updateError) throw updateError;
-      updated++;
-    } else {
-      const { error: insertError } = await supabase.from('credit_cards').insert(row);
-      if (insertError) throw insertError;
-      inserted++;
+    const { error: writeError } = existingId
+      ? await supabase.from('credit_cards').update(row).eq('id', existingId)
+      : await supabase.from('credit_cards').insert(row);
+    if (writeError) {
+      failed++;
+      if (!firstError) firstError = errorMessage(writeError);
+      continue;
     }
+    if (existingId) updated++;
+    else inserted++;
   }
-  return { inserted, skipped: updated };
+  return { inserted, skipped: updated, failed, firstError };
 }
 
 // ---------- 11. Capital draws ----------
 function drawKey(row: Record<string, unknown>): string {
   return ['draw', row.tx_date ?? '', num(row.amount).toFixed(2), row.note ?? ''].join('|');
 }
-async function importDraws(userId: string, draws: LegacyCapitalDraw[]) {
+async function importDraws(userId: string, draws: LegacyCapitalDraw[]): Promise<ImportOutcome> {
   const rows: CapitalTransactionInsert[] = draws
     .filter((d) => !!d.date)
     .map((d) => ({ user_id: userId, tx_type: 'draw', amount: num(d.amount), tx_date: d.date, note: d.note ?? null }));
-  return importIdempotent({
+  const missingDate = draws.length - rows.length;
+  const result = await importIdempotent({
     table: 'capital_transactions',
     userId,
     selectColumns: 'id,tx_type,tx_date,amount,note',
     rows,
     keyOf: drawKey,
   });
+  return { ...result, failed: result.failed + missingDate };
 }
 
-// ---------- 12. Capital contributions (id-linked to a deduction — CLAUDE.md invariant #2) ----------
+// ---------- 12. Capital contributions (id-linked to a deduction) ----------
 async function importContributions(
   userId: string,
   contributions: LegacyCapitalContribution[],
@@ -404,7 +504,7 @@ async function importContributions(
     .map((c) => ({ c, newDedId: legacyDedIdToNewId.get(c.id) }))
     .filter((x): x is { c: LegacyCapitalContribution; newDedId: string } => !!x.newDedId);
   const orphaned = contributions.length - linked.length;
-  if (linked.length === 0) return { inserted: 0, skipped: 0, orphaned };
+  if (linked.length === 0) return { inserted: 0, skipped: 0, failed: 0, firstError: null, orphaned };
 
   const { data: existing, error } = await supabase
     .from('capital_transactions')
@@ -412,11 +512,13 @@ async function importContributions(
     .eq('user_id', userId)
     .eq('tx_type', 'contribution')
     .in('linked_deduction_id', linked.map((x) => x.newDedId));
-  if (error) throw error;
+  if (error) return { inserted: 0, skipped: 0, failed: linked.length, firstError: errorMessage(error), orphaned };
   const idByDedId = new Map((existing ?? []).map((r) => [r.linked_deduction_id as string, r.id as string]));
 
   let inserted = 0;
   let updated = 0;
+  let failed = 0;
+  let firstError: string | null = null;
   for (const { c, newDedId } of linked) {
     const row: CapitalTransactionInsert = {
       user_id: userId,
@@ -427,33 +529,40 @@ async function importContributions(
       linked_deduction_id: newDedId,
     };
     const existingId = idByDedId.get(newDedId);
-    if (existingId) {
-      const { error: updateError } = await supabase.from('capital_transactions').update(row).eq('id', existingId);
-      if (updateError) throw updateError;
-      updated++;
-    } else {
-      const { error: insertError } = await supabase.from('capital_transactions').insert(row);
-      if (insertError) throw insertError;
-      inserted++;
+    const { error: writeError } = existingId
+      ? await supabase.from('capital_transactions').update(row).eq('id', existingId)
+      : await supabase.from('capital_transactions').insert(row);
+    if (writeError) {
+      failed++;
+      if (!firstError) firstError = errorMessage(writeError);
+      continue;
     }
+    if (existingId) updated++;
+    else inserted++;
   }
-  return { inserted, skipped: updated, orphaned };
+  return { inserted, skipped: updated, failed, firstError, orphaned };
 }
 
 // ---------- 13/14. Bank & checking statements ----------
 async function importBankStatements(userId: string, statements: LegacyBackupPayload['bankStatements']) {
   let inserted = 0;
   let skipped = 0;
+  let failed = 0;
+  let firstError: string | null = null;
   for (const s of statements ?? []) {
-    if (!s.month) continue;
-    const { data: existing } = await supabase
+    if (!s.month) {
+      failed++;
+      if (!firstError) firstError = 'Bank statement missing month.';
+      continue;
+    }
+    const { data: existingStmt } = await supabase
       .from('bank_statements')
       .select('id')
       .eq('user_id', userId)
       .eq('account_type', 'card')
       .eq('statement_month', s.month)
       .maybeSingle();
-    if (existing) {
+    if (existingStmt) {
       skipped++;
       continue;
     }
@@ -462,7 +571,11 @@ async function importBankStatements(userId: string, statements: LegacyBackupPayl
       .insert({ user_id: userId, account_type: 'card', statement_month: s.month })
       .select('id')
       .single();
-    if (error) throw error;
+    if (error || !created) {
+      failed++;
+      if (!firstError) firstError = errorMessage(error ?? new Error('insert returned no row'));
+      continue;
+    }
     inserted++;
     const txRows = (s.transactions ?? []).map((t) => ({
       statement_id: created.id,
@@ -476,25 +589,31 @@ async function importBankStatements(userId: string, statements: LegacyBackupPayl
     }));
     if (txRows.length > 0) {
       const { error: txError } = await supabase.from('bank_transactions').insert(txRows);
-      if (txError) throw txError;
+      if (txError && !firstError) firstError = errorMessage(txError);
     }
   }
-  return { inserted, skipped };
+  return { inserted, skipped, failed, firstError };
 }
 
 async function importCheckingStatements(userId: string, statements: LegacyBackupPayload['checkingStatements']) {
   let inserted = 0;
   let skipped = 0;
+  let failed = 0;
+  let firstError: string | null = null;
   for (const s of statements ?? []) {
-    if (!s.month) continue;
-    const { data: existing } = await supabase
+    if (!s.month) {
+      failed++;
+      if (!firstError) firstError = 'Checking statement missing month.';
+      continue;
+    }
+    const { data: existingStmt } = await supabase
       .from('bank_statements')
       .select('id')
       .eq('user_id', userId)
       .eq('account_type', 'checking')
       .eq('statement_month', s.month)
       .maybeSingle();
-    if (existing) {
+    if (existingStmt) {
       skipped++;
       continue;
     }
@@ -503,7 +622,11 @@ async function importCheckingStatements(userId: string, statements: LegacyBackup
       .insert({ user_id: userId, account_type: 'checking', statement_month: s.month })
       .select('id')
       .single();
-    if (error) throw error;
+    if (error || !created) {
+      failed++;
+      if (!firstError) firstError = errorMessage(error ?? new Error('insert returned no row'));
+      continue;
+    }
     inserted++;
     const txRows = (s.transactions ?? []).map((t) => ({
       statement_id: created.id,
@@ -517,10 +640,10 @@ async function importCheckingStatements(userId: string, statements: LegacyBackup
     }));
     if (txRows.length > 0) {
       const { error: txError } = await supabase.from('bank_transactions').insert(txRows);
-      if (txError) throw txError;
+      if (txError && !firstError) firstError = errorMessage(txError);
     }
   }
-  return { inserted, skipped };
+  return { inserted, skipped, failed, firstError };
 }
 
 // ---------- 15. Truck Health overrides + business balance ----------
@@ -610,89 +733,136 @@ export async function importLegacyBackup(
   const db = payload.DB ?? {};
 
   report(0);
-  const { truckId, created: truckCreated } = await ensureTruck(userId, payload.health);
-  if (truckCreated) await applyFluidTypeOverrides(truckId, payload.health);
+  let truckId: string | null = null;
+  let truckCreated = false;
+  try {
+    const r = await ensureTruck(userId, payload.health);
+    truckId = r.truckId;
+    truckCreated = r.created;
+    if (truckCreated) await applyFluidTypeOverrides(truckId, payload.health);
+  } catch (err) {
+    warnings.push(`Could not create/find the truck profile — truck-scoped records will import without a truck link: ${errorMessage(err)}`);
+  }
 
+  // Settlements returns dateToSettlementId (needed by loads/fuel/deductions
+  // below) alongside the standard counts — call it directly rather than
+  // through runEntity() so that map survives a partial failure too.
   report(1);
-  const { dateToSettlementId, inserted: sInserted, skipped: sSkipped } = await importSettlements(
-    userId,
-    truckId,
-    db.sett ?? []
-  );
-  entities.push({ label: 'Settlements', inserted: sInserted, skipped: sSkipped });
+  let dateToSettlementId = new Map<string, string>();
+  try {
+    const r = await importSettlements(userId, truckId, db.sett ?? []);
+    dateToSettlementId = r.dateToSettlementId;
+    entities.push({ label: 'Settlements', inserted: r.inserted, skipped: r.skipped, failed: r.failed, firstError: r.firstError });
+  } catch (err) {
+    entities.push({ label: 'Settlements', inserted: 0, skipped: 0, failed: (db.sett ?? []).length, firstError: errorMessage(err) });
+  }
 
   report(2);
-  const loadsResult = await importLoads(userId, db.loads ?? [], dateToSettlementId);
-  entities.push({ label: 'Loads', inserted: loadsResult.inserted, skipped: loadsResult.skipped });
+  entities.push(await runEntity('Loads', (db.loads ?? []).length, () => importLoads(userId, db.loads ?? [], dateToSettlementId)));
 
   report(3);
-  const fuelResult = await importFuel(userId, db.fuel?.tr ?? [], db.fuel?.re ?? [], dateToSettlementId);
-  entities.push({ label: 'Fuel purchases', inserted: fuelResult.inserted, skipped: fuelResult.skipped });
+  entities.push(
+    await runEntity('Fuel purchases', (db.fuel?.tr?.length ?? 0) + (db.fuel?.re?.length ?? 0), () =>
+      importFuel(userId, db.fuel?.tr ?? [], db.fuel?.re ?? [], dateToSettlementId)
+    )
+  );
 
+  // Deductions returns legacyDedIdToNewId (needed by capital contributions
+  // below) alongside the standard counts — same reasoning as settlements.
   report(4);
-  const dedResult = await importDeductions(userId, db.ded ?? [], dateToSettlementId);
-  entities.push({ label: 'Deductions', inserted: dedResult.inserted, skipped: dedResult.skipped });
+  let legacyDedIdToNewId = new Map<string, string>();
+  try {
+    const r = await importDeductions(userId, db.ded ?? [], dateToSettlementId);
+    legacyDedIdToNewId = r.legacyDedIdToNewId;
+    entities.push({ label: 'Deductions', inserted: r.inserted, skipped: r.skipped, failed: r.failed, firstError: r.firstError });
+  } catch (err) {
+    entities.push({ label: 'Deductions', inserted: 0, skipped: 0, failed: (db.ded ?? []).length, firstError: errorMessage(err) });
+  }
 
   report(5);
-  const maintResult = await importMaintenance(userId, truckId, db.maint ?? []);
-  entities.push({ label: 'Maintenance records', inserted: maintResult.inserted, skipped: maintResult.skipped });
+  entities.push(await runEntity('Maintenance records', (db.maint ?? []).length, () => importMaintenance(userId, truckId, db.maint ?? [])));
 
   report(6);
-  const tollsResult = await importTolls(userId, db.tolls?.ez ?? [], db.tolls?.dw ?? []);
-  entities.push({ label: 'Tolls', inserted: tollsResult.inserted, skipped: tollsResult.skipped });
+  entities.push(
+    await runEntity('Tolls', (db.tolls?.ez?.length ?? 0) + (db.tolls?.dw?.length ?? 0), () =>
+      importTolls(userId, db.tolls?.ez ?? [], db.tolls?.dw ?? [])
+    )
+  );
 
   report(7);
-  const reimbResult = await importReimbursements(userId, db.reimb ?? []);
-  entities.push({ label: 'Reimbursements', inserted: reimbResult.inserted, skipped: reimbResult.skipped });
+  entities.push(await runEntity('Reimbursements', (db.reimb ?? []).length, () => importReimbursements(userId, db.reimb ?? [])));
 
   report(8);
-  const loansResult = await importLoans(userId, payload.loans ?? []);
-  entities.push({ label: 'Loans', inserted: loansResult.inserted, skipped: loansResult.skipped });
+  entities.push(await runEntity('Loans', (payload.loans ?? []).length, () => importLoans(userId, payload.loans ?? [])));
 
   report(9);
-  const cardsResult = await importCreditCards(userId, payload.cards ?? []);
-  entities.push({ label: 'Credit cards', inserted: cardsResult.inserted, skipped: cardsResult.skipped });
+  entities.push(await runEntity('Credit cards', (payload.cards ?? []).length, () => importCreditCards(userId, payload.cards ?? [])));
 
   report(10);
-  const drawsResult = await importDraws(userId, payload.capitalDraws ?? []);
-  entities.push({ label: 'Capital draws', inserted: drawsResult.inserted, skipped: drawsResult.skipped });
+  entities.push(await runEntity('Capital draws', (payload.capitalDraws ?? []).length, () => importDraws(userId, payload.capitalDraws ?? [])));
 
+  // Capital contributions returns `orphaned` alongside the standard counts —
+  // same reasoning as settlements/deductions above.
   report(11);
-  const contribResult = await importContributions(
-    userId,
-    payload.capitalContributions ?? [],
-    dedResult.legacyDedIdToNewId
-  );
-  entities.push({ label: 'Capital contributions', inserted: contribResult.inserted, skipped: contribResult.skipped });
-  if (contribResult.orphaned > 0) {
-    warnings.push(
-      `${contribResult.orphaned} capital contribution(s) referenced a deduction not found in this backup — skipped.`
-    );
+  try {
+    const r = await importContributions(userId, payload.capitalContributions ?? [], legacyDedIdToNewId);
+    entities.push({ label: 'Capital contributions', inserted: r.inserted, skipped: r.skipped, failed: r.failed, firstError: r.firstError });
+    if (r.orphaned > 0) {
+      warnings.push(`${r.orphaned} capital contribution(s) referenced a deduction not found in this backup — skipped.`);
+    }
+  } catch (err) {
+    entities.push({
+      label: 'Capital contributions',
+      inserted: 0,
+      skipped: 0,
+      failed: (payload.capitalContributions ?? []).length,
+      firstError: errorMessage(err),
+    });
   }
 
   report(12);
-  const bankResult = await importBankStatements(userId, payload.bankStatements);
-  entities.push({ label: 'Bank (card) statements', inserted: bankResult.inserted, skipped: bankResult.skipped });
+  entities.push(
+    await runEntity('Bank (card) statements', (payload.bankStatements ?? []).length, () =>
+      importBankStatements(userId, payload.bankStatements)
+    )
+  );
 
   report(13);
-  const checkingResult = await importCheckingStatements(userId, payload.checkingStatements);
-  entities.push({ label: 'Checking statements', inserted: checkingResult.inserted, skipped: checkingResult.skipped });
+  entities.push(
+    await runEntity('Checking statements', (payload.checkingStatements ?? []).length, () =>
+      importCheckingStatements(userId, payload.checkingStatements)
+    )
+  );
 
   report(14);
-  const healthCategoriesWritten = await applyHealthOverrides(userId, truckId, payload.health);
-  const balanceUpdated = await updateBusinessBalance(userId, payload.bizBalance);
-  if (healthCategoriesWritten > 0) {
-    warnings.push(`Wrote ${healthCategoriesWritten} manual Truck Health baseline override(s) with no backing maintenance record.`);
+  if (truckId) {
+    try {
+      const healthCategoriesWritten = await applyHealthOverrides(userId, truckId, payload.health);
+      if (healthCategoriesWritten > 0) {
+        warnings.push(`Wrote ${healthCategoriesWritten} manual Truck Health baseline override(s) with no backing maintenance record.`);
+      }
+    } catch (err) {
+      warnings.push(`Truck Health override sync failed: ${errorMessage(err)}`);
+    }
   }
-  if (balanceUpdated) warnings.push('Business balance updated from backup.');
+  try {
+    const balanceUpdated = await updateBusinessBalance(userId, payload.bizBalance);
+    if (balanceUpdated) warnings.push('Business balance updated from backup.');
+  } catch (err) {
+    warnings.push(`Business balance update failed: ${errorMessage(err)}`);
+  }
 
   if (db.docs && db.docs.length > 0) {
     warnings.push(`Skipped ${db.docs.length} legacy document-archive entr(y/ies) — no source file to store.`);
   }
 
   report(15);
-  const consistencyWarnings = await runConsistencyPasses(userId);
-  warnings.push(...consistencyWarnings);
+  try {
+    const consistencyWarnings = await runConsistencyPasses(userId);
+    warnings.push(...consistencyWarnings);
+  } catch (err) {
+    warnings.push(`Consistency pass failed: ${errorMessage(err)}`);
+  }
 
   return { truckId, truckCreated, entities, warnings };
 }

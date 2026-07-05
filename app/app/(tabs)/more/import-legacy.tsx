@@ -22,6 +22,32 @@ function Row({ label, value }: { label: string; value: number | string }) {
   );
 }
 
+function EntityRow({ entity }: { entity: LegacyImportResult['entities'][number] }) {
+  const total = entity.inserted + entity.skipped + entity.failed;
+  if (total === 0) return null;
+  const parts = [`${entity.inserted} new`, `${entity.skipped} already present`];
+  if (entity.failed > 0) parts.push(`${entity.failed} FAILED`);
+  return (
+    <View style={{ marginBottom: spacing.sm }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <MutedText>{entity.label}</MutedText>
+        <Text
+          style={{
+            color: entity.failed > 0 ? colors.red : colors.text,
+            fontSize: typography.size.md,
+            fontWeight: '600',
+          }}
+        >
+          {parts.join(', ')}
+        </Text>
+      </View>
+      {entity.failed > 0 && entity.firstError && (
+        <Text style={{ color: colors.red, fontSize: typography.size.xs, marginTop: 2 }}>First error: {entity.firstError}</Text>
+      )}
+    </View>
+  );
+}
+
 export default function ImportLegacyBackup() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
@@ -104,6 +130,12 @@ export default function ImportLegacyBackup() {
             {preview.exportedAt && <MutedText>Exported {new Date(preview.exportedAt).toLocaleString()}</MutedText>}
             <View style={{ marginTop: spacing.md }}>
               <Row label="Settlements" value={preview.settlements} />
+              {preview.settlementsMissingWeekEnding > 0 && (
+                <MutedText>
+                  ⚠ {preview.settlementsMissingWeekEnding} of {preview.settlements} settlement(s) have no weekEnding — will use
+                  their document date instead.
+                </MutedText>
+              )}
               <Row label="Loads" value={preview.loads} />
               <Row label="Fuel purchases" value={preview.fuelPurchases} />
               <Row label="Deductions" value={preview.deductions} />
@@ -135,18 +167,32 @@ export default function ImportLegacyBackup() {
 
         {phase === 'done' && result && (
           <Card>
-            <Text style={{ color: colors.green, fontSize: typography.size.lg, fontWeight: '700', marginBottom: spacing.sm }}>
-              Import complete
-            </Text>
+            {(() => {
+              const totalFailed = result.entities.reduce((sum, e) => sum + e.failed, 0);
+              return (
+                <Text
+                  style={{
+                    color: totalFailed > 0 ? colors.orange : colors.green,
+                    fontSize: typography.size.lg,
+                    fontWeight: '700',
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  {totalFailed > 0 ? `Import finished with ${totalFailed} failure(s)` : 'Import complete'}
+                </Text>
+              );
+            })()}
             <MutedText>
-              {result.truckCreated ? 'Created truck Unit 830157.' : 'Matched existing truck Unit 830157.'}
+              {result.truckId
+                ? result.truckCreated
+                  ? 'Created truck Unit 830157.'
+                  : 'Matched existing truck Unit 830157.'
+                : 'Truck profile could not be created — see warnings below.'}
             </MutedText>
             <View style={{ marginTop: spacing.md }}>
-              {result.entities
-                .filter((e) => e.inserted > 0 || e.skipped > 0)
-                .map((e) => (
-                  <Row key={e.label} label={e.label} value={`${e.inserted} new, ${e.skipped} already present`} />
-                ))}
+              {result.entities.map((e) => (
+                <EntityRow key={e.label} entity={e} />
+              ))}
             </View>
             {result.warnings.length > 0 && (
               <View style={{ marginTop: spacing.md }}>
