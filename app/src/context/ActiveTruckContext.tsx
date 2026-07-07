@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
+import { withTimeout } from '@/src/lib/withTimeout';
+
+const STARTUP_TIMEOUT_MS = 8000;
 
 export type Truck = {
   id: string;
@@ -42,27 +45,40 @@ export function ActiveTruckProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLoading(true);
-    const { data } = await supabase
-      .from('trucks')
-      .select('id, unit_number, vin, year, make, model, is_active')
-      .eq('is_active', true)
-      .order('created_at', { ascending: true });
+    console.log('[startup] refreshTrucks start');
+    try {
+      const result = await withTimeout(
+        supabase
+          .from('trucks')
+          .select('id, unit_number, vin, year, make, model, is_active')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true }),
+        STARTUP_TIMEOUT_MS,
+        'trucks fetch'
+      );
 
-    const list = data ?? [];
-    setTrucks(list);
+      const list = result?.data ?? [];
+      setTrucks(list);
 
-    const stored = await AsyncStorage.getItem(storageKey(session.user.id));
-    const storedStillValid = list.some((t) => t.id === stored);
+      const stored = await withTimeout(
+        AsyncStorage.getItem(storageKey(session.user.id)),
+        STARTUP_TIMEOUT_MS,
+        'active-truck AsyncStorage read'
+      );
+      const storedStillValid = list.some((t) => t.id === stored);
 
-    if (storedStillValid) {
-      setActiveTruckIdState(stored);
-    } else if (list.length > 0) {
-      setActiveTruckIdState(list[0].id);
-      await AsyncStorage.setItem(storageKey(session.user.id), list[0].id);
-    } else {
-      setActiveTruckIdState(null);
+      if (storedStillValid) {
+        setActiveTruckIdState(stored);
+      } else if (list.length > 0) {
+        setActiveTruckIdState(list[0].id);
+        await AsyncStorage.setItem(storageKey(session.user.id), list[0].id);
+      } else {
+        setActiveTruckIdState(null);
+      }
+    } finally {
+      console.log('[startup] refreshTrucks done — clearing loading');
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {

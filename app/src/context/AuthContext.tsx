@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
 import { TOS_VERSION } from '@/src/config/termsOfUse';
+import { withTimeout } from '@/src/lib/withTimeout';
+
+const STARTUP_TIMEOUT_MS = 8000;
 
 type Profile = {
   user_id: string;
@@ -31,23 +34,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('user_id, company_name, owner_name, tos_accepted_at, tos_version')
-      .eq('user_id', userId)
-      .maybeSingle();
-    setProfile(data ?? null);
+    console.log('[startup] fetchProfile start', userId);
+    const result = await withTimeout(
+      supabase
+        .from('profiles')
+        .select('user_id, company_name, owner_name, tos_accepted_at, tos_version')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      STARTUP_TIMEOUT_MS,
+      'fetchProfile'
+    );
+    setProfile(result?.data ?? null);
+    console.log('[startup] fetchProfile done', !!result?.data);
   }
 
   useEffect(() => {
     let mounted = true;
+    console.log('[startup] AuthProvider mount — calling getSession()');
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      if (data.session) await fetchProfile(data.session.user.id);
-      setLoading(false);
-    });
+    (async () => {
+      try {
+        const result = await withTimeout(supabase.auth.getSession(), STARTUP_TIMEOUT_MS, 'auth.getSession');
+        if (!mounted) return;
+        console.log('[startup] getSession resolved — session present:', !!result?.data.session);
+        setSession(result?.data.session ?? null);
+        if (result?.data.session) await fetchProfile(result.data.session.user.id);
+      } finally {
+        if (mounted) {
+          console.log('[startup] auth bootstrap finished — clearing loading');
+          setLoading(false);
+        }
+      }
+    })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession);

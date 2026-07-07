@@ -3,11 +3,21 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { ActiveTruckProvider } from '@/src/context/ActiveTruckContext';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { colors } from '@/src/theme';
+
+// Startup diagnostics (2026-07-06): take manual control of the splash
+// screen instead of relying on its default auto-hide, so a stuck startup
+// promise can't leave the user staring at a native splash that already
+// auto-hid into our OWN loading screen with no way to tell the two apart.
+// AuthContext's getSession() bootstrap is now timeout-guarded (see
+// withTimeout.ts) so `loading` is guaranteed to resolve within ~8s even if
+// the storage layer hangs — hideAsync() below fires the moment it does.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   return (
@@ -41,11 +51,21 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
+    console.log('[startup] RootLayoutNav — loading:', loading);
+    if (loading) return;
+    // Auth bootstrap is done (success or timeout-fallback) — safe to reveal
+    // the app now. finally-equivalent: this fires no matter which path
+    // AuthContext's loading=false came from.
+    SplashScreen.hideAsync().catch(() => {});
+  }, [loading]);
+
+  useEffect(() => {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const onTosScreen = segments[0] === 'tos';
 
+    console.log('[startup] navigation decision — session:', !!session, 'needsTos:', needsTos, 'segments:', segments);
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
     } else if (session && needsTos && !onTosScreen) {
