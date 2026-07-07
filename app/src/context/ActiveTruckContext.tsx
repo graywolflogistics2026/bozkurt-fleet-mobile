@@ -45,7 +45,6 @@ export function ActiveTruckProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLoading(true);
-    console.log('[startup] refreshTrucks start');
     try {
       const result = await withTimeout(
         supabase
@@ -76,7 +75,6 @@ export function ActiveTruckProvider({ children }: { children: ReactNode }) {
         setActiveTruckIdState(null);
       }
     } finally {
-      console.log('[startup] refreshTrucks done — clearing loading');
       setLoading(false);
     }
   }

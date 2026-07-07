@@ -51,7 +51,6 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('[startup] RootLayoutNav — loading:', loading);
     if (loading) return;
     // Auth bootstrap is done (success or timeout-fallback) — safe to reveal
     // the app now. finally-equivalent: this fires no matter which path
@@ -65,7 +64,6 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === '(auth)';
     const onTosScreen = segments[0] === 'tos';
 
-    console.log('[startup] navigation decision — session:', !!session, 'needsTos:', needsTos, 'segments:', segments);
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
     } else if (session && needsTos && !onTosScreen) {

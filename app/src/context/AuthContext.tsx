@@ -34,7 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function fetchProfile(userId: string) {
-    console.log('[startup] fetchProfile start', userId);
     const result = await withTimeout(
       supabase
         .from('profiles')
@@ -45,25 +44,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       'fetchProfile'
     );
     setProfile(result?.data ?? null);
-    console.log('[startup] fetchProfile done', !!result?.data);
   }
 
   useEffect(() => {
     let mounted = true;
-    console.log('[startup] AuthProvider mount — calling getSession()');
 
     (async () => {
       try {
         const result = await withTimeout(supabase.auth.getSession(), STARTUP_TIMEOUT_MS, 'auth.getSession');
         if (!mounted) return;
-        console.log('[startup] getSession resolved — session present:', !!result?.data.session);
         setSession(result?.data.session ?? null);
         if (result?.data.session) await fetchProfile(result.data.session.user.id);
       } finally {
-        if (mounted) {
-          console.log('[startup] auth bootstrap finished — clearing loading');
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     })();
 
