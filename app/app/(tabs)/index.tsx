@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useMemo, useState, useCallback } from 'react';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFleetStats, fetchFleetStats } from '@/src/data/dashboardStats';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
@@ -39,10 +40,21 @@ export default function Dashboard() {
   const { session, profile, signOut } = useAuth();
   const { trucks, activeTruck, loading: trucksLoading } = useActiveTruck();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const userId = session?.user.id;
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [reasonableSalaryInput, setReasonableSalaryInput] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await invalidateFinancialData(queryClient);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
 
   const statsQuery = useFleetStats(activeTruck?.id ?? null);
   const capitalQuery = useCapitalAccountSummary();
@@ -100,7 +112,12 @@ export default function Dashboard() {
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+        }
+      >
         <ScreenTitle>Dashboard</ScreenTitle>
 
         <Card>

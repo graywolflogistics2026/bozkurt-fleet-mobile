@@ -1,6 +1,6 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-04): everything below (sections 1-5) has been run against
+**STATUS (2026-07-06): everything below (sections 1-6) has been run against
 the live DB.**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
@@ -223,7 +223,7 @@ changes.
 
 - [x] 5a run (add tos_accepted_at, tos_version to profiles)
 
-## 6. fuel_purchases.truck_id (PROMPTS.md Session 6 — fleet scalability) — ⏳ PENDING (not yet run)
+## 6. fuel_purchases.truck_id (PROMPTS.md Session 6 — fleet scalability) — ✅ APPLIED
 
 `docs/SCHEMA.sql`'s original draft gave `settlements` and `maintenance_records`
 a `truck_id` column but left it off `fuel_purchases` — an oversight caught
@@ -243,7 +243,7 @@ Nullable, no backfill needed for existing rows (same as `settlements`/
 `maintenance_records`.truck_id) — a single-truck account can leave it null
 or backfill it later; the app treats null the same as "unknown truck."
 
-- [ ] 6a run (add truck_id + index to fuel_purchases)
+- [x] 6a run (add truck_id + index to fuel_purchases)
 
 ---
 

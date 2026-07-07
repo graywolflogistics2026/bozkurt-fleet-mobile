@@ -11,6 +11,7 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { callAiImport, friendlyAiImportError, type AiImportError } from '@/src/data/aiImportCall';
 import { fetchExistingDocsForDuplicateCheck, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { isPersonalPayment } from '@/src/import/category';
@@ -194,7 +195,7 @@ export default function Import() {
       });
       setResult(saved);
       setPhase('done');
-      queryClient.invalidateQueries();
+      await invalidateFinancialData(queryClient);
       buildAndUploadBackupSnapshot(userId); // fire-and-forget
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Save failed.');

@@ -9,6 +9,7 @@ import { colors, spacing, typography } from '@/src/theme';
 import type { LegacyBackupPayload } from '@/src/data/legacyImport/types';
 import { buildImportPreview, type LegacyImportPreview } from '@/src/data/legacyImport/preview';
 import { importLegacyBackup, type ImportProgress, type LegacyImportResult } from '@/src/data/legacyImport/importLegacyBackup';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 
 type Phase = 'pick' | 'preview' | 'importing' | 'done' | 'error';
 
@@ -86,9 +87,10 @@ export default function ImportLegacyBackup() {
       const res = await importLegacyBackup(payload, session.user.id, setProgress);
       setResult(res);
       setPhase('done');
-      // New rows landed across most entities — simplest correct invalidation
-      // is to refresh every cached query rather than list them one by one.
-      queryClient.invalidateQueries();
+      // New rows landed across most entities — refresh every affected query
+      // and force an immediate refetch (see queryInvalidation.ts) rather
+      // than relying on the default active-observer-only refetch.
+      await invalidateFinancialData(queryClient);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Import failed.');
       setPhase('error');
