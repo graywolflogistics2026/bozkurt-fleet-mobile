@@ -6,12 +6,36 @@
   1. Settlement-withheld deductions are never counted as tax deductions
      (net-pay model: income = net settlement pay; expenses = out-of-pocket only
      + per diem $64/day).
-  2. Personal-payment purchases (Personal Card / Cash / Zelle / Venmo) always
-     create/update an id-linked capital contribution; deleting or editing the
-     deduction syncs the contribution (add/update/remove — never duplicate).
-  3. Store purchases book qty × unit price per item PLUS a "Sales tax & fees"
-     line so the booked total always equals the invoice grand total. No dollar
-     is silently lost.
+  2. Payment methods are exactly 9 generic values: Business Checking,
+     Business Credit Card, Personal Checking, Personal Credit Card, Cash,
+     Venmo, Cash App, Zelle Personal, Zelle Business (see
+     app/src/import/paymentMethods.ts) — never a bank-brand string like
+     "BofA Business"; map any legacy/free-text value into one of these 9.
+     isPersonal = NOT /business/i AND /personal|cash|venmo|zelle/i (the
+     NOT-business guard is why "Zelle Business" correctly reads as
+     business-paid despite matching /zelle/i). A personal-payment purchase
+     creates/updates an id-linked capital contribution ONLY after an
+     explicit confirmation dialog (asked once per receipt, not per line
+     item) — declining saves the deduction with no contribution. Deleting or
+     editing a deduction that DOES have a linked contribution still syncs it
+     (add/update/remove — never duplicate); this sync rule is unconditional,
+     the confirmation gate only applies to creating a NEW contribution at
+     import time.
+  3. Store purchases book qty × unit price per item. NO separate "Sales tax
+     & fees" row and NO separate service/add-on row: sales tax, shipping/
+     handling, and any add-on/service/protection-plan line (any name —
+     "Add-on services", "... service (for X)", "Walmart Protection Plan",
+     "installation/delivery service", etc.) fold into the REAL items' costs
+     PROPORTIONALLY (any remainder cent goes to the largest item) so the
+     booked total always equals the receipt's grand total to the cent — no
+     dollar is silently lost, and none of it is left sitting in its own
+     line either. If a fee/service line names its parent via "(for X)" (or
+     the item name otherwise makes the parent obvious), fold it directly
+     into that item instead of the proportional split. Each item's
+     description gets an "(incl. $X tax/fees/services)" suffix showing how
+     much of its booked cost is folded-in tax/fees/services. If a receipt
+     contains ONLY service/fee lines (no real item to fold into), keep them
+     as their own row(s), each description prefixed "NEEDS REVIEW: ".
   4. Truck Health intervals are per-truck, user-editable settings, not code
      constants — every truck is different and each owner tunes their own
      service schedule in Settings. The legacy values (oil 50,000 mi fixed;
@@ -69,6 +93,24 @@
      (PROMPTS.md Session 3) — see docs/TERMS_OF_USE_DRAFT.md (attorney-review
      draft, not itself legal advice) and Settings > Legal (PROMPTS.md
      Session 10) for the paired Privacy Policy.
+  9. Per diem days are DETERMINISTIC: 7 × the number of distinct settlement
+     weeks (deduped by `week_ending`) — `app/src/tax/perDiem.ts`
+     `calcPerDiemDays()` takes only `week_ending` values, nothing else.
+     Never derive per diem from AI-extracted load `pickup_date`/
+     `delivery_date` — those columns stay in `loads` (docs/PENDING_SQL.md
+     §8) and keep being populated for possible future use, but re-running
+     the same extraction can produce different dates run to run, which
+     would make the tax engine's own output non-reproducible.
+  10. Re-importing a settlement for a `week_ending` that already exists
+      REPLACES that week's batch-tagged rows (settlement, loads, fuel,
+      reimbursements, withheld deductions — all keyed off the stable
+      `settlement_id` from the settlement upsert) instead of duplicating
+      them (`app/src/data/aiImportSave.ts`, owner decision 2026-07-09,
+      mirrors the web app's v2026.07.09-A behavior). Maintenance/tolls/
+      loans are NOT part of this replace. A replace must not re-credit
+      `business_balance` with that week's net pay a second time.
+- The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
+  go through `DOC_TYPE_META`'s human label (e.g. "Store/Amazon Purchase").
 - All Anthropic API calls happen server-side (Supabase Edge Functions).
   The mobile app never holds the API key.
 - The AI extraction prompt in legacy/index.html is battle-tuned. Port it

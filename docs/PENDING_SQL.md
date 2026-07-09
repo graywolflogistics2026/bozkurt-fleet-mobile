@@ -245,6 +245,99 @@ or backfill it later; the app treats null the same as "unknown truck."
 
 - [x] 6a run (add truck_id + index to fuel_purchases)
 
+## 7. deductions.warranty_years (owner decision 2026-07-07, web app v2026.07.07-H)
+
+Store-purchase items may carry a warranty length extracted by ai-import
+(`warrantyYears` — halves allowed, e.g. 2.5). Persisted now by the mobile
+import/save mapping (`app/src/import/mapExtraction.ts` `mapPurchase()`,
+`app/src/types/db.ts` `Deduction.warranty_years`); surfacing it in the
+Deductions UI can wait until Session 8+.
+
+```sql
+alter table deductions add column warranty_years numeric(4,1);
+```
+
+Nullable, no backfill needed — existing rows simply have no warranty info.
+
+- [ ] 7a run (add warranty_years to deductions)
+
+## 8. loads.pickup_date/delivery_date (per-diem exact day-counting rework)
+
+Needed to replace the `calcPerDiemDays()` "7 days × settlement count"
+stopgap (`app/src/tax/perDiem.ts`) with legacy's real method — summing
+(deliveryDate − pickupDate) per load, merged with a 7-day fallback for
+settlement weeks whose loads have no date info at all. The `loads` table
+only ever kept a single `load_date` column (see PROMPTS.md's 2026-07-05
+implementation note, which flagged this exact gap and said a future
+migration would need to add these two columns back). Not explicitly
+requested this pass, but required to implement the per-diem rework for
+real rather than as another approximation — flagging it here rather than
+silently reintroducing a stopgap.
+
+```sql
+alter table loads add column pickup_date date;
+alter table loads add column delivery_date date;
+```
+
+Nullable, no backfill needed for existing rows — `load_date` stays
+populated for old rows and any display code that only reads it; new
+imports populate all three (`app/src/import/mapExtraction.ts`
+`mapSettlement()`).
+
+- [ ] 8a run (add pickup_date to loads)
+- [ ] 8b run (add delivery_date to loads)
+
+## 9. reimbursements.settlement_id (owner decision 2026-07-09, web v2026.07.09-A — re-import-replace)
+
+Mirrors the web app's new behavior: re-importing a settlement for a
+`week_ending` that already exists REPLACES that week's batch-tagged rows
+(settlement, loads, fuel, reimbursements, withheld deductions) instead of
+duplicating them (`app/src/data/aiImportSave.ts`). `loads`/`fuel_purchases`/
+withheld `deductions` already carry `settlement_id`; `reimbursements` never
+did (it was only ever written from the standalone-maintenance
+warranty-credit path, which has no settlement to tag). Settlement imports
+now also map `settlement.reimbursementItems` into this table (legacy
+saveImport(), legacy/index.html:2516 — a real gap, not previously ported),
+so it needs the same batch tag to be replaceable.
+
+```sql
+alter table reimbursements add column settlement_id uuid references settlements on delete cascade;
+create index on reimbursements (settlement_id);
+```
+
+Nullable — existing maintenance-warranty reimbursement rows have no
+settlement to tag and stay null; the app treats null as "not tied to a
+settlement import."
+
+- [ ] 9a run (add settlement_id + index to reimbursements)
+
+## 10. tax_year_data.per_diem gains full_daily_rate (Dashboard card parity, owner decision 2026-07-09)
+
+The Dashboard's "Per Diem Deduction" card must show the legacy caption
+"@$64/day (80% of $80)" — the $64 actually deducted is 80% of the $80 IRS
+transportation-industry meal per diem. `daily_rate` (64) and
+`deductible_pct` (100) already seeded in section 3 are exactly what
+`calcPerDiemDeduction()` computes with and must NOT change (that stays
+`days × 64 × 100%`, unchanged). `full_daily_rate` is a new, purely
+informational key merged into the existing `per_diem` jsonb — the
+Dashboard derives the caption's "80%" as `round(daily_rate /
+full_daily_rate × 100)` from these two data-sourced numbers, never a
+hardcoded percentage (CLAUDE.md invariant #6).
+
+```sql
+update tax_year_data
+set per_diem = per_diem || '{"full_daily_rate": 80}'::jsonb
+where tax_year = 2026;
+```
+
+Additive merge (`||`) — does not disturb the existing `daily_rate`/
+`deductible_pct` keys. If this key is missing (not yet run), the Dashboard
+card falls back to showing just "@$64/day" with no parenthetical, same
+"never silently compute with missing data" spirit as invariant #6's
+year-fallback banner.
+
+- [ ] 10a run (merge full_daily_rate into tax_year_data.per_diem for 2026)
+
 ---
 
 ## Also still open (not part of any pass above)

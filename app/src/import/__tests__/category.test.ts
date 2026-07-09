@@ -3,15 +3,25 @@ import { detectMaintType, getCatNote, guessCategory, isPersonalPayment, toDbServ
 describe('isPersonalPayment', () => {
   it('matches personal/cash/zelle/venmo payment methods', () => {
     expect(isPersonalPayment('Personal Card')).toBe(true);
+    expect(isPersonalPayment('Personal Checking')).toBe(true);
+    expect(isPersonalPayment('Personal Credit Card')).toBe(true);
     expect(isPersonalPayment('Cash')).toBe(true);
+    expect(isPersonalPayment('Cash App')).toBe(true);
     expect(isPersonalPayment('Zelle Personal')).toBe(true);
+    expect(isPersonalPayment('Venmo')).toBe(true);
     expect(isPersonalPayment('Venmo Personal')).toBe(true);
   });
 
   it('does not match business payment methods', () => {
     expect(isPersonalPayment('Business Credit')).toBe(false);
     expect(isPersonalPayment('Business Debit')).toBe(false);
+    expect(isPersonalPayment('Business Checking')).toBe(false);
+    expect(isPersonalPayment('Business Credit Card')).toBe(false);
     expect(isPersonalPayment(undefined)).toBe(false);
+  });
+
+  it('reads "Zelle Business" as business-paid despite matching /zelle/i (the NOT-business guard)', () => {
+    expect(isPersonalPayment('Zelle Business')).toBe(false);
   });
 });
 

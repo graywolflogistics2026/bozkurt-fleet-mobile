@@ -16,6 +16,7 @@ describe('mapSettlement', () => {
       deductions: [{ code: 'ELD', desc: 'Motive ELD', amount: 45 }],
       maintenance: [{ invoice: 'INV1', desc: 'Oil change', odometer: 300000, total: 250 }],
       tolls: { ezpass: { items: [{ date: '2026-06-26', amount: 12.5 }] } },
+      reimbursementItems: [{ desc: 'Detention pay', ref: 'DET1', amount: 75 }],
     },
   };
 
@@ -57,6 +58,13 @@ describe('mapSettlement', () => {
     const r = mapSettlement(extraction, 'user-1', 'truck-1');
     expect(r.maintenance).toEqual([
       expect.objectContaining({ truck_id: 'truck-1', service_type: 'oil', odometer: 300000, cost: 250 }),
+    ]);
+  });
+
+  it('maps reimbursementItems into reimbursement rows (legacy/index.html:2516 — previously not ported)', () => {
+    const r = mapSettlement(extraction, 'user-1', 'truck-1');
+    expect(r.reimbursements).toEqual([
+      expect.objectContaining({ description: 'Detention pay', reference: 'DET1', amount: 75 }),
     ]);
   });
 
@@ -135,7 +143,7 @@ describe('mapPurchase', () => {
     expect(line.isPersonalPayment).toBe(false);
   });
 
-  it('adds a Sales tax & fees line covering the gap to the invoice grand total', () => {
+  it('folds the gap to the invoice grand total into the single item instead of a separate tax row (CLAUDE.md invariant #3)', () => {
     const d: Extraction = {
       docType: 'amazon',
       date: '2026-06-28',
@@ -143,9 +151,9 @@ describe('mapPurchase', () => {
       purchase: { items: [{ name: 'Widget', qty: 1, price: 100 }], total: 108.25 },
     };
     const lines = mapPurchase(d, 'user-1');
-    expect(lines).toHaveLength(2);
-    expect(lines[1].insert.description).toContain('Sales tax & fees');
-    expect(lines[1].insert.amount).toBeCloseTo(8.25, 2);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].insert.amount).toBeCloseTo(108.25, 2);
+    expect(lines[0].insert.description).toContain('(incl. $8.25 tax/fees/services)');
   });
 
   it('uses the explicit tax field over the total-minus-items gap when present', () => {
@@ -156,7 +164,72 @@ describe('mapPurchase', () => {
       purchase: { items: [{ name: 'Widget', qty: 1, price: 100 }], tax: 7.5, total: 107.5 },
     };
     const lines = mapPurchase(d, 'user-1');
-    expect(lines[1].insert.amount).toBeCloseTo(7.5, 2);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].insert.amount).toBeCloseTo(107.5, 2);
+    expect(lines[0].insert.description).toContain('(incl. $7.50 tax/fees/services)');
+  });
+
+  it('distributes tax proportionally across multiple items, remainder cent to the largest', () => {
+    const d: Extraction = {
+      docType: 'amazon',
+      date: '2026-06-28',
+      vendor: 'Home Depot',
+      purchase: {
+        items: [
+          { name: 'Drill', qty: 1, price: 100 },
+          { name: 'Bit Set', qty: 1, price: 50 },
+        ],
+        total: 162.03, // +12.03 to fold in: 2/3 -> Drill, 1/3 -> Bit Set
+      },
+    };
+    const lines = mapPurchase(d, 'user-1');
+    expect(lines).toHaveLength(2);
+    const total = lines.reduce((s, l) => s + l.insert.amount, 0);
+    expect(total).toBeCloseTo(162.03, 2);
+    expect(lines[0].insert.amount).toBeCloseTo(108.02, 2); // Drill: 100 + 2/3 of 12.03
+    expect(lines[1].insert.amount).toBeCloseTo(54.01, 2); // Bit Set: 50 + 1/3 of 12.03
+  });
+
+  it('folds a named-parent service line directly into that item, not the proportional pool', () => {
+    const d: Extraction = {
+      docType: 'amazon',
+      date: '2026-06-28',
+      vendor: 'Walmart',
+      purchase: {
+        items: [
+          { name: 'Milwaukee M18 Drill', qty: 1, price: 150 },
+          { name: 'Extended warranty (for Milwaukee M18 Drill)', qty: 1, price: 20 },
+        ],
+        total: 170,
+      },
+    };
+    const lines = mapPurchase(d, 'user-1');
+    expect(lines).toHaveLength(1);
+    expect(lines[0].insert.amount).toBeCloseTo(170, 2);
+    expect(lines[0].insert.description).toContain('(incl. $20.00 tax/fees/services)');
+  });
+
+  it('keeps a receipt with ONLY service/fee lines as NEEDS REVIEW rows', () => {
+    const d: Extraction = {
+      docType: 'amazon',
+      date: '2026-06-28',
+      vendor: 'Best Buy',
+      purchase: { items: [{ name: 'Add-on services', qty: 1, price: 15 }], total: 15 },
+    };
+    const lines = mapPurchase(d, 'user-1');
+    expect(lines).toHaveLength(1);
+    expect(lines[0].insert.description).toContain('NEEDS REVIEW: Add-on services');
+  });
+
+  it('persists warrantyYears onto the item deduction', () => {
+    const d: Extraction = {
+      docType: 'amazon',
+      date: '2026-06-28',
+      vendor: 'Home Depot',
+      purchase: { items: [{ name: 'Generator', qty: 1, price: 500, warrantyYears: 2.5 }], total: 500 },
+    };
+    const [line] = mapPurchase(d, 'user-1');
+    expect(line.insert.warranty_years).toBe(2.5);
   });
 
   it('flags personal-payment lines for Capital Account linking (CLAUDE.md invariant #2)', () => {

@@ -46,7 +46,7 @@ export const fixtureTaxYearData: TaxYearData = {
   },
   standard_deduction: { mfj: 30000, single: 15000, hoh: 22500 },
   se_tax: { rate: 0.153, factor: 0.9235, ss_wage_base: 184500 },
-  per_diem: { daily_rate: 64, deductible_pct: 100 },
+  per_diem: { daily_rate: 64, deductible_pct: 100, full_daily_rate: 80 },
   quarterly_deadlines: [
     ['Q1', '2026-04-15'],
     ['Q2', '2026-06-15'],

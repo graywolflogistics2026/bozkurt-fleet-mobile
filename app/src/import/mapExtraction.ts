@@ -1,4 +1,5 @@
-import { detectMaintType, getCatNote, guessCategory, isPersonalPayment, toDbServiceType } from '@/src/import/category';
+import { detectMaintType, getCatNote, guessCategory, toDbServiceType } from '@/src/import/category';
+import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import type {
   DeductionInsert,
   FuelPurchaseInsert,
@@ -9,7 +10,7 @@ import type {
   SettlementInsert,
   TollInsert,
 } from '@/src/types/db';
-import type { Extraction, ExtractedFuel, ExtractedToll } from '@/src/import/types';
+import type { Extraction, ExtractedFuel, ExtractedReimbursementItem, ExtractedToll } from '@/src/import/types';
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
@@ -26,6 +27,7 @@ export type SettlementMapping = {
   fuel: FuelPurchaseInsert[];
   deductions: DeductionInsert[];
   maintenance: MaintenanceRecordInsert[];
+  reimbursements: ReimbursementInsert[];
   tolls: TollInsert[];
   loans: LoanInsert[];
   netPay: number;
@@ -43,6 +45,16 @@ function toFuelInsert(f: ExtractedFuel, fuelType: 'tractor' | 'reefer', userId: 
     gallons: f.gallons ?? null,
     amount: f.amount ?? null,
     discount: num(f.discount),
+  };
+}
+
+function toReimbInsert(r: ExtractedReimbursementItem, userId: string, fallbackDate?: string): ReimbursementInsert {
+  return {
+    user_id: userId,
+    reimb_date: fallbackDate ?? null,
+    description: r.desc ?? null,
+    reference: r.ref ?? null,
+    amount: num(r.amount),
   };
 }
 
@@ -68,17 +80,26 @@ export function mapSettlement(d: Extraction, userId: string, truckId: string | n
     miles: num(s.totalMiles),
   };
 
-  const loads: LoadInsert[] = (s.loads ?? []).map((l) => ({
-    user_id: userId,
-    settlement_id: null,
-    load_date: l.pickupDate ?? l.date ?? d.date ?? null,
-    order_number: l.order ?? null,
-    origin: l.from ?? null,
-    destination: l.to ?? null,
-    loaded_miles: num(l.loadedMiles),
-    empty_miles: num(l.emptyMiles),
-    revenue: num(l.revenue),
-  }));
+  // pickup_date/delivery_date (docs/PENDING_SQL.md §8) feed the per-diem
+  // day-range calc (app/src/tax/perDiem.ts) — load_date stays populated too
+  // for existing display code that only reads the single column.
+  const loads: LoadInsert[] = (s.loads ?? []).map((l) => {
+    const pickupDate = l.pickupDate ?? l.date ?? d.date ?? null;
+    const deliveryDate = l.deliveryDate ?? l.dropDate ?? pickupDate;
+    return {
+      user_id: userId,
+      settlement_id: null,
+      load_date: pickupDate,
+      pickup_date: pickupDate,
+      delivery_date: deliveryDate,
+      order_number: l.order ?? null,
+      origin: l.from ?? null,
+      destination: l.to ?? null,
+      loaded_miles: num(l.loadedMiles),
+      empty_miles: num(l.emptyMiles),
+      revenue: num(l.revenue),
+    };
+  });
 
   const fuel: FuelPurchaseInsert[] = [
     ...(s.tractorFuel ?? []).map((f) => toFuelInsert(f, 'tractor', userId, truckId, d.date)),
@@ -111,6 +132,10 @@ export function mapSettlement(d: Extraction, userId: string, truckId: string | n
     invoice_number: m.invoice ?? null,
   }));
 
+  // legacy/index.html:2516 — a real gap, not previously ported: settlement
+  // reimbursementItems were extracted but never turned into DB rows.
+  const reimbursements: ReimbursementInsert[] = (s.reimbursementItems ?? []).map((r) => toReimbInsert(r, userId, d.date));
+
   const tolls: TollInsert[] = [
     ...(s.tolls?.ezpass?.items ?? []).map((t) => toTollInsert(t, 'ezpass', userId)),
     ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, 'drivewyze', userId)),
@@ -125,7 +150,7 @@ export function mapSettlement(d: Extraction, userId: string, truckId: string | n
     next_due: l.nextDue || null,
   }));
 
-  return { settlement, loads, fuel, deductions, maintenance, tolls, loans, netPay: num(s.netPay) };
+  return { settlement, loads, fuel, deductions, maintenance, reimbursements, tolls, loans, netPay: num(s.netPay) };
 }
 
 // ---------- standalone fuel (legacy saveImport() fuel branch, legacy/index.html:2528-2530) ----------
@@ -178,10 +203,46 @@ export function mapMaintenance(d: Extraction, userId: string, truckId: string | 
 }
 
 // ---------- store/amazon purchase (legacy saveImport() purchase branch, legacy/index.html:2538-2575) ----------
+// Rewritten 2026-07-07 (owner decision, web app v2026.07.07-H) — REPLACES
+// CLAUDE.md's old invariant #3 (a separate "Sales tax & fees" row). Tax,
+// shipping/handling, and any add-on/service/protection-plan line now fold
+// PROPORTIONALLY into the real items' costs so the booked total still
+// equals the receipt's grand total to the cent, but no dollar sits in its
+// own disconnected line either.
 export type PurchaseDeductionMapping = {
   insert: DeductionInsert;
   isPersonalPayment: boolean;
 };
+
+const SERVICE_LINE_RE = /\b(service|protection plan|add-?on|installation|delivery service|assembly|gift wrap|warranty)\b/i;
+const PARENT_REF_RE = /\(for\s+(.+?)\)\s*$/i;
+
+function money(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+// Distributes `extra` (dollars) across `costs` proportionally by cost
+// share, cents-safe: whole cents are floor-allocated per share, then any
+// leftover cents go one-at-a-time to the largest-cost item(s) first so the
+// sum of the returned shares always equals `extra` to the cent.
+function distributeProportional(costs: number[], extra: number): number[] {
+  const total = costs.reduce((s, c) => s + c, 0);
+  if (total <= 0 || extra <= 0.009) return costs.map(() => 0);
+
+  const totalCents = Math.round(extra * 100);
+  const rawShares = costs.map((c) => (c / total) * totalCents);
+  const shares = rawShares.map((r) => Math.floor(r));
+  let remainder = totalCents - shares.reduce((s, c) => s + c, 0);
+
+  const order = costs.map((c, i) => i).sort((a, b) => costs[b] - costs[a]);
+  let i = 0;
+  while (remainder > 0 && order.length > 0) {
+    shares[order[i % order.length]] += 1;
+    remainder--;
+    i++;
+  }
+  return shares.map((cents) => cents / 100);
+}
 
 // Unlike legacy (which leaves `source` unset for these), we tag
 // source='import' — our schema (docs/SCHEMA.sql) added that value
@@ -190,63 +251,99 @@ export type PurchaseDeductionMapping = {
 export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMapping[] {
   const p = d.purchase ?? {};
   const storeName = d.vendor || d.docType;
-  const payMethod = p.paymentMethod || 'Business Credit';
+  const payMethod = normalizePaymentMethod(p.paymentMethod);
   const personal = isPersonalPayment(payMethod);
-  const items = p.items && p.items.length > 0 ? p.items : [{ name: d.summary || 'Purchase', price: d.totalAmount, qty: 1 }];
+  const rawItems = p.items && p.items.length > 0 ? p.items : [{ name: d.summary || 'Purchase', price: d.totalAmount, qty: 1 }];
 
-  const result: PurchaseDeductionMapping[] = [];
-  let itemsSum = 0;
+  type RealItem = { name: string; qty: number; cost: number; warrantyYears?: number; extra: number };
+  type ServiceLine = { name: string; cost: number; parent?: string };
 
-  for (const item of items) {
-    const cat = guessCategory(item.name, storeName);
+  const realItems: RealItem[] = [];
+  const serviceLines: ServiceLine[] = [];
+
+  for (const item of rawItems) {
+    const name = item.name ?? '';
     const qty = Math.max(1, parseInt(String(item.qty ?? 1), 10) || 1);
     const cost = num(item.price) * qty;
-    if (cost > 0) {
-      const note = getCatNote(cat);
-      const qtyLabel = qty > 1 ? `${qty}× ` : '';
-      const desc = `${qtyLabel}${item.name ?? ''} — ${note} | ${storeName} | ${payMethod}${personal ? ' — Owner Contribution' : ''}`;
-      result.push({
-        insert: {
-          user_id: userId,
-          ded_date: d.date ?? null,
-          code: 'EQUIP',
-          description: desc,
-          amount: cost,
-          category: cat,
-          store: storeName,
-          payment_method: payMethod,
-          source: 'import',
-        },
-        isPersonalPayment: personal,
-      });
-      itemsSum += cost;
+    if (cost <= 0.009) continue;
+    if (SERVICE_LINE_RE.test(name)) {
+      const parentMatch = name.match(PARENT_REF_RE);
+      serviceLines.push({ name, cost, parent: parentMatch?.[1]?.trim() ?? (item as { warrantyFor?: string }).warrantyFor });
+    } else {
+      realItems.push({ name, qty, cost, warrantyYears: item.warrantyYears, extra: 0 });
     }
   }
 
-  // Sales tax/fees make up the rest of the invoice total so nothing is
-  // silently lost (CLAUDE.md invariant #3): use the explicit tax field if
-  // extracted, else book the gap between the grand total and the item sum.
-  const grand = num(p.total, num(d.totalAmount));
-  const extra = p.tax && p.tax > 0 ? p.tax : grand > itemsSum + 0.01 ? Number((grand - itemsSum).toFixed(2)) : 0;
-  if (extra > 0.009) {
-    const desc = `Sales tax & fees | ${storeName} | ${payMethod}${personal ? ' — Owner Contribution' : ''}`;
-    result.push({
-      insert: {
-        user_id: userId,
-        ded_date: d.date ?? null,
-        code: 'EQUIP',
-        description: desc,
-        amount: extra,
-        category: 'Misc',
-        store: storeName,
-        payment_method: payMethod,
-        source: 'import',
-      },
-      isPersonalPayment: personal,
+  const explicitTax = num(p.tax);
+  if (explicitTax > 0.009) serviceLines.push({ name: 'Sales tax', cost: explicitTax });
+
+  const buildRow = (desc: string, amount: number, category: string, warrantyYears: number | null = null): PurchaseDeductionMapping => ({
+    insert: {
+      user_id: userId,
+      ded_date: d.date ?? null,
+      code: 'EQUIP',
+      description: desc,
+      amount,
+      category,
+      store: storeName,
+      payment_method: payMethod,
+      source: 'import',
+      warranty_years: warrantyYears,
+    },
+    isPersonalPayment: personal,
+  });
+
+  // Receipt with ONLY service/fee lines — nothing to fold into. Keep them
+  // as their own row(s), flagged for manual review (CLAUDE.md invariant #3).
+  if (realItems.length === 0) {
+    return serviceLines.map((line) =>
+      buildRow(`NEEDS REVIEW: ${line.name} | ${storeName} | ${payMethod}${personal ? ' — Owner Contribution' : ''}`, line.cost, 'Misc')
+    );
+  }
+
+  // A service/fee line that names its parent — e.g. "Extended warranty
+  // (for Milwaukee Drill)" — folds directly into that item, not the
+  // proportional pool.
+  const unnamedLines: ServiceLine[] = [];
+  for (const line of serviceLines) {
+    const idx = line.parent ? realItems.findIndex((i) => i.name.toLowerCase().includes(line.parent!.toLowerCase())) : -1;
+    if (idx >= 0) {
+      realItems[idx].extra += line.cost;
+    } else {
+      unnamedLines.push(line);
+    }
+  }
+
+  const itemsSum = realItems.reduce((s, i) => s + i.cost, 0);
+  const namedFoldTotal = realItems.reduce((s, i) => s + i.extra, 0);
+  const unnamedSum = unnamedLines.reduce((s, l) => s + l.cost, 0);
+
+  // Grand total is the receipt's own stated total when present; otherwise
+  // it's reconstructed from everything seen (real items + all fee/service
+  // lines) so nothing is assumed lost.
+  const explicitGrand = p.total ?? d.totalAmount;
+  const grand = explicitGrand && explicitGrand > 0 ? num(explicitGrand) : itemsSum + namedFoldTotal + unnamedSum;
+
+  const remainderToDistribute = Number((grand - itemsSum - namedFoldTotal).toFixed(2));
+  if (remainderToDistribute > 0.009) {
+    const shares = distributeProportional(
+      realItems.map((i) => i.cost),
+      remainderToDistribute
+    );
+    realItems.forEach((item, i) => {
+      item.extra = Number((item.extra + shares[i]).toFixed(2));
     });
   }
 
-  return result;
+  return realItems.map((item) => {
+    const cat = guessCategory(item.name, storeName);
+    const note = getCatNote(cat);
+    const qtyLabel = item.qty > 1 ? `${item.qty}× ` : '';
+    const finalCost = Number((item.cost + item.extra).toFixed(2));
+    const foldSuffix = item.extra > 0.009 ? ` (incl. ${money(item.extra)} tax/fees/services)` : '';
+    const desc = `${qtyLabel}${item.name} — ${note}${foldSuffix} | ${storeName} | ${payMethod}${personal ? ' — Owner Contribution' : ''}`;
+    return buildRow(desc, finalCost, cat, item.warrantyYears ?? null);
+  });
 }
 
 // ---------- generic fallback (legacy saveImport() else branch, legacy/index.html:2576-2578) ----------

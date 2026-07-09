@@ -11,6 +11,7 @@ export type FleetStats = {
   outOfPocketDeductions: number; // source != 'settlement' — feeds the tax engine's net profit
   totalMiles: number;
   settlementCount: number;
+  avgNetPerWeek: number; // legacy "Avg Net/Week" dashboard card — direct-deposit average
   perDiemDays: number;
   cpm: CpmResult;
 };
@@ -24,7 +25,7 @@ export type FleetStats = {
 // truck-scoped call still nets against the full shared expense total,
 // matching legacy's single-truck behavior exactly when there's only 1 truck.
 export async function fetchFleetStats(userId: string, truckId: string | null): Promise<FleetStats> {
-  let settlementsQuery = supabase.from('settlements').select('gross, net, miles').eq('user_id', userId);
+  let settlementsQuery = supabase.from('settlements').select('week_ending, gross, net, miles').eq('user_id', userId);
   if (truckId) settlementsQuery = settlementsQuery.eq('truck_id', truckId);
   const { data: settlements, error: settError } = await settlementsQuery;
   if (settError) throw settError;
@@ -54,7 +55,10 @@ export async function fetchFleetStats(userId: string, truckId: string | null): P
     outOfPocketDeductions,
     totalMiles,
     settlementCount,
-    perDiemDays: calcPerDiemDays(settlementCount),
+    avgNetPerWeek: settlementCount > 0 ? netRevenue / settlementCount : 0,
+    // Deterministic (CLAUDE.md invariant #9): 7 × distinct settlement
+    // weeks. Never derived from AI-extracted load dates.
+    perDiemDays: calcPerDiemDays(rows),
     cpm: calcCpm(grossRevenue, totalDeductions, totalMiles),
   };
 }

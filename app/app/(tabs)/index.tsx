@@ -19,6 +19,19 @@ function money(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
 
+const FILING_STATUS_LABEL: Record<string, string> = { single: 'Single', mfj: 'MFJ', hoh: 'HOH' };
+
+// "@$64/day (80% of $80)" — the 80% and $80 are both derived from
+// tax_year_data.per_diem (docs/PENDING_SQL.md §10), never hardcoded
+// (CLAUDE.md invariant #6). Degrades to just "@$64/day" until that
+// migration has run and full_daily_rate exists on the live row.
+function perDiemCaption(perDiem: { daily_rate: number; full_daily_rate?: number } | undefined): string | null {
+  if (!perDiem) return null;
+  if (!perDiem.full_daily_rate) return `@$${perDiem.daily_rate}/day`;
+  const pct = Math.round((perDiem.daily_rate / perDiem.full_daily_rate) * 100);
+  return `@$${perDiem.daily_rate}/day (${pct}% of $${perDiem.full_daily_rate})`;
+}
+
 function urgencyColor(urgency: QuarterlyDeadlineStatus['urgency']) {
   if (urgency === 'urgent') return colors.red;
   if (urgency === 'warn') return colors.orange;
@@ -148,11 +161,14 @@ export default function Dashboard() {
           </Card>
         ) : (
           <>
+            {/* Row 1 — CLAUDE.md Dashboard card parity: card-for-card, same
+                order, same empty-state hints as the legacy web dashboard. */}
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue label="Total Revenue" value={stats ? money(stats.grossRevenue) : '—'} />
+              <StatValue label="Total Revenue" value={stats ? money(stats.grossRevenue) : '—'} valueColor={colors.green} />
+              <MutedText>Import PDF to start</MutedText>
             </TappableCard>
             <TappableCard onPress={() => router.push('/(tabs)/deductions')}>
-              <StatValue label="Total Deductions" value={stats ? money(stats.totalDeductions) : '—'} />
+              <StatValue label="Total Deductions" value={stats ? money(stats.totalDeductions) : '—'} valueColor={colors.red} />
             </TappableCard>
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
               <StatValue
@@ -162,19 +178,28 @@ export default function Dashboard() {
               />
             </TappableCard>
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue label="Miles" value={stats ? stats.totalMiles.toLocaleString() : '—'} />
-              {stats ? <MutedText>{stats.settlementCount} week(s) settled</MutedText> : null}
+              <StatValue label="Miles Driven" value={stats ? stats.totalMiles.toLocaleString() : '—'} />
             </TappableCard>
 
+            {/* Row 2 */}
             <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <StatValue label="Per Diem" value={stats ? `${stats.perDiemDays} days` : '—'} />
-                <Text style={{ color: colors.accent, fontSize: typography.size.lg, fontWeight: '700' }}>
-                  {tax ? money(tax.perDiemDeduction) : ''}
-                </Text>
-              </View>
+              <StatValue label="YTD Per Diem Days" value={stats ? `${stats.perDiemDays}` : '—'} valueColor={colors.accent} />
+              <MutedText>days on road</MutedText>
+            </TappableCard>
+            <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+              <StatValue label="Per Diem Deduction" value={tax ? money(tax.perDiemDeduction) : '—'} valueColor={colors.green} />
+              {perDiemCaption(tax?.taxYearData.per_diem) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem)}</MutedText>}
+            </TappableCard>
+            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
+              <StatValue label="Weeks in Service" value={stats ? `${stats.settlementCount}` : '—'} />
+              <MutedText>settlements imported</MutedText>
+            </TappableCard>
+            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
+              <StatValue label="Avg Net/Week" value={stats ? money(stats.avgNetPerWeek) : '—'} />
+              <MutedText>direct deposit avg</MutedText>
             </TappableCard>
 
+            {/* Row 3 */}
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
               <StatValue
                 label="Business Balance"
@@ -187,32 +212,31 @@ export default function Dashboard() {
                       : colors.red
                 }
               />
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm }}>
-                <View>
-                  <MutedText>Revenue/Mile</MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>
-                    {stats?.cpm.revenuePerMile != null ? `$${stats.cpm.revenuePerMile.toFixed(2)}` : '—'}
-                  </Text>
-                </View>
-                <View>
-                  <MutedText>Cost/Mile</MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>
-                    {stats?.cpm.costPerMile != null ? `$${stats.cpm.costPerMile.toFixed(2)}` : '—'}
-                  </Text>
-                </View>
-                <View>
-                  <MutedText>Profit/Mile</MutedText>
-                  <Text
-                    style={{
-                      fontWeight: '700',
-                      color:
-                        stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : colors.text,
-                    }}
-                  >
-                    {stats?.cpm.profitPerMile != null ? `$${stats.cpm.profitPerMile.toFixed(2)}` : '—'}
-                  </Text>
-                </View>
-              </View>
+              <MutedText>checking account</MutedText>
+            </TappableCard>
+            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
+              <StatValue
+                label="Revenue/Mile"
+                value={stats?.cpm.revenuePerMile != null ? `$${stats.cpm.revenuePerMile.toFixed(2)}` : '—'}
+                valueColor={colors.green}
+              />
+              <MutedText>gross ÷ total miles</MutedText>
+            </TappableCard>
+            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
+              <StatValue
+                label="Cost/Mile (CPM)"
+                value={stats?.cpm.costPerMile != null ? `$${stats.cpm.costPerMile.toFixed(2)}` : '—'}
+                valueColor={colors.red}
+              />
+              <MutedText>all costs ÷ total miles</MutedText>
+            </TappableCard>
+            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
+              <StatValue
+                label="Profit/Mile"
+                value={stats?.cpm.profitPerMile != null ? `$${stats.cpm.profitPerMile.toFixed(2)}` : '—'}
+                valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
+              />
+              <MutedText>accept loads above CPM!</MutedText>
             </TappableCard>
           </>
         )}
@@ -221,24 +245,29 @@ export default function Dashboard() {
             as definitive. */}
         <ScreenTitle>Tax</ScreenTitle>
         <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-          <StatValue label="Est. Total Tax" value={tax ? money(tax.estimate.totalTax) : '—'} />
+          <StatValue label="Est. Total Tax" value={tax ? money(tax.estimate.totalTax) : '—'} valueColor={colors.red} />
+          {tax && <MutedText>{FILING_STATUS_LABEL[tax.taxConfig.filing_status] ?? tax.taxConfig.filing_status} — SE + Federal</MutedText>}
         </TappableCard>
         <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-          <StatValue label="Quarterly Payment" value={tax ? money(tax.estimate.quarterlyPayment) : '—'} />
-          {deadline && (
+          <StatValue label="Quarterly Payment" value={tax ? money(tax.estimate.quarterlyPayment) : '—'} valueColor={colors.red} />
+          {deadline ? (
             <Text style={{ color: urgencyColor(deadline.urgency), fontSize: typography.size.sm, marginTop: 2 }}>
               {deadline.label} due in {deadline.daysUntil} day{deadline.daysUntil === 1 ? '' : 's'} ({deadline.date})
             </Text>
+          ) : (
+            <MutedText>next due date</MutedText>
           )}
         </TappableCard>
         <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
           <StatValue label="Weekly Tax Reserve" value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'} />
+          <Text style={{ color: colors.orange, fontSize: typography.size.sm, marginTop: 2 }}>set aside weekly</Text>
         </TappableCard>
         <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
           <StatValue
             label="Effective Rate"
             value={tax?.estimate.effectiveRate != null ? `${tax.estimate.effectiveRate.toFixed(1)}%` : '—'}
           />
+          <MutedText>of net profit</MutedText>
           {tax?.estimate.stateTax.label === 'estimate' && (
             <MutedText>State tax is a rough estimate for {tax.taxConfig.state} — not bracket-accurate.</MutedText>
           )}

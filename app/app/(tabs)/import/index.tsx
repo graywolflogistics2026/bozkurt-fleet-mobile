@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -14,7 +14,7 @@ import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
-import { isPersonalPayment } from '@/src/import/category';
+import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import { DOC_TYPE_META } from '@/src/import/docTypes';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
@@ -80,6 +80,24 @@ function buildPreviewLines(d: Extraction): PreviewLine[] {
     if (m.warrantyCredit) lines.push({ label: 'Warranty Credit', value: money(m.warrantyCredit), color: colors.green });
   }
   return lines;
+}
+
+// Owner decision 2026-07-07 (CLAUDE.md invariant #2): a personal-payment
+// purchase only becomes a Capital Account contribution after this
+// confirmation, asked once per receipt — declining still saves the
+// deduction, just with no linked contribution.
+function confirmOwnerContribution(payMethod: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Add as Owner Contribution?',
+      `This was paid with ${payMethod} (personal funds). Record it as a Capital Account contribution?`,
+      [
+        { text: 'Just Save Deduction', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Add as Owner Contribution', onPress: () => resolve(true) },
+      ],
+      { cancelable: false }
+    );
+  });
 }
 
 export default function Import() {
@@ -183,6 +201,12 @@ export default function Import() {
   async function handleSave() {
     if (!extraction || !fileMeta || !userId) return;
     if (needsTruckPicker && !truckId) return;
+
+    const isPurchase = extraction.docType === 'amazon' || extraction.docType === 'store';
+    const payMethod = normalizePaymentMethod(extraction.purchase?.paymentMethod);
+    const hasPersonalPurchase = isPurchase && isPersonalPayment(payMethod);
+    const createContribution = hasPersonalPurchase ? await confirmOwnerContribution(payMethod) : false;
+
     setPhase('saving');
     try {
       const saved = await saveExtraction({
@@ -192,6 +216,7 @@ export default function Import() {
         fileUri: fileMeta.uri,
         fileExt: fileMeta.ext,
         mediaType: fileMeta.mediaType,
+        createContribution,
       });
       setResult(saved);
       setPhase('done');
@@ -242,7 +267,7 @@ export default function Import() {
                 <Text style={{ color: colors.orange, fontWeight: '700' }}>⚠️ Possible duplicate</Text>
                 {duplicates!.byContent.length > 0 && (
                   <MutedText>
-                    A {extraction.docType} dated {extraction.date} for {money(extraction.totalAmount)} was already saved.
+                    A {meta?.label ?? 'document'} dated {extraction.date} for {money(extraction.totalAmount)} was already saved.
                   </MutedText>
                 )}
                 {duplicates!.byFilename.length > 0 && <MutedText>A file with this name was already imported before.</MutedText>}

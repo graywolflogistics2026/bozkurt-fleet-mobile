@@ -1,17 +1,21 @@
 import type { TaxYearData } from '@/src/types/db';
 
-// Legacy calcPerDiemDays() (legacy/index.html:2301) sums (deliveryDate -
-// pickupDate) per load from DB.loads. The Postgres `loads` table
-// (docs/SCHEMA.sql) only kept a single `load_date` column, not the
-// pickup/delivery pair legacy tracked per load — so the exact per-load
-// method can't be reproduced from this schema today (see PROMPTS.md).
-// Until a future migration adds pickup_date/delivery_date back, this uses
-// the same "OTR the whole week" approximation the settlement cadence
-// itself implies: one settlement = one full week away from home = 7 per
-// diem days. This is clearly an ESTIMATE (CLAUDE.md invariant #8), same as
-// every other figure this engine produces.
-export function calcPerDiemDays(settlementCount: number): number {
-  return Math.max(0, settlementCount) * 7;
+// Per diem day-counting — CORRECTED 2026-07-09 (owner decision, supersedes
+// the 2026-07-07 load-date-range rework). Deriving per diem from
+// AI-extracted load pickup/delivery dates made the number non-deterministic:
+// re-importing the exact same settlement PDF could produce a different
+// extraction (and therefore a different per-diem total) run to run. Per
+// diem must be a pure function of data the app itself controls, so this is
+// now: 7 days × the number of DISTINCT settlement weeks (deduped by
+// week_ending) — never derived from load dates. `loads.pickup_date`/
+// `delivery_date` (docs/PENDING_SQL.md §8) stay in the schema and keep
+// being populated for possible future use, but the tax engine must not
+// depend on them.
+export type SettlementWeek = { week_ending: string };
+
+export function calcPerDiemDays(settlements: SettlementWeek[]): number {
+  const distinctWeeks = new Set(settlements.map((s) => s.week_ending));
+  return distinctWeeks.size * 7;
 }
 
 export function calcPerDiemDeduction(days: number, perDiem: TaxYearData['per_diem']): number {

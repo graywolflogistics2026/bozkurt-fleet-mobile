@@ -2,12 +2,10 @@
 // they encode months of real-receipt tuning (see CLAUDE.md: port battle-
 // tuned logic verbatim).
 
-// legacy/index.html:994 — payment methods meaning "paid from the owner's
-// own personal money", not the business account/card. Triggers the
-// Capital Account contribution rule (CLAUDE.md invariant #2).
-export function isPersonalPayment(payment: string | undefined | null): boolean {
-  return /personal|cash|zelle|venmo/i.test(payment ?? '');
-}
+// Re-exported for backward compatibility — the 9-generic-value payment
+// method logic (owner decision 2026-07-07, CLAUDE.md invariant #2) now
+// lives in paymentMethods.ts alongside normalizePaymentMethod().
+export { isPersonalPayment } from '@/src/import/paymentMethods';
 
 const STORE_CATS: Record<string, string | null> = {
   amazon: null,

@@ -173,6 +173,8 @@ create table loads (
   user_id       uuid not null references auth.users,
   settlement_id uuid references settlements on delete cascade,
   load_date     date,
+  pickup_date   date,  -- added retroactively, PENDING_SQL.md §8 (per-diem exact day-counting)
+  delivery_date date,  -- ditto — legacy calcPerDiemDays() sums (deliveryDate - pickupDate) per load
   order_number  text,
   origin        text,
   destination   text,
@@ -210,9 +212,16 @@ create table deductions (
   amount       numeric(12,2) not null,
   category     text,                          -- Software & Subscriptions | Legal & Accounting Fees | ...
   store        text,
-  payment_method text,                        -- Business Credit|Business Debit|Personal Card|Cash|Settlement Withheld
+  -- 9 generic values (owner decision 2026-07-07): Business Checking|
+  -- Business Credit Card|Personal Checking|Personal Credit Card|Cash|
+  -- Venmo|Cash App|Zelle Personal|Zelle Business — plus the synthetic
+  -- 'Settlement Withheld' stamped onto settlement-withheld line items.
+  -- Never a bank-brand string like "BofA Business" — see
+  -- app/src/import/paymentMethods.ts.
+  payment_method text,
   source       text default 'manual'          -- settlement|import|manual
                 check (source in ('settlement','import','manual')),
+  warranty_years numeric(4,1),                -- added retroactively, PENDING_SQL.md §7 — halves ok (e.g. 2.5)
   created_at   timestamptz default now()
 );
 -- Tax rule (net-pay model): deductible = rows where source != 'settlement'.
@@ -323,6 +332,8 @@ create table tolls (
 create table reimbursements (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users,
+  settlement_id uuid references settlements on delete cascade,  -- added retroactively,
+                                -- PENDING_SQL.md §9 — batch tag for settlement re-import-replace
   reimb_date   date,
   description  text,
   reference    text,

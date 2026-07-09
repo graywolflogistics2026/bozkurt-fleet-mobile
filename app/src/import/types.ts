@@ -102,7 +102,16 @@ export type ExtractedMaintenance = {
   netCost?: number;
 };
 
-export type ExtractedPurchaseItem = { name?: string; qty?: number; price?: number };
+// warrantyYears/warrantyFor — owner decision 2026-07-07 (web app
+// v2026.07.07-H): items may carry a warranty length (halves ok, e.g. 2.5)
+// and, for a fee/service line, which item it covers.
+export type ExtractedPurchaseItem = {
+  name?: string;
+  qty?: number;
+  price?: number;
+  warrantyYears?: number;
+  warrantyFor?: string;
+};
 export type ExtractedPurchase = {
   orderNumber?: string;
   items?: ExtractedPurchaseItem[];

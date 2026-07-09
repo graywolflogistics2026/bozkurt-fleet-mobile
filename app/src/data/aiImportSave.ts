@@ -21,6 +21,11 @@ export type SaveExtractionParams = {
   fileUri: string | null;
   fileExt: string;
   mediaType: string;
+  // Owner decision 2026-07-07 (CLAUDE.md invariant #2): a personal-payment
+  // purchase line only becomes a Capital Account contribution when the
+  // caller has already confirmed it with the user (once per receipt) —
+  // declining still saves the deduction, just with no linked contribution.
+  createContribution: boolean;
 };
 
 export type SaveExtractionResult = {
@@ -37,7 +42,7 @@ export type SaveExtractionResult = {
 // document id) into the pure mapping output, then performs the actual
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
-  const { extraction: d, userId, truckId, fileUri, fileExt, mediaType } = params;
+  const { extraction: d, userId, truckId, fileUri, fileExt, mediaType, createContribution } = params;
 
   // 1. Upload the original file to the documents bucket FIRST (CLAUDE.md
   // storage convention: {user_id}/{month}/...) so the documents row can
@@ -76,6 +81,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   if (d.docType === 'settlement' && d.settlement) {
     const mapping = mapSettlement(d, userId, truckId);
 
+    // Web v2026.07.09-A re-import-replace: importing the same week_ending
+    // again REPLACES that week's batch-tagged rows instead of duplicating
+    // them. Check for an existing settlement BEFORE the upsert so we know
+    // whether this is a fresh settlement (net pay should credit
+    // business_balance) or a replace (it already did, on the first import).
+    const { data: existingSett } = await supabase
+      .from('settlements')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('week_ending', mapping.settlement.week_ending)
+      .maybeSingle();
+    const isReimport = !!existingSett;
+
     const { data: settRow, error: settError } = await supabase
       .from('settlements')
       .upsert({ ...mapping.settlement, document_id: documentId }, { onConflict: 'user_id,week_ending' })
@@ -83,6 +101,25 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       .single();
     if (settError) throw settError;
     const settlementId = settRow.id as string;
+
+    if (isReimport) {
+      // Clear this week's previously-imported batch-tagged rows first —
+      // settlement, loads, fuel, reimbursements, withheld deductions
+      // (CLAUDE.md invariant #10). Maintenance/tolls/loans are NOT part of
+      // this replace — they're left as-is, matching the web app's scope.
+      const { error: delLoadsErr } = await supabase.from('loads').delete().eq('settlement_id', settlementId);
+      if (delLoadsErr) throw delLoadsErr;
+      const { error: delFuelErr } = await supabase.from('fuel_purchases').delete().eq('settlement_id', settlementId);
+      if (delFuelErr) throw delFuelErr;
+      const { error: delReimbErr } = await supabase.from('reimbursements').delete().eq('settlement_id', settlementId);
+      if (delReimbErr) throw delReimbErr;
+      const { error: delDedErr } = await supabase
+        .from('deductions')
+        .delete()
+        .eq('settlement_id', settlementId)
+        .eq('source', 'settlement');
+      if (delDedErr) throw delDedErr;
+    }
 
     if (mapping.loads.length > 0) {
       const { error } = await supabase
@@ -100,6 +137,12 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       const { error } = await supabase
         .from('deductions')
         .insert(mapping.deductions.map((x) => ({ ...x, settlement_id: settlementId, document_id: documentId })));
+      if (error) throw error;
+    }
+    if (mapping.reimbursements.length > 0) {
+      const { error } = await supabase
+        .from('reimbursements')
+        .insert(mapping.reimbursements.map((r) => ({ ...r, settlement_id: settlementId })));
       if (error) throw error;
     }
     if (mapping.maintenance.length > 0) {
@@ -126,7 +169,9 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         await supabase.from('loans').insert(loan);
       }
     }
-    if (mapping.netPay > 0) {
+    // Net pay only credits business_balance once per settlement week — a
+    // replace-import must not re-credit it a second time.
+    if (mapping.netPay > 0 && !isReimport) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('business_balance')
@@ -158,9 +203,11 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         .select('id')
         .single();
       if (error) throw error;
-      // CLAUDE.md invariant #2: personal-payment purchases always
-      // create/update an id-linked capital contribution.
-      if (line.isPersonalPayment) {
+      // CLAUDE.md invariant #2: a personal-payment purchase only becomes an
+      // id-linked capital contribution once the caller has confirmed it
+      // with the user (once per receipt) — see confirmOwnerContribution()
+      // in app/(tabs)/import/index.tsx.
+      if (line.isPersonalPayment && createContribution) {
         const contributionNote = `${(line.insert.description ?? 'Deduction').split(' — ')[0]} — paid personally (${line.insert.payment_method ?? ''})`;
         await supabase.from('capital_transactions').insert({
           user_id: userId,

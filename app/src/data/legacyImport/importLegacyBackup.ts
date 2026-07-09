@@ -231,17 +231,24 @@ function loadKey(row: Record<string, unknown>): string {
   return [row.settlement_id ?? 'none', row.load_date ?? '', row.order_number ?? '', num(row.revenue)].join('|');
 }
 async function importLoads(userId: string, loads: LegacyLoad[], dateToSettlementId: Map<string, string>): Promise<ImportOutcome> {
-  const rows: LoadInsert[] = loads.map((l) => ({
-    user_id: userId,
-    settlement_id: dateToSettlementId.get(l.date ?? '') ?? null,
-    load_date: l.pickupDate ?? l.date ?? null,
-    order_number: l.order ?? null,
-    origin: l.from ?? null,
-    destination: l.to ?? null,
-    loaded_miles: num(l.loadedMiles),
-    empty_miles: num(l.emptyMiles),
-    revenue: num(l.revenue),
-  }));
+  // pickup_date/delivery_date (docs/PENDING_SQL.md §8) feed the per-diem
+  // exact day-range calc when the legacy backup happens to have them.
+  const rows: LoadInsert[] = loads.map((l) => {
+    const pickupDate = l.pickupDate ?? l.date ?? null;
+    return {
+      user_id: userId,
+      settlement_id: dateToSettlementId.get(l.date ?? '') ?? null,
+      load_date: pickupDate,
+      pickup_date: pickupDate,
+      delivery_date: l.deliveryDate ?? pickupDate,
+      order_number: l.order ?? null,
+      origin: l.from ?? null,
+      destination: l.to ?? null,
+      loaded_miles: num(l.loadedMiles),
+      empty_miles: num(l.emptyMiles),
+      revenue: num(l.revenue),
+    };
+  });
   return importIdempotent({
     table: 'loads',
     userId,

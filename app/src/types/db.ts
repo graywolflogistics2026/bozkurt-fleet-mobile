@@ -62,6 +62,8 @@ export type Load = {
   user_id: string;
   settlement_id: string | null;
   load_date: string | null;
+  pickup_date: string | null; // docs/PENDING_SQL.md §8 — re-added for exact per-diem day-counting
+  delivery_date: string | null;
   order_number: string | null;
   origin: string | null;
   destination: string | null;
@@ -110,6 +112,7 @@ export type Deduction = {
   store: string | null;
   payment_method: string | null;
   source: 'settlement' | 'import' | 'manual';
+  warranty_years: number | null; // docs/PENDING_SQL.md §7 — halves ok (e.g. 2.5)
   created_at: string;
   updated_at: string;
 };
@@ -205,6 +208,7 @@ export type TollUpdate = Partial<Omit<Toll, 'id' | 'user_id' | 'created_at' | 'u
 export type Reimbursement = {
   id: string;
   user_id: string;
+  settlement_id: string | null; // docs/PENDING_SQL.md §9 — batch tag for settlement re-import-replace
   reimb_date: string | null;
   description: string | null;
   reference: string | null;
@@ -316,7 +320,12 @@ export type TaxYearData = {
   federal_brackets: Record<'mfj' | 'single' | 'hoh', Array<[number, number | null, number]>>;
   standard_deduction: Record<'mfj' | 'single' | 'hoh', number>;
   se_tax: { rate: number; factor: number; ss_wage_base?: number };
-  per_diem: { daily_rate: number; deductible_pct: number };
+  // full_daily_rate: the pre-reduction IRS transportation-industry meal
+  // rate (e.g. $80) that daily_rate ($64) is 80% of — optional, purely for
+  // the Dashboard's "@$64/day (80% of $80)" caption (docs/PENDING_SQL.md
+  // §10); daily_rate/deductible_pct alone remain what calcPerDiemDeduction()
+  // actually computes with, unchanged.
+  per_diem: { daily_rate: number; deductible_pct: number; full_daily_rate?: number };
   quarterly_deadlines: Array<[string, string]>;
   state_tax: {
     no_tax: string[];

@@ -294,22 +294,95 @@ screen, not just display a number:
 Add a visible chevron (›) affordance on every tappable card so it reads as
 navigable, not just informational. This is deliberate: with the Dashboard
 as a complete hub, most users should rarely need the More tab (see Session
-3's tab bar and Session 9's More-tab regrouping) — More exists for
+3's tab bar and Session 9a's More-tab regrouping) — More exists for
 completeness, not as the primary way to reach these screens.
 ```
 
-**Implementation note (2026-07-05) — per diem day-counting is an
-approximation, not legacy's exact method.** Legacy's `calcPerDiemDays()`
-sums (deliveryDate − pickupDate) per load from `DB.loads`. The Postgres
-`loads` table (docs/SCHEMA.sql) only kept a single `load_date` column, not
-that pickup/delivery pair, so the exact per-load method can't be
-reproduced from the current schema. `app/src/tax/perDiem.ts` instead
-approximates per diem as 7 days × settlement count (one settlement = one
-full week OTR) — reasonable given the weekly settlement cadence, but not
-what legacy actually computes. If exact day-counting is ever wanted, a
-future migration would need to add `pickup_date`/`delivery_date` back to
-`loads` and the importer (Session 4) would need a pass to backfill them
-from already-imported legacy backups where available.
+**DASHBOARD ACCEPTANCE CHECKLIST (owner, 2026-07-09 — binding).** The
+first screen after login must match the legacy web dashboard card-for-
+card, same order, same empty-state hints. Implemented in
+`app/app/(tabs)/index.tsx`:
+
+- [x] 1. Total Revenue — hint "Import PDF to start"
+- [x] 2. Total Deductions
+- [x] 3. Net to Owner
+- [x] 4. Miles Driven
+- [x] 5. YTD Per Diem Days — hint "days on road", own card (deterministic
+      7×distinct-weeks count, CLAUDE.md invariant #9 — not derived from
+      load dates)
+- [x] 6. Per Diem Deduction — hint "@$64/day (80% of $80)", rate AND the
+      80%/$80 breakdown both sourced from `tax_year_data.per_diem`
+      (`daily_rate`/`full_daily_rate`, docs/PENDING_SQL.md §10), own card
+- [x] 7. Weeks in Service — hint "settlements imported", own card
+- [x] 8. Avg Net/Week — hint "direct deposit avg" (`netRevenue /
+      settlementCount`, `FleetStats.avgNetPerWeek` in
+      `app/src/data/dashboardStats.ts`) — was missing, added 2026-07-09
+- [x] 9. Business Balance — hint "checking account"
+- [x] 10. Revenue/Mile — hint "gross ÷ total miles"
+- [x] 11. Cost/Mile (CPM) — hint "all costs ÷ total miles"
+- [x] 12. Profit/Mile — hint "accept loads above CPM!"
+- [x] 13. Est. Total Tax — hint shows the user's actual filing status (not
+      a hardcoded "MFJ") + "— SE + Federal"
+- [x] 14. Quarterly Payment — countdown to the next deadline
+- [x] 15. Weekly Tax Reserve — hint "set aside weekly" (orange)
+- [x] 16. Effective Rate — hint "of net profit", plus the existing
+      state-tax-estimate warning when applicable
+- [x] Capital Account strip (contributed / draws-or-distributions /
+      tax-free remaining / latest contribution note)
+- [x] S-Corp savings preview card (sole_prop/smllc only) or the S-Corp
+      payroll-provider notice (entity_type='scorp')
+- [x] Recent Loads list
+- [x] Truck card (+ Fleet Overview ranking when 2+ trucks)
+- [x] CLAUDE.md invariant #8 disclaimers (`LegalFootnote` under the tax
+      row and under the S-Corp preview)
+
+Any future Dashboard change must keep every row above checked — this list
+is the acceptance test for the first screen a user sees.
+
+**Implementation note (2026-07-05, superseded 2026-07-07, superseded again
+2026-07-09) — per diem day-counting is deterministic: 7 × distinct
+settlement weeks.** Legacy's `calcPerDiemDays()` sums (deliveryDate −
+pickupDate) per load from `DB.loads`. The Postgres `loads` table
+originally only kept a single `load_date` column, not that pickup/delivery
+pair, so this file used to approximate per diem as 7 days × settlement
+count instead (one settlement = one full week OTR).
+
+**2026-07-07 (owner decision, web app v2026.07.07-H, since reverted):**
+briefly reworked to sum AI-extracted load pickup/delivery date ranges per
+settlement week, falling back to the 7-day rule only for weeks with no
+dated loads. `docs/PENDING_SQL.md` §8 added `pickup_date`/`delivery_date`
+to `loads` for this.
+
+**2026-07-09 (owner decision — CORRECTS 2026-07-07): reverted to a
+deterministic rule on both platforms.** Deriving per diem from
+AI-extracted load dates made the number non-deterministic — re-importing
+the exact same settlement PDF could extract slightly different dates run
+to run, producing a different per-diem total for identical input, which
+is unacceptable for a tax figure. `app/src/tax/perDiem.ts`
+`calcPerDiemDays()` now takes only settlement `week_ending` values: 7 ×
+the count of DISTINCT weeks (deduped by `week_ending`), full stop — see
+CLAUDE.md invariant #9. `loads.pickup_date`/`delivery_date` stay in the
+schema and keep being populated by ai-import (possible future use, e.g. an
+exact-days opt-in), but the tax engine must never read them again without
+an explicit new owner decision.
+
+**Settlement re-import-replace (owner decision 2026-07-09, web
+v2026.07.09-A).** Previously, re-importing a settlement PDF for a
+`week_ending` that already existed just appended a second copy of that
+week's loads/fuel/deductions/reimbursements (the settlement row itself was
+already upsert-safe, but nothing else was). Now `app/src/data/
+aiImportSave.ts` checks whether the settlement already exists before the
+upsert; if so, it deletes that week's previously-imported loads, fuel
+purchases, reimbursements, and withheld (`source='settlement'`) deductions
+— all scoped by the stable `settlement_id` — before inserting the fresh
+mapped rows, and skips re-crediting `business_balance` with that week's
+net pay a second time. Maintenance, tolls, and loans are intentionally NOT
+part of this replace (out of scope for this pass). See CLAUDE.md invariant
+#10. This also fixed a real, previously-unnoticed gap: settlement
+`reimbursementItems` were extracted but never written to the
+`reimbursements` table at all (legacy/index.html:2516) — they are now,
+which is why `reimbursements` needed a `settlement_id` column
+(`docs/PENDING_SQL.md` §9) to be part of the replace batch.
 
 ## Session 6 — Camera + AI import flow
 
@@ -345,6 +418,54 @@ truck_id null when the user has more than one truck. With exactly 1 truck on
 the account, skip the picker entirely and tag it automatically (same n=1
 shortcut as Session 3's context).
 ```
+
+## Parity Checklist (owner, 2026-07-09 — binding scope commitment)
+
+**The mobile app must reach FULL parity with the legacy web sidebar —
+every one of its 22 sections present AND functional, not just a
+placeholder route.** This table is the authoritative map of section →
+session; keep it in sync as sessions land. Sidebar grouping/order (the
+`Overview / Revenue / Expenses / Business / Intelligence / Tools / System`
+headers, and the exact item order within each) must reproduce legacy's
+sidebar exactly on wide screens (Session 9a/9b's sidebar note below) —
+Overview: Dashboard; Revenue: Loads, Settlements, Reimbursements;
+Expenses: Fuel, Maintenance, Tolls & Fees, Deductions; Business: Assets,
+Capital Account, Operating P&L; Intelligence: Truck Health, Cash Flow,
+Scorecard, Loan Center, Credit Cards, Bank Statement; Tools: Asset
+Register, Accountant Pkg, AI Advisor, Tax Estimator; System: Settings.
+**Nothing ships to the store (Session 10) with an unimplemented sidebar
+item** — see Session 10's pre-launch checklist.
+
+| # | Section | Group | Session | Status |
+|---|---------|-------|---------|--------|
+| 1 | Dashboard | Overview | 5 | ✅ done (Dashboard acceptance checklist above) |
+| 2 | Loads | Revenue | 9a | ⬜ not started (own screen — currently only a "Recent Loads" slice on Dashboard) |
+| 3 | Settlements | Revenue | 9a | ⬜ not started |
+| 4 | Reimbursements | Revenue | 9a | ⬜ not started |
+| 5 | Fuel | Expenses | 9a | ⬜ not started |
+| 6 | Maintenance | Expenses | 8 | 🚧 placeholder route exists, not implemented |
+| 7 | Tolls & Fees | Expenses | 9a | ⬜ not started |
+| 8 | Deductions | Expenses | 7 | ✅ done (list view, Session 6/7) |
+| 9 | Assets | Business | 9a | ⬜ not started |
+| 10 | Capital Account | Business | 7 | 🚧 placeholder route exists, not implemented |
+| 11 | Operating P&L | Business | 9a | ⬜ not started |
+| 12 | Truck Health | Intelligence | 8 | 🚧 placeholder route exists, not implemented |
+| 13 | Cash Flow | Intelligence | 9a | 🚧 placeholder route exists, not implemented |
+| 14 | Scorecard | Intelligence | 9b | ⬜ not started |
+| 15 | Loan Center | Intelligence | 9a | 🚧 placeholder route exists (`more/loans.tsx`), not implemented |
+| 16 | Credit Cards | Intelligence | 9a | ⬜ not started |
+| 17 | Bank Statement | Intelligence | 9a | ⬜ not started |
+| 18 | Asset Register | Tools | 9b | ⬜ not started |
+| 19 | Accountant Pkg | Tools | 9b | ⬜ not started |
+| 20 | AI Advisor | Tools | 9b | ⬜ not started |
+| 21 | Tax Estimator | Tools | 9b | 🚧 placeholder route exists, not implemented (data layer/calc engine already built and used by Dashboard) |
+| 22 | Settings | System | 9b | ✅ mostly done (profile/sign-out); Legal sub-section still Session 10 |
+
+Session 9's original single write-up is split below into **9a (money
+screens)** — Revenue/Expenses/Business items plus the money-ledger
+Intelligence items (Cash Flow, Loan Center, Credit Cards, Bank Statement)
+— and **9b (intelligence + tools + settings)** — Scorecard (analytics, not
+a ledger), the Tools group, and Settings.
 
 ## Session 7 — Deductions + Capital Account
 
@@ -416,18 +537,23 @@ which truck needs attention without opening the app. This applies even with
 notification format to maintain.
 ```
 
-## Session 9 — Remaining screens + polish
+## Session 9a — Money screens (Parity Checklist #2–5, 7, 9, 11, 13, 15–17)
 
 ```
-Port the remaining features from legacy in priority order:
-1. Cash Flow (weekly net trend chart — victory-native or react-native-svg,
-   best/worst lanes table)
-2. Loans + Credit Cards
-3. Bank/Checking statement import (reuses ai-import with the statement prompt)
-4. Accountant Package export (JSON + a clean PDF summary via expo-print)
-5. Settings: profile/business info, view-only mode per device, export JSON
-Then a full audit session: run through docs/FEATURE_INVENTORY.md and produce
-PARITY.md marking each legacy feature done/partial/missing.
+Port the money/ledger screens from legacy in priority order (everything
+that's a straight ledger/statement view over already-imported data —
+Maintenance is Session 8, Deductions/Capital Account are Session 7):
+1. Loads, Settlements, Reimbursements (Revenue group) — each its own
+   screen; Loads/Settlements graduate from the Dashboard's "Recent Loads"
+   slice into full history + detail.
+2. Fuel, Tolls & Fees (Expenses group)
+3. Assets, Operating P&L (Business group — a real P&L statement, not just
+   the Dashboard's derived stat cards)
+4. Cash Flow (weekly net trend chart — victory-native or react-native-svg,
+   best/worst lanes table) — replaces the current placeholder
+5. Loan Center + Credit Cards — replaces the current Loans placeholder
+6. Bank/Checking statement import (reuses ai-import with the statement prompt)
+```
 
 **DESIGN NOTE (owner decision 2026-07-04, not implemented until this
 session): responsive layout — phone bottom tabs, wide-screen sidebar.**
@@ -493,6 +619,30 @@ More tab as part of this session's polish pass:**
      10's Settings > Legal)
 ```
 
+## Session 9b — Intelligence + Tools + Settings (Parity Checklist #14, 18–22)
+
+```
+Port the remaining Intelligence/Tools/System screens (the sidebar grouping
+and wide-screen design note above cover this session too — same nav, no
+separate design pass):
+1. Scorecard — legacy's business-health/KPI score card (Intelligence group;
+   the only Intelligence item not folded into Session 9a's money screens
+   because it's an analytics rollup, not a ledger view)
+2. Asset Register (Tools)
+3. Accountant Package export — JSON + a clean PDF summary via expo-print
+   (Tools)
+4. AI Advisor (Tools)
+5. Tax Estimator screen — wraps the calc engine Session 5 already built
+   (`useTaxEstimate`, `calcTaxEstimate`) in its own dedicated screen; the
+   Dashboard's tax row already surfaces the headline numbers, this is the
+   full breakdown/detail view (Tools)
+6. Settings: profile/business info, view-only mode per device, export JSON
+   (System — the Settings screen itself already exists; this is filling in
+   the remaining fields)
+Then a full audit session: run through docs/FEATURE_INVENTORY.md and produce
+PARITY.md marking each legacy feature done/partial/missing.
+```
+
 ## Session 10 — Store readiness (when you're ready to ship)
 
 ```
@@ -521,6 +671,13 @@ triggers automatically on version bump, per Session 3).
       rate-limiting corrupted a test auth user — this must be back on
       before real users can create accounts, otherwise anyone can sign up
       with an unowned email address.
+- [ ] **Full sidebar parity gate (owner, 2026-07-09 — binding, blocks
+      store submission):** every row in the Parity Checklist (above
+      Session 7) is ✅ done — all 22 legacy sidebar sections present as a
+      real, functional screen (not a `PlaceholderScreen`) and reachable
+      from the wide-screen sidebar / phone More tab in the exact legacy
+      grouping and order. Re-check the table immediately before this
+      session starts; do not begin store prep with any row still ⬜/🚧.
 ```
 
 ---
