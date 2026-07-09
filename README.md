@@ -1,8 +1,11 @@
 # Bozkurt Fleet OS — Mobile
 
-Long-term iOS + Android app for Graywolf Logistics LLC, built from the proven
-single-file web app (see `legacy/index.html`, which remains the product spec
-and stays in production during the migration).
+Long-term iOS + Android product for owner-operator trucking businesses, built
+from the proven single-file web app (see `legacy/index.html`, which remains
+the product spec and stays in production for its original owner during the
+migration). The mobile app itself is a clean multi-tenant product — every new
+account starts empty, with no data or defaults from the original owner's own
+business.
 
 **Positioning:** QuickBooks Self-Employed polish + trucking-native brain
 (per diem, CPM, settlements, truck health) + AI-first document import.

@@ -71,6 +71,21 @@ const PURCHASE_SCHEMA_BEFORE =
 const PURCHASE_SCHEMA_AFTER =
   `"purchase":{"orderNumber":"","items":[{"name":"","qty":1,"price":0,"warrantyYears":0,"warrantyFor":""}],"subtotal":0,"tax":0,"total":0,"paymentMethod":"Business Credit Card"}}`;
 
+// ---- Approved addition (owner decision 2026-07-09, PRODUCT DECISION —
+// this is a clean product for OTHER users, not just the original owner):
+// the identity line and the OTR-deductibility rule named a specific person,
+// company, and truck unit. Both must be generic — they apply the same way
+// to every user's own documents/trucks, not one owner's identity. ----
+const IDENTITY_LINE_BEFORE =
+  `Parse this document for Graywolf Logistics LLC (Ali Bozkurt, Prime Inc. owner-operator, Unit 830157). Return ONLY raw JSON starting with { ending with }. No markdown.`;
+const IDENTITY_LINE_AFTER =
+  `Parse this document for an owner-operator trucking business. Return ONLY raw JSON starting with { ending with }. No markdown.`;
+
+const OTR_RULE_BEFORE =
+  `IMPORTANT - Ali Bozkurt is OTR truck driver, sleeper cab is his home+office. ALL items 100% deductible: tools, TV, PlayStation, cooking appliances, electronics, bedding. Only groceries/medicine are personal.`;
+const OTR_RULE_AFTER =
+  `IMPORTANT - the user is an OTR truck driver whose sleeper cab is their home+office. ALL items 100% deductible: tools, TV, PlayStation, cooking appliances, electronics, bedding. Only groceries/medicine are personal.`;
+
 const APPROVED_ADDITIONS_SUFFIX = `
 APPROVED ADDITION (fuel/IFTA, owner decision 2026-07-03): for docType "fuel", also extract the US state as a 2-letter code (e.g. "TX", "OK") into fuel.state, read from the station's address on the receipt. If the state genuinely cannot be determined, leave fuel.state as "".
 
@@ -90,7 +105,9 @@ function buildExtractionPrompt(docHint?: string): string {
     .replace(FUEL_SCHEMA_BEFORE, FUEL_SCHEMA_AFTER)
     .replace(DOCTYPE_ENUM_BEFORE, DOCTYPE_ENUM_AFTER)
     .replace(LOADS_SCHEMA_BEFORE, LOADS_SCHEMA_AFTER)
-    .replace(PURCHASE_SCHEMA_BEFORE, PURCHASE_SCHEMA_AFTER);
+    .replace(PURCHASE_SCHEMA_BEFORE, PURCHASE_SCHEMA_AFTER)
+    .replace(IDENTITY_LINE_BEFORE, IDENTITY_LINE_AFTER)
+    .replace(OTR_RULE_BEFORE, OTR_RULE_AFTER);
   prompt += APPROVED_ADDITIONS_SUFFIX;
   if (docHint) {
     prompt += `\nThe user has hinted this document is likely a "${docHint}" — verify against the actual content, but use this as a tiebreaker only if the content is genuinely ambiguous.\n`;

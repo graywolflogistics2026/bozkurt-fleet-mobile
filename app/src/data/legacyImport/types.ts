@@ -94,6 +94,20 @@ export type LegacyReimbursement = {
   amount?: number;
 };
 
+// legacy/index.html DB.assets.tr shape (rAssets() ~line 1878, ai-import
+// settlement.assets.tractor schema) — the backup's OWN truck identity, never
+// a hardcoded specific truck (owner decision 2026-07-09: the legacy importer
+// is a generic migration feature for any web-app user).
+export type LegacyTractorAsset = {
+  unit?: string;
+  vin?: string;
+  year?: number | string;
+  make?: string;
+  model?: string;
+  engine?: string;
+  odometer?: number;
+};
+
 export type LegacyDB = {
   sett?: LegacySettlement[];
   loads?: LegacyLoad[];
@@ -102,6 +116,7 @@ export type LegacyDB = {
   maint?: LegacyMaintenance[];
   tolls?: { ez?: LegacyToll[]; dw?: LegacyToll[] };
   reimb?: LegacyReimbursement[];
+  assets?: { tr?: LegacyTractorAsset | null };
   docs?: unknown[];
 };
 

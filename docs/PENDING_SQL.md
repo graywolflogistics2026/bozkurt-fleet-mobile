@@ -1,7 +1,8 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-09): everything below (sections 1-10) has been run against
-the live DB.**
+**STATUS (2026-07-09): sections 1-10 have been run against the live DB.
+Section 11 is new and NOT yet applied — run it yourself in the Supabase SQL
+editor.**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
 (re-)run to fold all of this into a proper follow-up migration file. When
@@ -344,6 +345,28 @@ card falls back to showing just "@$64/day" with no parenthetical, same
 year-fallback banner.
 
 - [x] 10a run (merge full_daily_rate into tax_year_data.per_diem for 2026)
+
+---
+
+## 11. profiles column defaults — drop owner-specific defaults (PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+
+The mobile app is a clean product for other users; the `profiles` table's
+column defaults were still the original owner's own values
+(`company_name` defaulting to "Graywolf Logistics LLC", `business_balance`/
+`initial_capital` defaulting to $60,000). Every new signup's `profiles` row
+is created by `handle_new_user()` (`supabase/migrations/0001_init.sql`)
+with no explicit values, so it inherited these defaults verbatim. This
+section only changes the column DEFAULT for future inserts — it does not
+touch any existing row's current value (the owner's own dev/test account
+keeps whatever it currently has; this is a dev/test account now anyway).
+
+```sql
+alter table profiles alter column company_name drop default;
+alter table profiles alter column business_balance set default 0;
+alter table profiles alter column initial_capital set default 0;
+```
+
+- [ ] 11a run (profiles column defaults — company_name/business_balance/initial_capital)
 
 ---
 

@@ -14,6 +14,7 @@ import type {
   LegacyReimbursement,
   LegacySettlement,
   LegacyToll,
+  LegacyTractorAsset,
 } from '@/src/data/legacyImport/types';
 import type {
   CapitalTransactionInsert,
@@ -32,6 +33,7 @@ export type LegacyImportEntityResult = { label: string; inserted: number; skippe
 export type LegacyImportResult = {
   truckId: string | null;
   truckCreated: boolean;
+  truckLabel: string | null;
   entities: LegacyImportEntityResult[];
   warnings: string[];
 };
@@ -85,25 +87,29 @@ async function runEntity(
 }
 
 // ---------- 1. Truck (must exist first — trigger seeds maintenance_intervals) ----------
-async function ensureTruck(userId: string, health: LegacyHealth | undefined) {
-  const { data: existing, error } = await supabase
-    .from('trucks')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('unit_number', '830157')
-    .maybeSingle();
+// Truck identity comes ONLY from the backup file's own DB.assets.tr (owner
+// decision 2026-07-09: generic migration feature, never a hardcoded specific
+// truck). A backup with no assets.tr still gets a bare truck row so
+// truck-scoped records (loads, maintenance) have somewhere to attach.
+async function ensureTruck(userId: string, tractor: LegacyTractorAsset | null | undefined, health: LegacyHealth | undefined) {
+  const unitNumber = tractor?.unit || null;
+  let query = supabase.from('trucks').select('id').eq('user_id', userId);
+  query = unitNumber ? query.eq('unit_number', unitNumber) : query.is('unit_number', null);
+  const { data: existing, error } = await query.maybeSingle();
   if (error) throw error;
-  if (existing) return { truckId: existing.id as string, created: false };
+  if (existing) return { truckId: existing.id as string, created: false, label: unitNumber };
 
+  const yearNum = tractor?.year ? Number(tractor.year) || null : null;
   const insertRow: TruckInsert = {
     user_id: userId,
-    unit_number: '830157',
-    year: 2023,
-    make: 'International',
-    model: 'LT',
-    engine: 'A26 12.4L',
+    unit_number: unitNumber,
+    year: yearNum,
+    make: tractor?.make || null,
+    model: tractor?.model || null,
+    engine: tractor?.engine || null,
+    vin: tractor?.vin || null,
     fleet_mpg: health?.mpg ?? 8.9,
-    current_odometer: health?.odo ?? null,
+    current_odometer: health?.odo ?? tractor?.odometer ?? null,
     apu_hours: health?.apuHours ?? null,
     is_active: true,
   };
@@ -113,7 +119,7 @@ async function ensureTruck(userId: string, health: LegacyHealth | undefined) {
     .select('id')
     .single();
   if (insertError) throw insertError;
-  return { truckId: created.id as string, created: true };
+  return { truckId: created.id as string, created: true, label: unitNumber };
 }
 
 async function applyFluidTypeOverrides(truckId: string, health: LegacyHealth | undefined) {
@@ -742,10 +748,12 @@ export async function importLegacyBackup(
   report(0);
   let truckId: string | null = null;
   let truckCreated = false;
+  let truckLabel: string | null = null;
   try {
-    const r = await ensureTruck(userId, payload.health);
+    const r = await ensureTruck(userId, db.assets?.tr, payload.health);
     truckId = r.truckId;
     truckCreated = r.created;
+    truckLabel = r.label;
     if (truckCreated) await applyFluidTypeOverrides(truckId, payload.health);
   } catch (err) {
     warnings.push(`Could not create/find the truck profile — truck-scoped records will import without a truck link: ${errorMessage(err)}`);
@@ -871,5 +879,5 @@ export async function importLegacyBackup(
     warnings.push(`Consistency pass failed: ${errorMessage(err)}`);
   }
 
-  return { truckId, truckCreated, entities, warnings };
+  return { truckId, truckCreated, truckLabel, entities, warnings };
 }

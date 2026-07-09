@@ -1,7 +1,20 @@
 # CLAUDE.md — Standing rules for this repo
 
 - `legacy/index.html` is the source of truth for business logic. When in doubt,
-  match its behavior and cite the function name you ported.
+  match its behavior and cite the function name you ported. It is NOT a
+  source of truth for identity — `legacy/index.html` bakes in one specific
+  owner's name, company, and truck as a matter of it being a single-file,
+  single-user app; the mobile app is a clean multi-tenant product (owner
+  decision 2026-07-09, PRODUCT DECISION). New users start with ZERO data
+  and no owner-specific defaults anywhere: no hardcoded company name
+  ("Bozkurt Fleet OS" the product brand is fine; "Graywolf Logistics LLC"
+  as a value is not), no hardcoded truck (unit number, year/make/model —
+  the legacy-backup importer reads truck identity FROM the backup file's
+  `DB.assets.tr`, never a specific truck), no non-zero business-balance/
+  capital default. The legacy-backup importer (`app/src/data/legacyImport/`)
+  is a generic migration feature for any web-app user, not an Ali-specific
+  one-off. A first-launch onboarding wizard (PROMPTS.md Session 9b) is the
+  only place a user's own company/truck/balance get set.
 - Never weaken these invariants:
   1. Settlement-withheld deductions are never counted as tax deductions
      (net-pay model: income = net settlement pay; expenses = out-of-pocket only

@@ -177,7 +177,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         .select('business_balance')
         .eq('user_id', userId)
         .maybeSingle();
-      const newBalance = Number(profile?.business_balance ?? 60000) + mapping.netPay;
+      const newBalance = Number(profile?.business_balance ?? 0) + mapping.netPay;
       await supabase.from('profiles').update({ business_balance: newBalance }).eq('user_id', userId);
       netPayAdded = mapping.netPay;
     }

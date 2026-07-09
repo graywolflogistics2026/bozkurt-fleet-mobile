@@ -43,11 +43,11 @@ export function useCapitalAccountSummary() {
         (a, b) => new Date(b.tx_date).getTime() - new Date(a.tx_date).getTime()
       )[0];
 
-      const summary = calcCapitalAccount(Number(profile?.initial_capital ?? 60000), totalContributions, totalDraws);
+      const summary = calcCapitalAccount(Number(profile?.initial_capital ?? 0), totalContributions, totalDraws);
 
       return {
         ...summary,
-        businessBalance: Number(profile?.business_balance ?? 60000),
+        businessBalance: Number(profile?.business_balance ?? 0),
         contributionCount: contributions.length,
         latestContributionNote: latest?.note ?? null,
         latestContributionDate: latest?.tx_date ?? null,

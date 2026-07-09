@@ -658,6 +658,16 @@ separate design pass):
 6. Settings: profile/business info, view-only mode per device, export JSON
    (System — the Settings screen itself already exists; this is filling in
    the remaining fields)
+7. First-launch ONBOARDING wizard (owner decision 2026-07-09, PRODUCT
+   DECISION — new users start with ZERO data and no owner-specific
+   defaults): after sign-up + ToS acceptance, walk the user through
+   company name → truck setup (unit number, year/make/model, odometer —
+   this insert is what fires trg_seed_maintenance_intervals, seeding that
+   truck's maintenance_intervals rows per CLAUDE.md invariant #4) →
+   optional starting business balance (default 0, i.e. skippable). Until
+   onboarding completes, every screen shows its normal clean empty state
+   (no placeholder Graywolf/Ali data anywhere) rather than blocking
+   navigation outright.
 Then a full audit session: run through docs/FEATURE_INVENTORY.md and produce
 PARITY.md marking each legacy feature done/partial/missing.
 ```
@@ -697,6 +707,13 @@ triggers automatically on version bump, per Session 3).
       from the wide-screen sidebar / phone More tab in the exact legacy
       grouping and order. Re-check the table immediately before this
       session starts; do not begin store prep with any row still ⬜/🚧.
+- [ ] **Fresh-account walkthrough (owner, 2026-07-09 — binding, blocks
+      store submission):** sign up with a brand-new account (not the dev
+      seed account) and verify every screen starts empty with no Graywolf/
+      Ali Bozkurt/Unit 830157 remnants anywhere — company name blank until
+      set, business balance $0, no truck until onboarding creates one, no
+      pre-filled AI Advisor context beyond neutral "the owner-operator"/
+      "this fleet" labels.
 ```
 
 ---

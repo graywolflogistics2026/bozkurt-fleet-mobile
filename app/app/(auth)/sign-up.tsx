@@ -29,7 +29,7 @@ export default function SignUp() {
   return (
     <Screen>
       <ScreenTitle>Create account</ScreenTitle>
-      <MutedText>Graywolf Logistics LLC — Fleet OS</MutedText>
+      <MutedText>Bozkurt Fleet OS — for owner-operators</MutedText>
       <Field
         placeholder="Email"
         value={email}

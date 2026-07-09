@@ -8,11 +8,11 @@
 -- auth.users comes from Supabase Auth. profiles extends it.
 create table profiles (
   user_id      uuid primary key references auth.users on delete cascade,
-  company_name text default 'Graywolf Logistics LLC',
+  company_name text,                         -- blank until set in onboarding/Settings
   owner_name   text,
   home_state   text default 'TX',
-  business_balance numeric(12,2) default 60000,  -- was gw_bizbal
-  initial_capital  numeric(12,2) default 60000,  -- was CAPITAL.contribution
+  business_balance numeric(12,2) default 0,  -- was gw_bizbal; 0 until owner sets a starting balance
+  initial_capital  numeric(12,2) default 0,  -- was CAPITAL.contribution; 0 until owner sets a starting balance
   settings     jsonb default '{}',           -- autosave, view_only, etc.
   -- Terms of Use acceptance (added 2026-07-04, D12) — set on first-launch
   -- acceptance and re-set whenever tos_version changes (PROMPTS.md Session 3).

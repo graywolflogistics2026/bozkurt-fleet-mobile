@@ -115,7 +115,7 @@ export default function ImportLegacyBackup() {
         {phase === 'pick' && (
           <Card>
             <MutedText>
-              Pick the graywolf-backup-*.json file exported from the web app (Settings → Export Data). Settlements,
+              Pick the JSON backup file exported from the web app (Settings → Export Data). Settlements,
               deductions, maintenance history, Truck Health, Capital Account, loans, cards, and bank/checking
               statements will be imported. Safe to run more than once — matching records are updated in place, not
               duplicated.
@@ -187,8 +187,12 @@ export default function ImportLegacyBackup() {
             <MutedText>
               {result.truckId
                 ? result.truckCreated
-                  ? 'Created truck Unit 830157.'
-                  : 'Matched existing truck Unit 830157.'
+                  ? result.truckLabel
+                    ? `Created truck Unit ${result.truckLabel}.`
+                    : 'Created a truck profile (no unit number in this backup).'
+                  : result.truckLabel
+                    ? `Matched existing truck Unit ${result.truckLabel}.`
+                    : 'Matched your existing truck profile.'
                 : 'Truck profile could not be created — see warnings below.'}
             </MutedText>
             <View style={{ marginTop: spacing.md }}>

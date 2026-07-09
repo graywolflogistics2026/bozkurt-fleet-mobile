@@ -73,12 +73,12 @@ create extension if not exists "pgcrypto";
 -- auth.users comes from Supabase Auth. profiles extends it.
 create table profiles (
   user_id      uuid primary key references auth.users on delete cascade,
-  company_name text default 'Graywolf Logistics LLC',
+  company_name text,                         -- blank until set in onboarding/Settings
   owner_name   text,
   home_state   text default 'TX',
   filing_status text default 'mfj',          -- tax estimator default
-  business_balance numeric(12,2) default 60000,  -- was gw_bizbal
-  initial_capital  numeric(12,2) default 60000,  -- was CAPITAL.contribution
+  business_balance numeric(12,2) default 0,  -- was gw_bizbal; 0 until owner sets a starting balance
+  initial_capital  numeric(12,2) default 0,  -- was CAPITAL.contribution; 0 until owner sets a starting balance
   settings     jsonb default '{}',           -- autosave, view_only, etc.
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
