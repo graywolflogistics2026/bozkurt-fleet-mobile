@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -99,6 +99,34 @@ export function ErrorText({ children }: { children?: string | null }) {
   return <Text style={styles.error}>{children}</Text>;
 }
 
+// Reusable centered edit-sheet overlay (Session 7 Deductions edit sheet,
+// Capital Account's record-draw/update-balance sheets, and future forms) —
+// a lightweight equivalent of legacy's fixed-overlay modal pattern
+// (legacy/index.html editDedItem()). Tapping outside the card closes it.
+export function ModalSheet({
+  visible,
+  onClose,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          {children}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+export function SheetTitle({ children }: { children: React.ReactNode }) {
+  return <Text style={styles.sheetTitle}>{children}</Text>;
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -188,5 +216,27 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: typography.size.sm,
     marginBottom: spacing.sm,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+  },
+  sheetTitle: {
+    color: colors.text,
+    fontSize: typography.size.lg,
+    fontWeight: '700',
+    marginBottom: spacing.md,
   },
 });

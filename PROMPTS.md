@@ -445,9 +445,9 @@ item** — see Session 10's pre-launch checklist.
 | 5 | Fuel | Expenses | 9a | ⬜ not started |
 | 6 | Maintenance | Expenses | 8 | 🚧 placeholder route exists, not implemented |
 | 7 | Tolls & Fees | Expenses | 9a | ⬜ not started |
-| 8 | Deductions | Expenses | 7 | ✅ done (list view, Session 6/7) |
+| 8 | Deductions | Expenses | 7 | ✅ done (list view Session 6/7, edit+delete with contribution sync Session 7) |
 | 9 | Assets | Business | 9a | ⬜ not started |
-| 10 | Capital Account | Business | 7 | 🚧 placeholder route exists, not implemented |
+| 10 | Capital Account | Business | 7 | ✅ done (stat row, record draw/distribution, update balance, history with source-deduction links) |
 | 11 | Operating P&L | Business | 9a | ⬜ not started |
 | 12 | Truck Health | Intelligence | 8 | 🚧 placeholder route exists, not implemented |
 | 13 | Cash Flow | Intelligence | 9a | 🚧 placeholder route exists, not implemented |
@@ -475,15 +475,34 @@ Implement Deductions and Capital screens:
 - Deductions: two sections exactly like legacy rDed — "Out-of-Pocket (tax
   deductible)" and "Withheld from Settlement (already in net pay, NOT
   re-deducted)". Row tap → edit sheet (category from DED_CATEGORIES incl.
-  Software & Subscriptions, payment from the 4 standard methods, amount).
-  Editing payment syncs the linked capital contribution (add/update/remove).
-  Manual add form for non-PDF items (LLC fees, Anthropic subscription).
+  Software & Subscriptions, payment from the 9 standard methods — see
+  CLAUDE.md invariant #2 — amount). Editing payment syncs the linked
+  capital contribution (add/update/remove). Manual add form for non-PDF
+  items (LLC fees, Anthropic subscription).
 - Capital: stat row (total contributed / draws / tax-free remaining),
   breakdown card, unified history list (draws red with delete, contributions
   green with a link icon explaining they're edited via their deduction),
   record-draw action, update-business-balance action.
 - Deleting anything cascades exactly like legacy (contribution removal,
   document-record cleanup so re-imports don't false-flag as duplicates).
+
+**Implementation note (2026-07-09) — edit/delete + Capital Account
+screen done; manual add form still open.** Deductions edit (category/
+payment/amount via a pill-based sheet, `app/app/(tabs)/deductions.tsx`)
+and delete (cascades the linked contribution via the DB's `ON DELETE
+CASCADE`, plus `cleanupOrphanedDocument()` for the stale-document-record
+case) are implemented, along with the Capital Account screen (stat row,
+record draw/distribution, update business balance, unified history with
+contributions linking back to Deductions). The confirmation-dialog rule
+from the 2026-07-07 payment-method sync applies here too: editing a
+deduction to a personal payment method only creates a NEW linked
+contribution after `confirmOwnerContribution()` — updating or removing an
+already-linked contribution (e.g. correcting the amount, or correcting the
+payment method back to a business one) is unconditional, same as legacy
+(`app/src/stats/contributionSync.ts` `planContributionSync()`, ported from
+`syncContributionForDeduction()`). **Not done this pass:** the manual
+"add a deduction" form (LLC fees, subscriptions not tied to any PDF) —
+still open for a future pass.
 
 **Entity-type branch (owner decision 2026-07-03):** read tax_config
 .entity_type. For 'sole_prop'/'smllc' this screen is unchanged from legacy.

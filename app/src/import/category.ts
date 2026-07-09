@@ -7,6 +7,23 @@
 // lives in paymentMethods.ts alongside normalizePaymentMethod().
 export { isPersonalPayment } from '@/src/import/paymentMethods';
 
+// legacy/index.html:1774 DED_CATEGORIES — the manual-edit/manual-add
+// category list (a superset of what guessCategory() ever assigns
+// automatically; 'Other' only ever appears via manual entry).
+export const DED_CATEGORIES = [
+  'Software & Subscriptions',
+  'Legal & Accounting Fees',
+  'Insurance',
+  'Licensing & Permits',
+  'Tools & Equipment',
+  'Electronics',
+  'Comfort & Sleeper',
+  'Truck Supplies',
+  'Safety Equipment',
+  'Misc',
+  'Other',
+] as const;
+
 const STORE_CATS: Record<string, string | null> = {
   amazon: null,
   walmart: 'Misc',

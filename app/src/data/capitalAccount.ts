@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
 import { calcCapitalAccount } from '@/src/stats/capitalAccount';
@@ -54,5 +54,27 @@ export function useCapitalAccountSummary() {
       };
     },
     enabled: !!userId,
+  });
+}
+
+// Legacy updateBizBalance() (legacy/index.html:1034-1041) — a manual
+// correction to the checking-account figure shown on the Dashboard/Capital
+// Account screens (business_balance is otherwise only ever incremented by
+// settlement net-pay on import, aiImportSave.ts).
+export function useUpdateBusinessBalance() {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (balance: number) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ business_balance: balance })
+        .eq('user_id', userId as string);
+      if (error) throw error;
+      return balance;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['capital-account-summary'] }),
   });
 }
