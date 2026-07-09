@@ -1,6 +1,6 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-06): everything below (sections 1-6) has been run against
+**STATUS (2026-07-09): everything below (sections 1-10) has been run against
 the live DB.**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
@@ -245,7 +245,7 @@ or backfill it later; the app treats null the same as "unknown truck."
 
 - [x] 6a run (add truck_id + index to fuel_purchases)
 
-## 7. deductions.warranty_years (owner decision 2026-07-07, web app v2026.07.07-H)
+## 7. deductions.warranty_years (owner decision 2026-07-07, web app v2026.07.07-H) — ✅ APPLIED
 
 Store-purchase items may carry a warranty length extracted by ai-import
 (`warrantyYears` — halves allowed, e.g. 2.5). Persisted now by the mobile
@@ -259,9 +259,9 @@ alter table deductions add column warranty_years numeric(4,1);
 
 Nullable, no backfill needed — existing rows simply have no warranty info.
 
-- [ ] 7a run (add warranty_years to deductions)
+- [x] 7a run (add warranty_years to deductions)
 
-## 8. loads.pickup_date/delivery_date (per-diem exact day-counting rework)
+## 8. loads.pickup_date/delivery_date (per-diem exact day-counting rework) — ✅ APPLIED
 
 Needed to replace the `calcPerDiemDays()` "7 days × settlement count"
 stopgap (`app/src/tax/perDiem.ts`) with legacy's real method — summing
@@ -284,10 +284,10 @@ populated for old rows and any display code that only reads it; new
 imports populate all three (`app/src/import/mapExtraction.ts`
 `mapSettlement()`).
 
-- [ ] 8a run (add pickup_date to loads)
-- [ ] 8b run (add delivery_date to loads)
+- [x] 8a run (add pickup_date to loads)
+- [x] 8b run (add delivery_date to loads)
 
-## 9. reimbursements.settlement_id (owner decision 2026-07-09, web v2026.07.09-A — re-import-replace)
+## 9. reimbursements.settlement_id (owner decision 2026-07-09, web v2026.07.09-A — re-import-replace) — ✅ APPLIED
 
 Mirrors the web app's new behavior: re-importing a settlement for a
 `week_ending` that already exists REPLACES that week's batch-tagged rows
@@ -309,9 +309,16 @@ Nullable — existing maintenance-warranty reimbursement rows have no
 settlement to tag and stay null; the app treats null as "not tied to a
 settlement import."
 
-- [ ] 9a run (add settlement_id + index to reimbursements)
+Run live as two separate statements (the combined block above was garbled
+in the terminal when run together) — same DDL, same result:
+`alter table reimbursements add column settlement_id uuid references
+settlements on delete cascade;` then the `create index` statement. Column
+name confirmed to match what the code writes/reads
+(`app/src/data/aiImportSave.ts`).
 
-## 10. tax_year_data.per_diem gains full_daily_rate (Dashboard card parity, owner decision 2026-07-09)
+- [x] 9a run (add settlement_id + index to reimbursements)
+
+## 10. tax_year_data.per_diem gains full_daily_rate (Dashboard card parity, owner decision 2026-07-09) — ✅ APPLIED
 
 The Dashboard's "Per Diem Deduction" card must show the legacy caption
 "@$64/day (80% of $80)" — the $64 actually deducted is 80% of the $80 IRS
@@ -336,7 +343,7 @@ card falls back to showing just "@$64/day" with no parenthetical, same
 "never silently compute with missing data" spirit as invariant #6's
 year-fallback banner.
 
-- [ ] 10a run (merge full_daily_rate into tax_year_data.per_diem for 2026)
+- [x] 10a run (merge full_daily_rate into tax_year_data.per_diem for 2026)
 
 ---
 
