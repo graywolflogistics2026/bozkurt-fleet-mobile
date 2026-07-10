@@ -20,6 +20,16 @@ create table profiles (
   -- NULL means "never accepted" and must block data entry.
   tos_accepted_at timestamptz,
   tos_version     text,
+  -- Customizable dashboard (added retroactively, PENDING_SQL.md §19, owner
+  -- decision 2026-07-10) — null until Session 9a's drag-to-reorder/show-
+  -- hide/rename UI ships; see that section for the documented (unenforced)
+  -- shape.
+  dashboard_layout jsonb,
+  -- Expanded onboarding wizard (added retroactively, PENDING_SQL.md §20,
+  -- owner decision 2026-07-10) — null/'owner_operator' both mean "full
+  -- owner-operator experience" until Session 9b wires role-based module
+  -- hiding for 'company_driver_w2'.
+  role text check (role in ('owner_operator', 'company_driver_w2', 'contractor_1099', 'trainee')),
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );

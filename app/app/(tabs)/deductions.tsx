@@ -11,13 +11,10 @@ import { planContributionSync } from '@/src/stats/contributionSync';
 import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
 import { CANONICAL_CATEGORIES } from '@/src/import/category';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
+import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Deduction } from '@/src/types/db';
-
-function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
-}
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -41,6 +38,7 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 
 function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; onDelete: () => void }) {
   const { t } = useTranslation();
+  const { money } = useFormatters();
   const personal = isPersonalPayment(x.payment_method);
   return (
     <Pressable onPress={onPress} style={styles.row}>
@@ -85,6 +83,7 @@ function DedSection({
   onDelete: (x: Deduction) => void;
 }) {
   const { t } = useTranslation();
+  const { money } = useFormatters();
   return (
     <>
       <View style={{ marginBottom: spacing.xs }}>
@@ -114,6 +113,7 @@ function DedSection({
 
 export default function Deductions() {
   const { t } = useTranslation();
+  const { money } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
   const dedQuery = useDeductions();

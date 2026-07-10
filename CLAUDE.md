@@ -304,6 +304,76 @@
       accountant-readable naming, warranty extraction, per-truck/driver
       routing (#7) — universal capture is additive routing breadth, never
       a second set of rules.
+  15. LOCALE-AWARE FORMATTING (owner decision 2026-07-10, PRODUCT DECISION,
+      binding — personalization & onboarding package, item 3): every date,
+      currency, and number displayed anywhere in the app follows the user's
+      selected locale (invariant #11's 7 supported locales), via the
+      standard `Intl` APIs (`toLocaleString()`/`toLocaleDateString()`) —
+      never a hardcoded `'en-US'`. USD stays the CURRENCY (this app never
+      converts an amount to another currency); only its FORMATTING
+      localizes (symbol position, decimal/thousands separators, digit
+      script). `app/src/i18n/format.ts` is the ONE shared module for this —
+      `useFormatters()` inside a component (`money()`/`number()`/`date()`/
+      `dateTime()`, all bound to the current `i18n.language`), or the plain
+      `formatMoney()`/`formatNumber()`/`formatDate()`/`formatDateTime()`
+      functions (which take an explicit `locale` argument) for a non-
+      component call site — never a screen-local `money()` helper hardcoding
+      a locale again. Scope decision (2026-07-10 pass): this invariant
+      governs values that already go through explicit `Intl`-style
+      formatting (currency amounts, and call sites that were already
+      calling `toLocaleString()`/`toLocaleDateString()`); it does NOT
+      retroactively wrap every raw stored date string (e.g. a deduction's
+      `ded_date`) in `Intl.DateTimeFormat` — that's a larger, separate
+      per-screen pass, not done this session. AI-generated free-text
+      (docType `summary`, AI Advisor replies) is covered by invariant #16
+      below, not this one — that's a translation concern (what LANGUAGE the
+      text is in), this invariant is a formatting concern (how a number/
+      date/currency figure is DISPLAYED).
+  16. AI IN USER'S LANGUAGE (owner decision 2026-07-10, PRODUCT DECISION,
+      binding — personalization & onboarding package, item 4): `ai-import`
+      and `ai-advisor` (Edge Functions) accept an optional `locale` in
+      their request body and, when it's one of invariant #11's 6 non-
+      English supported locales, instruct the model to write free-text it
+      composes itself (a document's `summary`, an AI Advisor reply) in that
+      language — standard financial/trucking terms may stay English when
+      there's no natural equivalent (e.g. "per diem", "ELD", "IFTA"). This
+      NEVER applies to enum-like fields (`docType`, `category`,
+      `chargebackType`, `incomeType`, `serviceType`, `paymentMethod`) or to
+      text copied verbatim from the source document (vendor names, item
+      names) — only to text the model generates in its own words, same
+      "don't translate the domain values invariant #11 already carves out"
+      principle. `app/src/data/aiImportCall.ts`'s `callAiImport()` forwards
+      the app's current `i18n.language`; `app/(tabs)/import/index.tsx`'s
+      call sites pass it. `ai-advisor` accepts the same `locale` field as
+      groundwork — no app screen calls it yet (PROMPTS.md Session 9b "AI
+      Advisor"), that screen just has to pass `i18n.language`/
+      `profiles.locale` when it's built, no further server-side work.
+  17. CUSTOMIZABLE DASHBOARD (owner decision 2026-07-10, PRODUCT DECISION,
+      binding, not yet implemented — PROMPTS.md Session 9a): every
+      dashboard card (the full parity set + Capital strip + any future
+      card) must support drag-to-reorder, show/hide, and rename (a user's
+      custom label overrides the i18n default; clearing it restores the
+      i18n default — the override is never a replacement string baked over
+      the translation, so switching app language still re-translates a
+      card whose label the user never customized). Layout persists in
+      `profiles.dashboard_layout` (docs/PENDING_SQL.md §19) per user, with
+      a "Reset to default" action (`dashboard_layout = null`). No code path
+      may hardcode the Dashboard's card list/order as the only possible
+      arrangement once this ships — the default order becomes just that,
+      a default, same spirit as invariant #7's "single truck is just the
+      n=1 presentation" rule.
+  18. ROLE-BASED APP MODE (owner decision 2026-07-10, PRODUCT DECISION,
+      binding, not yet implemented — PROMPTS.md Session 9b, expanded
+      onboarding wizard supersedes the earlier shorter spec):
+      `profiles.role` (docs/PENDING_SQL.md §20) is one of `owner_operator`
+      / `company_driver_w2` / `contractor_1099` / `trainee`, set during
+      onboarding. `company_driver_w2` is the only value that changes
+      rendering: it hides owner-only modules (Schedule C deductions,
+      Capital Account, S-Corp election) and centers per-diem/W-2 tracking
+      instead; `contractor_1099` (and `trainee`/`owner_operator`) get the
+      full Schedule C experience unchanged. `role = null` (skipped the
+      wizard, or a pre-existing account) MUST behave identically to
+      `owner_operator` — never a third, undocumented behavior.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

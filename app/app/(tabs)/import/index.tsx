@@ -25,51 +25,52 @@ import { useDocTypeMeta } from '@/src/import/docTypes';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
+import { formatMoney } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
 
-function money(n: number | undefined | null) {
+function money(n: number | undefined | null, locale: string) {
   if (n == null) return '—';
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  return formatMoney(n, locale);
 }
 
 type PreviewLine = { label: string; value: string; color?: string };
 
-function buildPreviewLines(d: Extraction, t: TFunction): PreviewLine[] {
+function buildPreviewLines(d: Extraction, t: TFunction, locale: string): PreviewLine[] {
   const lines: PreviewLine[] = [];
   const p1 = 'importScreen.previewLabels';
   if (d.docType === 'settlement' && d.settlement) {
     const s = d.settlement;
-    lines.push({ label: t(`${p1}.grossRevenue`), value: money(s.grossRevenue), color: colors.green });
-    lines.push({ label: t(`${p1}.netPay`), value: money(s.netPay), color: colors.accent });
-    lines.push({ label: t(`${p1}.deductions`), value: money(s.totalDeductions), color: colors.red });
+    lines.push({ label: t(`${p1}.grossRevenue`), value: money(s.grossRevenue, locale), color: colors.green });
+    lines.push({ label: t(`${p1}.netPay`), value: money(s.netPay, locale), color: colors.accent });
+    lines.push({ label: t(`${p1}.deductions`), value: money(s.totalDeductions, locale), color: colors.red });
     lines.push({ label: t(`${p1}.milesLabel`), value: t(`${p1}.miles`, { count: s.totalMiles ?? 0 }) });
     lines.push({ label: t(`${p1}.loadsLabel`), value: t(`${p1}.loads`, { count: (s.loads ?? []).length }) });
     const tractorFuel = (s.tractorFuel ?? []).reduce((a, x) => a + (x.amount ?? 0), 0);
     const reeferFuel = (s.reeferFuel ?? []).reduce((a, x) => a + (x.amount ?? 0), 0);
-    if (tractorFuel) lines.push({ label: t(`${p1}.tractorFuel`), value: money(tractorFuel), color: colors.red });
-    if (reeferFuel) lines.push({ label: t(`${p1}.reeferFuel`), value: money(reeferFuel), color: colors.red });
+    if (tractorFuel) lines.push({ label: t(`${p1}.tractorFuel`), value: money(tractorFuel, locale), color: colors.red });
+    if (reeferFuel) lines.push({ label: t(`${p1}.reeferFuel`), value: money(reeferFuel, locale), color: colors.red });
     for (const x of (s.deductions ?? []).slice(0, 4)) {
-      lines.push({ label: `${x.code ?? ''} ${x.desc ?? ''}`.trim(), value: money(x.amount), color: colors.red });
+      lines.push({ label: `${x.code ?? ''} ${x.desc ?? ''}`.trim(), value: money(x.amount, locale), color: colors.red });
     }
   } else if (d.docType === 'fuel' && d.fuel) {
     const f = d.fuel;
     lines.push({ label: t(`${p1}.type`), value: f.type ?? '—' });
     lines.push({ label: t(`${p1}.station`), value: f.station ?? '—' });
     lines.push({ label: t(`${p1}.gallonsLabel`), value: t(`${p1}.gallons`, { count: Number((f.gallons ?? 0).toFixed(1)) }) });
-    lines.push({ label: t(`${p1}.gross`), value: money(f.gross), color: colors.red });
-    lines.push({ label: t(`${p1}.discount`), value: money(f.discount), color: colors.green });
-    lines.push({ label: t(`${p1}.net`), value: money(f.net), color: colors.red });
+    lines.push({ label: t(`${p1}.gross`), value: money(f.gross, locale), color: colors.red });
+    lines.push({ label: t(`${p1}.discount`), value: money(f.discount, locale), color: colors.green });
+    lines.push({ label: t(`${p1}.net`), value: money(f.net, locale), color: colors.red });
   } else if ((d.docType === 'amazon' || d.docType === 'store') && d.purchase) {
     const p = d.purchase;
     for (const item of p.items ?? []) {
       const qty = Math.max(1, parseInt(String(item.qty ?? 1), 10) || 1);
-      const label = qty > 1 ? `${qty}× ${item.name ?? ''} (@${money(item.price)} each)` : item.name ?? '';
-      lines.push({ label, value: money((item.price ?? 0) * qty), color: colors.accent });
+      const label = qty > 1 ? `${qty}× ${item.name ?? ''} (@${money(item.price, locale)} each)` : item.name ?? '';
+      lines.push({ label, value: money((item.price ?? 0) * qty, locale), color: colors.accent });
     }
-    if (p.tax) lines.push({ label: t(`${p1}.tax`), value: money(p.tax), color: colors.red });
-    lines.push({ label: t(`${p1}.total`), value: money(p.total ?? d.totalAmount), color: colors.green });
+    if (p.tax) lines.push({ label: t(`${p1}.tax`), value: money(p.tax, locale), color: colors.red });
+    lines.push({ label: t(`${p1}.total`), value: money(p.total ?? d.totalAmount, locale), color: colors.green });
     if (p.paymentMethod) {
       const personal = isPersonalPayment(p.paymentMethod);
       lines.push({
@@ -86,28 +87,28 @@ function buildPreviewLines(d: Extraction, t: TFunction): PreviewLine[] {
       label: t(`${p1}.odometerLabel`),
       value: m.odometer ? t(`${p1}.odometer`, { count: m.odometer }) : '—',
     });
-    lines.push({ label: t(`${p1}.totalCost`), value: money(m.total), color: colors.red });
-    if (m.warrantyCredit) lines.push({ label: t(`${p1}.warrantyCredit`), value: money(m.warrantyCredit), color: colors.green });
+    lines.push({ label: t(`${p1}.totalCost`), value: money(m.total, locale), color: colors.red });
+    if (m.warrantyCredit) lines.push({ label: t(`${p1}.warrantyCredit`), value: money(m.warrantyCredit, locale), color: colors.green });
   } else if (d.docType === 'driver_payment' && d.driverPayment) {
     const p = d.driverPayment;
     lines.push({ label: t(`${p1}.driver`), value: p.driverName || '—' });
-    lines.push({ label: t(`${p1}.total`), value: money(p.amount ?? d.totalAmount), color: colors.red });
+    lines.push({ label: t(`${p1}.total`), value: money(p.amount ?? d.totalAmount, locale), color: colors.red });
     if (p.method) lines.push({ label: t(`${p1}.method`), value: p.method });
   } else if (d.financialDoc) {
     const f = d.financialDoc;
     lines.push({ label: t(`${p1}.description`), value: f.description || d.summary || '—' });
-    lines.push({ label: t(`${p1}.total`), value: money(f.amount ?? d.totalAmount), color: colors.red });
+    lines.push({ label: t(`${p1}.total`), value: money(f.amount ?? d.totalAmount, locale), color: colors.red });
     if (f.reference) lines.push({ label: t(`${p1}.reference`), value: f.reference });
     if (f.period) lines.push({ label: t(`${p1}.period`), value: f.period });
   } else if (d.docType === 'other' && d.suggestedCategory) {
     lines.push({ label: t(`${p1}.suggestedCategory`), value: d.suggestedCategory });
-    lines.push({ label: t(`${p1}.total`), value: money(d.totalAmount), color: colors.red });
+    lines.push({ label: t(`${p1}.total`), value: money(d.totalAmount, locale), color: colors.red });
   }
   return lines;
 }
 
 export default function Import() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const docTypeMeta = useDocTypeMeta();
   const router = useRouter();
   const { session } = useAuth();
@@ -242,7 +243,7 @@ export default function Import() {
       setWorkingLabel(t('importScreen.readingDocument'));
       const base64 = await new File(compressed.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
-      const { data, error } = await callAiImport(base64, 'image/jpeg');
+      const { data, error } = await callAiImport(base64, 'image/jpeg', undefined, i18n.language);
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, undefined);
     } catch (err) {
@@ -267,7 +268,7 @@ export default function Import() {
       setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
       const base64 = await new File(asset.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
-      const { data, error } = await callAiImport(base64, 'application/pdf');
+      const { data, error } = await callAiImport(base64, 'application/pdf', undefined, i18n.language);
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, asset.name);
     } catch (err) {
@@ -359,7 +360,7 @@ export default function Import() {
                     {t('importScreen.duplicateByContent', {
                       label: meta?.label ?? t('docTypes.other.label'),
                       date: extraction.date,
-                      amount: money(extraction.totalAmount),
+                      amount: money(extraction.totalAmount, i18n.language),
                     })}
                   </MutedText>
                 )}
@@ -384,7 +385,7 @@ export default function Import() {
             <View style={{ marginBottom: spacing.sm }}>
               <MutedText>{t('importScreen.dateLabel', { date: extraction.date ?? '—' })}</MutedText>
               <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
-              <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount) })}</MutedText>
+              <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount, i18n.language) })}</MutedText>
               <MutedText>
                 {t('importScreen.deductibleLabel', {
                   value: extraction.taxDeductible ? t('importScreen.deductibleYes') : t('importScreen.deductibleNo'),
@@ -393,7 +394,7 @@ export default function Import() {
               {extraction.summary ? <MutedText>{extraction.summary}</MutedText> : null}
             </View>
 
-            {buildPreviewLines(extraction, t).map((line, i) => (
+            {buildPreviewLines(extraction, t, i18n.language).map((line, i) => (
               <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                 <MutedText>{line.label}</MutedText>
                 <Text style={{ color: line.color ?? colors.text, fontWeight: '600' }}>{line.value}</Text>
@@ -552,11 +553,11 @@ export default function Import() {
               {t('importScreen.saved')}
             </Text>
             {result.netPayAdded != null && (
-              <MutedText>{t('importScreen.balanceAdded', { amount: money(result.netPayAdded) })}</MutedText>
+              <MutedText>{t('importScreen.balanceAdded', { amount: money(result.netPayAdded, i18n.language) })}</MutedText>
             )}
             {result.contributionTotal > 0 && (
               <MutedText>
-                {t('importScreen.contributionAdded', { amount: money(result.contributionTotal) })}
+                {t('importScreen.contributionAdded', { amount: money(result.contributionTotal, i18n.language) })}
               </MutedText>
             )}
             {result.storagePath && <MutedText>{t('importScreen.savedToPath', { path: result.storagePath })}</MutedText>}

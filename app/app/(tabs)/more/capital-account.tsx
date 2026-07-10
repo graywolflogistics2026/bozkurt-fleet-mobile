@@ -20,12 +20,9 @@ import {
   PrimaryButton,
   SecondaryButton,
 } from '@/src/components/ui';
+import { useFormatters } from '@/src/i18n/format';
 import { colors, spacing, typography } from '@/src/theme';
 import type { CapitalTransaction } from '@/src/types/db';
-
-function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
-}
 
 function HistoryRow({
   tx,
@@ -36,6 +33,7 @@ function HistoryRow({
   onDeleteDraw: () => void;
   onTapContribution: () => void;
 }) {
+  const { money } = useFormatters();
   const isDraw = tx.tx_type === 'draw';
   const content = (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm }}>
@@ -69,6 +67,7 @@ function HistoryRow({
 
 export default function CapitalAccount() {
   const { t } = useTranslation();
+  const { money } = useFormatters();
   const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user.id;

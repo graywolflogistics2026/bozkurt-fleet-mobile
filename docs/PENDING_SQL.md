@@ -1,7 +1,7 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
 **STATUS (2026-07-09): sections 1-10 have been run against the live DB.
-Sections 11-18 are new and NOT yet applied — run them yourself in the
+Sections 11-20 are new and NOT yet applied — run them yourself in the
 Supabase SQL editor, in order (14 depends on 13; 16 depends on 15).**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
@@ -586,6 +586,56 @@ doesn't match what's actually live.
 
 - [ ] 18a run (drop + recreate tax_config.entity_type check constraint with multi_member_llc)
 - [ ] 18b run (add tax_config.ownership_pct column)
+
+---
+
+## 19. profiles.dashboard_layout (customizable dashboard, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+
+Schema groundwork only — the customizable-dashboard UI (drag-to-reorder,
+show/hide, rename) is scheduled for PROMPTS.md Session 9a, not built this
+pass. The column is unused (always null, app falls back to the default
+card order/visibility/labels) until that session lands, same "schema now,
+UI later" pattern as section 13's `drivers` table.
+
+```sql
+alter table profiles add column dashboard_layout jsonb;
+```
+
+Shape (documented here for whoever implements Session 9a, not enforced by
+the DB): an ordered array of `{ id: string, visible: boolean, label:
+string | null }` — `id` matches a stable per-card identifier (not the
+i18n key, so relabeling the i18n default later doesn't orphan a saved
+layout), `label` is the user's override (null = use the i18n default),
+absence from the array or `visible:false` hides the card. "Reset to
+default" is simply `dashboard_layout = null`.
+
+- [ ] 19a run (add profiles.dashboard_layout jsonb column)
+
+---
+
+## 20. profiles.role (expanded onboarding wizard, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+
+Schema groundwork only — the expanded onboarding wizard itself stays
+scheduled for PROMPTS.md Session 9b (supersedes the earlier, shorter
+wizard spec). The column is unused (every screen behaves as it does today,
+defaulting to the full owner-operator experience) until that session wires
+role-based module hiding.
+
+```sql
+alter table profiles add column role text
+  check (role in ('owner_operator', 'company_driver_w2', 'contractor_1099', 'trainee'));
+```
+
+Nullable, no default — an existing account (or one that skips this wizard
+step) has `role = null`, which the app must treat identically to
+`'owner_operator'` (the current, only behavior) until Session 9b adds the
+actual branching. `company_driver_w2` is the one value that changes what
+renders: it hides owner-only modules (Schedule C deductions, Capital
+Account, S-Corp election) and centers per-diem/W-2 tracking instead;
+`contractor_1099` gets the full Schedule C experience, same as
+`owner_operator`/`trainee`.
+
+- [ ] 20a run (add profiles.role column)
 
 ---
 

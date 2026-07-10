@@ -4,7 +4,7 @@
 // the Anthropic API. ANTHROPIC_API_KEY lives only in this function's
 // environment secrets; the mobile app never holds it (CLAUDE.md).
 //
-// POST body: { fileBase64: string, mediaType: string, docHint?: string }
+// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string }
 // Auth: Supabase JWT in the Authorization header (required).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -183,7 +183,22 @@ APPROVED ADDITION (category hints, owner decision 2026-07-10 — full list in do
 APPROVED ADDITION (non-deductible traps, owner decision 2026-07-10 — flag, never silently deduct): if an item/line is clearly one of these common trucking-tax mistakes, prefix its description/summary with "PERSONAL — REVIEW: " instead of treating it as a normal 100%-deductible business expense: a standard-mileage-rate claim (never valid for a semi-truck — actual-expense method only), everyday/regular clothing (not OTR-specific safety gear or workwear), commuting (ordinary home-to-work travel), a security deposit (not an expense unless forfeited), or the PRINCIPAL portion of a loan payment (only the interest portion of a truck/trailer loan payment is deductible — note the split if the document shows one).
 `;
 
-function buildExtractionPrompt(docHint?: string): string {
+// AI in user's language (owner decision 2026-07-10, PRODUCT DECISION —
+// personalization & onboarding package, item 4): matches app/src/i18n's
+// SUPPORTED_LOCALES. 'en' needs no instruction (the base prompt is already
+// English) — every other locale gets an explicit language-name instruction
+// since models follow "respond in Spanish" far more reliably than a bare
+// locale code like "es".
+const LOCALE_LANGUAGE_NAME: Record<string, string> = {
+  es: "Spanish",
+  ru: "Russian",
+  ar: "Arabic",
+  tr: "Turkish",
+  hi: "Hindi",
+  uk: "Ukrainian",
+};
+
+function buildExtractionPrompt(docHint?: string, locale?: string): string {
   let prompt = LEGACY_EXTRACTION_PROMPT
     .replace(FUEL_SCHEMA_BEFORE, FUEL_SCHEMA_AFTER)
     .replace(DOCTYPE_ENUM_BEFORE, DOCTYPE_ENUM_AFTER)
@@ -201,6 +216,10 @@ function buildExtractionPrompt(docHint?: string): string {
   prompt += APPROVED_ADDITIONS_SUFFIX;
   if (docHint) {
     prompt += `\nThe user has hinted this document is likely a "${docHint}" — verify against the actual content, but use this as a tiebreaker only if the content is genuinely ambiguous.\n`;
+  }
+  const languageName = locale ? LOCALE_LANGUAGE_NAME[locale] : undefined;
+  if (languageName) {
+    prompt += `\nAPPROVED ADDITION (AI in user's language, owner decision 2026-07-10): write every free-text field (summary, and any description you compose yourself) in ${languageName} — the user's chosen app language. Standard financial/trucking terms may stay in English when there's no natural equivalent (e.g. "per diem", "ELD", "IFTA"). This does NOT apply to enum-like fields (docType, category, chargebackType, incomeType, serviceType, paymentMethod) or to text you copy verbatim from the document itself (vendor names, item names, addresses) — only to text you are generating/summarizing in your own words.\n`;
   }
   return prompt;
 }
@@ -249,14 +268,14 @@ Deno.serve(async (req: Request) => {
   }
   const userId = userData.user.id;
 
-  let body: { fileBase64?: string; mediaType?: string; docHint?: string };
+  let body: { fileBase64?: string; mediaType?: string; docHint?: string; locale?: string };
   try {
     body = await req.json();
   } catch {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
   }
 
-  const { fileBase64, mediaType, docHint } = body;
+  const { fileBase64, mediaType, docHint, locale } = body;
   if (!fileBase64 || !mediaType) {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
   }
@@ -292,7 +311,7 @@ Deno.serve(async (req: Request) => {
     ? { type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } }
     : { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } };
 
-  const prompt = buildExtractionPrompt(docHint);
+  const prompt = buildExtractionPrompt(docHint, locale);
 
   let anthropicResp: Response;
   try {

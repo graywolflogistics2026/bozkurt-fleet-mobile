@@ -6,8 +6,15 @@
 // message history, max 150-word replies. ANTHROPIC_API_KEY stays server-side
 // (CLAUDE.md) — the mobile app only ever sends conversation history here.
 //
-// POST body: { messages: { role: "user" | "assistant"; content: string }[] }
+// POST body: { messages: { role: "user" | "assistant"; content: string }[], locale?: string }
 // Auth: Supabase JWT in the Authorization header (required).
+//
+// locale (owner decision 2026-07-10, PRODUCT DECISION — personalization &
+// onboarding package, item 4 "AI in user's language"): groundwork only —
+// no app screen calls this function yet (PROMPTS.md Session 9b "AI
+// Advisor"), but the Edge Function itself accepts and honors locale now so
+// that screen just has to pass profile.locale/i18n.language when it's
+// built, with no further server-side work.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -22,6 +29,17 @@ const ANTHROPIC_MAX_TOKENS = 400; // matches legacy sendAI()
 const HISTORY_WINDOW = 6; // matches legacy aiHist.slice(-6)
 
 type ErrorType = "unauthenticated" | "bad_request" | "anthropic_error";
+
+// Matches app/src/i18n's SUPPORTED_LOCALES (see ai-import's identical map
+// and comment for why a language NAME, not a bare locale code, is used).
+const LOCALE_LANGUAGE_NAME: Record<string, string> = {
+  es: "Spanish",
+  ru: "Russian",
+  ar: "Arabic",
+  tr: "Turkish",
+  hi: "Hindi",
+  uk: "Ukrainian",
+};
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
   return new Response(
@@ -55,7 +73,7 @@ Deno.serve(async (req: Request) => {
   }
   const userId = userData.user.id;
 
-  let body: { messages?: { role: string; content: string }[] };
+  let body: { messages?: { role: string; content: string }[]; locale?: string };
   try {
     body = await req.json();
   } catch {
@@ -63,6 +81,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const messages = body.messages;
+  const locale = body.locale;
   if (!Array.isArray(messages) || messages.length === 0) {
     return errorResponse("bad_request", "messages must be a non-empty array.", 400);
   }
@@ -83,11 +102,16 @@ Deno.serve(async (req: Request) => {
   const ownerLabel = profile?.owner_name || "the owner-operator";
   const companyLabel = profile?.company_name || "this fleet";
 
+  const languageName = locale ? LOCALE_LANGUAGE_NAME[locale] : undefined;
+  const languageInstruction = languageName
+    ? ` Respond in ${languageName} — the user's chosen app language. Standard financial/trucking terms may stay in English when there's no natural equivalent (e.g. "per diem", "ELD", "IFTA").`
+    : "";
+
   const systemPrompt =
     `You are the AI business advisor for ${ownerLabel}, owner-operator of ${companyLabel}.\n` +
     `Revenue: $${rev.toFixed(2)} | Deductions: $${ded.toFixed(2)} | Net: $${(rev - ded).toFixed(2)}\n` +
     `Miles: ${miles.toLocaleString()} | Settlements: ${settlementCount}\n` +
-    `Give specific, actionable trucking advice. Max 150 words.`;
+    `Give specific, actionable trucking advice. Max 150 words.${languageInstruction}`;
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!anthropicKey) {

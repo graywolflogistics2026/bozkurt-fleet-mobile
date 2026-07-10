@@ -11,9 +11,19 @@ export type AiImportCallResult = { data?: Extraction; error?: AiImportError };
 // model_refusal, parse_failed, ...); supabase-js surfaces a non-2xx
 // response as a FunctionsHttpError with the real body reachable via
 // `error.context` (the raw Response) rather than in `data`.
-export async function callAiImport(fileBase64: string, mediaType: string, docHint?: string): Promise<AiImportCallResult> {
+// locale (owner decision 2026-07-10, PRODUCT DECISION — "AI in user's
+// language"): the app's current i18n locale, forwarded so the model
+// responds in that language for user-facing free-text fields (summary,
+// descriptions) — standard financial terms (e.g. "per diem") may stay
+// English regardless (see ai-import's prompt addition).
+export async function callAiImport(
+  fileBase64: string,
+  mediaType: string,
+  docHint?: string,
+  locale?: string
+): Promise<AiImportCallResult> {
   const { data, error } = await supabase.functions.invoke('ai-import', {
-    body: { fileBase64, mediaType, docHint },
+    body: { fileBase64, mediaType, docHint, locale },
   });
 
   if (error) {

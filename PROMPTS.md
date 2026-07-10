@@ -536,6 +536,57 @@ both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
 ```
 
+## Personalization & onboarding package (owner decision 2026-07-10, PRODUCT DECISION — binding)
+
+```
+1. Customizable dashboard — SCHEMA RECORDED THIS PASS (docs/PENDING_SQL.md
+   §19, profiles.dashboard_layout jsonb; CLAUDE.md invariant #17), UI
+   implementation is Session 9a item 8 above. Every card (16-card parity
+   set + Capital strip + any future card) gets drag-to-reorder, show/hide,
+   and rename (user override beats the i18n default; clearing it restores
+   the default — store the override string, not a translation-key swap).
+   "Reset to default" = dashboard_layout = null.
+
+2. Expanded onboarding wizard — SCHEMA RECORDED THIS PASS
+   (docs/PENDING_SQL.md §20, profiles.role; CLAUDE.md invariant #18), UI
+   implementation stays Session 9b item 7 (rewritten above, supersedes the
+   2026-07-09 spec). Company Name → Home State → DOT/MC (optional) → ROLE
+   (owner_operator/company_driver_w2/contractor_1099/trainee — the one
+   step that changes what renders elsewhere) → Truck info → Trailer info
+   → current odometer → maintenance schedule confirm/adjust → opening
+   business balance → tax year confirm.
+
+3. Locale-aware formatting — IMPLEMENTED THIS PASS (CLAUDE.md invariant
+   #15): dates/currency/numbers follow the selected locale everywhere via
+   Intl APIs (app/src/i18n/format.ts — useFormatters() hook + plain
+   formatMoney/formatNumber/formatDate/formatDateTime functions). Removed
+   4 duplicated screen-local money() helpers hardcoding 'en-US' (Dashboard,
+   Deductions, Capital Account, Import preview) and 2 toLocaleString()/
+   toLocaleDateString() calls with no explicit locale (Settings' ToS-
+   accepted date, Import Legacy's exported-at timestamp) — all now bound
+   to i18n.language. USD stays the currency; only its formatting
+   localizes. Scope decision: this does NOT retroactively wrap every raw
+   stored date string (e.g. a deduction's ded_date, shown as-is) in Intl
+   formatting — only call sites that were already doing explicit
+   Intl-style formatting. A full per-screen raw-date-string audit is
+   future work, not this pass.
+
+4. AI in user's language — GROUNDWORK IMPLEMENTED THIS PASS (CLAUDE.md
+   invariant #16): ai-import and ai-advisor Edge Functions accept an
+   optional locale in the request body; when it's one of the 6 non-
+   English supported locales, the model is instructed to write free-text
+   it composes itself (a document's summary, an AI Advisor reply) in that
+   language — standard financial terms (e.g. "per diem") may stay English.
+   app/src/data/aiImportCall.ts's callAiImport() forwards i18n.language
+   now; the import screen's two call sites pass it. ai-advisor has no app
+   caller yet (Session 9b "AI Advisor" screen) — it accepts locale as
+   groundwork so that screen only has to pass it through, no further
+   server-side work needed then.
+
+5. Recorded in CLAUDE.md invariants #15-18 and here. tsc, tests, commit,
+   push.
+```
+
 ## Industry knowledge base (owner decision, researched 2026-07-10, PRODUCT DECISION — binding)
 
 ```
@@ -906,6 +957,19 @@ Maintenance is Session 8, Deductions/Capital Account are Session 7):
    settlements.driver_id the same way Fleet Overview aggregates truck_id
    (fetchFleetStats() pattern, app/src/data/dashboardStats.ts) — no new
    calculation engine, just a driver_id-scoped query variant.
+8. Customizable dashboard (NEW, owner decision 2026-07-10 — personalization
+   & onboarding package, PRODUCT DECISION, CLAUDE.md invariant #17): every
+   Dashboard card (the full parity set above + Capital strip + any future
+   card — Revenue, Profit, Fuel, MPG, Maintenance, Taxes, IFTA, Cash Flow,
+   ...) gets drag-to-reorder, a show/hide toggle, and a rename field (the
+   user's custom label overrides the i18n default; clearing it restores
+   the default — store the override string itself, not a translation-key
+   swap, so it survives a language change untouched while an un-renamed
+   card keeps re-translating normally). Persist to profiles.dashboard_layout
+   (docs/PENDING_SQL.md §19 — already added, not yet run). Add a "Reset to
+   default" action (sets dashboard_layout back to null). Needs a stable
+   per-card id (not the i18n key) for each of the ~20 cards so a saved
+   layout survives future relabeling.
 ```
 
 **DESIGN NOTE (owner decision 2026-07-04, not implemented until this
@@ -1000,7 +1064,6 @@ separate design pass):
    still needs its own persisted table or can be recomputed from
    `documents.parsed_json` at export time.
 4. AI Advisor (Tools)
-4. AI Advisor (Tools)
 5. Tax Estimator screen — wraps the calc engine Session 5 already built
    (`useTaxEstimate`, `calcTaxEstimate`) in its own dedicated screen; the
    Dashboard's tax row already surfaces the headline numbers, this is the
@@ -1008,16 +1071,40 @@ separate design pass):
 6. Settings: profile/business info, view-only mode per device, export JSON
    (System — the Settings screen itself already exists; this is filling in
    the remaining fields)
-7. First-launch ONBOARDING wizard (owner decision 2026-07-09, PRODUCT
-   DECISION — new users start with ZERO data and no owner-specific
-   defaults): after sign-up + ToS acceptance, walk the user through
-   company name → truck setup (unit number, year/make/model, odometer —
-   this insert is what fires trg_seed_maintenance_intervals, seeding that
-   truck's maintenance_intervals rows per CLAUDE.md invariant #4) →
-   optional starting business balance (default 0, i.e. skippable). Until
-   onboarding completes, every screen shows its normal clean empty state
-   (no placeholder Graywolf/Ali data anywhere) rather than blocking
-   navigation outright.
+7. EXPANDED first-launch ONBOARDING wizard (owner decision 2026-07-10,
+   PRODUCT DECISION — personalization & onboarding package, SUPERSEDES the
+   2026-07-09 wizard spec below it was originally paired with; new users
+   still start with ZERO data and no owner-specific defaults). After
+   sign-up + ToS acceptance, walk the user through, in order:
+   1. Company Name
+   2. Home State (feeds the state tax module — tax_config.state)
+   3. DOT/MC numbers (optional)
+   4. ROLE (NEW, profiles.role, docs/PENDING_SQL.md §20, CLAUDE.md
+      invariant #18): owner_operator | company_driver_w2 |
+      contractor_1099 | trainee. company_driver_w2 hides owner-only
+      modules (Schedule C deductions, Capital Account, S-Corp election)
+      and centers per-diem/W-2 tracking instead; contractor_1099 (and
+      trainee/owner_operator) get the full Schedule C experience. This is
+      the one step that changes what the REST of the app renders — every
+      screen gated by role must treat role=null identically to
+      owner_operator (never a third behavior).
+   5. Truck info (unit number, year/make/model, odometer — this insert is
+      what fires trg_seed_maintenance_intervals, seeding that truck's
+      maintenance_intervals rows per CLAUDE.md invariant #4)
+   6. Trailer info (NEW — no dedicated trailers table exists yet; decide
+      at implementation time whether this needs one or folds into the
+      truck's own row/settings)
+   7. Current odometer (may overlap with step 5 — reconcile at
+      implementation time rather than asking twice)
+   8. Maintenance schedule — accept the seeded defaults or adjust now
+      (same per-truck maintenance_intervals editor Session 8 already
+      builds, surfaced here as an onboarding step instead of requiring a
+      separate trip to Truck Health)
+   9. Opening business balance (default 0, i.e. skippable)
+   10. Tax year confirm
+   Until onboarding completes, every screen shows its normal clean empty
+   state (no placeholder Graywolf/Ali data anywhere) rather than blocking
+   navigation outright — unchanged from the original spec.
 8. Entity selection screen (owner decision 2026-07-10, PRODUCT DECISION —
    Settings > Business Profile, new): a picker for tax_config.entity_type —
    sole_prop / smllc / multi_member_llc / s_corp. The engine branches

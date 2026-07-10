@@ -9,6 +9,7 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { SUPPORTED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
+import { formatDate } from '@/src/i18n/format';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -80,7 +81,7 @@ export default function Settings() {
         <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>
         <MutedText>
           {t('settings.tosAccepted', {
-            date: profile?.tos_accepted_at ? new Date(profile.tos_accepted_at).toLocaleDateString() : '—',
+            date: profile?.tos_accepted_at ? formatDate(profile.tos_accepted_at, i18n.language) : '—',
             version: profile?.tos_version ?? '—',
           })}
         </MutedText>

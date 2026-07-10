@@ -12,6 +12,7 @@ import type { LegacyBackupPayload } from '@/src/data/legacyImport/types';
 import { buildImportPreview, type LegacyImportPreview } from '@/src/data/legacyImport/preview';
 import { importLegacyBackup, type ImportProgress, type LegacyImportResult } from '@/src/data/legacyImport/importLegacyBackup';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { formatDateTime } from '@/src/i18n/format';
 
 type Phase = 'pick' | 'preview' | 'importing' | 'done' | 'error';
 
@@ -54,7 +55,7 @@ function EntityRow({ entity, t }: { entity: LegacyImportResult['entities'][numbe
 }
 
 export default function ImportLegacyBackup() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>('pick');
@@ -130,7 +131,7 @@ export default function ImportLegacyBackup() {
               {fileName}
             </Text>
             {preview.exportedAt && (
-              <MutedText>{t('importLegacy.exportedAt', { date: new Date(preview.exportedAt).toLocaleString() })}</MutedText>
+              <MutedText>{t('importLegacy.exportedAt', { date: formatDateTime(preview.exportedAt, i18n.language) })}</MutedText>
             )}
             <View style={{ marginTop: spacing.md }}>
               <Row label={t('importLegacy.rows.settlements')} value={preview.settlements} />

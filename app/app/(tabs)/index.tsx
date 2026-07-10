@@ -15,11 +15,8 @@ import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/q
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field } from '@/src/components/ui';
+import { useFormatters } from '@/src/i18n/format';
 import { colors, spacing, typography } from '@/src/theme';
-
-function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-}
 
 const FILING_STATUS_LABEL: Record<string, string> = { single: 'Single', mfj: 'MFJ', hoh: 'HOH' };
 
@@ -56,6 +53,8 @@ function StatValue({ label, value, valueColor }: { label: string; value: string;
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const { money: moneyFmt, number } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const { session, profile, signOut } = useAuth();
   const { trucks, activeTruck, loading: trucksLoading } = useActiveTruck();
   const router = useRouter();
@@ -184,7 +183,7 @@ export default function Dashboard() {
               />
             </TappableCard>
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue label={t('dashboard.milesDriven')} value={stats ? stats.totalMiles.toLocaleString() : '—'} />
+              <StatValue label={t('dashboard.milesDriven')} value={stats ? number(stats.totalMiles) : '—'} />
             </TappableCard>
 
             {/* Row 2 */}
@@ -223,7 +222,7 @@ export default function Dashboard() {
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
               <StatValue
                 label={t('dashboard.revenuePerMile')}
-                value={stats?.cpm.revenuePerMile != null ? `$${stats.cpm.revenuePerMile.toFixed(2)}` : '—'}
+                value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                 valueColor={colors.green}
               />
               <MutedText>{t('dashboard.grossDividedByMiles')}</MutedText>
@@ -231,7 +230,7 @@ export default function Dashboard() {
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
               <StatValue
                 label={t('dashboard.costPerMile')}
-                value={stats?.cpm.costPerMile != null ? `$${stats.cpm.costPerMile.toFixed(2)}` : '—'}
+                value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                 valueColor={colors.red}
               />
               <MutedText>{t('dashboard.allCostsDividedByMiles')}</MutedText>
@@ -239,7 +238,7 @@ export default function Dashboard() {
             <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
               <StatValue
                 label={t('dashboard.profitPerMile')}
-                value={stats?.cpm.profitPerMile != null ? `$${stats.cpm.profitPerMile.toFixed(2)}` : '—'}
+                value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                 valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
               />
               <MutedText>{t('dashboard.acceptLoadsAboveCpm')}</MutedText>
@@ -433,7 +432,7 @@ export default function Dashboard() {
                     {t('common.unit', { unit: r.truck.unit_number ?? r.truck.id })}
                   </MutedText>
                   <Text style={{ color: r.ppm != null ? colors[ppmColor(r.ppm)] : colors.text, fontWeight: '700' }}>
-                    {r.ppm != null ? `$${r.ppm.toFixed(2)}/mi` : '—'}
+                    {r.ppm != null ? `${moneyFmt(r.ppm, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mi` : '—'}
                   </Text>
                 </View>
               ))}
