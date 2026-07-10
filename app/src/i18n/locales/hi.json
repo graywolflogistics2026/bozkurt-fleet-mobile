@@ -187,6 +187,10 @@
     "createDriverFailedTitle": "Could not create driver",
     "driverShareLabel": "{{name}}'s share of this settlement ($)",
     "driverSharePlaceholder": "Amount",
+    "lowConfidenceTitle": "⚠️ Please review before saving",
+    "lowConfidenceBody": "The AI wasn't fully confident reading this document — check the details below before saving.",
+    "miscIncomeNoteTitle": "💵 Business income detected",
+    "miscIncomeNoteBody": "This looks like business income (detention, layover, bonus, etc.) with no dedicated ledger yet — the document is archived, but please record it manually for now.",
     "save": "Save",
     "saveAnyway": "Save Anyway",
     "discard": "Discard",
@@ -224,7 +228,13 @@
       "odometerLabel": "Odometer",
       "odometer": "{{count}} mi",
       "totalCost": "Total",
-      "warrantyCredit": "Warranty Credit"
+      "warrantyCredit": "Warranty Credit",
+      "driver": "Driver",
+      "method": "Method",
+      "description": "Description",
+      "reference": "Reference",
+      "period": "Period",
+      "suggestedCategory": "Suggested Category"
     }
   },
   "camera": {
@@ -329,6 +339,12 @@
     "toll": { "label": "Toll Bill", "route": "Deductions" },
     "loan": { "label": "Loan Statement", "route": "Deductions" },
     "w2": { "label": "W-2 Tax Form", "route": "Household Income (not yet wired to a screen)" },
+    "driver_payment": { "label": "Driver Payment", "route": "Driver Payments" },
+    "insurance": { "label": "Insurance Statement", "route": "Deductions" },
+    "lease_rent": { "label": "Lease/Rent Statement", "route": "Deductions" },
+    "factoring_statement": { "label": "Factoring Statement", "route": "Deductions" },
+    "government_or_misc_income": { "label": "Misc. Income", "route": "Not yet wired to a screen — record manually for now" },
+    "utility_subscription": { "label": "Utility/Subscription Bill", "route": "Deductions" },
     "other": { "label": "Document", "route": "Deductions" }
   },
   "confirmContribution": {

@@ -187,6 +187,10 @@
     "createDriverFailedTitle": "Sürücü oluşturulamadı",
     "driverShareLabel": "{{name}} adlı sürücünün bu ödeme belgesindeki payı ($)",
     "driverSharePlaceholder": "Tutar",
+    "lowConfidenceTitle": "⚠️ Kaydetmeden önce inceleyin",
+    "lowConfidenceBody": "Yapay zeka bu belgeyi okurken tam emin değildi — kaydetmeden önce ayrıntıları kontrol edin.",
+    "miscIncomeNoteTitle": "💵 İşletme geliri tespit edildi",
+    "miscIncomeNoteBody": "Bu, henüz özel bir defteri olmayan işletme geliri gibi görünüyor (bekleme, gecikme, prim vb.) — belge arşivlendi, ancak şimdilik manuel olarak kaydedin.",
     "save": "Kaydet",
     "saveAnyway": "Yine de Kaydet",
     "discard": "Vazgeç",
@@ -224,7 +228,13 @@
       "odometerLabel": "Kilometre",
       "odometer": "{{count}} mil",
       "totalCost": "Toplam",
-      "warrantyCredit": "Garanti Kredisi"
+      "warrantyCredit": "Garanti Kredisi",
+      "driver": "Sürücü",
+      "method": "Yöntem",
+      "description": "Açıklama",
+      "reference": "Referans",
+      "period": "Dönem",
+      "suggestedCategory": "Önerilen Kategori"
     }
   },
   "camera": {
@@ -329,6 +339,12 @@
     "toll": { "label": "Geçiş Ücreti Faturası", "route": "Kesintiler" },
     "loan": { "label": "Kredi Ekstresi", "route": "Kesintiler" },
     "w2": { "label": "W-2 Vergi Formu", "route": "Hane Geliri (henüz bir ekrana bağlanmadı)" },
+    "driver_payment": { "label": "Sürücü Ödemesi", "route": "Sürücü Ödemeleri" },
+    "insurance": { "label": "Sigorta Ekstresi", "route": "Kesintiler" },
+    "lease_rent": { "label": "Kira/Leasing Ekstresi", "route": "Kesintiler" },
+    "factoring_statement": { "label": "Faktoring Ekstresi", "route": "Kesintiler" },
+    "government_or_misc_income": { "label": "Diğer Gelir", "route": "Henüz bir ekrana bağlanmadı — şimdilik manuel kaydedin" },
+    "utility_subscription": { "label": "Fatura/Abonelik Belgesi", "route": "Kesintiler" },
     "other": { "label": "Belge", "route": "Kesintiler" }
   },
   "confirmContribution": {

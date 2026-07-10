@@ -187,6 +187,10 @@
     "createDriverFailedTitle": "Не удалось создать водителя",
     "driverShareLabel": "Доля {{name}} в этом расчёте ($)",
     "driverSharePlaceholder": "Сумма",
+    "lowConfidenceTitle": "⚠️ Проверьте перед сохранением",
+    "lowConfidenceBody": "ИИ не был полностью уверен при чтении этого документа — проверьте данные перед сохранением.",
+    "miscIncomeNoteTitle": "💵 Обнаружен доход бизнеса",
+    "miscIncomeNoteBody": "Похоже на доход бизнеса (простой, задержка, бонус и т.д.), для которого пока нет отдельного учёта — документ архивирован, но запишите его вручную.",
     "save": "Сохранить",
     "saveAnyway": "Сохранить в Любом Случае",
     "discard": "Отклонить",
@@ -224,7 +228,13 @@
       "odometerLabel": "Одометр",
       "odometer": "{{count}} миль",
       "totalCost": "Итого",
-      "warrantyCredit": "Гарантийный Кредит"
+      "warrantyCredit": "Гарантийный Кредит",
+      "driver": "Водитель",
+      "method": "Способ",
+      "description": "Описание",
+      "reference": "Референс",
+      "period": "Период",
+      "suggestedCategory": "Предполагаемая Категория"
     }
   },
   "camera": {
@@ -329,6 +339,12 @@
     "toll": { "label": "Счёт за Проезд", "route": "Вычеты" },
     "loan": { "label": "Выписка по Кредиту", "route": "Вычеты" },
     "w2": { "label": "Форма Налога W-2", "route": "Доход Семьи (пока не привязано к экрану)" },
+    "driver_payment": { "label": "Выплата Водителю", "route": "Выплаты Водителям" },
+    "insurance": { "label": "Страховая Выписка", "route": "Вычеты" },
+    "lease_rent": { "label": "Выписка по Аренде", "route": "Вычеты" },
+    "factoring_statement": { "label": "Факторинговая Выписка", "route": "Вычеты" },
+    "government_or_misc_income": { "label": "Прочий Доход", "route": "Пока не привязано к экрану — записывайте вручную" },
+    "utility_subscription": { "label": "Счёт за Услуги/Подписку", "route": "Вычеты" },
     "other": { "label": "Документ", "route": "Вычеты" }
   },
   "confirmContribution": {

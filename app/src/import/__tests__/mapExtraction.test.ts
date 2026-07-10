@@ -1,4 +1,12 @@
-import { mapFuel, mapGenericDeduction, mapMaintenance, mapPurchase, mapSettlement } from '@/src/import/mapExtraction';
+import {
+  mapDriverPayment,
+  mapFinancialDocDeduction,
+  mapFuel,
+  mapGenericDeduction,
+  mapMaintenance,
+  mapPurchase,
+  mapSettlement,
+} from '@/src/import/mapExtraction';
 import type { Extraction } from '@/src/import/types';
 
 describe('mapSettlement', () => {
@@ -256,8 +264,113 @@ describe('mapPurchase', () => {
 });
 
 describe('mapGenericDeduction', () => {
-  it('creates one OTHER-coded deduction for unhandled doc types (toll/loan/other)', () => {
+  it('creates one OTHER-coded deduction for unhandled doc types (toll/loan)', () => {
     const d: Extraction = { docType: 'toll', date: '2026-06-10', totalAmount: 42, summary: 'Toll bill' };
     expect(mapGenericDeduction(d, 'user-1')).toMatchObject({ code: 'OTHER', amount: 42, description: 'Toll bill', category: 'Other' });
+  });
+
+  it('extends NEEDS REVIEW to the whole document for docType "other" (universal AI capture, owner decision 2026-07-10)', () => {
+    const d: Extraction = {
+      docType: 'other',
+      date: '2026-06-10',
+      totalAmount: 60,
+      summary: 'Unclear charge',
+      confidence: 'low',
+      suggestedCategory: 'Possibly a bank fee',
+    };
+    expect(mapGenericDeduction(d, 'user-1')).toMatchObject({
+      description: 'NEEDS REVIEW: Unclear charge',
+      category: 'Possibly a bank fee',
+      amount: 60,
+    });
+  });
+
+  it('falls back to category "Other" for docType "other" when no suggestedCategory is given', () => {
+    const d: Extraction = { docType: 'other', date: '2026-06-10', totalAmount: 10, summary: 'Mystery' };
+    expect(mapGenericDeduction(d, 'user-1')).toMatchObject({ description: 'NEEDS REVIEW: Mystery', category: 'Other' });
+  });
+});
+
+describe('mapDriverPayment (universal AI capture, owner decision 2026-07-10)', () => {
+  it('maps to a driver_payments row, not a deduction', () => {
+    const d: Extraction = {
+      docType: 'driver_payment',
+      date: '2026-06-10',
+      driverPayment: { driverName: 'Jane Doe', amount: 500, method: 'Zelle', notes: 'Week of 6/10' },
+    };
+    expect(mapDriverPayment(d, 'user-1', 'driver-1')).toMatchObject({
+      user_id: 'user-1',
+      driver_id: 'driver-1',
+      settlement_id: null,
+      date: '2026-06-10',
+      gross_pay: 500,
+      notes: 'Week of 6/10',
+    });
+  });
+
+  it('falls back to the method when notes is missing', () => {
+    const d: Extraction = { docType: 'driver_payment', date: '2026-06-10', driverPayment: { amount: 200, method: 'Cash' } };
+    expect(mapDriverPayment(d, 'user-1', 'driver-1').notes).toBe('Cash');
+  });
+
+  it('falls back to totalAmount when driverPayment.amount is missing', () => {
+    const d: Extraction = { docType: 'driver_payment', date: '2026-06-10', totalAmount: 300, driverPayment: {} };
+    expect(mapDriverPayment(d, 'user-1', 'driver-1').gross_pay).toBe(300);
+  });
+});
+
+describe('mapFinancialDocDeduction (universal AI capture, owner decision 2026-07-10)', () => {
+  it('maps insurance to the Insurance category', () => {
+    const d: Extraction = {
+      docType: 'insurance',
+      date: '2026-06-10',
+      vendor: 'Progressive Commercial',
+      financialDoc: { kind: 'insurance', description: 'Liability policy', amount: 450, reference: 'POL-9981' },
+    };
+    expect(mapFinancialDocDeduction(d, 'user-1')).toMatchObject({
+      category: 'Insurance',
+      amount: 450,
+      description: 'Liability policy (POL-9981)',
+      store: 'Progressive Commercial',
+    });
+  });
+
+  it('maps lease_rent to the Lease & Rent category', () => {
+    const d: Extraction = {
+      docType: 'lease_rent',
+      date: '2026-06-10',
+      financialDoc: { kind: 'lease_rent', description: 'Trailer lease — Unit 4471', amount: 800 },
+    };
+    expect(mapFinancialDocDeduction(d, 'user-1')).toMatchObject({ category: 'Lease & Rent', amount: 800 });
+  });
+
+  it('maps factoring_statement to the Factoring Fees category', () => {
+    const d: Extraction = {
+      docType: 'factoring_statement',
+      date: '2026-06-10',
+      financialDoc: { kind: 'factoring_statement', description: 'Factoring fee', amount: 120, reference: 'INV-1,INV-2' },
+    };
+    expect(mapFinancialDocDeduction(d, 'user-1')).toMatchObject({ category: 'Factoring Fees', amount: 120 });
+  });
+
+  it('maps utility_subscription to the Utilities & Subscriptions category, with period appended', () => {
+    const d: Extraction = {
+      docType: 'utility_subscription',
+      date: '2026-06-10',
+      financialDoc: { kind: 'utility_subscription', description: 'Phone bill', amount: 90, period: 'March 2026' },
+    };
+    const row = mapFinancialDocDeduction(d, 'user-1');
+    expect(row.category).toBe('Utilities & Subscriptions');
+    expect(row.description).toContain('March 2026');
+  });
+
+  it('falls back to vendor/summary when description is missing', () => {
+    const d: Extraction = {
+      docType: 'insurance',
+      date: '2026-06-10',
+      vendor: 'Acme Insurance',
+      financialDoc: { kind: 'insurance', amount: 200 },
+    };
+    expect(mapFinancialDocDeduction(d, 'user-1').description).toContain('Acme Insurance');
   });
 });

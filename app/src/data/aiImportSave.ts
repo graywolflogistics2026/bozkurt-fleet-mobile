@@ -1,7 +1,16 @@
 import { File } from 'expo-file-system';
 import { supabase } from '@/src/lib/supabase';
 import { buildStoragePath } from '@/src/import/storagePath';
-import { mapFuel, mapGenericDeduction, mapMaintenance, mapPurchase, mapSettlement } from '@/src/import/mapExtraction';
+import {
+  FINANCIAL_DOC_TYPES,
+  mapDriverPayment,
+  mapFinancialDocDeduction,
+  mapFuel,
+  mapGenericDeduction,
+  mapMaintenance,
+  mapPurchase,
+  mapSettlement,
+} from '@/src/import/mapExtraction';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 
@@ -214,6 +223,21 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     const row = mapFuel(d, userId, truckId);
     const { error } = await supabase.from('fuel_purchases').insert(row);
     if (error) throw error;
+  } else if (d.docType === 'driver_payment') {
+    // Universal AI capture (owner decision 2026-07-10): driver_payments.
+    // driver_id is NOT NULL — the import screen forces a driver pick for
+    // this docType before Save is even enabled (needsDriverPicker), so
+    // driverId being null here would be a UI bug, not a legitimate state.
+    if (!driverId) throw new Error('A driver must be selected to save a driver payment.');
+    const row = mapDriverPayment(d, userId, driverId);
+    const { error } = await supabase.from('driver_payments').insert(row);
+    if (error) throw error;
+  } else if ((FINANCIAL_DOC_TYPES as readonly string[]).includes(d.docType) && d.financialDoc) {
+    // insurance/lease_rent/factoring_statement/utility_subscription — real
+    // out-of-pocket business expenses, routed like any other deduction.
+    const row = mapFinancialDocDeduction(d, userId);
+    const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
+    if (error) throw error;
   } else if (d.docType === 'maintenance' && d.maintenance) {
     const { maintenance, reimbursement } = mapMaintenance(d, userId, truckId);
     const { error } = await supabase
@@ -249,16 +273,17 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         contributionTotal += line.insert.amount;
       }
     }
-  } else if (d.docType !== 'w2') {
+  } else if (d.docType !== 'w2' && d.docType !== 'government_or_misc_income') {
     // Generic fallback (toll/loan/other) — legacy's actual saveImport()
     // else-branch behavior, not the richer routing DTYPES hints at.
     const row = mapGenericDeduction(d, userId);
     const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
     if (error) throw error;
   }
-  // d.docType === 'w2': document saved above, no financial row created
-  // (see mapExtraction.ts's mapGenericDeduction comment — a W-2 is income,
-  // not an expense, and there's no household_income UI yet to attach it to).
+  // d.docType === 'w2' / 'government_or_misc_income': document saved above,
+  // no financial row created — both are INCOME with no dedicated ledger yet
+  // (see mapExtraction.ts's mapGenericDeduction comment; universal AI
+  // capture, owner decision 2026-07-10 — v1.x backlog, PROMPTS.md).
 
   return { documentId, storagePath, netPayAdded, contributionTotal };
 }

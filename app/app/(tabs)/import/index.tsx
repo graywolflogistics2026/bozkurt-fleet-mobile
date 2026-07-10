@@ -88,6 +88,20 @@ function buildPreviewLines(d: Extraction, t: TFunction): PreviewLine[] {
     });
     lines.push({ label: t(`${p1}.totalCost`), value: money(m.total), color: colors.red });
     if (m.warrantyCredit) lines.push({ label: t(`${p1}.warrantyCredit`), value: money(m.warrantyCredit), color: colors.green });
+  } else if (d.docType === 'driver_payment' && d.driverPayment) {
+    const p = d.driverPayment;
+    lines.push({ label: t(`${p1}.driver`), value: p.driverName || '—' });
+    lines.push({ label: t(`${p1}.total`), value: money(p.amount ?? d.totalAmount), color: colors.red });
+    if (p.method) lines.push({ label: t(`${p1}.method`), value: p.method });
+  } else if (d.financialDoc) {
+    const f = d.financialDoc;
+    lines.push({ label: t(`${p1}.description`), value: f.description || d.summary || '—' });
+    lines.push({ label: t(`${p1}.total`), value: money(f.amount ?? d.totalAmount), color: colors.red });
+    if (f.reference) lines.push({ label: t(`${p1}.reference`), value: f.reference });
+    if (f.period) lines.push({ label: t(`${p1}.period`), value: f.period });
+  } else if (d.docType === 'other' && d.suggestedCategory) {
+    lines.push({ label: t(`${p1}.suggestedCategory`), value: d.suggestedCategory });
+    lines.push({ label: t(`${p1}.total`), value: money(d.totalAmount), color: colors.red });
   }
   return lines;
 }
@@ -202,9 +216,15 @@ export default function Import() {
     setTruckId(truckMatch.truckId);
     setNeedsTruckPicker(truckMatch.needsPicker);
 
-    const driverMatch = resolveDriverMatch(d.settlement?.driverName, drivers);
+    const driverMatch = resolveDriverMatch(d.settlement?.driverName ?? d.driverPayment?.driverName, drivers);
     setDriverId(driverMatch.driverId);
-    setNeedsDriverPicker(driverMatch.needsPicker);
+    // Universal AI capture (owner decision 2026-07-10): unlike a settlement
+    // (driver is optional metadata), driver_payments.driver_id is NOT
+    // NULL — this docType always needs a driver picked, even with 0
+    // drivers on file or no name extracted (resolveDriverMatch() alone
+    // would say no picker needed in that case, which is right for
+    // settlements but wrong here).
+    setNeedsDriverPicker(driverMatch.needsPicker || (d.docType === 'driver_payment' && !driverMatch.driverId));
 
     setExtraction(d);
     setPhase('preview');
@@ -344,6 +364,20 @@ export default function Import() {
                   </MutedText>
                 )}
                 {duplicates!.byFilename.length > 0 && <MutedText>{t('importScreen.duplicateByFilename')}</MutedText>}
+              </View>
+            )}
+
+            {extraction.confidence === 'low' && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lowConfidenceTitle')}</Text>
+                <MutedText>{t('importScreen.lowConfidenceBody')}</MutedText>
+              </View>
+            )}
+
+            {extraction.docType === 'government_or_misc_income' && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.miscIncomeNoteTitle')}</Text>
+                <MutedText>{t('importScreen.miscIncomeNoteBody')}</MutedText>
               </View>
             )}
 

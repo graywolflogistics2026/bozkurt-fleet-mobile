@@ -16,6 +16,13 @@ export const DOC_TYPE_ICON: Record<DocType, string> = {
   toll: '🛣️',
   loan: '🏦',
   w2: '📋',
+  // Universal AI capture (owner decision 2026-07-10, PRODUCT DECISION).
+  driver_payment: '👤',
+  insurance: '🛡️',
+  lease_rent: '🏠',
+  factoring_statement: '🧾',
+  government_or_misc_income: '💵',
+  utility_subscription: '🔌',
   other: '📄',
 };
 

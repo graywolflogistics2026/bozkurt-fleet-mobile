@@ -187,6 +187,10 @@
     "createDriverFailedTitle": "No se pudo crear el conductor",
     "driverShareLabel": "Parte de {{name}} en esta liquidación ($)",
     "driverSharePlaceholder": "Monto",
+    "lowConfidenceTitle": "⚠️ Revise antes de guardar",
+    "lowConfidenceBody": "La IA no estuvo totalmente segura al leer este documento — revise los datos antes de guardar.",
+    "miscIncomeNoteTitle": "💵 Ingreso comercial detectado",
+    "miscIncomeNoteBody": "Esto parece ingreso comercial (detención, demora, bono, etc.) sin un libro contable dedicado todavía — el documento queda archivado, pero regístrelo manualmente por ahora.",
     "save": "Guardar",
     "saveAnyway": "Guardar de Todos Modos",
     "discard": "Descartar",
@@ -224,7 +228,13 @@
       "odometerLabel": "Odómetro",
       "odometer": "{{count}} mi",
       "totalCost": "Total",
-      "warrantyCredit": "Crédito de Garantía"
+      "warrantyCredit": "Crédito de Garantía",
+      "driver": "Conductor",
+      "method": "Método",
+      "description": "Descripción",
+      "reference": "Referencia",
+      "period": "Período",
+      "suggestedCategory": "Categoría Sugerida"
     }
   },
   "camera": {
@@ -329,6 +339,12 @@
     "toll": { "label": "Factura de Peaje", "route": "Deducciones" },
     "loan": { "label": "Estado de Préstamo", "route": "Deducciones" },
     "w2": { "label": "Formulario de Impuestos W-2", "route": "Ingreso Familiar (aún no conectado a una pantalla)" },
+    "driver_payment": { "label": "Pago a Conductor", "route": "Pagos a Conductores" },
+    "insurance": { "label": "Estado de Seguro", "route": "Deducciones" },
+    "lease_rent": { "label": "Estado de Arrendamiento/Renta", "route": "Deducciones" },
+    "factoring_statement": { "label": "Estado de Factoraje", "route": "Deducciones" },
+    "government_or_misc_income": { "label": "Ingreso Misceláneo", "route": "Aún no conectado a una pantalla — registre manualmente por ahora" },
+    "utility_subscription": { "label": "Factura de Servicio/Suscripción", "route": "Deducciones" },
     "other": { "label": "Documento", "route": "Deducciones" }
   },
   "confirmContribution": {

@@ -536,6 +536,71 @@ both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
 ```
 
+## Universal AI capture (owner decision 2026-07-10, PRODUCT DECISION — binding)
+
+```
+1. ai-import is carrier-agnostic (IMPLEMENTED THIS PASS): the settlement
+   extraction prompt now explicitly instructs the model not to assume any
+   single carrier's layout — extract the generic fields (carrier, week,
+   gross, deductions, net, miles, loads, driver/unit) from ANY carrier's
+   settlement (supabase/functions/ai-import/index.ts, "carrier-agnostic
+   settlement extraction" addition). The schema itself was already generic
+   (no carrier-specific field names); this pass added the explicit
+   instruction plus the assets/operating/tolls/loans sub-sections being
+   optional (leave at defaults when a carrier's settlement lacks them).
+
+2. Six new docTypes added (IMPLEMENTED THIS PASS — schema/prompt/save-
+   routing groundwork; see the "Supported document types" table below for
+   what's fully wired vs. archive-only):
+   - driver_payment → routes to driver_payments (NOT deductions) —
+     mapDriverPayment(), app/src/data/aiImportSave.ts. The import preview
+     forces a driver pick for this docType even with 0 drivers on file or
+     no name extracted (driver_payments.driver_id is NOT NULL, unlike a
+     settlement's optional driver — app/app/(tabs)/import/index.tsx).
+   - insurance / lease_rent / factoring_statement / utility_subscription →
+     share one ExtractedFinancialDoc shape, all route to deductions via
+     mapFinancialDocDeduction() with 3 new categories (Lease & Rent,
+     Factoring Fees, Utilities & Subscriptions — app/src/import/category.ts
+     DED_CATEGORIES).
+   - government_or_misc_income → INCOME (detention, layover, FEMA,
+     referral bonuses), taxDeductible always false. No dedicated income
+     ledger exists yet — archived only (document + parsed_json audit
+     trail), no financial row created, same treatment as w2. The import
+     preview shows an explicit "no ledger yet, record manually" note
+     rather than silently dropping it or mis-booking it as an expense.
+     Building a real misc-income table/screen is v1.x backlog, not this
+     pass.
+
+3. Confidence & review (IMPLEMENTED THIS PASS): every extraction carries a
+   top-level confidence:"high"|"low" flag (Extraction.confidence,
+   app/src/import/types.ts). The import preview shows a review banner
+   whenever it's "low". docType "other" (unknown-but-clearly-financial
+   documents) always sets confidence:"low" and a suggestedCategory — the
+   NEEDS REVIEW convention (previously line-item only, e.g. an unreadable
+   purchase-item name) now extends to whole documents:
+   mapGenericDeduction() prefixes the description "NEEDS REVIEW: " and
+   uses suggestedCategory as the deduction category for docType 'other',
+   never silently defaulting to a generic bucket without flagging it.
+
+4. Rolling backlog table — see "Supported document types" in the Backlog
+   section below. Full per-type coverage (dedicated income ledger for
+   government_or_misc_income, richer per-type preview/edit UI, etc.) is a
+   POST-LAUNCH v1.x track. NOT a Session 10 blocker — the launch-blocking
+   core set (settlements any-carrier, store receipts, fuel, maintenance,
+   W-2, bank/card statements, driver payments) was already fully wired
+   before this pass or is completed by it.
+
+5. Recorded in CLAUDE.md invariant #14 (new) and here. Every new docType
+   obeys every existing invariant unchanged: no separate tax/service rows
+   (#3), 9 payment methods + personal-payment confirmation (#2),
+   accountant-readable naming, warranty extraction, per-truck/driver
+   routing (#7) — this is additive routing breadth, not a parallel set of
+   rules. tsc, tests (mapExtraction.test.ts additions), commit, push.
+   ai-import Edge Function MUST be redeployed from the Supabase dashboard
+   — the extraction prompt changed (new docTypes, confidence flag,
+   carrier-agnostic instruction).
+```
+
 ## Driver compensation types + entity selection (owner decision 2026-07-10, PRODUCT DECISION — binding)
 
 ```
@@ -989,6 +1054,32 @@ triggers automatically on version bump, per Session 3).
   before shipping, since the current policy states no location collection
   at all.
 ```
+
+## Supported document types (rolling status — universal AI capture, owner decision 2026-07-10)
+
+Every business income/expense document must eventually be photo/PDF-
+capturable and auto-routed (CLAUDE.md invariant #14). This table is the
+single source of truth for what's actually wired vs. still backlog — update
+it whenever a docType's routing changes. "Launch core" = blocks Session 10;
+everything else is a POST-LAUNCH v1.x track.
+
+| docType | Routes to | Status | Launch core? |
+|---|---|---|---|
+| settlement | settlements/loads/fuel/deductions/maintenance/reimbursements/tolls/loans (carrier-agnostic) | ✅ wired | Yes |
+| fuel | fuel_purchases | ✅ wired | Yes |
+| maintenance | maintenance_records (+ reimbursement for warranty credit) | ✅ wired | Yes |
+| amazon / store | deductions (line-item, proportional tax/fee fold-in) | ✅ wired | Yes |
+| toll | deductions (generic fallback) | ✅ wired | Yes |
+| loan | deductions (generic fallback) | ✅ wired | Yes |
+| w2 | archive-only (no row — income, no household_income screen yet) | ✅ wired (archive) | Yes |
+| driver_payment | driver_payments | ✅ wired (this pass) | Yes |
+| insurance | deductions (category: Insurance) | ✅ wired (this pass) | No |
+| lease_rent | deductions (category: Lease & Rent) | ✅ wired (this pass) | No |
+| factoring_statement | deductions (category: Factoring Fees) | ✅ wired (this pass) | No |
+| utility_subscription | deductions (category: Utilities & Subscriptions) | ✅ wired (this pass) | No |
+| government_or_misc_income | archive-only (no row — INCOME, no ledger yet) | 🚧 archive-only, needs a real income table/screen (v1.x) | No |
+| other (unknown financial doc) | deductions, "NEEDS REVIEW: " prefix, AI suggestedCategory, always confidence:"low" | ✅ wired (this pass) | Yes (fallback safety net) |
+| bank/card statements | bank_statements/bank_transactions | ✅ wired (Session 4 legacy importer; live AI-import path not yet built) | Yes |
 
 ---
 

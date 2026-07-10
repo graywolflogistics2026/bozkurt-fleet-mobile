@@ -20,6 +20,12 @@ export const DED_CATEGORIES = [
   'Comfort & Sleeper',
   'Truck Supplies',
   'Safety Equipment',
+  // Added 2026-07-10 (universal AI capture, PRODUCT DECISION) — feed the
+  // new insurance/lease_rent/factoring_statement/utility_subscription
+  // docTypes (app/src/import/mapExtraction.ts mapFinancialDocDeduction()).
+  'Lease & Rent',
+  'Factoring Fees',
+  'Utilities & Subscriptions',
   'Misc',
   'Other',
 ] as const;

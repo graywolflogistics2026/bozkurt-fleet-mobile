@@ -135,7 +135,54 @@ export type ExtractedW2 = {
   box2FederalWithheld?: number;
 };
 
-export type DocType = 'settlement' | 'fuel' | 'maintenance' | 'amazon' | 'store' | 'toll' | 'loan' | 'w2' | 'other';
+// Universal AI capture (owner decision 2026-07-10, PRODUCT DECISION) — a
+// receipt/confirmation of a payment TO one of the owner's OWN drivers
+// (payroll check stub, Zelle/Venmo/Cash App confirmation where the
+// recipient is a driver, not a store). Routes to the driver_payments table
+// (docs/PENDING_SQL.md §16), never `deductions`.
+export type ExtractedDriverPayment = {
+  driverName?: string;
+  amount?: number;
+  method?: string;
+  notes?: string;
+};
+
+// Universal AI capture — one shared shape for the 5 new "generic business
+// financial document" docTypes below (kind mirrors the docType exactly).
+// insurance/lease_rent/factoring_statement/utility_subscription route to
+// `deductions`; government_or_misc_income is INCOME with no dedicated
+// ledger yet (v1.x backlog, PROMPTS.md) — archived (document + parsed_json
+// audit trail) but no financial row created, same treatment as 'w2'.
+export type FinancialDocKind =
+  | 'insurance'
+  | 'lease_rent'
+  | 'factoring_statement'
+  | 'government_or_misc_income'
+  | 'utility_subscription';
+export type ExtractedFinancialDoc = {
+  kind?: FinancialDocKind;
+  description?: string;
+  amount?: number;
+  reference?: string;
+  period?: string;
+};
+
+export type DocType =
+  | 'settlement'
+  | 'fuel'
+  | 'maintenance'
+  | 'amazon'
+  | 'store'
+  | 'toll'
+  | 'loan'
+  | 'w2'
+  | 'driver_payment'
+  | 'insurance'
+  | 'lease_rent'
+  | 'factoring_statement'
+  | 'government_or_misc_income'
+  | 'utility_subscription'
+  | 'other';
 
 export type Extraction = {
   docType: DocType;
@@ -144,10 +191,23 @@ export type Extraction = {
   totalAmount?: number;
   taxDeductible?: boolean;
   bizPct?: number;
+  // Universal AI capture (owner decision 2026-07-10) — 'low' whenever any
+  // key field is blurry/ambiguous/guessed; the import preview highlights
+  // these for the user to confirm before saving (CLAUDE.md invariant: the
+  // NEEDS REVIEW convention extends to whole documents, not just line
+  // items). Always 'low' for docType 'other' by prompt design.
+  confidence?: 'high' | 'low';
+  // AI's best-guess category for an unrecognized-but-clearly-financial
+  // document (docType 'other') — never silently guessed into the wrong
+  // ledger; shown in the preview and used as the deduction category only
+  // after the user reviews/confirms (mapGenericDeduction()).
+  suggestedCategory?: string;
   summary?: string;
   settlement?: ExtractedSettlement;
   fuel?: ExtractedStandaloneFuel;
   maintenance?: ExtractedMaintenance;
   purchase?: ExtractedPurchase;
   w2?: ExtractedW2;
+  driverPayment?: ExtractedDriverPayment;
+  financialDoc?: ExtractedFinancialDoc;
 };

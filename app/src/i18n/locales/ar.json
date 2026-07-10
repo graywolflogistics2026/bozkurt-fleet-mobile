@@ -187,6 +187,10 @@
     "createDriverFailedTitle": "تعذّر إنشاء السائق",
     "driverShareLabel": "حصة {{name}} من هذه التسوية ($)",
     "driverSharePlaceholder": "المبلغ",
+    "lowConfidenceTitle": "⚠️ يرجى المراجعة قبل الحفظ",
+    "lowConfidenceBody": "لم يكن الذكاء الاصطناعي واثقًا تمامًا من قراءة هذا المستند — راجع التفاصيل قبل الحفظ.",
+    "miscIncomeNoteTitle": "💵 تم اكتشاف دخل تجاري",
+    "miscIncomeNoteBody": "يبدو هذا دخلاً تجاريًا (انتظار، تأخير، مكافأة، إلخ) وليس له سجل مخصص بعد — تم أرشفة المستند، يرجى تسجيله يدويًا حاليًا.",
     "save": "حفظ",
     "saveAnyway": "احفظ على أي حال",
     "discard": "تجاهل",
@@ -224,7 +228,13 @@
       "odometerLabel": "عداد المسافات",
       "odometer": "{{count}} ميل",
       "totalCost": "الإجمالي",
-      "warrantyCredit": "رصيد الضمان"
+      "warrantyCredit": "رصيد الضمان",
+      "driver": "السائق",
+      "method": "الطريقة",
+      "description": "الوصف",
+      "reference": "المرجع",
+      "period": "الفترة",
+      "suggestedCategory": "الفئة المقترحة"
     }
   },
   "camera": {
@@ -329,6 +339,12 @@
     "toll": { "label": "فاتورة رسوم طريق", "route": "الخصومات" },
     "loan": { "label": "كشف قرض", "route": "الخصومات" },
     "w2": { "label": "نموذج ضريبة W-2", "route": "دخل الأسرة (غير مربوط بشاشة بعد)" },
+    "driver_payment": { "label": "دفعة لسائق", "route": "مدفوعات السائقين" },
+    "insurance": { "label": "كشف تأمين", "route": "الخصومات" },
+    "lease_rent": { "label": "كشف إيجار/تأجير", "route": "الخصومات" },
+    "factoring_statement": { "label": "كشف تخصيم (فاكتورينج)", "route": "الخصومات" },
+    "government_or_misc_income": { "label": "دخل متنوع", "route": "غير مربوط بشاشة بعد — سجّله يدويًا حاليًا" },
+    "utility_subscription": { "label": "فاتورة خدمة/اشتراك", "route": "الخصومات" },
     "other": { "label": "مستند", "route": "الخصومات" }
   },
   "confirmContribution": {

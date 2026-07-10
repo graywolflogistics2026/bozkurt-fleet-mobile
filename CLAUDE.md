@@ -263,6 +263,47 @@
       operations; any analytics/telemetry integration added in a future
       session must be audited against this invariant before being wired
       in, not after.
+  14. UNIVERSAL AI CAPTURE — every routing rule (owner decision 2026-07-10,
+      PRODUCT DECISION, binding): every business income & expense document
+      must be capturable by photo/PDF and auto-routed to the right ledger
+      with minimal user effort. Every captured document ends up as exactly
+      one of: an income row / an expense (deduction) row / a capital
+      transaction / an informational archive-only entry — with the
+      original file in Storage and the full raw extraction in
+      `documents.parsed_json` (D3 audit trail) regardless of which bucket
+      it lands in. Settlement extraction is carrier-agnostic — the AI
+      extracts generic fields (carrier, week, gross, deductions, net,
+      miles, loads, driver/unit) from ANY carrier's settlement layout, no
+      single carrier's format is ever assumed
+      (`supabase/functions/ai-import/index.ts`'s
+      "carrier-agnostic settlement extraction" addition). docTypes are
+      added incrementally as new document categories become common enough
+      to warrant their own routing (`driver_payment` → `driver_payments`
+      table, never `deductions`; `insurance`/`lease_rent`/
+      `factoring_statement`/`utility_subscription` → `deductions` via
+      `mapFinancialDocDeduction()`; `government_or_misc_income` is INCOME
+      with no dedicated ledger yet — archived only, no financial row
+      created, same treatment as `w2`, until a real income ledger exists —
+      see PROMPTS.md's "Supported document types" backlog table for
+      current status per type). An unknown-but-clearly-financial document
+      NEVER gets silently dropped or silently guessed into the wrong
+      ledger — it falls back to docType `'other'` with an AI-suggested
+      category (`suggestedCategory`) and is saved as a deduction prefixed
+      `"NEEDS REVIEW: "` (extending invariant #3's NEEDS REVIEW convention
+      from line items to whole documents), always with `confidence:"low"`.
+      Every extraction carries a top-level `confidence:"high"|"low"` flag
+      (`app/src/import/types.ts` `Extraction.confidence`); the import
+      preview surfaces a review banner whenever it's `"low"`, prompting the
+      user to confirm fields before saving rather than trusting a guess.
+      Full coverage of every docType is a POST-LAUNCH v1.x track, not a
+      Session 10 blocker — the launch-blocking core set is settlements
+      (any carrier), store receipts, fuel, maintenance, W-2, bank/card
+      statements, and driver payments (PROMPTS.md). Every new docType still
+      obeys every other invariant unmodified: no separate tax/service rows
+      (#3), the 9 payment methods + personal-payment confirmation (#2),
+      accountant-readable naming, warranty extraction, per-truck/driver
+      routing (#7) — universal capture is additive routing breadth, never
+      a second set of rules.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

@@ -2,6 +2,7 @@ import { detectMaintType, getCatNote, guessCategory, toDbServiceType } from '@/s
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import type {
   DeductionInsert,
+  DriverPaymentInsert,
   FuelPurchaseInsert,
   LoadInsert,
   LoanInsert,
@@ -10,7 +11,13 @@ import type {
   SettlementInsert,
   TollInsert,
 } from '@/src/types/db';
-import type { Extraction, ExtractedFuel, ExtractedReimbursementItem, ExtractedToll } from '@/src/import/types';
+import type {
+  Extraction,
+  ExtractedFuel,
+  ExtractedReimbursementItem,
+  ExtractedToll,
+  FinancialDocKind,
+} from '@/src/import/types';
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
@@ -365,22 +372,83 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
   });
 }
 
+// ---------- driver payment (universal AI capture, owner decision 2026-07-10, PRODUCT DECISION) ----------
+// Routes to driver_payments (docs/PENDING_SQL.md §16), NEVER deductions —
+// this is money paid to a driver, not a business purchase. The caller
+// resolves driverId the same way settlement's driverName is resolved
+// (app/src/import/driverMatch.ts), but unlike a settlement's driver
+// (optional metadata) this docType REQUIRES a driver — driver_payments.
+// driver_id is NOT NULL — so the import screen forces the picker whenever
+// no match is found, even with 0 drivers on file or no name extracted.
+export function mapDriverPayment(d: Extraction, userId: string, driverId: string): DriverPaymentInsert {
+  const p = d.driverPayment ?? {};
+  return {
+    user_id: userId,
+    driver_id: driverId,
+    settlement_id: null,
+    date: d.date || new Date().toISOString().slice(0, 10),
+    gross_pay: num(p.amount ?? d.totalAmount),
+    notes: p.notes || p.method || null,
+  };
+}
+
+// ---------- generic business financial documents (universal AI capture, owner decision 2026-07-10, PRODUCT DECISION) ----------
+// insurance/lease_rent/factoring_statement/utility_subscription all share
+// one shape (ExtractedFinancialDoc) and all route to `deductions` — real
+// out-of-pocket business expenses, same as a store purchase, just without
+// line-item detail. government_or_misc_income is the one exception: it's
+// INCOME, not an expense, and has no dedicated ledger yet (v1.x backlog,
+// PROMPTS.md) — the caller (aiImportSave.ts) skips creating a financial
+// row for it entirely, same treatment as 'w2', rather than mis-booking
+// income as a deduction.
+export const FINANCIAL_DOC_TYPES = ['insurance', 'lease_rent', 'factoring_statement', 'utility_subscription'] as const;
+
+const FINANCIAL_DOC_CATEGORY: Record<FinancialDocKind, string> = {
+  insurance: 'Insurance',
+  lease_rent: 'Lease & Rent',
+  factoring_statement: 'Factoring Fees',
+  utility_subscription: 'Utilities & Subscriptions',
+  government_or_misc_income: 'Misc', // never actually used — this kind never reaches mapFinancialDocDeduction()
+};
+
+export function mapFinancialDocDeduction(d: Extraction, userId: string): DeductionInsert {
+  const f = d.financialDoc ?? {};
+  const kind = f.kind ?? (d.docType as FinancialDocKind);
+  const refSuffix = f.reference ? ` (${f.reference})` : '';
+  const periodSuffix = f.period ? ` — ${f.period}` : '';
+  return {
+    user_id: userId,
+    ded_date: d.date ?? null,
+    code: 'FINDOC',
+    description: `${f.description || d.summary || d.vendor || 'Business expense'}${refSuffix}${periodSuffix}`,
+    amount: num(f.amount ?? d.totalAmount),
+    category: FINANCIAL_DOC_CATEGORY[kind] ?? 'Misc',
+    store: d.vendor ?? null,
+    source: 'import',
+  };
+}
+
 // ---------- generic fallback (legacy saveImport() else branch, legacy/index.html:2576-2578) ----------
-// Covers toll/loan/w2/other — legacy's actual save path (as opposed to the
+// Covers toll/loan/other — legacy's actual save path (as opposed to the
 // DTYPES preview labels, which hint at richer routing that was never
-// built) treats all of these as one generic deduction. The one exception:
-// w2 is INCOME, not an expense — booking it as a deduction would be
-// actively wrong, so it's excluded here and handled by the caller (saves
-// the document only, no financial row, until Household Income has a
-// screen to attach it to).
+// built) treats all of these as one generic deduction. w2 and
+// government_or_misc_income are INCOME, not expenses — booking either as a
+// deduction would be actively wrong, so both are excluded here and handled
+// by the caller (saves the document only, no financial row, until a real
+// income ledger/Household Income screen exists to attach them to).
+// Universal AI capture (owner decision 2026-07-10): 'other' extends the
+// NEEDS REVIEW convention to the whole document, not just a purchase line
+// item — the AI's suggestedCategory (never silently trusted) becomes the
+// category, and the description is flagged for the user to confirm.
 export function mapGenericDeduction(d: Extraction, userId: string): DeductionInsert {
+  const isOther = d.docType === 'other';
   return {
     user_id: userId,
     ded_date: d.date ?? null,
     code: 'OTHER',
-    description: d.summary || 'Document',
+    description: isOther ? `NEEDS REVIEW: ${d.summary || d.suggestedCategory || 'Document'}` : d.summary || 'Document',
     amount: num(d.totalAmount),
-    category: 'Other',
+    category: (isOther && d.suggestedCategory) || 'Other',
     source: 'import',
   };
 }
