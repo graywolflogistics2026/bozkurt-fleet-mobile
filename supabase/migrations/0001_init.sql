@@ -101,6 +101,24 @@ create table trucks (
   updated_at   timestamptz default now()
 );
 
+-- ---------- Drivers (NEW, owner decision 2026-07-09 — multi-truck fleet +
+-- drivers + payroll auto-routing, PRODUCT DECISION). A driver is optional:
+-- an account with zero driver rows behaves exactly as before (settlements
+-- just have a null driver_id). default_truck_id is a soft hint for future
+-- UI convenience (e.g. pre-selecting a truck when adding a driver's next
+-- settlement) — never required, never enforced by a trigger.
+create table drivers (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users on delete cascade,
+  name             text not null,
+  phone            text,
+  license          text,
+  active           boolean default true,
+  default_truck_id uuid references trucks on delete set null,
+  created_at       timestamptz default now(),
+  updated_at       timestamptz default now()
+);
+
 -- ---------- Documents (archive + duplicate detection; was DB.docs) ----------
 create table documents (
   id           uuid primary key default gen_random_uuid(),
@@ -120,6 +138,7 @@ create table settlements (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users on delete cascade,
   truck_id     uuid references trucks,
+  driver_id    uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14 (payroll auto-routing)
   document_id  uuid references documents,
   week_ending  date not null,
   gross        numeric(12,2) not null default 0,
@@ -135,6 +154,7 @@ create table loads (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references auth.users on delete cascade,
   settlement_id uuid references settlements on delete cascade,
+  driver_id     uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14
   load_date     date,
   order_number  text,
   origin        text,
@@ -151,6 +171,7 @@ create table fuel_purchases (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users on delete cascade,
   settlement_id uuid references settlements on delete cascade,  -- D6: matches legacy deleteSett()
+  driver_id    uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14
   fuel_type    text not null check (fuel_type in ('tractor','reefer')),
   purchase_date date,
   location     text,
@@ -167,6 +188,7 @@ create table deductions (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users on delete cascade,
   settlement_id uuid references settlements on delete cascade,  -- set for withheld items
+  driver_id    uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14 (withheld deductions only — see payroll auto-routing note)
   document_id  uuid references documents on delete set null,
   ded_date     date,
   code         text,                          -- EQUIP|LEGAL|INS|LIC|OTHER|...
@@ -453,6 +475,8 @@ create trigger trg_touch_updated_at before update on profiles
   for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on trucks
   for each row execute function touch_updated_at();
+create trigger trg_touch_updated_at before update on drivers
+  for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on documents
   for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on settlements
@@ -572,6 +596,10 @@ create policy "profiles_owner_all" on profiles
 
 alter table trucks enable row level security;
 create policy "trucks_owner_all" on trucks
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+alter table drivers enable row level security;
+create policy "drivers_owner_all" on drivers
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 alter table documents enable row level security;

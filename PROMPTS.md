@@ -536,6 +536,47 @@ both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
 ```
 
+## Multi-truck fleet + drivers + payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION — binding)
+
+```
+1. Trucks: unlimited (2nd, 3rd, ...Nth). Truck management UI (add/edit/
+   retire, each add seeding maintenance_intervals) is Session 8, item 0
+   above — not this pass.
+
+2. NEW drivers entity (docs/PENDING_SQL.md §13): drivers table (id,
+   user_id, name, phone, license, active, default_truck_id, RLS owner-
+   scoped). Driver management UI is Session 8, item 0b above. settlements/
+   loads/fuel_purchases/withheld-deductions gain driver_id (docs/
+   PENDING_SQL.md §14, nullable, on delete set null — never cascade,
+   retiring/removing a driver must not delete financial history).
+
+3. Payroll auto-routing — IMPLEMENTED THIS PASS: the ai-import settlement
+   schema gains driverName (supabase/functions/ai-import/index.ts,
+   SETTLEMENT_SCHEMA_BEFORE/AFTER patch); the truck's unit number was
+   already extracted as settlement.unit since the Session 6 fleet-
+   scalability work, no schema rename needed there. On import: unit is
+   matched against trucks.unit_number (exact, resolveTruckMatch()) and
+   driverName against drivers.name (case-insensitive, trimmed,
+   resolveDriverMatch(), app/src/import/driverMatch.ts). Match found on
+   either → tagged automatically, no picker. No match → the import
+   preview (app/app/(tabs)/import/index.tsx) shows a picker of existing
+   trucks/drivers PLUS a "+ New Truck"/"+ New Driver" inline-create
+   field — creating one persists it normally, so future imports of the
+   same unit/name auto-match with no separate alias table needed ("then
+   remembers it" = ordinary relational persistence, not a fuzzy-matching
+   memory system). All per-truck screens (Truck Health, fleet dashboard
+   aggregation) are unaffected — still keyed off truck_id exactly as
+   before.
+
+4. Dashboard: existing per-truck Fleet Overview card is unaffected. Per-
+   driver breakdown is Session 9a item 7 above — not this pass.
+
+5. Recorded in CLAUDE.md invariant #7 (extended with drivers) and here.
+   Nothing Ali-specific anywhere (per the 2026-07-09 clean-product
+   decision) — driverMatch.ts/truckMatch.ts/the drivers table are all
+   fully generic, no seed data, no hardcoded names.
+```
+
 ## Session 7 — Deductions + Capital Account
 
 ```
@@ -587,6 +628,21 @@ the existing capital_transactions data.
 ## Session 8 — Truck Health + Maintenance
 
 ```
+0. Truck management screen (NEW, owner decision 2026-07-09 — multi-truck
+   fleet + drivers + payroll auto-routing, PRODUCT DECISION): add/edit/
+   retire a truck (unit number, VIN, year/make/model, engine, odometer).
+   Adding a truck seeds its maintenance_intervals the same way the
+   legacy-backup importer's ensureTruck() and the new import-preview
+   "+ New Truck" inline-create already do (DB trigger, CLAUDE.md
+   invariant #4) — this screen is a third entry point to the same path,
+   not a new one. Retiring sets is_active=false (never delete a truck
+   with financial history attached).
+0b. Driver management screen (same session, same PRODUCT DECISION):
+   add/edit a driver (name, phone, license, active flag, default truck),
+   uses app/src/data/drivers.ts (already built — see PENDING_SQL.md §13).
+   No delete from the UI (drivers can have settlement history); "active"
+   toggle is the retire equivalent, same as trucks.
+
 Port Truck Health and Maintenance:
 
 - All 12 categories, reading their interval_miles/interval_hours/tracking_mode
@@ -641,6 +697,15 @@ Maintenance is Session 8, Deductions/Capital Account are Session 7):
    best/worst lanes table) — replaces the current placeholder
 5. Loan Center + Credit Cards — replaces the current Loans placeholder
 6. Bank/Checking statement import (reuses ai-import with the statement prompt)
+7. Per-driver dashboard breakdown (NEW, owner decision 2026-07-09 — multi-
+   truck fleet + drivers + payroll auto-routing, PRODUCT DECISION): same
+   pattern as the existing per-truck Fleet Overview card (gated on 2+
+   trucks) — a per-driver revenue/net breakdown, gated on 2+ drivers on
+   the account (an account with 0-1 drivers never sees it, same n≤1
+   shortcut as everywhere else fleet-scalability applies). Aggregates
+   settlements.driver_id the same way Fleet Overview aggregates truck_id
+   (fetchFleetStats() pattern, app/src/data/dashboardStats.ts) — no new
+   calculation engine, just a driver_id-scoped query variant.
 ```
 
 **DESIGN NOTE (owner decision 2026-07-04, not implemented until this

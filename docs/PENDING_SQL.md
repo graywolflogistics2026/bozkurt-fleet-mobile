@@ -1,8 +1,8 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
 **STATUS (2026-07-09): sections 1-10 have been run against the live DB.
-Sections 11-12 are new and NOT yet applied — run them yourself in the
-Supabase SQL editor.**
+Sections 11-14 are new and NOT yet applied — run them yourself in the
+Supabase SQL editor (section 14 depends on section 13 — run in order).**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
 (re-)run to fold all of this into a proper follow-up migration file. When
@@ -383,6 +383,59 @@ alter table profiles add column locale text;
 ```
 
 - [ ] 12a run (profiles.locale column)
+
+---
+
+## 13. drivers table (multi-truck fleet + drivers + payroll auto-routing, PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+
+New entity, entirely optional — an account with zero driver rows behaves
+exactly as it does today (every `driver_id` added in section 14 stays
+null, no picker is ever forced). `default_truck_id` is a soft UI
+convenience hint for a future driver-management screen (PROMPTS.md
+Session 8), never enforced.
+
+```sql
+create table drivers (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users on delete cascade,
+  name             text not null,
+  phone            text,
+  license          text,
+  active           boolean default true,
+  default_truck_id uuid references trucks on delete set null,
+  created_at       timestamptz default now(),
+  updated_at       timestamptz default now()
+);
+
+alter table drivers enable row level security;
+create policy "drivers_owner_all" on drivers
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create trigger trg_touch_updated_at before update on drivers
+  for each row execute function touch_updated_at();
+```
+
+- [ ] 13a run (create drivers table + RLS + trigger)
+
+---
+
+## 14. driver_id on settlements/loads/fuel_purchases/deductions (payroll auto-routing, PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+
+Depends on section 13 (drivers must exist first). `on delete set null`
+(not cascade) — removing/retiring a driver must never delete financial
+history, it just un-attributes it. Deductions only need this for
+settlement-withheld rows (`source='settlement'`) per the payroll
+auto-routing scope — standalone out-of-pocket deductions from purchases
+aren't part of a settlement and have no driver to attribute.
+
+```sql
+alter table settlements add column driver_id uuid references drivers on delete set null;
+alter table loads add column driver_id uuid references drivers on delete set null;
+alter table fuel_purchases add column driver_id uuid references drivers on delete set null;
+alter table deductions add column driver_id uuid references drivers on delete set null;
+```
+
+- [ ] 14a run (driver_id columns on settlements/loads/fuel_purchases/deductions)
 
 ---
 

@@ -106,6 +106,23 @@ create table trucks (
   created_at   timestamptz default now()
 );
 
+-- ---------- Drivers (NEW, owner decision 2026-07-09 — multi-truck fleet +
+-- drivers + payroll auto-routing, PRODUCT DECISION). A driver is optional:
+-- an account with zero driver rows behaves exactly as before (settlements
+-- just have a null driver_id). default_truck_id is a soft hint for future
+-- UI convenience (e.g. pre-selecting a truck when adding a driver's next
+-- settlement) — never required, never enforced by a trigger.
+create table drivers (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users on delete cascade,
+  name             text not null,
+  phone            text,
+  license          text,
+  active           boolean default true,
+  default_truck_id uuid references trucks on delete set null,
+  created_at       timestamptz default now()
+);
+
 -- ---------- Documents (archive + duplicate detection; was DB.docs) ----------
 create table documents (
   id           uuid primary key default gen_random_uuid(),
@@ -159,6 +176,7 @@ create table settlements (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users,
   truck_id     uuid references trucks,
+  driver_id    uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14 (payroll auto-routing)
   document_id  uuid references documents,
   week_ending  date not null,
   gross        numeric(12,2) not null default 0,
@@ -173,6 +191,7 @@ create table loads (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references auth.users,
   settlement_id uuid references settlements on delete cascade,
+  driver_id     uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14
   load_date     date,
   pickup_date   date,  -- added retroactively, PENDING_SQL.md §8 (per-diem exact day-counting)
   delivery_date date,  -- ditto — legacy calcPerDiemDays() sums (deliveryDate - pickupDate) per load
@@ -192,6 +211,7 @@ create table fuel_purchases (
                                          -- original oversight: settlements/maintenance_records both
                                          -- had truck_id from the start, fuel_purchases didn't)
   settlement_id uuid references settlements on delete cascade,  -- D6: matches legacy deleteSett()
+  driver_id    uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14
   fuel_type    text not null check (fuel_type in ('tractor','reefer')),
   purchase_date date,
   location     text,
@@ -206,6 +226,7 @@ create table deductions (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users,
   settlement_id uuid references settlements on delete cascade,  -- set for withheld items
+  driver_id    uuid references drivers on delete set null,  -- added retroactively, PENDING_SQL.md §14 (withheld deductions only — see payroll auto-routing note)
   document_id  uuid references documents on delete set null,
   ded_date     date,
   code         text,                          -- EQUIP|LEGAL|INS|LIC|OTHER|...

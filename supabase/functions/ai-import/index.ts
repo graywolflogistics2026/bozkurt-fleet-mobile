@@ -86,6 +86,19 @@ const OTR_RULE_BEFORE =
 const OTR_RULE_AFTER =
   `IMPORTANT - the user is an OTR truck driver whose sleeper cab is their home+office. ALL items 100% deductible: tools, TV, PlayStation, cooking appliances, electronics, bedding. Only groceries/medicine are personal.`;
 
+// ---- Approved addition (owner decision 2026-07-09, PRODUCT DECISION —
+// multi-truck fleet + drivers + payroll auto-routing): settlement gains
+// driverName alongside the existing "unit" field (the truck's unit
+// number — already extracted since the Session 6 fleet-scalability work,
+// no rename needed). Carrier settlements print both; the mobile app
+// matches unit → trucks.unit_number and driverName → drivers.name to
+// auto-tag the settlement and all its rows (app/src/import/truckMatch.ts,
+// app/src/import/driverMatch.ts). ----
+const SETTLEMENT_SCHEMA_BEFORE =
+  `"settlement":{"weekEnding":"","carrier":"","unit":"","grossRevenue":0,`;
+const SETTLEMENT_SCHEMA_AFTER =
+  `"settlement":{"weekEnding":"","carrier":"","unit":"","driverName":"","grossRevenue":0,`;
+
 const APPROVED_ADDITIONS_SUFFIX = `
 APPROVED ADDITION (fuel/IFTA, owner decision 2026-07-03): for docType "fuel", also extract the US state as a 2-letter code (e.g. "TX", "OK") into fuel.state, read from the station's address on the receipt. If the state genuinely cannot be determined, leave fuel.state as "".
 
@@ -98,6 +111,8 @@ APPROVED ADDITION (warranty extraction, owner decision 2026-07-07): a purchase i
 APPROVED ADDITION (payment method classification, owner decision 2026-07-07): purchase.paymentMethod MUST be exactly one of these 9 values: "Business Checking", "Business Credit Card", "Personal Checking", "Personal Credit Card", "Cash", "Venmo", "Cash App", "Zelle Personal", "Zelle Business" — never a bank-brand string like "BofA Business". A card payment with no further signal defaults to "Business Credit Card". Venmo and Cash App payments are always personal funds — use "Venmo"/"Cash App" (there is no business variant for either). Zelle defaults to "Zelle Personal" unless the receipt clearly shows a business account/name as the payer, in which case use "Zelle Business".
 
 APPROVED ADDITION (loads pickup/delivery dates, owner decision 2026-07-07 — feeds exact per-diem day-counting): for docType "settlement", each entry in settlement.loads should also include pickupDate and deliveryDate (both "YYYY-MM-DD") when the settlement/rate confirmation shows them. Leave them "" if genuinely not shown on the document — do not guess.
+
+APPROVED ADDITION (payroll auto-routing, owner decision 2026-07-09): for docType "settlement", settlement.unit is the tractor/truck unit number and settlement.driverName is the driver's full name as printed on the settlement — most carrier settlements show both near the top or in a header/summary section. Extract both whenever shown; leave either "" if genuinely not present rather than guessing. Do not confuse driverName with the carrier name (settlement.carrier) — the carrier is the trucking company the settlement is issued by/through, the driver is the individual who ran the loads.
 `;
 
 function buildExtractionPrompt(docHint?: string): string {
@@ -107,7 +122,8 @@ function buildExtractionPrompt(docHint?: string): string {
     .replace(LOADS_SCHEMA_BEFORE, LOADS_SCHEMA_AFTER)
     .replace(PURCHASE_SCHEMA_BEFORE, PURCHASE_SCHEMA_AFTER)
     .replace(IDENTITY_LINE_BEFORE, IDENTITY_LINE_AFTER)
-    .replace(OTR_RULE_BEFORE, OTR_RULE_AFTER);
+    .replace(OTR_RULE_BEFORE, OTR_RULE_AFTER)
+    .replace(SETTLEMENT_SCHEMA_BEFORE, SETTLEMENT_SCHEMA_AFTER);
   prompt += APPROVED_ADDITIONS_SUFFIX;
   if (docHint) {
     prompt += `\nThe user has hinted this document is likely a "${docHint}" — verify against the actual content, but use this as a tiebreaker only if the content is genuinely ambiguous.\n`;

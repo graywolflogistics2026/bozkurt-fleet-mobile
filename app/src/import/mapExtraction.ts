@@ -33,10 +33,18 @@ export type SettlementMapping = {
   netPay: number;
 };
 
-function toFuelInsert(f: ExtractedFuel, fuelType: 'tractor' | 'reefer', userId: string, truckId: string | null, fallbackDate?: string): FuelPurchaseInsert {
+function toFuelInsert(
+  f: ExtractedFuel,
+  fuelType: 'tractor' | 'reefer',
+  userId: string,
+  truckId: string | null,
+  driverId: string | null,
+  fallbackDate?: string
+): FuelPurchaseInsert {
   return {
     user_id: userId,
     truck_id: truckId,
+    driver_id: driverId,
     settlement_id: null,
     fuel_type: fuelType,
     purchase_date: f.date ?? fallbackDate ?? null,
@@ -68,12 +76,18 @@ function toTollInsert(t: ExtractedToll, network: 'ezpass' | 'drivewyze', userId:
   };
 }
 
-export function mapSettlement(d: Extraction, userId: string, truckId: string | null): SettlementMapping {
+export function mapSettlement(
+  d: Extraction,
+  userId: string,
+  truckId: string | null,
+  driverId: string | null = null
+): SettlementMapping {
   const s = d.settlement ?? {};
 
   const settlement: SettlementInsert = {
     user_id: userId,
     truck_id: truckId,
+    driver_id: driverId,
     week_ending: s.weekEnding || d.date || '',
     gross: num(s.grossRevenue),
     net: num(s.netPay),
@@ -89,6 +103,7 @@ export function mapSettlement(d: Extraction, userId: string, truckId: string | n
     return {
       user_id: userId,
       settlement_id: null,
+      driver_id: driverId,
       load_date: pickupDate,
       pickup_date: pickupDate,
       delivery_date: deliveryDate,
@@ -102,16 +117,20 @@ export function mapSettlement(d: Extraction, userId: string, truckId: string | n
   });
 
   const fuel: FuelPurchaseInsert[] = [
-    ...(s.tractorFuel ?? []).map((f) => toFuelInsert(f, 'tractor', userId, truckId, d.date)),
-    ...(s.reeferFuel ?? []).map((f) => toFuelInsert(f, 'reefer', userId, truckId, d.date)),
+    ...(s.tractorFuel ?? []).map((f) => toFuelInsert(f, 'tractor', userId, truckId, driverId, d.date)),
+    ...(s.reeferFuel ?? []).map((f) => toFuelInsert(f, 'reefer', userId, truckId, driverId, d.date)),
   ];
 
   // Settlement-withheld line items — CLAUDE.md invariant #1 (net-pay
   // model): source='settlement' so these are display-only, never
   // re-counted as an out-of-pocket tax deduction (income is already NET).
+  // driver_id here (payroll auto-routing, owner decision 2026-07-09) is
+  // scoped to withheld rows only — standalone purchase deductions
+  // (mapPurchase, below) aren't part of a settlement and have no driver.
   const deductions: DeductionInsert[] = (s.deductions ?? []).map((x) => ({
     user_id: userId,
     settlement_id: null,
+    driver_id: driverId,
     ded_date: d.date ?? null,
     code: x.code ?? null,
     description: x.desc ?? null,

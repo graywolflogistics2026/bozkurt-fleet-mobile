@@ -18,6 +18,10 @@ export type SaveExtractionParams = {
   extraction: Extraction;
   userId: string;
   truckId: string | null;
+  // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION):
+  // resolved by the caller (resolveDriverMatch()/a picked-or-created
+  // driver) same as truckId. Only applied to settlement docType rows.
+  driverId: string | null;
   fileUri: string | null;
   fileExt: string;
   mediaType: string;
@@ -42,7 +46,7 @@ export type SaveExtractionResult = {
 // document id) into the pure mapping output, then performs the actual
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
-  const { extraction: d, userId, truckId, fileUri, fileExt, mediaType, createContribution } = params;
+  const { extraction: d, userId, truckId, driverId, fileUri, fileExt, mediaType, createContribution } = params;
 
   // 1. Upload the original file to the documents bucket FIRST (CLAUDE.md
   // storage convention: {user_id}/{month}/...) so the documents row can
@@ -79,7 +83,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   let contributionTotal = 0;
 
   if (d.docType === 'settlement' && d.settlement) {
-    const mapping = mapSettlement(d, userId, truckId);
+    const mapping = mapSettlement(d, userId, truckId, driverId);
 
     // Web v2026.07.09-A re-import-replace: importing the same week_ending
     // again REPLACES that week's batch-tagged rows instead of duplicating

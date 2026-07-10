@@ -56,6 +56,12 @@ export type ExtractedSettlement = {
   weekEnding?: string;
   carrier?: string;
   unit?: string;
+  // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION):
+  // carrier settlements print both the unit number (above, "unit") and the
+  // driver's name — used to auto-match against trucks.unit_number /
+  // drivers.name at import time (app/src/import/truckMatch.ts,
+  // app/src/import/driverMatch.ts).
+  driverName?: string;
   grossRevenue?: number;
   reimbursements?: number;
   totalDeductions?: number;

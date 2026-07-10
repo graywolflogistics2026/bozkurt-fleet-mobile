@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -10,18 +10,21 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { useInsertTruck } from '@/src/data/trucks';
+import { useDrivers, useInsertDriver } from '@/src/data/drivers';
 import { callAiImport, friendlyAiImportError, type AiImportError } from '@/src/data/aiImportCall';
 import { fetchExistingDocsForDuplicateCheck, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
+import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useDocTypeMeta } from '@/src/import/docTypes';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
-import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
@@ -94,7 +97,11 @@ export default function Import() {
   const docTypeMeta = useDocTypeMeta();
   const router = useRouter();
   const { session } = useAuth();
-  const { trucks } = useActiveTruck();
+  const { trucks, refreshTrucks } = useActiveTruck();
+  const { data: driversData } = useDrivers();
+  const drivers = driversData ?? [];
+  const insertTruck = useInsertTruck();
+  const insertDriver = useInsertDriver();
   const queryClient = useQueryClient();
   const userId = session?.user.id;
 
@@ -105,6 +112,14 @@ export default function Import() {
   const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
   const [needsTruckPicker, setNeedsTruckPicker] = useState(false);
+  const [driverId, setDriverId] = useState<string | null>(null);
+  const [needsDriverPicker, setNeedsDriverPicker] = useState(false);
+  const [showNewTruckForm, setShowNewTruckForm] = useState(false);
+  const [newTruckUnit, setNewTruckUnit] = useState('');
+  const [creatingTruck, setCreatingTruck] = useState(false);
+  const [showNewDriverForm, setShowNewDriverForm] = useState(false);
+  const [newDriverName, setNewDriverName] = useState('');
+  const [creatingDriver, setCreatingDriver] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
 
@@ -120,8 +135,54 @@ export default function Import() {
     setDuplicates(null);
     setTruckId(null);
     setNeedsTruckPicker(false);
+    setDriverId(null);
+    setNeedsDriverPicker(false);
+    setShowNewTruckForm(false);
+    setNewTruckUnit('');
+    setShowNewDriverForm(false);
+    setNewDriverName('');
     setErrorMessage(null);
     setResult(null);
+  }
+
+  // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION): a
+  // newly created truck/driver is picked immediately and, for trucks, the
+  // shared ActiveTruckContext list is refreshed so it's available
+  // everywhere else in the app right away — "remembers it" for future
+  // imports is then just the normal unit_number/name match next time.
+  async function handleCreateTruck() {
+    const unit = newTruckUnit.trim();
+    if (!userId || !unit || creatingTruck) return;
+    setCreatingTruck(true);
+    try {
+      const created = await insertTruck.mutateAsync({ user_id: userId, unit_number: unit });
+      await refreshTrucks();
+      setTruckId(created.id);
+      setNeedsTruckPicker(false);
+      setShowNewTruckForm(false);
+      setNewTruckUnit('');
+    } catch (err) {
+      Alert.alert(t('importScreen.createTruckFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setCreatingTruck(false);
+    }
+  }
+
+  async function handleCreateDriver() {
+    const name = newDriverName.trim();
+    if (!userId || !name || creatingDriver) return;
+    setCreatingDriver(true);
+    try {
+      const created = await insertDriver.mutateAsync({ user_id: userId, name });
+      setDriverId(created.id);
+      setNeedsDriverPicker(false);
+      setShowNewDriverForm(false);
+      setNewDriverName('');
+    } catch (err) {
+      Alert.alert(t('importScreen.createDriverFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setCreatingDriver(false);
+    }
   }
 
   function handleAiError(err: AiImportError) {
@@ -135,9 +196,13 @@ export default function Import() {
     setDuplicates(checkDuplicateImport(d, fname, existingDocs));
 
     const extractedUnit = d.settlement?.unit ?? d.maintenance?.unit;
-    const match = resolveTruckMatch(extractedUnit, trucks);
-    setTruckId(match.truckId);
-    setNeedsTruckPicker(match.needsPicker);
+    const truckMatch = resolveTruckMatch(extractedUnit, trucks);
+    setTruckId(truckMatch.truckId);
+    setNeedsTruckPicker(truckMatch.needsPicker);
+
+    const driverMatch = resolveDriverMatch(d.settlement?.driverName, drivers);
+    setDriverId(driverMatch.driverId);
+    setNeedsDriverPicker(driverMatch.needsPicker);
 
     setExtraction(d);
     setPhase('preview');
@@ -192,6 +257,7 @@ export default function Import() {
   async function handleSave() {
     if (!extraction || !fileMeta || !userId) return;
     if (needsTruckPicker && !truckId) return;
+    if (needsDriverPicker && !driverId) return;
 
     const isPurchase = extraction.docType === 'amazon' || extraction.docType === 'store';
     const payMethod = normalizePaymentMethod(extraction.purchase?.paymentMethod);
@@ -204,6 +270,7 @@ export default function Import() {
         extraction,
         userId,
         truckId,
+        driverId,
         fileUri: fileMeta.uri,
         fileExt: fileMeta.ext,
         mediaType: fileMeta.mediaType,
@@ -297,14 +364,17 @@ export default function Import() {
                   {trucks.map((truck) => (
                     <Pressable
                       key={truck.id}
-                      onPress={() => setTruckId(truck.id)}
+                      onPress={() => {
+                        setTruckId(truck.id);
+                        setShowNewTruckForm(false);
+                      }}
                       style={{
                         paddingVertical: 8,
                         paddingHorizontal: 14,
                         borderRadius: radii.sm,
                         borderWidth: 1,
-                        borderColor: truckId === truck.id ? colors.accent : colors.border,
-                        backgroundColor: truckId === truck.id ? colors.accent : colors.card2,
+                        borderColor: truckId === truck.id && !showNewTruckForm ? colors.accent : colors.border,
+                        backgroundColor: truckId === truck.id && !showNewTruckForm ? colors.accent : colors.card2,
                       }}
                     >
                       <Text style={{ color: colors.text, fontWeight: '600' }}>
@@ -312,14 +382,99 @@ export default function Import() {
                       </Text>
                     </Pressable>
                   ))}
+                  <Pressable
+                    onPress={() => setShowNewTruckForm((v) => !v)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: radii.sm,
+                      borderWidth: 1,
+                      borderColor: showNewTruckForm ? colors.accent : colors.border,
+                      backgroundColor: showNewTruckForm ? colors.accent : colors.card2,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{t('importScreen.createNewTruck')}</Text>
+                  </Pressable>
                 </View>
+                {showNewTruckForm && (
+                  <View style={{ marginTop: spacing.sm }}>
+                    <Field
+                      value={newTruckUnit}
+                      onChangeText={setNewTruckUnit}
+                      placeholder={t('importScreen.newTruckUnitPlaceholder')}
+                    />
+                    <PrimaryButton
+                      title={t('common.create')}
+                      onPress={handleCreateTruck}
+                      loading={creatingTruck}
+                      disabled={!newTruckUnit.trim()}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+
+            {needsDriverPicker && (
+              <View style={{ marginTop: spacing.md }}>
+                <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
+                  {t('importScreen.whichDriver')}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                  {drivers.map((driver) => (
+                    <Pressable
+                      key={driver.id}
+                      onPress={() => {
+                        setDriverId(driver.id);
+                        setShowNewDriverForm(false);
+                      }}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: radii.sm,
+                        borderWidth: 1,
+                        borderColor: driverId === driver.id && !showNewDriverForm ? colors.accent : colors.border,
+                        backgroundColor: driverId === driver.id && !showNewDriverForm ? colors.accent : colors.card2,
+                      }}
+                    >
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>{driver.name}</Text>
+                    </Pressable>
+                  ))}
+                  <Pressable
+                    onPress={() => setShowNewDriverForm((v) => !v)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: radii.sm,
+                      borderWidth: 1,
+                      borderColor: showNewDriverForm ? colors.accent : colors.border,
+                      backgroundColor: showNewDriverForm ? colors.accent : colors.card2,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{t('importScreen.createNewDriver')}</Text>
+                  </Pressable>
+                </View>
+                {showNewDriverForm && (
+                  <View style={{ marginTop: spacing.sm }}>
+                    <Field
+                      value={newDriverName}
+                      onChangeText={setNewDriverName}
+                      placeholder={t('importScreen.newDriverNamePlaceholder')}
+                    />
+                    <PrimaryButton
+                      title={t('common.create')}
+                      onPress={handleCreateDriver}
+                      loading={creatingDriver}
+                      disabled={!newDriverName.trim()}
+                    />
+                  </View>
+                )}
               </View>
             )}
 
             <PrimaryButton
               title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
               onPress={handleSave}
-              disabled={needsTruckPicker && !truckId}
+              disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId)}
             />
             <SecondaryButton title={t('importScreen.discard')} onPress={reset} />
           </Card>

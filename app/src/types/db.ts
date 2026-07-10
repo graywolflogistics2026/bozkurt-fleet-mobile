@@ -24,6 +24,23 @@ export type Truck = {
 export type TruckInsert = Partial<Omit<Truck, 'id' | 'created_at' | 'updated_at'>> & { user_id: string };
 export type TruckUpdate = Partial<Omit<Truck, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
+// docs/PENDING_SQL.md §13 (multi-truck fleet + drivers + payroll
+// auto-routing, PRODUCT DECISION 2026-07-09) — optional entity; an account
+// with zero rows here behaves exactly as before.
+export type Driver = {
+  id: string;
+  user_id: string;
+  name: string;
+  phone: string | null;
+  license: string | null;
+  active: boolean;
+  default_truck_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type DriverInsert = Partial<Omit<Driver, 'id' | 'created_at' | 'updated_at'>> & { user_id: string; name: string };
+export type DriverUpdate = Partial<Omit<Driver, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
 export type DocumentRow = {
   id: string;
   user_id: string;
@@ -43,6 +60,7 @@ export type Settlement = {
   id: string;
   user_id: string;
   truck_id: string | null;
+  driver_id: string | null; // docs/PENDING_SQL.md §14 (payroll auto-routing)
   document_id: string | null;
   week_ending: string;
   gross: number;
@@ -61,6 +79,7 @@ export type Load = {
   id: string;
   user_id: string;
   settlement_id: string | null;
+  driver_id: string | null; // docs/PENDING_SQL.md §14 (payroll auto-routing)
   load_date: string | null;
   pickup_date: string | null; // docs/PENDING_SQL.md §8 — re-added for exact per-diem day-counting
   delivery_date: string | null;
@@ -81,6 +100,7 @@ export type FuelPurchase = {
   user_id: string;
   truck_id: string | null; // added retroactively, docs/PENDING_SQL.md §6 (Session 6)
   settlement_id: string | null;
+  driver_id: string | null; // docs/PENDING_SQL.md §14 (payroll auto-routing)
   fuel_type: 'tractor' | 'reefer';
   purchase_date: string | null;
   location: string | null;
@@ -103,6 +123,7 @@ export type Deduction = {
   id: string;
   user_id: string;
   settlement_id: string | null;
+  driver_id: string | null; // docs/PENDING_SQL.md §14 — settlement-withheld rows only (payroll auto-routing)
   document_id: string | null;
   ded_date: string | null;
   code: string | null;

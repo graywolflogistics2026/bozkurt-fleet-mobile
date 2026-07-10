@@ -6,6 +6,7 @@ function ded(overrides: Partial<Deduction>): Deduction {
     id: overrides.id ?? 'd1',
     user_id: 'u1',
     settlement_id: null,
+    driver_id: null,
     document_id: null,
     ded_date: '2026-06-01',
     code: null,

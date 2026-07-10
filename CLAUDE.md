@@ -92,7 +92,28 @@
      single-truck account is just the n=1 presentation of the exact same
      fleet-wide logic (active-truck context hides the picker and any
      fleet-only UI when count===1), never a separate code path that has to
-     be kept in sync with the multi-truck one.
+     be kept in sync with the multi-truck one. Users may add unlimited
+     trucks (2nd, 3rd, ...Nth), each seeding its own maintenance_intervals
+     on creation (Truck Health stays per-active-truck; a fleet-wide
+     aggregation view is separate, gated on 2+ trucks). Drivers (owner
+     decision 2026-07-09, PRODUCT DECISION) extend this the same way but
+     are OPTIONAL, not mandatory like trucks: the `drivers` table
+     (docs/PENDING_SQL.md §13) and `driver_id` on settlements/loads/
+     fuel_purchases/withheld-deductions (§14) exist so payroll can be
+     auto-routed, but an account with zero driver rows — or a settlement
+     with no driver name extracted — behaves exactly as before, `driver_id`
+     staying null, no picker ever forced (`app/src/import/driverMatch.ts`
+     `resolveDriverMatch()`, deliberately less aggressive than
+     `resolveTruckMatch()`). Payroll auto-routing: the ai-import settlement
+     schema carries `unit` (the truck's unit number — existing since the
+     Session 6 fleet-scalability work) and `driverName`; on import, `unit`
+     is matched against `trucks.unit_number` (exact) and `driverName`
+     against `drivers.name` (case-insensitive, trimmed) to auto-tag the
+     settlement and all its rows. No match on either → the import preview
+     shows a picker to choose an existing truck/driver OR create one
+     inline (`app/app/(tabs)/import/index.tsx`) — the newly created row
+     persists normally, so it auto-matches on every future import without
+     any separate alias/memory mechanism.
   8. This app provides ESTIMATES, not tax/legal/financial advice.
      (a) Every screen showing tax figures (Dashboard tax cards, tax
      estimator, S-Corp preview, quarterly payments, per diem) must include a
