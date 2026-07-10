@@ -536,6 +536,63 @@ both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
 ```
 
+## Industry knowledge base (owner decision, researched 2026-07-10, PRODUCT DECISION — binding)
+
+```
+1. docs/INDUSTRY_TAXONOMY.md (NEW, IMPLEMENTED THIS PASS) is the single
+   source of truth for the trucking document/category universe — change
+   it there first, then propagate to the ai-import prompt / category.ts.
+   Nothing in it requires a DB migration: deductions.category (and every
+   settlement-deduction row's category) is free text, no check constraint.
+
+2. Settlement anatomy classification (IMPLEMENTED THIS PASS): settlement
+   revenueItems gain incomeType (linehaul/fuel_surcharge/accessorial/
+   reimbursement/bonus/trailer_rent/ifta_refund/other_income); settlement
+   deductions (chargebacks) gain chargebackType (fuel_advance/
+   insurance_bobtail/insurance_physical_damage/insurance_occ_acc/
+   insurance_cargo/insurance_workers_comp/eld_communications/
+   plates_permits/escrow_reserve/lease_purchase_payment/trailer_fee/
+   cash_advance/loan_payment/drug_consortium/tolls_transponder/
+   admin_processing_fee/factoring_fee/dispatch_fee/other_chargeback).
+   chargebackType maps to a display category on the saved withheld-
+   deduction row (mapSettlement(), category.ts CHARGEBACK_CATEGORY_LABEL)
+   — still never re-counted as a tax deduction (net-pay model unchanged).
+   incomeType is extraction-only for now (audit-trailed in
+   documents.parsed_json) — revenueItems has no dedicated table yet, same
+   "extraction now, ledger later" pattern as government_or_misc_income;
+   Session 9b's Accountant Package rollup (above) is where it gets a real
+   consumer.
+
+3. CANONICAL_CATEGORIES (IMPLEMENTED THIS PASS, app/src/import/
+   category.ts, renamed from DED_CATEGORIES): the full 29-category
+   Schedule-C-aligned list from docs/INDUSTRY_TAXONOMY.md §B. Old
+   categories renamed (Insurance → Insurance—Truck, Licensing & Permits →
+   Permits/Licenses & Road Taxes, Legal & Accounting Fees → Professional
+   Services, Truck Supplies → Truck Supplies & Equipment, Safety Equipment
+   → Safety Gear & Workwear, Factoring Fees → Dispatch & Factoring Fees);
+   Lease & Rent / Utilities & Subscriptions (added in the universal-AI-
+   capture pass) already matched the canonical name, no rename needed. No
+   migration — old saved rows keep their old category string as free text.
+   guessCategory() expanded with brand hints (DAT/Truckstop → Software,
+   Comdata/EFS → Fuel & DEF, PrePass/EZPass/Drivewyze → Tolls & Scales,
+   OOIDA → Association Dues, Gusto/ADP/Paychex → Wages & Payroll Taxes,
+   Triumph/RTS → Dispatch & Factoring Fees) checked ahead of the older,
+   more generic legacy branches so an unambiguous brand name never gets
+   swallowed by a broader regex.
+
+4. ai-import prompt (IMPLEMENTED THIS PASS): compact classification
+   section (incomeType/chargebackType enums, brand hints, non-deductible-
+   traps flagging as "PERSONAL — REVIEW: ", reimbursement-vs-income rule)
+   appended to APPROVED_ADDITIONS_SUFFIX; settlement revenueItems/
+   deductions schemas patched to carry the two new fields.
+
+5. Recorded in docs/INDUSTRY_TAXONOMY.md (the source of truth itself) and
+   here. Session 9b's Accountant Package item (above) extended with the
+   per-category Schedule C rollup + reimbursement-offset consumer — not
+   built this pass. tsc, tests, commit, push. ai-import Edge Function MUST
+   be redeployed — the extraction prompt changed again.
+```
+
 ## Universal AI capture (owner decision 2026-07-10, PRODUCT DECISION — binding)
 
 ```
@@ -926,7 +983,23 @@ separate design pass):
    because it's an analytics rollup, not a ledger view)
 2. Asset Register (Tools)
 3. Accountant Package export — JSON + a clean PDF summary via expo-print
-   (Tools)
+   (Tools). Include a per-category Schedule C rollup driven by
+   docs/INDUSTRY_TAXONOMY.md's CANONICAL_CATEGORIES (owner decision
+   2026-07-10, industry knowledge base): sum `deductions` by category, PLUS
+   fold in `maintenance_records` (→ Maintenance & Repairs), `fuel_purchases`
+   (→ Fuel & DEF), and `loans` (→ Truck/Trailer Payments, interest portion
+   only — principal is not deductible, docs/INDUSTRY_TAXONOMY.md §B) into
+   the same rollup rather than leaving them in separate tables/screens with
+   no unified tax view. Apply the reimbursement-vs-income rule
+   (docs/INDUSTRY_TAXONOMY.md §D): a settlement revenueItems line with
+   incomeType 'reimbursement' offsets its matching expense category in the
+   rollup; incomeType 'ifta_refund' is income, never netted against an
+   expense. This is also where settlement revenueItems finally gets a real
+   consumer (currently extraction-only/audit-trail-only — see
+   docs/INDUSTRY_TAXONOMY.md's Wiring status) — decide then whether that
+   still needs its own persisted table or can be recomputed from
+   `documents.parsed_json` at export time.
+4. AI Advisor (Tools)
 4. AI Advisor (Tools)
 5. Tax Estimator screen — wraps the calc engine Session 5 already built
    (`useTaxEstimate`, `calcTaxEstimate`) in its own dedicated screen; the

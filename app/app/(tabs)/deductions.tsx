@@ -9,7 +9,7 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
 import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
-import { DED_CATEGORIES } from '@/src/import/category';
+import { CANONICAL_CATEGORIES } from '@/src/import/category';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -142,7 +142,7 @@ export default function Deductions() {
 
   function openEdit(x: Deduction) {
     setEditing(x);
-    const knownCategories: readonly string[] = DED_CATEGORIES;
+    const knownCategories: readonly string[] = CANONICAL_CATEGORIES;
     setEditCategory(x.category && knownCategories.includes(x.category) ? x.category : 'Misc');
     setEditPayment(normalizePaymentMethod(x.payment_method));
     setEditAmount(String(x.amount ?? 0));
@@ -261,7 +261,7 @@ export default function Deductions() {
           <MutedText>{t('deductions.categoryLabel')}</MutedText>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {DED_CATEGORIES.map((c) => (
+          {CANONICAL_CATEGORIES.map((c) => (
             <Pill key={c} label={c} selected={editCategory === c} onPress={() => setEditCategory(c)} />
           ))}
         </View>

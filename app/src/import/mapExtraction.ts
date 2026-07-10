@@ -1,4 +1,4 @@
-import { detectMaintType, getCatNote, guessCategory, toDbServiceType } from '@/src/import/category';
+import { CHARGEBACK_CATEGORY_LABEL, detectMaintType, getCatNote, guessCategory, toDbServiceType } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import type {
   DeductionInsert,
@@ -134,6 +134,9 @@ export function mapSettlement(
   // driver_id here (payroll auto-routing, owner decision 2026-07-09) is
   // scoped to withheld rows only — standalone purchase deductions
   // (mapPurchase, below) aren't part of a settlement and have no driver.
+  // docs/INDUSTRY_TAXONOMY.md §A — chargebackType (when the AI classified
+  // it) takes priority over the older loose `category` string; both are
+  // display-only, never re-counted as a tax deduction (source='settlement').
   const deductions: DeductionInsert[] = (s.deductions ?? []).map((x) => ({
     user_id: userId,
     settlement_id: null,
@@ -142,7 +145,7 @@ export function mapSettlement(
     code: x.code ?? null,
     description: x.desc ?? null,
     amount: num(x.amount),
-    category: x.category ?? null,
+    category: (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
     payment_method: 'Settlement Withheld',
     source: 'settlement',
   }));
@@ -403,10 +406,12 @@ export function mapDriverPayment(d: Extraction, userId: string, driverId: string
 // income as a deduction.
 export const FINANCIAL_DOC_TYPES = ['insurance', 'lease_rent', 'factoring_statement', 'utility_subscription'] as const;
 
+// docs/INDUSTRY_TAXONOMY.md §B canonical categories (renamed 2026-07-10,
+// industry knowledge base — was 'Insurance'/'Factoring Fees').
 const FINANCIAL_DOC_CATEGORY: Record<FinancialDocKind, string> = {
-  insurance: 'Insurance',
+  insurance: 'Insurance—Truck',
   lease_rent: 'Lease & Rent',
-  factoring_statement: 'Factoring Fees',
+  factoring_statement: 'Dispatch & Factoring Fees',
   utility_subscription: 'Utilities & Subscriptions',
   government_or_misc_income: 'Misc', // never actually used — this kind never reaches mapFinancialDocDeduction()
 };

@@ -5,7 +5,46 @@
 // typed on purpose: this is model-extracted JSON, not a DB row — never
 // trust it hasn't dropped a key.
 
-export type ExtractedRevenueItem = { desc?: string; order?: string; amount?: number };
+// docs/INDUSTRY_TAXONOMY.md §A (industry knowledge base, owner decision
+// 2026-07-10, PRODUCT DECISION) — classifies each settlement income/
+// chargeback line. Extraction-only for now (audit-trailed in
+// documents.parsed_json); chargebackType additionally maps to a display
+// category on the saved withheld-deduction row (mapExtraction.ts
+// mapSettlement(), category.ts CHARGEBACK_CATEGORY_LABEL). incomeType has
+// no persistence destination yet — see docs/INDUSTRY_TAXONOMY.md's Wiring
+// status (revenueItems has no dedicated table, same as
+// government_or_misc_income).
+export type IncomeType =
+  | 'linehaul'
+  | 'fuel_surcharge'
+  | 'accessorial'
+  | 'reimbursement'
+  | 'bonus'
+  | 'trailer_rent'
+  | 'ifta_refund'
+  | 'other_income';
+export type ChargebackType =
+  | 'fuel_advance'
+  | 'insurance_bobtail'
+  | 'insurance_physical_damage'
+  | 'insurance_occ_acc'
+  | 'insurance_cargo'
+  | 'insurance_workers_comp'
+  | 'eld_communications'
+  | 'plates_permits'
+  | 'escrow_reserve'
+  | 'lease_purchase_payment'
+  | 'trailer_fee'
+  | 'cash_advance'
+  | 'loan_payment'
+  | 'drug_consortium'
+  | 'tolls_transponder'
+  | 'admin_processing_fee'
+  | 'factoring_fee'
+  | 'dispatch_fee'
+  | 'other_chargeback';
+
+export type ExtractedRevenueItem = { desc?: string; order?: string; amount?: number; incomeType?: IncomeType };
 export type ExtractedReimbursementItem = { desc?: string; ref?: string; amount?: number };
 export type ExtractedLoad = {
   order?: string;
@@ -37,6 +76,10 @@ export type ExtractedSettlementDeduction = {
   balance?: number;
   amount?: number;
   category?: string;
+  // docs/INDUSTRY_TAXONOMY.md §A — when present, takes priority over the
+  // loose `category` string above (mapSettlement() maps it to a canonical
+  // display category via CHARGEBACK_CATEGORY_LABEL).
+  chargebackType?: ChargebackType;
 };
 export type ExtractedSettlementMaintenance = {
   invoice?: string;

@@ -85,6 +85,29 @@ describe('mapSettlement', () => {
     const r = mapSettlement({ docType: 'settlement', date: '2026-06-27', settlement: {} }, 'user-1', null);
     expect(r.settlement.week_ending).toBe('2026-06-27');
   });
+
+  it('maps chargebackType to a canonical display category (industry knowledge base, owner decision 2026-07-10)', () => {
+    const d: Extraction = {
+      docType: 'settlement',
+      date: '2026-06-27',
+      settlement: {
+        weekEnding: '2026-06-27',
+        deductions: [{ code: 'PLATE', desc: 'Plate payback', amount: 40, chargebackType: 'plates_permits' }],
+      },
+    };
+    const r = mapSettlement(d, 'user-1', 'truck-1');
+    expect(r.deductions[0].category).toBe('Permits, Licenses & Road Taxes');
+  });
+
+  it('falls back to the loose category string when chargebackType is absent', () => {
+    const d: Extraction = {
+      docType: 'settlement',
+      date: '2026-06-27',
+      settlement: { weekEnding: '2026-06-27', deductions: [{ code: 'X', desc: 'Old-style line', amount: 10, category: 'Fixed' }] },
+    };
+    const r = mapSettlement(d, 'user-1', 'truck-1');
+    expect(r.deductions[0].category).toBe('Fixed');
+  });
 });
 
 describe('mapFuel', () => {
@@ -320,7 +343,7 @@ describe('mapDriverPayment (universal AI capture, owner decision 2026-07-10)', (
 });
 
 describe('mapFinancialDocDeduction (universal AI capture, owner decision 2026-07-10)', () => {
-  it('maps insurance to the Insurance category', () => {
+  it('maps insurance to the Insurance—Truck category (renamed 2026-07-10, industry knowledge base)', () => {
     const d: Extraction = {
       docType: 'insurance',
       date: '2026-06-10',
@@ -328,7 +351,7 @@ describe('mapFinancialDocDeduction (universal AI capture, owner decision 2026-07
       financialDoc: { kind: 'insurance', description: 'Liability policy', amount: 450, reference: 'POL-9981' },
     };
     expect(mapFinancialDocDeduction(d, 'user-1')).toMatchObject({
-      category: 'Insurance',
+      category: 'Insurance—Truck',
       amount: 450,
       description: 'Liability policy (POL-9981)',
       store: 'Progressive Commercial',
@@ -344,13 +367,13 @@ describe('mapFinancialDocDeduction (universal AI capture, owner decision 2026-07
     expect(mapFinancialDocDeduction(d, 'user-1')).toMatchObject({ category: 'Lease & Rent', amount: 800 });
   });
 
-  it('maps factoring_statement to the Factoring Fees category', () => {
+  it('maps factoring_statement to the Dispatch & Factoring Fees category (renamed 2026-07-10)', () => {
     const d: Extraction = {
       docType: 'factoring_statement',
       date: '2026-06-10',
       financialDoc: { kind: 'factoring_statement', description: 'Factoring fee', amount: 120, reference: 'INV-1,INV-2' },
     };
-    expect(mapFinancialDocDeduction(d, 'user-1')).toMatchObject({ category: 'Factoring Fees', amount: 120 });
+    expect(mapFinancialDocDeduction(d, 'user-1')).toMatchObject({ category: 'Dispatch & Factoring Fees', amount: 120 });
   });
 
   it('maps utility_subscription to the Utilities & Subscriptions category, with period appended', () => {
