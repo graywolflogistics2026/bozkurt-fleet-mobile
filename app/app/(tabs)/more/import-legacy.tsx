@@ -3,6 +3,8 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -23,11 +25,11 @@ function Row({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function EntityRow({ entity }: { entity: LegacyImportResult['entities'][number] }) {
+function EntityRow({ entity, t }: { entity: LegacyImportResult['entities'][number]; t: TFunction }) {
   const total = entity.inserted + entity.skipped + entity.failed;
   if (total === 0) return null;
-  const parts = [`${entity.inserted} new`, `${entity.skipped} already present`];
-  if (entity.failed > 0) parts.push(`${entity.failed} FAILED`);
+  const parts = [t('importLegacy.entityNew', { count: entity.inserted }), t('importLegacy.entityAlreadyPresent', { count: entity.skipped })];
+  if (entity.failed > 0) parts.push(t('importLegacy.entityFailed', { count: entity.failed }));
   return (
     <View style={{ marginBottom: spacing.sm }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -43,13 +45,16 @@ function EntityRow({ entity }: { entity: LegacyImportResult['entities'][number] 
         </Text>
       </View>
       {entity.failed > 0 && entity.firstError && (
-        <Text style={{ color: colors.red, fontSize: typography.size.xs, marginTop: 2 }}>First error: {entity.firstError}</Text>
+        <Text style={{ color: colors.red, fontSize: typography.size.xs, marginTop: 2 }}>
+          {t('importLegacy.firstError', { error: entity.firstError })}
+        </Text>
       )}
     </View>
   );
 }
 
 export default function ImportLegacyBackup() {
+  const { t } = useTranslation();
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>('pick');
@@ -68,13 +73,13 @@ export default function ImportLegacyBackup() {
     try {
       const text = await new File(asset.uri).text();
       const parsed = JSON.parse(text) as LegacyBackupPayload;
-      if (typeof parsed !== 'object' || parsed === null) throw new Error('Not a valid backup file.');
+      if (typeof parsed !== 'object' || parsed === null) throw new Error(t('importLegacy.notValidBackupFile'));
       setFileName(asset.name);
       setPayload(parsed);
       setPreview(buildImportPreview(parsed));
       setPhase('preview');
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not read that file.');
+      setErrorMessage(err instanceof Error ? err.message : t('importLegacy.couldNotReadFile'));
       setPhase('error');
     }
   }
@@ -92,7 +97,7 @@ export default function ImportLegacyBackup() {
       // than relying on the default active-observer-only refetch.
       await invalidateFinancialData(queryClient);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Import failed.');
+      setErrorMessage(err instanceof Error ? err.message : t('importLegacy.importFailed'));
       setPhase('error');
     }
   }
@@ -110,17 +115,12 @@ export default function ImportLegacyBackup() {
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <ScreenTitle>Import Legacy Backup</ScreenTitle>
+        <ScreenTitle>{t('importLegacy.title')}</ScreenTitle>
 
         {phase === 'pick' && (
           <Card>
-            <MutedText>
-              Pick the JSON backup file exported from the web app (Settings → Export Data). Settlements,
-              deductions, maintenance history, Truck Health, Capital Account, loans, cards, and bank/checking
-              statements will be imported. Safe to run more than once — matching records are updated in place, not
-              duplicated.
-            </MutedText>
-            <PrimaryButton title="Choose backup file" onPress={pickFile} />
+            <MutedText>{t('importLegacy.pickPrompt')}</MutedText>
+            <PrimaryButton title={t('importLegacy.chooseFile')} onPress={pickFile} />
           </Card>
         )}
 
@@ -129,32 +129,36 @@ export default function ImportLegacyBackup() {
             <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '700', marginBottom: spacing.sm }}>
               {fileName}
             </Text>
-            {preview.exportedAt && <MutedText>Exported {new Date(preview.exportedAt).toLocaleString()}</MutedText>}
+            {preview.exportedAt && (
+              <MutedText>{t('importLegacy.exportedAt', { date: new Date(preview.exportedAt).toLocaleString() })}</MutedText>
+            )}
             <View style={{ marginTop: spacing.md }}>
-              <Row label="Settlements" value={preview.settlements} />
+              <Row label={t('importLegacy.rows.settlements')} value={preview.settlements} />
               {preview.settlementsMissingWeekEnding > 0 && (
                 <MutedText>
-                  ⚠ {preview.settlementsMissingWeekEnding} of {preview.settlements} settlement(s) have no weekEnding — will use
-                  their document date instead.
+                  {t('importLegacy.missingWeekEnding', {
+                    missing: preview.settlementsMissingWeekEnding,
+                    total: preview.settlements,
+                  })}
                 </MutedText>
               )}
-              <Row label="Loads" value={preview.loads} />
-              <Row label="Fuel purchases" value={preview.fuelPurchases} />
-              <Row label="Deductions" value={preview.deductions} />
-              <Row label="Maintenance records" value={preview.maintenanceRecords} />
-              <Row label="Tolls" value={preview.tolls} />
-              <Row label="Reimbursements" value={preview.reimbursements} />
-              <Row label="Loans" value={preview.loans} />
-              <Row label="Credit cards" value={preview.creditCards} />
-              <Row label="Capital draws" value={preview.capitalDraws} />
-              <Row label="Capital contributions" value={preview.capitalContributions} />
-              <Row label="Bank (card) statements" value={preview.bankStatements} />
-              <Row label="Checking statements" value={preview.checkingStatements} />
-              {preview.hasHealthData && <MutedText>Truck Health data present — will be applied as baseline overrides.</MutedText>}
-              {preview.hasBizBalance && <MutedText>Business balance present — will update your profile.</MutedText>}
+              <Row label={t('importLegacy.rows.loads')} value={preview.loads} />
+              <Row label={t('importLegacy.rows.fuelPurchases')} value={preview.fuelPurchases} />
+              <Row label={t('importLegacy.rows.deductions')} value={preview.deductions} />
+              <Row label={t('importLegacy.rows.maintenanceRecords')} value={preview.maintenanceRecords} />
+              <Row label={t('importLegacy.rows.tolls')} value={preview.tolls} />
+              <Row label={t('importLegacy.rows.reimbursements')} value={preview.reimbursements} />
+              <Row label={t('importLegacy.rows.loans')} value={preview.loans} />
+              <Row label={t('importLegacy.rows.creditCards')} value={preview.creditCards} />
+              <Row label={t('importLegacy.rows.capitalDraws')} value={preview.capitalDraws} />
+              <Row label={t('importLegacy.rows.capitalContributions')} value={preview.capitalContributions} />
+              <Row label={t('importLegacy.rows.bankStatements')} value={preview.bankStatements} />
+              <Row label={t('importLegacy.rows.checkingStatements')} value={preview.checkingStatements} />
+              {preview.hasHealthData && <MutedText>{t('importLegacy.healthDataPresent')}</MutedText>}
+              {preview.hasBizBalance && <MutedText>{t('importLegacy.bizBalancePresent')}</MutedText>}
             </View>
-            <PrimaryButton title="Import this file" onPress={runImport} />
-            <SecondaryButton title="Choose a different file" onPress={reset} />
+            <PrimaryButton title={t('importLegacy.importThisFile')} onPress={runImport} />
+            <SecondaryButton title={t('importLegacy.chooseDifferentFile')} onPress={reset} />
           </Card>
         )}
 
@@ -162,7 +166,9 @@ export default function ImportLegacyBackup() {
           <Card>
             <ActivityIndicator color={colors.accent} size="large" />
             <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>
-              {progress ? `${progress.label} (${progress.index + 1}/${progress.total})` : 'Starting…'}
+              {progress
+                ? t('importLegacy.progress', { label: progress.label, index: progress.index + 1, total: progress.total })
+                : t('importLegacy.startingImport')}
             </Text>
           </Card>
         )}
@@ -180,7 +186,9 @@ export default function ImportLegacyBackup() {
                     marginBottom: spacing.sm,
                   }}
                 >
-                  {totalFailed > 0 ? `Import finished with ${totalFailed} failure(s)` : 'Import complete'}
+                  {totalFailed > 0
+                    ? t('importLegacy.importFinishedWithFailures', { count: totalFailed })
+                    : t('importLegacy.importComplete')}
                 </Text>
               );
             })()}
@@ -188,16 +196,16 @@ export default function ImportLegacyBackup() {
               {result.truckId
                 ? result.truckCreated
                   ? result.truckLabel
-                    ? `Created truck Unit ${result.truckLabel}.`
-                    : 'Created a truck profile (no unit number in this backup).'
+                    ? t('importLegacy.truckCreatedWithUnit', { unit: result.truckLabel })
+                    : t('importLegacy.truckCreatedNoUnit')
                   : result.truckLabel
-                    ? `Matched existing truck Unit ${result.truckLabel}.`
-                    : 'Matched your existing truck profile.'
-                : 'Truck profile could not be created — see warnings below.'}
+                    ? t('importLegacy.truckMatchedWithUnit', { unit: result.truckLabel })
+                    : t('importLegacy.truckMatchedNoUnit')
+                : t('importLegacy.truckFailed')}
             </MutedText>
             <View style={{ marginTop: spacing.md }}>
               {result.entities.map((e) => (
-                <EntityRow key={e.label} entity={e} />
+                <EntityRow key={e.label} entity={e} t={t} />
               ))}
             </View>
             {result.warnings.length > 0 && (
@@ -207,14 +215,14 @@ export default function ImportLegacyBackup() {
                 ))}
               </View>
             )}
-            <SecondaryButton title="Import another file" onPress={reset} />
+            <SecondaryButton title={t('importLegacy.importAnother')} onPress={reset} />
           </Card>
         )}
 
         {phase === 'error' && (
           <Card>
             <ErrorText>{errorMessage}</ErrorText>
-            <SecondaryButton title="Try again" onPress={reset} />
+            <SecondaryButton title={t('importLegacy.tryAgain')} onPress={reset} />
           </Card>
         )}
       </ScrollView>

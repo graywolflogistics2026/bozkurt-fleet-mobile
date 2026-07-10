@@ -6,6 +6,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { File } from 'expo-file-system';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { callAiImport, friendlyAiImportError, type AiImportError } from '@/src/data/aiImportCall';
@@ -16,7 +18,7 @@ import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/du
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
-import { DOC_TYPE_META } from '@/src/import/docTypes';
+import { useDocTypeMeta } from '@/src/import/docTypes';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText } from '@/src/components/ui';
@@ -31,30 +33,31 @@ function money(n: number | undefined | null) {
 
 type PreviewLine = { label: string; value: string; color?: string };
 
-function buildPreviewLines(d: Extraction): PreviewLine[] {
+function buildPreviewLines(d: Extraction, t: TFunction): PreviewLine[] {
   const lines: PreviewLine[] = [];
+  const p1 = 'importScreen.previewLabels';
   if (d.docType === 'settlement' && d.settlement) {
     const s = d.settlement;
-    lines.push({ label: 'Gross Revenue', value: money(s.grossRevenue), color: colors.green });
-    lines.push({ label: 'Net Pay', value: money(s.netPay), color: colors.accent });
-    lines.push({ label: 'Deductions', value: money(s.totalDeductions), color: colors.red });
-    lines.push({ label: 'Miles', value: `${(s.totalMiles ?? 0).toLocaleString()} mi` });
-    lines.push({ label: 'Loads', value: `${(s.loads ?? []).length} loads` });
+    lines.push({ label: t(`${p1}.grossRevenue`), value: money(s.grossRevenue), color: colors.green });
+    lines.push({ label: t(`${p1}.netPay`), value: money(s.netPay), color: colors.accent });
+    lines.push({ label: t(`${p1}.deductions`), value: money(s.totalDeductions), color: colors.red });
+    lines.push({ label: t(`${p1}.milesLabel`), value: t(`${p1}.miles`, { count: s.totalMiles ?? 0 }) });
+    lines.push({ label: t(`${p1}.loadsLabel`), value: t(`${p1}.loads`, { count: (s.loads ?? []).length }) });
     const tractorFuel = (s.tractorFuel ?? []).reduce((a, x) => a + (x.amount ?? 0), 0);
     const reeferFuel = (s.reeferFuel ?? []).reduce((a, x) => a + (x.amount ?? 0), 0);
-    if (tractorFuel) lines.push({ label: 'Tractor Fuel', value: money(tractorFuel), color: colors.red });
-    if (reeferFuel) lines.push({ label: 'Reefer Fuel', value: money(reeferFuel), color: colors.red });
+    if (tractorFuel) lines.push({ label: t(`${p1}.tractorFuel`), value: money(tractorFuel), color: colors.red });
+    if (reeferFuel) lines.push({ label: t(`${p1}.reeferFuel`), value: money(reeferFuel), color: colors.red });
     for (const x of (s.deductions ?? []).slice(0, 4)) {
       lines.push({ label: `${x.code ?? ''} ${x.desc ?? ''}`.trim(), value: money(x.amount), color: colors.red });
     }
   } else if (d.docType === 'fuel' && d.fuel) {
     const f = d.fuel;
-    lines.push({ label: 'Type', value: f.type ?? '—' });
-    lines.push({ label: 'Station', value: f.station ?? '—' });
-    lines.push({ label: 'Gallons', value: `${(f.gallons ?? 0).toFixed(1)} gal` });
-    lines.push({ label: 'Gross', value: money(f.gross), color: colors.red });
-    lines.push({ label: 'Discount', value: money(f.discount), color: colors.green });
-    lines.push({ label: 'Net', value: money(f.net), color: colors.red });
+    lines.push({ label: t(`${p1}.type`), value: f.type ?? '—' });
+    lines.push({ label: t(`${p1}.station`), value: f.station ?? '—' });
+    lines.push({ label: t(`${p1}.gallonsLabel`), value: t(`${p1}.gallons`, { count: Number((f.gallons ?? 0).toFixed(1)) }) });
+    lines.push({ label: t(`${p1}.gross`), value: money(f.gross), color: colors.red });
+    lines.push({ label: t(`${p1}.discount`), value: money(f.discount), color: colors.green });
+    lines.push({ label: t(`${p1}.net`), value: money(f.net), color: colors.red });
   } else if ((d.docType === 'amazon' || d.docType === 'store') && d.purchase) {
     const p = d.purchase;
     for (const item of p.items ?? []) {
@@ -62,28 +65,33 @@ function buildPreviewLines(d: Extraction): PreviewLine[] {
       const label = qty > 1 ? `${qty}× ${item.name ?? ''} (@${money(item.price)} each)` : item.name ?? '';
       lines.push({ label, value: money((item.price ?? 0) * qty), color: colors.accent });
     }
-    if (p.tax) lines.push({ label: 'Tax', value: money(p.tax), color: colors.red });
-    lines.push({ label: 'TOTAL', value: money(p.total ?? d.totalAmount), color: colors.green });
+    if (p.tax) lines.push({ label: t(`${p1}.tax`), value: money(p.tax), color: colors.red });
+    lines.push({ label: t(`${p1}.total`), value: money(p.total ?? d.totalAmount), color: colors.green });
     if (p.paymentMethod) {
       const personal = isPersonalPayment(p.paymentMethod);
       lines.push({
-        label: 'Payment Method',
-        value: p.paymentMethod + (personal ? ' (→ Capital Contribution)' : ''),
+        label: t(`${p1}.paymentMethod`),
+        value: personal ? t(`${p1}.paymentMethodContribution`, { method: p.paymentMethod }) : p.paymentMethod,
         color: personal ? colors.orange : colors.muted,
       });
     }
   } else if (d.docType === 'maintenance' && d.maintenance) {
     const m = d.maintenance;
-    lines.push({ label: 'Shop', value: m.shop ?? '—' });
-    lines.push({ label: 'Invoice', value: m.invoice ?? '—' });
-    lines.push({ label: 'Odometer', value: m.odometer ? `${m.odometer.toLocaleString()} mi` : '—' });
-    lines.push({ label: 'Total', value: money(m.total), color: colors.red });
-    if (m.warrantyCredit) lines.push({ label: 'Warranty Credit', value: money(m.warrantyCredit), color: colors.green });
+    lines.push({ label: t(`${p1}.shop`), value: m.shop ?? '—' });
+    lines.push({ label: t(`${p1}.invoice`), value: m.invoice ?? '—' });
+    lines.push({
+      label: t(`${p1}.odometerLabel`),
+      value: m.odometer ? t(`${p1}.odometer`, { count: m.odometer }) : '—',
+    });
+    lines.push({ label: t(`${p1}.totalCost`), value: money(m.total), color: colors.red });
+    if (m.warrantyCredit) lines.push({ label: t(`${p1}.warrantyCredit`), value: money(m.warrantyCredit), color: colors.green });
   }
   return lines;
 }
 
 export default function Import() {
+  const { t } = useTranslation();
+  const docTypeMeta = useDocTypeMeta();
   const router = useRouter();
   const { session } = useAuth();
   const { trucks } = useActiveTruck();
@@ -137,21 +145,21 @@ export default function Import() {
 
   async function processImage(uri: string) {
     setPhase('working');
-    setWorkingLabel('Compressing photo…');
+    setWorkingLabel(t('importScreen.compressingPhoto'));
     try {
       const compressed = await manipulateAsync(uri, [{ resize: { width: 1600 } }], {
         compress: 0.8,
         format: SaveFormat.JPEG,
       });
       setFileMeta({ uri: compressed.uri, ext: 'jpg', mediaType: 'image/jpeg' });
-      setWorkingLabel('Reading document…');
+      setWorkingLabel(t('importScreen.readingDocument'));
       const base64 = await new File(compressed.uri).base64();
-      setWorkingLabel('AI processing…');
+      setWorkingLabel(t('importScreen.aiProcessing'));
       const { data, error } = await callAiImport(base64, 'image/jpeg');
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, undefined);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not process that photo.');
+      setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessPhoto'));
       setPhase('error');
     }
   }
@@ -167,16 +175,16 @@ export default function Import() {
     if (picked.canceled || !picked.assets?.[0]) return;
     const asset = picked.assets[0];
     setPhase('working');
-    setWorkingLabel('Reading document…');
+    setWorkingLabel(t('importScreen.readingDocument'));
     try {
       setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
       const base64 = await new File(asset.uri).base64();
-      setWorkingLabel('AI processing…');
+      setWorkingLabel(t('importScreen.aiProcessing'));
       const { data, error } = await callAiImport(base64, 'application/pdf');
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, asset.name);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not process that file.');
+      setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
       setPhase('error');
     }
   }
@@ -206,25 +214,25 @@ export default function Import() {
       await invalidateFinancialData(queryClient);
       buildAndUploadBackupSnapshot(userId); // fire-and-forget
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Save failed.');
+      setErrorMessage(err instanceof Error ? err.message : t('importScreen.saveFailed'));
       setPhase('error');
     }
   }
 
   const hasDuplicate = !!duplicates && (duplicates.byContent.length > 0 || duplicates.byFilename.length > 0);
-  const meta = extraction ? DOC_TYPE_META[extraction.docType] : null;
+  const meta = extraction ? docTypeMeta(extraction.docType) : null;
 
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <ScreenTitle>Import</ScreenTitle>
+        <ScreenTitle>{t('importScreen.title')}</ScreenTitle>
 
         {phase === 'pick' && (
           <Card>
-            <MutedText>Photograph or upload a settlement, receipt, fuel ticket, or maintenance invoice.</MutedText>
-            <PrimaryButton title="📷 Take Photo" onPress={() => router.push('/(tabs)/import/camera')} />
-            <SecondaryButton title="🖼️ Choose from Gallery" onPress={pickFromGallery} />
-            <SecondaryButton title="📄 Choose PDF" onPress={pickPdf} />
+            <MutedText>{t('importScreen.pickPrompt')}</MutedText>
+            <PrimaryButton title={t('importScreen.takePhoto')} onPress={() => router.push('/(tabs)/import/camera')} />
+            <SecondaryButton title={t('importScreen.chooseFromGallery')} onPress={pickFromGallery} />
+            <SecondaryButton title={t('importScreen.choosePdf')} onPress={pickPdf} />
           </Card>
         )}
 
@@ -238,34 +246,42 @@ export default function Import() {
         {phase === 'preview' && extraction && meta && (
           <Card>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
-              <Text style={{ fontSize: 28, marginRight: spacing.sm }}>{meta.icon}</Text>
+              <Text style={{ fontSize: 28, marginEnd: spacing.sm }}>{meta.icon}</Text>
               <View>
                 <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.lg }}>{meta.label}</Text>
-                <MutedText>→ {meta.route}</MutedText>
+                <MutedText>{t('importScreen.goesTo', { route: meta.route })}</MutedText>
               </View>
             </View>
 
             {hasDuplicate && (
               <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>⚠️ Possible duplicate</Text>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.possibleDuplicateTitle')}</Text>
                 {duplicates!.byContent.length > 0 && (
                   <MutedText>
-                    A {meta?.label ?? 'document'} dated {extraction.date} for {money(extraction.totalAmount)} was already saved.
+                    {t('importScreen.duplicateByContent', {
+                      label: meta?.label ?? t('docTypes.other.label'),
+                      date: extraction.date,
+                      amount: money(extraction.totalAmount),
+                    })}
                   </MutedText>
                 )}
-                {duplicates!.byFilename.length > 0 && <MutedText>A file with this name was already imported before.</MutedText>}
+                {duplicates!.byFilename.length > 0 && <MutedText>{t('importScreen.duplicateByFilename')}</MutedText>}
               </View>
             )}
 
             <View style={{ marginBottom: spacing.sm }}>
-              <MutedText>Date: {extraction.date ?? '—'}</MutedText>
-              <MutedText>Vendor: {extraction.vendor ?? '—'}</MutedText>
-              <MutedText>Amount: {money(extraction.totalAmount)}</MutedText>
-              <MutedText>Deductible: {extraction.taxDeductible ? '✅ Yes' : '❌ No'}</MutedText>
+              <MutedText>{t('importScreen.dateLabel', { date: extraction.date ?? '—' })}</MutedText>
+              <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
+              <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount) })}</MutedText>
+              <MutedText>
+                {t('importScreen.deductibleLabel', {
+                  value: extraction.taxDeductible ? t('importScreen.deductibleYes') : t('importScreen.deductibleNo'),
+                })}
+              </MutedText>
               {extraction.summary ? <MutedText>{extraction.summary}</MutedText> : null}
             </View>
 
-            {buildPreviewLines(extraction).map((line, i) => (
+            {buildPreviewLines(extraction, t).map((line, i) => (
               <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                 <MutedText>{line.label}</MutedText>
                 <Text style={{ color: line.color ?? colors.text, fontWeight: '600' }}>{line.value}</Text>
@@ -275,23 +291,25 @@ export default function Import() {
             {needsTruckPicker && (
               <View style={{ marginTop: spacing.md }}>
                 <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
-                  Which truck is this for?
+                  {t('importScreen.whichTruck')}
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-                  {trucks.map((t) => (
+                  {trucks.map((truck) => (
                     <Pressable
-                      key={t.id}
-                      onPress={() => setTruckId(t.id)}
+                      key={truck.id}
+                      onPress={() => setTruckId(truck.id)}
                       style={{
                         paddingVertical: 8,
                         paddingHorizontal: 14,
                         borderRadius: radii.sm,
                         borderWidth: 1,
-                        borderColor: truckId === t.id ? colors.accent : colors.border,
-                        backgroundColor: truckId === t.id ? colors.accent : colors.card2,
+                        borderColor: truckId === truck.id ? colors.accent : colors.border,
+                        backgroundColor: truckId === truck.id ? colors.accent : colors.card2,
                       }}
                     >
-                      <Text style={{ color: colors.text, fontWeight: '600' }}>Unit {t.unit_number ?? t.id}</Text>
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>
+                        {t('common.unit', { unit: truck.unit_number ?? truck.id })}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -299,41 +317,43 @@ export default function Import() {
             )}
 
             <PrimaryButton
-              title={hasDuplicate ? 'Save Anyway' : 'Save'}
+              title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
               onPress={handleSave}
               disabled={needsTruckPicker && !truckId}
             />
-            <SecondaryButton title="Discard" onPress={reset} />
+            <SecondaryButton title={t('importScreen.discard')} onPress={reset} />
           </Card>
         )}
 
         {phase === 'saving' && (
           <Card>
             <ActivityIndicator color={colors.accent} size="large" />
-            <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>Saving…</Text>
+            <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{t('importScreen.saving')}</Text>
           </Card>
         )}
 
         {phase === 'done' && result && extraction && (
           <Card>
             <Text style={{ color: colors.green, fontWeight: '700', fontSize: typography.size.lg, marginBottom: spacing.sm }}>
-              ✅ Saved
+              {t('importScreen.saved')}
             </Text>
-            {result.netPayAdded != null && <MutedText>💰 Balance +{money(result.netPayAdded)}</MutedText>}
+            {result.netPayAdded != null && (
+              <MutedText>{t('importScreen.balanceAdded', { amount: money(result.netPayAdded) })}</MutedText>
+            )}
             {result.contributionTotal > 0 && (
               <MutedText>
-                💰 Added as a Capital Account contribution: {money(result.contributionTotal)} (paid from personal funds)
+                {t('importScreen.contributionAdded', { amount: money(result.contributionTotal) })}
               </MutedText>
             )}
-            {result.storagePath && <MutedText>📁 Saved to {result.storagePath}</MutedText>}
-            <SecondaryButton title="Import Another" onPress={reset} />
+            {result.storagePath && <MutedText>{t('importScreen.savedToPath', { path: result.storagePath })}</MutedText>}
+            <SecondaryButton title={t('importScreen.importAnother')} onPress={reset} />
           </Card>
         )}
 
         {phase === 'error' && (
           <Card>
             <ErrorText>{errorMessage}</ErrorText>
-            <SecondaryButton title="Try Again" onPress={reset} />
+            <SecondaryButton title={t('importScreen.tryAgain')} onPress={reset} />
           </Card>
         )}
       </ScrollView>

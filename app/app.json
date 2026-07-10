@@ -46,7 +46,8 @@
         {
           "photosPermission": "Bozkurt Fleet OS accesses your photo library so you can import a saved photo of a settlement, receipt, or invoice."
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true

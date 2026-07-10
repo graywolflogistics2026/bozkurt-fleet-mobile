@@ -1,5 +1,6 @@
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { ActivityIndicator, I18nManager, Modal, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 export function Screen({ children }: { children: React.ReactNode }) {
@@ -29,7 +30,7 @@ export function TappableCard({ onPress, children }: { onPress: () => void; child
       style={({ pressed }) => [styles.card, styles.tappableCard, pressed && styles.buttonPressed]}
     >
       <View style={{ flex: 1 }}>{children}</View>
-      <Text style={styles.chevron}>›</Text>
+      <Text style={styles.chevron}>{I18nManager.isRTL ? '‹' : '›'}</Text>
     </Pressable>
   );
 }
@@ -39,11 +40,8 @@ export function MutedText({ children }: { children: React.ReactNode }) {
 }
 
 export function LegalFootnote({ children }: { children?: React.ReactNode }) {
-  return (
-    <Text style={styles.footnote}>
-      {children ?? 'Estimates only — not tax advice. Verify with your CPA.'}
-    </Text>
-  );
+  const { t } = useTranslation();
+  return <Text style={styles.footnote}>{children ?? t('common.legalFootnote')}</Text>;
 }
 
 export function Field({ style, ...props }: TextInputProps) {
@@ -157,7 +155,7 @@ const styles = StyleSheet.create({
   chevron: {
     color: colors.muted,
     fontSize: 22,
-    marginLeft: spacing.sm,
+    marginStart: spacing.sm,
     fontWeight: '300',
   },
   muted: {

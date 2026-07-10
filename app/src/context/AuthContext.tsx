@@ -3,6 +3,9 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
 import { TOS_VERSION } from '@/src/config/termsOfUse';
 import { withTimeout } from '@/src/lib/withTimeout';
+import { isSupportedLocale } from '@/src/i18n/config';
+import { setAppLocale } from '@/src/i18n';
+import { applyLocaleDirection } from '@/src/i18n/rtl';
 
 const STARTUP_TIMEOUT_MS = 8000;
 
@@ -10,6 +13,7 @@ type Profile = {
   user_id: string;
   company_name: string | null;
   owner_name: string | null;
+  locale: string | null;
   tos_accepted_at: string | null;
   tos_version: string | null;
 };
@@ -37,13 +41,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await withTimeout(
       supabase
         .from('profiles')
-        .select('user_id, company_name, owner_name, tos_accepted_at, tos_version')
+        .select('user_id, company_name, owner_name, locale, tos_accepted_at, tos_version')
         .eq('user_id', userId)
         .maybeSingle(),
       STARTUP_TIMEOUT_MS,
       'fetchProfile'
     );
     setProfile(result?.data ?? null);
+    // Cross-device sync (owner decision 2026-07-09): a manual language choice
+    // in Settings is written to profiles.locale, and always wins over this
+    // device's own cache/OS language on every subsequent sign-in.
+    const remoteLocale = result?.data?.locale;
+    if (isSupportedLocale(remoteLocale)) {
+      await setAppLocale(remoteLocale);
+      applyLocaleDirection(remoteLocale);
+    }
   }
 
   useEffect(() => {

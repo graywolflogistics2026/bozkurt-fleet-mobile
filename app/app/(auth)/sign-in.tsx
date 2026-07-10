@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Text } from 'react-native';
 import { Link } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { Screen, ScreenTitle, Field, PrimaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
 
 export default function SignIn() {
+  const { t } = useTranslation();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,10 +24,10 @@ export default function SignIn() {
 
   return (
     <Screen>
-      <ScreenTitle>Bozkurt Fleet OS</ScreenTitle>
-      <MutedText>Sign in to continue</MutedText>
+      <ScreenTitle>{t('auth.brand')}</ScreenTitle>
+      <MutedText>{t('auth.signInSubtitle')}</MutedText>
       <Field
-        placeholder="Email"
+        placeholder={t('auth.emailPlaceholder')}
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
@@ -34,17 +36,17 @@ export default function SignIn() {
         style={{ marginTop: 16 }}
       />
       <Field
-        placeholder="Password"
+        placeholder={t('auth.passwordPlaceholder')}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
         autoComplete="password"
       />
       <ErrorText>{error}</ErrorText>
-      <PrimaryButton title="Sign In" onPress={onSubmit} loading={loading} disabled={!email || !password} />
+      <PrimaryButton title={t('auth.signIn')} onPress={onSubmit} loading={loading} disabled={!email || !password} />
       <Link href="/(auth)/sign-up" asChild>
         <Text style={{ color: colors.accent, marginTop: 16, textAlign: 'center' }}>
-          Don't have an account? Sign up
+          {t('auth.noAccount')}
         </Text>
       </Link>
     </Screen>

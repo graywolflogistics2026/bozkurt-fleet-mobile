@@ -2,11 +2,13 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useTranslation } from 'react-i18next';
 import { setPendingCapture } from '@/src/import/pendingCapture';
 import { PrimaryButton, SecondaryButton, Screen, MutedText } from '@/src/components/ui';
 import { colors, spacing } from '@/src/theme';
 
 export default function TakePhoto() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [capturing, setCapturing] = useState(false);
@@ -29,7 +31,7 @@ export default function TakePhoto() {
   if (!permission) {
     return (
       <Screen>
-        <MutedText>Loading…</MutedText>
+        <MutedText>{t('common.loading')}</MutedText>
       </Screen>
     );
   }
@@ -37,9 +39,9 @@ export default function TakePhoto() {
   if (!permission.granted) {
     return (
       <Screen>
-        <MutedText>Camera access is needed to photograph receipts and settlement PDFs.</MutedText>
-        <PrimaryButton title="Grant Camera Access" onPress={requestPermission} />
-        <SecondaryButton title="Cancel" onPress={() => router.back()} />
+        <MutedText>{t('camera.permissionNote')}</MutedText>
+        <PrimaryButton title={t('camera.grantAccess')} onPress={requestPermission} />
+        <SecondaryButton title={t('camera.cancel')} onPress={() => router.back()} />
       </Screen>
     );
   }
@@ -49,7 +51,7 @@ export default function TakePhoto() {
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
       <View style={styles.controls}>
         <Pressable onPress={() => router.back()} style={styles.cancelButton}>
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('camera.cancel')}</Text>
         </Pressable>
         <Pressable
           onPress={capture}
@@ -69,8 +71,8 @@ const styles = StyleSheet.create({
   controls: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    start: 0,
+    end: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

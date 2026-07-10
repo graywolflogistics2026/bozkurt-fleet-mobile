@@ -467,6 +467,43 @@ Intelligence items (Cash Flow, Loan Center, Credit Cards, Bank Statement)
 — and **9b (intelligence + tools + settings)** — Scorecard (analytics, not
 a ledger), the Tools group, and Settings.
 
+## Multi-language support (owner decision 2026-07-09, PRODUCT DECISION — binding)
+
+```
+Target languages: English (default), Spanish, Russian, Arabic, Turkish.
+Infrastructure landed this session: i18next + react-i18next +
+expo-localization, app/src/i18n/{index.ts,config.ts,rtl.ts,localeStorage.ts}
++ locales/{en,es,ru,ar,tr}.json (en.json is the source of truth — every
+new key goes there first). Every currently-implemented screen was migrated
+off hardcoded strings onto useTranslation()'s t() (or i18n.t() outside a
+component, e.g. confirmOwnerContribution.ts). FROM THIS POINT ON, NO new
+screen/component may ship with a hardcoded user-facing string — add the
+key to all 5 locale files (parity-checked; see the check script pattern
+used this session) in the same PR that introduces the string.
+
+First-launch rule: device OS language wins when it's one of the 5
+supported (Arabic → RTL layout), else English. A manual override in
+Settings > Language is cached locally AND written to profiles.locale
+(docs/PENDING_SQL.md §12), and always wins afterwards, on every device.
+
+RTL: use marginStart/marginEnd/start/end, never marginLeft/marginRight or
+absolute left/right (I18nManager doesn't auto-flip those logical-unaware
+properties). I18nManager.forceRTL() only takes effect after a native
+reload — switching to/from Arabic shows a "restart required" prompt.
+
+RTL SMOKE-CHECK (binding, every session from Session 8 onward): before
+marking a session's UI work done, switch the simulator/device to Arabic
+in Settings, restart, and confirm the new screen(s) render with no
+clipped/overlapping/mis-mirrored layout. Record any RTL bug found and fix
+it in the same session — don't defer to a later cleanup pass.
+
+What does NOT get translated: user data (deduction descriptions, store
+names, notes), AI-extracted content, the payment-method/category enum
+pill labels (English on purpose — CLAUDE.md invariant #2 regex-matches
+their exact text), and legal documents (ToS stays English-only until
+attorney review).
+```
+
 ## Session 7 — Deductions + Capital Account
 
 ```
@@ -714,6 +751,12 @@ triggers automatically on version bump, per Session 3).
       set, business balance $0, no truck until onboarding creates one, no
       pre-filled AI Advisor context beyond neutral "the owner-operator"/
       "this fleet" labels.
+- [ ] **Full RTL pass (owner, 2026-07-09 — binding, blocks store
+      submission):** switch to Arabic in Settings, restart, and walk every
+      screen in the app (not just the ones touched this session) checking
+      for clipped/overlapping/mis-mirrored layout. Also spot-check Spanish,
+      Russian, and Turkish for text overflow/truncation on the longest
+      translated strings (German-length problem, but for these 4).
 ```
 
 ---

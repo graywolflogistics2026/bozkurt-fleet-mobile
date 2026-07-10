@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { colors } from '@/src/theme';
 
 export default function ImportLayout() {
+  const { t } = useTranslation();
   return (
     <Stack
       screenOptions={{
@@ -11,8 +13,8 @@ export default function ImportLayout() {
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Import', headerShown: false }} />
-      <Stack.Screen name="camera" options={{ title: 'Take Photo', presentation: 'modal' }} />
+      <Stack.Screen name="index" options={{ title: t('nav.import'), headerShown: false }} />
+      <Stack.Screen name="camera" options={{ title: t('nav.takePhoto'), presentation: 'modal' }} />
     </Stack>
   );
 }

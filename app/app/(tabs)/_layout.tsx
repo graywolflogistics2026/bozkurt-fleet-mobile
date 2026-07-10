@@ -1,5 +1,6 @@
 import { Text, type ColorValue } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { TruckSwitcher } from '@/src/components/TruckSwitcher';
 import { CenterImportButton } from '@/src/components/CenterImportButton';
 import { colors } from '@/src/theme';
@@ -12,6 +13,7 @@ function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
 // [+ Import] (raised center button — importing is the most frequent
 // action) · Truck Health · More. See PROMPTS.md Sessions 5/9.
 export default function TabsLayout() {
+  const { t } = useTranslation();
   return (
     <Tabs
       screenOptions={{
@@ -25,27 +27,27 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Dashboard', tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} /> }}
+        options={{ title: t('nav.dashboard'), tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} /> }}
       />
       <Tabs.Screen
         name="deductions"
-        options={{ title: 'Deductions', tabBarIcon: ({ color }) => <TabIcon emoji="🧾" color={color} /> }}
+        options={{ title: t('nav.deductions'), tabBarIcon: ({ color }) => <TabIcon emoji="🧾" color={color} /> }}
       />
       <Tabs.Screen
         name="import"
         options={{
-          title: 'Import',
+          title: t('nav.import'),
           tabBarButton: (props) => <CenterImportButton {...props} />,
         }}
       />
       <Tabs.Screen
         name="truck-health"
-        options={{ title: 'Truck Health', tabBarIcon: ({ color }) => <TabIcon emoji="🚛" color={color} /> }}
+        options={{ title: t('nav.truckHealth'), tabBarIcon: ({ color }) => <TabIcon emoji="🚛" color={color} /> }}
       />
       <Tabs.Screen
         name="more"
         options={{
-          title: 'More',
+          title: t('nav.more'),
           headerShown: false, // more/_layout.tsx renders its own Stack header
           tabBarIcon: ({ color }) => <TabIcon emoji="☰" color={color} />,
         }}

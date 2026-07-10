@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCapitalAccountSummary, useUpdateBusinessBalance } from '@/src/data/capitalAccount';
 import { useCapitalTransactions, useInsertCapitalTransaction, useDeleteCapitalTransaction } from '@/src/data/capitalTransactions';
@@ -67,6 +68,7 @@ function HistoryRow({
 }
 
 export default function CapitalAccount() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user.id;
@@ -90,8 +92,7 @@ export default function CapitalAccount() {
 
   const summary = summaryQuery.data;
   const isScorp = taxConfigQuery.data?.entity_type === 'scorp';
-  const drawsLabel = isScorp ? 'Distributions' : 'Draws';
-  const drawSingular = isScorp ? 'distribution' : 'draw';
+  const drawsLabel = isScorp ? t('capitalAccount.distributions') : t('capitalAccount.draws');
 
   const rows = txQuery.data ?? [];
   const history = useMemo(
@@ -116,28 +117,33 @@ export default function CapitalAccount() {
       setDrawAmount('');
       setDrawNote('');
     } catch (err) {
-      Alert.alert('Save failed', err instanceof Error ? err.message : 'Please try again.');
+      Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
     } finally {
       setSavingDraw(false);
     }
   }
 
   function handleDeleteDraw(id: string) {
-    Alert.alert(`Delete this ${drawSingular}?`, 'Made a typo? This is how to fix it.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteTx.mutateAsync(id);
-            await invalidateFinancialData(queryClient);
-          } catch (err) {
-            Alert.alert('Delete failed', err instanceof Error ? err.message : 'Please try again.');
-          }
+    const drawSingular = isScorp ? t('capitalAccount.distributionSingular') : t('capitalAccount.drawSingular');
+    Alert.alert(
+      t('capitalAccount.deleteDrawConfirmTitle', { label: drawSingular }),
+      t('capitalAccount.deleteDrawConfirmBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTx.mutateAsync(id);
+              await invalidateFinancialData(queryClient);
+            } catch (err) {
+              Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   }
 
   async function handleUpdateBalance() {
@@ -150,7 +156,7 @@ export default function CapitalAccount() {
       setBalanceModalOpen(false);
       setBalanceInput('');
     } catch (err) {
-      Alert.alert('Save failed', err instanceof Error ? err.message : 'Please try again.');
+      Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
     } finally {
       setSavingBalance(false);
     }
@@ -159,12 +165,12 @@ export default function CapitalAccount() {
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <ScreenTitle>Capital Account</ScreenTitle>
+        <ScreenTitle>{t('capitalAccount.title')}</ScreenTitle>
 
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View>
-              <MutedText>Contributed</MutedText>
+              <MutedText>{t('capitalAccount.contributed')}</MutedText>
               <Text style={styles.statValue}>{summary ? money(summary.effectiveContribution) : '—'}</Text>
             </View>
             <View>
@@ -172,7 +178,7 @@ export default function CapitalAccount() {
               <Text style={styles.statValue}>{summary ? money(summary.totalDraws) : '—'}</Text>
             </View>
             <View>
-              <MutedText>Tax-Free Left</MutedText>
+              <MutedText>{t('capitalAccount.taxFreeLeft')}</MutedText>
               <Text
                 style={[
                   styles.statValue,
@@ -189,22 +195,22 @@ export default function CapitalAccount() {
         </Card>
 
         <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-          <MutedText>Business Balance</MutedText>
+          <MutedText>{t('capitalAccount.businessBalance')}</MutedText>
           <Text style={styles.statValue}>{money(summary?.businessBalance ?? 0)}</Text>
         </TappableCard>
 
         <SecondaryButton
-          title={`➖ Record ${isScorp ? 'Distribution' : 'Draw'}`}
+          title={isScorp ? t('capitalAccount.recordDistribution') : t('capitalAccount.recordDraw')}
           onPress={() => setDrawModalOpen(true)}
         />
-        <SecondaryButton title="🏦 Update Business Balance" onPress={() => setBalanceModalOpen(true)} />
+        <SecondaryButton title={t('capitalAccount.updateBusinessBalance')} onPress={() => setBalanceModalOpen(true)} />
 
         <View style={{ marginTop: spacing.lg, marginBottom: spacing.xs }}>
-          <Text style={styles.sectionTitle}>History</Text>
+          <Text style={styles.sectionTitle}>{t('capitalAccount.historyTitle')}</Text>
         </View>
         <Card>
           {history.length === 0 ? (
-            <MutedText>No {drawsLabel.toLowerCase()} or contributions yet</MutedText>
+            <MutedText>{t('capitalAccount.historyEmpty', { label: drawsLabel })}</MutedText>
           ) : (
             history.map((tx, i) => (
               <View key={tx.id} style={i > 0 ? styles.rowBorder : undefined}>
@@ -218,29 +224,26 @@ export default function CapitalAccount() {
           )}
         </Card>
         {summary && summary.contributionCount > 0 && (
-          <MutedText>
-            🔗 Contributions are linked to a source deduction — tap one, or edit its payment method on the
-            Deductions tab, to change it.
-          </MutedText>
+          <MutedText>{t('capitalAccount.linkedNote')}</MutedText>
         )}
       </ScrollView>
 
       <ModalSheet visible={drawModalOpen} onClose={() => setDrawModalOpen(false)}>
-        <SheetTitle>➖ Record {isScorp ? 'Distribution' : 'Draw'}</SheetTitle>
-        <MutedText>Amount ($)</MutedText>
+        <SheetTitle>{isScorp ? t('capitalAccount.recordDistributionSheetTitle') : t('capitalAccount.recordDrawSheetTitle')}</SheetTitle>
+        <MutedText>{t('capitalAccount.amountLabel')}</MutedText>
         <Field keyboardType="numeric" value={drawAmount} onChangeText={setDrawAmount} placeholder="0.00" />
-        <MutedText>Note (optional)</MutedText>
-        <Field value={drawNote} onChangeText={setDrawNote} placeholder="e.g. Personal transfer" />
-        <PrimaryButton title="💾 Save" onPress={handleRecordDraw} loading={savingDraw} disabled={!drawAmount} />
-        <SecondaryButton title="Cancel" onPress={() => setDrawModalOpen(false)} />
+        <MutedText>{t('capitalAccount.noteLabel')}</MutedText>
+        <Field value={drawNote} onChangeText={setDrawNote} placeholder={t('capitalAccount.notePlaceholder')} />
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleRecordDraw} loading={savingDraw} disabled={!drawAmount} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setDrawModalOpen(false)} />
       </ModalSheet>
 
       <ModalSheet visible={balanceModalOpen} onClose={() => setBalanceModalOpen(false)}>
-        <SheetTitle>🏦 Update Business Balance</SheetTitle>
-        <MutedText>Current business checking account balance ($)</MutedText>
+        <SheetTitle>{t('capitalAccount.updateBalanceSheetTitle')}</SheetTitle>
+        <MutedText>{t('capitalAccount.updateBalanceLabel')}</MutedText>
         <Field keyboardType="numeric" value={balanceInput} onChangeText={setBalanceInput} placeholder="0.00" />
-        <PrimaryButton title="💾 Save" onPress={handleUpdateBalance} loading={savingBalance} disabled={!balanceInput} />
-        <SecondaryButton title="Cancel" onPress={() => setBalanceModalOpen(false)} />
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleUpdateBalance} loading={savingBalance} disabled={!balanceInput} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setBalanceModalOpen(false)} />
       </ModalSheet>
     </Screen>
   );

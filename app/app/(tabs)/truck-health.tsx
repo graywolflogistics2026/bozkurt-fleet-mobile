@@ -1,10 +1,7 @@
+import { useTranslation } from 'react-i18next';
 import { PlaceholderScreen } from '@/src/components/Placeholder';
 
 export default function TruckHealth() {
-  return (
-    <PlaceholderScreen
-      title="Truck Health"
-      note="Per-truck, user-editable maintenance intervals and remaining-life tracking land in a later session."
-    />
-  );
+  const { t } = useTranslation();
+  return <PlaceholderScreen title={t('placeholders.truckHealth.title')} note={t('placeholders.truckHealth.note')} />;
 }

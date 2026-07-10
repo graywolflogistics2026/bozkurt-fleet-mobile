@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useDeductions, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
 import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
@@ -29,7 +30,7 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
         borderWidth: 1,
         borderColor: selected ? colors.accent : colors.border,
         backgroundColor: selected ? colors.accent : colors.card2,
-        marginRight: spacing.xs,
+        marginEnd: spacing.xs,
         marginBottom: spacing.xs,
       }}
     >
@@ -39,6 +40,7 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 }
 
 function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; onDelete: () => void }) {
+  const { t } = useTranslation();
   const personal = isPersonalPayment(x.payment_method);
   return (
     <Pressable onPress={onPress} style={styles.row}>
@@ -52,7 +54,7 @@ function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; o
         </MutedText>
         <Text style={{ color: personal ? colors.orange : colors.muted, fontSize: typography.size.xs, marginTop: 2 }}>
           {x.payment_method ?? '—'}
-          {personal ? ' 💰 → Capital Contribution' : ''}
+          {personal ? ` ${t('deductions.personalContributionTag')}` : ''}
         </Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
@@ -82,6 +84,7 @@ function DedSection({
   onEdit: (x: Deduction) => void;
   onDelete: (x: Deduction) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <View style={{ marginBottom: spacing.xs }}>
@@ -99,7 +102,7 @@ function DedSection({
               </View>
             ))}
             <View style={[styles.row, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalLabel}>{t('deductions.total')}</Text>
               <Text style={styles.totalAmount}>{money(total)}</Text>
             </View>
           </>
@@ -110,6 +113,7 @@ function DedSection({
 }
 
 export default function Deductions() {
+  const { t } = useTranslation();
   const { session } = useAuth();
   const userId = session?.user.id;
   const dedQuery = useDeductions();
@@ -181,17 +185,17 @@ export default function Deductions() {
       await invalidateFinancialData(queryClient);
       setEditing(null);
     } catch (err) {
-      Alert.alert('Save failed', err instanceof Error ? err.message : 'Please try again.');
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
       setSaving(false);
     }
   }
 
   function handleDelete(x: Deduction) {
-    Alert.alert('Delete this deduction?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deductions.deleteConfirmTitle'), undefined, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           try {
@@ -202,7 +206,7 @@ export default function Deductions() {
             if (x.document_id) await cleanupOrphanedDocument(x.document_id);
             await invalidateFinancialData(queryClient);
           } catch (err) {
-            Alert.alert('Delete failed', err instanceof Error ? err.message : 'Please try again.');
+            Alert.alert(t('deductions.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
           }
         },
       },
@@ -215,29 +219,29 @@ export default function Deductions() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
-        <ScreenTitle>Deductions</ScreenTitle>
+        <ScreenTitle>{t('deductions.title')}</ScreenTitle>
 
         {dedQuery.isLoading ? (
           <Card>
-            <MutedText>Loading…</MutedText>
+            <MutedText>{t('common.loading')}</MutedText>
           </Card>
         ) : (
           <>
             <DedSection
-              title="💳 Out-of-Pocket"
-              subtitle="Tax deductible — paid by you (business card, personal card, cash)"
+              title={t('deductions.outOfPocketTitle')}
+              subtitle={t('deductions.outOfPocketSubtitle')}
               rows={outOfPocket}
               total={outOfPocketTotal}
-              emptyLabel="None yet — import a receipt or invoice."
+              emptyLabel={t('deductions.outOfPocketEmpty')}
               onEdit={openEdit}
               onDelete={handleDelete}
             />
             <DedSection
-              title="🏦 Withheld from Settlement"
-              subtitle="Already reflected in net pay, NOT re-deducted (ELD, insurance, truck payment)"
+              title={t('deductions.withheldTitle')}
+              subtitle={t('deductions.withheldSubtitle')}
               rows={withheld}
               total={withheldTotal}
-              emptyLabel="None yet — import a settlement PDF."
+              emptyLabel={t('deductions.withheldEmpty')}
               onEdit={openEdit}
               onDelete={handleDelete}
             />
@@ -246,7 +250,7 @@ export default function Deductions() {
       </ScrollView>
 
       <ModalSheet visible={!!editing} onClose={closeEdit}>
-        <SheetTitle>✏️ Edit Deduction</SheetTitle>
+        <SheetTitle>{t('deductions.editTitle')}</SheetTitle>
         {editing && (
           <MutedText>
             {(editing.description ?? 'Deduction').split(' — ')[0]} — {money(editing.amount)}
@@ -254,7 +258,7 @@ export default function Deductions() {
         )}
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
-          <MutedText>Category</MutedText>
+          <MutedText>{t('deductions.categoryLabel')}</MutedText>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {DED_CATEGORIES.map((c) => (
@@ -263,12 +267,12 @@ export default function Deductions() {
         </View>
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
-          <MutedText>Amount ($)</MutedText>
+          <MutedText>{t('deductions.amountLabel')}</MutedText>
         </View>
         <Field keyboardType="numeric" value={editAmount} onChangeText={setEditAmount} placeholder="0.00" />
 
         <View style={{ marginBottom: spacing.xs }}>
-          <MutedText>Payment Method</MutedText>
+          <MutedText>{t('deductions.paymentMethodLabel')}</MutedText>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {PAYMENT_METHODS.map((p) => (
@@ -286,14 +290,13 @@ export default function Deductions() {
             }}
           >
             <Text style={{ color: colors.orange, fontSize: typography.size.xs }}>
-              💰 A personal payment method means this was paid with the owner's own money — it will be recorded (or
-              kept in sync) as a Capital Account contribution.
+              {t('deductions.personalPaymentNote')}
             </Text>
           </View>
         )}
 
-        <PrimaryButton title="💾 Save" onPress={handleSaveEdit} loading={saving} />
-        <SecondaryButton title="Cancel" onPress={closeEdit} />
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={closeEdit} />
       </ModalSheet>
     </Screen>
   );
@@ -324,7 +327,7 @@ const styles = {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: '700' as const,
-    marginLeft: spacing.sm,
+    marginStart: spacing.sm,
   },
   totalRow: {
     borderTopWidth: 1,

@@ -1,8 +1,8 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
 **STATUS (2026-07-09): sections 1-10 have been run against the live DB.
-Section 11 is new and NOT yet applied — run it yourself in the Supabase SQL
-editor.**
+Sections 11-12 are new and NOT yet applied — run them yourself in the
+Supabase SQL editor.**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
 (re-)run to fold all of this into a proper follow-up migration file. When
@@ -367,6 +367,22 @@ alter table profiles alter column initial_capital set default 0;
 ```
 
 - [ ] 11a run (profiles column defaults — company_name/business_balance/initial_capital)
+
+---
+
+## 12. profiles.locale (multi-language support, PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+
+Manual language override (Settings → Language). NULL means "follow the
+device's own OS language" (falling back to English if the device language
+isn't one of the 5 supported). Once set, this value always wins over the
+device language, on every device the user signs into (see
+`app/src/context/AuthContext.tsx` fetchProfile()).
+
+```sql
+alter table profiles add column locale text;
+```
+
+- [ ] 12a run (profiles.locale column)
 
 ---
 

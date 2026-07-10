@@ -1,4 +1,5 @@
 import { Alert, Pressable, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { colors } from '@/src/theme';
 
@@ -6,20 +7,21 @@ import { colors } from '@/src/theme';
 // single-truck account never sees this (the picker is hidden entirely, the
 // one truck is auto-selected).
 export function TruckSwitcher() {
+  const { t } = useTranslation();
   const { trucks, activeTruck, showPicker, setActiveTruckId } = useActiveTruck();
 
   if (!showPicker) return null;
 
   function openPicker() {
     Alert.alert(
-      'Switch Truck',
+      t('truckSwitcher.switchTruck'),
       undefined,
       trucks
-        .map((t) => ({
-          text: t.unit_number ?? t.id,
-          onPress: () => setActiveTruckId(t.id),
+        .map((truck) => ({
+          text: truck.unit_number ?? truck.id,
+          onPress: () => setActiveTruckId(truck.id),
         }))
-        .concat([{ text: 'Cancel', style: 'cancel' } as any])
+        .concat([{ text: t('truckSwitcher.cancel'), style: 'cancel' } as any])
     );
   }
 
@@ -33,11 +35,11 @@ export function TruckSwitcher() {
         borderRadius: 20,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        marginRight: 12,
+        marginEnd: 12,
       }}
     >
       <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>
-        🚚 {activeTruck?.unit_number ?? 'Select truck'}
+        🚚 {activeTruck?.unit_number ?? t('truckSwitcher.selectTruck')}
       </Text>
     </Pressable>
   );

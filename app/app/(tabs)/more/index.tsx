@@ -1,18 +1,20 @@
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 const MENU_ITEMS = [
-  { href: '/(tabs)/more/capital-account', label: 'Capital Account', emoji: '💰' },
-  { href: '/(tabs)/more/tax-estimator', label: 'Tax Estimator', emoji: '🧮' },
-  { href: '/(tabs)/more/cash-flow', label: 'Cash Flow', emoji: '🏦' },
-  { href: '/(tabs)/more/maintenance', label: 'Maintenance', emoji: '🔧' },
-  { href: '/(tabs)/more/loans', label: 'Loans', emoji: '📄' },
-  { href: '/(tabs)/more/settings', label: 'Settings', emoji: '⚙️' },
+  { href: '/(tabs)/more/capital-account', labelKey: 'more.capitalAccount', emoji: '💰' },
+  { href: '/(tabs)/more/tax-estimator', labelKey: 'more.taxEstimator', emoji: '🧮' },
+  { href: '/(tabs)/more/cash-flow', labelKey: 'more.cashFlow', emoji: '🏦' },
+  { href: '/(tabs)/more/maintenance', labelKey: 'more.maintenance', emoji: '🔧' },
+  { href: '/(tabs)/more/loans', labelKey: 'more.loans', emoji: '📄' },
+  { href: '/(tabs)/more/settings', labelKey: 'more.settings', emoji: '⚙️' },
 ] as const;
 
 export default function More() {
+  const { t } = useTranslation();
   const router = useRouter();
 
   return (
@@ -33,9 +35,9 @@ export default function More() {
               opacity: pressed ? 0.85 : 1,
             })}
           >
-            <Text style={{ fontSize: 18, marginRight: spacing.md }}>{item.emoji}</Text>
+            <Text style={{ fontSize: 18, marginEnd: spacing.md }}>{item.emoji}</Text>
             <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>
-              {item.label}
+              {t(item.labelKey)}
             </Text>
           </Pressable>
         ))}

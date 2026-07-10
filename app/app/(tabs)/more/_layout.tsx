@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { colors } from '@/src/theme';
 
 export default function MoreLayout() {
+  const { t } = useTranslation();
   return (
     <Stack
       screenOptions={{
@@ -11,14 +13,14 @@ export default function MoreLayout() {
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'More' }} />
-      <Stack.Screen name="capital-account" options={{ title: 'Capital Account' }} />
-      <Stack.Screen name="cash-flow" options={{ title: 'Cash Flow' }} />
-      <Stack.Screen name="maintenance" options={{ title: 'Maintenance' }} />
-      <Stack.Screen name="loans" options={{ title: 'Loans' }} />
-      <Stack.Screen name="tax-estimator" options={{ title: 'Tax Estimator' }} />
-      <Stack.Screen name="settings" options={{ title: 'Settings' }} />
-      <Stack.Screen name="import-legacy" options={{ title: 'Import Legacy Backup' }} />
+      <Stack.Screen name="index" options={{ title: t('nav.more') }} />
+      <Stack.Screen name="capital-account" options={{ title: t('nav.capitalAccount') }} />
+      <Stack.Screen name="cash-flow" options={{ title: t('nav.cashFlow') }} />
+      <Stack.Screen name="maintenance" options={{ title: t('nav.maintenance') }} />
+      <Stack.Screen name="loans" options={{ title: t('nav.loans') }} />
+      <Stack.Screen name="tax-estimator" options={{ title: t('nav.taxEstimator') }} />
+      <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
+      <Stack.Screen name="import-legacy" options={{ title: t('nav.importLegacy') }} />
     </Stack>
   );
 }

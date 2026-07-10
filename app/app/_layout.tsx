@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { ActiveTruckProvider } from '@/src/context/ActiveTruckContext';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { colors } from '@/src/theme';
+import { initI18n } from '@/src/i18n';
 
 // Startup diagnostics (2026-07-06): take manual control of the splash
 // screen instead of relying on its default auto-hide, so a stuck startup
@@ -20,6 +21,18 @@ import { colors } from '@/src/theme';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  const [i18nReady, setI18nReady] = useState(false);
+
+  useEffect(() => {
+    // Resolves the device/cached language and initializes i18next BEFORE any
+    // screen renders, so no screen ever flashes the wrong language on boot
+    // (owner decision 2026-07-09: device-language auto-detect with manual
+    // override always winning afterwards).
+    initI18n().then(() => setI18nReady(true));
+  }, []);
+
+  if (!i18nReady) return <LoadingScreen />;
+
   return (
     <PersistQueryClientProvider
       client={queryClient}

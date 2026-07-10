@@ -75,6 +75,7 @@ create table profiles (
   user_id      uuid primary key references auth.users on delete cascade,
   company_name text,                         -- blank until set in onboarding/Settings
   owner_name   text,
+  locale       text,                         -- app UI language override (en/es/ru/ar/tr); null = follow device
   home_state   text default 'TX',
   filing_status text default 'mfj',          -- tax estimator default
   business_balance numeric(12,2) default 0,  -- was gw_bizbal; 0 until owner sets a starting balance

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Text } from 'react-native';
 import { Link } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { Screen, ScreenTitle, Field, PrimaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
 
 export default function SignUp() {
+  const { t } = useTranslation();
   const { signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,16 +24,16 @@ export default function SignUp() {
     if (error) {
       setError(error);
     } else {
-      setInfo('Account created. If email confirmation is required, check your inbox before signing in.');
+      setInfo(t('auth.signUpSuccess'));
     }
   }
 
   return (
     <Screen>
-      <ScreenTitle>Create account</ScreenTitle>
-      <MutedText>Bozkurt Fleet OS — for owner-operators</MutedText>
+      <ScreenTitle>{t('auth.createAccount')}</ScreenTitle>
+      <MutedText>{t('auth.signUpTagline')}</MutedText>
       <Field
-        placeholder="Email"
+        placeholder={t('auth.emailPlaceholder')}
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
@@ -40,7 +42,7 @@ export default function SignUp() {
         style={{ marginTop: 16 }}
       />
       <Field
-        placeholder="Password (min 6 characters)"
+        placeholder={t('auth.passwordMinPlaceholder')}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -49,14 +51,14 @@ export default function SignUp() {
       <ErrorText>{error}</ErrorText>
       {info ? <Text style={{ color: colors.green, fontSize: 12, marginBottom: 8 }}>{info}</Text> : null}
       <PrimaryButton
-        title="Create Account"
+        title={t('auth.signUpButton')}
         onPress={onSubmit}
         loading={loading}
         disabled={!email || password.length < 6}
       />
       <Link href="/(auth)/sign-in" asChild>
         <Text style={{ color: colors.accent, marginTop: 16, textAlign: 'center' }}>
-          Already have an account? Sign in
+          {t('auth.haveAccount')}
         </Text>
       </Link>
     </Screen>

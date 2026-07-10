@@ -1,5 +1,7 @@
+import { useTranslation } from 'react-i18next';
 import { PlaceholderScreen } from '@/src/components/Placeholder';
 
 export default function Loans() {
-  return <PlaceholderScreen title="Loans" note="Loan tracking lands in a later session." />;
+  const { t } = useTranslation();
+  return <PlaceholderScreen title={t('placeholders.loans.title')} note={t('placeholders.loans.note')} />;
 }

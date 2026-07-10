@@ -122,8 +122,40 @@
       mirrors the web app's v2026.07.09-A behavior). Maintenance/tolls/
       loans are NOT part of this replace. A replace must not re-credit
       `business_balance` with that week's net pay a second time.
+  11. Multi-language support (owner decision 2026-07-09, PRODUCT DECISION,
+      binding): target languages are English (default), Spanish, Russian,
+      Arabic, and Turkish — `app/src/i18n/locales/{en,es,ru,ar,tr}.json`,
+      `en.json` is the source of truth (every new key is added there
+      first, then translated into the other four — `app/src/i18n/index.ts`
+      has a static parity check script pattern; keep all 5 files' key sets
+      identical). NO hardcoded user-facing string may ship in a screen —
+      every string goes through `useTranslation()`'s `t()` (or, outside a
+      component, the default `i18n` export's `i18n.t()`, e.g.
+      `app/src/lib/confirmOwnerContribution.ts`). First-launch: the app
+      opens in the device's OS language when it's one of the 5 supported
+      (Arabic in RTL); anything else falls back to English
+      (`resolveInitialLocale()`). A manual choice in Settings > Language is
+      cached locally (`app/src/i18n/localeStorage.ts`) AND written to
+      `profiles.locale`, and always wins over the device language
+      afterwards, on every device the user signs into (synced in
+      `AuthContext.fetchProfile()`). Arabic requires RTL: use logical
+      style properties (`marginStart`/`marginEnd`/`start`/`end`), never
+      `marginLeft`/`marginRight`/absolute `left`/`right` — `I18nManager.
+      forceRTL()` only takes effect after a native reload, so switching
+      to/from Arabic in Settings shows a "restart required" prompt
+      (`app/src/i18n/rtl.ts`). Every session's verification step includes
+      an RTL smoke-check (switch to Arabic, confirm no clipped/overlapping
+      layout) — see PROMPTS.md. What does NOT get translated: user data
+      (deduction descriptions, store names, notes), AI-extracted content,
+      the enumerated domain values that CLAUDE.md invariant #2/payment
+      methods and the deduction category list rely on regex/exact-string
+      matching against (their pill labels stay English on purpose — see
+      `app/app/(tabs)/deductions.tsx`), and legal documents (Terms of Use
+      stays English-only until attorney review, docs/TERMS_OF_USE_DRAFT.md).
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
-  go through `DOC_TYPE_META`'s human label (e.g. "Store/Amazon Purchase").
+  go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
+  never the old `DOC_TYPE_META` constant name (renamed — icons are locale-
+  independent and live in `DOC_TYPE_ICON`, label/route text is localized).
 - All Anthropic API calls happen server-side (Supabase Edge Functions).
   The mobile app never holds the API key.
 - The AI extraction prompt in legacy/index.html is battle-tuned. Port it

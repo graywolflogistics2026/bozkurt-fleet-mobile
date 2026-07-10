@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
+import { useTranslation } from 'react-i18next';
 import { colors } from '@/src/theme';
 
 // Raised center tab button (owner decision 2026-07-04): importing
@@ -8,6 +9,7 @@ import { colors } from '@/src/theme';
 // wide-screen sidebar (PROMPTS.md Session 9) has no equivalent raised
 // button, Import is just a normal item there.
 export function CenterImportButton({ onPress, accessibilityState }: BottomTabBarButtonProps) {
+  const { t } = useTranslation();
   const selected = accessibilityState?.selected;
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
@@ -21,7 +23,7 @@ export function CenterImportButton({ onPress, accessibilityState }: BottomTabBar
       >
         <Text style={styles.icon}>+</Text>
       </Pressable>
-      <Text style={styles.label}>Import</Text>
+      <Text style={styles.label}>{t('nav.import')}</Text>
     </View>
   );
 }
