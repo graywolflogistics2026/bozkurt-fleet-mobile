@@ -123,16 +123,23 @@
       loans are NOT part of this replace. A replace must not re-credit
       `business_balance` with that week's net pay a second time.
   11. Multi-language support (owner decision 2026-07-09, PRODUCT DECISION,
-      binding): target languages are English (default), Spanish, Russian,
-      Arabic, and Turkish — `app/src/i18n/locales/{en,es,ru,ar,tr}.json`,
-      `en.json` is the source of truth (every new key is added there
-      first, then translated into the other four — `app/src/i18n/index.ts`
-      has a static parity check script pattern; keep all 5 files' key sets
-      identical). NO hardcoded user-facing string may ship in a screen —
+      binding; Hindi/Ukrainian added same-day addendum): target languages
+      are English (default), Spanish, Russian, Arabic, Turkish, Hindi, and
+      Ukrainian (7 total; only Arabic is RTL) —
+      `app/src/i18n/locales/{en,es,ru,ar,tr,hi,uk}.json`, `en.json` is the
+      source of truth (every new key is added there first, then
+      translated into the other six — `app/src/i18n/index.ts` has a
+      static parity check script pattern; keep all 7 files' key sets
+      identical). `hi.json`/`uk.json` currently ship as untranslated
+      copies of `en.json` (selectable, structurally complete, English
+      text) — real translation is PROMPTS.md's Session 9c, not to be done
+      piecemeal; when doing it, Ukrainian and Russian are distinct
+      languages and must be translated independently, never by adapting
+      `ru.json`. NO hardcoded user-facing string may ship in a screen —
       every string goes through `useTranslation()`'s `t()` (or, outside a
       component, the default `i18n` export's `i18n.t()`, e.g.
       `app/src/lib/confirmOwnerContribution.ts`). First-launch: the app
-      opens in the device's OS language when it's one of the 5 supported
+      opens in the device's OS language when it's one of the 7 supported
       (Arabic in RTL); anything else falls back to English
       (`resolveInitialLocale()`). A manual choice in Settings > Language is
       cached locally (`app/src/i18n/localeStorage.ts`) AND written to

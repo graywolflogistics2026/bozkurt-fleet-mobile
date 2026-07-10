@@ -9,6 +9,8 @@ import es from '@/src/i18n/locales/es.json';
 import ru from '@/src/i18n/locales/ru.json';
 import ar from '@/src/i18n/locales/ar.json';
 import tr from '@/src/i18n/locales/tr.json';
+import hi from '@/src/i18n/locales/hi.json';
+import uk from '@/src/i18n/locales/uk.json';
 
 const resources = {
   en: { translation: en },
@@ -16,6 +18,8 @@ const resources = {
   ru: { translation: ru },
   ar: { translation: ar },
   tr: { translation: tr },
+  hi: { translation: hi },
+  uk: { translation: uk },
 };
 
 // FIRST-LAUNCH RULE (owner decision 2026-07-09, PRODUCT DECISION): the app

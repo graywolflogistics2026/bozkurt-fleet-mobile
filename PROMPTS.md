@@ -467,24 +467,37 @@ Intelligence items (Cash Flow, Loan Center, Credit Cards, Bank Statement)
 — and **9b (intelligence + tools + settings)** — Scorecard (analytics, not
 a ledger), the Tools group, and Settings.
 
-## Multi-language support (owner decision 2026-07-09, PRODUCT DECISION — binding)
+## Multi-language support (owner decision 2026-07-09, PRODUCT DECISION — binding; Hindi/Ukrainian added same-day addendum)
 
 ```
-Target languages: English (default), Spanish, Russian, Arabic, Turkish.
+Target languages: English (default), Spanish, Russian, Arabic, Turkish,
+Hindi, Ukrainian (7 total). Hindi and Ukrainian are both LTR — no RTL
+work needed for either.
+
 Infrastructure landed this session: i18next + react-i18next +
 expo-localization, app/src/i18n/{index.ts,config.ts,rtl.ts,localeStorage.ts}
-+ locales/{en,es,ru,ar,tr}.json (en.json is the source of truth — every
-new key goes there first). Every currently-implemented screen was migrated
-off hardcoded strings onto useTranslation()'s t() (or i18n.t() outside a
-component, e.g. confirmOwnerContribution.ts). FROM THIS POINT ON, NO new
-screen/component may ship with a hardcoded user-facing string — add the
-key to all 5 locale files (parity-checked; see the check script pattern
-used this session) in the same PR that introduces the string.
++ locales/{en,es,ru,ar,tr,hi,uk}.json (en.json is the source of truth —
+every new key goes there first). Every currently-implemented screen was
+migrated off hardcoded strings onto useTranslation()'s t() (or i18n.t()
+outside a component, e.g. confirmOwnerContribution.ts). FROM THIS POINT
+ON, NO new screen/component may ship with a hardcoded user-facing string
+— add the key to all 7 locale files (parity-checked; see the check
+script pattern used this session) in the same PR that introduces the
+string.
 
-First-launch rule: device OS language wins when it's one of the 5
-supported (Arabic → RTL layout), else English. A manual override in
-Settings > Language is cached locally AND written to profiles.locale
-(docs/PENDING_SQL.md §12), and always wins afterwards, on every device.
+hi.json and uk.json currently ship as UNTRANSLATED COPIES of en.json
+(placeholder — English text under the hi/uk locale codes) so the
+languages are selectable and structurally complete without blocking on
+translation work. Real translation is a dedicated future pass —
+**Session 9c — Hindi/Ukrainian localization** (below), not to be done
+piecemeal. es/ru/ar/tr were fully translated this session and are NOT
+placeholders.
+
+First-launch rule: device OS language wins when it's one of the 7
+supported (Arabic → RTL layout, the other 6 LTR), else English. A manual
+override in Settings > Language is cached locally AND written to
+profiles.locale (docs/PENDING_SQL.md §12), and always wins afterwards, on
+every device.
 
 RTL: use marginStart/marginEnd/start/end, never marginLeft/marginRight or
 absolute left/right (I18nManager doesn't auto-flip those logical-unaware
@@ -502,6 +515,25 @@ names, notes), AI-extracted content, the payment-method/category enum
 pill labels (English on purpose — CLAUDE.md invariant #2 regex-matches
 their exact text), and legal documents (ToS stays English-only until
 attorney review).
+```
+
+## Session 9c — Hindi/Ukrainian localization
+
+```
+Translate hi.json and uk.json from their current English-copy placeholder
+state into real Hindi and Ukrainian, key-for-key against en.json (use the
+parity-check script pattern from the multi-language session above to
+verify no key is missing/extra afterward).
+
+CRITICAL: Ukrainian and Russian are distinct languages — translate uk.json
+independently from scratch (or from en.json), never by copying/adapting
+ru.json. Machine-transliterating Russian into Ukrainian produces text a
+Ukrainian speaker would immediately recognize as wrong (surzhyk), not a
+shortcut worth taking.
+
+Also: spot-check Hindi/Devanagari and Ukrainian/Cyrillic text rendering on
+both iOS and Android (font fallback, line-wrapping on the longest strings)
+since neither script has been exercised in the app before this pass.
 ```
 
 ## Session 7 — Deductions + Capital Account
@@ -755,8 +787,11 @@ triggers automatically on version bump, per Session 3).
       submission):** switch to Arabic in Settings, restart, and walk every
       screen in the app (not just the ones touched this session) checking
       for clipped/overlapping/mis-mirrored layout. Also spot-check Spanish,
-      Russian, and Turkish for text overflow/truncation on the longest
-      translated strings (German-length problem, but for these 4).
+      Russian, Turkish, Hindi, and Ukrainian for text overflow/truncation
+      on the longest translated strings (German-length problem, but for
+      these 5) — requires Session 9c (Hindi/Ukrainian localization) done
+      first, otherwise hi/uk are still English-copy placeholders and this
+      check is meaningless for them.
 ```
 
 ---
