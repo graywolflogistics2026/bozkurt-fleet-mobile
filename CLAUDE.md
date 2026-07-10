@@ -229,6 +229,40 @@
       matching against (their pill labels stay English on purpose — see
       `app/app/(tabs)/deductions.tsx`), and legal documents (Terms of Use
       stays English-only until attorney review, docs/TERMS_OF_USE_DRAFT.md).
+  12. NO LOCATION (owner decision 2026-07-10, PRODUCT DECISION, binding):
+      this app does not collect or track user location. No location
+      permission (`expo-location` or any equivalent) is ever requested, no
+      GPS reading is ever taken, and no location-derived value (lat/long,
+      geofence, route trace, mileage-by-GPS) is ever stored in any table —
+      `loads.loaded_miles`/`empty_miles` and `settlements.miles` come
+      exclusively from AI-extracted settlement documents (odometer/carrier-
+      reported figures), never a device sensor. This must be reflected in
+      the Session 10 privacy policy ("we do not collect location") and in
+      the app's own permission manifest (no `NSLocationWhenInUseUsageDescription`/
+      `ACCESS_FINE_LOCATION` entries). A future opt-in IFTA mile tracker
+      using real GPS is explicitly OUT OF SCOPE for now — parked in
+      PROMPTS.md's backlog as a v2+, explicitly-opt-in-only feature that
+      would need its own separate owner decision and permission prompt,
+      never silently bundled into an existing feature.
+  13. USER DATA IS PRIVATE (owner decision 2026-07-10, PRODUCT DECISION,
+      binding): each user's financial data (settlements, deductions, loads,
+      fuel, capital account, everything RLS-scoped to `auth.uid()`) is
+      private to that user. The operator (Bozkurt Fleet OS / whoever runs
+      the Supabase project) does not access an individual user's data
+      except (a) with that user's explicit consent, given for a specific
+      support request, or (b) where legally required (e.g. a valid
+      subpoena). This is an operational/access-policy invariant, not a
+      schema one — every table already has RLS (invariant below) that
+      technically prevents user-to-user access; this invariant is about
+      what the OPERATOR (who has service_role access) may do, and must be
+      stated plainly in the Session 10 privacy policy ("your financial data
+      is yours — we don't look at it without your permission"). Only
+      aggregate, anonymized product metrics (user counts, feature-usage
+      counts, import volumes, error rates — never a query scoped to one
+      user's own rows for product-analytics purposes) may be collected for
+      operations; any analytics/telemetry integration added in a future
+      session must be audited against this invariant before being wired
+      in, not after.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

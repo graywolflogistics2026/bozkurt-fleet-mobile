@@ -904,8 +904,23 @@ Prepare for TestFlight/Play internal testing:
 - EAS build config for iOS and Android
 - App icons + splash from the wolf theme
 - Privacy policy page (data stored in Supabase, receipts processed by
-  Anthropic API, no data sold) and in-app link
-- Crash reporting (sentry-expo)
+  Anthropic API, no data sold) and in-app link. Per CLAUDE.md invariants
+  #12/#13 (owner decision 2026-07-10, PRODUCT DECISION), the policy MUST
+  state plainly:
+    - "We do not collect or track your location." (no location permission
+      requested on either platform, no GPS reading ever taken; verify the
+      built app's iOS/Android permission manifest has no location entry as
+      part of this session's checklist, not just at code-review time)
+    - "Your financial data is yours — we don't access it without your
+      permission." (the operator does not view an individual user's
+      settlements/deductions/etc. except with that user's explicit consent
+      for support, or where legally required; only aggregate, anonymized
+      product metrics — user counts, feature usage, import volumes, error
+      rates — are collected for operations)
+- Crash reporting (sentry-expo) — audit whatever crash-reporting/analytics
+  SDK is chosen against invariant #13 before wiring it in: no per-user
+  financial data or PII in crash breadcrumbs/error context, aggregate-only
+  telemetry.
 - Empty-state onboarding: first-launch flow that offers "import legacy
   backup" or "start fresh"
 
@@ -948,6 +963,31 @@ triggers automatically on version bump, per Session 3).
       these 5) — requires Session 9c (Hindi/Ukrainian localization) done
       first, otherwise hi/uk are still English-copy placeholders and this
       check is meaningless for them.
+- [ ] **Privacy checklist (owner, 2026-07-10 — binding, blocks store
+      submission):** confirm the built app requests zero location
+      permissions on both iOS and Android (no `NSLocationWhenInUseUsageDescription`
+      in the iOS Info.plist, no `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`
+      in the Android manifest — CLAUDE.md invariant #12), and that the
+      published Privacy Policy states both "we do not collect location"
+      and "your financial data is yours — we don't access it without your
+      permission" (invariant #13) in plain language, not just in this repo's
+      internal docs.
+```
+
+## Backlog (parked features — do not start without a separate, explicit owner decision)
+
+```
+- Opt-in IFTA mile tracker (noted 2026-07-10, alongside the NO LOCATION
+  privacy decision, CLAUDE.md invariant #12): a v2+ feature that would use
+  real GPS to auto-log miles-by-state for IFTA reporting. Explicitly OUT OF
+  SCOPE today — CLAUDE.md invariant #12 says the app collects zero
+  location data. If ever built, it needs its own separate, explicit owner
+  decision; must be strictly opt-in (off by default, a dedicated toggle in
+  Settings, its own permission-request flow triggered only by that
+  toggle — never bundled into an existing permission prompt or enabled
+  silently by another feature); and needs its own Privacy Policy update
+  before shipping, since the current policy states no location collection
+  at all.
 ```
 
 ---
