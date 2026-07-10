@@ -536,6 +536,74 @@ both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
 ```
 
+## Driver compensation types + entity selection (owner decision 2026-07-10, PRODUCT DECISION — binding)
+
+```
+1. Drivers gain compensation_type (w2_employee/1099_contractor/team_split/
+   trainee) + pay_type/pay_rate (PENDING_SQL.md §15, informational display
+   only — the engine reads recorded driver_payments, never pay_rate).
+
+2. NEW driver_payments table (PENDING_SQL.md §16, on delete cascade from
+   drivers — unlike every other driver_id, which is on delete set null —
+   a payment has no meaning without the driver it paid; settlement_id is
+   on delete set null, invariant #5's cascades must not delete what was
+   actually paid). app/src/data/driverPayments.ts (entityHooks factory,
+   same pattern as trucks.ts/drivers.ts) built this pass; the
+   driver-management screen's log/add form is Session 8 item 0b above.
+
+3. Tax treatment — IMPLEMENTED THIS PASS (app/src/tax/driverPayroll.ts):
+   sumDeductibleDriverPayroll() reduces net profit by gross_pay +
+   employer_taxes uniformly across all four compensation_types (employer_
+   taxes defaults 0, only ever populated for w2_employee — this is what
+   keeps it one formula, no type branch). calcContractLaborYtd() tracks
+   1099_contractor YTD per driver; crossing tax_year_data.nec_1099.
+   threshold ($600 fallback until PENDING_SQL.md §17 runs) surfaces a
+   Dashboard reminder card (app/app/(tabs)/index.tsx, before the isScorp
+   card). W-2 true-cost-of-employee = calcTrueCostOfEmployee(gross_pay,
+   employer_taxes); employer_taxes at entry time = calcW2EmployerTaxes()
+   × tax_year_data.se_tax.employer_fica (7.65%, PENDING_SQL.md §17) — that
+   entry UI is Session 8 item 0b, not this pass. team_split/trainee:
+   the import preview (app/app/(tabs)/import/index.tsx
+   showsDriverSplitInput) shows a "driver's share of this settlement ($)"
+   field whenever the resolved/selected driver has that compensation_type
+   — entering an amount creates a driver_payment linked to the new
+   settlement (aiImportSave.ts); re-importing that settlement replaces the
+   prior payment the same way it replaces loads/fuel/reimbursements/
+   deductions (invariant #10 extended to cover this row too). No AI
+   extraction of a second driver's name/split was added this pass — the
+   owner's own message described "entering/confirming" the split, which
+   this manual field satisfies without a speculative new ai-import schema
+   field; revisit if settlement PDFs turn out to print a real per-driver
+   split the AI could extract directly.
+
+4. Entity selection — SCHEMA + ENGINE BRANCHES IMPLEMENTED THIS PASS,
+   SCREEN UI IS SESSION 9b item 8 above. tax_config.entity_type gains a
+   4th value, multi_member_llc (PENDING_SQL.md §18 — Postgres has no ALTER
+   TYPE for a plain check constraint, so it's a drop+recreate); ownership_
+   pct added alongside it. Scope decision: the owner's message said
+   "Entity choice stored in profiles (entity_type exists; add
+   ownership_pct)" — entity_type already lives on tax_config, not
+   profiles (see D7/D8), so ownership_pct was added there instead of
+   introducing a second, disconnected entity concept on profiles.
+   calcTaxEstimate.ts: multi_member_llc scopes ownerShareOfProfit (and the
+   SE-tax base) to ownershipPct of the full LLC profit — netProfit itself
+   stays unscoped, so no fleet-wide figure is silently alterable by one
+   member's %; s_corp now also estimates the employer-side FICA cost of
+   scorp_salary (tax_year_data.se_tax.employer_fica) as a real business
+   expense reducing ownerShareOfProfit, unless scorp_payroll_tax_handled
+   says a payroll provider already accounts for it (no double-counting).
+   sole_prop/smllc are completely unaffected (employerPayrollTax always 0
+   for them). The disclaimers/footnotes themselves (K-1 "each member files
+   their own", S-Corp "requires a payroll provider") render on the Session
+   9b screen, not before — the engine has no UI strings to carry them yet.
+
+5. Recorded in CLAUDE.md invariants #6 (tax constants: employer_fica,
+   nec_1099, entity_type's 4th value) and #7 (drivers: compensation_type,
+   driver_payments, split-entry) and here. Nothing Ali-specific anywhere
+   (per the 2026-07-09 clean-product decision) — no seed data, no
+   hardcoded names/rates outside tax_year_data.
+```
+
 ## Multi-truck fleet + drivers + payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION — binding)
 
 ```
@@ -641,7 +709,17 @@ the existing capital_transactions data.
    add/edit a driver (name, phone, license, active flag, default truck),
    uses app/src/data/drivers.ts (already built — see PENDING_SQL.md §13).
    No delete from the UI (drivers can have settlement history); "active"
-   toggle is the retire equivalent, same as trucks.
+   toggle is the retire equivalent, same as trucks. Also edit the driver
+   compensation fields added 2026-07-10 (PENDING_SQL.md §15): a
+   compensation_type picker (w2_employee/1099_contractor/team_split/
+   trainee) plus pay_type (per_mile/percent/flat) and pay_rate — both
+   informational display only, the tax engine never derives an amount
+   from them (app/src/tax/driverPayroll.ts reads actual driver_payments
+   rows exclusively). Also lands here: a driver_payments log/add form
+   (date, gross_pay, notes, optional settlement link) using
+   app/src/data/driverPayments.ts (already built — see PENDING_SQL.md
+   §16) — the "true cost of employee" display (calcTrueCostOfEmployee())
+   for w2_employee drivers.
 
 Port Truck Health and Maintenance:
 
@@ -802,6 +880,19 @@ separate design pass):
    onboarding completes, every screen shows its normal clean empty state
    (no placeholder Graywolf/Ali data anywhere) rather than blocking
    navigation outright.
+8. Entity selection screen (owner decision 2026-07-10, PRODUCT DECISION —
+   Settings > Business Profile, new): a picker for tax_config.entity_type —
+   sole_prop / smllc / multi_member_llc / s_corp. The engine branches
+   (calcTaxEstimate.ts) already exist (this pass, 2026-07-10) for all four;
+   this screen is just the UI to choose one and, for multi_member_llc,
+   enter ownership_pct (0-100, tax_config.ownership_pct) with a persistent
+   "each member files their own K-1 — this only estimates your share, get
+   a CPA" disclaimer (CLAUDE.md invariant #8). smllc reads as disregarded/
+   same as sole_prop (label only). s_corp promotes the existing Dashboard
+   S-Corp Savings Preview into the full flow: scorp_salary input,
+   scorp_payroll_tax_handled checkbox (already on the Dashboard, moves or
+   is mirrored here), and a footnote "S-Corp payroll requires a payroll
+   provider — verify with your CPA" (CLAUDE.md invariant #6/#8).
 Then a full audit session: run through docs/FEATURE_INVENTORY.md and produce
 PARITY.md marking each legacy feature done/partial/missing.
 ```

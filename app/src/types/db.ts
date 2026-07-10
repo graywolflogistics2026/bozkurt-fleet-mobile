@@ -27,6 +27,11 @@ export type TruckUpdate = Partial<Omit<Truck, 'id' | 'user_id' | 'created_at' | 
 // docs/PENDING_SQL.md §13 (multi-truck fleet + drivers + payroll
 // auto-routing, PRODUCT DECISION 2026-07-09) — optional entity; an account
 // with zero rows here behaves exactly as before.
+// compensation_type/pay_type/pay_rate: docs/PENDING_SQL.md §15 (driver
+// compensation types, owner decision 2026-07-10). pay_rate is informational
+// display only — the tax engine (app/src/tax/driverPayroll.ts) never
+// derives an amount from it, only from actual recorded DriverPayment rows.
+export type CompensationType = 'w2_employee' | '1099_contractor' | 'team_split' | 'trainee';
 export type Driver = {
   id: string;
   user_id: string;
@@ -35,11 +40,40 @@ export type Driver = {
   license: string | null;
   active: boolean;
   default_truck_id: string | null;
+  compensation_type: CompensationType;
+  pay_type: 'per_mile' | 'percent' | 'flat' | null;
+  pay_rate: number | null;
   created_at: string;
   updated_at: string;
 };
 export type DriverInsert = Partial<Omit<Driver, 'id' | 'created_at' | 'updated_at'>> & { user_id: string; name: string };
 export type DriverUpdate = Partial<Omit<Driver, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+// docs/PENDING_SQL.md §16 (driver compensation types, owner decision
+// 2026-07-10) — what the owner actually paid a driver; the tax engine's
+// sole source for driver payroll expense (never derived from
+// drivers.pay_rate). employer_taxes defaults to 0 and is only ever
+// populated for compensation_type='w2_employee' payments; this is what lets
+// sumDeductibleDriverPayroll() treat gross_pay + employer_taxes as a
+// uniform deductible-expense formula with no type-specific branch.
+export type DriverPayment = {
+  id: string;
+  user_id: string;
+  driver_id: string;
+  settlement_id: string | null;
+  date: string;
+  gross_pay: number;
+  employer_taxes: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type DriverPaymentInsert = Partial<Omit<DriverPayment, 'id' | 'created_at' | 'updated_at'>> & {
+  user_id: string;
+  driver_id: string;
+  date: string;
+};
+export type DriverPaymentUpdate = Partial<Omit<DriverPayment, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
 export type DocumentRow = {
   id: string;
@@ -323,15 +357,19 @@ export type ProfileUpdate = Partial<
   Omit<Profile, 'user_id' | 'created_at' | 'updated_at'>
 >;
 
+// entity_type: 'multi_member_llc' added retroactively, docs/PENDING_SQL.md
+// §18 (entity selection, owner decision 2026-07-10) — ownership_pct is only
+// meaningful for that entity_type (see calcTaxEstimate.ts ownerShareOfProfit).
 export type TaxConfig = {
   user_id: string;
   tax_year: number;
   filing_status: 'single' | 'mfj' | 'hoh';
   state: string;
   include_state_tax: boolean;
-  entity_type: 'sole_prop' | 'smllc' | 'scorp';
+  entity_type: 'sole_prop' | 'smllc' | 'multi_member_llc' | 'scorp';
   scorp_salary: number | null;
   scorp_payroll_tax_handled: boolean;
+  ownership_pct: number | null;
 };
 
 // Server-side, centrally-updatable tax constants (D10) — the ONLY place any
@@ -340,7 +378,13 @@ export type TaxYearData = {
   tax_year: number;
   federal_brackets: Record<'mfj' | 'single' | 'hoh', Array<[number, number | null, number]>>;
   standard_deduction: Record<'mfj' | 'single' | 'hoh', number>;
-  se_tax: { rate: number; factor: number; ss_wage_base?: number };
+  // employer_fica: added retroactively, docs/PENDING_SQL.md §17 (driver
+  // compensation types, owner decision 2026-07-10) — the employer-side FICA
+  // match rate (7.65%), read by both the W-2 driver true-cost-of-employee
+  // calc (app/src/tax/driverPayroll.ts) and the scorp owner-salary employer
+  // payroll tax estimate (calcTaxEstimate.ts). Optional/graceful fallback
+  // like full_daily_rate below until the migration has run.
+  se_tax: { rate: number; factor: number; ss_wage_base?: number; employer_fica?: number };
   // full_daily_rate: the pre-reduction IRS transportation-industry meal
   // rate (e.g. $80) that daily_rate ($64) is 80% of — optional, purely for
   // the Dashboard's "@$64/day (80% of $80)" caption (docs/PENDING_SQL.md
@@ -355,6 +399,12 @@ export type TaxYearData = {
     bracket?: Record<string, unknown>;
     fallback_effective_rate: number;
   };
+  // nec_1099: added retroactively, docs/PENDING_SQL.md §17 — the IRS
+  // 1099-NEC filing threshold/deadline (CLAUDE.md invariant #6: no tax
+  // constant lives in app code). Optional — app/src/tax/driverPayroll.ts
+  // falls back to a hardcoded $600/no-deadline-shown behavior until this
+  // migration has run.
+  nec_1099?: { threshold: number; filing_deadline: string };
   published: boolean;
   notes: string | null;
   created_at: string;

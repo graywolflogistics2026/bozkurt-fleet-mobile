@@ -45,7 +45,7 @@ export const fixtureTaxYearData: TaxYearData = {
     ],
   },
   standard_deduction: { mfj: 30000, single: 15000, hoh: 22500 },
-  se_tax: { rate: 0.153, factor: 0.9235, ss_wage_base: 184500 },
+  se_tax: { rate: 0.153, factor: 0.9235, ss_wage_base: 184500, employer_fica: 0.0765 },
   per_diem: { daily_rate: 64, deductible_pct: 100, full_daily_rate: 80 },
   quarterly_deadlines: [
     ['Q1', '2026-04-15'],
@@ -84,6 +84,7 @@ export const fixtureTaxYearData: TaxYearData = {
     },
     fallback_effective_rate: 0.045,
   },
+  nec_1099: { threshold: 600, filing_deadline: '2027-01-31' },
   published: true,
   notes: 'Test fixture',
   created_at: '2026-01-01T00:00:00Z',

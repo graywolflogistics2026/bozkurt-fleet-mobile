@@ -289,6 +289,27 @@ export default function Dashboard() {
         </TappableCard>
         <LegalFootnote />
 
+        {/* Driver compensation types (owner decision 2026-07-10): 1099
+            contractors crossing the NEC filing threshold YTD. */}
+        {tax && tax.contractLaborYtd.some((c) => c.needsNecReminder) && (
+          <Card>
+            <Text style={{ color: colors.orange, fontWeight: '700', marginBottom: spacing.xs }}>
+              {t('dashboard.necReminderTitle')}
+            </Text>
+            {tax.contractLaborYtd
+              .filter((c) => c.needsNecReminder)
+              .map((c) => (
+                <MutedText key={c.driverId}>
+                  {t('dashboard.necReminderBody', {
+                    name: c.driverName,
+                    amount: money(c.ytdTotal),
+                    deadline: tax.taxYearData.nec_1099?.filing_deadline ?? t('common.dash'),
+                  })}
+                </MutedText>
+              ))}
+          </Card>
+        )}
+
         {isScorp && (
           <Card>
             <Text style={{ color: colors.orange, fontWeight: '700', marginBottom: spacing.xs }}>

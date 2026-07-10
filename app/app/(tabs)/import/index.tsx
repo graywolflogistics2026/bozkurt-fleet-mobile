@@ -120,6 +120,7 @@ export default function Import() {
   const [showNewDriverForm, setShowNewDriverForm] = useState(false);
   const [newDriverName, setNewDriverName] = useState('');
   const [creatingDriver, setCreatingDriver] = useState(false);
+  const [driverShareAmount, setDriverShareAmount] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
 
@@ -141,6 +142,7 @@ export default function Import() {
     setNewTruckUnit('');
     setShowNewDriverForm(false);
     setNewDriverName('');
+    setDriverShareAmount('');
     setErrorMessage(null);
     setResult(null);
   }
@@ -271,6 +273,7 @@ export default function Import() {
         userId,
         truckId,
         driverId,
+        driverShareAmount: showsDriverSplitInput ? Number(driverShareAmount) || null : null,
         fileUri: fileMeta.uri,
         fileExt: fileMeta.ext,
         mediaType: fileMeta.mediaType,
@@ -288,6 +291,14 @@ export default function Import() {
 
   const hasDuplicate = !!duplicates && (duplicates.byContent.length > 0 || duplicates.byFilename.length > 0);
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
+  // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
+  // team_split/trainee drivers get a split-entry field on the settlement
+  // preview — 1099/W-2 drivers don't (their pay isn't settlement-derived).
+  const selectedDriver = driverId ? drivers.find((d) => d.id === driverId) : undefined;
+  const showsDriverSplitInput =
+    extraction?.docType === 'settlement' &&
+    !!selectedDriver &&
+    (selectedDriver.compensation_type === 'team_split' || selectedDriver.compensation_type === 'trainee');
 
   return (
     <Screen>
@@ -468,6 +479,20 @@ export default function Import() {
                     />
                   </View>
                 )}
+              </View>
+            )}
+
+            {showsDriverSplitInput && (
+              <View style={{ marginTop: spacing.md }}>
+                <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
+                  {t('importScreen.driverShareLabel', { name: selectedDriver?.name ?? '' })}
+                </Text>
+                <Field
+                  keyboardType="numeric"
+                  value={driverShareAmount}
+                  onChangeText={setDriverShareAmount}
+                  placeholder={t('importScreen.driverSharePlaceholder')}
+                />
               </View>
             )}
 

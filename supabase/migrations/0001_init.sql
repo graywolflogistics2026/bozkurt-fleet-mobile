@@ -107,6 +107,10 @@ create table trucks (
 -- just have a null driver_id). default_truck_id is a soft hint for future
 -- UI convenience (e.g. pre-selecting a truck when adding a driver's next
 -- settlement) — never required, never enforced by a trigger.
+-- compensation_type/pay_type/pay_rate added retroactively (driver
+-- compensation types, owner decision 2026-07-10, PENDING_SQL.md §15) —
+-- pay_rate is informational display only; the tax engine only ever reads
+-- actual recorded driver_payments rows below, never derives from pay_rate.
 create table drivers (
   id               uuid primary key default gen_random_uuid(),
   user_id          uuid not null references auth.users on delete cascade,
@@ -115,6 +119,10 @@ create table drivers (
   license          text,
   active           boolean default true,
   default_truck_id uuid references trucks on delete set null,
+  compensation_type text not null default 'w2_employee'
+                    check (compensation_type in ('w2_employee', '1099_contractor', 'team_split', 'trainee')),
+  pay_type         text check (pay_type in ('per_mile', 'percent', 'flat')),
+  pay_rate         numeric(10,4),
   created_at       timestamptz default now(),
   updated_at       timestamptz default now()
 );
@@ -148,6 +156,27 @@ create table settlements (
   updated_at   timestamptz default now(),
   unique (user_id, week_ending)               -- one settlement per week
 );
+
+-- ---------- Driver payments (NEW, owner decision 2026-07-10 — driver
+-- compensation types). What the owner actually paid a driver — the tax
+-- engine's sole source for driver payroll expense. on delete cascade from
+-- drivers (unlike driver_id elsewhere, which is on delete set null) — a
+-- payment record has no meaning without the driver it paid; settlement_id
+-- IS on delete set null (CLAUDE.md invariant #5 cascades still must not
+-- delete what was actually paid). See PENDING_SQL.md §16.
+create table driver_payments (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users on delete cascade,
+  driver_id      uuid not null references drivers on delete cascade,
+  settlement_id  uuid references settlements on delete set null,
+  date           date not null,
+  gross_pay      numeric(12,2) not null default 0,
+  employer_taxes numeric(12,2) not null default 0,  -- only populated for w2_employee, from tax_year_data.se_tax.employer_fica
+  notes          text,
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
+);
+create index on driver_payments (user_id, driver_id, date);
 
 -- ---------- Loads (was DB.loads; feeds best/worst lane analysis) ----------
 create table loads (
@@ -481,6 +510,8 @@ create trigger trg_touch_updated_at before update on documents
   for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on settlements
   for each row execute function touch_updated_at();
+create trigger trg_touch_updated_at before update on driver_payments
+  for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on loads
   for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on fuel_purchases
@@ -608,6 +639,10 @@ create policy "documents_owner_all" on documents
 
 alter table settlements enable row level security;
 create policy "settlements_owner_all" on settlements
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+alter table driver_payments enable row level security;
+create policy "driver_payments_owner_all" on driver_payments
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 alter table loads enable row level security;

@@ -30,7 +30,8 @@ create table profiles (
 -- tax_year_data (below) this user's estimate is computed against, and the
 -- state/include_state_tax pair drives that row's state_tax jsonb (see
 -- PROMPTS.md Session 5) instead of assuming TX/no-state-tax for everyone.
--- entity_type (added 2026-07-03, D8): 'sole_prop' and 'smllc' share the exact
+-- entity_type (added 2026-07-03, D8; 'multi_member_llc' added retroactively
+-- 2026-07-10, PENDING_SQL.md §18): 'sole_prop' and 'smllc' share the exact
 -- legacy math (Schedule C net-pay model, 15.3% SE tax on full net profit,
 -- tax-free draws up to basis) — smllc is a UI label only, never a branch in
 -- the tax math. 'scorp' branches the model: SE tax applies only to
@@ -39,7 +40,12 @@ create table profiles (
 -- same way to total income. scorp_payroll_tax_handled is a plain
 -- acknowledgement flag ("yes, my payroll provider files 941/940s") shown
 -- next to the required "this app estimates, not files — get a CPA/payroll
--- provider" notice; it does not change any calculation.
+-- provider" notice; when false the engine estimates the employer-side FICA
+-- cost of scorp_salary itself (calcTaxEstimate.ts employerPayrollTax), when
+-- true it trusts the provider's own accounting and does not double-count.
+-- 'multi_member_llc' scopes the estimate to just this member's K-1 share —
+-- ownership_pct is only meaningful for this entity_type (see
+-- calcTaxEstimate.ts ownerShareOfProfit); null/ignored otherwise.
 create table tax_config (
   user_id             uuid primary key references auth.users on delete cascade,
   tax_year            int not null default 2026,
@@ -48,9 +54,10 @@ create table tax_config (
   state                text not null default 'TX',
   include_state_tax    boolean not null default true,
   entity_type          text not null default 'sole_prop'
-                       check (entity_type in ('sole_prop','smllc','scorp')),
+                       check (entity_type in ('sole_prop','smllc','multi_member_llc','scorp')),
   scorp_salary                numeric(12,2),        -- only meaningful when entity_type='scorp'
-  scorp_payroll_tax_handled   boolean default false  -- owner-attested, not verified
+  scorp_payroll_tax_handled   boolean default false, -- owner-attested, not verified
+  ownership_pct               numeric(5,2)           -- only meaningful when entity_type='multi_member_llc'
 );
 
 -- ---------- Tax year data (NEW, owner decision 2026-07-03, D10) ----------
@@ -67,10 +74,11 @@ create table tax_year_data (
   tax_year            int primary key,
   federal_brackets    jsonb not null,   -- {mfj:[[lo,hi,rate],...], single:[...], hoh:[...]}
   standard_deduction  jsonb not null,   -- {mfj:30000, single:15000, hoh:22500}
-  se_tax              jsonb not null,   -- {rate:0.153, factor:0.9235, ss_wage_base:<verify each year>}
+  se_tax              jsonb not null,   -- {rate:0.153, factor:0.9235, ss_wage_base:<verify each year>, employer_fica:0.0765 (added 2026-07-10, PENDING_SQL.md §17)}
   per_diem            jsonb not null,   -- {daily_rate:64, deductible_pct:100}
   quarterly_deadlines jsonb not null,   -- [["Q1","2026-04-15"],["Q2","2026-06-15"],...]
   state_tax           jsonb not null,   -- {no_tax:[...], flat:{...}, bracket:{...}, fallback_effective_rate:...}
+  nec_1099            jsonb,            -- {threshold:600, filing_deadline:"2027-01-31"} — added retroactively, PENDING_SQL.md §17
   published           boolean not null default false,  -- app ignores unpublished rows (see fallback above)
   notes               text,
   created_at          timestamptz default now(),
@@ -112,6 +120,10 @@ create table trucks (
 -- just have a null driver_id). default_truck_id is a soft hint for future
 -- UI convenience (e.g. pre-selecting a truck when adding a driver's next
 -- settlement) — never required, never enforced by a trigger.
+-- compensation_type/pay_type/pay_rate added retroactively, PENDING_SQL.md
+-- §15 (driver compensation types, owner decision 2026-07-10) — pay_rate is
+-- informational display only, the tax engine never derives an amount from
+-- it, only from actual recorded driver_payments rows (see below).
 create table drivers (
   id               uuid primary key default gen_random_uuid(),
   user_id          uuid not null references auth.users on delete cascade,
@@ -120,6 +132,10 @@ create table drivers (
   license          text,
   active           boolean default true,
   default_truck_id uuid references trucks on delete set null,
+  compensation_type text not null default 'w2_employee'
+                    check (compensation_type in ('w2_employee', '1099_contractor', 'team_split', 'trainee')),
+  pay_type         text check (pay_type in ('per_mile', 'percent', 'flat')),
+  pay_rate         numeric(10,4),
   created_at       timestamptz default now()
 );
 
@@ -185,6 +201,28 @@ create table settlements (
   created_at   timestamptz default now(),
   unique (user_id, week_ending)               -- one settlement per week
 );
+
+-- ---------- Driver payments (NEW, owner decision 2026-07-10 — driver
+-- compensation types). What the owner actually paid a driver — the tax
+-- engine's sole source for driver payroll expense (never derived from
+-- drivers.pay_rate). on delete cascade from drivers (unlike driver_id
+-- elsewhere, which is on delete set null) — a payment record has no
+-- meaning without the driver it paid; settlement_id IS on delete set null
+-- (CLAUDE.md invariant #5 cascades still must not delete what was actually
+-- paid). See PENDING_SQL.md §16.
+create table driver_payments (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users on delete cascade,
+  driver_id      uuid not null references drivers on delete cascade,
+  settlement_id  uuid references settlements on delete set null,
+  date           date not null,
+  gross_pay      numeric(12,2) not null default 0,
+  employer_taxes numeric(12,2) not null default 0,  -- only populated for w2_employee, from tax_year_data.se_tax.employer_fica
+  notes          text,
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
+);
+create index on driver_payments (user_id, driver_id, date);
 
 -- ---------- Loads (was DB.loads; feeds best/worst lane analysis) ----------
 create table loads (

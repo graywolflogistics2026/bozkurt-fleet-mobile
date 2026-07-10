@@ -32,6 +32,7 @@ export function useTaxConfig() {
         entity_type: 'sole_prop',
         scorp_salary: null,
         scorp_payroll_tax_handled: false,
+        ownership_pct: null,
       };
     },
     enabled: !!userId,

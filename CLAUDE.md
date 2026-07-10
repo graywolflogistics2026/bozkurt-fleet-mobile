@@ -86,7 +86,32 @@
      computation path (smllc is a UI label only, never a math branch);
      'scorp' is the only entity_type that branches SE tax (applies to
      scorp_salary only, not full net profit) and relabels Capital Account
-     draws as distributions.
+     draws as distributions. entity_type gained a 4th value,
+     'multi_member_llc' (owner decision 2026-07-10, PRODUCT DECISION,
+     docs/PENDING_SQL.md §18) — scopes the whole estimate to just that
+     member's `ownership_pct` (0-100, `tax_config.ownership_pct`) share of
+     net profit before AGI/SE-tax/brackets ever apply
+     (`calcTaxEstimate.ts`'s `ownerShareOfProfit`); `netProfit` itself stays
+     the full LLC profit, unscoped, so a fleet-wide dashboard figure is
+     never silently altered by one member's ownership %. 'scorp' also
+     gained an employer-payroll-tax estimate this pass: unless
+     `scorp_payroll_tax_handled` is true (the owner attests a payroll
+     provider already accounts for it), the engine estimates the
+     employer-side FICA cost of `scorp_salary` from
+     `tax_year_data.se_tax.employer_fica` and subtracts it from
+     `ownerShareOfProfit` as a real business expense — this is what "the
+     existing reasonable-salary preview promoted to full flow with
+     owner-salary W-2 treatment" means. `tax_year_data` gained two more
+     server-sourced constants this pass (docs/PENDING_SQL.md §17), same
+     "never hardcode, never silently compute empty" rule as every other
+     constant here: `se_tax.employer_fica` (7.65% employer-side FICA match,
+     used for both the scorp owner-salary estimate above and driver W-2
+     "true cost of employee") and `nec_1099` (`{threshold, filing_deadline}`
+     — the IRS 1099-NEC $600/Jan-31 filing rule; see invariant #7's driver
+     compensation-types extension for how this drives the Dashboard
+     reminder). Both are optional/graceful-fallback fields (same pattern as
+     `per_diem.full_daily_rate`) since they gate an informational banner,
+     not a computed tax AMOUNT, until docs/PENDING_SQL.md §17 has run.
   7. No code path may assume a single truck. truck_id flows through every
      query (settlements, fuel, maintenance, health, notifications); a
      single-truck account is just the n=1 presentation of the exact same
@@ -113,7 +138,31 @@
      shows a picker to choose an existing truck/driver OR create one
      inline (`app/app/(tabs)/import/index.tsx`) — the newly created row
      persists normally, so it auto-matches on every future import without
-     any separate alias/memory mechanism.
+     any separate alias/memory mechanism. Driver compensation types (owner
+     decision 2026-07-10, PRODUCT DECISION, extends this invariant):
+     `drivers.compensation_type` is one of `w2_employee` / `1099_contractor`
+     / `team_split` / `trainee` (docs/PENDING_SQL.md §15); `pay_type`/
+     `pay_rate` are informational display fields only — the tax engine
+     (`app/src/tax/driverPayroll.ts`) NEVER derives an amount from them,
+     only from actual recorded `driver_payments` rows (§16, `on delete
+     cascade` from `drivers` — unlike every other `driver_id`, which is `on
+     delete set null` — because a payment record has no meaning without the
+     driver it paid). `sumDeductibleDriverPayroll()` reduces the owner's net
+     profit by `gross_pay + employer_taxes` uniformly across all four
+     compensation types (1099 = "Contract Labor", W-2 = wages + employer
+     FICA = "true cost of employee", team_split/trainee = the driver's
+     settlement share) — `employer_taxes` defaults to 0 and is only ever
+     populated for `w2_employee` payments, which is what keeps this one
+     formula instead of a type-specific branch. A driver's YTD 1099 total
+     crossing the IRS $600 threshold (`tax_year_data.nec_1099`, §17) surfaces
+     a Dashboard reminder to file a 1099-NEC (`calcContractLaborYtd()`).
+     team_split/trainee: the import preview shows a "driver's share of this
+     settlement" input whenever the resolved/selected driver has that
+     compensation_type (`app/app/(tabs)/import/index.tsx`
+     `showsDriverSplitInput`) — entering an amount creates a `driver_payment`
+     linked to the new settlement; re-importing that settlement replaces it
+     (CLAUDE.md invariant #10's re-import-replace behavior extends to this
+     row too, not just settlement/loads/fuel/reimbursements/deductions).
   8. This app provides ESTIMATES, not tax/legal/financial advice.
      (a) Every screen showing tax figures (Dashboard tax cards, tax
      estimator, S-Corp preview, quarterly payments, per diem) must include a

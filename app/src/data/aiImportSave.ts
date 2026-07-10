@@ -22,6 +22,12 @@ export type SaveExtractionParams = {
   // resolved by the caller (resolveDriverMatch()/a picked-or-created
   // driver) same as truckId. Only applied to settlement docType rows.
   driverId: string | null;
+  // Driver compensation types (owner decision 2026-07-10, PRODUCT
+  // DECISION): the owner's entered/confirmed split for a team_split/trainee
+  // driver on this settlement — creates a driver_payment row linked to the
+  // new settlement. Null/0 for every other compensation_type (the caller
+  // only shows this input when the resolved driver is team_split/trainee).
+  driverShareAmount: number | null;
   fileUri: string | null;
   fileExt: string;
   mediaType: string;
@@ -46,7 +52,7 @@ export type SaveExtractionResult = {
 // document id) into the pure mapping output, then performs the actual
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
-  const { extraction: d, userId, truckId, driverId, fileUri, fileExt, mediaType, createContribution } = params;
+  const { extraction: d, userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution } = params;
 
   // 1. Upload the original file to the documents bucket FIRST (CLAUDE.md
   // storage convention: {user_id}/{month}/...) so the documents row can
@@ -123,6 +129,12 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         .eq('settlement_id', settlementId)
         .eq('source', 'settlement');
       if (delDedErr) throw delDedErr;
+      // Driver compensation types (owner decision 2026-07-10): a re-import
+      // replaces the prior split payment for this settlement same as every
+      // other batch-tagged row (CLAUDE.md invariant #10) — otherwise
+      // re-confirming a changed split would duplicate the payment record.
+      const { error: delPayErr } = await supabase.from('driver_payments').delete().eq('settlement_id', settlementId);
+      if (delPayErr) throw delPayErr;
     }
 
     if (mapping.loads.length > 0) {
@@ -172,6 +184,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       } else {
         await supabase.from('loans').insert(loan);
       }
+    }
+    // Driver compensation types (owner decision 2026-07-10): the owner's
+    // entered/confirmed team_split/trainee share for this settlement.
+    if (driverId && driverShareAmount && driverShareAmount > 0) {
+      const { error: payErr } = await supabase.from('driver_payments').insert({
+        user_id: userId,
+        driver_id: driverId,
+        settlement_id: settlementId,
+        date: mapping.settlement.week_ending,
+        gross_pay: driverShareAmount,
+        notes: 'Settlement split (entered at import)',
+      });
+      if (payErr) throw payErr;
     }
     // Net pay only credits business_balance once per settlement week — a
     // replace-import must not re-credit it a second time.

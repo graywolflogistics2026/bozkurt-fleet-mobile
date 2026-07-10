@@ -1,8 +1,8 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
 **STATUS (2026-07-09): sections 1-10 have been run against the live DB.
-Sections 11-14 are new and NOT yet applied — run them yourself in the
-Supabase SQL editor (section 14 depends on section 13 — run in order).**
+Sections 11-18 are new and NOT yet applied — run them yourself in the
+Supabase SQL editor, in order (14 depends on 13; 16 depends on 15).**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
 (re-)run to fold all of this into a proper follow-up migration file. When
@@ -436,6 +436,156 @@ alter table deductions add column driver_id uuid references drivers on delete se
 ```
 
 - [ ] 14a run (driver_id columns on settlements/loads/fuel_purchases/deductions)
+
+---
+
+## 15. drivers gains compensation fields (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+
+Depends on section 13 (drivers must exist first). `compensation_type` drives
+both the tax-engine treatment (`app/src/tax/driverPayroll.ts`) and, later,
+the driver-management screen's pay fields (PROMPTS.md Session 8).
+`pay_type`/`pay_rate` are informational display fields for that future
+screen — the engine itself only ever reads recorded `driver_payments` rows
+(section 16), never derives an amount from `pay_rate` × miles/percent, so a
+driver with `pay_rate` set but no payments recorded contributes $0 to any
+tax calculation (no silent estimation).
+
+```sql
+alter table drivers add column compensation_type text not null default 'w2_employee'
+  check (compensation_type in ('w2_employee', '1099_contractor', 'team_split', 'trainee'));
+alter table drivers add column pay_type text
+  check (pay_type in ('per_mile', 'percent', 'flat'));
+alter table drivers add column pay_rate numeric(10,4);
+```
+
+- [ ] 15a run (drivers.compensation_type + pay_type + pay_rate)
+
+---
+
+## 16. driver_payments table (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+
+Depends on section 13 (drivers) and section 15 (compensation_type, read by
+the app to classify each payment for tax treatment — not enforced by a DB
+constraint, since a driver's compensation_type can change over time while
+past payments correctly keep whatever treatment applied when they were
+paid; the app reads the driver's CURRENT compensation_type at query time,
+per PROMPTS.md's decision notes). `settlement_id` is nullable — team_split/
+trainee payments are typically tied to the settlement they were split from,
+but a driver payment can also be recorded standalone (e.g. a monthly 1099
+contractor invoice with no settlement). `employer_taxes` defaults to 0 and
+is only ever populated for `w2_employee` payments (the app computes it from
+`tax_year_data.se_tax.employer_fica` × gross_pay, see section 17) — for
+every other compensation_type it stays 0, which is what lets
+`sumDeductibleDriverPayroll()` treat `gross_pay + employer_taxes` as the
+uniform deductible-expense formula across all four compensation types
+without a type-specific branch.
+
+```sql
+create table driver_payments (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users on delete cascade,
+  driver_id      uuid not null references drivers on delete cascade,
+  settlement_id  uuid references settlements on delete set null,
+  date           date not null,
+  gross_pay      numeric(12,2) not null default 0,
+  employer_taxes numeric(12,2) not null default 0,
+  notes          text,
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
+);
+
+alter table driver_payments enable row level security;
+create policy "driver_payments_owner_all" on driver_payments
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create trigger trg_touch_updated_at before update on driver_payments
+  for each row execute function touch_updated_at();
+
+create index on driver_payments (user_id, driver_id, date);
+```
+
+`on delete cascade` from `drivers` (unlike `driver_id` on settlements/loads/
+fuel/deductions, which is `on delete set null`) — a driver_payment has no
+meaning without the driver it paid; deleting the driver's own record is a
+deliberate "erase this driver" action, distinct from just un-attributing
+their financial history from settlements. `settlement_id` IS `on delete set
+null` — deleting a settlement (CLAUDE.md invariant #5, every delete
+cascades) must not delete the payment record of what the owner actually
+paid a driver, only un-link it from that settlement.
+
+- [ ] 16a run (create driver_payments table + RLS + trigger + index)
+
+---
+
+## 17. tax_year_data gains employer_fica + nec_1099 (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+
+CLAUDE.md invariant #6: no tax constant may live in app code. The W-2
+employer-side FICA match (7.65% — Social Security 6.2% + Medicare 1.45%,
+mirroring the employee-side rate already in `se_tax.rate`/`factor`) and the
+1099-NEC $600 filing threshold are both exactly this kind of constant, so
+both are merged into the existing 2026 `tax_year_data` row instead of being
+hardcoded in `app/src/tax/driverPayroll.ts`. `employer_fica` is merged into
+the existing `se_tax` jsonb (same object the SE-tax module already reads);
+`nec_1099` is a new top-level key, same pattern as `per_diem`/
+`quarterly_deadlines`. `filing_deadline` is Jan 31 of the year AFTER the tax
+year (2027 for the 2026 row) — the IRS 1099-NEC filing deadline.
+
+```sql
+update tax_year_data
+set se_tax = se_tax || '{"employer_fica": 0.0765}'::jsonb,
+    nec_1099 = '{"threshold": 600, "filing_deadline": "2027-01-31"}'::jsonb
+where tax_year = 2026;
+```
+
+Note: this requires `nec_1099` to exist as a column, not just a jsonb-merge
+target — unlike `se_tax` (already a jsonb column being merged into), there
+is no `nec_1099` column yet. Run the column-add FIRST:
+
+```sql
+alter table tax_year_data add column nec_1099 jsonb;
+```
+
+Both additive/nullable — the app's `driverPayroll.ts` falls back to a
+hardcoded $600/no-deadline-shown behavior (documented in code, same
+graceful-fallback spirit as `per_diem.full_daily_rate`, CLAUDE.md invariant
+#6's "never silently compute with an empty/default... show a banner" for
+brackets does NOT apply here since this isn't a bracket/rate/deduction
+figure that changes the computed tax amount — it only gates whether an
+informational reminder banner appears) until this migration runs.
+
+- [ ] 17a run (add tax_year_data.nec_1099 column)
+- [ ] 17b run (merge employer_fica into se_tax + set nec_1099 for tax_year 2026)
+
+---
+
+## 18. tax_config gains ownership_pct + entity_type 'multi_member_llc' (driver compensation types / entity selection, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+
+Scope decision: the owner's message said "Entity choice stored in profiles
+(entity_type exists; add ownership_pct)" — `entity_type` actually already
+lives on `tax_config`, not `profiles` (see section 1/D8), so `ownership_pct`
+is added there too rather than introducing a second, disconnected entity
+concept on `profiles`. `ownership_pct` is only meaningful when
+`entity_type = 'multi_member_llc'` (a member's % share of the LLC, used to
+scope the tax estimate to just that member's K-1 share — see
+`calcTaxEstimate.ts`'s `ownerShareOfProfit`); null/ignored for every other
+entity_type. Postgres has no `ALTER TYPE ... ADD VALUE` for a plain `check`
+constraint — the constraint itself must be dropped and recreated.
+
+```sql
+alter table tax_config drop constraint tax_config_entity_type_check;
+alter table tax_config add constraint tax_config_entity_type_check
+  check (entity_type in ('sole_prop', 'smllc', 'multi_member_llc', 'scorp'));
+alter table tax_config add column ownership_pct numeric(5,2);
+```
+
+The exact constraint name (`tax_config_entity_type_check`) is Postgres's
+default auto-generated name for an unnamed inline `check` on the
+`entity_type` column of `tax_config` — confirm with `\d tax_config` (or the
+Supabase table editor's constraints tab) before running the `drop` if this
+doesn't match what's actually live.
+
+- [ ] 18a run (drop + recreate tax_config.entity_type check constraint with multi_member_llc)
+- [ ] 18b run (add tax_config.ownership_pct column)
 
 ---
 
