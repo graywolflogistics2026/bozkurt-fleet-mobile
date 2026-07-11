@@ -28,7 +28,12 @@
     "settings": "Настройки",
     "importLegacy": "Импорт Старого Резервного Копирования",
     "takePhoto": "Сделать Фото",
-    "notFoundTitle": "Ой!"
+    "notFoundTitle": "Ой!",
+    "loads": "Грузы",
+    "settlements": "Settlements",
+    "reimbursements": "Возмещения",
+    "fuel": "Топливо",
+    "tolls": "Платные Дороги и Сборы"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -128,7 +133,12 @@
     "deleteConfirmTitle": "Удалить этот вычет?",
     "saveFailedTitle": "Ошибка сохранения",
     "deleteFailedTitle": "Ошибка удаления",
-    "genericRetry": "Пожалуйста, попробуйте снова."
+    "genericRetry": "Пожалуйста, попробуйте снова.",
+    "add": "Добавить",
+    "addTitle": "➕ Добавить Вычет",
+    "descriptionLabel": "Описание",
+    "descriptionPlaceholder": "За что это было?",
+    "dateLabel": "Дата"
   },
   "capitalAccount": {
     "title": "Капитальный Счёт",
@@ -310,7 +320,12 @@
     "trucks": "Грузовики",
     "drivers": "Водители",
     "loans": "Кредиты",
-    "settings": "Настройки"
+    "settings": "Настройки",
+    "loads": "Грузы",
+    "settlements": "Settlements",
+    "reimbursements": "Возмещения",
+    "fuel": "Топливо",
+    "tolls": "Платные Дороги и Сборы"
   },
   "placeholders": {
     "taxEstimator": {
@@ -572,5 +587,100 @@
     "switchTruck": "Сменить Грузовик",
     "selectTruck": "Выбрать грузовик",
     "cancel": "Отмена"
+  },
+  "loads": {
+    "title": "Грузы",
+    "totalLoads": "Всего Грузов",
+    "loadedMiles": "Гружёные Мили",
+    "revenuePerMile": "Доход/Милю",
+    "empty": "Пока нет грузов — импортируйте PDF settlement.",
+    "deleteConfirmTitle": "Удалить этот груз?",
+    "deleteFailedTitle": "Не удалось удалить"
+  },
+  "settlementsScreen": {
+    "title": "Settlements",
+    "grossTotal": "Всего Брутто",
+    "netTotal": "Всего Нетто",
+    "count": "Settlements",
+    "empty": "Пока нет settlements — импортируйте PDF settlement.",
+    "weekOf": "Неделя {{date}}",
+    "grossLabel": "Брутто {{amount}}",
+    "grossLabelShort": "Брутто",
+    "netLabelShort": "Нетто",
+    "milesLabelShort": "Мили",
+    "incomeLines": "Статьи Дохода",
+    "chargebacks": "Удержания",
+    "noChargebacks": "На этой неделе удержаний нет.",
+    "reimbursements": "Возмещения",
+    "loads": "Грузы",
+    "reimportNote": "Повторный импорт settlement за эту неделю заменяет его settlement, грузы, топливо, возмещения и удержанные вычеты — никогда их не дублирует.",
+    "deleteConfirmTitle": "Удалить этот settlement?",
+    "deleteConfirmBody": "Это также удалит связанные грузы, топливо, возмещения и удержанные вычеты.",
+    "deleteFailedTitle": "Не удалось удалить"
+  },
+  "reimbursements": {
+    "title": "Возмещения",
+    "add": "Добавить",
+    "addTitle": "➕ Добавить Возмещение",
+    "totalReimbursed": "Всего Возмещено",
+    "empty": "Пока нет возмещений.",
+    "descriptionLabel": "Описание",
+    "descriptionPlaceholder": "Что было возмещено?",
+    "referenceLabel": "№ Ссылки",
+    "referencePlaceholder": "Необязательно",
+    "dateLabel": "Дата",
+    "amountLabel": "Сумма ($)",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteConfirmTitle": "Удалить это возмещение?",
+    "deleteFailedTitle": "Не удалось удалить",
+    "warrantyTag": "Гарантия",
+    "fuelTag": "Топливо"
+  },
+  "fuel": {
+    "title": "Топливо",
+    "add": "Добавить",
+    "addTitle": "➕ Добавить Заправку",
+    "totalNetCost": "Общая Чистая Стоимость",
+    "tractorFuel": "Топливо Тягача",
+    "reeferFuel": "Топливо Reefer",
+    "netCost": "Чистая Стоимость",
+    "discounts": "Скидки",
+    "perGallon": "За Галлон",
+    "empty": "Пока нет заправок.",
+    "fuelTypeLabel": "Тип Топлива",
+    "locationLabel": "Местоположение",
+    "locationPlaceholder": "Стоянка / АЗС",
+    "stateLabel": "Штат (IFTA)",
+    "dateLabel": "Дата",
+    "gallonsLabel": "Галлоны",
+    "amountLabel": "Сумма ($)",
+    "discountLabel": "Скидка ($)",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteConfirmTitle": "Удалить эту заправку?",
+    "deleteFailedTitle": "Не удалось удалить",
+    "types": {
+      "tractor": "Тягач",
+      "reefer": "Reefer"
+    }
+  },
+  "tolls": {
+    "title": "Платные Дороги и Сборы",
+    "add": "Добавить",
+    "addTitle": "➕ Добавить Платёж",
+    "total": "Всего",
+    "empty": "Пока нет платежей.",
+    "networkLabel": "Сеть",
+    "plazaLabel": "Пункт Оплаты",
+    "plazaPlaceholder": "Необязательно",
+    "dateLabel": "Дата",
+    "amountLabel": "Сумма ($)",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteConfirmTitle": "Удалить этот платёж?",
+    "deleteFailedTitle": "Не удалось удалить",
+    "networks": {
+      "ezpass": "EZ-Pass",
+      "drivewyze": "Drivewyze",
+      "other": "Другое"
+    }
   }
 }

@@ -3,12 +3,12 @@ import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
-import { useDeductions, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
+import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
 import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
-import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
+import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS, type PaymentMethod } from '@/src/import/paymentMethods';
 import { CANONICAL_CATEGORIES } from '@/src/import/category';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useFormatters } from '@/src/i18n/format';
@@ -117,6 +117,7 @@ export default function Deductions() {
   const { session } = useAuth();
   const userId = session?.user.id;
   const dedQuery = useDeductions();
+  const insertDeduction = useInsertDeduction();
   const updateDeduction = useUpdateDeduction();
   const deleteDeduction = useDeleteDeduction();
   const queryClient = useQueryClient();
@@ -127,6 +128,14 @@ export default function Deductions() {
   const [editPayment, setEditPayment] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const [adding, setAdding] = useState(false);
+  const [addDescription, setAddDescription] = useState('');
+  const [addCategory, setAddCategory] = useState('Misc');
+  const [addPayment, setAddPayment] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
+  const [addAmount, setAddAmount] = useState('');
+  const [addDate, setAddDate] = useState('');
+  const [addSaving, setAddSaving] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -191,6 +200,65 @@ export default function Deductions() {
     }
   }
 
+  function openAdd() {
+    setAddDescription('');
+    setAddCategory('Misc');
+    setAddPayment(PAYMENT_METHODS[0]);
+    setAddAmount('');
+    setAddDate(new Date().toISOString().slice(0, 10));
+    setAdding(true);
+  }
+
+  function closeAdd() {
+    setAdding(false);
+  }
+
+  async function handleSaveAdd() {
+    if (!userId) return;
+    const amount = Number(addAmount) || 0;
+    const personal = isPersonalPayment(addPayment);
+
+    // CLAUDE.md invariant #2: a personal-payment purchase only creates a
+    // linked capital contribution after explicit confirmation — same gate
+    // as editing, asked once per save, not per line item.
+    if (personal && amount > 0) {
+      const confirmed = await confirmOwnerContribution(addPayment);
+      if (!confirmed) return;
+    }
+
+    setAddSaving(true);
+    try {
+      const newDed = await insertDeduction.mutateAsync({
+        user_id: userId,
+        description: addDescription || null,
+        category: addCategory,
+        payment_method: addPayment,
+        amount,
+        ded_date: addDate || null,
+        source: 'manual',
+      });
+
+      if (personal && amount > 0) {
+        const plan = planContributionSync({
+          isPersonal: true,
+          amount,
+          date: addDate || null,
+          description: addDescription || null,
+          paymentMethod: addPayment,
+          existingContributionId: null,
+        });
+        await applyContributionSync(userId, newDed.id, plan);
+      }
+
+      await invalidateFinancialData(queryClient);
+      setAdding(false);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setAddSaving(false);
+    }
+  }
+
   function handleDelete(x: Deduction) {
     Alert.alert(t('deductions.deleteConfirmTitle'), undefined, [
       { text: t('common.cancel'), style: 'cancel' },
@@ -219,7 +287,14 @@ export default function Deductions() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
-        <ScreenTitle>{t('deductions.title')}</ScreenTitle>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <ScreenTitle>{t('deductions.title')}</ScreenTitle>
+          <Pressable onPress={openAdd} hitSlop={8}>
+            <Text style={{ color: colors.accent, fontSize: typography.size.md, fontWeight: '700' }}>
+              + {t('deductions.add')}
+            </Text>
+          </Pressable>
+        </View>
 
         {dedQuery.isLoading ? (
           <Card>
@@ -297,6 +372,61 @@ export default function Deductions() {
 
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={saving} />
         <SecondaryButton title={t('common.cancel')} onPress={closeEdit} />
+      </ModalSheet>
+
+      <ModalSheet visible={adding} onClose={closeAdd}>
+        <SheetTitle>{t('deductions.addTitle')}</SheetTitle>
+
+        <View style={{ marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.descriptionLabel')}</MutedText>
+        </View>
+        <Field value={addDescription} onChangeText={setAddDescription} placeholder={t('deductions.descriptionPlaceholder')} />
+
+        <View style={{ marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.categoryLabel')}</MutedText>
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {CANONICAL_CATEGORIES.map((c) => (
+            <Pill key={c} label={c} selected={addCategory === c} onPress={() => setAddCategory(c)} />
+          ))}
+        </View>
+
+        <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.dateLabel')}</MutedText>
+        </View>
+        <Field value={addDate} onChangeText={setAddDate} placeholder="YYYY-MM-DD" />
+
+        <View style={{ marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.amountLabel')}</MutedText>
+        </View>
+        <Field keyboardType="numeric" value={addAmount} onChangeText={setAddAmount} placeholder="0.00" />
+
+        <View style={{ marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.paymentMethodLabel')}</MutedText>
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {PAYMENT_METHODS.map((p) => (
+            <Pill key={p} label={p} selected={addPayment === p} onPress={() => setAddPayment(p)} />
+          ))}
+        </View>
+
+        {isPersonalPayment(addPayment) && (
+          <View
+            style={{
+              marginTop: spacing.md,
+              padding: spacing.sm,
+              borderRadius: radii.sm,
+              backgroundColor: 'rgba(245,158,11,0.12)',
+            }}
+          >
+            <Text style={{ color: colors.orange, fontSize: typography.size.xs }}>
+              {t('deductions.personalPaymentNote')}
+            </Text>
+          </View>
+        )}
+
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveAdd} loading={addSaving} />
+        <SecondaryButton title={t('common.cancel')} onPress={closeAdd} />
       </ModalSheet>
     </Screen>
   );

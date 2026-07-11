@@ -28,7 +28,12 @@
     "settings": "Settings",
     "importLegacy": "Import Legacy Backup",
     "takePhoto": "Take Photo",
-    "notFoundTitle": "Oops!"
+    "notFoundTitle": "Oops!",
+    "loads": "Loads",
+    "settlements": "Settlements",
+    "reimbursements": "Reimbursements",
+    "fuel": "Fuel",
+    "tolls": "Tolls & Fees"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -128,7 +133,12 @@
     "deleteConfirmTitle": "Delete this deduction?",
     "saveFailedTitle": "Save failed",
     "deleteFailedTitle": "Delete failed",
-    "genericRetry": "Please try again."
+    "genericRetry": "Please try again.",
+    "add": "Add",
+    "addTitle": "➕ Add Deduction",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What was it for?",
+    "dateLabel": "Date"
   },
   "capitalAccount": {
     "title": "Capital Account",
@@ -310,7 +320,12 @@
     "trucks": "Trucks",
     "drivers": "Drivers",
     "loans": "Loans",
-    "settings": "Settings"
+    "settings": "Settings",
+    "loads": "Loads",
+    "settlements": "Settlements",
+    "reimbursements": "Reimbursements",
+    "fuel": "Fuel",
+    "tolls": "Tolls & Fees"
   },
   "placeholders": {
     "taxEstimator": {
@@ -477,26 +492,86 @@
     }
   },
   "docTypes": {
-    "settlement": { "label": "Settlement", "route": "Settlements · Loads · Fuel · Deductions · Assets" },
-    "fuel": { "label": "Fuel Receipt", "route": "Fuel Log" },
-    "maintenance": { "label": "Repair Invoice", "route": "Maintenance" },
-    "amazon": { "label": "Store/Amazon Purchase", "route": "Deductions (auto-categorized) · Capital Account" },
-    "store": { "label": "Store Receipt", "route": "Deductions · Capital Account" },
-    "toll": { "label": "Toll Bill", "route": "Deductions" },
-    "loan": { "label": "Loan Statement", "route": "Deductions" },
-    "w2": { "label": "W-2 Tax Form", "route": "Household Income (not yet wired to a screen)" },
-    "driver_payment": { "label": "Driver Payment", "route": "Driver Payments" },
-    "insurance": { "label": "Insurance Statement", "route": "Deductions" },
-    "lease_rent": { "label": "Lease/Rent Statement", "route": "Deductions" },
-    "factoring_statement": { "label": "Factoring Statement", "route": "Deductions" },
-    "government_or_misc_income": { "label": "Misc. Income", "route": "Not yet wired to a screen — record manually for now" },
-    "utility_subscription": { "label": "Utility/Subscription Bill", "route": "Deductions" },
-    "medical_card": { "label": "DOT Medical Card", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "inspection_report": { "label": "DOT Inspection Report", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "registration_cab_card": { "label": "IRP Registration/Cab Card", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "irs_2290_schedule1": { "label": "HVUT (Form 2290) Schedule 1", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "insurance_policy": { "label": "Insurance Policy", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "other": { "label": "Document", "route": "Deductions" }
+    "settlement": {
+      "label": "Settlement",
+      "route": "Settlements · Loads · Fuel · Deductions · Assets"
+    },
+    "fuel": {
+      "label": "Fuel Receipt",
+      "route": "Fuel Log"
+    },
+    "maintenance": {
+      "label": "Repair Invoice",
+      "route": "Maintenance"
+    },
+    "amazon": {
+      "label": "Store/Amazon Purchase",
+      "route": "Deductions (auto-categorized) · Capital Account"
+    },
+    "store": {
+      "label": "Store Receipt",
+      "route": "Deductions · Capital Account"
+    },
+    "toll": {
+      "label": "Toll Bill",
+      "route": "Deductions"
+    },
+    "loan": {
+      "label": "Loan Statement",
+      "route": "Deductions"
+    },
+    "w2": {
+      "label": "W-2 Tax Form",
+      "route": "Household Income (not yet wired to a screen)"
+    },
+    "driver_payment": {
+      "label": "Driver Payment",
+      "route": "Driver Payments"
+    },
+    "insurance": {
+      "label": "Insurance Statement",
+      "route": "Deductions"
+    },
+    "lease_rent": {
+      "label": "Lease/Rent Statement",
+      "route": "Deductions"
+    },
+    "factoring_statement": {
+      "label": "Factoring Statement",
+      "route": "Deductions"
+    },
+    "government_or_misc_income": {
+      "label": "Misc. Income",
+      "route": "Not yet wired to a screen — record manually for now"
+    },
+    "utility_subscription": {
+      "label": "Utility/Subscription Bill",
+      "route": "Deductions"
+    },
+    "medical_card": {
+      "label": "DOT Medical Card",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "inspection_report": {
+      "label": "DOT Inspection Report",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "registration_cab_card": {
+      "label": "IRP Registration/Cab Card",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "irs_2290_schedule1": {
+      "label": "HVUT (Form 2290) Schedule 1",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "insurance_policy": {
+      "label": "Insurance Policy",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "other": {
+      "label": "Document",
+      "route": "Deductions"
+    }
   },
   "confirmContribution": {
     "title": "Add as Owner Contribution?",
@@ -512,5 +587,100 @@
     "switchTruck": "Switch Truck",
     "selectTruck": "Select truck",
     "cancel": "Cancel"
+  },
+  "loads": {
+    "title": "Loads",
+    "totalLoads": "Total Loads",
+    "loadedMiles": "Loaded Miles",
+    "revenuePerMile": "Revenue/Mile",
+    "empty": "No loads yet — import a settlement PDF.",
+    "deleteConfirmTitle": "Delete this load?",
+    "deleteFailedTitle": "Delete failed"
+  },
+  "settlementsScreen": {
+    "title": "Settlements",
+    "grossTotal": "Total Gross",
+    "netTotal": "Total Net",
+    "count": "Settlements",
+    "empty": "No settlements yet — import a settlement PDF.",
+    "weekOf": "Week of {{date}}",
+    "grossLabel": "Gross {{amount}}",
+    "grossLabelShort": "Gross",
+    "netLabelShort": "Net",
+    "milesLabelShort": "Miles",
+    "incomeLines": "Income Lines",
+    "chargebacks": "Chargebacks",
+    "noChargebacks": "No chargebacks withheld this week.",
+    "reimbursements": "Reimbursements",
+    "loads": "Loads",
+    "reimportNote": "Re-importing a settlement for this week replaces its settlement, loads, fuel, reimbursements, and withheld deductions in place — it never duplicates them.",
+    "deleteConfirmTitle": "Delete this settlement?",
+    "deleteConfirmBody": "This also removes its linked loads, fuel, reimbursements, and withheld deductions.",
+    "deleteFailedTitle": "Delete failed"
+  },
+  "reimbursements": {
+    "title": "Reimbursements",
+    "add": "Add",
+    "addTitle": "➕ Add Reimbursement",
+    "totalReimbursed": "Total Reimbursed",
+    "empty": "No reimbursements yet.",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What was reimbursed?",
+    "referenceLabel": "Reference #",
+    "referencePlaceholder": "Optional",
+    "dateLabel": "Date",
+    "amountLabel": "Amount ($)",
+    "saveFailedTitle": "Save failed",
+    "deleteConfirmTitle": "Delete this reimbursement?",
+    "deleteFailedTitle": "Delete failed",
+    "warrantyTag": "Warranty",
+    "fuelTag": "Fuel"
+  },
+  "fuel": {
+    "title": "Fuel",
+    "add": "Add",
+    "addTitle": "➕ Add Fuel Purchase",
+    "totalNetCost": "Total Net Cost",
+    "tractorFuel": "Tractor Fuel",
+    "reeferFuel": "Reefer Fuel",
+    "netCost": "Net Cost",
+    "discounts": "Discounts",
+    "perGallon": "Per Gallon",
+    "empty": "No fuel purchases yet.",
+    "fuelTypeLabel": "Fuel Type",
+    "locationLabel": "Location",
+    "locationPlaceholder": "Truck stop / station",
+    "stateLabel": "State (IFTA)",
+    "dateLabel": "Date",
+    "gallonsLabel": "Gallons",
+    "amountLabel": "Amount ($)",
+    "discountLabel": "Discount ($)",
+    "saveFailedTitle": "Save failed",
+    "deleteConfirmTitle": "Delete this fuel purchase?",
+    "deleteFailedTitle": "Delete failed",
+    "types": {
+      "tractor": "Tractor",
+      "reefer": "Reefer"
+    }
+  },
+  "tolls": {
+    "title": "Tolls & Fees",
+    "add": "Add",
+    "addTitle": "➕ Add Toll",
+    "total": "Total",
+    "empty": "No tolls yet.",
+    "networkLabel": "Network",
+    "plazaLabel": "Plaza",
+    "plazaPlaceholder": "Optional",
+    "dateLabel": "Date",
+    "amountLabel": "Amount ($)",
+    "saveFailedTitle": "Save failed",
+    "deleteConfirmTitle": "Delete this toll?",
+    "deleteFailedTitle": "Delete failed",
+    "networks": {
+      "ezpass": "EZ-Pass",
+      "drivewyze": "Drivewyze",
+      "other": "Other"
+    }
   }
 }

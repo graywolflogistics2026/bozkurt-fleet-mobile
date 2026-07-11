@@ -28,7 +28,12 @@
     "settings": "Ayarlar",
     "importLegacy": "Eski Yedeği İçe Aktar",
     "takePhoto": "Fotoğraf Çek",
-    "notFoundTitle": "Hata!"
+    "notFoundTitle": "Hata!",
+    "loads": "Yükler",
+    "settlements": "Settlements",
+    "reimbursements": "Geri Ödemeler",
+    "fuel": "Yakıt",
+    "tolls": "Geçiş Ücretleri"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -128,7 +133,12 @@
     "deleteConfirmTitle": "Bu kesinti silinsin mi?",
     "saveFailedTitle": "Kaydetme başarısız",
     "deleteFailedTitle": "Silme başarısız",
-    "genericRetry": "Lütfen tekrar deneyin."
+    "genericRetry": "Lütfen tekrar deneyin.",
+    "add": "Ekle",
+    "addTitle": "➕ Kesinti Ekle",
+    "descriptionLabel": "Açıklama",
+    "descriptionPlaceholder": "Ne içindi?",
+    "dateLabel": "Tarih"
   },
   "capitalAccount": {
     "title": "Sermaye Hesabı",
@@ -310,7 +320,12 @@
     "trucks": "Kamyonlar",
     "drivers": "Sürücüler",
     "loans": "Krediler",
-    "settings": "Ayarlar"
+    "settings": "Ayarlar",
+    "loads": "Yükler",
+    "settlements": "Settlements",
+    "reimbursements": "Geri Ödemeler",
+    "fuel": "Yakıt",
+    "tolls": "Geçiş Ücretleri"
   },
   "placeholders": {
     "taxEstimator": {
@@ -572,5 +587,100 @@
     "switchTruck": "Kamyon Değiştir",
     "selectTruck": "Kamyon seç",
     "cancel": "İptal"
+  },
+  "loads": {
+    "title": "Yükler",
+    "totalLoads": "Toplam Yük",
+    "loadedMiles": "Yüklü Mil",
+    "revenuePerMile": "Gelir/Mil",
+    "empty": "Henüz yük yok — bir settlement PDF'i içe aktarın.",
+    "deleteConfirmTitle": "Bu yük silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız"
+  },
+  "settlementsScreen": {
+    "title": "Settlements",
+    "grossTotal": "Toplam Brüt",
+    "netTotal": "Toplam Net",
+    "count": "Settlements",
+    "empty": "Henüz settlement yok — bir settlement PDF'i içe aktarın.",
+    "weekOf": "{{date}} Haftası",
+    "grossLabel": "Brüt {{amount}}",
+    "grossLabelShort": "Brüt",
+    "netLabelShort": "Net",
+    "milesLabelShort": "Mil",
+    "incomeLines": "Gelir Kalemleri",
+    "chargebacks": "Kesintiler",
+    "noChargebacks": "Bu hafta kesinti yok.",
+    "reimbursements": "Geri Ödemeler",
+    "loads": "Yükler",
+    "reimportNote": "Bu haftaya ait bir settlement'ı yeniden içe aktarmak onun settlement'ını, yüklerini, yakıtını, geri ödemelerini ve kesilen kesintilerini yerinde değiştirir — asla çoğaltmaz.",
+    "deleteConfirmTitle": "Bu settlement silinsin mi?",
+    "deleteConfirmBody": "Bu, bağlı yükleri, yakıtı, geri ödemeleri ve kesilen kesintileri de kaldırır.",
+    "deleteFailedTitle": "Silme başarısız"
+  },
+  "reimbursements": {
+    "title": "Geri Ödemeler",
+    "add": "Ekle",
+    "addTitle": "➕ Geri Ödeme Ekle",
+    "totalReimbursed": "Toplam Geri Ödenen",
+    "empty": "Henüz geri ödeme yok.",
+    "descriptionLabel": "Açıklama",
+    "descriptionPlaceholder": "Ne geri ödendi?",
+    "referenceLabel": "Referans No",
+    "referencePlaceholder": "İsteğe bağlı",
+    "dateLabel": "Tarih",
+    "amountLabel": "Tutar ($)",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteConfirmTitle": "Bu geri ödeme silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız",
+    "warrantyTag": "Garanti",
+    "fuelTag": "Yakıt"
+  },
+  "fuel": {
+    "title": "Yakıt",
+    "add": "Ekle",
+    "addTitle": "➕ Yakıt Alımı Ekle",
+    "totalNetCost": "Toplam Net Maliyet",
+    "tractorFuel": "Çekici Yakıtı",
+    "reeferFuel": "Reefer Yakıtı",
+    "netCost": "Net Maliyet",
+    "discounts": "İndirimler",
+    "perGallon": "Galon Başına",
+    "empty": "Henüz yakıt alımı yok.",
+    "fuelTypeLabel": "Yakıt Türü",
+    "locationLabel": "Konum",
+    "locationPlaceholder": "Dinlenme tesisi / istasyon",
+    "stateLabel": "Eyalet (IFTA)",
+    "dateLabel": "Tarih",
+    "gallonsLabel": "Galon",
+    "amountLabel": "Tutar ($)",
+    "discountLabel": "İndirim ($)",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteConfirmTitle": "Bu yakıt alımı silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız",
+    "types": {
+      "tractor": "Çekici",
+      "reefer": "Reefer"
+    }
+  },
+  "tolls": {
+    "title": "Geçiş Ücretleri",
+    "add": "Ekle",
+    "addTitle": "➕ Geçiş Ücreti Ekle",
+    "total": "Toplam",
+    "empty": "Henüz geçiş ücreti yok.",
+    "networkLabel": "Ağ",
+    "plazaLabel": "Gişe",
+    "plazaPlaceholder": "İsteğe bağlı",
+    "dateLabel": "Tarih",
+    "amountLabel": "Tutar ($)",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteConfirmTitle": "Bu geçiş ücreti silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız",
+    "networks": {
+      "ezpass": "EZ-Pass",
+      "drivewyze": "Drivewyze",
+      "other": "Diğer"
+    }
   }
 }

@@ -5,6 +5,11 @@ import { Screen } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 const MENU_ITEMS = [
+  { href: '/(tabs)/more/loads', labelKey: 'more.loads', emoji: '🚛' },
+  { href: '/(tabs)/more/settlements', labelKey: 'more.settlements', emoji: '📋' },
+  { href: '/(tabs)/more/reimbursements', labelKey: 'more.reimbursements', emoji: '↩️' },
+  { href: '/(tabs)/more/fuel', labelKey: 'more.fuel', emoji: '⛽' },
+  { href: '/(tabs)/more/tolls', labelKey: 'more.tolls', emoji: '🛣️' },
   { href: '/(tabs)/more/capital-account', labelKey: 'more.capitalAccount', emoji: '💰' },
   { href: '/(tabs)/more/tax-estimator', labelKey: 'more.taxEstimator', emoji: '🧮' },
   { href: '/(tabs)/more/cash-flow', labelKey: 'more.cashFlow', emoji: '🏦' },

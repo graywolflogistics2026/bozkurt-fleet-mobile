@@ -12,6 +12,8 @@ const AFFECTED_TABLES = [
   'capital_transactions',
   'loads',
   'documents',
+  'reimbursements',
+  'tolls',
 ];
 
 // Derived/aggregate query keys that read from the tables above but aren't

@@ -28,7 +28,12 @@
     "settings": "الإعدادات",
     "importLegacy": "استيراد نسخة احتياطية قديمة",
     "takePhoto": "التقاط صورة",
-    "notFoundTitle": "عذرًا!"
+    "notFoundTitle": "عذرًا!",
+    "loads": "الحمولات",
+    "settlements": "Settlements",
+    "reimbursements": "المبالغ المستردة",
+    "fuel": "الوقود",
+    "tolls": "الرسوم والعوائد"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -128,7 +133,12 @@
     "deleteConfirmTitle": "حذف هذا الخصم؟",
     "saveFailedTitle": "فشل الحفظ",
     "deleteFailedTitle": "فشل الحذف",
-    "genericRetry": "يرجى المحاولة مرة أخرى."
+    "genericRetry": "يرجى المحاولة مرة أخرى.",
+    "add": "إضافة",
+    "addTitle": "➕ إضافة خصم",
+    "descriptionLabel": "الوصف",
+    "descriptionPlaceholder": "ما الغرض منه؟",
+    "dateLabel": "التاريخ"
   },
   "capitalAccount": {
     "title": "حساب رأس المال",
@@ -310,7 +320,12 @@
     "trucks": "الشاحنات",
     "drivers": "السائقون",
     "loans": "القروض",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "loads": "الحمولات",
+    "settlements": "Settlements",
+    "reimbursements": "المبالغ المستردة",
+    "fuel": "الوقود",
+    "tolls": "الرسوم والعوائد"
   },
   "placeholders": {
     "taxEstimator": {
@@ -572,5 +587,100 @@
     "switchTruck": "تبديل الشاحنة",
     "selectTruck": "اختر شاحنة",
     "cancel": "إلغاء"
+  },
+  "loads": {
+    "title": "الحمولات",
+    "totalLoads": "إجمالي الحمولات",
+    "loadedMiles": "الأميال المحمّلة",
+    "revenuePerMile": "الإيراد/الميل",
+    "empty": "لا توجد حمولات بعد — استورد ملف PDF لـ Settlement.",
+    "deleteConfirmTitle": "حذف هذه الحمولة؟",
+    "deleteFailedTitle": "فشل الحذف"
+  },
+  "settlementsScreen": {
+    "title": "Settlements",
+    "grossTotal": "إجمالي الإجمالي",
+    "netTotal": "إجمالي الصافي",
+    "count": "Settlements",
+    "empty": "لا توجد Settlements بعد — استورد ملف PDF لـ Settlement.",
+    "weekOf": "أسبوع {{date}}",
+    "grossLabel": "الإجمالي {{amount}}",
+    "grossLabelShort": "الإجمالي",
+    "netLabelShort": "الصافي",
+    "milesLabelShort": "الأميال",
+    "incomeLines": "بنود الدخل",
+    "chargebacks": "الخصومات المحتجزة",
+    "noChargebacks": "لا توجد خصومات محتجزة هذا الأسبوع.",
+    "reimbursements": "المبالغ المستردة",
+    "loads": "الحمولات",
+    "reimportNote": "إعادة استيراد Settlement لهذا الأسبوع تستبدل Settlement والحمولات والوقود والمبالغ المستردة والخصومات المحتجزة الخاصة به — لا تكررها أبدًا.",
+    "deleteConfirmTitle": "حذف هذا الـ Settlement؟",
+    "deleteConfirmBody": "سيؤدي هذا أيضًا إلى إزالة الحمولات والوقود والمبالغ المستردة والخصومات المحتجزة المرتبطة به.",
+    "deleteFailedTitle": "فشل الحذف"
+  },
+  "reimbursements": {
+    "title": "المبالغ المستردة",
+    "add": "إضافة",
+    "addTitle": "➕ إضافة مبلغ مسترد",
+    "totalReimbursed": "إجمالي المسترد",
+    "empty": "لا توجد مبالغ مستردة بعد.",
+    "descriptionLabel": "الوصف",
+    "descriptionPlaceholder": "ما الذي تم استرداده؟",
+    "referenceLabel": "رقم المرجع",
+    "referencePlaceholder": "اختياري",
+    "dateLabel": "التاريخ",
+    "amountLabel": "المبلغ ($)",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteConfirmTitle": "حذف هذا المبلغ المسترد؟",
+    "deleteFailedTitle": "فشل الحذف",
+    "warrantyTag": "الضمان",
+    "fuelTag": "الوقود"
+  },
+  "fuel": {
+    "title": "الوقود",
+    "add": "إضافة",
+    "addTitle": "➕ إضافة عملية تزويد بالوقود",
+    "totalNetCost": "إجمالي التكلفة الصافية",
+    "tractorFuel": "وقود الجرار",
+    "reeferFuel": "وقود Reefer",
+    "netCost": "التكلفة الصافية",
+    "discounts": "الخصومات",
+    "perGallon": "لكل جالون",
+    "empty": "لا توجد عمليات تزويد بالوقود بعد.",
+    "fuelTypeLabel": "نوع الوقود",
+    "locationLabel": "الموقع",
+    "locationPlaceholder": "محطة توقف / محطة وقود",
+    "stateLabel": "الولاية (IFTA)",
+    "dateLabel": "التاريخ",
+    "gallonsLabel": "الجالونات",
+    "amountLabel": "المبلغ ($)",
+    "discountLabel": "الخصم ($)",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteConfirmTitle": "حذف عملية التزويد بالوقود هذه؟",
+    "deleteFailedTitle": "فشل الحذف",
+    "types": {
+      "tractor": "جرار",
+      "reefer": "Reefer"
+    }
+  },
+  "tolls": {
+    "title": "الرسوم والعوائد",
+    "add": "إضافة",
+    "addTitle": "➕ إضافة رسم",
+    "total": "الإجمالي",
+    "empty": "لا توجد رسوم بعد.",
+    "networkLabel": "الشبكة",
+    "plazaLabel": "نقطة الرسم",
+    "plazaPlaceholder": "اختياري",
+    "dateLabel": "التاريخ",
+    "amountLabel": "المبلغ ($)",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteConfirmTitle": "حذف هذا الرسم؟",
+    "deleteFailedTitle": "فشل الحذف",
+    "networks": {
+      "ezpass": "EZ-Pass",
+      "drivewyze": "Drivewyze",
+      "other": "أخرى"
+    }
   }
 }

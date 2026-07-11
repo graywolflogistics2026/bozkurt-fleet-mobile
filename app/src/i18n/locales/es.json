@@ -28,7 +28,12 @@
     "settings": "Configuración",
     "importLegacy": "Importar Respaldo Anterior",
     "takePhoto": "Tomar Foto",
-    "notFoundTitle": "¡Ups!"
+    "notFoundTitle": "¡Ups!",
+    "loads": "Cargas",
+    "settlements": "Settlements",
+    "reimbursements": "Reembolsos",
+    "fuel": "Combustible",
+    "tolls": "Peajes y Tarifas"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -128,7 +133,12 @@
     "deleteConfirmTitle": "¿Eliminar esta deducción?",
     "saveFailedTitle": "Error al guardar",
     "deleteFailedTitle": "Error al eliminar",
-    "genericRetry": "Por favor, inténtelo de nuevo."
+    "genericRetry": "Por favor, inténtelo de nuevo.",
+    "add": "Agregar",
+    "addTitle": "➕ Agregar Deducción",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "¿Para qué fue?",
+    "dateLabel": "Fecha"
   },
   "capitalAccount": {
     "title": "Cuenta de Capital",
@@ -310,7 +320,12 @@
     "trucks": "Camiones",
     "drivers": "Conductores",
     "loans": "Préstamos",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "loads": "Cargas",
+    "settlements": "Settlements",
+    "reimbursements": "Reembolsos",
+    "fuel": "Combustible",
+    "tolls": "Peajes y Tarifas"
   },
   "placeholders": {
     "taxEstimator": {
@@ -572,5 +587,100 @@
     "switchTruck": "Cambiar Camión",
     "selectTruck": "Seleccionar camión",
     "cancel": "Cancelar"
+  },
+  "loads": {
+    "title": "Cargas",
+    "totalLoads": "Total de Cargas",
+    "loadedMiles": "Millas Cargadas",
+    "revenuePerMile": "Ingreso/Milla",
+    "empty": "Aún no hay cargas — importe un PDF de settlement.",
+    "deleteConfirmTitle": "¿Eliminar esta carga?",
+    "deleteFailedTitle": "Fallo al eliminar"
+  },
+  "settlementsScreen": {
+    "title": "Settlements",
+    "grossTotal": "Bruto Total",
+    "netTotal": "Neto Total",
+    "count": "Settlements",
+    "empty": "Aún no hay settlements — importe un PDF de settlement.",
+    "weekOf": "Semana del {{date}}",
+    "grossLabel": "Bruto {{amount}}",
+    "grossLabelShort": "Bruto",
+    "netLabelShort": "Neto",
+    "milesLabelShort": "Millas",
+    "incomeLines": "Líneas de Ingreso",
+    "chargebacks": "Cargos Retenidos",
+    "noChargebacks": "Sin cargos retenidos esta semana.",
+    "reimbursements": "Reembolsos",
+    "loads": "Cargas",
+    "reimportNote": "Reimportar un settlement de esta semana reemplaza su settlement, cargas, combustible, reembolsos y deducciones retenidas — nunca los duplica.",
+    "deleteConfirmTitle": "¿Eliminar este settlement?",
+    "deleteConfirmBody": "Esto también elimina sus cargas, combustible, reembolsos y deducciones retenidas vinculadas.",
+    "deleteFailedTitle": "Fallo al eliminar"
+  },
+  "reimbursements": {
+    "title": "Reembolsos",
+    "add": "Agregar",
+    "addTitle": "➕ Agregar Reembolso",
+    "totalReimbursed": "Total Reembolsado",
+    "empty": "Aún no hay reembolsos.",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "¿Qué fue reembolsado?",
+    "referenceLabel": "N.º de Referencia",
+    "referencePlaceholder": "Opcional",
+    "dateLabel": "Fecha",
+    "amountLabel": "Monto ($)",
+    "saveFailedTitle": "Fallo al guardar",
+    "deleteConfirmTitle": "¿Eliminar este reembolso?",
+    "deleteFailedTitle": "Fallo al eliminar",
+    "warrantyTag": "Garantía",
+    "fuelTag": "Combustible"
+  },
+  "fuel": {
+    "title": "Combustible",
+    "add": "Agregar",
+    "addTitle": "➕ Agregar Compra de Combustible",
+    "totalNetCost": "Costo Neto Total",
+    "tractorFuel": "Combustible del Tractor",
+    "reeferFuel": "Combustible Reefer",
+    "netCost": "Costo Neto",
+    "discounts": "Descuentos",
+    "perGallon": "Por Galón",
+    "empty": "Aún no hay compras de combustible.",
+    "fuelTypeLabel": "Tipo de Combustible",
+    "locationLabel": "Ubicación",
+    "locationPlaceholder": "Parada de camiones / estación",
+    "stateLabel": "Estado (IFTA)",
+    "dateLabel": "Fecha",
+    "gallonsLabel": "Galones",
+    "amountLabel": "Monto ($)",
+    "discountLabel": "Descuento ($)",
+    "saveFailedTitle": "Fallo al guardar",
+    "deleteConfirmTitle": "¿Eliminar esta compra de combustible?",
+    "deleteFailedTitle": "Fallo al eliminar",
+    "types": {
+      "tractor": "Tractor",
+      "reefer": "Reefer"
+    }
+  },
+  "tolls": {
+    "title": "Peajes y Tarifas",
+    "add": "Agregar",
+    "addTitle": "➕ Agregar Peaje",
+    "total": "Total",
+    "empty": "Aún no hay peajes.",
+    "networkLabel": "Red",
+    "plazaLabel": "Plaza",
+    "plazaPlaceholder": "Opcional",
+    "dateLabel": "Fecha",
+    "amountLabel": "Monto ($)",
+    "saveFailedTitle": "Fallo al guardar",
+    "deleteConfirmTitle": "¿Eliminar este peaje?",
+    "deleteFailedTitle": "Fallo al eliminar",
+    "networks": {
+      "ezpass": "EZ-Pass",
+      "drivewyze": "Drivewyze",
+      "other": "Otro"
+    }
   }
 }
