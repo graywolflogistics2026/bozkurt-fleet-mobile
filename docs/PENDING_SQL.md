@@ -1,9 +1,9 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-09): sections 1-10 have been run against the live DB.
-Sections 11-24 are new and NOT yet applied — run them yourself in the
-Supabase SQL editor, in order (14 depends on 13; 16 depends on 15).**
-This file started as a forward-looking "run this next" list; it's kept now
+**STATUS (2026-07-11): sections 1-24 have all been run against the live DB.**
+Sections 11-24 were applied together in one transaction on 2026-07-11 via a
+combined SQL block (generated from this file, run in the Supabase SQL
+editor). This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
 (re-)run to fold all of this into a proper follow-up migration file. When
 that happens, this file should be cleared out in favor of the migration.
@@ -348,7 +348,7 @@ year-fallback banner.
 
 ---
 
-## 11. profiles column defaults — drop owner-specific defaults (PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+## 11. profiles column defaults — drop owner-specific defaults (PRODUCT DECISION, owner decision 2026-07-09) — ✅ APPLIED
 
 The mobile app is a clean product for other users; the `profiles` table's
 column defaults were still the original owner's own values
@@ -366,11 +366,11 @@ alter table profiles alter column business_balance set default 0;
 alter table profiles alter column initial_capital set default 0;
 ```
 
-- [ ] 11a run (profiles column defaults — company_name/business_balance/initial_capital)
+- [x] 11a run (profiles column defaults — company_name/business_balance/initial_capital)
 
 ---
 
-## 12. profiles.locale (multi-language support, PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+## 12. profiles.locale (multi-language support, PRODUCT DECISION, owner decision 2026-07-09) — ✅ APPLIED
 
 Manual language override (Settings → Language). NULL means "follow the
 device's own OS language" (falling back to English if the device language
@@ -382,11 +382,11 @@ device language, on every device the user signs into (see
 alter table profiles add column locale text;
 ```
 
-- [ ] 12a run (profiles.locale column)
+- [x] 12a run (profiles.locale column)
 
 ---
 
-## 13. drivers table (multi-truck fleet + drivers + payroll auto-routing, PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+## 13. drivers table (multi-truck fleet + drivers + payroll auto-routing, PRODUCT DECISION, owner decision 2026-07-09) — ✅ APPLIED
 
 New entity, entirely optional — an account with zero driver rows behaves
 exactly as it does today (every `driver_id` added in section 14 stays
@@ -415,11 +415,11 @@ create trigger trg_touch_updated_at before update on drivers
   for each row execute function touch_updated_at();
 ```
 
-- [ ] 13a run (create drivers table + RLS + trigger)
+- [x] 13a run (create drivers table + RLS + trigger)
 
 ---
 
-## 14. driver_id on settlements/loads/fuel_purchases/deductions (payroll auto-routing, PRODUCT DECISION, owner decision 2026-07-09) — ⬜ NOT YET APPLIED
+## 14. driver_id on settlements/loads/fuel_purchases/deductions (payroll auto-routing, PRODUCT DECISION, owner decision 2026-07-09) — ✅ APPLIED
 
 Depends on section 13 (drivers must exist first). `on delete set null`
 (not cascade) — removing/retiring a driver must never delete financial
@@ -435,11 +435,11 @@ alter table fuel_purchases add column driver_id uuid references drivers on delet
 alter table deductions add column driver_id uuid references drivers on delete set null;
 ```
 
-- [ ] 14a run (driver_id columns on settlements/loads/fuel_purchases/deductions)
+- [x] 14a run (driver_id columns on settlements/loads/fuel_purchases/deductions)
 
 ---
 
-## 15. drivers gains compensation fields (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+## 15. drivers gains compensation fields (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ✅ APPLIED
 
 Depends on section 13 (drivers must exist first). `compensation_type` drives
 both the tax-engine treatment (`app/src/tax/driverPayroll.ts`) and, later,
@@ -458,11 +458,11 @@ alter table drivers add column pay_type text
 alter table drivers add column pay_rate numeric(10,4);
 ```
 
-- [ ] 15a run (drivers.compensation_type + pay_type + pay_rate)
+- [x] 15a run (drivers.compensation_type + pay_type + pay_rate)
 
 ---
 
-## 16. driver_payments table (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+## 16. driver_payments table (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ✅ APPLIED
 
 Depends on section 13 (drivers) and section 15 (compensation_type, read by
 the app to classify each payment for tax treatment — not enforced by a DB
@@ -513,11 +513,11 @@ null` — deleting a settlement (CLAUDE.md invariant #5, every delete
 cascades) must not delete the payment record of what the owner actually
 paid a driver, only un-link it from that settlement.
 
-- [ ] 16a run (create driver_payments table + RLS + trigger + index)
+- [x] 16a run (create driver_payments table + RLS + trigger + index)
 
 ---
 
-## 17. tax_year_data gains employer_fica + nec_1099 (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+## 17. tax_year_data gains employer_fica + nec_1099 (driver compensation types, PRODUCT DECISION, owner decision 2026-07-10) — ✅ APPLIED
 
 CLAUDE.md invariant #6: no tax constant may live in app code. The W-2
 employer-side FICA match (7.65% — Social Security 6.2% + Medicare 1.45%,
@@ -553,12 +553,12 @@ brackets does NOT apply here since this isn't a bracket/rate/deduction
 figure that changes the computed tax amount — it only gates whether an
 informational reminder banner appears) until this migration runs.
 
-- [ ] 17a run (add tax_year_data.nec_1099 column)
-- [ ] 17b run (merge employer_fica into se_tax + set nec_1099 for tax_year 2026)
+- [x] 17a run (add tax_year_data.nec_1099 column)
+- [x] 17b run (merge employer_fica into se_tax + set nec_1099 for tax_year 2026)
 
 ---
 
-## 18. tax_config gains ownership_pct + entity_type 'multi_member_llc' (driver compensation types / entity selection, PRODUCT DECISION, owner decision 2026-07-10) — ⬜ NOT YET APPLIED
+## 18. tax_config gains ownership_pct + entity_type 'multi_member_llc' (driver compensation types / entity selection, PRODUCT DECISION, owner decision 2026-07-10) — ✅ APPLIED
 
 Scope decision: the owner's message said "Entity choice stored in profiles
 (entity_type exists; add ownership_pct)" — `entity_type` actually already
@@ -584,12 +584,12 @@ default auto-generated name for an unnamed inline `check` on the
 Supabase table editor's constraints tab) before running the `drop` if this
 doesn't match what's actually live.
 
-- [ ] 18a run (drop + recreate tax_config.entity_type check constraint with multi_member_llc)
-- [ ] 18b run (add tax_config.ownership_pct column)
+- [x] 18a run (drop + recreate tax_config.entity_type check constraint with multi_member_llc)
+- [x] 18b run (add tax_config.ownership_pct column)
 
 ---
 
-## 19. profiles.dashboard_layout (customizable dashboard, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+## 19. profiles.dashboard_layout (customizable dashboard, owner decision 2026-07-10, PRODUCT DECISION) — ✅ APPLIED
 
 Schema groundwork only — the customizable-dashboard UI (drag-to-reorder,
 show/hide, rename) is scheduled for PROMPTS.md Session 9a, not built this
@@ -609,11 +609,11 @@ layout), `label` is the user's override (null = use the i18n default),
 absence from the array or `visible:false` hides the card. "Reset to
 default" is simply `dashboard_layout = null`.
 
-- [ ] 19a run (add profiles.dashboard_layout jsonb column)
+- [x] 19a run (add profiles.dashboard_layout jsonb column)
 
 ---
 
-## 20. profiles.role (expanded onboarding wizard, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+## 20. profiles.role (expanded onboarding wizard, owner decision 2026-07-10, PRODUCT DECISION) — ✅ APPLIED
 
 Schema groundwork only — the expanded onboarding wizard itself stays
 scheduled for PROMPTS.md Session 9b (supersedes the earlier, shorter
@@ -635,9 +635,9 @@ Account, S-Corp election) and centers per-diem/W-2 tracking instead;
 `contractor_1099` gets the full Schedule C experience, same as
 `owner_operator`/`trainee`.
 
-- [ ] 20a run (add profiles.role column)
+- [x] 20a run (add profiles.role column)
 
-## 21. user_categories table (custom categories, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+## 21. user_categories table (custom categories, owner decision 2026-07-10, PRODUCT DECISION) — ✅ APPLIED
 
 New entity, entirely optional/additive — an account with zero rows here
 behaves exactly as today (every picker just shows `CANONICAL_CATEGORIES`,
@@ -678,11 +678,11 @@ existing "no DB migration/no check constraint on category strings" pattern
 elsewhere), but nothing stops an admin/future feature from using a
 different string, hence text not a foreign key/enum.
 
-- [ ] 21a run (create user_categories table + RLS + trigger)
+- [x] 21a run (create user_categories table + RLS + trigger)
 
 ---
 
-## 22. tags column on financial record tables (flexible fields, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+## 22. tags column on financial record tables (flexible fields, owner decision 2026-07-10, PRODUCT DECISION) — ✅ APPLIED
 
 Every record that already has a free-text field (`description`/`note`/
 `notes`) for its own label ALSO gets an optional `tags` text field — the
@@ -713,11 +713,11 @@ alter table bank_transactions add column tags text;
 Nullable, no backfill needed — existing rows simply have no tags. Every
 one of these ALTERs is independent (no ordering dependency between them).
 
-- [ ] 22a run (add tags column to settlements/loads/fuel_purchases/
+- [x] 22a run (add tags column to settlements/loads/fuel_purchases/
       deductions/capital_transactions/maintenance_records/tolls/
       reimbursements/loans/credit_cards/driver_payments/bank_transactions)
 
-## 23. compliance_items table (AI feature package — compliance tracker, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+## 23. compliance_items table (AI feature package — compliance tracker, owner decision 2026-07-10, PRODUCT DECISION) — ✅ APPLIED
 
 New entity, entirely optional/additive — an account with zero rows here
 just has an empty compliance tracker (Session 9b screen shows an empty
@@ -768,11 +768,11 @@ every other extraction rule. The Session 9b screen sets/edits it (with
 sensible per-`type` defaults chosen there, e.g. medical cards commonly
 renew every 1-2 years, HVUT 2290 is always annual by Aug 31).
 
-- [ ] 23a run (create compliance_items table + RLS + trigger + index)
+- [x] 23a run (create compliance_items table + RLS + trigger + index)
 
 ---
 
-## 24. profiles.weekly_goal (AI feature package — CEO Mode briefing, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+## 24. profiles.weekly_goal (AI feature package — CEO Mode briefing, owner decision 2026-07-10, PRODUCT DECISION) — ✅ APPLIED
 
 Schema groundwork only — CEO Mode itself (the daily/weekly briefing that
 reads this to show goal progress) is PROMPTS.md Session 9b, not built
@@ -784,7 +784,7 @@ rather than silently comparing against 0.
 alter table profiles add column weekly_goal numeric(12,2);
 ```
 
-- [ ] 24a run (add profiles.weekly_goal column)
+- [x] 24a run (add profiles.weekly_goal column)
 
 ---
 
