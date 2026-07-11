@@ -345,6 +345,11 @@
     "factoring_statement": { "label": "Estado de Factoraje", "route": "Deducciones" },
     "government_or_misc_income": { "label": "Ingreso Misceláneo", "route": "Aún no conectado a una pantalla — registre manualmente por ahora" },
     "utility_subscription": { "label": "Factura de Servicio/Suscripción", "route": "Deducciones" },
+    "medical_card": { "label": "Tarjeta Médica DOT", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
+    "inspection_report": { "label": "Informe de Inspección DOT", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
+    "registration_cab_card": { "label": "Registro IRP/Tarjeta de Cabina", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
+    "irs_2290_schedule1": { "label": "HVUT (Formulario 2290) Anexo 1", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
+    "insurance_policy": { "label": "Póliza de Seguro", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
     "other": { "label": "Documento", "route": "Deducciones" }
   },
   "confirmContribution": {

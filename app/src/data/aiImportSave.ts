@@ -2,7 +2,9 @@ import { File } from 'expo-file-system';
 import { supabase } from '@/src/lib/supabase';
 import { buildStoragePath } from '@/src/import/storagePath';
 import {
+  COMPLIANCE_DOC_TYPES,
   FINANCIAL_DOC_TYPES,
+  mapCompliance,
   mapDriverPayment,
   mapFinancialDocDeduction,
   mapFuel,
@@ -238,6 +240,34 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     const row = mapFinancialDocDeduction(d, userId);
     const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
     if (error) throw error;
+  } else if ((COMPLIANCE_DOC_TYPES as readonly string[]).includes(d.docType)) {
+    // AI feature package (owner decision 2026-07-10) — find-or-update by
+    // (user_id, type): a re-scanned renewal replaces the old due date on
+    // the SAME row rather than piling up duplicate compliance items.
+    const row = mapCompliance(d, userId);
+    if (row) {
+      const { data: existing } = await supabase
+        .from('compliance_items')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('type', row.type)
+        .maybeSingle();
+      if (existing) {
+        const { error } = await supabase
+          .from('compliance_items')
+          .update({ label: row.label, due_date: row.due_date, source_document_id: documentId })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('compliance_items')
+          .insert({ ...row, source_document_id: documentId });
+        if (error) throw error;
+      }
+    }
+    // row === null: no due date was extracted — the document is still
+    // archived above (documents row + parsed_json), just nothing to track
+    // yet, same "never guess" spirit as every other extraction rule.
   } else if (d.docType === 'maintenance' && d.maintenance) {
     const { maintenance, reimbursement } = mapMaintenance(d, userId, truckId);
     const { error } = await supabase

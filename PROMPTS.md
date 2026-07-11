@@ -536,6 +536,62 @@ both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
 ```
 
+## AI feature package (owner decision 2026-07-10, PRODUCT DECISION — binding)
+
+```
+1. Compliance Tracker v1 — SCHEMA + AI-IMPORT DOCTYPE GROUNDWORK
+   IMPLEMENTED THIS PASS (docs/PENDING_SQL.md §23, CLAUDE.md invariant
+   #21): compliance_items table (user_id, type, label, due_date,
+   recurrence, source_document_id, RLS). 5 new ai-import docTypes
+   (medical_card, inspection_report, registration_cab_card,
+   irs_2290_schedule1, insurance_policy) extract a due/expiry date and
+   find-or-update the matching compliance_items row by (user_id, type) —
+   never guesses a due date, archives the document regardless. Countdown-
+   chip screen + local notifications + manual add/edit for the 3 types
+   with no extracting docType (ifta_filing/cdl/drug_consortium) is
+   PROMPTS.md Session 9b item 9 above — not this pass.
+
+2. Share Weekly Profit v1 — RECORDED, Session 9a item 10 above. One-tap
+   branded share card (view-shot + native share sheet), user picks which
+   metrics to include for privacy. No schema needed — reads existing
+   fleet-stats figures.
+
+3. CEO Mode — Daily/Weekly Briefing v1 — SCHEMA GROUNDWORK IMPLEMENTED
+   THIS PASS (profiles.weekly_goal, docs/PENDING_SQL.md §24), screen +
+   ai-advisor composition is Session 9b item 10 above. Composed ONLY from
+   the account's own data (revenue/profit, goal progress, NEEDS-REVIEW
+   count, maintenance/compliance status, tax opportunity hints) —
+   rendered via ai-advisor in the user's language (invariant #16),
+   friendly-CEO tone, invariant #8 disclaimer. NO external-data features
+   (no ELD integration, no fuel-price feeds, no inventory tracking) —
+   recorded as CLAUDE.md invariant #22, binding not just for CEO Mode but
+   every AI/insight feature in the app, now and in the backlog.
+
+4. Profit Analysis v1 — RECORDED, Session 9a item 11 above. 30-day/weekly
+   rollups + ratio insights vs. a NEW static benchmarks table (source +
+   year, published industry reference — own PENDING_SQL section when that
+   session starts) — explicitly labeled "industry reference, not peer
+   data" in the UI (invariant #22). True anonymized peer benchmarking
+   stays v2+, gated on both a real user base existing AND being designed
+   against invariant #13 (privacy) from day one.
+
+5. Maintenance Pattern Insights v1 — RECORDED, Session 9b item 11 above.
+   ai-advisor pattern analysis over the account's own maintenance_records
+   history, with a "not a mechanic — informational only" disclaimer
+   alongside invariant #8's standard footer.
+
+6. Backlog additions — RECORDED in the Backlog section below: (a) load
+   profitability calculator, (b) breakeven RPM dashboard indicator, (c)
+   invoice generator for own-authority operators. All v1.x candidates, no
+   session assigned yet — pure UI/calculation reading data that already
+   exists, no new schema anticipated.
+
+7. Recorded in CLAUDE.md invariants #21 (compliance tracker) and #22 (no
+   external-data features) and here. tsc, tests, commit, push. ai-import
+   Edge Function MUST be redeployed — the extraction prompt changed (5
+   new docTypes).
+```
+
 ## User-defined custom categories (owner decision 2026-07-10, PRODUCT DECISION — binding)
 
 ```
@@ -1031,6 +1087,27 @@ Maintenance is Session 8, Deductions/Capital Account are Session 7):
    name + kind (income/expense) + — for expense — a schedule_c_bucket
    picker (defaulting to "Misc", CANONICAL_CATEGORIES as the bucket
    choices) with the tax-safety-rail copy explaining why it's required.
+10. Share Weekly Profit v1 (NEW, owner decision 2026-07-10 — AI feature
+    package, PRODUCT DECISION): one-tap branded share card — render the
+    week's Revenue/Profit/MPG (user picks which of these to include, for
+    privacy — never forced to share all three) plus app branding as an
+    image (react-native-view-shot capturing a styled card view) and hand
+    it to the native share sheet (expo-sharing or the RN Share API). No
+    new backend — reads the same weekly figures the Dashboard already
+    computes (fetchFleetStats()).
+11. Profit Analysis v1 (NEW, owner decision 2026-07-10 — AI feature
+    package, PRODUCT DECISION, CLAUDE.md invariant #22): 30-day and weekly
+    rollups (revenue, expenses, net) plus ratio insights (fuel as % of
+    revenue, maintenance $/mile) compared against a NEW static
+    `benchmarks` table (source + year columns, seeded/updated by an admin
+    like `tax_year_data` — add its own PENDING_SQL section when this
+    session starts) holding PUBLISHED industry reference ranges — clearly
+    labeled in the UI "industry reference, not peer data." AI commentary
+    via ai-advisor (pass the computed rollup + benchmark comparison as
+    context, same pattern as ai-advisor's existing systemPrompt figures).
+    True anonymized peer benchmarking is v2+ only, once a real user base
+    exists (invariant #22) — do not build a peer-comparison feature this
+    session even as a stub.
 ```
 
 **DESIGN NOTE (owner decision 2026-07-04, not implemented until this
@@ -1179,6 +1256,41 @@ separate design pass):
    scorp_payroll_tax_handled checkbox (already on the Dashboard, moves or
    is mirrored here), and a footnote "S-Corp payroll requires a payroll
    provider — verify with your CPA" (CLAUDE.md invariant #6/#8).
+9. Compliance Tracker v1 (NEW, owner decision 2026-07-10 — AI feature
+   package, PRODUCT DECISION, CLAUDE.md invariant #21): a screen listing
+   `compliance_items` (docs/PENDING_SQL.md §23, already built —
+   `app/src/data/complianceItems.ts`) as countdown chips (days-until-due,
+   color-coded like Truck Health's green/orange/red thresholds), plus
+   local notifications (expo-notifications, same per-item scheduling
+   pattern as Truck Health's alerts) as a due date approaches. Manual add/
+   edit for all 8 types, required for `ifta_filing`/`cdl`/
+   `drug_consortium` (no extracting docType exists for those — see
+   invariant #21) and available as a correction path for the 5
+   auto-populated types too. Recurrence (`none`/`annual`/`biennial`/
+   `quarterly`) is set/edited here — pick a sensible per-type default
+   (e.g. HVUT 2290 always `annual`) rather than leaving it unset by
+   default.
+10. CEO Mode — Daily/Weekly Briefing v1 (NEW, owner decision 2026-07-10 —
+    AI feature package, PRODUCT DECISION, CLAUDE.md invariant #22):
+    rendered via ai-advisor, composed ONLY from this account's own data —
+    revenue & profit this week, goal progress (profiles.weekly_goal,
+    docs/PENDING_SQL.md §24, already added — null means "no goal set",
+    never compared against $0), NEEDS-REVIEW receipts count (deductions/
+    documents where confidence was "low" or docType was "other" — CLAUDE.md
+    invariant #14), maintenance items going orange/red (Truck Health's
+    existing thresholds), compliance items due soon (item 9 above), and
+    tax opportunity hints (e.g. uncategorized deductible candidates —
+    likely `docType:'other'` rows never resolved). Friendly-CEO tone,
+    rendered in the user's language (invariant #16 — pass locale to
+    ai-advisor same as the AI Advisor screen above), with the invariant #8
+    disclaimer footer. No live external data (invariant #22).
+11. Maintenance Pattern Insights v1 (NEW, owner decision 2026-07-10 — AI
+    feature package, PRODUCT DECISION): ai-advisor analyzes this account's
+    own `maintenance_records` history for recurring patterns (e.g. "3
+    tires + 2 air leaks in 6 months → have front suspension checked") —
+    composed only from data already in the account (invariant #22), with
+    a persistent "not a mechanic — informational only" disclaimer
+    alongside the standard invariant #8 footer.
 Then a full audit session: run through docs/FEATURE_INVENTORY.md and produce
 PARITY.md marking each legacy feature done/partial/missing.
 ```
@@ -1274,6 +1386,25 @@ triggers automatically on version bump, per Session 3).
   silently by another feature); and needs its own Privacy Policy update
   before shipping, since the current policy states no location collection
   at all.
+
+- Load profitability calculator (owner decision 2026-07-10, AI feature
+  package, v1.x candidate): enter an offered rate + miles for a load
+  under consideration → compares against the user's live CPM/breakeven
+  (app/src/stats/cpm.ts, already computed for the Dashboard) → a green/
+  red "take it or leave it" verdict. No new data model — a pure
+  calculation screen reading figures that already exist.
+- Breakeven RPM indicator (owner decision 2026-07-10, AI feature package,
+  v1.x candidate): a Dashboard card showing the user's current breakeven
+  rate-per-mile derived from their real cost data (same CPM engine as
+  above) — effectively a permanent, always-visible version of the load
+  calculator's threshold rather than a one-off lookup.
+- Invoice generator for own-authority operators (owner decision
+  2026-07-10, AI feature package, v1.x candidate): create and share/PDF a
+  broker invoice from a delivered load's data (expo-print, same approach
+  as the Accountant Package export). Only relevant to owner-authority
+  operators (not lease-on drivers under a carrier) — gate its visibility
+  on that distinction once profiles.role (CLAUDE.md invariant #18) or a
+  similar signal exists to detect it, rather than showing it to everyone.
 ```
 
 ## Supported document types (rolling status — universal AI capture, owner decision 2026-07-10)

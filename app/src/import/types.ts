@@ -210,6 +210,24 @@ export type ExtractedFinancialDoc = {
   period?: string;
 };
 
+// AI feature package (owner decision 2026-07-10, PRODUCT DECISION —
+// compliance tracker) — one shared shape for the 5 new "compliance
+// document" docTypes below (type mirrors the docType exactly), all
+// routing to compliance_items (docs/PENDING_SQL.md §23), found-or-updated
+// by (user_id, type) rather than duplicated on every re-import.
+export type ComplianceDocType =
+  | 'medical_card'
+  | 'inspection_report'
+  | 'registration_cab_card'
+  | 'irs_2290_schedule1'
+  | 'insurance_policy';
+export type ExtractedCompliance = {
+  type?: ComplianceDocType;
+  label?: string;
+  dueDate?: string;
+  issueDate?: string;
+};
+
 export type DocType =
   | 'settlement'
   | 'fuel'
@@ -225,6 +243,16 @@ export type DocType =
   | 'factoring_statement'
   | 'government_or_misc_income'
   | 'utility_subscription'
+  | 'medical_card'
+  | 'inspection_report'
+  | 'registration_cab_card'
+  | 'irs_2290_schedule1'
+  // 'insurance_policy' (compliance — the policy DOCUMENT, tracks its own
+  // renewal/expiry date via compliance_items) is deliberately distinct
+  // from the existing 'insurance' financialDoc kind (a bill/statement,
+  // routes to deductions as an expense) — same underlying topic, two
+  // different document purposes, never conflated.
+  | 'insurance_policy'
   | 'other';
 
 export type Extraction = {
@@ -253,4 +281,5 @@ export type Extraction = {
   w2?: ExtractedW2;
   driverPayment?: ExtractedDriverPayment;
   financialDoc?: ExtractedFinancialDoc;
+  compliance?: ExtractedCompliance;
 };

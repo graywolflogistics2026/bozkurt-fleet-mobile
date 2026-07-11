@@ -377,16 +377,59 @@ export type UserCategoryInsert = Partial<Omit<UserCategory, 'id' | 'created_at' 
 };
 export type UserCategoryUpdate = Partial<Omit<UserCategory, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
+// docs/PENDING_SQL.md §23 (AI feature package — compliance tracker, owner
+// decision 2026-07-10, PRODUCT DECISION). Optional/additive — zero rows
+// means an empty tracker. type covers all 8 categories named in the spec;
+// only 5 (see ComplianceType below) auto-populate via ai-import
+// (app/src/import/mapExtraction.ts mapCompliance()) — ifta_filing/cdl/
+// drug_consortium are manual-entry only for now. recurrence is nullable,
+// never auto-derived by the AI — set on the Session 9b screen.
+export type ComplianceType =
+  | 'medical_card'
+  | 'annual_inspection'
+  | 'irp_registration'
+  | 'hvut_2290'
+  | 'ifta_filing'
+  | 'insurance_policy'
+  | 'cdl'
+  | 'drug_consortium'
+  | 'other';
+export type ComplianceItem = {
+  id: string;
+  user_id: string;
+  type: ComplianceType;
+  label: string;
+  due_date: string;
+  recurrence: 'none' | 'annual' | 'biennial' | 'quarterly' | null;
+  source_document_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type ComplianceItemInsert = Partial<Omit<ComplianceItem, 'id' | 'created_at' | 'updated_at'>> & {
+  user_id: string;
+  type: ComplianceType;
+  label: string;
+  due_date: string;
+};
+export type ComplianceItemUpdate = Partial<Omit<ComplianceItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
 export type Profile = {
   user_id: string;
   company_name: string | null;
   owner_name: string | null;
+  locale: string | null; // app UI language override — null = follow device (multi-language support, owner decision 2026-07-09)
   home_state: string | null;
   business_balance: number;
   initial_capital: number;
   settings: Record<string, unknown>;
   tos_accepted_at: string | null;
   tos_version: string | null;
+  // docs/PENDING_SQL.md §19 (customizable dashboard) — unenforced shape documented there; null until Session 9a ships.
+  dashboard_layout: Record<string, unknown> | null;
+  // docs/PENDING_SQL.md §20 (expanded onboarding wizard) — null/'owner_operator' both mean the full owner-operator experience.
+  role: 'owner_operator' | 'company_driver_w2' | 'contractor_1099' | 'trainee' | null;
+  // docs/PENDING_SQL.md §24 (AI feature package — CEO Mode briefing) — null means "no goal set", never treated as $0.
+  weekly_goal: number | null;
   created_at: string;
   updated_at: string;
 };

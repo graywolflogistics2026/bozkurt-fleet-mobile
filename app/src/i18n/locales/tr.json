@@ -345,6 +345,11 @@
     "factoring_statement": { "label": "Faktoring Ekstresi", "route": "Kesintiler" },
     "government_or_misc_income": { "label": "Diğer Gelir", "route": "Henüz bir ekrana bağlanmadı — şimdilik manuel kaydedin" },
     "utility_subscription": { "label": "Fatura/Abonelik Belgesi", "route": "Kesintiler" },
+    "medical_card": { "label": "DOT Sağlık Kartı", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
+    "inspection_report": { "label": "DOT Muayene Raporu", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
+    "registration_cab_card": { "label": "IRP Tescili/Kabin Kartı", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
+    "irs_2290_schedule1": { "label": "HVUT (Form 2290) Ek 1", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
+    "insurance_policy": { "label": "Sigorta Poliçesi", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
     "other": { "label": "Belge", "route": "Kesintiler" }
   },
   "confirmContribution": {

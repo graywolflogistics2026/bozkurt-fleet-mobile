@@ -23,6 +23,12 @@ export const DOC_TYPE_ICON: Record<DocType, string> = {
   factoring_statement: '🧾',
   government_or_misc_income: '💵',
   utility_subscription: '🔌',
+  // AI feature package (owner decision 2026-07-10, PRODUCT DECISION — compliance tracker).
+  medical_card: '🩺',
+  inspection_report: '🔍',
+  registration_cab_card: '🪪',
+  irs_2290_schedule1: '📜',
+  insurance_policy: '🛡️',
   other: '📄',
 };
 

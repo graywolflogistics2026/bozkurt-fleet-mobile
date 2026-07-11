@@ -345,6 +345,11 @@
     "factoring_statement": { "label": "كشف تخصيم (فاكتورينج)", "route": "الخصومات" },
     "government_or_misc_income": { "label": "دخل متنوع", "route": "غير مربوط بشاشة بعد — سجّله يدويًا حاليًا" },
     "utility_subscription": { "label": "فاتورة خدمة/اشتراك", "route": "الخصومات" },
+    "medical_card": { "label": "البطاقة الطبية DOT", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
+    "inspection_report": { "label": "تقرير فحص DOT", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
+    "registration_cab_card": { "label": "تسجيل IRP/بطاقة المقصورة", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
+    "irs_2290_schedule1": { "label": "HVUT (نموذج 2290) الجدول 1", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
+    "insurance_policy": { "label": "بوليصة تأمين", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
     "other": { "label": "مستند", "route": "الخصومات" }
   },
   "confirmContribution": {

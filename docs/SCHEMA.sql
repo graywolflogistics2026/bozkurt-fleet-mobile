@@ -30,6 +30,11 @@ create table profiles (
   -- owner-operator experience" until Session 9b wires role-based module
   -- hiding for 'company_driver_w2'.
   role text check (role in ('owner_operator', 'company_driver_w2', 'contractor_1099', 'trainee')),
+  -- CEO Mode briefing (added retroactively, PENDING_SQL.md §24, owner
+  -- decision 2026-07-10 — AI feature package) — null until Session 9b's
+  -- daily/weekly briefing ships; null means "no goal set", never treated
+  -- as a goal of $0.
+  weekly_goal numeric(12,2),
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );
@@ -162,6 +167,35 @@ create table documents (
   imported_at  timestamptz default now()
 );
 create index on documents (user_id, doc_type, doc_date, amount);  -- duplicate check
+
+-- ---------- Compliance items (NEW, owner decision 2026-07-10 — AI feature
+-- package, compliance tracker, PRODUCT DECISION). Optional/additive —
+-- zero rows means an empty tracker, not an error state. type covers all 8
+-- categories named in the spec; only 5 (medical_card/annual_inspection/
+-- irp_registration/hvut_2290/insurance_policy) can be auto-populated by
+-- ai-import's matching docTypes (app/src/import/mapExtraction.ts
+-- mapCompliance()) — ifta_filing/cdl/drug_consortium are manual-entry
+-- only for now. "auto-creates or updates the matching item" matches by
+-- (user_id, type) only, NOT per-truck (v1 simplification — see
+-- PENDING_SQL.md §23). recurrence is nullable, never auto-derived by the
+-- AI (a document's own dates don't reliably state its own renewal
+-- cadence) — set/edited on the Session 9b screen.
+create table compliance_items (
+  id                  uuid primary key default gen_random_uuid(),
+  user_id             uuid not null references auth.users on delete cascade,
+  type                text not null check (type in (
+                        'medical_card', 'annual_inspection', 'irp_registration',
+                        'hvut_2290', 'ifta_filing', 'insurance_policy', 'cdl',
+                        'drug_consortium', 'other'
+                      )),
+  label               text not null,
+  due_date            date not null,
+  recurrence          text check (recurrence in ('none', 'annual', 'biennial', 'quarterly')),
+  source_document_id  uuid references documents on delete set null,
+  created_at          timestamptz default now(),
+  updated_at          timestamptz default now()
+);
+create index on compliance_items (user_id, due_date);
 
 -- ---------- Household (NEW, owner decision 2026-07-03, D11) ----------
 -- Supports the household side of the tax estimator (legacy calcTax's

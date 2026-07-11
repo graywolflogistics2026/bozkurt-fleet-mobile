@@ -1,7 +1,7 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
 **STATUS (2026-07-09): sections 1-10 have been run against the live DB.
-Sections 11-22 are new and NOT yet applied — run them yourself in the
+Sections 11-24 are new and NOT yet applied — run them yourself in the
 Supabase SQL editor, in order (14 depends on 13; 16 depends on 15).**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
@@ -716,6 +716,75 @@ one of these ALTERs is independent (no ordering dependency between them).
 - [ ] 22a run (add tags column to settlements/loads/fuel_purchases/
       deductions/capital_transactions/maintenance_records/tolls/
       reimbursements/loans/credit_cards/driver_payments/bank_transactions)
+
+## 23. compliance_items table (AI feature package — compliance tracker, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+
+New entity, entirely optional/additive — an account with zero rows here
+just has an empty compliance tracker (Session 9b screen shows an empty
+state). `type` covers all 8 categories named in the owner's spec; only 5
+of them (`medical_card`, `annual_inspection`, `irp_registration`,
+`hvut_2290`, `insurance_policy`) can be auto-populated by ai-import
+(matching new docTypes — see `app/src/import/mapExtraction.ts`
+`mapCompliance()`); `ifta_filing`/`cdl`/`drug_consortium` are manual-entry
+only for now (no source document type extracts them yet — v1.x if that
+changes). v1 simplification, documented here rather than silently
+implied: matching for the "auto-creates or updates" behavior is by
+`(user_id, type)` only, NOT per-truck — a multi-truck fleet needing
+separate annual-inspection deadlines per truck is a gap the Session 9b
+screen (or a future truck_id column) can address, not solved by this
+schema pass.
+
+```sql
+create table compliance_items (
+  id                  uuid primary key default gen_random_uuid(),
+  user_id             uuid not null references auth.users on delete cascade,
+  type                text not null check (type in (
+                        'medical_card', 'annual_inspection', 'irp_registration',
+                        'hvut_2290', 'ifta_filing', 'insurance_policy', 'cdl',
+                        'drug_consortium', 'other'
+                      )),
+  label               text not null,
+  due_date            date not null,
+  recurrence          text check (recurrence in ('none', 'annual', 'biennial', 'quarterly')),
+  source_document_id  uuid references documents on delete set null,
+  created_at          timestamptz default now(),
+  updated_at          timestamptz default now()
+);
+
+alter table compliance_items enable row level security;
+create policy "compliance_items_owner_all" on compliance_items
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create trigger trg_touch_updated_at before update on compliance_items
+  for each row execute function touch_updated_at();
+
+create index on compliance_items (user_id, due_date);
+```
+
+`recurrence` is nullable and NOT auto-derived by the AI at import time —
+a document's own dates don't reliably state its own renewal cadence, and
+guessing would violate the same "never guess, flag for review" spirit as
+every other extraction rule. The Session 9b screen sets/edits it (with
+sensible per-`type` defaults chosen there, e.g. medical cards commonly
+renew every 1-2 years, HVUT 2290 is always annual by Aug 31).
+
+- [ ] 23a run (create compliance_items table + RLS + trigger + index)
+
+---
+
+## 24. profiles.weekly_goal (AI feature package — CEO Mode briefing, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+
+Schema groundwork only — CEO Mode itself (the daily/weekly briefing that
+reads this to show goal progress) is PROMPTS.md Session 9b, not built
+this pass. Nullable/no default — CEO Mode must treat a null goal as "no
+goal set yet" (omit the goal-progress line, or prompt the user to set one)
+rather than silently comparing against 0.
+
+```sql
+alter table profiles add column weekly_goal numeric(12,2);
+```
+
+- [ ] 24a run (add profiles.weekly_goal column)
 
 ---
 

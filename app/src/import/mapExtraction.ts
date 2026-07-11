@@ -1,6 +1,8 @@
 import { CHARGEBACK_CATEGORY_LABEL, detectMaintType, getCatNote, guessCategory, toDbServiceType } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import type {
+  ComplianceItemInsert,
+  ComplianceType,
   DeductionInsert,
   DriverPaymentInsert,
   FuelPurchaseInsert,
@@ -12,6 +14,7 @@ import type {
   TollInsert,
 } from '@/src/types/db';
 import type {
+  ComplianceDocType,
   Extraction,
   ExtractedFuel,
   ExtractedReimbursementItem,
@@ -430,6 +433,56 @@ export function mapFinancialDocDeduction(d: Extraction, userId: string): Deducti
     category: FINANCIAL_DOC_CATEGORY[kind] ?? 'Misc',
     store: d.vendor ?? null,
     source: 'import',
+  };
+}
+
+// ---------- compliance documents (AI feature package, owner decision 2026-07-10, PRODUCT DECISION — compliance tracker) ----------
+// medical_card/inspection_report/registration_cab_card/irs_2290_schedule1/
+// insurance_policy all share one shape (ExtractedCompliance) and route to
+// compliance_items (docs/PENDING_SQL.md §23) — the caller (aiImportSave.ts)
+// finds an existing row for (user_id, type) and updates it, or inserts a
+// new one; never a plain insert (a re-scanned renewal must replace the
+// old due date, not pile up duplicate rows).
+export const COMPLIANCE_DOC_TYPES = [
+  'medical_card',
+  'inspection_report',
+  'registration_cab_card',
+  'irs_2290_schedule1',
+  'insurance_policy',
+] as const;
+
+const COMPLIANCE_TYPE_MAP: Record<ComplianceDocType, ComplianceType> = {
+  medical_card: 'medical_card',
+  inspection_report: 'annual_inspection',
+  registration_cab_card: 'irp_registration',
+  irs_2290_schedule1: 'hvut_2290',
+  insurance_policy: 'insurance_policy',
+};
+
+const COMPLIANCE_DEFAULT_LABEL: Record<ComplianceDocType, string> = {
+  medical_card: 'DOT Medical Card',
+  inspection_report: 'Annual DOT Inspection',
+  registration_cab_card: 'IRP Registration',
+  irs_2290_schedule1: 'HVUT (Form 2290)',
+  insurance_policy: 'Insurance Policy',
+};
+
+export function mapCompliance(d: Extraction, userId: string): ComplianceItemInsert | null {
+  const c = d.compliance ?? {};
+  const docType = (c.type ?? d.docType) as ComplianceDocType;
+  const type = COMPLIANCE_TYPE_MAP[docType];
+  const dueDate = c.dueDate || d.date;
+  // Never guess a due date — if the document genuinely doesn't show one,
+  // there is nothing to track yet (matches every other "never guess, flag
+  // for review" rule elsewhere in ai-import); the caller still archives
+  // the document itself regardless.
+  if (!type || !dueDate) return null;
+  return {
+    user_id: userId,
+    type,
+    label: c.label || COMPLIANCE_DEFAULT_LABEL[docType],
+    due_date: dueDate,
+    source_document_id: null, // filled in by the caller once the documents row exists
   };
 }
 

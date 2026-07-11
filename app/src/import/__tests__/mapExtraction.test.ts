@@ -1,4 +1,5 @@
 import {
+  mapCompliance,
   mapDriverPayment,
   mapFinancialDocDeduction,
   mapFuel,
@@ -395,5 +396,58 @@ describe('mapFinancialDocDeduction (universal AI capture, owner decision 2026-07
       financialDoc: { kind: 'insurance', amount: 200 },
     };
     expect(mapFinancialDocDeduction(d, 'user-1').description).toContain('Acme Insurance');
+  });
+});
+
+describe('mapCompliance (AI feature package, owner decision 2026-07-10 — compliance tracker)', () => {
+  it('maps medical_card to type "medical_card" with a default label', () => {
+    const d: Extraction = {
+      docType: 'medical_card',
+      date: '2026-06-10',
+      compliance: { type: 'medical_card', dueDate: '2027-06-10' },
+    };
+    expect(mapCompliance(d, 'user-1')).toMatchObject({
+      user_id: 'user-1',
+      type: 'medical_card',
+      label: 'DOT Medical Card',
+      due_date: '2027-06-10',
+    });
+  });
+
+  it('maps each compliance docType to its own compliance_items type', () => {
+    const cases: Array<[Extraction['docType'], string]> = [
+      ['inspection_report', 'annual_inspection'],
+      ['registration_cab_card', 'irp_registration'],
+      ['irs_2290_schedule1', 'hvut_2290'],
+      ['insurance_policy', 'insurance_policy'],
+    ];
+    for (const [docType, expectedType] of cases) {
+      const d: Extraction = { docType, date: '2026-06-10', compliance: { dueDate: '2027-01-01' } };
+      expect(mapCompliance(d, 'user-1')?.type).toBe(expectedType);
+    }
+  });
+
+  it('uses the AI-provided label when present, over the default', () => {
+    const d: Extraction = {
+      docType: 'insurance_policy',
+      date: '2026-06-10',
+      compliance: { label: 'Cargo Insurance', dueDate: '2027-01-01' },
+    };
+    expect(mapCompliance(d, 'user-1')?.label).toBe('Cargo Insurance');
+  });
+
+  it('falls back to the document date when compliance.dueDate is missing but a date is present', () => {
+    const d: Extraction = { docType: 'medical_card', date: '2026-06-10', compliance: {} };
+    expect(mapCompliance(d, 'user-1')?.due_date).toBe('2026-06-10');
+  });
+
+  it('never guesses a due date — returns null when neither dueDate nor date is present', () => {
+    const d: Extraction = { docType: 'medical_card', compliance: {} };
+    expect(mapCompliance(d, 'user-1')).toBeNull();
+  });
+
+  it('leaves source_document_id null — filled in by the caller once the documents row exists', () => {
+    const d: Extraction = { docType: 'medical_card', date: '2026-06-10', compliance: { dueDate: '2027-06-10' } };
+    expect(mapCompliance(d, 'user-1')?.source_document_id).toBeNull();
   });
 });

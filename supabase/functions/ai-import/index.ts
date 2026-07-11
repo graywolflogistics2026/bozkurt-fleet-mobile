@@ -53,10 +53,11 @@ const FUEL_SCHEMA_AFTER =
 // (household tax design) — adds "w2" to the docType enum. ----
 const DOCTYPE_ENUM_BEFORE = `docType: settlement|fuel|maintenance|amazon|store|toll|loan|other`;
 // Universal AI capture (owner decision 2026-07-10, PRODUCT DECISION) added
-// 6 more docTypes on top of the existing w2 addition (see
-// APPROVED_ADDITIONS_SUFFIX below for each one's schema).
+// 6 more docTypes on top of the existing w2 addition; AI feature package
+// (owner decision 2026-07-10 — compliance tracker) added 5 more on top of
+// that (see APPROVED_ADDITIONS_SUFFIX below for each one's schema).
 const DOCTYPE_ENUM_AFTER =
-  `docType: settlement|fuel|maintenance|amazon|store|toll|loan|w2|driver_payment|insurance|lease_rent|factoring_statement|government_or_misc_income|utility_subscription|other`;
+  `docType: settlement|fuel|maintenance|amazon|store|toll|loan|w2|driver_payment|insurance|lease_rent|factoring_statement|government_or_misc_income|utility_subscription|medical_card|inspection_report|registration_cab_card|irs_2290_schedule1|insurance_policy|other`;
 
 // ---- Approved addition (d), owner decision 2026-07-07 (web app
 // v2026.07.07-H): settlement loads gain pickupDate/deliveryDate — feeds
@@ -181,6 +182,14 @@ Reimbursement vs income: a reimbursement (income_type "reimbursement") offsets t
 APPROVED ADDITION (category hints, owner decision 2026-07-10 — full list in docs/INDUSTRY_TAXONOMY.md, keep in sync): for purchase/store/other documents, brand names are strong category signals — DAT/Truckstop.com/load board → Software & Subscriptions; Comdata/EFS → Fuel & DEF; PrePass/EZPass/Drivewyze/CAT Scale → Tolls & Scales; OOIDA → Association Dues; Gusto/ADP/Paychex → Wages & Payroll Taxes (W-2); Triumph/RTS/"factoring" → Dispatch & Factoring Fees; Motive/KeepTruckin/Samsara/Omnitracs/PeopleNet → ELD & Communications.
 
 APPROVED ADDITION (non-deductible traps, owner decision 2026-07-10 — flag, never silently deduct): if an item/line is clearly one of these common trucking-tax mistakes, prefix its description/summary with "PERSONAL — REVIEW: " instead of treating it as a normal 100%-deductible business expense: a standard-mileage-rate claim (never valid for a semi-truck — actual-expense method only), everyday/regular clothing (not OTR-specific safety gear or workwear), commuting (ordinary home-to-work travel), a security deposit (not an expense unless forfeited), or the PRINCIPAL portion of a loan payment (only the interest portion of a truck/trailer loan payment is deductible — note the split if the document shows one).
+
+APPROVED ADDITION (compliance tracker, owner decision 2026-07-10 — AI feature package): five more docTypes, all sharing ONE shape — set compliance.type to match the docType exactly: {"docType":"medical_card","date":"","vendor":"","totalAmount":0,"taxDeductible":false,"confidence":"high","summary":"","compliance":{"type":"medical_card","label":"","dueDate":"","issueDate":""}}. taxDeductible is always false for all five — these are compliance/regulatory documents, not expenses (an insurance_policy document here is the POLICY ITSELF for tracking its renewal date — a separate insurance BILL/statement still uses docType "insurance" above, routed as a normal expense). dueDate ("YYYY-MM-DD") is the single most important field — the date the card/inspection/registration/filing/policy EXPIRES or is next DUE; issueDate is the date it was issued/effective, when shown. NEVER guess dueDate — if the document genuinely doesn't show an expiration/due/renewal date, leave dueDate "" rather than inventing one; the document still gets archived, it just won't create a trackable compliance item.
+- medical_card: a DOT medical examiner's certificate. dueDate = the certificate's expiration date.
+- inspection_report: an annual DOT vehicle inspection report/sticker. dueDate = next inspection due date (often exactly 12 months after the inspection date shown).
+- registration_cab_card: an IRP (International Registration Plan) cab card or vehicle registration. dueDate = the registration's expiration date.
+- irs_2290_schedule1: a stamped IRS Form 2290 Schedule 1 (proof of Heavy Vehicle Use Tax payment). dueDate = the NEXT year's HVUT due date if determinable from the tax period shown (HVUT is annually due August 31 for the July-June tax period), otherwise leave "" rather than guessing.
+- insurance_policy: a commercial trucking insurance policy declarations page. dueDate = the policy's renewal/expiration date. label should name the coverage type if shown (e.g. "Physical Damage Insurance", "Cargo Insurance").
+label is a short human-readable name for the specific item (e.g. "Medical Card — John Smith", "Unit 4471 Annual Inspection") — when the document doesn't make a more specific label obvious, leave label "" and the app supplies a sensible default per type.
 `;
 
 // AI in user's language (owner decision 2026-07-10, PRODUCT DECISION —

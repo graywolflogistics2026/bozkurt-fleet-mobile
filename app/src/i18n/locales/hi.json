@@ -345,6 +345,11 @@
     "factoring_statement": { "label": "Factoring Statement", "route": "Deductions" },
     "government_or_misc_income": { "label": "Misc. Income", "route": "Not yet wired to a screen — record manually for now" },
     "utility_subscription": { "label": "Utility/Subscription Bill", "route": "Deductions" },
+    "medical_card": { "label": "DOT Medical Card", "route": "Compliance Tracker (not yet wired to a screen)" },
+    "inspection_report": { "label": "DOT Inspection Report", "route": "Compliance Tracker (not yet wired to a screen)" },
+    "registration_cab_card": { "label": "IRP Registration/Cab Card", "route": "Compliance Tracker (not yet wired to a screen)" },
+    "irs_2290_schedule1": { "label": "HVUT (Form 2290) Schedule 1", "route": "Compliance Tracker (not yet wired to a screen)" },
+    "insurance_policy": { "label": "Insurance Policy", "route": "Compliance Tracker (not yet wired to a screen)" },
     "other": { "label": "Document", "route": "Deductions" }
   },
   "confirmContribution": {

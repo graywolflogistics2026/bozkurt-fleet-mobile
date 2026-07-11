@@ -416,6 +416,40 @@
       constant, not a hundred user-specific ones" principle). `tags` is
       deliberately a single free-text field, not a normalized tags table
       or array column, to keep it that simple.
+  21. COMPLIANCE TRACKER (owner decision 2026-07-10, PRODUCT DECISION,
+      binding — AI feature package): `compliance_items`
+      (docs/PENDING_SQL.md §23) covers 8 categories (medical card, annual
+      DOT inspection, IRP registration, HVUT 2290, IFTA quarterly filings,
+      insurance policy renewals, CDL expiry, drug-consortium enrollment);
+      5 of them (`medical_card`, `annual_inspection`, `irp_registration`,
+      `hvut_2290`, `insurance_policy`) auto-populate from matching
+      ai-import docTypes — extracting a due/expiry date finds-or-updates
+      the ONE matching row per `(user_id, type)` rather than duplicating
+      it on every re-scan (`app/src/import/mapExtraction.ts`
+      `mapCompliance()`). The AI never guesses a due date — a document
+      with no visible expiration/due date is still archived (D3 audit
+      trail) but creates no compliance item, same "never guess, flag
+      instead" spirit as every other extraction rule. `ifta_filing`/`cdl`/
+      `drug_consortium` have no extracting docType yet — manual-entry only
+      until a real source document type is identified (v1.x if ever).
+  22. NO EXTERNAL-DATA FEATURES (owner decision 2026-07-10, PRODUCT
+      DECISION, binding — AI feature package, CEO Mode item): every AI/
+      insight feature in this app (CEO Mode briefing, Profit Analysis,
+      Maintenance Pattern Insights, AI Advisor) is composed ONLY from data
+      the user's own account already holds — settlements, deductions,
+      maintenance, compliance items, etc. NO live ELD integration, NO
+      fuel-price feeds, NO inventory tracking, and no other pull from a
+      third-party API for these features — not now, not as backlog, not
+      without a fresh, explicit owner decision that supersedes this one.
+      Profit Analysis's industry-benchmark comparison (PROMPTS.md Session
+      9a) is the one adjacent case worth spelling out: it compares against
+      PUBLISHED, static benchmark ranges (a `benchmarks` table with source
+      + year, clearly labeled "industry reference, not peer data" in the
+      UI) — never live anonymized peer data pulled from other users of
+      this app. True anonymized peer benchmarking is deliberately deferred
+      to v2+, once a real user base exists, and even then must be designed
+      against invariant #13 (user data is private) from day one — never
+      retrofitted onto data collected before that design existed.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

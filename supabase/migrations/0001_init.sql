@@ -141,6 +141,27 @@ create table documents (
   updated_at   timestamptz default now()
 );
 
+-- ---------- Compliance items (NEW, owner decision 2026-07-10 — AI feature
+-- package, compliance tracker, PRODUCT DECISION). Optional/additive; type
+-- covers all 8 categories named in the spec, only 5 auto-populate via
+-- ai-import (mapCompliance()) — ifta_filing/cdl/drug_consortium are
+-- manual-entry only for now. See PENDING_SQL.md §23.
+create table compliance_items (
+  id                  uuid primary key default gen_random_uuid(),
+  user_id             uuid not null references auth.users on delete cascade,
+  type                text not null check (type in (
+                        'medical_card', 'annual_inspection', 'irp_registration',
+                        'hvut_2290', 'ifta_filing', 'insurance_policy', 'cdl',
+                        'drug_consortium', 'other'
+                      )),
+  label               text not null,
+  due_date            date not null,
+  recurrence          text check (recurrence in ('none', 'annual', 'biennial', 'quarterly')),
+  source_document_id  uuid references documents on delete set null,
+  created_at          timestamptz default now(),
+  updated_at          timestamptz default now()
+);
+
 -- ---------- Settlements (was DB.sett) ----------
 create table settlements (
   id           uuid primary key default gen_random_uuid(),
@@ -443,6 +464,7 @@ create table bank_transactions (
 
 create index on documents (user_id, doc_type, doc_date, amount);  -- duplicate check
 create index on documents (user_id, doc_date);                    -- plain date-range lookups
+create index on compliance_items (user_id, due_date);
 create index on loads (user_id, load_date);
 create index on fuel_purchases (user_id, purchase_date);
 create index on deductions (user_id, ded_date);
@@ -543,6 +565,8 @@ create trigger trg_touch_updated_at before update on trucks
 create trigger trg_touch_updated_at before update on drivers
   for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on documents
+  for each row execute function touch_updated_at();
+create trigger trg_touch_updated_at before update on compliance_items
   for each row execute function touch_updated_at();
 create trigger trg_touch_updated_at before update on settlements
   for each row execute function touch_updated_at();
@@ -673,6 +697,10 @@ create policy "drivers_owner_all" on drivers
 
 alter table documents enable row level security;
 create policy "documents_owner_all" on documents
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+alter table compliance_items enable row level security;
+create policy "compliance_items_owner_all" on compliance_items
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 alter table settlements enable row level security;
