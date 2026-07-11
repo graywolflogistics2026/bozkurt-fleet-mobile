@@ -58,13 +58,13 @@
     "totalDeductions": "Toplam Kesintiler",
     "netToOwner": "Sahibe Net",
     "milesDriven": "Sürülen Mil",
-    "ytdPerDiemDays": "Yıl Başından Beri Yevmiye Günleri",
+    "ytdPerDiemDays": "Yıl Başından Beri Per Diem Günleri",
     "daysOnRoad": "yolda geçen gün",
-    "perDiemDeduction": "Yevmiye Kesintisi",
+    "perDiemDeduction": "Per Diem Kesintisi",
     "perDiemCaptionFull": "@${{rate}}/gün (${{fullRate}}'ın %{{pct}}'i)",
     "perDiemCaptionSimple": "@${{rate}}/gün",
     "weeksInService": "Hizmetteki Hafta",
-    "settlementsImported": "içe aktarılan hesap kapamaları",
+    "settlementsImported": "içe aktarılan settlement'lar",
     "avgNetPerWeek": "Haftalık Ort. Net",
     "directDepositAvg": "ortalama doğrudan yatırma",
     "businessBalance": "İşletme Bakiyesi",
@@ -115,9 +115,9 @@
     "outOfPocketTitle": "💳 Kendi Cebinden",
     "outOfPocketSubtitle": "Vergiden düşülebilir — sizin tarafınızdan ödendi (işletme kartı, kişisel kart, nakit)",
     "outOfPocketEmpty": "Henüz yok — bir makbuz veya fatura içe aktarın.",
-    "withheldTitle": "🏦 Hesap Kapamasından Kesilen",
+    "withheldTitle": "🏦 Settlement'tan Kesilen",
     "withheldSubtitle": "Zaten net ödemeye yansıtıldı, TEKRAR kesilmez (ELD, sigorta, kamyon ödemesi)",
-    "withheldEmpty": "Henüz yok — bir hesap kapama PDF'i içe aktarın.",
+    "withheldEmpty": "Henüz yok — bir settlement PDF'i içe aktarın.",
     "total": "Toplam",
     "personalContributionTag": "💰 → Sermaye Katkısı",
     "editTitle": "✏️ Kesintiyi Düzenle",
@@ -160,7 +160,7 @@
   },
   "importScreen": {
     "title": "İçe Aktar",
-    "pickPrompt": "Bir hesap kapaması, makbuz, yakıt fişi veya bakım faturası fotoğraflayın ya da yükleyin.",
+    "pickPrompt": "Bir settlement, makbuz, yakıt fişi veya bakım faturası fotoğraflayın ya da yükleyin.",
     "takePhoto": "📷 Fotoğraf Çek",
     "chooseFromGallery": "🖼️ Galeriden Seç",
     "choosePdf": "📄 PDF Seç",
@@ -187,12 +187,12 @@
     "createNewDriver": "+ Yeni Sürücü",
     "newDriverNamePlaceholder": "Sürücünün adı",
     "createDriverFailedTitle": "Sürücü oluşturulamadı",
-    "driverShareLabel": "{{name}} adlı sürücünün bu ödeme belgesindeki payı ($)",
+    "driverShareLabel": "{{name}} adlı sürücünün bu settlement'taki payı ($)",
     "driverSharePlaceholder": "Tutar",
     "lowConfidenceTitle": "⚠️ Kaydetmeden önce inceleyin",
     "lowConfidenceBody": "Yapay zeka bu belgeyi okurken tam emin değildi — kaydetmeden önce ayrıntıları kontrol edin.",
     "miscIncomeNoteTitle": "💵 İşletme geliri tespit edildi",
-    "miscIncomeNoteBody": "Bu, henüz özel bir defteri olmayan işletme geliri gibi görünüyor (bekleme, gecikme, prim vb.) — belge arşivlendi, ancak şimdilik manuel olarak kaydedin.",
+    "miscIncomeNoteBody": "Bu, henüz özel bir defteri olmayan işletme geliri gibi görünüyor (detention, layover, prim vb.) — belge arşivlendi, ancak şimdilik manuel olarak kaydedin.",
     "save": "Kaydet",
     "saveAnyway": "Yine de Kaydet",
     "discard": "Vazgeç",
@@ -213,7 +213,7 @@
       "loadsLabel": "Yükler",
       "loads": "{{count}} yük",
       "tractorFuel": "Çekici Yakıtı",
-      "reeferFuel": "Frigorifik Yakıt",
+      "reeferFuel": "Reefer Yakıtı",
       "type": "Tür",
       "station": "İstasyon",
       "gallonsLabel": "Galon",
@@ -240,18 +240,18 @@
     }
   },
   "camera": {
-    "permissionNote": "Makbuzları ve hesap kapama PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
+    "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
     "grantAccess": "Kamera Erişimi Ver",
     "cancel": "İptal"
   },
   "importLegacy": {
     "title": "Eski Yedeği İçe Aktar",
-    "pickPrompt": "Web uygulamasından dışa aktarılan JSON yedek dosyasını seçin (Ayarlar → Verileri Dışa Aktar). Hesap kapamaları, kesintiler, bakım geçmişi, Kamyon Durumu, Sermaye Hesabı, krediler, kartlar ve banka/vadesiz hesap ekstreleri içe aktarılacak. Birden fazla çalıştırmak güvenlidir — eşleşen kayıtlar yerinde güncellenir, kopyalanmaz.",
+    "pickPrompt": "Web uygulamasından dışa aktarılan JSON yedek dosyasını seçin (Ayarlar → Verileri Dışa Aktar). Settlement'lar, kesintiler, bakım geçmişi, Kamyon Durumu, Sermaye Hesabı, krediler, kartlar ve banka/vadesiz hesap ekstreleri içe aktarılacak. Birden fazla çalıştırmak güvenlidir — eşleşen kayıtlar yerinde güncellenir, kopyalanmaz.",
     "chooseFile": "Yedek dosyası seç",
     "exportedAt": "{{date}} tarihinde dışa aktarıldı",
-    "missingWeekEnding": "⚠ {{total}} hesap kapamasından {{missing}} tanesinde hafta sonu tarihi yok — bunun yerine belge tarihi kullanılacak.",
+    "missingWeekEnding": "⚠ {{total}} settlement'tan {{missing}} tanesinde hafta sonu tarihi yok — bunun yerine belge tarihi kullanılacak.",
     "rows": {
-      "settlements": "Hesap Kapamaları",
+      "settlements": "Settlements",
       "loads": "Yükler",
       "fuelPurchases": "Yakıt alımları",
       "deductions": "Kesintiler",
@@ -292,7 +292,7 @@
     "title": "Ayarlar",
     "tosAccepted": "Kullanım Şartları {{date}} tarihinde kabul edildi (v{{version}})",
     "dataTitle": "Veri",
-    "dataNote": "Eski bir JSON yedeğinden hesap kapamalarını, kesintileri, bakım geçmişini ve daha fazlasını geri yükleyin.",
+    "dataNote": "Eski bir JSON yedeğinden settlement'ları, kesintileri, bakım geçmişini ve daha fazlasını geri yükleyin.",
     "importLegacyButton": "Eski yedeği içe aktar (JSON)",
     "languageTitle": "Dil",
     "languageNote": "Uygulamanın kendi metninin dilini seçin. Verileriniz (açıklamalar, mağaza adları) asla çevrilmez.",
@@ -357,8 +357,8 @@
       "fuel": "Yakıt Filtresi",
       "dpf": "DPF Temizliği",
       "def": "DEF Filtresi",
-      "coolant_ext": "Soğutucu Uzatıcı",
-      "coolant": "Tam Soğutucu Değişimi",
+      "coolant_ext": "Coolant Uzatıcı",
+      "coolant": "Tam Coolant Değişimi",
       "trans": "Şanzıman",
       "diff": "Diferansiyel",
       "airfilter": "Motor Hava Filtresi",
@@ -398,8 +398,8 @@
       "fuel": "Yakıt Filtresi",
       "dpf": "DPF Temizliği",
       "def": "DEF Filtresi",
-      "coolant_ext": "Soğutucu Uzatıcı",
-      "coolant": "Tam Soğutucu Değişimi",
+      "coolant_ext": "Coolant Uzatıcı",
+      "coolant": "Tam Coolant Değişimi",
       "trans": "Şanzıman",
       "diff": "Diferansiyel",
       "airfilter": "Motor Hava Filtresi",
@@ -430,7 +430,7 @@
     "retire": "Hizmetten Kaldır",
     "retiredTag": "(Hizmet Dışı)",
     "retireConfirmTitle": "Bu kamyon hizmetten kaldırılsın mı?",
-    "retireConfirmBody": "Tüm geçmişi — hesap kapamaları, yakıt ve bakım — saklanacak, ancak listelerden gizlenecektir. İstediğiniz zaman yeniden etkinleştirebilirsiniz.",
+    "retireConfirmBody": "Tüm geçmişi — settlement'lar, yakıt ve bakım — saklanacak, ancak listelerden gizlenecektir. İstediğiniz zaman yeniden etkinleştirebilirsiniz.",
     "reactivate": "Yeniden Etkinleştir",
     "showRetired": "Hizmet Dışı Kamyonları Göster",
     "hideRetired": "Hizmet Dışı Kamyonları Gizle"
@@ -477,26 +477,86 @@
     }
   },
   "docTypes": {
-    "settlement": { "label": "Hesap Kapaması", "route": "Hesap Kapamaları · Yükler · Yakıt · Kesintiler · Varlıklar" },
-    "fuel": { "label": "Yakıt Fişi", "route": "Yakıt Kaydı" },
-    "maintenance": { "label": "Tamir Faturası", "route": "Bakım" },
-    "amazon": { "label": "Mağaza/Amazon Alışverişi", "route": "Kesintiler (otomatik kategorize) · Sermaye Hesabı" },
-    "store": { "label": "Mağaza Fişi", "route": "Kesintiler · Sermaye Hesabı" },
-    "toll": { "label": "Geçiş Ücreti Faturası", "route": "Kesintiler" },
-    "loan": { "label": "Kredi Ekstresi", "route": "Kesintiler" },
-    "w2": { "label": "W-2 Vergi Formu", "route": "Hane Geliri (henüz bir ekrana bağlanmadı)" },
-    "driver_payment": { "label": "Sürücü Ödemesi", "route": "Sürücü Ödemeleri" },
-    "insurance": { "label": "Sigorta Ekstresi", "route": "Kesintiler" },
-    "lease_rent": { "label": "Kira/Leasing Ekstresi", "route": "Kesintiler" },
-    "factoring_statement": { "label": "Faktoring Ekstresi", "route": "Kesintiler" },
-    "government_or_misc_income": { "label": "Diğer Gelir", "route": "Henüz bir ekrana bağlanmadı — şimdilik manuel kaydedin" },
-    "utility_subscription": { "label": "Fatura/Abonelik Belgesi", "route": "Kesintiler" },
-    "medical_card": { "label": "DOT Sağlık Kartı", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
-    "inspection_report": { "label": "DOT Muayene Raporu", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
-    "registration_cab_card": { "label": "IRP Tescili/Kabin Kartı", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
-    "irs_2290_schedule1": { "label": "HVUT (Form 2290) Ek 1", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
-    "insurance_policy": { "label": "Sigorta Poliçesi", "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)" },
-    "other": { "label": "Belge", "route": "Kesintiler" }
+    "settlement": {
+      "label": "Settlement",
+      "route": "Settlements · Yükler · Yakıt · Kesintiler · Varlıklar"
+    },
+    "fuel": {
+      "label": "Yakıt Fişi",
+      "route": "Yakıt Kaydı"
+    },
+    "maintenance": {
+      "label": "Tamir Faturası",
+      "route": "Bakım"
+    },
+    "amazon": {
+      "label": "Mağaza/Amazon Alışverişi",
+      "route": "Kesintiler (otomatik kategorize) · Sermaye Hesabı"
+    },
+    "store": {
+      "label": "Mağaza Fişi",
+      "route": "Kesintiler · Sermaye Hesabı"
+    },
+    "toll": {
+      "label": "Geçiş Ücreti Faturası",
+      "route": "Kesintiler"
+    },
+    "loan": {
+      "label": "Kredi Ekstresi",
+      "route": "Kesintiler"
+    },
+    "w2": {
+      "label": "W-2 Vergi Formu",
+      "route": "Hane Geliri (henüz bir ekrana bağlanmadı)"
+    },
+    "driver_payment": {
+      "label": "Sürücü Ödemesi",
+      "route": "Sürücü Ödemeleri"
+    },
+    "insurance": {
+      "label": "Sigorta Ekstresi",
+      "route": "Kesintiler"
+    },
+    "lease_rent": {
+      "label": "Kira/Leasing Ekstresi",
+      "route": "Kesintiler"
+    },
+    "factoring_statement": {
+      "label": "Factoring Ekstresi",
+      "route": "Kesintiler"
+    },
+    "government_or_misc_income": {
+      "label": "Diğer Gelir",
+      "route": "Henüz bir ekrana bağlanmadı — şimdilik manuel kaydedin"
+    },
+    "utility_subscription": {
+      "label": "Fatura/Abonelik Belgesi",
+      "route": "Kesintiler"
+    },
+    "medical_card": {
+      "label": "DOT Sağlık Kartı",
+      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+    },
+    "inspection_report": {
+      "label": "DOT Muayene Raporu",
+      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+    },
+    "registration_cab_card": {
+      "label": "IRP Tescili/Kabin Kartı",
+      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+    },
+    "irs_2290_schedule1": {
+      "label": "HVUT (Form 2290) Ek 1",
+      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+    },
+    "insurance_policy": {
+      "label": "Sigorta Poliçesi",
+      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+    },
+    "other": {
+      "label": "Belge",
+      "route": "Kesintiler"
+    }
   },
   "confirmContribution": {
     "title": "Sahip Katkısı Olarak Eklensin mi?",

@@ -58,13 +58,13 @@
     "totalDeductions": "إجمالي الخصومات",
     "netToOwner": "الصافي للمالك",
     "milesDriven": "الأميال المقطوعة",
-    "ytdPerDiemDays": "أيام البدل اليومي (منذ بداية العام)",
+    "ytdPerDiemDays": "أيام Per Diem (منذ بداية العام)",
     "daysOnRoad": "أيام على الطريق",
-    "perDiemDeduction": "خصم البدل اليومي",
+    "perDiemDeduction": "خصم Per Diem",
     "perDiemCaptionFull": "@${{rate}}/يوم ({{pct}}% من ${{fullRate}})",
     "perDiemCaptionSimple": "@${{rate}}/يوم",
     "weeksInService": "أسابيع الخدمة",
-    "settlementsImported": "التسويات المستوردة",
+    "settlementsImported": "Settlements المستوردة",
     "avgNetPerWeek": "متوسط الصافي/أسبوع",
     "directDepositAvg": "متوسط الإيداع المباشر",
     "businessBalance": "رصيد العمل",
@@ -115,9 +115,9 @@
     "outOfPocketTitle": "💳 من جيبك الخاص",
     "outOfPocketSubtitle": "قابل للخصم الضريبي — دفعته أنت (بطاقة العمل، البطاقة الشخصية، نقدًا)",
     "outOfPocketEmpty": "لا شيء بعد — استورد إيصالًا أو فاتورة.",
-    "withheldTitle": "🏦 محتجز من التسوية",
+    "withheldTitle": "🏦 محتجز من Settlement",
     "withheldSubtitle": "منعكس بالفعل في صافي الراتب، لا يُخصم مرة أخرى (ELD، التأمين، قسط الشاحنة)",
-    "withheldEmpty": "لا شيء بعد — استورد ملف PDF للتسوية.",
+    "withheldEmpty": "لا شيء بعد — استورد ملف PDF لـ Settlement.",
     "total": "الإجمالي",
     "personalContributionTag": "💰 → مساهمة في رأس المال",
     "editTitle": "✏️ تعديل الخصم",
@@ -160,7 +160,7 @@
   },
   "importScreen": {
     "title": "استيراد",
-    "pickPrompt": "صوّر أو ارفع تسوية، إيصالًا، بطاقة وقود، أو فاتورة صيانة.",
+    "pickPrompt": "صوّر أو ارفع Settlement، إيصالًا، بطاقة وقود، أو فاتورة صيانة.",
     "takePhoto": "📷 التقاط صورة",
     "chooseFromGallery": "🖼️ اختيار من المعرض",
     "choosePdf": "📄 اختيار PDF",
@@ -187,12 +187,12 @@
     "createNewDriver": "+ سائق جديد",
     "newDriverNamePlaceholder": "اسم السائق",
     "createDriverFailedTitle": "تعذّر إنشاء السائق",
-    "driverShareLabel": "حصة {{name}} من هذه التسوية ($)",
+    "driverShareLabel": "حصة {{name}} من هذا Settlement ($)",
     "driverSharePlaceholder": "المبلغ",
     "lowConfidenceTitle": "⚠️ يرجى المراجعة قبل الحفظ",
     "lowConfidenceBody": "لم يكن الذكاء الاصطناعي واثقًا تمامًا من قراءة هذا المستند — راجع التفاصيل قبل الحفظ.",
     "miscIncomeNoteTitle": "💵 تم اكتشاف دخل تجاري",
-    "miscIncomeNoteBody": "يبدو هذا دخلاً تجاريًا (انتظار، تأخير، مكافأة، إلخ) وليس له سجل مخصص بعد — تم أرشفة المستند، يرجى تسجيله يدويًا حاليًا.",
+    "miscIncomeNoteBody": "يبدو هذا دخلاً تجاريًا (Detention، Layover، مكافأة، إلخ) وليس له سجل مخصص بعد — تم أرشفة المستند، يرجى تسجيله يدويًا حاليًا.",
     "save": "حفظ",
     "saveAnyway": "احفظ على أي حال",
     "discard": "تجاهل",
@@ -213,7 +213,7 @@
       "loadsLabel": "الحمولات",
       "loads": "{{count}} حمولة",
       "tractorFuel": "وقود الجرار",
-      "reeferFuel": "وقود التبريد",
+      "reeferFuel": "وقود Reefer",
       "type": "النوع",
       "station": "المحطة",
       "gallonsLabel": "الغالونات",
@@ -240,18 +240,18 @@
     }
   },
   "camera": {
-    "permissionNote": "يلزم الوصول إلى الكاميرا لتصوير الإيصالات وملفات PDF للتسويات.",
+    "permissionNote": "يلزم الوصول إلى الكاميرا لتصوير الإيصالات وملفات PDF لـ Settlements.",
     "grantAccess": "منح الوصول إلى الكاميرا",
     "cancel": "إلغاء"
   },
   "importLegacy": {
     "title": "استيراد نسخة احتياطية قديمة",
-    "pickPrompt": "اختر ملف JSON للنسخة الاحتياطية المُصدَّرة من التطبيق الإلكتروني (الإعدادات ← تصدير البيانات). سيتم استيراد التسويات، الخصومات، سجل الصيانة، حالة الشاحنة، حساب رأس المال، القروض، البطاقات، وكشوف الحساب المصرفي/الجاري. آمن للتشغيل أكثر من مرة — السجلات المطابقة تُحدَّث في مكانها، ولا تُكرَّر.",
+    "pickPrompt": "اختر ملف JSON للنسخة الاحتياطية المُصدَّرة من التطبيق الإلكتروني (الإعدادات ← تصدير البيانات). سيتم استيراد Settlements، الخصومات، سجل الصيانة، حالة الشاحنة، حساب رأس المال، القروض، البطاقات، وكشوف الحساب المصرفي/الجاري. آمن للتشغيل أكثر من مرة — السجلات المطابقة تُحدَّث في مكانها، ولا تُكرَّر.",
     "chooseFile": "اختيار ملف النسخة الاحتياطية",
     "exportedAt": "تم التصدير في {{date}}",
-    "missingWeekEnding": "⚠ {{missing}} من أصل {{total}} تسوية بلا تاريخ نهاية أسبوع — سيُستخدم تاريخ المستند بدلاً من ذلك.",
+    "missingWeekEnding": "⚠ {{missing}} من أصل {{total}} Settlement بلا تاريخ نهاية أسبوع — سيُستخدم تاريخ المستند بدلاً من ذلك.",
     "rows": {
-      "settlements": "التسويات",
+      "settlements": "Settlements",
       "loads": "الحمولات",
       "fuelPurchases": "مشتريات الوقود",
       "deductions": "الخصومات",
@@ -292,7 +292,7 @@
     "title": "الإعدادات",
     "tosAccepted": "تم قبول شروط الاستخدام في {{date}} (الإصدار {{version}})",
     "dataTitle": "البيانات",
-    "dataNote": "استعد التسويات والخصومات وسجل الصيانة والمزيد من نسخة احتياطية قديمة بصيغة JSON.",
+    "dataNote": "استعد Settlements والخصومات وسجل الصيانة والمزيد من نسخة احتياطية قديمة بصيغة JSON.",
     "importLegacyButton": "استيراد نسخة احتياطية قديمة (JSON)",
     "languageTitle": "اللغة",
     "languageNote": "اختر لغة نصوص التطبيق نفسه. بياناتك (الأوصاف، أسماء المتاجر) لا تُترجم أبدًا.",
@@ -357,14 +357,14 @@
       "fuel": "فلتر الوقود",
       "dpf": "تنظيف DPF",
       "def": "فلتر DEF",
-      "coolant_ext": "مطيل عمر سائل التبريد",
-      "coolant": "استبدال سائل التبريد الكامل",
+      "coolant_ext": "مطيل عمر Coolant",
+      "coolant": "استبدال Coolant الكامل",
       "trans": "ناقل الحركة",
       "diff": "الترس التفاضلي",
       "airfilter": "فلتر هواء المحرك",
       "airdryer": "خرطوشة مجفف الهواء",
       "chassis": "تشحيم الهيكل",
-      "apu": "خدمة وحدة الطاقة المساعدة"
+      "apu": "خدمة APU"
     },
     "notifBannerTitle": "احصل على تذكير قبل استحقاق أي شيء",
     "notifBannerBody": "فعّل الإشعارات لتلقي تذكير محلي عندما تقترب فئة صيانة من الاستحقاق أو تتأخر.",
@@ -398,14 +398,14 @@
       "fuel": "فلتر الوقود",
       "dpf": "تنظيف DPF",
       "def": "فلتر DEF",
-      "coolant_ext": "مطيل عمر سائل التبريد",
-      "coolant": "استبدال سائل التبريد الكامل",
+      "coolant_ext": "مطيل عمر Coolant",
+      "coolant": "استبدال Coolant الكامل",
       "trans": "ناقل الحركة",
       "diff": "الترس التفاضلي",
       "airfilter": "فلتر هواء المحرك",
       "airdryer": "خرطوشة مجفف الهواء",
       "chassis": "تشحيم الهيكل",
-      "apu": "خدمة وحدة الطاقة المساعدة",
+      "apu": "خدمة APU",
       "valve": "ضبط الصمامات",
       "tires": "الإطارات",
       "brakes": "الفرامل",
@@ -430,7 +430,7 @@
     "retire": "إيقاف الخدمة",
     "retiredTag": "(متوقفة)",
     "retireConfirmTitle": "إيقاف خدمة هذه الشاحنة؟",
-    "retireConfirmBody": "سيتم الاحتفاظ بكل سجلها — التسويات والوقود والصيانة — لكن سيتم إخفاؤها من القوائم لاحقًا. يمكنك إعادة تفعيلها في أي وقت.",
+    "retireConfirmBody": "سيتم الاحتفاظ بكل سجلها — Settlements والوقود والصيانة — لكن سيتم إخفاؤها من القوائم لاحقًا. يمكنك إعادة تفعيلها في أي وقت.",
     "reactivate": "إعادة التفعيل",
     "showRetired": "إظهار الشاحنات المتوقفة",
     "hideRetired": "إخفاء الشاحنات المتوقفة"
@@ -477,26 +477,86 @@
     }
   },
   "docTypes": {
-    "settlement": { "label": "تسوية", "route": "التسويات · الحمولات · الوقود · الخصومات · الأصول" },
-    "fuel": { "label": "إيصال وقود", "route": "سجل الوقود" },
-    "maintenance": { "label": "فاتورة إصلاح", "route": "الصيانة" },
-    "amazon": { "label": "شراء من متجر/Amazon", "route": "الخصومات (مصنّفة تلقائيًا) · حساب رأس المال" },
-    "store": { "label": "إيصال متجر", "route": "الخصومات · حساب رأس المال" },
-    "toll": { "label": "فاتورة رسوم طريق", "route": "الخصومات" },
-    "loan": { "label": "كشف قرض", "route": "الخصومات" },
-    "w2": { "label": "نموذج ضريبة W-2", "route": "دخل الأسرة (غير مربوط بشاشة بعد)" },
-    "driver_payment": { "label": "دفعة لسائق", "route": "مدفوعات السائقين" },
-    "insurance": { "label": "كشف تأمين", "route": "الخصومات" },
-    "lease_rent": { "label": "كشف إيجار/تأجير", "route": "الخصومات" },
-    "factoring_statement": { "label": "كشف تخصيم (فاكتورينج)", "route": "الخصومات" },
-    "government_or_misc_income": { "label": "دخل متنوع", "route": "غير مربوط بشاشة بعد — سجّله يدويًا حاليًا" },
-    "utility_subscription": { "label": "فاتورة خدمة/اشتراك", "route": "الخصومات" },
-    "medical_card": { "label": "البطاقة الطبية DOT", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
-    "inspection_report": { "label": "تقرير فحص DOT", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
-    "registration_cab_card": { "label": "تسجيل IRP/بطاقة المقصورة", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
-    "irs_2290_schedule1": { "label": "HVUT (نموذج 2290) الجدول 1", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
-    "insurance_policy": { "label": "بوليصة تأمين", "route": "متتبع الامتثال (غير مربوط بشاشة بعد)" },
-    "other": { "label": "مستند", "route": "الخصومات" }
+    "settlement": {
+      "label": "Settlement",
+      "route": "Settlements · الحمولات · الوقود · الخصومات · الأصول"
+    },
+    "fuel": {
+      "label": "إيصال وقود",
+      "route": "سجل الوقود"
+    },
+    "maintenance": {
+      "label": "فاتورة إصلاح",
+      "route": "الصيانة"
+    },
+    "amazon": {
+      "label": "شراء من متجر/Amazon",
+      "route": "الخصومات (مصنّفة تلقائيًا) · حساب رأس المال"
+    },
+    "store": {
+      "label": "إيصال متجر",
+      "route": "الخصومات · حساب رأس المال"
+    },
+    "toll": {
+      "label": "فاتورة رسوم طريق",
+      "route": "الخصومات"
+    },
+    "loan": {
+      "label": "كشف قرض",
+      "route": "الخصومات"
+    },
+    "w2": {
+      "label": "نموذج ضريبة W-2",
+      "route": "دخل الأسرة (غير مربوط بشاشة بعد)"
+    },
+    "driver_payment": {
+      "label": "دفعة لسائق",
+      "route": "مدفوعات السائقين"
+    },
+    "insurance": {
+      "label": "كشف تأمين",
+      "route": "الخصومات"
+    },
+    "lease_rent": {
+      "label": "كشف إيجار/تأجير",
+      "route": "الخصومات"
+    },
+    "factoring_statement": {
+      "label": "كشف Factoring",
+      "route": "الخصومات"
+    },
+    "government_or_misc_income": {
+      "label": "دخل متنوع",
+      "route": "غير مربوط بشاشة بعد — سجّله يدويًا حاليًا"
+    },
+    "utility_subscription": {
+      "label": "فاتورة خدمة/اشتراك",
+      "route": "الخصومات"
+    },
+    "medical_card": {
+      "label": "البطاقة الطبية DOT",
+      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+    },
+    "inspection_report": {
+      "label": "تقرير فحص DOT",
+      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+    },
+    "registration_cab_card": {
+      "label": "تسجيل IRP/بطاقة المقصورة",
+      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+    },
+    "irs_2290_schedule1": {
+      "label": "HVUT (نموذج 2290) الجدول 1",
+      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+    },
+    "insurance_policy": {
+      "label": "بوليصة تأمين",
+      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+    },
+    "other": {
+      "label": "مستند",
+      "route": "الخصومات"
+    }
   },
   "confirmContribution": {
     "title": "إضافة كمساهمة من المالك؟",

@@ -363,6 +363,22 @@
       groundwork — no app screen calls it yet (PROMPTS.md Session 9b "AI
       Advisor"), that screen just has to pass `i18n.language`/
       `profiles.locale` when it's built, no further server-side work.
+      i18n TERMINOLOGY RULE (owner decision, extends this invariant's
+      "standard terms may stay English" into a binding glossary rather
+      than a case-by-case judgment call): `docs/I18N_GLOSSARY.md` is the
+      canonical DO-NOT-TRANSLATE list (per diem, coolant, DPF, DEF, ELD,
+      IFTA, IRP, HVUT/2290, settlement(s), linehaul, fuel surcharge,
+      detention, layover, lumper, bobtail, deadhead, reefer, APU, CDL,
+      DOT, MC number, escrow, factoring, Schedule C, 1099, W-2, K-1,
+      S-Corp, LLC) — every term on it stays in English (Latin script
+      embedded in the sentence) in every locale's UI strings AND in
+      AI-generated free text, no exceptions. Enforced by
+      `app/src/i18n/__tests__/glossary.test.ts`, which asserts every
+      glossary term found in `en.json` also appears in the corresponding
+      key of every other locale file — a translation pass that
+      accidentally translates a glossary term fails `npx jest`, not just
+      review. Binding on PROMPTS.md Session 9c (Hindi/Ukrainian real
+      translation) same as every other locale.
   17. CUSTOMIZABLE DASHBOARD (owner decision 2026-07-10, PRODUCT DECISION,
       binding, not yet implemented — PROMPTS.md Session 9a): every
       dashboard card (the full parity set + Capital strip + any future

@@ -58,13 +58,13 @@
     "totalDeductions": "Deducciones Totales",
     "netToOwner": "Neto al Propietario",
     "milesDriven": "Millas Recorridas",
-    "ytdPerDiemDays": "Días de Viático (año)",
+    "ytdPerDiemDays": "Días de Per Diem (año)",
     "daysOnRoad": "días en carretera",
-    "perDiemDeduction": "Deducción de Viático",
+    "perDiemDeduction": "Deducción de Per Diem",
     "perDiemCaptionFull": "@${{rate}}/día ({{pct}}% de ${{fullRate}})",
     "perDiemCaptionSimple": "@${{rate}}/día",
     "weeksInService": "Semanas en Servicio",
-    "settlementsImported": "liquidaciones importadas",
+    "settlementsImported": "settlements importados",
     "avgNetPerWeek": "Neto Prom./Semana",
     "directDepositAvg": "prom. de depósito directo",
     "businessBalance": "Saldo del Negocio",
@@ -115,9 +115,9 @@
     "outOfPocketTitle": "💳 De Su Bolsillo",
     "outOfPocketSubtitle": "Deducible de impuestos — pagado por usted (tarjeta de negocio, tarjeta personal, efectivo)",
     "outOfPocketEmpty": "Aún ninguno — importe un recibo o factura.",
-    "withheldTitle": "🏦 Retenido de la Liquidación",
+    "withheldTitle": "🏦 Retenido del Settlement",
     "withheldSubtitle": "Ya reflejado en el pago neto, NO se vuelve a deducir (ELD, seguro, pago del camión)",
-    "withheldEmpty": "Aún ninguno — importe un PDF de liquidación.",
+    "withheldEmpty": "Aún ninguno — importe un PDF de settlement.",
     "total": "Total",
     "personalContributionTag": "💰 → Aporte de Capital",
     "editTitle": "✏️ Editar Deducción",
@@ -160,7 +160,7 @@
   },
   "importScreen": {
     "title": "Importar",
-    "pickPrompt": "Fotografíe o suba una liquidación, recibo, ticket de combustible o factura de mantenimiento.",
+    "pickPrompt": "Fotografíe o suba un settlement, recibo, ticket de combustible o factura de mantenimiento.",
     "takePhoto": "📷 Tomar Foto",
     "chooseFromGallery": "🖼️ Elegir de la Galería",
     "choosePdf": "📄 Elegir PDF",
@@ -187,12 +187,12 @@
     "createNewDriver": "+ Nuevo Conductor",
     "newDriverNamePlaceholder": "Nombre del conductor",
     "createDriverFailedTitle": "No se pudo crear el conductor",
-    "driverShareLabel": "Parte de {{name}} en esta liquidación ($)",
+    "driverShareLabel": "Parte de {{name}} en este settlement ($)",
     "driverSharePlaceholder": "Monto",
     "lowConfidenceTitle": "⚠️ Revise antes de guardar",
     "lowConfidenceBody": "La IA no estuvo totalmente segura al leer este documento — revise los datos antes de guardar.",
     "miscIncomeNoteTitle": "💵 Ingreso comercial detectado",
-    "miscIncomeNoteBody": "Esto parece ingreso comercial (detención, demora, bono, etc.) sin un libro contable dedicado todavía — el documento queda archivado, pero regístrelo manualmente por ahora.",
+    "miscIncomeNoteBody": "Esto parece ingreso comercial (detention, layover, bono, etc.) sin un libro contable dedicado todavía — el documento queda archivado, pero regístrelo manualmente por ahora.",
     "save": "Guardar",
     "saveAnyway": "Guardar de Todos Modos",
     "discard": "Descartar",
@@ -213,7 +213,7 @@
       "loadsLabel": "Cargas",
       "loads": "{{count}} cargas",
       "tractorFuel": "Combustible del Tractor",
-      "reeferFuel": "Combustible del Refrigerador",
+      "reeferFuel": "Combustible Reefer",
       "type": "Tipo",
       "station": "Estación",
       "gallonsLabel": "Galones",
@@ -240,18 +240,18 @@
     }
   },
   "camera": {
-    "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de liquidaciones.",
+    "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de settlements.",
     "grantAccess": "Conceder Acceso a la Cámara",
     "cancel": "Cancelar"
   },
   "importLegacy": {
     "title": "Importar Respaldo Anterior",
-    "pickPrompt": "Elija el archivo JSON de respaldo exportado desde la app web (Configuración → Exportar Datos). Se importarán liquidaciones, deducciones, historial de mantenimiento, Estado del Camión, Cuenta de Capital, préstamos, tarjetas y estados de cuenta bancarios/corrientes. Es seguro ejecutarlo más de una vez — los registros coincidentes se actualizan en su lugar, no se duplican.",
+    "pickPrompt": "Elija el archivo JSON de respaldo exportado desde la app web (Configuración → Exportar Datos). Se importarán settlements, deducciones, historial de mantenimiento, Estado del Camión, Cuenta de Capital, préstamos, tarjetas y estados de cuenta bancarios/corrientes. Es seguro ejecutarlo más de una vez — los registros coincidentes se actualizan en su lugar, no se duplican.",
     "chooseFile": "Elegir archivo de respaldo",
     "exportedAt": "Exportado el {{date}}",
-    "missingWeekEnding": "⚠ {{missing}} de {{total}} liquidación(es) no tienen fecha de fin de semana — se usará la fecha del documento en su lugar.",
+    "missingWeekEnding": "⚠ {{missing}} de {{total}} settlement(s) no tienen fecha de fin de semana — se usará la fecha del documento en su lugar.",
     "rows": {
-      "settlements": "Liquidaciones",
+      "settlements": "Settlements",
       "loads": "Cargas",
       "fuelPurchases": "Compras de combustible",
       "deductions": "Deducciones",
@@ -292,7 +292,7 @@
     "title": "Configuración",
     "tosAccepted": "Términos de Uso aceptados {{date}} (v{{version}})",
     "dataTitle": "Datos",
-    "dataNote": "Restaure liquidaciones, deducciones, historial de mantenimiento y más desde un respaldo JSON anterior.",
+    "dataNote": "Restaure settlements, deducciones, historial de mantenimiento y más desde un respaldo JSON anterior.",
     "importLegacyButton": "Importar respaldo anterior (JSON)",
     "languageTitle": "Idioma",
     "languageNote": "Elija el idioma del texto propio de la app. Sus datos (descripciones, nombres de tiendas) nunca se traducen.",
@@ -357,8 +357,8 @@
       "fuel": "Filtro de Combustible",
       "dpf": "Limpieza de DPF",
       "def": "Filtro de DEF",
-      "coolant_ext": "Extensor de Refrigerante",
-      "coolant": "Reemplazo Total de Refrigerante",
+      "coolant_ext": "Extensor de Coolant",
+      "coolant": "Reemplazo Total de Coolant",
       "trans": "Transmisión",
       "diff": "Diferencial",
       "airfilter": "Filtro de Aire del Motor",
@@ -398,8 +398,8 @@
       "fuel": "Filtro de Combustible",
       "dpf": "Limpieza de DPF",
       "def": "Filtro de DEF",
-      "coolant_ext": "Extensor de Refrigerante",
-      "coolant": "Reemplazo Total de Refrigerante",
+      "coolant_ext": "Extensor de Coolant",
+      "coolant": "Reemplazo Total de Coolant",
       "trans": "Transmisión",
       "diff": "Diferencial",
       "airfilter": "Filtro de Aire del Motor",
@@ -430,7 +430,7 @@
     "retire": "Retirar",
     "retiredTag": "(Retirado)",
     "retireConfirmTitle": "¿Retirar este camión?",
-    "retireConfirmBody": "Esto conserva todo su historial — liquidaciones, combustible, mantenimiento — pero lo oculta de los selectores en adelante. Puede reactivarlo cuando quiera.",
+    "retireConfirmBody": "Esto conserva todo su historial — settlements, combustible, mantenimiento — pero lo oculta de los selectores en adelante. Puede reactivarlo cuando quiera.",
     "reactivate": "Reactivar",
     "showRetired": "Mostrar camiones retirados",
     "hideRetired": "Ocultar camiones retirados"
@@ -477,26 +477,86 @@
     }
   },
   "docTypes": {
-    "settlement": { "label": "Liquidación", "route": "Liquidaciones · Cargas · Combustible · Deducciones · Activos" },
-    "fuel": { "label": "Recibo de Combustible", "route": "Registro de Combustible" },
-    "maintenance": { "label": "Factura de Reparación", "route": "Mantenimiento" },
-    "amazon": { "label": "Compra en Tienda/Amazon", "route": "Deducciones (autocategorizado) · Cuenta de Capital" },
-    "store": { "label": "Recibo de Tienda", "route": "Deducciones · Cuenta de Capital" },
-    "toll": { "label": "Factura de Peaje", "route": "Deducciones" },
-    "loan": { "label": "Estado de Préstamo", "route": "Deducciones" },
-    "w2": { "label": "Formulario de Impuestos W-2", "route": "Ingreso Familiar (aún no conectado a una pantalla)" },
-    "driver_payment": { "label": "Pago a Conductor", "route": "Pagos a Conductores" },
-    "insurance": { "label": "Estado de Seguro", "route": "Deducciones" },
-    "lease_rent": { "label": "Estado de Arrendamiento/Renta", "route": "Deducciones" },
-    "factoring_statement": { "label": "Estado de Factoraje", "route": "Deducciones" },
-    "government_or_misc_income": { "label": "Ingreso Misceláneo", "route": "Aún no conectado a una pantalla — registre manualmente por ahora" },
-    "utility_subscription": { "label": "Factura de Servicio/Suscripción", "route": "Deducciones" },
-    "medical_card": { "label": "Tarjeta Médica DOT", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
-    "inspection_report": { "label": "Informe de Inspección DOT", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
-    "registration_cab_card": { "label": "Registro IRP/Tarjeta de Cabina", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
-    "irs_2290_schedule1": { "label": "HVUT (Formulario 2290) Anexo 1", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
-    "insurance_policy": { "label": "Póliza de Seguro", "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)" },
-    "other": { "label": "Documento", "route": "Deducciones" }
+    "settlement": {
+      "label": "Settlement",
+      "route": "Settlements · Cargas · Combustible · Deducciones · Activos"
+    },
+    "fuel": {
+      "label": "Recibo de Combustible",
+      "route": "Registro de Combustible"
+    },
+    "maintenance": {
+      "label": "Factura de Reparación",
+      "route": "Mantenimiento"
+    },
+    "amazon": {
+      "label": "Compra en Tienda/Amazon",
+      "route": "Deducciones (autocategorizado) · Cuenta de Capital"
+    },
+    "store": {
+      "label": "Recibo de Tienda",
+      "route": "Deducciones · Cuenta de Capital"
+    },
+    "toll": {
+      "label": "Factura de Peaje",
+      "route": "Deducciones"
+    },
+    "loan": {
+      "label": "Estado de Préstamo",
+      "route": "Deducciones"
+    },
+    "w2": {
+      "label": "Formulario de Impuestos W-2",
+      "route": "Ingreso Familiar (aún no conectado a una pantalla)"
+    },
+    "driver_payment": {
+      "label": "Pago a Conductor",
+      "route": "Pagos a Conductores"
+    },
+    "insurance": {
+      "label": "Estado de Seguro",
+      "route": "Deducciones"
+    },
+    "lease_rent": {
+      "label": "Estado de Arrendamiento/Renta",
+      "route": "Deducciones"
+    },
+    "factoring_statement": {
+      "label": "Estado de Factoring",
+      "route": "Deducciones"
+    },
+    "government_or_misc_income": {
+      "label": "Ingreso Misceláneo",
+      "route": "Aún no conectado a una pantalla — registre manualmente por ahora"
+    },
+    "utility_subscription": {
+      "label": "Factura de Servicio/Suscripción",
+      "route": "Deducciones"
+    },
+    "medical_card": {
+      "label": "Tarjeta Médica DOT",
+      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+    },
+    "inspection_report": {
+      "label": "Informe de Inspección DOT",
+      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+    },
+    "registration_cab_card": {
+      "label": "Registro IRP/Tarjeta de Cabina",
+      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+    },
+    "irs_2290_schedule1": {
+      "label": "HVUT (Formulario 2290) Anexo 1",
+      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+    },
+    "insurance_policy": {
+      "label": "Póliza de Seguro",
+      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+    },
+    "other": {
+      "label": "Documento",
+      "route": "Deducciones"
+    }
   },
   "confirmContribution": {
     "title": "¿Agregar como Aporte del Propietario?",

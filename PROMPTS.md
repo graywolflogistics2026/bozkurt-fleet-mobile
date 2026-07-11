@@ -534,6 +534,20 @@ shortcut worth taking.
 Also: spot-check Hindi/Devanagari and Ukrainian/Cyrillic text rendering on
 both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
+
+BINDING REVIEW ITEM (owner decision, i18n terminology rule):
+docs/I18N_GLOSSARY.md's DO-NOT-TRANSLATE glossary (per diem, coolant,
+DPF, DEF, ELD, IFTA, IRP, HVUT/2290, settlement(s), linehaul, fuel
+surcharge, detention, layover, lumper, bobtail, deadhead, reefer, APU,
+CDL, DOT, MC number, escrow, factoring, Schedule C, 1099, W-2, K-1,
+S-Corp, LLC) applies to hi.json/uk.json exactly like it already does to
+es/ru/ar/tr — every glossary term that appears in a string being
+translated stays in English (Latin script embedded in the Hindi/
+Ukrainian sentence), never rendered in Devanagari/Cyrillic. Run
+`npx jest app/src/i18n/__tests__/glossary.test.ts` after translating and
+confirm it passes before considering this session done — it asserts
+glossary terms are byte-identical across all 7 locales, so a slip here
+fails the test, not just review.
 ```
 
 ## AI feature package (owner decision 2026-07-10, PRODUCT DECISION — binding)
