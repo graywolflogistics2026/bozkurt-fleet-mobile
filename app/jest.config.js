@@ -13,6 +13,7 @@ module.exports = {
     '<rootDir>/src/stats/**/*.test.ts',
     '<rootDir>/src/import/**/*.test.ts',
     '<rootDir>/src/i18n/**/*.test.ts',
+    '<rootDir>/src/truck/**/*.test.ts',
   ],
   // Mirrors tsconfig.json's "@/*" path alias — ts-jest doesn't read tsconfig
   // paths for module resolution on its own.

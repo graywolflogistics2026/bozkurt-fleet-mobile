@@ -9,6 +9,8 @@ const MENU_ITEMS = [
   { href: '/(tabs)/more/tax-estimator', labelKey: 'more.taxEstimator', emoji: '🧮' },
   { href: '/(tabs)/more/cash-flow', labelKey: 'more.cashFlow', emoji: '🏦' },
   { href: '/(tabs)/more/maintenance', labelKey: 'more.maintenance', emoji: '🔧' },
+  { href: '/(tabs)/more/trucks', labelKey: 'more.trucks', emoji: '🚚' },
+  { href: '/(tabs)/more/drivers', labelKey: 'more.drivers', emoji: '🧑‍✈️' },
   { href: '/(tabs)/more/loans', labelKey: 'more.loans', emoji: '📄' },
   { href: '/(tabs)/more/settings', labelKey: 'more.settings', emoji: '⚙️' },
 ] as const;

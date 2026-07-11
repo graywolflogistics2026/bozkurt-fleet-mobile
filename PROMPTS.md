@@ -972,7 +972,7 @@ terminology). No new table needed; this is a presentation branch on top of
 the existing capital_transactions data.
 ```
 
-## Session 8 — Truck Health + Maintenance
+## Session 8 — Truck Health + Maintenance (DONE 2026-07-10)
 
 ```
 0. Truck management screen (NEW, owner decision 2026-07-09 — multi-truck

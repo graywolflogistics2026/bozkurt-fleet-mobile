@@ -59,6 +59,21 @@
      SEED DEFAULTS copied into `maintenance_intervals` when a truck is
      created (see docs/SCHEMA.sql) — not permanent constants to hard-code.
      Disabling a category (`enabled=false`) hides it from Truck Health.
+     Session 8 scope decisions: the health math lives ONLY in
+     `app/src/truck/health.ts`'s `calcTruckHealth()` — a pure, unit-tested
+     TS port of legacy's `rHealth()`/`applyMaintToHealth()`, same "every
+     calculation is a tested app/src/ function, never a SQL view" pattern
+     as CPM/per diem/tax estimate/driver payroll. The `truck_health` SQL
+     view in `supabase/migrations/0001_init.sql` is NOT used by the app —
+     it predates this invariant and stays in the schema unused rather than
+     being dropped, but no screen may query it; a `0` baseline (no record,
+     no override) would render a false "OVERDUE" on a brand-new truck with
+     real existing mileage, which `calcTruckHealth()` avoids via a
+     `'no_data'` status (neutral "no records yet" prompt) that the SQL
+     view has no equivalent for. `truck_health_config.overrides` (manual
+     baseline entry) has no editing UI yet — deliberately deferred, since
+     the seeded-intervals-plus-no_data-prompt empty state already satisfies
+     the "clean, not broken-looking" requirement for a fresh truck.
   5. Every delete cascades: linked capital contributions, document records
      (duplicate detection), fuel purchases (ON DELETE CASCADE from
      settlements — matches legacy deleteSett()'s hard-delete of that week's
