@@ -12,6 +12,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useInsertTruck } from '@/src/data/trucks';
 import { useDrivers, useInsertDriver } from '@/src/data/drivers';
+import { useUserCategories } from '@/src/data/userCategories';
 import { callAiImport, friendlyAiImportError, type AiImportError } from '@/src/data/aiImportCall';
 import { fetchExistingDocsForDuplicateCheck, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
@@ -115,6 +116,13 @@ export default function Import() {
   const { trucks, refreshTrucks } = useActiveTruck();
   const { data: driversData } = useDrivers();
   const drivers = driversData ?? [];
+  // Custom categories (owner decision 2026-07-10, PRODUCT DECISION): the
+  // user's own active category names, forwarded to ai-import so
+  // classification can suggest one of these too, not just the canonical
+  // taxonomy (docs/INDUSTRY_TAXONOMY.md §B). "+ New category" UI itself is
+  // PROMPTS.md Session 9a — this is just the ai-import awareness plumbing.
+  const { data: userCategoriesData } = useUserCategories({ active: true });
+  const customCategoryNames = (userCategoriesData ?? []).map((c) => c.name);
   const insertTruck = useInsertTruck();
   const insertDriver = useInsertDriver();
   const queryClient = useQueryClient();
@@ -243,7 +251,7 @@ export default function Import() {
       setWorkingLabel(t('importScreen.readingDocument'));
       const base64 = await new File(compressed.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
-      const { data, error } = await callAiImport(base64, 'image/jpeg', undefined, i18n.language);
+      const { data, error } = await callAiImport(base64, 'image/jpeg', undefined, i18n.language, customCategoryNames);
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, undefined);
     } catch (err) {
@@ -268,7 +276,7 @@ export default function Import() {
       setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
       const base64 = await new File(asset.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
-      const { data, error } = await callAiImport(base64, 'application/pdf', undefined, i18n.language);
+      const { data, error } = await callAiImport(base64, 'application/pdf', undefined, i18n.language, customCategoryNames);
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, asset.name);
     } catch (err) {

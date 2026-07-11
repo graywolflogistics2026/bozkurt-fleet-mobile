@@ -1,4 +1,29 @@
-import { detectMaintType, getCatNote, guessCategory, isPersonalPayment, toDbServiceType } from '@/src/import/category';
+import {
+  applyScheduleCDefault,
+  CANONICAL_CATEGORIES,
+  DEFAULT_SCHEDULE_C_BUCKET,
+  detectMaintType,
+  getCatNote,
+  guessCategory,
+  isPersonalPayment,
+  mergeCategoryOptions,
+  toDbServiceType,
+} from '@/src/import/category';
+import type { UserCategory } from '@/src/types/db';
+
+function userCategory(overrides: Partial<UserCategory>): UserCategory {
+  return {
+    id: 'uc1',
+    user_id: 'u1',
+    name: 'Custom',
+    kind: 'expense',
+    schedule_c_bucket: 'Misc',
+    active: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
 
 describe('isPersonalPayment', () => {
   it('matches personal/cash/zelle/venmo payment methods', () => {
@@ -121,5 +146,70 @@ describe('toDbServiceType', () => {
     for (const t of ['oil', 'fuel', 'dpf', 'def', 'coolant', 'trans', 'diff', 'airfilter', 'airdryer', 'chassis', 'apu', 'tires', 'brakes', 'general']) {
       expect(toDbServiceType(t)).toBe(t);
     }
+  });
+});
+
+describe('mergeCategoryOptions (custom categories, owner decision 2026-07-10)', () => {
+  it('merges CANONICAL_CATEGORIES with active custom expense categories', () => {
+    const custom = [userCategory({ name: 'Detention Software', kind: 'expense' })];
+    const result = mergeCategoryOptions('expense', custom);
+    expect(result).toEqual([...CANONICAL_CATEGORIES, 'Detention Software']);
+  });
+
+  it('excludes inactive custom categories', () => {
+    const custom = [userCategory({ name: 'Retired Category', kind: 'expense', active: false })];
+    expect(mergeCategoryOptions('expense', custom)).toEqual([...CANONICAL_CATEGORIES]);
+  });
+
+  it('excludes custom categories of the wrong kind', () => {
+    const custom = [userCategory({ name: 'Referral Bonus', kind: 'income' })];
+    expect(mergeCategoryOptions('expense', custom)).toEqual([...CANONICAL_CATEGORIES]);
+  });
+
+  it('de-dupes a custom name that collides with an existing canonical category', () => {
+    const custom = [userCategory({ name: 'Tires', kind: 'expense' })];
+    const result = mergeCategoryOptions('expense', custom);
+    expect(result.filter((c) => c === 'Tires')).toHaveLength(1);
+  });
+
+  it('income has no canonical list — only the user\'s own active custom income categories', () => {
+    const custom = [
+      userCategory({ id: 'uc1', name: 'Referral Bonus', kind: 'income', schedule_c_bucket: null }),
+      userCategory({ id: 'uc2', name: 'Inactive Income', kind: 'income', schedule_c_bucket: null, active: false }),
+      userCategory({ id: 'uc3', name: 'Some Expense', kind: 'expense' }),
+    ];
+    expect(mergeCategoryOptions('income', custom)).toEqual(['Referral Bonus']);
+  });
+
+  it('returns just the canonical list when there are no custom categories', () => {
+    expect(mergeCategoryOptions('expense', [])).toEqual([...CANONICAL_CATEGORIES]);
+    expect(mergeCategoryOptions('income', [])).toEqual([]);
+  });
+});
+
+describe('applyScheduleCDefault (tax safety rail, owner decision 2026-07-10)', () => {
+  it('defaults schedule_c_bucket to "Misc" for an expense category with none given', () => {
+    const result = applyScheduleCDefault({ user_id: 'u1', name: 'New Category', kind: 'expense' });
+    expect(result.schedule_c_bucket).toBe(DEFAULT_SCHEDULE_C_BUCKET);
+  });
+
+  it('preserves an explicit schedule_c_bucket for an expense category', () => {
+    const result = applyScheduleCDefault({
+      user_id: 'u1',
+      name: 'New Category',
+      kind: 'expense',
+      schedule_c_bucket: 'Tires',
+    });
+    expect(result.schedule_c_bucket).toBe('Tires');
+  });
+
+  it('forces schedule_c_bucket to null for an income category, even if one was passed in', () => {
+    const result = applyScheduleCDefault({
+      user_id: 'u1',
+      name: 'Referral Bonus',
+      kind: 'income',
+      schedule_c_bucket: 'Misc',
+    });
+    expect(result.schedule_c_bucket).toBeNull();
   });
 });

@@ -8,6 +8,7 @@
 // method logic (owner decision 2026-07-07, CLAUDE.md invariant #2) now
 // lives in paymentMethods.ts alongside normalizePaymentMethod().
 export { isPersonalPayment } from '@/src/import/paymentMethods';
+import type { UserCategory, UserCategoryInsert } from '@/src/types/db';
 
 // docs/INDUSTRY_TAXONOMY.md §B — the ONE shared category constant every
 // screen/dropdown/guesser reads from (industry knowledge base, owner
@@ -76,6 +77,39 @@ export const CHARGEBACK_CATEGORY_LABEL: Record<string, string> = {
   dispatch_fee: 'Dispatch & Factoring Fees',
   other_chargeback: 'Misc',
 };
+
+// docs/PENDING_SQL.md §21 (custom categories, owner decision 2026-07-10,
+// PRODUCT DECISION) — pure logic lives here (no React/Supabase deps, unit
+// testable) rather than in app/src/data/userCategories.ts, which just
+// re-exports these alongside the entityHooks-based CRUD hooks (same split
+// as app/src/tax/driverPayroll.ts vs app/src/data/driverPayments.ts).
+// Tax safety rail: a custom EXPENSE category must always resolve to a
+// Schedule C bucket so it can never silently fall out of the P&L/tax
+// estimate — also enforced by a DB check constraint, this is just the
+// app-side default so the UI doesn't have to ask every time. Custom
+// INCOME categories never carry a bucket — they roll straight into gross
+// income.
+export const DEFAULT_SCHEDULE_C_BUCKET = 'Misc';
+
+export function applyScheduleCDefault(values: UserCategoryInsert): UserCategoryInsert {
+  if (values.kind !== 'expense') return { ...values, schedule_c_bucket: null };
+  return { ...values, schedule_c_bucket: values.schedule_c_bucket || DEFAULT_SCHEDULE_C_BUCKET };
+}
+
+// Merges CANONICAL_CATEGORIES with the user's own active custom categories
+// for a given kind — the ONE place every category picker should read its
+// option list from (deduction edit, manual add, import preview —
+// PROMPTS.md Session 9a), rather than hand-rolling the merge per screen.
+// CANONICAL_CATEGORIES is expense-oriented (there is no canonical income
+// category list yet — income is currently just settlement gross/net, not
+// categorized), so 'income' only ever returns the user's own custom income
+// categories.
+export function mergeCategoryOptions(kind: 'income' | 'expense', customCategories: UserCategory[]): string[] {
+  const activeNames = customCategories.filter((c) => c.active && c.kind === kind).map((c) => c.name);
+  if (kind !== 'expense') return activeNames;
+  const canonical: readonly string[] = CANONICAL_CATEGORIES;
+  return [...CANONICAL_CATEGORIES, ...activeNames.filter((name) => !canonical.includes(name))];
+}
 
 const STORE_CATS: Record<string, string | null> = {
   amazon: null,

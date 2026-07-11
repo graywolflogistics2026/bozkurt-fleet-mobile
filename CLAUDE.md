@@ -374,6 +374,48 @@
       full Schedule C experience unchanged. `role = null` (skipped the
       wizard, or a pre-existing account) MUST behave identically to
       `owner_operator` — never a third, undocumented behavior.
+  19. CUSTOM CATEGORIES + TAX SAFETY RAIL (owner decision 2026-07-10,
+      PRODUCT DECISION, binding): users may create their own income and
+      expense categories beyond `CANONICAL_CATEGORIES`
+      (docs/INDUSTRY_TAXONOMY.md §B) via `user_categories`
+      (docs/PENDING_SQL.md §21 — entirely optional/additive, zero rows
+      means every picker just shows the canonical list, same "n=0/1 is
+      just the default presentation" spirit as invariant #7). Every
+      category picker (deduction edit, manual add, import preview —
+      PROMPTS.md Session 9a) must show canonical + the user's own active
+      categories together, with an inline "+ New category" option — never
+      two separate, un-mergeable lists. A custom EXPENSE category can NEVER
+      silently fall out of the P&L/tax estimate: creating one requires a
+      `schedule_c_bucket` mapping (defaults to `"Misc"` when the user
+      doesn't pick one, `app/src/data/userCategories.ts`
+      `applyScheduleCDefault()`), enforced by a DB check constraint too,
+      not just app-level validation. A custom INCOME category has no
+      bucket — it rolls straight into gross income, there is no Schedule C
+      expense line for income. AI classification may suggest a user's
+      custom categories too — `ai-import` accepts `customCategories` in
+      its request body and instructs the model to pick from that exact
+      list rather than inventing a new custom name itself (never let the
+      AI silently create categories the user never defined).
+  20. NO ARBITRARY USER-DEFINED SCHEMA COLUMNS (owner decision 2026-07-10,
+      PRODUCT DECISION, binding — flexible fields instead of free-form
+      columns): a user may never add their own ad-hoc column to any table.
+      Every financial record already carries a system description
+      (`description`/`note(s)`) plus an optional `tags` text field
+      (docs/PENDING_SQL.md §22) for the user's own ad-hoc labeling/
+      filtering — between custom categories (#19), `tags`, and `notes`,
+      there is no legitimate need this app has ever hit that isn't already
+      covered by one of these three, additive mechanisms. Why this is a
+      hard invariant, not just a preference: a free-form user-defined
+      column would have no place in the tax engine's fixed field list
+      (CLAUDE.md invariant #6's tax constants, `calcTaxEstimate.ts`'s
+      fixed input shape) or the Accountant Package's Schedule C rollup
+      (PROMPTS.md Session 9b) — either the column gets silently ignored by
+      every report (defeating the point of adding it) or every report
+      would need to special-case an open-ended, per-user schema (breaking
+      invariant #6's "no tax constant lives in app code, one shared
+      constant, not a hundred user-specific ones" principle). `tags` is
+      deliberately a single free-text field, not a normalized tags table
+      or array column, to keep it that simple.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

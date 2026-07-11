@@ -16,14 +16,19 @@ export type AiImportCallResult = { data?: Extraction; error?: AiImportError };
 // responds in that language for user-facing free-text fields (summary,
 // descriptions) — standard financial terms (e.g. "per diem") may stay
 // English regardless (see ai-import's prompt addition).
+// customCategories (owner decision 2026-07-10, PRODUCT DECISION — custom
+// categories): the user's own active category names (both kinds), so
+// classification can suggest one of THEM too instead of only ever
+// matching the canonical taxonomy (docs/INDUSTRY_TAXONOMY.md §B).
 export async function callAiImport(
   fileBase64: string,
   mediaType: string,
   docHint?: string,
-  locale?: string
+  locale?: string,
+  customCategories?: string[]
 ): Promise<AiImportCallResult> {
   const { data, error } = await supabase.functions.invoke('ai-import', {
-    body: { fileBase64, mediaType, docHint, locale },
+    body: { fileBase64, mediaType, docHint, locale, customCategories },
   });
 
   if (error) {

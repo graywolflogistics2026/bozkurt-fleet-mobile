@@ -17,6 +17,7 @@ function ded(overrides: Partial<Deduction>): Deduction {
     payment_method: null,
     source: 'manual',
     warranty_years: null,
+    tags: null,
     created_at: '2026-06-01T00:00:00Z',
     updated_at: '2026-06-01T00:00:00Z',
     ...overrides,

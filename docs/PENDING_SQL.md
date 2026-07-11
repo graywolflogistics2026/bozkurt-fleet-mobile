@@ -1,7 +1,7 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
 **STATUS (2026-07-09): sections 1-10 have been run against the live DB.
-Sections 11-20 are new and NOT yet applied — run them yourself in the
+Sections 11-22 are new and NOT yet applied — run them yourself in the
 Supabase SQL editor, in order (14 depends on 13; 16 depends on 15).**
 This file started as a forward-looking "run this next" list; it's kept now
 as the log of what actually landed, since Session 1 hasn't yet been
@@ -636,6 +636,86 @@ Account, S-Corp election) and centers per-diem/W-2 tracking instead;
 `owner_operator`/`trainee`.
 
 - [ ] 20a run (add profiles.role column)
+
+## 21. user_categories table (custom categories, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+
+New entity, entirely optional/additive — an account with zero rows here
+behaves exactly as today (every picker just shows `CANONICAL_CATEGORIES`,
+docs/INDUSTRY_TAXONOMY.md §B). The tax safety rail (owner decision, item
+2) is enforced at the DB level, not just in the app: a `kind='expense'`
+row MUST have a `schedule_c_bucket` — a custom expense category can never
+silently fall out of the P&L/tax estimate. `kind='income'` rows have no
+bucket (custom income categories roll straight into gross income, there is
+no Schedule C expense bucket for income).
+
+```sql
+create table user_categories (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users on delete cascade,
+  name              text not null,
+  kind              text not null check (kind in ('income', 'expense')),
+  schedule_c_bucket text,
+  active            boolean not null default true,
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now(),
+  unique (user_id, name),
+  check (kind = 'income' or schedule_c_bucket is not null)
+);
+
+alter table user_categories enable row level security;
+create policy "user_categories_owner_all" on user_categories
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create trigger trg_touch_updated_at before update on user_categories
+  for each row execute function touch_updated_at();
+```
+
+`schedule_c_bucket` is free text, not an enum — it should normally be one
+of `docs/INDUSTRY_TAXONOMY.md`'s `CANONICAL_CATEGORIES` (the app defaults
+it to `"Misc"` when creating an expense category without the user
+explicitly picking a bucket, per the tax safety rail — matches this file's
+existing "no DB migration/no check constraint on category strings" pattern
+elsewhere), but nothing stops an admin/future feature from using a
+different string, hence text not a foreign key/enum.
+
+- [ ] 21a run (create user_categories table + RLS + trigger)
+
+---
+
+## 22. tags column on financial record tables (flexible fields, owner decision 2026-07-10, PRODUCT DECISION) — ⬜ NOT YET APPLIED
+
+Every record that already has a free-text field (`description`/`note`/
+`notes`) for its own label ALSO gets an optional `tags` text field — the
+user's own ad-hoc labeling/filtering, separate from (and not a replacement
+for) the AI-populated/system description. Deliberately a single free-text
+field, not a normalized tags table or array column — matches this owner's
+explicit "no arbitrary user-defined schema columns" rule (CLAUDE.md): tags
+is itself the one flexible field the schema offers instead of letting
+users add their own columns, so it stays simple (comma-separated or
+freeform, the UI's choice when it lands) rather than growing its own
+relational structure.
+
+```sql
+alter table settlements add column tags text;
+alter table loads add column tags text;
+alter table fuel_purchases add column tags text;
+alter table deductions add column tags text;
+alter table capital_transactions add column tags text;
+alter table maintenance_records add column tags text;
+alter table tolls add column tags text;
+alter table reimbursements add column tags text;
+alter table loans add column tags text;
+alter table credit_cards add column tags text;
+alter table driver_payments add column tags text;
+alter table bank_transactions add column tags text;
+```
+
+Nullable, no backfill needed — existing rows simply have no tags. Every
+one of these ALTERs is independent (no ordering dependency between them).
+
+- [ ] 22a run (add tags column to settlements/loads/fuel_purchases/
+      deductions/capital_transactions/maintenance_records/tolls/
+      reimbursements/loans/credit_cards/driver_payments/bank_transactions)
 
 ---
 

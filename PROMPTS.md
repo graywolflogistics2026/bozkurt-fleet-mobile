@@ -536,6 +536,56 @@ both iOS and Android (font fallback, line-wrapping on the longest strings)
 since neither script has been exercised in the app before this pass.
 ```
 
+## User-defined custom categories (owner decision 2026-07-10, PRODUCT DECISION — binding)
+
+```
+1. Custom categories — SCHEMA IMPLEMENTED THIS PASS: user_categories table
+   (docs/PENDING_SQL.md §21 — id, user_id, name, kind income|expense,
+   schedule_c_bucket nullable, active, RLS owner-scoped, unique per
+   user_id+name). Entirely optional/additive, same pattern as drivers/
+   trucks — zero rows means every picker just shows CANONICAL_CATEGORIES
+   (docs/INDUSTRY_TAXONOMY.md §B). Category pickers everywhere (deduction
+   edit, manual add, import preview) showing canonical + the user's own
+   with an inline "+ New category" option is PROMPTS.md Session 9a item 9
+   above — not this pass.
+
+2. Tax safety rail — IMPLEMENTED THIS PASS, enforced at TWO layers: a DB
+   check constraint (kind='income' or schedule_c_bucket is not null) AND
+   an app-level default (app/src/data/userCategories.ts
+   applyScheduleCDefault(), defaults to "Misc" when the user creating an
+   expense category doesn't pick a bucket). A custom category can never
+   silently fall out of the P&L/tax estimate. Custom INCOME categories
+   have no bucket — they roll straight into gross income. AI
+   classification awareness — IMPLEMENTED THIS PASS: ai-import accepts
+   customCategories (string[]) in its request body and is instructed to
+   suggest one of the user's own categories when it fits better, never to
+   invent a new custom name itself. app/(tabs)/import/index.tsx fetches
+   the user's active categories (useUserCategories({active: true})) and
+   forwards their names on every call.
+
+3. Flexible fields instead of free-form columns — IMPLEMENTED THIS PASS
+   (docs/PENDING_SQL.md §22, CLAUDE.md invariant #20): every financial
+   record (settlements, loads, fuel_purchases, deductions,
+   capital_transactions, maintenance_records, tolls, reimbursements,
+   loans, credit_cards, driver_payments, bank_transactions) gains an
+   optional tags text column alongside its existing description/note(s)
+   field — the user's own ad-hoc labeling/filtering. NO arbitrary user-
+   defined schema columns, ever — custom categories (item 1) + tags +
+   notes cover the need; CLAUDE.md invariant #20 records why (breaks the
+   tax engine's fixed field list and the Accountant Package's Schedule C
+   rollup, which can't special-case an open-ended per-user schema).
+
+4. UI (category pickers with inline creation across the three named
+   screens) lands with the category-heavy screens, PROMPTS.md Session 9a
+   item 9. Schema + data-layer plumbing (useCategoryOptions(),
+   mergeCategoryOptions(), applyScheduleCDefault()) + ai-import awareness
+   are this pass.
+
+5. Recorded in CLAUDE.md invariants #19-20 and here. tsc, tests, commit,
+   push. ai-import Edge Function MUST be redeployed — the extraction
+   prompt changed (customCategories awareness).
+```
+
 ## Personalization & onboarding package (owner decision 2026-07-10, PRODUCT DECISION — binding)
 
 ```
@@ -970,6 +1020,17 @@ Maintenance is Session 8, Deductions/Capital Account are Session 7):
    default" action (sets dashboard_layout back to null). Needs a stable
    per-card id (not the i18n key) for each of the ~20 cards so a saved
    layout survives future relabeling.
+9. Custom category pickers (NEW, owner decision 2026-07-10 — custom
+   categories, PRODUCT DECISION, CLAUDE.md invariant #19): wire the
+   already-built data layer (app/src/data/userCategories.ts
+   useCategoryOptions()/applyScheduleCDefault()) into every category-
+   heavy screen landing this session — deduction edit's category pills,
+   a manual-add-deduction flow (if one doesn't already exist by this
+   point, build it), and the import preview (make its currently read-only
+   category line editable). Each gets an inline "+ New category" option:
+   name + kind (income/expense) + — for expense — a schedule_c_bucket
+   picker (defaulting to "Misc", CANONICAL_CATEGORIES as the bucket
+   choices) with the tax-safety-rail copy explaining why it's required.
 ```
 
 **DESIGN NOTE (owner decision 2026-07-04, not implemented until this

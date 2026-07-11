@@ -208,6 +208,9 @@ create table settlements (
   gross        numeric(12,2) not null default 0,
   net          numeric(12,2) not null default 0,
   miles        int default 0,
+  tags         text,  -- added retroactively, PENDING_SQL.md §22 (flexible fields, owner decision
+                       -- 2026-07-10) — the user's own ad-hoc labeling, separate from any AI/system
+                       -- description; same rationale on every other table below that gets this column.
   created_at   timestamptz default now(),
   unique (user_id, week_ending)               -- one settlement per week
 );
@@ -229,6 +232,7 @@ create table driver_payments (
   gross_pay      numeric(12,2) not null default 0,
   employer_taxes numeric(12,2) not null default 0,  -- only populated for w2_employee, from tax_year_data.se_tax.employer_fica
   notes          text,
+  tags           text,  -- PENDING_SQL.md §22
   created_at     timestamptz default now(),
   updated_at     timestamptz default now()
 );
@@ -248,7 +252,8 @@ create table loads (
   destination   text,
   loaded_miles  int default 0,
   empty_miles   int default 0,
-  revenue       numeric(12,2) default 0
+  revenue       numeric(12,2) default 0,
+  tags          text  -- PENDING_SQL.md §22
 );
 
 -- ---------- Fuel (was DB.fuel.tr / DB.fuel.re; +state = IFTA-ready) ----------
@@ -266,7 +271,31 @@ create table fuel_purchases (
   state        text,                          -- NEW: 2-letter code → IFTA quarterly report
   gallons      numeric(8,3),
   amount       numeric(12,2),
-  discount     numeric(12,2) default 0
+  discount     numeric(12,2) default 0,
+  tags         text  -- PENDING_SQL.md §22
+);
+
+-- ---------- User categories (NEW, owner decision 2026-07-10 — custom
+-- categories, PRODUCT DECISION). Entirely optional/additive — an account
+-- with zero rows here behaves exactly as today (pickers just show
+-- CANONICAL_CATEGORIES, docs/INDUSTRY_TAXONOMY.md §B). The tax safety
+-- rail is enforced here at the DB level: a kind='expense' row MUST carry
+-- schedule_c_bucket (defaults to "Misc" app-side when the user doesn't
+-- pick one) so a custom expense category can never silently fall out of
+-- the P&L/tax estimate; kind='income' rows have no bucket — custom
+-- income categories roll straight into gross income. See
+-- PENDING_SQL.md §21.
+create table user_categories (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users on delete cascade,
+  name              text not null,
+  kind              text not null check (kind in ('income', 'expense')),
+  schedule_c_bucket text,
+  active            boolean not null default true,
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now(),
+  unique (user_id, name),
+  check (kind = 'income' or schedule_c_bucket is not null)
 );
 
 -- ---------- Deductions (was DB.ded — the tax heart) ----------
@@ -292,6 +321,7 @@ create table deductions (
   source       text default 'manual'          -- settlement|import|manual
                 check (source in ('settlement','import','manual')),
   warranty_years numeric(4,1),                -- added retroactively, PENDING_SQL.md §7 — halves ok (e.g. 2.5)
+  tags         text,                          -- PENDING_SQL.md §22
   created_at   timestamptz default now()
 );
 -- Tax rule (net-pay model): deductible = rows where source != 'settlement'.
@@ -308,6 +338,7 @@ create table capital_transactions (
   linked_deduction_id uuid references deductions on delete cascade,
   -- ^ personal-payment purchases: contribution auto-created, cascades on delete.
   --   Postgres FK does the cascade the web app had to hand-code. NULL for manual draws.
+  tags         text,                          -- PENDING_SQL.md §22
   created_at   timestamptz default now()
 );
 -- Tax-free remaining = profiles.initial_capital + sum(contributions) - sum(draws)
@@ -325,7 +356,8 @@ create table maintenance_records (
   engine_hours int,                           -- APU services
   cost         numeric(12,2) default 0,
   vendor       text,
-  invoice_number text
+  invoice_number text,
+  tags         text                           -- PENDING_SQL.md §22
 );
 
 -- ---------- Maintenance intervals (per-truck, user-editable — NEW, owner decision 2026-07-03) ----------
@@ -395,7 +427,8 @@ create table tolls (
   network      text check (network in ('ezpass','drivewyze','other')),
   toll_date    date,
   amount       numeric(12,2),
-  plaza        text
+  plaza        text,
+  tags         text  -- PENDING_SQL.md §22
 );
 
 -- ---------- Reimbursements (was DB.reimb) ----------
@@ -407,7 +440,8 @@ create table reimbursements (
   reimb_date   date,
   description  text,
   reference    text,
-  amount       numeric(12,2)
+  amount       numeric(12,2),
+  tags         text  -- PENDING_SQL.md §22
 );
 
 -- ---------- Loans & credit cards (was LOANS / CARDS) ----------
@@ -417,7 +451,8 @@ create table loans (
   name         text, lender text,
   original_amount numeric(12,2), balance numeric(12,2),
   payment      numeric(12,2), frequency text, apr numeric(5,2),
-  next_due     date
+  next_due     date,
+  tags         text  -- PENDING_SQL.md §22
 );
 
 create table credit_cards (
@@ -425,7 +460,8 @@ create table credit_cards (
   user_id      uuid not null references auth.users,
   name         text, last_four text,
   credit_limit numeric(12,2), balance numeric(12,2),
-  apr numeric(5,2), due_day int
+  apr numeric(5,2), due_day int,
+  tags         text  -- PENDING_SQL.md §22
 );
 
 -- ---------- Bank & checking statements (was BANK_STMTS / CHK_STMTS, normalized) ----------
@@ -447,7 +483,8 @@ create table bank_transactions (
   category     text,
   tx_type      text check (tx_type in ('charge','payment','deposit','withdrawal')),
   amount       numeric(12,2),
-  deductible   boolean default false
+  deductible   boolean default false,
+  tags         text  -- PENDING_SQL.md §22
 );
 
 -- ============================================================================

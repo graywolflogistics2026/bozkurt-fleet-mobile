@@ -65,6 +65,7 @@ export type DriverPayment = {
   gross_pay: number;
   employer_taxes: number;
   notes: string | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -100,6 +101,7 @@ export type Settlement = {
   gross: number;
   net: number;
   miles: number;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -123,6 +125,7 @@ export type Load = {
   loaded_miles: number;
   empty_miles: number;
   revenue: number;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -142,6 +145,7 @@ export type FuelPurchase = {
   gallons: number | null;
   amount: number | null;
   discount: number;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -168,6 +172,7 @@ export type Deduction = {
   payment_method: string | null;
   source: 'settlement' | 'import' | 'manual';
   warranty_years: number | null; // docs/PENDING_SQL.md §7 — halves ok (e.g. 2.5)
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -186,6 +191,7 @@ export type CapitalTransaction = {
   tx_date: string;
   note: string | null;
   linked_deduction_id: string | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -212,6 +218,7 @@ export type MaintenanceRecord = {
   cost: number;
   vendor: string | null;
   invoice_number: string | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -254,6 +261,7 @@ export type Toll = {
   toll_date: string | null;
   amount: number | null;
   plaza: string | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -268,6 +276,7 @@ export type Reimbursement = {
   description: string | null;
   reference: string | null;
   amount: number | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -287,6 +296,7 @@ export type LoanRow = {
   frequency: string | null;
   apr: number | null;
   next_due: string | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -302,6 +312,7 @@ export type CreditCardRow = {
   balance: number | null;
   apr: number | null;
   due_day: number | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -332,6 +343,7 @@ export type BankTransaction = {
   tx_type: 'charge' | 'payment' | 'deposit' | 'withdrawal' | null;
   amount: number | null;
   deductible: boolean;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;
 };
@@ -339,6 +351,31 @@ export type BankTransactionInsert = Partial<Omit<BankTransaction, 'id' | 'create
   statement_id: string;
   user_id: string;
 };
+
+// docs/PENDING_SQL.md §21 (custom categories, owner decision 2026-07-10,
+// PRODUCT DECISION) — optional/additive entity; zero rows here means every
+// picker just shows CANONICAL_CATEGORIES (docs/INDUSTRY_TAXONOMY.md §B).
+// Tax safety rail: schedule_c_bucket is required (app defaults to "Misc")
+// for kind='expense' so a custom expense category can never silently fall
+// out of the P&L/tax estimate — enforced by a DB check constraint too, not
+// just this app-level type. kind='income' rows have no bucket; a custom
+// income category rolls straight into gross income.
+export type UserCategory = {
+  id: string;
+  user_id: string;
+  name: string;
+  kind: 'income' | 'expense';
+  schedule_c_bucket: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+export type UserCategoryInsert = Partial<Omit<UserCategory, 'id' | 'created_at' | 'updated_at'>> & {
+  user_id: string;
+  name: string;
+  kind: 'income' | 'expense';
+};
+export type UserCategoryUpdate = Partial<Omit<UserCategory, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
 export type Profile = {
   user_id: string;

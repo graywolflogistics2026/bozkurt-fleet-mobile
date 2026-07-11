@@ -4,7 +4,7 @@
 // the Anthropic API. ANTHROPIC_API_KEY lives only in this function's
 // environment secrets; the mobile app never holds it (CLAUDE.md).
 //
-// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string }
+// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[] }
 // Auth: Supabase JWT in the Authorization header (required).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -198,7 +198,7 @@ const LOCALE_LANGUAGE_NAME: Record<string, string> = {
   uk: "Ukrainian",
 };
 
-function buildExtractionPrompt(docHint?: string, locale?: string): string {
+function buildExtractionPrompt(docHint?: string, locale?: string, customCategories?: string[]): string {
   let prompt = LEGACY_EXTRACTION_PROMPT
     .replace(FUEL_SCHEMA_BEFORE, FUEL_SCHEMA_AFTER)
     .replace(DOCTYPE_ENUM_BEFORE, DOCTYPE_ENUM_AFTER)
@@ -220,6 +220,9 @@ function buildExtractionPrompt(docHint?: string, locale?: string): string {
   const languageName = locale ? LOCALE_LANGUAGE_NAME[locale] : undefined;
   if (languageName) {
     prompt += `\nAPPROVED ADDITION (AI in user's language, owner decision 2026-07-10): write every free-text field (summary, and any description you compose yourself) in ${languageName} — the user's chosen app language. Standard financial/trucking terms may stay in English when there's no natural equivalent (e.g. "per diem", "ELD", "IFTA"). This does NOT apply to enum-like fields (docType, category, chargebackType, incomeType, serviceType, paymentMethod) or to text you copy verbatim from the document itself (vendor names, item names, addresses) — only to text you are generating/summarizing in your own words.\n`;
+  }
+  if (customCategories && customCategories.length > 0) {
+    prompt += `\nAPPROVED ADDITION (custom categories, owner decision 2026-07-10): this user has also defined their own categories beyond the standard list above: ${customCategories.join(", ")}. When categorizing a purchase item (guessCategory-equivalent) or an unrecognized document's suggestedCategory (docType "other"), suggest one of THESE if it fits better than a standard category — never invent a new custom category name yourself, only pick from this exact list or fall back to a standard category.\n`;
   }
   return prompt;
 }
@@ -268,14 +271,20 @@ Deno.serve(async (req: Request) => {
   }
   const userId = userData.user.id;
 
-  let body: { fileBase64?: string; mediaType?: string; docHint?: string; locale?: string };
+  let body: {
+    fileBase64?: string;
+    mediaType?: string;
+    docHint?: string;
+    locale?: string;
+    customCategories?: string[];
+  };
   try {
     body = await req.json();
   } catch {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
   }
 
-  const { fileBase64, mediaType, docHint, locale } = body;
+  const { fileBase64, mediaType, docHint, locale, customCategories } = body;
   if (!fileBase64 || !mediaType) {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
   }
@@ -311,7 +320,7 @@ Deno.serve(async (req: Request) => {
     ? { type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } }
     : { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } };
 
-  const prompt = buildExtractionPrompt(docHint, locale);
+  const prompt = buildExtractionPrompt(docHint, locale, customCategories);
 
   let anthropicResp: Response;
   try {
