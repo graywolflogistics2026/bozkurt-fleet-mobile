@@ -1,8 +1,6 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-12): sections 1-26 have all been run against the live DB.
-Section 27 (added this pass, PROMPTS.md Session 9b) is NOT yet run — see
-its checklist below.**
+**STATUS (2026-07-12): sections 1-27 have all been run against the live DB.**
 Sections 11-24 were applied together in one transaction on 2026-07-11 via a
 combined SQL block (generated from this file, run in the Supabase SQL
 editor). This file started as a forward-looking "run this next" list; it's kept now
@@ -880,7 +878,7 @@ this pass; tracked here so it isn't lost.
 
 ---
 
-## 27. tax_config gains sep_contribution + health_insurance_premiums (Session 9b Tax Estimator screen) — ⬜ NOT YET RUN
+## 27. tax_config gains sep_contribution + health_insurance_premiums (Session 9b Tax Estimator screen) — ✅ APPLIED
 
 `calcTaxEstimate.ts`'s `TaxEstimateInputs.sepContribution`/
 `healthInsurancePremiums` have existed since Session 5 but nothing ever
@@ -899,7 +897,7 @@ alter table tax_config
 
 No RLS change needed — `tax_config` is already owner-scoped.
 
-- [ ] 27a run (add sep_contribution + health_insurance_premiums to tax_config)
+- [x] 27a run (add sep_contribution + health_insurance_premiums to tax_config)
 
 ---
 
