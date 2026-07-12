@@ -436,30 +436,37 @@ Register, Accountant Pkg, AI Advisor, Tax Estimator; System: Settings.
 **Nothing ships to the store (Session 10) with an unimplemented sidebar
 item** — see Session 10's pre-launch checklist.
 
+**SUPERSEDED as of Session 9b part 9 (2026-07-12) — this table is no
+longer maintained.** The authoritative, currently-accurate status for
+every section (including specific sub-feature gaps, not just a
+done/not-done flag) is `docs/PARITY.md`. Summary: 0/22 sections missing,
+12 at full parity or better, 10 partial with itemized gaps — see that
+file for the per-section detail and the prioritized gap list.
+
 | # | Section | Group | Session | Status |
 |---|---------|-------|---------|--------|
-| 1 | Dashboard | Overview | 5 | ✅ done (Dashboard acceptance checklist above) |
-| 2 | Loads | Revenue | 9a | ⬜ not started (own screen — currently only a "Recent Loads" slice on Dashboard) |
-| 3 | Settlements | Revenue | 9a | ⬜ not started |
-| 4 | Reimbursements | Revenue | 9a | ⬜ not started |
-| 5 | Fuel | Expenses | 9a | ⬜ not started |
-| 6 | Maintenance | Expenses | 8 | 🚧 placeholder route exists, not implemented |
-| 7 | Tolls & Fees | Expenses | 9a | ⬜ not started |
-| 8 | Deductions | Expenses | 7 | ✅ done (list view Session 6/7, edit+delete with contribution sync Session 7) |
-| 9 | Assets | Business | 9a | ⬜ not started |
-| 10 | Capital Account | Business | 7 | ✅ done (stat row, record draw/distribution, update balance, history with source-deduction links) |
-| 11 | Operating P&L | Business | 9a | ⬜ not started |
-| 12 | Truck Health | Intelligence | 8 | 🚧 placeholder route exists, not implemented |
-| 13 | Cash Flow | Intelligence | 9a | 🚧 placeholder route exists, not implemented |
-| 14 | Scorecard | Intelligence | 9b | ⬜ not started |
-| 15 | Loan Center | Intelligence | 9a | 🚧 placeholder route exists (`more/loans.tsx`), not implemented |
-| 16 | Credit Cards | Intelligence | 9a | ⬜ not started |
-| 17 | Bank Statement | Intelligence | 9a | ⬜ not started |
-| 18 | Asset Register | Tools | 9b | ⬜ not started |
-| 19 | Accountant Pkg | Tools | 9b | ⬜ not started |
-| 20 | AI Advisor | Tools | 9b | ⬜ not started |
-| 21 | Tax Estimator | Tools | 9b | 🚧 placeholder route exists, not implemented (data layer/calc engine already built and used by Dashboard) |
-| 22 | Settings | System | 9b | ✅ mostly done (profile/sign-out); Legal sub-section still Session 10 |
+| 1 | Dashboard | Overview | 5 | see docs/PARITY.md |
+| 2 | Loads | Revenue | 9a | see docs/PARITY.md |
+| 3 | Settlements | Revenue | 9a | see docs/PARITY.md |
+| 4 | Reimbursements | Revenue | 9a | see docs/PARITY.md |
+| 5 | Fuel | Expenses | 9a | see docs/PARITY.md |
+| 6 | Maintenance | Expenses | 8 | see docs/PARITY.md |
+| 7 | Tolls & Fees | Expenses | 9a | see docs/PARITY.md |
+| 8 | Deductions | Expenses | 7 | see docs/PARITY.md |
+| 9 | Assets | Business | 9a | see docs/PARITY.md |
+| 10 | Capital Account | Business | 7 | see docs/PARITY.md |
+| 11 | Operating P&L | Business | 9a | see docs/PARITY.md |
+| 12 | Truck Health | Intelligence | 8 | see docs/PARITY.md |
+| 13 | Cash Flow | Intelligence | 9a | see docs/PARITY.md |
+| 14 | Scorecard | Intelligence | 9b | see docs/PARITY.md |
+| 15 | Loan Center | Intelligence | 9a | see docs/PARITY.md |
+| 16 | Credit Cards | Intelligence | 9a | see docs/PARITY.md |
+| 17 | Bank Statement | Intelligence | 9a | see docs/PARITY.md |
+| 18 | Asset Register | Tools | 9b | see docs/PARITY.md |
+| 19 | Accountant Pkg | Tools | 9b | see docs/PARITY.md |
+| 20 | AI Advisor | Tools | 9b | see docs/PARITY.md |
+| 21 | Tax Estimator | Tools | 9b | see docs/PARITY.md |
+| 22 | Settings | System | 9b | see docs/PARITY.md |
 
 Session 9's original single write-up is split below into **9a (money
 screens)** — Revenue/Expenses/Business items plus the money-ledger
