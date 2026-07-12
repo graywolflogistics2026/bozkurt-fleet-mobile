@@ -787,7 +787,23 @@
     "allAssetsTitle": "Tüm Varlıklar",
     "empty": "Henüz varlık yok — ekipman/elektronik/alet satın alımları burada görünecek.",
     "warrantyActiveUntil": "Garanti {{date}} tarihine kadar aktif",
-    "warrantyExpired": "Garanti {{date}} tarihinde sona erdi"
+    "warrantyExpired": "Garanti {{date}} tarihinde sona erdi",
+    "add": "Ekle",
+    "addTitle": "Varlık Ekle",
+    "itemNameLabel": "Ürün Adı",
+    "itemNamePlaceholder": "Ne satın aldınız?",
+    "categoryLabel": "Kategori",
+    "storeLabel": "Mağaza / Kaynak",
+    "storePlaceholder": "Amazon, Walmart, Facebook Marketplace...",
+    "dateLabel": "Tarih",
+    "costLabel": "Maliyet",
+    "paymentMethodLabel": "Ödeme Yöntemi",
+    "businessUsePctLabel": "İşletme Kullanım %",
+    "warrantyYearsLabel": "Garanti (Yıl)",
+    "warrantyYearsPlaceholder": "örn. 2 veya 2.5",
+    "notesLabel": "Notlar",
+    "notesPlaceholder": "Ne için?",
+    "saveFailedTitle": "Varlık kaydedilemedi"
   },
   "operatingPnl": {
     "title": "İşletme P&L",
@@ -845,9 +861,19 @@
       "mpg": "MPG"
     },
     "weekOf": "{{date}} Haftası",
-    "share": "Paylaş",
     "notAvailableTitle": "Bu cihazda paylaşım kullanılamıyor.",
-    "shareFailedTitle": "Paylaşma başarısız"
+    "shareFailedTitle": "Paylaşma başarısız",
+    "shareTo": "Şuraya paylaş",
+    "destinations": {
+      "tiktok": "TikTok",
+      "instagram": "Instagram",
+      "facebook": "Facebook",
+      "twitter": "X",
+      "linkedin": "LinkedIn",
+      "more": "Diğer"
+    },
+    "imageCopiedTitle": "Görsel kopyalandı",
+    "imageCopiedBody": "Markalı kartınız panoya kopyalandı ve {{app}} açıldı — gönderinize yapıştırın."
   },
   "dashboardCustomize": {
     "title": "Paneli Özelleştir",

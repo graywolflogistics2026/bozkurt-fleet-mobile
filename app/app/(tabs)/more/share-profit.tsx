@@ -1,16 +1,71 @@
 import { useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import * as Clipboard from 'expo-clipboard';
+import { File } from 'expo-file-system';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/src/context/AuthContext';
 import { useSettlements } from '@/src/data/settlements';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFormatters } from '@/src/i18n/format';
-import { Screen, ScreenTitle, Card, MutedText, PrimaryButton } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 type MetricKey = 'revenue' | 'profit' | 'mpg';
 const METRICS: MetricKey[] = ['revenue', 'profit', 'mpg'];
+
+// Share destinations (PROMPTS.md Session 9a device-feedback pass). Only
+// Instagram/Facebook publicly document a no-SDK way to receive shared media
+// via the pasteboard (their Stories share intents read whatever image is
+// currently on the system clipboard) — TikTok/X/LinkedIn have no equivalent
+// public URL scheme, so for those three (and whenever the target app isn't
+// installed) this still copies the branded image to the clipboard and opens
+// the app so the user can paste it manually, then falls back to the system
+// share sheet if the app can't be opened at all. No target-app native SDKs
+// are added here (would need per-platform linking this pass can't verify on
+// a device).
+const DESTINATIONS: { key: string; monogram: string; bg: string; fg: string; scheme: string }[] = [
+  { key: 'tiktok', monogram: 'TT', bg: '#000000', fg: '#ffffff', scheme: 'tiktok://' },
+  { key: 'instagram', monogram: 'IG', bg: '#E1306C', fg: '#ffffff', scheme: 'instagram://app' },
+  { key: 'facebook', monogram: 'f', bg: '#1877F2', fg: '#ffffff', scheme: 'fb://' },
+  { key: 'twitter', monogram: 'X', bg: '#ffffff', fg: '#000000', scheme: 'twitter://' },
+  { key: 'linkedin', monogram: 'in', bg: '#0A66C2', fg: '#ffffff', scheme: 'linkedin://' },
+];
+
+function DestinationButton({
+  label,
+  monogram,
+  bg,
+  fg,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  monogram: string;
+  bg: string;
+  fg: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={{ alignItems: 'center', opacity: disabled ? 0.5 : 1 }}>
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: bg,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: fg, fontWeight: '700', fontSize: typography.size.sm }}>{monogram}</Text>
+      </View>
+      <MutedText style={{ marginTop: 4, fontSize: typography.size.xs }}>{label}</MutedText>
+    </Pressable>
+  );
+}
 
 // Share Weekly Profit v1 (PROMPTS.md Session 9a item 10, owner decision
 // 2026-07-10 — AI feature package, PRODUCT DECISION): the user picks which
@@ -20,6 +75,7 @@ const METRICS: MetricKey[] = ['revenue', 'profit', 'mpg'];
 export default function ShareProfit() {
   const { t } = useTranslation();
   const { money, number } = useFormatters();
+  const { profile } = useAuth();
   const settlementsQuery = useSettlements();
   const { activeTruck } = useActiveTruck();
   const shotRef = useRef<ViewShot>(null);
@@ -27,22 +83,48 @@ export default function ShareProfit() {
   const [sharing, setSharing] = useState(false);
 
   const latest = [...(settlementsQuery.data ?? [])].sort((a, b) => (b.week_ending ?? '').localeCompare(a.week_ending ?? ''))[0];
+  const companyLabel = profile?.company_name?.trim() || t('auth.brand');
 
   function toggle(key: MetricKey) {
     setIncluded((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  async function handleShare() {
-    if (!shotRef.current?.capture) return;
+  async function shareViaSystemSheet(uri: string) {
+    const available = await Sharing.isAvailableAsync();
+    if (!available) {
+      Alert.alert(t('shareProfit.notAvailableTitle'));
+      return;
+    }
+    await Sharing.shareAsync(uri);
+  }
+
+  async function handleShareTo(dest: { key: string; label: string; scheme?: string }) {
+    if (!shotRef.current?.capture || sharing) return;
     setSharing(true);
     try {
       const uri = await shotRef.current.capture();
-      const available = await Sharing.isAvailableAsync();
-      if (!available) {
-        Alert.alert(t('shareProfit.notAvailableTitle'));
-        return;
+
+      if (dest.scheme) {
+        let installed = false;
+        try {
+          installed = await Linking.canOpenURL(dest.scheme);
+        } catch {
+          installed = false;
+        }
+        if (installed) {
+          try {
+            const base64 = await new File(uri).base64();
+            await Clipboard.setImageAsync(base64);
+            await Linking.openURL(dest.scheme);
+            Alert.alert(t('shareProfit.imageCopiedTitle'), t('shareProfit.imageCopiedBody', { app: dest.label }));
+            return;
+          } catch {
+            // Best-effort only — fall through to the system share sheet.
+          }
+        }
       }
-      await Sharing.shareAsync(uri);
+
+      await shareViaSystemSheet(uri);
     } catch (err) {
       Alert.alert(t('shareProfit.shareFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -78,7 +160,7 @@ export default function ShareProfit() {
             <View style={{ alignItems: 'center', marginVertical: spacing.md }}>
               <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
                 <View style={styles.shareCard}>
-                  <Text style={styles.shareBrand}>🐺 {t('auth.brand')}</Text>
+                  <Text style={styles.shareBrand}>🐺 {companyLabel}</Text>
                   <Text style={styles.shareWeek}>{t('shareProfit.weekOf', { date: latest.week_ending })}</Text>
                   {included.revenue && (
                     <View style={styles.shareMetric}>
@@ -102,12 +184,29 @@ export default function ShareProfit() {
               </ViewShot>
             </View>
 
-            <PrimaryButton
-              title={`📤 ${t('shareProfit.share')}`}
-              onPress={handleShare}
-              loading={sharing}
-              disabled={noneSelected}
-            />
+            <MutedText style={{ marginBottom: spacing.xs }}>{t('shareProfit.shareTo')}</MutedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+              {DESTINATIONS.map((dest) => (
+                <DestinationButton
+                  key={dest.key}
+                  label={t(`shareProfit.destinations.${dest.key}`)}
+                  monogram={dest.monogram}
+                  bg={dest.bg}
+                  fg={dest.fg}
+                  disabled={sharing || noneSelected}
+                  onPress={() => handleShareTo({ key: dest.key, label: t(`shareProfit.destinations.${dest.key}`), scheme: dest.scheme })}
+                />
+              ))}
+              <DestinationButton
+                key="more"
+                label={t('shareProfit.destinations.more')}
+                monogram="•••"
+                bg={colors.card2}
+                fg={colors.text}
+                disabled={sharing || noneSelected}
+                onPress={() => handleShareTo({ key: 'more', label: t('shareProfit.destinations.more') })}
+              />
+            </View>
           </>
         )}
       </ScrollView>

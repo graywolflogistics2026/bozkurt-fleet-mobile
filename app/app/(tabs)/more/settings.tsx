@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
@@ -76,6 +76,7 @@ export default function Settings() {
 
   return (
     <Screen>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
       <ScreenTitle>{t('settings.title')}</ScreenTitle>
       <Card>
         <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>
@@ -110,6 +111,7 @@ export default function Settings() {
       </Card>
       <MutedText>{t('settings.comingSoonNote')}</MutedText>
       <SecondaryButton title={t('common.signOut')} onPress={signOut} />
+      </ScrollView>
     </Screen>
   );
 }

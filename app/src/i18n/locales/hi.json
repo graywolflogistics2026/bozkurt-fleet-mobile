@@ -787,7 +787,23 @@
     "allAssetsTitle": "All Assets",
     "empty": "No assets yet — equipment/electronics/tools purchases will appear here.",
     "warrantyActiveUntil": "Warranty active until {{date}}",
-    "warrantyExpired": "Warranty expired {{date}}"
+    "warrantyExpired": "Warranty expired {{date}}",
+    "add": "Add",
+    "addTitle": "Add Asset",
+    "itemNameLabel": "Item Name",
+    "itemNamePlaceholder": "What did you buy?",
+    "categoryLabel": "Category",
+    "storeLabel": "Store / Source",
+    "storePlaceholder": "Amazon, Walmart, Facebook Marketplace...",
+    "dateLabel": "Date",
+    "costLabel": "Cost",
+    "paymentMethodLabel": "Payment Method",
+    "businessUsePctLabel": "Business Use %",
+    "warrantyYearsLabel": "Warranty (Years)",
+    "warrantyYearsPlaceholder": "e.g. 2 or 2.5",
+    "notesLabel": "Notes",
+    "notesPlaceholder": "What is it for?",
+    "saveFailedTitle": "Could not save asset"
   },
   "operatingPnl": {
     "title": "Operating P&L",
@@ -845,9 +861,19 @@
       "mpg": "MPG"
     },
     "weekOf": "Week of {{date}}",
-    "share": "Share",
     "notAvailableTitle": "Sharing isn't available on this device.",
-    "shareFailedTitle": "Share failed"
+    "shareFailedTitle": "Share failed",
+    "shareTo": "Share to",
+    "destinations": {
+      "tiktok": "TikTok",
+      "instagram": "Instagram",
+      "facebook": "Facebook",
+      "twitter": "X",
+      "linkedin": "LinkedIn",
+      "more": "More"
+    },
+    "imageCopiedTitle": "Image copied",
+    "imageCopiedBody": "Your branded card image was copied to the clipboard and {{app}} was opened — paste it into your post."
   },
   "dashboardCustomize": {
     "title": "Customize Dashboard",

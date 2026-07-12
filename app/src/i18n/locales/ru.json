@@ -787,7 +787,23 @@
     "allAssetsTitle": "Все активы",
     "empty": "Активов пока нет — покупки оборудования/электроники/инструментов появятся здесь.",
     "warrantyActiveUntil": "Гарантия действует до {{date}}",
-    "warrantyExpired": "Гарантия истекла {{date}}"
+    "warrantyExpired": "Гарантия истекла {{date}}",
+    "add": "Добавить",
+    "addTitle": "Добавить актив",
+    "itemNameLabel": "Название предмета",
+    "itemNamePlaceholder": "Что вы купили?",
+    "categoryLabel": "Категория",
+    "storeLabel": "Магазин / Источник",
+    "storePlaceholder": "Amazon, Walmart, Facebook Marketplace...",
+    "dateLabel": "Дата",
+    "costLabel": "Стоимость",
+    "paymentMethodLabel": "Способ оплаты",
+    "businessUsePctLabel": "% использования в бизнесе",
+    "warrantyYearsLabel": "Гарантия (лет)",
+    "warrantyYearsPlaceholder": "напр. 2 или 2.5",
+    "notesLabel": "Заметки",
+    "notesPlaceholder": "Для чего это?",
+    "saveFailedTitle": "Не удалось сохранить актив"
   },
   "operatingPnl": {
     "title": "Операционный P&L",
@@ -845,9 +861,19 @@
       "mpg": "MPG"
     },
     "weekOf": "Неделя {{date}}",
-    "share": "Поделиться",
     "notAvailableTitle": "Обмен недоступен на этом устройстве.",
-    "shareFailedTitle": "Не удалось поделиться"
+    "shareFailedTitle": "Не удалось поделиться",
+    "shareTo": "Поделиться в",
+    "destinations": {
+      "tiktok": "TikTok",
+      "instagram": "Instagram",
+      "facebook": "Facebook",
+      "twitter": "X",
+      "linkedin": "LinkedIn",
+      "more": "Ещё"
+    },
+    "imageCopiedTitle": "Изображение скопировано",
+    "imageCopiedBody": "Ваша фирменная карточка скопирована в буфер обмена, и {{app}} открыт — вставьте её в публикацию."
   },
   "dashboardCustomize": {
     "title": "Настроить панель",

@@ -787,7 +787,23 @@
     "allAssetsTitle": "Todos los Activos",
     "empty": "Aún no hay activos — las compras de equipo/electrónica/herramientas aparecerán aquí.",
     "warrantyActiveUntil": "Garantía activa hasta {{date}}",
-    "warrantyExpired": "Garantía vencida el {{date}}"
+    "warrantyExpired": "Garantía vencida el {{date}}",
+    "add": "Agregar",
+    "addTitle": "Agregar Activo",
+    "itemNameLabel": "Nombre del Artículo",
+    "itemNamePlaceholder": "¿Qué compraste?",
+    "categoryLabel": "Categoría",
+    "storeLabel": "Tienda / Origen",
+    "storePlaceholder": "Amazon, Walmart, Facebook Marketplace...",
+    "dateLabel": "Fecha",
+    "costLabel": "Costo",
+    "paymentMethodLabel": "Método de Pago",
+    "businessUsePctLabel": "% de Uso Comercial",
+    "warrantyYearsLabel": "Garantía (Años)",
+    "warrantyYearsPlaceholder": "ej. 2 o 2.5",
+    "notesLabel": "Notas",
+    "notesPlaceholder": "¿Para qué es?",
+    "saveFailedTitle": "No se pudo guardar el activo"
   },
   "operatingPnl": {
     "title": "P&L Operativo",
@@ -845,9 +861,19 @@
       "mpg": "MPG"
     },
     "weekOf": "Semana del {{date}}",
-    "share": "Compartir",
     "notAvailableTitle": "Compartir no está disponible en este dispositivo.",
-    "shareFailedTitle": "Error al compartir"
+    "shareFailedTitle": "Error al compartir",
+    "shareTo": "Compartir en",
+    "destinations": {
+      "tiktok": "TikTok",
+      "instagram": "Instagram",
+      "facebook": "Facebook",
+      "twitter": "X",
+      "linkedin": "LinkedIn",
+      "more": "Más"
+    },
+    "imageCopiedTitle": "Imagen copiada",
+    "imageCopiedBody": "Tu tarjeta de marca se copió al portapapeles y se abrió {{app}} — pégala en tu publicación."
   },
   "dashboardCustomize": {
     "title": "Personalizar Panel",

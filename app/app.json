@@ -8,7 +8,10 @@
     "scheme": "bozkurtfleetos",
     "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["instagram", "fb", "twitter", "linkedin", "tiktok", "snssdk1233"]
+      }
     },
     "android": {
       "adaptiveIcon": {

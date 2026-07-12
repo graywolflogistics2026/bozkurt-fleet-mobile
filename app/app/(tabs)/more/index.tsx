@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Screen } from '@/src/components/ui';
@@ -34,7 +34,7 @@ export default function More() {
 
   return (
     <Screen>
-      <View style={{ gap: spacing.sm }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xl }}>
         {MENU_ITEMS.map((item) => (
           <Pressable
             key={item.href}
@@ -56,7 +56,7 @@ export default function More() {
             </Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
     </Screen>
   );
 }

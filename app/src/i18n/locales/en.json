@@ -690,7 +690,23 @@
     "allAssetsTitle": "All Assets",
     "empty": "No assets yet — equipment/electronics/tools purchases will appear here.",
     "warrantyActiveUntil": "Warranty active until {{date}}",
-    "warrantyExpired": "Warranty expired {{date}}"
+    "warrantyExpired": "Warranty expired {{date}}",
+    "add": "Add",
+    "addTitle": "Add Asset",
+    "itemNameLabel": "Item Name",
+    "itemNamePlaceholder": "What did you buy?",
+    "categoryLabel": "Category",
+    "storeLabel": "Store / Source",
+    "storePlaceholder": "Amazon, Walmart, Facebook Marketplace...",
+    "dateLabel": "Date",
+    "costLabel": "Cost",
+    "paymentMethodLabel": "Payment Method",
+    "businessUsePctLabel": "Business Use %",
+    "warrantyYearsLabel": "Warranty (Years)",
+    "warrantyYearsPlaceholder": "e.g. 2 or 2.5",
+    "notesLabel": "Notes",
+    "notesPlaceholder": "What is it for?",
+    "saveFailedTitle": "Could not save asset"
   },
   "operatingPnl": {
     "title": "Operating P&L",
@@ -748,9 +764,19 @@
       "mpg": "MPG"
     },
     "weekOf": "Week of {{date}}",
-    "share": "Share",
     "notAvailableTitle": "Sharing isn't available on this device.",
-    "shareFailedTitle": "Share failed"
+    "shareFailedTitle": "Share failed",
+    "shareTo": "Share to",
+    "destinations": {
+      "tiktok": "TikTok",
+      "instagram": "Instagram",
+      "facebook": "Facebook",
+      "twitter": "X",
+      "linkedin": "LinkedIn",
+      "more": "More"
+    },
+    "imageCopiedTitle": "Image copied",
+    "imageCopiedBody": "Your branded card image was copied to the clipboard and {{app}} was opened — paste it into your post."
   },
   "dashboardCustomize": {
     "title": "Customize Dashboard",
@@ -772,26 +798,86 @@
     "saveFailedTitle": "Save failed"
   },
   "docTypes": {
-    "settlement": { "label": "Settlement", "route": "Settlements · Loads · Fuel · Deductions · Assets" },
-    "fuel": { "label": "Fuel Receipt", "route": "Fuel Log" },
-    "maintenance": { "label": "Repair Invoice", "route": "Maintenance" },
-    "amazon": { "label": "Store/Amazon Purchase", "route": "Deductions (auto-categorized) · Capital Account" },
-    "store": { "label": "Store Receipt", "route": "Deductions · Capital Account" },
-    "toll": { "label": "Toll Bill", "route": "Deductions" },
-    "loan": { "label": "Loan Statement", "route": "Deductions" },
-    "w2": { "label": "W-2 Tax Form", "route": "Household Income (not yet wired to a screen)" },
-    "driver_payment": { "label": "Driver Payment", "route": "Driver Payments" },
-    "insurance": { "label": "Insurance Statement", "route": "Deductions" },
-    "lease_rent": { "label": "Lease/Rent Statement", "route": "Deductions" },
-    "factoring_statement": { "label": "Factoring Statement", "route": "Deductions" },
-    "government_or_misc_income": { "label": "Misc. Income", "route": "Other Income (record it there manually for now)" },
-    "utility_subscription": { "label": "Utility/Subscription Bill", "route": "Deductions" },
-    "medical_card": { "label": "DOT Medical Card", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "inspection_report": { "label": "DOT Inspection Report", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "registration_cab_card": { "label": "IRP Registration/Cab Card", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "irs_2290_schedule1": { "label": "HVUT (Form 2290) Schedule 1", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "insurance_policy": { "label": "Insurance Policy", "route": "Compliance Tracker (not yet wired to a screen)" },
-    "other": { "label": "Document", "route": "Deductions" }
+    "settlement": {
+      "label": "Settlement",
+      "route": "Settlements · Loads · Fuel · Deductions · Assets"
+    },
+    "fuel": {
+      "label": "Fuel Receipt",
+      "route": "Fuel Log"
+    },
+    "maintenance": {
+      "label": "Repair Invoice",
+      "route": "Maintenance"
+    },
+    "amazon": {
+      "label": "Store/Amazon Purchase",
+      "route": "Deductions (auto-categorized) · Capital Account"
+    },
+    "store": {
+      "label": "Store Receipt",
+      "route": "Deductions · Capital Account"
+    },
+    "toll": {
+      "label": "Toll Bill",
+      "route": "Deductions"
+    },
+    "loan": {
+      "label": "Loan Statement",
+      "route": "Deductions"
+    },
+    "w2": {
+      "label": "W-2 Tax Form",
+      "route": "Household Income (not yet wired to a screen)"
+    },
+    "driver_payment": {
+      "label": "Driver Payment",
+      "route": "Driver Payments"
+    },
+    "insurance": {
+      "label": "Insurance Statement",
+      "route": "Deductions"
+    },
+    "lease_rent": {
+      "label": "Lease/Rent Statement",
+      "route": "Deductions"
+    },
+    "factoring_statement": {
+      "label": "Factoring Statement",
+      "route": "Deductions"
+    },
+    "government_or_misc_income": {
+      "label": "Misc. Income",
+      "route": "Other Income (record it there manually for now)"
+    },
+    "utility_subscription": {
+      "label": "Utility/Subscription Bill",
+      "route": "Deductions"
+    },
+    "medical_card": {
+      "label": "DOT Medical Card",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "inspection_report": {
+      "label": "DOT Inspection Report",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "registration_cab_card": {
+      "label": "IRP Registration/Cab Card",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "irs_2290_schedule1": {
+      "label": "HVUT (Form 2290) Schedule 1",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "insurance_policy": {
+      "label": "Insurance Policy",
+      "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "other": {
+      "label": "Document",
+      "route": "Deductions"
+    }
   },
   "confirmContribution": {
     "title": "Add as Owner Contribution?",
