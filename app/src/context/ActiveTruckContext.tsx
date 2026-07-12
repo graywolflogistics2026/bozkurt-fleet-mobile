@@ -13,6 +13,7 @@ export type Truck = {
   year: number | null;
   make: string | null;
   model: string | null;
+  fleet_mpg: number | null;
   is_active: boolean;
 };
 
@@ -49,7 +50,7 @@ export function ActiveTruckProvider({ children }: { children: ReactNode }) {
       const result = await withTimeout(
         supabase
           .from('trucks')
-          .select('id, unit_number, vin, year, make, model, is_active')
+          .select('id, unit_number, vin, year, make, model, fleet_mpg, is_active')
           .eq('is_active', true)
           .order('created_at', { ascending: true }),
         STARTUP_TIMEOUT_MS,

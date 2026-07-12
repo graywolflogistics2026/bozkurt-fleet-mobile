@@ -73,3 +73,51 @@ export function useFleetStats(truckId: string | null) {
     enabled: !!userId,
   });
 }
+
+// Per-driver dashboard breakdown (PROMPTS.md Session 9a item 7, owner
+// decision 2026-07-09 — multi-truck fleet + drivers + payroll auto-
+// routing): the exact same driver_id-scoped query variant as
+// fetchFleetStats()'s truck_id one, not a new calculation engine. Deductions
+// stay user-wide for the same reason fetchFleetStats() keeps them
+// truck-wide — the deductions table has no driver_id column for
+// out-of-pocket rows either (driver_id on deductions is withheld-only,
+// docs/PENDING_SQL.md §14), so this is a revenue/net-focused breakdown, same
+// scope as Fleet Overview's per-truck ranking.
+export async function fetchDriverStats(userId: string, driverId: string): Promise<FleetStats> {
+  const { data: settlements, error: settError } = await supabase
+    .from('settlements')
+    .select('week_ending, gross, net, miles')
+    .eq('user_id', userId)
+    .eq('driver_id', driverId);
+  if (settError) throw settError;
+
+  const { data: deductions, error: dedError } = await supabase
+    .from('deductions')
+    .select('amount, source')
+    .eq('user_id', userId);
+  if (dedError) throw dedError;
+
+  const rows = settlements ?? [];
+  const grossRevenue = rows.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
+  const netRevenue = rows.reduce((sum, s) => sum + Number(s.net ?? 0), 0);
+  const totalMiles = rows.reduce((sum, s) => sum + Number(s.miles ?? 0), 0);
+  const settlementCount = rows.length;
+
+  const dedRows = deductions ?? [];
+  const totalDeductions = dedRows.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const outOfPocketDeductions = dedRows
+    .filter((d) => d.source !== 'settlement')
+    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+
+  return {
+    grossRevenue,
+    netRevenue,
+    totalDeductions,
+    outOfPocketDeductions,
+    totalMiles,
+    settlementCount,
+    avgNetPerWeek: settlementCount > 0 ? netRevenue / settlementCount : 0,
+    perDiemDays: calcPerDiemDays(rows),
+    cpm: calcCpm(grossRevenue, totalDeductions, totalMiles),
+  };
+}

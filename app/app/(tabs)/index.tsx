@@ -6,14 +6,17 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { useFleetStats, fetchFleetStats } from '@/src/data/dashboardStats';
+import { useFleetStats, fetchFleetStats, fetchDriverStats } from '@/src/data/dashboardStats';
+import { useDrivers } from '@/src/data/drivers';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
+import { useDashboardLayout } from '@/src/data/dashboardLayout';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
+import { CARD_LABEL_KEYS, type DashboardCardId } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field } from '@/src/components/ui';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, spacing, typography } from '@/src/theme';
@@ -78,6 +81,9 @@ export default function Dashboard() {
   const capitalQuery = useCapitalAccountSummary();
   const taxQuery = useTaxEstimate();
   const loadsQuery = useLoads();
+  const layoutQuery = useDashboardLayout();
+  const driversQuery = useDrivers({ active: true });
+  const drivers = driversQuery.data ?? [];
 
   // Fleet scalability (owner decision 2026-07-03): the per-truck ranking
   // below re-uses the SAME fetchFleetStats() function the single-truck
@@ -89,6 +95,22 @@ export default function Dashboard() {
         ? trucks.map((truck) => ({
             queryKey: ['fleet-stats', userId, truck.id],
             queryFn: () => fetchFleetStats(userId as string, truck.id),
+            enabled: !!userId,
+          }))
+        : [],
+  });
+
+  // Per-driver dashboard breakdown (PROMPTS.md Session 9a item 7): same
+  // useQueries-per-entity pattern as Fleet Overview above, gated on 2+
+  // active drivers (an account with 0-1 drivers never sees it — the same
+  // n≤1 shortcut fleet-scalability uses everywhere else, CLAUDE.md
+  // invariant #7).
+  const driverQueries = useQueries({
+    queries:
+      drivers.length > 1
+        ? drivers.map((driver) => ({
+            queryKey: ['driver-stats', userId, driver.id],
+            queryFn: () => fetchDriverStats(userId as string, driver.id),
             enabled: !!userId,
           }))
         : [],
@@ -126,7 +148,265 @@ export default function Dashboard() {
       .sort((a, b) => (b.ppm ?? -Infinity) - (a.ppm ?? -Infinity));
   }, [trucks, fleetQueries]);
 
+  const driverRanking = useMemo(() => {
+    if (drivers.length <= 1) return [];
+    return drivers
+      .map((driver, i) => ({ driver, stats: driverQueries[i]?.data }))
+      .filter((r) => r.stats);
+  }, [drivers, driverQueries]);
+
   const drawsLabel = isScorp ? t('dashboard.distributions') : t('dashboard.draws');
+
+  // Customizable dashboard (CLAUDE.md invariant #17, PROMPTS.md Session 9a
+  // item 8): every reorderable/hideable/renamable card's JSX lives in this
+  // renderer map, keyed by the stable id from src/stats/dashboardLayout.ts.
+  // The DEFAULT (never-customized) render path below calls these in their
+  // fixed, grouped, section-headered order — identical output to before
+  // this feature existed, zero behavior change for the common case. The
+  // CUSTOMIZED path (dashboard-customize.tsx has been used at least once)
+  // renders the same functions as one flat list in the user's chosen
+  // order/visibility/labels — deliberately without the section headers,
+  // since headers stop making sense once cards can move freely between
+  // what used to be separate groups.
+  const cardRenderers: Partial<Record<DashboardCardId, (label: string) => React.ReactNode>> = {
+    totalRevenue: (label) => (
+      <TappableCard key="totalRevenue" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue label={label} value={stats ? money(stats.grossRevenue) : '—'} valueColor={colors.green} />
+        <MutedText>{t('dashboard.importToStart')}</MutedText>
+      </TappableCard>
+    ),
+    totalDeductions: (label) => (
+      <TappableCard key="totalDeductions" onPress={() => router.push('/(tabs)/deductions')}>
+        <StatValue label={label} value={stats ? money(stats.totalDeductions) : '—'} valueColor={colors.red} />
+      </TappableCard>
+    ),
+    netToOwner: (label) => (
+      <TappableCard key="netToOwner" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue
+          label={label}
+          value={stats ? money(stats.netRevenue) : '—'}
+          valueColor={stats && stats.netRevenue < 0 ? colors.red : colors.green}
+        />
+      </TappableCard>
+    ),
+    milesDriven: (label) => (
+      <TappableCard key="milesDriven" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue label={label} value={stats ? number(stats.totalMiles) : '—'} />
+      </TappableCard>
+    ),
+    ytdPerDiemDays: (label) => (
+      <TappableCard key="ytdPerDiemDays" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+        <StatValue label={label} value={stats ? `${stats.perDiemDays}` : '—'} valueColor={colors.accent} />
+        <MutedText>{t('dashboard.daysOnRoad')}</MutedText>
+      </TappableCard>
+    ),
+    perDiemDeduction: (label) => (
+      <TappableCard key="perDiemDeduction" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+        <StatValue label={label} value={tax ? money(tax.perDiemDeduction) : '—'} valueColor={colors.green} />
+        {perDiemCaption(tax?.taxYearData.per_diem, t) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem, t)}</MutedText>}
+      </TappableCard>
+    ),
+    weeksInService: (label) => (
+      <TappableCard key="weeksInService" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue label={label} value={stats ? `${stats.settlementCount}` : '—'} />
+        <MutedText>{t('dashboard.settlementsImported')}</MutedText>
+      </TappableCard>
+    ),
+    avgNetPerWeek: (label) => (
+      <TappableCard key="avgNetPerWeek" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue label={label} value={stats ? money(stats.avgNetPerWeek) : '—'} />
+        <MutedText>{t('dashboard.directDepositAvg')}</MutedText>
+      </TappableCard>
+    ),
+    businessBalance: (label) => (
+      <TappableCard key="businessBalance" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue
+          label={label}
+          value={money(capital?.businessBalance ?? 0)}
+          valueColor={
+            (capital?.businessBalance ?? 0) > 10000 ? colors.green : (capital?.businessBalance ?? 0) > 3000 ? colors.orange : colors.red
+          }
+        />
+        <MutedText>{t('dashboard.checkingAccount')}</MutedText>
+      </TappableCard>
+    ),
+    revenuePerMile: (label) => (
+      <TappableCard key="revenuePerMile" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue
+          label={label}
+          value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+          valueColor={colors.green}
+        />
+        <MutedText>{t('dashboard.grossDividedByMiles')}</MutedText>
+      </TappableCard>
+    ),
+    costPerMile: (label) => (
+      <TappableCard key="costPerMile" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue
+          label={label}
+          value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+          valueColor={colors.red}
+        />
+        <MutedText>{t('dashboard.allCostsDividedByMiles')}</MutedText>
+      </TappableCard>
+    ),
+    profitPerMile: (label) => (
+      <TappableCard key="profitPerMile" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <StatValue
+          label={label}
+          value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+          valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
+        />
+        <MutedText>{t('dashboard.acceptLoadsAboveCpm')}</MutedText>
+      </TappableCard>
+    ),
+    estTotalTax: (label) => (
+      <TappableCard key="estTotalTax" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+        <StatValue label={label} value={tax ? money(tax.estimate.totalTax) : '—'} valueColor={colors.red} />
+        {tax && (
+          <MutedText>
+            {t('dashboard.filingStatusCaption', {
+              filingStatus: FILING_STATUS_LABEL[tax.taxConfig.filing_status] ?? tax.taxConfig.filing_status,
+            })}
+          </MutedText>
+        )}
+      </TappableCard>
+    ),
+    quarterlyPayment: (label) => (
+      <TappableCard key="quarterlyPayment" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+        <StatValue label={label} value={tax ? money(tax.estimate.quarterlyPayment) : '—'} valueColor={colors.red} />
+        {deadline ? (
+          <Text style={{ color: urgencyColor(deadline.urgency), fontSize: typography.size.sm, marginTop: 2 }}>
+            {t('dashboard.deadlineDueWithDate', {
+              deadline: t('dashboard.deadlineDue', { label: deadline.label, count: deadline.daysUntil }),
+              date: deadline.date,
+            })}
+          </Text>
+        ) : (
+          <MutedText>{t('dashboard.nextDueDate')}</MutedText>
+        )}
+      </TappableCard>
+    ),
+    weeklyTaxReserve: (label) => (
+      <TappableCard key="weeklyTaxReserve" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+        <StatValue label={label} value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'} />
+        <Text style={{ color: colors.orange, fontSize: typography.size.sm, marginTop: 2 }}>{t('dashboard.setAsideWeekly')}</Text>
+      </TappableCard>
+    ),
+    effectiveRate: (label) => (
+      <TappableCard key="effectiveRate" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+        <StatValue label={label} value={tax?.estimate.effectiveRate != null ? `${tax.estimate.effectiveRate.toFixed(1)}%` : '—'} />
+        <MutedText>{t('dashboard.ofNetProfit')}</MutedText>
+        {tax?.estimate.stateTax.label === 'estimate' && (
+          <MutedText>{t('dashboard.stateTaxEstimateNote', { state: tax.taxConfig.state })}</MutedText>
+        )}
+      </TappableCard>
+    ),
+    capitalAccountStrip: (label) => (
+      <TappableCard key="capitalAccountStrip" onPress={() => router.push('/(tabs)/more/capital-account')}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <View>
+            <MutedText>{t('dashboard.contributed')}</MutedText>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{capital ? money(capital.effectiveContribution) : '—'}</Text>
+          </View>
+          <View>
+            <MutedText>{drawsLabel}</MutedText>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{capital ? money(capital.totalDraws) : '—'}</Text>
+          </View>
+          <View>
+            <MutedText>{t('dashboard.taxFreeLeft')}</MutedText>
+            <Text
+              style={{
+                fontWeight: '700',
+                color: capital && capital.effectiveContribution - capital.totalDraws > 0 ? colors.green : colors.red,
+              }}
+            >
+              {capital ? money(capital.taxFreeRemaining) : '—'}
+            </Text>
+          </View>
+        </View>
+        {capital && capital.contributionCount > 0 && (
+          <MutedText>
+            {t('dashboard.extraContribution', {
+              count: capital.contributionCount,
+              note: (capital.latestContributionNote ?? '').split(' — ')[0].slice(0, 45),
+              date: capital.latestContributionDate,
+            })}
+          </MutedText>
+        )}
+        {label !== t('dashboard.capitalAccountTitle') && <MutedText>{label}</MutedText>}
+      </TappableCard>
+    ),
+    recentLoads: (label) => (
+      <TappableCard key="recentLoads" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        {recentLoads.length === 0 ? (
+          <MutedText>{t('dashboard.noLoadsYet')}</MutedText>
+        ) : (
+          <View>
+            {label !== t('dashboard.recentLoadsTitle') && <MutedText style={{ marginBottom: spacing.xs }}>{label}</MutedText>}
+            {recentLoads.map((l) => (
+              <View key={l.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+                <MutedText>
+                  {l.order_number ?? '—'} · {l.origin ?? '—'} → {l.destination ?? '—'}
+                </MutedText>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(l.revenue)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </TappableCard>
+    ),
+    truckCard: (label) =>
+      activeTruck ? (
+        <TappableCard key="truckCard" onPress={() => router.push('/(tabs)/truck-health')}>
+          {label !== t('dashboard.truckCardLabel') && <MutedText>{label}</MutedText>}
+          <Text style={{ color: colors.text, fontWeight: '600' }}>
+            {activeTruck.year ?? ''} {activeTruck.make ?? ''} {activeTruck.model ?? ''}
+          </Text>
+          <MutedText>{t('dashboard.truckUnit', { unit: activeTruck.unit_number ?? '—' })}</MutedText>
+        </TappableCard>
+      ) : null,
+    fleetOverview: (label) =>
+      trucks.length > 1 ? (
+        <Card key="fleetOverview">
+          {label !== t('dashboard.fleetOverviewTitle') && (
+            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{label}</Text>
+          )}
+          {fleetRanking.map((r, i) => (
+            <View key={r.truck.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+              <MutedText>
+                {i === fleetRanking.length - 1 ? '⚠ ' : ''}
+                {t('common.unit', { unit: r.truck.unit_number ?? r.truck.id })}
+              </MutedText>
+              <Text style={{ color: r.ppm != null ? colors[ppmColor(r.ppm)] : colors.text, fontWeight: '700' }}>
+                {r.ppm != null ? `${moneyFmt(r.ppm, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mi` : '—'}
+              </Text>
+            </View>
+          ))}
+        </Card>
+      ) : null,
+    driverOverview: (label) =>
+      drivers.length > 1 ? (
+        <Card key="driverOverview">
+          {label !== t('dashboard.driverOverviewTitle') && (
+            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{label}</Text>
+          )}
+          {driverRanking.map((r) => (
+            <View key={r.driver.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+              <MutedText>{r.driver.name}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{r.stats ? money(r.stats.netRevenue) : '—'}</Text>
+            </View>
+          ))}
+        </Card>
+      ) : null,
+  };
+
+  function renderCard(id: DashboardCardId, overrideLabel: string | null) {
+    const defaultLabel = t(CARD_LABEL_KEYS[id] ?? id);
+    return cardRenderers[id]?.(overrideLabel || defaultLabel) ?? null;
+  }
+
+  const isCustomized = layoutQuery.data?.isCustomized ?? false;
 
   return (
     <Screen>
@@ -136,7 +416,14 @@ export default function Dashboard() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
-        <ScreenTitle>{t('dashboard.title')}</ScreenTitle>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <ScreenTitle>{t('dashboard.title')}</ScreenTitle>
+          <Pressable onPress={() => router.push('/(tabs)/more/dashboard-customize')} hitSlop={8}>
+            <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
+              {t('dashboard.customize')}
+            </Text>
+          </Pressable>
+        </View>
 
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>
@@ -164,132 +451,62 @@ export default function Dashboard() {
           <Card>
             <MutedText>{t('dashboard.noTrucks')}</MutedText>
           </Card>
+        ) : isCustomized && layoutQuery.data ? (
+          // Customized layout: one flat list, user's own order/visibility/
+          // labels, no section headers (PROMPTS.md Session 9a item 8 — see
+          // the cardRenderers comment above for why headers are dropped
+          // here specifically).
+          <>
+            {layoutQuery.data.layout
+              .filter((row) => row.visible)
+              .map((row) => (
+                <View key={row.id}>{renderCard(row.id as DashboardCardId, row.label)}</View>
+              ))}
+          </>
         ) : (
           <>
             {/* Row 1 — CLAUDE.md Dashboard card parity: card-for-card, same
                 order, same empty-state hints as the legacy web dashboard. */}
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue label={t('dashboard.totalRevenue')} value={stats ? money(stats.grossRevenue) : '—'} valueColor={colors.green} />
-              <MutedText>{t('dashboard.importToStart')}</MutedText>
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/deductions')}>
-              <StatValue label={t('dashboard.totalDeductions')} value={stats ? money(stats.totalDeductions) : '—'} valueColor={colors.red} />
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue
-                label={t('dashboard.netToOwner')}
-                value={stats ? money(stats.netRevenue) : '—'}
-                valueColor={stats && stats.netRevenue < 0 ? colors.red : colors.green}
-              />
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue label={t('dashboard.milesDriven')} value={stats ? number(stats.totalMiles) : '—'} />
-            </TappableCard>
+            {renderCard('totalRevenue', null)}
+            {renderCard('totalDeductions', null)}
+            {renderCard('netToOwner', null)}
+            {renderCard('milesDriven', null)}
 
             {/* Row 2 */}
-            <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-              <StatValue label={t('dashboard.ytdPerDiemDays')} value={stats ? `${stats.perDiemDays}` : '—'} valueColor={colors.accent} />
-              <MutedText>{t('dashboard.daysOnRoad')}</MutedText>
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-              <StatValue label={t('dashboard.perDiemDeduction')} value={tax ? money(tax.perDiemDeduction) : '—'} valueColor={colors.green} />
-              {perDiemCaption(tax?.taxYearData.per_diem, t) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem, t)}</MutedText>}
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue label={t('dashboard.weeksInService')} value={stats ? `${stats.settlementCount}` : '—'} />
-              <MutedText>{t('dashboard.settlementsImported')}</MutedText>
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue label={t('dashboard.avgNetPerWeek')} value={stats ? money(stats.avgNetPerWeek) : '—'} />
-              <MutedText>{t('dashboard.directDepositAvg')}</MutedText>
-            </TappableCard>
+            {renderCard('ytdPerDiemDays', null)}
+            {renderCard('perDiemDeduction', null)}
+            {renderCard('weeksInService', null)}
+            {renderCard('avgNetPerWeek', null)}
 
             {/* Row 3 */}
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue
-                label={t('dashboard.businessBalance')}
-                value={money(capital?.businessBalance ?? 0)}
-                valueColor={
-                  (capital?.businessBalance ?? 0) > 10000
-                    ? colors.green
-                    : (capital?.businessBalance ?? 0) > 3000
-                      ? colors.orange
-                      : colors.red
-                }
-              />
-              <MutedText>{t('dashboard.checkingAccount')}</MutedText>
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue
-                label={t('dashboard.revenuePerMile')}
-                value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                valueColor={colors.green}
-              />
-              <MutedText>{t('dashboard.grossDividedByMiles')}</MutedText>
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue
-                label={t('dashboard.costPerMile')}
-                value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                valueColor={colors.red}
-              />
-              <MutedText>{t('dashboard.allCostsDividedByMiles')}</MutedText>
-            </TappableCard>
-            <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-              <StatValue
-                label={t('dashboard.profitPerMile')}
-                value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
-              />
-              <MutedText>{t('dashboard.acceptLoadsAboveCpm')}</MutedText>
-            </TappableCard>
+            {renderCard('businessBalance', null)}
+            {renderCard('revenuePerMile', null)}
+            {renderCard('costPerMile', null)}
+            {renderCard('profitPerMile', null)}
           </>
         )}
 
-        {/* Tax row — CLAUDE.md invariant #8: estimates only, never presented
-            as definitive. */}
-        <ScreenTitle>{t('dashboard.taxSectionTitle')}</ScreenTitle>
-        <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-          <StatValue label={t('dashboard.estTotalTax')} value={tax ? money(tax.estimate.totalTax) : '—'} valueColor={colors.red} />
-          {tax && (
-            <MutedText>
-              {t('dashboard.filingStatusCaption', {
-                filingStatus: FILING_STATUS_LABEL[tax.taxConfig.filing_status] ?? tax.taxConfig.filing_status,
-              })}
-            </MutedText>
-          )}
-        </TappableCard>
-        <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-          <StatValue label={t('dashboard.quarterlyPayment')} value={tax ? money(tax.estimate.quarterlyPayment) : '—'} valueColor={colors.red} />
-          {deadline ? (
-            <Text style={{ color: urgencyColor(deadline.urgency), fontSize: typography.size.sm, marginTop: 2 }}>
-              {t('dashboard.deadlineDueWithDate', {
-                deadline: t('dashboard.deadlineDue', { label: deadline.label, count: deadline.daysUntil }),
-                date: deadline.date,
-              })}
-            </Text>
-          ) : (
-            <MutedText>{t('dashboard.nextDueDate')}</MutedText>
-          )}
-        </TappableCard>
-        <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-          <StatValue label={t('dashboard.weeklyTaxReserve')} value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'} />
-          <Text style={{ color: colors.orange, fontSize: typography.size.sm, marginTop: 2 }}>{t('dashboard.setAsideWeekly')}</Text>
-        </TappableCard>
-        <TappableCard onPress={() => router.push('/(tabs)/more/tax-estimator')}>
-          <StatValue
-            label={t('dashboard.effectiveRate')}
-            value={tax?.estimate.effectiveRate != null ? `${tax.estimate.effectiveRate.toFixed(1)}%` : '—'}
-          />
-          <MutedText>{t('dashboard.ofNetProfit')}</MutedText>
-          {tax?.estimate.stateTax.label === 'estimate' && (
-            <MutedText>{t('dashboard.stateTaxEstimateNote', { state: tax.taxConfig.state })}</MutedText>
-          )}
-        </TappableCard>
+        {(!isCustomized || !layoutQuery.data) && (
+          <>
+            {/* Tax row — CLAUDE.md invariant #8: estimates only, never presented
+                as definitive. */}
+            <ScreenTitle>{t('dashboard.taxSectionTitle')}</ScreenTitle>
+            {renderCard('estTotalTax', null)}
+            {renderCard('quarterlyPayment', null)}
+            {renderCard('weeklyTaxReserve', null)}
+            {renderCard('effectiveRate', null)}
+          </>
+        )}
+
+        {/* CLAUDE.md invariant #8: every screen showing tax figures needs
+            this disclaimer — rendered unconditionally here (not only inside
+            the default-layout tax section above) so a customized layout
+            that still shows tax cards never loses it. */}
         <LegalFootnote />
 
         {/* Driver compensation types (owner decision 2026-07-10): 1099
-            contractors crossing the NEC filing threshold YTD. */}
+            contractors crossing the NEC filing threshold YTD. Informational
+            banners, not part of the customizable card set. */}
         {tax && tax.contractLaborYtd.some((c) => c.needsNecReminder) && (
           <Card>
             <Text style={{ color: colors.orange, fontWeight: '700', marginBottom: spacing.xs }}>
@@ -350,93 +567,34 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Capital Account strip */}
-        <ScreenTitle>{t('dashboard.capitalAccountTitle')}</ScreenTitle>
-        <TappableCard onPress={() => router.push('/(tabs)/more/capital-account')}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View>
-              <MutedText>{t('dashboard.contributed')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>
-                {capital ? money(capital.effectiveContribution) : '—'}
-              </Text>
-            </View>
-            <View>
-              <MutedText>{drawsLabel}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{capital ? money(capital.totalDraws) : '—'}</Text>
-            </View>
-            <View>
-              <MutedText>{t('dashboard.taxFreeLeft')}</MutedText>
-              <Text
-                style={{
-                  fontWeight: '700',
-                  color: capital && capital.effectiveContribution - capital.totalDraws > 0 ? colors.green : colors.red,
-                }}
-              >
-                {capital ? money(capital.taxFreeRemaining) : '—'}
-              </Text>
-            </View>
-          </View>
-          {capital && capital.contributionCount > 0 && (
-            <MutedText>
-              {t('dashboard.extraContribution', {
-                count: capital.contributionCount,
-                note: (capital.latestContributionNote ?? '').split(' — ')[0].slice(0, 45),
-                date: capital.latestContributionDate,
-              })}
-            </MutedText>
-          )}
-        </TappableCard>
-
-        {/* Recent loads */}
-        <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>
-        <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-          {recentLoads.length === 0 ? (
-            <MutedText>{t('dashboard.noLoadsYet')}</MutedText>
-          ) : (
-            <View>
-              {recentLoads.map((l) => (
-                <View key={l.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-                  <MutedText>
-                    {l.order_number ?? '—'} · {l.origin ?? '—'} → {l.destination ?? '—'}
-                  </MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>{money(l.revenue)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </TappableCard>
-
-        {/* Truck card */}
-        {activeTruck && (
-          <TappableCard onPress={() => router.push('/(tabs)/truck-health')}>
-            <Text style={{ color: colors.text, fontWeight: '600' }}>
-              {activeTruck.year ?? ''} {activeTruck.make ?? ''} {activeTruck.model ?? ''}
-            </Text>
-            <MutedText>{t('dashboard.truckUnit', { unit: activeTruck.unit_number ?? '—' })}</MutedText>
-          </TappableCard>
-        )}
-
-        {/* Fleet Overview — only renders with 2+ trucks (owner decision
-            2026-07-03: 1→100 trucks, no separate code path). */}
-        {trucks.length > 1 && (
+        {(!isCustomized || !layoutQuery.data) && (
           <>
-            <ScreenTitle>{t('dashboard.fleetOverviewTitle')}</ScreenTitle>
-            <Card>
-              {fleetRanking.map((r, i) => (
-                <View
-                  key={r.truck.id}
-                  style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}
-                >
-                  <MutedText>
-                    {i === fleetRanking.length - 1 ? '⚠ ' : ''}
-                    {t('common.unit', { unit: r.truck.unit_number ?? r.truck.id })}
-                  </MutedText>
-                  <Text style={{ color: r.ppm != null ? colors[ppmColor(r.ppm)] : colors.text, fontWeight: '700' }}>
-                    {r.ppm != null ? `${moneyFmt(r.ppm, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mi` : '—'}
-                  </Text>
-                </View>
-              ))}
-            </Card>
+            {/* Capital Account strip */}
+            <ScreenTitle>{t('dashboard.capitalAccountTitle')}</ScreenTitle>
+            {renderCard('capitalAccountStrip', null)}
+
+            {/* Recent loads */}
+            <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>
+            {renderCard('recentLoads', null)}
+
+            {/* Truck card */}
+            {renderCard('truckCard', null)}
+
+            {/* Fleet Overview — only renders with 2+ trucks (owner decision
+                2026-07-03: 1→100 trucks, no separate code path). */}
+            {trucks.length > 1 && (
+              <>
+                <ScreenTitle>{t('dashboard.fleetOverviewTitle')}</ScreenTitle>
+                {renderCard('fleetOverview', null)}
+              </>
+            )}
+
+            {drivers.length > 1 && (
+              <>
+                <ScreenTitle>{t('dashboard.driverOverviewTitle')}</ScreenTitle>
+                {renderCard('driverOverview', null)}
+              </>
+            )}
           </>
         )}
 
