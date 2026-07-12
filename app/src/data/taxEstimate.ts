@@ -4,8 +4,10 @@ import { useTaxConfig } from '@/src/data/taxConfig';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { useDrivers } from '@/src/data/drivers';
 import { useDriverPayments } from '@/src/data/driverPayments';
+import { useHouseholdIncome } from '@/src/data/householdIncome';
 import { calcTaxEstimate } from '@/src/tax/calcTaxEstimate';
 import { calcPerDiemDeduction } from '@/src/tax/perDiem';
+import { sumHouseholdIncome } from '@/src/tax/household';
 import { calcContractLaborYtd, sumDeductibleDriverPayroll, type ContractLaborYtd } from '@/src/tax/driverPayroll';
 import type { TaxConfig, TaxYearData } from '@/src/types/db';
 import type { TaxEstimateResult } from '@/src/tax/types';
@@ -21,6 +23,7 @@ export type TaxEstimateBundle = {
   perDiemDeduction: number;
   driverPayrollExpense: number;
   contractLaborYtd: ContractLaborYtd[];
+  householdIncome: number;
 };
 
 // Combines Session 4's tax_year_data hook + tax_config + fleet-wide stats
@@ -35,6 +38,7 @@ export function useTaxEstimate() {
   const fleetStatsQuery = useFleetStats(null);
   const driversQuery = useDrivers();
   const driverPaymentsQuery = useDriverPayments();
+  const householdIncomeQuery = useHouseholdIncome();
 
   const isLoading = taxYearDataQuery.isLoading || taxConfigQuery.isLoading || fleetStatsQuery.isLoading;
   const error = taxYearDataQuery.error ?? taxConfigQuery.error ?? fleetStatsQuery.error ?? null;
@@ -46,6 +50,7 @@ export function useTaxEstimate() {
     const stats = fleetStatsQuery.data;
     const drivers = driversQuery.data ?? [];
     const driverPayments = driverPaymentsQuery.data ?? [];
+    const householdIncome = sumHouseholdIncome(householdIncomeQuery.data ?? [], resolvedYear);
 
     const perDiemDeduction = calcPerDiemDeduction(stats.perDiemDays, taxYearData.per_diem);
     // Driver compensation types (owner decision 2026-07-10): what the owner
@@ -65,6 +70,9 @@ export function useTaxEstimate() {
       scorpPayrollTaxHandled: taxConfig.scorp_payroll_tax_handled,
       ownershipPct: taxConfig.ownership_pct ?? undefined,
       netProfit,
+      spouseIncome: householdIncome,
+      sepContribution: taxConfig.sep_contribution,
+      healthInsurancePremiums: taxConfig.health_insurance_premiums,
     });
 
     const contractLaborYtd = calcContractLaborYtd(driverPayments, drivers, resolvedYear, taxYearData.nec_1099);
@@ -80,8 +88,16 @@ export function useTaxEstimate() {
       perDiemDeduction,
       driverPayrollExpense,
       contractLaborYtd,
+      householdIncome,
     };
-  }, [taxYearDataQuery.data, taxConfigQuery.data, fleetStatsQuery.data, driversQuery.data, driverPaymentsQuery.data]);
+  }, [
+    taxYearDataQuery.data,
+    taxConfigQuery.data,
+    fleetStatsQuery.data,
+    driversQuery.data,
+    driverPaymentsQuery.data,
+    householdIncomeQuery.data,
+  ]);
 
   return { data, isLoading, error };
 }

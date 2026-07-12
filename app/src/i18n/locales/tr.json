@@ -347,12 +347,7 @@
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir"
   },
-  "placeholders": {
-    "taxEstimator": {
-      "title": "Vergi Tahmincisi",
-      "note": "Beyan durumu/eyalet düzenleme, eş/SEP/sağlık sigortası girdileri ve S-Corp seçim çalışma sayfası ileriki bir oturumda gelecek. Panel'deki vergi kartları zaten canlı tahmininizi yansıtıyor."
-    }
-  },
+  "placeholders": {},
   "truckHealth": {
     "title": "Kamyon Durumu",
     "noTrucks": "Henüz kamyon yok. Bakım takibine başlamak için bir tane ekleyin.",
@@ -904,5 +899,81 @@
     "bucketLabel": "Schedule C Kategorisi",
     "bucketNote": "Bu kategorinin vergi tahmininize her zaman dahil olması için gereklidir.",
     "saveFailedTitle": "Kaydetme başarısız"
+  },
+  "taxEstimator": {
+    "title": "Vergi Hesaplayıcı",
+    "savedTitle": "✅ Kaydedildi",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteFailedTitle": "Silme başarısız",
+    "filingSectionTitle": "Beyan Durumu ve Eyalet",
+    "filingStatusLabel": "Vergi Beyan Durumu",
+    "filingStatus": {
+      "single": "Bekar",
+      "mfj": "Evli Ortak Beyan",
+      "hoh": "Hane Reisi"
+    },
+    "homeStateLabel": "İkamet Eyaleti",
+    "includeStateTaxLabel": "Bu tahmine eyalet vergisini dahil et",
+    "entitySectionTitle": "İşletme Türü",
+    "entityType": {
+      "sole_prop": "Şahıs İşletmesi",
+      "smllc": "Tek Üyeli LLC",
+      "multi_member_llc": "Çok Üyeli LLC",
+      "scorp": "S-Corp"
+    },
+    "ownershipPctLabel": "Sahiplik Yüzdeniz (K-1 payı)",
+    "multiMemberDisclaimer": "Her üye kendi K-1 formunu sunar — bu yalnızca sizin payınızı tahmin eder. Bir CPA'ya danışın.",
+    "scorpSalaryLabel": "S-Corp Maaşı (W-2)",
+    "scorpDisclaimer": "S-Corp bordrosu bir bordro sağlayıcısı gerektirir — CPA'nızla doğrulayın.",
+    "household": {
+      "title": "Eş / Hane Geliri",
+      "subtitle": "Hanenizdeki diğer W-2 veya serbest meslek geliri — AGI'ye eklenir.",
+      "empty": "Henüz hane geliri girişi yok.",
+      "unnamed": "Hane üyesi",
+      "add": "Ekle",
+      "addTitle": "Hane Geliri Ekle",
+      "nameLabel": "Ad",
+      "namePlaceholder": "örn. Eşin adı",
+      "relationLabel": "Yakınlık",
+      "relation": {
+        "spouse": "Eş",
+        "child": "Çocuk",
+        "other": "Diğer"
+      },
+      "incomeTypeLabel": "Gelir Türü",
+      "incomeType": {
+        "w2_wages": "W-2 Ücreti",
+        "self_employment": "Serbest Meslek",
+        "other": "Diğer"
+      },
+      "annualAmountLabel": "Yıllık Tutar",
+      "federalWithheldLabel": "Kesilen Federal Vergi",
+      "deleteConfirmTitle": "Bu gelir girişi silinsin mi?"
+    },
+    "otherDeductionsTitle": "SEP-IRA ve Sağlık Sigortası",
+    "sepContributionLabel": "SEP-IRA Katkısı",
+    "healthInsuranceLabel": "Sağlık Sigortası Primleri",
+    "breakdownTitle": "Tam Döküm",
+    "netProfit": "Net Kâr",
+    "employerPayrollTax": "İşveren Bordro Vergisi (Tah.)",
+    "ownerShareOfProfit": "Kârdaki Payınız",
+    "seTaxBase": "Serbest Meslek Vergisi Matrahı",
+    "seTax": "Serbest Meslek Vergisi",
+    "seTaxDeduction": "Serbest Meslek Vergisi İndirimi (½)",
+    "spouseIncome": "Eş / Hane Geliri",
+    "agi": "Düzeltilmiş Brüt Gelir (AGI)",
+    "standardDeduction": "Standart İndirim",
+    "taxableIncome": "Vergilendirilebilir Gelir",
+    "federalTax": "Federal Vergi",
+    "stateTax": "Eyalet Vergisi",
+    "stateTaxEstimate": "Eyalet Vergisi (kaba tahmin, {{state}})",
+    "totalTax": "Toplam Tahmini Vergi",
+    "effectiveRate": "Efektif Oran",
+    "quarterlyTitle": "Üç Aylık Ödeme Takvimi",
+    "deadlinePast": "Son tarih geçti",
+    "deadlineToday": "Bugün son gün",
+    "deadlineInDays": "{{count}} gün içinde son gün",
+    "deadlineInDays_other": "{{count}} gün içinde son gün",
+    "reasonableSalaryLabel": "Makul Maaş ($)"
   }
 }

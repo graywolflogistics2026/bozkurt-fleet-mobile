@@ -1,6 +1,8 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-12): sections 1-26 have all been run against the live DB.**
+**STATUS (2026-07-12): sections 1-26 have all been run against the live DB.
+Section 27 (added this pass, PROMPTS.md Session 9b) is NOT yet run — see
+its checklist below.**
 Sections 11-24 were applied together in one transaction on 2026-07-11 via a
 combined SQL block (generated from this file, run in the Supabase SQL
 editor). This file started as a forward-looking "run this next" list; it's kept now
@@ -875,6 +877,29 @@ Once this has run, `app/src/import/mapExtraction.ts`'s handling of
 this pass; tracked here so it isn't lost.
 
 - [x] 26a run (create misc_income table + RLS)
+
+---
+
+## 27. tax_config gains sep_contribution + health_insurance_premiums (Session 9b Tax Estimator screen) — ⬜ NOT YET RUN
+
+`calcTaxEstimate.ts`'s `TaxEstimateInputs.sepContribution`/
+`healthInsurancePremiums` have existed since Session 5 but nothing ever
+persisted a value for them — `useTaxEstimate()` never passed them at all,
+so both silently defaulted to 0 for every user. The Tax Estimator screen
+now has real inputs for both, so they need somewhere to live. Same table
+as the rest of the entity/filing-status config (`tax_config`), not
+`profiles` — these are tax-year-scoped estimate inputs, not identity
+fields.
+
+```sql
+alter table tax_config
+  add column sep_contribution numeric(12,2) not null default 0,
+  add column health_insurance_premiums numeric(12,2) not null default 0;
+```
+
+No RLS change needed — `tax_config` is already owner-scoped.
+
+- [ ] 27a run (add sep_contribution + health_insurance_premiums to tax_config)
 
 ---
 

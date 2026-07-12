@@ -72,7 +72,13 @@ create table tax_config (
                        check (entity_type in ('sole_prop','smllc','multi_member_llc','scorp')),
   scorp_salary                numeric(12,2),        -- only meaningful when entity_type='scorp'
   scorp_payroll_tax_handled   boolean default false, -- owner-attested, not verified
-  ownership_pct               numeric(5,2)           -- only meaningful when entity_type='multi_member_llc'
+  ownership_pct               numeric(5,2),          -- only meaningful when entity_type='multi_member_llc'
+  -- sep_contribution/health_insurance_premiums (added retroactively,
+  -- PENDING_SQL.md §27, Session 9b Tax Estimator screen) — feed
+  -- calcTaxEstimate.ts's sepContribution/healthInsurancePremiums inputs,
+  -- which existed since Session 5 but had no persisted value until now.
+  sep_contribution             numeric(12,2) not null default 0,
+  health_insurance_premiums    numeric(12,2) not null default 0
 );
 
 -- ---------- Tax year data (NEW, owner decision 2026-07-03, D10) ----------

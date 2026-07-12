@@ -347,12 +347,7 @@
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel"
   },
-  "placeholders": {
-    "taxEstimator": {
-      "title": "Estimador de Impuestos",
-      "note": "La edición de estado civil/estado, entradas de cónyuge/SEP/seguro médico, y la hoja de trabajo de elección S-Corp llegarán en una sesión posterior. Las tarjetas de impuestos del Panel ya reflejan su estimación en vivo."
-    }
-  },
+  "placeholders": {},
   "truckHealth": {
     "title": "Estado del Camión",
     "noTrucks": "Aún no hay camiones. Agregue uno para empezar a rastrear el mantenimiento.",
@@ -904,5 +899,81 @@
     "bucketLabel": "Categoría de Schedule C",
     "bucketNote": "Requerido para que esta categoría siempre cuente en tu estimado de impuestos.",
     "saveFailedTitle": "Error al guardar"
+  },
+  "taxEstimator": {
+    "title": "Estimador de Impuestos",
+    "savedTitle": "✅ Guardado",
+    "saveFailedTitle": "Error al guardar",
+    "deleteFailedTitle": "Error al eliminar",
+    "filingSectionTitle": "Estado Civil y Estado",
+    "filingStatusLabel": "Estado Civil Tributario",
+    "filingStatus": {
+      "single": "Soltero",
+      "mfj": "Casado Declarando en Conjunto",
+      "hoh": "Cabeza de Familia"
+    },
+    "homeStateLabel": "Estado de Residencia",
+    "includeStateTaxLabel": "Incluir impuesto estatal en esta estimación",
+    "entitySectionTitle": "Entidad Comercial",
+    "entityType": {
+      "sole_prop": "Propietario Único",
+      "smllc": "LLC de un Solo Miembro",
+      "multi_member_llc": "LLC de Múltiples Miembros",
+      "scorp": "S-Corp"
+    },
+    "ownershipPctLabel": "Tu % de Propiedad (participación K-1)",
+    "multiMemberDisclaimer": "Cada miembro presenta su propio K-1 — esto solo estima tu parte. Consulta a un contador (CPA).",
+    "scorpSalaryLabel": "Salario S-Corp (W-2)",
+    "scorpDisclaimer": "La nómina de un S-Corp requiere un proveedor de nómina — verifica con tu CPA.",
+    "household": {
+      "title": "Ingresos del Cónyuge / Hogar",
+      "subtitle": "Otros ingresos W-2 o de trabajo por cuenta propia en tu hogar — se suman al AGI.",
+      "empty": "Aún no hay entradas de ingresos del hogar.",
+      "unnamed": "Miembro del hogar",
+      "add": "Agregar",
+      "addTitle": "Agregar Ingreso del Hogar",
+      "nameLabel": "Nombre",
+      "namePlaceholder": "ej. Nombre del cónyuge",
+      "relationLabel": "Relación",
+      "relation": {
+        "spouse": "Cónyuge",
+        "child": "Hijo/a",
+        "other": "Otro"
+      },
+      "incomeTypeLabel": "Tipo de Ingreso",
+      "incomeType": {
+        "w2_wages": "Salario W-2",
+        "self_employment": "Trabajo por Cuenta Propia",
+        "other": "Otro"
+      },
+      "annualAmountLabel": "Monto Anual",
+      "federalWithheldLabel": "Impuesto Federal Retenido",
+      "deleteConfirmTitle": "¿Eliminar esta entrada de ingreso?"
+    },
+    "otherDeductionsTitle": "SEP-IRA y Seguro Médico",
+    "sepContributionLabel": "Contribución SEP-IRA",
+    "healthInsuranceLabel": "Primas de Seguro Médico",
+    "breakdownTitle": "Desglose Completo",
+    "netProfit": "Ganancia Neta",
+    "employerPayrollTax": "Impuesto de Nómina del Empleador (Est.)",
+    "ownerShareOfProfit": "Tu Parte de la Ganancia",
+    "seTaxBase": "Base del Impuesto de Trabajo Independiente",
+    "seTax": "Impuesto de Trabajo Independiente",
+    "seTaxDeduction": "Deducción del Impuesto de Trabajo Independiente (½)",
+    "spouseIncome": "Ingresos del Cónyuge / Hogar",
+    "agi": "Ingreso Bruto Ajustado (AGI)",
+    "standardDeduction": "Deducción Estándar",
+    "taxableIncome": "Ingreso Sujeto a Impuesto",
+    "federalTax": "Impuesto Federal",
+    "stateTax": "Impuesto Estatal",
+    "stateTaxEstimate": "Impuesto Estatal (estimación aproximada, {{state}})",
+    "totalTax": "Impuesto Total Estimado",
+    "effectiveRate": "Tasa Efectiva",
+    "quarterlyTitle": "Calendario de Pagos Trimestrales",
+    "deadlinePast": "Fecha límite vencida",
+    "deadlineToday": "Vence hoy",
+    "deadlineInDays": "Vence en {{count}} día",
+    "deadlineInDays_other": "Vence en {{count}} días",
+    "reasonableSalaryLabel": "Salario Razonable ($)"
   }
 }

@@ -347,12 +347,7 @@
     "dashboardCustomize": "Customize Dashboard",
     "settings": "Settings"
   },
-  "placeholders": {
-    "taxEstimator": {
-      "title": "Tax Estimator",
-      "note": "Filing-status/state editing, spouse/SEP/health-insurance inputs, and the S-Corp election worksheet land in a later session. The Dashboard's tax cards already reflect your live estimate."
-    }
-  },
+  "placeholders": {},
   "truckHealth": {
     "title": "Truck Health",
     "noTrucks": "No trucks yet. Add one to start tracking maintenance.",
@@ -904,5 +899,81 @@
     "switchTruck": "Switch Truck",
     "selectTruck": "Select truck",
     "cancel": "Cancel"
+  },
+  "taxEstimator": {
+    "title": "Tax Estimator",
+    "savedTitle": "✅ Saved",
+    "saveFailedTitle": "Save failed",
+    "deleteFailedTitle": "Delete failed",
+    "filingSectionTitle": "Filing Status & State",
+    "filingStatusLabel": "Filing Status",
+    "filingStatus": {
+      "single": "Single",
+      "mfj": "Married Filing Jointly",
+      "hoh": "Head of Household"
+    },
+    "homeStateLabel": "Home State",
+    "includeStateTaxLabel": "Include state tax in this estimate",
+    "entitySectionTitle": "Business Entity",
+    "entityType": {
+      "sole_prop": "Sole Proprietor",
+      "smllc": "Single-Member LLC",
+      "multi_member_llc": "Multi-Member LLC",
+      "scorp": "S-Corp"
+    },
+    "ownershipPctLabel": "Your Ownership % (K-1 share)",
+    "multiMemberDisclaimer": "Each member files their own K-1 — this only estimates your share. Get a CPA.",
+    "scorpSalaryLabel": "S-Corp Salary (W-2)",
+    "scorpDisclaimer": "S-Corp payroll requires a payroll provider — verify with your CPA.",
+    "household": {
+      "title": "Spouse / Household Income",
+      "subtitle": "Other W-2 or self-employment income in your household — added to AGI.",
+      "empty": "No household income entries yet.",
+      "unnamed": "Household member",
+      "add": "Add",
+      "addTitle": "Add Household Income",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Spouse's name",
+      "relationLabel": "Relation",
+      "relation": {
+        "spouse": "Spouse",
+        "child": "Child",
+        "other": "Other"
+      },
+      "incomeTypeLabel": "Income Type",
+      "incomeType": {
+        "w2_wages": "W-2 Wages",
+        "self_employment": "Self-Employment",
+        "other": "Other"
+      },
+      "annualAmountLabel": "Annual Amount",
+      "federalWithheldLabel": "Federal Tax Withheld",
+      "deleteConfirmTitle": "Delete this income entry?"
+    },
+    "otherDeductionsTitle": "SEP-IRA & Health Insurance",
+    "sepContributionLabel": "SEP-IRA Contribution",
+    "healthInsuranceLabel": "Health Insurance Premiums",
+    "breakdownTitle": "Full Breakdown",
+    "netProfit": "Net Profit",
+    "employerPayrollTax": "Employer Payroll Tax (Est.)",
+    "ownerShareOfProfit": "Your Share of Profit",
+    "seTaxBase": "SE Tax Base",
+    "seTax": "Self-Employment Tax",
+    "seTaxDeduction": "SE Tax Deduction (½)",
+    "spouseIncome": "Spouse / Household Income",
+    "agi": "Adjusted Gross Income",
+    "standardDeduction": "Standard Deduction",
+    "taxableIncome": "Taxable Income",
+    "federalTax": "Federal Tax",
+    "stateTax": "State Tax",
+    "stateTaxEstimate": "State Tax (rough estimate, {{state}})",
+    "totalTax": "Total Estimated Tax",
+    "effectiveRate": "Effective Rate",
+    "quarterlyTitle": "Quarterly Payment Schedule",
+    "deadlinePast": "Past due date",
+    "deadlineToday": "Due today",
+    "deadlineInDays": "Due in {{count}} day",
+    "deadlineInDays_other": "Due in {{count}} days",
+    "reasonableSalaryLabel": "Reasonable Salary ($)"
   }
 }

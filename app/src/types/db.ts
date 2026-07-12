@@ -450,7 +450,54 @@ export type TaxConfig = {
   scorp_salary: number | null;
   scorp_payroll_tax_handled: boolean;
   ownership_pct: number | null;
+  // sep_contribution/health_insurance_premiums: added retroactively,
+  // docs/PENDING_SQL.md §27 (Session 9b Tax Estimator screen) — feed
+  // calcTaxEstimate.ts's sepContribution/healthInsurancePremiums inputs,
+  // which existed on TaxEstimateInputs since Session 5 but had no UI or
+  // persisted value wiring them in until this pass (both silently
+  // defaulted to 0 the entire time).
+  sep_contribution: number;
+  health_insurance_premiums: number;
 };
+export type TaxConfigUpdate = Partial<Omit<TaxConfig, 'user_id'>>;
+
+// household_members/household_income (D11, docs/SCHEMA.sql — tables were
+// applied live retroactively, but no app-side types/hooks existed until
+// this pass, Session 9b Tax Estimator screen's "spouse/household W-2
+// income" inputs). One member per person whose income feeds the estimate
+// (today: mainly 'spouse' for MFJ households); one household_income row
+// per member per tax_year per income source.
+export type HouseholdMember = {
+  id: string;
+  user_id: string;
+  name: string;
+  relation: 'spouse' | 'child' | 'other';
+  created_at: string;
+};
+export type HouseholdMemberInsert = Partial<Omit<HouseholdMember, 'id' | 'created_at'>> & {
+  user_id: string;
+  name: string;
+  relation: 'spouse' | 'child' | 'other';
+};
+export type HouseholdMemberUpdate = Partial<Omit<HouseholdMember, 'id' | 'user_id' | 'created_at'>>;
+
+export type HouseholdIncome = {
+  id: string;
+  user_id: string;
+  member_id: string;
+  tax_year: number;
+  income_type: 'w2_wages' | 'self_employment' | 'other';
+  annual_amount: number;
+  federal_withheld: number;
+  document_id: string | null;
+  created_at: string;
+};
+export type HouseholdIncomeInsert = Partial<Omit<HouseholdIncome, 'id' | 'created_at'>> & {
+  user_id: string;
+  member_id: string;
+  tax_year: number;
+};
+export type HouseholdIncomeUpdate = Partial<Omit<HouseholdIncome, 'id' | 'user_id' | 'created_at'>>;
 
 // Server-side, centrally-updatable tax constants (D10) — the ONLY place any
 // screen may read tax constants from (CLAUDE.md invariant #6).

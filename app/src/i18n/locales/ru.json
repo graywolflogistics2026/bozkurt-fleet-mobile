@@ -347,12 +347,7 @@
     "shareProfit": "Поделиться недельной прибылью",
     "dashboardCustomize": "Настроить панель"
   },
-  "placeholders": {
-    "taxEstimator": {
-      "title": "Калькулятор Налогов",
-      "note": "Редактирование статуса подачи/штата, данные о супруге/SEP/медстраховке и рабочий лист выбора S-Corp появятся в следующей сессии. Налоговые карточки на Панели уже отражают вашу текущую оценку."
-    }
-  },
+  "placeholders": {},
   "truckHealth": {
     "title": "Состояние Грузовика",
     "noTrucks": "Пока нет грузовиков. Добавьте один, чтобы начать отслеживать обслуживание.",
@@ -904,5 +899,81 @@
     "bucketLabel": "Категория Schedule C",
     "bucketNote": "Обязательно, чтобы эта категория всегда учитывалась в вашей налоговой оценке.",
     "saveFailedTitle": "Не удалось сохранить"
+  },
+  "taxEstimator": {
+    "title": "Калькулятор налогов",
+    "savedTitle": "✅ Сохранено",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteFailedTitle": "Не удалось удалить",
+    "filingSectionTitle": "Статус подачи и штат",
+    "filingStatusLabel": "Статус подачи декларации",
+    "filingStatus": {
+      "single": "Не в браке",
+      "mfj": "В браке, совместная подача",
+      "hoh": "Глава семьи"
+    },
+    "homeStateLabel": "Штат проживания",
+    "includeStateTaxLabel": "Включить налог штата в эту оценку",
+    "entitySectionTitle": "Форма бизнеса",
+    "entityType": {
+      "sole_prop": "Индивидуальный предприниматель",
+      "smllc": "LLC с одним участником",
+      "multi_member_llc": "LLC с несколькими участниками",
+      "scorp": "S-Corp"
+    },
+    "ownershipPctLabel": "Ваша доля владения % (доля по K-1)",
+    "multiMemberDisclaimer": "Каждый участник подаёт свой собственный K-1 — здесь оценивается только ваша доля. Обратитесь к CPA.",
+    "scorpSalaryLabel": "Зарплата S-Corp (W-2)",
+    "scorpDisclaimer": "Для расчёта зарплаты S-Corp нужен поставщик payroll-услуг — уточните у вашего CPA.",
+    "household": {
+      "title": "Доход супруга(и) / семьи",
+      "subtitle": "Прочий доход по форме W-2 или самозанятости в вашей семье — добавляется к AGI.",
+      "empty": "Записей о доходе семьи пока нет.",
+      "unnamed": "Член семьи",
+      "add": "Добавить",
+      "addTitle": "Добавить доход семьи",
+      "nameLabel": "Имя",
+      "namePlaceholder": "напр. Имя супруга(и)",
+      "relationLabel": "Отношение",
+      "relation": {
+        "spouse": "Супруг(а)",
+        "child": "Ребёнок",
+        "other": "Другое"
+      },
+      "incomeTypeLabel": "Тип дохода",
+      "incomeType": {
+        "w2_wages": "Зарплата W-2",
+        "self_employment": "Самозанятость",
+        "other": "Другое"
+      },
+      "annualAmountLabel": "Годовая сумма",
+      "federalWithheldLabel": "Удержанный федеральный налог",
+      "deleteConfirmTitle": "Удалить эту запись о доходе?"
+    },
+    "otherDeductionsTitle": "SEP-IRA и медицинская страховка",
+    "sepContributionLabel": "Взнос SEP-IRA",
+    "healthInsuranceLabel": "Взносы за медицинскую страховку",
+    "breakdownTitle": "Полная разбивка",
+    "netProfit": "Чистая прибыль",
+    "employerPayrollTax": "Налог работодателя на зарплату (оценка)",
+    "ownerShareOfProfit": "Ваша доля прибыли",
+    "seTaxBase": "База налога на самозанятость",
+    "seTax": "Налог на самозанятость",
+    "seTaxDeduction": "Вычет налога на самозанятость (½)",
+    "spouseIncome": "Доход супруга(и) / семьи",
+    "agi": "Скорректированный валовой доход (AGI)",
+    "standardDeduction": "Стандартный вычет",
+    "taxableIncome": "Налогооблагаемый доход",
+    "federalTax": "Федеральный налог",
+    "stateTax": "Налог штата",
+    "stateTaxEstimate": "Налог штата (приблизительная оценка, {{state}})",
+    "totalTax": "Общий расчётный налог",
+    "effectiveRate": "Эффективная ставка",
+    "quarterlyTitle": "График квартальных платежей",
+    "deadlinePast": "Срок просрочен",
+    "deadlineToday": "Срок сегодня",
+    "deadlineInDays": "Срок через {{count}} день",
+    "deadlineInDays_other": "Срок через {{count}} дней",
+    "reasonableSalaryLabel": "Разумная зарплата ($)"
   }
 }

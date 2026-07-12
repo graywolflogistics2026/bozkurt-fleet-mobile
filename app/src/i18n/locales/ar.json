@@ -347,12 +347,7 @@
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم"
   },
-  "placeholders": {
-    "taxEstimator": {
-      "title": "حاسبة الضرائب",
-      "note": "تحرير حالة الإيداع/الولاية، مدخلات الزوج/SEP/التأمين الصحي، وورقة عمل اختيار S-Corp ستأتي في جلسة لاحقة. بطاقات الضرائب في لوحة التحكم تعكس بالفعل تقديرك الحيّ."
-    }
-  },
+  "placeholders": {},
   "truckHealth": {
     "title": "حالة الشاحنة",
     "noTrucks": "لا توجد شاحنات بعد. أضف واحدة لبدء تتبع الصيانة.",
@@ -904,5 +899,81 @@
     "bucketLabel": "فئة Schedule C",
     "bucketNote": "مطلوب حتى تُحتسب هذه الفئة دائمًا ضمن تقدير ضرائبك.",
     "saveFailedTitle": "فشل الحفظ"
+  },
+  "taxEstimator": {
+    "title": "مقدّر الضرائب",
+    "savedTitle": "✅ تم الحفظ",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteFailedTitle": "فشل الحذف",
+    "filingSectionTitle": "الحالة الضريبية والولاية",
+    "filingStatusLabel": "حالة تقديم الإقرار",
+    "filingStatus": {
+      "single": "أعزب",
+      "mfj": "متزوج ويقدم إقرارًا مشتركًا",
+      "hoh": "رب الأسرة"
+    },
+    "homeStateLabel": "ولاية الإقامة",
+    "includeStateTaxLabel": "تضمين ضريبة الولاية في هذا التقدير",
+    "entitySectionTitle": "الكيان التجاري",
+    "entityType": {
+      "sole_prop": "مالك فردي",
+      "smllc": "LLC بعضو واحد",
+      "multi_member_llc": "LLC متعددة الأعضاء",
+      "scorp": "S-Corp"
+    },
+    "ownershipPctLabel": "نسبة ملكيتك % (حصة K-1)",
+    "multiMemberDisclaimer": "كل عضو يقدم نموذج K-1 الخاص به — هذا يقدّر حصتك فقط. استشر محاسبًا قانونيًا (CPA).",
+    "scorpSalaryLabel": "راتب S-Corp (W-2)",
+    "scorpDisclaimer": "رواتب S-Corp تتطلب مزود خدمة رواتب — تحقق مع محاسبك القانوني (CPA).",
+    "household": {
+      "title": "دخل الزوج/الزوجة أو الأسرة",
+      "subtitle": "دخل آخر من W-2 أو العمل الحر داخل أسرتك — يُضاف إلى AGI.",
+      "empty": "لا توجد إدخالات لدخل الأسرة بعد.",
+      "unnamed": "فرد من الأسرة",
+      "add": "إضافة",
+      "addTitle": "إضافة دخل الأسرة",
+      "nameLabel": "الاسم",
+      "namePlaceholder": "مثال: اسم الزوج/الزوجة",
+      "relationLabel": "صلة القرابة",
+      "relation": {
+        "spouse": "الزوج/الزوجة",
+        "child": "الابن/الابنة",
+        "other": "أخرى"
+      },
+      "incomeTypeLabel": "نوع الدخل",
+      "incomeType": {
+        "w2_wages": "أجور W-2",
+        "self_employment": "عمل حر",
+        "other": "أخرى"
+      },
+      "annualAmountLabel": "المبلغ السنوي",
+      "federalWithheldLabel": "الضريبة الفيدرالية المقتطعة",
+      "deleteConfirmTitle": "حذف إدخال الدخل هذا؟"
+    },
+    "otherDeductionsTitle": "SEP-IRA والتأمين الصحي",
+    "sepContributionLabel": "مساهمة SEP-IRA",
+    "healthInsuranceLabel": "أقساط التأمين الصحي",
+    "breakdownTitle": "التفصيل الكامل",
+    "netProfit": "صافي الربح",
+    "employerPayrollTax": "ضريبة رواتب صاحب العمل (تقديري)",
+    "ownerShareOfProfit": "حصتك من الربح",
+    "seTaxBase": "أساس ضريبة العمل الحر",
+    "seTax": "ضريبة العمل الحر",
+    "seTaxDeduction": "خصم ضريبة العمل الحر (½)",
+    "spouseIncome": "دخل الزوج/الزوجة أو الأسرة",
+    "agi": "الدخل الإجمالي المعدّل (AGI)",
+    "standardDeduction": "الخصم القياسي",
+    "taxableIncome": "الدخل الخاضع للضريبة",
+    "federalTax": "الضريبة الفيدرالية",
+    "stateTax": "ضريبة الولاية",
+    "stateTaxEstimate": "ضريبة الولاية (تقدير تقريبي، {{state}})",
+    "totalTax": "إجمالي الضريبة المقدرة",
+    "effectiveRate": "المعدل الفعلي",
+    "quarterlyTitle": "جدول الدفعات الفصلية",
+    "deadlinePast": "الموعد النهائي فات",
+    "deadlineToday": "يستحق اليوم",
+    "deadlineInDays": "يستحق خلال {{count}} يوم",
+    "deadlineInDays_other": "يستحق خلال {{count}} أيام",
+    "reasonableSalaryLabel": "الراتب المعقول ($)"
   }
 }
