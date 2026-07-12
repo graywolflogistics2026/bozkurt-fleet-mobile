@@ -42,7 +42,8 @@
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
-    "dashboardCustomize": "تخصيص لوحة التحكم"
+    "dashboardCustomize": "تخصيص لوحة التحكم",
+    "compliance": "متتبع الامتثال"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -345,7 +346,8 @@
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
-    "dashboardCustomize": "تخصيص لوحة التحكم"
+    "dashboardCustomize": "تخصيص لوحة التحكم",
+    "compliance": "متتبع الامتثال"
   },
   "placeholders": {},
   "truckHealth": {
@@ -975,5 +977,118 @@
     "deadlineInDays": "يستحق خلال {{count}} يوم",
     "deadlineInDays_other": "يستحق خلال {{count}} أيام",
     "reasonableSalaryLabel": "الراتب المعقول ($)"
+  },
+  "onboarding": {
+    "title": "إعداد حسابك",
+    "skipSetup": "تخطي — سأفعل ذلك لاحقًا",
+    "stepOf": "الخطوة {{current}} من {{total}}",
+    "next": "التالي",
+    "finish": "إنهاء",
+    "skipStep": "تخطي هذه الخطوة",
+    "back": "رجوع",
+    "noTruckYet": "أضف شاحنة في الخطوة السابقة لفتح هذا.",
+    "saveFailedTitle": "تعذر الحفظ",
+    "roles": {
+      "owner_operator": "مالك ومشغل",
+      "company_driver_w2": "سائق شركة (W-2)",
+      "contractor_1099": "مقاول 1099",
+      "trainee": "متدرب"
+    },
+    "steps": {
+      "companyName": {
+        "title": "ما اسم شركتك؟",
+        "subtitle": "يظهر في لوحة التحكم والتقارير المشتركة. يمكنك تغييره في أي وقت من الإعدادات.",
+        "placeholder": "اسم الشركة"
+      },
+      "homeState": {
+        "title": "ما هي ولاية إقامتك؟",
+        "subtitle": "يغذي تقدير ضريبة الولاية — يمكنك تغيير هذا لاحقًا في مقدّر الضرائب."
+      },
+      "dotMc": {
+        "title": "DOT و MC number",
+        "subtitle": "اختياري — أضفها الآن أو لاحقًا في الإعدادات.",
+        "dotLabel": "رقم DOT",
+        "mcLabel": "MC number"
+      },
+      "role": {
+        "title": "ما الذي يصفك بشكل أفضل؟",
+        "subtitle": "هذا يغيّر ما يعرضه التطبيق لك — سائق الشركة يرى تتبع per diem/W-2 بدلاً من أدوات خاصة بالمالكين فقط مثل خصومات Schedule C."
+      },
+      "truck": {
+        "title": "شاحنتك",
+        "subtitle": "رقم الوحدة، السنة/الصنع/الطراز، وعداد المسافة الحالي. هذا يُنشئ جدول صيانة Truck Health الخاص بك.",
+        "unitLabel": "رقم الوحدة",
+        "yearLabel": "السنة",
+        "makeLabel": "الصنع",
+        "modelLabel": "الطراز",
+        "odometerLabel": "عداد المسافة الحالي"
+      },
+      "trailer": {
+        "title": "مقطورتك",
+        "subtitle": "اختياري.",
+        "unitLabel": "رقم وحدة المقطورة",
+        "vinLabel": "رقم الهيكل (VIN)",
+        "yearLabel": "السنة",
+        "makeLabel": "الصنع",
+        "modelLabel": "الطراز"
+      },
+      "maintenance": {
+        "title": "جدول الصيانة",
+        "subtitle": "قمنا بتعبئة قيم افتراضية معقولة مسبقًا — عدّل أي فاصل زمني الآن أو لاحقًا في Truck Health."
+      },
+      "openingBalance": {
+        "title": "الرصيد الافتتاحي للعمل",
+        "subtitle": "رصيد حسابك الجاري الحالي. الافتراضي هو 0$ — تخطَّ هذا إذا كنت تفضل البدء من الصفر."
+      },
+      "taxYear": {
+        "title": "تأكيد السنة الضريبية",
+        "subtitle": "السنة التي تُحسب تقديراتك بناءً عليها."
+      }
+    }
+  },
+  "compliance": {
+    "title": "متتبع الامتثال",
+    "subtitle": "مواعيد DOT وIRP وHVUT 2290 وIFTA والتأمين وCDL وقنسورتيوم فحص المخدرات في مكان واحد.",
+    "add": "إضافة",
+    "addTitle": "إضافة عنصر امتثال",
+    "editTitle": "تعديل عنصر امتثال",
+    "typeLabel": "النوع",
+    "types": {
+      "medical_card": "البطاقة الطبية DOT",
+      "annual_inspection": "الفحص السنوي DOT",
+      "irp_registration": "تسجيل IRP",
+      "hvut_2290": "HVUT 2290",
+      "ifta_filing": "تقديم IFTA",
+      "insurance_policy": "بوليصة التأمين",
+      "cdl": "تجديد CDL",
+      "drug_consortium": "قنسورتيوم فحص المخدرات والكحول",
+      "other": "أخرى"
+    },
+    "labelLabel": "التسمية",
+    "dueDateLabel": "تاريخ الاستحقاق",
+    "recurrenceLabel": "التكرار",
+    "recurrence": {
+      "none": "مرة واحدة",
+      "annual": "سنويًا",
+      "biennial": "كل سنتين",
+      "quarterly": "ربع سنوي"
+    },
+    "empty": "لا توجد عناصر امتثال بعد. ستظهر هنا تلقائيًا البطاقات الطبية والفحوصات وتسجيلات IRP وHVUT 2290 وبوالص التأمين المستوردة بواسطة الذكاء الاصطناعي.",
+    "overdueBy": "متأخر بـ {{count}} يوم",
+    "overdueBy_other": "متأخر بـ {{count}} أيام",
+    "dueInDays": "يستحق خلال {{count}} يوم",
+    "dueInDays_other": "يستحق خلال {{count}} أيام",
+    "enterDueDateTitle": "أدخل تاريخ الاستحقاق",
+    "saveFailedTitle": "تعذر الحفظ",
+    "deleteFailedTitle": "تعذر الحذف",
+    "deleteConfirmTitle": "حذف عنصر الامتثال هذا؟",
+    "delete": "حذف العنصر",
+    "notifBannerTitle": "احصل على تذكيرات",
+    "notifBannerBody": "فعّل الإشعارات لتنبيهك عند اقتراب موعد استحقاق الامتثال.",
+    "notifEnableButton": "تفعيل الإشعارات",
+    "notifOverdueTitle": "{{label}} متأخر",
+    "notifDueSoonTitle": "{{label}} يستحق قريبًا",
+    "notifOverdueBody": "كان موعد {{label}} في {{date}}.",
+    "notifDueSoonBody": "يستحق {{label}} في {{date}}."
   }
 }

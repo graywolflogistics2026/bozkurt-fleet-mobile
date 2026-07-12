@@ -42,7 +42,8 @@
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
     "shareProfit": "Haftalık Kârı Paylaş",
-    "dashboardCustomize": "Paneli Özelleştir"
+    "dashboardCustomize": "Paneli Özelleştir",
+    "compliance": "Uyumluluk Takibi"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -345,7 +346,8 @@
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
     "shareProfit": "Haftalık Kârı Paylaş",
-    "dashboardCustomize": "Paneli Özelleştir"
+    "dashboardCustomize": "Paneli Özelleştir",
+    "compliance": "Uyumluluk Takibi"
   },
   "placeholders": {},
   "truckHealth": {
@@ -975,5 +977,118 @@
     "deadlineInDays": "{{count}} gün içinde son gün",
     "deadlineInDays_other": "{{count}} gün içinde son gün",
     "reasonableSalaryLabel": "Makul Maaş ($)"
+  },
+  "onboarding": {
+    "title": "Hesabınızı Kurun",
+    "skipSetup": "Atla — bunu sonra yaparım",
+    "stepOf": "Adım {{current}} / {{total}}",
+    "next": "İleri",
+    "finish": "Bitir",
+    "skipStep": "Bu adımı atla",
+    "back": "Geri",
+    "noTruckYet": "Bunun kilidini açmak için önceki adımda bir kamyon ekleyin.",
+    "saveFailedTitle": "Kaydedilemedi",
+    "roles": {
+      "owner_operator": "Sahip-İşletmeci",
+      "company_driver_w2": "Şirket Şoförü (W-2)",
+      "contractor_1099": "1099 Yüklenicisi",
+      "trainee": "Stajyer"
+    },
+    "steps": {
+      "companyName": {
+        "title": "Şirketinizin adı nedir?",
+        "subtitle": "Panonuzda ve paylaşılan raporlarda gösterilir. Bunu istediğiniz zaman Ayarlar'dan değiştirebilirsiniz.",
+        "placeholder": "Şirket adı"
+      },
+      "homeState": {
+        "title": "İkamet eyaletiniz nedir?",
+        "subtitle": "Eyalet vergi tahmininizi besler — bunu daha sonra Vergi Hesaplayıcı'da değiştirebilirsiniz."
+      },
+      "dotMc": {
+        "title": "DOT ve MC number",
+        "subtitle": "Opsiyonel — bunları şimdi veya daha sonra Ayarlar'dan ekleyin.",
+        "dotLabel": "DOT Numarası",
+        "mcLabel": "MC number"
+      },
+      "role": {
+        "title": "Sizi en iyi ne tanımlar?",
+        "subtitle": "Bu, uygulamanın size gösterdiklerini değiştirir — bir şirket şoförü, Schedule C indirimleri gibi yalnızca sahiplere özel araçlar yerine per diem/W-2 takibi görür."
+      },
+      "truck": {
+        "title": "Kamyonunuz",
+        "subtitle": "Ünite numarası, yıl/marka/model ve mevcut kilometre sayacı. Bu, Truck Health bakım takviminizi oluşturur.",
+        "unitLabel": "Ünite Numarası",
+        "yearLabel": "Yıl",
+        "makeLabel": "Marka",
+        "modelLabel": "Model",
+        "odometerLabel": "Mevcut Kilometre Sayacı"
+      },
+      "trailer": {
+        "title": "Römorkunuz",
+        "subtitle": "Opsiyonel.",
+        "unitLabel": "Römork Ünite Numarası",
+        "vinLabel": "VIN",
+        "yearLabel": "Yıl",
+        "makeLabel": "Marka",
+        "modelLabel": "Model"
+      },
+      "maintenance": {
+        "title": "Bakım takvimi",
+        "subtitle": "Makul varsayılan değerleri önceden doldurduk — herhangi bir aralığı şimdi veya daha sonra Truck Health'te ayarlayın."
+      },
+      "openingBalance": {
+        "title": "Açılış işletme bakiyesi",
+        "subtitle": "Mevcut çek hesabı bakiyeniz. Varsayılan olarak $0 — sıfırdan başlamak isterseniz atlayın."
+      },
+      "taxYear": {
+        "title": "Vergi yılını onaylayın",
+        "subtitle": "Tahminlerinizin hesaplandığı yıl."
+      }
+    }
+  },
+  "compliance": {
+    "title": "Uyumluluk Takibi",
+    "subtitle": "DOT, IRP, HVUT 2290, IFTA, sigorta, CDL ve uyuşturucu konsorsiyumu son tarihleri tek yerde.",
+    "add": "Ekle",
+    "addTitle": "Uyumluluk Öğesi Ekle",
+    "editTitle": "Uyumluluk Öğesini Düzenle",
+    "typeLabel": "Tür",
+    "types": {
+      "medical_card": "DOT Sağlık Kartı",
+      "annual_inspection": "Yıllık DOT Muayenesi",
+      "irp_registration": "IRP Kaydı",
+      "hvut_2290": "HVUT 2290",
+      "ifta_filing": "IFTA Beyanı",
+      "insurance_policy": "Sigorta Poliçesi",
+      "cdl": "CDL Yenileme",
+      "drug_consortium": "Uyuşturucu ve Alkol Konsorsiyumu",
+      "other": "Diğer"
+    },
+    "labelLabel": "Etiket",
+    "dueDateLabel": "Son Tarih",
+    "recurrenceLabel": "Tekrarlama",
+    "recurrence": {
+      "none": "Tek Seferlik",
+      "annual": "Yıllık",
+      "biennial": "2 Yılda Bir",
+      "quarterly": "Üç Aylık"
+    },
+    "empty": "Henüz uyumluluk öğesi yok. Yapay zeka ile içe aktarılan sağlık kartları, muayeneler, IRP kayıtları, HVUT 2290 ve sigorta poliçeleri burada otomatik olarak görünecek.",
+    "overdueBy": "{{count}} gün gecikti",
+    "overdueBy_other": "{{count}} gün gecikti",
+    "dueInDays": "{{count}} gün içinde son gün",
+    "dueInDays_other": "{{count}} gün içinde son gün",
+    "enterDueDateTitle": "Bir son tarih girin",
+    "saveFailedTitle": "Kaydedilemedi",
+    "deleteFailedTitle": "Silinemedi",
+    "deleteConfirmTitle": "Bu uyumluluk öğesi silinsin mi?",
+    "delete": "Öğeyi Sil",
+    "notifBannerTitle": "Hatırlatıcı alın",
+    "notifBannerBody": "Bir uyumluluk son tarihi yaklaştığında uyarı almak için bildirimleri etkinleştirin.",
+    "notifEnableButton": "Bildirimleri Etkinleştir",
+    "notifOverdueTitle": "{{label}} gecikti",
+    "notifDueSoonTitle": "{{label}} yakında sona eriyor",
+    "notifOverdueBody": "{{label}} için son tarih {{date}} idi.",
+    "notifDueSoonBody": "{{label}} için son tarih {{date}}."
   }
 }

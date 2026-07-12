@@ -1,6 +1,8 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-12): sections 1-27 have all been run against the live DB.**
+**STATUS (2026-07-12): sections 1-27 have all been run against the live DB.
+Section 28 (added this pass, PROMPTS.md Session 9b onboarding wizard) is
+NOT yet run — see its checklist below.**
 Sections 11-24 were applied together in one transaction on 2026-07-11 via a
 combined SQL block (generated from this file, run in the Supabase SQL
 editor). This file started as a forward-looking "run this next" list; it's kept now
@@ -898,6 +900,38 @@ alter table tax_config
 No RLS change needed — `tax_config` is already owner-scoped.
 
 - [x] 27a run (add sep_contribution + health_insurance_premiums to tax_config)
+
+---
+
+## 28. profiles gains dot_number/mc_number/onboarding_completed_at + trucks gains trailer fields (Session 9b onboarding wizard) — ⬜ NOT YET RUN
+
+Expanded first-launch onboarding wizard (PROMPTS.md Session 9b item 7,
+CLAUDE.md invariant #18): `onboarding_completed_at` gates whether the
+wizard shows (null = show it, same "null means never done" pattern as
+`tos_accepted_at`) — set once, on completion or explicit skip, never
+reset. `dot_number`/`mc_number` are optional identity fields (step 3).
+Trailer info (step 6) has no dedicated table — folds into the truck's own
+row (1:1, simplest for v1; a truck already carries single-tractor values
+the same way, so this matches the existing shape rather than introducing
+a join table before multi-trailer-per-truck is ever asked for).
+
+```sql
+alter table profiles
+  add column dot_number text,
+  add column mc_number text,
+  add column onboarding_completed_at timestamptz;
+
+alter table trucks
+  add column trailer_unit_number text,
+  add column trailer_vin text,
+  add column trailer_year int,
+  add column trailer_make text,
+  add column trailer_model text;
+```
+
+No RLS change needed — both tables are already owner-scoped.
+
+- [ ] 28a run (add profiles onboarding/DOT/MC columns + trucks trailer columns)
 
 ---
 

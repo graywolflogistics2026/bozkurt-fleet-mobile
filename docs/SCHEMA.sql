@@ -35,6 +35,14 @@ create table profiles (
   -- daily/weekly briefing ships; null means "no goal set", never treated
   -- as a goal of $0.
   weekly_goal numeric(12,2),
+  -- dot_number/mc_number/onboarding_completed_at (added retroactively,
+  -- PENDING_SQL.md §28, Session 9b onboarding wizard) — DOT/MC are
+  -- optional identity fields; onboarding_completed_at null means the
+  -- wizard has never been completed/skipped (same "null = never done"
+  -- pattern as tos_accepted_at), set once and never reset.
+  dot_number   text,
+  mc_number    text,
+  onboarding_completed_at timestamptz,
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );
@@ -132,6 +140,14 @@ create table trucks (
   fleet_mpg    numeric(4,1) default 8.9,
   apu_hours    int,                           -- TriPac Evolution
   is_active    boolean default true,
+  -- Trailer info (added retroactively, PENDING_SQL.md §28, Session 9b
+  -- onboarding wizard step 6) — no dedicated trailers table; folds into
+  -- the truck's own row, 1:1, same shape as the tractor fields above.
+  trailer_unit_number text,
+  trailer_vin         text,
+  trailer_year         int,
+  trailer_make         text,
+  trailer_model        text,
   created_at   timestamptz default now()
 );
 

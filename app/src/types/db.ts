@@ -18,6 +18,14 @@ export type Truck = {
   fleet_mpg: number | null;
   apu_hours: number | null;
   is_active: boolean;
+  // Trailer info: added retroactively, docs/PENDING_SQL.md §28 (Session
+  // 9b onboarding wizard step 6) — no dedicated trailers table, folds
+  // into the truck's own row, 1:1, same shape as the tractor fields above.
+  trailer_unit_number: string | null;
+  trailer_vin: string | null;
+  trailer_year: number | null;
+  trailer_make: string | null;
+  trailer_model: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -430,6 +438,14 @@ export type Profile = {
   role: 'owner_operator' | 'company_driver_w2' | 'contractor_1099' | 'trainee' | null;
   // docs/PENDING_SQL.md §24 (AI feature package — CEO Mode briefing) — null means "no goal set", never treated as $0.
   weekly_goal: number | null;
+  // dot_number/mc_number/onboarding_completed_at: added retroactively,
+  // docs/PENDING_SQL.md §28 (Session 9b onboarding wizard) —
+  // onboarding_completed_at null means the wizard has never been
+  // completed/skipped (same "null = never done" pattern as
+  // tos_accepted_at), set once and never reset.
+  dot_number: string | null;
+  mc_number: string | null;
+  onboarding_completed_at: string | null;
   created_at: string;
   updated_at: string;
 };

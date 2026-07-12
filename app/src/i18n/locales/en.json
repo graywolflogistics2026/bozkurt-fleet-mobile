@@ -38,6 +38,7 @@
     "profitAnalysis": "Profit Analysis",
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
+    "compliance": "Compliance Tracker",
     "taxEstimator": "Tax Estimator",
     "settings": "Settings",
     "importLegacy": "Import Legacy Backup",
@@ -345,6 +346,7 @@
     "profitAnalysis": "Profit Analysis",
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
+    "compliance": "Compliance Tracker",
     "settings": "Settings"
   },
   "placeholders": {},
@@ -975,5 +977,118 @@
     "deadlineInDays": "Due in {{count}} day",
     "deadlineInDays_other": "Due in {{count}} days",
     "reasonableSalaryLabel": "Reasonable Salary ($)"
+  },
+  "onboarding": {
+    "title": "Set Up Your Account",
+    "skipSetup": "Skip — I'll do this later",
+    "stepOf": "Step {{current}} of {{total}}",
+    "next": "Next",
+    "finish": "Finish",
+    "skipStep": "Skip this step",
+    "back": "Back",
+    "noTruckYet": "Add a truck in the previous step to unlock this.",
+    "saveFailedTitle": "Could not save",
+    "roles": {
+      "owner_operator": "Owner-Operator",
+      "company_driver_w2": "Company Driver (W-2)",
+      "contractor_1099": "1099 Contractor",
+      "trainee": "Trainee"
+    },
+    "steps": {
+      "companyName": {
+        "title": "What's your company name?",
+        "subtitle": "Shown on your dashboard and shared reports. You can change this anytime in Settings.",
+        "placeholder": "Company name"
+      },
+      "homeState": {
+        "title": "What's your home state?",
+        "subtitle": "Feeds your state tax estimate — you can change this later in the Tax Estimator."
+      },
+      "dotMc": {
+        "title": "DOT / MC numbers",
+        "subtitle": "Optional — add these now or later in Settings.",
+        "dotLabel": "DOT Number",
+        "mcLabel": "MC Number"
+      },
+      "role": {
+        "title": "What best describes you?",
+        "subtitle": "This changes what the app shows you — a company driver sees per-diem/W-2 tracking instead of owner-only tools like Schedule C deductions."
+      },
+      "truck": {
+        "title": "Your truck",
+        "subtitle": "Unit number, year/make/model, and current odometer. This seeds your Truck Health maintenance schedule.",
+        "unitLabel": "Unit Number",
+        "yearLabel": "Year",
+        "makeLabel": "Make",
+        "modelLabel": "Model",
+        "odometerLabel": "Current Odometer"
+      },
+      "trailer": {
+        "title": "Your trailer",
+        "subtitle": "Optional.",
+        "unitLabel": "Trailer Unit Number",
+        "vinLabel": "VIN",
+        "yearLabel": "Year",
+        "makeLabel": "Make",
+        "modelLabel": "Model"
+      },
+      "maintenance": {
+        "title": "Maintenance schedule",
+        "subtitle": "We've pre-filled sensible defaults — adjust any interval now or later in Truck Health."
+      },
+      "openingBalance": {
+        "title": "Opening business balance",
+        "subtitle": "Your current checking account balance. Defaults to $0 — skip if you'd rather start from zero."
+      },
+      "taxYear": {
+        "title": "Confirm tax year",
+        "subtitle": "The year your estimates are computed against."
+      }
+    }
+  },
+  "compliance": {
+    "title": "Compliance Tracker",
+    "subtitle": "DOT, IRP, HVUT 2290, IFTA, insurance, CDL, and drug consortium deadlines in one place.",
+    "add": "Add",
+    "addTitle": "Add Compliance Item",
+    "editTitle": "Edit Compliance Item",
+    "typeLabel": "Type",
+    "types": {
+      "medical_card": "DOT Medical Card",
+      "annual_inspection": "Annual DOT Inspection",
+      "irp_registration": "IRP Registration",
+      "hvut_2290": "HVUT 2290",
+      "ifta_filing": "IFTA Filing",
+      "insurance_policy": "Insurance Policy",
+      "cdl": "CDL Renewal",
+      "drug_consortium": "Drug & Alcohol Consortium",
+      "other": "Other"
+    },
+    "labelLabel": "Label",
+    "dueDateLabel": "Due Date",
+    "recurrenceLabel": "Recurrence",
+    "recurrence": {
+      "none": "One-time",
+      "annual": "Annual",
+      "biennial": "Every 2 Years",
+      "quarterly": "Quarterly"
+    },
+    "empty": "No compliance items yet. AI-imported medical cards, inspections, IRP registrations, HVUT 2290, and insurance policies will appear here automatically.",
+    "overdueBy": "{{count}} day overdue",
+    "overdueBy_other": "{{count}} days overdue",
+    "dueInDays": "Due in {{count}} day",
+    "dueInDays_other": "Due in {{count}} days",
+    "enterDueDateTitle": "Enter a due date",
+    "saveFailedTitle": "Could not save",
+    "deleteFailedTitle": "Could not delete",
+    "deleteConfirmTitle": "Delete this compliance item?",
+    "delete": "Delete Item",
+    "notifBannerTitle": "Get reminders",
+    "notifBannerBody": "Enable notifications to get alerted as a compliance deadline approaches.",
+    "notifEnableButton": "Enable Notifications",
+    "notifOverdueTitle": "{{label}} is overdue",
+    "notifDueSoonTitle": "{{label}} due soon",
+    "notifOverdueBody": "{{label}} was due {{date}}.",
+    "notifDueSoonBody": "{{label}} is due {{date}}."
   }
 }

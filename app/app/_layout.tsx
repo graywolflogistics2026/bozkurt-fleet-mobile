@@ -62,7 +62,7 @@ function LoadingScreen() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, needsTos } = useAuth();
+  const { session, loading, needsTos, needsOnboarding } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -79,15 +79,18 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const onTosScreen = segments[0] === 'tos';
+    const onOnboardingScreen = segments[0] === 'onboarding';
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
     } else if (session && needsTos && !onTosScreen) {
       router.replace('/tos');
-    } else if (session && !needsTos && (inAuthGroup || onTosScreen)) {
+    } else if (session && !needsTos && needsOnboarding && !onOnboardingScreen) {
+      router.replace('/onboarding');
+    } else if (session && !needsTos && !needsOnboarding && (inAuthGroup || onTosScreen || onOnboardingScreen)) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, needsTos, segments, router]);
+  }, [session, loading, needsTos, needsOnboarding, segments, router]);
 
   if (loading) return <LoadingScreen />;
 
@@ -95,6 +98,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="tos" />
+      <Stack.Screen name="onboarding" />
       <Stack.Screen name="(tabs)" />
     </Stack>
   );

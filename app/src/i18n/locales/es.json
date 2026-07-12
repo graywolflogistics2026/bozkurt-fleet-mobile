@@ -42,7 +42,8 @@
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
     "shareProfit": "Compartir Ganancias Semanales",
-    "dashboardCustomize": "Personalizar Panel"
+    "dashboardCustomize": "Personalizar Panel",
+    "compliance": "Seguimiento de Cumplimiento"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -345,7 +346,8 @@
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
     "shareProfit": "Compartir Ganancias Semanales",
-    "dashboardCustomize": "Personalizar Panel"
+    "dashboardCustomize": "Personalizar Panel",
+    "compliance": "Seguimiento de Cumplimiento"
   },
   "placeholders": {},
   "truckHealth": {
@@ -975,5 +977,118 @@
     "deadlineInDays": "Vence en {{count}} día",
     "deadlineInDays_other": "Vence en {{count}} días",
     "reasonableSalaryLabel": "Salario Razonable ($)"
+  },
+  "onboarding": {
+    "title": "Configura tu Cuenta",
+    "skipSetup": "Omitir — lo haré más tarde",
+    "stepOf": "Paso {{current}} de {{total}}",
+    "next": "Siguiente",
+    "finish": "Finalizar",
+    "skipStep": "Omitir este paso",
+    "back": "Atrás",
+    "noTruckYet": "Agrega un camión en el paso anterior para desbloquear esto.",
+    "saveFailedTitle": "No se pudo guardar",
+    "roles": {
+      "owner_operator": "Propietario-Operador",
+      "company_driver_w2": "Conductor de Empresa (W-2)",
+      "contractor_1099": "Contratista 1099",
+      "trainee": "Aprendiz"
+    },
+    "steps": {
+      "companyName": {
+        "title": "¿Cuál es el nombre de tu empresa?",
+        "subtitle": "Se muestra en tu panel y en reportes compartidos. Puedes cambiarlo cuando quieras en Configuración.",
+        "placeholder": "Nombre de la empresa"
+      },
+      "homeState": {
+        "title": "¿Cuál es tu estado de residencia?",
+        "subtitle": "Alimenta tu estimación de impuesto estatal — puedes cambiarlo después en el Estimador de Impuestos."
+      },
+      "dotMc": {
+        "title": "DOT y MC number",
+        "subtitle": "Opcional — agrégalos ahora o después en Configuración.",
+        "dotLabel": "Número DOT",
+        "mcLabel": "MC number"
+      },
+      "role": {
+        "title": "¿Qué te describe mejor?",
+        "subtitle": "Esto cambia lo que la app te muestra — un conductor de empresa ve seguimiento de per diem/W-2 en lugar de herramientas solo para propietarios como las deducciones de Schedule C."
+      },
+      "truck": {
+        "title": "Tu camión",
+        "subtitle": "Número de unidad, año/marca/modelo y odómetro actual. Esto genera tu calendario de mantenimiento de Truck Health.",
+        "unitLabel": "Número de Unidad",
+        "yearLabel": "Año",
+        "makeLabel": "Marca",
+        "modelLabel": "Modelo",
+        "odometerLabel": "Odómetro Actual"
+      },
+      "trailer": {
+        "title": "Tu remolque",
+        "subtitle": "Opcional.",
+        "unitLabel": "Número de Unidad del Remolque",
+        "vinLabel": "VIN",
+        "yearLabel": "Año",
+        "makeLabel": "Marca",
+        "modelLabel": "Modelo"
+      },
+      "maintenance": {
+        "title": "Calendario de mantenimiento",
+        "subtitle": "Hemos precargado valores predeterminados razonables — ajusta cualquier intervalo ahora o después en Truck Health."
+      },
+      "openingBalance": {
+        "title": "Saldo inicial del negocio",
+        "subtitle": "El saldo actual de tu cuenta de cheques. Por defecto es $0 — omite si prefieres empezar desde cero."
+      },
+      "taxYear": {
+        "title": "Confirma el año fiscal",
+        "subtitle": "El año contra el cual se calculan tus estimaciones."
+      }
+    }
+  },
+  "compliance": {
+    "title": "Seguimiento de Cumplimiento",
+    "subtitle": "Fechas límite de DOT, IRP, HVUT 2290, IFTA, seguro, CDL y consorcio antidrogas en un solo lugar.",
+    "add": "Agregar",
+    "addTitle": "Agregar Elemento de Cumplimiento",
+    "editTitle": "Editar Elemento de Cumplimiento",
+    "typeLabel": "Tipo",
+    "types": {
+      "medical_card": "Tarjeta Médica DOT",
+      "annual_inspection": "Inspección Anual DOT",
+      "irp_registration": "Registro IRP",
+      "hvut_2290": "HVUT 2290",
+      "ifta_filing": "Declaración IFTA",
+      "insurance_policy": "Póliza de Seguro",
+      "cdl": "Renovación de CDL",
+      "drug_consortium": "Consorcio Antidrogas y Alcohol",
+      "other": "Otro"
+    },
+    "labelLabel": "Etiqueta",
+    "dueDateLabel": "Fecha de Vencimiento",
+    "recurrenceLabel": "Recurrencia",
+    "recurrence": {
+      "none": "Una Vez",
+      "annual": "Anual",
+      "biennial": "Cada 2 Años",
+      "quarterly": "Trimestral"
+    },
+    "empty": "Aún no hay elementos de cumplimiento. Las tarjetas médicas, inspecciones, registros IRP, HVUT 2290 y pólizas de seguro importadas por IA aparecerán aquí automáticamente.",
+    "overdueBy": "Vencido hace {{count}} día",
+    "overdueBy_other": "Vencido hace {{count}} días",
+    "dueInDays": "Vence en {{count}} día",
+    "dueInDays_other": "Vence en {{count}} días",
+    "enterDueDateTitle": "Ingresa una fecha de vencimiento",
+    "saveFailedTitle": "No se pudo guardar",
+    "deleteFailedTitle": "No se pudo eliminar",
+    "deleteConfirmTitle": "¿Eliminar este elemento de cumplimiento?",
+    "delete": "Eliminar Elemento",
+    "notifBannerTitle": "Recibe recordatorios",
+    "notifBannerBody": "Activa las notificaciones para recibir alertas cuando se acerque una fecha límite de cumplimiento.",
+    "notifEnableButton": "Activar Notificaciones",
+    "notifOverdueTitle": "{{label}} está vencido",
+    "notifDueSoonTitle": "{{label}} vence pronto",
+    "notifOverdueBody": "{{label}} venció el {{date}}.",
+    "notifDueSoonBody": "{{label}} vence el {{date}}."
   }
 }

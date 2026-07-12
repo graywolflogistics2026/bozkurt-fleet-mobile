@@ -16,6 +16,10 @@ type Profile = {
   locale: string | null;
   tos_accepted_at: string | null;
   tos_version: string | null;
+  // onboarding_completed_at: docs/PENDING_SQL.md §28 (Session 9b onboarding
+  // wizard) — null means the wizard has never been completed/skipped, same
+  // "null = never done" pattern as tos_accepted_at.
+  onboarding_completed_at: string | null;
 };
 
 type AuthContextValue = {
@@ -23,6 +27,7 @@ type AuthContextValue = {
   profile: Profile | null;
   loading: boolean;
   needsTos: boolean;
+  needsOnboarding: boolean;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -41,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await withTimeout(
       supabase
         .from('profiles')
-        .select('user_id, company_name, owner_name, locale, tos_accepted_at, tos_version')
+        .select('user_id, company_name, owner_name, locale, tos_accepted_at, tos_version, onboarding_completed_at')
         .eq('user_id', userId)
         .maybeSingle(),
       STARTUP_TIMEOUT_MS,
@@ -121,11 +126,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return profile.tos_accepted_at === null || profile.tos_version !== TOS_VERSION;
   }, [session, profile]);
 
+  // Runs AFTER ToS acceptance (PROMPTS.md Session 9b — "after sign-up +
+  // ToS acceptance, walk the user through..."), so this only ever
+  // evaluates true once needsTos is already false.
+  const needsOnboarding = useMemo(() => {
+    if (!session || needsTos) return false;
+    if (!profile) return false;
+    return profile.onboarding_completed_at === null;
+  }, [session, needsTos, profile]);
+
   const value: AuthContextValue = {
     session,
     profile,
     loading,
     needsTos,
+    needsOnboarding,
     signUp,
     signIn,
     signOut,

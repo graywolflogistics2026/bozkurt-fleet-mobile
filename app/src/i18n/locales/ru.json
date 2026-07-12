@@ -42,7 +42,8 @@
     "operatingPnl": "Операционный P&L",
     "profitAnalysis": "Анализ прибыли",
     "shareProfit": "Поделиться недельной прибылью",
-    "dashboardCustomize": "Настроить панель"
+    "dashboardCustomize": "Настроить панель",
+    "compliance": "Отслеживание соответствия"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -345,7 +346,8 @@
     "operatingPnl": "Операционный P&L",
     "profitAnalysis": "Анализ прибыли",
     "shareProfit": "Поделиться недельной прибылью",
-    "dashboardCustomize": "Настроить панель"
+    "dashboardCustomize": "Настроить панель",
+    "compliance": "Отслеживание соответствия"
   },
   "placeholders": {},
   "truckHealth": {
@@ -975,5 +977,118 @@
     "deadlineInDays": "Срок через {{count}} день",
     "deadlineInDays_other": "Срок через {{count}} дней",
     "reasonableSalaryLabel": "Разумная зарплата ($)"
+  },
+  "onboarding": {
+    "title": "Настройка аккаунта",
+    "skipSetup": "Пропустить — сделаю это позже",
+    "stepOf": "Шаг {{current}} из {{total}}",
+    "next": "Далее",
+    "finish": "Завершить",
+    "skipStep": "Пропустить этот шаг",
+    "back": "Назад",
+    "noTruckYet": "Добавьте грузовик на предыдущем шаге, чтобы разблокировать это.",
+    "saveFailedTitle": "Не удалось сохранить",
+    "roles": {
+      "owner_operator": "Владелец-оператор",
+      "company_driver_w2": "Водитель компании (W-2)",
+      "contractor_1099": "Подрядчик 1099",
+      "trainee": "Стажёр"
+    },
+    "steps": {
+      "companyName": {
+        "title": "Как называется ваша компания?",
+        "subtitle": "Отображается на панели и в общих отчётах. Вы можете изменить это в любое время в настройках.",
+        "placeholder": "Название компании"
+      },
+      "homeState": {
+        "title": "Какой ваш домашний штат?",
+        "subtitle": "Влияет на оценку налога штата — вы можете изменить это позже в калькуляторе налогов."
+      },
+      "dotMc": {
+        "title": "DOT и MC number",
+        "subtitle": "Необязательно — добавьте их сейчас или позже в настройках.",
+        "dotLabel": "Номер DOT",
+        "mcLabel": "MC number"
+      },
+      "role": {
+        "title": "Что лучше всего вас описывает?",
+        "subtitle": "Это меняет то, что показывает приложение — водитель компании видит отслеживание per diem/W-2 вместо инструментов только для владельцев, таких как вычеты Schedule C."
+      },
+      "truck": {
+        "title": "Ваш грузовик",
+        "subtitle": "Номер юнита, год/марка/модель и текущий одометр. Это создаёт ваш график обслуживания Truck Health.",
+        "unitLabel": "Номер юнита",
+        "yearLabel": "Год",
+        "makeLabel": "Марка",
+        "modelLabel": "Модель",
+        "odometerLabel": "Текущий одометр"
+      },
+      "trailer": {
+        "title": "Ваш прицеп",
+        "subtitle": "Необязательно.",
+        "unitLabel": "Номер юнита прицепа",
+        "vinLabel": "VIN",
+        "yearLabel": "Год",
+        "makeLabel": "Марка",
+        "modelLabel": "Модель"
+      },
+      "maintenance": {
+        "title": "График обслуживания",
+        "subtitle": "Мы заранее заполнили разумные значения по умолчанию — измените любой интервал сейчас или позже в Truck Health."
+      },
+      "openingBalance": {
+        "title": "Начальный баланс бизнеса",
+        "subtitle": "Текущий баланс вашего расчётного счёта. По умолчанию $0 — пропустите, если хотите начать с нуля."
+      },
+      "taxYear": {
+        "title": "Подтвердите налоговый год",
+        "subtitle": "Год, относительно которого рассчитываются ваши оценки."
+      }
+    }
+  },
+  "compliance": {
+    "title": "Отслеживание соответствия",
+    "subtitle": "Сроки DOT, IRP, HVUT 2290, IFTA, страховки, CDL и нарко-консорциума — в одном месте.",
+    "add": "Добавить",
+    "addTitle": "Добавить элемент соответствия",
+    "editTitle": "Изменить элемент соответствия",
+    "typeLabel": "Тип",
+    "types": {
+      "medical_card": "Медицинская карта DOT",
+      "annual_inspection": "Ежегодная инспекция DOT",
+      "irp_registration": "Регистрация IRP",
+      "hvut_2290": "HVUT 2290",
+      "ifta_filing": "Подача IFTA",
+      "insurance_policy": "Страховой полис",
+      "cdl": "Продление CDL",
+      "drug_consortium": "Нарко- и алкогольный консорциум",
+      "other": "Другое"
+    },
+    "labelLabel": "Метка",
+    "dueDateLabel": "Срок",
+    "recurrenceLabel": "Периодичность",
+    "recurrence": {
+      "none": "Разово",
+      "annual": "Ежегодно",
+      "biennial": "Раз в 2 года",
+      "quarterly": "Ежеквартально"
+    },
+    "empty": "Пока нет элементов соответствия. Медицинские карты, инспекции, регистрации IRP, HVUT 2290 и страховые полисы, импортированные ИИ, появятся здесь автоматически.",
+    "overdueBy": "Просрочено на {{count}} день",
+    "overdueBy_other": "Просрочено на {{count}} дней",
+    "dueInDays": "Срок через {{count}} день",
+    "dueInDays_other": "Срок через {{count}} дней",
+    "enterDueDateTitle": "Введите срок",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteFailedTitle": "Не удалось удалить",
+    "deleteConfirmTitle": "Удалить этот элемент соответствия?",
+    "delete": "Удалить элемент",
+    "notifBannerTitle": "Получайте напоминания",
+    "notifBannerBody": "Включите уведомления, чтобы получать оповещения о приближении срока соответствия.",
+    "notifEnableButton": "Включить уведомления",
+    "notifOverdueTitle": "{{label}} просрочен",
+    "notifDueSoonTitle": "{{label}} скоро истекает",
+    "notifOverdueBody": "{{label}} должен был быть выполнен {{date}}.",
+    "notifDueSoonBody": "{{label}} истекает {{date}}."
   }
 }
