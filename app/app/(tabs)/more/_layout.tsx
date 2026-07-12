@@ -31,6 +31,7 @@ export default function MoreLayout() {
       <Stack.Screen name="asset-register" options={{ title: t('nav.assetRegister') }} />
       <Stack.Screen name="operating-pnl" options={{ title: t('nav.operatingPnl') }} />
       <Stack.Screen name="profit-analysis" options={{ title: t('nav.profitAnalysis') }} />
+      <Stack.Screen name="scorecard" options={{ title: t('nav.scorecard') }} />
       <Stack.Screen name="ceo-mode" options={{ title: t('nav.ceoMode') }} />
       <Stack.Screen name="ai-advisor" options={{ title: t('nav.aiAdvisor') }} />
       <Stack.Screen name="share-profit" options={{ title: t('nav.shareProfit') }} />

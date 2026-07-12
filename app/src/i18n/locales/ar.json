@@ -41,6 +41,7 @@
     "assetRegister": "سجل الأصول",
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
+    "scorecard": "بطاقة الأداء",
     "ceoMode": "وضع الرئيس التنفيذي",
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
@@ -348,6 +349,7 @@
     "assetRegister": "سجل الأصول",
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
+    "scorecard": "بطاقة الأداء",
     "ceoMode": "وضع الرئيس التنفيذي",
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
@@ -1148,5 +1150,24 @@
     "shareNotAvailable": "المشاركة غير متاحة على هذا الجهاز.",
     "exportFailedTitle": "فشل التصدير",
     "generatedOn": "تم الإنشاء في {{date}}"
+  },
+  "scorecard": {
+    "title": "بطاقة الأداء",
+    "subtitle": "صحة عملك في لمحة واحدة.",
+    "empty": "استورد settlement لحساب نتيجتك.",
+    "outOf100": "من 100",
+    "grades": {
+      "excellent": "ممتاز 🏆",
+      "good": "جيد 👍",
+      "average": "متوسط ⚠️",
+      "needs_work": "يحتاج إلى تحسين 🔧"
+    },
+    "kpiTitle": "تفصيل مؤشرات الأداء",
+    "revenuePerMile": "الإيراد/الميل",
+    "fuelPerMile": "الوقود/الميل",
+    "netPerMile": "الصافي/الميل",
+    "costPerMile": "التكلفة/الميل (CPM)",
+    "mpg": "معدل استهلاك الوقود للأسطول (MPG)",
+    "trendTitle": "اتجاه صافي الربح الأسبوعي"
   }
 }

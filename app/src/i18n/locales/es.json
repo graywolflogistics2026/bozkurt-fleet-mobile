@@ -41,6 +41,7 @@
     "assetRegister": "Registro de Activos",
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
+    "scorecard": "Calificación",
     "ceoMode": "Modo CEO",
     "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
@@ -348,6 +349,7 @@
     "assetRegister": "Registro de Activos",
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
+    "scorecard": "Calificación",
     "ceoMode": "Modo CEO",
     "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
@@ -1148,5 +1150,24 @@
     "shareNotAvailable": "Compartir no está disponible en este dispositivo.",
     "exportFailedTitle": "Error al exportar",
     "generatedOn": "Generado el {{date}}"
+  },
+  "scorecard": {
+    "title": "Calificación",
+    "subtitle": "La salud de tu negocio de un vistazo.",
+    "empty": "Importa un settlement para calcular tu puntuación.",
+    "outOf100": "de 100",
+    "grades": {
+      "excellent": "Excelente 🏆",
+      "good": "Bueno 👍",
+      "average": "Regular ⚠️",
+      "needs_work": "Necesita Mejorar 🔧"
+    },
+    "kpiTitle": "Desglose de KPI",
+    "revenuePerMile": "Ingreso/Milla",
+    "fuelPerMile": "Combustible/Milla",
+    "netPerMile": "Neto/Milla",
+    "costPerMile": "Costo/Milla (CPM)",
+    "mpg": "MPG de la Flota",
+    "trendTitle": "Tendencia Neta Semanal"
   }
 }

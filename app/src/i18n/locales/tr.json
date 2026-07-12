@@ -41,6 +41,7 @@
     "assetRegister": "Varlık Kaydı",
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
+    "scorecard": "Karne",
     "ceoMode": "CEO Modu",
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
@@ -348,6 +349,7 @@
     "assetRegister": "Varlık Kaydı",
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
+    "scorecard": "Karne",
     "ceoMode": "CEO Modu",
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
@@ -1148,5 +1150,24 @@
     "shareNotAvailable": "Bu cihazda paylaşım kullanılamıyor.",
     "exportFailedTitle": "Dışa aktarma başarısız",
     "generatedOn": "{{date}} tarihinde oluşturuldu"
+  },
+  "scorecard": {
+    "title": "Karne",
+    "subtitle": "İşletmenizin sağlığına bir bakışta göz atın.",
+    "empty": "Puanınızı hesaplamak için bir settlement içe aktarın.",
+    "outOf100": "100 üzerinden",
+    "grades": {
+      "excellent": "Mükemmel 🏆",
+      "good": "İyi 👍",
+      "average": "Orta ⚠️",
+      "needs_work": "Geliştirilmeli 🔧"
+    },
+    "kpiTitle": "KPI Dökümü",
+    "revenuePerMile": "Gelir/Mil",
+    "fuelPerMile": "Yakıt/Mil",
+    "netPerMile": "Net/Mil",
+    "costPerMile": "Maliyet/Mil (CPM)",
+    "mpg": "Filo MPG",
+    "trendTitle": "Haftalık Net Trend"
   }
 }

@@ -41,6 +41,7 @@
     "assetRegister": "Реестр активов",
     "operatingPnl": "Операционный P&L",
     "profitAnalysis": "Анализ прибыли",
+    "scorecard": "Оценка эффективности",
     "ceoMode": "Режим CEO",
     "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
@@ -348,6 +349,7 @@
     "assetRegister": "Реестр активов",
     "operatingPnl": "Операционный P&L",
     "profitAnalysis": "Анализ прибыли",
+    "scorecard": "Оценка эффективности",
     "ceoMode": "Режим CEO",
     "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
@@ -1148,5 +1150,24 @@
     "shareNotAvailable": "Общий доступ недоступен на этом устройстве.",
     "exportFailedTitle": "Ошибка экспорта",
     "generatedOn": "Сформировано {{date}}"
+  },
+  "scorecard": {
+    "title": "Оценка эффективности",
+    "subtitle": "Здоровье вашего бизнеса с первого взгляда.",
+    "empty": "Импортируйте settlement, чтобы рассчитать вашу оценку.",
+    "outOf100": "из 100",
+    "grades": {
+      "excellent": "Отлично 🏆",
+      "good": "Хорошо 👍",
+      "average": "Средне ⚠️",
+      "needs_work": "Нужно улучшить 🔧"
+    },
+    "kpiTitle": "Разбивка KPI",
+    "revenuePerMile": "Доход/миля",
+    "fuelPerMile": "Топливо/миля",
+    "netPerMile": "Чистая прибыль/миля",
+    "costPerMile": "Стоимость/миля (CPM)",
+    "mpg": "MPG флота",
+    "trendTitle": "Недельный тренд чистой прибыли"
   }
 }

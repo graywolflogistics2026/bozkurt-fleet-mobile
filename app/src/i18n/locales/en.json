@@ -36,6 +36,7 @@
     "assetRegister": "Asset Register",
     "operatingPnl": "Operating P&L",
     "profitAnalysis": "Profit Analysis",
+    "scorecard": "Scorecard",
     "ceoMode": "CEO Mode",
     "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
@@ -347,6 +348,7 @@
     "assetRegister": "Asset Register",
     "operatingPnl": "Operating P&L",
     "profitAnalysis": "Profit Analysis",
+    "scorecard": "Scorecard",
     "ceoMode": "CEO Mode",
     "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
@@ -1148,5 +1150,24 @@
     "shareNotAvailable": "Sharing isn't available on this device.",
     "exportFailedTitle": "Export failed",
     "generatedOn": "Generated {{date}}"
+  },
+  "scorecard": {
+    "title": "Scorecard",
+    "subtitle": "Your business-health score at a glance.",
+    "empty": "Import a settlement to calculate your score.",
+    "outOf100": "out of 100",
+    "grades": {
+      "excellent": "Excellent 🏆",
+      "good": "Good 👍",
+      "average": "Average ⚠️",
+      "needs_work": "Needs Work 🔧"
+    },
+    "kpiTitle": "KPI Breakdown",
+    "revenuePerMile": "Revenue/Mile",
+    "fuelPerMile": "Fuel/Mile",
+    "netPerMile": "Net/Mile",
+    "costPerMile": "Cost/Mile (CPM)",
+    "mpg": "Fleet MPG",
+    "trendTitle": "Weekly Net Trend"
   }
 }
