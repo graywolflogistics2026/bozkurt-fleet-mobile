@@ -399,7 +399,17 @@
     "notifDueSoonTitle": "Unidad {{unit}}: {{label}} próximo a vencer",
     "notifDueSoonBody": "{{label}} vence en {{amount}} {{unit}}.",
     "notifOverdueTitle": "Unidad {{unit}}: {{label}} vencido",
-    "notifOverdueBody": "{{label}} está vencido por {{amount}} {{unit}}."
+    "notifOverdueBody": "{{label}} está vencido por {{amount}} {{unit}}.",
+    "markAsDone": "Marcar como Hecho",
+    "markDoneTitle": "Marcar {{label}} como Hecho",
+    "markDoneDateLabel": "Fecha",
+    "markDoneOdometerLabel": "Odómetro",
+    "markDoneHoursLabel": "Horas de Motor",
+    "markDoneCostLabel": "Costo (opcional)",
+    "markDoneNoteLabel": "Nota (opcional)",
+    "markDoneNotePlaceholder": "ej. Realizado uno mismo en la carretera",
+    "markDoneConfirm": "Confirmar",
+    "markDoneFailedTitle": "No se pudo guardar"
   },
   "maintenance": {
     "title": "Mantenimiento",

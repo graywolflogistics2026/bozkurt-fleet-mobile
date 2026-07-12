@@ -138,6 +138,37 @@ describe('calcTruckHealth — next-due', () => {
   });
 });
 
+describe('calcTruckHealth — "Mark as Done" quick action (self-performed, no invoice)', () => {
+  it('resets the interval identically whether the record came from an invoice or a no-invoice "Mark as Done" action', () => {
+    // MaintenanceRecordInput carries only serviceType/odometer/engineHours/
+    // serviceDate — no cost or document_id field reaches this calc engine
+    // at all, so a free, document-less "Mark as Done" record is
+    // structurally indistinguishable from a fully invoiced one here.
+    const markedDone = record({ odometer: 260000, serviceDate: '2026-03-01' });
+    const [result] = calcTruckHealth([interval({})], [markedDone], 270000, 0);
+    expect(result.baselineOdometer).toBe(260000);
+    expect(result.lastDoneDate).toBe('2026-03-01');
+    expect(result.remaining).toBe(50000 - (270000 - 260000));
+    expect(result.status).toBe('ok');
+  });
+
+  it('resets an hours-mode category (e.g. APU) the same way', () => {
+    const iv = interval({ category: 'apu', trackingMode: 'hours', intervalMiles: null, intervalHours: 2000 });
+    const markedDone = record({ serviceType: 'apu', odometer: null, engineHours: 10500, serviceDate: '2026-03-01' });
+    const [result] = calcTruckHealth([iv], [markedDone], 0, 10600);
+    expect(result.baselineHours).toBe(10500);
+    expect(result.remaining).toBe(2000 - 100);
+  });
+
+  it('a later "Mark as Done" record supersedes an earlier invoiced one, same highest-wins rule', () => {
+    const invoiced = record({ odometer: 260000, serviceDate: '2026-01-01' });
+    const markedDone = record({ odometer: 265000, serviceDate: '2026-03-01' });
+    const [result] = calcTruckHealth([interval({})], [invoiced, markedDone], 270000, 0);
+    expect(result.baselineOdometer).toBe(265000);
+    expect(result.lastDoneDate).toBe('2026-03-01');
+  });
+});
+
 describe('calcTruckHealth — disabled categories', () => {
   it('excludes a disabled category entirely, not just hides its status', () => {
     const results = calcTruckHealth([interval({ enabled: false })], [], 0, 0);

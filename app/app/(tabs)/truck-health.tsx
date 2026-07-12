@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList, useUpdateTruck } from '@/src/data/trucks';
-import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useMaintenanceRecords, useInsertMaintenanceRecord } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals, useUpdateMaintenanceInterval } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcTruckHealth, type HealthResult, type HealthOverrides } from '@/src/truck/health';
 import { HEALTH_CATEGORIES, HEALTH_CATEGORY_ICON, type HealthCategory } from '@/src/truck/categories';
 import {
@@ -29,7 +31,27 @@ function statusColor(status: HealthResult['status']): string {
   return colors.muted;
 }
 
-function CategoryCard({ result, t, formatters }: { result: HealthResult; t: TFunction; formatters: ReturnType<typeof useFormatters> }) {
+function MarkAsDoneAction({ t, onPress }: { t: TFunction; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={8} style={{ alignSelf: 'flex-start', marginTop: spacing.sm }}>
+      <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
+        ✅ {t('truckHealth.markAsDone')}
+      </Text>
+    </Pressable>
+  );
+}
+
+function CategoryCard({
+  result,
+  t,
+  formatters,
+  onMarkDone,
+}: {
+  result: HealthResult;
+  t: TFunction;
+  formatters: ReturnType<typeof useFormatters>;
+  onMarkDone: (result: HealthResult) => void;
+}) {
   const { number, date } = formatters;
   const icon = HEALTH_CATEGORY_ICON[result.category as HealthCategory] ?? '🔧';
   const label = t(`truckHealth.categories.${result.category}`);
@@ -43,6 +65,7 @@ function CategoryCard({ result, t, formatters }: { result: HealthResult; t: TFun
           <Text style={styles.categoryLabel}>{label}</Text>
         </View>
         <MutedText>{t('truckHealth.noDataPrompt')}</MutedText>
+        <MarkAsDoneAction t={t} onPress={() => onMarkDone(result)} />
       </Card>
     );
   }
@@ -78,6 +101,7 @@ function CategoryCard({ result, t, formatters }: { result: HealthResult; t: TFun
         })}
       </MutedText>
       <MutedText>{t('truckHealth.nextDue', { amount: number(Math.round(result.nextDue)), unit })}</MutedText>
+      <MarkAsDoneAction t={t} onPress={() => onMarkDone(result)} />
     </Card>
   );
 }
@@ -88,6 +112,8 @@ export default function TruckHealth() {
   const { number } = formatters;
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { session } = useAuth();
+  const userId = session?.user.id;
   const { activeTruckId, loading: activeTruckLoading } = useActiveTruck();
 
   const trucksQuery = useTrucksList();
@@ -98,6 +124,7 @@ export default function TruckHealth() {
   const healthConfigQuery = useTruckHealthConfig(activeTruckId);
   const updateTruck = useUpdateTruck();
   const updateInterval = useUpdateMaintenanceInterval();
+  const insertMaintenanceRecord = useInsertMaintenanceRecord();
 
   const [refreshing, setRefreshing] = useState(false);
   const [editingIntervals, setEditingIntervals] = useState(false);
@@ -107,6 +134,13 @@ export default function TruckHealth() {
   const [odometerDraft, setOdometerDraft] = useState('');
   const [savingOdometer, setSavingOdometer] = useState(false);
   const [notifStatus, setNotifStatus] = useState<NotificationPermissionStatus | null>(null);
+
+  const [markingDone, setMarkingDone] = useState<HealthResult | null>(null);
+  const [markDoneDate, setMarkDoneDate] = useState('');
+  const [markDoneReading, setMarkDoneReading] = useState('');
+  const [markDoneCost, setMarkDoneCost] = useState('0');
+  const [markDoneNote, setMarkDoneNote] = useState('');
+  const [markDoneSaving, setMarkDoneSaving] = useState(false);
 
   useEffect(() => {
     getNotificationPermissionStatus().then(setNotifStatus);
@@ -227,6 +261,67 @@ export default function TruckHealth() {
     }
   }
 
+  // "Mark as Done" (owner decision) — maintenance performed WITHOUT an
+  // invoice (e.g. self-performed chassis lube on the road). Creates a
+  // normal maintenance_records row for this category with no document
+  // attached; calcTruckHealth() already resets a category's interval off
+  // the highest-odometer/hours maintenance_records row per service_type
+  // (src/truck/health.ts buildBaselines()), so no separate "reset" step is
+  // needed here — inserting the record IS the reset, identical to an
+  // invoiced record. Cost defaults to 0 (free self-service still resets
+  // the interval); a non-zero cost flows into Maintenance & Repairs
+  // expenses the same way any other maintenance_records row does.
+  function openMarkDone(result: HealthResult) {
+    setMarkingDone(result);
+    setMarkDoneDate(new Date().toISOString().slice(0, 10));
+    setMarkDoneReading(String(result.trackingMode === 'hours' ? truck?.apu_hours ?? 0 : truck?.current_odometer ?? 0));
+    setMarkDoneCost('0');
+    setMarkDoneNote('');
+  }
+
+  function closeMarkDone() {
+    setMarkingDone(null);
+  }
+
+  async function handleConfirmMarkDone() {
+    if (!markingDone || !truck || !userId) return;
+    const isHours = markingDone.trackingMode === 'hours';
+    const reading = Number(markDoneReading) || 0;
+    const cost = Number(markDoneCost) || 0;
+    setMarkDoneSaving(true);
+    try {
+      await insertMaintenanceRecord.mutateAsync({
+        user_id: userId,
+        truck_id: truck.id,
+        service_date: markDoneDate || new Date().toISOString().slice(0, 10),
+        service_type: markingDone.category,
+        odometer: isHours ? null : reading || null,
+        engine_hours: isHours ? reading || null : null,
+        cost,
+        description: markDoneNote || null,
+      });
+
+      // Same "latest reading from any source drives next-due math" rule
+      // as maintenance.tsx's manual-add form — only bumps the truck's
+      // tracked reading upward, never down.
+      const truckUpdates: { current_odometer?: number; apu_hours?: number } = {};
+      if (!isHours && reading > (truck.current_odometer ?? 0)) truckUpdates.current_odometer = reading;
+      if (isHours && reading > (truck.apu_hours ?? 0)) truckUpdates.apu_hours = reading;
+      if (Object.keys(truckUpdates).length > 0) await updateTruck.mutateAsync({ id: truck.id, values: truckUpdates });
+
+      await Promise.all([
+        invalidateFinancialData(queryClient),
+        queryClient.invalidateQueries({ queryKey: ['trucks'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['maintenance_intervals'], refetchType: 'all' }),
+      ]);
+      setMarkingDone(null);
+    } catch (err) {
+      Alert.alert(t('truckHealth.markDoneFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setMarkDoneSaving(false);
+    }
+  }
+
   const isLoading = activeTruckLoading || trucksQuery.isLoading;
 
   return (
@@ -277,7 +372,7 @@ export default function TruckHealth() {
                 <MutedText>{t('truckHealth.noIntervals')}</MutedText>
               </Card>
             ) : (
-              results.map((r) => <CategoryCard key={r.category} result={r} t={t} formatters={formatters} />)
+              results.map((r) => <CategoryCard key={r.category} result={r} t={t} formatters={formatters} onMarkDone={openMarkDone} />)
             )}
           </>
         )}
@@ -333,6 +428,33 @@ export default function TruckHealth() {
         <Field keyboardType="numeric" value={odometerDraft} onChangeText={setOdometerDraft} placeholder="0" />
         <PrimaryButton title={t('common.save')} onPress={handleSaveOdometer} loading={savingOdometer} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setEditingOdometer(false)} />
+      </ModalSheet>
+
+      <ModalSheet visible={!!markingDone} onClose={closeMarkDone}>
+        {markingDone && (
+          <>
+            <SheetTitle>
+              {t('truckHealth.markDoneTitle', { label: t(`truckHealth.categories.${markingDone.category}`) })}
+            </SheetTitle>
+
+            <MutedText>{t('truckHealth.markDoneDateLabel')}</MutedText>
+            <Field value={markDoneDate} onChangeText={setMarkDoneDate} placeholder="YYYY-MM-DD" />
+
+            <MutedText>
+              {markingDone.trackingMode === 'hours' ? t('truckHealth.markDoneHoursLabel') : t('truckHealth.markDoneOdometerLabel')}
+            </MutedText>
+            <Field keyboardType="numeric" value={markDoneReading} onChangeText={setMarkDoneReading} placeholder="0" />
+
+            <MutedText>{t('truckHealth.markDoneCostLabel')}</MutedText>
+            <Field keyboardType="numeric" value={markDoneCost} onChangeText={setMarkDoneCost} placeholder="0.00" />
+
+            <MutedText>{t('truckHealth.markDoneNoteLabel')}</MutedText>
+            <Field value={markDoneNote} onChangeText={setMarkDoneNote} placeholder={t('truckHealth.markDoneNotePlaceholder')} />
+
+            <PrimaryButton title={`✅ ${t('truckHealth.markDoneConfirm')}`} onPress={handleConfirmMarkDone} loading={markDoneSaving} />
+            <SecondaryButton title={t('common.cancel')} onPress={closeMarkDone} />
+          </>
+        )}
       </ModalSheet>
     </Screen>
   );

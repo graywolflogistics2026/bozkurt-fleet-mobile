@@ -399,7 +399,17 @@
     "notifDueSoonTitle": "Unit {{unit}}: {{label}} due soon",
     "notifDueSoonBody": "{{label}} is due in {{amount}} {{unit}}.",
     "notifOverdueTitle": "Unit {{unit}}: {{label}} overdue",
-    "notifOverdueBody": "{{label}} is overdue by {{amount}} {{unit}}."
+    "notifOverdueBody": "{{label}} is overdue by {{amount}} {{unit}}.",
+    "markAsDone": "Mark as Done",
+    "markDoneTitle": "Mark {{label}} as Done",
+    "markDoneDateLabel": "Date",
+    "markDoneOdometerLabel": "Odometer",
+    "markDoneHoursLabel": "Engine Hours",
+    "markDoneCostLabel": "Cost (optional)",
+    "markDoneNoteLabel": "Note (optional)",
+    "markDoneNotePlaceholder": "e.g. Self-performed on the road",
+    "markDoneConfirm": "Confirm",
+    "markDoneFailedTitle": "Could not save"
   },
   "maintenance": {
     "title": "Maintenance",

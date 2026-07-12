@@ -399,7 +399,17 @@
     "notifDueSoonTitle": "الوحدة {{unit}}: {{label}} قريب الاستحقاق",
     "notifDueSoonBody": "{{label}} مستحق خلال {{amount}} {{unit}}.",
     "notifOverdueTitle": "الوحدة {{unit}}: {{label}} متأخر",
-    "notifOverdueBody": "{{label}} متأخر بمقدار {{amount}} {{unit}}."
+    "notifOverdueBody": "{{label}} متأخر بمقدار {{amount}} {{unit}}.",
+    "markAsDone": "وضع علامة كمنجز",
+    "markDoneTitle": "وضع علامة على {{label}} كمنجز",
+    "markDoneDateLabel": "التاريخ",
+    "markDoneOdometerLabel": "عداد المسافة",
+    "markDoneHoursLabel": "ساعات المحرك",
+    "markDoneCostLabel": "التكلفة (اختياري)",
+    "markDoneNoteLabel": "ملاحظة (اختياري)",
+    "markDoneNotePlaceholder": "مثال: تم تنفيذه ذاتيًا على الطريق",
+    "markDoneConfirm": "تأكيد",
+    "markDoneFailedTitle": "تعذر الحفظ"
   },
   "maintenance": {
     "title": "الصيانة",

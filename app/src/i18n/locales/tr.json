@@ -399,7 +399,17 @@
     "notifDueSoonTitle": "Ünite {{unit}}: {{label}} yaklaşıyor",
     "notifDueSoonBody": "{{label}} için {{amount}} {{unit}} kaldı.",
     "notifOverdueTitle": "Ünite {{unit}}: {{label}} gecikti",
-    "notifOverdueBody": "{{label}} {{amount}} {{unit}} gecikmiş durumda."
+    "notifOverdueBody": "{{label}} {{amount}} {{unit}} gecikmiş durumda.",
+    "markAsDone": "Yapıldı Olarak İşaretle",
+    "markDoneTitle": "{{label}} için Yapıldı Olarak İşaretle",
+    "markDoneDateLabel": "Tarih",
+    "markDoneOdometerLabel": "Kilometre",
+    "markDoneHoursLabel": "Motor Saati",
+    "markDoneCostLabel": "Maliyet (opsiyonel)",
+    "markDoneNoteLabel": "Not (opsiyonel)",
+    "markDoneNotePlaceholder": "örn. Yolda kendim yaptım",
+    "markDoneConfirm": "Onayla",
+    "markDoneFailedTitle": "Kaydedilemedi"
   },
   "maintenance": {
     "title": "Bakım",

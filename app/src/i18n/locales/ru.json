@@ -399,7 +399,17 @@
     "notifDueSoonTitle": "Юнит {{unit}}: {{label}} скоро срок",
     "notifDueSoonBody": "{{label}} наступит через {{amount}} {{unit}}.",
     "notifOverdueTitle": "Юнит {{unit}}: {{label}} просрочено",
-    "notifOverdueBody": "{{label}} просрочено на {{amount}} {{unit}}."
+    "notifOverdueBody": "{{label}} просрочено на {{amount}} {{unit}}.",
+    "markAsDone": "Отметить выполненным",
+    "markDoneTitle": "Отметить «{{label}}» выполненным",
+    "markDoneDateLabel": "Дата",
+    "markDoneOdometerLabel": "Одометр",
+    "markDoneHoursLabel": "Моточасы",
+    "markDoneCostLabel": "Стоимость (необязательно)",
+    "markDoneNoteLabel": "Заметка (необязательно)",
+    "markDoneNotePlaceholder": "напр. Выполнено самостоятельно в дороге",
+    "markDoneConfirm": "Подтвердить",
+    "markDoneFailedTitle": "Не удалось сохранить"
   },
   "maintenance": {
     "title": "Обслуживание",
