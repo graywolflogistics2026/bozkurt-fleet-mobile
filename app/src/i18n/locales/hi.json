@@ -41,6 +41,8 @@
     "assetRegister": "Asset Register",
     "operatingPnl": "Operating P&L",
     "profitAnalysis": "Profit Analysis",
+    "ceoMode": "CEO Mode",
+    "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
     "compliance": "Compliance Tracker"
@@ -345,6 +347,8 @@
     "assetRegister": "Asset Register",
     "operatingPnl": "Operating P&L",
     "profitAnalysis": "Profit Analysis",
+    "ceoMode": "CEO Mode",
+    "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
     "compliance": "Compliance Tracker"
@@ -427,6 +431,10 @@
     "saveFailedTitle": "Save failed",
     "deleteConfirmTitle": "Delete this maintenance record?",
     "deleteFailedTitle": "Delete failed",
+    "aiInsightsTitle": "Maintenance Pattern Insights",
+    "aiInsightsNotAMechanic": "Not a mechanic — informational only. General information, not professional advice.",
+    "askAiPatterns": "🔍 Look for Patterns",
+    "aiFailed": "Could not get insights right now",
     "types": {
       "oil": "Oil & Filter",
       "fuel": "Fuel Filter",
@@ -1090,5 +1098,33 @@
     "notifDueSoonTitle": "{{label}} due soon",
     "notifOverdueBody": "{{label}} was due {{date}}.",
     "notifDueSoonBody": "{{label}} is due {{date}}."
+  },
+  "ceoMode": {
+    "title": "CEO Mode",
+    "subtitle": "Your weekly business briefing, composed from your own data.",
+    "saveFailedTitle": "Could not save",
+    "thisWeekRevenue": "This Week's Revenue",
+    "thisWeekProfit": "This Week's Profit",
+    "weeklyGoalTitle": "Weekly Profit Goal",
+    "currentGoal": "Goal: {{amount}}",
+    "ofGoal": "of goal",
+    "noGoalSet": "No goal set yet.",
+    "goalPlaceholder": "e.g. 2000",
+    "saveGoal": "Save Goal",
+    "statusTitle": "Status",
+    "needsReview": "Receipts needing review",
+    "maintenanceDue": "Maintenance due soon/overdue",
+    "complianceDue": "Compliance items due soon/overdue",
+    "briefingTitle": "Your Briefing",
+    "getBriefing": "Get My Briefing",
+    "briefingFailed": "Could not get your briefing right now"
+  },
+  "aiAdvisor": {
+    "title": "AI Advisor",
+    "subtitle": "Ask anything about your business — answers use your own account data.",
+    "empty": "Ask a question to get started, e.g. \"How can I improve my profit per mile?\"",
+    "failedTitle": "Could not reach the advisor",
+    "inputPlaceholder": "Ask a question...",
+    "send": "Send"
   }
 }

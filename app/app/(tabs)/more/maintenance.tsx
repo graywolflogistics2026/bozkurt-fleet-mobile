@@ -9,10 +9,12 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
 import { MAINTENANCE_TYPES, MAINTENANCE_TYPE_ICON, type MaintenanceType } from '@/src/truck/categories';
+import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { MaintenanceRecord } from '@/src/types/db';
+import i18n from '@/src/i18n';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -82,6 +84,9 @@ export default function Maintenance() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<MaintenanceRecord | null>(null);
   const [editForm, setEditForm] = useState<FormState>(emptyForm());
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const rows = useMemo(
     () => [...(recordsQuery.data ?? [])].sort((a, b) => new Date(b.service_date ?? 0).getTime() - new Date(a.service_date ?? 0).getTime()),
@@ -91,6 +96,46 @@ export default function Maintenance() {
     const total = rows.reduce((a, x) => a + (x.cost ?? 0), 0);
     return { total };
   }, [rows]);
+
+  // Maintenance Pattern Insights v1 (PROMPTS.md Session 9b item 11, owner
+  // decision 2026-07-10 — AI feature package): same "compose a rich prompt
+  // client-side, send to the generic ai-advisor Edge Function" pattern as
+  // Profit Analysis/CEO Mode — a per-type occurrence-and-cost summary
+  // (not every individual record) keeps the prompt compact regardless of
+  // how much history a truck has.
+  async function handleAskAiPatterns() {
+    setAiLoading(true);
+    setAiError(null);
+    setAiAnswer(null);
+    try {
+      const byType = new Map<string, { count: number; totalCost: number }>();
+      for (const r of rows) {
+        const key = r.service_type ?? 'general';
+        const entry = byType.get(key) ?? { count: 0, totalCost: 0 };
+        entry.count += 1;
+        entry.totalCost += Number(r.cost ?? 0);
+        byType.set(key, entry);
+      }
+      const summary = [...byType.entries()]
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([type, { count, totalCost }]) => `${type}: ${count}x, ${money(totalCost)} total`)
+        .join('; ');
+      const prompt =
+        `Here is this truck's maintenance history summary (${rows.length} records total): ${summary || 'no records yet'}. ` +
+        'Look for recurring patterns that might indicate a root cause worth investigating (e.g. repeated tire/brake/suspension work suggesting an alignment issue). ' +
+        'Give 1-3 short, specific observations. If there is not enough data for a pattern, say so plainly.';
+      const result = await callAiAdvisor([{ role: 'user', content: prompt }], i18n.language);
+      if (result.error) {
+        setAiError(result.error.message || t('maintenance.aiFailed'));
+      } else {
+        setAiAnswer(result.data ?? null);
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : t('maintenance.aiFailed'));
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   async function onRefresh() {
     setRefreshing(true);
@@ -330,6 +375,25 @@ export default function Maintenance() {
         )}
 
         <PrimaryButton title={t('maintenance.addRecord')} onPress={() => setShowAddForm(true)} />
+
+        {rows.length > 0 && (
+          <>
+            <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '700', marginTop: spacing.md, marginBottom: spacing.xs }}>
+              {t('maintenance.aiInsightsTitle')}
+            </Text>
+            <MutedText>{t('maintenance.aiInsightsNotAMechanic')}</MutedText>
+            <Card>
+              <PrimaryButton title={t('maintenance.askAiPatterns')} onPress={handleAskAiPatterns} loading={aiLoading} />
+              {aiAnswer && (
+                <>
+                  <Text style={{ color: colors.text, marginTop: spacing.sm, lineHeight: 20 }}>{aiAnswer}</Text>
+                  <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
+                </>
+              )}
+              {aiError && <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>{aiError}</MutedText>}
+            </Card>
+          </>
+        )}
       </ScrollView>
 
       <ModalSheet visible={showAddForm} onClose={() => setShowAddForm(false)}>

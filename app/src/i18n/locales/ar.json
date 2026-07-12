@@ -41,6 +41,8 @@
     "assetRegister": "سجل الأصول",
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
+    "ceoMode": "وضع الرئيس التنفيذي",
+    "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
     "compliance": "متتبع الامتثال"
@@ -345,6 +347,8 @@
     "assetRegister": "سجل الأصول",
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
+    "ceoMode": "وضع الرئيس التنفيذي",
+    "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
     "compliance": "متتبع الامتثال"
@@ -427,6 +431,10 @@
     "saveFailedTitle": "فشل الحفظ",
     "deleteConfirmTitle": "حذف سجل الصيانة هذا؟",
     "deleteFailedTitle": "فشل الحذف",
+    "aiInsightsTitle": "تحليل أنماط الصيانة",
+    "aiInsightsNotAMechanic": "لسنا ميكانيكيًا — لأغراض إعلامية فقط. معلومات عامة، وليست نصيحة احترافية.",
+    "askAiPatterns": "🔍 البحث عن الأنماط",
+    "aiFailed": "تعذر الحصول على الرؤى الآن",
     "types": {
       "oil": "الزيت والفلتر",
       "fuel": "فلتر الوقود",
@@ -1090,5 +1098,33 @@
     "notifDueSoonTitle": "{{label}} يستحق قريبًا",
     "notifOverdueBody": "كان موعد {{label}} في {{date}}.",
     "notifDueSoonBody": "يستحق {{label}} في {{date}}."
+  },
+  "ceoMode": {
+    "title": "وضع الرئيس التنفيذي",
+    "subtitle": "تقريرك الأسبوعي عن العمل، مُعد من بياناتك الخاصة.",
+    "saveFailedTitle": "تعذر الحفظ",
+    "thisWeekRevenue": "إيرادات هذا الأسبوع",
+    "thisWeekProfit": "أرباح هذا الأسبوع",
+    "weeklyGoalTitle": "هدف الربح الأسبوعي",
+    "currentGoal": "الهدف: {{amount}}",
+    "ofGoal": "من الهدف",
+    "noGoalSet": "لم يتم تحديد هدف بعد.",
+    "goalPlaceholder": "مثال: 2000",
+    "saveGoal": "حفظ الهدف",
+    "statusTitle": "الحالة",
+    "needsReview": "إيصالات بحاجة إلى مراجعة",
+    "maintenanceDue": "صيانة مستحقة قريبًا/متأخرة",
+    "complianceDue": "عناصر امتثال مستحقة قريبًا/متأخرة",
+    "briefingTitle": "تقريرك",
+    "getBriefing": "احصل على تقريري",
+    "briefingFailed": "تعذر الحصول على تقريرك الآن"
+  },
+  "aiAdvisor": {
+    "title": "المستشار الذكي",
+    "subtitle": "اسأل أي شيء عن عملك — تستخدم الإجابات بيانات حسابك الخاص.",
+    "empty": "اطرح سؤالاً للبدء، مثال: \"كيف يمكنني تحسين ربحي لكل ميل؟\"",
+    "failedTitle": "تعذر الوصول إلى المستشار",
+    "inputPlaceholder": "اطرح سؤالاً...",
+    "send": "إرسال"
   }
 }

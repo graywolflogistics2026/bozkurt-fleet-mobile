@@ -1,0 +1,256 @@
+import { useMemo, useState } from 'react';
+import { Alert, ScrollView, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { useSettlements } from '@/src/data/settlements';
+import { useDeductions } from '@/src/data/deductions';
+import { useDocuments } from '@/src/data/documents';
+import { useComplianceItems } from '@/src/data/complianceItems';
+import { useProfile, useUpdateProfile } from '@/src/data/profile';
+import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { useTrucksList } from '@/src/data/trucks';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
+import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
+import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
+import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
+import { calcComplianceStatus } from '@/src/compliance/status';
+import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
+import { useFormatters } from '@/src/i18n/format';
+import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButton } from '@/src/components/ui';
+import { colors, spacing, typography } from '@/src/theme';
+import i18n from '@/src/i18n';
+
+// CEO Mode — Daily/Weekly Briefing v1 (PROMPTS.md Session 9b item 10,
+// CLAUDE.md invariant #22 — composed ONLY from this account's own data,
+// no live external feeds). Follows the exact same pattern Profit
+// Analysis (Session 9a) already established: build a rich, data-filled
+// prompt client-side, send it as one 'user' message to the generic
+// ai-advisor Edge Function (no server-side changes needed), render the
+// reply with the standard disclaimer footer.
+export default function CeoMode() {
+  const { t } = useTranslation();
+  const { money, number } = useFormatters();
+  const settlementsQuery = useSettlements();
+  const deductionsQuery = useDeductions();
+  const documentsQuery = useDocuments();
+  const complianceQuery = useComplianceItems();
+  const profileQuery = useProfile();
+  const updateProfile = useUpdateProfile();
+  const { activeTruckId } = useActiveTruck();
+  const trucksQuery = useTrucksList();
+  const recordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
+  const intervalsQuery = useMaintenanceIntervals(activeTruckId);
+  const healthConfigQuery = useTruckHealthConfig(activeTruckId);
+
+  const [goalInput, setGoalInput] = useState('');
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadingData =
+    settlementsQuery.isLoading || deductionsQuery.isLoading || documentsQuery.isLoading || complianceQuery.isLoading || profileQuery.isLoading;
+
+  const weeklyTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
+  const latestWeek = weeklyTrend[weeklyTrend.length - 1] ?? null;
+
+  const weeklyGoal = profileQuery.data?.weekly_goal ?? null;
+  const goalProgressPct = weeklyGoal && weeklyGoal > 0 && latestWeek ? (latestWeek.net / weeklyGoal) * 100 : null;
+
+  // NEEDS-REVIEW count (CLAUDE.md invariant #14): deduction descriptions
+  // get prefixed "NEEDS REVIEW: " for low-confidence/docType:'other'
+  // extractions — counting that prefix directly is simpler and just as
+  // accurate as re-deriving confidence, since the prefix IS the flag.
+  const needsReviewCount = useMemo(
+    () => (deductionsQuery.data ?? []).filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:')).length,
+    [deductionsQuery.data]
+  );
+
+  // Tax opportunity hint: archived documents that never resolved past the
+  // generic 'other' docType (CLAUDE.md invariant #14) — the same
+  // population needs-review deductions come from, but this also counts
+  // documents that were archived without becoming a deduction at all.
+  const unresolvedOtherDocs = useMemo(() => (documentsQuery.data ?? []).filter((d) => d.doc_type === 'other').length, [documentsQuery.data]);
+
+  const complianceDueSoonCount = useMemo(
+    () => (complianceQuery.data ?? []).filter((item) => calcComplianceStatus(item.due_date).urgency !== 'ok').length,
+    [complianceQuery.data]
+  );
+
+  // Maintenance orange/red count, scoped to the active truck — same
+  // truck-scoping convention as every other Dashboard stat (CLAUDE.md
+  // invariant #7: a single-truck account is just the n=1 presentation of
+  // the same fleet-wide logic; a fleet-wide CEO briefing still reads
+  // through whichever truck is currently active, same as the Dashboard).
+  const truck = useMemo(() => trucksQuery.data?.find((tr) => tr.id === activeTruckId) ?? null, [trucksQuery.data, activeTruckId]);
+  const maintenanceAlertCount = useMemo(() => {
+    if (!truck || !intervalsQuery.data) return 0;
+    const intervals = intervalsQuery.data.map((iv) => ({
+      category: iv.category,
+      trackingMode: iv.tracking_mode,
+      intervalMiles: iv.interval_miles,
+      intervalHours: iv.interval_hours,
+      bundledWithCategory: iv.bundled_with_category,
+      enabled: iv.enabled,
+    }));
+    const records = (recordsQuery.data ?? []).map((r) => ({
+      serviceType: r.service_type,
+      odometer: r.odometer,
+      engineHours: r.engine_hours,
+      serviceDate: r.service_date,
+    }));
+    const overrides = (healthConfigQuery.data?.overrides ?? {}) as HealthOverrides;
+    const results = calcTruckHealth(intervals, records, truck.current_odometer ?? 0, truck.apu_hours ?? 0, overrides);
+    return results.filter((r) => r.status === 'due_soon' || r.status === 'overdue').length;
+  }, [truck, intervalsQuery.data, recordsQuery.data, healthConfigQuery.data]);
+
+  async function handleSaveGoal() {
+    const value = Number(goalInput);
+    if (!value || value <= 0) return;
+    setGoalSaving(true);
+    try {
+      await updateProfile.mutateAsync({ weekly_goal: value });
+    } catch (err) {
+      Alert.alert(t('ceoMode.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setGoalSaving(false);
+    }
+  }
+
+  async function handleGetBriefing() {
+    setLoading(true);
+    setError(null);
+    setBriefing(null);
+    try {
+      const parts = [
+        'Give me my weekly business briefing as a friendly, encouraging CEO coach would.',
+        latestWeek ? `This week's revenue: ${money(latestWeek.gross)}, profit: ${money(latestWeek.net)}.` : 'No settlements recorded yet this week.',
+        goalProgressPct != null ? `Weekly profit goal: ${money(weeklyGoal ?? 0)} — currently at ${goalProgressPct.toFixed(0)}% of goal.` : '',
+        needsReviewCount > 0 ? `${needsReviewCount} receipt(s) flagged NEEDS REVIEW and waiting on a decision.` : 'No receipts waiting on review.',
+        maintenanceAlertCount > 0 ? `${maintenanceAlertCount} maintenance item(s) due soon or overdue on the active truck.` : 'No maintenance items due soon.',
+        complianceDueSoonCount > 0 ? `${complianceDueSoonCount} compliance item(s) (DOT/IRP/insurance/etc.) due soon or overdue.` : 'No compliance items due soon.',
+        unresolvedOtherDocs > 0 ? `${unresolvedOtherDocs} imported document(s) never got sorted into a real category — possible missed deductions.` : '',
+        'Give 2-4 short, specific, encouraging observations and next actions. Keep it upbeat but honest.',
+      ].filter(Boolean);
+      const result = await callAiAdvisor([{ role: 'user', content: parts.join(' ') }], i18n.language);
+      if (result.error) {
+        setError(result.error.message || t('ceoMode.briefingFailed'));
+      } else {
+        setBriefing(result.data ?? null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('ceoMode.briefingFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <ScreenTitle>{t('ceoMode.title')}</ScreenTitle>
+        <MutedText>{t('ceoMode.subtitle')}</MutedText>
+
+        {loadingData ? (
+          <Card>
+            <MutedText>{t('common.loading')}</MutedText>
+          </Card>
+        ) : (
+          <>
+            <Card>
+              <View style={styles.statRow}>
+                <View style={styles.statCell}>
+                  <MutedText>{t('ceoMode.thisWeekRevenue')}</MutedText>
+                  <Text style={[styles.statValue, { color: colors.green }]}>{latestWeek ? money(latestWeek.gross) : '—'}</Text>
+                </View>
+                <View style={styles.statCell}>
+                  <MutedText>{t('ceoMode.thisWeekProfit')}</MutedText>
+                  <Text style={[styles.statValue, { color: colors.green }]}>{latestWeek ? money(latestWeek.net) : '—'}</Text>
+                </View>
+              </View>
+            </Card>
+
+            <Text style={styles.sectionTitle}>{t('ceoMode.weeklyGoalTitle')}</Text>
+            <Card>
+              {weeklyGoal != null ? (
+                <>
+                  <MutedText>{t('ceoMode.currentGoal', { amount: money(weeklyGoal) })}</MutedText>
+                  {goalProgressPct != null && (
+                    <Text style={{ color: goalProgressPct >= 100 ? colors.green : colors.text, fontWeight: '700', fontSize: typography.size.lg, marginTop: 2 }}>
+                      {goalProgressPct.toFixed(0)}% {t('ceoMode.ofGoal')}
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <MutedText>{t('ceoMode.noGoalSet')}</MutedText>
+              )}
+              <Field keyboardType="numeric" value={goalInput} onChangeText={setGoalInput} placeholder={t('ceoMode.goalPlaceholder')} />
+              <PrimaryButton title={t('ceoMode.saveGoal')} onPress={handleSaveGoal} loading={goalSaving} disabled={!goalInput} />
+            </Card>
+
+            <Text style={styles.sectionTitle}>{t('ceoMode.statusTitle')}</Text>
+            <Card>
+              <View style={styles.row}>
+                <MutedText>{t('ceoMode.needsReview')}</MutedText>
+                <Text style={{ color: needsReviewCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(needsReviewCount)}</Text>
+              </View>
+              <View style={[styles.row, styles.rowBorder]}>
+                <MutedText>{t('ceoMode.maintenanceDue')}</MutedText>
+                <Text style={{ color: maintenanceAlertCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(maintenanceAlertCount)}</Text>
+              </View>
+              <View style={[styles.row, styles.rowBorder]}>
+                <MutedText>{t('ceoMode.complianceDue')}</MutedText>
+                <Text style={{ color: complianceDueSoonCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(complianceDueSoonCount)}</Text>
+              </View>
+            </Card>
+
+            <Text style={styles.sectionTitle}>{t('ceoMode.briefingTitle')}</Text>
+            <Card>
+              <PrimaryButton title={`🐺 ${t('ceoMode.getBriefing')}`} onPress={handleGetBriefing} loading={loading} />
+              {briefing && (
+                <>
+                  <Text style={{ color: colors.text, marginTop: spacing.sm, lineHeight: 20 }}>{briefing}</Text>
+                  <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
+                </>
+              )}
+              {error && <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>{error}</MutedText>}
+            </Card>
+            <LegalFootnote />
+          </>
+        )}
+      </ScrollView>
+    </Screen>
+  );
+}
+
+const styles = {
+  sectionTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: '700' as const,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  statRow: {
+    flexDirection: 'row' as const,
+    gap: spacing.sm,
+  },
+  statCell: {
+    flex: 1,
+  },
+  statValue: {
+    fontSize: typography.size.lg,
+    fontWeight: '700' as const,
+    marginTop: 2,
+  },
+  row: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingVertical: spacing.sm,
+  },
+  rowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+};

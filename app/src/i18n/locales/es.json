@@ -41,6 +41,8 @@
     "assetRegister": "Registro de Activos",
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
+    "ceoMode": "Modo CEO",
+    "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
     "compliance": "Seguimiento de Cumplimiento"
@@ -345,6 +347,8 @@
     "assetRegister": "Registro de Activos",
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
+    "ceoMode": "Modo CEO",
+    "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
     "compliance": "Seguimiento de Cumplimiento"
@@ -427,6 +431,10 @@
     "saveFailedTitle": "Error al guardar",
     "deleteConfirmTitle": "¿Eliminar este registro de mantenimiento?",
     "deleteFailedTitle": "Error al eliminar",
+    "aiInsightsTitle": "Análisis de Patrones de Mantenimiento",
+    "aiInsightsNotAMechanic": "No es un mecánico — solo informativo. Información general, no un consejo profesional.",
+    "askAiPatterns": "🔍 Buscar Patrones",
+    "aiFailed": "No se pudieron obtener recomendaciones en este momento",
     "types": {
       "oil": "Aceite y Filtro",
       "fuel": "Filtro de Combustible",
@@ -1090,5 +1098,33 @@
     "notifDueSoonTitle": "{{label}} vence pronto",
     "notifOverdueBody": "{{label}} venció el {{date}}.",
     "notifDueSoonBody": "{{label}} vence el {{date}}."
+  },
+  "ceoMode": {
+    "title": "Modo CEO",
+    "subtitle": "Tu informe semanal del negocio, compuesto a partir de tus propios datos.",
+    "saveFailedTitle": "No se pudo guardar",
+    "thisWeekRevenue": "Ingresos de Esta Semana",
+    "thisWeekProfit": "Ganancia de Esta Semana",
+    "weeklyGoalTitle": "Meta de Ganancia Semanal",
+    "currentGoal": "Meta: {{amount}}",
+    "ofGoal": "de la meta",
+    "noGoalSet": "Aún no hay meta establecida.",
+    "goalPlaceholder": "ej. 2000",
+    "saveGoal": "Guardar Meta",
+    "statusTitle": "Estado",
+    "needsReview": "Recibos que necesitan revisión",
+    "maintenanceDue": "Mantenimiento próximo/vencido",
+    "complianceDue": "Elementos de cumplimiento próximos/vencidos",
+    "briefingTitle": "Tu Informe",
+    "getBriefing": "Obtener Mi Informe",
+    "briefingFailed": "No se pudo obtener tu informe en este momento"
+  },
+  "aiAdvisor": {
+    "title": "Asesor de IA",
+    "subtitle": "Pregunta lo que quieras sobre tu negocio — las respuestas usan los datos de tu propia cuenta.",
+    "empty": "Haz una pregunta para comenzar, ej. \"¿Cómo puedo mejorar mi ganancia por milla?\"",
+    "failedTitle": "No se pudo conectar con el asesor",
+    "inputPlaceholder": "Haz una pregunta...",
+    "send": "Enviar"
   }
 }

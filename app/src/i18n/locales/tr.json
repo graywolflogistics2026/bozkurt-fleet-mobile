@@ -41,6 +41,8 @@
     "assetRegister": "Varlık Kaydı",
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
+    "ceoMode": "CEO Modu",
+    "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
     "compliance": "Uyumluluk Takibi"
@@ -345,6 +347,8 @@
     "assetRegister": "Varlık Kaydı",
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
+    "ceoMode": "CEO Modu",
+    "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
     "compliance": "Uyumluluk Takibi"
@@ -427,6 +431,10 @@
     "saveFailedTitle": "Kaydetme başarısız",
     "deleteConfirmTitle": "Bu bakım kaydı silinsin mi?",
     "deleteFailedTitle": "Silme başarısız",
+    "aiInsightsTitle": "Bakım Örüntü Analizi",
+    "aiInsightsNotAMechanic": "Bir tamirci değil — yalnızca bilgilendirme amaçlıdır. Genel bilgidir, profesyonel tavsiye değildir.",
+    "askAiPatterns": "🔍 Örüntüleri Ara",
+    "aiFailed": "Şu anda öngörü alınamadı",
     "types": {
       "oil": "Yağ ve Filtre",
       "fuel": "Yakıt Filtresi",
@@ -1090,5 +1098,33 @@
     "notifDueSoonTitle": "{{label}} yakında sona eriyor",
     "notifOverdueBody": "{{label}} için son tarih {{date}} idi.",
     "notifDueSoonBody": "{{label}} için son tarih {{date}}."
+  },
+  "ceoMode": {
+    "title": "CEO Modu",
+    "subtitle": "Kendi verilerinizden oluşturulan haftalık iş özetiniz.",
+    "saveFailedTitle": "Kaydedilemedi",
+    "thisWeekRevenue": "Bu Haftanın Geliri",
+    "thisWeekProfit": "Bu Haftanın Kârı",
+    "weeklyGoalTitle": "Haftalık Kâr Hedefi",
+    "currentGoal": "Hedef: {{amount}}",
+    "ofGoal": "hedefin",
+    "noGoalSet": "Henüz hedef belirlenmedi.",
+    "goalPlaceholder": "örn. 2000",
+    "saveGoal": "Hedefi Kaydet",
+    "statusTitle": "Durum",
+    "needsReview": "İncelenmesi gereken makbuzlar",
+    "maintenanceDue": "Yakında/gecikmiş bakım",
+    "complianceDue": "Yakında/gecikmiş uyumluluk öğeleri",
+    "briefingTitle": "Özetiniz",
+    "getBriefing": "Özetimi Al",
+    "briefingFailed": "Şu anda özetiniz alınamadı"
+  },
+  "aiAdvisor": {
+    "title": "Yapay Zeka Danışmanı",
+    "subtitle": "İşiniz hakkında her şeyi sorun — yanıtlar kendi hesap verilerinizi kullanır.",
+    "empty": "Başlamak için bir soru sorun, örn. \"Mil başına kârımı nasıl artırabilirim?\"",
+    "failedTitle": "Danışmana ulaşılamadı",
+    "inputPlaceholder": "Bir soru sorun...",
+    "send": "Gönder"
   }
 }

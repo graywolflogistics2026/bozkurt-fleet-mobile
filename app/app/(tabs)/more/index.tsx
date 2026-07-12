@@ -15,6 +15,8 @@ const MENU_ITEMS = [
   { href: '/(tabs)/more/capital-account', labelKey: 'more.capitalAccount', emoji: '💰' },
   { href: '/(tabs)/more/operating-pnl', labelKey: 'more.operatingPnl', emoji: '📊' },
   { href: '/(tabs)/more/profit-analysis', labelKey: 'more.profitAnalysis', emoji: '📈' },
+  { href: '/(tabs)/more/ceo-mode', labelKey: 'more.ceoMode', emoji: '🐺' },
+  { href: '/(tabs)/more/ai-advisor', labelKey: 'more.aiAdvisor', emoji: '🤖' },
   { href: '/(tabs)/more/share-profit', labelKey: 'more.shareProfit', emoji: '📤' },
   { href: '/(tabs)/more/tax-estimator', labelKey: 'more.taxEstimator', emoji: '🧮' },
   { href: '/(tabs)/more/cash-flow', labelKey: 'more.cashFlow', emoji: '🏦' },

@@ -41,6 +41,8 @@
     "assetRegister": "Реестр активов",
     "operatingPnl": "Операционный P&L",
     "profitAnalysis": "Анализ прибыли",
+    "ceoMode": "Режим CEO",
+    "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
     "dashboardCustomize": "Настроить панель",
     "compliance": "Отслеживание соответствия"
@@ -345,6 +347,8 @@
     "assetRegister": "Реестр активов",
     "operatingPnl": "Операционный P&L",
     "profitAnalysis": "Анализ прибыли",
+    "ceoMode": "Режим CEO",
+    "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
     "dashboardCustomize": "Настроить панель",
     "compliance": "Отслеживание соответствия"
@@ -427,6 +431,10 @@
     "saveFailedTitle": "Не удалось сохранить",
     "deleteConfirmTitle": "Удалить эту запись обслуживания?",
     "deleteFailedTitle": "Не удалось удалить",
+    "aiInsightsTitle": "Анализ закономерностей обслуживания",
+    "aiInsightsNotAMechanic": "Не механик — только информационно. Общая информация, не профессиональный совет.",
+    "askAiPatterns": "🔍 Найти закономерности",
+    "aiFailed": "Не удалось получить рекомендации сейчас",
     "types": {
       "oil": "Масло и Фильтр",
       "fuel": "Топливный Фильтр",
@@ -1090,5 +1098,33 @@
     "notifDueSoonTitle": "{{label}} скоро истекает",
     "notifOverdueBody": "{{label}} должен был быть выполнен {{date}}.",
     "notifDueSoonBody": "{{label}} истекает {{date}}."
+  },
+  "ceoMode": {
+    "title": "Режим CEO",
+    "subtitle": "Ваш еженедельный бизнес-отчёт, составленный на основе ваших собственных данных.",
+    "saveFailedTitle": "Не удалось сохранить",
+    "thisWeekRevenue": "Доход за эту неделю",
+    "thisWeekProfit": "Прибыль за эту неделю",
+    "weeklyGoalTitle": "Еженедельная цель по прибыли",
+    "currentGoal": "Цель: {{amount}}",
+    "ofGoal": "от цели",
+    "noGoalSet": "Цель ещё не установлена.",
+    "goalPlaceholder": "напр. 2000",
+    "saveGoal": "Сохранить цель",
+    "statusTitle": "Статус",
+    "needsReview": "Чеки, требующие проверки",
+    "maintenanceDue": "Обслуживание скоро/просрочено",
+    "complianceDue": "Элементы соответствия скоро/просрочены",
+    "briefingTitle": "Ваш отчёт",
+    "getBriefing": "Получить мой отчёт",
+    "briefingFailed": "Не удалось получить отчёт сейчас"
+  },
+  "aiAdvisor": {
+    "title": "ИИ-советник",
+    "subtitle": "Спрашивайте что угодно о своём бизнесе — ответы используют данные вашего аккаунта.",
+    "empty": "Задайте вопрос, чтобы начать, напр. «Как мне улучшить прибыль на милю?»",
+    "failedTitle": "Не удалось связаться с советником",
+    "inputPlaceholder": "Задайте вопрос...",
+    "send": "Отправить"
   }
 }
