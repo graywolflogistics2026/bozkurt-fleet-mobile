@@ -893,7 +893,8 @@
     "resetToDefault": "Varsayılana Sıfırla",
     "labelPlaceholder": "{{defaultLabel}} (varsayılan)",
     "visible": "Görünür",
-    "hidden": "Gizli"
+    "hidden": "Gizli",
+    "dragHint": "Sıralamak için ☰ simgesine basılı tutup sürükleyin."
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

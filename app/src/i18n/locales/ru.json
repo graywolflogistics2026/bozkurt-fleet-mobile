@@ -893,7 +893,8 @@
     "resetToDefault": "Сбросить по умолчанию",
     "labelPlaceholder": "{{defaultLabel}} (по умолчанию)",
     "visible": "Видимо",
-    "hidden": "Скрыто"
+    "hidden": "Скрыто",
+    "dragHint": "Нажмите и удерживайте ☰, затем перетащите, чтобы изменить порядок."
   },
   "categoryPicker": {
     "newCategory": "Новая категория",

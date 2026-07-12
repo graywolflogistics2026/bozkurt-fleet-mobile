@@ -1,25 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, Text, View } from 'react-native';
+import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
+import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useDashboardLayout, useUpdateDashboardLayout } from '@/src/data/dashboardLayout';
 import { CARD_LABEL_KEYS, type DashboardCardConfig } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
-function move<T>(list: T[], from: number, to: number): T[] {
-  if (to < 0 || to >= list.length) return list;
-  const copy = [...list];
-  const [item] = copy.splice(from, 1);
-  copy.splice(to, 0, item);
-  return copy;
-}
-
-// Reorder affordance is up/down buttons rather than touch-drag: no
-// drag-and-drop library is installed in this project yet (would need
-// react-native-gesture-handler on top of the reanimated already present),
-// and this keeps reordering fully accessible/RTL-safe without adding an
-// unverified native dependency in this pass. Swap for a real drag list
-// later if desired — the persisted shape (ordered array) doesn't change.
+// Drag-and-drop reorder (owner decision — the previous up/down-arrow
+// affordance was too small/tedious on device). react-native-draggable-
+// flatlist (built on the reanimated + react-native-gesture-handler already
+// verified SDK-54-compatible in this pass) replaces it: long-press
+// anywhere on a card lifts it (ScaleDecorator gives the "subtle scale",
+// onDragBegin fires a haptic via expo-haptics), drag to reorder, release
+// to drop. The persisted shape (an ordered array) is unchanged — only the
+// UI affordance for reordering it changed, so useDashboardLayout/
+// useUpdateDashboardLayout and the default-layout/reset behavior below are
+// untouched.
 export default function DashboardCustomize() {
   const { t } = useTranslation();
   const layoutQuery = useDashboardLayout();
@@ -33,17 +31,11 @@ export default function DashboardCustomize() {
 
   const rows = draft ?? [];
 
-  function updateRow(index: number, patch: Partial<DashboardCardConfig>) {
+  function updateRowById(id: string, patch: Partial<DashboardCardConfig>) {
     setDraft((current) => {
       if (!current) return current;
-      const copy = [...current];
-      copy[index] = { ...copy[index], ...patch };
-      return copy;
+      return current.map((row) => (row.id === id ? { ...row, ...patch } : row));
     });
-  }
-
-  function moveRow(index: number, direction: -1 | 1) {
-    setDraft((current) => (current ? move(current, index, index + direction) : current));
   }
 
   async function handleSave() {
@@ -72,115 +64,129 @@ export default function DashboardCustomize() {
     }
   }
 
+  function renderItem({ item, drag, isActive }: RenderItemParams<DashboardCardConfig>) {
+    return (
+      <ScaleDecorator>
+        <CardEditor
+          row={item}
+          drag={drag}
+          isActive={isActive}
+          defaultLabel={t(CARD_LABEL_KEYS[item.id as keyof typeof CARD_LABEL_KEYS] ?? item.id)}
+          onToggleVisible={() => updateRowById(item.id, { visible: !item.visible })}
+          onLabelChange={(label) => updateRowById(item.id, { label: label || null })}
+        />
+      </ScaleDecorator>
+    );
+  }
+
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <ScreenTitle>{t('dashboardCustomize.title')}</ScreenTitle>
-        <MutedText>{t('dashboardCustomize.subtitle')}</MutedText>
-
-        {layoutQuery.isLoading || !draft ? (
-          <Card>
-            <MutedText>{t('common.loading')}</MutedText>
-          </Card>
-        ) : (
-          <Card>
-            {rows.map((row, i) => (
-              <CardEditor
-                key={row.id}
-                row={row}
-                index={i}
-                total={rows.length}
-                defaultLabel={t(CARD_LABEL_KEYS[row.id as keyof typeof CARD_LABEL_KEYS] ?? row.id)}
-                onToggleVisible={() => updateRow(i, { visible: !row.visible })}
-                onLabelChange={(label) => updateRow(i, { label: label || null })}
-                onMoveUp={() => moveRow(i, -1)}
-                onMoveDown={() => moveRow(i, 1)}
-              />
-            ))}
-          </Card>
-        )}
-
-        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSave} loading={saving} disabled={!draft} />
-        <SecondaryButton title={t('dashboardCustomize.resetToDefault')} onPress={handleReset} />
-      </ScrollView>
+      <DraggableFlatList
+        style={{ flex: 1 }}
+        data={rows}
+        keyExtractor={(row) => row.id}
+        renderItem={renderItem}
+        onDragBegin={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        }}
+        onDragEnd={({ data }) => setDraft(data)}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View>
+            <ScreenTitle>{t('dashboardCustomize.title')}</ScreenTitle>
+            <MutedText>{t('dashboardCustomize.subtitle')}</MutedText>
+            <MutedText style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}>
+              {t('dashboardCustomize.dragHint')}
+            </MutedText>
+            {(layoutQuery.isLoading || !draft) && (
+              <Card>
+                <MutedText>{t('common.loading')}</MutedText>
+              </Card>
+            )}
+          </View>
+        }
+        ListFooterComponent={
+          <View>
+            <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSave} loading={saving} disabled={!draft} />
+            <SecondaryButton title={t('dashboardCustomize.resetToDefault')} onPress={handleReset} />
+          </View>
+        }
+      />
     </Screen>
   );
 }
 
 function CardEditor({
   row,
-  index,
-  total,
+  drag,
+  isActive,
   defaultLabel,
   onToggleVisible,
   onLabelChange,
-  onMoveUp,
-  onMoveDown,
 }: {
   row: DashboardCardConfig;
-  index: number;
-  total: number;
+  drag: () => void;
+  isActive: boolean;
   defaultLabel: string;
   onToggleVisible: () => void;
   onLabelChange: (label: string) => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
 }) {
   const { t } = useTranslation();
   return (
-    <View style={[styles.cardRow, index > 0 && styles.rowBorder]}>
-      <View style={styles.reorderButtons}>
-        <Pressable onPress={onMoveUp} disabled={index === 0} hitSlop={8}>
-          <Text style={[styles.reorderArrow, index === 0 && styles.reorderArrowDisabled]}>▲</Text>
-        </Pressable>
-        <Pressable onPress={onMoveDown} disabled={index === total - 1} hitSlop={8}>
-          <Text style={[styles.reorderArrow, index === total - 1 && styles.reorderArrowDisabled]}>▼</Text>
+    <Pressable onLongPress={drag} disabled={isActive} delayLongPress={200}>
+      <View style={[styles.card, isActive && styles.cardActive]}>
+        <View style={styles.grabHandle}>
+          <Text style={styles.grabHandleGlyph}>☰</Text>
+        </View>
+
+        <View style={{ flex: 1, marginStart: spacing.sm }}>
+          <MutedText>{defaultLabel}</MutedText>
+          <Field
+            value={row.label ?? ''}
+            onChangeText={onLabelChange}
+            placeholder={t('dashboardCustomize.labelPlaceholder', { defaultLabel })}
+            style={{ marginTop: spacing.xs, marginBottom: 0 }}
+          />
+        </View>
+
+        <Pressable
+          onPress={onToggleVisible}
+          hitSlop={8}
+          style={[styles.visibilityPill, row.visible ? styles.visibilityOn : styles.visibilityOff]}
+        >
+          <Text style={{ color: colors.text, fontSize: typography.size.xs, fontWeight: '700' }}>
+            {row.visible ? t('dashboardCustomize.visible') : t('dashboardCustomize.hidden')}
+          </Text>
         </Pressable>
       </View>
-
-      <View style={{ flex: 1, marginStart: spacing.sm }}>
-        <MutedText>{defaultLabel}</MutedText>
-        <Field
-          value={row.label ?? ''}
-          onChangeText={onLabelChange}
-          placeholder={t('dashboardCustomize.labelPlaceholder', { defaultLabel })}
-          style={{ marginTop: spacing.xs, marginBottom: 0 }}
-        />
-      </View>
-
-      <Pressable
-        onPress={onToggleVisible}
-        hitSlop={8}
-        style={[styles.visibilityPill, row.visible ? styles.visibilityOn : styles.visibilityOff]}
-      >
-        <Text style={{ color: colors.text, fontSize: typography.size.xs, fontWeight: '700' }}>
-          {row.visible ? t('dashboardCustomize.visible') : t('dashboardCustomize.hidden')}
-        </Text>
-      </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = {
-  cardRow: {
+  card: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingVertical: spacing.sm,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
   },
-  rowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  cardActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.card2,
   },
-  reorderButtons: {
+  grabHandle: {
+    width: 44,
+    height: 44,
     alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
-  reorderArrow: {
-    color: colors.accent,
-    fontSize: typography.size.sm,
-    paddingVertical: 2,
-  },
-  reorderArrowDisabled: {
-    color: colors.border,
+  grabHandleGlyph: {
+    color: colors.muted,
+    fontSize: 22,
   },
   visibilityPill: {
     paddingVertical: 6,

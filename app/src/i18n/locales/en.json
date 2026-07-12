@@ -796,7 +796,8 @@
     "resetToDefault": "Reset to Default",
     "labelPlaceholder": "{{defaultLabel}} (default)",
     "visible": "Visible",
-    "hidden": "Hidden"
+    "hidden": "Hidden",
+    "dragHint": "Long-press and drag ☰ to reorder."
   },
   "categoryPicker": {
     "newCategory": "New Category",

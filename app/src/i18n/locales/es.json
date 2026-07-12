@@ -893,7 +893,8 @@
     "resetToDefault": "Restablecer Predeterminado",
     "labelPlaceholder": "{{defaultLabel}} (predeterminado)",
     "visible": "Visible",
-    "hidden": "Oculto"
+    "hidden": "Oculto",
+    "dragHint": "Mantén presionado y arrastra ☰ para reordenar."
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -34,19 +35,21 @@ export default function RootLayout() {
   if (!i18nReady) return <LoadingScreen />;
 
   return (
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{ persister: asyncStoragePersister }}
-    >
-      <SafeAreaProvider>
-        <AuthProvider>
-          <ActiveTruckProvider>
-            <StatusBar style="light" />
-            <RootLayoutNav />
-          </ActiveTruckProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </PersistQueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{ persister: asyncStoragePersister }}
+      >
+        <SafeAreaProvider>
+          <AuthProvider>
+            <ActiveTruckProvider>
+              <StatusBar style="light" />
+              <RootLayoutNav />
+            </ActiveTruckProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </PersistQueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
 

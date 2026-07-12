@@ -893,7 +893,8 @@
     "resetToDefault": "إعادة التعيين إلى الافتراضي",
     "labelPlaceholder": "{{defaultLabel}} (افتراضي)",
     "visible": "ظاهر",
-    "hidden": "مخفي"
+    "hidden": "مخفي",
+    "dragHint": "اضغط مطولاً واسحب ☰ لإعادة الترتيب."
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",
