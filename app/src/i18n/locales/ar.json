@@ -45,7 +45,8 @@
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
-    "compliance": "متتبع الامتثال"
+    "compliance": "متتبع الامتثال",
+    "accountantPackage": "حزمة المحاسب"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -351,7 +352,8 @@
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
-    "compliance": "متتبع الامتثال"
+    "compliance": "متتبع الامتثال",
+    "accountantPackage": "حزمة المحاسب"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1126,5 +1128,25 @@
     "failedTitle": "تعذر الوصول إلى المستشار",
     "inputPlaceholder": "اطرح سؤالاً...",
     "send": "إرسال"
+  },
+  "accountantPackage": {
+    "title": "حزمة المحاسب",
+    "subtitle": "تفصيل حسب فئة Schedule C وملخص الدخل، جاهز لتسليمه إلى محاسبك (CPA).",
+    "scheduleCTitle": "تفصيل Schedule C",
+    "noExpenses": "لا توجد مصروفات مسجلة بعد.",
+    "totalExpenses": "إجمالي المصروفات",
+    "incomeTitle": "دخل آخر",
+    "incomeSubtitle": "بنود دخل settlement بخلاف linehaul/fuel surcharge — المبالغ المستردة تمت مقاصتها بالفعل في فئات المصروفات أعلاه، ولا تُحتسب هنا.",
+    "noOtherIncome": "لا يوجد دخل آخر مسجل.",
+    "totalOtherIncome": "إجمالي الدخل الآخر",
+    "perDiemTitle": "ملخص Per Diem",
+    "perDiemDays": "أيام Per Diem",
+    "perDiemDeduction": "خصم Per Diem",
+    "exportTitle": "تصدير",
+    "exportPdf": "تصدير كملف PDF",
+    "exportJson": "تصدير كملف JSON",
+    "shareNotAvailable": "المشاركة غير متاحة على هذا الجهاز.",
+    "exportFailedTitle": "فشل التصدير",
+    "generatedOn": "تم الإنشاء في {{date}}"
   }
 }

@@ -45,7 +45,8 @@
     "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
-    "compliance": "Seguimiento de Cumplimiento"
+    "compliance": "Seguimiento de Cumplimiento",
+    "accountantPackage": "Paquete para el Contador"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -351,7 +352,8 @@
     "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
-    "compliance": "Seguimiento de Cumplimiento"
+    "compliance": "Seguimiento de Cumplimiento",
+    "accountantPackage": "Paquete para el Contador"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1126,5 +1128,25 @@
     "failedTitle": "No se pudo conectar con el asesor",
     "inputPlaceholder": "Haz una pregunta...",
     "send": "Enviar"
+  },
+  "accountantPackage": {
+    "title": "Paquete para el Contador",
+    "subtitle": "Un desglose por categoría de Schedule C y un resumen de ingresos, listo para entregar a tu CPA.",
+    "scheduleCTitle": "Desglose de Schedule C",
+    "noExpenses": "Aún no hay gastos registrados.",
+    "totalExpenses": "Gastos Totales",
+    "incomeTitle": "Otros Ingresos",
+    "incomeSubtitle": "Líneas de ingreso del settlement además de linehaul/fuel surcharge — los reembolsos ya se netean en las categorías de gastos anteriores, no se cuentan aquí.",
+    "noOtherIncome": "No hay otros ingresos registrados.",
+    "totalOtherIncome": "Total de Otros Ingresos",
+    "perDiemTitle": "Resumen de Per Diem",
+    "perDiemDays": "Días de Per Diem",
+    "perDiemDeduction": "Deducción de Per Diem",
+    "exportTitle": "Exportar",
+    "exportPdf": "Exportar como PDF",
+    "exportJson": "Exportar como JSON",
+    "shareNotAvailable": "Compartir no está disponible en este dispositivo.",
+    "exportFailedTitle": "Error al exportar",
+    "generatedOn": "Generado el {{date}}"
   }
 }

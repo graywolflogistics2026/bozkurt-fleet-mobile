@@ -41,6 +41,7 @@
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
     "compliance": "Compliance Tracker",
+    "accountantPackage": "Accountant Package",
     "taxEstimator": "Tax Estimator",
     "settings": "Settings",
     "importLegacy": "Import Legacy Backup",
@@ -351,6 +352,7 @@
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
     "compliance": "Compliance Tracker",
+    "accountantPackage": "Accountant Package",
     "settings": "Settings"
   },
   "placeholders": {},
@@ -1126,5 +1128,25 @@
     "failedTitle": "Could not reach the advisor",
     "inputPlaceholder": "Ask a question...",
     "send": "Send"
+  },
+  "accountantPackage": {
+    "title": "Accountant Package",
+    "subtitle": "A per-category Schedule C rollup and income summary, ready to hand to your CPA.",
+    "scheduleCTitle": "Schedule C Rollup",
+    "noExpenses": "No expenses recorded yet.",
+    "totalExpenses": "Total Expenses",
+    "incomeTitle": "Other Income",
+    "incomeSubtitle": "Settlement income lines besides linehaul/fuel surcharge — reimbursements are already netted into the expense categories above, not counted here.",
+    "noOtherIncome": "No other income recorded.",
+    "totalOtherIncome": "Total Other Income",
+    "perDiemTitle": "Per Diem Summary",
+    "perDiemDays": "Per Diem Days",
+    "perDiemDeduction": "Per Diem Deduction",
+    "exportTitle": "Export",
+    "exportPdf": "Export as PDF",
+    "exportJson": "Export as JSON",
+    "shareNotAvailable": "Sharing isn't available on this device.",
+    "exportFailedTitle": "Export failed",
+    "generatedOn": "Generated {{date}}"
   }
 }

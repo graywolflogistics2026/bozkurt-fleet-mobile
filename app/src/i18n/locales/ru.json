@@ -45,7 +45,8 @@
     "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
     "dashboardCustomize": "Настроить панель",
-    "compliance": "Отслеживание соответствия"
+    "compliance": "Отслеживание соответствия",
+    "accountantPackage": "Пакет для бухгалтера"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -351,7 +352,8 @@
     "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
     "dashboardCustomize": "Настроить панель",
-    "compliance": "Отслеживание соответствия"
+    "compliance": "Отслеживание соответствия",
+    "accountantPackage": "Пакет для бухгалтера"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1126,5 +1128,25 @@
     "failedTitle": "Не удалось связаться с советником",
     "inputPlaceholder": "Задайте вопрос...",
     "send": "Отправить"
+  },
+  "accountantPackage": {
+    "title": "Пакет для бухгалтера",
+    "subtitle": "Разбивка по категориям Schedule C и сводка доходов, готовые для передачи вашему бухгалтеру (CPA).",
+    "scheduleCTitle": "Разбивка Schedule C",
+    "noExpenses": "Расходы ещё не записаны.",
+    "totalExpenses": "Общие расходы",
+    "incomeTitle": "Прочий доход",
+    "incomeSubtitle": "Строки дохода settlement, кроме linehaul/fuel surcharge — возмещения уже зачтены в категориях расходов выше, здесь не учитываются.",
+    "noOtherIncome": "Прочий доход не записан.",
+    "totalOtherIncome": "Итого прочий доход",
+    "perDiemTitle": "Сводка Per Diem",
+    "perDiemDays": "Дни Per Diem",
+    "perDiemDeduction": "Вычет Per Diem",
+    "exportTitle": "Экспорт",
+    "exportPdf": "Экспортировать как PDF",
+    "exportJson": "Экспортировать как JSON",
+    "shareNotAvailable": "Общий доступ недоступен на этом устройстве.",
+    "exportFailedTitle": "Ошибка экспорта",
+    "generatedOn": "Сформировано {{date}}"
   }
 }

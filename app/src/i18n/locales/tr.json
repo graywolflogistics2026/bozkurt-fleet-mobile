@@ -45,7 +45,8 @@
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
-    "compliance": "Uyumluluk Takibi"
+    "compliance": "Uyumluluk Takibi",
+    "accountantPackage": "Muhasebeci Paketi"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -351,7 +352,8 @@
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
-    "compliance": "Uyumluluk Takibi"
+    "compliance": "Uyumluluk Takibi",
+    "accountantPackage": "Muhasebeci Paketi"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1126,5 +1128,25 @@
     "failedTitle": "Danışmana ulaşılamadı",
     "inputPlaceholder": "Bir soru sorun...",
     "send": "Gönder"
+  },
+  "accountantPackage": {
+    "title": "Muhasebeci Paketi",
+    "subtitle": "CPA'nıza vermeye hazır, kategori bazında Schedule C dökümü ve gelir özeti.",
+    "scheduleCTitle": "Schedule C Dökümü",
+    "noExpenses": "Henüz gider kaydedilmedi.",
+    "totalExpenses": "Toplam Giderler",
+    "incomeTitle": "Diğer Gelir",
+    "incomeSubtitle": "linehaul/fuel surcharge dışındaki settlement gelir kalemleri — geri ödemeler zaten yukarıdaki gider kategorilerine mahsup edilmiştir, burada sayılmaz.",
+    "noOtherIncome": "Başka gelir kaydedilmedi.",
+    "totalOtherIncome": "Toplam Diğer Gelir",
+    "perDiemTitle": "Per Diem Özeti",
+    "perDiemDays": "Per Diem Günleri",
+    "perDiemDeduction": "Per Diem İndirimi",
+    "exportTitle": "Dışa Aktar",
+    "exportPdf": "PDF Olarak Dışa Aktar",
+    "exportJson": "JSON Olarak Dışa Aktar",
+    "shareNotAvailable": "Bu cihazda paylaşım kullanılamıyor.",
+    "exportFailedTitle": "Dışa aktarma başarısız",
+    "generatedOn": "{{date}} tarihinde oluşturuldu"
   }
 }

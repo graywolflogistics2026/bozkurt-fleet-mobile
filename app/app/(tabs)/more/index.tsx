@@ -28,6 +28,7 @@ const MENU_ITEMS = [
   { href: '/(tabs)/more/bank-statements', labelKey: 'more.bankStatements', emoji: '🏛️' },
   { href: '/(tabs)/more/dashboard-customize', labelKey: 'more.dashboardCustomize', emoji: '🧩' },
   { href: '/(tabs)/more/compliance', labelKey: 'more.compliance', emoji: '🪪' },
+  { href: '/(tabs)/more/accountant-package', labelKey: 'more.accountantPackage', emoji: '📁' },
   { href: '/(tabs)/more/settings', labelKey: 'more.settings', emoji: '⚙️' },
 ] as const;
 

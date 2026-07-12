@@ -36,6 +36,7 @@ export default function MoreLayout() {
       <Stack.Screen name="share-profit" options={{ title: t('nav.shareProfit') }} />
       <Stack.Screen name="dashboard-customize" options={{ title: t('nav.dashboardCustomize') }} />
       <Stack.Screen name="compliance" options={{ title: t('nav.compliance') }} />
+      <Stack.Screen name="accountant-package" options={{ title: t('nav.accountantPackage') }} />
       <Stack.Screen name="tax-estimator" options={{ title: t('nav.taxEstimator') }} />
       <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
       <Stack.Screen name="import-legacy" options={{ title: t('nav.importLegacy') }} />
