@@ -40,6 +40,8 @@ export default function MoreLayout() {
       <Stack.Screen name="accountant-package" options={{ title: t('nav.accountantPackage') }} />
       <Stack.Screen name="tax-estimator" options={{ title: t('nav.taxEstimator') }} />
       <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
+      <Stack.Screen name="terms-of-use" options={{ title: t('nav.termsOfUse') }} />
+      <Stack.Screen name="privacy-policy" options={{ title: t('nav.privacyPolicy') }} />
       <Stack.Screen name="import-legacy" options={{ title: t('nav.importLegacy') }} />
     </Stack>
   );
