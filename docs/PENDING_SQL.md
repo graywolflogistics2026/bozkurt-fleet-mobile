@@ -1,8 +1,6 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-11): sections 1-24 have all been run against the live DB.
-Sections 25-26 (added this pass, PROMPTS.md Session 9a) are NOT yet run —
-see their checklists below.**
+**STATUS (2026-07-12): sections 1-26 have all been run against the live DB.**
 Sections 11-24 were applied together in one transaction on 2026-07-11 via a
 combined SQL block (generated from this file, run in the Supabase SQL
 editor). This file started as a forward-looking "run this next" list; it's kept now
@@ -790,7 +788,7 @@ alter table profiles add column weekly_goal numeric(12,2);
 
 ---
 
-## 25. benchmarks table (Profit Analysis v1, PROMPTS.md Session 9a, CLAUDE.md invariant #22 — NO external-data features) — ⬜ NOT YET RUN
+## 25. benchmarks table (Profit Analysis v1, PROMPTS.md Session 9a, CLAUDE.md invariant #22 — NO external-data features) — ✅ APPLIED
 
 NOT user-scoped — one row per metric/year, shared by every user, same
 "admin-seeded, published-gates-visibility" pattern as `tax_year_data`
@@ -837,11 +835,11 @@ metric's row is unpublished), Profit Analysis shows the computed ratio with
 no benchmark comparison and no error, same "banner, not silent
 default-zero" spirit as the tax-year fallback.
 
-- [ ] 25a run (create benchmarks table + RLS + seed the 2 metrics above)
+- [x] 25a run (create benchmarks table + RLS + seed the 2 metrics above)
 
 ---
 
-## 26. misc_income table (manual income ledger, PROMPTS.md Session 9a) — ⬜ NOT YET RUN
+## 26. misc_income table (manual income ledger, PROMPTS.md Session 9a) — ✅ APPLIED
 
 Fills the gap CLAUDE.md invariant #14 flagged: docType
 `government_or_misc_income` was archive-only with no financial row created
@@ -876,7 +874,7 @@ Once this has run, `app/src/import/mapExtraction.ts`'s handling of
 (same as the other financial docTypes) instead of archive-only — not done
 this pass; tracked here so it isn't lost.
 
-- [ ] 26a run (create misc_income table + RLS)
+- [x] 26a run (create misc_income table + RLS)
 
 ---
 
