@@ -10,7 +10,8 @@
     "discard": "Discard",
     "unit": "Unit {{unit}}",
     "dash": "—",
-    "legalFootnote": "Estimates only — not tax advice. Verify with your CPA."
+    "legalFootnote": "Estimates only — not tax advice. Verify with your CPA.",
+    "close": "Close"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -33,7 +34,15 @@
     "settlements": "Settlements",
     "reimbursements": "Reimbursements",
     "fuel": "Fuel",
-    "tolls": "Tolls & Fees"
+    "tolls": "Tolls & Fees",
+    "creditCards": "Credit Cards",
+    "bankStatements": "Bank Statement",
+    "otherIncome": "Other Income",
+    "assetRegister": "Asset Register",
+    "operatingPnl": "Operating P&L",
+    "profitAnalysis": "Profit Analysis",
+    "shareProfit": "Share Weekly Profit",
+    "dashboardCustomize": "Customize Dashboard"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -113,7 +122,10 @@
     "recentLoadsTitle": "Recent Loads",
     "noLoadsYet": "No loads yet.",
     "truckUnit": "Unit: {{unit}}",
-    "fleetOverviewTitle": "Fleet Overview"
+    "fleetOverviewTitle": "Fleet Overview",
+    "truckCardLabel": "Truck",
+    "driverOverviewTitle": "Driver Overview",
+    "customize": "✏️ Customize"
   },
   "deductions": {
     "title": "Deductions",
@@ -202,7 +214,7 @@
     "lowConfidenceTitle": "⚠️ Please review before saving",
     "lowConfidenceBody": "The AI wasn't fully confident reading this document — check the details below before saving.",
     "miscIncomeNoteTitle": "💵 Business income detected",
-    "miscIncomeNoteBody": "This looks like business income (detention, layover, bonus, etc.) with no dedicated ledger yet — the document is archived, but please record it manually for now.",
+    "miscIncomeNoteBody": "This looks like business income (detention, layover, bonus, etc.) with no dedicated ledger yet — the document is archived, but please record it manually on the Other Income screen for now.",
     "save": "Save",
     "saveAnyway": "Save Anyway",
     "discard": "Discard",
@@ -325,20 +337,20 @@
     "settlements": "Settlements",
     "reimbursements": "Reimbursements",
     "fuel": "Fuel",
-    "tolls": "Tolls & Fees"
+    "tolls": "Tolls & Fees",
+    "creditCards": "Credit Cards",
+    "bankStatements": "Bank Statement",
+    "otherIncome": "Other Income",
+    "assetRegister": "Asset Register",
+    "operatingPnl": "Operating P&L",
+    "profitAnalysis": "Profit Analysis",
+    "shareProfit": "Share Weekly Profit",
+    "dashboardCustomize": "Customize Dashboard"
   },
   "placeholders": {
     "taxEstimator": {
       "title": "Tax Estimator",
       "note": "Filing-status/state editing, spouse/SEP/health-insurance inputs, and the S-Corp election worksheet land in a later session. The Dashboard's tax cards already reflect your live estimate."
-    },
-    "cashFlow": {
-      "title": "Cash Flow",
-      "note": "Checking account and bank statement views land in a later session."
-    },
-    "loans": {
-      "title": "Loans",
-      "note": "Loan tracking lands in a later session."
     }
   },
   "truckHealth": {
@@ -542,7 +554,7 @@
     },
     "government_or_misc_income": {
       "label": "Misc. Income",
-      "route": "Not yet wired to a screen — record manually for now"
+      "route": "Other Income (record it there manually for now)"
     },
     "utility_subscription": {
       "label": "Utility/Subscription Bill",
@@ -682,5 +694,178 @@
       "drivewyze": "Drivewyze",
       "other": "Other"
     }
+  },
+  "otherIncome": {
+    "title": "Other Income",
+    "subtitle": "Business income with no dedicated ledger yet — state refunds, detention pay outside a settlement, etc.",
+    "add": "Add",
+    "addTitle": "➕ Add Income",
+    "totalOtherIncome": "Total Other Income",
+    "empty": "No other income recorded yet.",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What was it for?",
+    "sourceLabel": "Source",
+    "sourcePlaceholder": "e.g. IRS, State of Texas",
+    "dateLabel": "Date",
+    "amountLabel": "Amount ($)",
+    "saveFailedTitle": "Save failed",
+    "deleteConfirmTitle": "Delete this income record?",
+    "deleteFailedTitle": "Delete failed"
+  },
+  "loans": {
+    "title": "Loan Center",
+    "add": "Add",
+    "addTitle": "➕ Add Loan",
+    "editTitle": "✏️ Edit Loan",
+    "unnamed": "Untitled Loan",
+    "totalBalance": "Total Balance",
+    "estMonthlyPayments": "Est. Monthly Payments",
+    "empty": "No loans yet.",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Freightliner Cascadia",
+    "lenderLabel": "Lender",
+    "lenderPlaceholder": "e.g. Daimler Truck Financial",
+    "originalAmountLabel": "Original Amount ($)",
+    "balanceLabel": "Current Balance ($)",
+    "paymentLabel": "Payment Amount ($)",
+    "frequencyLabel": "Payment Frequency",
+    "frequencies": {
+      "weekly": "Weekly",
+      "biweekly": "Bi-Weekly",
+      "monthly": "Monthly"
+    },
+    "aprLabel": "APR (%)",
+    "nextDueLabel": "Next Due Date",
+    "nextDue": "Next due: {{date}}",
+    "paidOffPct": "{{pct}}% paid off",
+    "paymentAmount": "{{amount}}/pmt",
+    "saveFailedTitle": "Save failed",
+    "deleteConfirmTitle": "Delete this loan?",
+    "deleteFailedTitle": "Delete failed"
+  },
+  "creditCards": {
+    "title": "Credit Cards",
+    "add": "Add",
+    "addTitle": "➕ Add Credit Card",
+    "editTitle": "✏️ Edit Credit Card",
+    "unnamed": "Untitled Card",
+    "totalBalance": "Total Balance",
+    "totalLimit": "Total Limit",
+    "empty": "No credit cards yet.",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Business Visa",
+    "lastFourLabel": "Last 4 Digits",
+    "creditLimitLabel": "Credit Limit ($)",
+    "balanceLabel": "Current Balance ($)",
+    "aprLabel": "APR (%)",
+    "dueDayLabel": "Due Day of Month",
+    "dueDayShort": "due day {{day}}",
+    "limitOf": "Limit: {{limit}}",
+    "utilized": "utilized",
+    "saveFailedTitle": "Save failed",
+    "deleteConfirmTitle": "Delete this credit card?",
+    "deleteFailedTitle": "Delete failed"
+  },
+  "bankStatements": {
+    "title": "Bank Statement",
+    "subtitle": "View-only — imported statement data, not editable here.",
+    "checkingTitle": "Checking Statements",
+    "cardTitle": "Card Statements",
+    "empty": "No statements imported yet.",
+    "noTransactions": "No transactions on this statement.",
+    "deductibleTag": "Deductible",
+    "deleteStatement": "Delete this statement",
+    "deleteConfirmTitle": "Delete this statement?",
+    "deleteFailedTitle": "Delete failed"
+  },
+  "assetRegister": {
+    "title": "Asset Register",
+    "totalAssets": "Total Assets",
+    "totalValue": "Total Value",
+    "activeWarranties": "Active Warranties",
+    "activeWarrantiesTitle": "Active Warranties",
+    "allAssetsTitle": "All Assets",
+    "empty": "No assets yet — equipment/electronics/tools purchases will appear here.",
+    "warrantyActiveUntil": "Warranty active until {{date}}",
+    "warrantyExpired": "Warranty expired {{date}}"
+  },
+  "operatingPnl": {
+    "title": "Operating P&L",
+    "revenue": "Revenue",
+    "expenses": "Expenses",
+    "netIncome": "Net Income",
+    "expenseBreakdownTitle": "Expenses by Category",
+    "expenseBreakdownSubtitle": "Schedule C rollup preview — the full Accountant Package export adds maintenance/fuel/loan interest.",
+    "empty": "No expenses recorded yet.",
+    "total": "Total",
+    "carrierYtdTitle": "Carrier-Reported YTD",
+    "carrierYtdSubtitle": "As printed on your most recent settlement — a reference to cross-check against the totals above, not used in this screen's math.",
+    "carrierName": "Carrier",
+    "ytdRevenue": "YTD Revenue",
+    "ytdExpenses": "YTD Expenses",
+    "ytdNet": "YTD Net",
+    "weeksInService": "Weeks in Service"
+  },
+  "cashFlowScreen": {
+    "title": "Cash Flow",
+    "empty": "No settlements yet — import a settlement PDF.",
+    "weeklyTrendTitle": "Weekly Trend",
+    "lanesTitle": "Best & Worst Lanes",
+    "avgRpm": "Average across all loads: {{rate}}/loaded mi",
+    "noLoadData": "Import settlement PDFs with load data to see lane rankings.",
+    "bestLanes": "Best Lanes",
+    "worstLanes": "Worst Lanes"
+  },
+  "profitAnalysis": {
+    "title": "Profit Analysis",
+    "last30Days": "Last 30 Days",
+    "revenue": "Revenue",
+    "netIncome": "Net Income",
+    "ratiosTitle": "Cost Ratios",
+    "ratiosSubtitle": "Compared against published industry reference ranges, not peer data.",
+    "fuelPctOfRevenue": "Fuel as % of Revenue",
+    "maintenanceCostPerMile": "Maintenance $/Mile",
+    "industryRange": "Industry reference: {{low}}–{{high}}",
+    "industryRangeUsd": "Industry reference: {{low}}–{{high}}",
+    "noBenchmarkYet": "Industry reference not available yet.",
+    "industryReferenceNote": "Industry reference ranges are published figures, not live peer data from other users of this app.",
+    "weeklyTitle": "Recent Weeks (Net)",
+    "aiInsightsTitle": "AI Insights",
+    "askAi": "🤖 Get AI Insights",
+    "aiFooter": "General information, not professional tax advice.",
+    "aiFailed": "Could not reach the advisor service."
+  },
+  "shareProfit": {
+    "title": "Share Weekly Profit",
+    "subtitle": "Pick which figures to include — you're never forced to share all three.",
+    "noSettlements": "Import a settlement to share your numbers.",
+    "metrics": {
+      "revenue": "Revenue",
+      "profit": "Profit",
+      "mpg": "MPG"
+    },
+    "weekOf": "Week of {{date}}",
+    "share": "Share",
+    "notAvailableTitle": "Sharing isn't available on this device.",
+    "shareFailedTitle": "Share failed"
+  },
+  "dashboardCustomize": {
+    "title": "Customize Dashboard",
+    "subtitle": "Reorder, hide, or rename any card. Your language never affects a card you haven't renamed.",
+    "savedTitle": "✅ Saved",
+    "saveFailedTitle": "Save failed",
+    "resetToDefault": "Reset to Default",
+    "labelPlaceholder": "{{defaultLabel}} (default)",
+    "visible": "Visible",
+    "hidden": "Hidden"
+  },
+  "categoryPicker": {
+    "newCategory": "New Category",
+    "newCategoryTitle": "➕ New Category",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Truck Wash",
+    "bucketLabel": "Schedule C Bucket",
+    "bucketNote": "Required so this category always counts toward your tax estimate.",
+    "saveFailedTitle": "Save failed"
   }
 }

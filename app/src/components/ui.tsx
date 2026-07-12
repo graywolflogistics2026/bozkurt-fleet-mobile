@@ -1,4 +1,4 @@
-import { ActivityIndicator, I18nManager, Modal, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { ActivityIndicator, I18nManager, Modal, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type TextStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -35,8 +35,8 @@ export function TappableCard({ onPress, children }: { onPress: () => void; child
   );
 }
 
-export function MutedText({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.muted}>{children}</Text>;
+export function MutedText({ children, style }: { children: React.ReactNode; style?: TextStyle }) {
+  return <Text style={[styles.muted, style]}>{children}</Text>;
 }
 
 export function LegalFootnote({ children }: { children?: React.ReactNode }) {

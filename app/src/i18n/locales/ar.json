@@ -10,7 +10,8 @@
     "discard": "تجاهل",
     "unit": "الوحدة {{unit}}",
     "dash": "—",
-    "legalFootnote": "تقديرات فقط — ليست استشارة ضريبية. تحقق مع محاسبك."
+    "legalFootnote": "تقديرات فقط — ليست استشارة ضريبية. تحقق مع محاسبك.",
+    "close": "إغلاق"
   },
   "nav": {
     "dashboard": "لوحة التحكم",
@@ -33,7 +34,15 @@
     "settlements": "Settlements",
     "reimbursements": "المبالغ المستردة",
     "fuel": "الوقود",
-    "tolls": "الرسوم والعوائد"
+    "tolls": "الرسوم والعوائد",
+    "creditCards": "بطاقات الائتمان",
+    "bankStatements": "كشف الحساب البنكي",
+    "otherIncome": "دخل آخر",
+    "assetRegister": "سجل الأصول",
+    "operatingPnl": "الأرباح والخسائر التشغيلية",
+    "profitAnalysis": "تحليل الأرباح",
+    "shareProfit": "مشاركة الأرباح الأسبوعية",
+    "dashboardCustomize": "تخصيص لوحة التحكم"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -113,7 +122,10 @@
     "recentLoadsTitle": "الحمولات الأخيرة",
     "noLoadsYet": "لا توجد حمولات بعد.",
     "truckUnit": "الوحدة: {{unit}}",
-    "fleetOverviewTitle": "نظرة عامة على الأسطول"
+    "fleetOverviewTitle": "نظرة عامة على الأسطول",
+    "truckCardLabel": "الشاحنة",
+    "driverOverviewTitle": "نظرة عامة على السائقين",
+    "customize": "✏️ تخصيص"
   },
   "deductions": {
     "title": "الخصومات",
@@ -202,7 +214,7 @@
     "lowConfidenceTitle": "⚠️ يرجى المراجعة قبل الحفظ",
     "lowConfidenceBody": "لم يكن الذكاء الاصطناعي واثقًا تمامًا من قراءة هذا المستند — راجع التفاصيل قبل الحفظ.",
     "miscIncomeNoteTitle": "💵 تم اكتشاف دخل تجاري",
-    "miscIncomeNoteBody": "يبدو هذا دخلاً تجاريًا (Detention، Layover، مكافأة، إلخ) وليس له سجل مخصص بعد — تم أرشفة المستند، يرجى تسجيله يدويًا حاليًا.",
+    "miscIncomeNoteBody": "يبدو هذا دخلاً تجاريًا (detention، layover، مكافأة، إلخ) ليس له سجل مخصص بعد — تم أرشفة المستند، لكن يُرجى تسجيله يدويًا في شاشة الدخل الآخر في الوقت الحالي.",
     "save": "حفظ",
     "saveAnyway": "احفظ على أي حال",
     "discard": "تجاهل",
@@ -325,20 +337,20 @@
     "settlements": "Settlements",
     "reimbursements": "المبالغ المستردة",
     "fuel": "الوقود",
-    "tolls": "الرسوم والعوائد"
+    "tolls": "الرسوم والعوائد",
+    "creditCards": "بطاقات الائتمان",
+    "bankStatements": "كشف الحساب البنكي",
+    "otherIncome": "دخل آخر",
+    "assetRegister": "سجل الأصول",
+    "operatingPnl": "الأرباح والخسائر التشغيلية",
+    "profitAnalysis": "تحليل الأرباح",
+    "shareProfit": "مشاركة الأرباح الأسبوعية",
+    "dashboardCustomize": "تخصيص لوحة التحكم"
   },
   "placeholders": {
     "taxEstimator": {
       "title": "حاسبة الضرائب",
       "note": "تحرير حالة الإيداع/الولاية، مدخلات الزوج/SEP/التأمين الصحي، وورقة عمل اختيار S-Corp ستأتي في جلسة لاحقة. بطاقات الضرائب في لوحة التحكم تعكس بالفعل تقديرك الحيّ."
-    },
-    "cashFlow": {
-      "title": "التدفق النقدي",
-      "note": "عروض الحساب الجاري وكشوف الحساب المصرفي ستأتي في جلسة لاحقة."
-    },
-    "loans": {
-      "title": "القروض",
-      "note": "تتبع القروض يأتي في جلسة لاحقة."
     }
   },
   "truckHealth": {
@@ -542,7 +554,7 @@
     },
     "government_or_misc_income": {
       "label": "دخل متنوع",
-      "route": "غير مربوط بشاشة بعد — سجّله يدويًا حاليًا"
+      "route": "دخل آخر (سجّله هناك يدويًا في الوقت الحالي)"
     },
     "utility_subscription": {
       "label": "فاتورة خدمة/اشتراك",
@@ -682,5 +694,178 @@
       "drivewyze": "Drivewyze",
       "other": "أخرى"
     }
+  },
+  "otherIncome": {
+    "title": "دخل آخر",
+    "subtitle": "دخل تجاري ليس له سجل مخصص بعد — مبالغ مستردة من الولاية، أجرة detention خارج settlement، إلخ.",
+    "add": "إضافة",
+    "addTitle": "➕ إضافة دخل",
+    "totalOtherIncome": "إجمالي الدخل الآخر",
+    "empty": "لا يوجد دخل آخر مسجل بعد.",
+    "descriptionLabel": "الوصف",
+    "descriptionPlaceholder": "ما الغرض منه؟",
+    "sourceLabel": "المصدر",
+    "sourcePlaceholder": "مثال: مصلحة الضرائب، ولاية تكساس",
+    "dateLabel": "التاريخ",
+    "amountLabel": "المبلغ ($)",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteConfirmTitle": "هل تريد حذف سجل الدخل هذا؟",
+    "deleteFailedTitle": "فشل الحذف"
+  },
+  "loans": {
+    "title": "مركز القروض",
+    "add": "إضافة",
+    "addTitle": "➕ إضافة قرض",
+    "editTitle": "✏️ تعديل القرض",
+    "unnamed": "قرض بدون اسم",
+    "totalBalance": "إجمالي الرصيد",
+    "estMonthlyPayments": "الدفعات الشهرية التقديرية",
+    "empty": "لا توجد قروض بعد.",
+    "nameLabel": "الاسم",
+    "namePlaceholder": "مثال: Freightliner Cascadia",
+    "lenderLabel": "الجهة المقرضة",
+    "lenderPlaceholder": "مثال: Daimler Truck Financial",
+    "originalAmountLabel": "المبلغ الأصلي ($)",
+    "balanceLabel": "الرصيد الحالي ($)",
+    "paymentLabel": "مبلغ الدفعة ($)",
+    "frequencyLabel": "تكرار الدفع",
+    "frequencies": {
+      "weekly": "أسبوعي",
+      "biweekly": "كل أسبوعين",
+      "monthly": "شهري"
+    },
+    "aprLabel": "معدل الفائدة السنوي (%)",
+    "nextDueLabel": "تاريخ الاستحقاق التالي",
+    "nextDue": "الاستحقاق التالي: {{date}}",
+    "paidOffPct": "تم سداد {{pct}}%",
+    "paymentAmount": "{{amount}}/دفعة",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteConfirmTitle": "هل تريد حذف هذا القرض؟",
+    "deleteFailedTitle": "فشل الحذف"
+  },
+  "creditCards": {
+    "title": "بطاقات الائتمان",
+    "add": "إضافة",
+    "addTitle": "➕ إضافة بطاقة ائتمان",
+    "editTitle": "✏️ تعديل بطاقة الائتمان",
+    "unnamed": "بطاقة بدون اسم",
+    "totalBalance": "إجمالي الرصيد",
+    "totalLimit": "إجمالي الحد الائتماني",
+    "empty": "لا توجد بطاقات ائتمان بعد.",
+    "nameLabel": "الاسم",
+    "namePlaceholder": "مثال: Visa للأعمال",
+    "lastFourLabel": "آخر 4 أرقام",
+    "creditLimitLabel": "الحد الائتماني ($)",
+    "balanceLabel": "الرصيد الحالي ($)",
+    "aprLabel": "معدل الفائدة السنوي (%)",
+    "dueDayLabel": "يوم الاستحقاق من الشهر",
+    "dueDayShort": "الاستحقاق يوم {{day}}",
+    "limitOf": "الحد: {{limit}}",
+    "utilized": "مستخدَم",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteConfirmTitle": "هل تريد حذف بطاقة الائتمان هذه؟",
+    "deleteFailedTitle": "فشل الحذف"
+  },
+  "bankStatements": {
+    "title": "كشف الحساب البنكي",
+    "subtitle": "للعرض فقط — بيانات كشف الحساب المستوردة، لا يمكن تعديلها هنا.",
+    "checkingTitle": "كشوفات الحساب الجاري",
+    "cardTitle": "كشوفات البطاقة",
+    "empty": "لم يتم استيراد أي كشوفات بعد.",
+    "noTransactions": "لا توجد معاملات في هذا الكشف.",
+    "deductibleTag": "قابل للخصم",
+    "deleteStatement": "حذف هذا الكشف",
+    "deleteConfirmTitle": "هل تريد حذف هذا الكشف؟",
+    "deleteFailedTitle": "فشل الحذف"
+  },
+  "assetRegister": {
+    "title": "سجل الأصول",
+    "totalAssets": "إجمالي الأصول",
+    "totalValue": "القيمة الإجمالية",
+    "activeWarranties": "الضمانات السارية",
+    "activeWarrantiesTitle": "الضمانات السارية",
+    "allAssetsTitle": "جميع الأصول",
+    "empty": "لا توجد أصول بعد — ستظهر هنا مشتريات المعدات/الإلكترونيات/الأدوات.",
+    "warrantyActiveUntil": "الضمان ساري حتى {{date}}",
+    "warrantyExpired": "انتهى الضمان في {{date}}"
+  },
+  "operatingPnl": {
+    "title": "الأرباح والخسائر التشغيلية",
+    "revenue": "الإيرادات",
+    "expenses": "المصروفات",
+    "netIncome": "صافي الدخل",
+    "expenseBreakdownTitle": "المصروفات حسب الفئة",
+    "expenseBreakdownSubtitle": "معاينة ملخص Schedule C — يضيف التصدير الكامل لحزمة المحاسب الصيانة والوقود وفوائد القروض.",
+    "empty": "لا توجد مصروفات مسجلة بعد.",
+    "total": "الإجمالي",
+    "carrierYtdTitle": "إجمالي العام حسب الناقل",
+    "carrierYtdSubtitle": "كما هو مطبوع في أحدث settlement لديك — مرجع للمقارنة مع الإجماليات أعلاه، ولا يُستخدم في حسابات هذه الشاشة.",
+    "carrierName": "الناقل",
+    "ytdRevenue": "إيرادات العام حتى الآن",
+    "ytdExpenses": "مصروفات العام حتى الآن",
+    "ytdNet": "صافي العام حتى الآن",
+    "weeksInService": "أسابيع الخدمة"
+  },
+  "cashFlowScreen": {
+    "title": "التدفق النقدي",
+    "empty": "لا توجد settlements بعد — قم باستيراد ملف PDF لـ settlement.",
+    "weeklyTrendTitle": "الاتجاه الأسبوعي",
+    "lanesTitle": "أفضل وأسوأ المسارات",
+    "avgRpm": "المتوسط عبر جميع الأحمال: {{rate}}/ميل محمّل",
+    "noLoadData": "قم باستيراد ملفات PDF لـ settlement تحتوي على بيانات الأحمال لعرض تصنيف المسارات.",
+    "bestLanes": "أفضل المسارات",
+    "worstLanes": "أسوأ المسارات"
+  },
+  "profitAnalysis": {
+    "title": "تحليل الأرباح",
+    "last30Days": "آخر 30 يومًا",
+    "revenue": "الإيرادات",
+    "netIncome": "صافي الدخل",
+    "ratiosTitle": "نسب التكاليف",
+    "ratiosSubtitle": "مقارنة بنطاقات مرجعية منشورة للصناعة، وليست بيانات من مستخدمين آخرين.",
+    "fuelPctOfRevenue": "الوقود كنسبة من الإيرادات",
+    "maintenanceCostPerMile": "تكلفة الصيانة $/ميل",
+    "industryRange": "المرجع الصناعي: {{low}}–{{high}}",
+    "industryRangeUsd": "المرجع الصناعي: {{low}}–{{high}}",
+    "noBenchmarkYet": "المرجع الصناعي غير متوفر بعد.",
+    "industryReferenceNote": "نطاقات المرجع الصناعي هي أرقام منشورة، وليست بيانات حية من مستخدمين آخرين لهذا التطبيق.",
+    "weeklyTitle": "الأسابيع الأخيرة (الصافي)",
+    "aiInsightsTitle": "رؤى الذكاء الاصطناعي",
+    "askAi": "🤖 الحصول على رؤى الذكاء الاصطناعي",
+    "aiFooter": "معلومات عامة، وليست استشارة ضريبية احترافية.",
+    "aiFailed": "تعذّر الوصول إلى خدمة الاستشارة."
+  },
+  "shareProfit": {
+    "title": "مشاركة الأرباح الأسبوعية",
+    "subtitle": "اختر الأرقام التي تريد تضمينها — لست مضطرًا أبدًا لمشاركة الثلاثة جميعها.",
+    "noSettlements": "قم باستيراد settlement لمشاركة أرقامك.",
+    "metrics": {
+      "revenue": "الإيرادات",
+      "profit": "الربح",
+      "mpg": "MPG"
+    },
+    "weekOf": "أسبوع {{date}}",
+    "share": "مشاركة",
+    "notAvailableTitle": "المشاركة غير متوفرة على هذا الجهاز.",
+    "shareFailedTitle": "فشلت المشاركة"
+  },
+  "dashboardCustomize": {
+    "title": "تخصيص لوحة التحكم",
+    "subtitle": "أعد ترتيب أي بطاقة أو أخفها أو أعد تسميتها. لغتك لا تؤثر أبدًا على بطاقة لم تُعد تسميتها.",
+    "savedTitle": "✅ تم الحفظ",
+    "saveFailedTitle": "فشل الحفظ",
+    "resetToDefault": "إعادة التعيين إلى الافتراضي",
+    "labelPlaceholder": "{{defaultLabel}} (افتراضي)",
+    "visible": "ظاهر",
+    "hidden": "مخفي"
+  },
+  "categoryPicker": {
+    "newCategory": "فئة جديدة",
+    "newCategoryTitle": "➕ فئة جديدة",
+    "nameLabel": "الاسم",
+    "namePlaceholder": "مثال: غسيل الشاحنة",
+    "bucketLabel": "فئة Schedule C",
+    "bucketNote": "مطلوب حتى تُحتسب هذه الفئة دائمًا ضمن تقدير ضرائبك.",
+    "saveFailedTitle": "فشل الحفظ"
   }
 }

@@ -490,3 +490,51 @@ export type TaxYearData = {
   created_at: string;
   updated_at: string;
 };
+
+// docs/PENDING_SQL.md §26 (misc income ledger, PROMPTS.md Session 9a) — the
+// real income ledger CLAUDE.md invariant #14 flagged as missing for
+// docType 'government_or_misc_income' (previously archive-only, no
+// financial row). Also the target of the "manual add income" form legacy
+// has no equivalent of — a user-entered row (stimulus, tax refund credited
+// to the business, detention pay outside a settlement, etc.) that should
+// roll into gross income without inventing a fake settlement or load. No
+// category/bucket — income never carries a Schedule C bucket (only
+// expenses do, CLAUDE.md invariant #19).
+export type MiscIncome = {
+  id: string;
+  user_id: string;
+  document_id: string | null;
+  income_date: string | null;
+  description: string | null;
+  source: string | null; // free text, e.g. "IRS", "State of Texas" — NOT a payment method
+  amount: number;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  created_at: string;
+  updated_at: string;
+};
+export type MiscIncomeInsert = Partial<Omit<MiscIncome, 'id' | 'created_at' | 'updated_at'>> & {
+  user_id: string;
+  amount: number;
+};
+export type MiscIncomeUpdate = Partial<Omit<MiscIncome, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+// docs/PENDING_SQL.md §25 (Profit Analysis v1, PROMPTS.md Session 9a,
+// CLAUDE.md invariant #22 — NO external-data features) — NOT user-scoped,
+// admin-seeded PUBLISHED industry reference ranges, same "server-sourced
+// constant, never hardcoded, never live peer data" pattern as
+// tax_year_data. metric is a stable key the app switches on
+// ('fuel_pct_of_revenue' | 'maintenance_cost_per_mile' today); low/high
+// bound a reference range, not a single number, since real fleets vary.
+export type Benchmark = {
+  id: string;
+  metric: string;
+  label: string;
+  low: number;
+  high: number;
+  unit: 'percent' | 'usd_per_mile';
+  source: string;
+  year: number;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+};

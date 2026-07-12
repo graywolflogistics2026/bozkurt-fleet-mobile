@@ -9,9 +9,9 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
 import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS, type PaymentMethod } from '@/src/import/paymentMethods';
-import { CANONICAL_CATEGORIES } from '@/src/import/category';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useFormatters } from '@/src/i18n/format';
+import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Deduction } from '@/src/types/db';
@@ -151,8 +151,9 @@ export default function Deductions() {
 
   function openEdit(x: Deduction) {
     setEditing(x);
-    const knownCategories: readonly string[] = CANONICAL_CATEGORIES;
-    setEditCategory(x.category && knownCategories.includes(x.category) ? x.category : 'Misc');
+    // Custom categories (CLAUDE.md invariant #19) are valid values here too
+    // now — only an empty/never-set category falls back to "Misc".
+    setEditCategory(x.category || 'Misc');
     setEditPayment(normalizePaymentMethod(x.payment_method));
     setEditAmount(String(x.amount ?? 0));
   }
@@ -335,11 +336,7 @@ export default function Deductions() {
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.categoryLabel')}</MutedText>
         </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {CANONICAL_CATEGORIES.map((c) => (
-            <Pill key={c} label={c} selected={editCategory === c} onPress={() => setEditCategory(c)} />
-          ))}
-        </View>
+        <CategoryPicker kind="expense" value={editCategory} onChange={setEditCategory} />
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.amountLabel')}</MutedText>
@@ -385,11 +382,7 @@ export default function Deductions() {
         <View style={{ marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.categoryLabel')}</MutedText>
         </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {CANONICAL_CATEGORIES.map((c) => (
-            <Pill key={c} label={c} selected={addCategory === c} onPress={() => setAddCategory(c)} />
-          ))}
-        </View>
+        <CategoryPicker kind="expense" value={addCategory} onChange={setAddCategory} />
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.dateLabel')}</MutedText>

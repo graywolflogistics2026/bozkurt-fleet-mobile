@@ -3,57 +3,39 @@ import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
-import { useLoanRows, useInsertLoanRow, useUpdateLoanRow, useDeleteLoanRow } from '@/src/data/loans';
+import { useCreditCards, useInsertCreditCard, useUpdateCreditCard, useDeleteCreditCard } from '@/src/data/creditCards';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
-import { colors, radii, spacing, typography } from '@/src/theme';
-import type { LoanRow } from '@/src/types/db';
+import { colors, spacing, typography } from '@/src/theme';
+import type { CreditCardRow } from '@/src/types/db';
 
-const FREQUENCIES = ['weekly', 'biweekly', 'monthly'] as const;
-type Frequency = (typeof FREQUENCIES)[number];
-
-function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: radii.sm,
-        borderWidth: 1,
-        borderColor: selected ? colors.accent : colors.border,
-        backgroundColor: selected ? colors.accent : colors.card2,
-        marginEnd: spacing.xs,
-        marginBottom: spacing.xs,
-      }}
-    >
-      <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function LoanCard({ x, onEdit, onDelete }: { x: LoanRow; onEdit: () => void; onDelete: () => void }) {
+function CardRow({ x, onEdit, onDelete }: { x: CreditCardRow; onEdit: () => void; onDelete: () => void }) {
   const { t } = useTranslation();
-  const { money, date } = useFormatters();
-  const paidPct = x.original_amount ? Math.max(0, Math.min(1, 1 - (x.balance ?? 0) / x.original_amount)) : null;
+  const { money } = useFormatters();
+  const utilization = x.credit_limit ? Math.max(0, Math.min(1, (x.balance ?? 0) / x.credit_limit)) : null;
   return (
     <Pressable onPress={onEdit} style={styles.row}>
       <View style={{ flex: 1 }}>
         <Text style={styles.desc} numberOfLines={1}>
-          {x.name ?? t('loans.unnamed')}
+          {x.name ?? t('creditCards.unnamed')}
+          {x.last_four ? ` ••${x.last_four}` : ''}
         </Text>
         <MutedText>
-          {x.lender ?? '—'}
-          {x.frequency ? ` · ${t(`loans.frequencies.${x.frequency}`, x.frequency)}` : ''}
-          {x.apr != null ? ` · ${x.apr}% APR` : ''}
+          {x.apr != null ? `${x.apr}% APR` : '—'}
+          {x.due_day != null ? ` · ${t('creditCards.dueDayShort', { day: x.due_day })}` : ''}
         </MutedText>
-        {x.next_due && <MutedText>{t('loans.nextDue', { date: date(x.next_due) })}</MutedText>}
-        {paidPct != null && <MutedText>{t('loans.paidOffPct', { pct: Math.round(paidPct * 100) })}</MutedText>}
+        {x.credit_limit != null && (
+          <MutedText>{t('creditCards.limitOf', { limit: money(x.credit_limit) })}</MutedText>
+        )}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.balance ?? 0)}</Text>
-        {x.payment != null && <MutedText>{t('loans.paymentAmount', { amount: money(x.payment) })}</MutedText>}
+        {utilization != null && (
+          <MutedText style={utilization > 0.7 ? { color: colors.red } : undefined}>
+            {Math.round(utilization * 100)}% {t('creditCards.utilized')}
+          </MutedText>
+        )}
         <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: spacing.xs }}>
           <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
         </Pressable>
@@ -64,38 +46,27 @@ function LoanCard({ x, onEdit, onDelete }: { x: LoanRow; onEdit: () => void; onD
 
 type FormState = {
   name: string;
-  lender: string;
-  originalAmount: string;
+  lastFour: string;
+  creditLimit: string;
   balance: string;
-  payment: string;
-  frequency: Frequency;
   apr: string;
-  nextDue: string;
+  dueDay: string;
 };
 
-const EMPTY_FORM: FormState = {
-  name: '',
-  lender: '',
-  originalAmount: '',
-  balance: '',
-  payment: '',
-  frequency: 'monthly',
-  apr: '',
-  nextDue: '',
-};
+const EMPTY_FORM: FormState = { name: '', lastFour: '', creditLimit: '', balance: '', apr: '', dueDay: '' };
 
-export default function LoanCenter() {
+export default function CreditCards() {
   const { t } = useTranslation();
   const { money } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
-  const loansQuery = useLoanRows();
-  const insertLoan = useInsertLoanRow();
-  const updateLoan = useUpdateLoanRow();
-  const deleteLoan = useDeleteLoanRow();
+  const cardsQuery = useCreditCards();
+  const insertCard = useInsertCreditCard();
+  const updateCard = useUpdateCreditCard();
+  const deleteCard = useDeleteCreditCard();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [editing, setEditing] = useState<LoanRow | null>(null);
+  const [editing, setEditing] = useState<CreditCardRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -110,19 +81,14 @@ export default function LoanCenter() {
   }, [queryClient]);
 
   const rows = useMemo(() => {
-    const list = loansQuery.data ?? [];
+    const list = cardsQuery.data ?? [];
     return [...list].sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
-  }, [loansQuery.data]);
+  }, [cardsQuery.data]);
 
   const totals = useMemo(() => {
     const balance = rows.reduce((sum, x) => sum + Number(x.balance ?? 0), 0);
-    const monthlyPayment = rows.reduce((sum, x) => {
-      const p = Number(x.payment ?? 0);
-      if (x.frequency === 'weekly') return sum + p * 4.33;
-      if (x.frequency === 'biweekly') return sum + p * 2.17;
-      return sum + p;
-    }, 0);
-    return { balance, monthlyPayment };
+    const limit = rows.reduce((sum, x) => sum + Number(x.credit_limit ?? 0), 0);
+    return { balance, limit };
   }, [rows]);
 
   function openAdd() {
@@ -130,17 +96,15 @@ export default function LoanCenter() {
     setAdding(true);
   }
 
-  function openEdit(x: LoanRow) {
+  function openEdit(x: CreditCardRow) {
     setEditing(x);
     setForm({
       name: x.name ?? '',
-      lender: x.lender ?? '',
-      originalAmount: x.original_amount != null ? String(x.original_amount) : '',
+      lastFour: x.last_four ?? '',
+      creditLimit: x.credit_limit != null ? String(x.credit_limit) : '',
       balance: x.balance != null ? String(x.balance) : '',
-      payment: x.payment != null ? String(x.payment) : '',
-      frequency: (x.frequency as Frequency) ?? 'monthly',
       apr: x.apr != null ? String(x.apr) : '',
-      nextDue: x.next_due ?? '',
+      dueDay: x.due_day != null ? String(x.due_day) : '',
     });
   }
 
@@ -153,13 +117,11 @@ export default function LoanCenter() {
     return {
       user_id: userIdValue,
       name: form.name || null,
-      lender: form.lender || null,
-      original_amount: form.originalAmount ? Number(form.originalAmount) : null,
+      last_four: form.lastFour || null,
+      credit_limit: form.creditLimit ? Number(form.creditLimit) : null,
       balance: form.balance ? Number(form.balance) : null,
-      payment: form.payment ? Number(form.payment) : null,
-      frequency: form.frequency,
       apr: form.apr ? Number(form.apr) : null,
-      next_due: form.nextDue || null,
+      due_day: form.dueDay ? Number(form.dueDay) : null,
     };
   }
 
@@ -167,11 +129,11 @@ export default function LoanCenter() {
     if (!userId) return;
     setSaving(true);
     try {
-      await insertLoan.mutateAsync(toValues(userId));
+      await insertCard.mutateAsync(toValues(userId));
       await invalidateFinancialData(queryClient);
       closeSheets();
     } catch (err) {
-      Alert.alert(t('loans.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+      Alert.alert(t('creditCards.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
       setSaving(false);
     }
@@ -182,29 +144,29 @@ export default function LoanCenter() {
     setSaving(true);
     try {
       const { user_id: _uid, ...values } = toValues(userId);
-      await updateLoan.mutateAsync({ id: editing.id, values });
+      await updateCard.mutateAsync({ id: editing.id, values });
       await invalidateFinancialData(queryClient);
       closeSheets();
     } catch (err) {
-      Alert.alert(t('loans.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+      Alert.alert(t('creditCards.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
       setSaving(false);
     }
   }
 
-  function handleDelete(x: LoanRow) {
-    Alert.alert(t('loans.deleteConfirmTitle'), undefined, [
+  function handleDelete(x: CreditCardRow) {
+    Alert.alert(t('creditCards.deleteConfirmTitle'), undefined, [
       { text: t('common.cancel'), style: 'cancel' },
       {
         text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteLoan.mutateAsync(x.id);
+            await deleteCard.mutateAsync(x.id);
             await invalidateFinancialData(queryClient);
             closeSheets();
           } catch (err) {
-            Alert.alert(t('loans.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+            Alert.alert(t('creditCards.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
           }
         },
       },
@@ -213,36 +175,29 @@ export default function LoanCenter() {
 
   const formFields = (
     <>
-      <MutedText>{t('loans.nameLabel')}</MutedText>
-      <Field value={form.name} onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} placeholder={t('loans.namePlaceholder')} />
-      <MutedText>{t('loans.lenderLabel')}</MutedText>
-      <Field value={form.lender} onChangeText={(v) => setForm((f) => ({ ...f, lender: v }))} placeholder={t('loans.lenderPlaceholder')} />
-      <MutedText>{t('loans.originalAmountLabel')}</MutedText>
+      <MutedText>{t('creditCards.nameLabel')}</MutedText>
+      <Field value={form.name} onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} placeholder={t('creditCards.namePlaceholder')} />
+      <MutedText>{t('creditCards.lastFourLabel')}</MutedText>
+      <Field
+        value={form.lastFour}
+        onChangeText={(v) => setForm((f) => ({ ...f, lastFour: v.replace(/\D/g, '').slice(0, 4) }))}
+        placeholder="1234"
+        keyboardType="numeric"
+        maxLength={4}
+      />
+      <MutedText>{t('creditCards.creditLimitLabel')}</MutedText>
       <Field
         keyboardType="numeric"
-        value={form.originalAmount}
-        onChangeText={(v) => setForm((f) => ({ ...f, originalAmount: v }))}
+        value={form.creditLimit}
+        onChangeText={(v) => setForm((f) => ({ ...f, creditLimit: v }))}
         placeholder="0.00"
       />
-      <MutedText>{t('loans.balanceLabel')}</MutedText>
+      <MutedText>{t('creditCards.balanceLabel')}</MutedText>
       <Field keyboardType="numeric" value={form.balance} onChangeText={(v) => setForm((f) => ({ ...f, balance: v }))} placeholder="0.00" />
-      <MutedText>{t('loans.paymentLabel')}</MutedText>
-      <Field keyboardType="numeric" value={form.payment} onChangeText={(v) => setForm((f) => ({ ...f, payment: v }))} placeholder="0.00" />
-      <MutedText>{t('loans.frequencyLabel')}</MutedText>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {FREQUENCIES.map((f) => (
-          <Pill
-            key={f}
-            label={t(`loans.frequencies.${f}`)}
-            selected={form.frequency === f}
-            onPress={() => setForm((s) => ({ ...s, frequency: f }))}
-          />
-        ))}
-      </View>
-      <MutedText>{t('loans.aprLabel')}</MutedText>
+      <MutedText>{t('creditCards.aprLabel')}</MutedText>
       <Field keyboardType="numeric" value={form.apr} onChangeText={(v) => setForm((f) => ({ ...f, apr: v }))} placeholder="0.0" />
-      <MutedText>{t('loans.nextDueLabel')}</MutedText>
-      <Field value={form.nextDue} onChangeText={(v) => setForm((f) => ({ ...f, nextDue: v }))} placeholder="YYYY-MM-DD" />
+      <MutedText>{t('creditCards.dueDayLabel')}</MutedText>
+      <Field keyboardType="numeric" value={form.dueDay} onChangeText={(v) => setForm((f) => ({ ...f, dueDay: v }))} placeholder="15" />
     </>
   );
 
@@ -253,34 +208,34 @@ export default function LoanCenter() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <ScreenTitle>{t('loans.title')}</ScreenTitle>
+          <ScreenTitle>{t('creditCards.title')}</ScreenTitle>
           <Pressable onPress={openAdd} hitSlop={8}>
-            <Text style={{ color: colors.accent, fontSize: typography.size.md, fontWeight: '700' }}>+ {t('loans.add')}</Text>
+            <Text style={{ color: colors.accent, fontSize: typography.size.md, fontWeight: '700' }}>+ {t('creditCards.add')}</Text>
           </Pressable>
         </View>
 
         <Card>
           <View style={styles.statRow}>
             <View style={styles.statCell}>
-              <MutedText>{t('loans.totalBalance')}</MutedText>
+              <MutedText>{t('creditCards.totalBalance')}</MutedText>
               <Text style={styles.statValue}>{money(totals.balance)}</Text>
             </View>
             <View style={styles.statCell}>
-              <MutedText>{t('loans.estMonthlyPayments')}</MutedText>
-              <Text style={styles.statValue}>{money(totals.monthlyPayment)}</Text>
+              <MutedText>{t('creditCards.totalLimit')}</MutedText>
+              <Text style={styles.statValue}>{money(totals.limit)}</Text>
             </View>
           </View>
         </Card>
 
         <Card>
-          {loansQuery.isLoading ? (
+          {cardsQuery.isLoading ? (
             <MutedText>{t('common.loading')}</MutedText>
           ) : rows.length === 0 ? (
-            <MutedText>{t('loans.empty')}</MutedText>
+            <MutedText>{t('creditCards.empty')}</MutedText>
           ) : (
             rows.map((x, i) => (
               <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <LoanCard x={x} onEdit={() => openEdit(x)} onDelete={() => handleDelete(x)} />
+                <CardRow x={x} onEdit={() => openEdit(x)} onDelete={() => handleDelete(x)} />
               </View>
             ))
           )}
@@ -288,14 +243,14 @@ export default function LoanCenter() {
       </ScrollView>
 
       <ModalSheet visible={adding} onClose={closeSheets}>
-        <SheetTitle>{t('loans.addTitle')}</SheetTitle>
+        <SheetTitle>{t('creditCards.addTitle')}</SheetTitle>
         {formFields}
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveAdd} loading={saving} />
         <SecondaryButton title={t('common.cancel')} onPress={closeSheets} />
       </ModalSheet>
 
       <ModalSheet visible={!!editing} onClose={closeSheets}>
-        <SheetTitle>{t('loans.editTitle')}</SheetTitle>
+        <SheetTitle>{t('creditCards.editTitle')}</SheetTitle>
         {formFields}
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={saving} />
         <SecondaryButton title={t('common.cancel')} onPress={closeSheets} />

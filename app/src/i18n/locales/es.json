@@ -10,7 +10,8 @@
     "discard": "Descartar",
     "unit": "Unidad {{unit}}",
     "dash": "—",
-    "legalFootnote": "Solo estimaciones — no es asesoría fiscal. Verifique con su contador."
+    "legalFootnote": "Solo estimaciones — no es asesoría fiscal. Verifique con su contador.",
+    "close": "Cerrar"
   },
   "nav": {
     "dashboard": "Panel",
@@ -33,7 +34,15 @@
     "settlements": "Settlements",
     "reimbursements": "Reembolsos",
     "fuel": "Combustible",
-    "tolls": "Peajes y Tarifas"
+    "tolls": "Peajes y Tarifas",
+    "creditCards": "Tarjetas de Crédito",
+    "bankStatements": "Estado de Cuenta Bancario",
+    "otherIncome": "Otros Ingresos",
+    "assetRegister": "Registro de Activos",
+    "operatingPnl": "P&L Operativo",
+    "profitAnalysis": "Análisis de Ganancias",
+    "shareProfit": "Compartir Ganancias Semanales",
+    "dashboardCustomize": "Personalizar Panel"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -113,7 +122,10 @@
     "recentLoadsTitle": "Cargas Recientes",
     "noLoadsYet": "Aún no hay cargas.",
     "truckUnit": "Unidad: {{unit}}",
-    "fleetOverviewTitle": "Resumen de la Flota"
+    "fleetOverviewTitle": "Resumen de la Flota",
+    "truckCardLabel": "Camión",
+    "driverOverviewTitle": "Resumen de Conductores",
+    "customize": "✏️ Personalizar"
   },
   "deductions": {
     "title": "Deducciones",
@@ -202,7 +214,7 @@
     "lowConfidenceTitle": "⚠️ Revise antes de guardar",
     "lowConfidenceBody": "La IA no estuvo totalmente segura al leer este documento — revise los datos antes de guardar.",
     "miscIncomeNoteTitle": "💵 Ingreso comercial detectado",
-    "miscIncomeNoteBody": "Esto parece ingreso comercial (detention, layover, bono, etc.) sin un libro contable dedicado todavía — el documento queda archivado, pero regístrelo manualmente por ahora.",
+    "miscIncomeNoteBody": "Esto parece ser ingreso del negocio (detention, layover, bono, etc.) sin un libro contable dedicado todavía — el documento se archiva, pero por favor regístralo manualmente en la pantalla de Otros Ingresos por ahora.",
     "save": "Guardar",
     "saveAnyway": "Guardar de Todos Modos",
     "discard": "Descartar",
@@ -325,20 +337,20 @@
     "settlements": "Settlements",
     "reimbursements": "Reembolsos",
     "fuel": "Combustible",
-    "tolls": "Peajes y Tarifas"
+    "tolls": "Peajes y Tarifas",
+    "creditCards": "Tarjetas de Crédito",
+    "bankStatements": "Estado de Cuenta Bancario",
+    "otherIncome": "Otros Ingresos",
+    "assetRegister": "Registro de Activos",
+    "operatingPnl": "P&L Operativo",
+    "profitAnalysis": "Análisis de Ganancias",
+    "shareProfit": "Compartir Ganancias Semanales",
+    "dashboardCustomize": "Personalizar Panel"
   },
   "placeholders": {
     "taxEstimator": {
       "title": "Estimador de Impuestos",
       "note": "La edición de estado civil/estado, entradas de cónyuge/SEP/seguro médico, y la hoja de trabajo de elección S-Corp llegarán en una sesión posterior. Las tarjetas de impuestos del Panel ya reflejan su estimación en vivo."
-    },
-    "cashFlow": {
-      "title": "Flujo de Caja",
-      "note": "Las vistas de cuenta corriente y estados de cuenta bancarios llegarán en una sesión posterior."
-    },
-    "loans": {
-      "title": "Préstamos",
-      "note": "El seguimiento de préstamos llega en una sesión posterior."
     }
   },
   "truckHealth": {
@@ -542,7 +554,7 @@
     },
     "government_or_misc_income": {
       "label": "Ingreso Misceláneo",
-      "route": "Aún no conectado a una pantalla — registre manualmente por ahora"
+      "route": "Otros Ingresos (regístralo ahí manualmente por ahora)"
     },
     "utility_subscription": {
       "label": "Factura de Servicio/Suscripción",
@@ -682,5 +694,178 @@
       "drivewyze": "Drivewyze",
       "other": "Otro"
     }
+  },
+  "otherIncome": {
+    "title": "Otros Ingresos",
+    "subtitle": "Ingresos del negocio que aún no tienen un libro contable dedicado — reembolsos estatales, pago de detention fuera de un settlement, etc.",
+    "add": "Agregar",
+    "addTitle": "➕ Agregar Ingreso",
+    "totalOtherIncome": "Total de Otros Ingresos",
+    "empty": "Aún no hay otros ingresos registrados.",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "¿Para qué fue?",
+    "sourceLabel": "Fuente",
+    "sourcePlaceholder": "ej. IRS, Estado de Texas",
+    "dateLabel": "Fecha",
+    "amountLabel": "Monto ($)",
+    "saveFailedTitle": "Error al guardar",
+    "deleteConfirmTitle": "¿Eliminar este registro de ingreso?",
+    "deleteFailedTitle": "Error al eliminar"
+  },
+  "loans": {
+    "title": "Centro de Préstamos",
+    "add": "Agregar",
+    "addTitle": "➕ Agregar Préstamo",
+    "editTitle": "✏️ Editar Préstamo",
+    "unnamed": "Préstamo sin Nombre",
+    "totalBalance": "Saldo Total",
+    "estMonthlyPayments": "Pagos Mensuales Est.",
+    "empty": "Aún no hay préstamos.",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "ej. Freightliner Cascadia",
+    "lenderLabel": "Prestamista",
+    "lenderPlaceholder": "ej. Daimler Truck Financial",
+    "originalAmountLabel": "Monto Original ($)",
+    "balanceLabel": "Saldo Actual ($)",
+    "paymentLabel": "Monto del Pago ($)",
+    "frequencyLabel": "Frecuencia de Pago",
+    "frequencies": {
+      "weekly": "Semanal",
+      "biweekly": "Quincenal",
+      "monthly": "Mensual"
+    },
+    "aprLabel": "Tasa Anual (%)",
+    "nextDueLabel": "Próxima Fecha de Vencimiento",
+    "nextDue": "Próximo vencimiento: {{date}}",
+    "paidOffPct": "{{pct}}% pagado",
+    "paymentAmount": "{{amount}}/pago",
+    "saveFailedTitle": "Error al guardar",
+    "deleteConfirmTitle": "¿Eliminar este préstamo?",
+    "deleteFailedTitle": "Error al eliminar"
+  },
+  "creditCards": {
+    "title": "Tarjetas de Crédito",
+    "add": "Agregar",
+    "addTitle": "➕ Agregar Tarjeta de Crédito",
+    "editTitle": "✏️ Editar Tarjeta de Crédito",
+    "unnamed": "Tarjeta sin Nombre",
+    "totalBalance": "Saldo Total",
+    "totalLimit": "Límite Total",
+    "empty": "Aún no hay tarjetas de crédito.",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "ej. Visa Empresarial",
+    "lastFourLabel": "Últimos 4 Dígitos",
+    "creditLimitLabel": "Límite de Crédito ($)",
+    "balanceLabel": "Saldo Actual ($)",
+    "aprLabel": "Tasa Anual (%)",
+    "dueDayLabel": "Día de Vencimiento del Mes",
+    "dueDayShort": "vence el día {{day}}",
+    "limitOf": "Límite: {{limit}}",
+    "utilized": "utilizado",
+    "saveFailedTitle": "Error al guardar",
+    "deleteConfirmTitle": "¿Eliminar esta tarjeta de crédito?",
+    "deleteFailedTitle": "Error al eliminar"
+  },
+  "bankStatements": {
+    "title": "Estado de Cuenta Bancario",
+    "subtitle": "Solo lectura — datos del estado de cuenta importado, no editable aquí.",
+    "checkingTitle": "Estados de Cuenta Corriente",
+    "cardTitle": "Estados de Cuenta de Tarjeta",
+    "empty": "Aún no se han importado estados de cuenta.",
+    "noTransactions": "No hay transacciones en este estado de cuenta.",
+    "deductibleTag": "Deducible",
+    "deleteStatement": "Eliminar este estado de cuenta",
+    "deleteConfirmTitle": "¿Eliminar este estado de cuenta?",
+    "deleteFailedTitle": "Error al eliminar"
+  },
+  "assetRegister": {
+    "title": "Registro de Activos",
+    "totalAssets": "Total de Activos",
+    "totalValue": "Valor Total",
+    "activeWarranties": "Garantías Activas",
+    "activeWarrantiesTitle": "Garantías Activas",
+    "allAssetsTitle": "Todos los Activos",
+    "empty": "Aún no hay activos — las compras de equipo/electrónica/herramientas aparecerán aquí.",
+    "warrantyActiveUntil": "Garantía activa hasta {{date}}",
+    "warrantyExpired": "Garantía vencida el {{date}}"
+  },
+  "operatingPnl": {
+    "title": "P&L Operativo",
+    "revenue": "Ingresos",
+    "expenses": "Gastos",
+    "netIncome": "Ingreso Neto",
+    "expenseBreakdownTitle": "Gastos por Categoría",
+    "expenseBreakdownSubtitle": "Vista previa del resumen de Schedule C — la exportación completa del Paquete para el Contador agrega mantenimiento/combustible/intereses de préstamos.",
+    "empty": "Aún no hay gastos registrados.",
+    "total": "Total",
+    "carrierYtdTitle": "Total del Año Según el Transportista",
+    "carrierYtdSubtitle": "Como aparece en tu settlement más reciente — una referencia para verificar contra los totales anteriores, no se usa en los cálculos de esta pantalla.",
+    "carrierName": "Transportista",
+    "ytdRevenue": "Ingresos del Año (Transportista)",
+    "ytdExpenses": "Gastos del Año (Transportista)",
+    "ytdNet": "Neto del Año (Transportista)",
+    "weeksInService": "Semanas en Servicio"
+  },
+  "cashFlowScreen": {
+    "title": "Flujo de Caja",
+    "empty": "Aún no hay settlements — importa un PDF de settlement.",
+    "weeklyTrendTitle": "Tendencia Semanal",
+    "lanesTitle": "Mejores y Peores Rutas",
+    "avgRpm": "Promedio en todas las cargas: {{rate}}/milla cargada",
+    "noLoadData": "Importa PDFs de settlement con datos de carga para ver la clasificación de rutas.",
+    "bestLanes": "Mejores Rutas",
+    "worstLanes": "Peores Rutas"
+  },
+  "profitAnalysis": {
+    "title": "Análisis de Ganancias",
+    "last30Days": "Últimos 30 Días",
+    "revenue": "Ingresos",
+    "netIncome": "Ingreso Neto",
+    "ratiosTitle": "Razones de Costos",
+    "ratiosSubtitle": "Comparado con rangos de referencia de la industria publicados, no con datos de otros usuarios.",
+    "fuelPctOfRevenue": "Combustible como % de Ingresos",
+    "maintenanceCostPerMile": "Mantenimiento $/Milla",
+    "industryRange": "Referencia de la industria: {{low}}–{{high}}",
+    "industryRangeUsd": "Referencia de la industria: {{low}}–{{high}}",
+    "noBenchmarkYet": "La referencia de la industria aún no está disponible.",
+    "industryReferenceNote": "Los rangos de referencia de la industria son cifras publicadas, no datos en vivo de otros usuarios de esta app.",
+    "weeklyTitle": "Semanas Recientes (Neto)",
+    "aiInsightsTitle": "Perspectivas de IA",
+    "askAi": "🤖 Obtener Perspectivas de IA",
+    "aiFooter": "Información general, no es asesoría fiscal profesional.",
+    "aiFailed": "No se pudo conectar con el servicio de asesoría."
+  },
+  "shareProfit": {
+    "title": "Compartir Ganancias Semanales",
+    "subtitle": "Elige qué cifras incluir — nunca estás obligado a compartir las tres.",
+    "noSettlements": "Importa un settlement para compartir tus cifras.",
+    "metrics": {
+      "revenue": "Ingresos",
+      "profit": "Ganancia",
+      "mpg": "MPG"
+    },
+    "weekOf": "Semana del {{date}}",
+    "share": "Compartir",
+    "notAvailableTitle": "Compartir no está disponible en este dispositivo.",
+    "shareFailedTitle": "Error al compartir"
+  },
+  "dashboardCustomize": {
+    "title": "Personalizar Panel",
+    "subtitle": "Reordena, oculta o renombra cualquier tarjeta. Tu idioma nunca afecta una tarjeta que no hayas renombrado.",
+    "savedTitle": "✅ Guardado",
+    "saveFailedTitle": "Error al guardar",
+    "resetToDefault": "Restablecer Predeterminado",
+    "labelPlaceholder": "{{defaultLabel}} (predeterminado)",
+    "visible": "Visible",
+    "hidden": "Oculto"
+  },
+  "categoryPicker": {
+    "newCategory": "Nueva Categoría",
+    "newCategoryTitle": "➕ Nueva Categoría",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "ej. Lavado de Camión",
+    "bucketLabel": "Categoría de Schedule C",
+    "bucketNote": "Requerido para que esta categoría siempre cuente en tu estimado de impuestos.",
+    "saveFailedTitle": "Error al guardar"
   }
 }

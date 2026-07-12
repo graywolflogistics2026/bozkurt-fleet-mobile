@@ -14,13 +14,27 @@ const AFFECTED_TABLES = [
   'documents',
   'reimbursements',
   'tolls',
+  'loans',
+  'credit_cards',
+  'bank_statements',
+  'bank_transactions',
+  'misc_income',
+  'user_categories',
 ];
 
 // Derived/aggregate query keys that read from the tables above but aren't
 // plain entity-hook lists (dashboardStats.ts, capitalAccount.ts,
 // taxConfig.ts) — an import can move profiles.business_balance and add
 // capital_transactions rows, both of which feed these.
-const AFFECTED_AGGREGATES = ['fleet-stats', 'capital-account-summary', 'tax_config', 'tax_year_data'];
+const AFFECTED_AGGREGATES = [
+  'fleet-stats',
+  'driver-stats',
+  'capital-account-summary',
+  'tax_config',
+  'tax_year_data',
+  'dashboard-layout',
+  'profit-loss',
+];
 
 // A bare queryClient.invalidateQueries() call only eagerly refetches
 // queries with an ACTIVE observer (refetchType defaults to 'active') — a

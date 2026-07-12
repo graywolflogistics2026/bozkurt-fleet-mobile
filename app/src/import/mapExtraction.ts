@@ -498,7 +498,10 @@ export function mapCompliance(d: Extraction, userId: string): ComplianceItemInse
 // NEEDS REVIEW convention to the whole document, not just a purchase line
 // item — the AI's suggestedCategory (never silently trusted) becomes the
 // category, and the description is flagged for the user to confirm.
-export function mapGenericDeduction(d: Extraction, userId: string): DeductionInsert {
+// categoryOverride (PROMPTS.md Session 9a item 9, custom category picker):
+// the import preview's category line is editable — when the user has
+// picked/created a category before saving, that wins over the AI's guess.
+export function mapGenericDeduction(d: Extraction, userId: string, categoryOverride?: string | null): DeductionInsert {
   const isOther = d.docType === 'other';
   return {
     user_id: userId,
@@ -506,7 +509,7 @@ export function mapGenericDeduction(d: Extraction, userId: string): DeductionIns
     code: 'OTHER',
     description: isOther ? `NEEDS REVIEW: ${d.summary || d.suggestedCategory || 'Document'}` : d.summary || 'Document',
     amount: num(d.totalAmount),
-    category: (isOther && d.suggestedCategory) || 'Other',
+    category: categoryOverride || (isOther && d.suggestedCategory) || 'Other',
     source: 'import',
   };
 }

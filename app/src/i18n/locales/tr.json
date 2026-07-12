@@ -10,7 +10,8 @@
     "discard": "Vazgeç",
     "unit": "Ünite {{unit}}",
     "dash": "—",
-    "legalFootnote": "Sadece tahmin — vergi danışmanlığı değildir. Muhasebecinizle doğrulayın."
+    "legalFootnote": "Sadece tahmin — vergi danışmanlığı değildir. Muhasebecinizle doğrulayın.",
+    "close": "Kapat"
   },
   "nav": {
     "dashboard": "Panel",
@@ -33,7 +34,15 @@
     "settlements": "Settlements",
     "reimbursements": "Geri Ödemeler",
     "fuel": "Yakıt",
-    "tolls": "Geçiş Ücretleri"
+    "tolls": "Geçiş Ücretleri",
+    "creditCards": "Kredi Kartları",
+    "bankStatements": "Banka Ekstresi",
+    "otherIncome": "Diğer Gelirler",
+    "assetRegister": "Varlık Kaydı",
+    "operatingPnl": "İşletme P&L",
+    "profitAnalysis": "Kâr Analizi",
+    "shareProfit": "Haftalık Kârı Paylaş",
+    "dashboardCustomize": "Paneli Özelleştir"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -113,7 +122,10 @@
     "recentLoadsTitle": "Son Yükler",
     "noLoadsYet": "Henüz yük yok.",
     "truckUnit": "Ünite: {{unit}}",
-    "fleetOverviewTitle": "Filo Genel Bakışı"
+    "fleetOverviewTitle": "Filo Genel Bakışı",
+    "truckCardLabel": "Kamyon",
+    "driverOverviewTitle": "Sürücü Özeti",
+    "customize": "✏️ Özelleştir"
   },
   "deductions": {
     "title": "Kesintiler",
@@ -202,7 +214,7 @@
     "lowConfidenceTitle": "⚠️ Kaydetmeden önce inceleyin",
     "lowConfidenceBody": "Yapay zeka bu belgeyi okurken tam emin değildi — kaydetmeden önce ayrıntıları kontrol edin.",
     "miscIncomeNoteTitle": "💵 İşletme geliri tespit edildi",
-    "miscIncomeNoteBody": "Bu, henüz özel bir defteri olmayan işletme geliri gibi görünüyor (detention, layover, prim vb.) — belge arşivlendi, ancak şimdilik manuel olarak kaydedin.",
+    "miscIncomeNoteBody": "Bu, henüz kendine ait bir deftere sahip olmayan işletme geliri gibi görünüyor (detention, layover, bonus vb.) — belge arşivlendi, ancak lütfen şimdilik Diğer Gelirler ekranından manuel olarak kaydedin.",
     "save": "Kaydet",
     "saveAnyway": "Yine de Kaydet",
     "discard": "Vazgeç",
@@ -325,20 +337,20 @@
     "settlements": "Settlements",
     "reimbursements": "Geri Ödemeler",
     "fuel": "Yakıt",
-    "tolls": "Geçiş Ücretleri"
+    "tolls": "Geçiş Ücretleri",
+    "creditCards": "Kredi Kartları",
+    "bankStatements": "Banka Ekstresi",
+    "otherIncome": "Diğer Gelirler",
+    "assetRegister": "Varlık Kaydı",
+    "operatingPnl": "İşletme P&L",
+    "profitAnalysis": "Kâr Analizi",
+    "shareProfit": "Haftalık Kârı Paylaş",
+    "dashboardCustomize": "Paneli Özelleştir"
   },
   "placeholders": {
     "taxEstimator": {
       "title": "Vergi Tahmincisi",
       "note": "Beyan durumu/eyalet düzenleme, eş/SEP/sağlık sigortası girdileri ve S-Corp seçim çalışma sayfası ileriki bir oturumda gelecek. Panel'deki vergi kartları zaten canlı tahmininizi yansıtıyor."
-    },
-    "cashFlow": {
-      "title": "Nakit Akışı",
-      "note": "Vadesiz hesap ve banka ekstresi görünümleri ileriki bir oturumda gelecek."
-    },
-    "loans": {
-      "title": "Krediler",
-      "note": "Kredi takibi ileriki bir oturumda gelecek."
     }
   },
   "truckHealth": {
@@ -542,7 +554,7 @@
     },
     "government_or_misc_income": {
       "label": "Diğer Gelir",
-      "route": "Henüz bir ekrana bağlanmadı — şimdilik manuel kaydedin"
+      "route": "Diğer Gelirler (şimdilik oraya manuel girin)"
     },
     "utility_subscription": {
       "label": "Fatura/Abonelik Belgesi",
@@ -682,5 +694,178 @@
       "drivewyze": "Drivewyze",
       "other": "Diğer"
     }
+  },
+  "otherIncome": {
+    "title": "Diğer Gelirler",
+    "subtitle": "Henüz kendine ait bir deftere sahip olmayan işletme geliri — eyalet iadeleri, settlement dışında ödenen detention ücreti vb.",
+    "add": "Ekle",
+    "addTitle": "➕ Gelir Ekle",
+    "totalOtherIncome": "Toplam Diğer Gelir",
+    "empty": "Henüz kayıtlı başka gelir yok.",
+    "descriptionLabel": "Açıklama",
+    "descriptionPlaceholder": "Ne içindi?",
+    "sourceLabel": "Kaynak",
+    "sourcePlaceholder": "örn. IRS, Texas Eyaleti",
+    "dateLabel": "Tarih",
+    "amountLabel": "Tutar ($)",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteConfirmTitle": "Bu gelir kaydı silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız"
+  },
+  "loans": {
+    "title": "Kredi Merkezi",
+    "add": "Ekle",
+    "addTitle": "➕ Kredi Ekle",
+    "editTitle": "✏️ Krediyi Düzenle",
+    "unnamed": "İsimsiz Kredi",
+    "totalBalance": "Toplam Bakiye",
+    "estMonthlyPayments": "Tah. Aylık Ödemeler",
+    "empty": "Henüz kredi yok.",
+    "nameLabel": "Ad",
+    "namePlaceholder": "örn. Freightliner Cascadia",
+    "lenderLabel": "Kredi Veren",
+    "lenderPlaceholder": "örn. Daimler Truck Financial",
+    "originalAmountLabel": "Orijinal Tutar ($)",
+    "balanceLabel": "Güncel Bakiye ($)",
+    "paymentLabel": "Ödeme Tutarı ($)",
+    "frequencyLabel": "Ödeme Sıklığı",
+    "frequencies": {
+      "weekly": "Haftalık",
+      "biweekly": "İki Haftada Bir",
+      "monthly": "Aylık"
+    },
+    "aprLabel": "Yıllık Faiz Oranı (%)",
+    "nextDueLabel": "Sonraki Vade Tarihi",
+    "nextDue": "Sonraki vade: {{date}}",
+    "paidOffPct": "%{{pct}} ödendi",
+    "paymentAmount": "{{amount}}/ödeme",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteConfirmTitle": "Bu kredi silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız"
+  },
+  "creditCards": {
+    "title": "Kredi Kartları",
+    "add": "Ekle",
+    "addTitle": "➕ Kredi Kartı Ekle",
+    "editTitle": "✏️ Kredi Kartını Düzenle",
+    "unnamed": "İsimsiz Kart",
+    "totalBalance": "Toplam Bakiye",
+    "totalLimit": "Toplam Limit",
+    "empty": "Henüz kredi kartı yok.",
+    "nameLabel": "Ad",
+    "namePlaceholder": "örn. İşletme Visa",
+    "lastFourLabel": "Son 4 Hane",
+    "creditLimitLabel": "Kredi Limiti ($)",
+    "balanceLabel": "Güncel Bakiye ($)",
+    "aprLabel": "Yıllık Faiz Oranı (%)",
+    "dueDayLabel": "Ayın Vade Günü",
+    "dueDayShort": "vade günü {{day}}",
+    "limitOf": "Limit: {{limit}}",
+    "utilized": "kullanılan",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteConfirmTitle": "Bu kredi kartı silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız"
+  },
+  "bankStatements": {
+    "title": "Banka Ekstresi",
+    "subtitle": "Salt okunur — içe aktarılan ekstre verisi, burada düzenlenemez.",
+    "checkingTitle": "Vadesiz Hesap Ekstreleri",
+    "cardTitle": "Kart Ekstreleri",
+    "empty": "Henüz ekstre içe aktarılmadı.",
+    "noTransactions": "Bu ekstrede işlem yok.",
+    "deductibleTag": "İndirilebilir",
+    "deleteStatement": "Bu ekstreyi sil",
+    "deleteConfirmTitle": "Bu ekstre silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız"
+  },
+  "assetRegister": {
+    "title": "Varlık Kaydı",
+    "totalAssets": "Toplam Varlık",
+    "totalValue": "Toplam Değer",
+    "activeWarranties": "Aktif Garantiler",
+    "activeWarrantiesTitle": "Aktif Garantiler",
+    "allAssetsTitle": "Tüm Varlıklar",
+    "empty": "Henüz varlık yok — ekipman/elektronik/alet satın alımları burada görünecek.",
+    "warrantyActiveUntil": "Garanti {{date}} tarihine kadar aktif",
+    "warrantyExpired": "Garanti {{date}} tarihinde sona erdi"
+  },
+  "operatingPnl": {
+    "title": "İşletme P&L",
+    "revenue": "Gelir",
+    "expenses": "Giderler",
+    "netIncome": "Net Gelir",
+    "expenseBreakdownTitle": "Kategoriye Göre Giderler",
+    "expenseBreakdownSubtitle": "Schedule C özet önizlemesi — Muhasebeci Paketi'nin tam dışa aktarımı bakım/yakıt/kredi faizini de ekler.",
+    "empty": "Henüz kayıtlı gider yok.",
+    "total": "Toplam",
+    "carrierYtdTitle": "Taşıyıcının Bildirdiği Yıl Başından İtibaren",
+    "carrierYtdSubtitle": "En son settlement'ınızda yazan şekliyle — yukarıdaki toplamlarla karşılaştırma referansıdır, bu ekranın hesaplamalarında kullanılmaz.",
+    "carrierName": "Taşıyıcı",
+    "ytdRevenue": "Yıl Başından İtibaren Gelir",
+    "ytdExpenses": "Yıl Başından İtibaren Gider",
+    "ytdNet": "Yıl Başından İtibaren Net",
+    "weeksInService": "Hizmetteki Hafta Sayısı"
+  },
+  "cashFlowScreen": {
+    "title": "Nakit Akışı",
+    "empty": "Henüz settlement yok — bir settlement PDF'i içe aktarın.",
+    "weeklyTrendTitle": "Haftalık Eğilim",
+    "lanesTitle": "En İyi ve En Kötü Güzergâhlar",
+    "avgRpm": "Tüm yükler ortalaması: {{rate}}/yüklü mil",
+    "noLoadData": "Güzergâh sıralamasını görmek için yük verisi olan settlement PDF'leri içe aktarın.",
+    "bestLanes": "En İyi Güzergâhlar",
+    "worstLanes": "En Kötü Güzergâhlar"
+  },
+  "profitAnalysis": {
+    "title": "Kâr Analizi",
+    "last30Days": "Son 30 Gün",
+    "revenue": "Gelir",
+    "netIncome": "Net Gelir",
+    "ratiosTitle": "Maliyet Oranları",
+    "ratiosSubtitle": "Yayınlanmış sektör referans aralıklarıyla karşılaştırılır, diğer kullanıcı verileriyle değil.",
+    "fuelPctOfRevenue": "Gelirin Yüzdesi Olarak Yakıt",
+    "maintenanceCostPerMile": "Bakım $/Mil",
+    "industryRange": "Sektör referansı: {{low}}–{{high}}",
+    "industryRangeUsd": "Sektör referansı: {{low}}–{{high}}",
+    "noBenchmarkYet": "Sektör referansı henüz mevcut değil.",
+    "industryReferenceNote": "Sektör referans aralıkları yayınlanmış rakamlardır, bu uygulamanın diğer kullanıcılarından canlı veri değildir.",
+    "weeklyTitle": "Son Haftalar (Net)",
+    "aiInsightsTitle": "AI Öngörüleri",
+    "askAi": "🤖 AI Öngörüleri Al",
+    "aiFooter": "Genel bilgidir, profesyonel vergi danışmanlığı değildir.",
+    "aiFailed": "Danışman servisine ulaşılamadı."
+  },
+  "shareProfit": {
+    "title": "Haftalık Kârı Paylaş",
+    "subtitle": "Hangi rakamların dahil edileceğini seçin — asla üçünü birden paylaşmaya zorlanmazsınız.",
+    "noSettlements": "Rakamlarınızı paylaşmak için bir settlement içe aktarın.",
+    "metrics": {
+      "revenue": "Gelir",
+      "profit": "Kâr",
+      "mpg": "MPG"
+    },
+    "weekOf": "{{date}} Haftası",
+    "share": "Paylaş",
+    "notAvailableTitle": "Bu cihazda paylaşım kullanılamıyor.",
+    "shareFailedTitle": "Paylaşma başarısız"
+  },
+  "dashboardCustomize": {
+    "title": "Paneli Özelleştir",
+    "subtitle": "Herhangi bir kartı yeniden sıralayın, gizleyin veya yeniden adlandırın. Dil değişikliği, yeniden adlandırmadığınız bir kartı asla etkilemez.",
+    "savedTitle": "✅ Kaydedildi",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "resetToDefault": "Varsayılana Sıfırla",
+    "labelPlaceholder": "{{defaultLabel}} (varsayılan)",
+    "visible": "Görünür",
+    "hidden": "Gizli"
+  },
+  "categoryPicker": {
+    "newCategory": "Yeni Kategori",
+    "newCategoryTitle": "➕ Yeni Kategori",
+    "nameLabel": "Ad",
+    "namePlaceholder": "örn. Kamyon Yıkama",
+    "bucketLabel": "Schedule C Kategorisi",
+    "bucketNote": "Bu kategorinin vergi tahmininize her zaman dahil olması için gereklidir.",
+    "saveFailedTitle": "Kaydetme başarısız"
   }
 }

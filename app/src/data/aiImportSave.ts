@@ -47,6 +47,11 @@ export type SaveExtractionParams = {
   // caller has already confirmed it with the user (once per receipt) —
   // declining still saves the deduction, just with no linked contribution.
   createContribution: boolean;
+  // Custom category picker (PROMPTS.md Session 9a item 9): the user's
+  // edited/picked category for the (previously read-only) 'other' docType
+  // preview line — null/undefined falls back to mapGenericDeduction()'s own
+  // suggestedCategory/'Other' default, unchanged from before this existed.
+  categoryOverride?: string | null;
 };
 
 export type SaveExtractionResult = {
@@ -63,7 +68,7 @@ export type SaveExtractionResult = {
 // document id) into the pure mapping output, then performs the actual
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
-  const { extraction: d, userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution } = params;
+  const { extraction: d, userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution, categoryOverride } = params;
 
   // 1. Upload the original file to the documents bucket FIRST (CLAUDE.md
   // storage convention: {user_id}/{month}/...) so the documents row can
@@ -306,7 +311,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   } else if (d.docType !== 'w2' && d.docType !== 'government_or_misc_income') {
     // Generic fallback (toll/loan/other) — legacy's actual saveImport()
     // else-branch behavior, not the richer routing DTYPES hints at.
-    const row = mapGenericDeduction(d, userId);
+    const row = mapGenericDeduction(d, userId, categoryOverride);
     const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
     if (error) throw error;
   }

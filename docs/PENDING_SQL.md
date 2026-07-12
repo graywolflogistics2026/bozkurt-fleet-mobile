@@ -1,6 +1,8 @@
 # Pending SQL — history of what's been run against the live Supabase DB
 
-**STATUS (2026-07-11): sections 1-24 have all been run against the live DB.**
+**STATUS (2026-07-11): sections 1-24 have all been run against the live DB.
+Sections 25-26 (added this pass, PROMPTS.md Session 9a) are NOT yet run —
+see their checklists below.**
 Sections 11-24 were applied together in one transaction on 2026-07-11 via a
 combined SQL block (generated from this file, run in the Supabase SQL
 editor). This file started as a forward-looking "run this next" list; it's kept now
@@ -785,6 +787,96 @@ alter table profiles add column weekly_goal numeric(12,2);
 ```
 
 - [x] 24a run (add profiles.weekly_goal column)
+
+---
+
+## 25. benchmarks table (Profit Analysis v1, PROMPTS.md Session 9a, CLAUDE.md invariant #22 — NO external-data features) — ⬜ NOT YET RUN
+
+NOT user-scoped — one row per metric/year, shared by every user, same
+"admin-seeded, published-gates-visibility" pattern as `tax_year_data`
+(section 1). These are PUBLISHED, STATIC industry reference ranges (source
++ year cited) — never live peer data pulled from other users of this app
+(invariant #22 forbids that; true anonymized peer benchmarking is v2+
+only). The UI must label every comparison "industry reference, not peer
+data."
+
+```sql
+create table benchmarks (
+  id          uuid primary key default gen_random_uuid(),
+  metric      text not null,          -- 'fuel_pct_of_revenue' | 'maintenance_cost_per_mile'
+  label       text not null,
+  low         numeric(10,4) not null,
+  high        numeric(10,4) not null,
+  unit        text not null check (unit in ('percent','usd_per_mile')),
+  source      text not null,          -- e.g. "ATRI 2025 Operational Costs of Trucking"
+  year        int not null,
+  published   boolean not null default false,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now(),
+  unique (metric, year)
+);
+
+alter table benchmarks enable row level security;
+create policy "benchmarks_read_all_authenticated" on benchmarks
+  for select using (auth.role() = 'authenticated');
+-- No insert/update/delete policy for regular users — same as
+-- tax_year_data, only service_role (admin) may write these.
+
+-- Seed values (ATRI-style published ranges — placeholder figures, an admin
+-- should verify/replace against the actual current-year source before
+-- publishing per docs/ADMIN_RUNBOOK.md's pattern for tax_year_data):
+insert into benchmarks (metric, label, low, high, unit, source, year, published) values
+  ('fuel_pct_of_revenue', 'Fuel as % of revenue', 0.20, 0.28, 'percent', 'ATRI Operational Costs of Trucking (industry reference)', 2026, true),
+  ('maintenance_cost_per_mile', 'Maintenance & repair cost per mile', 0.15, 0.22, 'usd_per_mile', 'ATRI Operational Costs of Trucking (industry reference)', 2026, true)
+on conflict (metric, year) do nothing;
+```
+
+App fallback (mirrors `tax_year_data`'s CLAUDE.md invariant #6 rule — never
+silently compute against an empty/default table): until this has run (or a
+metric's row is unpublished), Profit Analysis shows the computed ratio with
+no benchmark comparison and no error, same "banner, not silent
+default-zero" spirit as the tax-year fallback.
+
+- [ ] 25a run (create benchmarks table + RLS + seed the 2 metrics above)
+
+---
+
+## 26. misc_income table (manual income ledger, PROMPTS.md Session 9a) — ⬜ NOT YET RUN
+
+Fills the gap CLAUDE.md invariant #14 flagged: docType
+`government_or_misc_income` was archive-only with no financial row created
+because no income ledger existed. This table is also the target of the
+Session 9a "manual add income" form (legacy has no equivalent — a
+user-entered row for things like a state tax refund credited to the
+business, or detention pay paid outside a settlement). No category/bucket
+column: unlike deductions, income never carries a Schedule C bucket
+(invariant #19) — every row here rolls straight into gross income.
+
+```sql
+create table misc_income (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users on delete cascade,
+  document_id  uuid references documents on delete set null,
+  income_date  date,
+  description  text,
+  source       text,        -- free text, e.g. "IRS", "State of Texas" — NOT a payment method
+  amount       numeric(12,2) not null,
+  tags         text,        -- docs/PENDING_SQL.md §22 (flexible fields)
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now()
+);
+
+alter table misc_income enable row level security;
+create policy "misc_income_owner_all" on misc_income
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+```
+
+Once this has run, `app/src/import/mapExtraction.ts`'s handling of
+`government_or_misc_income` should be updated to insert a `misc_income` row
+(same as the other financial docTypes) instead of archive-only — not done
+this pass; tracked here so it isn't lost.
+
+- [ ] 26a run (create misc_income table + RLS)
 
 ---
 

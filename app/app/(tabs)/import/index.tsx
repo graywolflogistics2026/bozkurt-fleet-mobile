@@ -23,6 +23,7 @@ import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useDocTypeMeta } from '@/src/import/docTypes';
+import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
@@ -101,8 +102,10 @@ function buildPreviewLines(d: Extraction, t: TFunction, locale: string): Preview
     lines.push({ label: t(`${p1}.total`), value: money(f.amount ?? d.totalAmount, locale), color: colors.red });
     if (f.reference) lines.push({ label: t(`${p1}.reference`), value: f.reference });
     if (f.period) lines.push({ label: t(`${p1}.period`), value: f.period });
-  } else if (d.docType === 'other' && d.suggestedCategory) {
-    lines.push({ label: t(`${p1}.suggestedCategory`), value: d.suggestedCategory });
+  } else if (d.docType === 'other') {
+    // Category line intentionally NOT pushed here — it's rendered as an
+    // editable CategoryPicker instead (PROMPTS.md Session 9a item 9, custom
+    // category picker; this used to be a read-only suggestedCategory line).
     lines.push({ label: t(`${p1}.total`), value: money(d.totalAmount, locale), color: colors.red });
   }
   return lines;
@@ -144,6 +147,7 @@ export default function Import() {
   const [newDriverName, setNewDriverName] = useState('');
   const [creatingDriver, setCreatingDriver] = useState(false);
   const [driverShareAmount, setDriverShareAmount] = useState('');
+  const [categoryOverride, setCategoryOverride] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
 
@@ -166,6 +170,7 @@ export default function Import() {
     setShowNewDriverForm(false);
     setNewDriverName('');
     setDriverShareAmount('');
+    setCategoryOverride('');
     setErrorMessage(null);
     setResult(null);
   }
@@ -235,6 +240,7 @@ export default function Import() {
     // settlements but wrong here).
     setNeedsDriverPicker(driverMatch.needsPicker || (d.docType === 'driver_payment' && !driverMatch.driverId));
 
+    setCategoryOverride(d.docType === 'other' ? d.suggestedCategory || 'Other' : '');
     setExtraction(d);
     setPhase('preview');
   }
@@ -307,6 +313,7 @@ export default function Import() {
         fileExt: fileMeta.ext,
         mediaType: fileMeta.mediaType,
         createContribution,
+        categoryOverride: extraction.docType === 'other' ? categoryOverride : null,
       });
       setResult(saved);
       setPhase('done');
@@ -408,6 +415,15 @@ export default function Import() {
                 <Text style={{ color: line.color ?? colors.text, fontWeight: '600' }}>{line.value}</Text>
               </View>
             ))}
+
+            {extraction.docType === 'other' && (
+              <View style={{ marginTop: spacing.sm }}>
+                <MutedText>{t('importScreen.previewLabels.suggestedCategory')}</MutedText>
+                <View style={{ marginTop: spacing.xs }}>
+                  <CategoryPicker kind="expense" value={categoryOverride} onChange={setCategoryOverride} />
+                </View>
+              </View>
+            )}
 
             {needsTruckPicker && (
               <View style={{ marginTop: spacing.md }}>

@@ -10,7 +10,8 @@
     "discard": "Отклонить",
     "unit": "Юнит {{unit}}",
     "dash": "—",
-    "legalFootnote": "Только оценки — не является налоговой консультацией. Проверьте у своего бухгалтера."
+    "legalFootnote": "Только оценки — не является налоговой консультацией. Проверьте у своего бухгалтера.",
+    "close": "Закрыть"
   },
   "nav": {
     "dashboard": "Панель",
@@ -33,7 +34,15 @@
     "settlements": "Settlements",
     "reimbursements": "Возмещения",
     "fuel": "Топливо",
-    "tolls": "Платные Дороги и Сборы"
+    "tolls": "Платные Дороги и Сборы",
+    "creditCards": "Кредитные карты",
+    "bankStatements": "Банковская выписка",
+    "otherIncome": "Прочие доходы",
+    "assetRegister": "Реестр активов",
+    "operatingPnl": "Операционный P&L",
+    "profitAnalysis": "Анализ прибыли",
+    "shareProfit": "Поделиться недельной прибылью",
+    "dashboardCustomize": "Настроить панель"
   },
   "auth": {
     "brand": "Bozkurt Fleet OS",
@@ -113,7 +122,10 @@
     "recentLoadsTitle": "Недавние Грузы",
     "noLoadsYet": "Пока нет грузов.",
     "truckUnit": "Юнит: {{unit}}",
-    "fleetOverviewTitle": "Обзор Автопарка"
+    "fleetOverviewTitle": "Обзор Автопарка",
+    "truckCardLabel": "Грузовик",
+    "driverOverviewTitle": "Обзор водителей",
+    "customize": "✏️ Настроить"
   },
   "deductions": {
     "title": "Вычеты",
@@ -202,7 +214,7 @@
     "lowConfidenceTitle": "⚠️ Проверьте перед сохранением",
     "lowConfidenceBody": "ИИ не был полностью уверен при чтении этого документа — проверьте данные перед сохранением.",
     "miscIncomeNoteTitle": "💵 Обнаружен доход бизнеса",
-    "miscIncomeNoteBody": "Похоже на доход бизнеса (detention, layover, бонус и т.д.), для которого пока нет отдельного учёта — документ архивирован, но запишите его вручную.",
+    "miscIncomeNoteBody": "Похоже, это доход бизнеса (detention, layover, бонус и т.д.), для которого пока нет отдельного реестра — документ архивируется, но, пожалуйста, внесите его вручную на экране «Прочие доходы».",
     "save": "Сохранить",
     "saveAnyway": "Сохранить в Любом Случае",
     "discard": "Отклонить",
@@ -325,20 +337,20 @@
     "settlements": "Settlements",
     "reimbursements": "Возмещения",
     "fuel": "Топливо",
-    "tolls": "Платные Дороги и Сборы"
+    "tolls": "Платные Дороги и Сборы",
+    "creditCards": "Кредитные карты",
+    "bankStatements": "Банковская выписка",
+    "otherIncome": "Прочие доходы",
+    "assetRegister": "Реестр активов",
+    "operatingPnl": "Операционный P&L",
+    "profitAnalysis": "Анализ прибыли",
+    "shareProfit": "Поделиться недельной прибылью",
+    "dashboardCustomize": "Настроить панель"
   },
   "placeholders": {
     "taxEstimator": {
       "title": "Калькулятор Налогов",
       "note": "Редактирование статуса подачи/штата, данные о супруге/SEP/медстраховке и рабочий лист выбора S-Corp появятся в следующей сессии. Налоговые карточки на Панели уже отражают вашу текущую оценку."
-    },
-    "cashFlow": {
-      "title": "Движение Денежных Средств",
-      "note": "Просмотр расчётного счёта и банковских выписок появится в следующей сессии."
-    },
-    "loans": {
-      "title": "Кредиты",
-      "note": "Учёт кредитов появится в следующей сессии."
     }
   },
   "truckHealth": {
@@ -542,7 +554,7 @@
     },
     "government_or_misc_income": {
       "label": "Прочий Доход",
-      "route": "Пока не привязано к экрану — записывайте вручную"
+      "route": "Прочие доходы (пока вносите туда вручную)"
     },
     "utility_subscription": {
       "label": "Счёт за Услуги/Подписку",
@@ -682,5 +694,178 @@
       "drivewyze": "Drivewyze",
       "other": "Другое"
     }
+  },
+  "otherIncome": {
+    "title": "Прочие доходы",
+    "subtitle": "Доход бизнеса, для которого пока нет отдельного реестра — возврат налогов штата, оплата detention вне settlement и т.д.",
+    "add": "Добавить",
+    "addTitle": "➕ Добавить доход",
+    "totalOtherIncome": "Всего прочих доходов",
+    "empty": "Прочих доходов пока нет.",
+    "descriptionLabel": "Описание",
+    "descriptionPlaceholder": "За что это было?",
+    "sourceLabel": "Источник",
+    "sourcePlaceholder": "напр. IRS, штат Техас",
+    "dateLabel": "Дата",
+    "amountLabel": "Сумма ($)",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteConfirmTitle": "Удалить эту запись о доходе?",
+    "deleteFailedTitle": "Не удалось удалить"
+  },
+  "loans": {
+    "title": "Центр кредитов",
+    "add": "Добавить",
+    "addTitle": "➕ Добавить кредит",
+    "editTitle": "✏️ Изменить кредит",
+    "unnamed": "Кредит без названия",
+    "totalBalance": "Общий остаток",
+    "estMonthlyPayments": "Прим. ежемесячные платежи",
+    "empty": "Кредитов пока нет.",
+    "nameLabel": "Название",
+    "namePlaceholder": "напр. Freightliner Cascadia",
+    "lenderLabel": "Кредитор",
+    "lenderPlaceholder": "напр. Daimler Truck Financial",
+    "originalAmountLabel": "Первоначальная сумма ($)",
+    "balanceLabel": "Текущий остаток ($)",
+    "paymentLabel": "Сумма платежа ($)",
+    "frequencyLabel": "Периодичность платежей",
+    "frequencies": {
+      "weekly": "Еженедельно",
+      "biweekly": "Раз в две недели",
+      "monthly": "Ежемесячно"
+    },
+    "aprLabel": "Годовая ставка (%)",
+    "nextDueLabel": "Дата следующего платежа",
+    "nextDue": "Следующий платёж: {{date}}",
+    "paidOffPct": "Погашено {{pct}}%",
+    "paymentAmount": "{{amount}}/платёж",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteConfirmTitle": "Удалить этот кредит?",
+    "deleteFailedTitle": "Не удалось удалить"
+  },
+  "creditCards": {
+    "title": "Кредитные карты",
+    "add": "Добавить",
+    "addTitle": "➕ Добавить карту",
+    "editTitle": "✏️ Изменить карту",
+    "unnamed": "Карта без названия",
+    "totalBalance": "Общий остаток",
+    "totalLimit": "Общий лимит",
+    "empty": "Кредитных карт пока нет.",
+    "nameLabel": "Название",
+    "namePlaceholder": "напр. Business Visa",
+    "lastFourLabel": "Последние 4 цифры",
+    "creditLimitLabel": "Кредитный лимит ($)",
+    "balanceLabel": "Текущий остаток ($)",
+    "aprLabel": "Годовая ставка (%)",
+    "dueDayLabel": "День платежа в месяце",
+    "dueDayShort": "платёж {{day}} числа",
+    "limitOf": "Лимит: {{limit}}",
+    "utilized": "использовано",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteConfirmTitle": "Удалить эту карту?",
+    "deleteFailedTitle": "Не удалось удалить"
+  },
+  "bankStatements": {
+    "title": "Банковская выписка",
+    "subtitle": "Только просмотр — импортированные данные выписки, здесь не редактируются.",
+    "checkingTitle": "Выписки по расчётному счёту",
+    "cardTitle": "Выписки по картам",
+    "empty": "Выписки пока не импортированы.",
+    "noTransactions": "В этой выписке нет транзакций.",
+    "deductibleTag": "Вычитаемое",
+    "deleteStatement": "Удалить эту выписку",
+    "deleteConfirmTitle": "Удалить эту выписку?",
+    "deleteFailedTitle": "Не удалось удалить"
+  },
+  "assetRegister": {
+    "title": "Реестр активов",
+    "totalAssets": "Всего активов",
+    "totalValue": "Общая стоимость",
+    "activeWarranties": "Действующие гарантии",
+    "activeWarrantiesTitle": "Действующие гарантии",
+    "allAssetsTitle": "Все активы",
+    "empty": "Активов пока нет — покупки оборудования/электроники/инструментов появятся здесь.",
+    "warrantyActiveUntil": "Гарантия действует до {{date}}",
+    "warrantyExpired": "Гарантия истекла {{date}}"
+  },
+  "operatingPnl": {
+    "title": "Операционный P&L",
+    "revenue": "Доход",
+    "expenses": "Расходы",
+    "netIncome": "Чистая прибыль",
+    "expenseBreakdownTitle": "Расходы по категориям",
+    "expenseBreakdownSubtitle": "Предварительный свод Schedule C — полный экспорт пакета для бухгалтера добавляет техобслуживание/топливо/проценты по кредитам.",
+    "empty": "Расходов пока не зафиксировано.",
+    "total": "Итого",
+    "carrierYtdTitle": "Данные с начала года от перевозчика",
+    "carrierYtdSubtitle": "Как указано в вашем последнем settlement — справочные данные для сверки с итогами выше, в расчётах этого экрана не используются.",
+    "carrierName": "Перевозчик",
+    "ytdRevenue": "Доход с начала года",
+    "ytdExpenses": "Расходы с начала года",
+    "ytdNet": "Чистая прибыль с начала года",
+    "weeksInService": "Недель в эксплуатации"
+  },
+  "cashFlowScreen": {
+    "title": "Денежный поток",
+    "empty": "Settlement'ов пока нет — импортируйте PDF settlement.",
+    "weeklyTrendTitle": "Недельная динамика",
+    "lanesTitle": "Лучшие и худшие маршруты",
+    "avgRpm": "Среднее по всем рейсам: {{rate}}/загруженную милю",
+    "noLoadData": "Импортируйте PDF settlement с данными о грузах, чтобы увидеть рейтинг маршрутов.",
+    "bestLanes": "Лучшие маршруты",
+    "worstLanes": "Худшие маршруты"
+  },
+  "profitAnalysis": {
+    "title": "Анализ прибыли",
+    "last30Days": "Последние 30 дней",
+    "revenue": "Доход",
+    "netIncome": "Чистая прибыль",
+    "ratiosTitle": "Соотношения затрат",
+    "ratiosSubtitle": "Сравнение с опубликованными отраслевыми ориентирами, не с данными других пользователей.",
+    "fuelPctOfRevenue": "Топливо, % от дохода",
+    "maintenanceCostPerMile": "Техобслуживание, $/милю",
+    "industryRange": "Отраслевой ориентир: {{low}}–{{high}}",
+    "industryRangeUsd": "Отраслевой ориентир: {{low}}–{{high}}",
+    "noBenchmarkYet": "Отраслевой ориентир пока недоступен.",
+    "industryReferenceNote": "Отраслевые ориентиры — это опубликованные показатели, а не данные в реальном времени от других пользователей приложения.",
+    "weeklyTitle": "Последние недели (нетто)",
+    "aiInsightsTitle": "Аналитика ИИ",
+    "askAi": "🤖 Получить аналитику ИИ",
+    "aiFooter": "Общая информация, не является профессиональной налоговой консультацией.",
+    "aiFailed": "Не удалось связаться со службой консультирования."
+  },
+  "shareProfit": {
+    "title": "Поделиться недельной прибылью",
+    "subtitle": "Выберите, какие показатели включить — вас никогда не заставляют делиться всеми тремя.",
+    "noSettlements": "Импортируйте settlement, чтобы поделиться своими показателями.",
+    "metrics": {
+      "revenue": "Доход",
+      "profit": "Прибыль",
+      "mpg": "MPG"
+    },
+    "weekOf": "Неделя {{date}}",
+    "share": "Поделиться",
+    "notAvailableTitle": "Обмен недоступен на этом устройстве.",
+    "shareFailedTitle": "Не удалось поделиться"
+  },
+  "dashboardCustomize": {
+    "title": "Настроить панель",
+    "subtitle": "Меняйте порядок, скрывайте или переименовывайте любую карточку. Смена языка никогда не затронет карточку, которую вы переименовали.",
+    "savedTitle": "✅ Сохранено",
+    "saveFailedTitle": "Не удалось сохранить",
+    "resetToDefault": "Сбросить по умолчанию",
+    "labelPlaceholder": "{{defaultLabel}} (по умолчанию)",
+    "visible": "Видимо",
+    "hidden": "Скрыто"
+  },
+  "categoryPicker": {
+    "newCategory": "Новая категория",
+    "newCategoryTitle": "➕ Новая категория",
+    "nameLabel": "Название",
+    "namePlaceholder": "напр. Мойка грузовика",
+    "bucketLabel": "Категория Schedule C",
+    "bucketNote": "Обязательно, чтобы эта категория всегда учитывалась в вашей налоговой оценке.",
+    "saveFailedTitle": "Не удалось сохранить"
   }
 }
