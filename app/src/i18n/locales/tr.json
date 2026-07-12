@@ -1194,5 +1194,16 @@
     "costPerMile": "Maliyet/Mil (CPM)",
     "mpg": "Filo MPG",
     "trendTitle": "Haftalık Net Trend"
+  },
+  "sidebar": {
+    "sections": {
+      "overview": "Genel Bakış",
+      "revenue": "Gelir",
+      "expenses": "Giderler",
+      "business": "İşletme",
+      "intelligence": "Analiz",
+      "tools": "Araçlar",
+      "system": "Sistem"
+    }
   }
 }

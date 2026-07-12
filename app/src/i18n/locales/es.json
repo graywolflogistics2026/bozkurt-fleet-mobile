@@ -1194,5 +1194,16 @@
     "costPerMile": "Costo/Milla (CPM)",
     "mpg": "MPG de la Flota",
     "trendTitle": "Tendencia Neta Semanal"
+  },
+  "sidebar": {
+    "sections": {
+      "overview": "Resumen",
+      "revenue": "Ingresos",
+      "expenses": "Gastos",
+      "business": "Negocio",
+      "intelligence": "Inteligencia",
+      "tools": "Herramientas",
+      "system": "Sistema"
+    }
   }
 }

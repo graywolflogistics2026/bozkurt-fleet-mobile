@@ -1194,5 +1194,16 @@
     "costPerMile": "Стоимость/миля (CPM)",
     "mpg": "MPG флота",
     "trendTitle": "Недельный тренд чистой прибыли"
+  },
+  "sidebar": {
+    "sections": {
+      "overview": "Обзор",
+      "revenue": "Доход",
+      "expenses": "Расходы",
+      "business": "Бизнес",
+      "intelligence": "Аналитика",
+      "tools": "Инструменты",
+      "system": "Система"
+    }
   }
 }

@@ -1194,5 +1194,16 @@
     "costPerMile": "التكلفة/الميل (CPM)",
     "mpg": "معدل استهلاك الوقود للأسطول (MPG)",
     "trendTitle": "اتجاه صافي الربح الأسبوعي"
+  },
+  "sidebar": {
+    "sections": {
+      "overview": "نظرة عامة",
+      "revenue": "الإيرادات",
+      "expenses": "المصروفات",
+      "business": "الأعمال",
+      "intelligence": "التحليلات",
+      "tools": "الأدوات",
+      "system": "النظام"
+    }
   }
 }

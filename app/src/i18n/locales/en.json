@@ -1194,5 +1194,16 @@
     "costPerMile": "Cost/Mile (CPM)",
     "mpg": "Fleet MPG",
     "trendTitle": "Weekly Net Trend"
+  },
+  "sidebar": {
+    "sections": {
+      "overview": "Overview",
+      "revenue": "Revenue",
+      "expenses": "Expenses",
+      "business": "Business",
+      "intelligence": "Intelligence",
+      "tools": "Tools",
+      "system": "System"
+    }
   }
 }
