@@ -444,6 +444,8 @@
   "maintenance": {
     "title": "الصيانة",
     "totalSpent": "إجمالي المصروف",
+    "warrantyCovered": "مغطى بالضمان",
+    "outOfPocket": "من الجيب الخاص",
     "empty": "لا توجد سجلات صيانة بعد — استورد ملف PDF أو أضف سجلاً يدويًا أدناه.",
     "addRecord": "إضافة سجل",
     "editRecord": "تعديل السجل",
@@ -656,6 +658,8 @@
   "settlementsScreen": {
     "title": "Settlements",
     "grossTotal": "إجمالي الإجمالي",
+    "reimbTotal": "المبالغ المستردة",
+    "dedTotal": "الخصومات",
     "netTotal": "إجمالي الصافي",
     "count": "Settlements",
     "empty": "لا توجد Settlements بعد — استورد ملف PDF لـ Settlement.",
@@ -795,6 +799,7 @@
     "unnamed": "بطاقة بدون اسم",
     "totalBalance": "إجمالي الرصيد",
     "totalLimit": "إجمالي الحد الائتماني",
+    "totalUtilization": "نسبة الاستخدام",
     "empty": "لا توجد بطاقات ائتمان بعد.",
     "nameLabel": "الاسم",
     "namePlaceholder": "مثال: Visa للأعمال",

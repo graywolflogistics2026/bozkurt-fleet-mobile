@@ -444,6 +444,8 @@
   "maintenance": {
     "title": "Bakım",
     "totalSpent": "Toplam Harcama",
+    "warrantyCovered": "Garanti Kapsamında",
+    "outOfPocket": "Cepten Ödenen",
     "empty": "Henüz bakım kaydı yok — bir PDF içe aktarın veya aşağıdan manuel kayıt ekleyin.",
     "addRecord": "Kayıt Ekle",
     "editRecord": "Kaydı Düzenle",
@@ -656,6 +658,8 @@
   "settlementsScreen": {
     "title": "Settlements",
     "grossTotal": "Toplam Brüt",
+    "reimbTotal": "Geri Ödenen",
+    "dedTotal": "Kesintiler",
     "netTotal": "Toplam Net",
     "count": "Settlements",
     "empty": "Henüz settlement yok — bir settlement PDF'i içe aktarın.",
@@ -795,6 +799,7 @@
     "unnamed": "İsimsiz Kart",
     "totalBalance": "Toplam Bakiye",
     "totalLimit": "Toplam Limit",
+    "totalUtilization": "Kullanım Oranı",
     "empty": "Henüz kredi kartı yok.",
     "nameLabel": "Ad",
     "namePlaceholder": "örn. İşletme Visa",

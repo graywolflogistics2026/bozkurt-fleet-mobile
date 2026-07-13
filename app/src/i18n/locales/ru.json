@@ -444,6 +444,8 @@
   "maintenance": {
     "title": "Обслуживание",
     "totalSpent": "Всего Потрачено",
+    "warrantyCovered": "Покрыто гарантией",
+    "outOfPocket": "Из своего кармана",
     "empty": "Записей обслуживания пока нет — импортируйте PDF или добавьте запись вручную ниже.",
     "addRecord": "Добавить Запись",
     "editRecord": "Изменить Запись",
@@ -656,6 +658,8 @@
   "settlementsScreen": {
     "title": "Settlements",
     "grossTotal": "Всего Брутто",
+    "reimbTotal": "Возмещено",
+    "dedTotal": "Вычеты",
     "netTotal": "Всего Нетто",
     "count": "Settlements",
     "empty": "Пока нет settlements — импортируйте PDF settlement.",
@@ -795,6 +799,7 @@
     "unnamed": "Карта без названия",
     "totalBalance": "Общий остаток",
     "totalLimit": "Общий лимит",
+    "totalUtilization": "Использование",
     "empty": "Кредитных карт пока нет.",
     "nameLabel": "Название",
     "namePlaceholder": "напр. Business Visa",

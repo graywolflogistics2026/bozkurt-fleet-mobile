@@ -32,7 +32,8 @@ function CardRow({ x, onEdit, onDelete }: { x: CreditCardRow; onEdit: () => void
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.balance ?? 0)}</Text>
         {utilization != null && (
-          <MutedText style={utilization > 0.7 ? { color: colors.red } : undefined}>
+          // Legacy rCards(): utilization >30% shown orange.
+          <MutedText style={utilization > 0.3 ? { color: colors.orange } : undefined}>
             {Math.round(utilization * 100)}% {t('creditCards.utilized')}
           </MutedText>
         )}
@@ -88,7 +89,8 @@ export default function CreditCards() {
   const totals = useMemo(() => {
     const balance = rows.reduce((sum, x) => sum + Number(x.balance ?? 0), 0);
     const limit = rows.reduce((sum, x) => sum + Number(x.credit_limit ?? 0), 0);
-    return { balance, limit };
+    const utilization = limit > 0 ? Math.max(0, Math.min(1, balance / limit)) : null;
+    return { balance, limit, utilization };
   }, [rows]);
 
   function openAdd() {
@@ -223,6 +225,12 @@ export default function CreditCards() {
             <View style={styles.statCell}>
               <MutedText>{t('creditCards.totalLimit')}</MutedText>
               <Text style={styles.statValue}>{money(totals.limit)}</Text>
+            </View>
+            <View style={styles.statCell}>
+              <MutedText>{t('creditCards.totalUtilization')}</MutedText>
+              <Text style={[styles.statValue, totals.utilization != null && totals.utilization > 0.3 ? { color: colors.orange } : undefined]}>
+                {totals.utilization != null ? `${Math.round(totals.utilization * 100)}%` : t('common.dash')}
+              </Text>
             </View>
           </View>
         </Card>

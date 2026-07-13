@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList, useUpdateTruck } from '@/src/data/trucks';
 import { useMaintenanceRecords, useInsertMaintenanceRecord, useUpdateMaintenanceRecord, useDeleteMaintenanceRecord } from '@/src/data/maintenanceRecords';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
@@ -73,6 +74,7 @@ export default function Maintenance() {
   const truck = useMemo(() => trucksQuery.data?.find((tr) => tr.id === activeTruckId) ?? null, [trucksQuery.data, activeTruckId]);
 
   const recordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
+  const reimbQuery = useReimbursements();
   const insertRecord = useInsertMaintenanceRecord();
   const updateRecord = useUpdateMaintenanceRecord();
   const deleteRecord = useDeleteMaintenanceRecord();
@@ -92,10 +94,19 @@ export default function Maintenance() {
     () => [...(recordsQuery.data ?? [])].sort((a, b) => new Date(b.service_date ?? 0).getTime() - new Date(a.service_date ?? 0).getTime()),
     [recordsQuery.data]
   );
+  // 3-way stat split (FEATURE_INVENTORY.md §1 row 6: legacy rMaint() shows
+  // Total repairs / Warranty-covered / Out-of-pocket) — warranty-covered is
+  // read from linked reimbursements (createWarrantyReimbursement() below and
+  // ai-import's mapMaintenance() both tag the row "Warranty — <desc>"),
+  // since maintenance_records itself has no warranty-covered column.
   const totals = useMemo(() => {
     const total = rows.reduce((a, x) => a + (x.cost ?? 0), 0);
-    return { total };
-  }, [rows]);
+    const warranty = (reimbQuery.data ?? [])
+      .filter((r) => r.description?.startsWith('Warranty — '))
+      .reduce((a, x) => a + Number(x.amount ?? 0), 0);
+    const outOfPocket = Math.max(0, total - warranty);
+    return { total, warranty, outOfPocket };
+  }, [rows, reimbQuery.data]);
 
   // Maintenance Pattern Insights v1 (PROMPTS.md Session 9b item 11, owner
   // decision 2026-07-10 — AI feature package): same "compose a rich prompt
@@ -331,8 +342,20 @@ export default function Maintenance() {
         <ScreenTitle>{t('maintenance.title')}</ScreenTitle>
 
         <Card>
-          <MutedText>{t('maintenance.totalSpent')}</MutedText>
-          <Text style={{ color: colors.text, fontSize: typography.size.xl, fontWeight: '700' }}>{money(totals.total)}</Text>
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <MutedText>{t('maintenance.totalSpent')}</MutedText>
+              <Text style={{ color: colors.text, fontSize: typography.size.lg, fontWeight: '700' }}>{money(totals.total)}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <MutedText>{t('maintenance.warrantyCovered')}</MutedText>
+              <Text style={{ color: colors.green, fontSize: typography.size.lg, fontWeight: '700' }}>{money(totals.warranty)}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <MutedText>{t('maintenance.outOfPocket')}</MutedText>
+              <Text style={{ color: colors.text, fontSize: typography.size.lg, fontWeight: '700' }}>{money(totals.outOfPocket)}</Text>
+            </View>
+          </View>
         </Card>
 
         {recordsQuery.isLoading ? (

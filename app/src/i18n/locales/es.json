@@ -444,6 +444,8 @@
   "maintenance": {
     "title": "Mantenimiento",
     "totalSpent": "Total Gastado",
+    "warrantyCovered": "Cubierto por Garantía",
+    "outOfPocket": "De Bolsillo",
     "empty": "Aún no hay registros de mantenimiento — importe un PDF o agregue uno manualmente abajo.",
     "addRecord": "Agregar Registro",
     "editRecord": "Editar Registro",
@@ -656,6 +658,8 @@
   "settlementsScreen": {
     "title": "Settlements",
     "grossTotal": "Bruto Total",
+    "reimbTotal": "Reembolsado",
+    "dedTotal": "Deducciones",
     "netTotal": "Neto Total",
     "count": "Settlements",
     "empty": "Aún no hay settlements — importe un PDF de settlement.",
@@ -795,6 +799,7 @@
     "unnamed": "Tarjeta sin Nombre",
     "totalBalance": "Saldo Total",
     "totalLimit": "Límite Total",
+    "totalUtilization": "Utilización",
     "empty": "Aún no hay tarjetas de crédito.",
     "nameLabel": "Nombre",
     "namePlaceholder": "ej. Visa Empresarial",

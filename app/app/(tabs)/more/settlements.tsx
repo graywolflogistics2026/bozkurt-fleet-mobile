@@ -86,6 +86,22 @@ export default function Settlements() {
     [settlementReimbursements]
   );
 
+  // Fleet-wide top stat row (FEATURE_INVENTORY.md §1 row 3: legacy's rSett()
+  // shows Gross/Reimbursed/Deductions/Net) — scoped to settlement-linked rows
+  // only (settlement_id set), same scoping as the per-settlement detail sheet
+  // above, not the whole out-of-pocket ledger.
+  const allSettlementReimbTotal = useMemo(
+    () => (reimbQuery.data ?? []).filter((r) => r.settlement_id != null).reduce((sum, x) => sum + Number(x.amount ?? 0), 0),
+    [reimbQuery.data]
+  );
+  const allSettlementDedTotal = useMemo(
+    () =>
+      (dedQuery.data ?? [])
+        .filter((d) => d.settlement_id != null && d.source === 'settlement')
+        .reduce((sum, x) => sum + Number(x.amount ?? 0), 0),
+    [dedQuery.data]
+  );
+
   function handleDelete(x: Settlement) {
     Alert.alert(t('settlementsScreen.deleteConfirmTitle'), t('settlementsScreen.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -122,12 +138,18 @@ export default function Settlements() {
               <Text style={styles.statValue}>{money(fleetStats.data?.grossRevenue ?? 0)}</Text>
             </View>
             <View style={styles.statCell}>
-              <MutedText>{t('settlementsScreen.netTotal')}</MutedText>
-              <Text style={styles.statValue}>{money(fleetStats.data?.netRevenue ?? 0)}</Text>
+              <MutedText>{t('settlementsScreen.reimbTotal')}</MutedText>
+              <Text style={styles.statValue}>{money(allSettlementReimbTotal)}</Text>
+            </View>
+          </View>
+          <View style={[styles.statRow, { marginTop: spacing.sm }]}>
+            <View style={styles.statCell}>
+              <MutedText>{t('settlementsScreen.dedTotal')}</MutedText>
+              <Text style={styles.statValue}>{money(allSettlementDedTotal)}</Text>
             </View>
             <View style={styles.statCell}>
-              <MutedText>{t('settlementsScreen.count')}</MutedText>
-              <Text style={styles.statValue}>{number(fleetStats.data?.settlementCount ?? 0)}</Text>
+              <MutedText>{t('settlementsScreen.netTotal')}</MutedText>
+              <Text style={styles.statValue}>{money(fleetStats.data?.netRevenue ?? 0)}</Text>
             </View>
           </View>
         </Card>

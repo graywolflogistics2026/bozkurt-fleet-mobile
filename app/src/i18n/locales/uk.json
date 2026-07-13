@@ -444,6 +444,8 @@
   "maintenance": {
     "title": "Maintenance",
     "totalSpent": "Total Spent",
+    "warrantyCovered": "Warranty-Covered",
+    "outOfPocket": "Out-of-Pocket",
     "empty": "No maintenance records yet — import a PDF or add one manually below.",
     "addRecord": "Add Record",
     "editRecord": "Edit Record",
@@ -656,6 +658,8 @@
   "settlementsScreen": {
     "title": "Settlements",
     "grossTotal": "Total Gross",
+    "reimbTotal": "Reimbursed",
+    "dedTotal": "Deductions",
     "netTotal": "Total Net",
     "count": "Settlements",
     "empty": "No settlements yet — import a settlement PDF.",
@@ -795,6 +799,7 @@
     "unnamed": "Untitled Card",
     "totalBalance": "Total Balance",
     "totalLimit": "Total Limit",
+    "totalUtilization": "Використання",
     "empty": "No credit cards yet.",
     "nameLabel": "Name",
     "namePlaceholder": "e.g. Business Visa",

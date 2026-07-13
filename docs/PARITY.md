@@ -12,13 +12,12 @@ Every screen was read in full and checked against its specific legacy
 row (§1), the relevant business-logic rules (§3), and the relevant
 known legacy bugs (§4) — not just spot-checked.
 
-**Bottom line: 0 of 22 sections are missing. 12 are at full parity or
-better; 10 are partial**, each with a specific, itemized gap below —
-none of the gaps are "screen doesn't exist," all are "screen exists,
-missing one sub-feature." Nothing here blocks a store submission on its
-own, but Settings' View-Only-Mode gap and the Bank Statement balance-
-reconciliation gap are worth a real decision before Session 10 (see
-"Genuine gaps to prioritize" at the bottom).
+**Bottom line: 0 of 22 sections are missing.** As of the 2026-07-12
+parity-gap closure pass, 15 are at full parity or better and 7 remain
+partial, each with a specific, itemized gap below — none of the gaps
+are "screen doesn't exist," all are "screen exists, missing one
+sub-feature." See "Genuine gaps to prioritize" at the bottom for
+what's still open and why.
 
 Legend: ✅ full parity (or better) · 🟡 partial (gap listed) · ❌ missing.
 "Parity+" means the mobile app does something legacy didn't or fixes a
@@ -33,10 +32,10 @@ a future audit.
 |---|---------|-------|--------|----------------|
 | 1 | Dashboard | Overview | 🟡 | `app/(tabs)/index.tsx` |
 | 2 | Loads | Revenue | ✅ | `more/loads.tsx` |
-| 3 | Settlements | Revenue | 🟡 | `more/settlements.tsx` |
+| 3 | Settlements | Revenue | ✅ | `more/settlements.tsx` |
 | 4 | Reimbursements | Revenue | ✅ | `more/reimbursements.tsx` |
 | 5 | Fuel | Expenses | ✅ | `more/fuel.tsx` |
-| 6 | Maintenance | Expenses | 🟡 | `more/maintenance.tsx` |
+| 6 | Maintenance | Expenses | ✅ | `more/maintenance.tsx` |
 | 7 | Tolls & Fees | Expenses | ✅ | `more/tolls.tsx` |
 | 8 | Deductions | Expenses | ✅ | `(tabs)/deductions.tsx` |
 | 9 | Assets | Business | 🟡 | `more/trucks.tsx` (mapped, see below) |
@@ -46,7 +45,7 @@ a future audit.
 | 13 | Cash Flow | Intelligence | 🟡 | `more/cash-flow.tsx` |
 | 14 | Scorecard | Intelligence | ✅ | `more/scorecard.tsx` |
 | 15 | Loan Center | Intelligence | ✅ parity+ | `more/loans.tsx` |
-| 16 | Credit Cards | Intelligence | 🟡 | `more/credit-cards.tsx` |
+| 16 | Credit Cards | Intelligence | ✅ | `more/credit-cards.tsx` |
 | 17 | Bank Statement | Intelligence | 🟡 | `more/bank-statements.tsx` |
 | 18 | Asset Register | Tools | 🟡 | `more/asset-register.tsx` |
 | 19 | Accountant Pkg | Tools | 🟡 | `more/accountant-package.tsx` |
@@ -83,12 +82,11 @@ reminders, fleet/driver overview, customizable card layout, invariant
 Total loads, loaded miles, rev/mile stat row; full load table with
 delete. Matches legacy exactly.
 
-### 3. Settlements — 🟡 partial (minor)
+### 3. Settlements — ✅ full parity (RESOLVED 2026-07-12)
 History table + delete (server-side cascade per invariant #5) match
-legacy. Top stat row shows gross/net/settlement-count; legacy's is
-gross/reimb/ded/net — the reimbursement and deduction totals are only
-visible inside each settlement's detail sheet, not aggregated in the
-top row.
+legacy. Top stat row now shows Gross/Reimbursed/Deductions/Net, matching
+legacy's `rSett()` exactly (reimb/ded scoped to settlement-linked rows,
+same scoping as the per-settlement detail sheet).
 
 ### 4. Reimbursements — ✅ full parity
 `tagFor()` ports legacy's exact `/warranty/i` and `/fuel/i` regexes
@@ -101,14 +99,17 @@ Tractor and reefer tracked as fully separate ledgers (separate stat
 cards, separate lists, `fuel_type` filter), discounts, net cost = gross
 − discount. Matches §2.1's `DB.fuel.tr[]`/`.re[]` split.
 
-### 6. Maintenance — 🟡 partial
+### 6. Maintenance — ✅ full parity (RESOLVED 2026-07-12)
 History table with edit/delete, add form, all 17 legacy service types
 (confirmed exact count in `src/truck/categories.ts`). AI Insights card
 present (Session 9b addition, beyond legacy). Health sync is an
 automatic reactive recompute rather than a manual "Sync to Truck
-Health" button — an architectural improvement, not a gap.
-- **Missing**: legacy's 3-way stat split (Total repairs / Warranty-
-  covered / Out-of-pocket) — mobile shows one "Total Spent" tile only.
+Health" button — an architectural improvement, not a gap. Now shows
+legacy's 3-way stat split (Total repairs / Warranty-covered /
+Out-of-pocket) — warranty-covered is read from linked reimbursements
+(the `"Warranty — "` description prefix both manual entry and
+ai-import's `mapMaintenance()` already write), since
+`maintenance_records` has no dedicated warranty-covered column.
 - **Correctly not ported**: legacy's Ali-specific "Load Prime Unit
   830157 History (56 records)" bulk-seed button — excluded per
   CLAUDE.md's multi-tenant mandate (new users start with zero data, no
@@ -219,12 +220,11 @@ data (`app/src/import/mapExtraction.ts` maps `s.loans` into the same
 `LoanInsert` shape the screen reads) — legacy's `DB.loans` vs. `LOANS`
 dead-store split (§4 bug #1) does not exist in the mobile port.
 
-### 16. Credit Cards — 🟡 partial
-Balance/limit/APR/due-day fields, full add/edit/delete.
-- **Gap**: no aggregate portfolio-utilization stat tile.
-- **Gap**: legacy's >30%-utilization orange highlight isn't reproduced
-  — the mobile screen reddens a single card's row past 70% utilization
-  instead, a different threshold and a per-row-only treatment.
+### 16. Credit Cards — ✅ full parity (RESOLVED 2026-07-12)
+Balance/limit/APR/due-day fields, full add/edit/delete. Now has an
+aggregate portfolio-utilization stat tile, and both the per-card and
+aggregate utilization highlight match legacy's exact >30% orange
+threshold (previously a different, per-row-only 70% red highlight).
 
 ### 17. Bank Statement — 🟡 partial, plus one undocumented behavior change
 Two-tab structure (checking/card) via `account_type`, view-only
@@ -356,12 +356,12 @@ honest remainder of the Session 9b Parity Checklist commitment:
 5. **Dashboard: no revenue-vs-expense trend chart.** Every other
    Dashboard tile is done; this is the one visual legacy had that
    mobile doesn't.
-6. Smaller, lower-priority items: Settlements' top-row reimb/ded
-   aggregate, Maintenance's warranty/out-of-pocket stat split, Credit
-   Cards' aggregate utilization tile + 30% threshold match, Asset
-   Register's category-breakdown card + filter + edit modal,
-   Accountant Package's assets/loans summary cards, Bank Statement's
-   category-breakdown + cross-check panel.
+6. ~~Smaller items: Settlements' top-row reimb/ded aggregate,
+   Maintenance's warranty/out-of-pocket stat split, Credit Cards'
+   aggregate utilization tile + 30% threshold match~~ — **RESOLVED
+   2026-07-12**. Still open: Asset Register's category-breakdown card +
+   filter + edit modal, Accountant Package's assets/loans summary
+   cards, Bank Statement's category-breakdown + cross-check panel.
 
 ## Deliberately not ported (by design, not oversight)
 
