@@ -62,3 +62,34 @@ export function activeWarranties(assets: AssetRow[]): AssetRow[] {
     .filter((a) => a.warrantyStatus === 'active')
     .sort((a, b) => (a.warrantyExpires ?? '').localeCompare(b.warrantyExpires ?? ''));
 }
+
+export type AssetCategoryBreakdown = { category: string; count: number; total: number };
+
+// Legacy's category-breakdown card (FEATURE_INVENTORY.md §1 row 18: "Tools,
+// Comfort, Electronics, Supplies, Safety, Total") — one row per
+// ASSET_CATEGORIES value plus a Total row, in that fixed order (not
+// sorted by amount) so it reads the same every time.
+export function buildAssetCategoryBreakdown(assets: AssetRow[]): AssetCategoryBreakdown[] {
+  const rows = ASSET_CATEGORIES.map((category) => {
+    const inCategory = assets.filter((a) => a.deduction.category === category);
+    return {
+      category,
+      count: inCategory.length,
+      total: inCategory.reduce((sum, a) => sum + Number(a.deduction.amount ?? 0), 0),
+    };
+  });
+  const total: AssetCategoryBreakdown = {
+    category: 'Total',
+    count: assets.length,
+    total: assets.reduce((sum, a) => sum + Number(a.deduction.amount ?? 0), 0),
+  };
+  return [...rows, total];
+}
+
+// This-month $ (legacy stat tile) — assets whose ded_date falls within the
+// given YYYY-MM.
+export function thisMonthTotal(assets: AssetRow[], monthKey: string): number {
+  return assets
+    .filter((a) => (a.deduction.ded_date ?? '').startsWith(monthKey))
+    .reduce((sum, a) => sum + Number(a.deduction.amount ?? 0), 0);
+}

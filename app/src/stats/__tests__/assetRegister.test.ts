@@ -1,4 +1,4 @@
-import { buildAssetRegister, activeWarranties, isAssetCategory } from '@/src/stats/assetRegister';
+import { buildAssetRegister, activeWarranties, isAssetCategory, buildAssetCategoryBreakdown, thisMonthTotal } from '@/src/stats/assetRegister';
 import type { Deduction } from '@/src/types/db';
 
 function ded(overrides: Partial<Deduction>): Deduction {
@@ -64,6 +64,46 @@ describe('buildAssetRegister', () => {
   it('flags NEEDS REVIEW rows', () => {
     const rows = buildAssetRegister([ded({ description: 'NEEDS REVIEW: unknown item' })], '2026-06-01');
     expect(rows[0].needsReview).toBe(true);
+  });
+});
+
+describe('buildAssetCategoryBreakdown', () => {
+  it('returns one row per canonical category plus a Total row, in fixed order', () => {
+    const rows = buildAssetRegister(
+      [
+        ded({ id: 'a', category: 'Tools & Equipment', amount: 100 }),
+        ded({ id: 'b', category: 'Tools & Equipment', amount: 50 }),
+        ded({ id: 'c', category: 'Electronics', amount: 200 }),
+      ],
+      '2026-06-01'
+    );
+    const breakdown = buildAssetCategoryBreakdown(rows);
+    expect(breakdown.map((b) => b.category)).toEqual([
+      'Tools & Equipment',
+      'Electronics',
+      'Comfort & Sleeper',
+      'Truck Supplies & Equipment',
+      'Safety Gear & Workwear',
+      'Total',
+    ]);
+    expect(breakdown[0]).toMatchObject({ count: 2, total: 150 });
+    expect(breakdown[1]).toMatchObject({ count: 1, total: 200 });
+    expect(breakdown[2]).toMatchObject({ count: 0, total: 0 });
+    expect(breakdown[5]).toMatchObject({ count: 3, total: 350 });
+  });
+});
+
+describe('thisMonthTotal', () => {
+  it('sums only rows whose ded_date falls in the given month', () => {
+    const rows = buildAssetRegister(
+      [
+        ded({ id: 'a', ded_date: '2026-06-05', amount: 100 }),
+        ded({ id: 'b', ded_date: '2026-06-20', amount: 50 }),
+        ded({ id: 'c', ded_date: '2026-05-31', amount: 999 }),
+      ],
+      '2026-06-01'
+    );
+    expect(thisMonthTotal(rows, '2026-06')).toBe(150);
   });
 });
 

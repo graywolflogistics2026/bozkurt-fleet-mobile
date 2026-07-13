@@ -13,7 +13,7 @@ row (§1), the relevant business-logic rules (§3), and the relevant
 known legacy bugs (§4) — not just spot-checked.
 
 **Bottom line: 0 of 22 sections are missing.** As of the 2026-07-12
-parity-gap closure pass, 16 are at full parity or better and 6 remain
+parity-gap closure pass, 17 are at full parity or better and 5 remain
 partial, each with a specific, itemized gap below — none of the gaps
 are "screen doesn't exist," all are "screen exists, missing one
 sub-feature." See "Genuine gaps to prioritize" at the bottom for
@@ -47,7 +47,7 @@ a future audit.
 | 15 | Loan Center | Intelligence | ✅ parity+ | `more/loans.tsx` |
 | 16 | Credit Cards | Intelligence | ✅ | `more/credit-cards.tsx` |
 | 17 | Bank Statement | Intelligence | 🟡 | `more/bank-statements.tsx` |
-| 18 | Asset Register | Tools | 🟡 | `more/asset-register.tsx` |
+| 18 | Asset Register | Tools | ✅ | `more/asset-register.tsx` |
 | 19 | Accountant Pkg | Tools | 🟡 | `more/accountant-package.tsx` |
 | 20 | AI Advisor | Tools | ✅ parity+ | `more/ai-advisor.tsx` |
 | 21 | Tax Estimator | Tools | ✅ parity+ | `more/tax-estimator.tsx` |
@@ -259,13 +259,20 @@ to the deduction ledger" rule).
 
 ## Tools
 
-### 18. Asset Register — 🟡 partial
+### 18. Asset Register — ✅ full parity (RESOLVED 2026-07-12)
 Total/value/warranty stats, add form (name/category/store/payment/
-date/cost/business-use%/warranty-years/notes).
-- **Missing**: legacy's category-breakdown card (Tools/Comfort/
-  Electronics/Supplies/Safety) and the filterable table — the mobile
-  list has no filter UI and no per-category totals.
-- **Missing**: an edit modal — rows support add + delete but not edit.
+date/cost/business-use%/warranty-years/notes). Now also has: the
+category-breakdown card (`buildAssetCategoryBreakdown()` — one row per
+ASSET_CATEGORIES value + a Total row, in fixed order, matching legacy's
+Tools/Comfort/Electronics/Supplies/Safety/Total layout), filter pills
+above the asset list (all 5 categories + "All"), a This Month stat tile
+(`thisMonthTotal()`) and an Avg/Item tile, and a full edit modal (tap any
+row) reusing the same field set as Add, wired through the same create-
+vs-sync capital-contribution logic as the main Deductions screen's edit
+flow (CLAUDE.md invariant #2). There is still no delete affordance on
+this screen specifically — an asset IS a deduction row (single source
+of truth, `docs/PENDING_SQL.md §7`), so deletion already happens via the
+Deductions screen rather than a duplicate control here.
 - **Business-use% (§4 bug #4)**: correctly NOT silently discarded like
   legacy — it's captured into the row's `tags` field as a visible note
   — but it still doesn't multiply the booked deduction amount (100%
@@ -375,9 +382,9 @@ honest remainder of the Session 9b Parity Checklist commitment:
    customizable dashboard card.
 6. ~~Smaller items: Settlements' top-row reimb/ded aggregate,
    Maintenance's warranty/out-of-pocket stat split, Credit Cards'
-   aggregate utilization tile + 30% threshold match~~ — **RESOLVED
-   2026-07-12**. Still open: Asset Register's category-breakdown card +
-   filter + edit modal, Accountant Package's assets/loans summary
+   aggregate utilization tile + 30% threshold match, Asset Register's
+   category-breakdown card + filter + edit modal~~ — **RESOLVED
+   2026-07-12**. Still open: Accountant Package's assets/loans summary
    cards, Bank Statement's category-breakdown + cross-check panel.
 
 ## Deliberately not ported (by design, not oversight)
