@@ -329,12 +329,14 @@ Supabase Storage architecture (CLAUDE.md, §3.6's flagged
 client-side-API-key flaw).
 
 **Genuinely missing**:
-1. No full-data Backup/Export JSON or "Reset Financial Data Only"
-   utility (legacy `exportData()`/`clearFinancialData()`) — the
-   Accountant Package's export is a Schedule C rollup, not a full raw
-   data dump, so there's currently no user-facing way to get a complete
-   JSON export of one's own account (Delete Account is the only
-   "everything" operation, and it's destructive).
+1. ~~No full-data Backup/Export JSON~~ — **RESOLVED 2026-07-12**:
+   "Export All My Data (JSON)" in the Data card
+   (`src/data/exportAllData.ts`), one row per every user-owned table
+   (25 tables, excludes nothing), shared via the native share sheet —
+   mirrors legacy `exportData()`. No "Reset Financial Data Only" utility
+   yet (`clearFinancialData()`'s equivalent) — Delete Account remains the
+   only "everything" operation, and it's destructive; a scoped reset is
+   still open if wanted later.
 2. No data-stats card (settlement/loads/fuel counts).
 3. ~~No View-Only Mode equivalent~~ — **RESOLVED 2026-07-12**: formally
    retired, not a gap. Owner decision (CLAUDE.md invariant #23): legacy's
@@ -354,11 +356,9 @@ Ranked by how much a real owner-operator would notice/miss them —
 none of these block a store submission by themselves, but they're the
 honest remainder of the Session 9b Parity Checklist commitment:
 
-1. **Settings: no full-account JSON export.** Every other "get my data
-   out" path either goes through Delete Account (destructive) or the
-   Accountant Package (a curated Schedule C rollup, not a raw dump).
-   Worth adding a plain "Export All My Data" action mirroring legacy's
-   `exportData()`, independent of the Accountant Package's tax framing.
+1. ~~Settings: no full-account JSON export.~~ — **RESOLVED 2026-07-12**:
+   "Export All My Data (JSON)" added, independent of the Accountant
+   Package's tax framing.
 2. ~~Bank Statement: the closing-balance → business-balance
    reconciliation was silently dropped~~ — **RESOLVED 2026-07-12** as an
    explicit-confirm action (owner decision, matching §4 bug #11's

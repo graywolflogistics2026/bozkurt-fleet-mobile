@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import * as Sharing from 'expo-sharing';
+import { File, Paths } from 'expo-file-system';
 import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/lib/supabase';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useTaxConfig, useUpdateTaxConfig } from '@/src/data/taxConfig';
 import { callDeleteAccount } from '@/src/data/deleteAccountCall';
+import { fetchAllUserData } from '@/src/data/exportAllData';
 import type { EntityType } from '@/src/tax/types';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -63,6 +66,7 @@ export default function Settings() {
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
 
   // One-time hydration once both queries resolve (same pattern as
   // dashboard-customize.tsx/tax-estimator.tsx) — never re-hydrates over a
@@ -129,6 +133,35 @@ export default function Settings() {
       Alert.alert(t('settings.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
       setSavingBusiness(false);
+    }
+  }
+
+  // Full-account JSON export (Session 9b parity-gap decision #1) —
+  // mirrors legacy exportData(), one row per user-owned table, excludes
+  // nothing. Same File/Paths/Sharing pattern as the Accountant Package's
+  // JSON export, just a full raw dump instead of a curated Schedule C
+  // rollup.
+  async function handleExportAllData() {
+    if (!userId) return;
+    setExportingData(true);
+    try {
+      const data = await fetchAllUserData(userId);
+      const payload = { exportedAt: new Date().toISOString(), data };
+      const file = new File(Paths.cache, 'bozkurt-fleet-os-export.json');
+      if (file.exists) file.delete();
+      file.create();
+      file.write(JSON.stringify(payload, null, 2));
+
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert(t('settings.shareNotAvailable'));
+        return;
+      }
+      await Sharing.shareAsync(file.uri);
+    } catch (err) {
+      Alert.alert(t('settings.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setExportingData(false);
     }
   }
 
@@ -221,6 +254,7 @@ export default function Settings() {
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>{t('settings.dataTitle')}</Text>
           <MutedText>{t('settings.dataNote')}</MutedText>
+          <PrimaryButton title={`⬇️ ${t('settings.exportAllDataButton')}`} onPress={handleExportAllData} loading={exportingData} />
           <SecondaryButton title={t('settings.importLegacyButton')} onPress={() => router.push('/(tabs)/more/import-legacy')} />
         </Card>
 
