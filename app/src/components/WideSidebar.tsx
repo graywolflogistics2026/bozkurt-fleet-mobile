@@ -35,10 +35,14 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 
 const SIDEBAR_WIDTH = 220;
 
-type SidebarItem = { href: Href; labelKey: string; emoji: string };
-type SidebarGroup = { titleKey: string; items: SidebarItem[] };
+export type SidebarItem = { href: Href; labelKey: string; emoji: string };
+export type SidebarGroup = { titleKey: string; items: SidebarItem[] };
 
-const GROUPS: SidebarGroup[] = [
+// Exported so MenuSheet.tsx (the phone hamburger-menu slide-up sheet,
+// device feedback round 2) reuses this exact grouped structure instead of
+// a second, driftable copy — one source of truth for legacy's
+// Overview/Revenue/Expenses/Business/Intelligence/Tools/System grouping.
+export const GROUPS: SidebarGroup[] = [
   {
     titleKey: 'sidebar.sections.overview',
     items: [{ href: '/(tabs)', labelKey: 'nav.dashboard', emoji: '📊' }],
@@ -105,7 +109,7 @@ const GROUPS: SidebarGroup[] = [
 // expo-router's usePathname() strips group segments like "(tabs)" from
 // the resolved path, so an href of '/(tabs)/more/loads' resolves to
 // '/more/loads', and the root '/(tabs)' resolves to '/'.
-function isActiveRoute(pathname: string, href: string): boolean {
+export function isActiveRoute(pathname: string, href: string): boolean {
   const stripped = href.replace('/(tabs)', '') || '/';
   return pathname === stripped;
 }
