@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
@@ -9,7 +10,9 @@ import { supabase } from '@/src/lib/supabase';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useTaxConfig, useUpdateTaxConfig } from '@/src/data/taxConfig';
 import { callDeleteAccount } from '@/src/data/deleteAccountCall';
+import { callResetData } from '@/src/data/resetDataCall';
 import { fetchAllUserData } from '@/src/data/exportAllData';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import type { EntityType } from '@/src/tax/types';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -20,6 +23,7 @@ import { formatDate } from '@/src/i18n/format';
 
 const ENTITY_TYPES: EntityType[] = ['sole_prop', 'smllc', 'multi_member_llc', 'scorp'];
 const DELETE_CONFIRM_WORD = 'DELETE';
+const RESET_CONFIRM_WORD = 'RESET';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -45,6 +49,7 @@ export default function Settings() {
   const { t, i18n } = useTranslation();
   const { session, profile, signOut, refreshProfile } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const userId = session?.user.id;
   const [savingLocale, setSavingLocale] = useState(false);
   const currentLocale = i18n.language as SupportedLocale;
@@ -67,6 +72,9 @@ export default function Settings() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [exportingData, setExportingData] = useState(false);
+  const [resetConfirming, setResetConfirming] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   // One-time hydration once both queries resolve (same pattern as
   // dashboard-customize.tsx/tax-estimator.tsx) — never re-hydrates over a
@@ -197,6 +205,44 @@ export default function Settings() {
     }
   }
 
+  // Reset All Data (device feedback round 2, owner decision 2026-07-13) —
+  // distinct from Delete Account: wipes every business row + Storage file
+  // but KEEPS the account/profile, so the user stays signed in to a
+  // zeroed account afterward (no signOut() call, unlike delete).
+  function handleResetPress() {
+    Alert.alert(t('settings.resetConfirm1Title'), t('settings.resetConfirm1Body'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('settings.resetContinue'),
+        style: 'destructive',
+        onPress: () => {
+          setResetConfirmText('');
+          setResetConfirming(true);
+        },
+      },
+    ]);
+  }
+
+  async function handleConfirmReset() {
+    if (resetConfirmText.trim().toUpperCase() !== RESET_CONFIRM_WORD) return;
+    setResetting(true);
+    try {
+      const result = await callResetData();
+      if (!result.success) {
+        Alert.alert(t('settings.resetFailedTitle'), result.error || t('deductions.genericRetry'));
+        return;
+      }
+      setResetConfirming(false);
+      await refreshProfile();
+      await invalidateFinancialData(queryClient);
+      Alert.alert(t('settings.resetSuccessTitle'));
+    } catch (err) {
+      Alert.alert(t('settings.resetFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
@@ -272,6 +318,12 @@ export default function Settings() {
 
         <Text style={[styles.sectionTitle, { color: colors.red }]}>{t('settings.dangerZoneTitle')}</Text>
         <Card>
+          <MutedText>{t('settings.resetAllDataNote')}</MutedText>
+          <Pressable onPress={handleResetPress} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
+            <Text style={{ color: colors.orange, fontWeight: '700', fontSize: typography.size.sm }}>{t('settings.resetAllDataButton')}</Text>
+          </Pressable>
+        </Card>
+        <Card>
           <MutedText>{t('settings.deleteAccountNote')}</MutedText>
           <Pressable onPress={handleDeletePress} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
             <Text style={{ color: colors.red, fontWeight: '700', fontSize: typography.size.sm }}>{t('settings.deleteAccountButton')}</Text>
@@ -300,6 +352,27 @@ export default function Settings() {
           disabled={deleteConfirmText.trim().toUpperCase() !== DELETE_CONFIRM_WORD}
         />
         <SecondaryButton title={t('common.cancel')} onPress={() => setDeleteConfirming(false)} />
+      </ModalSheet>
+
+      <ModalSheet visible={resetConfirming} onClose={() => setResetConfirming(false)}>
+        <SheetTitle>{t('settings.resetConfirm2Title')}</SheetTitle>
+        <MutedText>{t('settings.resetConfirm2Body')}</MutedText>
+        <MutedText style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+          {t('settings.resetTypeToConfirm', { word: RESET_CONFIRM_WORD })}
+        </MutedText>
+        <Field
+          value={resetConfirmText}
+          onChangeText={setResetConfirmText}
+          placeholder={RESET_CONFIRM_WORD}
+          autoCapitalize="characters"
+        />
+        <PrimaryButton
+          title={t('settings.resetPermanently')}
+          onPress={handleConfirmReset}
+          loading={resetting}
+          disabled={resetConfirmText.trim().toUpperCase() !== RESET_CONFIRM_WORD}
+        />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setResetConfirming(false)} />
       </ModalSheet>
     </Screen>
   );
