@@ -481,6 +481,22 @@
       to v2+, once a real user base exists, and even then must be designed
       against invariant #13 (user data is private) from day one — never
       retrofitted onto data collected before that design existed.
+  23. VIEW-ONLY MODE IS RETIRED (owner decision 2026-07-12, PRODUCT
+      DECISION, binding — Session 9b parity-gap decision #4): legacy's
+      `gw_readonly` device-local read-only toggle (FEATURE_INVENTORY.md
+      §3.9 — intended for a spouse/other device to view a shared JSON
+      backup without editing it) has NO equivalent in this app and never
+      will as a device-local flag. It is formally obsolete under the
+      multi-tenant model: every user already has their own
+      `auth.uid()`-scoped account with RLS enforcing invariant #13, so
+      "give someone read-only access to MY data" is a cross-account
+      sharing problem, not a local UI lock. Its future replacement (an
+      accountant/spouse read-only share link, scoped to one recipient,
+      revocable, read-only by construction not by a client-side flag) is
+      PROMPTS.md Backlog — a genuinely new feature requiring its own
+      schema/RLS design, not a resurrection of `gw_readonly`. No mobile
+      screen should ever gain a "View-Only Mode" toggle again without a
+      fresh owner decision superseding this one.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

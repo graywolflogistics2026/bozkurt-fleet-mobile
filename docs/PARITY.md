@@ -316,11 +316,13 @@ client-side-API-key flaw).
    JSON export of one's own account (Delete Account is the only
    "everything" operation, and it's destructive).
 2. No data-stats card (settlement/loads/fuel counts).
-3. No View-Only Mode equivalent (§3.9) — legacy's spouse/other-device
-   read-only workflow has no replacement in the multi-tenant model.
-   Arguably obsolete now that each person can have their own account
-   with their own RLS-scoped access, but that's an inference, not a
-   documented product decision — see below.
+3. ~~No View-Only Mode equivalent~~ — **RESOLVED 2026-07-12**: formally
+   retired, not a gap. Owner decision (CLAUDE.md invariant #23): legacy's
+   device-local `gw_readonly` flag is obsolete under the multi-tenant
+   model (every user already has their own RLS-scoped account). Its
+   future replacement — an accountant/spouse read-only share link — is
+   tracked in PROMPTS.md's Backlog, a new feature, not a resurrection of
+   the old toggle.
 4. Email/phone/EIN/address fields from legacy's business-info form
    aren't collected anywhere in the mobile app.
 
@@ -348,11 +350,9 @@ honest remainder of the Session 9b Parity Checklist commitment:
    recurring costs, tax-reserve % → forecast, plus the 4-week timeline.
    Everything else on that screen (trend chart, load profitability) is
    done; this input form/output block is the one substantial hole.
-4. **Settings: no View-Only Mode equivalent.** Likely fine to formally
-   retire (multi-tenant accounts make "give my spouse read-only access
-   to my account" a different, not-yet-designed feature — sharing
-   access across two `auth.uid()`s, not a device-local flag), but that
-   should be a stated decision, not a silent gap.
+4. ~~Settings: no View-Only Mode equivalent.~~ **RESOLVED 2026-07-12** —
+   formally retired (CLAUDE.md invariant #23); accountant/spouse
+   read-only share link tracked in PROMPTS.md Backlog as its replacement.
 5. **Dashboard: no revenue-vs-expense trend chart.** Every other
    Dashboard tile is done; this is the one visual legacy had that
    mobile doesn't.

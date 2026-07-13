@@ -1426,6 +1426,16 @@ triggers automatically on version bump, per Session 3).
   operators (not lease-on drivers under a carrier) — gate its visibility
   on that distinction once profiles.role (CLAUDE.md invariant #18) or a
   similar signal exists to detect it, rather than showing it to everyone.
+- Accountant/spouse read-only share link (owner decision 2026-07-12,
+  Session 9b parity-gap decision #4, replaces legacy's retired View-Only
+  Mode — CLAUDE.md invariant #23): a scoped, revocable, read-only share
+  link/invite that grants one recipient (e.g. an accountant, a spouse)
+  view access to the account's data without giving them the owner's own
+  credentials. This is a real cross-account sharing feature — needs its
+  own schema (a share/invite table, scoped permissions) and RLS design,
+  not a device-local flag like legacy's `gw_readonly`. Needs a separate,
+  explicit owner decision on scope (which screens/tables are visible,
+  expiry, revocation UX) before implementation starts.
 ```
 
 ## Supported document types (rolling status — universal AI capture, owner decision 2026-07-10)
