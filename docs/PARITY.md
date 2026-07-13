@@ -13,7 +13,7 @@ row (§1), the relevant business-logic rules (§3), and the relevant
 known legacy bugs (§4) — not just spot-checked.
 
 **Bottom line: 0 of 22 sections are missing.** As of the 2026-07-12
-parity-gap closure pass, 17 are at full parity or better and 5 remain
+parity-gap closure pass, 18 are at full parity or better and 4 remain
 partial, each with a specific, itemized gap below — none of the gaps
 are "screen doesn't exist," all are "screen exists, missing one
 sub-feature." See "Genuine gaps to prioritize" at the bottom for
@@ -48,7 +48,7 @@ a future audit.
 | 16 | Credit Cards | Intelligence | ✅ | `more/credit-cards.tsx` |
 | 17 | Bank Statement | Intelligence | 🟡 | `more/bank-statements.tsx` |
 | 18 | Asset Register | Tools | ✅ | `more/asset-register.tsx` |
-| 19 | Accountant Pkg | Tools | 🟡 | `more/accountant-package.tsx` |
+| 19 | Accountant Pkg | Tools | ✅ | `more/accountant-package.tsx` |
 | 20 | AI Advisor | Tools | ✅ parity+ | `more/ai-advisor.tsx` |
 | 21 | Tax Estimator | Tools | ✅ parity+ | `more/tax-estimator.tsx` |
 | 22 | Settings | System | 🟡 | `more/settings.tsx` |
@@ -280,20 +280,18 @@ Deductions screen rather than a duplicate control here.
   deliberate, transparent choice (the value is recorded, not lost) —
   worth being explicit that it's a conscious call, not a blind bug port.
 
-### 19. Accountant Package — 🟡 partial (core is solid, fixes legacy bug #3)
+### 19. Accountant Package — ✅ full parity (RESOLVED 2026-07-12, fixes legacy bug #3)
 Schedule C rollup (deductions + maintenance + fuel + estimated loan
 interest, with the reimbursement-vs-income offset), per diem summary,
 other income, JSON export, PDF export, and the mandatory disclaimer are
 all present. Its asset summary correctly sources from the same EQUIP-
 coded-deduction bucket the real Asset Register uses — §4 bug #3 (the
 permanently-broken, always-empty `ASSETS2`-backed "Assets by category"
-card) is genuinely fixed, not silently re-ported.
-- **Missing**: a dedicated "Assets by category" breakdown card (assets
-  ARE included in the Schedule C total, just not broken out
-  separately).
-- **Missing**: a "Loans & Cards summary" card — loan interest is folded
-  into the Schedule C total silently; raw loan/card balances aren't
-  shown on this screen.
+card) is genuinely fixed, not silently re-ported. Now has a dedicated
+"Assets (by category)" card (reuses `src/stats/assetRegister.ts`'s
+`buildAssetCategoryBreakdown()` directly — one source of truth, not a
+second implementation) and a "Loans & Cards" card with per-loan/per-card
+raw balances plus totals, both included in the JSON and PDF exports.
 
 ### 20. AI Advisor — ✅ full parity+
 Real multi-turn chat, forwards the full running message history,
@@ -383,9 +381,9 @@ honest remainder of the Session 9b Parity Checklist commitment:
 6. ~~Smaller items: Settlements' top-row reimb/ded aggregate,
    Maintenance's warranty/out-of-pocket stat split, Credit Cards'
    aggregate utilization tile + 30% threshold match, Asset Register's
-   category-breakdown card + filter + edit modal~~ — **RESOLVED
-   2026-07-12**. Still open: Accountant Package's assets/loans summary
-   cards, Bank Statement's category-breakdown + cross-check panel.
+   category-breakdown card + filter + edit modal, Accountant Package's
+   assets/loans summary cards~~ — **RESOLVED 2026-07-12**. Still open:
+   Bank Statement's category-breakdown + cross-check panel.
 
 ## Deliberately not ported (by design, not oversight)
 

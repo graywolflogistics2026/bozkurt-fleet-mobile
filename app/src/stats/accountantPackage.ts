@@ -1,15 +1,29 @@
 import { DEFAULT_SCHEDULE_C_BUCKET } from '@/src/import/category';
 import { resolveScheduleCBucket } from '@/src/stats/profitLoss';
-import type { Deduction, MaintenanceRecord, FuelPurchase, LoanRow, UserCategory } from '@/src/types/db';
+import { buildAssetRegister, buildAssetCategoryBreakdown, type AssetCategoryBreakdown } from '@/src/stats/assetRegister';
+import type { Deduction, MaintenanceRecord, FuelPurchase, LoanRow, CreditCardRow, UserCategory } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
 
 export type CategoryTotal = { category: string; amount: number };
+
+export type LoansAndCardsSummary = {
+  loans: { name: string; balance: number; payment: number }[];
+  totalLoanBalance: number;
+  cards: { name: string; balance: number; limit: number }[];
+  totalCardBalance: number;
+};
 
 export type AccountantPackage = {
   scheduleC: CategoryTotal[];
   totalExpenses: number;
   income: { total: number; byType: CategoryTotal[] };
   perDiem: { days: number; deduction: number };
+  // §4 bug #3 fix: sourced from the SAME EQUIP-coded deductions the real
+  // Asset Register uses (src/stats/assetRegister.ts), never a separate
+  // store — legacy's own "Assets (by category)" card was permanently
+  // broken/empty because it read a dead, disconnected ASSETS2 store.
+  assetsByCategory: AssetCategoryBreakdown[];
+  loansAndCards: LoansAndCardsSummary;
 };
 
 // Best-effort keyword match from a reimbursement line's free-text
@@ -63,10 +77,12 @@ export function buildAccountantPackage(
   maintenanceRecords: MaintenanceRecord[],
   fuelPurchases: FuelPurchase[],
   loans: LoanRow[],
+  creditCards: CreditCardRow[],
   revenueItems: ExtractedRevenueItem[],
   userCategories: UserCategory[],
   perDiemDays: number,
-  perDiemDeduction: number
+  perDiemDeduction: number,
+  todayIso: string
 ): AccountantPackage {
   const buckets = new Map<string, number>();
   function add(category: string, amount: number) {
@@ -113,10 +129,23 @@ export function buildAccountantPackage(
   const totalExpenses = scheduleC.reduce((sum, c) => sum + c.amount, 0);
   const byType = [...incomeByType.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
 
+  const assetsByCategory = buildAssetCategoryBreakdown(buildAssetRegister(deductions, todayIso));
+
+  const loanRows = loans.map((l) => ({ name: l.name ?? '—', balance: Number(l.balance ?? 0), payment: Number(l.payment ?? 0) }));
+  const cardRows = creditCards.map((c) => ({ name: c.name ?? '—', balance: Number(c.balance ?? 0), limit: Number(c.credit_limit ?? 0) }));
+  const loansAndCards: LoansAndCardsSummary = {
+    loans: loanRows,
+    totalLoanBalance: loanRows.reduce((sum, l) => sum + l.balance, 0),
+    cards: cardRows,
+    totalCardBalance: cardRows.reduce((sum, c) => sum + c.balance, 0),
+  };
+
   return {
     scheduleC,
     totalExpenses,
     income: { total: incomeTotal, byType },
     perDiem: { days: perDiemDays, deduction: perDiemDeduction },
+    assetsByCategory,
+    loansAndCards,
   };
 }

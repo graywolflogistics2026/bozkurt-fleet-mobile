@@ -1,5 +1,5 @@
 import { buildAccountantPackage, estimateLoanInterest, matchReimbursementCategory } from '@/src/stats/accountantPackage';
-import type { Deduction, MaintenanceRecord, FuelPurchase, LoanRow, UserCategory } from '@/src/types/db';
+import type { Deduction, MaintenanceRecord, FuelPurchase, LoanRow, CreditCardRow, UserCategory } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
 
 function deduction(overrides: Partial<Deduction>): Deduction {
@@ -86,7 +86,25 @@ function loan(overrides: Partial<LoanRow>): LoanRow {
   };
 }
 
+function card(overrides: Partial<CreditCardRow>): CreditCardRow {
+  return {
+    id: 'c1',
+    user_id: 'u1',
+    name: 'Business Visa',
+    last_four: null,
+    credit_limit: 0,
+    balance: 0,
+    apr: null,
+    due_day: null,
+    tags: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
 const noUserCategories: UserCategory[] = [];
+const todayIso = '2026-06-01';
 
 describe('estimateLoanInterest', () => {
   it('approximates annual interest as balance × APR', () => {
@@ -128,9 +146,11 @@ describe('buildAccountantPackage', () => {
       [],
       [],
       [],
+      [],
       noUserCategories,
       0,
-      0
+      0,
+      todayIso
     );
     expect(result.scheduleC).toEqual([{ category: 'Fuel & DEF', amount: 150 }]);
     expect(result.totalExpenses).toBe(150);
@@ -143,21 +163,23 @@ describe('buildAccountantPackage', () => {
       [],
       [],
       [],
+      [],
       noUserCategories,
       0,
-      0
+      0,
+      todayIso
     );
     const bucket = result.scheduleC.find((c) => c.category === 'Maintenance & Repairs');
     expect(bucket?.amount).toBe(650);
   });
 
   it('folds fuel_purchases (net of discount) into Fuel & DEF', () => {
-    const result = buildAccountantPackage([], [], [fuel({ amount: 500, discount: 40 })], [], [], noUserCategories, 0, 0);
+    const result = buildAccountantPackage([], [], [fuel({ amount: 500, discount: 40 })], [], [], [], noUserCategories, 0, 0, todayIso);
     expect(result.scheduleC).toEqual([{ category: 'Fuel & DEF', amount: 460 }]);
   });
 
   it('folds estimated loan interest into Truck/Trailer Payments, not the full payment', () => {
-    const result = buildAccountantPackage([], [], [], [loan({ balance: 40000, apr: 5 })], [], noUserCategories, 0, 0);
+    const result = buildAccountantPackage([], [], [], [loan({ balance: 40000, apr: 5 })], [], [], noUserCategories, 0, 0, todayIso);
     expect(result.scheduleC).toEqual([{ category: 'Truck/Trailer Payments', amount: 2000 }]);
   });
 
@@ -168,10 +190,12 @@ describe('buildAccountantPackage', () => {
       [],
       [],
       [],
+      [],
       revenueItems,
       noUserCategories,
       0,
-      0
+      0,
+      todayIso
     );
     expect(result.scheduleC).toEqual([{ category: 'Tolls & Scales', amount: 120 }]);
     expect(result.income.total).toBe(0);
@@ -184,10 +208,12 @@ describe('buildAccountantPackage', () => {
       [],
       [],
       [],
+      [],
       revenueItems,
       noUserCategories,
       0,
-      0
+      0,
+      todayIso
     );
     // Nets to 0, which is filtered out of the rollup entirely.
     expect(result.scheduleC.find((c) => c.category === 'Tolls & Scales')).toBeUndefined();
@@ -202,10 +228,12 @@ describe('buildAccountantPackage', () => {
       [],
       [],
       [],
+      [],
       revenueItems,
       noUserCategories,
       0,
-      0
+      0,
+      todayIso
     );
     expect(result.scheduleC).toEqual([{ category: 'Fuel & DEF', amount: 1000 }]);
     expect(result.income.total).toBe(60);
@@ -231,15 +259,60 @@ describe('buildAccountantPackage', () => {
       [],
       [],
       [],
+      [],
       userCategories,
       0,
-      0
+      0,
+      todayIso
     );
     expect(result.scheduleC).toEqual([{ category: 'Office & Admin', amount: 75 }]);
   });
 
   it('passes per diem days/deduction through unchanged (computed by the shared tax module, not re-derived here)', () => {
-    const result = buildAccountantPackage([], [], [], [], [], noUserCategories, 70, 4480);
+    const result = buildAccountantPackage([], [], [], [], [], [], noUserCategories, 70, 4480, todayIso);
     expect(result.perDiem).toEqual({ days: 70, deduction: 4480 });
+  });
+
+  it('assetsByCategory sources from the same EQUIP-coded deductions as the real Asset Register (§4 bug #3 fix)', () => {
+    const result = buildAccountantPackage(
+      [deduction({ category: 'Tools & Equipment', amount: 120 }), deduction({ category: 'Electronics', amount: 80 })],
+      [],
+      [],
+      [],
+      [],
+      [],
+      noUserCategories,
+      0,
+      0,
+      todayIso
+    );
+    const tools = result.assetsByCategory.find((c) => c.category === 'Tools & Equipment');
+    const electronics = result.assetsByCategory.find((c) => c.category === 'Electronics');
+    const total = result.assetsByCategory.find((c) => c.category === 'Total');
+    expect(tools).toMatchObject({ count: 1, total: 120 });
+    expect(electronics).toMatchObject({ count: 1, total: 80 });
+    expect(total).toMatchObject({ count: 2, total: 200 });
+  });
+
+  it('loansAndCards summarizes raw loan and credit card balances', () => {
+    const result = buildAccountantPackage(
+      [],
+      [],
+      [],
+      [loan({ name: 'Truck Loan', balance: 40000, payment: 900 }), loan({ name: 'Trailer Loan', balance: 10000, payment: 300 })],
+      [card({ name: 'Business Visa', balance: 500, credit_limit: 5000 })],
+      [],
+      noUserCategories,
+      0,
+      0,
+      todayIso
+    );
+    expect(result.loansAndCards.totalLoanBalance).toBe(50000);
+    expect(result.loansAndCards.loans).toEqual([
+      { name: 'Truck Loan', balance: 40000, payment: 900 },
+      { name: 'Trailer Loan', balance: 10000, payment: 300 },
+    ]);
+    expect(result.loansAndCards.totalCardBalance).toBe(500);
+    expect(result.loansAndCards.cards).toEqual([{ name: 'Business Visa', balance: 500, limit: 5000 }]);
   });
 });

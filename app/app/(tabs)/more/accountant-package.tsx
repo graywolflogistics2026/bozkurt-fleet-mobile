@@ -10,6 +10,7 @@ import { useDeductions } from '@/src/data/deductions';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useLoanRows } from '@/src/data/loans';
+import { useCreditCards } from '@/src/data/creditCards';
 import { useDocuments } from '@/src/data/documents';
 import { useUserCategories } from '@/src/data/userCategories';
 import { useTaxYearData } from '@/src/data/taxYearData';
@@ -53,6 +54,7 @@ export default function AccountantPackage() {
   const maintenanceQuery = useMaintenanceRecords();
   const fuelQuery = useFuelPurchases();
   const loansQuery = useLoanRows();
+  const creditCardsQuery = useCreditCards();
   const documentsQuery = useDocuments();
   const userCategoriesQuery = useUserCategories({ active: true });
   const taxYearDataQuery = useTaxYearData();
@@ -67,6 +69,7 @@ export default function AccountantPackage() {
     maintenanceQuery.isLoading ||
     fuelQuery.isLoading ||
     loansQuery.isLoading ||
+    creditCardsQuery.isLoading ||
     documentsQuery.isLoading ||
     taxYearDataQuery.isLoading;
 
@@ -100,10 +103,12 @@ export default function AccountantPackage() {
       maintenanceQuery.data ?? [],
       fuelQuery.data ?? [],
       loansQuery.data ?? [],
+      creditCardsQuery.data ?? [],
       revenueItems,
       userCategoriesQuery.data ?? [],
       perDiemDays,
-      perDiemDeduction
+      perDiemDeduction,
+      new Date().toISOString().slice(0, 10)
     );
   }, [
     taxYearDataQuery.data,
@@ -112,6 +117,7 @@ export default function AccountantPackage() {
     maintenanceQuery.data,
     fuelQuery.data,
     loansQuery.data,
+    creditCardsQuery.data,
     revenueItems,
     userCategoriesQuery.data,
   ]);
@@ -125,6 +131,8 @@ export default function AccountantPackage() {
         disclaimer: DISCLAIMER,
         scheduleC: rollup.scheduleC,
         totalExpenses: rollup.totalExpenses,
+        assetsByCategory: rollup.assetsByCategory,
+        loansAndCards: rollup.loansAndCards,
         income: rollup.income,
         perDiem: rollup.perDiem,
       };
@@ -156,6 +164,15 @@ export default function AccountantPackage() {
       const incomeRows = rollup.income.byType
         .map((c) => `<tr><td>${c.category.replace(/_/g, ' ')}</td><td style="text-align:right">${money(c.amount)}</td></tr>`)
         .join('');
+      const assetRows = rollup.assetsByCategory
+        .map((c) => `<tr><td>${c.category}</td><td style="text-align:right">${c.count}</td><td style="text-align:right">${money(c.total)}</td></tr>`)
+        .join('');
+      const loanRows = rollup.loansAndCards.loans
+        .map((l) => `<tr><td>${l.name}</td><td style="text-align:right">${money(l.balance)}</td></tr>`)
+        .join('');
+      const cardRows = rollup.loansAndCards.cards
+        .map((c) => `<tr><td>${c.name}</td><td style="text-align:right">${money(c.balance)}</td></tr>`)
+        .join('');
       const html = `
         <html>
           <head><meta charset="utf-8" />
@@ -175,6 +192,12 @@ export default function AccountantPackage() {
 
             <h2>${t('accountantPackage.scheduleCTitle')}</h2>
             <table>${rows}<tr class="total"><td>${t('accountantPackage.totalExpenses')}</td><td style="text-align:right">${money(rollup.totalExpenses)}</td></tr></table>
+
+            <h2>${t('accountantPackage.assetsByCategoryTitle')}</h2>
+            <table>${assetRows || `<tr><td>${t('accountantPackage.noAssets')}</td><td></td><td></td></tr>`}</table>
+
+            <h2>${t('accountantPackage.loansCardsTitle')}</h2>
+            <table>${loanRows || cardRows ? loanRows + cardRows : `<tr><td>${t('accountantPackage.noLoansCards')}</td><td></td></tr>`}</table>
 
             <h2>${t('accountantPackage.incomeTitle')}</h2>
             <table>${incomeRows || `<tr><td>${t('accountantPackage.noOtherIncome')}</td><td></td></tr>`}<tr class="total"><td>${t('accountantPackage.totalOtherIncome')}</td><td style="text-align:right">${money(rollup.income.total)}</td></tr></table>
@@ -229,6 +252,55 @@ export default function AccountantPackage() {
                   <View style={styles.rowBorder}>
                     <Row label={t('accountantPackage.totalExpenses')} value={money(rollup.totalExpenses)} bold />
                   </View>
+                </>
+              )}
+            </Card>
+
+            <Text style={styles.sectionTitle}>{t('accountantPackage.assetsByCategoryTitle')}</Text>
+            <Card>
+              {rollup.assetsByCategory.every((c) => c.count === 0) ? (
+                <MutedText>{t('accountantPackage.noAssets')}</MutedText>
+              ) : (
+                rollup.assetsByCategory.map((c, i) => (
+                  <View key={c.category} style={[styles.row, i > 0 && styles.rowBorder, c.category === 'Total' && styles.rowBorder]}>
+                    <Text style={c.category === 'Total' ? styles.rowLabelBold : styles.rowLabel} numberOfLines={1}>
+                      {c.category === 'Total' ? t('accountantPackage.totalAssets') : c.category}
+                    </Text>
+                    <MutedText>{c.count}</MutedText>
+                    <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: c.category === 'Total' ? '700' : '600', marginStart: spacing.sm }}>
+                      {money(c.total)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </Card>
+
+            <Text style={styles.sectionTitle}>{t('accountantPackage.loansCardsTitle')}</Text>
+            <Card>
+              {rollup.loansAndCards.loans.length === 0 && rollup.loansAndCards.cards.length === 0 ? (
+                <MutedText>{t('accountantPackage.noLoansCards')}</MutedText>
+              ) : (
+                <>
+                  {rollup.loansAndCards.loans.map((l, i) => (
+                    <View key={`loan-${l.name}-${i}`} style={i > 0 ? styles.rowBorder : undefined}>
+                      <Row label={l.name} value={money(l.balance)} />
+                    </View>
+                  ))}
+                  {rollup.loansAndCards.loans.length > 0 && (
+                    <View style={styles.rowBorder}>
+                      <Row label={t('accountantPackage.totalLoanBalance')} value={money(rollup.loansAndCards.totalLoanBalance)} bold />
+                    </View>
+                  )}
+                  {rollup.loansAndCards.cards.map((c, i) => (
+                    <View key={`card-${c.name}-${i}`} style={styles.rowBorder}>
+                      <Row label={c.name} value={money(c.balance)} />
+                    </View>
+                  ))}
+                  {rollup.loansAndCards.cards.length > 0 && (
+                    <View style={styles.rowBorder}>
+                      <Row label={t('accountantPackage.totalCardBalance')} value={money(rollup.loansAndCards.totalCardBalance)} bold />
+                    </View>
+                  )}
                 </>
               )}
             </Card>
