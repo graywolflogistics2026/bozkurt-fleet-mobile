@@ -62,19 +62,24 @@ see the note at the end of this file about updating PROMPTS.md.
 
 ## Overview
 
-### 1. Dashboard — 🟡 partial
+### 1. Dashboard — 🟡 partial (chart gap RESOLVED 2026-07-12)
 Has all 3 legacy stat rows (revenue/deductions/net/miles; per-diem
 days/$/weeks-in-service/avg-net-per-week; business balance/RPM/CPM/PPM),
 the tax row (estimate/quarterly countdown/weekly reserve/effective
 rate), a clickable Capital Account strip, Recent Loads, and a truck
 mini-card — plus beyond-legacy additions (S-corp preview, 1099-NEC
 reminders, fleet/driver overview, customizable card layout, invariant
-#17).
-- **Missing**: the Revenue-vs-Expenses trend chart (legacy `rChart()`,
-  Chart.js) — no chart library is used on this screen at all.
-- **Missing**: the "Last Settlement" breakdown card that legacy shows
-  directly on the Dashboard — that detail now only lives on the
-  Settlements screen (one tap away, not literally absent from the app).
+#17). Now has the Revenue-vs-Expenses trend chart, a hand-rolled
+monthly overlay-bar chart (`src/stats/cashFlowTrend.ts`
+`buildMonthlyRevenueExpenseTrend()`, a cited port of legacy `rChart()`'s
+month-grouping — revenue = sum settlement gross, expenses = sum ALL
+deductions per calendar month, same "every deduction" scope as CPM/
+Operating P&L) — a customizable dashboard card (invariant #17) like
+every other card on this screen, not a fixed fifth row.
+- **Still not literally ported**: the "Last Settlement" breakdown card
+  legacy shows directly on the Dashboard. That detail lives one tap away
+  on the Settlements screen instead — a deliberate simplification, not
+  reopened by this pass.
 
 ## Revenue
 
@@ -353,9 +358,9 @@ honest remainder of the Session 9b Parity Checklist commitment:
 4. ~~Settings: no View-Only Mode equivalent.~~ **RESOLVED 2026-07-12** —
    formally retired (CLAUDE.md invariant #23); accountant/spouse
    read-only share link tracked in PROMPTS.md Backlog as its replacement.
-5. **Dashboard: no revenue-vs-expense trend chart.** Every other
-   Dashboard tile is done; this is the one visual legacy had that
-   mobile doesn't.
+5. ~~Dashboard: no revenue-vs-expense trend chart.~~ **RESOLVED
+   2026-07-12** — hand-rolled monthly overlay-bar chart added as a
+   customizable dashboard card.
 6. ~~Smaller items: Settlements' top-row reimb/ded aggregate,
    Maintenance's warranty/out-of-pocket stat split, Credit Cards'
    aggregate utilization tile + 30% threshold match~~ — **RESOLVED

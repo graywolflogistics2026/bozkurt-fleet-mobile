@@ -11,11 +11,14 @@ import { useDrivers } from '@/src/data/drivers';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
+import { useDeductions } from '@/src/data/deductions';
+import { useSettlements } from '@/src/data/settlements';
 import { useDashboardLayout } from '@/src/data/dashboardLayout';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
+import { buildMonthlyRevenueExpenseTrend, type MonthlyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
 import { CARD_LABEL_KEYS, type DashboardCardId } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field } from '@/src/components/ui';
 import { useFormatters } from '@/src/i18n/format';
@@ -41,6 +44,62 @@ function urgencyColor(urgency: QuarterlyDeadlineStatus['urgency']) {
   if (urgency === 'urgent') return colors.red;
   if (urgency === 'warn') return colors.orange;
   return colors.muted;
+}
+
+const CHART_HEIGHT = 110;
+
+// Revenue-vs-Expenses trend (legacy rChart(), a monthly line chart — see
+// src/stats/cashFlowTrend.ts's buildMonthlyRevenueExpenseTrend()). Hand-
+// rolled overlay bars, same dependency-free approach as Cash Flow's weekly
+// trend chart (no chart library installed).
+function RevenueExpenseChart({ points }: { points: MonthlyRevenueExpensePoint[] }) {
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const max = Math.max(1, ...points.map((p) => Math.max(p.revenue, p.expenses)));
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 4 }}>
+        {points.map((p) => (
+          <View key={p.monthKey} style={{ flex: 1, alignItems: 'center' }}>
+            <View style={{ width: '100%', height: CHART_HEIGHT, justifyContent: 'flex-end' }}>
+              <View
+                style={{
+                  width: '100%',
+                  height: Math.max(2, (p.revenue / max) * CHART_HEIGHT),
+                  backgroundColor: 'rgba(34,197,94,0.35)',
+                  borderRadius: 2,
+                  position: 'absolute',
+                  bottom: 0,
+                }}
+              />
+              <View
+                style={{
+                  width: '100%',
+                  height: Math.max(2, (p.expenses / max) * CHART_HEIGHT),
+                  backgroundColor: colors.red,
+                  borderRadius: 2,
+                }}
+              />
+            </View>
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
+        <MutedText>{points[0]?.label}</MutedText>
+        <MutedText>{points[points.length - 1]?.label}</MutedText>
+      </View>
+      <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: 'rgba(34,197,94,0.35)' }} />
+          <MutedText>{`Revenue · ${money(Math.max(...points.map((p) => p.revenue)))} max`}</MutedText>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.red }} />
+          <MutedText>Expenses</MutedText>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function StatValue({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
@@ -81,6 +140,8 @@ export default function Dashboard() {
   const capitalQuery = useCapitalAccountSummary();
   const taxQuery = useTaxEstimate();
   const loadsQuery = useLoads();
+  const settlementsQuery = useSettlements();
+  const dedQuery = useDeductions();
   const layoutQuery = useDashboardLayout();
   const driversQuery = useDrivers({ active: true });
   const drivers = driversQuery.data ?? [];
@@ -120,6 +181,11 @@ export default function Dashboard() {
   const capital = capitalQuery.data;
   const tax = taxQuery.data;
   const deadline = tax ? nextQuarterlyDeadline(tax.taxYearData.quarterly_deadlines) : null;
+
+  const revenueExpenseTrend = useMemo(
+    () => buildMonthlyRevenueExpenseTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
+    [settlementsQuery.data, dedQuery.data]
+  );
 
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
@@ -260,6 +326,13 @@ export default function Dashboard() {
         <MutedText>{t('dashboard.acceptLoadsAboveCpm')}</MutedText>
       </TappableCard>
     ),
+    revenueExpenseTrend: (label) =>
+      revenueExpenseTrend.length === 0 ? null : (
+        <TappableCard key="revenueExpenseTrend" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+          {label !== t('dashboard.revenueExpenseTrendTitle') && <MutedText style={{ marginBottom: spacing.xs }}>{label}</MutedText>}
+          <RevenueExpenseChart points={revenueExpenseTrend} />
+        </TappableCard>
+      ),
     estTotalTax: (label) => (
       <TappableCard key="estTotalTax" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
         <StatValue label={label} value={tax ? money(tax.estimate.totalTax) : '—'} valueColor={colors.red} />
@@ -483,6 +556,9 @@ export default function Dashboard() {
             {renderCard('revenuePerMile', null)}
             {renderCard('costPerMile', null)}
             {renderCard('profitPerMile', null)}
+
+            {/* Revenue-vs-Expenses trend chart — legacy rChart() */}
+            {renderCard('revenueExpenseTrend', null)}
           </>
         )}
 

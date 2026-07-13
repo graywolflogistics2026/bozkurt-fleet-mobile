@@ -96,6 +96,7 @@
     "allCostsDividedByMiles": "tüm maliyetler ÷ toplam mil",
     "profitPerMile": "Kâr/Mil",
     "acceptLoadsAboveCpm": "CPM üzerindeki yükleri kabul edin!",
+    "revenueExpenseTrendTitle": "Gelir - Gider",
     "taxSectionTitle": "Vergi",
     "estTotalTax": "Tah. Toplam Vergi",
     "filingStatusCaption": "{{filingStatus}} — SE + Federal",

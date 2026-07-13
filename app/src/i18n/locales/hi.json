@@ -96,6 +96,7 @@
     "allCostsDividedByMiles": "all costs ÷ total miles",
     "profitPerMile": "Profit/Mile",
     "acceptLoadsAboveCpm": "accept loads above CPM!",
+    "revenueExpenseTrendTitle": "Revenue vs. Expenses",
     "taxSectionTitle": "Tax",
     "estTotalTax": "Est. Total Tax",
     "filingStatusCaption": "{{filingStatus}} — SE + Federal",

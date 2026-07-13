@@ -96,6 +96,7 @@
     "allCostsDividedByMiles": "все расходы ÷ всего миль",
     "profitPerMile": "Прибыль/Милю",
     "acceptLoadsAboveCpm": "берите грузы выше CPM!",
+    "revenueExpenseTrendTitle": "Доход и расходы",
     "taxSectionTitle": "Налоги",
     "estTotalTax": "Оценка Общего Налога",
     "filingStatusCaption": "{{filingStatus}} — SE + Федеральный",
