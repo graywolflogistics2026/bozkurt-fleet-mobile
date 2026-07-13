@@ -446,6 +446,16 @@ export type Profile = {
   dot_number: string | null;
   mc_number: string | null;
   onboarding_completed_at: string | null;
+  // Cash Flow 30-day forecast budget inputs: docs/PENDING_SQL.md §29
+  // (Session 9b parity-gap decision #3) — all nullable; the app supplies
+  // legacy's own placeholder defaults (1145/1800/0/500/25) when null.
+  cf_bank_balance: number | null;
+  cf_weekly_revenue: number | null;
+  cf_truck_payment: number | null;
+  cf_fuel_weekly: number | null;
+  cf_insurance_monthly: number | null;
+  cf_other_weekly: number | null;
+  cf_tax_reserve_pct: number | null;
   created_at: string;
   updated_at: string;
 };

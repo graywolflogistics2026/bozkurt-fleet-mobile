@@ -43,6 +43,19 @@ create table profiles (
   dot_number   text,
   mc_number    text,
   onboarding_completed_at timestamptz,
+  -- Cash Flow 30-day forecast budget inputs (added retroactively,
+  -- PENDING_SQL.md §29, Session 9b parity-gap decision #3) — legacy's
+  -- own calcCF() form fields have no persistence either (recomputed on
+  -- every oninput); these are nullable so the app can supply legacy's
+  -- own placeholder defaults (1145/1800/0/500/25) client-side without a
+  -- server-side default masquerading as a real user-entered value.
+  cf_bank_balance       numeric(12,2),
+  cf_weekly_revenue     numeric(12,2),
+  cf_truck_payment      numeric(12,2),
+  cf_fuel_weekly        numeric(12,2),
+  cf_insurance_monthly  numeric(12,2),
+  cf_other_weekly       numeric(12,2),
+  cf_tax_reserve_pct    numeric(5,2),
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );

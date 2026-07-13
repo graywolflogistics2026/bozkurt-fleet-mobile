@@ -13,7 +13,7 @@ row (§1), the relevant business-logic rules (§3), and the relevant
 known legacy bugs (§4) — not just spot-checked.
 
 **Bottom line: 0 of 22 sections are missing.** As of the 2026-07-12
-parity-gap closure pass, 15 are at full parity or better and 7 remain
+parity-gap closure pass, 16 are at full parity or better and 6 remain
 partial, each with a specific, itemized gap below — none of the gaps
 are "screen doesn't exist," all are "screen exists, missing one
 sub-feature." See "Genuine gaps to prioritize" at the bottom for
@@ -42,7 +42,7 @@ a future audit.
 | 10 | Capital Account | Business | ✅ | `more/capital-account.tsx` |
 | 11 | Operating P&L | Business | ✅ parity+ | `more/operating-pnl.tsx` |
 | 12 | Truck Health | Intelligence | ✅ parity+ | `(tabs)/truck-health.tsx` |
-| 13 | Cash Flow | Intelligence | 🟡 | `more/cash-flow.tsx` |
+| 13 | Cash Flow | Intelligence | ✅ | `more/cash-flow.tsx` |
 | 14 | Scorecard | Intelligence | ✅ | `more/scorecard.tsx` |
 | 15 | Loan Center | Intelligence | ✅ parity+ | `more/loans.tsx` |
 | 16 | Credit Cards | Intelligence | ✅ | `more/credit-cards.tsx` |
@@ -200,15 +200,22 @@ current view (parity+, not missing).
   already-documented, deliberate deferral (CLAUDE.md invariant #4), not
   a new finding.
 
-### 13. Cash Flow — 🟡 partial
+### 13. Cash Flow — ✅ full parity (RESOLVED 2026-07-12)
 Has the Weekly Net Pay Trend (bar chart, gross vs. net — verbatim port
 of `rWeeklyTrend()`) and Load Profitability best/worst-5-by-RPM
-(verbatim port of `rLoadProfit()`).
-- **Missing**: the manual weekly-budget input form (bank balance,
-  weekly revenue, truck payment, fuel, insurance, other, tax-reserve %)
-  → 30-day forecast + weekly tax reserve $ is entirely absent.
-- **Missing**: bank-balance / 30-day-revenue / net-cash stat tiles.
-- **Missing**: the 4-week balance timeline table.
+(verbatim port of `rLoadProfit()`). Now also has the manual weekly-
+budget input form (bank balance, weekly revenue, truck payment, fuel,
+insurance monthly, other, tax-reserve %) → 30-day forecast + weekly tax
+reserve $, bank/30-day-revenue/net-cash stat tiles, and the 4-week
+balance timeline table — `src/stats/cashFlowForecast.ts`
+`calcCashFlowForecast()`, a verbatim port of legacy `calcCF()`
+(including its `||`-default quirk where an explicit 0 truck payment
+falls back to the 1145 placeholder, ported as-is rather than "fixed,"
+since it's existing tested behavior not a listed bug). Budget inputs
+persist to `profiles.cf_*` columns (docs/PENDING_SQL.md §29) — legacy's
+own form fields have no persistence at all (recomputed on every
+keystroke, lost on reload), so this is a deliberate improvement over
+strict 1:1 parity, not a deviation from it.
 
 ### 14. Scorecard — ✅ full parity
 `calcScorecard()` is a verbatim, threshold-exact port of `rScore()`
@@ -350,11 +357,10 @@ honest remainder of the Session 9b Parity Checklist commitment:
    explicit confirm action (the fix §4 bug #11 already recommended), or
    formally document "not reconciled, use Update Business Balance
    manually" as the intended behavior.
-3. **Cash Flow: the 30-day manual-budget forecast is the single
-   biggest missing sub-feature in this audit** — bank balance, weekly
-   recurring costs, tax-reserve % → forecast, plus the 4-week timeline.
-   Everything else on that screen (trend chart, load profitability) is
-   done; this input form/output block is the one substantial hole.
+3. ~~Cash Flow: the 30-day manual-budget forecast~~ — **RESOLVED
+   2026-07-12**, and persisted (`profiles.cf_*`, docs/PENDING_SQL.md
+   §29 — not yet run against the live DB), unlike legacy's own
+   unpersisted form fields.
 4. ~~Settings: no View-Only Mode equivalent.~~ **RESOLVED 2026-07-12** —
    formally retired (CLAUDE.md invariant #23); accountant/spouse
    read-only share link tracked in PROMPTS.md Backlog as its replacement.

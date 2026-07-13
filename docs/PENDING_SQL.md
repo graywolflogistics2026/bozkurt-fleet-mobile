@@ -935,6 +935,38 @@ No RLS change needed — both tables are already owner-scoped.
 
 ---
 
+## 29. profiles gains cash-flow budget fields (Session 9b parity-gap decision #3, Cash Flow 30-day forecast) — ⬜ NOT YET RUN
+
+Cash Flow's manual weekly-budget inputs (legacy `calcCF()`,
+legacy/index.html:1960) — bank balance, weekly revenue, truck payment,
+fuel, insurance (monthly), other, tax-reserve % — have no persistence in
+legacy either (plain form fields, recomputed on every `oninput`), but a
+mobile user closing the app would lose them every time with no
+persistence at all, so this pass adds them as nullable `profiles`
+columns, same "single-row-per-user settings scalar" pattern as
+`weekly_goal` (§24) rather than a new table. All nullable/no default —
+the app supplies legacy's own placeholder defaults (1145/1800/0/500/25)
+client-side when a column is null, matching legacy's `||` fallback
+behavior in `calcCF()`, never a server-side default that would silently
+say "you set this" when the user never touched the field.
+
+```sql
+alter table profiles
+  add column cf_bank_balance numeric(12,2),
+  add column cf_weekly_revenue numeric(12,2),
+  add column cf_truck_payment numeric(12,2),
+  add column cf_fuel_weekly numeric(12,2),
+  add column cf_insurance_monthly numeric(12,2),
+  add column cf_other_weekly numeric(12,2),
+  add column cf_tax_reserve_pct numeric(5,2);
+```
+
+No RLS change needed — `profiles` is already owner-scoped.
+
+- [ ] 29a run (add profiles cash-flow budget columns)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` to
