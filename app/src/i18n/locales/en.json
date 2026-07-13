@@ -73,6 +73,12 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "sections": {
+      "overview": "Overview",
+      "money": "Money",
+      "onTheRoad": "On the Road",
+      "taxes": "Taxes"
+    },
     "yearFallbackBanner": "{{requestedYear}} IRS figures not loaded yet — estimates use {{resolvedYear}} data.",
     "noTrucks": "No trucks yet. Import a legacy backup or add one in Settings to get started.",
     "totalRevenue": "Total Revenue",
@@ -890,7 +896,8 @@
     "dragHint": "Long-press and drag ☰ to reorder.",
     "arrowHint": "Use the ▲▼ arrows or Top/Bottom to reorder.",
     "moveToTop": "Top",
-    "moveToBottom": "Bottom"
+    "moveToBottom": "Bottom",
+    "noSection": "—"
   },
   "categoryPicker": {
     "newCategory": "New Category",

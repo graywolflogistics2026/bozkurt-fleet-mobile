@@ -73,6 +73,12 @@
   },
   "dashboard": {
     "title": "Panel",
+    "sections": {
+      "overview": "Genel Bakış",
+      "money": "Para",
+      "onTheRoad": "Yolda",
+      "taxes": "Vergiler"
+    },
     "yearFallbackBanner": "{{requestedYear}} IRS rakamları henüz yüklenmedi — tahminler {{resolvedYear}} verilerini kullanıyor.",
     "noTrucks": "Henüz kamyon yok. Başlamak için eski bir yedek içe aktarın veya Ayarlar'dan bir tane ekleyin.",
     "totalRevenue": "Toplam Gelir",
@@ -987,7 +993,8 @@
     "dragHint": "Sıralamak için ☰ simgesine basılı tutup sürükleyin.",
     "arrowHint": "Yeniden sıralamak için ▲▼ oklarını veya Üst/Alt'ı kullanın.",
     "moveToTop": "Üste",
-    "moveToBottom": "Alta"
+    "moveToBottom": "Alta",
+    "noSection": "—"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

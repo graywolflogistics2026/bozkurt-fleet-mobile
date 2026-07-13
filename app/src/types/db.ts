@@ -439,6 +439,8 @@ export type Profile = {
   tos_version: string | null;
   // docs/PENDING_SQL.md §19 (customizable dashboard) — unenforced shape documented there; null until Session 9a ships.
   dashboard_layout: Record<string, unknown> | null;
+  // docs/PENDING_SQL.md §32 (Dashboard sections addition) — Record<SectionId, boolean>, true = collapsed; null/missing = expanded.
+  dashboard_sections_collapsed: Record<string, boolean> | null;
   // docs/PENDING_SQL.md §20 (expanded onboarding wizard) — null/'owner_operator' both mean the full owner-operator experience.
   role: 'owner_operator' | 'company_driver_w2' | 'contractor_1099' | 'trainee' | 'lease_operator' | null;
   // docs/PENDING_SQL.md §24 (AI feature package — CEO Mode briefing) — null means "no goal set", never treated as $0.

@@ -73,6 +73,12 @@
   },
   "dashboard": {
     "title": "Panel",
+    "sections": {
+      "overview": "Resumen",
+      "money": "Dinero",
+      "onTheRoad": "En Carretera",
+      "taxes": "Impuestos"
+    },
     "yearFallbackBanner": "Las cifras del IRS de {{requestedYear}} aún no están cargadas — las estimaciones usan datos de {{resolvedYear}}.",
     "noTrucks": "Aún no hay camiones. Importa un respaldo anterior o agrega uno en Configuración para comenzar.",
     "totalRevenue": "Ingresos Totales",
@@ -987,7 +993,8 @@
     "dragHint": "Mantén presionado y arrastra ☰ para reordenar.",
     "arrowHint": "Use las flechas ▲▼ o Arriba/Abajo para reordenar.",
     "moveToTop": "Arriba",
-    "moveToBottom": "Abajo"
+    "moveToBottom": "Abajo",
+    "noSection": "—"
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",

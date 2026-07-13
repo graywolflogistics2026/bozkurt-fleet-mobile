@@ -13,14 +13,21 @@ import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
 import { useDeductions } from '@/src/data/deductions';
 import { useSettlements } from '@/src/data/settlements';
-import { useDashboardLayout } from '@/src/data/dashboardLayout';
+import { useDashboardLayout, useUpdateSectionsCollapsed, type SectionsCollapsed } from '@/src/data/dashboardLayout';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
 import { buildWeeklyTrend, buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
 import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
-import { CARD_LABEL_KEYS, type DashboardCardId } from '@/src/stats/dashboardLayout';
+import {
+  CARD_LABEL_KEYS,
+  SECTION_IDS,
+  SECTION_LABEL_KEYS,
+  type DashboardCardId,
+  type DashboardCardConfig,
+  type SectionId,
+} from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field } from '@/src/components/ui';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -199,6 +206,41 @@ function CompactTile({
   );
 }
 
+// Collapsible titled section (Dashboard sections addition, owner
+// decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
+// language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
+// header when collapsed; children unmount entirely rather than just
+// being hidden, so a collapsed section costs nothing to render.
+function DashboardSection({
+  title,
+  collapsed,
+  onToggle,
+  children,
+}: {
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ marginBottom: spacing.sm }}>
+      <Pressable
+        onPress={onToggle}
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingVertical: spacing.xs,
+        }}
+      >
+        <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '700' }}>{title}</Text>
+        <Text style={{ color: colors.muted, fontSize: typography.size.md }}>{collapsed ? '▸' : '▾'}</Text>
+      </Pressable>
+      {!collapsed && <View>{children}</View>}
+    </View>
+  );
+}
+
 export default function Dashboard() {
   const { t } = useTranslation();
   const { money: moneyFmt, number } = useFormatters();
@@ -212,6 +254,10 @@ export default function Dashboard() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [reasonableSalaryInput, setReasonableSalaryInput] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  // Local-first collapse toggling (Dashboard sections addition) — flips
+  // instantly in the UI while the mutation persists in the background,
+  // rather than waiting a round-trip for every tap to visually register.
+  const [localSectionsCollapsed, setLocalSectionsCollapsed] = useState<SectionsCollapsed | null>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -229,8 +275,16 @@ export default function Dashboard() {
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
   const layoutQuery = useDashboardLayout();
+  const updateSectionsCollapsed = useUpdateSectionsCollapsed();
   const driversQuery = useDrivers({ active: true });
   const drivers = driversQuery.data ?? [];
+
+  const sectionsCollapsed = localSectionsCollapsed ?? layoutQuery.data?.sectionsCollapsed ?? {};
+  function toggleSection(id: SectionId) {
+    const next = { ...sectionsCollapsed, [id]: !sectionsCollapsed[id] };
+    setLocalSectionsCollapsed(next);
+    updateSectionsCollapsed.mutate(next);
+  }
 
   // Fleet scalability (owner decision 2026-07-03): the per-truck ranking
   // below re-uses the SAME fetchFleetStats() function the single-truck
@@ -642,6 +696,27 @@ export default function Dashboard() {
 
   const isCustomized = layoutQuery.data?.isCustomized ?? false;
 
+  // Customized-path grouping (Dashboard sections addition): the flat,
+  // user-ordered list gets split into the 4 collapsible sections (in
+  // SECTION_IDS order) plus a trailing unsectioned group — preserving
+  // each card's relative order within its own group, same as before.
+  const groupedCustomized = useMemo(() => {
+    if (!layoutQuery.data) return null;
+    const visible = layoutQuery.data.layout.filter((row) => row.visible);
+    const bySection = new Map<SectionId, DashboardCardConfig[]>();
+    const unsectioned: DashboardCardConfig[] = [];
+    for (const row of visible) {
+      const section = row.section;
+      if (section && (SECTION_IDS as readonly string[]).includes(section)) {
+        if (!bySection.has(section)) bySection.set(section, []);
+        bySection.get(section)!.push(row);
+      } else {
+        unsectioned.push(row);
+      }
+    }
+    return { bySection, unsectioned };
+  }, [layoutQuery.data]);
+
   return (
     <Screen>
       <ScrollView
@@ -685,97 +760,125 @@ export default function Dashboard() {
           <Card>
             <MutedText>{t('dashboard.noTrucks')}</MutedText>
           </Card>
-        ) : isCustomized && layoutQuery.data ? (
-          // Customized layout: one flat list, user's own order/visibility/
-          // labels, no section headers (PROMPTS.md Session 9a item 8 — see
-          // the cardRenderers comment above for why headers are dropped
-          // here specifically).
+        ) : isCustomized && layoutQuery.data && groupedCustomized ? (
+          // Customized layout, grouped into the same 4 collapsible
+          // sections by each card's own `section` (settable via
+          // Customize), plus a trailing flat list of unsectioned cards —
+          // individual full-width cards throughout (the compact trio/pair
+          // treatment below is a DEFAULT-layout-only visual, same as
+          // before Dashboard sections existed).
           <>
-            {layoutQuery.data.layout
-              .filter((row) => row.visible)
-              .map((row) => (
-                <View key={row.id}>{renderCard(row.id as DashboardCardId, row.label)}</View>
-              ))}
+            {SECTION_IDS.map((sectionId) => {
+              const rows = groupedCustomized.bySection.get(sectionId);
+              if (!rows || rows.length === 0) return null;
+              return (
+                <DashboardSection
+                  key={sectionId}
+                  title={t(SECTION_LABEL_KEYS[sectionId])}
+                  collapsed={!!sectionsCollapsed[sectionId]}
+                  onToggle={() => toggleSection(sectionId)}
+                >
+                  {rows.map((row) => (
+                    <View key={row.id}>{renderCard(row.id as DashboardCardId, row.label)}</View>
+                  ))}
+                </DashboardSection>
+              );
+            })}
+            {groupedCustomized.unsectioned.map((row) => (
+              <View key={row.id}>{renderCard(row.id as DashboardCardId, row.label)}</View>
+            ))}
           </>
         ) : (
           // New zoned default layout (device feedback round 2, owner
-          // decision 2026-07-13) — supersedes the old card-per-row parity
-          // layout. Business Balance/Miles/Weeks in Service/Avg Net-Week/
-          // Total Revenue/effectiveRate/S-Corp preview are hidden from
-          // this default (DEFAULT_HIDDEN_CARD_IDS,
+          // decision 2026-07-13), organized into 4 collapsible titled
+          // sections (Dashboard sections addition) mirroring the sidebar/
+          // menu-sheet grouping language. Business Balance/Miles/Weeks in
+          // Service/Avg Net-Week/Total Revenue/effectiveRate/S-Corp
+          // preview are hidden from this default (DEFAULT_HIDDEN_CARD_IDS,
           // src/stats/dashboardLayout.ts) but remain fully available via
           // Customize.
           <>
-            {/* Zone 1 (hero): weekly revenue-vs-expenses trend chart */}
-            {renderCard('revenueExpenseTrend', null)}
+            <DashboardSection
+              title={t(SECTION_LABEL_KEYS.overview)}
+              collapsed={!!sectionsCollapsed.overview}
+              onToggle={() => toggleSection('overview')}
+            >
+              {renderCard('revenueExpenseTrend', null)}
+            </DashboardSection>
 
-            {/* Zone 2: Net to Owner (large) + Total Deductions side by side */}
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <View style={{ flex: 1 }}>{renderCard('netToOwner', null)}</View>
-              <View style={{ flex: 1 }}>{renderCard('totalDeductions', null)}</View>
-            </View>
+            <DashboardSection
+              title={t(SECTION_LABEL_KEYS.money)}
+              collapsed={!!sectionsCollapsed.money}
+              onToggle={() => toggleSection('money')}
+            >
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>{renderCard('netToOwner', null)}</View>
+                <View style={{ flex: 1 }}>{renderCard('totalDeductions', null)}</View>
+              </View>
+            </DashboardSection>
 
-            {/* Zone 3: combined per-diem card (days on road + deduction $) */}
-            {renderCard('perDiemSummary', null)}
+            <DashboardSection
+              title={t(SECTION_LABEL_KEYS.onTheRoad)}
+              collapsed={!!sectionsCollapsed.onTheRoad}
+              onToggle={() => toggleSection('onTheRoad')}
+            >
+              {renderCard('perDiemSummary', null)}
+              <View style={styles.compactRow}>
+                <CompactTile
+                  label={t('dashboard.revenuePerMile')}
+                  value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                  valueColor={colors.green}
+                  trend={cpmTrends.revenuePerMile}
+                  goodDirection="up"
+                  onPress={() => router.push('/(tabs)/more/cash-flow')}
+                />
+                <CompactTile
+                  label={t('dashboard.costPerMile')}
+                  value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                  valueColor={colors.red}
+                  trend={cpmTrends.costPerMile}
+                  goodDirection="down"
+                  onPress={() => router.push('/(tabs)/more/cash-flow')}
+                />
+                <CompactTile
+                  label={t('dashboard.profitPerMile')}
+                  value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                  valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
+                  trend={cpmTrends.profitPerMile}
+                  goodDirection="up"
+                  onPress={() => router.push('/(tabs)/more/cash-flow')}
+                />
+              </View>
+            </DashboardSection>
 
-            {/* Zone 4: Revenue/Cost/Profit-per-mile compact trio, each with
-                a trend arrow vs. the prior 4-week average. */}
-            <View style={styles.compactRow}>
-              <CompactTile
-                label={t('dashboard.revenuePerMile')}
-                value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                valueColor={colors.green}
-                trend={cpmTrends.revenuePerMile}
-                goodDirection="up"
-                onPress={() => router.push('/(tabs)/more/cash-flow')}
-              />
-              <CompactTile
-                label={t('dashboard.costPerMile')}
-                value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                valueColor={colors.red}
-                trend={cpmTrends.costPerMile}
-                goodDirection="down"
-                onPress={() => router.push('/(tabs)/more/cash-flow')}
-              />
-              <CompactTile
-                label={t('dashboard.profitPerMile')}
-                value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
-                trend={cpmTrends.profitPerMile}
-                goodDirection="up"
-                onPress={() => router.push('/(tabs)/more/cash-flow')}
-              />
-            </View>
-          </>
-        )}
-
-        {(!isCustomized || !layoutQuery.data) && (
-          <>
-            {/* Zone 5: tax strip — CLAUDE.md invariant #8: estimates only,
-                never presented as definitive. */}
-            <ScreenTitle>{t('dashboard.taxSectionTitle')}</ScreenTitle>
-            <View style={styles.compactRow}>
-              <CompactTile
-                label={t('dashboard.estTotalTax')}
-                value={tax ? money(tax.estimate.totalTax) : '—'}
-                valueColor={colors.red}
-                onPress={() => router.push('/(tabs)/more/tax-estimator')}
-              />
-              <CompactTile
-                label={t('dashboard.quarterlyPayment')}
-                value={tax ? money(tax.estimate.quarterlyPayment) : '—'}
-                valueColor={colors.red}
-                caption={deadline ? t('dashboard.deadlineDue', { label: deadline.label, count: deadline.daysUntil }) : undefined}
-                captionColor={deadline ? urgencyColor(deadline.urgency) : undefined}
-                onPress={() => router.push('/(tabs)/more/tax-estimator')}
-              />
-              <CompactTile
-                label={t('dashboard.weeklyTaxReserve')}
-                value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'}
-                valueColor={colors.orange}
-                onPress={() => router.push('/(tabs)/more/tax-estimator')}
-              />
-            </View>
+            <DashboardSection
+              title={t(SECTION_LABEL_KEYS.taxes)}
+              collapsed={!!sectionsCollapsed.taxes}
+              onToggle={() => toggleSection('taxes')}
+            >
+              <View style={styles.compactRow}>
+                <CompactTile
+                  label={t('dashboard.estTotalTax')}
+                  value={tax ? money(tax.estimate.totalTax) : '—'}
+                  valueColor={colors.red}
+                  onPress={() => router.push('/(tabs)/more/tax-estimator')}
+                />
+                <CompactTile
+                  label={t('dashboard.quarterlyPayment')}
+                  value={tax ? money(tax.estimate.quarterlyPayment) : '—'}
+                  valueColor={colors.red}
+                  caption={deadline ? t('dashboard.deadlineDue', { label: deadline.label, count: deadline.daysUntil }) : undefined}
+                  captionColor={deadline ? urgencyColor(deadline.urgency) : undefined}
+                  onPress={() => router.push('/(tabs)/more/tax-estimator')}
+                />
+                <CompactTile
+                  label={t('dashboard.weeklyTaxReserve')}
+                  value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'}
+                  valueColor={colors.orange}
+                  onPress={() => router.push('/(tabs)/more/tax-estimator')}
+                />
+              </View>
+            </DashboardSection>
           </>
         )}
 

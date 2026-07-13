@@ -46,11 +46,15 @@ describe('mergeDashboardLayout', () => {
       { id: 'totalRevenue', visible: false, label: null },
     ];
     const merged = mergeDashboardLayout(stored, ['totalRevenue', 'netToOwner', 'costPerMile']);
-    expect(merged[0]).toEqual({ id: 'netToOwner', visible: true, label: 'My Net' });
-    expect(merged[1]).toEqual({ id: 'totalRevenue', visible: false, label: null });
+    // 'netToOwner'/'totalRevenue' were stored with no `section` key at all
+    // (pre-dating the "Dashboard sections" addition) — falls back to each
+    // id's default section (money / none).
+    expect(merged[0]).toEqual({ id: 'netToOwner', visible: true, label: 'My Net', section: 'money' });
+    expect(merged[1]).toEqual({ id: 'totalRevenue', visible: false, label: null, section: null });
     // missing 'costPerMile' appended at the end, visible by default (not
-    // one of the redesign's hidden-by-default ids).
-    expect(merged[2]).toEqual({ id: 'costPerMile', visible: true, label: null });
+    // one of the redesign's hidden-by-default ids), default section
+    // 'onTheRoad'.
+    expect(merged[2]).toEqual({ id: 'costPerMile', visible: true, label: null, section: 'onTheRoad' });
   });
 
   it('drops stored ids that no longer correspond to a real card', () => {
@@ -65,12 +69,36 @@ describe('mergeDashboardLayout', () => {
       { id: 'totalRevenue', visible: true, label: 'Second' },
     ];
     const merged = mergeDashboardLayout(stored, ['totalRevenue']);
-    expect(merged).toEqual([{ id: 'totalRevenue', visible: false, label: 'First' }]);
+    expect(merged).toEqual([{ id: 'totalRevenue', visible: false, label: 'First', section: null }]);
   });
 
   it('treats a malformed stored array entry as ignorable rather than throwing', () => {
     const stored = [null, { notAnId: true }, { id: 'totalRevenue', visible: true, label: null }];
     const merged = mergeDashboardLayout(stored, ['totalRevenue']);
-    expect(merged).toEqual([{ id: 'totalRevenue', visible: true, label: null }]);
+    expect(merged).toEqual([{ id: 'totalRevenue', visible: true, label: null, section: null }]);
+  });
+
+  it('preserves an explicit stored section, including a user-chosen "no section" (null)', () => {
+    const stored = [{ id: 'netToOwner', visible: true, label: null, section: 'taxes' }, { id: 'revenueExpenseTrend', visible: true, label: null, section: null }];
+    const merged = mergeDashboardLayout(stored, ['netToOwner', 'revenueExpenseTrend']);
+    // Moved OUT of its default 'money' section into 'taxes' by the user.
+    expect(merged[0].section).toBe('taxes');
+    // Explicitly cleared to "no section" — NOT the same as never having
+    // been stored (which would fall back to the 'overview' default).
+    expect(merged[1].section).toBeNull();
+  });
+
+  it('defaults a never-stored card to its DEFAULT_CARD_SECTIONS entry', () => {
+    const merged = mergeDashboardLayout(null);
+    const byId = Object.fromEntries(merged.map((m) => [m.id, m.section]));
+    expect(byId.revenueExpenseTrend).toBe('overview');
+    expect(byId.netToOwner).toBe('money');
+    expect(byId.totalDeductions).toBe('money');
+    expect(byId.perDiemSummary).toBe('onTheRoad');
+    expect(byId.revenuePerMile).toBe('onTheRoad');
+    expect(byId.estTotalTax).toBe('taxes');
+    // Never assigned to any of the 4 sections — stays unsectioned.
+    expect(byId.capitalAccountStrip).toBeNull();
+    expect(byId.recentLoads).toBeNull();
   });
 });

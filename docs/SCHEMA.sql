@@ -25,6 +25,11 @@ create table profiles (
   -- hide/rename UI ships; see that section for the documented (unenforced)
   -- shape.
   dashboard_layout jsonb,
+  -- Collapsible Dashboard sections (added retroactively, PENDING_SQL.md
+  -- §32, owner decision 2026-07-13) — Record<SectionId, boolean>, true =
+  -- collapsed; null/missing key both mean "expanded" (never assume
+  -- collapsed just because this column is new for an existing user).
+  dashboard_sections_collapsed jsonb,
   -- Expanded onboarding wizard (added retroactively, PENDING_SQL.md §20,
   -- owner decision 2026-07-10) — null/'owner_operator' both mean "full
   -- owner-operator experience" until Session 9b wires role-based module

@@ -73,6 +73,12 @@
   },
   "dashboard": {
     "title": "لوحة التحكم",
+    "sections": {
+      "overview": "نظرة عامة",
+      "money": "المال",
+      "onTheRoad": "على الطريق",
+      "taxes": "الضرائب"
+    },
     "yearFallbackBanner": "أرقام مصلحة الضرائب لعام {{requestedYear}} لم تُحمّل بعد — تستخدم التقديرات بيانات {{resolvedYear}}.",
     "noTrucks": "لا توجد شاحنات بعد. استورد نسخة احتياطية قديمة أو أضف واحدة في الإعدادات للبدء.",
     "totalRevenue": "إجمالي الإيرادات",
@@ -987,7 +993,8 @@
     "dragHint": "اضغط مطولاً واسحب ☰ لإعادة الترتيب.",
     "arrowHint": "استخدم الأسهم ▲▼ أو أعلى/أسفل لإعادة الترتيب.",
     "moveToTop": "الأعلى",
-    "moveToBottom": "الأسفل"
+    "moveToBottom": "الأسفل",
+    "noSection": "—"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",

@@ -55,6 +55,46 @@ const DEFAULT_HIDDEN_CARD_IDS = new Set<string>([
   'scorpPreview',
 ]);
 
+// Collapsible titled sections (owner decision 2026-07-13, "Dashboard
+// sections" addition to the redesign) — mirrors the sidebar/menu-sheet
+// grouping language (WideSidebar.tsx's GROUPS) at a coarser grain: not
+// every Dashboard card belongs to one of these 4, only the ones the
+// redesign's Zones 1-5 cover. Everything else (capitalAccountStrip,
+// recentLoads, truckCard, fleetOverview, driverOverview, and every
+// still-hidden-by-default card above) stays unsectioned (section: null)
+// — rendered below the 4 sections, unchanged, no collapse behavior.
+export const SECTION_IDS = ['overview', 'money', 'onTheRoad', 'taxes'] as const;
+export type SectionId = (typeof SECTION_IDS)[number];
+
+// i18n key for each section's title — read by both the Dashboard itself
+// and dashboard-customize.tsx's section picker.
+export const SECTION_LABEL_KEYS: Record<SectionId, string> = {
+  overview: 'dashboard.sections.overview',
+  money: 'dashboard.sections.money',
+  onTheRoad: 'dashboard.sections.onTheRoad',
+  taxes: 'dashboard.sections.taxes',
+};
+
+// Default section for every card that has one — deliberately includes
+// the hidden-by-default atomic per-diem/tax cards (ytdPerDiemDays,
+// perDiemDeduction, effectiveRate) so that if a user re-enables one via
+// Customize, it lands somewhere sensible instead of unsectioned.
+const DEFAULT_CARD_SECTIONS: Partial<Record<string, SectionId>> = {
+  revenueExpenseTrend: 'overview',
+  netToOwner: 'money',
+  totalDeductions: 'money',
+  perDiemSummary: 'onTheRoad',
+  ytdPerDiemDays: 'onTheRoad',
+  perDiemDeduction: 'onTheRoad',
+  revenuePerMile: 'onTheRoad',
+  costPerMile: 'onTheRoad',
+  profitPerMile: 'onTheRoad',
+  estTotalTax: 'taxes',
+  quarterlyPayment: 'taxes',
+  weeklyTaxReserve: 'taxes',
+  effectiveRate: 'taxes',
+};
+
 // i18n key for each card's DEFAULT label — read by the customize screen so
 // it can show "Total Revenue" etc. next to the reorder/hide/rename controls
 // even before the user has touched anything.
@@ -85,15 +125,20 @@ export const CARD_LABEL_KEYS: Record<DashboardCardId, string> = {
   driverOverview: 'dashboard.driverOverviewTitle',
 };
 
-export type DashboardCardConfig = { id: string; visible: boolean; label: string | null };
+export type DashboardCardConfig = { id: string; visible: boolean; label: string | null; section: SectionId | null };
 
 // Merges a saved layout (from profiles.dashboard_layout, possibly stale —
 // missing newer cards, or carrying an id for a card that no longer exists)
 // with the current default order: known stored entries keep the user's
-// order/visibility/label; any card missing from storage (new card added in
-// a later release, or the user has never customized) is appended at the
-// end, visible by default; any stored id that no longer matches a real
-// card is dropped silently.
+// order/visibility/label/section; any card missing from storage (new card
+// added in a later release, or the user has never customized) is appended
+// at the end, visible by default; any stored id that no longer matches a
+// real card is dropped silently.
+//
+// section backward-compat: an entry saved BEFORE the "Dashboard sections"
+// addition has no `section` key at all (`undefined`), which is treated as
+// "use the default for this id" — distinct from a user explicitly moving a
+// card to "no section" (`section: null` stored), which is preserved as-is.
 export function mergeDashboardLayout(stored: unknown, defaultOrder: readonly string[] = DEFAULT_CARD_ORDER): DashboardCardConfig[] {
   const validIds = new Set<string>(defaultOrder);
   const storedList = Array.isArray(stored) ? (stored as Array<Partial<DashboardCardConfig>>) : [];
@@ -104,11 +149,16 @@ export function mergeDashboardLayout(stored: unknown, defaultOrder: readonly str
   for (const entry of storedList) {
     if (!entry || typeof entry.id !== 'string' || !validIds.has(entry.id) || seen.has(entry.id)) continue;
     seen.add(entry.id);
-    merged.push({ id: entry.id, visible: entry.visible !== false, label: entry.label ?? null });
+    merged.push({
+      id: entry.id,
+      visible: entry.visible !== false,
+      label: entry.label ?? null,
+      section: entry.section !== undefined ? entry.section : (DEFAULT_CARD_SECTIONS[entry.id] ?? null),
+    });
   }
 
   for (const id of defaultOrder) {
-    if (!seen.has(id)) merged.push({ id, visible: !DEFAULT_HIDDEN_CARD_IDS.has(id), label: null });
+    if (!seen.has(id)) merged.push({ id, visible: !DEFAULT_HIDDEN_CARD_IDS.has(id), label: null, section: DEFAULT_CARD_SECTIONS[id] ?? null });
   }
 
   return merged;

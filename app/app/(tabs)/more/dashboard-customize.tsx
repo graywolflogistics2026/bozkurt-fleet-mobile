@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useDashboardLayout, useUpdateDashboardLayout } from '@/src/data/dashboardLayout';
-import { CARD_LABEL_KEYS, type DashboardCardConfig } from '@/src/stats/dashboardLayout';
+import { CARD_LABEL_KEYS, SECTION_IDS, SECTION_LABEL_KEYS, type DashboardCardConfig, type SectionId } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -49,6 +49,35 @@ function moveToEdge<T>(list: T[], index: number, toStart: boolean): T[] {
   next.splice(target, 0, item);
   return next;
 }
+
+// Section picker (Dashboard sections addition, owner decision
+// 2026-07-13) — lets a card be moved within/between the 4 collapsible
+// titled sections (OVERVIEW/MONEY/ON THE ROAD/TAXES) or cleared to "no
+// section" (rendered unsectioned, below all 4). Shared by both
+// CardEditor and FallbackCardEditor.
+function SectionPills({ value, onChange }: { value: SectionId | null; onChange: (section: SectionId | null) => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs }}>
+      <Pressable
+        onPress={() => onChange(null)}
+        style={[styles.sectionPill, value === null ? styles.sectionPillOn : styles.sectionPillOff]}
+      >
+        <Text style={styles.sectionPillText}>{t('dashboardCustomize.noSection')}</Text>
+      </Pressable>
+      {SECTION_IDS.map((id) => (
+        <Pressable
+          key={id}
+          onPress={() => onChange(id)}
+          style={[styles.sectionPill, value === id ? styles.sectionPillOn : styles.sectionPillOff]}
+        >
+          <Text style={styles.sectionPillText}>{t(SECTION_LABEL_KEYS[id])}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 export default function DashboardCustomize() {
   const { t } = useTranslation();
   const layoutQuery = useDashboardLayout();
@@ -105,6 +134,7 @@ export default function DashboardCustomize() {
           defaultLabel={t(CARD_LABEL_KEYS[item.id as keyof typeof CARD_LABEL_KEYS] ?? item.id)}
           onToggleVisible={() => updateRowById(item.id, { visible: !item.visible })}
           onLabelChange={(label) => updateRowById(item.id, { label: label || null })}
+          onSectionChange={(section) => updateRowById(item.id, { section })}
         />
       </ScaleDecorator>
     );
@@ -119,6 +149,7 @@ export default function DashboardCustomize() {
         isLast={index === rows.length - 1}
         onToggleVisible={() => updateRowById(item.id, { visible: !item.visible })}
         onLabelChange={(label) => updateRowById(item.id, { label: label || null })}
+        onSectionChange={(section) => updateRowById(item.id, { section })}
         onMoveUp={() => setDraft((current) => (current ? moveBy(current, index, -1) : current))}
         onMoveDown={() => setDraft((current) => (current ? moveBy(current, index, 1) : current))}
         onMoveToTop={() => setDraft((current) => (current ? moveToEdge(current, index, true) : current))}
@@ -187,6 +218,7 @@ function CardEditor({
   defaultLabel,
   onToggleVisible,
   onLabelChange,
+  onSectionChange,
 }: {
   row: DashboardCardConfig;
   drag: () => void;
@@ -194,6 +226,7 @@ function CardEditor({
   defaultLabel: string;
   onToggleVisible: () => void;
   onLabelChange: (label: string) => void;
+  onSectionChange: (section: SectionId | null) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -211,6 +244,7 @@ function CardEditor({
             placeholder={t('dashboardCustomize.labelPlaceholder', { defaultLabel })}
             style={{ marginTop: spacing.xs, marginBottom: 0 }}
           />
+          <SectionPills value={row.section} onChange={onSectionChange} />
         </View>
 
         <Pressable
@@ -237,6 +271,7 @@ function FallbackCardEditor({
   isLast,
   onToggleVisible,
   onLabelChange,
+  onSectionChange,
   onMoveUp,
   onMoveDown,
   onMoveToTop,
@@ -248,6 +283,7 @@ function FallbackCardEditor({
   isLast: boolean;
   onToggleVisible: () => void;
   onLabelChange: (label: string) => void;
+  onSectionChange: (section: SectionId | null) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveToTop: () => void;
@@ -281,6 +317,7 @@ function FallbackCardEditor({
             <Text style={[styles.edgeActionText, isLast && styles.arrowGlyphDisabled]}>{t('dashboardCustomize.moveToBottom')}</Text>
           </Pressable>
         </View>
+        <SectionPills value={row.section} onChange={onSectionChange} />
       </View>
 
       <Pressable
@@ -345,6 +382,27 @@ const styles = {
     color: colors.accent,
     fontSize: typography.size.xs,
     fontWeight: '700' as const,
+  },
+  sectionPill: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    marginEnd: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  sectionPillOn: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  sectionPillOff: {
+    backgroundColor: 'transparent',
+    borderColor: colors.border,
+  },
+  sectionPillText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
+    fontWeight: '600' as const,
   },
   visibilityPill: {
     paddingVertical: 6,

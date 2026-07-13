@@ -1013,6 +1013,25 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
+## 32. profiles.dashboard_sections_collapsed (Dashboard sections addition, owner decision 2026-07-13) — ⬜ NOT YET RUN
+
+Collapsible titled sections on the Dashboard (OVERVIEW/MONEY/ON THE
+ROAD/TAXES, mirroring the sidebar/menu-sheet grouping language at a
+coarser grain) need their expand/collapse state remembered per user.
+Nullable/no default (`{}` in the app when null) — same "degrade
+gracefully to an empty object, never assume a section is collapsed
+just because the column is new" pattern as `dashboard_layout` itself.
+
+```sql
+alter table profiles add column dashboard_sections_collapsed jsonb;
+```
+
+No RLS change needed — `profiles` is already owner-scoped.
+
+- [ ] 32a run (add profiles.dashboard_sections_collapsed column)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` to
