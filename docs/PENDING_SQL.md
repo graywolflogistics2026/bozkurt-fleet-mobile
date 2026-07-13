@@ -903,7 +903,7 @@ No RLS change needed — `tax_config` is already owner-scoped.
 
 ---
 
-## 28. profiles gains dot_number/mc_number/onboarding_completed_at + trucks gains trailer fields (Session 9b onboarding wizard) — ⬜ NOT YET RUN
+## 28. profiles gains dot_number/mc_number/onboarding_completed_at + trucks gains trailer fields (Session 9b onboarding wizard) — ✅ APPLIED
 
 Expanded first-launch onboarding wizard (PROMPTS.md Session 9b item 7,
 CLAUDE.md invariant #18): `onboarding_completed_at` gates whether the
@@ -931,11 +931,11 @@ alter table trucks
 
 No RLS change needed — both tables are already owner-scoped.
 
-- [ ] 28a run (add profiles onboarding/DOT/MC columns + trucks trailer columns)
+- [x] 28a run (add profiles onboarding/DOT/MC columns + trucks trailer columns)
 
 ---
 
-## 29. profiles gains cash-flow budget fields (Session 9b parity-gap decision #3, Cash Flow 30-day forecast) — ⬜ NOT YET RUN
+## 29. profiles gains cash-flow budget fields (Session 9b parity-gap decision #3, Cash Flow 30-day forecast) — ✅ APPLIED
 
 Cash Flow's manual weekly-budget inputs (legacy `calcCF()`,
 legacy/index.html:1960) — bank balance, weekly revenue, truck payment,
@@ -963,11 +963,11 @@ alter table profiles
 
 No RLS change needed — `profiles` is already owner-scoped.
 
-- [ ] 29a run (add profiles cash-flow budget columns)
+- [x] 29a run (add profiles cash-flow budget columns)
 
 ---
 
-## 30. bank_statements gains opening_balance/closing_balance (Session 9b parity-gap decision #2, explicit-confirm balance update) — ⬜ NOT YET RUN
+## 30. bank_statements gains opening_balance/closing_balance (Session 9b parity-gap decision #2, explicit-confirm balance update) — ✅ APPLIED
 
 Legacy's checking-statement import (`CHK_STMTS`, FEATURE_INVENTORY.md
 §2.6) captures `openingBalance`/`closingBalance` per statement but the
@@ -987,7 +987,7 @@ alter table bank_statements
 
 No RLS change needed — `bank_statements` is already owner-scoped.
 
-- [ ] 30a run (add bank_statements opening_balance/closing_balance columns)
+- [x] 30a run (add bank_statements opening_balance/closing_balance columns)
 
 ---
 

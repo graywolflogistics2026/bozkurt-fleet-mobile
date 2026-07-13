@@ -253,9 +253,9 @@ to the deduction ledger" rule).
   a checking statement with a closing balance shows an "Update Business
   Balance to $X?" button (`src/lib/confirmBusinessBalanceUpdate.ts`),
   never automatic. Requires `bank_statements.opening_balance`/
-  `closing_balance` (docs/PENDING_SQL.md §30, not yet run against the
-  live DB) — previously silently dropped even by the legacy-backup
-  importer, now captured.
+  `closing_balance` (docs/PENDING_SQL.md §30, applied 2026-07-12) —
+  previously silently dropped even by the legacy-backup importer, now
+  captured.
 
 ## Tools
 
@@ -370,8 +370,7 @@ honest remainder of the Session 9b Parity Checklist commitment:
    balance-confirm behavior for statements however they arrive.
 3. ~~Cash Flow: the 30-day manual-budget forecast~~ — **RESOLVED
    2026-07-12**, and persisted (`profiles.cf_*`, docs/PENDING_SQL.md
-   §29 — not yet run against the live DB), unlike legacy's own
-   unpersisted form fields.
+   §29, applied), unlike legacy's own unpersisted form fields.
 4. ~~Settings: no View-Only Mode equivalent.~~ **RESOLVED 2026-07-12** —
    formally retired (CLAUDE.md invariant #23); accountant/spouse
    read-only share link tracked in PROMPTS.md Backlog as its replacement.
