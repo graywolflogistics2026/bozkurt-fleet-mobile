@@ -632,7 +632,16 @@ async function importCheckingStatements(userId: string, statements: LegacyBackup
     }
     const { data: created, error } = await supabase
       .from('bank_statements')
-      .insert({ user_id: userId, account_type: 'checking', statement_month: s.month })
+      .insert({
+        user_id: userId,
+        account_type: 'checking',
+        statement_month: s.month,
+        // docs/PENDING_SQL.md §30 — previously silently dropped; now
+        // retained so the Bank Statement screen can offer the
+        // explicit-confirm business-balance update.
+        opening_balance: num(s.openingBalance),
+        closing_balance: num(s.closingBalance),
+      })
       .select('id')
       .single();
     if (error || !created) {

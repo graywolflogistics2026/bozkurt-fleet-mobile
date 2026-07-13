@@ -540,6 +540,13 @@ create table bank_statements (
   account_type text check (account_type in ('card','checking')),
   statement_month text,                       -- 'June 2026'
   document_id  uuid references documents on delete set null,
+  -- opening_balance/closing_balance (added retroactively, PENDING_SQL.md
+  -- §30, Session 9b parity-gap decision #2) — checking-statement only in
+  -- practice (legacy CHK_STMTS); powers the Bank Statement screen's
+  -- explicit-confirm "update business balance to $X" action, never a
+  -- silent overwrite like legacy's own on-render behavior.
+  opening_balance numeric(12,2),
+  closing_balance numeric(12,2),
   unique (user_id, account_type, statement_month)   -- month-level duplicate guard
 );
 

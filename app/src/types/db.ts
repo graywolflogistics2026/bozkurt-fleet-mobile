@@ -333,6 +333,11 @@ export type BankStatement = {
   account_type: 'card' | 'checking';
   statement_month: string | null;
   document_id: string | null;
+  // docs/PENDING_SQL.md §30 — checking-statement only in practice; powers
+  // the explicit-confirm business-balance update (Session 9b parity-gap
+  // decision #2), never a silent auto-overwrite.
+  opening_balance: number | null;
+  closing_balance: number | null;
   created_at: string;
   updated_at: string;
 };

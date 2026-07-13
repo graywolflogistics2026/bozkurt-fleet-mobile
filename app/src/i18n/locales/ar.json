@@ -826,7 +826,15 @@
     "deductibleTag": "قابل للخصم",
     "deleteStatement": "حذف هذا الكشف",
     "deleteConfirmTitle": "هل تريد حذف هذا الكشف؟",
-    "deleteFailedTitle": "فشل الحذف"
+    "deleteFailedTitle": "فشل الحذف",
+    "openingClosing": "الافتتاحي {{opening}} → الختامي {{closing}}",
+    "updateBalanceTo": "تحديث رصيد العمل إلى {{amount}}",
+    "currentBalance": "رصيد العمل الحالي: {{amount}}",
+    "balanceUpdateFailedTitle": "فشل تحديث الرصيد"
+  },
+  "confirmBalanceUpdate": {
+    "title": "تحديث رصيد العمل؟",
+    "body": "هل تريد ضبط رصيد عملك على {{amount}} (الرصيد الختامي لهذا الكشف)؟"
   },
   "assetRegister": {
     "title": "سجل الأصول",

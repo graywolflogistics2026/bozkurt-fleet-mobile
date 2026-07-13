@@ -967,6 +967,30 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
+## 30. bank_statements gains opening_balance/closing_balance (Session 9b parity-gap decision #2, explicit-confirm balance update) — ⬜ NOT YET RUN
+
+Legacy's checking-statement import (`CHK_STMTS`, FEATURE_INVENTORY.md
+§2.6) captures `openingBalance`/`closingBalance` per statement but the
+mobile `bank_statements` table never gained matching columns — the
+legacy-backup importer (`app/src/data/legacyImport/importLegacyBackup.ts`
+`importCheckingStatements()`) was silently dropping both fields. Adding
+them here so the Bank Statement screen can offer legacy's closing-
+balance reconciliation, but as an EXPLICIT confirm action (owner
+decision 2026-07-12, Session 9b parity-gap decision #2) rather than
+legacy's silent on-render overwrite of `gw_bizbal` — never automatic.
+
+```sql
+alter table bank_statements
+  add column opening_balance numeric(12,2),
+  add column closing_balance numeric(12,2);
+```
+
+No RLS change needed — `bank_statements` is already owner-scoped.
+
+- [ ] 30a run (add bank_statements opening_balance/closing_balance columns)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` to

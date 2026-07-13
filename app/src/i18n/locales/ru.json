@@ -826,7 +826,15 @@
     "deductibleTag": "Вычитаемое",
     "deleteStatement": "Удалить эту выписку",
     "deleteConfirmTitle": "Удалить эту выписку?",
-    "deleteFailedTitle": "Не удалось удалить"
+    "deleteFailedTitle": "Не удалось удалить",
+    "openingClosing": "Начальный {{opening}} → Конечный {{closing}}",
+    "updateBalanceTo": "Обновить баланс бизнеса до {{amount}}",
+    "currentBalance": "Текущий баланс бизнеса: {{amount}}",
+    "balanceUpdateFailedTitle": "Не удалось обновить баланс"
+  },
+  "confirmBalanceUpdate": {
+    "title": "Обновить баланс бизнеса?",
+    "body": "Установить баланс бизнеса на {{amount}} (конечный баланс этой выписки)?"
   },
   "assetRegister": {
     "title": "Реестр активов",

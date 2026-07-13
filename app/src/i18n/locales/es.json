@@ -826,7 +826,15 @@
     "deductibleTag": "Deducible",
     "deleteStatement": "Eliminar este estado de cuenta",
     "deleteConfirmTitle": "¿Eliminar este estado de cuenta?",
-    "deleteFailedTitle": "Error al eliminar"
+    "deleteFailedTitle": "Error al eliminar",
+    "openingClosing": "Apertura {{opening}} → Cierre {{closing}}",
+    "updateBalanceTo": "Actualizar Saldo del Negocio a {{amount}}",
+    "currentBalance": "Saldo actual del negocio: {{amount}}",
+    "balanceUpdateFailedTitle": "Error al actualizar el saldo"
+  },
+  "confirmBalanceUpdate": {
+    "title": "¿Actualizar Saldo del Negocio?",
+    "body": "¿Establecer el saldo de su negocio en {{amount}} (saldo de cierre de este estado de cuenta)?"
   },
   "assetRegister": {
     "title": "Registro de Activos",

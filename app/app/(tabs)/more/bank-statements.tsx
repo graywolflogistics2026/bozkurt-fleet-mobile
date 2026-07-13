@@ -3,9 +3,11 @@ import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useBankStatements, useBankTransactions, useDeleteBankStatement } from '@/src/data/bankStatements';
+import { useProfile, useUpdateProfile } from '@/src/data/profile';
+import { confirmBusinessBalanceUpdate } from '@/src/lib/confirmBusinessBalanceUpdate';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useFormatters } from '@/src/i18n/format';
-import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, SecondaryButton } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, SecondaryButton, PrimaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import type { BankStatement, BankTransaction } from '@/src/types/db';
 
@@ -44,12 +46,35 @@ function TransactionRow({ x }: { x: BankTransaction }) {
 
 export default function BankStatements() {
   const { t } = useTranslation();
+  const { money } = useFormatters();
   const statementsQuery = useBankStatements();
   const allTransactionsQuery = useBankTransactions();
   const deleteStatement = useDeleteBankStatement();
+  const profileQuery = useProfile();
+  const updateProfile = useUpdateProfile();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [viewing, setViewing] = useState<BankStatement | null>(null);
+  const [updatingBalance, setUpdatingBalance] = useState(false);
+
+  // Legacy's checking-statement closing balance SILENTLY overwrites
+  // gw_bizbal on every render (FEATURE_INVENTORY.md §2.6) — this app
+  // requires an explicit confirm instead (Session 9b parity-gap decision
+  // #2), triggered by viewing the statement (same "on render" moment
+  // legacy uses) rather than at import time, which would spam a confirm
+  // dialog per statement during a multi-month legacy-backup restore.
+  async function handleUpdateBusinessBalance(closingBalance: number) {
+    const confirmed = await confirmBusinessBalanceUpdate(money(closingBalance));
+    if (!confirmed) return;
+    setUpdatingBalance(true);
+    try {
+      await updateProfile.mutateAsync({ business_balance: closingBalance });
+    } catch (err) {
+      Alert.alert(t('bankStatements.balanceUpdateFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setUpdatingBalance(false);
+    }
+  }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -148,6 +173,25 @@ export default function BankStatements() {
             ))
           )}
         </ScrollView>
+
+        {viewing?.account_type === 'checking' && viewing.closing_balance != null && (
+          <View style={{ marginTop: spacing.sm }}>
+            {viewing.opening_balance != null && (
+              <MutedText>
+                {t('bankStatements.openingClosing', { opening: money(viewing.opening_balance), closing: money(viewing.closing_balance) })}
+              </MutedText>
+            )}
+            <PrimaryButton
+              title={t('bankStatements.updateBalanceTo', { amount: money(viewing.closing_balance) })}
+              onPress={() => handleUpdateBusinessBalance(viewing.closing_balance as number)}
+              loading={updatingBalance}
+            />
+            {profileQuery.data && (
+              <MutedText>{t('bankStatements.currentBalance', { amount: money(profileQuery.data.business_balance) })}</MutedText>
+            )}
+          </View>
+        )}
+
         {viewing && (
           <Pressable onPress={() => handleDelete(viewing)} hitSlop={8} style={{ marginTop: spacing.sm }}>
             <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>

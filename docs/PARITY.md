@@ -238,21 +238,24 @@ aggregate portfolio-utilization stat tile, and both the per-card and
 aggregate utilization highlight match legacy's exact >30% orange
 threshold (previously a different, per-row-only 70% red highlight).
 
-### 17. Bank Statement — 🟡 partial, plus one undocumented behavior change
+### 17. Bank Statement — 🟡 partial (balance behavior RESOLVED 2026-07-12)
 Two-tab structure (checking/card) via `account_type`, view-only
 transaction list, no deduction creation (matches legacy's "never writes
 to the deduction ledger" rule).
 - **Missing**: the category-breakdown card and the cross-check-vs-
   settlements comparison panel, on both tabs.
-- **Behavior change, not decided anywhere**: legacy's checking-
-  statement render silently overwrites `gw_bizbal` with the latest
-  closing balance every time it's viewed (§2.6). The mobile screen
-  never writes to `business_balance` at all — not preserved as
-  automatic, and not turned into the explicit-confirm action that §4
-  bug #11 suggested as the better alternative either. It was simply
-  dropped, with no substitute reconciliation path. Worth an explicit
-  decision (see "Genuine gaps to prioritize" below) rather than staying
-  an accidental omission.
+- **Balance-reconciliation behavior — now decided and implemented**:
+  legacy's checking-statement render silently overwrote `gw_bizbal` with
+  the latest closing balance on every view (§2.6); the mobile app had
+  neither that automatic behavior nor a substitute. Owner decision
+  2026-07-12 (parity-gap decision #2): implemented as an EXPLICIT
+  confirm action instead, exactly the fix §4 bug #11 suggested — opening
+  a checking statement with a closing balance shows an "Update Business
+  Balance to $X?" button (`src/lib/confirmBusinessBalanceUpdate.ts`),
+  never automatic. Requires `bank_statements.opening_balance`/
+  `closing_balance` (docs/PENDING_SQL.md §30, not yet run against the
+  live DB) — previously silently dropped even by the legacy-backup
+  importer, now captured.
 
 ## Tools
 
@@ -351,12 +354,15 @@ honest remainder of the Session 9b Parity Checklist commitment:
    Accountant Package (a curated Schedule C rollup, not a raw dump).
    Worth adding a plain "Export All My Data" action mirroring legacy's
    `exportData()`, independent of the Accountant Package's tax framing.
-2. **Bank Statement: the closing-balance → business-balance
-   reconciliation was silently dropped**, not decided. Needs an
-   explicit choice: reinstate as automatic (matching legacy), add as an
-   explicit confirm action (the fix §4 bug #11 already recommended), or
-   formally document "not reconciled, use Update Business Balance
-   manually" as the intended behavior.
+2. ~~Bank Statement: the closing-balance → business-balance
+   reconciliation was silently dropped~~ — **RESOLVED 2026-07-12** as an
+   explicit-confirm action (owner decision, matching §4 bug #11's
+   recommendation). Note the live AI-import path for bank/checking
+   statements itself remains a separate, pre-existing, Session-10-
+   blocking gap (PROMPTS.md's "Supported document types" table) — today
+   `bank_statements` rows only come from the one-time legacy-backup
+   importer; this pass did not build that live import path, only the
+   balance-confirm behavior for statements however they arrive.
 3. ~~Cash Flow: the 30-day manual-budget forecast~~ — **RESOLVED
    2026-07-12**, and persisted (`profiles.cf_*`, docs/PENDING_SQL.md
    §29 — not yet run against the live DB), unlike legacy's own

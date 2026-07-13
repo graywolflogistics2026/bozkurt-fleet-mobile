@@ -826,7 +826,15 @@
     "deductibleTag": "İndirilebilir",
     "deleteStatement": "Bu ekstreyi sil",
     "deleteConfirmTitle": "Bu ekstre silinsin mi?",
-    "deleteFailedTitle": "Silme başarısız"
+    "deleteFailedTitle": "Silme başarısız",
+    "openingClosing": "Açılış {{opening}} → Kapanış {{closing}}",
+    "updateBalanceTo": "İşletme Bakiyesini {{amount}} Olarak Güncelle",
+    "currentBalance": "Mevcut işletme bakiyesi: {{amount}}",
+    "balanceUpdateFailedTitle": "Bakiye güncellenemedi"
+  },
+  "confirmBalanceUpdate": {
+    "title": "İşletme Bakiyesi Güncellensin mi?",
+    "body": "İşletme bakiyeniz {{amount}} olarak ayarlansın mı (bu ekstrenin kapanış bakiyesi)?"
   },
   "assetRegister": {
     "title": "Varlık Kaydı",

@@ -729,7 +729,15 @@
     "deductibleTag": "Deductible",
     "deleteStatement": "Delete this statement",
     "deleteConfirmTitle": "Delete this statement?",
-    "deleteFailedTitle": "Delete failed"
+    "deleteFailedTitle": "Delete failed",
+    "openingClosing": "Opening {{opening}} → Closing {{closing}}",
+    "updateBalanceTo": "Update Business Balance to {{amount}}",
+    "currentBalance": "Current business balance: {{amount}}",
+    "balanceUpdateFailedTitle": "Balance update failed"
+  },
+  "confirmBalanceUpdate": {
+    "title": "Update Business Balance?",
+    "body": "Set your business balance to {{amount}} (this statement's closing balance)?"
   },
   "assetRegister": {
     "title": "Asset Register",
