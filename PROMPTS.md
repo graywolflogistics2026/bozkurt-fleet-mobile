@@ -555,6 +555,19 @@ Ukrainian sentence), never rendered in Devanagari/Cyrillic. Run
 confirm it passes before considering this session done — it asserts
 glossary terms are byte-identical across all 7 locales, so a slip here
 fails the test, not just review.
+
+ADDED CHECKLIST ITEM (device feedback round 2, 2026-07-13, user report):
+verify the Russian locale loads correctly on-device — a user reported an
+issue selecting/loading `ru` on their own device this pass; it was not
+reproduced or root-caused in this session (ru.json itself parses fine
+and passes the parity/glossary tests same as every other locale), so
+treat it as unverified rather than fixed. Test explicitly: fresh install
+→ device language set to Russian (OS-detection path) AND manually
+picking Russian in Settings > Language (manual-override path) → confirm
+the app actually renders in Russian both ways, on a real device, not
+just the simulator. hi.json/uk.json remain untranslated English-mirror
+copies until this session actually runs — selectable, structurally
+complete, just not real Hindi/Ukrainian text yet.
 ```
 
 ## AI feature package (owner decision 2026-07-10, PRODUCT DECISION — binding)

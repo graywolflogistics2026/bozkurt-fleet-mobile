@@ -99,6 +99,8 @@
     "profitPerMile": "Profit/Mile",
     "acceptLoadsAboveCpm": "accept loads above CPM!",
     "revenueExpenseTrendTitle": "Revenue vs. Expenses",
+    "chartRevenueLegend": "Revenue · {{amount}} max",
+    "chartExpensesLegend": "Expenses",
     "taxSectionTitle": "Tax",
     "estTotalTax": "Est. Total Tax",
     "filingStatusCaption": "{{filingStatus}} — SE + Federal",

@@ -55,6 +55,7 @@ const CHART_HEIGHT = 110;
 // rolled overlay bars, same dependency-free approach as Cash Flow's weekly
 // trend chart (no chart library installed).
 function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
+  const { t } = useTranslation();
   const { money: moneyFmt, date } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const max = Math.max(1, ...points.map((p) => Math.max(p.revenue, p.expenses)));
@@ -93,11 +94,13 @@ function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }
       <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: 'rgba(34,197,94,0.35)' }} />
-          <MutedText>{`Revenue · ${money(Math.max(...points.map((p) => p.revenue)))} max`}</MutedText>
+          <MutedText>
+            {t('dashboard.chartRevenueLegend', { amount: money(Math.max(...points.map((p) => p.revenue))) })}
+          </MutedText>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.red }} />
-          <MutedText>Expenses</MutedText>
+          <MutedText>{t('dashboard.chartExpensesLegend')}</MutedText>
         </View>
       </View>
     </View>

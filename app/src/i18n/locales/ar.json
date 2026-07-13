@@ -99,6 +99,8 @@
     "profitPerMile": "الربح/الميل",
     "acceptLoadsAboveCpm": "اقبل الحمولات فوق تكلفة الميل!",
     "revenueExpenseTrendTitle": "الإيرادات مقابل المصروفات",
+    "chartRevenueLegend": "الإيرادات · الحد الأقصى {{amount}}",
+    "chartExpensesLegend": "المصروفات",
     "taxSectionTitle": "الضرائب",
     "estTotalTax": "تقدير إجمالي الضريبة",
     "filingStatusCaption": "{{filingStatus}} — ضريبة العمل الحر + الفيدرالية",
