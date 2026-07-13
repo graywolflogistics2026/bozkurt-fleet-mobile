@@ -170,51 +170,70 @@ export default function CeoMode() {
               </View>
             </Card>
 
-            <Text style={styles.sectionTitle}>{t('ceoMode.weeklyGoalTitle')}</Text>
-            <Card>
-              {weeklyGoal != null ? (
-                <>
+            {weeklyGoal == null ? (
+              // First-open goal prompt (device feedback round 2, owner
+              // decision 2026-07-13): a null weekly_goal blocks the
+              // briefing itself, not just its progress-% line — friendlier,
+              // more prominent copy than the old inline "no goal set" note,
+              // and the briefing section below doesn't render at all until
+              // a goal is saved.
+              <>
+                <Text style={styles.sectionTitle}>{t('ceoMode.goalPromptTitle')}</Text>
+                <Card>
+                  <MutedText>{t('ceoMode.goalPromptBody')}</MutedText>
+                  <Field
+                    keyboardType="numeric"
+                    value={goalInput}
+                    onChangeText={setGoalInput}
+                    placeholder={t('ceoMode.goalPlaceholder')}
+                    style={{ marginTop: spacing.sm }}
+                  />
+                  <PrimaryButton title={t('ceoMode.saveGoal')} onPress={handleSaveGoal} loading={goalSaving} disabled={!goalInput} />
+                </Card>
+              </>
+            ) : (
+              <>
+                <Text style={styles.sectionTitle}>{t('ceoMode.weeklyGoalTitle')}</Text>
+                <Card>
                   <MutedText>{t('ceoMode.currentGoal', { amount: money(weeklyGoal) })}</MutedText>
                   {goalProgressPct != null && (
                     <Text style={{ color: goalProgressPct >= 100 ? colors.green : colors.text, fontWeight: '700', fontSize: typography.size.lg, marginTop: 2 }}>
                       {goalProgressPct.toFixed(0)}% {t('ceoMode.ofGoal')}
                     </Text>
                   )}
-                </>
-              ) : (
-                <MutedText>{t('ceoMode.noGoalSet')}</MutedText>
-              )}
-              <Field keyboardType="numeric" value={goalInput} onChangeText={setGoalInput} placeholder={t('ceoMode.goalPlaceholder')} />
-              <PrimaryButton title={t('ceoMode.saveGoal')} onPress={handleSaveGoal} loading={goalSaving} disabled={!goalInput} />
-            </Card>
+                  <Field keyboardType="numeric" value={goalInput} onChangeText={setGoalInput} placeholder={t('ceoMode.goalPlaceholder')} />
+                  <PrimaryButton title={t('ceoMode.saveGoal')} onPress={handleSaveGoal} loading={goalSaving} disabled={!goalInput} />
+                </Card>
 
-            <Text style={styles.sectionTitle}>{t('ceoMode.statusTitle')}</Text>
-            <Card>
-              <View style={styles.row}>
-                <MutedText>{t('ceoMode.needsReview')}</MutedText>
-                <Text style={{ color: needsReviewCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(needsReviewCount)}</Text>
-              </View>
-              <View style={[styles.row, styles.rowBorder]}>
-                <MutedText>{t('ceoMode.maintenanceDue')}</MutedText>
-                <Text style={{ color: maintenanceAlertCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(maintenanceAlertCount)}</Text>
-              </View>
-              <View style={[styles.row, styles.rowBorder]}>
-                <MutedText>{t('ceoMode.complianceDue')}</MutedText>
-                <Text style={{ color: complianceDueSoonCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(complianceDueSoonCount)}</Text>
-              </View>
-            </Card>
+                <Text style={styles.sectionTitle}>{t('ceoMode.statusTitle')}</Text>
+                <Card>
+                  <View style={styles.row}>
+                    <MutedText>{t('ceoMode.needsReview')}</MutedText>
+                    <Text style={{ color: needsReviewCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(needsReviewCount)}</Text>
+                  </View>
+                  <View style={[styles.row, styles.rowBorder]}>
+                    <MutedText>{t('ceoMode.maintenanceDue')}</MutedText>
+                    <Text style={{ color: maintenanceAlertCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(maintenanceAlertCount)}</Text>
+                  </View>
+                  <View style={[styles.row, styles.rowBorder]}>
+                    <MutedText>{t('ceoMode.complianceDue')}</MutedText>
+                    <Text style={{ color: complianceDueSoonCount > 0 ? colors.orange : colors.text, fontWeight: '700' }}>{number(complianceDueSoonCount)}</Text>
+                  </View>
+                </Card>
 
-            <Text style={styles.sectionTitle}>{t('ceoMode.briefingTitle')}</Text>
-            <Card>
-              <PrimaryButton title={`🐺 ${t('ceoMode.getBriefing')}`} onPress={handleGetBriefing} loading={loading} />
-              {briefing && (
-                <>
-                  <Text style={{ color: colors.text, marginTop: spacing.sm, lineHeight: 20 }}>{briefing}</Text>
-                  <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
-                </>
-              )}
-              {error && <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>{error}</MutedText>}
-            </Card>
+                <Text style={styles.sectionTitle}>{t('ceoMode.briefingTitle')}</Text>
+                <Card>
+                  <PrimaryButton title={`🐺 ${t('ceoMode.getBriefing')}`} onPress={handleGetBriefing} loading={loading} />
+                  {briefing && (
+                    <>
+                      <Text style={{ color: colors.text, marginTop: spacing.sm, lineHeight: 20 }}>{briefing}</Text>
+                      <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
+                    </>
+                  )}
+                  {error && <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>{error}</MutedText>}
+                </Card>
+              </>
+            )}
             <LegalFootnote />
           </>
         )}
