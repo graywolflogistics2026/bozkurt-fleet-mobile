@@ -1013,7 +1013,7 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
-## 32. profiles.dashboard_sections_collapsed (Dashboard sections addition, owner decision 2026-07-13) — ⬜ NOT YET RUN
+## 32. profiles.dashboard_sections_collapsed (Dashboard sections addition, owner decision 2026-07-13) — ✅ APPLIED
 
 Collapsible titled sections on the Dashboard (OVERVIEW/MONEY/ON THE
 ROAD/TAXES, mirroring the sidebar/menu-sheet grouping language at a
@@ -1028,7 +1028,7 @@ alter table profiles add column dashboard_sections_collapsed jsonb;
 
 No RLS change needed — `profiles` is already owner-scoped.
 
-- [ ] 32a run (add profiles.dashboard_sections_collapsed column)
+- [x] 32a run (add profiles.dashboard_sections_collapsed column)
 
 ---
 
