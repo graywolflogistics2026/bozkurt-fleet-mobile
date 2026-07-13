@@ -991,7 +991,7 @@ No RLS change needed — `bank_statements` is already owner-scoped.
 
 ---
 
-## 31. profiles.role gains lease_operator (device feedback round 2, owner decision 2026-07-13) — ⬜ NOT YET RUN
+## 31. profiles.role gains lease_operator (device feedback round 2, owner decision 2026-07-13) — ✅ APPLIED
 
 Onboarding's role step gains a 5th option: leases a truck from another
 operator/carrier rather than owning it. Treated identically to
@@ -1009,7 +1009,7 @@ alter table profiles add constraint profiles_role_check
 
 No RLS change needed — `profiles` is already owner-scoped.
 
-- [ ] 31a run (widen profiles.role check constraint to add lease_operator)
+- [x] 31a run (widen profiles.role check constraint to add lease_operator)
 
 ---
 
