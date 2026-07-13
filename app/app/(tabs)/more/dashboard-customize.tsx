@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
+import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useDashboardLayout, useUpdateDashboardLayout } from '@/src/data/dashboardLayout';
@@ -18,6 +19,36 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 // UI affordance for reordering it changed, so useDashboardLayout/
 // useUpdateDashboardLayout and the default-layout/reset behavior below are
 // untouched.
+//
+// CRITICAL BUG FIX (device feedback round 2): react-native-draggable-
+// flatlist's gesture-handler-backed list renders completely blank inside
+// Expo Go (confirmed on-device, EN+TR) — Expo Go doesn't bundle a matching
+// native reanimated/gesture-handler build for every JS version this repo
+// pins. Detected via `Constants.appOwnership === 'expo'` (only truthy
+// inside the Expo Go client, never in a dev-client/EAS build), gating a
+// fallback plain FlatList with large (44pt+) up/down arrows plus move-to-
+// top/bottom actions — functionally equivalent reordering, just without
+// the drag gesture. Dev-client and EAS builds keep the drag-and-drop path
+// since it works there.
+const isExpoGo = Constants.appOwnership === 'expo';
+
+function moveBy<T>(list: T[], index: number, delta: number): T[] {
+  const target = index + delta;
+  if (target < 0 || target >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  return next;
+}
+
+function moveToEdge<T>(list: T[], index: number, toStart: boolean): T[] {
+  const target = toStart ? 0 : list.length - 1;
+  if (index === target) return list;
+  const next = [...list];
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  return next;
+}
 export default function DashboardCustomize() {
   const { t } = useTranslation();
   const layoutQuery = useDashboardLayout();
@@ -79,39 +110,72 @@ export default function DashboardCustomize() {
     );
   }
 
+  function renderFallbackItem({ item, index }: { item: DashboardCardConfig; index: number }) {
+    return (
+      <FallbackCardEditor
+        row={item}
+        defaultLabel={t(CARD_LABEL_KEYS[item.id as keyof typeof CARD_LABEL_KEYS] ?? item.id)}
+        isFirst={index === 0}
+        isLast={index === rows.length - 1}
+        onToggleVisible={() => updateRowById(item.id, { visible: !item.visible })}
+        onLabelChange={(label) => updateRowById(item.id, { label: label || null })}
+        onMoveUp={() => setDraft((current) => (current ? moveBy(current, index, -1) : current))}
+        onMoveDown={() => setDraft((current) => (current ? moveBy(current, index, 1) : current))}
+        onMoveToTop={() => setDraft((current) => (current ? moveToEdge(current, index, true) : current))}
+        onMoveToBottom={() => setDraft((current) => (current ? moveToEdge(current, index, false) : current))}
+      />
+    );
+  }
+
+  const listHeader = (
+    <View>
+      <ScreenTitle>{t('dashboardCustomize.title')}</ScreenTitle>
+      <MutedText>{t('dashboardCustomize.subtitle')}</MutedText>
+      <MutedText style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}>
+        {isExpoGo ? t('dashboardCustomize.arrowHint') : t('dashboardCustomize.dragHint')}
+      </MutedText>
+      {(layoutQuery.isLoading || !draft) && (
+        <Card>
+          <MutedText>{t('common.loading')}</MutedText>
+        </Card>
+      )}
+    </View>
+  );
+
+  const listFooter = (
+    <View>
+      <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSave} loading={saving} disabled={!draft} />
+      <SecondaryButton title={t('dashboardCustomize.resetToDefault')} onPress={handleReset} />
+    </View>
+  );
+
   return (
     <Screen>
-      <DraggableFlatList
-        style={{ flex: 1 }}
-        data={rows}
-        keyExtractor={(row) => row.id}
-        renderItem={renderItem}
-        onDragBegin={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-        }}
-        onDragEnd={({ data }) => setDraft(data)}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
-            <ScreenTitle>{t('dashboardCustomize.title')}</ScreenTitle>
-            <MutedText>{t('dashboardCustomize.subtitle')}</MutedText>
-            <MutedText style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}>
-              {t('dashboardCustomize.dragHint')}
-            </MutedText>
-            {(layoutQuery.isLoading || !draft) && (
-              <Card>
-                <MutedText>{t('common.loading')}</MutedText>
-              </Card>
-            )}
-          </View>
-        }
-        ListFooterComponent={
-          <View>
-            <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSave} loading={saving} disabled={!draft} />
-            <SecondaryButton title={t('dashboardCustomize.resetToDefault')} onPress={handleReset} />
-          </View>
-        }
-      />
+      {isExpoGo ? (
+        <FlatList
+          style={{ flex: 1 }}
+          data={rows}
+          keyExtractor={(row) => row.id}
+          renderItem={renderFallbackItem}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
+        />
+      ) : (
+        <DraggableFlatList
+          style={{ flex: 1 }}
+          data={rows}
+          keyExtractor={(row) => row.id}
+          renderItem={renderItem}
+          onDragBegin={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          }}
+          onDragEnd={({ data }) => setDraft(data)}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
+        />
+      )}
     </Screen>
   );
 }
@@ -163,6 +227,75 @@ function CardEditor({
   );
 }
 
+// Expo Go fallback (no drag gesture available — see the isExpoGo comment
+// above): large 44pt+ up/down arrow buttons plus "move to top/bottom" text
+// actions. Functionally equivalent to drag-and-drop, just button-driven.
+function FallbackCardEditor({
+  row,
+  defaultLabel,
+  isFirst,
+  isLast,
+  onToggleVisible,
+  onLabelChange,
+  onMoveUp,
+  onMoveDown,
+  onMoveToTop,
+  onMoveToBottom,
+}: {
+  row: DashboardCardConfig;
+  defaultLabel: string;
+  isFirst: boolean;
+  isLast: boolean;
+  onToggleVisible: () => void;
+  onLabelChange: (label: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onMoveToTop: () => void;
+  onMoveToBottom: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.card}>
+      <View style={styles.arrowColumn}>
+        <Pressable onPress={onMoveUp} disabled={isFirst} hitSlop={4} style={[styles.arrowButton, isFirst && styles.arrowButtonDisabled]}>
+          <Text style={[styles.arrowGlyph, isFirst && styles.arrowGlyphDisabled]}>▲</Text>
+        </Pressable>
+        <Pressable onPress={onMoveDown} disabled={isLast} hitSlop={4} style={[styles.arrowButton, isLast && styles.arrowButtonDisabled]}>
+          <Text style={[styles.arrowGlyph, isLast && styles.arrowGlyphDisabled]}>▼</Text>
+        </Pressable>
+      </View>
+
+      <View style={{ flex: 1, marginStart: spacing.sm }}>
+        <MutedText>{defaultLabel}</MutedText>
+        <Field
+          value={row.label ?? ''}
+          onChangeText={onLabelChange}
+          placeholder={t('dashboardCustomize.labelPlaceholder', { defaultLabel })}
+          style={{ marginTop: spacing.xs, marginBottom: spacing.xs }}
+        />
+        <View style={{ flexDirection: 'row' }}>
+          <Pressable onPress={onMoveToTop} disabled={isFirst} hitSlop={6}>
+            <Text style={[styles.edgeActionText, isFirst && styles.arrowGlyphDisabled]}>{t('dashboardCustomize.moveToTop')}</Text>
+          </Pressable>
+          <Pressable onPress={onMoveToBottom} disabled={isLast} hitSlop={6} style={{ marginStart: spacing.md }}>
+            <Text style={[styles.edgeActionText, isLast && styles.arrowGlyphDisabled]}>{t('dashboardCustomize.moveToBottom')}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <Pressable
+        onPress={onToggleVisible}
+        hitSlop={8}
+        style={[styles.visibilityPill, row.visible ? styles.visibilityOn : styles.visibilityOff]}
+      >
+        <Text style={{ color: colors.text, fontSize: typography.size.xs, fontWeight: '700' }}>
+          {row.visible ? t('dashboardCustomize.visible') : t('dashboardCustomize.hidden')}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = {
   card: {
     flexDirection: 'row' as const,
@@ -187,6 +320,31 @@ const styles = {
   grabHandleGlyph: {
     color: colors.muted,
     fontSize: 22,
+  },
+  arrowColumn: {
+    alignItems: 'center' as const,
+  },
+  arrowButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  arrowButtonDisabled: {
+    opacity: 0.3,
+  },
+  arrowGlyph: {
+    color: colors.accent,
+    fontSize: 22,
+    fontWeight: '700' as const,
+  },
+  arrowGlyphDisabled: {
+    color: colors.muted,
+  },
+  edgeActionText: {
+    color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: '700' as const,
   },
   visibilityPill: {
     paddingVertical: 6,

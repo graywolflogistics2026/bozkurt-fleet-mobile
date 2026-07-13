@@ -969,7 +969,10 @@
     "labelPlaceholder": "{{defaultLabel}} (varsayılan)",
     "visible": "Görünür",
     "hidden": "Gizli",
-    "dragHint": "Sıralamak için ☰ simgesine basılı tutup sürükleyin."
+    "dragHint": "Sıralamak için ☰ simgesine basılı tutup sürükleyin.",
+    "arrowHint": "Yeniden sıralamak için ▲▼ oklarını veya Üst/Alt'ı kullanın.",
+    "moveToTop": "Üste",
+    "moveToBottom": "Alta"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

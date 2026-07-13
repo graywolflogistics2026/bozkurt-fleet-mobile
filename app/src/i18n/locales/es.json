@@ -969,7 +969,10 @@
     "labelPlaceholder": "{{defaultLabel}} (predeterminado)",
     "visible": "Visible",
     "hidden": "Oculto",
-    "dragHint": "Mantén presionado y arrastra ☰ para reordenar."
+    "dragHint": "Mantén presionado y arrastra ☰ para reordenar.",
+    "arrowHint": "Use las flechas ▲▼ o Arriba/Abajo para reordenar.",
+    "moveToTop": "Arriba",
+    "moveToBottom": "Abajo"
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",

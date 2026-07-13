@@ -872,7 +872,10 @@
     "labelPlaceholder": "{{defaultLabel}} (default)",
     "visible": "Visible",
     "hidden": "Hidden",
-    "dragHint": "Long-press and drag ☰ to reorder."
+    "dragHint": "Long-press and drag ☰ to reorder.",
+    "arrowHint": "Use the ▲▼ arrows or Top/Bottom to reorder.",
+    "moveToTop": "Top",
+    "moveToBottom": "Bottom"
   },
   "categoryPicker": {
     "newCategory": "New Category",

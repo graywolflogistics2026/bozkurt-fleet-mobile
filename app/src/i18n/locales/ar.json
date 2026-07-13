@@ -969,7 +969,10 @@
     "labelPlaceholder": "{{defaultLabel}} (افتراضي)",
     "visible": "ظاهر",
     "hidden": "مخفي",
-    "dragHint": "اضغط مطولاً واسحب ☰ لإعادة الترتيب."
+    "dragHint": "اضغط مطولاً واسحب ☰ لإعادة الترتيب.",
+    "arrowHint": "استخدم الأسهم ▲▼ أو أعلى/أسفل لإعادة الترتيب.",
+    "moveToTop": "الأعلى",
+    "moveToBottom": "الأسفل"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",
