@@ -12,6 +12,7 @@ export const DEFAULT_CARD_ORDER = [
   'milesDriven',
   'ytdPerDiemDays',
   'perDiemDeduction',
+  'perDiemSummary',
   'weeksInService',
   'avgNetPerWeek',
   'businessBalance',
@@ -23,6 +24,7 @@ export const DEFAULT_CARD_ORDER = [
   'quarterlyPayment',
   'weeklyTaxReserve',
   'effectiveRate',
+  'scorpPreview',
   'capitalAccountStrip',
   'recentLoads',
   'truckCard',
@@ -31,6 +33,27 @@ export const DEFAULT_CARD_ORDER = [
 ] as const;
 
 export type DashboardCardId = (typeof DEFAULT_CARD_ORDER)[number];
+
+// Dashboard redesign (device feedback round 2, owner decision 2026-07-13):
+// these cards are hidden from the fresh/never-touched default layout —
+// absorbed into the new zoned design (perDiemSummary merges
+// ytdPerDiemDays+perDiemDeduction into one compact card; totalRevenue is
+// absorbed by the Zone 1 trend chart) or simply de-prioritized — but stay
+// fully available in Customize, where a user can still toggle them back
+// on. Applied in mergeDashboardLayout() below so this is true both for a
+// brand-new user AND for an existing saved layout that's never explicitly
+// touched that specific card's visibility.
+const DEFAULT_HIDDEN_CARD_IDS = new Set<string>([
+  'totalRevenue',
+  'ytdPerDiemDays',
+  'perDiemDeduction',
+  'milesDriven',
+  'weeksInService',
+  'avgNetPerWeek',
+  'businessBalance',
+  'effectiveRate',
+  'scorpPreview',
+]);
 
 // i18n key for each card's DEFAULT label — read by the customize screen so
 // it can show "Total Revenue" etc. next to the reorder/hide/rename controls
@@ -42,6 +65,7 @@ export const CARD_LABEL_KEYS: Record<DashboardCardId, string> = {
   milesDriven: 'dashboard.milesDriven',
   ytdPerDiemDays: 'dashboard.ytdPerDiemDays',
   perDiemDeduction: 'dashboard.perDiemDeduction',
+  perDiemSummary: 'dashboard.perDiemSummaryTitle',
   weeksInService: 'dashboard.weeksInService',
   avgNetPerWeek: 'dashboard.avgNetPerWeek',
   businessBalance: 'dashboard.businessBalance',
@@ -53,6 +77,7 @@ export const CARD_LABEL_KEYS: Record<DashboardCardId, string> = {
   quarterlyPayment: 'dashboard.quarterlyPayment',
   weeklyTaxReserve: 'dashboard.weeklyTaxReserve',
   effectiveRate: 'dashboard.effectiveRate',
+  scorpPreview: 'dashboard.scorpPreviewTitle',
   capitalAccountStrip: 'dashboard.capitalAccountTitle',
   recentLoads: 'dashboard.recentLoadsTitle',
   truckCard: 'dashboard.truckCardLabel',
@@ -83,7 +108,7 @@ export function mergeDashboardLayout(stored: unknown, defaultOrder: readonly str
   }
 
   for (const id of defaultOrder) {
-    if (!seen.has(id)) merged.push({ id, visible: true, label: null });
+    if (!seen.has(id)) merged.push({ id, visible: !DEFAULT_HIDDEN_CARD_IDS.has(id), label: null });
   }
 
   return merged;

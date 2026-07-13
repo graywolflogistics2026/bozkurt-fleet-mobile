@@ -1,4 +1,4 @@
-import { buildWeeklyTrend, rankLoadsByRpm, buildMonthlyRevenueExpenseTrend } from '@/src/stats/cashFlowTrend';
+import { buildWeeklyTrend, rankLoadsByRpm, buildWeeklyRevenueExpenseTrend } from '@/src/stats/cashFlowTrend';
 import type { Deduction, Load, Settlement } from '@/src/types/db';
 
 function sett(overrides: Partial<Settlement>): Settlement {
@@ -64,34 +64,45 @@ function ded(overrides: Partial<Deduction>): Deduction {
   };
 }
 
-describe('buildMonthlyRevenueExpenseTrend', () => {
-  it('groups settlement gross and deduction amount by calendar month', () => {
-    const points = buildMonthlyRevenueExpenseTrend(
-      [sett({ week_ending: '2026-01-05', gross: 1000 }), sett({ week_ending: '2026-01-19', gross: 500 })],
-      [ded({ ded_date: '2026-01-10', amount: 200 })]
+describe('buildWeeklyRevenueExpenseTrend', () => {
+  it('groups settlement gross by week_ending and deductions falling within that 7-day window', () => {
+    const points = buildWeeklyRevenueExpenseTrend(
+      [sett({ week_ending: '2026-01-14', gross: 1000 })],
+      [
+        ded({ ded_date: '2026-01-10', amount: 200 }), // within [01-08, 01-14]
+        ded({ ded_date: '2026-01-07', amount: 999 }), // outside (one day early)
+      ]
     );
     expect(points).toHaveLength(1);
-    expect(points[0]).toMatchObject({ revenue: 1500, expenses: 200 });
+    expect(points[0]).toMatchObject({ weekEnding: '2026-01-14', revenue: 1000, expenses: 200 });
   });
 
-  it('sorts months chronologically even across a year boundary (zero-padded key)', () => {
-    const points = buildMonthlyRevenueExpenseTrend(
-      [sett({ week_ending: '2026-10-05', gross: 1 }), sett({ week_ending: '2026-02-05', gross: 2 }), sett({ week_ending: '2027-01-05', gross: 3 })],
+  it('sums multiple settlements sharing the same week_ending', () => {
+    const points = buildWeeklyRevenueExpenseTrend(
+      [sett({ week_ending: '2026-01-14', gross: 1000 }), sett({ week_ending: '2026-01-14', gross: 500 })],
       []
     );
-    expect(points.map((p) => p.monthKey)).toEqual(['2026-02', '2026-10', '2027-01']);
+    expect(points[0].revenue).toBe(1500);
+  });
+
+  it('sorts weeks chronologically ascending', () => {
+    const points = buildWeeklyRevenueExpenseTrend(
+      [sett({ week_ending: '2026-02-01', gross: 1 }), sett({ week_ending: '2026-01-01', gross: 2 })],
+      []
+    );
+    expect(points.map((p) => p.weekEnding)).toEqual(['2026-01-01', '2026-02-01']);
   });
 
   it('includes ALL deductions regardless of source (withheld + out-of-pocket), matching Dashboard CPM scope', () => {
-    const points = buildMonthlyRevenueExpenseTrend(
-      [],
+    const points = buildWeeklyRevenueExpenseTrend(
+      [sett({ week_ending: '2026-03-07', gross: 0 })],
       [ded({ ded_date: '2026-03-01', amount: 100, source: 'settlement' }), ded({ ded_date: '2026-03-02', amount: 50, source: 'manual' })]
     );
     expect(points[0].expenses).toBe(150);
   });
 
-  it('skips rows with no date', () => {
-    const points = buildMonthlyRevenueExpenseTrend([sett({ week_ending: null as unknown as string })], [ded({ ded_date: null })]);
+  it('skips settlements with no week_ending', () => {
+    const points = buildWeeklyRevenueExpenseTrend([sett({ week_ending: null as unknown as string })], []);
     expect(points).toHaveLength(0);
   });
 });

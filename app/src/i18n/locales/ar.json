@@ -83,6 +83,7 @@
     "ytdPerDiemDays": "أيام Per Diem (منذ بداية العام)",
     "daysOnRoad": "أيام على الطريق",
     "perDiemDeduction": "خصم Per Diem",
+    "perDiemSummaryTitle": "Per Diem",
     "perDiemCaptionFull": "@${{rate}}/يوم ({{pct}}% من ${{fullRate}})",
     "perDiemCaptionSimple": "@${{rate}}/يوم",
     "weeksInService": "أسابيع الخدمة",

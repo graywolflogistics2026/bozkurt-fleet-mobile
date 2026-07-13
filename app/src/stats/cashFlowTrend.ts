@@ -11,44 +11,39 @@ export function buildWeeklyTrend(settlements: Settlement[]): WeeklyPoint[] {
     .map((s) => ({ weekEnding: s.week_ending, gross: Number(s.gross ?? 0), net: Number(s.net ?? 0) }));
 }
 
-// Monthly revenue-vs-expenses trend (legacy rChart(), legacy/index.html:1464)
-// — Dashboard's line chart, distinct from the weekly gross/net trend above.
-// Ported verbatim: group settlements by calendar month of s.date (revenue =
-// sum gross), group ALL deductions by calendar month of ded_date (expenses =
-// sum amount, withheld + out-of-pocket alike — same "every deduction" scope
-// as Dashboard's own CPM tile and Operating P&L, CLAUDE.md invariant #1),
-// sorted ascending by month key so a chart reads left-to-right oldest-to-newest.
-export type MonthlyRevenueExpensePoint = { monthKey: string; label: string; revenue: number; expenses: number };
+// Shared by buildWeeklyRevenueExpenseTrend/buildWeeklyCpmTrend (src/stats/
+// cpmTrend.ts) — a settlement week is defined as the 7-day window ending
+// at (and including) week_ending, matching the typical carrier pay-period
+// convention. Exported so cpmTrend.ts doesn't reimplement it.
+export function weekStartFromEnding(weekEnding: string): string {
+  const d = new Date(`${weekEnding}T12:00:00`);
+  d.setDate(d.getDate() - 6);
+  return d.toISOString().slice(0, 10);
+}
 
-export function buildMonthlyRevenueExpenseTrend(settlements: Settlement[], deductions: Deduction[]): MonthlyRevenueExpensePoint[] {
-  const months = new Map<string, MonthlyRevenueExpensePoint>();
+// Weekly revenue-vs-expenses trend (Dashboard Zone 1 hero chart, device
+// feedback round 2 — supersedes the earlier monthly version). Groups by
+// settlement week_ending (revenue = sum gross for that week); expenses =
+// ALL deductions (withheld + out-of-pocket alike — same "every deduction"
+// scope as Dashboard's own CPM tile and Operating P&L, CLAUDE.md
+// invariant #1) whose ded_date falls within that week's 7-day window.
+// Sorted ascending by week_ending so a chart reads left-to-right
+// oldest-to-newest.
+export type WeeklyRevenueExpensePoint = { weekEnding: string; revenue: number; expenses: number };
 
-  function monthKeyAndLabel(dateStr: string) {
-    const d = new Date(`${dateStr}T12:00:00`);
-    // Zero-padded month so string-sorting the keys below is chronological
-    // (legacy's unpadded 'YYYY-M' key sorts "…-10" before "…-2" — an
-    // ordering bug, not a business rule worth porting).
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    return { key, label };
-  }
+export function buildWeeklyRevenueExpenseTrend(settlements: Settlement[], deductions: Deduction[]): WeeklyRevenueExpensePoint[] {
+  const weekEndings = [...new Set(settlements.filter((s) => s.week_ending).map((s) => s.week_ending as string))].sort();
 
-  for (const s of settlements) {
-    if (!s.week_ending) continue;
-    const { key, label } = monthKeyAndLabel(s.week_ending);
-    const entry = months.get(key) ?? { monthKey: key, label, revenue: 0, expenses: 0 };
-    entry.revenue += Number(s.gross ?? 0);
-    months.set(key, entry);
-  }
-  for (const d of deductions) {
-    if (!d.ded_date) continue;
-    const { key, label } = monthKeyAndLabel(d.ded_date);
-    const entry = months.get(key) ?? { monthKey: key, label, revenue: 0, expenses: 0 };
-    entry.expenses += Number(d.amount ?? 0);
-    months.set(key, entry);
-  }
-
-  return [...months.values()].sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+  return weekEndings.map((weekEnding) => {
+    const revenue = settlements
+      .filter((s) => s.week_ending === weekEnding)
+      .reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
+    const start = weekStartFromEnding(weekEnding);
+    const expenses = deductions
+      .filter((d) => d.ded_date && d.ded_date >= start && d.ded_date <= weekEnding)
+      .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+    return { weekEnding, revenue, expenses };
+  });
 }
 
 // Best/worst lanes by rate-per-loaded-mile (legacy rLoadProfit(),

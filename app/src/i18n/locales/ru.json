@@ -83,6 +83,7 @@
     "ytdPerDiemDays": "Дни Per Diem (с начала года)",
     "daysOnRoad": "дней в пути",
     "perDiemDeduction": "Вычет Per Diem",
+    "perDiemSummaryTitle": "Per Diem",
     "perDiemCaptionFull": "@${{rate}}/день ({{pct}}% от ${{fullRate}})",
     "perDiemCaptionSimple": "@${{rate}}/день",
     "weeksInService": "Недель в Работе",

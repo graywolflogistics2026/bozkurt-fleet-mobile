@@ -83,6 +83,7 @@
     "ytdPerDiemDays": "Yıl Başından Beri Per Diem Günleri",
     "daysOnRoad": "yolda geçen gün",
     "perDiemDeduction": "Per Diem Kesintisi",
+    "perDiemSummaryTitle": "Per Diem",
     "perDiemCaptionFull": "@${{rate}}/gün (${{fullRate}}'ın %{{pct}}'i)",
     "perDiemCaptionSimple": "@${{rate}}/gün",
     "weeksInService": "Hizmetteki Hafta",

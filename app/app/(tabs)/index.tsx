@@ -18,11 +18,12 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
-import { buildMonthlyRevenueExpenseTrend, type MonthlyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
+import { buildWeeklyTrend, buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
+import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
 import { CARD_LABEL_KEYS, type DashboardCardId } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field } from '@/src/components/ui';
 import { useFormatters } from '@/src/i18n/format';
-import { colors, spacing, typography } from '@/src/theme';
+import { colors, radii, spacing, typography } from '@/src/theme';
 
 const FILING_STATUS_LABEL: Record<string, string> = { single: 'Single', mfj: 'MFJ', hoh: 'HOH' };
 
@@ -48,19 +49,20 @@ function urgencyColor(urgency: QuarterlyDeadlineStatus['urgency']) {
 
 const CHART_HEIGHT = 110;
 
-// Revenue-vs-Expenses trend (legacy rChart(), a monthly line chart — see
-// src/stats/cashFlowTrend.ts's buildMonthlyRevenueExpenseTrend()). Hand-
+// Revenue-vs-Expenses trend (Dashboard Zone 1 hero, device feedback round
+// 2 — weekly, superseding the earlier monthly version; see
+// src/stats/cashFlowTrend.ts's buildWeeklyRevenueExpenseTrend()). Hand-
 // rolled overlay bars, same dependency-free approach as Cash Flow's weekly
 // trend chart (no chart library installed).
-function RevenueExpenseChart({ points }: { points: MonthlyRevenueExpensePoint[] }) {
-  const { money: moneyFmt } = useFormatters();
+function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
+  const { money: moneyFmt, date } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const max = Math.max(1, ...points.map((p) => Math.max(p.revenue, p.expenses)));
   return (
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 4 }}>
         {points.map((p) => (
-          <View key={p.monthKey} style={{ flex: 1, alignItems: 'center' }}>
+          <View key={p.weekEnding} style={{ flex: 1, alignItems: 'center' }}>
             <View style={{ width: '100%', height: CHART_HEIGHT, justifyContent: 'flex-end' }}>
               <View
                 style={{
@@ -85,8 +87,8 @@ function RevenueExpenseChart({ points }: { points: MonthlyRevenueExpensePoint[] 
         ))}
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
-        <MutedText>{points[0]?.label}</MutedText>
-        <MutedText>{points[points.length - 1]?.label}</MutedText>
+        <MutedText>{points[0] ? date(points[0].weekEnding) : ''}</MutedText>
+        <MutedText>{points.length > 1 ? date(points[points.length - 1].weekEnding) : ''}</MutedText>
       </View>
       <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -102,6 +104,44 @@ function RevenueExpenseChart({ points }: { points: MonthlyRevenueExpensePoint[] 
   );
 }
 
+// Tiny hand-rolled sparkline (device feedback round 2: "where sensible add
+// tiny sparklines to cards") — last bar full-opacity, older bars dimmed,
+// bar color reflects sign (a net-loss week reads red even mid-sparkline).
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const max = Math.max(1, ...values.map((v) => Math.abs(v)));
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 20, gap: 2, marginTop: spacing.xs }}>
+      {values.map((v, i) => (
+        <View
+          key={i}
+          style={{
+            flex: 1,
+            height: Math.max(2, (Math.abs(v) / max) * 20),
+            backgroundColor: v >= 0 ? colors.green : colors.red,
+            borderRadius: 1,
+            opacity: i === values.length - 1 ? 1 : 0.45,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+// Zone 4's per-mile trend arrows (device feedback round 2) — purely
+// reports current-vs-prior-4-week-average direction; "up" is colored
+// green for revenue/profit-per-mile but red for cost-per-mile, which is
+// why the caller passes goodDirection rather than this component guessing.
+function TrendArrow({ trend, goodDirection }: { trend: MetricTrend; goodDirection: 'up' | 'down' }) {
+  if (trend.direction === 'flat') return null;
+  const isGood = trend.direction === goodDirection;
+  return (
+    <Text style={{ color: isGood ? colors.green : colors.red, fontSize: 11, fontWeight: '700', marginStart: 3 }}>
+      {trend.direction === 'up' ? '▲' : '▼'}
+    </Text>
+  );
+}
+
 function StatValue({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
     <View>
@@ -110,6 +150,49 @@ function StatValue({ label, value, valueColor }: { label: string; value: string;
         {value}
       </Text>
     </View>
+  );
+}
+
+// Zone 4/5's compact trio tiles (device feedback round 2) — smaller and
+// side-by-side, unlike the full-width TappableCard every other Dashboard
+// stat uses; deliberately has no chevron (three of them in a row would be
+// visually noisy) but is still tappable.
+function CompactTile({
+  label,
+  value,
+  valueColor,
+  caption,
+  captionColor,
+  trend,
+  goodDirection,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  caption?: string;
+  captionColor?: string;
+  trend?: MetricTrend;
+  goodDirection?: 'up' | 'down';
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.compactTile, pressed && { opacity: 0.85 }]}>
+      <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={{ color: valueColor ?? colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
+          {value}
+        </Text>
+        {trend && goodDirection && <TrendArrow trend={trend} goodDirection={goodDirection} />}
+      </View>
+      {caption ? (
+        <Text style={{ color: captionColor ?? colors.muted, fontSize: 10, marginTop: 2 }} numberOfLines={1}>
+          {caption}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -182,10 +265,26 @@ export default function Dashboard() {
   const tax = taxQuery.data;
   const deadline = tax ? nextQuarterlyDeadline(tax.taxYearData.quarterly_deadlines) : null;
 
+  // Zone 1 hero chart — last 8 completed weeks (matching Scorecard/Cash
+  // Flow's established "last 8 weeks" trend convention elsewhere in the
+  // app) so the chart stays legible regardless of how much settlement
+  // history exists.
   const revenueExpenseTrend = useMemo(
-    () => buildMonthlyRevenueExpenseTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
+    () => buildWeeklyRevenueExpenseTrend(settlementsQuery.data ?? [], dedQuery.data ?? []).slice(-8),
     [settlementsQuery.data, dedQuery.data]
   );
+
+  // Zone 2's Net to Owner sparkline.
+  const weeklyNetTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
+  const netSparkValues = useMemo(() => weeklyNetTrend.slice(-8).map((p) => p.net), [weeklyNetTrend]);
+
+  // Zone 4's per-mile trend arrows — current week vs. the prior 4-week
+  // average (src/stats/cpmTrend.ts).
+  const weeklyCpmTrend = useMemo(
+    () => buildWeeklyCpmTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
+    [settlementsQuery.data, dedQuery.data]
+  );
+  const cpmTrends = useMemo(() => calcCpmTrends(weeklyCpmTrend), [weeklyCpmTrend]);
 
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
@@ -253,6 +352,7 @@ export default function Dashboard() {
           value={stats ? money(stats.netRevenue) : '—'}
           valueColor={stats && stats.netRevenue < 0 ? colors.red : colors.green}
         />
+        <Sparkline values={netSparkValues} />
       </TappableCard>
     ),
     milesDriven: (label) => (
@@ -270,6 +370,31 @@ export default function Dashboard() {
       <TappableCard key="perDiemDeduction" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
         <StatValue label={label} value={tax ? money(tax.perDiemDeduction) : '—'} valueColor={colors.green} />
         {perDiemCaption(tax?.taxYearData.per_diem, t) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem, t)}</MutedText>}
+      </TappableCard>
+    ),
+    // Zone 3 (device feedback round 2) — days-on-road count + deduction $
+    // merged into one compact card, same "several stats, one card" pattern
+    // capitalAccountStrip already uses. ytdPerDiemDays/perDiemDeduction
+    // stay registered above too (hidden by default, still individually
+    // toggleable via Customize) rather than being removed.
+    perDiemSummary: (label) => (
+      <TappableCard key="perDiemSummary" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <View>
+            <MutedText>{t('dashboard.daysOnRoad')}</MutedText>
+            <Text style={{ color: colors.accent, fontWeight: '700', fontSize: typography.size.lg }}>
+              {stats ? `${stats.perDiemDays}` : '—'}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <MutedText>{t('dashboard.perDiemDeduction')}</MutedText>
+            <Text style={{ color: colors.green, fontWeight: '700', fontSize: typography.size.lg }}>
+              {tax ? money(tax.perDiemDeduction) : '—'}
+            </Text>
+          </View>
+        </View>
+        {perDiemCaption(tax?.taxYearData.per_diem, t) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem, t)}</MutedText>}
+        {label !== t('dashboard.perDiemSummaryTitle') && <MutedText>{label}</MutedText>}
       </TappableCard>
     ),
     weeksInService: (label) => (
@@ -375,6 +500,39 @@ export default function Dashboard() {
         )}
       </TappableCard>
     ),
+    // Registered as a real card (device feedback round 2) so it's still
+    // reachable via Customize despite being hidden from the fresh default
+    // layout — was previously an unconditional inline block, never
+    // customizable at all. Gating (!isScorp && scorpPreview) is unchanged.
+    scorpPreview: (label) =>
+      !isScorp && scorpPreview ? (
+        <Card key="scorpPreview">
+          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{label}</Text>
+          <MutedText>{t('dashboard.scorpPreviewNote')}</MutedText>
+          <Field
+            keyboardType="numeric"
+            placeholder={String(scorpPreview.defaultSalary)}
+            value={reasonableSalaryInput}
+            onChangeText={setReasonableSalaryInput}
+            style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}
+          />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View>
+              <MutedText>{t('dashboard.currentSeTax')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{money(scorpPreview.currentSeTax)}</Text>
+            </View>
+            <View>
+              <MutedText>{t('dashboard.seTaxAtSalary')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{money(scorpPreview.scorpSeTax)}</Text>
+            </View>
+            <View>
+              <MutedText>{t('dashboard.potentialSavings')}</MutedText>
+              <Text style={{ color: colors.green, fontWeight: '700' }}>{money(scorpPreview.savings)}</Text>
+            </View>
+          </View>
+          <LegalFootnote />
+        </Card>
+      ) : null,
     capitalAccountStrip: (label) => (
       <TappableCard key="capitalAccountStrip" onPress={() => router.push('/(tabs)/more/capital-account')}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -537,40 +695,84 @@ export default function Dashboard() {
               ))}
           </>
         ) : (
+          // New zoned default layout (device feedback round 2, owner
+          // decision 2026-07-13) — supersedes the old card-per-row parity
+          // layout. Business Balance/Miles/Weeks in Service/Avg Net-Week/
+          // Total Revenue/effectiveRate/S-Corp preview are hidden from
+          // this default (DEFAULT_HIDDEN_CARD_IDS,
+          // src/stats/dashboardLayout.ts) but remain fully available via
+          // Customize.
           <>
-            {/* Row 1 — CLAUDE.md Dashboard card parity: card-for-card, same
-                order, same empty-state hints as the legacy web dashboard. */}
-            {renderCard('totalRevenue', null)}
-            {renderCard('totalDeductions', null)}
-            {renderCard('netToOwner', null)}
-            {renderCard('milesDriven', null)}
-
-            {/* Row 2 */}
-            {renderCard('ytdPerDiemDays', null)}
-            {renderCard('perDiemDeduction', null)}
-            {renderCard('weeksInService', null)}
-            {renderCard('avgNetPerWeek', null)}
-
-            {/* Row 3 */}
-            {renderCard('businessBalance', null)}
-            {renderCard('revenuePerMile', null)}
-            {renderCard('costPerMile', null)}
-            {renderCard('profitPerMile', null)}
-
-            {/* Revenue-vs-Expenses trend chart — legacy rChart() */}
+            {/* Zone 1 (hero): weekly revenue-vs-expenses trend chart */}
             {renderCard('revenueExpenseTrend', null)}
+
+            {/* Zone 2: Net to Owner (large) + Total Deductions side by side */}
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>{renderCard('netToOwner', null)}</View>
+              <View style={{ flex: 1 }}>{renderCard('totalDeductions', null)}</View>
+            </View>
+
+            {/* Zone 3: combined per-diem card (days on road + deduction $) */}
+            {renderCard('perDiemSummary', null)}
+
+            {/* Zone 4: Revenue/Cost/Profit-per-mile compact trio, each with
+                a trend arrow vs. the prior 4-week average. */}
+            <View style={styles.compactRow}>
+              <CompactTile
+                label={t('dashboard.revenuePerMile')}
+                value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                valueColor={colors.green}
+                trend={cpmTrends.revenuePerMile}
+                goodDirection="up"
+                onPress={() => router.push('/(tabs)/more/cash-flow')}
+              />
+              <CompactTile
+                label={t('dashboard.costPerMile')}
+                value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                valueColor={colors.red}
+                trend={cpmTrends.costPerMile}
+                goodDirection="down"
+                onPress={() => router.push('/(tabs)/more/cash-flow')}
+              />
+              <CompactTile
+                label={t('dashboard.profitPerMile')}
+                value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
+                trend={cpmTrends.profitPerMile}
+                goodDirection="up"
+                onPress={() => router.push('/(tabs)/more/cash-flow')}
+              />
+            </View>
           </>
         )}
 
         {(!isCustomized || !layoutQuery.data) && (
           <>
-            {/* Tax row — CLAUDE.md invariant #8: estimates only, never presented
-                as definitive. */}
+            {/* Zone 5: tax strip — CLAUDE.md invariant #8: estimates only,
+                never presented as definitive. */}
             <ScreenTitle>{t('dashboard.taxSectionTitle')}</ScreenTitle>
-            {renderCard('estTotalTax', null)}
-            {renderCard('quarterlyPayment', null)}
-            {renderCard('weeklyTaxReserve', null)}
-            {renderCard('effectiveRate', null)}
+            <View style={styles.compactRow}>
+              <CompactTile
+                label={t('dashboard.estTotalTax')}
+                value={tax ? money(tax.estimate.totalTax) : '—'}
+                valueColor={colors.red}
+                onPress={() => router.push('/(tabs)/more/tax-estimator')}
+              />
+              <CompactTile
+                label={t('dashboard.quarterlyPayment')}
+                value={tax ? money(tax.estimate.quarterlyPayment) : '—'}
+                valueColor={colors.red}
+                caption={deadline ? t('dashboard.deadlineDue', { label: deadline.label, count: deadline.daysUntil }) : undefined}
+                captionColor={deadline ? urgencyColor(deadline.urgency) : undefined}
+                onPress={() => router.push('/(tabs)/more/tax-estimator')}
+              />
+              <CompactTile
+                label={t('dashboard.weeklyTaxReserve')}
+                value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'}
+                valueColor={colors.orange}
+                onPress={() => router.push('/(tabs)/more/tax-estimator')}
+              />
+            </View>
           </>
         )}
 
@@ -614,34 +816,12 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {!isScorp && scorpPreview && (
-          <Card>
-            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('dashboard.scorpPreviewTitle')}</Text>
-            <MutedText>{t('dashboard.scorpPreviewNote')}</MutedText>
-            <Field
-              keyboardType="numeric"
-              placeholder={String(scorpPreview.defaultSalary)}
-              value={reasonableSalaryInput}
-              onChangeText={setReasonableSalaryInput}
-              style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View>
-                <MutedText>{t('dashboard.currentSeTax')}</MutedText>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(scorpPreview.currentSeTax)}</Text>
-              </View>
-              <View>
-                <MutedText>{t('dashboard.seTaxAtSalary')}</MutedText>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(scorpPreview.scorpSeTax)}</Text>
-              </View>
-              <View>
-                <MutedText>{t('dashboard.potentialSavings')}</MutedText>
-                <Text style={{ color: colors.green, fontWeight: '700' }}>{money(scorpPreview.savings)}</Text>
-              </View>
-            </View>
-            <LegalFootnote />
-          </Card>
-        )}
+        {/* S-Corp preview (device feedback round 2): hidden from the fresh
+            default layout (DEFAULT_HIDDEN_CARD_IDS, src/stats/
+            dashboardLayout.ts) — the customized flat-list loop above
+            already renders it if a user explicitly re-enabled it via
+            Customize, so there is nothing to render here for the default
+            (non-customized) path. */}
 
         {(!isCustomized || !layoutQuery.data) && (
           <>
@@ -679,3 +859,18 @@ export default function Dashboard() {
     </Screen>
   );
 }
+
+const styles = {
+  compactRow: {
+    flexDirection: 'row' as const,
+    gap: spacing.sm,
+  },
+  compactTile: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.sm,
+  },
+};

@@ -83,6 +83,7 @@
     "ytdPerDiemDays": "Días de Per Diem (año)",
     "daysOnRoad": "días en carretera",
     "perDiemDeduction": "Deducción de Per Diem",
+    "perDiemSummaryTitle": "Per Diem",
     "perDiemCaptionFull": "@${{rate}}/día ({{pct}}% de ${{fullRate}})",
     "perDiemCaptionSimple": "@${{rate}}/día",
     "weeksInService": "Semanas en Servicio",
