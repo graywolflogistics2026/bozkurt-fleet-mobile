@@ -1071,6 +1071,7 @@
     "saveFailedTitle": "Не удалось сохранить",
     "roles": {
       "owner_operator": "Владелец-оператор",
+      "lease_operator": "Лизинг-оператор",
       "company_driver_w2": "Водитель компании (W-2)",
       "contractor_1099": "Подрядчик 1099",
       "trainee": "Стажёр"

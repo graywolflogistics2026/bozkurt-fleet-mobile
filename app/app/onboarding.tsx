@@ -13,7 +13,14 @@ import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButt
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Profile } from '@/src/types/db';
 
-const ROLES: NonNullable<Profile['role']>[] = ['owner_operator', 'company_driver_w2', 'contractor_1099', 'trainee'];
+// lease_operator (owner decision 2026-07-13, device feedback round 2):
+// leases a truck from another operator/carrier rather than owning it —
+// treated identically to owner_operator for every module/tax code path
+// today (CLAUDE.md invariant #18: only company_driver_w2 branches
+// rendering). Kept as its own distinct value, not folded into
+// owner_operator, so a future carrier-lease-specific feature has
+// something to key off without a migration.
+const ROLES: NonNullable<Profile['role']>[] = ['owner_operator', 'lease_operator', 'company_driver_w2', 'contractor_1099', 'trainee'];
 const STEP_COUNT = 9;
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {

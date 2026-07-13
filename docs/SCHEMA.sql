@@ -29,7 +29,10 @@ create table profiles (
   -- owner decision 2026-07-10) — null/'owner_operator' both mean "full
   -- owner-operator experience" until Session 9b wires role-based module
   -- hiding for 'company_driver_w2'.
-  role text check (role in ('owner_operator', 'company_driver_w2', 'contractor_1099', 'trainee')),
+  -- lease_operator added retroactively (PENDING_SQL.md §31, device
+  -- feedback round 2, owner decision 2026-07-13) — treated identically to
+  -- owner_operator for every module/tax code path today.
+  role text check (role in ('owner_operator', 'company_driver_w2', 'contractor_1099', 'trainee', 'lease_operator')),
   -- CEO Mode briefing (added retroactively, PENDING_SQL.md §24, owner
   -- decision 2026-07-10 — AI feature package) — null until Session 9b's
   -- daily/weekly briefing ships; null means "no goal set", never treated

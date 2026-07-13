@@ -1071,6 +1071,7 @@
     "saveFailedTitle": "No se pudo guardar",
     "roles": {
       "owner_operator": "Propietario-Operador",
+      "lease_operator": "Operador de Arrendamiento",
       "company_driver_w2": "Conductor de Empresa (W-2)",
       "contractor_1099": "Contratista 1099",
       "trainee": "Aprendiz"

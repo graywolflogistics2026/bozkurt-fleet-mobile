@@ -1071,6 +1071,7 @@
     "saveFailedTitle": "Kaydedilemedi",
     "roles": {
       "owner_operator": "Sahip-İşletmeci",
+      "lease_operator": "Kiralık İşletmeci",
       "company_driver_w2": "Şirket Şoförü (W-2)",
       "contractor_1099": "1099 Yüklenicisi",
       "trainee": "Stajyer"

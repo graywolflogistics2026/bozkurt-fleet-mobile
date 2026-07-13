@@ -991,6 +991,28 @@ No RLS change needed — `bank_statements` is already owner-scoped.
 
 ---
 
+## 31. profiles.role gains lease_operator (device feedback round 2, owner decision 2026-07-13) — ⬜ NOT YET RUN
+
+Onboarding's role step gains a 5th option: leases a truck from another
+operator/carrier rather than owning it. Treated identically to
+`owner_operator` for every module/tax code path today (CLAUDE.md
+invariant #18: only `company_driver_w2` branches rendering, and
+`lease_operator` is not that) — kept as its own distinct value, not
+folded into `owner_operator`, so a future carrier-lease-specific feature
+has something to key off without another migration.
+
+```sql
+alter table profiles drop constraint if exists profiles_role_check;
+alter table profiles add constraint profiles_role_check
+  check (role in ('owner_operator', 'company_driver_w2', 'contractor_1099', 'trainee', 'lease_operator'));
+```
+
+No RLS change needed — `profiles` is already owner-scoped.
+
+- [ ] 31a run (widen profiles.role check constraint to add lease_operator)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` to

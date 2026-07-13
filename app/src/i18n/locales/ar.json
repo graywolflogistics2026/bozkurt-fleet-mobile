@@ -1071,6 +1071,7 @@
     "saveFailedTitle": "تعذر الحفظ",
     "roles": {
       "owner_operator": "مالك ومشغل",
+      "lease_operator": "مشغل بعقد إيجار",
       "company_driver_w2": "سائق شركة (W-2)",
       "contractor_1099": "مقاول 1099",
       "trainee": "متدرب"

@@ -1071,6 +1071,7 @@
     "saveFailedTitle": "Could not save",
     "roles": {
       "owner_operator": "Owner-Operator",
+      "lease_operator": "Lease Operator",
       "company_driver_w2": "Company Driver (W-2)",
       "contractor_1099": "1099 Contractor",
       "trainee": "Trainee"

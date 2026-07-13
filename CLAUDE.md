@@ -397,14 +397,21 @@
       binding, not yet implemented — PROMPTS.md Session 9b, expanded
       onboarding wizard supersedes the earlier shorter spec):
       `profiles.role` (docs/PENDING_SQL.md §20) is one of `owner_operator`
-      / `company_driver_w2` / `contractor_1099` / `trainee`, set during
-      onboarding. `company_driver_w2` is the only value that changes
-      rendering: it hides owner-only modules (Schedule C deductions,
-      Capital Account, S-Corp election) and centers per-diem/W-2 tracking
-      instead; `contractor_1099` (and `trainee`/`owner_operator`) get the
-      full Schedule C experience unchanged. `role = null` (skipped the
-      wizard, or a pre-existing account) MUST behave identically to
-      `owner_operator` — never a third, undocumented behavior.
+      / `company_driver_w2` / `contractor_1099` / `trainee` /
+      `lease_operator` (5th value, docs/PENDING_SQL.md §31, device
+      feedback round 2, owner decision 2026-07-13), set during onboarding.
+      `company_driver_w2` is the only value that changes rendering: it
+      hides owner-only modules (Schedule C deductions, Capital Account,
+      S-Corp election) and centers per-diem/W-2 tracking instead;
+      `contractor_1099`/`trainee`/`owner_operator`/`lease_operator` all get
+      the full Schedule C experience unchanged. `lease_operator` (leases a
+      truck from another operator/carrier rather than owning it) is kept
+      as its own distinct value rather than folded into `owner_operator`
+      so a future carrier-lease-specific feature has something to key off
+      without another migration — but it must never be treated as
+      `company_driver_w2`. `role = null` (skipped the wizard, or a
+      pre-existing account) MUST behave identically to `owner_operator` —
+      never a third, undocumented behavior.
   19. CUSTOM CATEGORIES + TAX SAFETY RAIL (owner decision 2026-07-10,
       PRODUCT DECISION, binding): users may create their own income and
       expense categories beyond `CANONICAL_CATEGORIES`
