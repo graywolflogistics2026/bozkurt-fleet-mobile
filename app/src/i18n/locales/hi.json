@@ -110,6 +110,10 @@
       "profit": "Profit",
       "totalCaption": "{{amount}} total"
     },
+    "taxProgress": {
+      "title": "Tax Progress",
+      "reservedOfTarget": "{{reserved}} of {{target}} reserved"
+    },
     "sections": {
       "overview": "Overview",
       "money": "Money",

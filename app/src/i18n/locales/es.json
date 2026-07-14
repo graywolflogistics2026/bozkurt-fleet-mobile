@@ -110,6 +110,10 @@
       "profit": "Ganancia",
       "totalCaption": "{{amount}} total"
     },
+    "taxProgress": {
+      "title": "Progreso de Impuestos",
+      "reservedOfTarget": "{{reserved}} de {{target}} reservado"
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",

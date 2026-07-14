@@ -36,6 +36,7 @@ import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stat
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcFleetHealthScore, type ChipStatus } from '@/src/stats/fleetHealthScore';
 import { filterTrendByRange, TREND_RANGES, type TrendRange } from '@/src/stats/trendRange';
+import { calcTaxProgressColor, calcTaxProgressPct } from '@/src/stats/taxProgress';
 import {
   CARD_LABEL_KEYS,
   SECTION_IDS,
@@ -490,6 +491,42 @@ function MoneyBreakdownCard({ slices, onPress }: { slices: DonutSlice[]; onPress
       )}
       <MutedText style={{ marginTop: spacing.sm }}>{t('dashboard.moneyBreakdown.totalCaption', { amount: money(total) })}</MutedText>
     </Card>
+  );
+}
+
+// Tax Progress bar (Session 9d item 5) — fill = reserved business_balance
+// ÷ the full-year Federal+SE estimated tax; color reflects days until the
+// next quarterly deadline (src/stats/taxProgress.ts), not the fill ratio
+// itself — a fully-reserved user still sees the bar go red in the final
+// week before a deadline, which is the point (a reminder to actually pay).
+function TaxProgressCard({
+  reserved,
+  target,
+  daysUntil,
+  onPress,
+}: {
+  reserved: number;
+  target: number;
+  daysUntil: number | null;
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const pct = calcTaxProgressPct(reserved, target);
+  const barColor = chipColor(calcTaxProgressColor(daysUntil));
+
+  return (
+    <TappableCard onPress={onPress}>
+      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('dashboard.taxProgress.title')}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+        <MutedText>{t('dashboard.taxProgress.reservedOfTarget', { reserved: money(reserved), target: money(target) })}</MutedText>
+        <Text style={{ color: barColor, fontWeight: '700' }}>{pct}%</Text>
+      </View>
+      <View style={styles.heroScoreTrack}>
+        <View style={[styles.heroScoreFill, { width: `${pct}%`, backgroundColor: barColor }]} />
+      </View>
+    </TappableCard>
   );
 }
 
@@ -1276,6 +1313,12 @@ export default function Dashboard() {
               collapsed={!!sectionsCollapsed.taxes}
               onToggle={() => toggleSection('taxes')}
             >
+              <TaxProgressCard
+                reserved={capital?.businessBalance ?? 0}
+                target={tax?.estimate.totalTax ?? 0}
+                daysUntil={deadline?.daysUntil ?? null}
+                onPress={() => router.push('/(tabs)/more/tax-estimator')}
+              />
               <View style={styles.compactRow}>
                 <CompactTile
                   label={t('dashboard.estTotalTax')}

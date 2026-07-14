@@ -110,6 +110,10 @@
       "profit": "Kâr",
       "totalCaption": "{{amount}} toplam"
     },
+    "taxProgress": {
+      "title": "Vergi İlerlemesi",
+      "reservedOfTarget": "{{target}} içinden {{reserved}} ayrıldı"
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",

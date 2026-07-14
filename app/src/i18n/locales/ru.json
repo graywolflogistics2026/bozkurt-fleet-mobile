@@ -110,6 +110,10 @@
       "profit": "Прибыль",
       "totalCaption": "{{amount}} всего"
     },
+    "taxProgress": {
+      "title": "Прогресс по налогам",
+      "reservedOfTarget": "{{reserved}} из {{target}} зарезервировано"
+    },
     "sections": {
       "overview": "Обзор",
       "money": "Деньги",

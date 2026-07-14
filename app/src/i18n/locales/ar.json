@@ -110,6 +110,10 @@
       "profit": "الربح",
       "totalCaption": "{{amount}} الإجمالي"
     },
+    "taxProgress": {
+      "title": "تقدم الضرائب",
+      "reservedOfTarget": "تم حجز {{reserved}} من {{target}}"
+    },
     "sections": {
       "overview": "نظرة عامة",
       "money": "المال",
