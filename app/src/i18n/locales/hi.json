@@ -122,6 +122,10 @@
       "paceProjection": "At this pace, you're on track for about {{amount}} net profit this year.",
       "industryReferenceNote": "Industry reference, not peer data — see Profit Analysis for the source."
     },
+    "roadDaysHeatmap": {
+      "title": "Road Days",
+      "caption": "Last 12 weeks — each column is a week, each square a day on the road."
+    },
     "sections": {
       "overview": "Overview",
       "money": "Money",

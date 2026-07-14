@@ -122,6 +122,10 @@
       "paceProjection": "Bu hızla, bu yıl yaklaşık {{amount}} net kâr elde etme yolundasınız.",
       "industryReferenceNote": "Sektör referansı, diğer kullanıcı verisi değil — kaynak için Kâr Analizi'ne bakın."
     },
+    "roadDaysHeatmap": {
+      "title": "Yolda Geçen Günler",
+      "caption": "Son 12 hafta — her sütun bir hafta, her kare yolda geçen bir gün."
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",

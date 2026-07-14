@@ -22,6 +22,7 @@ import { useBenchmarks } from '@/src/data/benchmarks';
 import { buildProfitLoss } from '@/src/stats/profitLoss';
 import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { buildInsightCandidates, selectDailyInsight, type Insight } from '@/src/stats/aiInsights';
+import { buildRoadDaysGrid, type RoadDayCell } from '@/src/stats/roadDaysHeatmap';
 import { useComplianceItems } from '@/src/data/complianceItems';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
@@ -572,6 +573,38 @@ function AiInsightsCard({ insight, onViewDetails }: { insight: Insight; onViewDe
   );
 }
 
+// Road Days heat map (Session 9d item 8) — GitHub-style grid, 12 weeks of
+// 7-day columns, oldest-to-newest left-to-right (matches every other
+// trend chart's reading direction in this app). Cell color is binary
+// (on-road / not) rather than a shaded scale, since src/stats/
+// roadDaysHeatmap.ts's grid is itself binary (a day is either inside a
+// settlement week or it isn't) — a shade gradient would just be
+// decorative noise here, unlike a real GitHub contribution count.
+function RoadDaysHeatmap({ cells }: { cells: RoadDayCell[] }) {
+  const weeks: RoadDayCell[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 3 }}>
+      {weeks.map((week, wi) => (
+        <View key={wi} style={{ gap: 3 }}>
+          {week.map((day) => (
+            <View
+              key={day.date}
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                backgroundColor: day.onRoad ? colors.green : colors.border,
+              }}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // Collapsible titled section (Dashboard sections addition, owner
 // decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
 // language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
@@ -842,6 +875,12 @@ export default function Dashboard() {
     [profitAnalysisRollup, fuelBenchmark, needsReviewDeductions, stats]
   );
   const dailyInsight = useMemo(() => selectDailyInsight(insightCandidates), [insightCandidates]);
+
+  // Road Days heat map (Session 9d item 8).
+  const roadDaysGrid = useMemo(
+    () => buildRoadDaysGrid((settlementsQuery.data ?? []).map((s) => s.week_ending).filter(Boolean) as string[]),
+    [settlementsQuery.data]
+  );
   function handleInsightViewDetails(type: Insight['type']) {
     if (type === 'fuelBenchmark') router.push('/(tabs)/more/profit-analysis');
     else if (type === 'needsReview') router.push('/(tabs)/deductions');
@@ -1359,6 +1398,15 @@ export default function Dashboard() {
               onToggle={() => toggleSection('onTheRoad')}
             >
               {renderCard('perDiemSummary', null)}
+              <Card>
+                <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.sm }}>
+                  {t('dashboard.roadDaysHeatmap.title')}
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <RoadDaysHeatmap cells={roadDaysGrid} />
+                </ScrollView>
+                <MutedText style={{ marginTop: spacing.sm }}>{t('dashboard.roadDaysHeatmap.caption')}</MutedText>
+              </Card>
               <View style={styles.compactRow}>
                 <CompactTile
                   label={t('dashboard.revenuePerMile')}

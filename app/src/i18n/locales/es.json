@@ -122,6 +122,10 @@
       "paceProjection": "A este ritmo, va camino de unos {{amount}} de ganancia neta este año.",
       "industryReferenceNote": "Referencia de la industria, no datos de otros usuarios — vea Análisis de Ganancias para la fuente."
     },
+    "roadDaysHeatmap": {
+      "title": "Días en Carretera",
+      "caption": "Últimas 12 semanas — cada columna es una semana, cada cuadro un día en carretera."
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",
