@@ -393,6 +393,22 @@ function HeroCard({
   );
 }
 
+// Visual polish (Session 9d item 13) — a subtle card-to-card2 vertical
+// gradient for the composite "cockpit" cards (Fleet Health), giving them
+// a touch more depth than a flat Card without going as bold as the Hero
+// Card's dark-blue gradient. Deliberately NOT applied to every TappableCard
+// in the app (that's the shared ui.tsx primitive used everywhere, out of
+// scope for a targeted polish pass) and expo-blur/glass is explicitly
+// skipped this pass — the spec calls it optional/performance-sensitive,
+// and neither expo-blur nor react-native-svg's gauge/donut work needed it.
+function GradientCard({ children }: { children: React.ReactNode }) {
+  return (
+    <LinearGradient colors={[colors.card2, colors.card]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.gradientCard}>
+      {children}
+    </LinearGradient>
+  );
+}
+
 function chipColor(status: ChipStatus): string {
   if (status === 'green') return colors.green;
   if (status === 'amber') return colors.orange;
@@ -430,7 +446,7 @@ function FleetHealthCard({
   const gaugeColor = score >= 75 ? colors.green : score >= 60 ? colors.orange : colors.red;
 
   return (
-    <Card>
+    <GradientCard>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
         <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('dashboard.fleetHealth.title')}</Text>
         <Pressable onPress={onInfoPress} hitSlop={8}>
@@ -452,7 +468,7 @@ function FleetHealthCard({
           <StatusChip label={t('dashboard.fleetHealth.chipCashFlow')} status={chips.cashFlow} />
         </View>
       </View>
-    </Card>
+    </GradientCard>
   );
 }
 
@@ -1771,6 +1787,13 @@ const styles = {
     borderColor: colors.border,
     borderWidth: 1,
     padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  gradientCard: {
+    borderRadius: radii.lg,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: spacing.md,
     marginBottom: spacing.md,
   },
   heroGreeting: {
