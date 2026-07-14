@@ -1525,6 +1525,41 @@ export default function Dashboard() {
               collapsed={!!sectionsCollapsed.overview}
               onToggle={() => toggleSection('overview')}
             >
+              {/* 2x2 compact stat grid (Session 9d item 12) — Revenue/Net/
+                  Miles/CPM at a glance, all-time totals (distinct from the
+                  Hero Card's THIS WEEK figures above). Replaces what would
+                  otherwise be up to 4 separate full-width stacked cards
+                  (totalRevenue/milesDriven are DEFAULT_HIDDEN_CARD_IDS —
+                  this is their first compact presence in the zoned
+                  default layout). */}
+              <View style={styles.compactRow}>
+                <CompactTile
+                  label={t('dashboard.totalRevenue')}
+                  value={stats ? money(stats.grossRevenue) : '—'}
+                  valueColor={colors.green}
+                  onPress={() => router.push('/(tabs)/more/cash-flow')}
+                />
+                <CompactTile
+                  label={t('dashboard.netToOwner')}
+                  value={stats ? money(stats.netRevenue) : '—'}
+                  valueColor={stats && stats.netRevenue < 0 ? colors.red : colors.green}
+                  onPress={() => router.push('/(tabs)/more/cash-flow')}
+                />
+              </View>
+              <View style={styles.compactRow}>
+                <CompactTile
+                  label={t('dashboard.milesDriven')}
+                  value={stats ? number(stats.totalMiles) : '—'}
+                  onPress={() => router.push('/(tabs)/more/cash-flow')}
+                />
+                <CompactTile
+                  label={t('dashboard.costPerMile')}
+                  value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                  valueColor={colors.red}
+                  onPress={() => router.push('/(tabs)/more/cash-flow')}
+                />
+              </View>
+
               {renderCard('revenueExpenseTrend', null)}
               <Card>
                 <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
