@@ -103,6 +103,13 @@
       "notEnoughData": "Aún no hay suficientes datos para este rango.",
       "maxSuffix": "máximo"
     },
+    "moneyBreakdown": {
+      "title": "Desglose de Dinero",
+      "empty": "Importa tu primer settlement o recibo para ver un desglose.",
+      "other": "Otro",
+      "profit": "Ganancia",
+      "totalCaption": "{{amount}} total"
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",

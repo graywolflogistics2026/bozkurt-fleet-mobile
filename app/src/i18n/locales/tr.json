@@ -103,6 +103,13 @@
       "notEnoughData": "Bu aralık için henüz yeterli veri yok.",
       "maxSuffix": "zirve"
     },
+    "moneyBreakdown": {
+      "title": "Para Dağılımı",
+      "empty": "Bir dağılım görmek için ilk settlement veya fişinizi içe aktarın.",
+      "other": "Diğer",
+      "profit": "Kâr",
+      "totalCaption": "{{amount}} toplam"
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",

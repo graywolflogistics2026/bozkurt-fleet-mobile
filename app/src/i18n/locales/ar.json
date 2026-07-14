@@ -103,6 +103,13 @@
       "notEnoughData": "لا توجد بيانات كافية بعد لهذا النطاق.",
       "maxSuffix": "الذروة"
     },
+    "moneyBreakdown": {
+      "title": "تفصيل الأموال",
+      "empty": "استورد أول settlement أو إيصال لرؤية التفصيل.",
+      "other": "أخرى",
+      "profit": "الربح",
+      "totalCaption": "{{amount}} الإجمالي"
+    },
     "sections": {
       "overview": "نظرة عامة",
       "money": "المال",

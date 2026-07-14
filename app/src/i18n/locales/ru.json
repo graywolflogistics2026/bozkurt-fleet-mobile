@@ -103,6 +103,13 @@
       "notEnoughData": "Пока недостаточно данных для этого периода.",
       "maxSuffix": "максимум"
     },
+    "moneyBreakdown": {
+      "title": "Разбивка Денег",
+      "empty": "Импортируйте первый settlement или чек, чтобы увидеть разбивку.",
+      "other": "Другое",
+      "profit": "Прибыль",
+      "totalCaption": "{{amount}} всего"
+    },
     "sections": {
       "overview": "Обзор",
       "money": "Деньги",

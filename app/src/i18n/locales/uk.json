@@ -103,6 +103,13 @@
       "notEnoughData": "Not enough data yet for this range.",
       "maxSuffix": "peak"
     },
+    "moneyBreakdown": {
+      "title": "Money Breakdown",
+      "empty": "Import your first settlement or receipt to see a breakdown.",
+      "other": "Other",
+      "profit": "Profit",
+      "totalCaption": "{{amount}} total"
+    },
     "sections": {
       "overview": "Overview",
       "money": "Money",

@@ -17,6 +17,8 @@ import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
 import { useDeductions } from '@/src/data/deductions';
 import { useSettlements } from '@/src/data/settlements';
+import { useUserCategories } from '@/src/data/userCategories';
+import { buildProfitLoss } from '@/src/stats/profitLoss';
 import { useComplianceItems } from '@/src/data/complianceItems';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
@@ -45,6 +47,7 @@ import {
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { CircularGauge } from '@/src/components/CircularGauge';
+import { DonutChart, type DonutSlice } from '@/src/components/DonutChart';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -444,6 +447,52 @@ function FleetHealthCard({
   );
 }
 
+// Money Breakdown donut card (Session 9d item 4) — expense categories as
+// % of revenue + a Profit slice, reusing buildProfitLoss()'s
+// expensesByBucket (same Schedule C bucket rollup Operating P&L already
+// shows) rather than a second category-grouping function. Capped at the
+// top 3 buckets + an "Other" fold-in (dataviz anti-pattern: never a
+// generated hue per category) — Profit only appears when netIncome > 0,
+// since expenses + profit summing to exactly revenue is what makes "% of
+// revenue" a meaningful donut in the first place. Tapping any slice/row
+// goes to Deductions, same destination the existing Total Deductions
+// card already uses.
+function MoneyBreakdownCard({ slices, onPress }: { slices: DonutSlice[]; onPress: () => void }) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const total = slices.reduce((sum, s) => sum + Math.max(0, s.value), 0);
+
+  return (
+    <Card>
+      <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md, marginBottom: spacing.md }}>
+        {t('dashboard.moneyBreakdown.title')}
+      </Text>
+      {total <= 0 ? (
+        <MutedText>{t('dashboard.moneyBreakdown.empty')}</MutedText>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+          <Pressable onPress={onPress}>
+            <DonutChart slices={slices} />
+          </Pressable>
+          <View style={{ flex: 1, gap: spacing.xs }}>
+            {slices.map((s) => (
+              <Pressable key={s.label} onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: s.color }} />
+                <Text style={{ color: colors.text, fontSize: typography.size.xs, flex: 1 }} numberOfLines={1}>
+                  {s.label}
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: typography.size.xs }}>{Math.round((s.value / total) * 100)}%</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
+      <MutedText style={{ marginTop: spacing.sm }}>{t('dashboard.moneyBreakdown.totalCaption', { amount: money(total) })}</MutedText>
+    </Card>
+  );
+}
+
 // Collapsible titled section (Dashboard sections addition, owner
 // decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
 // language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
@@ -518,6 +567,7 @@ export default function Dashboard() {
   const drivers = driversQuery.data ?? [];
   const fuelQuery = useFuelPurchases();
   const complianceQuery = useComplianceItems();
+  const userCategoriesQuery = useUserCategories();
   const activeTruckId = activeTruck?.id ?? null;
   const trucksListQuery = useTrucksList();
   const maintRecordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
@@ -668,6 +718,21 @@ export default function Dashboard() {
       }),
     [truckHealthStatuses, complianceUrgencies, taxReserveRatio, heroNetProfitChange.direction]
   );
+
+  // Money Breakdown donut (Session 9d item 4).
+  const profitLoss = useMemo(
+    () => buildProfitLoss(settlementsQuery.data ?? [], dedQuery.data ?? [], userCategoriesQuery.data ?? []),
+    [settlementsQuery.data, dedQuery.data, userCategoriesQuery.data]
+  );
+  const moneyBreakdownSlices = useMemo<DonutSlice[]>(() => {
+    const palette = [colors.red, colors.orange, colors.purple];
+    const top = profitLoss.expensesByBucket.slice(0, 3);
+    const otherTotal = profitLoss.expensesByBucket.slice(3).reduce((sum, b) => sum + b.amount, 0);
+    const slices: DonutSlice[] = top.map((b, i) => ({ label: b.category, value: b.amount, color: palette[i] }));
+    if (otherTotal > 0) slices.push({ label: t('dashboard.moneyBreakdown.other'), value: otherTotal, color: colors.muted });
+    if (profitLoss.netIncome > 0) slices.push({ label: t('dashboard.moneyBreakdown.profit'), value: profitLoss.netIncome, color: colors.green });
+    return slices;
+  }, [profitLoss, t]);
 
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
@@ -1169,6 +1234,7 @@ export default function Dashboard() {
                 <View style={{ flex: 1 }}>{renderCard('netToOwner', null)}</View>
                 <View style={{ flex: 1 }}>{renderCard('totalDeductions', null)}</View>
               </View>
+              <MoneyBreakdownCard slices={moneyBreakdownSlices} onPress={() => router.push('/(tabs)/deductions')} />
             </DashboardSection>
 
             <DashboardSection
