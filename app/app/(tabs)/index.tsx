@@ -30,7 +30,8 @@ import { useComplianceItems } from '@/src/data/complianceItems';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
-import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
+import { calcTruckHealth, type HealthOverrides, type HealthResult } from '@/src/truck/health';
+import { HEALTH_CATEGORY_ICON, type HealthCategory } from '@/src/truck/categories';
 import { calcComplianceStatus } from '@/src/compliance/status';
 import { useDashboardLayout, useUpdateSectionsCollapsed, type SectionsCollapsed } from '@/src/data/dashboardLayout';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -682,6 +683,71 @@ function GoalProgressCard({
   );
 }
 
+function healthStatusColor(status: HealthResult['status']): string {
+  if (status === 'overdue') return colors.red;
+  if (status === 'due_soon') return colors.orange;
+  if (status === 'ok') return colors.green;
+  return colors.muted;
+}
+
+// Remaining-life percentage for one Truck Health category — the inverse
+// of truck-health.tsx's own pctUsed (100 - pctUsed), since this mini card
+// reads as "how much health is LEFT", matching the icon's implicit
+// "green = healthy" framing. null for 'no_data' (nothing to show a % of
+// yet) rather than a misleading 0%/100%.
+function truckHealthRemainingPct(result: HealthResult): number | null {
+  if (result.status === 'no_data') return null;
+  const interval = result.trackingMode === 'hours' ? result.intervalHours ?? 0 : result.intervalMiles ?? 0;
+  if (interval <= 0) return null;
+  const pctUsed = Math.min(100, Math.max(0, ((interval - result.remaining) / interval) * 100));
+  return Math.round(100 - pctUsed);
+}
+
+// Truck Status mini card (Session 9d item 10) — unit name + per-category
+// interval health (Oil %, Tires %, ...) reusing calcTruckHealth()'s own
+// math, no telemetry/battery/external data of any kind (CLAUDE.md
+// invariant #22). Renders nothing when there are no enabled categories
+// yet (a brand-new truck before its maintenance_intervals seed has
+// loaded) rather than an empty card.
+function TruckStatusCard({
+  truckLabel,
+  unitLabel,
+  results,
+  onPress,
+}: {
+  truckLabel: string;
+  unitLabel: string;
+  results: HealthResult[];
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  if (results.length === 0) return null;
+
+  return (
+    <TappableCard onPress={onPress}>
+      <Text style={{ color: colors.text, fontWeight: '700' }}>{truckLabel}</Text>
+      <MutedText style={{ marginBottom: spacing.sm }}>{unitLabel}</MutedText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        {results.map((r) => {
+          const pct = truckHealthRemainingPct(r);
+          const color = healthStatusColor(r.status);
+          return (
+            <View key={r.category} style={{ alignItems: 'center', minWidth: 56 }}>
+              <Text style={{ fontSize: 16 }}>{HEALTH_CATEGORY_ICON[r.category as HealthCategory] ?? '🔧'}</Text>
+              <Text style={{ color, fontWeight: '700', fontSize: typography.size.xs, marginTop: 2 }}>
+                {pct != null ? `${pct}%` : '—'}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 9 }} numberOfLines={1}>
+                {t(`truckHealth.categories.${r.category}`)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </TappableCard>
+  );
+}
+
 // Collapsible titled section (Dashboard sections addition, owner
 // decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
 // language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
@@ -866,7 +932,7 @@ export default function Dashboard() {
     () => trucksListQuery.data?.find((tr) => tr.id === activeTruckId) ?? null,
     [trucksListQuery.data, activeTruckId]
   );
-  const truckHealthStatuses = useMemo(() => {
+  const truckHealthResults = useMemo(() => {
     if (!activeTruckRow || !maintIntervalsQuery.data) return [];
     const intervals = maintIntervalsQuery.data.map((iv) => ({
       category: iv.category,
@@ -883,14 +949,9 @@ export default function Dashboard() {
       serviceDate: r.service_date,
     }));
     const overrides = (healthConfigQuery.data?.overrides ?? {}) as HealthOverrides;
-    return calcTruckHealth(
-      intervals,
-      records,
-      activeTruckRow.current_odometer ?? 0,
-      activeTruckRow.apu_hours ?? 0,
-      overrides
-    ).map((r) => r.status);
+    return calcTruckHealth(intervals, records, activeTruckRow.current_odometer ?? 0, activeTruckRow.apu_hours ?? 0, overrides);
   }, [activeTruckRow, maintIntervalsQuery.data, maintRecordsQuery.data, healthConfigQuery.data]);
+  const truckHealthStatuses = useMemo(() => truckHealthResults.map((r) => r.status), [truckHealthResults]);
 
   const complianceUrgencies = useMemo(
     () => (complianceQuery.data ?? []).map((item) => calcComplianceStatus(item.due_date).urgency),
@@ -1375,6 +1436,15 @@ export default function Dashboard() {
         <FleetHealthCard score={fleetHealth.score} chips={fleetHealth.chips} onInfoPress={() => setHealthInfoOpen(true)} />
 
         {dailyInsight && <AiInsightsCard insight={dailyInsight} onViewDetails={handleInsightViewDetails} />}
+
+        {activeTruck && (
+          <TruckStatusCard
+            truckLabel={`${activeTruck.year ?? ''} ${activeTruck.make ?? ''} ${activeTruck.model ?? ''}`.trim() || t('dashboard.truckCardLabel')}
+            unitLabel={t('dashboard.truckUnit', { unit: activeTruck.unit_number ?? '—' })}
+            results={truckHealthResults}
+            onPress={() => router.push('/(tabs)/truck-health')}
+          />
+        )}
 
         <ModalSheet visible={healthInfoOpen} onClose={() => setHealthInfoOpen(false)}>
           <SheetTitle>{t('dashboard.fleetHealth.infoTitle')}</SheetTitle>
