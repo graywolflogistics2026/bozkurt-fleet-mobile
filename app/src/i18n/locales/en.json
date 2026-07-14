@@ -98,6 +98,11 @@
       "infoTaxes": "Taxes: your Business Balance compared to the upcoming quarterly payment — red below 50% reserved, amber below 100%.",
       "infoCashFlow": "Cash Flow: this week's net profit vs. last week — red if down, amber if flat."
     },
+    "revenueTrendChart": {
+      "title": "Revenue Trend",
+      "notEnoughData": "Not enough data yet for this range.",
+      "maxSuffix": "peak"
+    },
     "sections": {
       "overview": "Overview",
       "money": "Money",

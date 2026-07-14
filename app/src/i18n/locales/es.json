@@ -98,6 +98,11 @@
       "infoTaxes": "Impuestos: tu Saldo del Negocio comparado con el próximo pago trimestral — rojo por debajo del 50% reservado, ámbar por debajo del 100%.",
       "infoCashFlow": "Flujo de Caja: la ganancia neta de esta semana vs. la semana pasada — rojo si baja, ámbar si está estable."
     },
+    "revenueTrendChart": {
+      "title": "Tendencia de Ingresos",
+      "notEnoughData": "Aún no hay suficientes datos para este rango.",
+      "maxSuffix": "máximo"
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",

@@ -98,6 +98,11 @@
       "infoTaxes": "Vergiler: İşletme Bakiyeniz ile yaklaşan üç aylık ödeme karşılaştırması — rezerv %50'nin altındaysa kırmızı, %100'ün altındaysa turuncu.",
       "infoCashFlow": "Nakit Akışı: bu haftanın net kârı geçen haftaya göre — düşüyorsa kırmızı, değişmiyorsa turuncu."
     },
+    "revenueTrendChart": {
+      "title": "Gelir Trendi",
+      "notEnoughData": "Bu aralık için henüz yeterli veri yok.",
+      "maxSuffix": "zirve"
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",

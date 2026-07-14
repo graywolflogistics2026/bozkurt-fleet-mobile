@@ -5,6 +5,7 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Polyline } from 'react-native-svg';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFleetStats, fetchFleetStats, fetchDriverStats } from '@/src/data/dashboardStats';
@@ -32,6 +33,7 @@ import { buildWeeklyTrend, buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExp
 import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcFleetHealthScore, type ChipStatus } from '@/src/stats/fleetHealthScore';
+import { filterTrendByRange, TREND_RANGES, type TrendRange } from '@/src/stats/trendRange';
 import {
   CARD_LABEL_KEYS,
   SECTION_IDS,
@@ -124,6 +126,71 @@ function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }
           <MutedText>{t('dashboard.chartExpensesLegend')}</MutedText>
         </View>
       </View>
+    </View>
+  );
+}
+
+function buildPolylinePoints(values: number[], width: number, height: number): string {
+  if (values.length === 0 || width <= 0) return '';
+  if (values.length === 1) return `0,${height / 2} ${width},${height / 2}`;
+  const max = Math.max(...values, 0);
+  const min = Math.min(...values, 0);
+  const range = Math.max(1, max - min);
+  return values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - ((v - min) / range) * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
+}
+
+// Revenue Trend line chart (Session 9d item 3) — "Apple Stocks style":
+// plain green react-native-svg Polyline, no chart library, with 7D/30D/
+// 90D/YTD range toggles (src/stats/trendRange.ts). Measures its own width
+// via onLayout since it lives inside a full-width Card whose exact pixel
+// width depends on the device.
+function RevenueTrendChart({ weeklyRevenue }: { weeklyRevenue: WeeklyRevenueExpensePoint[] }) {
+  const { t } = useTranslation();
+  const { money: moneyFmt, date } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const [range, setRange] = useState<TrendRange>('30D');
+  const [width, setWidth] = useState(0);
+  const height = 90;
+
+  const filtered = useMemo(() => filterTrendByRange(weeklyRevenue, range), [weeklyRevenue, range]);
+  const values = filtered.map((p) => p.revenue);
+  const polylinePoints = buildPolylinePoints(values, width, height);
+
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.sm }}>
+        {TREND_RANGES.map((r) => (
+          <Pressable
+            key={r}
+            onPress={() => setRange(r)}
+            style={[styles.rangePill, range === r && styles.rangePillActive]}
+          >
+            <Text style={[styles.rangePillText, range === r && styles.rangePillTextActive]}>{r}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
+        {filtered.length < 2 ? (
+          <MutedText>{t('dashboard.revenueTrendChart.notEnoughData')}</MutedText>
+        ) : (
+          <Svg width={width} height={height}>
+            <Polyline points={polylinePoints} fill="none" stroke={colors.green} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          </Svg>
+        )}
+      </View>
+      {filtered.length >= 2 && (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
+          <MutedText>{date(filtered[0].weekEnding)}</MutedText>
+          <MutedText>{money(Math.max(...values))} {t('dashboard.revenueTrendChart.maxSuffix')}</MutedText>
+          <MutedText>{date(filtered[filtered.length - 1].weekEnding)}</MutedText>
+        </View>
+      )}
     </View>
   );
 }
@@ -505,10 +572,11 @@ export default function Dashboard() {
   // Flow's established "last 8 weeks" trend convention elsewhere in the
   // app) so the chart stays legible regardless of how much settlement
   // history exists.
-  const revenueExpenseTrend = useMemo(
-    () => buildWeeklyRevenueExpenseTrend(settlementsQuery.data ?? [], dedQuery.data ?? []).slice(-8),
+  const fullWeeklyRevenueExpenseTrend = useMemo(
+    () => buildWeeklyRevenueExpenseTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
     [settlementsQuery.data, dedQuery.data]
   );
+  const revenueExpenseTrend = useMemo(() => fullWeeklyRevenueExpenseTrend.slice(-8), [fullWeeklyRevenueExpenseTrend]);
 
   // Zone 2's Net to Owner sparkline.
   const weeklyNetTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
@@ -1084,6 +1152,12 @@ export default function Dashboard() {
               onToggle={() => toggleSection('overview')}
             >
               {renderCard('revenueExpenseTrend', null)}
+              <Card>
+                <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
+                  {t('dashboard.revenueTrendChart.title')}
+                </Text>
+                <RevenueTrendChart weeklyRevenue={fullWeeklyRevenueExpenseTrend} />
+              </Card>
             </DashboardSection>
 
             <DashboardSection
@@ -1320,5 +1394,25 @@ const styles = {
     color: colors.text,
     fontSize: typography.size.sm,
     flexShrink: 1,
+  },
+  rangePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radii.sm,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rangePillActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  rangePillText: {
+    color: colors.muted,
+    fontSize: typography.size.xs,
+    fontWeight: '700' as const,
+  },
+  rangePillTextActive: {
+    color: colors.text,
   },
 };
