@@ -73,6 +73,18 @@
   },
   "dashboard": {
     "title": "Панель",
+    "hero": {
+      "greetingMorning": "Доброе утро, {{name}}",
+      "greetingAfternoon": "Добрый день, {{name}}",
+      "greetingEvening": "Добрый вечер, {{name}}",
+      "fallbackName": "друг",
+      "thisWeek": "На этой неделе",
+      "revenue": "Доход",
+      "netProfit": "Чистая прибыль",
+      "profitScore": "Оценка прибыли",
+      "vsLastWeek": "по сравнению с прошлой неделей",
+      "newThisWeek": "Новое на этой неделе"
+    },
     "sections": {
       "overview": "Обзор",
       "money": "Деньги",

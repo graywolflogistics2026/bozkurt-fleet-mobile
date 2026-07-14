@@ -73,6 +73,18 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "hero": {
+      "greetingMorning": "Good morning, {{name}}",
+      "greetingAfternoon": "Good afternoon, {{name}}",
+      "greetingEvening": "Good evening, {{name}}",
+      "fallbackName": "there",
+      "thisWeek": "This Week",
+      "revenue": "Revenue",
+      "netProfit": "Net Profit",
+      "profitScore": "Profit Score",
+      "vsLastWeek": "vs last week",
+      "newThisWeek": "New this week"
+    },
     "sections": {
       "overview": "Overview",
       "money": "Money",

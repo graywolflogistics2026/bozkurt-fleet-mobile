@@ -73,6 +73,18 @@
   },
   "dashboard": {
     "title": "لوحة التحكم",
+    "hero": {
+      "greetingMorning": "صباح الخير، {{name}}",
+      "greetingAfternoon": "مساء الخير، {{name}}",
+      "greetingEvening": "مساء الخير، {{name}}",
+      "fallbackName": "صديقي",
+      "thisWeek": "هذا الأسبوع",
+      "revenue": "الإيرادات",
+      "netProfit": "صافي الربح",
+      "profitScore": "درجة الربح",
+      "vsLastWeek": "مقارنة بالأسبوع الماضي",
+      "newThisWeek": "جديد هذا الأسبوع"
+    },
     "sections": {
       "overview": "نظرة عامة",
       "money": "المال",

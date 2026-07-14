@@ -73,6 +73,18 @@
   },
   "dashboard": {
     "title": "Panel",
+    "hero": {
+      "greetingMorning": "Buenos días, {{name}}",
+      "greetingAfternoon": "Buenas tardes, {{name}}",
+      "greetingEvening": "Buenas noches, {{name}}",
+      "fallbackName": "amigo",
+      "thisWeek": "Esta Semana",
+      "revenue": "Ingresos",
+      "netProfit": "Ganancia Neta",
+      "profitScore": "Puntaje de Ganancia",
+      "vsLastWeek": "vs. semana pasada",
+      "newThisWeek": "Nuevo esta semana"
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",

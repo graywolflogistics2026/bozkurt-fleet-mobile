@@ -73,6 +73,18 @@
   },
   "dashboard": {
     "title": "Panel",
+    "hero": {
+      "greetingMorning": "Günaydın, {{name}}",
+      "greetingAfternoon": "İyi günler, {{name}}",
+      "greetingEvening": "İyi akşamlar, {{name}}",
+      "fallbackName": "dostum",
+      "thisWeek": "Bu Hafta",
+      "revenue": "Gelir",
+      "netProfit": "Net Kâr",
+      "profitScore": "Kâr Puanı",
+      "vsLastWeek": "geçen haftaya göre",
+      "newThisWeek": "Bu hafta yeni"
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",

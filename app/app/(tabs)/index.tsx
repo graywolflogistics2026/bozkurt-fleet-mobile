@@ -4,10 +4,12 @@ import { useRouter } from 'expo-router';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFleetStats, fetchFleetStats, fetchDriverStats } from '@/src/data/dashboardStats';
 import { useDrivers } from '@/src/data/drivers';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
@@ -18,8 +20,10 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
+import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrend, buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
 import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
+import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import {
   CARD_LABEL_KEYS,
   SECTION_IDS,
@@ -29,6 +33,7 @@ import {
   type SectionId,
 } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field } from '@/src/components/ui';
+import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -206,6 +211,100 @@ function CompactTile({
   );
 }
 
+function profitScoreColor(score: number): string {
+  if (score >= 75) return colors.green;
+  if (score >= 60) return colors.orange;
+  return colors.red;
+}
+
+function greetingKey(hour: number): string {
+  if (hour < 12) return 'dashboard.hero.greetingMorning';
+  if (hour < 18) return 'dashboard.hero.greetingAfternoon';
+  return 'dashboard.hero.greetingEvening';
+}
+
+// Hero Card's "vs last week" line (Session 9d item 1) — pct==null means
+// there's no prior week yet (first-ever settlement), which reads as "New"
+// rather than a misleading 0%/blank.
+function HeroChange({ change, goodDirection }: { change: WeekOverWeekChange; goodDirection: 'up' | 'down' }) {
+  const { t } = useTranslation();
+  if (change.pct == null) {
+    return <Text style={styles.heroChange}>{t('dashboard.hero.newThisWeek')}</Text>;
+  }
+  const isGood = change.direction === goodDirection;
+  const color = change.direction === 'flat' ? 'rgba(232,234,246,0.65)' : isGood ? colors.green : colors.red;
+  const arrow = change.direction === 'up' ? '▲' : change.direction === 'down' ? '▼' : '—';
+  return (
+    <Text style={[styles.heroChange, { color }]}>
+      {arrow} {Math.abs(change.pct).toFixed(1)}% {t('dashboard.hero.vsLastWeek')}
+    </Text>
+  );
+}
+
+// Dashboard 2.0 Hero Card (Session 9d item 1, owner + design-advisor
+// vision — "from list to cockpit"): the one thing a user sees first,
+// answering "how much did I make, am I on pace" in 5 seconds. Reuses
+// calcScorecard() (src/stats/scorecard.ts, legacy rScore() port) for the
+// Profit Score bar rather than inventing a second business-health
+// formula — same all-time revenue/mile + fuel/mile + net/mile composite
+// the Scorecard screen already shows, just presented as a bar here.
+function HeroCard({
+  name,
+  weekRevenue,
+  weekNetProfit,
+  revenueChange,
+  netProfitChange,
+  profitScore,
+  onPress,
+}: {
+  name: string;
+  weekRevenue: number;
+  weekNetProfit: number;
+  revenueChange: WeekOverWeekChange;
+  netProfitChange: WeekOverWeekChange;
+  profitScore: number | null;
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const animatedRevenue = useAnimatedNumber(weekRevenue);
+  const animatedNetProfit = useAnimatedNumber(weekNetProfit);
+  const hour = new Date().getHours();
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
+      <LinearGradient colors={['#1b2650', '#0f1117']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
+        <Text style={styles.heroGreeting}>{t(greetingKey(hour), { name })}</Text>
+        <Text style={styles.heroSubtitle}>{t('dashboard.hero.thisWeek')}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md }}>
+          <View>
+            <Text style={styles.heroLabel}>{t('dashboard.hero.revenue')}</Text>
+            <Text style={styles.heroValue}>{money(animatedRevenue)}</Text>
+            <HeroChange change={revenueChange} goodDirection="up" />
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.heroLabel}>{t('dashboard.hero.netProfit')}</Text>
+            <Text style={[styles.heroValue, weekNetProfit < 0 && { color: colors.red }]}>{money(animatedNetProfit)}</Text>
+            <HeroChange change={netProfitChange} goodDirection="up" />
+          </View>
+        </View>
+        {profitScore != null && (
+          <View style={{ marginTop: spacing.lg }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+              <Text style={styles.heroScoreLabel}>{t('dashboard.hero.profitScore')}</Text>
+              <Text style={styles.heroScoreLabel}>{profitScore}/100</Text>
+            </View>
+            <View style={styles.heroScoreTrack}>
+              <View style={[styles.heroScoreFill, { width: `${profitScore}%`, backgroundColor: profitScoreColor(profitScore) }]} />
+            </View>
+          </View>
+        )}
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 // Collapsible titled section (Dashboard sections addition, owner
 // decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
 // language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
@@ -278,6 +377,7 @@ export default function Dashboard() {
   const updateSectionsCollapsed = useUpdateSectionsCollapsed();
   const driversQuery = useDrivers({ active: true });
   const drivers = driversQuery.data ?? [];
+  const fuelQuery = useFuelPurchases();
 
   const sectionsCollapsed = localSectionsCollapsed ?? layoutQuery.data?.sectionsCollapsed ?? {};
   function toggleSection(id: SectionId) {
@@ -342,6 +442,30 @@ export default function Dashboard() {
     [settlementsQuery.data, dedQuery.data]
   );
   const cpmTrends = useMemo(() => calcCpmTrends(weeklyCpmTrend), [weeklyCpmTrend]);
+
+  // Hero Card (Session 9d item 1) — this week vs. last week, both read
+  // straight off revenueExpenseTrend's last two points rather than a
+  // separate fetch. "Net Profit" here = revenue - ALL deductions for the
+  // week, same definition the Overview chart right below it already uses.
+  const heroFirstName =
+    profile?.owner_name?.trim().split(/\s+/)[0] || session?.user?.email?.split('@')[0] || t('dashboard.hero.fallbackName');
+  const thisWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 1];
+  const lastWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 2];
+  const heroWeekRevenue = thisWeekPoint?.revenue ?? 0;
+  const heroWeekNetProfit = thisWeekPoint ? thisWeekPoint.revenue - thisWeekPoint.expenses : 0;
+  const heroRevenueChange = calcWeekOverWeekChange(heroWeekRevenue, lastWeekPoint?.revenue);
+  const heroNetProfitChange = calcWeekOverWeekChange(
+    heroWeekNetProfit,
+    lastWeekPoint ? lastWeekPoint.revenue - lastWeekPoint.expenses : null
+  );
+  const fuelCost = useMemo(
+    () => (fuelQuery.data ?? []).reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
+    [fuelQuery.data]
+  );
+  const profitScore = useMemo(() => {
+    if (!stats) return null;
+    return calcScorecard(stats.grossRevenue, stats.totalDeductions, stats.totalMiles, fuelCost)?.score ?? null;
+  }, [stats, fuelCost]);
 
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
@@ -734,6 +858,16 @@ export default function Dashboard() {
           </Pressable>
         </View>
 
+        <HeroCard
+          name={heroFirstName}
+          weekRevenue={heroWeekRevenue}
+          weekNetProfit={heroWeekNetProfit}
+          revenueChange={heroRevenueChange}
+          netProfitChange={heroNetProfitChange}
+          profitScore={profitScore}
+          onPress={() => router.push('/(tabs)/more/cash-flow')}
+        />
+
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>
           {profile?.company_name ? <MutedText>{profile.company_name}</MutedText> : null}
@@ -978,5 +1112,52 @@ const styles = {
     borderWidth: 1,
     borderRadius: radii.md,
     padding: spacing.sm,
+  },
+  hero: {
+    borderRadius: radii.lg,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  heroGreeting: {
+    color: colors.text,
+    fontSize: typography.size.lg,
+    fontWeight: '700' as const,
+  },
+  heroSubtitle: {
+    color: 'rgba(232,234,246,0.65)',
+    fontSize: typography.size.sm,
+    marginTop: 2,
+  },
+  heroLabel: {
+    color: 'rgba(232,234,246,0.65)',
+    fontSize: typography.size.xs,
+  },
+  heroValue: {
+    color: colors.text,
+    fontSize: 28,
+    fontWeight: '800' as const,
+    marginTop: 2,
+  },
+  heroChange: {
+    fontSize: typography.size.xs,
+    fontWeight: '700' as const,
+    marginTop: spacing.xs,
+  },
+  heroScoreLabel: {
+    color: 'rgba(232,234,246,0.65)',
+    fontSize: typography.size.xs,
+    fontWeight: '600' as const,
+  },
+  heroScoreTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(232,234,246,0.12)',
+    overflow: 'hidden' as const,
+  },
+  heroScoreFill: {
+    height: 8,
+    borderRadius: 4,
   },
 };
