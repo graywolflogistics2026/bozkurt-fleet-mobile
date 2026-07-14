@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Text, View, useWindowDimensions, type ColorValue } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { TruckSwitcher } from '@/src/components/TruckSwitcher';
 import { CenterImportButton } from '@/src/components/CenterImportButton';
+import { ImportActionSheet } from '@/src/components/ImportActionSheet';
 import { MenuTabButton } from '@/src/components/MenuTabButton';
 import { MenuSheet } from '@/src/components/MenuSheet';
 import { WideSidebar } from '@/src/components/WideSidebar';
@@ -28,9 +29,11 @@ function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
 // there is no second set of screens to keep in sync.
 export default function TabsLayout() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [actionSheetOpen, setActionSheetOpen] = useState(false);
 
   const tabs = (
     <Tabs
@@ -57,7 +60,10 @@ export default function TabsLayout() {
         name="import"
         options={{
           title: t('nav.import'),
-          tabBarButton: (props) => <CenterImportButton {...props} />,
+          // Session 9d item 11: intercepts the press to open a two-action
+          // sheet (Import / Ask AI) instead of navigating straight to the
+          // import tab — same pattern as the Menu tab below.
+          tabBarButton: (props) => <CenterImportButton {...props} onOpenActionSheet={() => setActionSheetOpen(true)} />,
         }}
       />
       <Tabs.Screen
@@ -87,6 +93,18 @@ export default function TabsLayout() {
     <>
       {tabs}
       <MenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} />
+      <ImportActionSheet
+        visible={actionSheetOpen}
+        onClose={() => setActionSheetOpen(false)}
+        onImport={() => {
+          setActionSheetOpen(false);
+          router.push('/(tabs)/import');
+        }}
+        onAskAi={() => {
+          setActionSheetOpen(false);
+          router.push('/(tabs)/more/ai-advisor');
+        }}
+      />
     </>
   );
 

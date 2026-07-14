@@ -71,6 +71,11 @@
     "accept": "Aceptar",
     "signOutInstead": "Cerrar sesión en su lugar"
   },
+  "centerAction": {
+    "title": "¿Qué te gustaría hacer?",
+    "import": "Importar (Cámara/PDF)",
+    "askAi": "Preguntar a la IA"
+  },
   "dashboard": {
     "title": "Panel",
     "hero": {

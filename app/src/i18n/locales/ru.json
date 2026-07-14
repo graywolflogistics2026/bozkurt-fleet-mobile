@@ -71,6 +71,11 @@
     "accept": "Принять",
     "signOutInstead": "Выйти из аккаунта"
   },
+  "centerAction": {
+    "title": "Что вы хотите сделать?",
+    "import": "Импорт (Камера/PDF)",
+    "askAi": "Спросить ИИ"
+  },
   "dashboard": {
     "title": "Панель",
     "hero": {

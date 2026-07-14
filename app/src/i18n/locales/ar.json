@@ -71,6 +71,11 @@
     "accept": "قبول",
     "signOutInstead": "تسجيل الخروج بدلاً من ذلك"
   },
+  "centerAction": {
+    "title": "ماذا تريد أن تفعل؟",
+    "import": "استيراد (كاميرا/PDF)",
+    "askAi": "اسأل الذكاء الاصطناعي"
+  },
   "dashboard": {
     "title": "لوحة التحكم",
     "hero": {

@@ -8,13 +8,19 @@ import { colors } from '@/src/theme';
 // prominent circular button instead of a plain tab slot. Phone-only — the
 // wide-screen sidebar (PROMPTS.md Session 9) has no equivalent raised
 // button, Import is just a normal item there.
-export function CenterImportButton({ onPress, accessibilityState }: BottomTabBarButtonProps) {
+//
+// Session 9d item 11 ("Dashboard 2.0"): the + button now opens a
+// two-action sheet (Import / Ask AI) instead of navigating straight to
+// the import tab — same "custom tabBarButton intercepts the press,
+// deliberately never calls the default onPress" pattern MenuTabButton
+// already uses for the hamburger Menu tab.
+export function CenterImportButton({ onOpenActionSheet, accessibilityState }: BottomTabBarButtonProps & { onOpenActionSheet: () => void }) {
   const { t } = useTranslation();
   const selected = accessibilityState?.selected;
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
       <Pressable
-        onPress={onPress}
+        onPress={onOpenActionSheet}
         style={({ pressed }) => [
           styles.button,
           selected && styles.buttonSelected,

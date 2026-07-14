@@ -71,6 +71,11 @@
     "accept": "Kabul Et",
     "signOutInstead": "Bunun yerine çıkış yap"
   },
+  "centerAction": {
+    "title": "Ne yapmak istersiniz?",
+    "import": "İçe Aktar (Kamera/PDF)",
+    "askAi": "Yapay Zekaya Sor"
+  },
   "dashboard": {
     "title": "Panel",
     "hero": {

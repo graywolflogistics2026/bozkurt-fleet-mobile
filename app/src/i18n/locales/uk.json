@@ -71,6 +71,11 @@
     "accept": "Accept",
     "signOutInstead": "Sign out instead"
   },
+  "centerAction": {
+    "title": "What would you like to do?",
+    "import": "Import (Camera/PDF)",
+    "askAi": "Ask AI"
+  },
   "dashboard": {
     "title": "Dashboard",
     "hero": {
