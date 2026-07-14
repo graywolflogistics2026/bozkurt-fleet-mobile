@@ -126,6 +126,13 @@
       "title": "Días en Carretera",
       "caption": "Últimas 12 semanas — cada columna es una semana, cada cuadro un día en carretera."
     },
+    "goalProgress": {
+      "title": "Meta Semanal",
+      "currentOfGoal": "{{current}} de {{goal}} esta semana",
+      "setGoalPrompt": "Aún no hay meta semanal — toque para establecer una en Modo CEO.",
+      "truckPaidTitle": "Camión Pagado",
+      "paidOfOriginal": "{{paid}} de {{original}} pagado"
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",

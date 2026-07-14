@@ -12,6 +12,7 @@ import { useFleetStats, fetchFleetStats, fetchDriverStats } from '@/src/data/das
 import { useDrivers } from '@/src/data/drivers';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useTrucksList } from '@/src/data/trucks';
+import { useProfile } from '@/src/data/profile';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
@@ -23,6 +24,8 @@ import { buildProfitLoss } from '@/src/stats/profitLoss';
 import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { buildInsightCandidates, selectDailyInsight, type Insight } from '@/src/stats/aiInsights';
 import { buildRoadDaysGrid, type RoadDayCell } from '@/src/stats/roadDaysHeatmap';
+import { calcGoalProgressPct, calcTruckLoanProgress } from '@/src/stats/goalProgress';
+import { useLoanRows } from '@/src/data/loans';
 import { useComplianceItems } from '@/src/data/complianceItems';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
@@ -605,6 +608,80 @@ function RoadDaysHeatmap({ cells }: { cells: RoadDayCell[] }) {
   );
 }
 
+function ProgressBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <View style={styles.heroScoreTrack}>
+      <View style={[styles.heroScoreFill, { width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+// Goal Progress + Truck Paid card (Session 9d item 9) — weekly goal
+// (profiles.weekly_goal, same field CEO Mode's first-open prompt sets)
+// against this week's net, and a "Truck Paid" bar (paid principal ÷
+// original_amount) for whichever loan is the biggest one on file (see
+// src/stats/goalProgress.ts for why — no truck_id on LoanRow to scope by
+// precisely). Either half renders independently: a user with no goal set
+// still sees the Truck Paid bar if a loan exists, and vice versa.
+function GoalProgressCard({
+  goalPct,
+  current,
+  goal,
+  truckLoan,
+  onGoalPress,
+  onLoanPress,
+}: {
+  goalPct: number | null;
+  current: number;
+  goal: number | null;
+  truckLoan: { paidPrincipal: number; originalAmount: number; pct: number } | null;
+  onGoalPress: () => void;
+  onLoanPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+
+  if (goalPct == null && !truckLoan) return null;
+
+  return (
+    <Card>
+      {goalPct != null ? (
+        <Pressable onPress={onGoalPress}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{t('dashboard.goalProgress.title')}</Text>
+            <Text style={{ color: colors.accent, fontWeight: '700' }}>{goalPct}%</Text>
+          </View>
+          <MutedText style={{ marginBottom: spacing.xs }}>
+            {t('dashboard.goalProgress.currentOfGoal', { current: money(current), goal: money(goal ?? 0) })}
+          </MutedText>
+          <ProgressBar pct={goalPct} color={colors.accent} />
+        </Pressable>
+      ) : (
+        <Pressable onPress={onGoalPress}>
+          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('dashboard.goalProgress.title')}</Text>
+          <MutedText>{t('dashboard.goalProgress.setGoalPrompt')}</MutedText>
+        </Pressable>
+      )}
+      {truckLoan && (
+        <Pressable onPress={onLoanPress} style={{ marginTop: goalPct != null ? spacing.md : 0 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{t('dashboard.goalProgress.truckPaidTitle')}</Text>
+            <Text style={{ color: colors.green, fontWeight: '700' }}>{truckLoan.pct}%</Text>
+          </View>
+          <MutedText style={{ marginBottom: spacing.xs }}>
+            {t('dashboard.goalProgress.paidOfOriginal', {
+              paid: money(truckLoan.paidPrincipal),
+              original: money(truckLoan.originalAmount),
+            })}
+          </MutedText>
+          <ProgressBar pct={truckLoan.pct} color={colors.green} />
+        </Pressable>
+      )}
+    </Card>
+  );
+}
+
 // Collapsible titled section (Dashboard sections addition, owner
 // decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
 // language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
@@ -681,6 +758,8 @@ export default function Dashboard() {
   const complianceQuery = useComplianceItems();
   const userCategoriesQuery = useUserCategories();
   const benchmarksQuery = useBenchmarks();
+  const loansQuery = useLoanRows();
+  const fullProfileQuery = useProfile();
   const activeTruckId = activeTruck?.id ?? null;
   const trucksListQuery = useTrucksList();
   const maintRecordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
@@ -881,6 +960,11 @@ export default function Dashboard() {
     () => buildRoadDaysGrid((settlementsQuery.data ?? []).map((s) => s.week_ending).filter(Boolean) as string[]),
     [settlementsQuery.data]
   );
+
+  // Goal Progress + Truck Paid (Session 9d item 9).
+  const currentWeekNet = weeklyNetTrend[weeklyNetTrend.length - 1]?.net ?? 0;
+  const goalPct = useMemo(() => calcGoalProgressPct(currentWeekNet, fullProfileQuery.data?.weekly_goal), [currentWeekNet, fullProfileQuery.data?.weekly_goal]);
+  const truckLoanProgress = useMemo(() => calcTruckLoanProgress(loansQuery.data ?? []), [loansQuery.data]);
   function handleInsightViewDetails(type: Insight['type']) {
     if (type === 'fuelBenchmark') router.push('/(tabs)/more/profit-analysis');
     else if (type === 'needsReview') router.push('/(tabs)/deductions');
@@ -1390,6 +1474,14 @@ export default function Dashboard() {
                 <View style={{ flex: 1 }}>{renderCard('totalDeductions', null)}</View>
               </View>
               <MoneyBreakdownCard slices={moneyBreakdownSlices} onPress={() => router.push('/(tabs)/deductions')} />
+              <GoalProgressCard
+                goalPct={goalPct}
+                current={currentWeekNet}
+                goal={fullProfileQuery.data?.weekly_goal ?? null}
+                truckLoan={truckLoanProgress}
+                onGoalPress={() => router.push('/(tabs)/more/ceo-mode')}
+                onLoanPress={() => router.push('/(tabs)/more/loans')}
+              />
             </DashboardSection>
 
             <DashboardSection

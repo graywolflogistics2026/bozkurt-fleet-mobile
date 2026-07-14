@@ -126,6 +126,13 @@
       "title": "أيام على الطريق",
       "caption": "آخر 12 أسبوعًا — كل عمود أسبوع، وكل مربع يوم على الطريق."
     },
+    "goalProgress": {
+      "title": "الهدف الأسبوعي",
+      "currentOfGoal": "{{current}} من {{goal}} هذا الأسبوع",
+      "setGoalPrompt": "لم يتم تعيين هدف أسبوعي بعد — اضغط لتعيينه في وضع الرئيس التنفيذي.",
+      "truckPaidTitle": "الشاحنة المدفوعة",
+      "paidOfOriginal": "تم سداد {{paid}} من {{original}}"
+    },
     "sections": {
       "overview": "نظرة عامة",
       "money": "المال",

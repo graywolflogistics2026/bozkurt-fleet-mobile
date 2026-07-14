@@ -126,6 +126,13 @@
       "title": "Road Days",
       "caption": "Last 12 weeks — each column is a week, each square a day on the road."
     },
+    "goalProgress": {
+      "title": "Weekly Goal",
+      "currentOfGoal": "{{current}} of {{goal}} this week",
+      "setGoalPrompt": "No weekly goal set yet — tap to set one in CEO Mode.",
+      "truckPaidTitle": "Truck Paid",
+      "paidOfOriginal": "{{paid}} of {{original}} paid off"
+    },
     "sections": {
       "overview": "Overview",
       "money": "Money",

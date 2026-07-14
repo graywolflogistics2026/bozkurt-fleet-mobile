@@ -126,6 +126,13 @@
       "title": "Дни в пути",
       "caption": "Последние 12 недель — каждый столбец это неделя, каждый квадрат день в пути."
     },
+    "goalProgress": {
+      "title": "Недельная цель",
+      "currentOfGoal": "{{current}} из {{goal}} на этой неделе",
+      "setGoalPrompt": "Недельная цель ещё не установлена — нажмите, чтобы задать её в Режиме CEO.",
+      "truckPaidTitle": "Грузовик выплачен",
+      "paidOfOriginal": "выплачено {{paid}} из {{original}}"
+    },
     "sections": {
       "overview": "Обзор",
       "money": "Деньги",

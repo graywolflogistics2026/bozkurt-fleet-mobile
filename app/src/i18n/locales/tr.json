@@ -126,6 +126,13 @@
       "title": "Yolda Geçen Günler",
       "caption": "Son 12 hafta — her sütun bir hafta, her kare yolda geçen bir gün."
     },
+    "goalProgress": {
+      "title": "Haftalık Hedef",
+      "currentOfGoal": "Bu hafta {{goal}} hedefinden {{current}}",
+      "setGoalPrompt": "Henüz haftalık hedef belirlenmedi — CEO Modu'nda ayarlamak için dokunun.",
+      "truckPaidTitle": "Kamyon Ödemesi",
+      "paidOfOriginal": "{{original}} içinden {{paid}} ödendi"
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",
