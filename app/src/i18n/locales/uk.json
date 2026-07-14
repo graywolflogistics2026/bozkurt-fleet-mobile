@@ -1279,7 +1279,18 @@
     "complianceDue": "Compliance items due soon/overdue",
     "briefingTitle": "Your Briefing",
     "getBriefing": "Get My Briefing",
-    "briefingFailed": "Could not get your briefing right now"
+    "briefingFailed": "Could not get your briefing right now",
+    "businessScoreTitle": "AI Business Score",
+    "starFuelEfficiency": "Fuel Efficiency",
+    "starTaxOptimization": "Tax Optimization",
+    "starMaintenance": "Maintenance",
+    "starCashFlow": "Cash Flow",
+    "scoreInfoTitle": "How this score is calculated",
+    "scoreInfoBody": "Four 1-5 star ratings, composed only from your own account data:",
+    "scoreInfoFuel": "Fuel Efficiency: your fuel cost per mile — more stars the lower it is.",
+    "scoreInfoTax": "Tax Optimization: your Business Balance compared to the upcoming quarterly payment.",
+    "scoreInfoMaintenance": "Maintenance: Truck Health interval statuses — fewer stars if anything is due soon or overdue.",
+    "scoreInfoCashFlow": "Cash Flow: this week's net profit vs. last week."
   },
   "aiAdvisor": {
     "title": "AI Advisor",

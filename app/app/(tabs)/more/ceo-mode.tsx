@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
 import { useDocuments } from '@/src/data/documents';
 import { useComplianceItems } from '@/src/data/complianceItems';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList } from '@/src/data/trucks';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
@@ -13,12 +15,18 @@ import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
 import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
 import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
+import { calcWeekOverWeekChange } from '@/src/stats/heroStats';
+import { calcBusinessScore, type StarRating } from '@/src/stats/aiBusinessScore';
 import { calcComplianceStatus } from '@/src/compliance/status';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
-import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButton } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import i18n from '@/src/i18n';
+
+function starString(rating: StarRating): string {
+  return '★★★★★'.slice(0, rating) + '☆☆☆☆☆'.slice(0, 5 - rating);
+}
 
 // CEO Mode — Daily/Weekly Briefing v1 (PROMPTS.md Session 9b item 10,
 // CLAUDE.md invariant #22 — composed ONLY from this account's own data,
@@ -36,6 +44,8 @@ export default function CeoMode() {
   const complianceQuery = useComplianceItems();
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
+  const fuelQuery = useFuelPurchases();
+  const taxQuery = useTaxEstimate();
   const { activeTruckId } = useActiveTruck();
   const trucksQuery = useTrucksList();
   const recordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
@@ -47,6 +57,7 @@ export default function CeoMode() {
   const [briefing, setBriefing] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scoreInfoOpen, setScoreInfoOpen] = useState(false);
 
   const loadingData =
     settlementsQuery.isLoading || deductionsQuery.isLoading || documentsQuery.isLoading || complianceQuery.isLoading || profileQuery.isLoading;
@@ -83,8 +94,8 @@ export default function CeoMode() {
   // the same fleet-wide logic; a fleet-wide CEO briefing still reads
   // through whichever truck is currently active, same as the Dashboard).
   const truck = useMemo(() => trucksQuery.data?.find((tr) => tr.id === activeTruckId) ?? null, [trucksQuery.data, activeTruckId]);
-  const maintenanceAlertCount = useMemo(() => {
-    if (!truck || !intervalsQuery.data) return 0;
+  const truckHealthResults = useMemo(() => {
+    if (!truck || !intervalsQuery.data) return [];
     const intervals = intervalsQuery.data.map((iv) => ({
       category: iv.category,
       trackingMode: iv.tracking_mode,
@@ -100,9 +111,40 @@ export default function CeoMode() {
       serviceDate: r.service_date,
     }));
     const overrides = (healthConfigQuery.data?.overrides ?? {}) as HealthOverrides;
-    const results = calcTruckHealth(intervals, records, truck.current_odometer ?? 0, truck.apu_hours ?? 0, overrides);
-    return results.filter((r) => r.status === 'due_soon' || r.status === 'overdue').length;
+    return calcTruckHealth(intervals, records, truck.current_odometer ?? 0, truck.apu_hours ?? 0, overrides);
   }, [truck, intervalsQuery.data, recordsQuery.data, healthConfigQuery.data]);
+  const maintenanceAlertCount = useMemo(
+    () => truckHealthResults.filter((r) => r.status === 'due_soon' || r.status === 'overdue').length,
+    [truckHealthResults]
+  );
+
+  // AI Business Score (Session 9d item 14) — fuelPerMile mirrors
+  // scorecard.ts's own fuelCost/totalMiles definition; taxReserveRatio
+  // mirrors the Dashboard Fleet Health Score's business_balance vs.
+  // upcoming quarterlyPayment; cashFlowDirection is this week vs. last
+  // week net, the same calcWeekOverWeekChange the Dashboard Hero Card uses.
+  const totalMiles = useMemo(
+    () => (settlementsQuery.data ?? []).reduce((sum, s) => sum + Number(s.miles ?? 0), 0),
+    [settlementsQuery.data]
+  );
+  const fuelCost = useMemo(
+    () => (fuelQuery.data ?? []).reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
+    [fuelQuery.data]
+  );
+  const previousWeek = weeklyTrend[weeklyTrend.length - 2] ?? null;
+  const businessScore = useMemo(
+    () =>
+      calcBusinessScore({
+        fuelPerMile: totalMiles > 0 ? fuelCost / totalMiles : null,
+        taxReserveRatio:
+          taxQuery.data && taxQuery.data.estimate.quarterlyPayment > 0
+            ? (profileQuery.data?.business_balance ?? 0) / taxQuery.data.estimate.quarterlyPayment
+            : null,
+        truckHealthStatuses: truckHealthResults.map((r) => r.status),
+        cashFlowDirection: calcWeekOverWeekChange(latestWeek?.net ?? 0, previousWeek?.net).direction,
+      }),
+    [totalMiles, fuelCost, taxQuery.data, profileQuery.data, truckHealthResults, latestWeek, previousWeek]
+  );
 
   async function handleSaveGoal() {
     const value = Number(goalInput);
@@ -169,6 +211,42 @@ export default function CeoMode() {
                 </View>
               </View>
             </Card>
+
+            <Text style={styles.sectionTitle}>{t('ceoMode.businessScoreTitle')}</Text>
+            <Card>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.text, fontSize: 32, fontWeight: '800' }}>{businessScore.score}</Text>
+                <Pressable onPress={() => setScoreInfoOpen(true)} hitSlop={8}>
+                  <Text style={{ color: colors.muted, fontSize: typography.size.md }}>ⓘ</Text>
+                </Pressable>
+              </View>
+              <View style={[styles.row]}>
+                <MutedText>{t('ceoMode.starFuelEfficiency')}</MutedText>
+                <Text style={{ color: colors.orange }}>{starString(businessScore.stars.fuelEfficiency)}</Text>
+              </View>
+              <View style={[styles.row, styles.rowBorder]}>
+                <MutedText>{t('ceoMode.starTaxOptimization')}</MutedText>
+                <Text style={{ color: colors.orange }}>{starString(businessScore.stars.taxOptimization)}</Text>
+              </View>
+              <View style={[styles.row, styles.rowBorder]}>
+                <MutedText>{t('ceoMode.starMaintenance')}</MutedText>
+                <Text style={{ color: colors.orange }}>{starString(businessScore.stars.maintenance)}</Text>
+              </View>
+              <View style={[styles.row, styles.rowBorder]}>
+                <MutedText>{t('ceoMode.starCashFlow')}</MutedText>
+                <Text style={{ color: colors.orange }}>{starString(businessScore.stars.cashFlow)}</Text>
+              </View>
+            </Card>
+
+            <ModalSheet visible={scoreInfoOpen} onClose={() => setScoreInfoOpen(false)}>
+              <SheetTitle>{t('ceoMode.scoreInfoTitle')}</SheetTitle>
+              <MutedText style={{ marginBottom: spacing.sm }}>{t('ceoMode.scoreInfoBody')}</MutedText>
+              <MutedText style={{ marginBottom: spacing.xs }}>• {t('ceoMode.scoreInfoFuel')}</MutedText>
+              <MutedText style={{ marginBottom: spacing.xs }}>• {t('ceoMode.scoreInfoTax')}</MutedText>
+              <MutedText style={{ marginBottom: spacing.xs }}>• {t('ceoMode.scoreInfoMaintenance')}</MutedText>
+              <MutedText style={{ marginBottom: spacing.sm }}>• {t('ceoMode.scoreInfoCashFlow')}</MutedText>
+              <LegalFootnote />
+            </ModalSheet>
 
             {weeklyGoal == null ? (
               // First-open goal prompt (device feedback round 2, owner

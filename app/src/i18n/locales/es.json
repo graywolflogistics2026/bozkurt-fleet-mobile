@@ -1279,7 +1279,18 @@
     "complianceDue": "Elementos de cumplimiento próximos/vencidos",
     "briefingTitle": "Tu Informe",
     "getBriefing": "Obtener Mi Informe",
-    "briefingFailed": "No se pudo obtener tu informe en este momento"
+    "briefingFailed": "No se pudo obtener tu informe en este momento",
+    "businessScoreTitle": "Puntaje de Negocio IA",
+    "starFuelEfficiency": "Eficiencia de Combustible",
+    "starTaxOptimization": "Optimización Fiscal",
+    "starMaintenance": "Mantenimiento",
+    "starCashFlow": "Flujo de Caja",
+    "scoreInfoTitle": "Cómo se calcula este puntaje",
+    "scoreInfoBody": "Cuatro calificaciones de 1 a 5 estrellas, compuestas solo con los datos de tu propia cuenta:",
+    "scoreInfoFuel": "Eficiencia de Combustible: tu costo de combustible por milla — más estrellas cuanto más bajo sea.",
+    "scoreInfoTax": "Optimización Fiscal: tu Saldo del Negocio comparado con el próximo pago trimestral.",
+    "scoreInfoMaintenance": "Mantenimiento: estados de los intervalos de Salud del Camión — menos estrellas si algo está por vencer o vencido.",
+    "scoreInfoCashFlow": "Flujo de Caja: la ganancia neta de esta semana vs. la semana pasada."
   },
   "aiAdvisor": {
     "title": "Asesor de IA",

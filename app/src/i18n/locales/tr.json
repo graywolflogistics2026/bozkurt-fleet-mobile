@@ -1279,7 +1279,18 @@
     "complianceDue": "Yakında/gecikmiş uyumluluk öğeleri",
     "briefingTitle": "Özetiniz",
     "getBriefing": "Özetimi Al",
-    "briefingFailed": "Şu anda özetiniz alınamadı"
+    "briefingFailed": "Şu anda özetiniz alınamadı",
+    "businessScoreTitle": "Yapay Zeka İş Puanı",
+    "starFuelEfficiency": "Yakıt Verimliliği",
+    "starTaxOptimization": "Vergi Optimizasyonu",
+    "starMaintenance": "Bakım",
+    "starCashFlow": "Nakit Akışı",
+    "scoreInfoTitle": "Bu puan nasıl hesaplanır",
+    "scoreInfoBody": "Yalnızca kendi hesap verilerinizden oluşturulan dört adet 1-5 yıldızlı derecelendirme:",
+    "scoreInfoFuel": "Yakıt Verimliliği: mil başına yakıt maliyetiniz — ne kadar düşükse o kadar çok yıldız.",
+    "scoreInfoTax": "Vergi Optimizasyonu: İşletme Bakiyenizin yaklaşan üç aylık ödemeyle karşılaştırması.",
+    "scoreInfoMaintenance": "Bakım: Kamyon Sağlığı aralık durumları — bir şey yakında gerekiyorsa veya gecikmişse daha az yıldız.",
+    "scoreInfoCashFlow": "Nakit Akışı: bu haftanın net kârı geçen haftaya göre."
   },
   "aiAdvisor": {
     "title": "Yapay Zeka Danışmanı",
