@@ -85,6 +85,19 @@
       "vsLastWeek": "vs last week",
       "newThisWeek": "New this week"
     },
+    "fleetHealth": {
+      "title": "Fleet Health Score",
+      "chipTruck": "Truck",
+      "chipMaintenance": "Maintenance",
+      "chipTaxes": "Taxes",
+      "chipCashFlow": "Cash Flow",
+      "infoTitle": "How this score is calculated",
+      "infoBody": "Four equally-weighted factors, each worth up to 25 points:",
+      "infoTruck": "Truck: compliance items (DOT inspection, IRP, insurance, CDL, medical card, etc.) — red if any is overdue, amber if due soon.",
+      "infoMaintenance": "Maintenance: Truck Health interval statuses (oil, tires, and the rest) — red if any is overdue, amber if due soon.",
+      "infoTaxes": "Taxes: your Business Balance compared to the upcoming quarterly payment — red below 50% reserved, amber below 100%.",
+      "infoCashFlow": "Cash Flow: this week's net profit vs. last week — red if down, amber if flat."
+    },
     "sections": {
       "overview": "Overview",
       "money": "Money",

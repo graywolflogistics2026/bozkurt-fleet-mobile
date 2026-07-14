@@ -85,6 +85,19 @@
       "vsLastWeek": "geçen haftaya göre",
       "newThisWeek": "Bu hafta yeni"
     },
+    "fleetHealth": {
+      "title": "Filo Sağlığı Puanı",
+      "chipTruck": "Kamyon",
+      "chipMaintenance": "Bakım",
+      "chipTaxes": "Vergiler",
+      "chipCashFlow": "Nakit Akışı",
+      "infoTitle": "Bu puan nasıl hesaplanır",
+      "infoBody": "Eşit ağırlıklı dört faktör, her biri 25 puana kadar değerli:",
+      "infoTruck": "Kamyon: uygunluk kalemleri (DOT muayenesi, IRP, sigorta, CDL, sağlık kartı vb.) — herhangi biri gecikmişse kırmızı, yakında gerekiyorsa turuncu.",
+      "infoMaintenance": "Bakım: Kamyon Sağlığı aralık durumları (yağ, lastikler ve diğerleri) — herhangi biri gecikmişse kırmızı, yakında gerekiyorsa turuncu.",
+      "infoTaxes": "Vergiler: İşletme Bakiyeniz ile yaklaşan üç aylık ödeme karşılaştırması — rezerv %50'nin altındaysa kırmızı, %100'ün altındaysa turuncu.",
+      "infoCashFlow": "Nakit Akışı: bu haftanın net kârı geçen haftaya göre — düşüyorsa kırmızı, değişmiyorsa turuncu."
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",

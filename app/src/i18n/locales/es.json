@@ -85,6 +85,19 @@
       "vsLastWeek": "vs. semana pasada",
       "newThisWeek": "Nuevo esta semana"
     },
+    "fleetHealth": {
+      "title": "Puntaje de Salud de la Flota",
+      "chipTruck": "Camión",
+      "chipMaintenance": "Mantenimiento",
+      "chipTaxes": "Impuestos",
+      "chipCashFlow": "Flujo de Caja",
+      "infoTitle": "Cómo se calcula este puntaje",
+      "infoBody": "Cuatro factores con igual peso, cada uno vale hasta 25 puntos:",
+      "infoTruck": "Camión: elementos de cumplimiento (inspección DOT, IRP, seguro, CDL, tarjeta médica, etc.) — rojo si alguno está vencido, ámbar si vence pronto.",
+      "infoMaintenance": "Mantenimiento: estados de los intervalos de Salud del Camión (aceite, llantas, y el resto) — rojo si alguno está vencido, ámbar si vence pronto.",
+      "infoTaxes": "Impuestos: tu Saldo del Negocio comparado con el próximo pago trimestral — rojo por debajo del 50% reservado, ámbar por debajo del 100%.",
+      "infoCashFlow": "Flujo de Caja: la ganancia neta de esta semana vs. la semana pasada — rojo si baja, ámbar si está estable."
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",

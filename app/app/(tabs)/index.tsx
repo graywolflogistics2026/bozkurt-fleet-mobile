@@ -10,11 +10,18 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFleetStats, fetchFleetStats, fetchDriverStats } from '@/src/data/dashboardStats';
 import { useDrivers } from '@/src/data/drivers';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useTrucksList } from '@/src/data/trucks';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
 import { useDeductions } from '@/src/data/deductions';
 import { useSettlements } from '@/src/data/settlements';
+import { useComplianceItems } from '@/src/data/complianceItems';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
+import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
+import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
+import { calcComplianceStatus } from '@/src/compliance/status';
 import { useDashboardLayout, useUpdateSectionsCollapsed, type SectionsCollapsed } from '@/src/data/dashboardLayout';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
@@ -24,6 +31,7 @@ import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrend, buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
 import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
+import { calcFleetHealthScore, type ChipStatus } from '@/src/stats/fleetHealthScore';
 import {
   CARD_LABEL_KEYS,
   SECTION_IDS,
@@ -32,8 +40,9 @@ import {
   type DashboardCardConfig,
   type SectionId,
 } from '@/src/stats/dashboardLayout';
-import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
+import { CircularGauge } from '@/src/components/CircularGauge';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -305,6 +314,69 @@ function HeroCard({
   );
 }
 
+function chipColor(status: ChipStatus): string {
+  if (status === 'green') return colors.green;
+  if (status === 'amber') return colors.orange;
+  return colors.red;
+}
+
+function StatusChip({ label, status }: { label: string; status: ChipStatus }) {
+  return (
+    <View style={styles.statusChip}>
+      <View style={[styles.statusChipDot, { backgroundColor: chipColor(status) }]} />
+      <Text style={styles.statusChipLabel} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+// Fleet Health Score card (Session 9d item 2) — circular gauge (react-
+// native-svg, no chart library) + 4 status chips explaining the score's
+// composition, tap opens a methodology info sheet. Scoped to the active
+// truck, same "n=1 is just the default presentation" convention every
+// other truck-specific Dashboard stat already follows (CLAUDE.md
+// invariant #7) — CEO Mode's maintenanceAlertCount uses the identical
+// active-truck scoping for the same reason.
+function FleetHealthCard({
+  score,
+  chips,
+  onInfoPress,
+}: {
+  score: number;
+  chips: { truck: ChipStatus; maintenance: ChipStatus; taxes: ChipStatus; cashFlow: ChipStatus };
+  onInfoPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const gaugeColor = score >= 75 ? colors.green : score >= 60 ? colors.orange : colors.red;
+
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+        <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('dashboard.fleetHealth.title')}</Text>
+        <Pressable onPress={onInfoPress} hitSlop={8}>
+          <Text style={{ color: colors.muted, fontSize: typography.size.md }}>ⓘ</Text>
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+        <View style={{ width: 96, height: 96, alignItems: 'center', justifyContent: 'center' }}>
+          <CircularGauge score={score} color={gaugeColor} />
+          <View style={{ position: 'absolute', alignItems: 'center' }}>
+            <Text style={{ color: colors.text, fontSize: 24, fontWeight: '800' }}>{score}</Text>
+            <MutedText>/100</MutedText>
+          </View>
+        </View>
+        <View style={{ flex: 1, gap: spacing.xs }}>
+          <StatusChip label={t('dashboard.fleetHealth.chipTruck')} status={chips.truck} />
+          <StatusChip label={t('dashboard.fleetHealth.chipMaintenance')} status={chips.maintenance} />
+          <StatusChip label={t('dashboard.fleetHealth.chipTaxes')} status={chips.taxes} />
+          <StatusChip label={t('dashboard.fleetHealth.chipCashFlow')} status={chips.cashFlow} />
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 // Collapsible titled section (Dashboard sections addition, owner
 // decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
 // language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
@@ -378,6 +450,13 @@ export default function Dashboard() {
   const driversQuery = useDrivers({ active: true });
   const drivers = driversQuery.data ?? [];
   const fuelQuery = useFuelPurchases();
+  const complianceQuery = useComplianceItems();
+  const activeTruckId = activeTruck?.id ?? null;
+  const trucksListQuery = useTrucksList();
+  const maintRecordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
+  const maintIntervalsQuery = useMaintenanceIntervals(activeTruckId);
+  const healthConfigQuery = useTruckHealthConfig(activeTruckId);
+  const [healthInfoOpen, setHealthInfoOpen] = useState(false);
 
   const sectionsCollapsed = localSectionsCollapsed ?? layoutQuery.data?.sectionsCollapsed ?? {};
   function toggleSection(id: SectionId) {
@@ -466,6 +545,61 @@ export default function Dashboard() {
     if (!stats) return null;
     return calcScorecard(stats.grossRevenue, stats.totalDeductions, stats.totalMiles, fuelCost)?.score ?? null;
   }, [stats, fuelCost]);
+
+  // Fleet Health Score (Session 9d item 2) — 4 inputs, each also a status
+  // chip: Truck Health interval statuses (maintenance), compliance item
+  // urgencies (truck/legal), business_balance vs. the upcoming quarterly
+  // payment (taxes), and this-week-vs-last-week net profit direction
+  // (cash flow — reuses heroNetProfitChange rather than a second trend
+  // calculation).
+  const activeTruckRow = useMemo(
+    () => trucksListQuery.data?.find((tr) => tr.id === activeTruckId) ?? null,
+    [trucksListQuery.data, activeTruckId]
+  );
+  const truckHealthStatuses = useMemo(() => {
+    if (!activeTruckRow || !maintIntervalsQuery.data) return [];
+    const intervals = maintIntervalsQuery.data.map((iv) => ({
+      category: iv.category,
+      trackingMode: iv.tracking_mode,
+      intervalMiles: iv.interval_miles,
+      intervalHours: iv.interval_hours,
+      bundledWithCategory: iv.bundled_with_category,
+      enabled: iv.enabled,
+    }));
+    const records = (maintRecordsQuery.data ?? []).map((r) => ({
+      serviceType: r.service_type,
+      odometer: r.odometer,
+      engineHours: r.engine_hours,
+      serviceDate: r.service_date,
+    }));
+    const overrides = (healthConfigQuery.data?.overrides ?? {}) as HealthOverrides;
+    return calcTruckHealth(
+      intervals,
+      records,
+      activeTruckRow.current_odometer ?? 0,
+      activeTruckRow.apu_hours ?? 0,
+      overrides
+    ).map((r) => r.status);
+  }, [activeTruckRow, maintIntervalsQuery.data, maintRecordsQuery.data, healthConfigQuery.data]);
+
+  const complianceUrgencies = useMemo(
+    () => (complianceQuery.data ?? []).map((item) => calcComplianceStatus(item.due_date).urgency),
+    [complianceQuery.data]
+  );
+
+  const taxReserveRatio =
+    tax && tax.estimate.quarterlyPayment > 0 ? (capital?.businessBalance ?? 0) / tax.estimate.quarterlyPayment : null;
+
+  const fleetHealth = useMemo(
+    () =>
+      calcFleetHealthScore({
+        truckHealthStatuses,
+        complianceUrgencies,
+        taxReserveRatio,
+        cashFlowDirection: heroNetProfitChange.direction,
+      }),
+    [truckHealthStatuses, complianceUrgencies, taxReserveRatio, heroNetProfitChange.direction]
+  );
 
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
@@ -868,6 +1002,18 @@ export default function Dashboard() {
           onPress={() => router.push('/(tabs)/more/cash-flow')}
         />
 
+        <FleetHealthCard score={fleetHealth.score} chips={fleetHealth.chips} onInfoPress={() => setHealthInfoOpen(true)} />
+
+        <ModalSheet visible={healthInfoOpen} onClose={() => setHealthInfoOpen(false)}>
+          <SheetTitle>{t('dashboard.fleetHealth.infoTitle')}</SheetTitle>
+          <MutedText style={{ marginBottom: spacing.sm }}>{t('dashboard.fleetHealth.infoBody')}</MutedText>
+          <MutedText style={{ marginBottom: spacing.xs }}>• {t('dashboard.fleetHealth.infoTruck')}</MutedText>
+          <MutedText style={{ marginBottom: spacing.xs }}>• {t('dashboard.fleetHealth.infoMaintenance')}</MutedText>
+          <MutedText style={{ marginBottom: spacing.xs }}>• {t('dashboard.fleetHealth.infoTaxes')}</MutedText>
+          <MutedText style={{ marginBottom: spacing.sm }}>• {t('dashboard.fleetHealth.infoCashFlow')}</MutedText>
+          <LegalFootnote />
+        </ModalSheet>
+
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>
           {profile?.company_name ? <MutedText>{profile.company_name}</MutedText> : null}
@@ -1159,5 +1305,20 @@ const styles = {
   heroScoreFill: {
     height: 8,
     borderRadius: 4,
+  },
+  statusChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: spacing.xs,
+  },
+  statusChipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusChipLabel: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    flexShrink: 1,
   },
 };
