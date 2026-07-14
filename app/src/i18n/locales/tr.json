@@ -114,6 +114,14 @@
       "title": "Vergi İlerlemesi",
       "reservedOfTarget": "{{target}} içinden {{reserved}} ayrıldı"
     },
+    "aiInsights": {
+      "title": "Yapay Zeka İçgörüsü",
+      "fuelBenchmark": "Yakıt maliyeti sektör referansının {{pct}} puan üzerinde — ayda yaklaşık {{amount}} fazla.",
+      "needsReview": "{{count}} fiş NEEDS REVIEW olarak işaretlendi — tahmini {{amount}} tutarında kesinti kategorilendirilmeyi bekliyor.",
+      "cpmTarget": "Kârlı kalmak için yalnızca en az {{rate}}/mil ödeyen yükleri kabul edin.",
+      "paceProjection": "Bu hızla, bu yıl yaklaşık {{amount}} net kâr elde etme yolundasınız.",
+      "industryReferenceNote": "Sektör referansı, diğer kullanıcı verisi değil — kaynak için Kâr Analizi'ne bakın."
+    },
     "sections": {
       "overview": "Genel Bakış",
       "money": "Para",

@@ -114,6 +114,14 @@
       "title": "Progreso de Impuestos",
       "reservedOfTarget": "{{reserved}} de {{target}} reservado"
     },
+    "aiInsights": {
+      "title": "Perspectiva IA",
+      "fuelBenchmark": "El combustible está {{pct}} puntos por encima de la referencia de la industria — unos {{amount}}/mes de más.",
+      "needsReview": "{{count}} recibo(s) marcados NEEDS REVIEW — se estima {{amount}} en deducciones esperando ser clasificadas.",
+      "cpmTarget": "Acepte solo cargas que paguen al menos {{rate}}/milla para seguir siendo rentable.",
+      "paceProjection": "A este ritmo, va camino de unos {{amount}} de ganancia neta este año.",
+      "industryReferenceNote": "Referencia de la industria, no datos de otros usuarios — vea Análisis de Ganancias para la fuente."
+    },
     "sections": {
       "overview": "Resumen",
       "money": "Dinero",

@@ -18,7 +18,10 @@ import { useLoads } from '@/src/data/loads';
 import { useDeductions } from '@/src/data/deductions';
 import { useSettlements } from '@/src/data/settlements';
 import { useUserCategories } from '@/src/data/userCategories';
+import { useBenchmarks } from '@/src/data/benchmarks';
 import { buildProfitLoss } from '@/src/stats/profitLoss';
+import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
+import { buildInsightCandidates, selectDailyInsight, type Insight } from '@/src/stats/aiInsights';
 import { useComplianceItems } from '@/src/data/complianceItems';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
@@ -530,6 +533,45 @@ function TaxProgressCard({
   );
 }
 
+// AI Insights rotating card (Session 9d item 6) — one sentence, deterministic
+// day-of-year rotation through whichever insights are actually applicable
+// (src/stats/aiInsights.ts). Phrased via this app's own i18n strings rather
+// than an ai-advisor round-trip on every dashboard load (that would add
+// network latency/cost to a purely informational card render) — still
+// locale-aware across all 7 supported languages, just via t() instead of
+// a server call.
+function AiInsightsCard({ insight, onViewDetails }: { insight: Insight; onViewDetails: (type: Insight['type']) => void }) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+
+  let sentence: string;
+  if (insight.type === 'fuelBenchmark') {
+    sentence = t('dashboard.aiInsights.fuelBenchmark', {
+      pct: insight.pctPointsAboveRange.toFixed(1),
+      amount: money(insight.estMonthlyDelta),
+    });
+  } else if (insight.type === 'needsReview') {
+    sentence = t('dashboard.aiInsights.needsReview', { count: insight.count, amount: money(insight.estValue) });
+  } else if (insight.type === 'cpmTarget') {
+    sentence = t('dashboard.aiInsights.cpmTarget', {
+      rate: moneyFmt(insight.targetRate, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    });
+  } else {
+    sentence = t('dashboard.aiInsights.paceProjection', { amount: money(insight.projectedNet) });
+  }
+
+  return (
+    <TappableCard onPress={() => onViewDetails(insight.type)}>
+      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('dashboard.aiInsights.title')}</Text>
+      <Text style={{ color: colors.text }}>{sentence}</Text>
+      {insight.type === 'fuelBenchmark' && (
+        <MutedText style={{ marginTop: spacing.xs }}>{t('dashboard.aiInsights.industryReferenceNote')}</MutedText>
+      )}
+    </TappableCard>
+  );
+}
+
 // Collapsible titled section (Dashboard sections addition, owner
 // decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
 // language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
@@ -605,6 +647,7 @@ export default function Dashboard() {
   const fuelQuery = useFuelPurchases();
   const complianceQuery = useComplianceItems();
   const userCategoriesQuery = useUserCategories();
+  const benchmarksQuery = useBenchmarks();
   const activeTruckId = activeTruck?.id ?? null;
   const trucksListQuery = useTrucksList();
   const maintRecordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
@@ -770,6 +813,40 @@ export default function Dashboard() {
     if (profitLoss.netIncome > 0) slices.push({ label: t('dashboard.moneyBreakdown.profit'), value: profitLoss.netIncome, color: colors.green });
     return slices;
   }, [profitLoss, t]);
+
+  // AI Insights (Session 9d item 6) — needsReviewCount/estValue mirrors
+  // CEO Mode's own "NEEDS REVIEW:" prefix count (CLAUDE.md invariant #14).
+  const needsReviewDeductions = useMemo(
+    () => (dedQuery.data ?? []).filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:')),
+    [dedQuery.data]
+  );
+  const profitAnalysisRollup = useMemo(
+    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], 30),
+    [settlementsQuery.data, fuelQuery.data]
+  );
+  const fuelBenchmark = useMemo(
+    () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,
+    [benchmarksQuery.data]
+  );
+  const insightCandidates = useMemo(
+    () =>
+      buildInsightCandidates({
+        fuelPctOfRevenue: profitAnalysisRollup.fuelPctOfRevenue,
+        fuelBenchmarkHigh: fuelBenchmark?.high ?? null,
+        monthlyRevenue: profitAnalysisRollup.revenue,
+        needsReviewCount: needsReviewDeductions.length,
+        needsReviewEstValue: needsReviewDeductions.reduce((sum, d) => sum + Number(d.amount ?? 0), 0),
+        costPerMile: stats?.cpm.costPerMile ?? null,
+        avgNetPerWeek: stats?.avgNetPerWeek ?? 0,
+      }),
+    [profitAnalysisRollup, fuelBenchmark, needsReviewDeductions, stats]
+  );
+  const dailyInsight = useMemo(() => selectDailyInsight(insightCandidates), [insightCandidates]);
+  function handleInsightViewDetails(type: Insight['type']) {
+    if (type === 'fuelBenchmark') router.push('/(tabs)/more/profit-analysis');
+    else if (type === 'needsReview') router.push('/(tabs)/deductions');
+    else router.push('/(tabs)/more/cash-flow');
+  }
 
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
@@ -1173,6 +1250,8 @@ export default function Dashboard() {
         />
 
         <FleetHealthCard score={fleetHealth.score} chips={fleetHealth.chips} onInfoPress={() => setHealthInfoOpen(true)} />
+
+        {dailyInsight && <AiInsightsCard insight={dailyInsight} onViewDetails={handleInsightViewDetails} />}
 
         <ModalSheet visible={healthInfoOpen} onClose={() => setHealthInfoOpen(false)}>
           <SheetTitle>{t('dashboard.fleetHealth.infoTitle')}</SheetTitle>
