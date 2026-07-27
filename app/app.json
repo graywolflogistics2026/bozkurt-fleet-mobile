@@ -8,12 +8,16 @@
     "scheme": "bozkurtfleetos",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.bozkurtfleetos.app",
+      "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
         "LSApplicationQueriesSchemes": ["instagram", "fb", "twitter", "linkedin", "tiktok", "snssdk1233"]
       }
     },
     "android": {
+      "package": "com.bozkurtfleetos.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

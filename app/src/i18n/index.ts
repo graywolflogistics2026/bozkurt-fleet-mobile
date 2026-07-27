@@ -2,7 +2,7 @@ import 'intl-pluralrules';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
-import { DEFAULT_LOCALE, isSupportedLocale, type SupportedLocale } from '@/src/i18n/config';
+import { DEFAULT_LOCALE, LANGUAGE_PICKER_ENABLED, isSupportedLocale, type SupportedLocale } from '@/src/i18n/config';
 import { clearCachedLocale, getCachedLocale, setCachedLocale } from '@/src/i18n/localeStorage';
 import en from '@/src/i18n/locales/en.json';
 import es from '@/src/i18n/locales/es.json';
@@ -23,16 +23,23 @@ const resources = {
 };
 
 // FIRST-LAUNCH RULE (owner decision 2026-07-09, PRODUCT DECISION): the app
-// opens in the device's OS language when it's one of the 5 supported ones;
+// opens in the device's OS language when it's one of the 7 supported ones;
 // anything else falls back to English. A manual choice made later in
 // Settings (cached here, and mirrored to profiles.locale) always wins over
 // the device language on every subsequent launch/device.
+//
+// LAUNCH SCOPE (owner decision 2026-07-26): while LANGUAGE_PICKER_ENABLED is
+// false the app is English-only — device-language auto-detect is disabled
+// entirely rather than silently switching a beta tester's phone into an
+// unfinished/placeholder translation (hi/uk still ship as English copies).
 export function detectDeviceLocale(): SupportedLocale {
+  if (!LANGUAGE_PICKER_ENABLED) return DEFAULT_LOCALE;
   const code = Localization.getLocales()[0]?.languageCode;
   return isSupportedLocale(code) ? code : DEFAULT_LOCALE;
 }
 
 export async function resolveInitialLocale(): Promise<SupportedLocale> {
+  if (!LANGUAGE_PICKER_ENABLED) return DEFAULT_LOCALE;
   const cached = await getCachedLocale();
   return cached ?? detectDeviceLocale();
 }

@@ -4,6 +4,12 @@ How to use: run these prompts **one session at a time, in order**. Don't combine
 After each session: review the diff, run the app/tests, commit, THEN move to the next.
 Claude Code understands Turkish too — feel free to ask follow-ups in Turkish mid-session.
 
+**ACTIVE SESSION: Session 10 — Store readiness** (owner decision 2026-07-26).
+Session 9c (Hindi/Ukrainian real translation) is POSTPONED to the
+post-launch v1.1 track — see its section below for the launch-scope
+decision. Session 9e (BOZKA AI design language, items 9e-A/B1–B10) is
+paused mid-task, not resumed this pass; continue it later on request.
+
 ---
 
 ## Session 0 — Orientation (run once, first)
@@ -524,13 +530,34 @@ their exact text), and legal documents (ToS stays English-only until
 attorney review).
 ```
 
-## Session 9c — Hindi/Ukrainian localization
+## Session 9c — Hindi/Ukrainian localization (POSTPONED to post-launch v1.1)
 
 ```
-Translate hi.json and uk.json from their current English-copy placeholder
-state into real Hindi and Ukrainian, key-for-key against en.json (use the
-parity-check script pattern from the multi-language session above to
-verify no key is missing/extra afterward).
+LAUNCH SCOPE DECISION (owner decision 2026-07-26, PRODUCT DECISION,
+binding): the app launches ENGLISH-ONLY to accelerate store readiness.
+This session is postponed to the post-launch v1.1 track — do not start it
+during Session 10 store prep. In the meantime:
+  - Settings > Language picker is hidden behind
+    `LANGUAGE_PICKER_ENABLED` (app/src/i18n/config.ts, default false) —
+    flip it to true once this session actually ships.
+  - Device-language auto-detect is disabled while the flag is off
+    (`detectDeviceLocale()`/`resolveInitialLocale()` always resolve to
+    'en'; `AuthContext.fetchProfile()`'s cross-device `profiles.locale`
+    sync is also gated on the flag).
+  - NOTHING is deleted: all 7 locale files, the i18n infra
+    (`app/src/i18n/*`), the glossary test, and RTL groundwork
+    (`app/src/i18n/rtl.ts`) stay exactly as they are — re-enabling
+    multi-language later is a one-line flip plus this session's real
+    hi/uk translation work, not a rebuild.
+  - The 7-locale key-parity test and the glossary test keep running in CI
+    regardless of the flag — they test the JSON files, not the picker UI,
+    so they must stay green every session even while the picker is hidden.
+
+Once resumed post-launch, translate hi.json and uk.json from their
+current English-copy placeholder state into real Hindi and Ukrainian,
+key-for-key against en.json (use the parity-check script pattern from the
+multi-language session above to verify no key is missing/extra
+afterward).
 
 CRITICAL: Ukrainian and Russian are distinct languages — translate uk.json
 independently from scratch (or from en.json), never by copying/adapting
@@ -1331,6 +1358,26 @@ PARITY.md marking each legacy feature done/partial/missing.
 
 ## Session 10 — Store readiness (when you're ready to ship)
 
+**BETA BUILD FIRST (owner decision 2026-07-26):** the first concrete
+Session 10 deliverable is a working beta build the owner's brother can
+install on his own phone as the first beta tester — everything else in
+this session is secondary until that build exists.
+
+- **Part 1 (build pipeline, do this first):** `eas.json` build profiles
+  (development/preview/production), `app.json` audit (bundle id/package
+  name, icon/splash placeholders — acceptable for beta, version/build
+  numbers, zero-location permission-manifest check per invariant #12),
+  then an exact ordered checklist for the owner to run the `eas` commands
+  themselves for iOS TestFlight + Android APK/internal testing (account
+  prerequisites and costs included).
+- **Part 2 (remaining Session 10 work, tracked as tasks below, not
+  blocking the beta build):** production store listings (EN metadata,
+  screenshots), final brand/name decision after trademark search, ToS/
+  Privacy attorney review, Supabase email-confirm + custom SMTP
+  re-enable, sentry-expo privacy audit (invariant #13 gate), fresh-account
+  walkthrough gate, delete-account/reset-data final live tests, rate-
+  limit/AI-cost caps review.
+
 ```
 Prepare for TestFlight/Play internal testing:
 - EAS build config for iOS and Android
@@ -1386,15 +1433,17 @@ triggers automatically on version bump, per Session 3).
       set, business balance $0, no truck until onboarding creates one, no
       pre-filled AI Advisor context beyond neutral "the owner-operator"/
       "this fleet" labels.
-- [ ] **Full RTL pass (owner, 2026-07-09 — binding, blocks store
-      submission):** switch to Arabic in Settings, restart, and walk every
-      screen in the app (not just the ones touched this session) checking
-      for clipped/overlapping/mis-mirrored layout. Also spot-check Spanish,
-      Russian, Turkish, Hindi, and Ukrainian for text overflow/truncation
-      on the longest translated strings (German-length problem, but for
-      these 5) — requires Session 9c (Hindi/Ukrainian localization) done
-      first, otherwise hi/uk are still English-copy placeholders and this
-      check is meaningless for them.
+- [x] **Full RTL pass — DEFERRED, not a beta blocker (owner decision
+      2026-07-26):** superseded by the English-only launch-scope decision
+      above — with `LANGUAGE_PICKER_ENABLED` off, the app only ever runs
+      in English/LTR for beta/store release, so there is no RTL surface to
+      break today. Re-instate this as a binding pre-launch gate once the
+      language picker flag flips back on (Session 9c done, real hi/uk
+      translations in place) — at that point, switch to Arabic in
+      Settings, restart, and walk every screen checking for clipped/
+      overlapping/mis-mirrored layout, and spot-check Spanish, Russian,
+      Turkish, Hindi, and Ukrainian for text overflow/truncation on the
+      longest translated strings.
 - [ ] **Privacy checklist (owner, 2026-07-10 — binding, blocks store
       submission):** confirm the built app requests zero location
       permissions on both iOS and Android (no `NSLocationWhenInUseUsageDescription`
@@ -1404,6 +1453,30 @@ triggers automatically on version bump, per Session 3).
       and "your financial data is yours — we don't access it without your
       permission" (invariant #13) in plain language, not just in this repo's
       internal docs.
+
+**Session 10 Part 2 (owner decision 2026-07-26 — recorded as the rest of
+Session 10's scope, not blocking the Part 1 beta build):**
+- [ ] Production store listings — EN metadata (title, subtitle,
+      description, keywords) and screenshots for both App Store Connect
+      and Google Play Console.
+- [ ] Final brand/name decision after a trademark search (working name
+      "BOZKA AI" / "Bozkurt Fleet OS" not yet cleared).
+- [ ] ToS/Privacy attorney review of `docs/TERMS_OF_USE_DRAFT.md` and the
+      Privacy Policy page from this session (both currently
+      English-only, unreviewed drafts).
+- [ ] Supabase: re-enable "Confirm email" (see the checklist item above)
+      AND re-enable/verify custom SMTP for auth emails (disabled/default
+      during dev per Session 3's note above).
+- [ ] sentry-expo (or equivalent crash reporting) privacy audit against
+      invariant #13 before wiring it in — no per-user financial data or
+      PII in breadcrumbs/error context.
+- [ ] Fresh-account walkthrough gate (see the checklist item above) —
+      run for real once a production build exists, not just in dev.
+- [ ] Delete-account / reset-data final live tests against the real
+      Supabase project (not just unit tests of `callDeleteAccount`/
+      `callResetData`).
+- [ ] Rate-limit / AI-cost caps review for `ai-import`/`ai-advisor`
+      Edge Functions before public signups are possible.
 ```
 
 ## Backlog (parked features — do not start without a separate, explicit owner decision)

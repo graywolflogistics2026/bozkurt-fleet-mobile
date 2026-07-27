@@ -11,6 +11,16 @@ export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 export const DEFAULT_LOCALE: SupportedLocale = 'en';
 
+// LAUNCH SCOPE (owner decision 2026-07-26, PRODUCT DECISION): the app ships
+// its first beta/store release English-only. Session 9c (real Hindi/
+// Ukrainian translation) is postponed to the post-launch v1.1 track; this
+// flag just hides the Settings > Language picker and disables device-
+// language auto-detect — it does NOT delete any i18n infrastructure, locale
+// file, the glossary test, or RTL groundwork, all of which stay intact so
+// re-enabling multi-language later is a one-line flip, not a rebuild. Flip
+// to true once 9c ships.
+export const LANGUAGE_PICKER_ENABLED = false;
+
 export const LOCALE_LABELS: Record<SupportedLocale, string> = {
   en: 'English',
   es: 'Español',

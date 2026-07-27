@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
 import { TOS_VERSION } from '@/src/config/termsOfUse';
 import { withTimeout } from '@/src/lib/withTimeout';
-import { isSupportedLocale } from '@/src/i18n/config';
+import { isSupportedLocale, LANGUAGE_PICKER_ENABLED } from '@/src/i18n/config';
 import { setAppLocale } from '@/src/i18n';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // in Settings is written to profiles.locale, and always wins over this
     // device's own cache/OS language on every subsequent sign-in.
     const remoteLocale = result?.data?.locale;
-    if (isSupportedLocale(remoteLocale)) {
+    if (LANGUAGE_PICKER_ENABLED && isSupportedLocale(remoteLocale)) {
       await setAppLocale(remoteLocale);
       applyLocaleDirection(remoteLocale);
     }
