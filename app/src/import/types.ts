@@ -42,6 +42,12 @@ export type ChargebackType =
   | 'admin_processing_fee'
   | 'factoring_fee'
   | 'dispatch_fee'
+  // Meals & advance repayments (owner decision 2026-07-17, mirrors web
+  // v2026.07.17-D): a plain repayment of a PRIOR advance (e.g. an
+  // extended-warranty or company-store credit) — loan principal, distinct
+  // from `cash_advance` (a NEW advance being deducted back) and
+  // `loan_payment` (a routed truck/equipment loan payment).
+  | 'advance_repayment'
   | 'other_chargeback';
 
 export type ExtractedRevenueItem = { desc?: string; order?: string; amount?: number; incomeType?: IncomeType };

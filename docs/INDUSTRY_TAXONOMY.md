@@ -60,6 +60,7 @@ double-counted.
 | `trailer_fee` | Trailer rental fee charged BY the carrier |
 | `cash_advance` | A cash advance, deducted back |
 | `loan_payment` | A loan payment routed through the settlement |
+| `advance_repayment` | Repayment of a prior advance (e.g. extended-warranty or company-store advance) — loan principal, not an expense. If the line instead pays for a reimbursed service (matched by a corresponding `reimbursement` income line), classify it under that normal category/`income_type` instead, not this value (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
 | `drug_consortium` | DOT drug/alcohol testing consortium fee |
 | `tolls_transponder` | Toll transponder fee/rental |
 | `admin_processing_fee` | Generic administrative/processing fee |
@@ -107,6 +108,8 @@ are left as-is (free text, no migration) and still display fine.
 | Utilities & Subscriptions | Fully deductible |
 | Misc | Fully deductible — catch-all for a real business expense that doesn't fit a more specific category |
 | Other | Manual-entry / low-confidence catch-all (see docType `'other'`, CLAUDE.md invariant #14) — NEVER auto-assigned by `guessCategory()`, only ever a manual pick or an AI `suggestedCategory` string that happens not to match a canonical name |
+| Meals (per diem covered) | NOT deductible — restaurant/cafe/food-purchase lines are covered by the per diem deduction already (CLAUDE.md invariant #9); `deductions.tax_deductible` defaults to `false` for this category but is a smart default, freely user-editable (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
+| Advance Repayment | NOT deductible — loan principal (repaying a prior advance), same smart-default/editable treatment as Meals above (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
 
 Old app categories fold in as follows (renamed, not duplicated):
 `Insurance` → `Insurance—Truck` · `Licensing & Permits` → `Permits, Licenses
@@ -195,3 +198,12 @@ whoever builds it doesn't have to re-derive the rule from first principles.
   `deductions` AND `maintenance_records`/`fuel_purchases`/`loans` into one
   rollup, applying the reimbursement-offset rule) — PROMPTS.md Session 9b,
   not built yet.
+- ✅ Meals & advance repayments (owner decision 2026-07-17, mirrors web
+  v2026.07.17-D): restaurant-purchase detection (`isRestaurantPurchase()`)
+  and the `advance_repayment` chargeback type both default
+  `deductions.tax_deductible` to `false` via `defaultTaxDeductible()` — a
+  smart default, not a lock; excluded from the tax engine, Accountant
+  Package, and Dashboard deduction totals (`tax_deductible !== false`
+  filter), but NOT from the Operating P&L (`profitLoss.ts`), which
+  intentionally counts every real cash outflow including non-deductible
+  ones. See CLAUDE.md invariant #1 and `app/src/import/category.ts`.

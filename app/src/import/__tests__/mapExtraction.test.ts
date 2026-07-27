@@ -109,6 +109,38 @@ describe('mapSettlement', () => {
     const r = mapSettlement(d, 'user-1', 'truck-1');
     expect(r.deductions[0].category).toBe('Fixed');
   });
+
+  it('every withheld deduction row is tax_deductible:false, regardless of category (defense in depth for CLAUDE.md invariant #1)', () => {
+    const r = mapSettlement(extraction, 'user-1', 'truck-1');
+    expect(r.deductions.every((x) => x.tax_deductible === false)).toBe(true);
+  });
+
+  it('a restaurant/food chargeback description wins over chargebackType/category (meals & advance repayments, owner decision 2026-07-17)', () => {
+    const d: Extraction = {
+      docType: 'settlement',
+      date: '2026-06-27',
+      settlement: {
+        weekEnding: '2026-06-27',
+        deductions: [{ code: 'X', desc: 'Waffle House charge', amount: 18, chargebackType: 'cash_advance' }],
+      },
+    };
+    const r = mapSettlement(d, 'user-1', 'truck-1');
+    expect(r.deductions[0].category).toBe('Meals (per diem covered)');
+    expect(r.deductions[0].tax_deductible).toBe(false);
+  });
+
+  it('maps chargebackType "advance_repayment" to the Advance Repayment category', () => {
+    const d: Extraction = {
+      docType: 'settlement',
+      date: '2026-06-27',
+      settlement: {
+        weekEnding: '2026-06-27',
+        deductions: [{ code: 'ADV', desc: 'Weekly advance repayment', amount: 30, chargebackType: 'advance_repayment' }],
+      },
+    };
+    const r = mapSettlement(d, 'user-1', 'truck-1');
+    expect(r.deductions[0].category).toBe('Advance Repayment');
+  });
 });
 
 describe('mapFuel', () => {
@@ -285,6 +317,42 @@ describe('mapPurchase', () => {
     };
     expect(mapPurchase(d, 'user-1')).toHaveLength(1);
   });
+
+  it('a real item is tax_deductible:true by default', () => {
+    const d: Extraction = {
+      docType: 'amazon',
+      date: '2026-06-28',
+      vendor: 'Home Depot',
+      purchase: { items: [{ name: 'Milwaukee Drill', qty: 1, price: 150 }], total: 150 },
+    };
+    const [line] = mapPurchase(d, 'user-1');
+    expect(line.insert.tax_deductible).toBe(true);
+  });
+
+  it('a restaurant store name gets category Meals (per diem covered) and tax_deductible:false (meals & advance repayments, owner decision 2026-07-17)', () => {
+    const d: Extraction = {
+      docType: 'amazon',
+      date: '2026-06-28',
+      vendor: 'Waffle House',
+      purchase: { items: [{ name: 'Breakfast combo', qty: 1, price: 12.5 }], total: 12.5 },
+    };
+    const [line] = mapPurchase(d, 'user-1');
+    expect(line.insert.category).toBe('Meals (per diem covered)');
+    expect(line.insert.tax_deductible).toBe(false);
+  });
+
+  it('the AI-flagged whole-receipt taxDeductible:false forces every item to Meals (per diem covered), even with an unrecognized restaurant name', () => {
+    const d: Extraction = {
+      docType: 'amazon',
+      date: '2026-06-28',
+      vendor: "Joe's Kitchen",
+      taxDeductible: false,
+      purchase: { items: [{ name: 'Lunch special', qty: 1, price: 15 }], total: 15 },
+    };
+    const [line] = mapPurchase(d, 'user-1');
+    expect(line.insert.category).toBe('Meals (per diem covered)');
+    expect(line.insert.tax_deductible).toBe(false);
+  });
 });
 
 describe('mapGenericDeduction', () => {
@@ -312,6 +380,16 @@ describe('mapGenericDeduction', () => {
   it('falls back to category "Other" for docType "other" when no suggestedCategory is given', () => {
     const d: Extraction = { docType: 'other', date: '2026-06-10', totalAmount: 10, summary: 'Mystery' };
     expect(mapGenericDeduction(d, 'user-1')).toMatchObject({ description: 'NEEDS REVIEW: Mystery', category: 'Other' });
+  });
+
+  it('is tax_deductible:false when the resolved category is Advance Repayment (meals & advance repayments, owner decision 2026-07-17)', () => {
+    const d: Extraction = { docType: 'toll', date: '2026-06-10', totalAmount: 42, summary: 'Weekly repayment' };
+    expect(mapGenericDeduction(d, 'user-1', 'Advance Repayment').tax_deductible).toBe(false);
+  });
+
+  it('is tax_deductible:true for a normal category', () => {
+    const d: Extraction = { docType: 'toll', date: '2026-06-10', totalAmount: 42, summary: 'Toll bill' };
+    expect(mapGenericDeduction(d, 'user-1').tax_deductible).toBe(true);
   });
 });
 

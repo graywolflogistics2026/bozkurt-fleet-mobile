@@ -397,6 +397,13 @@ export default function Import() {
               </View>
             )}
 
+            {(extraction.docType === 'store' || extraction.docType === 'amazon') && extraction.taxDeductible === false && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.mealsNoteTitle')}</Text>
+                <MutedText>{t('importScreen.mealsNoteBody')}</MutedText>
+              </View>
+            )}
+
             <View style={{ marginBottom: spacing.sm }}>
               <MutedText>{t('importScreen.dateLabel', { date: extraction.date ?? '—' })}</MutedText>
               <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>

@@ -8,7 +8,7 @@ export type FleetStats = {
   grossRevenue: number;
   netRevenue: number;
   totalDeductions: number; // ALL deductions (withheld + out-of-pocket) — legacy rDash()'s `ded`
-  outOfPocketDeductions: number; // source != 'settlement' — feeds the tax engine's net profit
+  outOfPocketDeductions: number; // source != 'settlement' AND tax_deductible != false — feeds the tax engine's net profit
   totalMiles: number;
   settlementCount: number;
   avgNetPerWeek: number; // legacy "Avg Net/Week" dashboard card — direct-deposit average
@@ -32,7 +32,7 @@ export async function fetchFleetStats(userId: string, truckId: string | null): P
 
   const { data: deductions, error: dedError } = await supabase
     .from('deductions')
-    .select('amount, source')
+    .select('amount, source, tax_deductible')
     .eq('user_id', userId);
   if (dedError) throw dedError;
 
@@ -45,7 +45,7 @@ export async function fetchFleetStats(userId: string, truckId: string | null): P
   const dedRows = deductions ?? [];
   const totalDeductions = dedRows.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
   const outOfPocketDeductions = dedRows
-    .filter((d) => d.source !== 'settlement')
+    .filter((d) => d.source !== 'settlement' && d.tax_deductible !== false)
     .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
 
   return {
@@ -93,7 +93,7 @@ export async function fetchDriverStats(userId: string, driverId: string): Promis
 
   const { data: deductions, error: dedError } = await supabase
     .from('deductions')
-    .select('amount, source')
+    .select('amount, source, tax_deductible')
     .eq('user_id', userId);
   if (dedError) throw dedError;
 
@@ -106,7 +106,7 @@ export async function fetchDriverStats(userId: string, driverId: string): Promis
   const dedRows = deductions ?? [];
   const totalDeductions = dedRows.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
   const outOfPocketDeductions = dedRows
-    .filter((d) => d.source !== 'settlement')
+    .filter((d) => d.source !== 'settlement' && d.tax_deductible !== false)
     .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
 
   return {

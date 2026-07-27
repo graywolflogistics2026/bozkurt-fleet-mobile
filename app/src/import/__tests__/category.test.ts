@@ -2,10 +2,12 @@ import {
   applyScheduleCDefault,
   CANONICAL_CATEGORIES,
   DEFAULT_SCHEDULE_C_BUCKET,
+  defaultTaxDeductible,
   detectMaintType,
   getCatNote,
   guessCategory,
   isPersonalPayment,
+  isRestaurantPurchase,
   mergeCategoryOptions,
   toDbServiceType,
 } from '@/src/import/category';
@@ -184,6 +186,51 @@ describe('mergeCategoryOptions (custom categories, owner decision 2026-07-10)', 
   it('returns just the canonical list when there are no custom categories', () => {
     expect(mergeCategoryOptions('expense', [])).toEqual([...CANONICAL_CATEGORIES]);
     expect(mergeCategoryOptions('income', [])).toEqual([]);
+  });
+});
+
+describe('isRestaurantPurchase (meals & advance repayments, owner decision 2026-07-17)', () => {
+  it('matches known restaurant/food-purchase names', () => {
+    expect(isRestaurantPurchase('Waffle House')).toBe(true);
+    expect(isRestaurantPurchase("Bob's Bar & Grill")).toBe(true);
+    expect(isRestaurantPurchase('Pilot Travel Center Restaurant')).toBe(true);
+    expect(isRestaurantPurchase('Downtown Diner')).toBe(true);
+    expect(isRestaurantPurchase('Taco Bell drive-thru')).toBe(true);
+  });
+
+  it('does NOT match a truck GRILLE part (equipment, never a meal)', () => {
+    expect(isRestaurantPurchase('Freightliner Cascadia grille assembly')).toBe(false);
+    expect(isRestaurantPurchase('Chrome grille insert')).toBe(false);
+    expect(isRestaurantPurchase('Front grille bracket')).toBe(false);
+  });
+
+  it('returns false for unrelated/empty text', () => {
+    expect(isRestaurantPurchase('Milwaukee Drill')).toBe(false);
+    expect(isRestaurantPurchase(undefined)).toBe(false);
+  });
+});
+
+describe('guessCategory restaurant detection (meals & advance repayments, owner decision 2026-07-17)', () => {
+  it('tags a restaurant store name as Meals (per diem covered)', () => {
+    expect(guessCategory('Combo #3', 'Waffle House')).toBe('Meals (per diem covered)');
+  });
+
+  it('does not misclassify a truck grille part as a meal', () => {
+    expect(guessCategory('Freightliner Cascadia grille assembly', 'AutoZone')).toBe('Tools & Equipment');
+  });
+});
+
+describe('defaultTaxDeductible (meals & advance repayments, owner decision 2026-07-17)', () => {
+  it('is false for Meals (per diem covered) and Advance Repayment', () => {
+    expect(defaultTaxDeductible('Meals (per diem covered)')).toBe(false);
+    expect(defaultTaxDeductible('Advance Repayment')).toBe(false);
+  });
+
+  it('is true for every other category, including null/undefined', () => {
+    expect(defaultTaxDeductible('Fuel & DEF')).toBe(true);
+    expect(defaultTaxDeductible('Misc')).toBe(true);
+    expect(defaultTaxDeductible(null)).toBe(true);
+    expect(defaultTaxDeductible(undefined)).toBe(true);
   });
 });
 

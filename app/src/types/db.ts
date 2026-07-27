@@ -164,7 +164,11 @@ export type FuelPurchaseInsert = Partial<Omit<FuelPurchase, 'id' | 'created_at' 
 export type FuelPurchaseUpdate = Partial<Omit<FuelPurchase, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
 // Tax rule (net-pay model, CLAUDE.md invariant #1): deductible = rows where
-// source !== 'settlement'. Withheld rows are display-only.
+// source !== 'settlement' AND tax_deductible is not false. Withheld rows are
+// display-only; tax_deductible additionally excludes an out-of-pocket row
+// that is a Meal (per diem already covers it) or an Advance Repayment (loan
+// principal) — a smart default set at save time, editable per row like any
+// other field (docs/PENDING_SQL.md §33, owner decision 2026-07-17).
 export type Deduction = {
   id: string;
   user_id: string;
@@ -181,6 +185,7 @@ export type Deduction = {
   source: 'settlement' | 'import' | 'manual';
   warranty_years: number | null; // docs/PENDING_SQL.md §7 — halves ok (e.g. 2.5)
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  tax_deductible: boolean; // docs/PENDING_SQL.md §33 (meals & advance repayments, owner decision 2026-07-17)
   created_at: string;
   updated_at: string;
 };

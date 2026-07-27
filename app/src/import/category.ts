@@ -46,9 +46,43 @@ export const CANONICAL_CATEGORIES = [
   'Association Dues',
   'Lease & Rent',
   'Utilities & Subscriptions',
+  // Meals & advance repayments (owner decision 2026-07-17, mirrors web
+  // v2026.07.17-D) — both NON-deductible by default (NON_DEDUCTIBLE_CATEGORIES
+  // below): per diem already covers meals (never double-book them as a
+  // separate deduction), and an advance repayment is loan principal, not a
+  // new expense. Still real, pickable categories (a standalone/imported row
+  // can land here even when it isn't settlement-withheld), just excluded
+  // from tax deductible totals by default — the user can flip that per row.
+  'Meals (per diem covered)',
+  'Advance Repayment',
   'Misc',
   'Other',
 ] as const;
+
+// docs/PENDING_SQL.md §33 (meals & advance repayments, owner decision
+// 2026-07-17) — categories that default a deduction row's tax_deductible to
+// false at save time. SMART DEFAULT, NOT A LOCK: the user can still flip
+// tax_deductible per row regardless of category, and that edit is never
+// re-overridden by a migration or a re-import of the same document.
+export const NON_DEDUCTIBLE_CATEGORIES: readonly string[] = ['Meals (per diem covered)', 'Advance Repayment'];
+
+export function defaultTaxDeductible(category: string | null | undefined): boolean {
+  return !NON_DEDUCTIBLE_CATEGORIES.includes(category ?? '');
+}
+
+// Restaurant/food-purchase detection (owner decision 2026-07-17) — truck-stop
+// restaurants, carrier point-of-sale meals, cafes, diners, and a "grill" that
+// IS a restaurant (e.g. "Bob's Bar & Grill", "Waffle House"). CAUTION: a
+// truck GRILLE (the tractor's front-end part/assembly) is EQUIPMENT, not a
+// meal — this regex deliberately never matches a bare "grill"/"grille" on
+// its own, only within an unambiguous restaurant phrase, so a line like
+// "Freightliner Cascadia grille assembly" is never misclassified.
+const RESTAURANT_RE =
+  /\brestaurant\b|\bcafe\b|\bcaf[eé]\b|\bdiner\b|pizzeria|steakhouse|\bbuffet\b|bar\s*&\s*grill|\bgrill\s*(house|room|shack)\b|\bbbq\b|barbeque|\btaco bell\b|\bsubway\b|\bmcdonald'?s?\b|burger king|wendy'?s|chili'?s|cracker barrel|waffle house|denny'?s|\bihop\b|popeyes|\bkfc\b|pizza hut|domino'?s|papa john'?s|starbucks|dunkin|food truck|drive-?thru|fast food|\bcatering\b|\beatery\b|\bbistro\b/i;
+
+export function isRestaurantPurchase(text: string | undefined): boolean {
+  return RESTAURANT_RE.test(text ?? '');
+}
 
 // docs/INDUSTRY_TAXONOMY.md §A chargeback_type enum → a display category
 // for the settlement-withheld deduction row (app/src/import/mapExtraction.ts
@@ -75,6 +109,7 @@ export const CHARGEBACK_CATEGORY_LABEL: Record<string, string> = {
   admin_processing_fee: 'Bank & Merchant Fees',
   factoring_fee: 'Dispatch & Factoring Fees',
   dispatch_fee: 'Dispatch & Factoring Fees',
+  advance_repayment: 'Advance Repayment',
   other_chargeback: 'Misc',
 };
 
@@ -132,6 +167,7 @@ export function guessCategory(name: string | undefined, store: string | undefine
   const s = (store ?? '').toLowerCase();
   const combined = n + ' ' + s;
 
+  if (isRestaurantPurchase(combined)) return 'Meals (per diem covered)';
   if (/comdata|efs\b|fuelman|fuel card|def\b|diesel exhaust fluid/.test(combined)) return 'Fuel & DEF';
   if (/prepass|pre-pass|ezpass|e-zpass|drivewyze|cat scale|weigh station/.test(combined)) return 'Tolls & Scales';
   if (/\booida\b|owner-?operator independent drivers|association due|union due|membership due/.test(combined))

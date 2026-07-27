@@ -2,7 +2,8 @@
 
 **STATUS (2026-07-12): sections 1-27 have all been run against the live DB.
 Section 28 (added this pass, PROMPTS.md Session 9b onboarding wizard) is
-NOT yet run — see its checklist below.**
+NOT yet run — see its checklist below. Section 33 (added 2026-07-17, meals
+& advance repayments) is also NOT yet run.**
 Sections 11-24 were applied together in one transaction on 2026-07-11 via a
 combined SQL block (generated from this file, run in the Supabase SQL
 editor). This file started as a forward-looking "run this next" list; it's kept now
@@ -1029,6 +1030,30 @@ alter table profiles add column dashboard_sections_collapsed jsonb;
 No RLS change needed — `profiles` is already owner-scoped.
 
 - [x] 32a run (add profiles.dashboard_sections_collapsed column)
+
+---
+
+## 33. deductions.tax_deductible (meals & advance repayments, owner decision 2026-07-17, mirrors web v2026.07.17-D) — NOT YET APPLIED
+
+A settlement-withheld row (`source='settlement'`) is already excluded from
+every tax total (CLAUDE.md invariant #1's net-pay model, `source !==
+'settlement'` filter) — but a Meals or Advance Repayment line can also
+arrive as an out-of-pocket/imported row (`source='import'`/`'manual'`,
+e.g. a standalone restaurant receipt or a company-store advance repaid
+via a tracked document), which that filter never catches. This column is
+a SMART DEFAULT, not a lock: `guessCategory()`/the ai-import prompt set it
+false for "Meals (per diem covered)"/"Advance Repayment" rows at save
+time, but the user can flip it per row like any other field on the
+Deductions screen, and the edit sticks (never re-overridden by a
+migration or a re-import of the same document).
+
+```sql
+alter table deductions add column tax_deductible boolean not null default true;
+```
+
+No RLS change needed — `deductions` is already owner-scoped.
+
+- [ ] 33a run (add deductions.tax_deductible column)
 
 ---
 

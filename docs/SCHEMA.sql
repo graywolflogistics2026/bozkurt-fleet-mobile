@@ -399,10 +399,19 @@ create table deductions (
                 check (source in ('settlement','import','manual')),
   warranty_years numeric(4,1),                -- added retroactively, PENDING_SQL.md §7 — halves ok (e.g. 2.5)
   tags         text,                          -- PENDING_SQL.md §22
+  -- PENDING_SQL.md §33 (meals & advance repayments, owner decision
+  -- 2026-07-17) — smart default, not a lock: guessCategory()/ai-import set
+  -- this false for "Meals (per diem covered)"/"Advance Repayment" rows,
+  -- the user can edit it per row like any other field and the edit sticks.
+  tax_deductible boolean not null default true,
   created_at   timestamptz default now()
 );
--- Tax rule (net-pay model): deductible = rows where source != 'settlement'.
--- Withheld rows are display-only; already reflected in settlements.net.
+-- Tax rule (net-pay model): deductible = rows where source != 'settlement'
+-- AND tax_deductible = true. Withheld rows are display-only; already
+-- reflected in settlements.net. tax_deductible additionally excludes an
+-- out-of-pocket/imported row that is a Meal (per diem already covers it)
+-- or an Advance Repayment (loan principal), even though its source isn't
+-- 'settlement'.
 
 -- ---------- Capital transactions (UNIFIED: was CAPITAL.draws + extraContributions) ----------
 create table capital_transactions (

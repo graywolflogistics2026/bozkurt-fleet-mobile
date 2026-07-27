@@ -92,8 +92,11 @@ export function buildAccountantPackage(
 
   for (const d of deductions) {
     // Settlement-withheld rows are already reflected in net pay — never
-    // re-counted as a tax deduction (CLAUDE.md invariant #1).
-    if (d.source === 'settlement') continue;
+    // re-counted as a tax deduction (CLAUDE.md invariant #1). A row flagged
+    // tax_deductible=false (Meals/Advance Repayment — docs/PENDING_SQL.md
+    // §33, owner decision 2026-07-17) is excluded the same way even when
+    // it's an out-of-pocket/imported row, not a settlement one.
+    if (d.source === 'settlement' || d.tax_deductible === false) continue;
     add(resolveScheduleCBucket(d.category, userCategories), Number(d.amount ?? 0));
   }
   for (const m of maintenanceRecords) {

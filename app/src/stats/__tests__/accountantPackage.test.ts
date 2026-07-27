@@ -19,6 +19,7 @@ function deduction(overrides: Partial<Deduction>): Deduction {
     source: 'manual',
     warranty_years: null,
     tags: null,
+    tax_deductible: true,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -154,6 +155,27 @@ describe('buildAccountantPackage', () => {
     );
     expect(result.scheduleC).toEqual([{ category: 'Fuel & DEF', amount: 150 }]);
     expect(result.totalExpenses).toBe(150);
+  });
+
+  it('excludes a tax_deductible:false row from Schedule C even when source is not settlement (meals & advance repayments, owner decision 2026-07-17)', () => {
+    const result = buildAccountantPackage(
+      [
+        deduction({ category: 'Fuel & DEF', amount: 100, source: 'manual' }),
+        deduction({ category: 'Meals (per diem covered)', amount: 25, source: 'import', tax_deductible: false }),
+        deduction({ category: 'Advance Repayment', amount: 60, source: 'import', tax_deductible: false }),
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      noUserCategories,
+      0,
+      0,
+      todayIso
+    );
+    expect(result.scheduleC).toEqual([{ category: 'Fuel & DEF', amount: 100 }]);
+    expect(result.totalExpenses).toBe(100);
   });
 
   it('folds maintenance_records into Maintenance & Repairs alongside deductions', () => {

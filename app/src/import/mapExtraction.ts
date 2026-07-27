@@ -1,4 +1,12 @@
-import { CHARGEBACK_CATEGORY_LABEL, detectMaintType, getCatNote, guessCategory, toDbServiceType } from '@/src/import/category';
+import {
+  CHARGEBACK_CATEGORY_LABEL,
+  defaultTaxDeductible,
+  detectMaintType,
+  getCatNote,
+  guessCategory,
+  isRestaurantPurchase,
+  toDbServiceType,
+} from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import type {
   ComplianceItemInsert,
@@ -140,6 +148,13 @@ export function mapSettlement(
   // docs/INDUSTRY_TAXONOMY.md §A — chargebackType (when the AI classified
   // it) takes priority over the older loose `category` string; both are
   // display-only, never re-counted as a tax deduction (source='settlement').
+  // Meals & advance repayments (owner decision 2026-07-17): a restaurant/
+  // food-purchase description (a truck-stop restaurant charge, a carrier
+  // point-of-sale meal) wins over whatever category/chargebackType the AI
+  // guessed, since these are common trucking-tax mistakes to mislabel.
+  // tax_deductible is set false on every withheld row here too (defense in
+  // depth) even though source='settlement' already excludes it from every
+  // tax total on its own.
   const deductions: DeductionInsert[] = (s.deductions ?? []).map((x) => ({
     user_id: userId,
     settlement_id: null,
@@ -148,9 +163,12 @@ export function mapSettlement(
     code: x.code ?? null,
     description: x.desc ?? null,
     amount: num(x.amount),
-    category: (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
+    category: isRestaurantPurchase(x.desc)
+      ? 'Meals (per diem covered)'
+      : (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
     payment_method: 'Settlement Withheld',
     source: 'settlement',
+    tax_deductible: false,
   }));
 
   const maintenance: MaintenanceRecordInsert[] = (s.maintenance ?? []).map((m) => ({
@@ -321,9 +339,19 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
       payment_method: payMethod,
       source: 'import',
       warranty_years: warrantyYears,
+      tax_deductible: defaultTaxDeductible(category),
     },
     isPersonalPayment: personal,
   });
+
+  // Meals & advance repayments (owner decision 2026-07-17): the AI's
+  // document-level taxDeductible flag (already extracted for every docType,
+  // app/src/import/types.ts Extraction.taxDeductible) is the fallback signal
+  // for a standalone restaurant receipt whose store/item names don't match
+  // isRestaurantPurchase()'s keyword list (e.g. an independent diner with no
+  // recognizable chain name) — when the AI has flagged the whole document
+  // non-deductible, every real item on it is a meal, not a guessed category.
+  const wholeReceiptIsMeal = d.taxDeductible === false;
 
   // Receipt with ONLY service/fee lines — nothing to fold into. Keep them
   // as their own row(s), flagged for manual review (CLAUDE.md invariant #3).
@@ -368,7 +396,7 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
   }
 
   return realItems.map((item) => {
-    const cat = guessCategory(item.name, storeName);
+    const cat = wholeReceiptIsMeal ? 'Meals (per diem covered)' : guessCategory(item.name, storeName);
     const note = getCatNote(cat);
     const qtyLabel = item.qty > 1 ? `${item.qty}× ` : '';
     const finalCost = Number((item.cost + item.extra).toFixed(2));
@@ -503,13 +531,19 @@ export function mapCompliance(d: Extraction, userId: string): ComplianceItemInse
 // picked/created a category before saving, that wins over the AI's guess.
 export function mapGenericDeduction(d: Extraction, userId: string, categoryOverride?: string | null): DeductionInsert {
   const isOther = d.docType === 'other';
+  const category = categoryOverride || (isOther && d.suggestedCategory) || 'Other';
   return {
     user_id: userId,
     ded_date: d.date ?? null,
     code: 'OTHER',
     description: isOther ? `NEEDS REVIEW: ${d.summary || d.suggestedCategory || 'Document'}` : d.summary || 'Document',
     amount: num(d.totalAmount),
-    category: categoryOverride || (isOther && d.suggestedCategory) || 'Other',
+    category,
     source: 'import',
+    // Meals & advance repayments (owner decision 2026-07-17): a smart
+    // default from whatever category this row actually lands on (user's
+    // categoryOverride wins over the AI's suggestedCategory) — never a lock,
+    // still editable per row on the Deductions screen.
+    tax_deductible: defaultTaxDeductible(category),
   };
 }

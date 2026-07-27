@@ -8,6 +8,7 @@ import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocume
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
+import { defaultTaxDeductible } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS, type PaymentMethod } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useFormatters } from '@/src/i18n/format';
@@ -54,6 +55,11 @@ function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; o
           {x.payment_method ?? '—'}
           {personal ? ` ${t('deductions.personalContributionTag')}` : ''}
         </Text>
+        {x.tax_deductible === false && (
+          <Text style={{ color: colors.muted, fontSize: typography.size.xs, marginTop: 2, fontWeight: '700' }}>
+            {t('deductions.nonDeductibleTag')}
+          </Text>
+        )}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.amount)}</Text>
@@ -127,6 +133,7 @@ export default function Deductions() {
   const [editCategory, setEditCategory] = useState('');
   const [editPayment, setEditPayment] = useState('');
   const [editAmount, setEditAmount] = useState('');
+  const [editTaxDeductible, setEditTaxDeductible] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [adding, setAdding] = useState(false);
@@ -135,7 +142,17 @@ export default function Deductions() {
   const [addPayment, setAddPayment] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
   const [addAmount, setAddAmount] = useState('');
   const [addDate, setAddDate] = useState('');
+  const [addTaxDeductible, setAddTaxDeductible] = useState(true);
   const [addSaving, setAddSaving] = useState(false);
+
+  // Meals & advance repayments (owner decision 2026-07-17): a smart default
+  // from the picked category, recomputed only while the row is still being
+  // composed (new "add" flow) — never re-applied to an EXISTING row just
+  // because its category changed, so a user's own deliberate edit sticks.
+  function handleAddCategoryChange(category: string) {
+    setAddCategory(category);
+    setAddTaxDeductible(defaultTaxDeductible(category));
+  }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -156,6 +173,7 @@ export default function Deductions() {
     setEditCategory(x.category || 'Misc');
     setEditPayment(normalizePaymentMethod(x.payment_method));
     setEditAmount(String(x.amount ?? 0));
+    setEditTaxDeductible(x.tax_deductible !== false);
   }
 
   function closeEdit() {
@@ -189,7 +207,7 @@ export default function Deductions() {
 
       await updateDeduction.mutateAsync({
         id: editing.id,
-        values: { category: editCategory, payment_method: editPayment, amount },
+        values: { category: editCategory, payment_method: editPayment, amount, tax_deductible: editTaxDeductible },
       });
       await applyContributionSync(userId, editing.id, plan);
       await invalidateFinancialData(queryClient);
@@ -207,6 +225,7 @@ export default function Deductions() {
     setAddPayment(PAYMENT_METHODS[0]);
     setAddAmount('');
     setAddDate(new Date().toISOString().slice(0, 10));
+    setAddTaxDeductible(true);
     setAdding(true);
   }
 
@@ -237,6 +256,7 @@ export default function Deductions() {
         amount,
         ded_date: addDate || null,
         source: 'manual',
+        tax_deductible: addTaxDeductible,
       });
 
       if (personal && amount > 0) {
@@ -339,6 +359,14 @@ export default function Deductions() {
         <CategoryPicker kind="expense" value={editCategory} onChange={setEditCategory} />
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.taxDeductibleLabel')}</MutedText>
+        </View>
+        <View style={{ flexDirection: 'row' }}>
+          <Pill label={t('deductions.taxDeductibleYes')} selected={editTaxDeductible} onPress={() => setEditTaxDeductible(true)} />
+          <Pill label={t('deductions.taxDeductibleNo')} selected={!editTaxDeductible} onPress={() => setEditTaxDeductible(false)} />
+        </View>
+
+        <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.amountLabel')}</MutedText>
         </View>
         <Field keyboardType="numeric" value={editAmount} onChangeText={setEditAmount} placeholder="0.00" />
@@ -382,7 +410,15 @@ export default function Deductions() {
         <View style={{ marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.categoryLabel')}</MutedText>
         </View>
-        <CategoryPicker kind="expense" value={addCategory} onChange={setAddCategory} />
+        <CategoryPicker kind="expense" value={addCategory} onChange={handleAddCategoryChange} />
+
+        <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.taxDeductibleLabel')}</MutedText>
+        </View>
+        <View style={{ flexDirection: 'row' }}>
+          <Pill label={t('deductions.taxDeductibleYes')} selected={addTaxDeductible} onPress={() => setAddTaxDeductible(true)} />
+          <Pill label={t('deductions.taxDeductibleNo')} selected={!addTaxDeductible} onPress={() => setAddTaxDeductible(false)} />
+        </View>
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.dateLabel')}</MutedText>
