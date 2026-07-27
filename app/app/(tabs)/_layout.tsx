@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Text, View, useWindowDimensions, type ColorValue } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { Pressable, Text, View, useWindowDimensions, type ColorValue } from 'react-native';
+import { Tabs, useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { TruckSwitcher } from '@/src/components/TruckSwitcher';
 import { CenterImportButton } from '@/src/components/CenterImportButton';
@@ -8,7 +8,9 @@ import { ImportActionSheet } from '@/src/components/ImportActionSheet';
 import { MenuTabButton } from '@/src/components/MenuTabButton';
 import { MenuSheet } from '@/src/components/MenuSheet';
 import { WideSidebar } from '@/src/components/WideSidebar';
-import { colors } from '@/src/theme';
+import { BrandWordmark } from '@/src/components/BrandWordmark';
+import { useAlertsData } from '@/src/data/alerts';
+import { colors, spacing } from '@/src/theme';
 
 // PROMPTS.md's wide-screen breakpoint — matches legacy's fixed 200px
 // #sidebar, which only ever appeared above this width.
@@ -18,9 +20,63 @@ function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
   return <Text style={{ fontSize: 20, color }}>{emoji}</Text>;
 }
 
-// Tab order (owner decision 2026-07-04): Dashboard · Deductions ·
-// [+ Import] (raised center button — importing is the most frequent
-// action) · Truck Health · More. See PROMPTS.md Sessions 5/9.
+// Session 9e-B1: Dashboard-only top bar — hamburger (opens MenuSheet,
+// state lifted to TabsLayout below) / brand wordmark / notification bell
+// (badge = compliance + Truck Health items due, opens the new Alerts
+// screen). Every other tab keeps the default TruckSwitcher header
+// unchanged.
+function DashboardHamburger({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={12} style={{ paddingHorizontal: spacing.md }}>
+      <Text style={{ fontSize: 20, color: colors.text }}>☰</Text>
+    </Pressable>
+  );
+}
+
+// "/(tabs)/more/alerts" (app/(tabs)/more/alerts.tsx, added this pass) is a
+// valid route, but expo-router's typed-routes union in .expo/types/
+// router.d.ts only regenerates on a dev-server/export run — this explicit
+// Href cast is expo-router's own documented escape hatch for a route added
+// since the last regen, not a general-purpose `any`.
+const ALERTS_ROUTE = '/(tabs)/more/alerts' as Href;
+
+function DashboardBell() {
+  const router = useRouter();
+  const { count } = useAlertsData();
+  return (
+    <Pressable onPress={() => router.push(ALERTS_ROUTE)} hitSlop={12} style={{ paddingHorizontal: spacing.md }}>
+      <Text style={{ fontSize: 20 }}>🔔</Text>
+      {count > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 2,
+            right: 2,
+            minWidth: 15,
+            height: 15,
+            borderRadius: 8,
+            backgroundColor: colors.red,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 3,
+          }}
+        >
+          <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{count > 9 ? '9+' : count}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+// Tab order (Session 9e-B8 restructure, owner decision — supersedes the
+// 2026-07-04 Dashboard/Deductions/[+]/Truck Health/More order): Home ·
+// Transactions · [+ Import] (raised center button — importing is the most
+// frequent action) · Reports · Menu. Deductions and Truck Health are no
+// longer direct tabs but stay fully reachable — Deductions via
+// Transactions' expense rows and the Menu sheet's Expenses group; Truck
+// Health via the Reports hub's Intelligence group and the Home dashboard's
+// Truck Status card — both keep their own route (`href: null` below hides
+// them from the tab bar without removing the route).
 //
 // On width >= 768 (tablet landscape / web) a left WideSidebar replaces
 // the bottom tab bar as the primary nav surface (PROMPTS.md's Wide-Screen
@@ -50,11 +106,17 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: t('nav.dashboard'), tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} /> }}
+        options={{
+          title: t('nav.dashboard'),
+          tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} />,
+          headerLeft: () => <DashboardHamburger onPress={() => setMenuOpen(true)} />,
+          headerTitle: () => <BrandWordmark />,
+          headerRight: () => <DashboardBell />,
+        }}
       />
       <Tabs.Screen
-        name="deductions"
-        options={{ title: t('nav.deductions'), tabBarIcon: ({ color }) => <TabIcon emoji="🧾" color={color} /> }}
+        name="transactions"
+        options={{ title: t('nav.transactions'), tabBarIcon: ({ color }) => <TabIcon emoji="💳" color={color} /> }}
       />
       <Tabs.Screen
         name="import"
@@ -67,8 +129,8 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="truck-health"
-        options={{ title: t('nav.truckHealth'), tabBarIcon: ({ color }) => <TabIcon emoji="🚛" color={color} /> }}
+        name="reports"
+        options={{ title: t('nav.reports'), tabBarIcon: ({ color }) => <TabIcon emoji="📈" color={color} /> }}
       />
       <Tabs.Screen
         name="more"
@@ -86,6 +148,12 @@ export default function TabsLayout() {
           tabBarButton: (props) => <MenuTabButton {...props} onOpenMenu={() => setMenuOpen(true)} />,
         }}
       />
+      {/* No longer direct tabs (Session 9e-B8) — href: null keeps the
+          route navigable (Transactions' expense rows, Menu's Expenses
+          group, the Reports hub, Home's Truck Status card) without a
+          bottom-tab icon of their own. */}
+      <Tabs.Screen name="deductions" options={{ title: t('nav.deductions'), href: null }} />
+      <Tabs.Screen name="truck-health" options={{ title: t('nav.truckHealth'), href: null }} />
     </Tabs>
   );
 

@@ -14,12 +14,14 @@
     "close": "إغلاق"
   },
   "nav": {
-    "dashboard": "لوحة التحكم",
+    "dashboard": "الرئيسية",
     "deductions": "الخصومات",
     "import": "استيراد",
     "truckHealth": "حالة الشاحنة",
     "more": "المزيد",
     "menu": "القائمة",
+    "transactions": "المعاملات",
+    "reports": "التقارير",
     "capitalAccount": "حساب رأس المال",
     "cashFlow": "التدفق النقدي",
     "maintenance": "الصيانة",
@@ -45,7 +47,7 @@
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
     "scorecard": "بطاقة الأداء",
-    "ceoMode": "وضع الرئيس التنفيذي",
+    "ceoMode": "مدرب الذكاء الاصطناعي",
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
@@ -53,8 +55,7 @@
     "accountantPackage": "حزمة المحاسب"
   },
   "auth": {
-    "brand": "Bozkurt Fleet OS",
-    "signUpTagline": "Bozkurt Fleet OS — لأصحاب الشاحنات المستقلين",
+    "signUpTagline": "{{brand}} — لأصحاب الشاحنات المستقلين",
     "signInSubtitle": "سجّل الدخول للمتابعة",
     "createAccount": "إنشاء حساب",
     "emailPlaceholder": "البريد الإلكتروني",
@@ -78,17 +79,28 @@
   },
   "dashboard": {
     "title": "لوحة التحكم",
+    "greeting": {
+      "morning": "صباح الخير، {{name}} 👋",
+      "afternoon": "مساء الخير، {{name}} 👋",
+      "evening": "مساء الخير، {{name}} 👋",
+      "subtitle": "لنجعل اليوم مثمرًا."
+    },
     "hero": {
       "greetingMorning": "صباح الخير، {{name}}",
       "greetingAfternoon": "مساء الخير، {{name}}",
       "greetingEvening": "مساء الخير، {{name}}",
       "fallbackName": "صديقي",
       "thisWeek": "هذا الأسبوع",
+      "eyebrow": "أرباح هذا الأسبوع",
       "revenue": "الإيرادات",
       "netProfit": "صافي الربح",
       "profitScore": "درجة الربح",
       "vsLastWeek": "مقارنة بالأسبوع الماضي",
+      "vsLastWeekAmount": "{{delta}} مقارنة بالأسبوع الماضي",
       "newThisWeek": "جديد هذا الأسبوع"
+    },
+    "overview": {
+      "expenses": "المصروفات"
     },
     "fleetHealth": {
       "title": "درجة صحة الأسطول",
@@ -109,11 +121,13 @@
       "maxSuffix": "الذروة"
     },
     "moneyBreakdown": {
-      "title": "تفصيل الأموال",
+      "title": "تفصيل المصروفات",
       "empty": "استورد أول settlement أو إيصال لرؤية التفصيل.",
       "other": "أخرى",
       "profit": "الربح",
-      "totalCaption": "{{amount}} الإجمالي"
+      "totalCaption": "{{amount}} الإجمالي",
+      "thisMonth": "هذا الشهر",
+      "lastMonth": "الشهر الماضي"
     },
     "taxProgress": {
       "title": "تقدم الضرائب",
@@ -121,6 +135,7 @@
     },
     "aiInsights": {
       "title": "رؤية الذكاء الاصطناعي",
+      "newBadge": "جديد",
       "fuelBenchmark": "الوقود يتجاوز المرجع الصناعي بـ {{pct}} نقطة — حوالي {{amount}}/شهريًا زيادة.",
       "needsReview": "{{count}} إيصال (إيصالات) موسومة NEEDS REVIEW — يُقدَّر {{amount}} من الخصومات بانتظار التصنيف.",
       "cpmTarget": "اقبل فقط الحمولات التي تدفع {{rate}}/ميل على الأقل للبقاء مربحًا.",
@@ -134,7 +149,7 @@
     "goalProgress": {
       "title": "الهدف الأسبوعي",
       "currentOfGoal": "{{current}} من {{goal}} هذا الأسبوع",
-      "setGoalPrompt": "لم يتم تعيين هدف أسبوعي بعد — اضغط لتعيينه في وضع الرئيس التنفيذي.",
+      "setGoalPrompt": "لم يتم تعيين هدف أسبوعي بعد — اضغط لتعيينه في مدرب الذكاء الاصطناعي.",
       "truckPaidTitle": "الشاحنة المدفوعة",
       "paidOfOriginal": "تم سداد {{paid}} من {{original}}"
     },
@@ -471,7 +486,7 @@
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
     "scorecard": "بطاقة الأداء",
-    "ceoMode": "وضع الرئيس التنفيذي",
+    "ceoMode": "مدرب الذكاء الاصطناعي",
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
@@ -1221,6 +1236,34 @@
       }
     }
   },
+  "alerts": {
+    "title": "التنبيهات",
+    "empty": "كل شيء على ما يرام — لا توجد عناصر صيانة أو امتثال تحتاج إلى اهتمام الآن.",
+    "maintenanceSection": "صحة الشاحنة",
+    "complianceSection": "الامتثال"
+  },
+  "transactions": {
+    "title": "المعاملات",
+    "filterAll": "الكل",
+    "filterIncome": "الدخل",
+    "filterExpenses": "المصروفات",
+    "settlementLabel": "settlement — الأسبوع المنتهي في {{date}}",
+    "expenseFallback": "مصروف",
+    "empty": "لا توجد معاملات بعد — استورد أول settlement أو إيصال لرؤيتها هنا."
+  },
+  "reports": {
+    "subtitle": "التقارير والأدوات وصحة الشاحنة — كل ما تغطيه مجموعتا الذكاء والأدوات، في مكان واحد."
+  },
+  "introSlides": {
+    "skip": "تخطي",
+    "getStarted": "ابدأ الآن",
+    "slide1Title": "قرارات أذكى. أرباح أكبر.",
+    "slide1Body": "حوّل كل settlement وإيصال وميل إلى صورة أوضح لعملك.",
+    "slide2Title": "مدرب أعمالك بالذكاء الاصطناعي",
+    "slide2Body": "احصل على توصيات مخصصة بناءً على أرقامك الخاصة — لا نصائح عامة.",
+    "slide3Title": "التقط صورة، ونحن نتولى الباقي",
+    "slide3Body": "يقوم الذكاء الاصطناعي بفرز settlements والإيصالات والفواتير تلقائيًا في المكان الصحيح."
+  },
   "compliance": {
     "title": "متتبع الامتثال",
     "subtitle": "مواعيد DOT وIRP وHVUT 2290 وIFTA والتأمين وCDL وقنسورتيوم فحص المخدرات في مكان واحد.",
@@ -1267,7 +1310,7 @@
     "notifDueSoonBody": "يستحق {{label}} في {{date}}."
   },
   "ceoMode": {
-    "title": "وضع الرئيس التنفيذي",
+    "title": "مدرب الذكاء الاصطناعي",
     "subtitle": "تقريرك الأسبوعي عن العمل، مُعد من بياناتك الخاصة.",
     "saveFailedTitle": "تعذر الحفظ",
     "thisWeekRevenue": "إيرادات هذا الأسبوع",
@@ -1296,7 +1339,17 @@
     "scoreInfoFuel": "كفاءة الوقود: تكلفة الوقود لكل ميل — كلما انخفضت زادت النجوم.",
     "scoreInfoTax": "تحسين الضرائب: رصيد عملك مقارنة بالدفعة الفصلية القادمة.",
     "scoreInfoMaintenance": "الصيانة: حالات فترات صحة الشاحنة — نجوم أقل إذا كان أي شيء مستحقًا قريبًا أو متأخرًا.",
-    "scoreInfoCashFlow": "التدفق النقدي: صافي ربح هذا الأسبوع مقابل الأسبوع الماضي."
+    "scoreInfoCashFlow": "التدفق النقدي: صافي ربح هذا الأسبوع مقابل الأسبوع الماضي.",
+    "recommendations": {
+      "headerTitle": "بناءً على أرقامك، يمكنك زيادة ربحك الشهري بحوالي {{amount}}",
+      "headerTitleZero": "إليك أهم توصياتك",
+      "subtitle": "إليك أهم 3 توصيات مني",
+      "fuelEfficiency": "حسّن كفاءة الوقود — يتجاوز المرجع الصناعي بـ {{pct}} نقطة، حوالي {{amount}}/شهريًا زيادة",
+      "needsReview": "رتّب {{count}} إيصال(ات) NEEDS REVIEW — {{amount}} من الخصومات بانتظار القرار",
+      "taxReserveShortfall": "احتفظ بمبلغ إضافي قدره {{amount}} قبل دفعتك الضريبية القادمة",
+      "maintenanceCatchUp": "{{count}} بند(ود) صيانة مستحقة قريبًا أو متأخرة",
+      "complianceCatchUp": "{{count}} بند(ود) امتثال مستحقة قريبًا أو متأخرة"
+    }
   },
   "aiAdvisor": {
     "title": "المستشار الذكي",

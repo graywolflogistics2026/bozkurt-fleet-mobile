@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -11,6 +11,7 @@ import { ActiveTruckProvider } from '@/src/context/ActiveTruckContext';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { colors } from '@/src/theme';
 import { initI18n } from '@/src/i18n';
+import { getIntroSeen } from '@/src/onboarding/introStorage';
 
 // Startup diagnostics (2026-07-06): take manual control of the splash
 // screen instead of relying on its default auto-hide, so a stuck startup
@@ -65,6 +66,15 @@ function RootLayoutNav() {
   const { session, loading, needsTos, needsOnboarding } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  // Session 9e-B9: brand intro slides, shown once per device before the
+  // very first sign-in/sign-up — null means "not resolved yet" (same
+  // pattern i18nReady above uses), so the redirect effect waits for it
+  // rather than flashing sign-in first.
+  const [introSeen, setIntroSeenState] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getIntroSeen().then(setIntroSeenState);
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -75,27 +85,36 @@ function RootLayoutNav() {
   }, [loading]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || introSeen === null) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const onTosScreen = segments[0] === 'tos';
-    const onOnboardingScreen = segments[0] === 'onboarding';
+    // "intro" (app/intro.tsx, added this pass) isn't in the last generated
+    // .expo/types/router.d.ts yet — same typed-routes regen lag as
+    // _layout.tsx (tabs)'s ALERTS_ROUTE, hence the (string) cast/Href cast
+    // rather than a general-purpose `any`.
+    const currentSegment = segments[0] as string;
+    const inAuthGroup = currentSegment === '(auth)';
+    const onTosScreen = currentSegment === 'tos';
+    const onOnboardingScreen = currentSegment === 'onboarding';
+    const onIntroScreen = currentSegment === 'intro';
 
-    if (!session && !inAuthGroup) {
+    if (!session && !introSeen && !onIntroScreen) {
+      router.replace('/intro' as Href);
+    } else if (!session && !inAuthGroup && !onIntroScreen) {
       router.replace('/(auth)/sign-in');
     } else if (session && needsTos && !onTosScreen) {
       router.replace('/tos');
     } else if (session && !needsTos && needsOnboarding && !onOnboardingScreen) {
       router.replace('/onboarding');
-    } else if (session && !needsTos && !needsOnboarding && (inAuthGroup || onTosScreen || onOnboardingScreen)) {
+    } else if (session && !needsTos && !needsOnboarding && (inAuthGroup || onTosScreen || onOnboardingScreen || onIntroScreen)) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, needsTos, needsOnboarding, segments, router]);
+  }, [session, loading, needsTos, needsOnboarding, introSeen, segments, router]);
 
-  if (loading) return <LoadingScreen />;
+  if (loading || introSeen === null) return <LoadingScreen />;
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack.Screen name="intro" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="tos" />
       <Stack.Screen name="onboarding" />

@@ -43,6 +43,7 @@ export default function MoreLayout() {
       <Stack.Screen name="terms-of-use" options={{ title: t('nav.termsOfUse') }} />
       <Stack.Screen name="privacy-policy" options={{ title: t('nav.privacyPolicy') }} />
       <Stack.Screen name="import-legacy" options={{ title: t('nav.importLegacy') }} />
+      <Stack.Screen name="alerts" options={{ title: t('alerts.title') }} />
     </Stack>
   );
 }

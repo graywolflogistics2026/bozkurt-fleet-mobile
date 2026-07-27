@@ -32,6 +32,8 @@ import { useRouter, usePathname, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { BRAND_NAME } from '@/src/brand';
+import { BrandWordmark } from '@/src/components/BrandWordmark';
 
 const SIDEBAR_WIDTH = 220;
 
@@ -45,7 +47,16 @@ export type SidebarGroup = { titleKey: string; items: SidebarItem[] };
 export const GROUPS: SidebarGroup[] = [
   {
     titleKey: 'sidebar.sections.overview',
-    items: [{ href: '/(tabs)', labelKey: 'nav.dashboard', emoji: '📊' }],
+    items: [
+      { href: '/(tabs)', labelKey: 'nav.dashboard', emoji: '📊' },
+      // Session 9e-B8: Transactions is its own bottom tab on phones (tab
+      // bar restructure) but has no other sidebar entry — added here so
+      // wide-screen users (no bottom tab bar) don't lose it. Href cast:
+      // same expo-router typed-routes regen lag as _layout.tsx's
+      // ALERTS_ROUTE — app/(tabs)/transactions.tsx is a real route added
+      // this pass, just not in the last generated router.d.ts.
+      { href: '/(tabs)/transactions' as Href, labelKey: 'nav.transactions', emoji: '💳' },
+    ],
   },
   {
     titleKey: 'sidebar.sections.revenue',
@@ -120,7 +131,7 @@ export function WideSidebar() {
   const pathname = usePathname();
   const { profile, session } = useAuth();
 
-  const companyLabel = profile?.company_name?.trim() || t('auth.brand');
+  const companyLabel = profile?.company_name?.trim() || BRAND_NAME;
   const personLabel = profile?.owner_name?.trim() || session?.user?.email || '';
   const initial = (personLabel || companyLabel).trim().charAt(0).toUpperCase() || '?';
 
@@ -134,9 +145,7 @@ export function WideSidebar() {
       }}
     >
       <View style={{ padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Text style={{ color: colors.text, fontSize: typography.size.lg, fontWeight: '700' }}>
-          🐺 {t('auth.brand')}
-        </Text>
+        <BrandWordmark fontSize={typography.size.lg} />
         {profile?.company_name?.trim() ? (
           <Text style={{ color: colors.muted, fontSize: typography.size.xs, marginTop: spacing.xs }} numberOfLines={1}>
             {companyLabel}
@@ -219,7 +228,7 @@ export function WideSidebar() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }} numberOfLines={1}>
-            {personLabel || t('auth.brand')}
+            {personLabel || BRAND_NAME}
           </Text>
           <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
             {companyLabel}

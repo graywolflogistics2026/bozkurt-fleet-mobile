@@ -14,12 +14,14 @@
     "close": "Close"
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Home",
     "deductions": "Deductions",
     "import": "Import",
     "truckHealth": "Truck Health",
     "more": "More",
     "menu": "Menu",
+    "transactions": "Transactions",
+    "reports": "Reports",
     "capitalAccount": "Capital Account",
     "cashFlow": "Cash Flow",
     "maintenance": "Maintenance",
@@ -45,7 +47,7 @@
     "operatingPnl": "Operating P&L",
     "profitAnalysis": "Profit Analysis",
     "scorecard": "Scorecard",
-    "ceoMode": "CEO Mode",
+    "ceoMode": "AI Coach",
     "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
@@ -53,8 +55,7 @@
     "accountantPackage": "Accountant Package"
   },
   "auth": {
-    "brand": "Bozkurt Fleet OS",
-    "signUpTagline": "Bozkurt Fleet OS — for owner-operators",
+    "signUpTagline": "{{brand}} — for owner-operators",
     "signInSubtitle": "Sign in to continue",
     "createAccount": "Create account",
     "emailPlaceholder": "Email",
@@ -78,17 +79,28 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "greeting": {
+      "morning": "Good Morning, {{name}} 👋",
+      "afternoon": "Good Afternoon, {{name}} 👋",
+      "evening": "Good Evening, {{name}} 👋",
+      "subtitle": "Let's make today count."
+    },
     "hero": {
       "greetingMorning": "Good morning, {{name}}",
       "greetingAfternoon": "Good afternoon, {{name}}",
       "greetingEvening": "Good evening, {{name}}",
       "fallbackName": "there",
       "thisWeek": "This Week",
+      "eyebrow": "This week's profit",
       "revenue": "Revenue",
       "netProfit": "Net Profit",
       "profitScore": "Profit Score",
       "vsLastWeek": "vs last week",
+      "vsLastWeekAmount": "{{delta}} vs last week",
       "newThisWeek": "New this week"
+    },
+    "overview": {
+      "expenses": "Expenses"
     },
     "fleetHealth": {
       "title": "Fleet Health Score",
@@ -109,11 +121,13 @@
       "maxSuffix": "peak"
     },
     "moneyBreakdown": {
-      "title": "Money Breakdown",
+      "title": "Expenses Breakdown",
       "empty": "Import your first settlement or receipt to see a breakdown.",
       "other": "Other",
       "profit": "Profit",
-      "totalCaption": "{{amount}} total"
+      "totalCaption": "{{amount}} total",
+      "thisMonth": "This Month",
+      "lastMonth": "Last Month"
     },
     "taxProgress": {
       "title": "Tax Progress",
@@ -121,6 +135,7 @@
     },
     "aiInsights": {
       "title": "AI Insight",
+      "newBadge": "New",
       "fuelBenchmark": "Fuel is running {{pct}} points above the industry reference — about {{amount}}/month over.",
       "needsReview": "{{count}} receipt(s) flagged NEEDS REVIEW — an estimated {{amount}} in deductions is waiting to be sorted.",
       "cpmTarget": "Only accept loads that pay at least {{rate}}/mile to stay profitable.",
@@ -134,7 +149,7 @@
     "goalProgress": {
       "title": "Weekly Goal",
       "currentOfGoal": "{{current}} of {{goal}} this week",
-      "setGoalPrompt": "No weekly goal set yet — tap to set one in CEO Mode.",
+      "setGoalPrompt": "No weekly goal set yet — tap to set one in AI Coach.",
       "truckPaidTitle": "Truck Paid",
       "paidOfOriginal": "{{paid}} of {{original}} paid off"
     },
@@ -471,7 +486,7 @@
     "operatingPnl": "Operating P&L",
     "profitAnalysis": "Profit Analysis",
     "scorecard": "Scorecard",
-    "ceoMode": "CEO Mode",
+    "ceoMode": "AI Coach",
     "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
@@ -1221,6 +1236,34 @@
       }
     }
   },
+  "alerts": {
+    "title": "Alerts",
+    "empty": "You're all caught up — no maintenance or compliance items need attention right now.",
+    "maintenanceSection": "Truck Health",
+    "complianceSection": "Compliance"
+  },
+  "transactions": {
+    "title": "Transactions",
+    "filterAll": "All",
+    "filterIncome": "Income",
+    "filterExpenses": "Expenses",
+    "settlementLabel": "Settlement — week ending {{date}}",
+    "expenseFallback": "Expense",
+    "empty": "No transactions yet — import your first settlement or receipt to see them here."
+  },
+  "reports": {
+    "subtitle": "Reports, tools, and Truck Health — everything the Intelligence and Tools groups already cover, in one place."
+  },
+  "introSlides": {
+    "skip": "Skip",
+    "getStarted": "Get Started",
+    "slide1Title": "Smarter Decisions. Bigger Profits.",
+    "slide1Body": "Turn every settlement, receipt, and mile into a clearer picture of your business.",
+    "slide2Title": "Your AI Business Coach",
+    "slide2Body": "Get personalized recommendations based on your own numbers — not generic advice.",
+    "slide3Title": "Snap a Photo, We Handle the Rest",
+    "slide3Body": "AI sorts settlements, receipts, and invoices into the right place automatically."
+  },
   "compliance": {
     "title": "Compliance Tracker",
     "subtitle": "DOT, IRP, HVUT 2290, IFTA, insurance, CDL, and drug consortium deadlines in one place.",
@@ -1267,7 +1310,7 @@
     "notifDueSoonBody": "{{label}} is due {{date}}."
   },
   "ceoMode": {
-    "title": "CEO Mode",
+    "title": "AI Coach",
     "subtitle": "Your weekly business briefing, composed from your own data.",
     "saveFailedTitle": "Could not save",
     "thisWeekRevenue": "This Week's Revenue",
@@ -1296,7 +1339,17 @@
     "scoreInfoFuel": "Fuel Efficiency: your fuel cost per mile — more stars the lower it is.",
     "scoreInfoTax": "Tax Optimization: your Business Balance compared to the upcoming quarterly payment.",
     "scoreInfoMaintenance": "Maintenance: Truck Health interval statuses — fewer stars if anything is due soon or overdue.",
-    "scoreInfoCashFlow": "Cash Flow: this week's net profit vs. last week."
+    "scoreInfoCashFlow": "Cash Flow: this week's net profit vs. last week.",
+    "recommendations": {
+      "headerTitle": "Based on your numbers, you can increase your monthly profit by ~{{amount}}",
+      "headerTitleZero": "Here are your top recommendations",
+      "subtitle": "Here are my top 3 recommendations",
+      "fuelEfficiency": "Improve fuel efficiency — running {{pct}} points above the industry reference, about {{amount}}/month over",
+      "needsReview": "Sort {{count}} NEEDS REVIEW receipt(s) — {{amount}} in deductions waiting",
+      "taxReserveShortfall": "Reserve {{amount}} more before your next tax payment",
+      "maintenanceCatchUp": "{{count}} maintenance item(s) due soon or overdue",
+      "complianceCatchUp": "{{count}} compliance item(s) due soon or overdue"
+    }
   },
   "aiAdvisor": {
     "title": "AI Advisor",

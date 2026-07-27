@@ -14,12 +14,14 @@
     "close": "Kapat"
   },
   "nav": {
-    "dashboard": "Panel",
+    "dashboard": "Ana Sayfa",
     "deductions": "Kesintiler",
     "import": "İçe Aktar",
     "truckHealth": "Kamyon Durumu",
     "more": "Diğer",
     "menu": "Menü",
+    "transactions": "İşlemler",
+    "reports": "Raporlar",
     "capitalAccount": "Sermaye Hesabı",
     "cashFlow": "Nakit Akışı",
     "maintenance": "Bakım",
@@ -45,7 +47,7 @@
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
     "scorecard": "Karne",
-    "ceoMode": "CEO Modu",
+    "ceoMode": "Yapay Zeka Koçu",
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
@@ -53,8 +55,7 @@
     "accountantPackage": "Muhasebeci Paketi"
   },
   "auth": {
-    "brand": "Bozkurt Fleet OS",
-    "signUpTagline": "Bozkurt Fleet OS — sahibi-operatörler için",
+    "signUpTagline": "{{brand}} — sahibi-operatörler için",
     "signInSubtitle": "Devam etmek için giriş yapın",
     "createAccount": "Hesap oluştur",
     "emailPlaceholder": "E-posta",
@@ -78,17 +79,28 @@
   },
   "dashboard": {
     "title": "Panel",
+    "greeting": {
+      "morning": "Günaydın, {{name}} 👋",
+      "afternoon": "İyi günler, {{name}} 👋",
+      "evening": "İyi akşamlar, {{name}} 👋",
+      "subtitle": "Bugünü değerlendirelim."
+    },
     "hero": {
       "greetingMorning": "Günaydın, {{name}}",
       "greetingAfternoon": "İyi günler, {{name}}",
       "greetingEvening": "İyi akşamlar, {{name}}",
       "fallbackName": "dostum",
       "thisWeek": "Bu Hafta",
+      "eyebrow": "Bu haftanın karı",
       "revenue": "Gelir",
       "netProfit": "Net Kâr",
       "profitScore": "Kâr Puanı",
       "vsLastWeek": "geçen haftaya göre",
+      "vsLastWeekAmount": "{{delta}} geçen haftaya göre",
       "newThisWeek": "Bu hafta yeni"
+    },
+    "overview": {
+      "expenses": "Giderler"
     },
     "fleetHealth": {
       "title": "Filo Sağlığı Puanı",
@@ -109,11 +121,13 @@
       "maxSuffix": "zirve"
     },
     "moneyBreakdown": {
-      "title": "Para Dağılımı",
+      "title": "Gider Dağılımı",
       "empty": "Bir dağılım görmek için ilk settlement veya fişinizi içe aktarın.",
       "other": "Diğer",
       "profit": "Kâr",
-      "totalCaption": "{{amount}} toplam"
+      "totalCaption": "{{amount}} toplam",
+      "thisMonth": "Bu Ay",
+      "lastMonth": "Geçen Ay"
     },
     "taxProgress": {
       "title": "Vergi İlerlemesi",
@@ -121,6 +135,7 @@
     },
     "aiInsights": {
       "title": "Yapay Zeka İçgörüsü",
+      "newBadge": "Yeni",
       "fuelBenchmark": "Yakıt maliyeti sektör referansının {{pct}} puan üzerinde — ayda yaklaşık {{amount}} fazla.",
       "needsReview": "{{count}} fiş NEEDS REVIEW olarak işaretlendi — tahmini {{amount}} tutarında kesinti kategorilendirilmeyi bekliyor.",
       "cpmTarget": "Kârlı kalmak için yalnızca en az {{rate}}/mil ödeyen yükleri kabul edin.",
@@ -134,7 +149,7 @@
     "goalProgress": {
       "title": "Haftalık Hedef",
       "currentOfGoal": "Bu hafta {{goal}} hedefinden {{current}}",
-      "setGoalPrompt": "Henüz haftalık hedef belirlenmedi — CEO Modu'nda ayarlamak için dokunun.",
+      "setGoalPrompt": "Henüz haftalık hedef belirlenmedi — Yapay Zeka Koçu'nda ayarlamak için dokunun.",
       "truckPaidTitle": "Kamyon Ödemesi",
       "paidOfOriginal": "{{original}} içinden {{paid}} ödendi"
     },
@@ -471,7 +486,7 @@
     "operatingPnl": "İşletme P&L",
     "profitAnalysis": "Kâr Analizi",
     "scorecard": "Karne",
-    "ceoMode": "CEO Modu",
+    "ceoMode": "Yapay Zeka Koçu",
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
@@ -1221,6 +1236,34 @@
       }
     }
   },
+  "alerts": {
+    "title": "Uyarılar",
+    "empty": "Her şey yolunda — şu anda dikkat gerektiren bakım veya uyumluluk öğesi yok.",
+    "maintenanceSection": "Kamyon Sağlığı",
+    "complianceSection": "Uyumluluk"
+  },
+  "transactions": {
+    "title": "İşlemler",
+    "filterAll": "Tümü",
+    "filterIncome": "Gelir",
+    "filterExpenses": "Giderler",
+    "settlementLabel": "Settlement — haftası biten {{date}}",
+    "expenseFallback": "Gider",
+    "empty": "Henüz işlem yok — ilk settlement veya fişinizi içe aktararak burada görün."
+  },
+  "reports": {
+    "subtitle": "Raporlar, araçlar ve Kamyon Sağlığı — Zeka ve Araçlar gruplarının kapsadığı her şey tek yerde."
+  },
+  "introSlides": {
+    "skip": "Atla",
+    "getStarted": "Başlayın",
+    "slide1Title": "Daha Akıllı Kararlar. Daha Büyük Kârlar.",
+    "slide1Body": "Her settlement, fiş ve mili işletmenizin daha net bir resmine dönüştürün.",
+    "slide2Title": "Yapay Zeka İş Koçunuz",
+    "slide2Body": "Genel tavsiyeler değil, kendi rakamlarınıza dayalı kişiselleştirilmiş öneriler alın.",
+    "slide3Title": "Fotoğrafını Çekin, Gerisini Biz Halledelim",
+    "slide3Body": "Yapay zeka, settlement, fiş ve faturaları otomatik olarak doğru yere sıralar."
+  },
   "compliance": {
     "title": "Uyumluluk Takibi",
     "subtitle": "DOT, IRP, HVUT 2290, IFTA, sigorta, CDL ve uyuşturucu konsorsiyumu son tarihleri tek yerde.",
@@ -1267,7 +1310,7 @@
     "notifDueSoonBody": "{{label}} için son tarih {{date}}."
   },
   "ceoMode": {
-    "title": "CEO Modu",
+    "title": "Yapay Zeka Koçu",
     "subtitle": "Kendi verilerinizden oluşturulan haftalık iş özetiniz.",
     "saveFailedTitle": "Kaydedilemedi",
     "thisWeekRevenue": "Bu Haftanın Geliri",
@@ -1296,7 +1339,17 @@
     "scoreInfoFuel": "Yakıt Verimliliği: mil başına yakıt maliyetiniz — ne kadar düşükse o kadar çok yıldız.",
     "scoreInfoTax": "Vergi Optimizasyonu: İşletme Bakiyenizin yaklaşan üç aylık ödemeyle karşılaştırması.",
     "scoreInfoMaintenance": "Bakım: Kamyon Sağlığı aralık durumları — bir şey yakında gerekiyorsa veya gecikmişse daha az yıldız.",
-    "scoreInfoCashFlow": "Nakit Akışı: bu haftanın net kârı geçen haftaya göre."
+    "scoreInfoCashFlow": "Nakit Akışı: bu haftanın net kârı geçen haftaya göre.",
+    "recommendations": {
+      "headerTitle": "Rakamlarınıza göre aylık kârınızı ~{{amount}} artırabilirsiniz",
+      "headerTitleZero": "İşte en önemli önerilerim",
+      "subtitle": "İşte en önemli 3 önerim",
+      "fuelEfficiency": "Yakıt verimliliğini artırın — sektör referansının {{pct}} puan üzerinde, ayda yaklaşık {{amount}} fazla",
+      "needsReview": "{{count}} NEEDS REVIEW fişini sıraya koyun — {{amount}} tutarında gider bekliyor",
+      "taxReserveShortfall": "Bir sonraki vergi ödemenizden önce {{amount}} daha ayırın",
+      "maintenanceCatchUp": "{{count}} bakım kalemi yakında gerekiyor veya gecikmiş",
+      "complianceCatchUp": "{{count}} uyumluluk kalemi yakında gerekiyor veya gecikmiş"
+    }
   },
   "aiAdvisor": {
     "title": "Yapay Zeka Danışmanı",

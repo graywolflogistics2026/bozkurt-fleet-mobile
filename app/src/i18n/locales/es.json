@@ -14,12 +14,14 @@
     "close": "Cerrar"
   },
   "nav": {
-    "dashboard": "Panel",
+    "dashboard": "Inicio",
     "deductions": "Deducciones",
     "import": "Importar",
     "truckHealth": "Estado del Camión",
     "more": "Más",
     "menu": "Menú",
+    "transactions": "Transacciones",
+    "reports": "Informes",
     "capitalAccount": "Cuenta de Capital",
     "cashFlow": "Flujo de Caja",
     "maintenance": "Mantenimiento",
@@ -45,7 +47,7 @@
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
     "scorecard": "Calificación",
-    "ceoMode": "Modo CEO",
+    "ceoMode": "Coach de IA",
     "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
@@ -53,8 +55,7 @@
     "accountantPackage": "Paquete para el Contador"
   },
   "auth": {
-    "brand": "Bozkurt Fleet OS",
-    "signUpTagline": "Bozkurt Fleet OS — para operadores propietarios",
+    "signUpTagline": "{{brand}} — para operadores propietarios",
     "signInSubtitle": "Inicia sesión para continuar",
     "createAccount": "Crear cuenta",
     "emailPlaceholder": "Correo electrónico",
@@ -78,17 +79,28 @@
   },
   "dashboard": {
     "title": "Panel",
+    "greeting": {
+      "morning": "Buenos días, {{name}} 👋",
+      "afternoon": "Buenas tardes, {{name}} 👋",
+      "evening": "Buenas noches, {{name}} 👋",
+      "subtitle": "Hagamos que hoy cuente."
+    },
     "hero": {
       "greetingMorning": "Buenos días, {{name}}",
       "greetingAfternoon": "Buenas tardes, {{name}}",
       "greetingEvening": "Buenas noches, {{name}}",
       "fallbackName": "amigo",
       "thisWeek": "Esta Semana",
+      "eyebrow": "Ganancia de esta semana",
       "revenue": "Ingresos",
       "netProfit": "Ganancia Neta",
       "profitScore": "Puntaje de Ganancia",
       "vsLastWeek": "vs. semana pasada",
+      "vsLastWeekAmount": "{{delta}} vs. la semana pasada",
       "newThisWeek": "Nuevo esta semana"
+    },
+    "overview": {
+      "expenses": "Gastos"
     },
     "fleetHealth": {
       "title": "Puntaje de Salud de la Flota",
@@ -109,11 +121,13 @@
       "maxSuffix": "máximo"
     },
     "moneyBreakdown": {
-      "title": "Desglose de Dinero",
+      "title": "Desglose de Gastos",
       "empty": "Importa tu primer settlement o recibo para ver un desglose.",
       "other": "Otro",
       "profit": "Ganancia",
-      "totalCaption": "{{amount}} total"
+      "totalCaption": "{{amount}} total",
+      "thisMonth": "Este Mes",
+      "lastMonth": "Mes Pasado"
     },
     "taxProgress": {
       "title": "Progreso de Impuestos",
@@ -121,6 +135,7 @@
     },
     "aiInsights": {
       "title": "Perspectiva IA",
+      "newBadge": "Nuevo",
       "fuelBenchmark": "El combustible está {{pct}} puntos por encima de la referencia de la industria — unos {{amount}}/mes de más.",
       "needsReview": "{{count}} recibo(s) marcados NEEDS REVIEW — se estima {{amount}} en deducciones esperando ser clasificadas.",
       "cpmTarget": "Acepte solo cargas que paguen al menos {{rate}}/milla para seguir siendo rentable.",
@@ -134,7 +149,7 @@
     "goalProgress": {
       "title": "Meta Semanal",
       "currentOfGoal": "{{current}} de {{goal}} esta semana",
-      "setGoalPrompt": "Aún no hay meta semanal — toque para establecer una en Modo CEO.",
+      "setGoalPrompt": "Aún no hay meta semanal — toque para establecer una en Coach de IA.",
       "truckPaidTitle": "Camión Pagado",
       "paidOfOriginal": "{{paid}} de {{original}} pagado"
     },
@@ -471,7 +486,7 @@
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
     "scorecard": "Calificación",
-    "ceoMode": "Modo CEO",
+    "ceoMode": "Coach de IA",
     "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
@@ -1221,6 +1236,34 @@
       }
     }
   },
+  "alerts": {
+    "title": "Alertas",
+    "empty": "Ya estás al día — no hay elementos de mantenimiento o cumplimiento que requieran atención en este momento.",
+    "maintenanceSection": "Salud del Camión",
+    "complianceSection": "Cumplimiento"
+  },
+  "transactions": {
+    "title": "Transacciones",
+    "filterAll": "Todo",
+    "filterIncome": "Ingresos",
+    "filterExpenses": "Gastos",
+    "settlementLabel": "Settlement — semana que termina {{date}}",
+    "expenseFallback": "Gasto",
+    "empty": "Aún no hay transacciones — importa tu primer settlement o recibo para verlas aquí."
+  },
+  "reports": {
+    "subtitle": "Informes, herramientas y Salud del Camión — todo lo que ya cubren los grupos Inteligencia y Herramientas, en un solo lugar."
+  },
+  "introSlides": {
+    "skip": "Omitir",
+    "getStarted": "Comenzar",
+    "slide1Title": "Decisiones Más Inteligentes. Más Ganancias.",
+    "slide1Body": "Convierte cada settlement, recibo y milla en una imagen más clara de tu negocio.",
+    "slide2Title": "Tu Coach de Negocios con IA",
+    "slide2Body": "Recibe recomendaciones personalizadas basadas en tus propios números — no consejos genéricos.",
+    "slide3Title": "Toma una Foto, Nosotros Nos Encargamos",
+    "slide3Body": "La IA clasifica settlements, recibos y facturas automáticamente en el lugar correcto."
+  },
   "compliance": {
     "title": "Seguimiento de Cumplimiento",
     "subtitle": "Fechas límite de DOT, IRP, HVUT 2290, IFTA, seguro, CDL y consorcio antidrogas en un solo lugar.",
@@ -1267,7 +1310,7 @@
     "notifDueSoonBody": "{{label}} vence el {{date}}."
   },
   "ceoMode": {
-    "title": "Modo CEO",
+    "title": "Coach de IA",
     "subtitle": "Tu informe semanal del negocio, compuesto a partir de tus propios datos.",
     "saveFailedTitle": "No se pudo guardar",
     "thisWeekRevenue": "Ingresos de Esta Semana",
@@ -1296,7 +1339,17 @@
     "scoreInfoFuel": "Eficiencia de Combustible: tu costo de combustible por milla — más estrellas cuanto más bajo sea.",
     "scoreInfoTax": "Optimización Fiscal: tu Saldo del Negocio comparado con el próximo pago trimestral.",
     "scoreInfoMaintenance": "Mantenimiento: estados de los intervalos de Salud del Camión — menos estrellas si algo está por vencer o vencido.",
-    "scoreInfoCashFlow": "Flujo de Caja: la ganancia neta de esta semana vs. la semana pasada."
+    "scoreInfoCashFlow": "Flujo de Caja: la ganancia neta de esta semana vs. la semana pasada.",
+    "recommendations": {
+      "headerTitle": "Según tus números, puedes aumentar tu ganancia mensual en ~{{amount}}",
+      "headerTitleZero": "Aquí están tus principales recomendaciones",
+      "subtitle": "Aquí están mis 3 principales recomendaciones",
+      "fuelEfficiency": "Mejora la eficiencia de combustible — {{pct}} puntos por encima de la referencia de la industria, unos {{amount}}/mes de más",
+      "needsReview": "Ordena {{count}} recibo(s) NEEDS REVIEW — {{amount}} en deducciones esperando",
+      "taxReserveShortfall": "Reserva {{amount}} más antes de tu próximo pago de impuestos",
+      "maintenanceCatchUp": "{{count}} elemento(s) de mantenimiento próximo(s) o vencido(s)",
+      "complianceCatchUp": "{{count}} elemento(s) de cumplimiento próximo(s) o vencido(s)"
+    }
   },
   "aiAdvisor": {
     "title": "Asesor de IA",

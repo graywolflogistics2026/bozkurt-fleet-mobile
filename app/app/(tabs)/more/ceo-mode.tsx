@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
@@ -8,6 +9,7 @@ import { useComplianceItems } from '@/src/data/complianceItems';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
+import { useBenchmarks } from '@/src/data/benchmarks';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList } from '@/src/data/trucks';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
@@ -17,15 +19,71 @@ import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
 import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
 import { calcWeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcBusinessScore, type StarRating } from '@/src/stats/aiBusinessScore';
+import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
+import {
+  buildRecommendationCandidates,
+  selectTopRecommendations,
+  sumRecommendationImpact,
+  type Recommendation,
+} from '@/src/stats/aiRecommendations';
 import { calcComplianceStatus } from '@/src/compliance/status';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
-import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Field, PrimaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import i18n from '@/src/i18n';
 
+const RECOMMENDATION_ICON: Record<Recommendation['type'], string> = {
+  fuelEfficiency: '⛽',
+  needsReview: '🧾',
+  taxReserveShortfall: '💰',
+  maintenanceCatchUp: '🔧',
+  complianceCatchUp: '📋',
+};
+
 function starString(rating: StarRating): string {
   return '★★★★★'.slice(0, rating) + '☆☆☆☆☆'.slice(0, 5 - rating);
+}
+
+// Session 9e-B7: per-recommendation-type copy, mirrors the Dashboard AI
+// Insights card's per-insight-type sentence builder (index.tsx's
+// AiInsightsCard) — same "compose from real computed numbers, never a
+// generic placeholder" spirit.
+function recommendationText(
+  rec: Recommendation,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  money: (n: number) => string
+): string {
+  switch (rec.type) {
+    case 'fuelEfficiency':
+      return t('ceoMode.recommendations.fuelEfficiency', {
+        amount: money(rec.estMonthlyImpact ?? 0),
+        pct: (rec.detail.pctPointsAboveRange ?? 0).toFixed(1),
+      });
+    case 'needsReview':
+      return t('ceoMode.recommendations.needsReview', { count: rec.detail.count, amount: money(rec.estMonthlyImpact ?? 0) });
+    case 'taxReserveShortfall':
+      return t('ceoMode.recommendations.taxReserveShortfall', { amount: money(rec.estMonthlyImpact ?? 0) });
+    case 'maintenanceCatchUp':
+      return t('ceoMode.recommendations.maintenanceCatchUp', { count: rec.detail.count });
+    case 'complianceCatchUp':
+      return t('ceoMode.recommendations.complianceCatchUp', { count: rec.detail.count });
+  }
+}
+
+function recommendationRoute(rec: Recommendation): '/(tabs)/more/profit-analysis' | '/(tabs)/deductions' | '/(tabs)/more/tax-estimator' | '/(tabs)/truck-health' | '/(tabs)/more/compliance' {
+  switch (rec.type) {
+    case 'fuelEfficiency':
+      return '/(tabs)/more/profit-analysis';
+    case 'needsReview':
+      return '/(tabs)/deductions';
+    case 'taxReserveShortfall':
+      return '/(tabs)/more/tax-estimator';
+    case 'maintenanceCatchUp':
+      return '/(tabs)/truck-health';
+    case 'complianceCatchUp':
+      return '/(tabs)/more/compliance';
+  }
 }
 
 // CEO Mode — Daily/Weekly Briefing v1 (PROMPTS.md Session 9b item 10,
@@ -38,6 +96,8 @@ function starString(rating: StarRating): string {
 export default function CeoMode() {
   const { t } = useTranslation();
   const { money, number } = useFormatters();
+  const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
+  const router = useRouter();
   const settlementsQuery = useSettlements();
   const deductionsQuery = useDeductions();
   const documentsQuery = useDocuments();
@@ -46,6 +106,7 @@ export default function CeoMode() {
   const updateProfile = useUpdateProfile();
   const fuelQuery = useFuelPurchases();
   const taxQuery = useTaxEstimate();
+  const benchmarksQuery = useBenchmarks();
   const { activeTruckId } = useActiveTruck();
   const trucksQuery = useTrucksList();
   const recordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
@@ -74,6 +135,13 @@ export default function CeoMode() {
   // accurate as re-deriving confidence, since the prefix IS the flag.
   const needsReviewCount = useMemo(
     () => (deductionsQuery.data ?? []).filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:')).length,
+    [deductionsQuery.data]
+  );
+  const needsReviewEstValue = useMemo(
+    () =>
+      (deductionsQuery.data ?? [])
+        .filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:'))
+        .reduce((sum, d) => sum + Number(d.amount ?? 0), 0),
     [deductionsQuery.data]
   );
 
@@ -146,6 +214,39 @@ export default function CeoMode() {
     [totalMiles, fuelCost, taxQuery.data, profileQuery.data, truckHealthResults, latestWeek, previousWeek]
   );
 
+  // AI Coach's top 3 recommendations (Session 9e-B7) — profitAnalysisRollup
+  // mirrors the Dashboard's own 30-day fuelPctOfRevenue/monthlyRevenue
+  // wiring (index.tsx), fuelBenchmark reads the same published benchmarks
+  // row (CLAUDE.md invariant #22), taxReserveShortfall is a real computed
+  // dollar gap (quarterlyPayment - business_balance), never a fabricated
+  // estimate (src/stats/aiRecommendations.ts).
+  const profitAnalysisRollup = useMemo(
+    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], 30),
+    [settlementsQuery.data, fuelQuery.data]
+  );
+  const fuelBenchmark = useMemo(
+    () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,
+    [benchmarksQuery.data]
+  );
+  const taxReserveShortfall =
+    taxQuery.data && taxQuery.data.estimate.quarterlyPayment > 0
+      ? Math.max(0, taxQuery.data.estimate.quarterlyPayment - (profileQuery.data?.business_balance ?? 0))
+      : null;
+  const recommendations = useMemo(() => {
+    const candidates = buildRecommendationCandidates({
+      fuelPctOfRevenue: profitAnalysisRollup.fuelPctOfRevenue,
+      fuelBenchmarkHigh: fuelBenchmark?.high ?? null,
+      monthlyRevenue: profitAnalysisRollup.revenue,
+      needsReviewCount,
+      needsReviewEstValue,
+      taxReserveShortfall,
+      maintenanceAlertCount,
+      complianceDueSoonCount,
+    });
+    return selectTopRecommendations(candidates, 3);
+  }, [profitAnalysisRollup, fuelBenchmark, needsReviewCount, needsReviewEstValue, taxReserveShortfall, maintenanceAlertCount, complianceDueSoonCount]);
+  const recommendationsTotalImpact = useMemo(() => sumRecommendationImpact(recommendations), [recommendations]);
+
   async function handleSaveGoal() {
     const value = Number(goalInput);
     if (!value || value <= 0) return;
@@ -199,6 +300,25 @@ export default function CeoMode() {
           </Card>
         ) : (
           <>
+            {recommendations.length > 0 && (
+              <Card>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.lg, marginBottom: spacing.xs }}>
+                  {recommendationsTotalImpact > 0
+                    ? t('ceoMode.recommendations.headerTitle', { amount: moneyRounded(recommendationsTotalImpact) })
+                    : t('ceoMode.recommendations.headerTitleZero')}
+                </Text>
+                <MutedText style={{ marginBottom: spacing.sm }}>{t('ceoMode.recommendations.subtitle')}</MutedText>
+                {recommendations.map((rec) => (
+                  <TappableCard key={rec.type} onPress={() => router.push(recommendationRoute(rec))}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                      <Text style={{ fontSize: 20 }}>{RECOMMENDATION_ICON[rec.type]}</Text>
+                      <Text style={{ color: colors.text, flex: 1 }}>{recommendationText(rec, t, moneyRounded)}</Text>
+                    </View>
+                  </TappableCard>
+                ))}
+              </Card>
+            )}
+
             <Card>
               <View style={styles.statRow}>
                 <View style={styles.statCell}>

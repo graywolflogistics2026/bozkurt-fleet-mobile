@@ -5,7 +5,7 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Polyline } from 'react-native-svg';
+import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFleetStats, fetchFleetStats, fetchDriverStats } from '@/src/data/dashboardStats';
@@ -299,6 +299,66 @@ function CompactTile({
   );
 }
 
+// Session 9e-B3: Overview Revenue/Expenses/Net trio (replaces the old 2x2
+// compact stat grid) — a tiny vs-last-week % delta per tile, reusing
+// WeekOverWeekChange (pct + direction) directly rather than CompactTile's
+// MetricTrend shape (which only carries direction, no %, and is shared by
+// several per-mile trend call sites this pass deliberately leaves alone).
+function OverviewTile({
+  label,
+  value,
+  valueColor,
+  change,
+  goodDirection,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  change: WeekOverWeekChange;
+  goodDirection: 'up' | 'down';
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const isGood = change.direction === goodDirection;
+  const deltaColor = change.pct == null || change.direction === 'flat' ? colors.muted : isGood ? colors.green : colors.red;
+  const arrow = change.direction === 'up' ? '▲' : change.direction === 'down' ? '▼' : '—';
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.compactTile, pressed && { opacity: 0.85 }]}>
+      <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={{ color: valueColor ?? colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={{ color: deltaColor, fontSize: 10, marginTop: 2, fontWeight: '700' }} numberOfLines={1}>
+        {change.pct == null ? t('dashboard.hero.newThisWeek') : `${arrow} ${Math.abs(change.pct).toFixed(1)}%`}
+      </Text>
+    </Pressable>
+  );
+}
+
+// Session 9e-B4: a slim Cash Balance (business_balance) row, visible by
+// default in the new zoned layout — this design decision brings it back
+// to default visibility (it's `businessBalance` in DEFAULT_HIDDEN_CARD_IDS,
+// src/stats/dashboardLayout.ts, still fully available via Customize as the
+// larger StatValue-style card too). Same balance-tier coloring as that
+// card, just a single compact row instead of a full-height block.
+function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: () => void }) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const color = balance > 10000 ? colors.green : balance > 3000 ? colors.orange : colors.red;
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.slimCard, pressed && { opacity: 0.85 }]}>
+      <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>💰 {t('dashboard.businessBalance')}</Text>
+      <Text style={{ color, fontWeight: '700', fontSize: typography.size.lg }}>{money(balance)}</Text>
+    </Pressable>
+  );
+}
+
 function profitScoreColor(score: number): string {
   if (score >= 75) return colors.green;
   if (score >= 60) return colors.orange;
@@ -306,77 +366,118 @@ function profitScoreColor(score: number): string {
 }
 
 function greetingKey(hour: number): string {
-  if (hour < 12) return 'dashboard.hero.greetingMorning';
-  if (hour < 18) return 'dashboard.hero.greetingAfternoon';
-  return 'dashboard.hero.greetingEvening';
+  if (hour < 12) return 'dashboard.greeting.morning';
+  if (hour < 18) return 'dashboard.greeting.afternoon';
+  return 'dashboard.greeting.evening';
 }
 
-// Hero Card's "vs last week" line (Session 9d item 1) — pct==null means
-// there's no prior week yet (first-ever settlement), which reads as "New"
-// rather than a misleading 0%/blank.
-function HeroChange({ change, goodDirection }: { change: WeekOverWeekChange; goodDirection: 'up' | 'down' }) {
+// Session 9e-B1: greeting moved out of the Hero Card into the page body,
+// below the new top bar (hamburger/wordmark/bell, see _layout.tsx) —
+// time-of-day aware, same three-way split the old in-hero greeting used.
+function DashboardGreeting({ name }: { name: string }) {
   const { t } = useTranslation();
-  if (change.pct == null) {
+  const hour = new Date().getHours();
+  return (
+    <View style={{ marginTop: spacing.md, marginBottom: spacing.sm }}>
+      <Text style={{ color: colors.text, fontSize: typography.size.xl, fontWeight: '700' }}>
+        {t(greetingKey(hour), { name })}
+      </Text>
+      <MutedText>{t('dashboard.greeting.subtitle')}</MutedText>
+    </View>
+  );
+}
+
+function formattedDelta(amount: number, moneyFmt: (n: number, opts?: Intl.NumberFormatOptions) => string): string {
+  const abs = moneyFmt(Math.abs(amount), { maximumFractionDigits: 0 });
+  return amount < 0 ? `-${abs}` : `+${abs}`;
+}
+
+// Hero Card's "vs last week" line (Session 9e-B2: dollar delta, not a
+// %, per the "TODAY'S PROFIT" mockup) — pct==null on the underlying change
+// means there's no prior week yet (first-ever settlement), which reads as
+// "New" rather than a misleading $0.
+function HeroChange({
+  change,
+  deltaAmount,
+  goodDirection,
+}: {
+  change: WeekOverWeekChange;
+  deltaAmount: number | null;
+  goodDirection: 'up' | 'down';
+}) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  if (change.pct == null || deltaAmount == null) {
     return <Text style={styles.heroChange}>{t('dashboard.hero.newThisWeek')}</Text>;
   }
   const isGood = change.direction === goodDirection;
-  const color = change.direction === 'flat' ? 'rgba(232,234,246,0.65)' : isGood ? colors.green : colors.red;
-  const arrow = change.direction === 'up' ? '▲' : change.direction === 'down' ? '▼' : '—';
+  const color = change.direction === 'flat' ? 'rgba(240,240,245,0.65)' : isGood ? colors.green : colors.red;
   return (
     <Text style={[styles.heroChange, { color }]}>
-      {arrow} {Math.abs(change.pct).toFixed(1)}% {t('dashboard.hero.vsLastWeek')}
+      {t('dashboard.hero.vsLastWeekAmount', { delta: formattedDelta(deltaAmount, moneyFmt) })}
     </Text>
   );
 }
 
-// Dashboard 2.0 Hero Card (Session 9d item 1, owner + design-advisor
-// vision — "from list to cockpit"): the one thing a user sees first,
-// answering "how much did I make, am I on pace" in 5 seconds. Reuses
-// calcScorecard() (src/stats/scorecard.ts, legacy rScore() port) for the
-// Profit Score bar rather than inventing a second business-health
-// formula — same all-time revenue/mile + fuel/mile + net/mile composite
-// the Scorecard screen already shows, just presented as a bar here.
+// Filled area chart under the Hero Card's big profit number (Session
+// 9e-B2) — adapted from RevenueTrendChart's Polyline-only line-drawing
+// (buildPolylinePoints, above) by also drawing a translucent-green Polygon
+// under the same points. Weekly net-profit points (this app's settlements
+// are weekly, CLAUDE.md invariant #7-adjacent) rather than fabricated daily
+// granularity — "30D" reads as "recent weeks" the same way
+// RevenueTrendChart's own 30D range already does.
+function HeroAreaChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
+  const [width, setWidth] = useState(0);
+  const height = 64;
+  const values = points.map((p) => p.revenue - p.expenses);
+  const polylinePoints = buildPolylinePoints(values, width, height);
+  const areaPoints = width > 0 && values.length >= 2 ? `0,${height} ${polylinePoints} ${width},${height}` : '';
+
+  return (
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height, marginTop: spacing.lg }}>
+      {values.length >= 2 && width > 0 && (
+        <Svg width={width} height={height}>
+          <Polygon points={areaPoints} fill="rgba(34,197,94,0.18)" stroke="none" />
+          <Polyline points={polylinePoints} fill="none" stroke={colors.green} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        </Svg>
+      )}
+    </View>
+  );
+}
+
+// Dashboard 2.0 Hero Card (Session 9d item 1, restyled Session 9e-B2
+// toward the "TODAY'S PROFIT" mockup — owner + design-advisor vision "from
+// list to cockpit"). Now singularly about this week's PROFIT (Revenue/
+// Expenses moved to the Overview trio below, B3) — the one thing a user
+// sees first. Reuses calcScorecard() (src/stats/scorecard.ts, legacy
+// rScore() port) for the Profit Score bar rather than inventing a second
+// business-health formula.
 function HeroCard({
-  name,
-  weekRevenue,
   weekNetProfit,
-  revenueChange,
   netProfitChange,
+  netProfitDeltaAmount,
+  chartPoints,
   profitScore,
   onPress,
 }: {
-  name: string;
-  weekRevenue: number;
   weekNetProfit: number;
-  revenueChange: WeekOverWeekChange;
   netProfitChange: WeekOverWeekChange;
+  netProfitDeltaAmount: number | null;
+  chartPoints: WeeklyRevenueExpensePoint[];
   profitScore: number | null;
   onPress: () => void;
 }) {
   const { t } = useTranslation();
   const { money: moneyFmt } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const animatedRevenue = useAnimatedNumber(weekRevenue);
   const animatedNetProfit = useAnimatedNumber(weekNetProfit);
-  const hour = new Date().getHours();
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
-      <LinearGradient colors={['#1b2650', '#0f1117']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
-        <Text style={styles.heroGreeting}>{t(greetingKey(hour), { name })}</Text>
-        <Text style={styles.heroSubtitle}>{t('dashboard.hero.thisWeek')}</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md }}>
-          <View>
-            <Text style={styles.heroLabel}>{t('dashboard.hero.revenue')}</Text>
-            <Text style={styles.heroValue}>{money(animatedRevenue)}</Text>
-            <HeroChange change={revenueChange} goodDirection="up" />
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.heroLabel}>{t('dashboard.hero.netProfit')}</Text>
-            <Text style={[styles.heroValue, weekNetProfit < 0 && { color: colors.red }]}>{money(animatedNetProfit)}</Text>
-            <HeroChange change={netProfitChange} goodDirection="up" />
-          </View>
-        </View>
+      <LinearGradient colors={['#0f1a3d', colors.bg]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
+        <Text style={styles.heroEyebrow}>{t('dashboard.hero.eyebrow')}</Text>
+        <Text style={[styles.heroBigValue, weekNetProfit < 0 && { color: colors.red }]}>{money(animatedNetProfit)}</Text>
+        <HeroChange change={netProfitChange} deltaAmount={netProfitDeltaAmount} goodDirection="up" />
         {profitScore != null && (
           <View style={{ marginTop: spacing.lg }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
@@ -388,6 +489,7 @@ function HeroCard({
             </View>
           </View>
         )}
+        <HeroAreaChart points={chartPoints} />
       </LinearGradient>
     </Pressable>
   );
@@ -472,17 +574,31 @@ function FleetHealthCard({
   );
 }
 
-// Money Breakdown donut card (Session 9d item 4) — expense categories as
-// % of revenue + a Profit slice, reusing buildProfitLoss()'s
-// expensesByBucket (same Schedule C bucket rollup Operating P&L already
-// shows) rather than a second category-grouping function. Capped at the
-// top 3 buckets + an "Other" fold-in (dataviz anti-pattern: never a
-// generated hue per category) — Profit only appears when netIncome > 0,
-// since expenses + profit summing to exactly revenue is what makes "% of
-// revenue" a meaningful donut in the first place. Tapping any slice/row
-// goes to Deductions, same destination the existing Total Deductions
-// card already uses.
-function MoneyBreakdownCard({ slices, onPress }: { slices: DonutSlice[]; onPress: () => void }) {
+export type MoneyBreakdownRange = 'thisMonth' | 'lastMonth';
+
+// Expenses Breakdown donut card (Session 9d item 4, restyled Session
+// 9e-B6 into "Expenses Breakdown" per the mockup — legend rows now show a
+// $ amount alongside the %, plus a This Month/Last Month selector).
+// Category slices reuse buildProfitLoss()'s expensesByBucket (same
+// Schedule C bucket rollup Operating P&L already shows) rather than a
+// second category-grouping function. Capped at the top 3 buckets + an
+// "Other" fold-in (dataviz anti-pattern: never a generated hue per
+// category) — Profit only appears when netIncome > 0, since expenses +
+// profit summing to exactly revenue is what makes "% of revenue" a
+// meaningful donut in the first place. Tapping any slice/row goes to
+// Deductions, same destination the existing Total Deductions card
+// already uses.
+function MoneyBreakdownCard({
+  slices,
+  range,
+  onRangeChange,
+  onPress,
+}: {
+  slices: DonutSlice[];
+  range: MoneyBreakdownRange;
+  onRangeChange: (range: MoneyBreakdownRange) => void;
+  onPress: () => void;
+}) {
   const { t } = useTranslation();
   const { money: moneyFmt } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
@@ -490,9 +606,20 @@ function MoneyBreakdownCard({ slices, onPress }: { slices: DonutSlice[]; onPress
 
   return (
     <Card>
-      <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md, marginBottom: spacing.md }}>
-        {t('dashboard.moneyBreakdown.title')}
-      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+        <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>
+          {t('dashboard.moneyBreakdown.title')}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          {(['thisMonth', 'lastMonth'] as const).map((r) => (
+            <Pressable key={r} onPress={() => onRangeChange(r)} style={[styles.rangePill, range === r && styles.rangePillActive]}>
+              <Text style={[styles.rangePillText, range === r && styles.rangePillTextActive]}>
+                {t(`dashboard.moneyBreakdown.${r}`)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
       {total <= 0 ? (
         <MutedText>{t('dashboard.moneyBreakdown.empty')}</MutedText>
       ) : (
@@ -507,7 +634,10 @@ function MoneyBreakdownCard({ slices, onPress }: { slices: DonutSlice[]; onPress
                 <Text style={{ color: colors.text, fontSize: typography.size.xs, flex: 1 }} numberOfLines={1}>
                   {s.label}
                 </Text>
-                <Text style={{ color: colors.muted, fontSize: typography.size.xs }}>{Math.round((s.value / total) * 100)}%</Text>
+                <Text style={{ color: colors.muted, fontSize: typography.size.xs }}>{money(s.value)}</Text>
+                <Text style={{ color: colors.muted, fontSize: typography.size.xs, minWidth: 32, textAlign: 'right' }}>
+                  {Math.round((s.value / total) * 100)}%
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -584,7 +714,12 @@ function AiInsightsCard({ insight, onViewDetails }: { insight: Insight; onViewDe
 
   return (
     <TappableCard onPress={() => onViewDetails(insight.type)}>
-      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('dashboard.aiInsights.title')}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+        <Text style={{ color: colors.text, fontWeight: '700' }}>⚡ {t('dashboard.aiInsights.title')}</Text>
+        <View style={styles.newBadge}>
+          <Text style={styles.newBadgeText}>{t('dashboard.aiInsights.newBadge')}</Text>
+        </View>
+      </View>
       <Text style={{ color: colors.text }}>{sentence}</Text>
       {insight.type === 'fuelBenchmark' && (
         <MutedText style={{ marginTop: spacing.xs }}>{t('dashboard.aiInsights.industryReferenceNote')}</MutedText>
@@ -923,12 +1058,14 @@ export default function Dashboard() {
   const thisWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 1];
   const lastWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 2];
   const heroWeekRevenue = thisWeekPoint?.revenue ?? 0;
+  const heroWeekExpenses = thisWeekPoint?.expenses ?? 0;
   const heroWeekNetProfit = thisWeekPoint ? thisWeekPoint.revenue - thisWeekPoint.expenses : 0;
+  const lastWeekNetProfit = lastWeekPoint ? lastWeekPoint.revenue - lastWeekPoint.expenses : null;
   const heroRevenueChange = calcWeekOverWeekChange(heroWeekRevenue, lastWeekPoint?.revenue);
-  const heroNetProfitChange = calcWeekOverWeekChange(
-    heroWeekNetProfit,
-    lastWeekPoint ? lastWeekPoint.revenue - lastWeekPoint.expenses : null
-  );
+  const heroExpensesChange = calcWeekOverWeekChange(heroWeekExpenses, lastWeekPoint?.expenses);
+  const heroNetProfitChange = calcWeekOverWeekChange(heroWeekNetProfit, lastWeekNetProfit);
+  // Session 9e-B2: Hero Card's "vs last week" line is a $ delta, not a %.
+  const heroNetProfitDeltaAmount = lastWeekNetProfit == null ? null : heroWeekNetProfit - lastWeekNetProfit;
   const fuelCost = useMemo(
     () => (fuelQuery.data ?? []).reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
     [fuelQuery.data]
@@ -988,20 +1125,45 @@ export default function Dashboard() {
     [truckHealthStatuses, complianceUrgencies, taxReserveRatio, heroNetProfitChange.direction]
   );
 
-  // Money Breakdown donut (Session 9d item 4).
+  // All-time P&L (Money section's Net to Owner/Total Deductions cards) —
+  // distinct from the Expenses Breakdown donut below, which is
+  // month-scoped (Session 9e-B6).
   const profitLoss = useMemo(
     () => buildProfitLoss(settlementsQuery.data ?? [], dedQuery.data ?? [], userCategoriesQuery.data ?? []),
     [settlementsQuery.data, dedQuery.data, userCategoriesQuery.data]
   );
+
+  // Expenses Breakdown donut (Session 9d item 4, restyled Session 9e-B6
+  // with a This Month/Last Month selector — the donut now scopes
+  // buildProfitLoss()'s inputs to the selected calendar month via
+  // week_ending/ded_date instead of reading the all-time profitLoss above).
+  const [moneyBreakdownRange, setMoneyBreakdownRange] = useState<MoneyBreakdownRange>('thisMonth');
+  const moneyBreakdownProfitLoss = useMemo(() => {
+    const now = new Date();
+    const monthOffset = moneyBreakdownRange === 'lastMonth' ? 1 : 0;
+    const targetDate = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+    const inMonth = (dateStr: string | null | undefined) => {
+      if (!dateStr) return false;
+      const d = new Date(`${dateStr}T00:00:00`);
+      return d.getFullYear() === year && d.getMonth() === month;
+    };
+    const monthSettlements = (settlementsQuery.data ?? []).filter((s) => inMonth(s.week_ending));
+    const monthDeductions = (dedQuery.data ?? []).filter((d) => inMonth(d.ded_date));
+    return buildProfitLoss(monthSettlements, monthDeductions, userCategoriesQuery.data ?? []);
+  }, [settlementsQuery.data, dedQuery.data, userCategoriesQuery.data, moneyBreakdownRange]);
   const moneyBreakdownSlices = useMemo<DonutSlice[]>(() => {
     const palette = [colors.red, colors.orange, colors.purple];
-    const top = profitLoss.expensesByBucket.slice(0, 3);
-    const otherTotal = profitLoss.expensesByBucket.slice(3).reduce((sum, b) => sum + b.amount, 0);
+    const top = moneyBreakdownProfitLoss.expensesByBucket.slice(0, 3);
+    const otherTotal = moneyBreakdownProfitLoss.expensesByBucket.slice(3).reduce((sum, b) => sum + b.amount, 0);
     const slices: DonutSlice[] = top.map((b, i) => ({ label: b.category, value: b.amount, color: palette[i] }));
     if (otherTotal > 0) slices.push({ label: t('dashboard.moneyBreakdown.other'), value: otherTotal, color: colors.muted });
-    if (profitLoss.netIncome > 0) slices.push({ label: t('dashboard.moneyBreakdown.profit'), value: profitLoss.netIncome, color: colors.green });
+    if (moneyBreakdownProfitLoss.netIncome > 0) {
+      slices.push({ label: t('dashboard.moneyBreakdown.profit'), value: moneyBreakdownProfitLoss.netIncome, color: colors.green });
+    }
     return slices;
-  }, [profitLoss, t]);
+  }, [moneyBreakdownProfitLoss, t]);
 
   // AI Insights (Session 9d item 6) — needsReviewCount/estValue mirrors
   // CEO Mode's own "NEEDS REVIEW:" prefix count (CLAUDE.md invariant #14).
@@ -1430,9 +1592,9 @@ export default function Dashboard() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <ScreenTitle>{t('dashboard.title')}</ScreenTitle>
-          <Pressable onPress={() => router.push('/(tabs)/more/dashboard-customize')} hitSlop={8}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <DashboardGreeting name={heroFirstName} />
+          <Pressable onPress={() => router.push('/(tabs)/more/dashboard-customize')} hitSlop={8} style={{ marginTop: spacing.md }}>
             <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
               {t('dashboard.customize')}
             </Text>
@@ -1440,14 +1602,42 @@ export default function Dashboard() {
         </View>
 
         <HeroCard
-          name={heroFirstName}
-          weekRevenue={heroWeekRevenue}
           weekNetProfit={heroWeekNetProfit}
-          revenueChange={heroRevenueChange}
           netProfitChange={heroNetProfitChange}
+          netProfitDeltaAmount={heroNetProfitDeltaAmount}
+          chartPoints={revenueExpenseTrend}
           profitScore={profitScore}
           onPress={() => router.push('/(tabs)/more/cash-flow')}
         />
+
+        <View style={styles.compactRow}>
+          <OverviewTile
+            label={t('dashboard.hero.revenue')}
+            value={money(heroWeekRevenue)}
+            valueColor={colors.green}
+            change={heroRevenueChange}
+            goodDirection="up"
+            onPress={() => router.push('/(tabs)/more/cash-flow')}
+          />
+          <OverviewTile
+            label={t('dashboard.overview.expenses')}
+            value={money(heroWeekExpenses)}
+            valueColor={colors.red}
+            change={heroExpensesChange}
+            goodDirection="down"
+            onPress={() => router.push('/(tabs)/deductions')}
+          />
+          <OverviewTile
+            label={t('dashboard.hero.netProfit')}
+            value={money(heroWeekNetProfit)}
+            valueColor={heroWeekNetProfit < 0 ? colors.red : colors.green}
+            change={heroNetProfitChange}
+            goodDirection="up"
+            onPress={() => router.push('/(tabs)/more/cash-flow')}
+          />
+        </View>
+
+        <CashBalanceSlimCard balance={capital?.businessBalance ?? 0} onPress={() => router.push('/(tabs)/more/cash-flow')} />
 
         <FleetHealthCard score={fleetHealth.score} chips={fleetHealth.chips} onInfoPress={() => setHealthInfoOpen(true)} />
 
@@ -1541,41 +1731,13 @@ export default function Dashboard() {
               collapsed={!!sectionsCollapsed.overview}
               onToggle={() => toggleSection('overview')}
             >
-              {/* 2x2 compact stat grid (Session 9d item 12) — Revenue/Net/
-                  Miles/CPM at a glance, all-time totals (distinct from the
-                  Hero Card's THIS WEEK figures above). Replaces what would
-                  otherwise be up to 4 separate full-width stacked cards
-                  (totalRevenue/milesDriven are DEFAULT_HIDDEN_CARD_IDS —
-                  this is their first compact presence in the zoned
-                  default layout). */}
-              <View style={styles.compactRow}>
-                <CompactTile
-                  label={t('dashboard.totalRevenue')}
-                  value={stats ? money(stats.grossRevenue) : '—'}
-                  valueColor={colors.green}
-                  onPress={() => router.push('/(tabs)/more/cash-flow')}
-                />
-                <CompactTile
-                  label={t('dashboard.netToOwner')}
-                  value={stats ? money(stats.netRevenue) : '—'}
-                  valueColor={stats && stats.netRevenue < 0 ? colors.red : colors.green}
-                  onPress={() => router.push('/(tabs)/more/cash-flow')}
-                />
-              </View>
-              <View style={styles.compactRow}>
-                <CompactTile
-                  label={t('dashboard.milesDriven')}
-                  value={stats ? number(stats.totalMiles) : '—'}
-                  onPress={() => router.push('/(tabs)/more/cash-flow')}
-                />
-                <CompactTile
-                  label={t('dashboard.costPerMile')}
-                  value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                  valueColor={colors.red}
-                  onPress={() => router.push('/(tabs)/more/cash-flow')}
-                />
-              </View>
-
+              {/* The old all-time 2x2 Revenue/Net/Miles/CPM grid (Session 9d
+                  item 12) was replaced Session 9e-B3 by the weekly
+                  Revenue/Expenses/Net trio now shown right under the Hero
+                  Card — those all-time figures stay reachable via Customize
+                  (totalRevenue/milesDriven are DEFAULT_HIDDEN_CARD_IDS) and
+                  Cash Flow; Cost/Mile remains visible below in "On the
+                  Road" (revenuePerMile/costPerMile pair). */}
               {renderCard('revenueExpenseTrend', null)}
               <Card>
                 <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
@@ -1594,7 +1756,12 @@ export default function Dashboard() {
                 <View style={{ flex: 1 }}>{renderCard('netToOwner', null)}</View>
                 <View style={{ flex: 1 }}>{renderCard('totalDeductions', null)}</View>
               </View>
-              <MoneyBreakdownCard slices={moneyBreakdownSlices} onPress={() => router.push('/(tabs)/deductions')} />
+              <MoneyBreakdownCard
+                slices={moneyBreakdownSlices}
+                range={moneyBreakdownRange}
+                onRangeChange={setMoneyBreakdownRange}
+                onPress={() => router.push('/(tabs)/deductions')}
+              />
               <GoalProgressCard
                 goalPct={goalPct}
                 current={currentWeekNet}
@@ -1774,6 +1941,18 @@ const styles = {
     flexDirection: 'row' as const,
     gap: spacing.sm,
   },
+  slimCard: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
   compactTile: {
     flex: 1,
     backgroundColor: colors.card,
@@ -1796,40 +1975,46 @@ const styles = {
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  heroGreeting: {
-    color: colors.text,
-    fontSize: typography.size.lg,
-    fontWeight: '700' as const,
-  },
-  heroSubtitle: {
-    color: 'rgba(232,234,246,0.65)',
-    fontSize: typography.size.sm,
-    marginTop: 2,
-  },
-  heroLabel: {
-    color: 'rgba(232,234,246,0.65)',
+  heroEyebrow: {
+    color: 'rgba(240,240,245,0.65)',
     fontSize: typography.size.xs,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
-  heroValue: {
+  heroBigValue: {
     color: colors.text,
-    fontSize: 28,
+    fontSize: 40,
     fontWeight: '800' as const,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   heroChange: {
     fontSize: typography.size.xs,
     fontWeight: '700' as const,
     marginTop: spacing.xs,
   },
+  newBadge: {
+    backgroundColor: 'rgba(37,99,235,0.18)',
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 1,
+    marginStart: spacing.xs,
+  },
+  newBadgeText: {
+    color: colors.accent,
+    fontSize: 9,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase' as const,
+  },
   heroScoreLabel: {
-    color: 'rgba(232,234,246,0.65)',
+    color: 'rgba(240,240,245,0.65)',
     fontSize: typography.size.xs,
     fontWeight: '600' as const,
   },
   heroScoreTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(232,234,246,0.12)',
+    backgroundColor: 'rgba(240,240,245,0.12)',
     overflow: 'hidden' as const,
   },
   heroScoreFill: {

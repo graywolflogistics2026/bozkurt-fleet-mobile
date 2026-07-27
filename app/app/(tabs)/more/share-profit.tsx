@@ -11,6 +11,7 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { BRAND_NAME } from '@/src/brand';
 
 type MetricKey = 'revenue' | 'profit' | 'mpg';
 const METRICS: MetricKey[] = ['revenue', 'profit', 'mpg'];
@@ -83,7 +84,7 @@ export default function ShareProfit() {
   const [sharing, setSharing] = useState(false);
 
   const latest = [...(settlementsQuery.data ?? [])].sort((a, b) => (b.week_ending ?? '').localeCompare(a.week_ending ?? ''))[0];
-  const companyLabel = profile?.company_name?.trim() || t('auth.brand');
+  const companyLabel = profile?.company_name?.trim() || BRAND_NAME;
 
   function toggle(key: MetricKey) {
     setIncluded((prev) => ({ ...prev, [key]: !prev[key] }));

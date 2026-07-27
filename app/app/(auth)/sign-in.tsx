@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { Screen, ScreenTitle, Field, PrimaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
+import { BRAND_NAME } from '@/src/brand';
 
 export default function SignIn() {
   const { t } = useTranslation();
@@ -24,7 +25,7 @@ export default function SignIn() {
 
   return (
     <Screen>
-      <ScreenTitle>{t('auth.brand')}</ScreenTitle>
+      <ScreenTitle>{BRAND_NAME}</ScreenTitle>
       <MutedText>{t('auth.signInSubtitle')}</MutedText>
       <Field
         placeholder={t('auth.emailPlaceholder')}

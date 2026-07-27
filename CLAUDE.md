@@ -526,4 +526,14 @@
   Never write to a bucket path that doesn't start with the current user's
   auth.uid() — the RLS policy will reject it.
 - TypeScript strict mode; no `any` in the data layer.
-- Dark theme colors come from the CSS variables in legacy/index.html.
+- Dark theme colors (owner decision 2026-07-10, Session 9e-B10, "BOZKA AI"
+  design language — SUPERSEDES the earlier rule below): `app/src/theme.ts`'s
+  `colors` constant is deeper blacks (`bg:#08080c`, `side:#101015`,
+  `card:#16161d`, `card2:#1c1c26`, `border:#26262f`, `text:#f0f0f5`,
+  `muted:#8a8a99`) with a blue-600 accent (`accent:#2563eb`, the
+  `#2563eb` family). The 4 semantic signal colors (green/red/orange/
+  purple) are UNCHANGED. `theme.ts`'s own header comment carries the
+  original legacy-CSS-variable values for history; no other file may
+  hardcode a color from that old palette going forward — always import
+  from `theme.ts`. (Superseded rule, kept for context: dark theme colors
+  used to come verbatim from the CSS variables in legacy/index.html.)

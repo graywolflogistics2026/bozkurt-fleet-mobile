@@ -8,7 +8,7 @@ Claude Code understands Turkish too — feel free to ask follow-ups in Turkish m
 Session 9c (Hindi/Ukrainian real translation) is POSTPONED to the
 post-launch v1.1 track — see its section below for the launch-scope
 decision. Session 9e (BOZKA AI design language, items 9e-A/B1–B10) is
-paused mid-task, not resumed this pass; continue it later on request.
+DONE as of 2026-07-27 — see its section below.
 
 ---
 
@@ -1354,6 +1354,49 @@ separate design pass):
     alongside the standard invariant #8 footer.
 Then a full audit session: run through docs/FEATURE_INVENTORY.md and produce
 PARITY.md marking each legacy feature done/partial/missing.
+```
+
+## Session 9e — "BOZKA AI" design language (DONE 2026-07-27)
+
+```
+Dashboard/nav restyle pass toward the "BOZKA AI" mockup (owner decision
+2026-07-10). All items shipped:
+9e-A: brand.ts + BrandWordmark component — one file to rename the working
+   brand ("BOZKA AI") later; app.json's store-facing name/slug untouched.
+9e-B1: Home tab's top bar (hamburger/wordmark/bell) + in-body time-of-day
+   greeting, replacing the old in-hero greeting. Bell badge = compliance +
+   Truck Health items due (src/data/alerts.ts), opens the new Alerts
+   screen (app/(tabs)/more/alerts.tsx).
+9e-B2: Hero Card restyled to a single big "this week's profit" figure +
+   $ delta vs last week + a green filled area chart (last 8 weeks).
+9e-B3: Revenue/Expenses/Net trio (OverviewTile) replaces the old all-time
+   2x2 stat grid, each with a vs-last-week %.
+9e-B4: slim Cash Balance row, back to default visibility.
+9e-B5: AI Insight card gets a ⚡ + "New" pill.
+9e-B6: Money Breakdown → "Expenses Breakdown": $ + % per legend row, This
+   Month/Last Month selector (month-scoped buildProfitLoss, separate from
+   the Money section's all-time P&L).
+9e-B7: CEO Mode → "AI Coach": header "you can increase your monthly
+   profit by ~$X" + top-3 recommendations (src/stats/aiRecommendations.ts
+   — money-backed candidates only get a real $ impact, maintenance/
+   compliance catch-up items never fabricate one).
+9e-B8: bottom tab bar restructured to Home/Transactions/[+]/Reports/Menu.
+   Deductions and Truck Health are no longer direct tabs (href: null) but
+   stay reachable — Deductions via the new Transactions screen's expense
+   rows + Menu's Expenses group, Truck Health via the Reports hub
+   (reuses WideSidebar's shared GROUPS constant's Intelligence/Tools
+   sections) + Home's Truck Status card.
+9e-B9: 2026-07-tuned app/intro.tsx — 2-3 brand slides shown once per
+   device (src/onboarding/introStorage.ts) before sign-up/sign-in; the
+   existing 10-step onboarding wizard (post-signup) is unchanged.
+9e-B10: theme.ts deepened (bg #08080c, blue-600 accent #2563eb — CLAUDE.md
+   color-source invariant updated), generous radii/spacing bump.
+
+Not done this pass (flagged for later, not blockers): a full on-device RTL
+walkthrough (deferred — Settings > Language is hidden behind
+LANGUAGE_PICKER_ENABLED for the English-only beta launch, so there's no
+RTL surface to exercise yet) and swapping BrandWordmark's emoji for a real
+logo asset (still a placeholder, per 9e-A's own scope note).
 ```
 
 ## Session 10 — Store readiness (when you're ready to ship)
