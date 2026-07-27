@@ -3,7 +3,7 @@
 **STATUS (2026-07-12): sections 1-27 have all been run against the live DB.
 Section 28 (added this pass, PROMPTS.md Session 9b onboarding wizard) is
 NOT yet run — see its checklist below. Section 33 (added 2026-07-17, meals
-& advance repayments) is also NOT yet run.**
+& advance repayments) has been run (2026-07-27).**
 Sections 11-24 were applied together in one transaction on 2026-07-11 via a
 combined SQL block (generated from this file, run in the Supabase SQL
 editor). This file started as a forward-looking "run this next" list; it's kept now
@@ -1033,7 +1033,7 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
-## 33. deductions.tax_deductible (meals & advance repayments, owner decision 2026-07-17, mirrors web v2026.07.17-D) — NOT YET APPLIED
+## 33. deductions.tax_deductible (meals & advance repayments, owner decision 2026-07-17, mirrors web v2026.07.17-D) — ✅ APPLIED (2026-07-27)
 
 A settlement-withheld row (`source='settlement'`) is already excluded from
 every tax total (CLAUDE.md invariant #1's net-pay model, `source !==
@@ -1053,7 +1053,7 @@ alter table deductions add column tax_deductible boolean not null default true;
 
 No RLS change needed — `deductions` is already owner-scoped.
 
-- [ ] 33a run (add deductions.tax_deductible column)
+- [x] 33a run (add deductions.tax_deductible column)
 
 ---
 
