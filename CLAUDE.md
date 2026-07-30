@@ -504,6 +504,48 @@
       schema/RLS design, not a resurrection of `gw_readonly`. No mobile
       screen should ever gain a "View-Only Mode" toggle again without a
       fresh owner decision superseding this one.
+  24. RESET ALL DATA — exact kept/cleared list (owner decision
+      2026-07-30, tablet-testing fix, binding): `supabase/functions/
+      reset-data/index.ts` wipes every business-data table (settlements,
+      deductions, fuel, maintenance, loads, trucks, drivers, documents,
+      etc. — `TABLES_IN_DELETION_ORDER`) plus the matching Storage files,
+      but never deletes the `profiles` row or the `auth.users` account
+      itself (unlike Delete Account). Within `profiles`, exactly two
+      buckets:
+      - CLEARED (`PROFILE_DATA_RESET`): `business_balance`,
+        `initial_capital` (both reset to `0`, not null — they're
+        always-a-number balances, never "unset"); `weekly_goal`; every
+        Cash Flow forecast budget input (`cf_bank_balance`,
+        `cf_weekly_revenue`, `cf_truck_payment`, `cf_fuel_weekly`,
+        `cf_insurance_monthly`, `cf_other_weekly`, `cf_tax_reserve_pct`,
+        docs/PENDING_SQL.md §29); `dashboard_layout`;
+        `dashboard_sections_collapsed`.
+      - KEPT (never touched by the reset, on purpose): `company_name`,
+        `owner_name`, `home_state`, `dot_number`, `mc_number`, `locale`,
+        `role`, `tos_accepted_at`/`tos_version`,
+        `onboarding_completed_at`. `entity_type`/`filing_status`/every
+        other tax-profile field lives on `tax_config`, a table this
+        function has never touched (see its own file-header comment) —
+        nothing to keep-or-clear there, it's simply out of scope by
+        table, same as it always was.
+      `onboarding_completed_at` moved from CLEARED to KEPT this pass —
+      before 2026-07-30 it was deliberately nulled so the onboarding
+      wizard could be re-tested without a fresh account; it's now treated
+      as an identity/prefs field like the rest of that list, so Reset All
+      Data no longer forces the wizard to run again. Any FUTURE new
+      `profiles` column must be explicitly sorted into one of these two
+      buckets before shipping — there is no default; an unlisted column
+      is silently KEPT (an `.update()` with an explicit field list never
+      touches columns it doesn't name), which is exactly how
+      `dashboard_layout`/`dashboard_sections_collapsed` were missed and
+      kept reappearing after a reset until this pass added them. The
+      client mirror (`app/src/data/queryInvalidation.ts`'s
+      `invalidateFinancialData()`) must invalidate every react-query key
+      that reads a CLEARED field — `'profile'` (the full-row
+      `useProfile()` fetch, distinct from AuthContext's own narrower one)
+      and `'dashboard-layout'` are both required there for the same
+      reason: a correct server-side reset with a stale client cache still
+      *looks* like the bug to the user.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

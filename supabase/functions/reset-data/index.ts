@@ -49,11 +49,29 @@ const TABLES_IN_DELETION_ORDER = [
 ];
 
 // profiles.* fields that hold actual business/financial DATA (a balance,
-// a goal, a budget number) rather than account identity/settings
-// (company_name, home_state, dot_number, locale, role, dashboard_layout,
-// tos_*) — reset to their "never set" default instead of deleting the
-// row (profiles has no meaningful "deleted" state; it's 1:1 with
-// auth.users and every screen assumes it always has a row).
+// a goal, a budget number, a saved dashboard layout) rather than account
+// identity/settings — reset to their "never set" default instead of
+// deleting the row (profiles has no meaningful "deleted" state; it's 1:1
+// with auth.users and every screen assumes it always has a row).
+//
+// CLEARED (2026-07-30 tablet-testing fix — dashboard_layout/
+// dashboard_sections_collapsed were missing here, so a reset-then-
+// reopen-the-app still showed the old custom layout): business_balance,
+// initial_capital, weekly_goal, every cf_* Cash Flow forecast budget
+// input (PENDING_SQL.md §29), dashboard_layout, dashboard_sections_collapsed.
+//
+// KEPT (never touched by this object, so never touched by the .update()
+// below) — see CLAUDE.md's reset-data invariant for the full rationale:
+// company_name, owner_name, home_state, dot_number, mc_number, locale,
+// role, tos_accepted_at/tos_version, onboarding_completed_at.
+// onboarding_completed_at in particular is a DELIBERATE CHANGE this pass
+// (owner decision 2026-07-30) — it used to be reset here specifically so
+// the onboarding wizard could be re-tested without a fresh account; it's
+// now treated as an identity/prefs field like the others, so Reset All
+// Data no longer forces the wizard to run again. entity_type/filing
+// status/etc. live on tax_config, which this function already never
+// touches (see TABLES_IN_DELETION_ORDER's comment above) — nothing to
+// change there.
 const PROFILE_DATA_RESET = {
   business_balance: 0,
   initial_capital: 0,
@@ -65,9 +83,8 @@ const PROFILE_DATA_RESET = {
   cf_insurance_monthly: null,
   cf_other_weekly: null,
   cf_tax_reserve_pct: null,
-  // Reset so a re-test of the onboarding wizard is possible without a
-  // fresh account — the whole point of this function for dev use.
-  onboarding_completed_at: null,
+  dashboard_layout: null,
+  dashboard_sections_collapsed: null,
 };
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

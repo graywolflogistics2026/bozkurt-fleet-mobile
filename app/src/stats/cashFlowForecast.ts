@@ -42,7 +42,14 @@ export function calcCashFlowForecast(inputs: CashFlowBudgetInputs): CashFlowFore
   // weekly<->monthly (4.33 = 52/12).
   const wExp = tp + fu + oth + ins / 4.33;
   const wNet = wr - wExp;
-  const taxR = wNet * tx;
+  // Tax Reserve must never go negative (2026-07-30 tablet-testing fix):
+  // on a loss week (wNet <= 0) there's no profit to reserve tax against,
+  // so taxR clamps to $0 rather than the raw wNet*tx product, which would
+  // otherwise be negative and perversely ADD money back into
+  // weeklyNetAfterTax below — every downstream figure (the 4-week
+  // timeline's running balance, netBalance30d) derives from wNA, so
+  // clamping here is the one place that needs to change.
+  const taxR = Math.max(0, wNet * tx);
   const wNA = wNet - taxR;
   const r30 = wr * 4.33;
   const n30 = b + wNA * 4.33;

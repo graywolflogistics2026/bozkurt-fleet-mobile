@@ -26,6 +26,15 @@ const AFFECTED_TABLES = [
 // plain entity-hook lists (dashboardStats.ts, capitalAccount.ts,
 // taxConfig.ts) — an import can move profiles.business_balance and add
 // capital_transactions rows, both of which feed these.
+//
+// 'profile' (useProfile(), src/data/profile.ts — the FULL profiles row,
+// distinct from AuthContext's own narrower fetch) was missing here until
+// 2026-07-30's tablet-testing fix: Reset All Data correctly nulled
+// weekly_goal/cf_* server-side, but the Cash Flow forecast screen and
+// CEO Mode kept showing the stale cached values because nothing ever
+// invalidated this query key — reset-data (and any future flow that
+// changes profiles columns outside useUpdateProfile's own mutation,
+// which already invalidates it) needs this listed explicitly.
 const AFFECTED_AGGREGATES = [
   'fleet-stats',
   'driver-stats',
@@ -34,6 +43,7 @@ const AFFECTED_AGGREGATES = [
   'tax_year_data',
   'dashboard-layout',
   'profit-loss',
+  'profile',
 ];
 
 // A bare queryClient.invalidateQueries() call only eagerly refetches
