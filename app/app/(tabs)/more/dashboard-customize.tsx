@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useDashboardLayout, useUpdateDashboardLayout } from '@/src/data/dashboardLayout';
@@ -24,13 +24,20 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 // flatlist's gesture-handler-backed list renders completely blank inside
 // Expo Go (confirmed on-device, EN+TR) — Expo Go doesn't bundle a matching
 // native reanimated/gesture-handler build for every JS version this repo
-// pins. Detected via `Constants.appOwnership === 'expo'` (only truthy
-// inside the Expo Go client, never in a dev-client/EAS build), gating a
-// fallback plain FlatList with large (44pt+) up/down arrows plus move-to-
-// top/bottom actions — functionally equivalent reordering, just without
-// the drag gesture. Dev-client and EAS builds keep the drag-and-drop path
-// since it works there.
-const isExpoGo = Constants.appOwnership === 'expo';
+// pins. Detected via `Constants.executionEnvironment ===
+// ExecutionEnvironment.StoreClient` (true ONLY inside the Expo Go app
+// downloaded from the App Store/Play Store, never in a dev-client or EAS
+// build — 2026-07-30: switched from the deprecated `Constants.
+// appOwnership === 'expo'` check, which was equivalent but is being phased
+// out; `appOwnership` is `null`, NOT `'standalone'`, in an EAS/preview
+// build, so this was never actually the cause of any real-device bug, but
+// executionEnvironment is the non-deprecated, forward-compatible API for
+// the same check going forward), gating a fallback plain FlatList with
+// large (44pt+) up/down arrows plus move-to-top/bottom actions —
+// functionally equivalent reordering, just without the drag gesture.
+// Dev-client and EAS builds keep the drag-and-drop path since it works
+// there.
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 function moveBy<T>(list: T[], index: number, delta: number): T[] {
   const target = index + delta;
