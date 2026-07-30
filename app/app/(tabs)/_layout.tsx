@@ -10,7 +10,7 @@ import { MenuSheet } from '@/src/components/MenuSheet';
 import { WideSidebar } from '@/src/components/WideSidebar';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { useAlertsData } from '@/src/data/alerts';
-import { colors, spacing } from '@/src/theme';
+import { colors, radii, spacing, typography } from '@/src/theme';
 
 // PROMPTS.md's wide-screen breakpoint — matches legacy's fixed 200px
 // #sidebar, which only ever appeared above this width.
@@ -39,6 +39,51 @@ function DashboardHamburger({ onPress }: { onPress: () => void }) {
 // Href cast is expo-router's own documented escape hatch for a route added
 // since the last regen, not a general-purpose `any`.
 const ALERTS_ROUTE = '/(tabs)/more/alerts' as Href;
+
+// Owner decision (tablet testing feedback, 2026-07-30): a prominent Import
+// action in the top bar, next to the wordmark on both phone AND wide/
+// tablet layouts — the wide-screen sidebar has no raised center button
+// equivalent (see CenterImportButton.tsx's own note), so wide-screen users
+// previously had no shortcut-strength way to start an import at all.
+// DESIGN CALL: navigates straight to the import flow rather than
+// reopening the center tab's Import/Ask AI chooser sheet — this button is
+// explicitly labeled/iconed "Import" (unlike the center "+" button), so
+// re-asking "Import or Ask AI?" after a tap on a button that already says
+// "Import" would be a labeling mismatch. Ask AI stays reachable via the
+// center + button's sheet and the Menu.
+function TopBarImportButton({ isWide }: { isWide: boolean }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => router.push('/(tabs)/import')}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t('nav.import')}
+      style={({ pressed }) => [
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: 44,
+          minHeight: 44,
+          paddingHorizontal: isWide ? spacing.sm : spacing.xs,
+          borderRadius: radii.sm,
+          backgroundColor: colors.accent,
+          marginEnd: spacing.xs,
+        },
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      <Text style={{ fontSize: 18 }}>📥</Text>
+      {isWide && (
+        <Text style={{ color: '#fff', fontWeight: '700', fontSize: typography.size.sm, marginStart: spacing.xs }}>
+          {t('nav.import')}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
 
 function DashboardBell() {
   const router = useRouter();
@@ -111,7 +156,12 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} />,
           headerLeft: () => <DashboardHamburger onPress={() => setMenuOpen(true)} />,
           headerTitle: () => <BrandWordmark />,
-          headerRight: () => <DashboardBell />,
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TopBarImportButton isWide={isWide} />
+              <DashboardBell />
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
