@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
@@ -9,6 +10,7 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
 import { defaultTaxDeductible } from '@/src/import/category';
+import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS, type PaymentMethod } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useFormatters } from '@/src/i18n/format';
@@ -122,6 +124,9 @@ export default function Deductions() {
   const { money } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const router = useRouter();
+  const { openId } = useLocalSearchParams<{ openId?: string }>();
+  const autoOpenedRef = useRef(false);
   const dedQuery = useDeductions();
   const insertDeduction = useInsertDeduction();
   const updateDeduction = useUpdateDeduction();
@@ -179,6 +184,17 @@ export default function Deductions() {
   function closeEdit() {
     setEditing(null);
   }
+
+  // "View linked records" from the Documents Archive viewer (owner decision
+  // 2026-07-30) jumps here with ?openId=<deductionId> — auto-opens it
+  // exactly once (findRowToAutoOpen's "already opened" guard).
+  useEffect(() => {
+    const match = findRowToAutoOpen(rows, openId, autoOpenedRef.current);
+    if (match) {
+      autoOpenedRef.current = true;
+      openEdit(match);
+    }
+  }, [rows, openId]);
 
   async function handleSaveEdit() {
     if (!editing || !userId) return;
@@ -396,6 +412,16 @@ export default function Deductions() {
         )}
 
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={saving} />
+        {editing?.document_id && (
+          <SecondaryButton
+            title={`📄 ${t('common.viewOriginalDocument')}`}
+            onPress={() => {
+              const documentId = editing.document_id as string;
+              closeEdit();
+              router.push({ pathname: '/(tabs)/more/documents', params: { openId: documentId } } as unknown as Href);
+            }}
+          />
+        )}
         <SecondaryButton title={t('common.cancel')} onPress={closeEdit} />
       </ModalSheet>
 

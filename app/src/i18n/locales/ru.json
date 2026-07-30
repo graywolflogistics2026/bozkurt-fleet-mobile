@@ -11,7 +11,8 @@
     "unit": "Юнит {{unit}}",
     "dash": "—",
     "legalFootnote": "Только оценки — не является налоговой консультацией. Проверьте у своего бухгалтера.",
-    "close": "Закрыть"
+    "close": "Закрыть",
+    "viewOriginalDocument": "Просмотреть исходный документ"
   },
   "nav": {
     "dashboard": "Главная",
@@ -52,6 +53,7 @@
     "shareProfit": "Поделиться недельной прибылью",
     "dashboardCustomize": "Настроить панель",
     "compliance": "Отслеживание соответствия",
+    "documents": "Документы",
     "accountantPackage": "Пакет для бухгалтера"
   },
   "auth": {
@@ -499,6 +501,7 @@
     "shareProfit": "Поделиться недельной прибылью",
     "dashboardCustomize": "Настроить панель",
     "compliance": "Отслеживание соответствия",
+    "documents": "Документы",
     "accountantPackage": "Пакет для бухгалтера"
   },
   "placeholders": {},
@@ -1318,6 +1321,23 @@
     "notifDueSoonTitle": "{{label}} скоро истекает",
     "notifOverdueBody": "{{label}} должен был быть выполнен {{date}}.",
     "notifDueSoonBody": "{{label}} истекает {{date}}."
+  },
+  "documentsArchive": {
+    "title": "Документы",
+    "subtitle": "Все ваши импортированные чеки и PDF-файлы в одном месте.",
+    "searchPlaceholder": "Поиск по имени файла, типу или сумме",
+    "allTypes": "Все",
+    "dateFromLabel": "С",
+    "dateToLabel": "По",
+    "emptyState": "Здесь хранятся все импортированные чеки и PDF — готово для аудита.",
+    "noMatches": "Нет документов, соответствующих поиску/фильтрам.",
+    "noFile": "К этому документу не прикреплён файл.",
+    "viewFailed": "Не удалось открыть этот документ.",
+    "shareFailedTitle": "Не удалось поделиться этим документом",
+    "openDocument": "Открыть документ",
+    "shareDownload": "Поделиться / Скачать",
+    "preparingShare": "Подготовка файла для отправки…",
+    "linkedRecords": "Связанные записи"
   },
   "ceoMode": {
     "title": "AI-коуч",

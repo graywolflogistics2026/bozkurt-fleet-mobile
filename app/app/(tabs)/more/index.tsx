@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Screen } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -29,6 +29,7 @@ const MENU_ITEMS = [
   { href: '/(tabs)/more/bank-statements', labelKey: 'more.bankStatements', emoji: '🏛️' },
   { href: '/(tabs)/more/dashboard-customize', labelKey: 'more.dashboardCustomize', emoji: '🧩' },
   { href: '/(tabs)/more/compliance', labelKey: 'more.compliance', emoji: '🪪' },
+  { href: '/(tabs)/more/documents', labelKey: 'more.documents', emoji: '🗃️' },
   { href: '/(tabs)/more/accountant-package', labelKey: 'more.accountantPackage', emoji: '📁' },
   { href: '/(tabs)/more/settings', labelKey: 'more.settings', emoji: '⚙️' },
 ] as const;
@@ -43,7 +44,7 @@ export default function More() {
         {MENU_ITEMS.map((item) => (
           <Pressable
             key={item.href}
-            onPress={() => router.push(item.href)}
+            onPress={() => router.push(item.href as Href)}
             style={({ pressed }) => ({
               backgroundColor: colors.card,
               borderColor: colors.border,

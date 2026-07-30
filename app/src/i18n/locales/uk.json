@@ -11,7 +11,8 @@
     "unit": "Unit {{unit}}",
     "dash": "—",
     "legalFootnote": "Estimates only — not tax advice. Verify with your CPA.",
-    "close": "Close"
+    "close": "Close",
+    "viewOriginalDocument": "View Original Document"
   },
   "nav": {
     "dashboard": "Home",
@@ -52,6 +53,7 @@
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
     "compliance": "Compliance Tracker",
+    "documents": "Documents",
     "accountantPackage": "Accountant Package"
   },
   "auth": {
@@ -499,6 +501,7 @@
     "shareProfit": "Share Weekly Profit",
     "dashboardCustomize": "Customize Dashboard",
     "compliance": "Compliance Tracker",
+    "documents": "Documents",
     "accountantPackage": "Accountant Package"
   },
   "placeholders": {},
@@ -1318,6 +1321,23 @@
     "notifDueSoonTitle": "{{label}} due soon",
     "notifOverdueBody": "{{label}} was due {{date}}.",
     "notifDueSoonBody": "{{label}} is due {{date}}."
+  },
+  "documentsArchive": {
+    "title": "Documents",
+    "subtitle": "Every receipt and PDF you've ever imported, in one place.",
+    "searchPlaceholder": "Search filename, type, or amount",
+    "allTypes": "All",
+    "dateFromLabel": "From",
+    "dateToLabel": "To",
+    "emptyState": "Your imported receipts and PDFs live here — audit-ready.",
+    "noMatches": "No documents match your search/filters.",
+    "noFile": "No file attached to this document.",
+    "viewFailed": "Could not open this document.",
+    "shareFailedTitle": "Could not share this document",
+    "openDocument": "Open Document",
+    "shareDownload": "Share / Download",
+    "preparingShare": "Preparing file to share…",
+    "linkedRecords": "Linked Records"
   },
   "ceoMode": {
     "title": "AI Coach",

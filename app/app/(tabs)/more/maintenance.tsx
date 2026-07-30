@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
@@ -11,6 +12,7 @@ import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
 import { MAINTENANCE_TYPES, MAINTENANCE_TYPE_ICON, type MaintenanceType } from '@/src/truck/categories';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
+import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -68,6 +70,9 @@ export default function Maintenance() {
   const { money, date, number } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const router = useRouter();
+  const { openId } = useLocalSearchParams<{ openId?: string }>();
+  const autoOpenedRef = useRef(false);
   const queryClient = useQueryClient();
   const { activeTruckId } = useActiveTruck();
   const trucksQuery = useTrucksList();
@@ -94,6 +99,17 @@ export default function Maintenance() {
     () => [...(recordsQuery.data ?? [])].sort((a, b) => new Date(b.service_date ?? 0).getTime() - new Date(a.service_date ?? 0).getTime()),
     [recordsQuery.data]
   );
+
+  // "View linked records" from the Documents Archive viewer (owner decision
+  // 2026-07-30) jumps here with ?openId=<maintenanceRecordId> — auto-opens
+  // it exactly once (findRowToAutoOpen's "already opened" guard).
+  useEffect(() => {
+    const match = findRowToAutoOpen(rows, openId, autoOpenedRef.current);
+    if (match) {
+      autoOpenedRef.current = true;
+      openEdit(match);
+    }
+  }, [rows, openId]);
   // 3-way stat split (FEATURE_INVENTORY.md §1 row 6: legacy rMaint() shows
   // Total repairs / Warranty-covered / Out-of-pocket) — warranty-covered is
   // read from linked reimbursements (createWarrantyReimbursement() below and
@@ -433,6 +449,16 @@ export default function Maintenance() {
           <SheetTitle>{t('maintenance.editRecord')}</SheetTitle>
           {renderForm(editForm, setEditForm)}
           <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
+          {editing?.document_id && (
+            <SecondaryButton
+              title={`📄 ${t('common.viewOriginalDocument')}`}
+              onPress={() => {
+                const documentId = editing.document_id as string;
+                setEditing(null);
+                router.push({ pathname: '/(tabs)/more/documents', params: { openId: documentId } } as unknown as Href);
+              }}
+            />
+          )}
           <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
         </ScrollView>
       </ModalSheet>

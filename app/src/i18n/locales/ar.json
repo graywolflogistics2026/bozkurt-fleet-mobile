@@ -11,7 +11,8 @@
     "unit": "الوحدة {{unit}}",
     "dash": "—",
     "legalFootnote": "تقديرات فقط — ليست استشارة ضريبية. تحقق مع محاسبك.",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "viewOriginalDocument": "عرض المستند الأصلي"
   },
   "nav": {
     "dashboard": "الرئيسية",
@@ -52,6 +53,7 @@
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
     "compliance": "متتبع الامتثال",
+    "documents": "المستندات",
     "accountantPackage": "حزمة المحاسب"
   },
   "auth": {
@@ -499,6 +501,7 @@
     "shareProfit": "مشاركة الأرباح الأسبوعية",
     "dashboardCustomize": "تخصيص لوحة التحكم",
     "compliance": "متتبع الامتثال",
+    "documents": "المستندات",
     "accountantPackage": "حزمة المحاسب"
   },
   "placeholders": {},
@@ -1318,6 +1321,23 @@
     "notifDueSoonTitle": "{{label}} يستحق قريبًا",
     "notifOverdueBody": "كان موعد {{label}} في {{date}}.",
     "notifDueSoonBody": "يستحق {{label}} في {{date}}."
+  },
+  "documentsArchive": {
+    "title": "المستندات",
+    "subtitle": "كل إيصال وملف PDF قمت باستيراده على الإطلاق، في مكان واحد.",
+    "searchPlaceholder": "ابحث باسم الملف أو النوع أو المبلغ",
+    "allTypes": "الكل",
+    "dateFromLabel": "من",
+    "dateToLabel": "إلى",
+    "emptyState": "إيصالاتك وملفات PDF المستوردة موجودة هنا — جاهزة للتدقيق.",
+    "noMatches": "لا توجد مستندات تطابق البحث/الفلاتر.",
+    "noFile": "لا يوجد ملف مرفق بهذا المستند.",
+    "viewFailed": "تعذر فتح هذا المستند.",
+    "shareFailedTitle": "تعذرت مشاركة هذا المستند",
+    "openDocument": "فتح المستند",
+    "shareDownload": "مشاركة / تنزيل",
+    "preparingShare": "جارٍ تجهيز الملف للمشاركة…",
+    "linkedRecords": "السجلات المرتبطة"
   },
   "ceoMode": {
     "title": "مدرب الذكاء الاصطناعي",

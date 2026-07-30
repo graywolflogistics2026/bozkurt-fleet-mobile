@@ -11,7 +11,8 @@
     "unit": "Unidad {{unit}}",
     "dash": "—",
     "legalFootnote": "Solo estimaciones — no es asesoría fiscal. Verifique con su contador.",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "viewOriginalDocument": "Ver documento original"
   },
   "nav": {
     "dashboard": "Inicio",
@@ -52,6 +53,7 @@
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
     "compliance": "Seguimiento de Cumplimiento",
+    "documents": "Documentos",
     "accountantPackage": "Paquete para el Contador"
   },
   "auth": {
@@ -499,6 +501,7 @@
     "shareProfit": "Compartir Ganancias Semanales",
     "dashboardCustomize": "Personalizar Panel",
     "compliance": "Seguimiento de Cumplimiento",
+    "documents": "Documentos",
     "accountantPackage": "Paquete para el Contador"
   },
   "placeholders": {},
@@ -1318,6 +1321,23 @@
     "notifDueSoonTitle": "{{label}} vence pronto",
     "notifOverdueBody": "{{label}} venció el {{date}}.",
     "notifDueSoonBody": "{{label}} vence el {{date}}."
+  },
+  "documentsArchive": {
+    "title": "Documentos",
+    "subtitle": "Todos los recibos y PDF que has importado, en un solo lugar.",
+    "searchPlaceholder": "Buscar por archivo, tipo o monto",
+    "allTypes": "Todos",
+    "dateFromLabel": "Desde",
+    "dateToLabel": "Hasta",
+    "emptyState": "Tus recibos y PDF importados viven aquí — listos para auditoría.",
+    "noMatches": "Ningún documento coincide con tu búsqueda/filtros.",
+    "noFile": "No hay ningún archivo adjunto a este documento.",
+    "viewFailed": "No se pudo abrir este documento.",
+    "shareFailedTitle": "No se pudo compartir este documento",
+    "openDocument": "Abrir Documento",
+    "shareDownload": "Compartir / Descargar",
+    "preparingShare": "Preparando archivo para compartir…",
+    "linkedRecords": "Registros Vinculados"
   },
   "ceoMode": {
     "title": "Coach de IA",

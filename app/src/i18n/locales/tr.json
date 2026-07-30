@@ -11,7 +11,8 @@
     "unit": "Ünite {{unit}}",
     "dash": "—",
     "legalFootnote": "Sadece tahmin — vergi danışmanlığı değildir. Muhasebecinizle doğrulayın.",
-    "close": "Kapat"
+    "close": "Kapat",
+    "viewOriginalDocument": "Orijinal Belgeyi Görüntüle"
   },
   "nav": {
     "dashboard": "Ana Sayfa",
@@ -52,6 +53,7 @@
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
     "compliance": "Uyumluluk Takibi",
+    "documents": "Belgeler",
     "accountantPackage": "Muhasebeci Paketi"
   },
   "auth": {
@@ -499,6 +501,7 @@
     "shareProfit": "Haftalık Kârı Paylaş",
     "dashboardCustomize": "Paneli Özelleştir",
     "compliance": "Uyumluluk Takibi",
+    "documents": "Belgeler",
     "accountantPackage": "Muhasebeci Paketi"
   },
   "placeholders": {},
@@ -1318,6 +1321,23 @@
     "notifDueSoonTitle": "{{label}} yakında sona eriyor",
     "notifOverdueBody": "{{label}} için son tarih {{date}} idi.",
     "notifDueSoonBody": "{{label}} için son tarih {{date}}."
+  },
+  "documentsArchive": {
+    "title": "Belgeler",
+    "subtitle": "Bugüne kadar içe aktardığınız her fiş ve PDF, tek bir yerde.",
+    "searchPlaceholder": "Dosya adı, tür veya tutara göre ara",
+    "allTypes": "Tümü",
+    "dateFromLabel": "Başlangıç",
+    "dateToLabel": "Bitiş",
+    "emptyState": "İçe aktarılan fişleriniz ve PDF'leriniz burada yaşar — denetime hazır.",
+    "noMatches": "Arama/filtrelerinizle eşleşen belge yok.",
+    "noFile": "Bu belgeye ekli dosya yok.",
+    "viewFailed": "Bu belge açılamadı.",
+    "shareFailedTitle": "Bu belge paylaşılamadı",
+    "openDocument": "Belgeyi Aç",
+    "shareDownload": "Paylaş / İndir",
+    "preparingShare": "Paylaşım için dosya hazırlanıyor…",
+    "linkedRecords": "Bağlantılı Kayıtlar"
   },
   "ceoMode": {
     "title": "Yapay Zeka Koçu",

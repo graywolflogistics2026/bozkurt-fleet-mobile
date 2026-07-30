@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSettlements, useDeleteSettlement } from '@/src/data/settlements';
@@ -9,6 +10,7 @@ import { useLoads } from '@/src/data/loads';
 import { useDocuments } from '@/src/data/documents';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { useFormatters } from '@/src/i18n/format';
 import {
   Screen,
@@ -34,6 +36,9 @@ function extractRevenueItems(parsedJson: Record<string, unknown> | null | undefi
 export default function Settlements() {
   const { t } = useTranslation();
   const { money, number, date } = useFormatters();
+  const router = useRouter();
+  const { openId } = useLocalSearchParams<{ openId?: string }>();
+  const autoOpenedRef = useRef(false);
   const settlementsQuery = useSettlements();
   const deleteSettlement = useDeleteSettlement();
   const dedQuery = useDeductions();
@@ -58,6 +63,17 @@ export default function Settlements() {
     const list = settlementsQuery.data ?? [];
     return [...list].sort((a, b) => b.week_ending.localeCompare(a.week_ending));
   }, [settlementsQuery.data]);
+
+  // "View linked records" from the Documents Archive viewer (owner decision
+  // 2026-07-30) jumps here with ?openId=<settlementId> — auto-selects it
+  // exactly once so re-selecting a fresh settlement later isn't overridden.
+  useEffect(() => {
+    const match = findRowToAutoOpen(rows, openId, autoOpenedRef.current);
+    if (match) {
+      autoOpenedRef.current = true;
+      setSelected(match);
+    }
+  }, [rows, openId]);
 
   const chargebacks = useMemo(() => {
     if (!selected) return [];
@@ -269,6 +285,17 @@ export default function Settlements() {
                   {t('settlementsScreen.reimportNote')}
                 </Text>
               </View>
+
+              {selected.document_id && (
+                <SecondaryButton
+                  title={`📄 ${t('common.viewOriginalDocument')}`}
+                  onPress={() => {
+                    const documentId = selected.document_id as string;
+                    setSelected(null);
+                    router.push({ pathname: '/(tabs)/more/documents', params: { openId: documentId } } as unknown as Href);
+                  }}
+                />
+              )}
 
               <SecondaryButton title={`🗑 ${t('common.delete')}`} onPress={() => handleDelete(selected)} />
               <SecondaryButton title={t('common.cancel')} onPress={() => setSelected(null)} />
