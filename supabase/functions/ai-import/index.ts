@@ -225,6 +225,17 @@ function buildExtractionPrompt(docHint?: string, locale?: string, customCategori
     .replace(REVENUE_ITEMS_BEFORE, REVENUE_ITEMS_AFTER)
     .replace(SETTLEMENT_DEDUCTIONS_BEFORE, SETTLEMENT_DEDUCTIONS_AFTER);
   prompt += APPROVED_ADDITIONS_SUFFIX;
+  // DATE HARDENING round 2 (owner decision 2026-07-30): round 1 only
+  // caught OBVIOUSLY implausible dates. A carrier-header year/day swap
+  // (26/07/24 misread as DD/MM/YY comes out 2024-07-26) can land INSIDE
+  // that plausible window on its own — 2024 isn't an absurd year — so it
+  // slipped through. Injecting today's actual date + an explicit
+  // cross-check instruction is the first line of defense; the client
+  // also runs a second, deterministic pass (src/import/dateGuard.ts) that
+  // actively prefers whichever reading is closer to "a real recent
+  // document" when the two disagree by more than a swap's worth.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  prompt += `\nAPPROVED ADDITION (date hardening round 2, owner decision 2026-07-30): today's date is ${todayIso}. Statement dates are almost always within the last ~13 months of today. Carrier headers commonly print dates as YY/MM/DD (26/07/24 = 2026-07-24) while other fields on the same document print M/D/YY (7/16/26) — CROSS-CHECK every extracted date against every OTHER date in the same document; they must agree on the year and cluster near the statement date. If one reading of an ambiguous date places the document more than 13 months in the past while an alternative reading lands near today, choose the near-today reading.\n`;
   if (docHint) {
     prompt += `\nThe user has hinted this document is likely a "${docHint}" — verify against the actual content, but use this as a tiebreaker only if the content is genuinely ambiguous.\n`;
   }

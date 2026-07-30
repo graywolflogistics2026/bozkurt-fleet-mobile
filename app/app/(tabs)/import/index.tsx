@@ -18,6 +18,7 @@ import { fetchExistingDocsForDuplicateCheck, saveExtraction, type SaveExtraction
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
+import { isOlderThanMonths } from '@/src/import/dateGuard';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
@@ -35,6 +36,25 @@ type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
 function money(n: number | undefined | null, locale: string) {
   if (n == null) return '—';
   return formatMoney(n, locale);
+}
+
+// PREVIEW CONFIRMATION (owner decision 2026-07-30, DATE HARDENING round
+// 2): the "one editable date" shown/edited in the preview — for a
+// settlement that's settlement.weekEnding (what actually feeds
+// week_ending/per-diem), everything else it's the top-level date. A smart
+// default, never a lock: whatever the user types here is what
+// handleSave() actually persists (extraction state is passed straight
+// through to saveExtraction()).
+function getPrimaryExtractionDate(extraction: Extraction): string {
+  if (extraction.docType === 'settlement') return extraction.settlement?.weekEnding ?? extraction.date ?? '';
+  return extraction.date ?? '';
+}
+
+function withPrimaryExtractionDate(extraction: Extraction, newDate: string): Extraction {
+  if (extraction.docType === 'settlement' && extraction.settlement) {
+    return { ...extraction, settlement: { ...extraction.settlement, weekEnding: newDate } };
+  }
+  return { ...extraction, date: newDate };
 }
 
 type PreviewLine = { label: string; value: string; color?: string };
@@ -404,8 +424,21 @@ export default function Import() {
               </View>
             )}
 
+            {isOlderThanMonths(getPrimaryExtractionDate(extraction), 6) && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.dateConfirmTitle')}</Text>
+                <MutedText>{t('importScreen.dateConfirmBody')}</MutedText>
+              </View>
+            )}
+
             <View style={{ marginBottom: spacing.sm }}>
-              <MutedText>{t('importScreen.dateLabel', { date: extraction.date ?? '—' })}</MutedText>
+              <MutedText>{t('importScreen.documentDateLabel')}</MutedText>
+              <Field
+                value={getPrimaryExtractionDate(extraction)}
+                onChangeText={(v) => setExtraction(withPrimaryExtractionDate(extraction, v))}
+                placeholder="YYYY-MM-DD"
+                style={{ marginBottom: spacing.xs }}
+              />
               <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
               <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount, i18n.language) })}</MutedText>
               <MutedText>

@@ -1,4 +1,5 @@
 import { supabase } from '@/src/lib/supabase';
+import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import type { Extraction } from '@/src/import/types';
 
 export type AiImportError = { type: string; message: string; detail?: string };
@@ -45,7 +46,12 @@ export async function callAiImport(
   }
 
   if (data?.error) return { error: data.error as AiImportError };
-  return { data: data?.data as Extraction };
+  const extraction = data?.data as Extraction | undefined;
+  // DATE HARDENING round 2 (2026-07-30) — see src/import/dateGuard.ts.
+  // Applied once, right here, so every downstream consumer (mapExtraction
+  // mappers, the import preview screen) automatically sees the corrected
+  // date without needing its own fix.
+  return { data: extraction ? sanitizeExtractionDates(extraction) : extraction };
 }
 
 // User-facing message per structured error type (PROMPTS.md Session 6).
