@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
@@ -18,38 +18,51 @@ export default function SignIn() {
   async function onSubmit() {
     setError(null);
     setLoading(true);
-    const { error } = await signIn(email.trim(), password);
-    setLoading(false);
-    if (error) setError(error);
+    try {
+      const { error } = await signIn(email.trim(), password);
+      if (error) setError(error);
+    } catch (err) {
+      // AuthContext.signIn() already catches internally and never throws —
+      // this is belt-and-suspenders so a failure path is never silent even
+      // if that contract is ever broken by a future change (2026-07-30
+      // sign-up audit, applied symmetrically here).
+      setError(err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <Screen>
-      <ScreenTitle>{BRAND_NAME}</ScreenTitle>
-      <MutedText>{t('auth.signInSubtitle')}</MutedText>
-      <Field
-        placeholder={t('auth.emailPlaceholder')}
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoComplete="email"
-        autoCorrect={false}
-        style={{ marginTop: 16 }}
-      />
-      <Field
-        placeholder={t('auth.passwordPlaceholder')}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoComplete="password"
-      />
-      <ErrorText>{error}</ErrorText>
-      <PrimaryButton title={t('auth.signIn')} onPress={onSubmit} loading={loading} disabled={!email || !password} />
-      <Link href="/(auth)/sign-up" asChild>
-        <Text style={{ color: colors.accent, marginTop: 16, textAlign: 'center' }}>
-          {t('auth.noAccount')}
-        </Text>
-      </Link>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+          <ScreenTitle>{BRAND_NAME}</ScreenTitle>
+          <MutedText>{t('auth.signInSubtitle')}</MutedText>
+          <Field
+            placeholder={t('auth.emailPlaceholder')}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoComplete="email"
+            autoCorrect={false}
+            style={{ marginTop: 16 }}
+          />
+          <Field
+            placeholder={t('auth.passwordPlaceholder')}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoComplete="password"
+          />
+          <ErrorText>{error}</ErrorText>
+          <PrimaryButton title={t('auth.signIn')} onPress={onSubmit} loading={loading} disabled={!email || !password} />
+          <Link href="/(auth)/sign-up" asChild>
+            <Text style={{ color: colors.accent, marginTop: 16, textAlign: 'center' }}>
+              {t('auth.noAccount')}
+            </Text>
+          </Link>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }

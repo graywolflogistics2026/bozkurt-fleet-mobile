@@ -6,6 +6,16 @@ import { withTimeout } from '@/src/lib/withTimeout';
 import { isSupportedLocale, LANGUAGE_PICKER_ENABLED } from '@/src/i18n/config';
 import { setAppLocale } from '@/src/i18n';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
+import { resolveSignUpOutcome, type SignUpOutcome } from '@/src/auth/signUpFlow';
+
+// A network/runtime failure that never reaches Supabase's own {error}
+// contract (e.g. the device is offline) throws instead of resolving —
+// every auth entry point below catches that and surfaces it the same way
+// as a normal AuthError, so a thrown exception can never look like a
+// silently-dead button (2026-07-30 bug fix).
+function messageFromUnknownError(err: unknown): string {
+  return err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+}
 
 const STARTUP_TIMEOUT_MS = 8000;
 
@@ -28,7 +38,7 @@ type AuthContextValue = {
   loading: boolean;
   needsTos: boolean;
   needsOnboarding: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<SignUpOutcome>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   acceptTos: () => Promise<{ error: string | null }>;
@@ -92,14 +102,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function signUp(email: string, password: string) {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error: error?.message ?? null };
+  async function signUp(email: string, password: string): Promise<SignUpOutcome> {
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      return resolveSignUpOutcome({ errorMessage: error?.message ?? null, hasSession: !!data?.session });
+    } catch (err) {
+      return { status: 'error', message: messageFromUnknownError(err) };
+    }
   }
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return { error: error?.message ?? null };
+    } catch (err) {
+      return { error: messageFromUnknownError(err) };
+    }
   }
 
   async function signOut() {

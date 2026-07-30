@@ -65,7 +65,10 @@
     "signUpButton": "Crear Cuenta",
     "noAccount": "¿No tienes una cuenta? Regístrate",
     "haveAccount": "¿Ya tienes una cuenta? Inicia sesión",
-    "signUpSuccess": "Cuenta creada. Si se requiere confirmación por correo, revisa tu bandeja de entrada antes de iniciar sesión."
+    "errorMissingEmail": "Ingresa tu correo electrónico.",
+    "errorPasswordTooShort": "La contraseña debe tener al menos 6 caracteres.",
+    "signUpCheckEmail": "¡Cuenta creada! Revisa tu correo para confirmar tu dirección antes de iniciar sesión.",
+    "signUpWelcome": "¡Cuenta creada! Ingresando..."
   },
   "tos": {
     "scrollHint": "Desplázate hasta el final para habilitar Aceptar.",

@@ -65,7 +65,10 @@
     "signUpButton": "Hesap Oluştur",
     "noAccount": "Hesabın yok mu? Kayıt ol",
     "haveAccount": "Zaten hesabın var mı? Giriş yap",
-    "signUpSuccess": "Hesap oluşturuldu. E-posta onayı gerekiyorsa, giriş yapmadan önce gelen kutunuzu kontrol edin."
+    "errorMissingEmail": "E-posta adresinizi girin.",
+    "errorPasswordTooShort": "Şifre en az 6 karakter olmalıdır.",
+    "signUpCheckEmail": "Hesap oluşturuldu! Giriş yapmadan önce adresinizi onaylamak için e-postanızı kontrol edin.",
+    "signUpWelcome": "Hesap oluşturuldu! Giriş yapılıyor..."
   },
   "tos": {
     "scrollHint": "Kabul Et'i etkinleştirmek için en alta kaydırın.",

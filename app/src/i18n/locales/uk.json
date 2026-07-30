@@ -65,7 +65,10 @@
     "signUpButton": "Create Account",
     "noAccount": "Don't have an account? Sign up",
     "haveAccount": "Already have an account? Sign in",
-    "signUpSuccess": "Account created. If email confirmation is required, check your inbox before signing in."
+    "errorMissingEmail": "Enter your email address.",
+    "errorPasswordTooShort": "Password must be at least 6 characters.",
+    "signUpCheckEmail": "Account created! Check your email to confirm your address before signing in.",
+    "signUpWelcome": "Account created! Taking you in..."
   },
   "tos": {
     "scrollHint": "Scroll to the bottom to enable Accept.",
