@@ -1065,10 +1065,12 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "driverpulse": "Driver Pulse",
       "more": "المزيد"
     },
     "imageCopiedTitle": "تم نسخ الصورة",
-    "imageCopiedBody": "تم نسخ بطاقتك المميزة إلى الحافظة وفتح {{app}} — الصقها في منشورك."
+    "imageCopiedBody": "تم نسخ بطاقتك المميزة إلى الحافظة وفتح {{app}} — الصقها في منشورك. التعليق: \"{{caption}}\"",
+    "captionTemplate": "{{weekSummary}} — بمتابعة {{brand}}"
   },
   "dashboardCustomize": {
     "title": "تخصيص لوحة التحكم",

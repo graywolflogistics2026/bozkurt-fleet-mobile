@@ -12,7 +12,7 @@
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["instagram", "fb", "twitter", "linkedin", "tiktok", "snssdk1233"]
+        "LSApplicationQueriesSchemes": ["instagram", "fb", "twitter", "linkedin", "tiktok", "snssdk1233", "driverpulse"]
       }
     },
     "android": {

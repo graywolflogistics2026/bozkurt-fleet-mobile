@@ -1065,10 +1065,12 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "driverpulse": "Driver Pulse",
       "more": "Diğer"
     },
     "imageCopiedTitle": "Görsel kopyalandı",
-    "imageCopiedBody": "Markalı kartınız panoya kopyalandı ve {{app}} açıldı — gönderinize yapıştırın."
+    "imageCopiedBody": "Markalı kartınız panoya kopyalandı ve {{app}} açıldı — gönderinize yapıştırın. Açıklama: \"{{caption}}\"",
+    "captionTemplate": "{{weekSummary}} — {{brand}} ile takip edildi"
   },
   "dashboardCustomize": {
     "title": "Paneli Özelleştir",

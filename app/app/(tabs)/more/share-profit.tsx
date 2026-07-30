@@ -10,28 +10,43 @@ import { useSettlements } from '@/src/data/settlements';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
+import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { BRAND_NAME } from '@/src/brand';
 
 type MetricKey = 'revenue' | 'profit' | 'mpg';
 const METRICS: MetricKey[] = ['revenue', 'profit', 'mpg'];
 
-// Share destinations (PROMPTS.md Session 9a device-feedback pass). Only
+// Share destinations (PROMPTS.md Session 9a device-feedback pass, Driver
+// Pulse added 2026-07-30 owner decision from native-build testing). Only
 // Instagram/Facebook publicly document a no-SDK way to receive shared media
 // via the pasteboard (their Stories share intents read whatever image is
-// currently on the system clipboard) — TikTok/X/LinkedIn have no equivalent
-// public URL scheme, so for those three (and whenever the target app isn't
-// installed) this still copies the branded image to the clipboard and opens
-// the app so the user can paste it manually, then falls back to the system
-// share sheet if the app can't be opened at all. No target-app native SDKs
-// are added here (would need per-platform linking this pass can't verify on
-// a device).
+// currently on the system clipboard) — TikTok/X/LinkedIn/Driver Pulse have
+// no equivalent public URL scheme, so for those (and whenever the target
+// app isn't installed) this still copies the branded image to the
+// clipboard and opens the app so the user can paste it manually, then
+// falls back to the system share sheet if the app can't be opened at all.
+// No target-app native SDKs are added here (would need per-platform
+// linking this pass can't verify on a device).
+//
+// Driver Pulse's real bundle id/URL scheme isn't publicly documented
+// anywhere this pass could verify — 'driverpulse://' is a best-effort
+// guess following the same convention as the others, wired through the
+// exact same canOpenURL-checked, safe-fallback path as every other
+// destination, so a wrong guess just means it politely falls through to
+// the system share sheet instead of deep-linking, never a crash or dead
+// end.
+//
+// Row order is an explicit owner decision (2026-07-30): Instagram,
+// Facebook, X, TikTok, LinkedIn, Driver Pulse — "More" is appended after
+// this array, always last.
 const DESTINATIONS: { key: string; monogram: string; bg: string; fg: string; scheme: string }[] = [
-  { key: 'tiktok', monogram: 'TT', bg: '#000000', fg: '#ffffff', scheme: 'tiktok://' },
   { key: 'instagram', monogram: 'IG', bg: '#E1306C', fg: '#ffffff', scheme: 'instagram://app' },
   { key: 'facebook', monogram: 'f', bg: '#1877F2', fg: '#ffffff', scheme: 'fb://' },
   { key: 'twitter', monogram: 'X', bg: '#ffffff', fg: '#000000', scheme: 'twitter://' },
+  { key: 'tiktok', monogram: 'TT', bg: '#000000', fg: '#ffffff', scheme: 'tiktok://' },
   { key: 'linkedin', monogram: 'in', bg: '#0A66C2', fg: '#ffffff', scheme: 'linkedin://' },
+  { key: 'driverpulse', monogram: 'DP', bg: '#FF5A1F', fg: '#ffffff', scheme: 'driverpulse://' },
 ];
 
 function DestinationButton({
@@ -84,7 +99,17 @@ export default function ShareProfit() {
   const [sharing, setSharing] = useState(false);
 
   const latest = [...(settlementsQuery.data ?? [])].sort((a, b) => (b.week_ending ?? '').localeCompare(a.week_ending ?? ''))[0];
-  const companyLabel = profile?.company_name?.trim() || BRAND_NAME;
+  // BRAND VISIBILITY guarantee (owner decision 2026-07-30): the app
+  // wordmark is rendered unconditionally at the bottom of the share card
+  // (see the ViewShot tree below) regardless of whether the user has set a
+  // company name — every share advertises the app. company_name, when set,
+  // is a SEPARATE line above it; it never replaces the wordmark the way
+  // the old single `companyLabel` fallback used to.
+  const companyName = profile?.company_name?.trim() || null;
+  const weekSummary = latest ? t('shareProfit.weekOf', { date: latest.week_ending }) : '';
+  // Caption auto-copied to the clipboard alongside the image (owner
+  // decision 2026-07-30) so paste-flows carry the brand name in text too.
+  const caption = latest ? t('shareProfit.captionTemplate', { weekSummary, brand: BRAND_NAME }) : '';
 
   function toggle(key: MetricKey) {
     setIncluded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -115,9 +140,16 @@ export default function ShareProfit() {
         if (installed) {
           try {
             const base64 = await new File(uri).base64();
+            // The OS clipboard can only hold one thing at a time, and the
+            // IMAGE has to win here — that's what IG/FB/X/TikTok/Driver
+            // Pulse's "paste from clipboard" story/post composer actually
+            // reads. The caption is echoed in the alert below (and was
+            // briefly on the clipboard first) so it's still visible to
+            // copy/retype by hand into the caption field.
+            await Clipboard.setStringAsync(caption);
             await Clipboard.setImageAsync(base64);
             await Linking.openURL(dest.scheme);
-            Alert.alert(t('shareProfit.imageCopiedTitle'), t('shareProfit.imageCopiedBody', { app: dest.label }));
+            Alert.alert(t('shareProfit.imageCopiedTitle'), t('shareProfit.imageCopiedBody', { app: dest.label, caption }));
             return;
           } catch {
             // Best-effort only — fall through to the system share sheet.
@@ -125,6 +157,11 @@ export default function ShareProfit() {
         }
       }
 
+      // No scheme match / app not installed / "More" — the system share
+      // sheet carries the image as a real file attachment, so the
+      // clipboard is free for the caption text, which most share-sheet
+      // targets let you paste straight into their own text field.
+      await Clipboard.setStringAsync(caption);
       await shareViaSystemSheet(uri);
     } catch (err) {
       Alert.alert(t('shareProfit.shareFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -161,7 +198,7 @@ export default function ShareProfit() {
             <View style={{ alignItems: 'center', marginVertical: spacing.md }}>
               <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
                 <View style={styles.shareCard}>
-                  <Text style={styles.shareBrand}>🐺 {companyLabel}</Text>
+                  {companyName && <Text style={styles.shareCompanyName}>{companyName}</Text>}
                   <Text style={styles.shareWeek}>{t('shareProfit.weekOf', { date: latest.week_ending })}</Text>
                   {included.revenue && (
                     <View style={styles.shareMetric}>
@@ -181,6 +218,14 @@ export default function ShareProfit() {
                       <Text style={styles.shareMetricValue}>{number(activeTruck.fleet_mpg, { maximumFractionDigits: 1 })}</Text>
                     </View>
                   )}
+                  {/* BRAND VISIBILITY guarantee (owner decision 2026-07-30):
+                      unconditional — renders regardless of metric
+                      selection or company_name, so every share advertises
+                      the app. colors.text against the card's dark
+                      background keeps contrast good in the captured PNG. */}
+                  <View style={styles.shareBrandFooter}>
+                    <BrandWordmark fontSize={16} />
+                  </View>
                 </View>
               </ViewShot>
             </View>
@@ -231,7 +276,7 @@ const styles = {
     padding: spacing.lg,
     alignItems: 'center' as const,
   },
-  shareBrand: {
+  shareCompanyName: {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: '700' as const,
@@ -255,5 +300,13 @@ const styles = {
     fontSize: typography.size.xl,
     fontWeight: '700' as const,
     marginTop: 2,
+  },
+  shareBrandFooter: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    width: '100%' as const,
+    alignItems: 'center' as const,
   },
 };

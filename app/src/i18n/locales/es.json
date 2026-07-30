@@ -1065,10 +1065,12 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "driverpulse": "Driver Pulse",
       "more": "Más"
     },
     "imageCopiedTitle": "Imagen copiada",
-    "imageCopiedBody": "Tu tarjeta de marca se copió al portapapeles y se abrió {{app}} — pégala en tu publicación."
+    "imageCopiedBody": "Tu tarjeta de marca se copió al portapapeles y se abrió {{app}} — pégala en tu publicación. Leyenda: \"{{caption}}\"",
+    "captionTemplate": "{{weekSummary}} — con seguimiento de {{brand}}"
   },
   "dashboardCustomize": {
     "title": "Personalizar Panel",

@@ -1065,10 +1065,12 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "driverpulse": "Driver Pulse",
       "more": "More"
     },
     "imageCopiedTitle": "Image copied",
-    "imageCopiedBody": "Your branded card image was copied to the clipboard and {{app}} was opened — paste it into your post."
+    "imageCopiedBody": "Your branded card image was copied to the clipboard and {{app}} was opened — paste it into your post. Caption: \"{{caption}}\"",
+    "captionTemplate": "{{weekSummary}} — tracked with {{brand}}"
   },
   "dashboardCustomize": {
     "title": "Customize Dashboard",
