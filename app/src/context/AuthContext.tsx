@@ -126,12 +126,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function acceptTos() {
     if (!session) return { error: 'Not signed in.' };
-    const { error } = await supabase
-      .from('profiles')
-      .update({ tos_accepted_at: new Date().toISOString(), tos_version: TOS_VERSION })
-      .eq('user_id', session.user.id);
-    if (!error) await fetchProfile(session.user.id);
-    return { error: error?.message ?? null };
+    try {
+      // upsert, not update (2026-07-30 tablet bug fix): a brand-new user
+      // can reach this screen before trg_handle_new_user's profiles-row
+      // insert has actually landed (a real race, not hypothetical — see
+      // CLAUDE.md invariant #24-adjacent notes). A plain .update() on a
+      // row that doesn't exist yet matches ZERO rows and Postgres/
+      // PostgREST report that as SUCCESS with no error — so the write
+      // silently no-opped, fetchProfile() below re-read the still-
+      // missing row, profile stayed null, needsTos stayed true, and the
+      // user was stuck on this screen with no visible error and no
+      // navigation. onConflict: 'user_id' (the primary key) means this
+      // creates the row if the trigger hasn't fired yet, or updates it
+      // normally if it already has — either way it actually lands. Safe
+      // against the trigger's own `on conflict (user_id) do nothing`
+      // insert firing on either side of this call (0001_init.sql).
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ user_id: session.user.id, tos_accepted_at: new Date().toISOString(), tos_version: TOS_VERSION }, { onConflict: 'user_id' });
+      if (!error) await fetchProfile(session.user.id);
+      return { error: error?.message ?? null };
+    } catch (err) {
+      return { error: messageFromUnknownError(err) };
+    }
   }
 
   async function refreshProfile() {
