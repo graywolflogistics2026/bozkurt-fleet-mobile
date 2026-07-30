@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View, useWindowDimensions, type NativeSynt
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { setIntroSeen } from '@/src/onboarding/introStorage';
+import { useIntro } from '@/src/context/IntroContext';
 import { BRAND_EMOJI } from '@/src/brand';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -17,6 +17,7 @@ const SLIDE_KEYS = ['slide1', 'slide2', 'slide3'] as const;
 export default function Intro() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { markIntroSeen } = useIntro();
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -26,8 +27,14 @@ export default function Intro() {
     if (i !== index) setIndex(i);
   }
 
-  async function goToAuth(path: '/(auth)/sign-up' | '/(auth)/sign-in') {
-    await setIntroSeen();
+  // Synchronous, single call: markIntroSeen() updates IntroContext's
+  // in-memory flag immediately (persisting to AsyncStorage in the
+  // background, logged-not-thrown on failure — see IntroContext.tsx), then
+  // router.replace() navigates exactly once. Previously this awaited the
+  // storage write directly and RootLayoutNav read a separate, stale local
+  // flag — that's what caused the real-device bounce-back-to-intro loop.
+  function goToAuth(path: '/(auth)/sign-up' | '/(auth)/sign-in') {
+    markIntroSeen();
     router.replace(path);
   }
 

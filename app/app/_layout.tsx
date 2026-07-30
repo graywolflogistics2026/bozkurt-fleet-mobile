@@ -8,10 +8,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { ActiveTruckProvider } from '@/src/context/ActiveTruckContext';
+import { IntroProvider, useIntro } from '@/src/context/IntroContext';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { colors } from '@/src/theme';
 import { initI18n } from '@/src/i18n';
-import { getIntroSeen } from '@/src/onboarding/introStorage';
+import { resolveRootRedirect } from '@/src/navigation/rootRedirect';
 
 // Startup diagnostics (2026-07-06): take manual control of the splash
 // screen instead of relying on its default auto-hide, so a stuck startup
@@ -44,8 +45,10 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <AuthProvider>
             <ActiveTruckProvider>
-              <StatusBar style="light" />
-              <RootLayoutNav />
+              <IntroProvider>
+                <StatusBar style="light" />
+                <RootLayoutNav />
+              </IntroProvider>
             </ActiveTruckProvider>
           </AuthProvider>
         </SafeAreaProvider>
@@ -64,17 +67,9 @@ function LoadingScreen() {
 
 function RootLayoutNav() {
   const { session, loading, needsTos, needsOnboarding } = useAuth();
+  const { introSeen } = useIntro();
   const segments = useSegments();
   const router = useRouter();
-  // Session 9e-B9: brand intro slides, shown once per device before the
-  // very first sign-in/sign-up — null means "not resolved yet" (same
-  // pattern i18nReady above uses), so the redirect effect waits for it
-  // rather than flashing sign-in first.
-  const [introSeen, setIntroSeenState] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    getIntroSeen().then(setIntroSeenState);
-  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -86,28 +81,18 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (loading || introSeen === null) return;
-
-    // "intro" (app/intro.tsx, added this pass) isn't in the last generated
-    // .expo/types/router.d.ts yet — same typed-routes regen lag as
-    // _layout.tsx (tabs)'s ALERTS_ROUTE, hence the (string) cast/Href cast
-    // rather than a general-purpose `any`.
-    const currentSegment = segments[0] as string;
-    const inAuthGroup = currentSegment === '(auth)';
-    const onTosScreen = currentSegment === 'tos';
-    const onOnboardingScreen = currentSegment === 'onboarding';
-    const onIntroScreen = currentSegment === 'intro';
-
-    if (!session && !introSeen && !onIntroScreen) {
-      router.replace('/intro' as Href);
-    } else if (!session && !inAuthGroup && !onIntroScreen) {
-      router.replace('/(auth)/sign-in');
-    } else if (session && needsTos && !onTosScreen) {
-      router.replace('/tos');
-    } else if (session && !needsTos && needsOnboarding && !onOnboardingScreen) {
-      router.replace('/onboarding');
-    } else if (session && !needsTos && !needsOnboarding && (inAuthGroup || onTosScreen || onOnboardingScreen || onIntroScreen)) {
-      router.replace('/(tabs)');
-    }
+    const target = resolveRootRedirect({
+      hasSession: !!session,
+      needsTos,
+      needsOnboarding,
+      introSeen,
+      segment: segments[0] as string | undefined,
+    });
+    // "intro" (app/intro.tsx, added Session 9e-B9) isn't in the last
+    // generated .expo/types/router.d.ts yet — same typed-routes regen lag
+    // as _layout.tsx (tabs)'s ALERTS_ROUTE, hence the Href cast rather than
+    // a general-purpose `any`.
+    if (target) router.replace(target as Href);
   }, [session, loading, needsTos, needsOnboarding, introSeen, segments, router]);
 
   if (loading || introSeen === null) return <LoadingScreen />;
