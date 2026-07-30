@@ -202,11 +202,24 @@
   10. Re-importing a settlement for a `week_ending` that already exists
       REPLACES that week's batch-tagged rows (settlement, loads, fuel,
       reimbursements, withheld deductions — all keyed off the stable
-      `settlement_id` from the settlement upsert) instead of duplicating
+      `settlement_id` from the settlement match) instead of duplicating
       them (`app/src/data/aiImportSave.ts`, owner decision 2026-07-09,
       mirrors the web app's v2026.07.09-A behavior). Maintenance/tolls/
       loans are NOT part of this replace. A replace must not re-credit
-      `business_balance` with that week's net pay a second time.
+      `business_balance` with that week's net pay a second time. The match
+      key is `(user_id, week_ending, truck_id)` — NOT `(user_id,
+      week_ending)` alone (bug fixed 2026-07-30, docs/PENDING_SQL.md §34):
+      a fleet with 2+ trucks routinely has every truck settle on the same
+      `week_ending`, and matching without `truck_id` silently replaced one
+      truck's settlement with another's. `findExistingSettlement()`
+      (`aiImportSave.ts`) is the one shared lookup for this match — used
+      both by the actual save/replace decision and by the import preview's
+      "this week is already imported, saving will replace it" banner, so
+      the two can never disagree. A settlement with no resolvable
+      `week_ending` must never silently save under an empty-string match
+      key (two such settlements would collide with each other) — the save
+      throws instead, since the preview's date field already requires the
+      user to see/set this value.
   11. Multi-language support (owner decision 2026-07-09, PRODUCT DECISION,
       binding; Hindi/Ukrainian added same-day addendum): target languages
       are English (default), Spanish, Russian, Arabic, Turkish, Hindi, and

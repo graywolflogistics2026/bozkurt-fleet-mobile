@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState, type ReactNode } from 'react';
 import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -9,34 +9,22 @@ import { CARD_LABEL_KEYS, SECTION_IDS, SECTION_LABEL_KEYS, type DashboardCardCon
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
-// Drag-and-drop reorder (owner decision — the previous up/down-arrow
-// affordance was too small/tedious on device). react-native-draggable-
-// flatlist (built on the reanimated + react-native-gesture-handler already
-// verified SDK-54-compatible in this pass) replaces it: long-press
-// anywhere on a card lifts it (ScaleDecorator gives the "subtle scale",
-// onDragBegin fires a haptic via expo-haptics), drag to reorder, release
-// to drop. The persisted shape (an ordered array) is unchanged — only the
-// UI affordance for reordering it changed, so useDashboardLayout/
-// useUpdateDashboardLayout and the default-layout/reset behavior below are
-// untouched.
-//
-// CRITICAL BUG FIX (device feedback round 2): react-native-draggable-
-// flatlist's gesture-handler-backed list renders completely blank inside
-// Expo Go (confirmed on-device, EN+TR) — Expo Go doesn't bundle a matching
-// native reanimated/gesture-handler build for every JS version this repo
-// pins. Detected via `Constants.executionEnvironment ===
-// ExecutionEnvironment.StoreClient` (true ONLY inside the Expo Go app
-// downloaded from the App Store/Play Store, never in a dev-client or EAS
-// build — 2026-07-30: switched from the deprecated `Constants.
-// appOwnership === 'expo'` check, which was equivalent but is being phased
-// out; `appOwnership` is `null`, NOT `'standalone'`, in an EAS/preview
-// build, so this was never actually the cause of any real-device bug, but
-// executionEnvironment is the non-deprecated, forward-compatible API for
-// the same check going forward), gating a fallback plain FlatList with
-// large (44pt+) up/down arrows plus move-to-top/bottom actions —
-// functionally equivalent reordering, just without the drag gesture.
-// Dev-client and EAS builds keep the drag-and-drop path since it works
-// there.
+// Reorder UX (CRITICAL BUG FIX, device feedback round 3, 2026-07-30): drag-
+// and-drop (react-native-draggable-flatlist, built on reanimated + react-
+// native-gesture-handler) was STILL dead on a real device even after fixing
+// the missing babel.config.js (6c1db0f) that should have made its worklets
+// transform work. Rather than chase a second root cause blind, the screen
+// is now designed so drag NEVER has to work for the screen to be usable:
+// large ▲▼/top-bottom arrow buttons + section pills are the unconditional
+// BASELINE, always rendered regardless of platform or gesture-stack
+// health — CardEditorRow below has no drag-only code path. Drag is layered
+// on top ONLY as an optional enhancement (long-press the ☰ handle), active
+// only once DraggableFlatList has proven it can mount without throwing
+// (DragListErrorBoundary) and never even attempted inside Expo Go (which
+// doesn't bundle a matching native reanimated/gesture-handler build for
+// every JS version this repo pins — Constants.executionEnvironment ===
+// ExecutionEnvironment.StoreClient is true ONLY there, never in a
+// dev-client or EAS build).
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 function moveBy<T>(list: T[], index: number, delta: number): T[] {
@@ -57,11 +45,30 @@ function moveToEdge<T>(list: T[], index: number, toStart: boolean): T[] {
   return next;
 }
 
+// Catches any JS-catchable render/lifecycle error thrown by
+// DraggableFlatList (e.g. a gesture-handler/reanimated mismatch that
+// doesn't crash the native layer but does throw in JS) and reports it to
+// the parent, which permanently switches to the guaranteed-safe plain
+// FlatList for the rest of this screen's lifetime — the user never sees a
+// dead or blank customize screen because of it.
+class DragListErrorBoundary extends Component<{ onError: () => void; children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.log('[DashboardCustomize] DraggableFlatList threw — falling back to arrows-only mode.', error);
+    this.props.onError();
+  }
+  render() {
+    return this.state.hasError ? null : this.props.children;
+  }
+}
+
 // Section picker (Dashboard sections addition, owner decision
 // 2026-07-13) — lets a card be moved within/between the 4 collapsible
 // titled sections (OVERVIEW/MONEY/ON THE ROAD/TAXES) or cleared to "no
-// section" (rendered unsectioned, below all 4). Shared by both
-// CardEditor and FallbackCardEditor.
+// section" (rendered unsectioned, below all 4).
 function SectionPills({ value, onChange }: { value: SectionId | null; onChange: (section: SectionId | null) => void }) {
   const { t } = useTranslation();
   return (
@@ -91,12 +98,24 @@ export default function DashboardCustomize() {
   const updateLayout = useUpdateDashboardLayout();
   const [draft, setDraft] = useState<DashboardCardConfig[] | null>(null);
   const [saving, setSaving] = useState(false);
+  // Baseline is arrows-only inside Expo Go (never even attempted); a real
+  // build/dev-client starts by trying drag-plus-arrows, and permanently
+  // drops to arrows-only the instant DraggableFlatList proves it can't run.
+  const [dragUnavailable, setDragUnavailable] = useState(isExpoGo);
 
   useEffect(() => {
     if (layoutQuery.data && !draft) setDraft(layoutQuery.data.layout);
   }, [layoutQuery.data, draft]);
 
   const rows = draft ?? [];
+
+  useEffect(() => {
+    console.log(
+      '[DashboardCustomize] rendering mode:',
+      dragUnavailable ? 'arrows-only' : 'drag-plus-arrows',
+      isExpoGo ? '(Expo Go detected)' : ''
+    );
+  }, [dragUnavailable]);
 
   function updateRowById(id: string, patch: Partial<DashboardCardConfig>) {
     setDraft((current) => {
@@ -131,38 +150,33 @@ export default function DashboardCustomize() {
     }
   }
 
-  function renderItem({ item, drag, isActive }: RenderItemParams<DashboardCardConfig>) {
+  function rowProps(item: DashboardCardConfig, index: number) {
+    return {
+      row: item,
+      defaultLabel: t(CARD_LABEL_KEYS[item.id as keyof typeof CARD_LABEL_KEYS] ?? item.id),
+      isFirst: index === 0,
+      isLast: index === rows.length - 1,
+      onToggleVisible: () => updateRowById(item.id, { visible: !item.visible }),
+      onLabelChange: (label: string) => updateRowById(item.id, { label: label || null }),
+      onSectionChange: (section: SectionId | null) => updateRowById(item.id, { section }),
+      onMoveUp: () => setDraft((current) => (current ? moveBy(current, index, -1) : current)),
+      onMoveDown: () => setDraft((current) => (current ? moveBy(current, index, 1) : current)),
+      onMoveToTop: () => setDraft((current) => (current ? moveToEdge(current, index, true) : current)),
+      onMoveToBottom: () => setDraft((current) => (current ? moveToEdge(current, index, false) : current)),
+    };
+  }
+
+  function renderDraggableItem({ item, getIndex, drag, isActive }: RenderItemParams<DashboardCardConfig>) {
+    const index = getIndex() ?? rows.findIndex((r) => r.id === item.id);
     return (
       <ScaleDecorator>
-        <CardEditor
-          row={item}
-          drag={drag}
-          isActive={isActive}
-          defaultLabel={t(CARD_LABEL_KEYS[item.id as keyof typeof CARD_LABEL_KEYS] ?? item.id)}
-          onToggleVisible={() => updateRowById(item.id, { visible: !item.visible })}
-          onLabelChange={(label) => updateRowById(item.id, { label: label || null })}
-          onSectionChange={(section) => updateRowById(item.id, { section })}
-        />
+        <CardEditorRow {...rowProps(item, index)} drag={drag} isActive={isActive} />
       </ScaleDecorator>
     );
   }
 
-  function renderFallbackItem({ item, index }: { item: DashboardCardConfig; index: number }) {
-    return (
-      <FallbackCardEditor
-        row={item}
-        defaultLabel={t(CARD_LABEL_KEYS[item.id as keyof typeof CARD_LABEL_KEYS] ?? item.id)}
-        isFirst={index === 0}
-        isLast={index === rows.length - 1}
-        onToggleVisible={() => updateRowById(item.id, { visible: !item.visible })}
-        onLabelChange={(label) => updateRowById(item.id, { label: label || null })}
-        onSectionChange={(section) => updateRowById(item.id, { section })}
-        onMoveUp={() => setDraft((current) => (current ? moveBy(current, index, -1) : current))}
-        onMoveDown={() => setDraft((current) => (current ? moveBy(current, index, 1) : current))}
-        onMoveToTop={() => setDraft((current) => (current ? moveToEdge(current, index, true) : current))}
-        onMoveToBottom={() => setDraft((current) => (current ? moveToEdge(current, index, false) : current))}
-      />
-    );
+  function renderPlainItem({ item, index }: { item: DashboardCardConfig; index: number }) {
+    return <CardEditorRow {...rowProps(item, index)} />;
   }
 
   const listHeader = (
@@ -170,7 +184,7 @@ export default function DashboardCustomize() {
       <ScreenTitle>{t('dashboardCustomize.title')}</ScreenTitle>
       <MutedText>{t('dashboardCustomize.subtitle')}</MutedText>
       <MutedText style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}>
-        {isExpoGo ? t('dashboardCustomize.arrowHint') : t('dashboardCustomize.dragHint')}
+        {dragUnavailable ? t('dashboardCustomize.arrowHint') : t('dashboardCustomize.dragHint')}
       </MutedText>
       {(layoutQuery.isLoading || !draft) && (
         <Card>
@@ -189,89 +203,45 @@ export default function DashboardCustomize() {
 
   return (
     <Screen>
-      {isExpoGo ? (
+      {dragUnavailable ? (
         <FlatList
           style={{ flex: 1 }}
           data={rows}
           keyExtractor={(row) => row.id}
-          renderItem={renderFallbackItem}
+          renderItem={renderPlainItem}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={listHeader}
           ListFooterComponent={listFooter}
         />
       ) : (
-        <DraggableFlatList
-          style={{ flex: 1 }}
-          data={rows}
-          keyExtractor={(row) => row.id}
-          renderItem={renderItem}
-          onDragBegin={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-          }}
-          onDragEnd={({ data }) => setDraft(data)}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={listHeader}
-          ListFooterComponent={listFooter}
-        />
+        <DragListErrorBoundary onError={() => setDragUnavailable(true)}>
+          <DraggableFlatList
+            style={{ flex: 1 }}
+            data={rows}
+            keyExtractor={(row) => row.id}
+            renderItem={renderDraggableItem}
+            onDragBegin={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            }}
+            onDragEnd={({ data }) => setDraft(data)}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={listHeader}
+            ListFooterComponent={listFooter}
+          />
+        </DragListErrorBoundary>
       )}
     </Screen>
   );
 }
 
-function CardEditor({
-  row,
-  drag,
-  isActive,
-  defaultLabel,
-  onToggleVisible,
-  onLabelChange,
-  onSectionChange,
-}: {
-  row: DashboardCardConfig;
-  drag: () => void;
-  isActive: boolean;
-  defaultLabel: string;
-  onToggleVisible: () => void;
-  onLabelChange: (label: string) => void;
-  onSectionChange: (section: SectionId | null) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Pressable onLongPress={drag} disabled={isActive} delayLongPress={200}>
-      <View style={[styles.card, isActive && styles.cardActive]}>
-        <View style={styles.grabHandle}>
-          <Text style={styles.grabHandleGlyph}>☰</Text>
-        </View>
-
-        <View style={{ flex: 1, marginStart: spacing.sm }}>
-          <MutedText>{defaultLabel}</MutedText>
-          <Field
-            value={row.label ?? ''}
-            onChangeText={onLabelChange}
-            placeholder={t('dashboardCustomize.labelPlaceholder', { defaultLabel })}
-            style={{ marginTop: spacing.xs, marginBottom: 0 }}
-          />
-          <SectionPills value={row.section} onChange={onSectionChange} />
-        </View>
-
-        <Pressable
-          onPress={onToggleVisible}
-          hitSlop={8}
-          style={[styles.visibilityPill, row.visible ? styles.visibilityOn : styles.visibilityOff]}
-        >
-          <Text style={{ color: colors.text, fontSize: typography.size.xs, fontWeight: '700' }}>
-            {row.visible ? t('dashboardCustomize.visible') : t('dashboardCustomize.hidden')}
-          </Text>
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-}
-
-// Expo Go fallback (no drag gesture available — see the isExpoGo comment
-// above): large 44pt+ up/down arrow buttons plus "move to top/bottom" text
-// actions. Functionally equivalent to drag-and-drop, just button-driven.
-function FallbackCardEditor({
+// The one card-editor row for BOTH interaction models. Arrows/top-bottom/
+// pills/label/visibility are the unconditional baseline — every prop for
+// them is required, never optional, so this component has no "degraded"
+// render path. `drag`/`isActive` are the only optional pieces: passed only
+// when rendered inside a successfully-mounted DraggableFlatList, wiring an
+// ADDITIONAL long-press-to-drag affordance on the ☰ handle without ever
+// replacing the arrows.
+function CardEditorRow({
   row,
   defaultLabel,
   isFirst,
@@ -283,6 +253,8 @@ function FallbackCardEditor({
   onMoveDown,
   onMoveToTop,
   onMoveToBottom,
+  drag,
+  isActive,
 }: {
   row: DashboardCardConfig;
   defaultLabel: string;
@@ -295,10 +267,12 @@ function FallbackCardEditor({
   onMoveDown: () => void;
   onMoveToTop: () => void;
   onMoveToBottom: () => void;
+  drag?: () => void;
+  isActive?: boolean;
 }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isActive && styles.cardActive]}>
       <View style={styles.arrowColumn}>
         <Pressable onPress={onMoveUp} disabled={isFirst} hitSlop={4} style={[styles.arrowButton, isFirst && styles.arrowButtonDisabled]}>
           <Text style={[styles.arrowGlyph, isFirst && styles.arrowGlyphDisabled]}>▲</Text>
@@ -307,6 +281,12 @@ function FallbackCardEditor({
           <Text style={[styles.arrowGlyph, isLast && styles.arrowGlyphDisabled]}>▼</Text>
         </Pressable>
       </View>
+
+      {drag && (
+        <Pressable onLongPress={drag} disabled={isActive} delayLongPress={200} style={styles.grabHandle} hitSlop={4}>
+          <Text style={styles.grabHandleGlyph}>☰</Text>
+        </Pressable>
+      )}
 
       <View style={{ flex: 1, marginStart: spacing.sm }}>
         <MutedText>{defaultLabel}</MutedText>

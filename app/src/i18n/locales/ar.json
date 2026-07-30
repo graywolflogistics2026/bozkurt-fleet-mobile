@@ -304,6 +304,8 @@
     "documentDateLabel": "تاريخ المستند",
     "dateConfirmTitle": "هل هذا التاريخ صحيح؟",
     "dateConfirmBody": "يبدو أن هذا المستند يعود لأكثر من 6 أشهر — تحقق من التاريخ أعلاه قبل الحفظ.",
+    "settlementReplaceTitle": "⚠️ تم استيراد هذا الأسبوع من قبل",
+    "settlementReplaceBody": "أسبوع الـ settlement هذا (W/E {{date}}) تم استيراده من قبل — سيؤدي الحفظ إلى استبداله.",
     "vendorLabel": "المورّد: {{vendor}}",
     "amountLabel": "المبلغ: {{amount}}",
     "deductibleLabel": "قابل للخصم: {{value}}",

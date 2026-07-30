@@ -1,4 +1,5 @@
 import type { Extraction } from '@/src/import/types';
+import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
 
 export type ExistingDocSummary = {
   filename: string | null;
@@ -22,10 +23,11 @@ export function checkDuplicateImport(
   existingDocs: ExistingDocSummary[]
 ): DuplicateCheckResult {
   const docType = extraction.docType || 'other';
+  const primaryDate = getPrimaryExtractionDate(extraction) || null;
   const byContent = existingDocs.filter(
     (doc) =>
       doc.doc_type === docType &&
-      doc.doc_date === (extraction.date ?? null) &&
+      doc.doc_date === primaryDate &&
       Math.abs((doc.amount ?? 0) - (extraction.totalAmount ?? 0)) < 0.01
   );
   const byFilename = filename ? existingDocs.filter((doc) => doc.filename && doc.filename === filename) : [];

@@ -304,6 +304,8 @@
     "documentDateLabel": "Fecha del Documento",
     "dateConfirmTitle": "¿Es correcta esta fecha?",
     "dateConfirmBody": "Este documento parece tener más de 6 meses — verifica la fecha de arriba antes de guardar.",
+    "settlementReplaceTitle": "⚠️ Esta semana ya fue importada",
+    "settlementReplaceBody": "Esta semana de settlement (W/E {{date}}) ya fue importada — guardar la REEMPLAZARÁ.",
     "vendorLabel": "Proveedor: {{vendor}}",
     "amountLabel": "Monto: {{amount}}",
     "deductibleLabel": "Deducible: {{value}}",

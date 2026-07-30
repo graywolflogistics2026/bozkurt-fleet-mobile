@@ -15,6 +15,7 @@ import {
 } from '@/src/import/mapExtraction';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
+import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
 
 export async function fetchExistingDocsForDuplicateCheck(userId: string): Promise<ExistingDocSummary[]> {
   const { data, error } = await supabase
@@ -23,6 +24,28 @@ export async function fetchExistingDocsForDuplicateCheck(userId: string): Promis
     .eq('user_id', userId);
   if (error) throw error;
   return (data ?? []) as ExistingDocSummary[];
+}
+
+// Settlement match key (bug fix 2026-07-30): a settlement is uniquely
+// identified by (user_id, week_ending, truck_id) — truck_id included so
+// two DIFFERENT trucks' settlements for the SAME week never collide (a
+// fleet with 2+ trucks commonly gets paid on the same week_ending for
+// every truck). truck_id === null matches only other null-truck rows
+// (.is, not .eq — Postgres/PostgREST treat these as distinct filters).
+// Used both by the import preview (to show the "will replace" banner
+// before saving) and by saveExtraction() itself, so the two can never
+// disagree about what counts as "already imported."
+export async function findExistingSettlement(
+  userId: string,
+  weekEnding: string,
+  truckId: string | null
+): Promise<{ id: string } | null> {
+  if (!weekEnding) return null;
+  let query = supabase.from('settlements').select('id').eq('user_id', userId).eq('week_ending', weekEnding);
+  query = truckId ? query.eq('truck_id', truckId) : query.is('truck_id', null);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return (data as { id: string } | null) ?? null;
 }
 
 export type SaveExtractionParams = {
@@ -91,7 +114,12 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       user_id: userId,
       filename: storagePath ? storagePath.split('/').pop() : null,
       doc_type: d.docType,
-      doc_date: d.date ?? null,
+      // For a settlement, the real "when did this happen" date is
+      // weekEnding, not the (often-empty) top-level date — same resolver
+      // duplicateCheck.ts uses, so a settlement document's stored doc_date
+      // and its duplicate-check comparison can never disagree (bug fixed
+      // 2026-07-30).
+      doc_date: getPrimaryExtractionDate(d) || null,
       amount: d.totalAmount ?? null,
       storage_path: storagePath,
       parsed_json: d as unknown as Record<string, unknown>,
@@ -107,26 +135,48 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   if (d.docType === 'settlement' && d.settlement) {
     const mapping = mapSettlement(d, userId, truckId, driverId);
 
-    // Web v2026.07.09-A re-import-replace: importing the same week_ending
-    // again REPLACES that week's batch-tagged rows instead of duplicating
-    // them. Check for an existing settlement BEFORE the upsert so we know
-    // whether this is a fresh settlement (net pay should credit
-    // business_balance) or a replace (it already did, on the first import).
-    const { data: existingSett } = await supabase
-      .from('settlements')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('week_ending', mapping.settlement.week_ending)
-      .maybeSingle();
+    // A week_ending we can't pin down must never silently fall back to an
+    // empty-string match key — two different weeks that both failed to
+    // extract a date would otherwise collide on '' and replace each other
+    // (the exact "second import replaces the first" bug this guards
+    // against). The import preview's date field (CLAUDE.md DATE HARDENING
+    // round 2) already requires the user to see/edit this value, so an
+    // empty one here means it was left blank, not a legitimate settlement.
+    if (!mapping.settlement.week_ending) {
+      throw new Error('This settlement has no week-ending date. Please set the document date before saving.');
+    }
+
+    // Web v2026.07.09-A re-import-replace: importing the same
+    // (week_ending, truck) again REPLACES that week's batch-tagged rows
+    // instead of duplicating them — scoped by truck_id too (bug fix
+    // 2026-07-30) so two different trucks paid for the same week never
+    // collide. Matched via findExistingSettlement(), the same helper the
+    // import preview uses for its "already imported" banner, so the two
+    // can never disagree. An explicit select-then-update-or-insert (not a
+    // Postgres upsert/onConflict) — the match key includes a nullable
+    // truck_id, which onConflict's column-list inference can't express.
+    const existingSett = await findExistingSettlement(userId, mapping.settlement.week_ending, truckId);
     const isReimport = !!existingSett;
 
-    const { data: settRow, error: settError } = await supabase
-      .from('settlements')
-      .upsert({ ...mapping.settlement, document_id: documentId }, { onConflict: 'user_id,week_ending' })
-      .select('id')
-      .single();
-    if (settError) throw settError;
-    const settlementId = settRow.id as string;
+    let settlementId: string;
+    if (isReimport) {
+      const { data: settRow, error: settError } = await supabase
+        .from('settlements')
+        .update({ ...mapping.settlement, document_id: documentId })
+        .eq('id', existingSett!.id)
+        .select('id')
+        .single();
+      if (settError) throw settError;
+      settlementId = settRow.id as string;
+    } else {
+      const { data: settRow, error: settError } = await supabase
+        .from('settlements')
+        .insert({ ...mapping.settlement, document_id: documentId })
+        .select('id')
+        .single();
+      if (settError) throw settError;
+      settlementId = settRow.id as string;
+    }
 
     if (isReimport) {
       // Clear this week's previously-imported batch-tagged rows first —

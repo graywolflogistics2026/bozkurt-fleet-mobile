@@ -304,6 +304,8 @@
     "documentDateLabel": "Document Date",
     "dateConfirmTitle": "Is this date correct?",
     "dateConfirmBody": "This document looks like it's from over 6 months ago — double check the date above before saving.",
+    "settlementReplaceTitle": "⚠️ This week is already imported",
+    "settlementReplaceBody": "This settlement week (W/E {{date}}) is already imported — saving will REPLACE the existing one.",
     "vendorLabel": "Vendor: {{vendor}}",
     "amountLabel": "Amount: {{amount}}",
     "deductibleLabel": "Deductible: {{value}}",

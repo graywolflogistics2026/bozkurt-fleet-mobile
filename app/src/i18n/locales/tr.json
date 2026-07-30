@@ -304,6 +304,8 @@
     "documentDateLabel": "Belge Tarihi",
     "dateConfirmTitle": "Bu tarih doğru mu?",
     "dateConfirmBody": "Bu belge 6 aydan daha eski görünüyor — kaydetmeden önce yukarıdaki tarihi kontrol edin.",
+    "settlementReplaceTitle": "⚠️ Bu hafta zaten içe aktarılmış",
+    "settlementReplaceBody": "Bu settlement haftası (W/E {{date}}) zaten içe aktarılmış — kaydetmek mevcut olanı DEĞİŞTİRECEK.",
     "vendorLabel": "Satıcı: {{vendor}}",
     "amountLabel": "Tutar: {{amount}}",
     "deductibleLabel": "Vergiden düşülebilir: {{value}}",

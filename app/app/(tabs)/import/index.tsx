@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,11 +14,11 @@ import { useInsertTruck } from '@/src/data/trucks';
 import { useDrivers, useInsertDriver } from '@/src/data/drivers';
 import { useUserCategories } from '@/src/data/userCategories';
 import { callAiImport, friendlyAiImportError, type AiImportError } from '@/src/data/aiImportCall';
-import { fetchExistingDocsForDuplicateCheck, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
+import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
-import { isOlderThanMonths } from '@/src/import/dateGuard';
+import { getPrimaryExtractionDate, isOlderThanMonths, withPrimaryExtractionDate } from '@/src/import/dateGuard';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
@@ -36,25 +36,6 @@ type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
 function money(n: number | undefined | null, locale: string) {
   if (n == null) return '—';
   return formatMoney(n, locale);
-}
-
-// PREVIEW CONFIRMATION (owner decision 2026-07-30, DATE HARDENING round
-// 2): the "one editable date" shown/edited in the preview — for a
-// settlement that's settlement.weekEnding (what actually feeds
-// week_ending/per-diem), everything else it's the top-level date. A smart
-// default, never a lock: whatever the user types here is what
-// handleSave() actually persists (extraction state is passed straight
-// through to saveExtraction()).
-function getPrimaryExtractionDate(extraction: Extraction): string {
-  if (extraction.docType === 'settlement') return extraction.settlement?.weekEnding ?? extraction.date ?? '';
-  return extraction.date ?? '';
-}
-
-function withPrimaryExtractionDate(extraction: Extraction, newDate: string): Extraction {
-  if (extraction.docType === 'settlement' && extraction.settlement) {
-    return { ...extraction, settlement: { ...extraction.settlement, weekEnding: newDate } };
-  }
-  return { ...extraction, date: newDate };
 }
 
 type PreviewLine = { label: string; value: string; color?: string };
@@ -156,6 +137,7 @@ export default function Import() {
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [fileMeta, setFileMeta] = useState<{ uri: string; ext: string; mediaType: string; name?: string } | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
+  const [existingSettlementWeek, setExistingSettlementWeek] = useState<{ id: string } | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
   const [needsTruckPicker, setNeedsTruckPicker] = useState(false);
   const [driverId, setDriverId] = useState<string | null>(null);
@@ -181,6 +163,7 @@ export default function Import() {
     setExtraction(null);
     setFileMeta(null);
     setDuplicates(null);
+    setExistingSettlementWeek(null);
     setTruckId(null);
     setNeedsTruckPicker(false);
     setDriverId(null);
@@ -194,6 +177,32 @@ export default function Import() {
     setErrorMessage(null);
     setResult(null);
   }
+
+  // DUPLICATE-WEEK UX (owner decision 2026-07-30, blocks-beta fix): before
+  // the user ever taps Save, tell them plainly when the settlement's
+  // corrected week_ending (+ matched truck) already has a settlement on
+  // file, so a replace is never a surprise. Re-checks whenever the date
+  // field is edited or the truck picker resolves, using the exact same
+  // findExistingSettlement() match key saveExtraction() itself uses — the
+  // banner and the actual replace decision can never disagree.
+  const settlementPrimaryDate = extraction?.docType === 'settlement' ? getPrimaryExtractionDate(extraction) : null;
+  useEffect(() => {
+    if (!userId || !settlementPrimaryDate) {
+      setExistingSettlementWeek(null);
+      return;
+    }
+    let cancelled = false;
+    findExistingSettlement(userId, settlementPrimaryDate, truckId)
+      .then((row) => {
+        if (!cancelled) setExistingSettlementWeek(row);
+      })
+      .catch(() => {
+        if (!cancelled) setExistingSettlementWeek(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, settlementPrimaryDate, truckId]);
 
   // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION): a
   // newly created truck/driver is picked immediately and, for trucks, the
@@ -400,6 +409,15 @@ export default function Import() {
                   </MutedText>
                 )}
                 {duplicates!.byFilename.length > 0 && <MutedText>{t('importScreen.duplicateByFilename')}</MutedText>}
+              </View>
+            )}
+
+            {extraction.docType === 'settlement' && existingSettlementWeek && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.settlementReplaceTitle')}</Text>
+                <MutedText>
+                  {t('importScreen.settlementReplaceBody', { date: settlementPrimaryDate ?? '' })}
+                </MutedText>
               </View>
             )}
 

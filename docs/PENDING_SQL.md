@@ -1057,6 +1057,55 @@ No RLS change needed — `deductions` is already owner-scoped.
 
 ---
 
+## 34. settlements uniqueness scoped by truck_id (CRITICAL BUG FIX, device feedback, 2026-07-30)
+
+**Symptom**: on a real device, importing settlements for two different
+trucks that both happened to have the same `week_ending` caused the
+second import to silently REPLACE the first — only one settlement ever
+existed afterward. Root cause: the original `unique (user_id,
+week_ending)` constraint (no `truck_id`) meant `.upsert(...,
+{onConflict: 'user_id,week_ending'})` matched across trucks. The match
+key must be `(user_id, week_ending, truck_id)` — with a null truck_id
+still uniquely constrained against other null-truck rows, so a
+single-truck/no-truck account keeps exactly the same one-settlement-per-
+week behavior it always had (CLAUDE.md invariant #7: n=1 is just the
+default presentation, never a separate code path). Two partial unique
+indexes express this (a plain 3-column unique constraint would NOT work —
+Postgres/Postgres-style NULL semantics treat every NULL truck_id as
+distinct, which would silently un-guard the no-truck case).
+
+App-side companion fix (`app/src/data/aiImportSave.ts`): the settlement
+save path no longer uses `.upsert(..., {onConflict})` at all — an
+explicit `findExistingSettlement(user_id, week_ending, truck_id)` select
+(`.eq('truck_id', id)` when set, `.is('truck_id', null)` when not) decides
+update-vs-insert instead, since a nullable third column can't be
+expressed as a single onConflict column list anyway.
+
+```sql
+alter table settlements drop constraint settlements_user_id_week_ending_key;
+
+create unique index settlements_user_week_truck_uidx
+  on settlements (user_id, week_ending, truck_id)
+  where truck_id is not null;
+
+create unique index settlements_user_week_notruck_uidx
+  on settlements (user_id, week_ending)
+  where truck_id is null;
+```
+
+If `settlements_user_id_week_ending_key` isn't the live constraint's
+actual name (Postgres auto-names an inline `unique (...)` this way, but
+double-check in the Supabase dashboard's table constraints view before
+running), find it first with:
+
+```sql
+select conname from pg_constraint where conrelid = 'settlements'::regclass and contype = 'u';
+```
+
+- [ ] 34a run (drop old settlements unique constraint, add the two partial unique indexes)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` to

@@ -131,3 +131,23 @@ export function isOlderThanMonths(dateStr: string | null | undefined, months: nu
   if (!d) return false;
   return d < addMonths(now, -months);
 }
+
+// The ONE "what date does this extraction represent" resolver — for a
+// settlement that's settlement.weekEnding (what actually feeds
+// week_ending/per-diem/the settlement-replace match key), everything else
+// it's the top-level date. Shared by the import preview's editable date
+// field AND duplicateCheck.ts's possible-duplicate comparison (bug fixed
+// 2026-07-30 — duplicateCheck used to compare a settlement's top-level
+// `date`, which is typically unset for settlements, against the wrong
+// field entirely) so the two can never disagree about "what date is this."
+export function getPrimaryExtractionDate(extraction: Extraction): string {
+  if (extraction.docType === 'settlement') return extraction.settlement?.weekEnding ?? extraction.date ?? '';
+  return extraction.date ?? '';
+}
+
+export function withPrimaryExtractionDate(extraction: Extraction, newDate: string): Extraction {
+  if (extraction.docType === 'settlement' && extraction.settlement) {
+    return { ...extraction, settlement: { ...extraction.settlement, weekEnding: newDate } };
+  }
+  return { ...extraction, date: newDate };
+}

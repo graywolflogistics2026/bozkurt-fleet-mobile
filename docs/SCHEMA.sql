@@ -288,9 +288,19 @@ create table settlements (
   tags         text,  -- added retroactively, PENDING_SQL.md §22 (flexible fields, owner decision
                        -- 2026-07-10) — the user's own ad-hoc labeling, separate from any AI/system
                        -- description; same rationale on every other table below that gets this column.
-  created_at   timestamptz default now(),
-  unique (user_id, week_ending)               -- one settlement per week
+  created_at   timestamptz default now()
+  -- one settlement per (user, week, truck) — see PENDING_SQL.md §34 for the
+  -- two partial unique indexes below; NOT a plain `unique(user_id,
+  -- week_ending, truck_id)` column constraint, since Postgres treats every
+  -- NULL truck_id as distinct and that would silently un-guard the
+  -- no-truck case.
 );
+create unique index settlements_user_week_truck_uidx
+  on settlements (user_id, week_ending, truck_id)
+  where truck_id is not null;
+create unique index settlements_user_week_notruck_uidx
+  on settlements (user_id, week_ending)
+  where truck_id is null;
 
 -- ---------- Driver payments (NEW, owner decision 2026-07-10 — driver
 -- compensation types). What the owner actually paid a driver — the tax

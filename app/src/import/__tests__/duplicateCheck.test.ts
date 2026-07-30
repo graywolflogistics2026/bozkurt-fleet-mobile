@@ -31,4 +31,27 @@ describe('checkDuplicateImport', () => {
     const result = checkDuplicateImport(d, 'x.pdf', existing);
     expect(result.byContent).toHaveLength(1);
   });
+
+  // Bug fix 2026-07-30: a settlement's real date lives in
+  // settlement.weekEnding, not the (usually unset) top-level `date` field —
+  // comparing against the wrong field meant the duplicate banner never
+  // fired for settlements, and could also false-positive/false-negative
+  // against unrelated documents that happen to share a null date.
+  describe('settlement docType uses settlement.weekEnding, not the top-level date', () => {
+    const settlementExisting: ExistingDocSummary[] = [
+      { filename: 'sett.pdf', doc_date: '2026-07-05', doc_type: 'settlement', amount: 1000, imported_at: '2026-07-05T00:00:00Z' },
+    ];
+
+    it('flags a match keyed off weekEnding even though top-level date is unset', () => {
+      const d: Extraction = { docType: 'settlement', settlement: { weekEnding: '2026-07-05' }, totalAmount: 1000 };
+      const result = checkDuplicateImport(d, 'other-name.pdf', settlementExisting);
+      expect(result.byContent).toHaveLength(1);
+    });
+
+    it('does not flag a different week as a duplicate', () => {
+      const d: Extraction = { docType: 'settlement', settlement: { weekEnding: '2026-07-12' }, totalAmount: 1000 };
+      const result = checkDuplicateImport(d, 'other-name.pdf', settlementExisting);
+      expect(result.byContent).toHaveLength(0);
+    });
+  });
 });

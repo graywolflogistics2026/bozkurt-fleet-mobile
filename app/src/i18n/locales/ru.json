@@ -304,6 +304,8 @@
     "documentDateLabel": "Дата документа",
     "dateConfirmTitle": "Эта дата верна?",
     "dateConfirmBody": "Похоже, этому документу больше 6 месяцев — проверьте дату выше перед сохранением.",
+    "settlementReplaceTitle": "⚠️ Эта неделя уже импортирована",
+    "settlementReplaceBody": "Эта неделя settlement (W/E {{date}}) уже импортирована — сохранение ЗАМЕНИТ существующую.",
     "vendorLabel": "Продавец: {{vendor}}",
     "amountLabel": "Сумма: {{amount}}",
     "deductibleLabel": "Подлежит вычету: {{value}}",
