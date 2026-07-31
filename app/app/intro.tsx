@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useIntro } from '@/src/context/IntroContext';
-import { BRAND_EMOJI } from '@/src/brand';
+import { BrandLogo } from '@/src/components/BrandLogo';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 const SLIDE_KEYS = ['slide1', 'slide2', 'slide3'] as const;
@@ -55,7 +55,9 @@ export default function Intro() {
       >
         {SLIDE_KEYS.map((key) => (
           <View key={key} style={{ width, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl }}>
-            <Text style={{ fontSize: 64, marginBottom: spacing.xl }}>{BRAND_EMOJI}</Text>
+            <View style={{ marginBottom: spacing.xl }}>
+              <BrandLogo size={72} />
+            </View>
             <Text style={{ color: colors.text, fontSize: typography.size.xl, fontWeight: '800', textAlign: 'center', marginBottom: spacing.sm }}>
               {t(`introSlides.${key}Title`)}
             </Text>

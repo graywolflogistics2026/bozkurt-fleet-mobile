@@ -30,6 +30,7 @@ import { calcComplianceStatus } from '@/src/compliance/status';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Field, PrimaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { colors, spacing, typography } from '@/src/theme';
 import i18n from '@/src/i18n';
 
@@ -291,6 +292,13 @@ export default function CeoMode() {
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* BRAND REFRESH (owner decision 2026-07-30): AI Coach is the one
+            screen the "Your AI Business Coach" tagline is most directly
+            about — the logo+name+tagline header block appears here too,
+            not just the app-wide top bar/sidebar. */}
+        <View style={{ marginBottom: spacing.md }}>
+          <BrandWordmark fontSize={16} showTagline />
+        </View>
         <ScreenTitle>{t('ceoMode.title')}</ScreenTitle>
         <MutedText>{t('ceoMode.subtitle')}</MutedText>
 

@@ -155,7 +155,7 @@ export default function TabsLayout() {
           title: t('nav.dashboard'),
           tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} />,
           headerLeft: () => <DashboardHamburger onPress={() => setMenuOpen(true)} />,
-          headerTitle: () => <BrandWordmark />,
+          headerTitle: () => <BrandWordmark fontSize={16} showTagline />,
           headerRight: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <TopBarImportButton isWide={isWide} />

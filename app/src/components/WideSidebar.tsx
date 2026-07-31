@@ -68,13 +68,13 @@ export function WideSidebar() {
         borderEndColor: colors.border,
       }}
     >
+      {/* BRAND REFRESH (owner decision 2026-07-30): logo + name + tagline
+          header block — the company name moved out of here (redundant
+          with the user-info block below, which already shows it) in
+          favor of the tagline, matching the phone top bar's same
+          logo+name+tagline treatment. */}
       <View style={{ padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <BrandWordmark fontSize={typography.size.lg} />
-        {profile?.company_name?.trim() ? (
-          <Text style={{ color: colors.muted, fontSize: typography.size.xs, marginTop: spacing.xs }} numberOfLines={1}>
-            {companyLabel}
-          </Text>
-        ) : null}
+        <BrandWordmark fontSize={typography.size.lg} showTagline />
       </View>
 
       <ScrollView contentContainerStyle={{ paddingVertical: spacing.sm }} showsVerticalScrollIndicator={false}>
