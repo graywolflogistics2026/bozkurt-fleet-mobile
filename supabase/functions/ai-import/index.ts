@@ -104,6 +104,16 @@ const SETTLEMENT_SCHEMA_BEFORE =
 const SETTLEMENT_SCHEMA_AFTER =
   `"settlement":{"weekEnding":"","carrier":"","unit":"","driverName":"","grossRevenue":0,`;
 
+// ---- Approved addition (date anchor, owner decision 2026-07-30,
+// DEFINITIVE FIX — owner's own field diagnosis): settlement gains
+// printDate, the unambiguous header "DATE:" print date (see
+// APPROVED_ADDITIONS_SUFFIX below for the full extraction/resolution
+// instruction). Chained after the driverName patch above — BEFORE here
+// targets that patch's own AFTER text. ----
+const PRINTDATE_SCHEMA_BEFORE = SETTLEMENT_SCHEMA_AFTER;
+const PRINTDATE_SCHEMA_AFTER =
+  `"settlement":{"weekEnding":"","printDate":"","carrier":"","unit":"","driverName":"","grossRevenue":0,`;
+
 // ---- Approved addition (universal AI capture, owner decision 2026-07-10,
 // PRODUCT DECISION): every docType's top-level object gains a
 // "confidence":"high"|"low" field, right after taxDeductible. Patched into
@@ -218,6 +228,7 @@ function buildExtractionPrompt(docHint?: string, locale?: string, customCategori
     .replace(IDENTITY_LINE_BEFORE, IDENTITY_LINE_AFTER)
     .replace(OTR_RULE_BEFORE, OTR_RULE_AFTER)
     .replace(SETTLEMENT_SCHEMA_BEFORE, SETTLEMENT_SCHEMA_AFTER)
+    .replace(PRINTDATE_SCHEMA_BEFORE, PRINTDATE_SCHEMA_AFTER)
     .replace(CONFIDENCE_SETTLEMENT_BEFORE, CONFIDENCE_SETTLEMENT_AFTER)
     .replace(CONFIDENCE_FUEL_BEFORE, CONFIDENCE_FUEL_AFTER)
     .replace(CONFIDENCE_MAINTENANCE_BEFORE, CONFIDENCE_MAINTENANCE_AFTER)
@@ -248,6 +259,17 @@ function buildExtractionPrompt(docHint?: string, locale?: string, customCategori
   // deliberately explicit and settlement-specific so the two rules can
   // never be conflated again.
   prompt += `\nAPPROVED ADDITION (date hardening round 3 — settlement week ending must never be guessed, owner decision 2026-07-30, CRITICAL BUG FIX): settlement.weekEnding must be read directly from the document's own "week ending" / "settlement date" / "pay period ending" text (or computed from a clearly-printed pay-period date range shown on the same document) — NEVER inferred, defaulted, or approximated from today's date (${todayIso}) or from any other unrelated date on the document. The "prefer the near-today reading" instruction above applies ONLY when choosing between two possible READINGS of a date that IS printed on the document (e.g. resolving a year/day-order ambiguity) — it is never license to invent a week-ending date that is not printed on the document at all. If the week-ending date genuinely cannot be found anywhere on the document, leave settlement.weekEnding as "" and do not guess — the app will require the user to enter it before saving.\n`;
+  // DATE HARDENING round 4 (owner decision 2026-07-30, DEFINITIVE FIX —
+  // owner's own field diagnosis): carrier statements print TWO dates in
+  // the header — an unambiguous print date ("DATE:", commonly M/D/YY,
+  // impossible to misread since a day value >12 rules out the alternate
+  // month/day order) printed ~1 day BEFORE the settlement week, and the
+  // ambiguous "SETTLEMENTS DATE:" (commonly YY/MM/DD) which IS
+  // weekEnding. Anchoring weekEnding's digit-order resolution to the
+  // unambiguous print date is strictly more reliable than round 2's
+  // "closest to today" heuristic, since only one reading can ever land in
+  // the tight post-print-date window a real settlement week must fall in.
+  prompt += `\nAPPROVED ADDITION (date hardening round 4 — settlement date anchor, owner decision 2026-07-30, DEFINITIVE FIX): carrier settlement statements print TWO dates in their header — an unambiguous "DATE:" print date (commonly M/D/YY — this order is certain because a day value over 12 rules out reading it any other way) printed about 1 day BEFORE the settlement week, and the "SETTLEMENTS DATE:" (commonly YY/MM/DD) which IS the week-ending date but whose digit order is ambiguous. Extract the print date into settlement.printDate (YYYY-MM-DD) whenever the "DATE:" header line is shown. Then resolve settlement.weekEnding by choosing whichever reading of the SETTLEMENTS DATE — read literally as printed, OR with its year and day digits swapped — falls within the 7-day window starting at printDate (printDate through printDate+7 days). Example: printDate 2026-07-16, SETTLEMENTS DATE printed "26/07/17" -> weekEnding "2026-07-17" (the alternate reading "2017-07-26" falls outside the window and must be rejected). If neither reading falls in that window, or the print date cannot be determined, leave weekEnding "" rather than guessing — never fall back to today's date (round 3 above already forbids that).\n`;
   if (docHint) {
     prompt += `\nThe user has hinted this document is likely a "${docHint}" — verify against the actual content, but use this as a tiebreaker only if the content is genuinely ambiguous.\n`;
   }

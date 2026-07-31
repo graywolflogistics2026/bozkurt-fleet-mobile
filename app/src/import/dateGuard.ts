@@ -21,6 +21,12 @@ function addMonths(date: Date, delta: number): Date {
   return d;
 }
 
+function addDays(date: Date, delta: number): Date {
+  const d = new Date(date.getTime());
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d;
+}
+
 function parseIsoDate(dateStr: string): Date | null {
   const m = ISO_DATE_RE.exec(dateStr);
   if (!m) return null;
@@ -76,6 +82,44 @@ export function correctImplausibleDate(dateStr: string | null | undefined, now: 
   return swappedDate >= lowerBound && swappedDate <= upperBound ? swapped : dateStr;
 }
 
+// DATE ANCHOR (owner decision 2026-07-30, DEFINITIVE FIX — owner's own
+// field diagnosis): carrier settlement statements print TWO dates in
+// their header — an unambiguous "DATE:" print date (commonly M/D/YY,
+// impossible to misread since a day value >12 rules out the alternate
+// month/day order) printed ~1 day BEFORE the settlement week, and the
+// "SETTLEMENTS DATE:" (commonly YY/MM/DD) which IS the real weekEnding
+// but whose digit order the AI can misread (the exact round-2/round-3 bug
+// this whole file exists to catch). When printDate is available it is a
+// far more precise anchor than "now" (correctImplausibleDate above) —
+// only ONE reading of weekEnding (as extracted, or with year/day swapped
+// per trySwapYearAndDay) can ever land inside the tight
+// [printDate, printDate+7 days] window a real settlement week must fall
+// in, so this resolves the ambiguity deterministically instead of by
+// "closest to today" guesswork. Returns null (never a guess) when
+// printDate is missing/unparseable or neither reading fits the window —
+// callers fall back to the round-2/"now" correction in that case.
+export function resolveWeekEndingWithAnchor(
+  printDate: string | null | undefined,
+  weekEndingCandidate: string | null | undefined
+): string | null {
+  if (!printDate || !weekEndingCandidate) return null;
+  const anchor = parseIsoDate(printDate);
+  if (!anchor) return null;
+
+  const windowStart = anchor;
+  const windowEnd = addDays(anchor, 7);
+  const inWindow = (d: Date | null): d is Date => !!d && d >= windowStart && d <= windowEnd;
+
+  const primary = parseIsoDate(weekEndingCandidate);
+  if (inWindow(primary)) return weekEndingCandidate;
+
+  const swappedStr = trySwapYearAndDay(weekEndingCandidate);
+  const swapped = swappedStr ? parseIsoDate(swappedStr) : null;
+  if (inWindow(swapped)) return swappedStr;
+
+  return null;
+}
+
 // Applied once, right after the AI extraction is received (src/data/
 // aiImportCall.ts), so every downstream mapper (mapSettlement/mapFuel/
 // mapPurchase/etc.) and the import preview screen all see the corrected
@@ -90,7 +134,10 @@ export function sanitizeExtractionDates(extraction: Extraction, now: Date = new 
   const settlement = s
     ? {
         ...s,
-        weekEnding: fix(s.weekEnding),
+        // DATE ANCHOR takes priority over the "now"-based correction below
+        // whenever printDate is present — an exact per-document anchor is
+        // strictly more reliable than "recent relative to today."
+        weekEnding: resolveWeekEndingWithAnchor(s.printDate, s.weekEnding) ?? fix(s.weekEnding),
         loads: s.loads?.map((l) => ({
           ...l,
           pickupDate: fix(l.pickupDate),

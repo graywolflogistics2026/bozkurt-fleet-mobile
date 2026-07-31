@@ -4,6 +4,7 @@ import {
   sanitizeExtractionDates,
   isOlderThanMonths,
   isSettlementWeekEndingMissing,
+  resolveWeekEndingWithAnchor,
 } from '@/src/import/dateGuard';
 import type { Extraction } from '@/src/import/types';
 
@@ -148,6 +149,73 @@ describe('isOlderThanMonths (import preview "Is this date correct?" highlight)',
 // enters it themselves. This guard is what the Save button's `disabled`
 // prop is keyed off of, mirroring the throw in aiImportSave.ts's
 // saveExtraction() so the UI never reaches that throw.
+// DATE ANCHOR (owner decision 2026-07-30, DEFINITIVE FIX — owner's own
+// field diagnosis): both real examples the owner reported from an actual
+// carrier statement, plus a no-fit case.
+describe('resolveWeekEndingWithAnchor (DATE HARDENING round 4)', () => {
+  it('example 1: printDate 2026-07-16 + "26/07/17" -> 2026-07-17 (not 2017-07-26)', () => {
+    expect(resolveWeekEndingWithAnchor('2026-07-16', '2026-07-17')).toBe('2026-07-17');
+  });
+
+  it('example 1, swapped-reading input: printDate 2026-07-16 + the misread "2017-07-26" still resolves to 2026-07-17', () => {
+    // If the AI had instead read the ambiguous SETTLEMENTS DATE the OTHER
+    // way (year/day swapped), the anchor must still pull it back to the
+    // correct reading rather than accepting the out-of-window guess.
+    expect(resolveWeekEndingWithAnchor('2026-07-16', '2017-07-26')).toBe('2026-07-17');
+  });
+
+  it('example 2: printDate 2026-07-23 + "26/07/24" -> 2026-07-24', () => {
+    expect(resolveWeekEndingWithAnchor('2026-07-23', '2026-07-24')).toBe('2026-07-24');
+  });
+
+  it('returns null when neither reading falls in the [printDate, printDate+7] window', () => {
+    expect(resolveWeekEndingWithAnchor('2026-07-16', '2026-09-01')).toBeNull();
+  });
+
+  it('returns null when printDate is missing', () => {
+    expect(resolveWeekEndingWithAnchor(null, '2026-07-17')).toBeNull();
+    expect(resolveWeekEndingWithAnchor(undefined, '2026-07-17')).toBeNull();
+  });
+
+  it('returns null when the weekEnding candidate is missing', () => {
+    expect(resolveWeekEndingWithAnchor('2026-07-16', null)).toBeNull();
+  });
+
+  it('accepts a reading exactly on the window boundary (printDate itself, and printDate+7)', () => {
+    expect(resolveWeekEndingWithAnchor('2026-07-16', '2026-07-16')).toBe('2026-07-16');
+    expect(resolveWeekEndingWithAnchor('2026-07-16', '2026-07-23')).toBe('2026-07-23');
+  });
+});
+
+describe('sanitizeExtractionDates uses the date anchor when printDate is present', () => {
+  it('resolves weekEnding via the anchor instead of the "now"-based correction', () => {
+    const extraction: Extraction = {
+      docType: 'settlement',
+      settlement: { weekEnding: '2026-07-17', printDate: '2026-07-16' },
+    };
+    // NOW is far from both dates — the "now"-based correction alone would
+    // leave 2026-07-17 untouched anyway here, so this specifically proves
+    // the anchor path is taken by checking the swapped-misread case below.
+    const result = sanitizeExtractionDates(extraction, NOW);
+    expect(result.settlement?.weekEnding).toBe('2026-07-17');
+  });
+
+  it('pulls a swapped/misread weekEnding back to the anchor-correct reading', () => {
+    const extraction: Extraction = {
+      docType: 'settlement',
+      settlement: { weekEnding: '2017-07-26', printDate: '2026-07-16' },
+    };
+    const result = sanitizeExtractionDates(extraction, NOW);
+    expect(result.settlement?.weekEnding).toBe('2026-07-17');
+  });
+
+  it('falls back to the "now"-based correction when printDate is absent', () => {
+    const extraction: Extraction = { docType: 'settlement', settlement: { weekEnding: '2024-07-26' } };
+    const result = sanitizeExtractionDates(extraction, NOW);
+    expect(result.settlement?.weekEnding).toBe('2026-07-24');
+  });
+});
+
 describe('isSettlementWeekEndingMissing (DATE HARDENING round 3)', () => {
   it('is true for a settlement with no weekEnding at all', () => {
     expect(isSettlementWeekEndingMissing({ docType: 'settlement', settlement: {} })).toBe(true);

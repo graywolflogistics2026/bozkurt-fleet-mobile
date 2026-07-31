@@ -103,6 +103,12 @@ export type ExtractedLoan = { name: string; balance?: number; payment?: number; 
 
 export type ExtractedSettlement = {
   weekEnding?: string;
+  // DATE ANCHOR (owner decision 2026-07-30, definitive fix): the header's
+  // unambiguous print date ("DATE:", commonly M/D/YY, printed ~1 day
+  // before the settlement week) — used to resolve which digit-order
+  // reading of the ambiguous "SETTLEMENTS DATE:" (weekEnding, commonly
+  // YY/MM/DD) is correct (dateGuard.ts resolveWeekEndingWithAnchor()).
+  printDate?: string;
   carrier?: string;
   unit?: string;
   // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION):

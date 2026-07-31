@@ -262,7 +262,22 @@
       excluded from the duplicate-import warning for settlements
       specifically (`app/src/import/duplicateCheck.ts`) — only a genuine
       content match (docType + `week_ending` + amount) flags a settlement
-      as a possible duplicate, a filename match alone never does.
+      as a possible duplicate, a filename match alone never does. DATE
+      HARDENING round 4 — settlement date anchor (owner decision
+      2026-07-30, DEFINITIVE FIX, owner's own field diagnosis): carrier
+      statements print an unambiguous header print date ("DATE:",
+      commonly M/D/YY) about a day before the ambiguous "SETTLEMENTS
+      DATE:" (commonly YY/MM/DD, = weekEnding). `settlement.printDate` is
+      now extracted alongside weekEnding; `app/src/import/dateGuard.ts`'s
+      `resolveWeekEndingWithAnchor(printDate, weekEndingCandidate)`
+      deterministically picks whichever digit-order reading of weekEnding
+      (as extracted, or year/day-swapped per `trySwapYearAndDay()`) falls
+      within `[printDate, printDate+7 days]` — a window tight enough that
+      only the correct reading can ever land inside it — and takes
+      priority over round 2's "closest to today" heuristic in
+      `sanitizeExtractionDates()` whenever printDate is present. Returns
+      null (never a guess) when printDate is missing or neither reading
+      fits, same as every other rule in this list.
   11. Multi-language support (owner decision 2026-07-09, PRODUCT DECISION,
       binding; Hindi/Ukrainian added same-day addendum): target languages
       are English (default), Spanish, Russian, Arabic, Turkish, Hindi, and
