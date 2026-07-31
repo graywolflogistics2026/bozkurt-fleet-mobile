@@ -1057,7 +1057,7 @@ No RLS change needed — `deductions` is already owner-scoped.
 
 ---
 
-## 34. settlements uniqueness scoped by truck_id (CRITICAL BUG FIX, device feedback, 2026-07-30)
+## 34. settlements uniqueness scoped by truck_id (CRITICAL BUG FIX, device feedback, 2026-07-30) — ✅ APPLIED
 
 **Symptom**: on a real device, importing settlements for two different
 trucks that both happened to have the same `week_ending` caused the
@@ -1102,11 +1102,11 @@ running), find it first with:
 select conname from pg_constraint where conrelid = 'settlements'::regclass and contype = 'u';
 ```
 
-- [ ] 34a run (drop old settlements unique constraint, add the two partial unique indexes)
+- [x] 34a run (drop old settlements unique constraint, add the two partial unique indexes)
 
 ---
 
-## 35. settlements.per_diem_days (PER DIEM INTELLIGENCE, owner decision 2026-07-30, mega-pass part B)
+## 35. settlements.per_diem_days (PER DIEM INTELLIGENCE, owner decision 2026-07-30, mega-pass part B) — ✅ APPLIED
 
 **Symptom fixed**: per diem was a flat 7 days × distinct settlement weeks
 (`app/src/tax/perDiem.ts`), so a "home week" settlement with 0 miles
@@ -1137,11 +1137,11 @@ update settlements set per_diem_days = 0 where miles = 0;
 
 No RLS change needed — `settlements` is already owner-scoped.
 
-- [ ] 35a run (add settlements.per_diem_days + backfill 0-mile weeks to 0 days)
+- [x] 35a run (add settlements.per_diem_days + backfill 0-mile weeks to 0 days)
 
 ---
 
-## 36. Asset purchase & financing (owner decision 2026-07-30, PRODUCT DECISION, mega-pass part C)
+## 36. Asset purchase & financing (owner decision 2026-07-30, PRODUCT DECISION, mega-pass part C) — ✅ SQL APPLIED (Edge Function redeploys still pending, see 36b/36c)
 
 Every asset (truck, trailer, or unlimited other equipment) can now record
 its own purchase price/date and financing (cash or loan). A loan links
@@ -1214,7 +1214,7 @@ pass — this SQL section is the DB-side companion; no further SQL needed
 for that, it's just a reminder these two Edge Functions need
 redeploying too since their source changed).
 
-- [ ] 36a run (trucks purchase/financing columns + new equipment table + RLS)
+- [x] 36a run (trucks purchase/financing columns + new equipment table + RLS)
 - [ ] 36b redeploy reset-data (TABLES_IN_DELETION_ORDER gained "equipment")
 - [ ] 36c redeploy delete-account (TABLES_IN_DELETION_ORDER gained "equipment")
 
