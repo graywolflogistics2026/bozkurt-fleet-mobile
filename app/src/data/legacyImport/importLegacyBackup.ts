@@ -1,6 +1,7 @@
 import { supabase } from '@/src/lib/supabase';
 import { importIdempotent, type ImportOutcome } from '@/src/data/legacyImport/idempotent';
 import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
+import { FEATURE_FLAGS } from '@/src/config/featureFlags';
 import type {
   LegacyBackupPayload,
   LegacyCapitalContribution,
@@ -836,7 +837,18 @@ export async function importLegacyBackup(
   entities.push(await runEntity('Loans', (payload.loans ?? []).length, () => importLoans(userId, payload.loans ?? [])));
 
   report(9);
-  entities.push(await runEntity('Credit cards', (payload.cards ?? []).length, () => importCreditCards(userId, payload.cards ?? [])));
+  // NAV SIMPLIFICATION (owner decision 2026-07-30): Credit Cards is
+  // hidden app-wide behind FEATURE_FLAGS.bankCreditCards (default off) —
+  // the legacy-backup importer politely skips creating new rows for it
+  // while the flag is off instead of silently importing into a feature
+  // the user can no longer navigate to. Existing rows are never touched;
+  // flipping the flag back to `true` re-enables this entity immediately,
+  // no code changes needed.
+  if (FEATURE_FLAGS.bankCreditCards) {
+    entities.push(await runEntity('Credit cards', (payload.cards ?? []).length, () => importCreditCards(userId, payload.cards ?? [])));
+  } else if ((payload.cards ?? []).length > 0) {
+    warnings.push(`Credit Cards import is currently disabled — ${(payload.cards ?? []).length} card(s) in this backup were skipped.`);
+  }
 
   report(10);
   entities.push(await runEntity('Capital draws', (payload.capitalDraws ?? []).length, () => importDraws(userId, payload.capitalDraws ?? [])));
@@ -861,18 +873,30 @@ export async function importLegacyBackup(
   }
 
   report(12);
-  entities.push(
-    await runEntity('Bank (card) statements', (payload.bankStatements ?? []).length, () =>
-      importBankStatements(userId, payload.bankStatements)
-    )
-  );
+  // NAV SIMPLIFICATION (owner decision 2026-07-30): Bank Statement (both
+  // card-type and checking-type rows, both land in `bank_statements`) is
+  // hidden app-wide behind the same flag as Credit Cards above — same
+  // "politely skip new imports, never touch existing rows" treatment.
+  if (FEATURE_FLAGS.bankCreditCards) {
+    entities.push(
+      await runEntity('Bank (card) statements', (payload.bankStatements ?? []).length, () =>
+        importBankStatements(userId, payload.bankStatements)
+      )
+    );
+  } else if ((payload.bankStatements ?? []).length > 0) {
+    warnings.push(`Bank Statement import is currently disabled — ${(payload.bankStatements ?? []).length} card statement(s) in this backup were skipped.`);
+  }
 
   report(13);
-  entities.push(
-    await runEntity('Checking statements', (payload.checkingStatements ?? []).length, () =>
-      importCheckingStatements(userId, payload.checkingStatements)
-    )
-  );
+  if (FEATURE_FLAGS.bankCreditCards) {
+    entities.push(
+      await runEntity('Checking statements', (payload.checkingStatements ?? []).length, () =>
+        importCheckingStatements(userId, payload.checkingStatements)
+      )
+    );
+  } else if ((payload.checkingStatements ?? []).length > 0) {
+    warnings.push(`Bank Statement import is currently disabled — ${(payload.checkingStatements ?? []).length} checking statement(s) in this backup were skipped.`);
+  }
 
   report(14);
   if (truckId) {

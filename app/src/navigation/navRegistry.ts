@@ -1,4 +1,5 @@
 import type { Href } from 'expo-router';
+import { FEATURE_FLAGS, type FeatureFlagKey } from '@/src/config/featureFlags';
 
 // NAV PARITY FIX (owner decision 2026-07-30, device evidence: "Documents"
 // missing from the WideSidebar's TOOLS group despite being reachable from
@@ -21,7 +22,13 @@ export type NavGroup = { titleKey: string; items: NavItem[] };
 // appended into whichever group fits best. See WideSidebar.tsx's own
 // header comment for the icon-strategy and "Assets vs Asset Register"
 // naming notes — those design decisions live there, not here.
-export const NAV_GROUPS: NavGroup[] = [
+//
+// RAW — deliberately unfiltered by feature flags (see NAV_GROUPS below,
+// the filtered export every nav surface actually uses). Kept intact and
+// exported so NAV SIMPLIFICATION (owner decision 2026-07-30, hiding Bank
+// Statement + Credit Cards) never has to touch or delete a route entry
+// here — only gate its visibility at the export boundary.
+export const RAW_NAV_GROUPS: NavGroup[] = [
   {
     titleKey: 'sidebar.sections.overview',
     items: [
@@ -89,6 +96,39 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [{ href: '/(tabs)/more/settings', labelKey: 'nav.settings', emoji: '⚙️' }],
   },
 ];
+
+// NAV SIMPLIFICATION (owner decision 2026-07-30): Bank Statement +
+// Credit Cards hidden from every nav surface behind FEATURE_FLAGS.
+// bankCreditCards (default off) — Capital Account is explicitly NOT
+// gated (owner-contribution flow, draw tracking, and tax basis depend
+// on it, confirmed decision). Code/tables/tests are untouched; flipping
+// the flag back to `true` restores both routes everywhere instantly.
+const FLAG_GATED_HREFS: Partial<Record<string, FeatureFlagKey>> = {
+  '/(tabs)/more/bank-statements': 'bankCreditCards',
+  '/(tabs)/more/credit-cards': 'bankCreditCards',
+};
+
+// Pure and exported so the gating logic itself is directly testable
+// (arbitrary flag values in, not just the app's live default) —
+// src/navigation/__tests__/navRegistry.test.ts exercises both the "off"
+// (current default) and "on" states against this function.
+export function filterNavGroupsByFlags(groups: NavGroup[], flags: Record<FeatureFlagKey, boolean>): NavGroup[] {
+  return groups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((item) => {
+        const flagKey = FLAG_GATED_HREFS[item.href as string];
+        return !flagKey || flags[flagKey];
+      }),
+    }))
+    .filter((g) => g.items.length > 0);
+}
+
+// THE registry every nav surface (WideSidebar, MenuSheet, the More tab's
+// flat list, Reports' section filter) actually renders from — RAW_NAV_GROUPS
+// filtered through the live FEATURE_FLAGS. A route hidden here is hidden
+// literally everywhere at once, by construction.
+export const NAV_GROUPS: NavGroup[] = filterNavGroupsByFlags(RAW_NAV_GROUPS, FEATURE_FLAGS);
 
 // Routes that already have their own bottom-tab icon on phones (Home,
 // Transactions, Import, Deductions, Truck Health) — the More tab's own

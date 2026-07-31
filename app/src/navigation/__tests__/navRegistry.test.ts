@@ -1,4 +1,13 @@
-import { NAV_GROUPS, TAB_BAR_HREFS, flattenNavItems, moreTabItems, isActiveRoute } from '@/src/navigation/navRegistry';
+import {
+  NAV_GROUPS,
+  RAW_NAV_GROUPS,
+  TAB_BAR_HREFS,
+  flattenNavItems,
+  moreTabItems,
+  isActiveRoute,
+  filterNavGroupsByFlags,
+} from '@/src/navigation/navRegistry';
+import { FEATURE_FLAGS } from '@/src/config/featureFlags';
 
 // NAV PARITY FIX (owner decision 2026-07-30, device evidence: "Documents"
 // missing from the wide-screen sidebar's TOOLS group despite being
@@ -51,6 +60,44 @@ describe('flattenNavItems / moreTabItems (identical-route-sets guard)', () => {
     // imports GROUPS directly — both iterate the literal same array, so
     // there is no second copy anywhere left that could drift.
     expect(flattenNavItems(NAV_GROUPS)).toEqual(flattenNavItems(NAV_GROUPS));
+  });
+});
+
+// NAV SIMPLIFICATION (owner decision 2026-07-30): Bank Statement + Credit
+// Cards hidden from every nav surface behind FEATURE_FLAGS.bankCreditCards
+// (default off) — data/code/tables/tests untouched, only visibility
+// gated. Capital Account is explicitly NOT gated by this flag.
+describe('NAV SIMPLIFICATION — feature-flag gating', () => {
+  it('the live app default (FEATURE_FLAGS.bankCreditCards = false) hides Bank Statement and Credit Cards from NAV_GROUPS', () => {
+    expect(FEATURE_FLAGS.bankCreditCards).toBe(false);
+    const hrefs = flattenNavItems(NAV_GROUPS).map((item) => item.href as string);
+    expect(hrefs).not.toContain('/(tabs)/more/bank-statements');
+    expect(hrefs).not.toContain('/(tabs)/more/credit-cards');
+  });
+
+  it('Capital Account is never gated by the bankCreditCards flag', () => {
+    const hrefs = flattenNavItems(NAV_GROUPS).map((item) => item.href as string);
+    expect(hrefs).toContain('/(tabs)/more/capital-account');
+  });
+
+  it('the routes are NOT deleted from the raw registry — only hidden at the filtered export boundary', () => {
+    const rawHrefs = flattenNavItems(RAW_NAV_GROUPS).map((item) => item.href as string);
+    expect(rawHrefs).toContain('/(tabs)/more/bank-statements');
+    expect(rawHrefs).toContain('/(tabs)/more/credit-cards');
+  });
+
+  it('filterNavGroupsByFlags restores both routes when the flag is explicitly on', () => {
+    const restored = filterNavGroupsByFlags(RAW_NAV_GROUPS, { ...FEATURE_FLAGS, bankCreditCards: true });
+    const hrefs = flattenNavItems(restored).map((item) => item.href as string);
+    expect(hrefs).toContain('/(tabs)/more/bank-statements');
+    expect(hrefs).toContain('/(tabs)/more/credit-cards');
+  });
+
+  it('never drops an unrelated route while filtering', () => {
+    const withFlagOn = flattenNavItems(filterNavGroupsByFlags(RAW_NAV_GROUPS, { ...FEATURE_FLAGS, bankCreditCards: true }));
+    const withFlagOff = flattenNavItems(filterNavGroupsByFlags(RAW_NAV_GROUPS, { ...FEATURE_FLAGS, bankCreditCards: false }));
+    const unrelatedOn = withFlagOn.filter((i) => (i.href as string) !== '/(tabs)/more/bank-statements' && (i.href as string) !== '/(tabs)/more/credit-cards');
+    expect(withFlagOff).toEqual(unrelatedOn);
   });
 });
 

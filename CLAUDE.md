@@ -777,6 +777,36 @@
   moreTabItems" invariant. The orphaned `more.*` i18n block (labelKeys the
   old separate list used, since replaced by the registry's `nav.*` keys)
   was deleted from all 7 locales — confirmed unused everywhere first.
+- NAV SIMPLIFICATION / FEATURE FLAGS (owner decision 2026-07-30): Bank
+  Statement and Credit Cards are hidden from every nav surface (phone
+  Menu, wide sidebar, Reports hub — all of which render through
+  `navRegistry.ts`, so this is one change, not three) behind
+  `app/src/config/featureFlags.ts`'s `FEATURE_FLAGS.bankCreditCards`
+  (default `false`). This is the established pattern for "turn a feature
+  off without deleting it": `navRegistry.ts` keeps the full, unfiltered
+  route list as `RAW_NAV_GROUPS` and exports a flag-filtered `NAV_GROUPS`
+  (`filterNavGroupsByFlags()`, pure and directly testable) as the one
+  thing every surface actually renders from — flipping the flag back to
+  `true` restores both routes everywhere instantly, no code/table/test
+  changes needed. Capital Account is explicitly NOT gated by this flag
+  (owner-contribution flow, draw tracking, and tax basis depend on it —
+  confirmed decision). Existing `bank_statements`/`bank_transactions`/
+  `credit_cards` rows are untouched and still readable by anything that
+  queries them directly (e.g. Accountant Package's own aggregate) — the
+  flag only gates NAVIGATION and NEW rows. The legacy-backup importer
+  (`app/src/data/legacyImport/importLegacyBackup.ts`, the only actual
+  "import" pathway for these two entities — ai-import's docType schema
+  has never covered bank/card statements) checks the same flag for its
+  3 relevant entities (Credit Cards; Bank statements' card-type AND
+  checking-type rows, both landing in `bank_statements`) and, when off,
+  skips writing new rows and pushes a plain informational line to the
+  import result's existing `warnings` array (never styled as a failure)
+  when the backup payload actually contained rows of that type — "politely
+  say the feature is currently disabled," never a silent skip and never
+  an error. Any FUTURE feature that needs this same "hide without delete"
+  treatment should follow the identical pattern: a new `FEATURE_FLAGS` key
+  + gating at the single registry/import choke point, never scattered
+  per-screen conditionals.
 - RUNTIME VISIBILITY (owner decision 2026-07-30 — "which JS is on this
   device should never be a guess again"): `app/src/lib/buildInfo.ts`'s
   `getBuildInfo()`/`formatBuildInfoLine()` — app version
