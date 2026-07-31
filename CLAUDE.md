@@ -13,7 +13,29 @@
   `DB.assets.tr`, never a specific truck), no non-zero business-balance/
   capital default. The legacy-backup importer (`app/src/data/legacyImport/`)
   is a generic migration feature for any web-app user, not an Ali-specific
-  one-off. A first-launch onboarding wizard (PROMPTS.md Session 9b) is the
+  one-off — including numeric fields, not just names: its `ensureTruck()`
+  used to fall back `fleet_mpg` to `8.9` (the original owner's actual MPG)
+  when a backup's health data omitted it, which is exactly the identity
+  leak this rule forbids (bug fixed 2026-07-30) — a missing value falls
+  back to `null`, never a specific owner's number. The same class of bug
+  existed in the Cash Flow 30-day forecast (`app/src/stats/
+  cashFlowForecast.ts`, `app/app/(tabs)/more/cash-flow.tsx`): its budget
+  inputs (truck payment, fuel, other weekly expenses) defaulted to the
+  original owner's own numbers ($1145/$1800/$500) directly in the
+  calculation whenever `profiles.cf_*` was null — so even a perfect Reset
+  All Data (invariant #24) silently "came back" because the FORM/MATH
+  refilled them, not the database. Every Cash Flow budget input now
+  contributes exactly `$0` when unset; the 25% tax reserve is the one
+  field allowed to appear as a labeled UI suggestion
+  (`taxReservePctSuggestion`) but is never applied to the math unless the
+  user actually enters it. Any future numeric default sourced from
+  `legacy/index.html` (a form placeholder, a `||`/`??` fallback, a seeded
+  constant) must be checked against this rule before being ported: legacy
+  business LOGIC (formulas, thresholds, tax math) is fair game to port
+  verbatim per the rule above, but a legacy DATA VALUE (this owner's
+  actual truck payment, MPG, balance, truck unit) is never a valid
+  fallback for another user's empty field. A first-launch onboarding
+  wizard (PROMPTS.md Session 9b) is the
   only place a user's own company/truck/balance get set.
 - Never weaken these invariants:
   1. Settlement-withheld deductions are never counted as tax deductions

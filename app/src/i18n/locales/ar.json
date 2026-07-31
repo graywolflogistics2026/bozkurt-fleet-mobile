@@ -1028,6 +1028,7 @@
     "insuranceMonthlyLabel": "التأمين (شهري)",
     "otherWeeklyLabel": "أخرى (أسبوعي)",
     "taxReservePctLabel": "نسبة احتياطي الضريبة %",
+    "taxReservePctSuggestion": "مقترح: {{pct}}% — لا يُطبَّق ما لم تُدخله بنفسك",
     "saveBudget": "حفظ الميزانية",
     "bankLabel": "البنك",
     "revenue30dLabel": "إيرادات 30 يومًا",

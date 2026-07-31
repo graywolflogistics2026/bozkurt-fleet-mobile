@@ -1028,6 +1028,7 @@
     "insuranceMonthlyLabel": "Страховка (мес)",
     "otherWeeklyLabel": "Прочее (нед)",
     "taxReservePctLabel": "Налоговый резерв %",
+    "taxReservePctSuggestion": "Рекомендуется: {{pct}}% — не применяется, пока вы не введёте значение",
     "saveBudget": "Сохранить бюджет",
     "bankLabel": "Банк",
     "revenue30dLabel": "Доход за 30д",

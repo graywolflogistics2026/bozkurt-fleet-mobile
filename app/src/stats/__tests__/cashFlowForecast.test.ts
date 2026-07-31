@@ -14,22 +14,29 @@ function inputs(overrides: Partial<CashFlowBudgetInputs> = {}): CashFlowBudgetIn
 }
 
 describe('calcCashFlowForecast', () => {
-  it('applies legacy default placeholders when every input is null', () => {
+  // Clean-product fix (owner decision 2026-07-30): a fresh or freshly-reset
+  // profile (CLAUDE.md invariant #24) must show an all-zero forecast, not
+  // one silently computed against the original owner's actual budget
+  // numbers (truck payment $1145, fuel $1800, other $500, 25% tax reserve).
+  it('every unset input contributes $0 — no legacy owner-specific defaults applied', () => {
     const r = calcCashFlowForecast(inputs());
-    // wExp = 1145 + 1800 + 500 + 0/4.33 = 3445; wr = 0 -> wNet = -3445
-    expect(r.weeklyExpenses).toBeCloseTo(3445, 5);
-    expect(r.weeklyNet).toBeCloseTo(-3445, 5);
+    expect(r.weeklyExpenses).toBe(0);
+    expect(r.weeklyNet).toBe(0);
     expect(r.bankBalance).toBe(0);
-    // 2026-07-30 fix: a loss week reserves $0 tax, never a negative
-    // number added back into the net-after-tax figure.
     expect(r.weeklyTaxReserve).toBe(0);
-    expect(r.weeklyNetAfterTax).toBeCloseTo(-3445, 5);
+    expect(r.weeklyNetAfterTax).toBe(0);
+    expect(r.revenue30d).toBe(0);
+    expect(r.netBalance30d).toBe(0);
+    expect(r.weeks.every((w) => w.revenue === 0 && w.expenses === 0 && w.net === 0 && w.balance === 0)).toBe(true);
+  });
+
+  it('an explicit 0 for any budget field behaves identically to leaving it unset (no hidden fallback)', () => {
+    const r = calcCashFlowForecast(inputs({ truckPayment: 0, fuelWeekly: 0, otherWeekly: 0, taxReservePct: 0 }));
+    expect(r.weeklyExpenses).toBe(0);
+    expect(r.weeklyTaxReserve).toBe(0);
   });
 
   it('clamps the tax reserve to $0 on a loss week (net <= 0) instead of going negative', () => {
-    // Same shape as the null-inputs case but with an explicit revenue of 0
-    // and a non-default tax %, to isolate the clamp from the ||-default
-    // quirks exercised elsewhere in this file.
     const r = calcCashFlowForecast(
       inputs({ bankBalance: 500, weeklyRevenue: 0, truckPayment: 1000, fuelWeekly: 500, otherWeekly: 0, taxReservePct: 30 })
     );
@@ -42,9 +49,6 @@ describe('calcCashFlowForecast', () => {
   });
 
   it('clamps the tax reserve to exactly $0 (not merely non-negative) when net is exactly 0', () => {
-    // otherWeekly must be non-zero (an explicit 0 falls back to the
-    // legacy 500 default, same quirk covered elsewhere in this file) —
-    // 1000+500+500 of expenses against 2000 revenue nets exactly to 0.
     const r = calcCashFlowForecast(
       inputs({ weeklyRevenue: 2000, truckPayment: 1000, fuelWeekly: 500, otherWeekly: 500, insuranceMonthly: 0, taxReservePct: 25 })
     );
@@ -59,7 +63,7 @@ describe('calcCashFlowForecast', () => {
     expect(r.weeklyTaxReserve).toBeGreaterThan(0);
   });
 
-  it('matches legacy calcCF() math exactly for a full set of inputs', () => {
+  it('matches the expected math exactly for a full, user-entered set of inputs', () => {
     const r = calcCashFlowForecast(
       inputs({
         bankBalance: 10000,
@@ -83,9 +87,6 @@ describe('calcCashFlowForecast', () => {
   });
 
   it('produces a 4-week running balance timeline seeded from bank balance', () => {
-    // taxReservePct:0 would hit the same ||-default quirk as truck payment
-    // (0 is falsy -> falls back to 25%), so use a small non-zero value to
-    // keep this test's arithmetic simple and unambiguous.
     const r = calcCashFlowForecast(inputs({ bankBalance: 1000, weeklyRevenue: 5000, truckPayment: 500, fuelWeekly: 500, otherWeekly: 0.01, taxReservePct: 0.01 }));
     const wExp = 500 + 500 + 0.01;
     const wNet = 5000 - wExp;
@@ -94,10 +95,5 @@ describe('calcCashFlowForecast', () => {
     expect(r.weeks[0].balance).toBeCloseTo(1000 + wNA, 5);
     expect(r.weeks[3].balance).toBeCloseTo(1000 + wNA * 4, 5);
     expect(r.weeks.every((w) => w.revenue === 5000 && Math.abs(w.expenses - wExp) < 1e-9)).toBe(true);
-  });
-
-  it('treats an explicit 0 truck payment as unset (legacy ||-default quirk, ported as-is)', () => {
-    const r = calcCashFlowForecast(inputs({ truckPayment: 0 }));
-    expect(r.weeklyExpenses).toBeCloseTo(1145 + 1800 + 500, 5);
   });
 });

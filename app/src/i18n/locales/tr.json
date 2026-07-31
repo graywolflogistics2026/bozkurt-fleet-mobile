@@ -1028,6 +1028,7 @@
     "insuranceMonthlyLabel": "Sigorta (ay)",
     "otherWeeklyLabel": "Diğer (hf)",
     "taxReservePctLabel": "Vergi Rezervi %",
+    "taxReservePctSuggestion": "Önerilen: %{{pct}} — siz girmedikçe uygulanmaz",
     "saveBudget": "Bütçeyi Kaydet",
     "bankLabel": "Banka",
     "revenue30dLabel": "30g Gelir",

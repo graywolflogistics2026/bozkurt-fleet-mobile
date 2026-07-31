@@ -1028,6 +1028,7 @@
     "insuranceMonthlyLabel": "Seguro (mes)",
     "otherWeeklyLabel": "Otros (sem)",
     "taxReservePctLabel": "Reserva de Impuestos %",
+    "taxReservePctSuggestion": "Sugerido: {{pct}}% — no se aplica a menos que lo ingrese",
     "saveBudget": "Guardar Presupuesto",
     "bankLabel": "Banco",
     "revenue30dLabel": "Ingresos 30d",

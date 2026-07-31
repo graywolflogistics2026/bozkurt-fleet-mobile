@@ -14,11 +14,14 @@ import { colors, spacing, typography } from '@/src/theme';
 
 const CHART_HEIGHT = 120;
 
-// Legacy calcCF()'s own form placeholders (legacy/index.html:474-480) —
-// shown as Field placeholders, never silently written to the DB as if the
-// user had entered them (src/stats/cashFlowForecast.ts applies the same
-// defaults independently when a stored value is null).
-const BUDGET_PLACEHOLDERS = { truckPayment: '1145', fuelWeekly: '1800', otherWeekly: '500', taxReservePct: '25' };
+// Clean-product fix (owner decision 2026-07-30): every budget input
+// defaults to empty/0 for a fresh or reset profile — no legacy owner-
+// specific dollar amounts pre-filled here or baked into the math
+// (src/stats/cashFlowForecast.ts). The tax reserve % is the ONE field
+// allowed to show 25 as a labeled SUGGESTION (taxReservePctSuggestion
+// i18n copy below the field) — it is never applied unless the user
+// actually enters it.
+const TAX_RESERVE_SUGGESTED_PCT = '25';
 
 type BudgetFormState = {
   bankBalance: string;
@@ -205,15 +208,15 @@ export default function CashFlow() {
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.weeklyRevenueLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.weeklyRevenue} onChangeText={(v) => setBudget((f) => ({ ...f, weeklyRevenue: v }))} placeholder="6800" />
+              <Field keyboardType="numeric" value={budget.weeklyRevenue} onChangeText={(v) => setBudget((f) => ({ ...f, weeklyRevenue: v }))} placeholder="0" />
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.truckPaymentLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.truckPayment} onChangeText={(v) => setBudget((f) => ({ ...f, truckPayment: v }))} placeholder={BUDGET_PLACEHOLDERS.truckPayment} />
+              <Field keyboardType="numeric" value={budget.truckPayment} onChangeText={(v) => setBudget((f) => ({ ...f, truckPayment: v }))} placeholder="0" />
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.fuelWeeklyLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.fuelWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, fuelWeekly: v }))} placeholder={BUDGET_PLACEHOLDERS.fuelWeekly} />
+              <Field keyboardType="numeric" value={budget.fuelWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, fuelWeekly: v }))} placeholder="0" />
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.insuranceMonthlyLabel')}</MutedText>
@@ -221,11 +224,12 @@ export default function CashFlow() {
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.otherWeeklyLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.otherWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, otherWeekly: v }))} placeholder={BUDGET_PLACEHOLDERS.otherWeekly} />
+              <Field keyboardType="numeric" value={budget.otherWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, otherWeekly: v }))} placeholder="0" />
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.taxReservePctLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.taxReservePct} onChangeText={(v) => setBudget((f) => ({ ...f, taxReservePct: v }))} placeholder={BUDGET_PLACEHOLDERS.taxReservePct} />
+              <Field keyboardType="numeric" value={budget.taxReservePct} onChangeText={(v) => setBudget((f) => ({ ...f, taxReservePct: v }))} placeholder="0" />
+              <MutedText>{t('cashFlowScreen.taxReservePctSuggestion', { pct: TAX_RESERVE_SUGGESTED_PCT })}</MutedText>
             </View>
           </View>
           <PrimaryButton title={`💾 ${t('cashFlowScreen.saveBudget')}`} onPress={handleSaveBudget} loading={saving} />
@@ -260,11 +264,11 @@ export default function CashFlow() {
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.truckPaymentLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((Number(budget.truckPayment) || 1145) * 4.33)}</Text>
+              <Text style={{ color: colors.red }}>-{money((Number(budget.truckPayment) || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.fuelWeeklyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((Number(budget.fuelWeekly) || 1800) * 4.33)}</Text>
+              <Text style={{ color: colors.red }}>-{money((Number(budget.fuelWeekly) || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.insuranceMonthlyLabel')}</MutedText>
@@ -272,7 +276,7 @@ export default function CashFlow() {
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.otherWeeklyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((Number(budget.otherWeekly) || 500) * 4.33)}</Text>
+              <Text style={{ color: colors.red }}>-{money((Number(budget.otherWeekly) || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.taxReserveLabel')}</MutedText>

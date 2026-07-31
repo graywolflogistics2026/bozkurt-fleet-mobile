@@ -108,7 +108,13 @@ async function ensureTruck(userId: string, tractor: LegacyTractorAsset | null | 
     model: tractor?.model || null,
     engine: tractor?.engine || null,
     vin: tractor?.vin || null,
-    fleet_mpg: health?.mpg ?? 8.9,
+    // Clean-product fix (owner decision 2026-07-30): fleet_mpg comes ONLY
+    // from the backup file's own health data — 8.9 was the original
+    // owner's actual truck MPG, hardcoded here as a fallback in violation
+    // of this importer's own "generic migration feature" rule (see this
+    // function's header comment). No backup MPG data means no MPG value,
+    // same as every other identity/business field in this row.
+    fleet_mpg: health?.mpg ?? null,
     current_odometer: health?.odo ?? tractor?.odometer ?? null,
     apu_hours: health?.apuHours ?? null,
     is_active: true,

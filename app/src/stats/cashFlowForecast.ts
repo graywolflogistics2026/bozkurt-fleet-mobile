@@ -1,10 +1,14 @@
-// Cash Flow's 30-day manual-budget forecast — verbatim port of legacy
-// calcCF() (legacy/index.html:1960). Legacy's own form fields have no
-// persistence (recomputed on every oninput); the ||-fallback defaults
-// below (including the "0 is treated as unset" quirk that gives an
-// explicit 0 truck payment back its 1145 default) are ported as-is
-// rather than "fixed," since this is existing, tested legacy behavior,
-// not a bug (FEATURE_INVENTORY.md §4 lists no issue with it).
+// Cash Flow's 30-day manual-budget forecast — math ported from legacy
+// calcCF() (legacy/index.html:1960), MINUS legacy's own hardcoded
+// ||-fallback defaults (truck payment 1145, fuel 1800, other 500, tax
+// reserve 25%). Those were the original owner's actual web-app numbers
+// baked into the calculation itself — a clean-product bug (owner decision
+// 2026-07-30): a brand-new user (or a user who just ran Reset All Data,
+// CLAUDE.md invariant #24) would see a "reset" 30-day forecast that still
+// silently computed against a stranger's truck payment and fuel budget.
+// Every unset input now contributes exactly $0 to the forecast; the tax
+// reserve % may be SUGGESTED as 25% in the UI copy, but it is never
+// applied to the math unless the user has actually entered a value.
 export type CashFlowBudgetInputs = {
   bankBalance: number | null;
   weeklyRevenue: number | null;
@@ -31,11 +35,11 @@ export type CashFlowForecast = {
 export function calcCashFlowForecast(inputs: CashFlowBudgetInputs): CashFlowForecast {
   const b = inputs.bankBalance || 0;
   const wr = inputs.weeklyRevenue || 0;
-  const tp = inputs.truckPayment || 1145;
-  const fu = inputs.fuelWeekly || 1800;
+  const tp = inputs.truckPayment || 0;
+  const fu = inputs.fuelWeekly || 0;
   const ins = inputs.insuranceMonthly || 0;
-  const oth = inputs.otherWeekly || 500;
-  const tx = (inputs.taxReservePct || 25) / 100;
+  const oth = inputs.otherWeekly || 0;
+  const tx = (inputs.taxReservePct || 0) / 100;
 
   // Insurance is entered monthly; converted to a weekly figure by /4.33
   // (weeks/month), same constant legacy uses everywhere it converts
