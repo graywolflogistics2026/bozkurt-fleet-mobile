@@ -697,6 +697,46 @@
   thrown inside `onDragEnd`'s event-handler callback — that callback now
   has its own try/catch as a second safety net, both permanently
   downgrading to the guaranteed-safe arrows-only `FlatList`.
+- CUSTOMIZE DASHBOARD — CRASH-ON-MOUNT, the actual root cause (owner
+  decision 2026-07-30, decisive device evidence: a white flash then the
+  screen closes, before first paint, so the diagnostics panel above never
+  even got a chance to render): every fix up to this point was downstream
+  of the real bug — `dashboard-customize.tsx` imported
+  `react-native-draggable-flatlist` (built on reanimated + gesture-
+  handler) STATICALLY at module scope. If that native module fails to
+  link/initialize in a release build, evaluating the screen's own module
+  throws before React renders anything at all — no error boundary,
+  wherever placed, can catch a throw during `require()`/module
+  evaluation, because the component tree that would contain the boundary
+  never gets built. Fixed two ways, together: (1)
+  `app/src/dashboard/dragModuleLoader.ts`'s `loadDragModule()` — the ONLY
+  reference to the drag module anywhere in the file is now a type-only
+  `import type` (erased entirely at compile time, zero runtime
+  reference); the real module is loaded lazily, inside a `useEffect`
+  (never during the synchronous render), wrapped so ANY failure resolves
+  to `null` instead of propagating — the arrows-only baseline is
+  therefore always what's rendered on first paint (dragModule starts
+  `null`), upgrading to drag-plus-arrows only after a load that has
+  already proven it won't crash; (2) `app/src/components/
+  ScreenErrorBoundary.tsx` — a reusable, generic screen-level error
+  boundary that renders the error message + component stack ON SCREEN
+  (not just console), now wrapping the whole Customize Dashboard screen.
+  The two are complementary, not redundant: the boundary is the safety
+  net for anything that could still go wrong AFTER the module
+  successfully loads; the lazy loader is what prevents the crash from
+  ever reaching a boundary in the first place. Available for reuse on any
+  other screen with a similarly risky native-module dependency.
+- CHART LANGUAGE CONSISTENCY (owner decision 2026-07-30): every trend
+  chart app-wide draws from one shared, tested primitive —
+  `app/src/stats/chartHelpers.ts`'s `buildPolylinePoints()`/
+  `buildAreaPoints()` (extracted from the Dashboard hero card's own
+  hand-rolled SVG math) — a thin 1-2px `react-native-svg` `Polyline`,
+  optionally with a subtle translucent `Polygon` fill underneath
+  ("Apple Stocks style"). Cash Flow's Weekly Trend chart was the one
+  holdout still using thick opaque bars; restyled to match (gross = thin
+  accent-blue line, no fill; net = thin green/red line with a subtle
+  fill, colored by its most recent value's sign). Any NEW trend chart
+  must use these shared helpers rather than hand-rolling bars again.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

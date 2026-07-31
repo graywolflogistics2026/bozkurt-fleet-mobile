@@ -44,6 +44,7 @@ import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stat
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcFleetHealthScore, type ChipStatus } from '@/src/stats/fleetHealthScore';
 import { filterTrendByRange, TREND_RANGES, type TrendRange } from '@/src/stats/trendRange';
+import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { calcTaxProgressColor, calcTaxProgressPct } from '@/src/stats/taxProgress';
 import {
   CARD_LABEL_KEYS,
@@ -140,21 +141,6 @@ function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }
       </View>
     </View>
   );
-}
-
-function buildPolylinePoints(values: number[], width: number, height: number): string {
-  if (values.length === 0 || width <= 0) return '';
-  if (values.length === 1) return `0,${height / 2} ${width},${height / 2}`;
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
-  const range = Math.max(1, max - min);
-  return values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * width;
-      const y = height - ((v - min) / range) * height;
-      return `${x},${y}`;
-    })
-    .join(' ');
 }
 
 // Revenue Trend line chart (Session 9d item 3) — "Apple Stocks style":
@@ -431,7 +417,7 @@ function HeroAreaChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
   const height = 64;
   const values = points.map((p) => p.revenue - p.expenses);
   const polylinePoints = buildPolylinePoints(values, width, height);
-  const areaPoints = width > 0 && values.length >= 2 ? `0,${height} ${polylinePoints} ${width},${height}` : '';
+  const areaPoints = width > 0 && values.length >= 2 ? buildAreaPoints(polylinePoints, width, height) : '';
 
   return (
     <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height, marginTop: spacing.lg }}>

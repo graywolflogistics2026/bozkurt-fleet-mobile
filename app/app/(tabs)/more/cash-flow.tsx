@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
@@ -8,6 +9,7 @@ import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { buildWeeklyTrend, rankLoadsByRpm, type RankedLoad } from '@/src/stats/cashFlowTrend';
 import { calcCashFlowForecast, trailingWeeklyRevenueAverage, type CashFlowBudgetInputs } from '@/src/stats/cashFlowForecast';
+import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -45,39 +47,44 @@ function toBudgetInputs(form: BudgetFormState): CashFlowBudgetInputs {
   };
 }
 
-// Hand-rolled bar trend (no chart library installed — react-native-svg /
-// victory-native were both considered but not added; this keeps the weekly
-// trend dependency-free while still giving gross-vs-net at a glance).
+// Thin-line "Apple Stocks style" trend chart (owner decision 2026-07-30:
+// "consistent chart language app-wide") — replaces the old thick-bar
+// gross/net chart with the same buildPolylinePoints/Svg/Polyline/Polygon
+// primitives the Dashboard hero card uses (app/(tabs)/index.tsx's
+// HeroAreaChart/RevenueTrendChart, extracted to src/stats/chartHelpers.ts
+// so both screens draw from one tested implementation). Gross is a plain
+// thin accent-blue line (no fill, matches RevenueTrendChart); Net gets a
+// thin line WITH a subtle fill underneath (matches HeroAreaChart),
+// colored green/red by its most recent value's sign — both series share
+// one Y domain so they're visually comparable on the same chart.
 function WeeklyTrendChart({ points }: { points: ReturnType<typeof buildWeeklyTrend> }) {
   const { money } = useFormatters();
-  const maxGross = Math.max(1, ...points.map((p) => p.gross));
+  const [width, setWidth] = useState(0);
+  const height = CHART_HEIGHT;
+
+  const grossValues = points.map((p) => p.gross);
+  const netValues = points.map((p) => p.net);
+  const domain: [number, number] = [
+    Math.min(0, ...grossValues, ...netValues),
+    Math.max(0, ...grossValues, ...netValues),
+  ];
+  const grossLine = buildPolylinePoints(grossValues, width, height, domain);
+  const netLine = buildPolylinePoints(netValues, width, height, domain);
+  const netArea = width > 0 && netValues.length >= 2 ? buildAreaPoints(netLine, width, height) : '';
+  const netIsPositive = (netValues[netValues.length - 1] ?? 0) >= 0;
+  const netColor = netIsPositive ? colors.green : colors.red;
+  const netFill = netIsPositive ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)';
+
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 4 }}>
-        {points.map((p) => (
-          <View key={p.weekEnding} style={{ flex: 1, alignItems: 'center' }}>
-            <View style={{ width: '100%', height: CHART_HEIGHT, justifyContent: 'flex-end' }}>
-              <View
-                style={{
-                  width: '100%',
-                  height: Math.max(2, (p.gross / maxGross) * CHART_HEIGHT),
-                  backgroundColor: 'rgba(79,124,255,0.35)',
-                  borderRadius: 2,
-                  position: 'absolute',
-                  bottom: 0,
-                }}
-              />
-              <View
-                style={{
-                  width: '100%',
-                  height: Math.max(2, (Math.max(0, p.net) / maxGross) * CHART_HEIGHT),
-                  backgroundColor: p.net >= 0 ? colors.green : colors.red,
-                  borderRadius: 2,
-                }}
-              />
-            </View>
-          </View>
-        ))}
+      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
+        {points.length >= 2 && width > 0 && (
+          <Svg width={width} height={height}>
+            <Polygon points={netArea} fill={netFill} stroke="none" />
+            <Polyline points={grossLine} fill="none" stroke={colors.accent} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+            <Polyline points={netLine} fill="none" stroke={netColor} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+          </Svg>
+        )}
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
         <MutedText>{points[0]?.weekEnding}</MutedText>
@@ -85,11 +92,11 @@ function WeeklyTrendChart({ points }: { points: ReturnType<typeof buildWeeklyTre
       </View>
       <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: 'rgba(79,124,255,0.35)' }} />
-          <MutedText>{`Gross · ${money(Math.max(...points.map((p) => p.gross)))} max`}</MutedText>
+          <View style={{ width: 10, height: 2, backgroundColor: colors.accent }} />
+          <MutedText>{`Gross · ${money(Math.max(0, ...grossValues))} max`}</MutedText>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.green }} />
+          <View style={{ width: 10, height: 2, backgroundColor: netColor }} />
           <MutedText>Net</MutedText>
         </View>
       </View>

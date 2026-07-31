@@ -1154,7 +1154,8 @@
     "diagnosticsLayoutLength": "Длина JSON макета: {{length}}",
     "diagnosticsQueryStatus": "Статус запроса: {{status}}",
     "diagnosticsLastError": "Последняя ошибка: {{error}}",
-    "diagnosticsNone": "нет"
+    "diagnosticsNone": "нет",
+    "screenCrashed": "Сбой экрана «{{screenName}}»"
   },
   "categoryPicker": {
     "newCategory": "Новая категория",

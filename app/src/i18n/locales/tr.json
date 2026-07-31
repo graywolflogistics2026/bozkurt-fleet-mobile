@@ -1154,7 +1154,8 @@
     "diagnosticsLayoutLength": "Düzen JSON uzunluğu: {{length}}",
     "diagnosticsQueryStatus": "Sorgu durumu: {{status}}",
     "diagnosticsLastError": "Son hata: {{error}}",
-    "diagnosticsNone": "yok"
+    "diagnosticsNone": "yok",
+    "screenCrashed": "{{screenName}} çöktü"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

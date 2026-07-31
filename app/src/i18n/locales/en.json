@@ -1053,7 +1053,8 @@
     "diagnosticsLayoutLength": "Layout JSON length: {{length}}",
     "diagnosticsQueryStatus": "Query status: {{status}}",
     "diagnosticsLastError": "Last error: {{error}}",
-    "diagnosticsNone": "none"
+    "diagnosticsNone": "none",
+    "screenCrashed": "{{screenName}} crashed"
   },
   "categoryPicker": {
     "newCategory": "New Category",

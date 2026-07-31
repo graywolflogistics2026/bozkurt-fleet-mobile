@@ -88,6 +88,23 @@ describe('mergeDashboardLayout', () => {
     expect(merged[1].section).toBeNull();
   });
 
+  // CRASH-ON-MOUNT FIX (owner decision 2026-07-30) — suspect (c) in the
+  // requested hunt order: dashboard_layout is a `jsonb` column
+  // (docs/SCHEMA.sql), so PostgREST already hands back a parsed JS value
+  // and this codebase never calls JSON.parse on it anywhere. These tests
+  // prove mergeDashboardLayout() never throws regardless of what a
+  // post-reset, corrupted, or otherwise unexpected stored value looks
+  // like — every one of these falls through the `Array.isArray` check to
+  // the full, safe default layout without ever attempting to parse.
+  it('never throws and falls back to the full default layout for every non-array stored shape', () => {
+    const badValues: unknown[] = [null, undefined, '', '{}', '[]', 'not json at all {{{', 0, false, {}, 'null'];
+    for (const bad of badValues) {
+      expect(() => mergeDashboardLayout(bad)).not.toThrow();
+      const merged = mergeDashboardLayout(bad);
+      expect(merged.map((m) => m.id)).toEqual([...DEFAULT_CARD_ORDER]);
+    }
+  });
+
   it('defaults a never-stored card to its DEFAULT_CARD_SECTIONS entry', () => {
     const merged = mergeDashboardLayout(null);
     const byId = Object.fromEntries(merged.map((m) => [m.id, m.section]));

@@ -1154,7 +1154,8 @@
     "diagnosticsLayoutLength": "Longitud del JSON del diseño: {{length}}",
     "diagnosticsQueryStatus": "Estado de la consulta: {{status}}",
     "diagnosticsLastError": "Último error: {{error}}",
-    "diagnosticsNone": "ninguno"
+    "diagnosticsNone": "ninguno",
+    "screenCrashed": "{{screenName}} falló"
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",

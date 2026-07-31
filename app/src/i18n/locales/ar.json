@@ -1154,7 +1154,8 @@
     "diagnosticsLayoutLength": "طول JSON للتخطيط: {{length}}",
     "diagnosticsQueryStatus": "حالة الاستعلام: {{status}}",
     "diagnosticsLastError": "آخر خطأ: {{error}}",
-    "diagnosticsNone": "لا يوجد"
+    "diagnosticsNone": "لا يوجد",
+    "screenCrashed": "تعطلت شاشة {{screenName}}"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",

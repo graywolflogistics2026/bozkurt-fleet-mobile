@@ -14,6 +14,7 @@ module.exports = {
     '<rootDir>/src/import/**/*.test.ts',
     '<rootDir>/src/i18n/**/*.test.ts',
     '<rootDir>/src/truck/**/*.test.ts',
+    '<rootDir>/src/dashboard/**/*.test.ts',
     '<rootDir>/src/compliance/**/*.test.ts',
     '<rootDir>/src/navigation/**/*.test.ts',
     '<rootDir>/src/auth/**/*.test.ts',

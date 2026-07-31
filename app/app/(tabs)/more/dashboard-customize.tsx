@@ -1,6 +1,6 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, FlatList, Pressable, Text, View } from 'react-native';
-import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
+import type { RenderItemParams } from 'react-native-draggable-flatlist';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
@@ -13,25 +13,47 @@ import {
   type DashboardCardConfig,
   type SectionId,
 } from '@/src/stats/dashboardLayout';
+import { loadDragModule, resolveDragRenderMode, type DragModule } from '@/src/dashboard/dragModuleLoader';
+import { ScreenErrorBoundary } from '@/src/components/ScreenErrorBoundary';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
-// Reorder UX (CRITICAL BUG FIX, device feedback round 3, 2026-07-30): drag-
-// and-drop (react-native-draggable-flatlist, built on reanimated + react-
-// native-gesture-handler) was STILL dead on a real device even after fixing
-// the missing babel.config.js (6c1db0f) that should have made its worklets
-// transform work. Rather than chase a second root cause blind, the screen
-// is now designed so drag NEVER has to work for the screen to be usable:
-// large ▲▼/top-bottom arrow buttons + section pills are the unconditional
-// BASELINE, always rendered regardless of platform or gesture-stack
-// health — CardEditorRow below has no drag-only code path. Drag is layered
-// on top ONLY as an optional enhancement (long-press the ☰ handle), active
-// only once DraggableFlatList has proven it can mount without throwing
-// (DragListErrorBoundary) and never even attempted inside Expo Go (which
-// doesn't bundle a matching native reanimated/gesture-handler build for
-// every JS version this repo pins — Constants.executionEnvironment ===
-// ExecutionEnvironment.StoreClient is true ONLY there, never in a
-// dev-client or EAS build).
+// CRASH-ON-MOUNT FIX (owner decision 2026-07-30, decisive device evidence:
+// a white flash then the screen closes — a throw during module
+// evaluation/initial render, before first paint). The previous pass's
+// arrows-baseline fix was real but downstream of the actual bug: this
+// file used to `import DraggableFlatList, { ScaleDecorator } from
+// 'react-native-draggable-flatlist'` STATICALLY at module scope, so if
+// that native module (built on reanimated + gesture-handler) fails to
+// link/initialize in a release build, evaluating THIS FILE throws before
+// React ever renders anything — no error boundary placed anywhere in this
+// file's tree could ever have caught that, because the tree never gets
+// built. Only a `import type` (below) survives now at the top level —
+// TypeScript erases type-only imports completely, so there is genuinely
+// ZERO runtime reference to the drag module unless/until
+// src/dashboard/dragModuleLoader.ts's loadDragModule() is explicitly
+// called, lazily, inside a useEffect (see below) — never during the
+// synchronous render pass, always wrapped so a failure resolves to
+// `null` instead of throwing.
+//
+// Investigated and ruled out per the requested hunt order:
+//  (b) hook order / conditional render — every hook below is called
+//      unconditionally at the top of the component; no early return
+//      before a hook, no hook inside a condition/loop.
+//  (c) dashboard_layout JSON.parse — profiles.dashboard_layout is a
+//      `jsonb` column (docs/SCHEMA.sql), so PostgREST already returns it
+//      as a parsed JS value; this codebase has never called
+//      `JSON.parse` on it anywhere. mergeDashboardLayout() only checks
+//      `Array.isArray(stored)` — a string/null/corrupt value simply
+//      isn't an array, so it silently falls through to the full default
+//      layout without ever attempting to parse it (see the hardening
+//      tests in src/stats/__tests__/dashboardLayout.test.ts covering
+//      null/''/'{}'/corrupt-string/post-reset explicitly).
+//  (d) navigation params / wide-screen layout wrapper — app/(tabs)/
+//      _layout.tsx's WideSidebar swap is generic to every route in the
+//      tab tree (hides the bottom tab bar above the 768px breakpoint);
+//      it does nothing route-specific to dashboard-customize that would
+//      explain a crash unique to this one screen.
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 function moveBy<T>(list: T[], index: number, delta: number): T[] {
@@ -52,12 +74,11 @@ function moveToEdge<T>(list: T[], index: number, toStart: boolean): T[] {
   return next;
 }
 
-// Catches any JS-catchable render/lifecycle error thrown by
-// DraggableFlatList (e.g. a gesture-handler/reanimated mismatch that
-// doesn't crash the native layer but does throw in JS) and reports it to
-// the parent, which permanently switches to the guaranteed-safe plain
-// FlatList for the rest of this screen's lifetime — the user never sees a
-// dead or blank customize screen because of it.
+// Belt-and-suspenders for render-phase errors thrown by the DraggableFlatList
+// tree AFTER a successful lazy load (e.g. a gesture-handler/reanimated
+// version mismatch that doesn't crash on import but does throw on render) —
+// distinct from, and layered on top of, dragModuleLoader.ts's own
+// try/catch around the import itself.
 class DragListErrorBoundary extends Component<{ onError: (message: string) => void; children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
   static getDerivedStateFromError() {
@@ -100,16 +121,44 @@ function SectionPills({ value, onChange }: { value: SectionId | null; onChange: 
   );
 }
 
-export default function DashboardCustomize() {
+export default function DashboardCustomizeScreen() {
+  const { t } = useTranslation();
+  return (
+    <ScreenErrorBoundary screenName="Customize Dashboard" title={t('dashboardCustomize.screenCrashed', { screenName: t('dashboardCustomize.title') })}>
+      <DashboardCustomize />
+    </ScreenErrorBoundary>
+  );
+}
+
+function DashboardCustomize() {
   const { t } = useTranslation();
   const layoutQuery = useDashboardLayout();
   const updateLayout = useUpdateDashboardLayout();
   const [draft, setDraft] = useState<DashboardCardConfig[] | null>(null);
   const [saving, setSaving] = useState(false);
-  // Baseline is arrows-only inside Expo Go (never even attempted); a real
-  // build/dev-client starts by trying drag-plus-arrows, and permanently
-  // drops to arrows-only the instant DraggableFlatList proves it can't run.
+  // Baseline is arrows-only until (and unless) a lazy load of the drag
+  // module succeeds — see the useEffect below. Never true synchronously
+  // during the first render; dragModule starts null, which
+  // resolveDragRenderMode() alone already resolves to 'arrows-only'.
   const [dragUnavailable, setDragUnavailable] = useState(isExpoGo);
+  const [dragModule, setDragModule] = useState<DragModule | null>(null);
+
+  // Lazy module load (the actual crash-on-mount fix) — runs once, AFTER
+  // the first successful render, never blocking or risking it. Expo Go
+  // never even attempts (no matching native build there, same reasoning
+  // as before). Any failure — module not found, native init throwing,
+  // an unexpected export shape — resolves to `null` inside
+  // loadDragModule() itself; nothing here can throw.
+  useEffect(() => {
+    if (isExpoGo) return;
+    const loaded = loadDragModule();
+    if (loaded) {
+      setDragModule(loaded);
+    } else {
+      setDragUnavailable(true);
+      setLastError('react-native-draggable-flatlist failed to load (native module unavailable)');
+    }
+  }, []);
 
   // On-screen diagnostics (owner directive, device feedback round 4,
   // 2026-07-30 — "stop guessing"): triple-tap the screen title to reveal a
@@ -156,14 +205,11 @@ export default function DashboardCustomize() {
   }, [layoutQuery.isError, layoutQuery.error, draft]);
 
   const rows = draft ?? [];
+  const renderMode = resolveDragRenderMode({ isExpoGo, dragUnavailable, dragModule });
 
   useEffect(() => {
-    console.log(
-      '[DashboardCustomize] rendering mode:',
-      dragUnavailable ? 'arrows-only' : 'drag-plus-arrows',
-      isExpoGo ? '(Expo Go detected)' : ''
-    );
-  }, [dragUnavailable]);
+    console.log('[DashboardCustomize] rendering mode:', renderMode, isExpoGo ? '(Expo Go detected)' : '');
+  }, [renderMode]);
 
   function updateRowById(id: string, patch: Partial<DashboardCardConfig>) {
     setDraft((current) => {
@@ -216,6 +262,7 @@ export default function DashboardCustomize() {
 
   function renderDraggableItem({ item, getIndex, drag, isActive }: RenderItemParams<DashboardCardConfig>) {
     const index = getIndex() ?? rows.findIndex((r) => r.id === item.id);
+    const ScaleDecorator = dragModule!.ScaleDecorator;
     return (
       <ScaleDecorator>
         <CardEditorRow {...rowProps(item, index)} drag={drag} isActive={isActive} />
@@ -234,16 +281,14 @@ export default function DashboardCustomize() {
       </Pressable>
       <MutedText>{t('dashboardCustomize.subtitle')}</MutedText>
       <MutedText style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}>
-        {dragUnavailable ? t('dashboardCustomize.arrowHint') : t('dashboardCustomize.dragHint')}
+        {renderMode === 'arrows-only' ? t('dashboardCustomize.arrowHint') : t('dashboardCustomize.dragHint')}
       </MutedText>
       {showDiagnostics && (
         <Card>
           <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
             {t('dashboardCustomize.diagnosticsTitle')}
           </Text>
-          <MutedText>
-            {t('dashboardCustomize.diagnosticsMode', { mode: dragUnavailable ? 'arrows-only' : 'drag-plus-arrows' })}
-          </MutedText>
+          <MutedText>{t('dashboardCustomize.diagnosticsMode', { mode: renderMode })}</MutedText>
           <MutedText>{t('dashboardCustomize.diagnosticsCards', { count: rows.length })}</MutedText>
           <MutedText>
             {t('dashboardCustomize.diagnosticsLayoutLength', { length: draft ? JSON.stringify(draft).length : 'null' })}
@@ -276,9 +321,9 @@ export default function DashboardCustomize() {
     </View>
   );
 
-  return (
-    <Screen>
-      {dragUnavailable ? (
+  if (renderMode === 'arrows-only' || !dragModule) {
+    return (
+      <Screen>
         <FlatList
           style={{ flex: 1 }}
           data={rows}
@@ -288,43 +333,49 @@ export default function DashboardCustomize() {
           ListHeaderComponent={listHeader}
           ListFooterComponent={listFooter}
         />
-      ) : (
-        <DragListErrorBoundary
-          onError={(message) => {
-            setLastError(message);
-            setDragUnavailable(true);
+      </Screen>
+    );
+  }
+
+  const DraggableFlatList = dragModule.DraggableFlatList;
+
+  return (
+    <Screen>
+      <DragListErrorBoundary
+        onError={(message) => {
+          setLastError(message);
+          setDragUnavailable(true);
+        }}
+      >
+        <DraggableFlatList
+          style={{ flex: 1 }}
+          data={rows}
+          keyExtractor={(row: DashboardCardConfig) => row.id}
+          renderItem={renderDraggableItem}
+          onDragBegin={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
           }}
-        >
-          <DraggableFlatList
-            style={{ flex: 1 }}
-            data={rows}
-            keyExtractor={(row) => row.id}
-            renderItem={renderDraggableItem}
-            onDragBegin={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-            }}
-            onDragEnd={({ data }) => {
-              // React error boundaries only catch render-path errors — a
-              // gesture-handler/reanimated failure surfacing inside this
-              // callback (event-handler code, not render) would NOT be
-              // caught by DragListErrorBoundary above. This try/catch is
-              // the belt-and-suspenders safety net for that gap (device
-              // feedback round 4): any failure here still permanently
-              // downgrades to the guaranteed-safe arrows-only FlatList
-              // instead of leaving the screen in a broken drag state.
-              try {
-                setDraft(data);
-              } catch (err) {
-                setLastError(err instanceof Error ? err.message : String(err));
-                setDragUnavailable(true);
-              }
-            }}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={listHeader}
-            ListFooterComponent={listFooter}
-          />
-        </DragListErrorBoundary>
-      )}
+          onDragEnd={({ data }: { data: DashboardCardConfig[] }) => {
+            // React error boundaries only catch render-path errors — a
+            // gesture-handler/reanimated failure surfacing inside this
+            // callback (event-handler code, not render) would NOT be
+            // caught by DragListErrorBoundary above. This try/catch is
+            // the belt-and-suspenders safety net for that gap (device
+            // feedback round 4): any failure here still permanently
+            // downgrades to the guaranteed-safe arrows-only FlatList
+            // instead of leaving the screen in a broken drag state.
+            try {
+              setDraft(data);
+            } catch (err) {
+              setLastError(err instanceof Error ? err.message : String(err));
+              setDragUnavailable(true);
+            }
+          }}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
+        />
+      </DragListErrorBoundary>
     </Screen>
   );
 }
