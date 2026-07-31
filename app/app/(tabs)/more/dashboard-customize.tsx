@@ -124,7 +124,12 @@ function SectionPills({ value, onChange }: { value: SectionId | null; onChange: 
 export default function DashboardCustomizeScreen() {
   const { t } = useTranslation();
   return (
-    <ScreenErrorBoundary screenName="Customize Dashboard" title={t('dashboardCustomize.screenCrashed', { screenName: t('dashboardCustomize.title') })}>
+    <ScreenErrorBoundary
+      screenName="Customize Dashboard"
+      title={t('dashboardCustomize.screenCrashed', { screenName: t('dashboardCustomize.title') })}
+      copyLabel={t('common.copyDetails')}
+      copiedLabel={t('common.copied')}
+    >
       <DashboardCustomize />
     </ScreenErrorBoundary>
   );
@@ -134,7 +139,20 @@ function DashboardCustomize() {
   const { t } = useTranslation();
   const layoutQuery = useDashboardLayout();
   const updateLayout = useUpdateDashboardLayout();
-  const [draft, setDraft] = useState<DashboardCardConfig[] | null>(null);
+  // SYNCHRONOUS FIRST PAINT (owner decision 2026-07-30, device evidence —
+  // persistent white screen after the crash-on-mount fix landed): the
+  // arrows baseline must never wait on the network to show something.
+  // `draft` is now computed synchronously from local state via a lazy
+  // initializer — mergeDashboardLayout(null) is a pure function with no
+  // I/O, so the FULL default card list is already what's rendered on the
+  // very first paint, before layoutQuery has even had a chance to
+  // resolve. `hydrated` tracks whether the user's REAL saved layout (or
+  // the error-fallback default) has arrived yet — used only to gate
+  // Save (never overwrite a not-yet-seen real layout with the
+  // placeholder default) and to show a non-blocking sync hint; it is
+  // NEVER a precondition for the cards themselves to render.
+  const [draft, setDraft] = useState<DashboardCardConfig[]>(() => mergeDashboardLayout(null));
+  const [hydrated, setHydrated] = useState(false);
   const [saving, setSaving] = useState(false);
   // Baseline is arrows-only until (and unless) a lazy load of the drag
   // module succeeds — see the useEffect below. Never true synchronously
@@ -184,27 +202,27 @@ function DashboardCustomize() {
   }
 
   useEffect(() => {
-    if (layoutQuery.data && !draft) setDraft(layoutQuery.data.layout);
-  }, [layoutQuery.data, draft]);
+    if (layoutQuery.data && !hydrated) {
+      setDraft(layoutQuery.data.layout);
+      setHydrated(true);
+    }
+  }, [layoutQuery.data, hydrated]);
 
   // Silent-failure fix (owner directive, device feedback round 4): if the
   // profiles fetch itself errors (network blip, RLS edge case, a malformed
-  // row), the screen used to be stuck on "Loading…" forever — isLoading
-  // goes false but draft never gets set, so the loading card's `!draft`
-  // condition stayed true with nothing beneath it. Falling back to the
-  // pure default merge (same shape a brand-new profile gets) means the
-  // screen is ALWAYS usable even when the fetch itself failed; the user
-  // can still reorder/hide/save (a subsequent save re-fetches and
-  // reconciles normally), and the diagnostics panel surfaces the real
-  // error message for a device report.
+  // row), the screen must stay usable — the arrows-only default is
+  // already showing (synchronous first paint, above), this just marks
+  // "hydrated" so Save is no longer held back and the diagnostics panel
+  // surfaces the real error message for a device report.
   useEffect(() => {
-    if (layoutQuery.isError && !draft) {
+    if (layoutQuery.isError && !hydrated) {
       setDraft(mergeDashboardLayout(null));
+      setHydrated(true);
       setLastError(layoutQuery.error instanceof Error ? layoutQuery.error.message : String(layoutQuery.error));
     }
-  }, [layoutQuery.isError, layoutQuery.error, draft]);
+  }, [layoutQuery.isError, layoutQuery.error, hydrated]);
 
-  const rows = draft ?? [];
+  const rows = draft;
   const renderMode = resolveDragRenderMode({ isExpoGo, dragUnavailable, dragModule });
 
   useEffect(() => {
@@ -212,14 +230,10 @@ function DashboardCustomize() {
   }, [renderMode]);
 
   function updateRowById(id: string, patch: Partial<DashboardCardConfig>) {
-    setDraft((current) => {
-      if (!current) return current;
-      return current.map((row) => (row.id === id ? { ...row, ...patch } : row));
-    });
+    setDraft((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
   async function handleSave() {
-    if (!draft) return;
     setSaving(true);
     try {
       await updateLayout.mutateAsync(draft);
@@ -235,7 +249,8 @@ function DashboardCustomize() {
     setSaving(true);
     try {
       await updateLayout.mutateAsync(null);
-      setDraft(null);
+      setDraft(mergeDashboardLayout(null));
+      setHydrated(false);
       layoutQuery.refetch();
     } catch (err) {
       Alert.alert(t('dashboardCustomize.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -253,10 +268,10 @@ function DashboardCustomize() {
       onToggleVisible: () => updateRowById(item.id, { visible: !item.visible }),
       onLabelChange: (label: string) => updateRowById(item.id, { label: label || null }),
       onSectionChange: (section: SectionId | null) => updateRowById(item.id, { section }),
-      onMoveUp: () => setDraft((current) => (current ? moveBy(current, index, -1) : current)),
-      onMoveDown: () => setDraft((current) => (current ? moveBy(current, index, 1) : current)),
-      onMoveToTop: () => setDraft((current) => (current ? moveToEdge(current, index, true) : current)),
-      onMoveToBottom: () => setDraft((current) => (current ? moveToEdge(current, index, false) : current)),
+      onMoveUp: () => setDraft((current) => moveBy(current, index, -1)),
+      onMoveDown: () => setDraft((current) => moveBy(current, index, 1)),
+      onMoveToTop: () => setDraft((current) => moveToEdge(current, index, true)),
+      onMoveToBottom: () => setDraft((current) => moveToEdge(current, index, false)),
     };
   }
 
@@ -291,7 +306,7 @@ function DashboardCustomize() {
           <MutedText>{t('dashboardCustomize.diagnosticsMode', { mode: renderMode })}</MutedText>
           <MutedText>{t('dashboardCustomize.diagnosticsCards', { count: rows.length })}</MutedText>
           <MutedText>
-            {t('dashboardCustomize.diagnosticsLayoutLength', { length: draft ? JSON.stringify(draft).length : 'null' })}
+            {t('dashboardCustomize.diagnosticsLayoutLength', { length: JSON.stringify(draft).length })}
           </MutedText>
           <MutedText>
             {t('dashboardCustomize.diagnosticsQueryStatus', {
@@ -301,10 +316,12 @@ function DashboardCustomize() {
           <MutedText>{t('dashboardCustomize.diagnosticsLastError', { error: lastError ?? t('dashboardCustomize.diagnosticsNone') })}</MutedText>
         </Card>
       )}
-      {layoutQuery.isLoading && !draft && (
-        <Card>
-          <MutedText>{t('common.loading')}</MutedText>
-        </Card>
+      {!hydrated && layoutQuery.isLoading && (
+        // Non-blocking: the cards above are already the real (default or
+        // previously-saved) content, rendered synchronously — this is
+        // just a quiet heads-up that the user's actual saved layout is
+        // still being fetched, never a gate in front of first paint.
+        <MutedText style={{ marginBottom: spacing.sm }}>{t('dashboardCustomize.syncingHint')}</MutedText>
       )}
       {layoutQuery.isError && (
         <Card>
@@ -316,7 +333,7 @@ function DashboardCustomize() {
 
   const listFooter = (
     <View>
-      <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSave} loading={saving} disabled={!draft} />
+      <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSave} loading={saving} disabled={!hydrated} />
       <SecondaryButton title={t('dashboardCustomize.resetToDefault')} onPress={handleReset} />
     </View>
   );

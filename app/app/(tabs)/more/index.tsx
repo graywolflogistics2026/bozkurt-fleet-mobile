@@ -1,39 +1,20 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { moreTabItems } from '@/src/navigation/navRegistry';
 import { Screen } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
-const MENU_ITEMS = [
-  { href: '/(tabs)/more/loads', labelKey: 'more.loads', emoji: '🚛' },
-  { href: '/(tabs)/more/settlements', labelKey: 'more.settlements', emoji: '📋' },
-  { href: '/(tabs)/more/reimbursements', labelKey: 'more.reimbursements', emoji: '↩️' },
-  { href: '/(tabs)/more/other-income', labelKey: 'more.otherIncome', emoji: '💵' },
-  { href: '/(tabs)/more/fuel', labelKey: 'more.fuel', emoji: '⛽' },
-  { href: '/(tabs)/more/tolls', labelKey: 'more.tolls', emoji: '🛣️' },
-  { href: '/(tabs)/more/asset-register', labelKey: 'more.assetRegister', emoji: '🗄️' },
-  { href: '/(tabs)/more/capital-account', labelKey: 'more.capitalAccount', emoji: '💰' },
-  { href: '/(tabs)/more/operating-pnl', labelKey: 'more.operatingPnl', emoji: '📊' },
-  { href: '/(tabs)/more/profit-analysis', labelKey: 'more.profitAnalysis', emoji: '📈' },
-  { href: '/(tabs)/more/scorecard', labelKey: 'more.scorecard', emoji: '🏆' },
-  { href: '/(tabs)/more/ceo-mode', labelKey: 'more.ceoMode', emoji: '🐺' },
-  { href: '/(tabs)/more/ai-advisor', labelKey: 'more.aiAdvisor', emoji: '🤖' },
-  { href: '/(tabs)/more/share-profit', labelKey: 'more.shareProfit', emoji: '📤' },
-  { href: '/(tabs)/more/tax-estimator', labelKey: 'more.taxEstimator', emoji: '🧮' },
-  { href: '/(tabs)/more/cash-flow', labelKey: 'more.cashFlow', emoji: '🏦' },
-  { href: '/(tabs)/more/maintenance', labelKey: 'more.maintenance', emoji: '🔧' },
-  { href: '/(tabs)/more/trucks', labelKey: 'more.trucks', emoji: '🚚' },
-  { href: '/(tabs)/more/equipment', labelKey: 'more.equipment', emoji: '🛠️' },
-  { href: '/(tabs)/more/drivers', labelKey: 'more.drivers', emoji: '🧑‍✈️' },
-  { href: '/(tabs)/more/loans', labelKey: 'more.loans', emoji: '📄' },
-  { href: '/(tabs)/more/credit-cards', labelKey: 'more.creditCards', emoji: '💳' },
-  { href: '/(tabs)/more/bank-statements', labelKey: 'more.bankStatements', emoji: '🏛️' },
-  { href: '/(tabs)/more/dashboard-customize', labelKey: 'more.dashboardCustomize', emoji: '🧩' },
-  { href: '/(tabs)/more/compliance', labelKey: 'more.compliance', emoji: '🪪' },
-  { href: '/(tabs)/more/documents', labelKey: 'more.documents', emoji: '🗃️' },
-  { href: '/(tabs)/more/accountant-package', labelKey: 'more.accountantPackage', emoji: '📁' },
-  { href: '/(tabs)/more/settings', labelKey: 'more.settings', emoji: '⚙️' },
-] as const;
+// NAV PARITY FIX (owner decision 2026-07-30): this used to be its own,
+// separately hand-maintained item list — Equipment and Documents were
+// each added here but never to WideSidebar.tsx's GROUPS (which
+// WideSidebar AND MenuSheet.tsx both render directly), so they silently
+// never appeared on the wide-screen sidebar or the phone hamburger menu
+// despite being reachable from this screen. Now derived from the same
+// shared registry (src/navigation/navRegistry.ts) every other nav
+// surface uses — this class of bug is structurally impossible going
+// forward, since there's only one list left to add a route to.
+const MENU_ITEMS = moreTabItems();
 
 export default function More() {
   const { t } = useTranslation();
@@ -44,8 +25,8 @@ export default function More() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xl }}>
         {MENU_ITEMS.map((item) => (
           <Pressable
-            key={item.href}
-            onPress={() => router.push(item.href as Href)}
+            key={item.href as string}
+            onPress={() => router.push(item.href)}
             style={({ pressed }) => ({
               backgroundColor: colors.card,
               borderColor: colors.border,

@@ -11,6 +11,8 @@
     "unit": "Unit {{unit}}",
     "dash": "—",
     "legalFootnote": "Estimates only — not tax advice. Verify with your CPA.",
+    "copyDetails": "Copy Details",
+    "copied": "Copied!",
     "close": "Close",
     "viewOriginalDocument": "View Original Document"
   },
@@ -481,36 +483,6 @@
     "deleteTypeToConfirm": "Type {{word}} to confirm",
     "deletePermanently": "Delete Permanently",
     "deleteFailedTitle": "Could not delete account"
-  },
-  "more": {
-    "capitalAccount": "Capital Account",
-    "taxEstimator": "Tax Estimator",
-    "cashFlow": "Cash Flow",
-    "maintenance": "Maintenance",
-    "trucks": "Trucks",
-    "equipment": "Equipment",
-    "drivers": "Drivers",
-    "loans": "Loans",
-    "settings": "Settings",
-    "loads": "Loads",
-    "settlements": "Settlements",
-    "reimbursements": "Reimbursements",
-    "fuel": "Fuel",
-    "tolls": "Tolls & Fees",
-    "creditCards": "Credit Cards",
-    "bankStatements": "Bank Statement",
-    "otherIncome": "Other Income",
-    "assetRegister": "Asset Register",
-    "operatingPnl": "Operating P&L",
-    "profitAnalysis": "Profit Analysis",
-    "scorecard": "Scorecard",
-    "ceoMode": "AI Coach",
-    "aiAdvisor": "AI Advisor",
-    "shareProfit": "Share Weekly Profit",
-    "dashboardCustomize": "Customize Dashboard",
-    "compliance": "Compliance Tracker",
-    "documents": "Documents",
-    "accountantPackage": "Accountant Package"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1155,7 +1127,8 @@
     "diagnosticsQueryStatus": "Query status: {{status}}",
     "diagnosticsLastError": "Last error: {{error}}",
     "diagnosticsNone": "none",
-    "screenCrashed": "{{screenName}} crashed"
+    "screenCrashed": "{{screenName}} crashed",
+    "syncingHint": "Syncing your saved layout…"
   },
   "categoryPicker": {
     "newCategory": "New Category",

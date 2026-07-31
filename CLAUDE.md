@@ -725,7 +725,24 @@
   net for anything that could still go wrong AFTER the module
   successfully loads; the lazy loader is what prevents the crash from
   ever reaching a boundary in the first place. Available for reuse on any
-  other screen with a similarly risky native-module dependency.
+  other screen with a similarly risky native-module dependency. Follow-up
+  (device evidence: a PERSISTENT white screen after that fix landed —
+  changed behavior from the earlier white-flash-then-close, meaning an
+  update DID reach the device): audited `ScreenErrorBoundary` end to end
+  (already 100% dark-themed colors, reinforced with an explicit
+  `flex:1`/`colors.bg` outer wrapper so the dark background is guaranteed
+  to paint full-screen regardless of the navigator's own flex chain) and
+  the arrows-only baseline (found and fixed a real gap: `draft` used to
+  start `null` and only populate once `layoutQuery` resolved, so first
+  paint showed an EMPTY card list — not literally white given `Screen`'s
+  own dark background, but a real violation of "must render synchronously
+  with a hard default layout, no query-await before first paint"). `draft`
+  now initializes via `useState(() => mergeDashboardLayout(null))` — a
+  pure, synchronous call, so the full default card list is what's on
+  screen before the network round-trip even starts; a `hydrated` flag
+  (not `draft` itself) tracks whether the user's real saved layout has
+  arrived, gating Save (never silently overwrite an unseen real layout
+  with the placeholder default) without ever gating the cards themselves.
 - CHART LANGUAGE CONSISTENCY (owner decision 2026-07-30): every trend
   chart app-wide draws from one shared, tested primitive —
   `app/src/stats/chartHelpers.ts`'s `buildPolylinePoints()`/
@@ -737,6 +754,47 @@
   accent-blue line, no fill; net = thin green/red line with a subtle
   fill, colored by its most recent value's sign). Any NEW trend chart
   must use these shared helpers rather than hand-rolling bars again.
+- NAV PARITY (owner decision 2026-07-30, device evidence: "Documents"
+  missing from the wide-screen sidebar's TOOLS group despite being
+  reachable from the More tab): `app/(tabs)/more/index.tsx` used to
+  maintain its OWN separately hand-written item list — Equipment and then
+  Documents were each added there but never to `WideSidebar.tsx`'s
+  `GROUPS` (which WideSidebar AND `MenuSheet.tsx` both already rendered
+  directly, so they were ALREADY guaranteed identical to each other — the
+  actual divergence was between those two and the More tab's flat list).
+  `app/src/navigation/navRegistry.ts` is now the ONE shared registry
+  every nav surface derives from — `WideSidebar.tsx` re-exports
+  `GROUPS`/`isActiveRoute` from it (so `MenuSheet.tsx` and
+  `app/(tabs)/reports.tsx`'s existing imports don't need to change), and
+  `more/index.tsx` calls its `moreTabItems()` (the full registry minus
+  the 5 routes that already have their own bottom-tab icon — Home,
+  Transactions, Import, Deductions, Truck Health — named explicitly via
+  `TAB_BAR_HREFS`, not inferred). A route added to ONE nav surface but not
+  another is now structurally impossible — there is only one list left to
+  add it to. `src/navigation/__tests__/navRegistry.test.ts` regression-
+  guards the exact reported bug (Documents under tools, Equipment under
+  business) plus the general "every non-tab-bar route appears in
+  moreTabItems" invariant. The orphaned `more.*` i18n block (labelKeys the
+  old separate list used, since replaced by the registry's `nav.*` keys)
+  was deleted from all 7 locales — confirmed unused everywhere first.
+- RUNTIME VISIBILITY (owner decision 2026-07-30 — "which JS is on this
+  device should never be a guess again"): `app/src/lib/buildInfo.ts`'s
+  `getBuildInfo()`/`formatBuildInfoLine()` — app version
+  (`Constants.expoConfig?.version`), the EAS Update id (`Updates.updateId`,
+  the single most reliable "which bundle actually loaded" signal, shown
+  short-form), and a git commit hash (`app.config.js`'s build-time
+  injection of `EAS_BUILD_GIT_COMMIT_HASH`, an env var EAS Build sets
+  automatically on every cloud build — null for a local dev-client run).
+  `app.json` was converted to `app.config.js` (dynamic config) SOLELY to
+  read that env var at build time; every other field is unchanged. Shown
+  in Settings' footer AND on `ScreenErrorBoundary`'s crash screen (with a
+  "Copy Details" button bundling build info + error + both stacks via
+  `expo-clipboard`) — both read from this one module so they can never
+  disagree about the format. The pure formatting half
+  (`app/src/lib/buildInfoFormat.ts`) has zero expo-constants/expo-updates
+  imports so it stays unit-testable and safely importable from
+  `ScreenErrorBoundary` (the last line of defense) without adding a new
+  native-module dependency to worry about there.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

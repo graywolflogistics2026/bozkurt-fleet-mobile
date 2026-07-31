@@ -11,6 +11,8 @@
     "unit": "Юнит {{unit}}",
     "dash": "—",
     "legalFootnote": "Только оценки — не является налоговой консультацией. Проверьте у своего бухгалтера.",
+    "copyDetails": "Копировать детали",
+    "copied": "Скопировано!",
     "close": "Закрыть",
     "viewOriginalDocument": "Просмотреть исходный документ"
   },
@@ -481,36 +483,6 @@
     "deleteTypeToConfirm": "Введите {{word}} для подтверждения",
     "deletePermanently": "Удалить навсегда",
     "deleteFailedTitle": "Не удалось удалить аккаунт"
-  },
-  "more": {
-    "capitalAccount": "Капитальный Счёт",
-    "taxEstimator": "Калькулятор Налогов",
-    "cashFlow": "Движение Денежных Средств",
-    "maintenance": "Обслуживание",
-    "trucks": "Грузовики",
-    "equipment": "Оборудование",
-    "drivers": "Водители",
-    "loans": "Кредиты",
-    "settings": "Настройки",
-    "loads": "Грузы",
-    "settlements": "Settlements",
-    "reimbursements": "Возмещения",
-    "fuel": "Топливо",
-    "tolls": "Платные Дороги и Сборы",
-    "creditCards": "Кредитные карты",
-    "bankStatements": "Банковская выписка",
-    "otherIncome": "Прочие доходы",
-    "assetRegister": "Реестр активов",
-    "operatingPnl": "Операционный P&L",
-    "profitAnalysis": "Анализ прибыли",
-    "scorecard": "Оценка эффективности",
-    "ceoMode": "AI-коуч",
-    "aiAdvisor": "ИИ-советник",
-    "shareProfit": "Поделиться недельной прибылью",
-    "dashboardCustomize": "Настроить панель",
-    "compliance": "Отслеживание соответствия",
-    "documents": "Документы",
-    "accountantPackage": "Пакет для бухгалтера"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1155,7 +1127,8 @@
     "diagnosticsQueryStatus": "Статус запроса: {{status}}",
     "diagnosticsLastError": "Последняя ошибка: {{error}}",
     "diagnosticsNone": "нет",
-    "screenCrashed": "Сбой экрана «{{screenName}}»"
+    "screenCrashed": "Сбой экрана «{{screenName}}»",
+    "syncingHint": "Синхронизация сохранённого макета…"
   },
   "categoryPicker": {
     "newCategory": "Новая категория",

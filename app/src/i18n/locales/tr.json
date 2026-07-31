@@ -11,6 +11,8 @@
     "unit": "Ünite {{unit}}",
     "dash": "—",
     "legalFootnote": "Sadece tahmin — vergi danışmanlığı değildir. Muhasebecinizle doğrulayın.",
+    "copyDetails": "Ayrıntıları Kopyala",
+    "copied": "Kopyalandı!",
     "close": "Kapat",
     "viewOriginalDocument": "Orijinal Belgeyi Görüntüle"
   },
@@ -481,36 +483,6 @@
     "deleteTypeToConfirm": "Onaylamak için {{word}} yazın",
     "deletePermanently": "Kalıcı Olarak Sil",
     "deleteFailedTitle": "Hesap silinemedi"
-  },
-  "more": {
-    "capitalAccount": "Sermaye Hesabı",
-    "taxEstimator": "Vergi Tahmincisi",
-    "cashFlow": "Nakit Akışı",
-    "maintenance": "Bakım",
-    "trucks": "Kamyonlar",
-    "equipment": "Ekipman",
-    "drivers": "Sürücüler",
-    "loans": "Krediler",
-    "settings": "Ayarlar",
-    "loads": "Yükler",
-    "settlements": "Settlements",
-    "reimbursements": "Geri Ödemeler",
-    "fuel": "Yakıt",
-    "tolls": "Geçiş Ücretleri",
-    "creditCards": "Kredi Kartları",
-    "bankStatements": "Banka Ekstresi",
-    "otherIncome": "Diğer Gelirler",
-    "assetRegister": "Varlık Kaydı",
-    "operatingPnl": "İşletme P&L",
-    "profitAnalysis": "Kâr Analizi",
-    "scorecard": "Karne",
-    "ceoMode": "Yapay Zeka Koçu",
-    "aiAdvisor": "Yapay Zeka Danışmanı",
-    "shareProfit": "Haftalık Kârı Paylaş",
-    "dashboardCustomize": "Paneli Özelleştir",
-    "compliance": "Uyumluluk Takibi",
-    "documents": "Belgeler",
-    "accountantPackage": "Muhasebeci Paketi"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1155,7 +1127,8 @@
     "diagnosticsQueryStatus": "Sorgu durumu: {{status}}",
     "diagnosticsLastError": "Son hata: {{error}}",
     "diagnosticsNone": "yok",
-    "screenCrashed": "{{screenName}} çöktü"
+    "screenCrashed": "{{screenName}} çöktü",
+    "syncingHint": "Kayıtlı düzeniniz senkronize ediliyor…"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

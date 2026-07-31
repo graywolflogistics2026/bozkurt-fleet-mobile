@@ -11,6 +11,8 @@
     "unit": "Unidad {{unit}}",
     "dash": "—",
     "legalFootnote": "Solo estimaciones — no es asesoría fiscal. Verifique con su contador.",
+    "copyDetails": "Copiar Detalles",
+    "copied": "¡Copiado!",
     "close": "Cerrar",
     "viewOriginalDocument": "Ver documento original"
   },
@@ -481,36 +483,6 @@
     "deleteTypeToConfirm": "Escribe {{word}} para confirmar",
     "deletePermanently": "Eliminar Permanentemente",
     "deleteFailedTitle": "No se pudo eliminar la cuenta"
-  },
-  "more": {
-    "capitalAccount": "Cuenta de Capital",
-    "taxEstimator": "Estimador de Impuestos",
-    "cashFlow": "Flujo de Caja",
-    "maintenance": "Mantenimiento",
-    "trucks": "Camiones",
-    "equipment": "Equipo",
-    "drivers": "Conductores",
-    "loans": "Préstamos",
-    "settings": "Configuración",
-    "loads": "Cargas",
-    "settlements": "Settlements",
-    "reimbursements": "Reembolsos",
-    "fuel": "Combustible",
-    "tolls": "Peajes y Tarifas",
-    "creditCards": "Tarjetas de Crédito",
-    "bankStatements": "Estado de Cuenta Bancario",
-    "otherIncome": "Otros Ingresos",
-    "assetRegister": "Registro de Activos",
-    "operatingPnl": "P&L Operativo",
-    "profitAnalysis": "Análisis de Ganancias",
-    "scorecard": "Calificación",
-    "ceoMode": "Coach de IA",
-    "aiAdvisor": "Asesor de IA",
-    "shareProfit": "Compartir Ganancias Semanales",
-    "dashboardCustomize": "Personalizar Panel",
-    "compliance": "Seguimiento de Cumplimiento",
-    "documents": "Documentos",
-    "accountantPackage": "Paquete para el Contador"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1155,7 +1127,8 @@
     "diagnosticsQueryStatus": "Estado de la consulta: {{status}}",
     "diagnosticsLastError": "Último error: {{error}}",
     "diagnosticsNone": "ninguno",
-    "screenCrashed": "{{screenName}} falló"
+    "screenCrashed": "{{screenName}} falló",
+    "syncingHint": "Sincronizando tu diseño guardado…"
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",

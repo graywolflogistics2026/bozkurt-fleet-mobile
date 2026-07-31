@@ -11,6 +11,8 @@
     "unit": "الوحدة {{unit}}",
     "dash": "—",
     "legalFootnote": "تقديرات فقط — ليست استشارة ضريبية. تحقق مع محاسبك.",
+    "copyDetails": "نسخ التفاصيل",
+    "copied": "تم النسخ!",
     "close": "إغلاق",
     "viewOriginalDocument": "عرض المستند الأصلي"
   },
@@ -481,36 +483,6 @@
     "deleteTypeToConfirm": "اكتب {{word}} للتأكيد",
     "deletePermanently": "حذف نهائي",
     "deleteFailedTitle": "تعذر حذف الحساب"
-  },
-  "more": {
-    "capitalAccount": "حساب رأس المال",
-    "taxEstimator": "حاسبة الضرائب",
-    "cashFlow": "التدفق النقدي",
-    "maintenance": "الصيانة",
-    "trucks": "الشاحنات",
-    "equipment": "المعدات",
-    "drivers": "السائقون",
-    "loans": "القروض",
-    "settings": "الإعدادات",
-    "loads": "الحمولات",
-    "settlements": "Settlements",
-    "reimbursements": "المبالغ المستردة",
-    "fuel": "الوقود",
-    "tolls": "الرسوم والعوائد",
-    "creditCards": "بطاقات الائتمان",
-    "bankStatements": "كشف الحساب البنكي",
-    "otherIncome": "دخل آخر",
-    "assetRegister": "سجل الأصول",
-    "operatingPnl": "الأرباح والخسائر التشغيلية",
-    "profitAnalysis": "تحليل الأرباح",
-    "scorecard": "بطاقة الأداء",
-    "ceoMode": "مدرب الذكاء الاصطناعي",
-    "aiAdvisor": "المستشار الذكي",
-    "shareProfit": "مشاركة الأرباح الأسبوعية",
-    "dashboardCustomize": "تخصيص لوحة التحكم",
-    "compliance": "متتبع الامتثال",
-    "documents": "المستندات",
-    "accountantPackage": "حزمة المحاسب"
   },
   "placeholders": {},
   "truckHealth": {
@@ -1155,7 +1127,8 @@
     "diagnosticsQueryStatus": "حالة الاستعلام: {{status}}",
     "diagnosticsLastError": "آخر خطأ: {{error}}",
     "diagnosticsNone": "لا يوجد",
-    "screenCrashed": "تعطلت شاشة {{screenName}}"
+    "screenCrashed": "تعطلت شاشة {{screenName}}",
+    "syncingHint": "جارٍ مزامنة التخطيط المحفوظ…"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",

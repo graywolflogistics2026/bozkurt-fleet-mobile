@@ -18,6 +18,7 @@ import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryBu
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { SUPPORTED_LOCALES, LOCALE_LABELS, LANGUAGE_PICKER_ENABLED, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
+import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { formatDate } from '@/src/i18n/format';
 
@@ -333,6 +334,14 @@ export default function Settings() {
         </Card>
 
         <SecondaryButton title={t('common.signOut')} onPress={signOut} />
+
+        {/* RUNTIME VISIBILITY (owner decision 2026-07-30): "which JS is
+            on this device" should never be a guess — same buildInfo.ts
+            module ScreenErrorBoundary reads from, so the two can never
+            disagree about the format. */}
+        <Text style={{ color: colors.muted, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.lg }}>
+          {formatBuildInfoLine(getBuildInfo())}
+        </Text>
       </ScrollView>
 
       <ModalSheet visible={deleteConfirming} onClose={() => setDeleteConfirming(false)}>
