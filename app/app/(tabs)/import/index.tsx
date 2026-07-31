@@ -18,7 +18,7 @@ import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtract
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
-import { getPrimaryExtractionDate, isOlderThanMonths, withPrimaryExtractionDate } from '@/src/import/dateGuard';
+import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
@@ -324,6 +324,7 @@ export default function Import() {
     if (!extraction || !fileMeta || !userId) return;
     if (needsTruckPicker && !truckId) return;
     if (needsDriverPicker && !driverId) return;
+    if (isSettlementWeekEndingMissing(extraction)) return;
 
     const isPurchase = extraction.docType === 'amazon' || extraction.docType === 'store';
     const payMethod = normalizePaymentMethod(extraction.purchase?.paymentMethod);
@@ -355,6 +356,7 @@ export default function Import() {
   }
 
   const hasDuplicate = !!duplicates && (duplicates.byContent.length > 0 || duplicates.byFilename.length > 0);
+  const settlementWeekEndingMissing = extraction ? isSettlementWeekEndingMissing(extraction) : false;
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
   // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
   // team_split/trainee drivers get a split-entry field on the settlement
@@ -450,13 +452,16 @@ export default function Import() {
             )}
 
             <View style={{ marginBottom: spacing.sm }}>
-              <MutedText>{t('importScreen.documentDateLabel')}</MutedText>
+              <Text style={{ color: extraction.docType === 'settlement' ? colors.orange : colors.muted, fontWeight: extraction.docType === 'settlement' ? '700' : '400' }}>
+                {extraction.docType === 'settlement' ? t('importScreen.weekEndingLabel') : t('importScreen.documentDateLabel')}
+              </Text>
               <Field
                 value={getPrimaryExtractionDate(extraction)}
                 onChangeText={(v) => setExtraction(withPrimaryExtractionDate(extraction, v))}
                 placeholder="YYYY-MM-DD"
                 style={{ marginBottom: spacing.xs }}
               />
+              {settlementWeekEndingMissing && <ErrorText>{t('importScreen.weekEndingRequired')}</ErrorText>}
               <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
               <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount, i18n.language) })}</MutedText>
               <MutedText>
@@ -616,7 +621,7 @@ export default function Import() {
             <PrimaryButton
               title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
               onPress={handleSave}
-              disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId)}
+              disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing}
             />
             <SecondaryButton title={t('importScreen.discard')} onPress={reset} />
           </Card>
@@ -634,6 +639,13 @@ export default function Import() {
             <Text style={{ color: colors.green, fontWeight: '700', fontSize: typography.size.lg, marginBottom: spacing.sm }}>
               {t('importScreen.saved')}
             </Text>
+            {result.settlementWeekEnding && (
+              <MutedText>
+                {result.isSettlementReimport
+                  ? t('importScreen.savedSettlementReplaced', { date: result.settlementWeekEnding })
+                  : t('importScreen.savedSettlementNew', { date: result.settlementWeekEnding })}
+              </MutedText>
+            )}
             {result.netPayAdded != null && (
               <MutedText>{t('importScreen.balanceAdded', { amount: money(result.netPayAdded, i18n.language) })}</MutedText>
             )}

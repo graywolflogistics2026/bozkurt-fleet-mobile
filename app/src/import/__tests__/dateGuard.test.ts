@@ -1,4 +1,10 @@
-import { trySwapYearAndDay, correctImplausibleDate, sanitizeExtractionDates, isOlderThanMonths } from '@/src/import/dateGuard';
+import {
+  trySwapYearAndDay,
+  correctImplausibleDate,
+  sanitizeExtractionDates,
+  isOlderThanMonths,
+  isSettlementWeekEndingMissing,
+} from '@/src/import/dateGuard';
 import type { Extraction } from '@/src/import/types';
 
 const NOW = new Date('2026-07-30T00:00:00Z');
@@ -133,5 +139,30 @@ describe('isOlderThanMonths (import preview "Is this date correct?" highlight)',
   it('is false for null/undefined', () => {
     expect(isOlderThanMonths(null, 6, NOW)).toBe(false);
     expect(isOlderThanMonths(undefined, 6, NOW)).toBe(false);
+  });
+});
+
+// DATE HARDENING round 3 (owner decision 2026-07-30, CRITICAL BUG FIX): the
+// AI must never invent a settlement weekEnding from today's date — when it
+// genuinely can't read one, the import preview blocks Save until the user
+// enters it themselves. This guard is what the Save button's `disabled`
+// prop is keyed off of, mirroring the throw in aiImportSave.ts's
+// saveExtraction() so the UI never reaches that throw.
+describe('isSettlementWeekEndingMissing (DATE HARDENING round 3)', () => {
+  it('is true for a settlement with no weekEnding at all', () => {
+    expect(isSettlementWeekEndingMissing({ docType: 'settlement', settlement: {} })).toBe(true);
+  });
+
+  it('is true for a settlement with an empty-string weekEnding', () => {
+    expect(isSettlementWeekEndingMissing({ docType: 'settlement', settlement: { weekEnding: '' } })).toBe(true);
+  });
+
+  it('is false once the user has confirmed a weekEnding', () => {
+    expect(isSettlementWeekEndingMissing({ docType: 'settlement', settlement: { weekEnding: '2026-07-05' } })).toBe(false);
+  });
+
+  it('is false for every non-settlement docType regardless of date', () => {
+    expect(isSettlementWeekEndingMissing({ docType: 'fuel' })).toBe(false);
+    expect(isSettlementWeekEndingMissing({ docType: 'other' })).toBe(false);
   });
 });

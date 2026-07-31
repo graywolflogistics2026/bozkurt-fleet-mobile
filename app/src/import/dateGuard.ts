@@ -151,3 +151,13 @@ export function withPrimaryExtractionDate(extraction: Extraction, newDate: strin
   }
   return { ...extraction, date: newDate };
 }
+
+// DATE HARDENING round 3 (owner decision 2026-07-30, CRITICAL BUG FIX): a
+// settlement's weekEnding is the entire match key for the
+// coexist-vs-replace decision (aiImportSave.ts findExistingSettlement()) —
+// the import preview must block Save until the user has confirmed one,
+// exactly mirroring the throw in saveExtraction() (see its own comment)
+// so the UI never lets a request reach that throw in the first place.
+export function isSettlementWeekEndingMissing(extraction: Extraction): boolean {
+  return extraction.docType === 'settlement' && !getPrimaryExtractionDate(extraction);
+}

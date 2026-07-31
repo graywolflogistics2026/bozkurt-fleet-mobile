@@ -236,6 +236,18 @@ function buildExtractionPrompt(docHint?: string, locale?: string, customCategori
   // document" when the two disagree by more than a swap's worth.
   const todayIso = new Date().toISOString().slice(0, 10);
   prompt += `\nAPPROVED ADDITION (date hardening round 2, owner decision 2026-07-30): today's date is ${todayIso}. Statement dates are almost always within the last ~13 months of today. Carrier headers commonly print dates as YY/MM/DD (26/07/24 = 2026-07-24) while other fields on the same document print M/D/YY (7/16/26) — CROSS-CHECK every extracted date against every OTHER date in the same document; they must agree on the year and cluster near the statement date. If one reading of an ambiguous date places the document more than 13 months in the past while an alternative reading lands near today, choose the near-today reading.\n`;
+  // DATE HARDENING round 3 (owner decision 2026-07-30, CRITICAL BUG FIX):
+  // round 2's "prefer the near-today reading" instruction was written to
+  // resolve an AMBIGUOUS reading of a date that IS printed on the
+  // document (a year/day-order swap) — but nothing stopped the model from
+  // over-applying that same "near-today" preference to INVENT a
+  // weekEnding when the document's real week-ending text couldn't be
+  // found at all, which made every settlement land on ~today and
+  // incorrectly collide with the "same week" replace logic
+  // (aiImportSave.ts findExistingSettlement()). This addition is
+  // deliberately explicit and settlement-specific so the two rules can
+  // never be conflated again.
+  prompt += `\nAPPROVED ADDITION (date hardening round 3 — settlement week ending must never be guessed, owner decision 2026-07-30, CRITICAL BUG FIX): settlement.weekEnding must be read directly from the document's own "week ending" / "settlement date" / "pay period ending" text (or computed from a clearly-printed pay-period date range shown on the same document) — NEVER inferred, defaulted, or approximated from today's date (${todayIso}) or from any other unrelated date on the document. The "prefer the near-today reading" instruction above applies ONLY when choosing between two possible READINGS of a date that IS printed on the document (e.g. resolving a year/day-order ambiguity) — it is never license to invent a week-ending date that is not printed on the document at all. If the week-ending date genuinely cannot be found anywhere on the document, leave settlement.weekEnding as "" and do not guess — the app will require the user to enter it before saving.\n`;
   if (docHint) {
     prompt += `\nThe user has hinted this document is likely a "${docHint}" — verify against the actual content, but use this as a tiebreaker only if the content is genuinely ambiguous.\n`;
   }

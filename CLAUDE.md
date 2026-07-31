@@ -219,7 +219,28 @@
       `week_ending` must never silently save under an empty-string match
       key (two such settlements would collide with each other) — the save
       throws instead, since the preview's date field already requires the
-      user to see/set this value.
+      user to see/set this value. DATE HARDENING round 3 (bug fixed
+      2026-07-30, root cause of "every settlement replaces the last one"):
+      the ai-import extraction prompt's round-2 "prefer the near-today
+      reading" instruction (for resolving a year/day-order ambiguity in a
+      date that IS printed on the document) was being over-applied to
+      INVENT a `weekEnding` when the real one couldn't be found at all,
+      landing every settlement on ~today and making them all collide on
+      the replace match key. The prompt now has an explicit, settlement-
+      specific addition forbidding that: `weekEnding` must come only from
+      the document's own printed week-ending/settlement-date text, never
+      from today's date, and must be left `""` (never guessed) when
+      genuinely absent. Client-side, `app/src/import/dateGuard.ts`'s
+      `isSettlementWeekEndingMissing()` renders the preview's date field as
+      a prominent, required "Week Ending" field for settlements and blocks
+      Save until the user has confirmed a value — this is what actually
+      enforces the invariant on-device even if a future prompt regression
+      lets the model guess again. Carrier-portal filename false-duplicates
+      (e.g. Prime exports every week under one fixed filename) are also
+      excluded from the duplicate-import warning for settlements
+      specifically (`app/src/import/duplicateCheck.ts`) — only a genuine
+      content match (docType + `week_ending` + amount) flags a settlement
+      as a possible duplicate, a filename match alone never does.
   11. Multi-language support (owner decision 2026-07-09, PRODUCT DECISION,
       binding; Hindi/Ukrainian added same-day addendum): target languages
       are English (default), Spanish, Russian, Arabic, Turkish, Hindi, and

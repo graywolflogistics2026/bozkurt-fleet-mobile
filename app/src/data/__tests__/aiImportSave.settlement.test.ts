@@ -86,8 +86,8 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
   });
 
   test('re-importing the same week replaces it — exactly one settlement remains', async () => {
-    await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1000)));
-    await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1500)));
+    const first = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1000)));
+    const second = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1500)));
 
     const settlements = mockClient.__store.settlements;
     expect(settlements).toHaveLength(1);
@@ -96,6 +96,13 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     // business_balance credited only once (first import), not twice.
     const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
     expect(profile?.business_balance).toBe(1000);
+
+    // Save-confirmation fields (owner decision 2026-07-30): the caller can
+    // tell the user plainly whether this was a new week or a replace.
+    expect(first.settlementWeekEnding).toBe('2026-07-05');
+    expect(first.isSettlementReimport).toBe(false);
+    expect(second.settlementWeekEnding).toBe('2026-07-05');
+    expect(second.isSettlementReimport).toBe(true);
   });
 
   test('replacing one week never deletes another week\'s loads/fuel/deductions', async () => {

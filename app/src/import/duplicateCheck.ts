@@ -30,6 +30,13 @@ export function checkDuplicateImport(
       doc.doc_date === primaryDate &&
       Math.abs((doc.amount ?? 0) - (extraction.totalAmount ?? 0)) < 0.01
   );
-  const byFilename = filename ? existingDocs.filter((doc) => doc.filename && doc.filename === filename) : [];
+  // Settlement filename false-duplicate (owner decision 2026-07-30): many
+  // carrier portals (e.g. Prime) export every week's settlement under one
+  // fixed filename per owner ("settlement.pdf" etc.) — a filename match
+  // alone is meaningless for settlements and must never trigger the
+  // duplicate warning on its own. byContent (docType+weekEnding+amount)
+  // still catches a genuine re-import of the same settlement.
+  const byFilename =
+    filename && docType !== 'settlement' ? existingDocs.filter((doc) => doc.filename && doc.filename === filename) : [];
   return { byContent, byFilename };
 }

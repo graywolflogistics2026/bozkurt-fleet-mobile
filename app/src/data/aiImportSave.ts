@@ -82,6 +82,12 @@ export type SaveExtractionResult = {
   storagePath: string | null;
   netPayAdded: number | null;
   contributionTotal: number;
+  // Settlement week-ending confirmation (owner decision 2026-07-30): lets
+  // the "Saved" screen tell the user plainly whether this was a brand-new
+  // week or a replace of an existing one — null/false for every non-
+  // settlement docType.
+  settlementWeekEnding: string | null;
+  isSettlementReimport: boolean;
 };
 
 // Writes rows exactly like legacy saveImport() (legacy/index.html:2502) —
@@ -131,6 +137,8 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
 
   let netPayAdded: number | null = null;
   let contributionTotal = 0;
+  let settlementWeekEnding: string | null = null;
+  let isSettlementReimport = false;
 
   if (d.docType === 'settlement' && d.settlement) {
     const mapping = mapSettlement(d, userId, truckId, driverId);
@@ -157,6 +165,8 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // truck_id, which onConflict's column-list inference can't express.
     const existingSett = await findExistingSettlement(userId, mapping.settlement.week_ending, truckId);
     const isReimport = !!existingSett;
+    settlementWeekEnding = mapping.settlement.week_ending;
+    isSettlementReimport = isReimport;
 
     let settlementId: string;
     if (isReimport) {
@@ -370,5 +380,5 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // (see mapExtraction.ts's mapGenericDeduction comment; universal AI
   // capture, owner decision 2026-07-10 — v1.x backlog, PROMPTS.md).
 
-  return { documentId, storagePath, netPayAdded, contributionTotal };
+  return { documentId, storagePath, netPayAdded, contributionTotal, settlementWeekEnding, isSettlementReimport };
 }

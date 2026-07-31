@@ -53,5 +53,22 @@ describe('checkDuplicateImport', () => {
       const result = checkDuplicateImport(d, 'other-name.pdf', settlementExisting);
       expect(result.byContent).toHaveLength(0);
     });
+
+    // Owner decision 2026-07-30: carrier portals (e.g. Prime) commonly
+    // export every week's settlement under one fixed filename per owner —
+    // a filename match alone must never trigger the duplicate warning for
+    // settlements, even when it exactly matches a prior import.
+    it('never flags a filename-only match for settlements, even on an exact filename hit', () => {
+      const d: Extraction = { docType: 'settlement', settlement: { weekEnding: '2026-07-19' }, totalAmount: 999 };
+      const result = checkDuplicateImport(d, 'sett.pdf', settlementExisting);
+      expect(result.byFilename).toHaveLength(0);
+      expect(result.byContent).toHaveLength(0);
+    });
+
+    it('still flags a filename match for non-settlement docTypes (unchanged behavior)', () => {
+      const d: Extraction = { docType: 'maintenance', totalAmount: 1 };
+      const result = checkDuplicateImport(d, 'sett.pdf', settlementExisting);
+      expect(result.byFilename).toHaveLength(1);
+    });
   });
 });
