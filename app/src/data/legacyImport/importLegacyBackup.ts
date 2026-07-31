@@ -1,5 +1,6 @@
 import { supabase } from '@/src/lib/supabase';
 import { importIdempotent, type ImportOutcome } from '@/src/data/legacyImport/idempotent';
+import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import type {
   LegacyBackupPayload,
   LegacyCapitalContribution,
@@ -183,14 +184,23 @@ async function importSettlements(userId: string, truckId: string | null, sett: L
   const existingWeeks = new Set((existing ?? []).map((r) => r.week_ending as string));
 
   const entries = Array.from(dedupedByWeek.entries());
-  const toRow = (week: string, s: LegacySettlement) => ({
-    user_id: userId,
-    truck_id: truckId,
-    week_ending: week,
-    gross: num(s.gross),
-    net: num(s.net),
-    miles: num(s.miles),
-  });
+  const toRow = (week: string, s: LegacySettlement) => {
+    const miles = num(s.miles);
+    return {
+      user_id: userId,
+      truck_id: truckId,
+      week_ending: week,
+      gross: num(s.gross),
+      net: num(s.net),
+      miles,
+      // PER DIEM INTELLIGENCE (owner decision 2026-07-30): a legacy backup
+      // never carried its own per_diem_days — apply the same miles-based
+      // smart default mapSettlement() uses for a fresh AI import, so a
+      // 0-mile home week imported from a backup gets the same 0-day
+      // treatment instead of the flat legacy 7.
+      per_diem_days: defaultPerDiemDaysForMiles(miles),
+    };
+  };
   const rows = entries.map(([week, s]) => toRow(week, s));
 
   let inserted = 0;

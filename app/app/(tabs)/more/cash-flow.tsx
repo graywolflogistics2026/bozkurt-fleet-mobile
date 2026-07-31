@@ -7,7 +7,7 @@ import { useLoads } from '@/src/data/loads';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { buildWeeklyTrend, rankLoadsByRpm, type RankedLoad } from '@/src/stats/cashFlowTrend';
-import { calcCashFlowForecast, type CashFlowBudgetInputs } from '@/src/stats/cashFlowForecast';
+import { calcCashFlowForecast, trailingWeeklyRevenueAverage, type CashFlowBudgetInputs } from '@/src/stats/cashFlowForecast';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -155,7 +155,25 @@ export default function CashFlow() {
     setBudgetHydrated(true);
   }, [budgetHydrated, profileQuery.data]);
 
-  const forecast = useMemo(() => calcCashFlowForecast(toBudgetInputs(budget)), [budget]);
+  // DATA-FLOW AUDIT FIX (owner decision 2026-07-30 — known symptom: Cash
+  // Flow revenue stayed $0 after a settlement import): when the user
+  // hasn't entered their own Weekly Revenue budget number, the forecast
+  // uses the trailing 4-week average of their ACTUAL settlement gross
+  // revenue instead of silently treating it as $0 — labeled "from your
+  // settlements" so it's never mistaken for a manually-entered figure.
+  // This is display-only: the SAVED budget value (handleSaveBudget below)
+  // still persists `null` when the field is empty, so this recomputes
+  // live from the latest imports every time rather than freezing a stale
+  // number the moment it's first shown.
+  const trailingAvgRevenue = useMemo(
+    () => trailingWeeklyRevenueAverage(settlementsQuery.data ?? []),
+    [settlementsQuery.data]
+  );
+  const forecastInputs = useMemo(() => {
+    const base = toBudgetInputs(budget);
+    return { ...base, weeklyRevenue: base.weeklyRevenue ?? trailingAvgRevenue };
+  }, [budget, trailingAvgRevenue]);
+  const forecast = useMemo(() => calcCashFlowForecast(forecastInputs), [forecastInputs]);
 
   async function handleSaveBudget() {
     setSaving(true);
@@ -209,6 +227,9 @@ export default function CashFlow() {
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.weeklyRevenueLabel')}</MutedText>
               <Field keyboardType="numeric" value={budget.weeklyRevenue} onChangeText={(v) => setBudget((f) => ({ ...f, weeklyRevenue: v }))} placeholder="0" />
+              {!budget.weeklyRevenue && (
+                <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(trailingAvgRevenue) })}</MutedText>
+              )}
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.truckPaymentLabel')}</MutedText>

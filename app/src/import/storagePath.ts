@@ -1,4 +1,5 @@
 import type { DocType, Extraction } from '@/src/import/types';
+import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
 
 // Verbatim ports of legacy/index.html's Drive-organization helpers
 // (~lines 1102-1163), retargeted at Supabase Storage paths instead of
@@ -65,8 +66,15 @@ export function buildDocFolderParts(docType: DocType, dateStr: string | undefine
 }
 
 // legacy/index.html:1152 — human-readable filename, never internal codes.
+// Bug fix (owner decision 2026-07-30, Documents-not-listing audit): uses
+// getPrimaryExtractionDate(d) — the same resolver duplicateCheck.ts/
+// aiImportSave.ts's documents.doc_date use — instead of the raw `d.date`
+// field, which is normally EMPTY for a settlement (its real date lives in
+// d.settlement.weekEnding). Filing every settlement under "Undated" was a
+// real, silent misfile bug (never a lost row, but hid it in the wrong
+// month/week folder in Storage).
 export function buildDocFileName(d: Extraction, ext: string): string {
-  const date = d.date || 'undated';
+  const date = getPrimaryExtractionDate(d) || 'undated';
   if (d.docType === 'amazon' || d.docType === 'store') {
     const vendor = slugify(d.vendor || 'Unknown-Store');
     const firstItem = d.purchase?.items?.[0]?.name;
@@ -88,7 +96,7 @@ export function buildDocFileName(d: Extraction, ext: string): string {
 
 // Full Storage object path: {user_id}/{month}/.../{filename} (CLAUDE.md).
 export function buildStoragePath(userId: string, d: Extraction, ext: string): string {
-  const folderParts = buildDocFolderParts(d.docType, d.date, d.vendor);
+  const folderParts = buildDocFolderParts(d.docType, getPrimaryExtractionDate(d), d.vendor);
   const fileName = buildDocFileName(d, ext);
   return [userId, ...folderParts, fileName].join('/');
 }

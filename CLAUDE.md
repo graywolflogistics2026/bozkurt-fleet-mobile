@@ -617,6 +617,86 @@
       and `'dashboard-layout'` are both required there for the same
       reason: a correct server-side reset with a stale client cache still
       *looks* like the bug to the user.
+  25. PER DIEM INTELLIGENCE + ASSET PURCHASE & FINANCING (owner decision
+      2026-07-30, PRODUCT DECISION, mega-pass parts B/C): per diem is no
+      longer a flat 7 days × distinct settlement weeks — every settlement
+      carries its own `per_diem_days` (0-7, `docs/PENDING_SQL.md` §35),
+      smart-defaulted at import/save time from miles
+      (`app/src/tax/perDiem.ts` `defaultPerDiemDaysForMiles()`: 0 miles ->
+      0 days "home week," else 7) and freely editable on both the import
+      preview and the settlement detail screen afterward.
+      `calcPerDiemDays()` SUMS whatever's stored per settlement — it never
+      re-derives from miles itself, so a user's edit always sticks — and
+      dedupes a repeated `week_ending` (a multi-truck fleet settling every
+      truck the same week) by taking the MIN value among the duplicates,
+      never summing them (the same calendar week can't count as
+      away-from-home twice). Every asset (truck, trailer, or unlimited
+      "other equipment" via the new `equipment` table, docs/PENDING_SQL.md
+      §36) carries its own `purchase_price`/`purchase_date`/`financing`
+      (`'cash'|'loan'`) — a trailer's financing is independent of its
+      tractor's even though both live in the same `trucks` row (mirrors
+      the existing `trailer_*` fold-in pattern). A loan links via
+      `loan_id`/`trailer_loan_id`/`equipment.loan_id` to the SAME `loans`
+      table every other Loan Center entry already uses — payments keep
+      flowing through the existing principal/interest logic unchanged,
+      this is only the asset-side pointer to "which loan financed this."
+      Populated either by uploading a financing document (ai-import
+      docType `loan_agreement` — extracts lender/amount/apr/payment/
+      frequency/nextDue/assetType/assetName, always creates the Loan
+      Center row unconditionally) or by manual entry
+      (`app/src/components/AssetFinancingFields.tsx`, shared by the Trucks
+      and Equipment screens). Asset linking from an import is
+      auto-matched by assetName against unit_number/trailer_unit_number/
+      equipment.name (`app/src/import/loanAssetMatch.ts`
+      `resolveLoanAssetMatch()`) and — same "less aggressive than truck/
+      driver match, never forces a picker" spirit as `driverMatch.ts` —
+      the loan is ALWAYS created in Loan Center regardless of whether a
+      match is found; linking is a bonus, never a blocking extra step.
+      `loan_id`/`trailer_loan_id`/`equipment.loan_id` are `on delete set
+      null` (never a plain FK) because Reset All Data and Delete Account
+      both delete `loans` before `trucks`/`equipment` in their deletion
+      order — a plain FK would make either flow fail outright.
+      `"equipment"` was added to both Edge Functions'
+      `TABLES_IN_DELETION_ORDER` and to `queryInvalidation.ts`'s
+      `AFFECTED_TABLES` in the same pass (see invariant #24 and the data-
+      flow audit below) — a new table wired into Reset without also being
+      wired into invalidation is exactly the class of bug that audit
+      exists to catch.
+- DATA-FLOW CONSISTENCY (owner decision 2026-07-30, mega-pass part A):
+  `docs/DATA_FLOW.md` maps every mutation (import new/replace, manual
+  add/edit/delete per entity, Mark-as-Done, capital tx, budget save,
+  Reset, Delete Account) to every screen/stat that must reflect it — the
+  reference to check before assuming a screen "just doesn't update."
+  That audit found and fixed two concrete gaps: (1) 8 tables Reset All
+  Data wipes (`trucks`, `drivers`, `driver_payments`, `household_income`,
+  `household_members`, `compliance_items`, `maintenance_intervals`,
+  `truck_health_config`) were silently missing from
+  `queryInvalidation.ts`'s `AFFECTED_TABLES`, so those screens kept
+  showing pre-reset data — `app/src/data/__tests__/queryInvalidation.test.ts`
+  now regression-guards this by mirroring `TABLES_IN_DELETION_ORDER`; (2)
+  Cash Flow's "Weekly Revenue" forecast input had zero connection to the
+  `settlements` table at all (a manually-typed budget number only), so it
+  stayed $0 after every import — `trailingWeeklyRevenueAverage()`
+  (`app/src/stats/cashFlowForecast.ts`) now fills it from the trailing
+  4-week actual settlement gross average, labeled "from your settlements"
+  in the UI, whenever the user hasn't entered their own number; a manual
+  entry always overrides it, and the SAVED value still persists `null`
+  when empty so the average keeps recomputing live from the latest
+  imports rather than freezing.
+- CUSTOMIZE DASHBOARD DIAGNOSTICS (owner decision 2026-07-30, device
+  feedback round 4): a triple-tap on the screen title reveals a small,
+  deliberately plain diagnostics panel (rendering mode, card count,
+  layout JSON length, query status, last caught error) — temporary
+  instrumentation for device bug reports, not a permanent UI feature.
+  Two real silent-failure bugs found by this pass's review and fixed
+  alongside it: the loading card's `!draft` condition could stay true
+  forever if the `profiles` fetch itself errored (now falls back to
+  `mergeDashboardLayout(null)` so the screen is always usable even when
+  the fetch failed); `DraggableFlatList`'s error boundary
+  (`DragListErrorBoundary`) only catches RENDER-path errors, never one
+  thrown inside `onDragEnd`'s event-handler callback — that callback now
+  has its own try/catch as a second safety net, both permanently
+  downgrading to the guaranteed-safe arrows-only `FlatList`.
 - The UI never shows a raw internal doc-type code (e.g. `'amazon'`) — always
   go through `useDocTypeMeta()`'s human label (e.g. "Store/Amazon Purchase"),
   never the old `DOC_TYPE_META` constant name (renamed — icons are locale-

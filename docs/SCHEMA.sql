@@ -158,7 +158,9 @@ create table trucks (
   year int, make text, model text,            -- 2023 International LT
   engine       text,                          -- 'A26 12.4L'
   current_odometer int,
-  fleet_mpg    numeric(4,1) default 8.9,
+  fleet_mpg    numeric(4,1),                  -- no DB default (PENDING_SQL.md §36 dropped the old
+                                               -- `default 8.9` — that was the original owner's own
+                                               -- truck's MPG, a "no owner-specific defaults" violation).
   apu_hours    int,                           -- TriPac Evolution
   is_active    boolean default true,
   -- Trailer info (added retroactively, PENDING_SQL.md §28, Session 9b
@@ -169,6 +171,18 @@ create table trucks (
   trailer_year         int,
   trailer_make         text,
   trailer_model        text,
+  -- Asset purchase & financing (added retroactively, PENDING_SQL.md §36,
+  -- owner decision 2026-07-30) — the tractor's own purchase/financing
+  -- info; trailer_* below is the trailer's own, independent of the
+  -- tractor's even though it's folded into this same row.
+  purchase_price numeric(12,2),
+  purchase_date  date,
+  financing      text check (financing in ('cash', 'loan')),
+  loan_id        uuid references loans on delete set null,
+  trailer_purchase_price numeric(12,2),
+  trailer_purchase_date  date,
+  trailer_financing      text check (trailer_financing in ('cash', 'loan')),
+  trailer_loan_id        uuid references loans on delete set null,
   created_at   timestamptz default now()
 );
 
@@ -285,6 +299,11 @@ create table settlements (
   gross        numeric(12,2) not null default 0,
   net          numeric(12,2) not null default 0,
   miles        int default 0,
+  per_diem_days int not null default 7 check (per_diem_days >= 0 and per_diem_days <= 7),
+                       -- added retroactively, PENDING_SQL.md §35 (per diem
+                       -- intelligence, owner decision 2026-07-30) — smart-
+                       -- defaulted from miles at save time (0 miles -> 0,
+                       -- else 7), freely editable afterward.
   tags         text,  -- added retroactively, PENDING_SQL.md §22 (flexible fields, owner decision
                        -- 2026-07-10) — the user's own ad-hoc labeling, separate from any AI/system
                        -- description; same rationale on every other table below that gets this column.
@@ -558,6 +577,27 @@ create table credit_cards (
   credit_limit numeric(12,2), balance numeric(12,2),
   apr numeric(5,2), due_day int,
   tags         text  -- PENDING_SQL.md §22
+);
+
+-- ---------- Equipment (added retroactively, PENDING_SQL.md §36, owner
+-- decision 2026-07-30 — "unlimited other equipment" beyond trucks/
+-- trailers: generators, reefer units, tools financed on their own note.
+-- Distinct from the Asset Register (app/src/stats/assetRegister.ts), a
+-- view over booked deduction line items with a warranty — this is a
+-- first-class row with its own purchase price and financing.) ----------
+create table equipment (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users on delete cascade,
+  name           text not null,
+  category       text,
+  purchase_price numeric(12,2),
+  purchase_date  date,
+  financing      text check (financing in ('cash', 'loan')),
+  loan_id        uuid references loans on delete set null,
+  notes          text,
+  tags           text,  -- PENDING_SQL.md §22
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
 );
 
 -- ---------- Bank & checking statements (was BANK_STMTS / CHK_STMTS, normalized) ----------

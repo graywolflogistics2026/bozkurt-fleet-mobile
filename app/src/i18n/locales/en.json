@@ -27,6 +27,7 @@
     "cashFlow": "Cash Flow",
     "maintenance": "Maintenance",
     "trucks": "Trucks",
+    "equipment": "Equipment",
     "drivers": "Drivers",
     "loans": "Loans",
     "creditCards": "Credit Cards",
@@ -306,6 +307,8 @@
     "documentDateLabel": "Document Date",
     "weekEndingLabel": "Week Ending (required)",
     "weekEndingRequired": "Week ending is required — enter the date from the settlement before saving.",
+    "perDiemDaysLabel": "Per Diem Days (0-7)",
+    "perDiemDaysHint": "Defaults to 0 for a 0-mile home week, 7 otherwise — edit if it's not quite right.",
     "dateConfirmTitle": "Is this date correct?",
     "dateConfirmBody": "This document looks like it's from over 6 months ago — double check the date above before saving.",
     "settlementReplaceTitle": "⚠️ This week is already imported",
@@ -485,6 +488,7 @@
     "cashFlow": "Cash Flow",
     "maintenance": "Maintenance",
     "trucks": "Trucks",
+    "equipment": "Equipment",
     "drivers": "Drivers",
     "loans": "Loans",
     "creditCards": "Credit Cards",
@@ -632,7 +636,44 @@
     "retireConfirmBody": "This keeps all its history — settlements, fuel, maintenance — but hides it from pickers going forward. You can reactivate it anytime.",
     "reactivate": "Reactivate",
     "showRetired": "Show retired trucks",
-    "hideRetired": "Hide retired trucks"
+    "hideRetired": "Hide retired trucks",
+    "purchaseFinancingTitle": "Purchase & Financing",
+    "trailerSectionTitle": "Trailer",
+    "trailerUnitLabel": "Trailer Unit Number"
+  },
+  "equipmentScreen": {
+    "title": "Equipment",
+    "subtitle": "Generators, reefer units, tools financed on their own note — unlimited entries, each with its own purchase price and financing.",
+    "empty": "No equipment yet.",
+    "addEquipment": "Add Equipment",
+    "editEquipment": "Edit Equipment",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Thermo King Reefer Unit",
+    "categoryLabel": "Category",
+    "categoryPlaceholder": "e.g. Generator, Reefer, Tools",
+    "notesLabel": "Notes",
+    "enterNameTitle": "Enter a name",
+    "saveFailedTitle": "Save failed",
+    "deleteConfirmTitle": "Delete this equipment?",
+    "deleteConfirmBody": "This removes it from your records. Any linked loan in Loan Center is unaffected."
+  },
+  "assetFinancing": {
+    "purchasePriceLabel": "Purchase Price ($)",
+    "purchaseDateLabel": "Purchase Date",
+    "financingLabel": "Financing",
+    "cash": "Cash",
+    "loan": "Loan",
+    "pickExistingLoan": "Link an existing loan",
+    "enterLoanDetails": "+ Enter loan details",
+    "lenderLabel": "Lender",
+    "amountLabel": "Loan Amount ($)",
+    "aprLabel": "APR (%)",
+    "paymentLabel": "Payment ($)",
+    "frequencyLabel": "Frequency",
+    "createAndLink": "Create & Link Loan",
+    "createLoanFailedTitle": "Could not create loan",
+    "linkedLoanHint": "Linked — payments are tracked in Loan Center.",
+    "unlink": "Unlink"
   },
   "drivers": {
     "title": "Drivers",
@@ -697,6 +738,8 @@
     "grossLabelShort": "Gross",
     "netLabelShort": "Net",
     "milesLabelShort": "Miles",
+    "perDiemDaysLabel": "Per Diem Days (0-7)",
+    "perDiemSaveFailedTitle": "Could not save per diem days",
     "incomeLines": "Income Lines",
     "chargebacks": "Chargebacks",
     "noChargebacks": "No chargebacks withheld this week.",
@@ -926,6 +969,7 @@
     "forecastTitle": "30-Day Forecast",
     "bankBalanceLabel": "Bank Balance ($)",
     "weeklyRevenueLabel": "Weekly Revenue ($)",
+    "weeklyRevenueFromSettlements": "{{amount}}/wk — from your settlements (last 4 weeks avg)",
     "truckPaymentLabel": "Truck Payment (wk)",
     "fuelWeeklyLabel": "Fuel (wk)",
     "insuranceMonthlyLabel": "Insurance (mo)",
@@ -1001,7 +1045,15 @@
     "arrowHint": "Use the ▲▼ arrows or Top/Bottom to reorder.",
     "moveToTop": "Top",
     "moveToBottom": "Bottom",
-    "noSection": "—"
+    "noSection": "—",
+    "loadErrorFallback": "Couldn't load your saved layout — showing the default. You can still reorder and save.",
+    "diagnosticsTitle": "Diagnostics (triple-tap title to hide)",
+    "diagnosticsMode": "Mode: {{mode}}",
+    "diagnosticsCards": "Cards: {{count}}",
+    "diagnosticsLayoutLength": "Layout JSON length: {{length}}",
+    "diagnosticsQueryStatus": "Query status: {{status}}",
+    "diagnosticsLastError": "Last error: {{error}}",
+    "diagnosticsNone": "none"
   },
   "categoryPicker": {
     "newCategory": "New Category",
@@ -1088,6 +1140,10 @@
     "insurance_policy": {
       "label": "Insurance Policy",
       "route": "Compliance Tracker (not yet wired to a screen)"
+    },
+    "loan_agreement": {
+      "label": "Loan/Financing Agreement",
+      "route": "Loan Center · linked truck/trailer/equipment"
     },
     "other": {
       "label": "Document",

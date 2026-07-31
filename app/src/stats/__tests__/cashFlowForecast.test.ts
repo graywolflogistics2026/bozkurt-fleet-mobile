@@ -1,4 +1,4 @@
-import { calcCashFlowForecast, type CashFlowBudgetInputs } from '@/src/stats/cashFlowForecast';
+import { calcCashFlowForecast, trailingWeeklyRevenueAverage, type CashFlowBudgetInputs } from '@/src/stats/cashFlowForecast';
 
 function inputs(overrides: Partial<CashFlowBudgetInputs> = {}): CashFlowBudgetInputs {
   return {
@@ -95,5 +95,47 @@ describe('calcCashFlowForecast', () => {
     expect(r.weeks[0].balance).toBeCloseTo(1000 + wNA, 5);
     expect(r.weeks[3].balance).toBeCloseTo(1000 + wNA * 4, 5);
     expect(r.weeks.every((w) => w.revenue === 5000 && Math.abs(w.expenses - wExp) < 1e-9)).toBe(true);
+  });
+});
+
+// DATA-FLOW AUDIT FIX (owner decision 2026-07-30 — known symptom: Cash
+// Flow revenue stayed $0 after a settlement import). The forecast's
+// Weekly Revenue default when no manual budget is set.
+describe('trailingWeeklyRevenueAverage', () => {
+  it('is 0 with no settlements', () => {
+    expect(trailingWeeklyRevenueAverage([])).toBe(0);
+  });
+
+  it('averages the trailing 4 most recent distinct weeks', () => {
+    const settlements = [
+      { week_ending: '2026-07-05', gross: 1000 },
+      { week_ending: '2026-07-12', gross: 2000 },
+      { week_ending: '2026-07-19', gross: 3000 },
+      { week_ending: '2026-07-26', gross: 4000 },
+    ];
+    expect(trailingWeeklyRevenueAverage(settlements)).toBe(2500);
+  });
+
+  it('ignores weeks older than the trailing window', () => {
+    const settlements = [
+      { week_ending: '2026-06-01', gross: 100000 }, // way outside the trailing 4
+      { week_ending: '2026-07-05', gross: 1000 },
+      { week_ending: '2026-07-12', gross: 2000 },
+      { week_ending: '2026-07-19', gross: 3000 },
+      { week_ending: '2026-07-26', gross: 4000 },
+    ];
+    expect(trailingWeeklyRevenueAverage(settlements)).toBe(2500);
+  });
+
+  it('sums multiple settlements sharing the same week_ending (multi-truck fleet) before averaging', () => {
+    const settlements = [
+      { week_ending: '2026-07-26', gross: 1000 },
+      { week_ending: '2026-07-26', gross: 1500 }, // 2nd truck, same week
+    ];
+    expect(trailingWeeklyRevenueAverage(settlements)).toBe(2500);
+  });
+
+  it('treats a null gross as 0', () => {
+    expect(trailingWeeklyRevenueAverage([{ week_ending: '2026-07-26', gross: null }])).toBe(0);
   });
 });

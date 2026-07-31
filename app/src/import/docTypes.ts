@@ -29,6 +29,8 @@ export const DOC_TYPE_ICON: Record<DocType, string> = {
   registration_cab_card: '🪪',
   irs_2290_schedule1: '📜',
   insurance_policy: '🛡️',
+  // ASSET PURCHASE & FINANCING (owner decision 2026-07-30, PRODUCT DECISION).
+  loan_agreement: '📝',
   other: '📄',
 };
 

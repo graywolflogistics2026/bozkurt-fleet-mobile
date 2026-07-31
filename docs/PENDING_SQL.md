@@ -1106,6 +1106,120 @@ select conname from pg_constraint where conrelid = 'settlements'::regclass and c
 
 ---
 
+## 35. settlements.per_diem_days (PER DIEM INTELLIGENCE, owner decision 2026-07-30, mega-pass part B)
+
+**Symptom fixed**: per diem was a flat 7 days × distinct settlement weeks
+(`app/src/tax/perDiem.ts`), so a "home week" settlement with 0 miles
+(e.g. W/E 2026-07-25) still counted a full 7 per-diem days it never
+earned. `per_diem_days` is now a real, per-settlement, editable column
+(0-7) — editable on the settlement detail screen AND the import preview
+before save. Smart default at import/save time
+(`app/src/import/mapExtraction.ts` `mapSettlement()`): 0 total miles ->
+0 days ("home week," user can override), miles > 0 -> 7 (matches the old
+flat behavior for every settlement that actually represents time OTR).
+`calcPerDiemDays()` now SUMS whatever's stored per settlement (never
+re-derives from miles itself, so a manual edit always sticks), deduping
+a repeated `week_ending` (a multi-truck fleet settling every truck the
+same week) by taking the MIN value among the duplicates — the same
+calendar week can't count as away-from-home twice just because 2 trucks
+settled on it.
+
+```sql
+alter table settlements
+  add column per_diem_days integer not null default 7
+    check (per_diem_days >= 0 and per_diem_days <= 7);
+
+-- Backfill: apply the new smart default retroactively — a 0-mile "home
+-- week" settlement already on file gets corrected to 0 days; every other
+-- existing settlement keeps the flat 7 it already effectively had.
+update settlements set per_diem_days = 0 where miles = 0;
+```
+
+No RLS change needed — `settlements` is already owner-scoped.
+
+- [ ] 35a run (add settlements.per_diem_days + backfill 0-mile weeks to 0 days)
+
+---
+
+## 36. Asset purchase & financing (owner decision 2026-07-30, PRODUCT DECISION, mega-pass part C)
+
+Every asset (truck, trailer, or unlimited other equipment) can now record
+its own purchase price/date and financing (cash or loan). A loan links
+via `loan_id` to the SAME `loans` table every other Loan Center entry
+already uses — payments keep flowing through the existing principal/
+interest logic unchanged; this only adds the asset-side pointer to
+"which loan financed this," populated either by uploading a financing
+document (ai-import docType `loan_agreement`, auto-matched by asset
+name/unit number — `app/src/import/loanAssetMatch.ts`) or by manual
+entry on the Trucks/Equipment screens. `equipment` is a new, first-class
+table for "unlimited other equipment" (generators, reefer units, tools
+financed on their own note) — distinct from the lighter-weight Asset
+Register (`app/src/stats/assetRegister.ts`, a view over booked deduction
+line items with a warranty), which is unaffected.
+
+`loan_id`/`trailer_loan_id`/`equipment.loan_id` are `on delete set null`
+— Reset All Data and Delete Account both delete `loans` BEFORE
+`trucks`/`equipment` in their deletion order, so a plain FK (no
+`on delete set null`) would make either flow fail outright the moment a
+linked asset still pointed at a loan row being deleted.
+
+Found while here, same class of bug as the Cash Flow/legacy-import
+numeric-default fix earlier this session: `trucks.fleet_mpg` still has a
+DB-level `default 8.9` (the original owner's actual truck MPG) left over
+from before the "no owner-specific defaults" rule existed — every truck
+INSERT in the app already explicitly sets `fleet_mpg` itself (or leaves
+it out and gets `null`, since it's an optional field on the manual
+add-truck form), so this default has likely never actually fired through
+the app, but it's still wrong to leave sitting on the live column.
+Dropped in the same pass.
+
+```sql
+alter table trucks
+  alter column fleet_mpg drop default,
+  add column purchase_price numeric(12,2),
+  add column purchase_date date,
+  add column financing text check (financing in ('cash', 'loan')),
+  add column loan_id uuid references loans on delete set null,
+  add column trailer_purchase_price numeric(12,2),
+  add column trailer_purchase_date date,
+  add column trailer_financing text check (trailer_financing in ('cash', 'loan')),
+  add column trailer_loan_id uuid references loans on delete set null;
+
+create table equipment (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users on delete cascade,
+  name           text not null,
+  category       text,
+  purchase_price numeric(12,2),
+  purchase_date  date,
+  financing      text check (financing in ('cash', 'loan')),
+  loan_id        uuid references loans on delete set null,
+  notes          text,
+  tags           text,  -- PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
+);
+create trigger trg_touch_updated_at before update on equipment
+  for each row execute function touch_updated_at();
+
+alter table equipment enable row level security;
+create policy "equipment_owner_all" on equipment
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+```
+
+Also add `"equipment"` to both `supabase/functions/reset-data/index.ts`'s
+and `supabase/functions/delete-account/index.ts`'s
+`TABLES_IN_DELETION_ORDER` (already done in the app-side source for this
+pass — this SQL section is the DB-side companion; no further SQL needed
+for that, it's just a reminder these two Edge Functions need
+redeploying too since their source changed).
+
+- [ ] 36a run (trucks purchase/financing columns + new equipment table + RLS)
+- [ ] 36b redeploy reset-data (TABLES_IN_DELETION_ORDER gained "equipment")
+- [ ] 36c redeploy delete-account (TABLES_IN_DELETION_ORDER gained "equipment")
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` to

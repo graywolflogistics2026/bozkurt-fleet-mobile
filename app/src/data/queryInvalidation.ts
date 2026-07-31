@@ -4,6 +4,23 @@ import type { QueryClient } from '@tanstack/react-query';
 // (src/data/entityHooks.ts) — invalidating by the bare table-name prefix
 // also matches every filtered variant, since react-query does prefix
 // matching on query keys, not exact-array equality.
+//
+// DATA-FLOW AUDIT FIX (owner decision 2026-07-30, mega-pass part A): this
+// list must cover EVERY table `supabase/functions/reset-data/index.ts`'s
+// TABLES_IN_DELETION_ORDER wipes — Reset All Data calls
+// invalidateFinancialData() as its one client-side cache-refresh step
+// (app/(tabs)/more/settings.tsx), so any wiped table missing here shows
+// STALE (pre-reset) data until something else happens to refetch it. This
+// audit found 8 tables silently missing (trucks, drivers, driver_payments,
+// household_income, household_members, compliance_items,
+// maintenance_intervals, truck_health_config) — none of them are wired to
+// any OTHER invalidation path, so a user resetting their account kept
+// seeing their old truck, driver, and compliance data on Truck Health, the
+// Drivers screen, and Compliance Tracker until they force-quit the app.
+// These two files can't share a literal (Deno Edge Function vs React
+// Native) — src/data/__tests__/queryInvalidation.test.ts asserts this list
+// against a mirrored copy of TABLES_IN_DELETION_ORDER as a regression
+// guard; update both together.
 const AFFECTED_TABLES = [
   'settlements',
   'deductions',
@@ -20,6 +37,15 @@ const AFFECTED_TABLES = [
   'bank_transactions',
   'misc_income',
   'user_categories',
+  'trucks',
+  'equipment',
+  'drivers',
+  'driver_payments',
+  'household_income',
+  'household_members',
+  'compliance_items',
+  'maintenance_intervals',
+  'truck_health_config',
 ];
 
 // Derived/aggregate query keys that read from the tables above but aren't

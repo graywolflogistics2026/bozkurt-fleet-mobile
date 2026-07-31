@@ -32,6 +32,30 @@ export type CashFlowForecast = {
   weeks: CashFlowWeek[];
 };
 
+// DATA-FLOW AUDIT FIX (owner decision 2026-07-30, mega-pass part A —
+// known symptom: after a settlement import, Cash Flow revenue stayed $0
+// because the forecast's "Weekly Revenue" input has no connection to
+// actual settlement data at all, only a manually-typed budget number).
+// Trailing 4-week average of ACTUAL settlement gross revenue, grouped by
+// week_ending (a multi-truck fleet's same week sums across trucks) —
+// used as the forecast's weekly-revenue figure whenever the user hasn't
+// entered their own budget number, never persisted over the user's saved
+// `null` (see cash-flow.tsx: this is display-only, re-computed live every
+// time, so it always reflects the latest imports).
+export function trailingWeeklyRevenueAverage(
+  settlements: { week_ending: string; gross: number | null }[],
+  weeks = 4
+): number {
+  const byWeek = new Map<string, number>();
+  for (const s of settlements) {
+    byWeek.set(s.week_ending, (byWeek.get(s.week_ending) ?? 0) + Number(s.gross ?? 0));
+  }
+  const recentWeeks = [...byWeek.keys()].sort().reverse().slice(0, weeks);
+  if (recentWeeks.length === 0) return 0;
+  const total = recentWeeks.reduce((sum, w) => sum + (byWeek.get(w) ?? 0), 0);
+  return total / recentWeeks.length;
+}
+
 export function calcCashFlowForecast(inputs: CashFlowBudgetInputs): CashFlowForecast {
   const b = inputs.bankBalance || 0;
   const wr = inputs.weeklyRevenue || 0;

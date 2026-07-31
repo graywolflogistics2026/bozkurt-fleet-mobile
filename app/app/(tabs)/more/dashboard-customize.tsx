@@ -1,11 +1,18 @@
-import { Component, useEffect, useState, type ReactNode } from 'react';
+import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useDashboardLayout, useUpdateDashboardLayout } from '@/src/data/dashboardLayout';
-import { CARD_LABEL_KEYS, SECTION_IDS, SECTION_LABEL_KEYS, type DashboardCardConfig, type SectionId } from '@/src/stats/dashboardLayout';
+import {
+  CARD_LABEL_KEYS,
+  SECTION_IDS,
+  SECTION_LABEL_KEYS,
+  mergeDashboardLayout,
+  type DashboardCardConfig,
+  type SectionId,
+} from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -51,14 +58,15 @@ function moveToEdge<T>(list: T[], index: number, toStart: boolean): T[] {
 // the parent, which permanently switches to the guaranteed-safe plain
 // FlatList for the rest of this screen's lifetime — the user never sees a
 // dead or blank customize screen because of it.
-class DragListErrorBoundary extends Component<{ onError: () => void; children: ReactNode }, { hasError: boolean }> {
+class DragListErrorBoundary extends Component<{ onError: (message: string) => void; children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
   static getDerivedStateFromError() {
     return { hasError: true };
   }
   componentDidCatch(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
     console.log('[DashboardCustomize] DraggableFlatList threw — falling back to arrows-only mode.', error);
-    this.props.onError();
+    this.props.onError(message);
   }
   render() {
     return this.state.hasError ? null : this.props.children;
@@ -103,9 +111,49 @@ export default function DashboardCustomize() {
   // drops to arrows-only the instant DraggableFlatList proves it can't run.
   const [dragUnavailable, setDragUnavailable] = useState(isExpoGo);
 
+  // On-screen diagnostics (owner directive, device feedback round 4,
+  // 2026-07-30 — "stop guessing"): triple-tap the screen title to reveal a
+  // small panel reporting rendering mode/card count/layout size/last
+  // caught error, so a device report can include hard numbers instead of
+  // "it's still broken." Temporary instrumentation, not a permanent UI
+  // feature — kept deliberately plain (no design polish).
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const tapCountRef = useRef(0);
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleTitleTap() {
+    tapCountRef.current += 1;
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    tapTimerRef.current = setTimeout(() => {
+      tapCountRef.current = 0;
+    }, 600);
+    if (tapCountRef.current >= 3) {
+      tapCountRef.current = 0;
+      setShowDiagnostics((v) => !v);
+    }
+  }
+
   useEffect(() => {
     if (layoutQuery.data && !draft) setDraft(layoutQuery.data.layout);
   }, [layoutQuery.data, draft]);
+
+  // Silent-failure fix (owner directive, device feedback round 4): if the
+  // profiles fetch itself errors (network blip, RLS edge case, a malformed
+  // row), the screen used to be stuck on "Loading…" forever — isLoading
+  // goes false but draft never gets set, so the loading card's `!draft`
+  // condition stayed true with nothing beneath it. Falling back to the
+  // pure default merge (same shape a brand-new profile gets) means the
+  // screen is ALWAYS usable even when the fetch itself failed; the user
+  // can still reorder/hide/save (a subsequent save re-fetches and
+  // reconciles normally), and the diagnostics panel surfaces the real
+  // error message for a device report.
+  useEffect(() => {
+    if (layoutQuery.isError && !draft) {
+      setDraft(mergeDashboardLayout(null));
+      setLastError(layoutQuery.error instanceof Error ? layoutQuery.error.message : String(layoutQuery.error));
+    }
+  }, [layoutQuery.isError, layoutQuery.error, draft]);
 
   const rows = draft ?? [];
 
@@ -181,14 +229,41 @@ export default function DashboardCustomize() {
 
   const listHeader = (
     <View>
-      <ScreenTitle>{t('dashboardCustomize.title')}</ScreenTitle>
+      <Pressable onPress={handleTitleTap}>
+        <ScreenTitle>{t('dashboardCustomize.title')}</ScreenTitle>
+      </Pressable>
       <MutedText>{t('dashboardCustomize.subtitle')}</MutedText>
       <MutedText style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}>
         {dragUnavailable ? t('dashboardCustomize.arrowHint') : t('dashboardCustomize.dragHint')}
       </MutedText>
-      {(layoutQuery.isLoading || !draft) && (
+      {showDiagnostics && (
+        <Card>
+          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
+            {t('dashboardCustomize.diagnosticsTitle')}
+          </Text>
+          <MutedText>
+            {t('dashboardCustomize.diagnosticsMode', { mode: dragUnavailable ? 'arrows-only' : 'drag-plus-arrows' })}
+          </MutedText>
+          <MutedText>{t('dashboardCustomize.diagnosticsCards', { count: rows.length })}</MutedText>
+          <MutedText>
+            {t('dashboardCustomize.diagnosticsLayoutLength', { length: draft ? JSON.stringify(draft).length : 'null' })}
+          </MutedText>
+          <MutedText>
+            {t('dashboardCustomize.diagnosticsQueryStatus', {
+              status: layoutQuery.isLoading ? 'loading' : layoutQuery.isError ? 'error' : 'success',
+            })}
+          </MutedText>
+          <MutedText>{t('dashboardCustomize.diagnosticsLastError', { error: lastError ?? t('dashboardCustomize.diagnosticsNone') })}</MutedText>
+        </Card>
+      )}
+      {layoutQuery.isLoading && !draft && (
         <Card>
           <MutedText>{t('common.loading')}</MutedText>
+        </Card>
+      )}
+      {layoutQuery.isError && (
+        <Card>
+          <MutedText style={{ color: colors.orange }}>{t('dashboardCustomize.loadErrorFallback')}</MutedText>
         </Card>
       )}
     </View>
@@ -214,7 +289,12 @@ export default function DashboardCustomize() {
           ListFooterComponent={listFooter}
         />
       ) : (
-        <DragListErrorBoundary onError={() => setDragUnavailable(true)}>
+        <DragListErrorBoundary
+          onError={(message) => {
+            setLastError(message);
+            setDragUnavailable(true);
+          }}
+        >
           <DraggableFlatList
             style={{ flex: 1 }}
             data={rows}
@@ -223,7 +303,22 @@ export default function DashboardCustomize() {
             onDragBegin={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
             }}
-            onDragEnd={({ data }) => setDraft(data)}
+            onDragEnd={({ data }) => {
+              // React error boundaries only catch render-path errors — a
+              // gesture-handler/reanimated failure surfacing inside this
+              // callback (event-handler code, not render) would NOT be
+              // caught by DragListErrorBoundary above. This try/catch is
+              // the belt-and-suspenders safety net for that gap (device
+              // feedback round 4): any failure here still permanently
+              // downgrades to the guaranteed-safe arrows-only FlatList
+              // instead of leaving the screen in a broken drag state.
+              try {
+                setDraft(data);
+              } catch (err) {
+                setLastError(err instanceof Error ? err.message : String(err));
+                setDragUnavailable(true);
+              }
+            }}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={listHeader}
             ListFooterComponent={listFooter}

@@ -25,7 +25,7 @@ export type FleetStats = {
 // truck-scoped call still nets against the full shared expense total,
 // matching legacy's single-truck behavior exactly when there's only 1 truck.
 export async function fetchFleetStats(userId: string, truckId: string | null): Promise<FleetStats> {
-  let settlementsQuery = supabase.from('settlements').select('week_ending, gross, net, miles').eq('user_id', userId);
+  let settlementsQuery = supabase.from('settlements').select('week_ending, gross, net, miles, per_diem_days').eq('user_id', userId);
   if (truckId) settlementsQuery = settlementsQuery.eq('truck_id', truckId);
   const { data: settlements, error: settError } = await settlementsQuery;
   if (settError) throw settError;
@@ -86,7 +86,7 @@ export function useFleetStats(truckId: string | null) {
 export async function fetchDriverStats(userId: string, driverId: string): Promise<FleetStats> {
   const { data: settlements, error: settError } = await supabase
     .from('settlements')
-    .select('week_ending, gross, net, miles')
+    .select('week_ending, gross, net, miles, per_diem_days')
     .eq('user_id', userId)
     .eq('driver_id', driverId);
   if (settError) throw settError;

@@ -19,6 +19,7 @@ import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
+import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
@@ -270,7 +271,12 @@ export default function Import() {
     setNeedsDriverPicker(driverMatch.needsPicker || (d.docType === 'driver_payment' && !driverMatch.driverId));
 
     setCategoryOverride(d.docType === 'other' ? d.suggestedCategory || 'Other' : '');
-    setExtraction(d);
+    // PER DIEM INTELLIGENCE (owner decision 2026-07-30): smart-default
+    // per_diem_days from miles (0 miles -> 0 days "home week", else 7)
+    // BEFORE the preview ever renders — editable from there on, same
+    // "compute once, then it's the user's value" pattern as the week-
+    // ending date field.
+    setExtraction(applyDefaultPerDiemDays(d));
     setPhase('preview');
   }
 
@@ -462,6 +468,18 @@ export default function Import() {
                 style={{ marginBottom: spacing.xs }}
               />
               {settlementWeekEndingMissing && <ErrorText>{t('importScreen.weekEndingRequired')}</ErrorText>}
+              {extraction.docType === 'settlement' && (
+                <View style={{ marginTop: spacing.xs, marginBottom: spacing.xs }}>
+                  <MutedText>{t('importScreen.perDiemDaysLabel')}</MutedText>
+                  <Field
+                    keyboardType="numeric"
+                    value={String(extraction.settlement?.perDiemDays ?? 0)}
+                    onChangeText={(v) => setExtraction(withPerDiemDays(extraction, Number(v) || 0))}
+                    placeholder="0-7"
+                  />
+                  <MutedText>{t('importScreen.perDiemDaysHint')}</MutedText>
+                </View>
+              )}
               <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
               <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount, i18n.language) })}</MutedText>
               <MutedText>

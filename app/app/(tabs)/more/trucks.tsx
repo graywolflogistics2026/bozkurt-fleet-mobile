@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList, useInsertTruck, useUpdateTruck } from '@/src/data/trucks';
+import { useLoanRows, useInsertLoanRow } from '@/src/data/loans';
+import { AssetFinancingFields, emptyAssetFinancing, type AssetFinancingValue } from '@/src/components/AssetFinancingFields';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
-import type { Truck } from '@/src/types/db';
+import type { LoanInsert, Truck } from '@/src/types/db';
 
 type FormState = {
   unit_number: string;
@@ -17,10 +19,27 @@ type FormState = {
   model: string;
   engine: string;
   current_odometer: string;
+  // ASSET PURCHASE & FINANCING (owner decision 2026-07-30) — the tractor's
+  // own purchase/financing, and the trailer's own (independent), even
+  // though both live in this one truck row.
+  financing: AssetFinancingValue;
+  trailer_unit_number: string;
+  trailerFinancing: AssetFinancingValue;
 };
 
 function emptyForm(): FormState {
-  return { unit_number: '', vin: '', year: '', make: '', model: '', engine: '', current_odometer: '' };
+  return {
+    unit_number: '',
+    vin: '',
+    year: '',
+    make: '',
+    model: '',
+    engine: '',
+    current_odometer: '',
+    financing: emptyAssetFinancing(),
+    trailer_unit_number: '',
+    trailerFinancing: emptyAssetFinancing(),
+  };
 }
 
 function truckToForm(t: Truck): FormState {
@@ -32,6 +51,19 @@ function truckToForm(t: Truck): FormState {
     model: t.model ?? '',
     engine: t.engine ?? '',
     current_odometer: t.current_odometer != null ? String(t.current_odometer) : '',
+    financing: {
+      purchase_price: t.purchase_price != null ? String(t.purchase_price) : '',
+      purchase_date: t.purchase_date ?? '',
+      financing: t.financing ?? '',
+      loan_id: t.loan_id,
+    },
+    trailer_unit_number: t.trailer_unit_number ?? '',
+    trailerFinancing: {
+      purchase_price: t.trailer_purchase_price != null ? String(t.trailer_purchase_price) : '',
+      purchase_date: t.trailer_purchase_date ?? '',
+      financing: t.trailer_financing ?? '',
+      loan_id: t.trailer_loan_id,
+    },
   };
 }
 
@@ -44,6 +76,9 @@ export default function Trucks() {
   const trucksQuery = useTrucksList();
   const insertTruck = useInsertTruck();
   const updateTruck = useUpdateTruck();
+  const loansQuery = useLoanRows();
+  const insertLoan = useInsertLoanRow();
+  const loans = loansQuery.data ?? [];
 
   const [showRetired, setShowRetired] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -64,7 +99,21 @@ export default function Trucks() {
       model: form.model || null,
       engine: form.engine || null,
       current_odometer: form.current_odometer ? Number(form.current_odometer) || null : null,
+      purchase_price: form.financing.purchase_price ? Number(form.financing.purchase_price) || null : null,
+      purchase_date: form.financing.purchase_date || null,
+      financing: form.financing.financing || null,
+      loan_id: form.financing.financing === 'loan' ? form.financing.loan_id : null,
+      trailer_unit_number: form.trailer_unit_number || null,
+      trailer_purchase_price: form.trailerFinancing.purchase_price ? Number(form.trailerFinancing.purchase_price) || null : null,
+      trailer_purchase_date: form.trailerFinancing.purchase_date || null,
+      trailer_financing: form.trailerFinancing.financing || null,
+      trailer_loan_id: form.trailerFinancing.financing === 'loan' ? form.trailerFinancing.loan_id : null,
     };
+  }
+
+  async function createLoan(fields: Omit<LoanInsert, 'user_id'>) {
+    if (!userId) throw new Error('Not signed in');
+    return insertLoan.mutateAsync({ user_id: userId, ...fields });
   }
 
   async function handleAdd() {
@@ -157,6 +206,24 @@ export default function Trucks() {
         <Field value={form.engine} onChangeText={(v) => setForm({ ...form, engine: v })} />
         <MutedText>{t('trucks.odometerLabel')}</MutedText>
         <Field keyboardType="numeric" value={form.current_odometer} onChangeText={(v) => setForm({ ...form, current_odometer: v })} />
+
+        <Text style={styles.sectionTitle}>{t('trucks.purchaseFinancingTitle')}</Text>
+        <AssetFinancingFields
+          value={form.financing}
+          onChange={(financing) => setForm({ ...form, financing })}
+          loans={loans}
+          onCreateLoan={createLoan}
+        />
+
+        <Text style={styles.sectionTitle}>{t('trucks.trailerSectionTitle')}</Text>
+        <MutedText>{t('trucks.trailerUnitLabel')}</MutedText>
+        <Field value={form.trailer_unit_number} onChangeText={(v) => setForm({ ...form, trailer_unit_number: v })} />
+        <AssetFinancingFields
+          value={form.trailerFinancing}
+          onChange={(trailerFinancing) => setForm({ ...form, trailerFinancing })}
+          loans={loans}
+          onCreateLoan={createLoan}
+        />
       </>
     );
   }
@@ -231,3 +298,13 @@ export default function Trucks() {
     </Screen>
   );
 }
+
+const styles = {
+  sectionTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: '700' as const,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+};

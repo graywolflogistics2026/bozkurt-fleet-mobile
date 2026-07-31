@@ -27,6 +27,7 @@
     "cashFlow": "Движение Денежных Средств",
     "maintenance": "Обслуживание",
     "trucks": "Грузовики",
+    "equipment": "Оборудование",
     "drivers": "Водители",
     "loans": "Кредиты",
     "taxEstimator": "Калькулятор Налогов",
@@ -306,6 +307,8 @@
     "documentDateLabel": "Дата документа",
     "weekEndingLabel": "Неделя окончания (обязательно)",
     "weekEndingRequired": "Дата окончания недели обязательна — введите дату из settlement перед сохранением.",
+    "perDiemDaysLabel": "Дни per diem (0-7)",
+    "perDiemDaysHint": "По умолчанию 0 для недели дома (0 миль), иначе 7 — измените, если это не так.",
     "dateConfirmTitle": "Эта дата верна?",
     "dateConfirmBody": "Похоже, этому документу больше 6 месяцев — проверьте дату выше перед сохранением.",
     "settlementReplaceTitle": "⚠️ Эта неделя уже импортирована",
@@ -485,6 +488,7 @@
     "cashFlow": "Движение Денежных Средств",
     "maintenance": "Обслуживание",
     "trucks": "Грузовики",
+    "equipment": "Оборудование",
     "drivers": "Водители",
     "loans": "Кредиты",
     "settings": "Настройки",
@@ -632,7 +636,44 @@
     "retireConfirmBody": "Вся история — settlements, топливо, обслуживание — сохранится, но грузовик будет скрыт из выбора в дальнейшем. Вы можете восстановить его в любой момент.",
     "reactivate": "Восстановить",
     "showRetired": "Показать выведенные грузовики",
-    "hideRetired": "Скрыть выведенные грузовики"
+    "hideRetired": "Скрыть выведенные грузовики",
+    "purchaseFinancingTitle": "Покупка и финансирование",
+    "trailerSectionTitle": "Прицеп",
+    "trailerUnitLabel": "Номер прицепа"
+  },
+  "equipmentScreen": {
+    "title": "Оборудование",
+    "subtitle": "Генераторы, reefer-установки, инструменты, приобретённые в кредит отдельно — неограниченное число записей, у каждой своя цена покупки и финансирование.",
+    "empty": "Пока нет оборудования.",
+    "addEquipment": "Добавить оборудование",
+    "editEquipment": "Изменить оборудование",
+    "nameLabel": "Название",
+    "namePlaceholder": "напр. Thermo King Reefer Unit",
+    "categoryLabel": "Категория",
+    "categoryPlaceholder": "напр. Генератор, Reefer, Инструменты",
+    "notesLabel": "Заметки",
+    "enterNameTitle": "Введите название",
+    "saveFailedTitle": "Не удалось сохранить",
+    "deleteConfirmTitle": "Удалить это оборудование?",
+    "deleteConfirmBody": "Это удалит его из ваших записей. Связанный кредит в Кредитном центре не затрагивается."
+  },
+  "assetFinancing": {
+    "purchasePriceLabel": "Цена покупки ($)",
+    "purchaseDateLabel": "Дата покупки",
+    "financingLabel": "Финансирование",
+    "cash": "Наличные",
+    "loan": "Кредит",
+    "pickExistingLoan": "Привязать существующий кредит",
+    "enterLoanDetails": "+ Ввести данные кредита",
+    "lenderLabel": "Кредитор",
+    "amountLabel": "Сумма кредита ($)",
+    "aprLabel": "Ставка (%)",
+    "paymentLabel": "Платёж ($)",
+    "frequencyLabel": "Периодичность",
+    "createAndLink": "Создать и привязать кредит",
+    "createLoanFailedTitle": "Не удалось создать кредит",
+    "linkedLoanHint": "Привязано — платежи отслеживаются в Кредитном центре.",
+    "unlink": "Отвязать"
   },
   "drivers": {
     "title": "Водители",
@@ -752,6 +793,10 @@
       "label": "Страховой Полис",
       "route": "Трекер Соответствия (пока не привязано к экрану)"
     },
+    "loan_agreement": {
+      "label": "Кредитный/финансовый договор",
+      "route": "Кредитный центр · привязанный truck/trailer/equipment"
+    },
     "other": {
       "label": "Документ",
       "route": "Вычеты"
@@ -794,6 +839,8 @@
     "grossLabelShort": "Брутто",
     "netLabelShort": "Нетто",
     "milesLabelShort": "Мили",
+    "perDiemDaysLabel": "Дни per diem (0-7)",
+    "perDiemSaveFailedTitle": "Не удалось сохранить дни per diem",
     "incomeLines": "Статьи Дохода",
     "chargebacks": "Удержания",
     "noChargebacks": "На этой неделе удержаний нет.",
@@ -1023,6 +1070,7 @@
     "forecastTitle": "Прогноз на 30 дней",
     "bankBalanceLabel": "Баланс банка ($)",
     "weeklyRevenueLabel": "Недельный доход ($)",
+    "weeklyRevenueFromSettlements": "{{amount}}/нед — из ваших settlement (среднее за последние 4 недели)",
     "truckPaymentLabel": "Платёж за грузовик (нед)",
     "fuelWeeklyLabel": "Топливо (нед)",
     "insuranceMonthlyLabel": "Страховка (мес)",
@@ -1098,7 +1146,15 @@
     "arrowHint": "Используйте стрелки ▲▼ или Вверх/Вниз для изменения порядка.",
     "moveToTop": "Вверх",
     "moveToBottom": "Вниз",
-    "noSection": "—"
+    "noSection": "—",
+    "loadErrorFallback": "Не удалось загрузить сохранённый макет — показан макет по умолчанию. Вы всё ещё можете переставлять и сохранять.",
+    "diagnosticsTitle": "Диагностика (тройное нажатие на заголовок скрывает)",
+    "diagnosticsMode": "Режим: {{mode}}",
+    "diagnosticsCards": "Карточек: {{count}}",
+    "diagnosticsLayoutLength": "Длина JSON макета: {{length}}",
+    "diagnosticsQueryStatus": "Статус запроса: {{status}}",
+    "diagnosticsLastError": "Последняя ошибка: {{error}}",
+    "diagnosticsNone": "нет"
   },
   "categoryPicker": {
     "newCategory": "Новая категория",

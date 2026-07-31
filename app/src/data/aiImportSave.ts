@@ -9,10 +9,12 @@ import {
   mapFinancialDocDeduction,
   mapFuel,
   mapGenericDeduction,
+  mapLoanAgreement,
   mapMaintenance,
   mapPurchase,
   mapSettlement,
 } from '@/src/import/mapExtraction';
+import { resolveLoanAssetMatch } from '@/src/import/loanAssetMatch';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
@@ -367,6 +369,38 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         });
         contributionTotal += line.insert.amount;
       }
+    }
+  } else if (d.docType === 'loan_agreement') {
+    // ASSET PURCHASE & FINANCING (owner decision 2026-07-30, PRODUCT
+    // DECISION): the loan is created in Loan Center unconditionally —
+    // asset linking (truck/trailer/equipment.loan_id + financing='loan')
+    // only happens when assetName cleanly matches exactly one existing
+    // asset (resolveLoanAssetMatch() — never a forced picker, same "bonus,
+    // not a blocker" spirit as the rest of this docType).
+    const loanRow = mapLoanAgreement(d, userId);
+    const { data: insertedLoan, error: loanError } = await supabase
+      .from('loans')
+      .insert(loanRow)
+      .select('id')
+      .single();
+    if (loanError) throw loanError;
+
+    const [{ data: trucksData }, { data: equipmentData }] = await Promise.all([
+      supabase.from('trucks').select('id, unit_number, trailer_unit_number').eq('user_id', userId),
+      supabase.from('equipment').select('id, name').eq('user_id', userId),
+    ]);
+    const match = resolveLoanAssetMatch(
+      d.loanAgreement?.assetType,
+      d.loanAgreement?.assetName,
+      (trucksData ?? []) as { id: string; unit_number: string | null; trailer_unit_number: string | null }[],
+      (equipmentData ?? []) as { id: string; name: string }[]
+    );
+    if (match.kind === 'truck') {
+      await supabase.from('trucks').update({ financing: 'loan', loan_id: insertedLoan.id }).eq('id', match.truckId);
+    } else if (match.kind === 'trailer') {
+      await supabase.from('trucks').update({ trailer_financing: 'loan', trailer_loan_id: insertedLoan.id }).eq('id', match.truckId);
+    } else if (match.kind === 'equipment') {
+      await supabase.from('equipment').update({ financing: 'loan', loan_id: insertedLoan.id }).eq('id', match.equipmentId);
     }
   } else if (d.docType !== 'w2' && d.docType !== 'government_or_misc_income') {
     // Generic fallback (toll/loan/other) — legacy's actual saveImport()

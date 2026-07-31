@@ -4,6 +4,7 @@ import {
   mapFinancialDocDeduction,
   mapFuel,
   mapGenericDeduction,
+  mapLoanAgreement,
   mapMaintenance,
   mapPurchase,
   mapSettlement,
@@ -527,5 +528,50 @@ describe('mapCompliance (AI feature package, owner decision 2026-07-10 — compl
   it('leaves source_document_id null — filled in by the caller once the documents row exists', () => {
     const d: Extraction = { docType: 'medical_card', date: '2026-06-10', compliance: { dueDate: '2027-06-10' } };
     expect(mapCompliance(d, 'user-1')?.source_document_id).toBeNull();
+  });
+});
+
+// ASSET PURCHASE & FINANCING (owner decision 2026-07-30, PRODUCT DECISION)
+describe('mapLoanAgreement', () => {
+  it('maps a full loan_agreement extraction to a Loan Center row', () => {
+    const d: Extraction = {
+      docType: 'loan_agreement',
+      vendor: 'Daimler Truck Financial',
+      loanAgreement: {
+        lender: 'Daimler Truck Financial',
+        amount: 85000,
+        apr: 7.5,
+        payment: 1145,
+        frequency: 'monthly',
+        nextDue: '2026-08-01',
+        assetType: 'truck',
+        assetName: 'Unit 4471',
+      },
+    };
+    const row = mapLoanAgreement(d, 'user-1');
+    expect(row).toEqual({
+      user_id: 'user-1',
+      name: 'Unit 4471',
+      lender: 'Daimler Truck Financial',
+      original_amount: 85000,
+      balance: 85000,
+      payment: 1145,
+      apr: 7.5,
+      frequency: 'monthly',
+      next_due: '2026-08-01',
+    });
+  });
+
+  it('falls back to vendor, then lender, for the loan name when assetName is missing', () => {
+    const d: Extraction = { docType: 'loan_agreement', vendor: 'Some Bank', loanAgreement: { lender: 'Some Bank', amount: 5000 } };
+    expect(mapLoanAgreement(d, 'user-1').name).toBe('Some Bank');
+  });
+
+  it('handles a bare loan_agreement with no sub-object gracefully', () => {
+    const d: Extraction = { docType: 'loan_agreement' };
+    const row = mapLoanAgreement(d, 'user-1');
+    expect(row.user_id).toBe('user-1');
+    expect(row.name).toBe('Loan');
+    expect(row.lender).toBeNull();
   });
 });

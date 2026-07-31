@@ -26,11 +26,55 @@ export type Truck = {
   trailer_year: number | null;
   trailer_make: string | null;
   trailer_model: string | null;
+  // ASSET PURCHASE & FINANCING (docs/PENDING_SQL.md §36, owner decision
+  // 2026-07-30): the tractor's own purchase/financing info. loan_id links
+  // to a Loan Center row (either uploaded via ai-import docType
+  // "loan_agreement" or manually created) — loan payments keep flowing
+  // through the existing loans table/UI unchanged, this is just the
+  // asset-side pointer to "which loan financed this."
+  purchase_price: number | null;
+  purchase_date: string | null;
+  financing: 'cash' | 'loan' | null;
+  loan_id: string | null;
+  // Trailer's own purchase/financing — independent of the tractor's,
+  // since a trailer is routinely financed (or bought outright) on its own
+  // terms even when folded into this same row.
+  trailer_purchase_price: number | null;
+  trailer_purchase_date: string | null;
+  trailer_financing: 'cash' | 'loan' | null;
+  trailer_loan_id: string | null;
   created_at: string;
   updated_at: string;
 };
 export type TruckInsert = Partial<Omit<Truck, 'id' | 'created_at' | 'updated_at'>> & { user_id: string };
 export type TruckUpdate = Partial<Omit<Truck, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+// ASSET PURCHASE & FINANCING (docs/PENDING_SQL.md §36, owner decision
+// 2026-07-30) — "unlimited other equipment" beyond trucks/trailers
+// (generators, reefers, tools financed on their own note, etc.): a
+// first-class entity, not folded into deductions like the lighter-weight
+// Asset Register warranty tracking (src/stats/assetRegister.ts) — that
+// view is for booked EXPENSE line items with a warranty; this is for a
+// standalone physical asset with its own purchase price and financing.
+export type Equipment = {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string | null;
+  purchase_price: number | null;
+  purchase_date: string | null;
+  financing: 'cash' | 'loan' | null;
+  loan_id: string | null;
+  notes: string | null;
+  tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  created_at: string;
+  updated_at: string;
+};
+export type EquipmentInsert = Partial<Omit<Equipment, 'id' | 'created_at' | 'updated_at'>> & {
+  user_id: string;
+  name: string;
+};
+export type EquipmentUpdate = Partial<Omit<Equipment, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
 // docs/PENDING_SQL.md §13 (multi-truck fleet + drivers + payroll
 // auto-routing, PRODUCT DECISION 2026-07-09) — optional entity; an account
@@ -109,6 +153,12 @@ export type Settlement = {
   gross: number;
   net: number;
   miles: number;
+  // PER DIEM INTELLIGENCE (docs/PENDING_SQL.md §35, owner decision
+  // 2026-07-30): 0-7, editable on the settlement detail screen AND the
+  // import preview. Smart default at import/save time (mapSettlement()):
+  // 0 miles -> 0 days ("home week"), miles > 0 -> 7. Never recomputed from
+  // miles after the row exists — once a user edits it, their value sticks.
+  per_diem_days: number;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;

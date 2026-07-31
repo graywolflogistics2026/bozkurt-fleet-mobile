@@ -81,13 +81,28 @@ export function PrimaryButton({
   );
 }
 
-export function SecondaryButton({ title, onPress }: { title: string; onPress: () => void }) {
+export function SecondaryButton({
+  title,
+  onPress,
+  loading,
+  disabled,
+}: {
+  title: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+      disabled={disabled || loading}
+      style={({ pressed }) => [
+        styles.secondaryButton,
+        (disabled || loading) && styles.buttonDisabled,
+        pressed && styles.buttonPressed,
+      ]}
     >
-      <Text style={styles.secondaryButtonText}>{title}</Text>
+      {loading ? <ActivityIndicator color={colors.text} /> : <Text style={styles.secondaryButtonText}>{title}</Text>}
     </Pressable>
   );
 }

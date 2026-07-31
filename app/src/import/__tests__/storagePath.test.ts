@@ -78,4 +78,15 @@ describe('buildStoragePath', () => {
     const d: Extraction = { docType: 'fuel', date: '2026-06-15', vendor: 'Pilot' };
     expect(buildStoragePath('user-123', d, 'pdf')).toBe('user-123/2026-06/Fuel/2026-06-15_Fuel-Receipt_Pilot.pdf');
   });
+
+  // Documents-not-listing audit fix (owner decision 2026-07-30): a
+  // settlement's real date lives in settlement.weekEnding, not the
+  // (normally unset) top-level `date` field — using `date` directly filed
+  // every settlement under "Undated/Payroll" instead of its real month/
+  // week folder. Same resolver duplicateCheck.ts/aiImportSave.ts already
+  // use for doc_date, applied here too so all three can never disagree.
+  it('files a settlement under its week_ending month/week, not "Undated", even though top-level date is unset', () => {
+    const d: Extraction = { docType: 'settlement', settlement: { weekEnding: '2026-06-27' }, vendor: 'Prime Inc' };
+    expect(buildStoragePath('user-123', d, 'pdf')).toBe('user-123/2026-06/Payroll/Week-4/2026-06-27_Payroll-Settlement_Prime-Inc.pdf');
+  });
 });

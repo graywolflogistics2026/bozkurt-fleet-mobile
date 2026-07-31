@@ -3,7 +3,8 @@ import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useSettlements, useDeleteSettlement } from '@/src/data/settlements';
+import { useSettlements, useDeleteSettlement, useUpdateSettlement } from '@/src/data/settlements';
+import { clampPerDiemDays } from '@/src/tax/perDiem';
 import { useDeductions } from '@/src/data/deductions';
 import { useReimbursements } from '@/src/data/reimbursements';
 import { useLoads } from '@/src/data/loads';
@@ -21,6 +22,7 @@ import {
   ModalSheet,
   SheetTitle,
   SecondaryButton,
+  Field,
 } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import type { Settlement } from '@/src/types/db';
@@ -41,6 +43,7 @@ export default function Settlements() {
   const autoOpenedRef = useRef(false);
   const settlementsQuery = useSettlements();
   const deleteSettlement = useDeleteSettlement();
+  const updateSettlement = useUpdateSettlement();
   const dedQuery = useDeductions();
   const reimbQuery = useReimbursements();
   const loadsQuery = useLoads();
@@ -49,6 +52,30 @@ export default function Settlements() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<Settlement | null>(null);
+  // PER DIEM INTELLIGENCE (owner decision 2026-07-30): per_diem_days is
+  // editable right here on the detail sheet, not just at import time — a
+  // user correcting an old "home week" that got the wrong smart default.
+  const [perDiemDraft, setPerDiemDraft] = useState('');
+  const [savingPerDiem, setSavingPerDiem] = useState(false);
+
+  useEffect(() => {
+    setPerDiemDraft(selected ? String(selected.per_diem_days ?? 0) : '');
+  }, [selected]);
+
+  async function handleSavePerDiem() {
+    if (!selected) return;
+    const days = clampPerDiemDays(Number(perDiemDraft) || 0);
+    setSavingPerDiem(true);
+    try {
+      const updated = await updateSettlement.mutateAsync({ id: selected.id, values: { per_diem_days: days } });
+      setSelected(updated);
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('settlementsScreen.perDiemSaveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setSavingPerDiem(false);
+    }
+  }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -214,6 +241,21 @@ export default function Settlements() {
                 <View>
                   <MutedText>{t('settlementsScreen.milesLabelShort')}</MutedText>
                   <Text style={styles.detailAmount}>{number(selected.miles ?? 0)}</Text>
+                </View>
+              </View>
+
+              <View style={{ marginBottom: spacing.sm }}>
+                <MutedText>{t('settlementsScreen.perDiemDaysLabel')}</MutedText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <View style={{ width: 80 }}>
+                    <Field keyboardType="numeric" value={perDiemDraft} onChangeText={setPerDiemDraft} placeholder="0-7" />
+                  </View>
+                  <SecondaryButton
+                    title={t('common.save')}
+                    onPress={handleSavePerDiem}
+                    loading={savingPerDiem}
+                    disabled={perDiemDraft === String(selected.per_diem_days ?? 0)}
+                  />
                 </View>
               </View>
 

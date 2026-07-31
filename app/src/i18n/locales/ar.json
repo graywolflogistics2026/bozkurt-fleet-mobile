@@ -27,6 +27,7 @@
     "cashFlow": "التدفق النقدي",
     "maintenance": "الصيانة",
     "trucks": "الشاحنات",
+    "equipment": "المعدات",
     "drivers": "السائقون",
     "loans": "القروض",
     "taxEstimator": "حاسبة الضرائب",
@@ -306,6 +307,8 @@
     "documentDateLabel": "تاريخ المستند",
     "weekEndingLabel": "نهاية الأسبوع (مطلوب)",
     "weekEndingRequired": "نهاية الأسبوع مطلوبة — أدخل التاريخ من الـ settlement قبل الحفظ.",
+    "perDiemDaysLabel": "أيام الـ per diem (0-7)",
+    "perDiemDaysHint": "الافتراضي 0 لأسبوع منزلي (0 ميل)، وإلا 7 — عدّل القيمة إذا لم تكن صحيحة.",
     "dateConfirmTitle": "هل هذا التاريخ صحيح؟",
     "dateConfirmBody": "يبدو أن هذا المستند يعود لأكثر من 6 أشهر — تحقق من التاريخ أعلاه قبل الحفظ.",
     "settlementReplaceTitle": "⚠️ تم استيراد هذا الأسبوع من قبل",
@@ -485,6 +488,7 @@
     "cashFlow": "التدفق النقدي",
     "maintenance": "الصيانة",
     "trucks": "الشاحنات",
+    "equipment": "المعدات",
     "drivers": "السائقون",
     "loans": "القروض",
     "settings": "الإعدادات",
@@ -632,7 +636,44 @@
     "retireConfirmBody": "سيتم الاحتفاظ بكل سجلها — Settlements والوقود والصيانة — لكن سيتم إخفاؤها من القوائم لاحقًا. يمكنك إعادة تفعيلها في أي وقت.",
     "reactivate": "إعادة التفعيل",
     "showRetired": "إظهار الشاحنات المتوقفة",
-    "hideRetired": "إخفاء الشاحنات المتوقفة"
+    "hideRetired": "إخفاء الشاحنات المتوقفة",
+    "purchaseFinancingTitle": "الشراء والتمويل",
+    "trailerSectionTitle": "المقطورة",
+    "trailerUnitLabel": "رقم وحدة المقطورة"
+  },
+  "equipmentScreen": {
+    "title": "المعدات",
+    "subtitle": "مولدات، وحدات reefer، أدوات ممولة بشكل منفصل — عدد غير محدود من الإدخالات، لكل منها سعر شراء وتمويل خاص بها.",
+    "empty": "لا توجد معدات بعد.",
+    "addEquipment": "إضافة معدات",
+    "editEquipment": "تعديل المعدات",
+    "nameLabel": "الاسم",
+    "namePlaceholder": "مثال: Thermo King Reefer Unit",
+    "categoryLabel": "الفئة",
+    "categoryPlaceholder": "مثال: مولد، Reefer، أدوات",
+    "notesLabel": "ملاحظات",
+    "enterNameTitle": "أدخل اسمًا",
+    "saveFailedTitle": "فشل الحفظ",
+    "deleteConfirmTitle": "حذف هذه المعدات؟",
+    "deleteConfirmBody": "سيؤدي هذا إلى إزالتها من سجلاتك. أي قرض مرتبط في مركز القروض لن يتأثر."
+  },
+  "assetFinancing": {
+    "purchasePriceLabel": "سعر الشراء ($)",
+    "purchaseDateLabel": "تاريخ الشراء",
+    "financingLabel": "التمويل",
+    "cash": "نقدًا",
+    "loan": "قرض",
+    "pickExistingLoan": "ربط قرض موجود",
+    "enterLoanDetails": "+ إدخال تفاصيل القرض",
+    "lenderLabel": "الجهة المُقرضة",
+    "amountLabel": "مبلغ القرض ($)",
+    "aprLabel": "معدل الفائدة السنوي (%)",
+    "paymentLabel": "الدفعة ($)",
+    "frequencyLabel": "التكرار",
+    "createAndLink": "إنشاء وربط القرض",
+    "createLoanFailedTitle": "تعذّر إنشاء القرض",
+    "linkedLoanHint": "مرتبط — يتم تتبع الدفعات في مركز القروض.",
+    "unlink": "إلغاء الربط"
   },
   "drivers": {
     "title": "السائقون",
@@ -752,6 +793,10 @@
       "label": "بوليصة تأمين",
       "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
     },
+    "loan_agreement": {
+      "label": "اتفاقية قرض/تمويل",
+      "route": "مركز القروض · مرتبط بشاحنة/مقطورة/معدة"
+    },
     "other": {
       "label": "مستند",
       "route": "الخصومات"
@@ -794,6 +839,8 @@
     "grossLabelShort": "الإجمالي",
     "netLabelShort": "الصافي",
     "milesLabelShort": "الأميال",
+    "perDiemDaysLabel": "أيام الـ per diem (0-7)",
+    "perDiemSaveFailedTitle": "تعذّر حفظ أيام الـ per diem",
     "incomeLines": "بنود الدخل",
     "chargebacks": "الخصومات المحتجزة",
     "noChargebacks": "لا توجد خصومات محتجزة هذا الأسبوع.",
@@ -1023,6 +1070,7 @@
     "forecastTitle": "توقعات 30 يومًا",
     "bankBalanceLabel": "رصيد البنك ($)",
     "weeklyRevenueLabel": "الإيرادات الأسبوعية ($)",
+    "weeklyRevenueFromSettlements": "{{amount}}/أسبوع — من الـ settlements الخاصة بك (متوسط آخر 4 أسابيع)",
     "truckPaymentLabel": "قسط الشاحنة (أسبوعي)",
     "fuelWeeklyLabel": "الوقود (أسبوعي)",
     "insuranceMonthlyLabel": "التأمين (شهري)",
@@ -1098,7 +1146,15 @@
     "arrowHint": "استخدم الأسهم ▲▼ أو أعلى/أسفل لإعادة الترتيب.",
     "moveToTop": "الأعلى",
     "moveToBottom": "الأسفل",
-    "noSection": "—"
+    "noSection": "—",
+    "loadErrorFallback": "تعذّر تحميل التخطيط المحفوظ — يتم عرض التخطيط الافتراضي. لا يزال بإمكانك إعادة الترتيب والحفظ.",
+    "diagnosticsTitle": "التشخيص (اضغط ثلاث مرات على العنوان للإخفاء)",
+    "diagnosticsMode": "الوضع: {{mode}}",
+    "diagnosticsCards": "البطاقات: {{count}}",
+    "diagnosticsLayoutLength": "طول JSON للتخطيط: {{length}}",
+    "diagnosticsQueryStatus": "حالة الاستعلام: {{status}}",
+    "diagnosticsLastError": "آخر خطأ: {{error}}",
+    "diagnosticsNone": "لا يوجد"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",

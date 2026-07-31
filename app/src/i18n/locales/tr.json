@@ -27,6 +27,7 @@
     "cashFlow": "Nakit Akışı",
     "maintenance": "Bakım",
     "trucks": "Kamyonlar",
+    "equipment": "Ekipman",
     "drivers": "Sürücüler",
     "loans": "Krediler",
     "taxEstimator": "Vergi Tahmincisi",
@@ -306,6 +307,8 @@
     "documentDateLabel": "Belge Tarihi",
     "weekEndingLabel": "Hafta Sonu Tarihi (zorunlu)",
     "weekEndingRequired": "Hafta sonu tarihi zorunludur — kaydetmeden önce settlement üzerindeki tarihi girin.",
+    "perDiemDaysLabel": "Per Diem Günleri (0-7)",
+    "perDiemDaysHint": "0 millik bir ev haftası için varsayılan 0, aksi halde 7 — doğru değilse düzenleyin.",
     "dateConfirmTitle": "Bu tarih doğru mu?",
     "dateConfirmBody": "Bu belge 6 aydan daha eski görünüyor — kaydetmeden önce yukarıdaki tarihi kontrol edin.",
     "settlementReplaceTitle": "⚠️ Bu hafta zaten içe aktarılmış",
@@ -485,6 +488,7 @@
     "cashFlow": "Nakit Akışı",
     "maintenance": "Bakım",
     "trucks": "Kamyonlar",
+    "equipment": "Ekipman",
     "drivers": "Sürücüler",
     "loans": "Krediler",
     "settings": "Ayarlar",
@@ -632,7 +636,44 @@
     "retireConfirmBody": "Tüm geçmişi — settlement'lar, yakıt ve bakım — saklanacak, ancak listelerden gizlenecektir. İstediğiniz zaman yeniden etkinleştirebilirsiniz.",
     "reactivate": "Yeniden Etkinleştir",
     "showRetired": "Hizmet Dışı Kamyonları Göster",
-    "hideRetired": "Hizmet Dışı Kamyonları Gizle"
+    "hideRetired": "Hizmet Dışı Kamyonları Gizle",
+    "purchaseFinancingTitle": "Satın Alma ve Finansman",
+    "trailerSectionTitle": "Römork",
+    "trailerUnitLabel": "Römork Birim Numarası"
+  },
+  "equipmentScreen": {
+    "title": "Ekipman",
+    "subtitle": "Jeneratörler, reefer üniteler, kendi kredisiyle finanse edilen aletler — sınırsız kayıt, her biri kendi satın alma fiyatı ve finansmanıyla.",
+    "empty": "Henüz ekipman yok.",
+    "addEquipment": "Ekipman Ekle",
+    "editEquipment": "Ekipmanı Düzenle",
+    "nameLabel": "Ad",
+    "namePlaceholder": "örn. Thermo King Reefer Unit",
+    "categoryLabel": "Kategori",
+    "categoryPlaceholder": "örn. Jeneratör, Reefer, Aletler",
+    "notesLabel": "Notlar",
+    "enterNameTitle": "Bir ad girin",
+    "saveFailedTitle": "Kaydetme başarısız",
+    "deleteConfirmTitle": "Bu ekipman silinsin mi?",
+    "deleteConfirmBody": "Bu, kayıtlarınızdan kaldırılır. Kredi Merkezi'ndeki bağlı bir kredi etkilenmez."
+  },
+  "assetFinancing": {
+    "purchasePriceLabel": "Satın Alma Fiyatı ($)",
+    "purchaseDateLabel": "Satın Alma Tarihi",
+    "financingLabel": "Finansman",
+    "cash": "Nakit",
+    "loan": "Kredi",
+    "pickExistingLoan": "Mevcut bir krediyi bağla",
+    "enterLoanDetails": "+ Kredi bilgilerini gir",
+    "lenderLabel": "Kredi Veren",
+    "amountLabel": "Kredi Tutarı ($)",
+    "aprLabel": "Yıllık Faiz Oranı (%)",
+    "paymentLabel": "Ödeme ($)",
+    "frequencyLabel": "Sıklık",
+    "createAndLink": "Kredi Oluştur ve Bağla",
+    "createLoanFailedTitle": "Kredi oluşturulamadı",
+    "linkedLoanHint": "Bağlandı — ödemeler Kredi Merkezi'nde takip edilir.",
+    "unlink": "Bağlantıyı Kaldır"
   },
   "drivers": {
     "title": "Sürücüler",
@@ -752,6 +793,10 @@
       "label": "Sigorta Poliçesi",
       "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
     },
+    "loan_agreement": {
+      "label": "Kredi/Finansman Sözleşmesi",
+      "route": "Kredi Merkezi · bağlı truck/trailer/equipment"
+    },
     "other": {
       "label": "Belge",
       "route": "Kesintiler"
@@ -794,6 +839,8 @@
     "grossLabelShort": "Brüt",
     "netLabelShort": "Net",
     "milesLabelShort": "Mil",
+    "perDiemDaysLabel": "Per Diem Günleri (0-7)",
+    "perDiemSaveFailedTitle": "Per diem günleri kaydedilemedi",
     "incomeLines": "Gelir Kalemleri",
     "chargebacks": "Kesintiler",
     "noChargebacks": "Bu hafta kesinti yok.",
@@ -1023,6 +1070,7 @@
     "forecastTitle": "30 Günlük Tahmin",
     "bankBalanceLabel": "Banka Bakiyesi ($)",
     "weeklyRevenueLabel": "Haftalık Gelir ($)",
+    "weeklyRevenueFromSettlements": "{{amount}}/hf — settlement'lerinizden (son 4 haftanın ortalaması)",
     "truckPaymentLabel": "Kamyon Ödemesi (hf)",
     "fuelWeeklyLabel": "Yakıt (hf)",
     "insuranceMonthlyLabel": "Sigorta (ay)",
@@ -1098,7 +1146,15 @@
     "arrowHint": "Yeniden sıralamak için ▲▼ oklarını veya Üst/Alt'ı kullanın.",
     "moveToTop": "Üste",
     "moveToBottom": "Alta",
-    "noSection": "—"
+    "noSection": "—",
+    "loadErrorFallback": "Kayıtlı düzeniniz yüklenemedi — varsayılan gösteriliyor. Yine de yeniden sıralayıp kaydedebilirsiniz.",
+    "diagnosticsTitle": "Tanılama (gizlemek için başlığa üç kez dokunun)",
+    "diagnosticsMode": "Mod: {{mode}}",
+    "diagnosticsCards": "Kartlar: {{count}}",
+    "diagnosticsLayoutLength": "Düzen JSON uzunluğu: {{length}}",
+    "diagnosticsQueryStatus": "Sorgu durumu: {{status}}",
+    "diagnosticsLastError": "Son hata: {{error}}",
+    "diagnosticsNone": "yok"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

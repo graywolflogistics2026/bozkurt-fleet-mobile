@@ -109,6 +109,12 @@ export type ExtractedSettlement = {
   // reading of the ambiguous "SETTLEMENTS DATE:" (weekEnding, commonly
   // YY/MM/DD) is correct (dateGuard.ts resolveWeekEndingWithAnchor()).
   printDate?: string;
+  // PER DIEM INTELLIGENCE (owner decision 2026-07-30): smart-defaulted
+  // client-side from totalMiles (src/tax/perDiem.ts
+  // defaultPerDiemDaysForMiles()) once the extraction is received — the AI
+  // itself never sets this, it's not part of the ai-import schema.
+  // Editable on the import preview before save; 0-7.
+  perDiemDays?: number;
   carrier?: string;
   unit?: string;
   // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION):
@@ -240,6 +246,25 @@ export type ExtractedCompliance = {
   issueDate?: string;
 };
 
+// ASSET PURCHASE & FINANCING (owner decision 2026-07-30, PRODUCT
+// DECISION) — a loan/financing agreement document (truck, trailer, or
+// other equipment note). On save (aiImportSave.ts) creates a Loan Center
+// row from lender/amount/apr/payment/frequency/nextDue; assetType/
+// assetName are used ONLY to auto-match an existing truck/trailer/
+// equipment row to link the new loan to (never a forced picker — same
+// "less aggressive than truck/driver match" spirit as driverMatch.ts).
+export type LoanAgreementAssetType = 'truck' | 'trailer' | 'equipment' | 'other';
+export type ExtractedLoanAgreement = {
+  lender?: string;
+  amount?: number;
+  apr?: number;
+  payment?: number;
+  frequency?: string;
+  nextDue?: string;
+  assetType?: LoanAgreementAssetType;
+  assetName?: string;
+};
+
 export type DocType =
   | 'settlement'
   | 'fuel'
@@ -265,6 +290,7 @@ export type DocType =
   // routes to deductions as an expense) — same underlying topic, two
   // different document purposes, never conflated.
   | 'insurance_policy'
+  | 'loan_agreement'
   | 'other';
 
 export type Extraction = {
@@ -294,4 +320,5 @@ export type Extraction = {
   driverPayment?: ExtractedDriverPayment;
   financialDoc?: ExtractedFinancialDoc;
   compliance?: ExtractedCompliance;
+  loanAgreement?: ExtractedLoanAgreement;
 };

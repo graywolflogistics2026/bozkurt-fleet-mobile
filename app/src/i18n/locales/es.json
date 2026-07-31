@@ -27,6 +27,7 @@
     "cashFlow": "Flujo de Caja",
     "maintenance": "Mantenimiento",
     "trucks": "Camiones",
+    "equipment": "Equipo",
     "drivers": "Conductores",
     "loans": "Préstamos",
     "taxEstimator": "Estimador de Impuestos",
@@ -306,6 +307,8 @@
     "documentDateLabel": "Fecha del Documento",
     "weekEndingLabel": "Fecha de Cierre de Semana (obligatorio)",
     "weekEndingRequired": "La fecha de cierre de semana es obligatoria — ingrese la fecha del settlement antes de guardar.",
+    "perDiemDaysLabel": "Días de Per Diem (0-7)",
+    "perDiemDaysHint": "Por defecto 0 para una semana en casa (0 millas), 7 en caso contrario — edítelo si no es correcto.",
     "dateConfirmTitle": "¿Es correcta esta fecha?",
     "dateConfirmBody": "Este documento parece tener más de 6 meses — verifica la fecha de arriba antes de guardar.",
     "settlementReplaceTitle": "⚠️ Esta semana ya fue importada",
@@ -485,6 +488,7 @@
     "cashFlow": "Flujo de Caja",
     "maintenance": "Mantenimiento",
     "trucks": "Camiones",
+    "equipment": "Equipo",
     "drivers": "Conductores",
     "loans": "Préstamos",
     "settings": "Configuración",
@@ -632,7 +636,44 @@
     "retireConfirmBody": "Esto conserva todo su historial — settlements, combustible, mantenimiento — pero lo oculta de los selectores en adelante. Puede reactivarlo cuando quiera.",
     "reactivate": "Reactivar",
     "showRetired": "Mostrar camiones retirados",
-    "hideRetired": "Ocultar camiones retirados"
+    "hideRetired": "Ocultar camiones retirados",
+    "purchaseFinancingTitle": "Compra y Financiamiento",
+    "trailerSectionTitle": "Remolque",
+    "trailerUnitLabel": "Número de Unidad del Remolque"
+  },
+  "equipmentScreen": {
+    "title": "Equipo",
+    "subtitle": "Generadores, unidades reefer, herramientas financiadas por separado — entradas ilimitadas, cada una con su propio precio de compra y financiamiento.",
+    "empty": "Aún no hay equipo.",
+    "addEquipment": "Agregar Equipo",
+    "editEquipment": "Editar Equipo",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "ej. Thermo King Reefer Unit",
+    "categoryLabel": "Categoría",
+    "categoryPlaceholder": "ej. Generador, Reefer, Herramientas",
+    "notesLabel": "Notas",
+    "enterNameTitle": "Ingrese un nombre",
+    "saveFailedTitle": "Error al guardar",
+    "deleteConfirmTitle": "¿Eliminar este equipo?",
+    "deleteConfirmBody": "Esto lo elimina de sus registros. Cualquier préstamo vinculado en el Centro de Préstamos no se ve afectado."
+  },
+  "assetFinancing": {
+    "purchasePriceLabel": "Precio de Compra ($)",
+    "purchaseDateLabel": "Fecha de Compra",
+    "financingLabel": "Financiamiento",
+    "cash": "Efectivo",
+    "loan": "Préstamo",
+    "pickExistingLoan": "Vincular un préstamo existente",
+    "enterLoanDetails": "+ Ingresar detalles del préstamo",
+    "lenderLabel": "Prestamista",
+    "amountLabel": "Monto del Préstamo ($)",
+    "aprLabel": "TAE (%)",
+    "paymentLabel": "Pago ($)",
+    "frequencyLabel": "Frecuencia",
+    "createAndLink": "Crear y Vincular Préstamo",
+    "createLoanFailedTitle": "No se pudo crear el préstamo",
+    "linkedLoanHint": "Vinculado — los pagos se rastrean en el Centro de Préstamos.",
+    "unlink": "Desvincular"
   },
   "drivers": {
     "title": "Conductores",
@@ -752,6 +793,10 @@
       "label": "Póliza de Seguro",
       "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
     },
+    "loan_agreement": {
+      "label": "Contrato de Financiamiento/Préstamo",
+      "route": "Centro de Préstamos · camión/remolque/equipo vinculado"
+    },
     "other": {
       "label": "Documento",
       "route": "Deducciones"
@@ -794,6 +839,8 @@
     "grossLabelShort": "Bruto",
     "netLabelShort": "Neto",
     "milesLabelShort": "Millas",
+    "perDiemDaysLabel": "Días de Per Diem (0-7)",
+    "perDiemSaveFailedTitle": "No se pudieron guardar los días de per diem",
     "incomeLines": "Líneas de Ingreso",
     "chargebacks": "Cargos Retenidos",
     "noChargebacks": "Sin cargos retenidos esta semana.",
@@ -1023,6 +1070,7 @@
     "forecastTitle": "Pronóstico a 30 Días",
     "bankBalanceLabel": "Saldo Bancario ($)",
     "weeklyRevenueLabel": "Ingreso Semanal ($)",
+    "weeklyRevenueFromSettlements": "{{amount}}/sem — de tus settlements (promedio de las últimas 4 semanas)",
     "truckPaymentLabel": "Pago del Camión (sem)",
     "fuelWeeklyLabel": "Combustible (sem)",
     "insuranceMonthlyLabel": "Seguro (mes)",
@@ -1098,7 +1146,15 @@
     "arrowHint": "Use las flechas ▲▼ o Arriba/Abajo para reordenar.",
     "moveToTop": "Arriba",
     "moveToBottom": "Abajo",
-    "noSection": "—"
+    "noSection": "—",
+    "loadErrorFallback": "No se pudo cargar tu diseño guardado — mostrando el predeterminado. Aún puedes reordenar y guardar.",
+    "diagnosticsTitle": "Diagnóstico (toque triple en el título para ocultar)",
+    "diagnosticsMode": "Modo: {{mode}}",
+    "diagnosticsCards": "Tarjetas: {{count}}",
+    "diagnosticsLayoutLength": "Longitud del JSON del diseño: {{length}}",
+    "diagnosticsQueryStatus": "Estado de la consulta: {{status}}",
+    "diagnosticsLastError": "Último error: {{error}}",
+    "diagnosticsNone": "ninguno"
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",

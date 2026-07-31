@@ -23,6 +23,7 @@ const MENU_ITEMS = [
   { href: '/(tabs)/more/cash-flow', labelKey: 'more.cashFlow', emoji: '🏦' },
   { href: '/(tabs)/more/maintenance', labelKey: 'more.maintenance', emoji: '🔧' },
   { href: '/(tabs)/more/trucks', labelKey: 'more.trucks', emoji: '🚚' },
+  { href: '/(tabs)/more/equipment', labelKey: 'more.equipment', emoji: '🛠️' },
   { href: '/(tabs)/more/drivers', labelKey: 'more.drivers', emoji: '🧑‍✈️' },
   { href: '/(tabs)/more/loans', labelKey: 'more.loans', emoji: '📄' },
   { href: '/(tabs)/more/credit-cards', labelKey: 'more.creditCards', emoji: '💳' },

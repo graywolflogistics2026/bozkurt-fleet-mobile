@@ -8,6 +8,7 @@ import {
   toDbServiceType,
 } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
+import { clampPerDiemDays, defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import type {
   ComplianceItemInsert,
   ComplianceType,
@@ -102,6 +103,7 @@ export function mapSettlement(
 ): SettlementMapping {
   const s = d.settlement ?? {};
 
+  const miles = num(s.totalMiles);
   const settlement: SettlementInsert = {
     user_id: userId,
     truck_id: truckId,
@@ -109,7 +111,14 @@ export function mapSettlement(
     week_ending: s.weekEnding || d.date || '',
     gross: num(s.grossRevenue),
     net: num(s.netPay),
-    miles: num(s.totalMiles),
+    miles,
+    // PER DIEM INTELLIGENCE (owner decision 2026-07-30): the import
+    // preview computes+lets the user edit s.perDiemDays before save (see
+    // withPerDiemDays()/the preview screen) — when it's genuinely absent
+    // (a non-import save path, e.g. legacy-backup import, or a test that
+    // doesn't set it), fall back to the same miles-based smart default so
+    // this mapper is safe to call on its own.
+    per_diem_days: clampPerDiemDays(s.perDiemDays ?? defaultPerDiemDaysForMiles(miles)),
   };
 
   // pickup_date/delivery_date (docs/PENDING_SQL.md §8) feed the per-diem
@@ -511,6 +520,30 @@ export function mapCompliance(d: Extraction, userId: string): ComplianceItemInse
     label: c.label || COMPLIANCE_DEFAULT_LABEL[docType],
     due_date: dueDate,
     source_document_id: null, // filled in by the caller once the documents row exists
+  };
+}
+
+// ---------- loan/financing agreement (ASSET PURCHASE & FINANCING, owner decision 2026-07-30, PRODUCT DECISION) ----------
+// Creates a Loan Center row (the SAME `loans` table/UI every other loan
+// already uses — payments keep flowing through the existing principal/
+// interest logic unchanged, this just gets the loan ON FILE from the
+// financing document instead of requiring manual entry). Asset linking
+// (which truck/trailer/equipment.loan_id gets set) is the caller's job —
+// see loanAssetMatch.ts resolveLoanAssetMatch() — since it needs the
+// user's current trucks/equipment lists, which this pure mapper doesn't
+// have access to.
+export function mapLoanAgreement(d: Extraction, userId: string): LoanInsert {
+  const l = d.loanAgreement ?? {};
+  return {
+    user_id: userId,
+    name: l.assetName || d.vendor || l.lender || 'Loan',
+    lender: l.lender ?? d.vendor ?? null,
+    original_amount: num(l.amount ?? d.totalAmount) || null,
+    balance: num(l.amount ?? d.totalAmount) || null,
+    payment: l.payment ? num(l.payment) : null,
+    apr: l.apr ? num(l.apr) : null,
+    frequency: l.frequency ?? null,
+    next_due: l.nextDue || null,
   };
 }
 

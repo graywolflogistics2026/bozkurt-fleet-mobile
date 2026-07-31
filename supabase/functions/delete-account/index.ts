@@ -79,6 +79,7 @@ const TABLES_IN_DELETION_ORDER = [
   "maintenance_intervals",
   "truck_health_config",
   "trucks",
+  "equipment",
   "driver_payments",
   "household_income",
   "household_members",

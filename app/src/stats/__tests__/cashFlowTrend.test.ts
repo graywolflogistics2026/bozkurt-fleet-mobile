@@ -12,6 +12,7 @@ function sett(overrides: Partial<Settlement>): Settlement {
     gross: 3000,
     net: 2000,
     miles: 2000,
+    per_diem_days: 7,
     tags: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
