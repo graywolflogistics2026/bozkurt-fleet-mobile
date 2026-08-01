@@ -1100,12 +1100,19 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "whatsapp": "WhatsApp",
+      "sms": "Mensajes",
       "driverpulse": "Driver Pulse",
+      "copy": "Copiar Imagen",
       "more": "Más"
     },
     "imageCopiedTitle": "Imagen copiada",
     "imageCopiedBody": "Tu tarjeta de marca se copió al portapapeles y se abrió {{app}} — pégala en tu publicación. Leyenda: \"{{caption}}\"",
-    "captionTemplate": "{{weekSummary}} — con seguimiento de {{brand}}"
+    "copiedTitle": "Copiado",
+    "copiedBody": "La imagen de la tarjeta y la leyenda se copiaron a tu portapapeles — pégalas en cualquier app.",
+    "captionTemplate": "{{weekSummary}} — con seguimiento de {{brand}}",
+    "weekPickerLabel": "Semana",
+    "share": "Compartir"
   },
   "dashboardCustomize": {
     "title": "Personalizar Panel",

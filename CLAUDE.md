@@ -988,3 +988,37 @@
   title, so the document category is never lost, just demoted from
   "the only thing you see" to "context under the actual name." The
   viewer's close X came for free from item B's ModalSheet upgrade.
+- UX MEGA-PASS item F — SHARE WEEKLY PROFIT (owner decision 2026-07-31):
+  the entire capture/destinations/clipboard pipeline was extracted out of
+  `app/(tabs)/more/share-profit.tsx` into `app/src/components/shareCard/`
+  — `shareDestinations.ts` (the destination list), `useShareCapture.ts`
+  (the ViewShot-capture + clipboard/Linking/system-share-sheet logic,
+  content-agnostic — caption and pre-translated alert strings are passed
+  in per call, not closed over), `useShareMessages.ts` (builds those
+  strings once via `t()`), `ShareDestinationsRow.tsx` (the button row),
+  and `ShareCardModal.tsx` (a `ModalSheet`-based wrapper bundling all of
+  the above for a screen that just wants a share button, not a whole
+  screen). This is what "same share-card pipeline" means below. (1)
+  WhatsApp, SMS/Messages, and Copy Image added to
+  `shareDestinations.ts`'s `SHARE_DESTINATIONS` — Copy Image is a pure
+  clipboard action (`dest.key === 'copy'`, no `scheme`, never calls
+  `Linking.openURL`) rather than a literal "Copy Link," since this app
+  has no hosted image/link URL to copy (CLAUDE.md invariant #22, no
+  external-data features/backend) — copying the branded image + caption
+  straight to the clipboard is the one coherent thing "copy" can mean
+  here. (2) The metric-toggle row's on-screen card is now keyed
+  (`key={cardKey}`, derived from the exact inputs that determine its
+  content: included metrics + selected week) so the ViewShot child View
+  fully re-mounts on every toggle/week change, rather than relying on a
+  third-party native view wrapper's own diffing to catch a state update —
+  a defensive fix for the reported "toggling MPG doesn't change the
+  rendered card" symptom. (3) A week picker (horizontal pill row, only
+  shown when 2+ settlements exist) lets any past week be shared, not just
+  the latest — `selected` (the settlement being shared) replaces the old
+  hardcoded `latest` throughout. (4) AI Coach (`ceo-mode.tsx`) and
+  Scorecard (`scorecard.tsx`) both gained a "📤 Share" header link that
+  opens a `ShareCardModal` with content appropriate to each screen — CEO
+  Mode's business score + this week's revenue/profit, Scorecard's score/
+  grade + revenue-per-mile/net-per-mile — through the identical
+  destinations row and capture pipeline Share Weekly Profit uses, per the
+  directive's "same share-card pipeline, appropriate content."

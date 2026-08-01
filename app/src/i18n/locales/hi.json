@@ -1100,12 +1100,19 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "whatsapp": "WhatsApp",
+      "sms": "Messages",
       "driverpulse": "Driver Pulse",
+      "copy": "Copy Image",
       "more": "More"
     },
     "imageCopiedTitle": "Image copied",
     "imageCopiedBody": "Your branded card image was copied to the clipboard and {{app}} was opened — paste it into your post. Caption: \"{{caption}}\"",
-    "captionTemplate": "{{weekSummary}} — tracked with {{brand}}"
+    "copiedTitle": "Copied",
+    "copiedBody": "The branded card image and caption were copied to your clipboard — paste them into any app.",
+    "captionTemplate": "{{weekSummary}} — tracked with {{brand}}",
+    "weekPickerLabel": "Week",
+    "share": "Share"
   },
   "dashboardCustomize": {
     "title": "Customize Dashboard",

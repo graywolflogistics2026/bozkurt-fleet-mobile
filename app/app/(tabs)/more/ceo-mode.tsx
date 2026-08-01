@@ -31,7 +31,9 @@ import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Field, PrimaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
-import { colors, spacing, typography } from '@/src/theme';
+import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
+import { colors, radii, spacing, typography } from '@/src/theme';
+import { BRAND_NAME } from '@/src/brand';
 import i18n from '@/src/i18n';
 
 const RECOMMENDATION_ICON: Record<Recommendation['type'], string> = {
@@ -117,6 +119,7 @@ export default function CeoMode() {
   const [goalInput, setGoalInput] = useState('');
   const [goalSaving, setGoalSaving] = useState(false);
   const [briefing, setBriefing] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scoreInfoOpen, setScoreInfoOpen] = useState(false);
@@ -299,8 +302,19 @@ export default function CeoMode() {
         <View style={{ marginBottom: spacing.md }}>
           <BrandWordmark fontSize={16} showTagline />
         </View>
-        <ScreenTitle>{t('ceoMode.title')}</ScreenTitle>
-        <MutedText>{t('ceoMode.subtitle')}</MutedText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <ScreenTitle>{t('ceoMode.title')}</ScreenTitle>
+            <MutedText>{t('ceoMode.subtitle')}</MutedText>
+          </View>
+          {!loadingData && (
+            <Pressable onPress={() => setShareOpen(true)} hitSlop={8} style={{ marginTop: spacing.md }}>
+              <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
+                📤 {t('shareProfit.share')}
+              </Text>
+            </Pressable>
+          )}
+        </View>
 
         {loadingData ? (
           <Card>
@@ -444,9 +458,76 @@ export default function CeoMode() {
           </>
         )}
       </ScrollView>
+
+      {!loadingData && (
+        <ShareCardModal
+          visible={shareOpen}
+          onClose={() => setShareOpen(false)}
+          title={t('ceoMode.title')}
+          caption={t('shareProfit.captionTemplate', { weekSummary: t('ceoMode.businessScoreTitle'), brand: BRAND_NAME })}
+          renderCard={() => (
+            <View style={shareStyles.shareCard}>
+              {profileQuery.data?.company_name?.trim() && (
+                <Text style={shareStyles.shareCompanyName}>{profileQuery.data.company_name.trim()}</Text>
+              )}
+              <Text style={shareStyles.shareCardTitle}>{t('ceoMode.businessScoreTitle')}</Text>
+              <Text style={{ color: colors.text, fontSize: 48, fontWeight: '800' }}>{businessScore.score}</Text>
+              <View style={shareStyles.shareKpiRow}>
+                <View style={{ alignItems: 'center' }}>
+                  <MutedText>{t('ceoMode.thisWeekRevenue')}</MutedText>
+                  <Text style={{ color: colors.green, fontWeight: '700' }}>{latestWeek ? money(latestWeek.gross) : '—'}</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <MutedText>{t('ceoMode.thisWeekProfit')}</MutedText>
+                  <Text style={{ color: colors.green, fontWeight: '700' }}>{latestWeek ? money(latestWeek.net) : '—'}</Text>
+                </View>
+              </View>
+              <View style={shareStyles.shareBrandFooter}>
+                <BrandWordmark fontSize={16} />
+              </View>
+            </View>
+          )}
+        />
+      )}
     </Screen>
   );
 }
+
+const shareStyles = {
+  shareCard: {
+    width: 320,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    alignItems: 'center' as const,
+  },
+  shareCompanyName: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: '700' as const,
+    marginBottom: spacing.xs,
+  },
+  shareCardTitle: {
+    color: colors.muted,
+    fontSize: typography.size.sm,
+    marginBottom: spacing.md,
+  },
+  shareKpiRow: {
+    flexDirection: 'row' as const,
+    gap: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  shareBrandFooter: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    width: '100%' as const,
+    alignItems: 'center' as const,
+  },
+};
 
 const styles = {
   sectionTitle: {

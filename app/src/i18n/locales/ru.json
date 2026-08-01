@@ -1100,12 +1100,19 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "whatsapp": "WhatsApp",
+      "sms": "Сообщения",
       "driverpulse": "Driver Pulse",
+      "copy": "Копировать изображение",
       "more": "Ещё"
     },
     "imageCopiedTitle": "Изображение скопировано",
     "imageCopiedBody": "Ваша фирменная карточка скопирована в буфер обмена, и {{app}} открыт — вставьте её в публикацию. Подпись: «{{caption}}»",
-    "captionTemplate": "{{weekSummary}} — отслеживается в {{brand}}"
+    "copiedTitle": "Скопировано",
+    "copiedBody": "Фирменная карточка и подпись скопированы в буфер обмена — вставьте их в любое приложение.",
+    "captionTemplate": "{{weekSummary}} — отслеживается в {{brand}}",
+    "weekPickerLabel": "Неделя",
+    "share": "Поделиться"
   },
   "dashboardCustomize": {
     "title": "Настроить панель",

@@ -1100,12 +1100,19 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "whatsapp": "WhatsApp",
+      "sms": "Mesajlar",
       "driverpulse": "Driver Pulse",
+      "copy": "Görseli Kopyala",
       "more": "Diğer"
     },
     "imageCopiedTitle": "Görsel kopyalandı",
     "imageCopiedBody": "Markalı kartınız panoya kopyalandı ve {{app}} açıldı — gönderinize yapıştırın. Açıklama: \"{{caption}}\"",
-    "captionTemplate": "{{weekSummary}} — {{brand}} ile takip edildi"
+    "copiedTitle": "Kopyalandı",
+    "copiedBody": "Markalı kart görseli ve açıklama panoya kopyalandı — herhangi bir uygulamaya yapıştırabilirsiniz.",
+    "captionTemplate": "{{weekSummary}} — {{brand}} ile takip edildi",
+    "weekPickerLabel": "Hafta",
+    "share": "Paylaş"
   },
   "dashboardCustomize": {
     "title": "Paneli Özelleştir",

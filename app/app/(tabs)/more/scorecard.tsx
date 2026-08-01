@@ -1,7 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/src/context/AuthContext';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useSettlements } from '@/src/data/settlements';
@@ -10,8 +11,11 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
 import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
 import { useFormatters } from '@/src/i18n/format';
+import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
+import { BrandWordmark } from '@/src/components/BrandWordmark';
+import { BRAND_NAME } from '@/src/brand';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
-import { colors, spacing, typography } from '@/src/theme';
+import { colors, radii, spacing, typography } from '@/src/theme';
 
 function gradeColor(grade: ScorecardGrade): string {
   if (grade === 'excellent' || grade === 'good') return colors.green;
@@ -28,6 +32,7 @@ function scoreColor(score: number): string {
 export default function Scorecard() {
   const { t } = useTranslation();
   const { money, number } = useFormatters();
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
   const statsQuery = useFleetStats(null);
   const fuelQuery = useFuelPurchases();
@@ -35,6 +40,8 @@ export default function Scorecard() {
   const { activeTruck } = useActiveTruck();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const companyName = profile?.company_name?.trim() || null;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -62,8 +69,19 @@ export default function Scorecard() {
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
-        <ScreenTitle>{t('scorecard.title')}</ScreenTitle>
-        <MutedText>{t('scorecard.subtitle')}</MutedText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <ScreenTitle>{t('scorecard.title')}</ScreenTitle>
+            <MutedText>{t('scorecard.subtitle')}</MutedText>
+          </View>
+          {scorecard && (
+            <Pressable onPress={() => setShareOpen(true)} hitSlop={8} style={{ marginTop: spacing.md }}>
+              <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
+                📤 {t('shareProfit.share')}
+              </Text>
+            </Pressable>
+          )}
+        </View>
 
         {loading ? (
           <Card>
@@ -148,6 +166,39 @@ export default function Scorecard() {
           </>
         )}
       </ScrollView>
+
+      {scorecard && (
+        <ShareCardModal
+          visible={shareOpen}
+          onClose={() => setShareOpen(false)}
+          title={t('scorecard.title')}
+          caption={t('shareProfit.captionTemplate', { weekSummary: t('scorecard.title'), brand: BRAND_NAME })}
+          renderCard={() => (
+            <View style={styles.shareCard}>
+              {companyName && <Text style={styles.shareCompanyName}>{companyName}</Text>}
+              <Text style={styles.shareCardTitle}>{t('scorecard.title')}</Text>
+              <Text style={{ color: scoreColor(scorecard.score), fontSize: 48, fontWeight: '800' }}>{scorecard.score}</Text>
+              <MutedText>{t('scorecard.outOf100')}</MutedText>
+              <Text style={{ color: gradeColor(scorecard.grade), fontWeight: '700', fontSize: typography.size.lg, marginTop: spacing.xs }}>
+                {t(`scorecard.grades.${scorecard.grade}`)}
+              </Text>
+              <View style={styles.shareKpiRow}>
+                <View style={{ alignItems: 'center' }}>
+                  <MutedText>{t('scorecard.revenuePerMile')}</MutedText>
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>{money(scorecard.revenuePerMile, { maximumFractionDigits: 2 })}</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <MutedText>{t('scorecard.netPerMile')}</MutedText>
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>{money(scorecard.netPerMile, { maximumFractionDigits: 2 })}</Text>
+                </View>
+              </View>
+              <View style={styles.shareBrandFooter}>
+                <BrandWordmark fontSize={16} />
+              </View>
+            </View>
+          )}
+        />
+      )}
     </Screen>
   );
 }
@@ -159,6 +210,39 @@ const styles = {
     fontWeight: '700' as const,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
+  },
+  shareCard: {
+    width: 320,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.lg,
+    alignItems: 'center' as const,
+  },
+  shareCompanyName: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: '700' as const,
+    marginBottom: spacing.xs,
+  },
+  shareCardTitle: {
+    color: colors.muted,
+    fontSize: typography.size.sm,
+    marginBottom: spacing.md,
+  },
+  shareKpiRow: {
+    flexDirection: 'row' as const,
+    gap: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  shareBrandFooter: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    width: '100%' as const,
+    alignItems: 'center' as const,
   },
   row: {
     flexDirection: 'row' as const,

@@ -1100,12 +1100,19 @@
       "facebook": "Facebook",
       "twitter": "X",
       "linkedin": "LinkedIn",
+      "whatsapp": "WhatsApp",
+      "sms": "الرسائل",
       "driverpulse": "Driver Pulse",
+      "copy": "نسخ الصورة",
       "more": "المزيد"
     },
     "imageCopiedTitle": "تم نسخ الصورة",
     "imageCopiedBody": "تم نسخ بطاقتك المميزة إلى الحافظة وفتح {{app}} — الصقها في منشورك. التعليق: \"{{caption}}\"",
-    "captionTemplate": "{{weekSummary}} — بمتابعة {{brand}}"
+    "copiedTitle": "تم النسخ",
+    "copiedBody": "تم نسخ صورة البطاقة والتعليق إلى الحافظة — الصقهما في أي تطبيق.",
+    "captionTemplate": "{{weekSummary}} — بمتابعة {{brand}}",
+    "weekPickerLabel": "الأسبوع",
+    "share": "مشاركة"
   },
   "dashboardCustomize": {
     "title": "تخصيص لوحة التحكم",
