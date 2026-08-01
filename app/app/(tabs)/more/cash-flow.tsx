@@ -326,21 +326,6 @@ export default function CashFlow() {
           </View>
         </Card>
 
-        <Text style={styles.sectionTitle}>{t('cashFlowScreen.timelineTitle')}</Text>
-        <Card>
-          {forecast.weeks.map((w, i) => (
-            <View key={w.week} style={[styles.timelineRow, i > 0 && styles.rowBorder]}>
-              <Text style={{ color: colors.text, flex: 1 }}>{t('cashFlowScreen.weekN', { n: w.week })}</Text>
-              <Text style={{ color: colors.green, flex: 1, textAlign: 'right' }}>+{money(w.revenue)}</Text>
-              <Text style={{ color: colors.red, flex: 1, textAlign: 'right' }}>-{money(w.expenses)}</Text>
-              <Text style={{ color: w.net >= 0 ? colors.green : colors.red, flex: 1, textAlign: 'right' }}>{money(w.net)}</Text>
-              <Text style={{ color: w.balance >= 0 ? colors.accent : colors.red, flex: 1, textAlign: 'right', fontWeight: '700' }}>
-                {money(w.balance)}
-              </Text>
-            </View>
-          ))}
-        </Card>
-
         {loading ? (
           <Card>
             <MutedText>{t('common.loading')}</MutedText>

@@ -49,8 +49,20 @@ export function TappableCard({ onPress, children }: { onPress: () => void; child
   );
 }
 
-export function MutedText({ children, style }: { children: React.ReactNode; style?: TextStyle }) {
-  return <Text style={[styles.muted, style]}>{children}</Text>;
+export function MutedText({
+  children,
+  style,
+  numberOfLines,
+}: {
+  children: React.ReactNode;
+  style?: TextStyle;
+  numberOfLines?: number;
+}) {
+  return (
+    <Text style={[styles.muted, style]} numberOfLines={numberOfLines}>
+      {children}
+    </Text>
+  );
 }
 
 export function LegalFootnote({ children }: { children?: React.ReactNode }) {

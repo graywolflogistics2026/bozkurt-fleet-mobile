@@ -105,7 +105,24 @@
       "profitScore": "Kâr Puanı",
       "vsLastWeek": "geçen haftaya göre",
       "vsLastWeekAmount": "{{delta}} geçen haftaya göre",
-      "newThisWeek": "Bu hafta yeni"
+      "vsPreviousPeriodAmount": "{{delta}} önceki döneme göre",
+      "newThisWeek": "Bu hafta yeni",
+      "periodTabs": {
+        "thisWeek": "Bu Hafta",
+        "lastWeek": "Geçen Hafta",
+        "1M": "1A",
+        "3M": "3A",
+        "6M": "6A",
+        "yearly": "Yıllık"
+      },
+      "eyebrowByPeriod": {
+        "thisWeek": "Bu haftanın kârı",
+        "lastWeek": "Geçen haftanın kârı",
+        "1M": "Son 30 günün kârı",
+        "3M": "Son 90 günün kârı",
+        "6M": "Son 6 ayın kârı",
+        "yearly": "Bu yılın kârı"
+      }
     },
     "overview": {
       "expenses": "Giderler"

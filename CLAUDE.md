@@ -1022,3 +1022,61 @@
   grade + revenue-per-mile/net-per-mile — through the identical
   destinations row and capture pipeline Share Weekly Profit uses, per the
   directive's "same share-card pipeline, appropriate content."
+- UX MEGA-PASS item G — CHARTS & HOME LAYOUT (owner decision 2026-07-31):
+  (1) the Hero Card gets period tabs — This Week / Last Week / 1M / 3M /
+  6M / Yearly — driving the number, delta, AND chart together via the new
+  `app/src/stats/heroPeriod.ts`'s `calcHeroPeriod()`. thisWeek/lastWeek
+  stay the pre-existing straight two-settlement-week comparison (weekly
+  is this app's only revenue granularity, CLAUDE.md invariant #9);
+  1M/3M/6M/yearly sum every week's net within a rolling N-day window
+  (30/90/180/365) and compare it to the immediately PRECEDING equal-
+  length window — a rolling comparison, not the unrelated "YTD Per Diem
+  Days" stat's calendar-year convention, so every non-weekly period's
+  delta is defined the same consistent way. The "vs last week" $-delta
+  copy only shows for the two weekly periods; every other period shows a
+  new generic "vs previous period" string
+  (`dashboard.hero.vsPreviousPeriodAmount`). (2) The Dashboard's Overview
+  chart (`RevenueExpenseChart`, the `revenueExpenseTrend` card) was the
+  one remaining thick-opaque-bar holdout — restyled to the same thin-line
+  `buildPolylinePoints()`/`buildAreaPoints()` primitive (src/stats/
+  chartHelpers.ts) Hero/Cash-Flow already use (CLAUDE.md's CHART LANGUAGE
+  CONSISTENCY invariant), two lines (revenue green, expenses red) sharing
+  one Y-axis domain via `buildPolylinePoints`'s `domain` param — plotting
+  them independently would have made a false visual comparison. (3) Cash
+  Flow's 4-week balance timeline section (the `cashFlowScreen.
+  timelineTitle` Card, `forecast.weeks` row list) was removed from
+  `app/(tabs)/more/cash-flow.tsx` per the directive — the underlying
+  `weeks` field stays computed in the forecast stats module (unused by
+  any screen now, not deleted, in case a future screen wants it) rather
+  than being torn out of the pure calculation. (4) Recent Loads' route
+  text (`{{order}} · {{origin}} → {{destination}}`) had no `flex`/
+  `numberOfLines` constraint sharing a row with the revenue amount — a
+  long route could overflow past the card edge or squeeze the amount
+  column on narrower phones (and, less visibly, tablets with more cards
+  per row). Fixed with `flex:1`+`numberOfLines={1}` on the route text and
+  `flexShrink:0` on the amount — `MutedText` (`src/components/ui.tsx`)
+  gained a `numberOfLines` passthrough prop to make this possible, since
+  it didn't forward one before. (5) AUDIT FINDING — the Dashboard's "Net
+  to Owner" card was reading `stats.netRevenue`: the sum of each
+  settlement's own `net` field, i.e. net PAY (gross minus carrier-
+  WITHHELD deductions only) — it silently ignored every out-of-pocket
+  business expense (fuel, maintenance, store purchases — any deduction
+  with `source != 'settlement'`), overstating what the owner actually
+  nets by exactly that amount. Verified against `src/stats/profitLoss.ts`
+  (Operating P&L)'s `buildProfitLoss()`, whose own header comment proves
+  the correct formula: `netIncome = grossRevenue - totalDeductions(ALL)`
+  is mathematically identical to `netRevenue - outOfPocketDeductions`
+  ("gross - withheld already equals settlement net by definition").
+  Fixed: the card and its sparkline (previously `weeklyNetTrend`'s bare
+  per-week `.net`, same bug at per-week granularity) now both derive from
+  `fullWeeklyRevenueExpenseTrend`'s `revenue - expenses`, which already
+  nets ALL deductions correctly (it's the same source the Hero Card and
+  the newly-restyled Overview chart use). NOT fixed in this pass, flagged
+  as a known follow-up: the identical "settlement net, not true profit"
+  pattern also feeds `buildWeeklyTrend()`'s `.net` field, which is what
+  Scorecard's weekly trend, CEO Mode's "This Week Profit" card, and Share
+  Weekly Profit's "Profit" metric all display — each reads as "profit"
+  but is actually settlement net pay, the same conceptual gap this audit
+  found and fixed for the Dashboard specifically. Fixing those three
+  needs its own pass (they're a different card/screen from the one this
+  audit item named) rather than a scope-creeping side effect here.

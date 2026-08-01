@@ -105,7 +105,24 @@
       "profitScore": "درجة الربح",
       "vsLastWeek": "مقارنة بالأسبوع الماضي",
       "vsLastWeekAmount": "{{delta}} مقارنة بالأسبوع الماضي",
-      "newThisWeek": "جديد هذا الأسبوع"
+      "vsPreviousPeriodAmount": "{{delta}} مقارنة بالفترة السابقة",
+      "newThisWeek": "جديد هذا الأسبوع",
+      "periodTabs": {
+        "thisWeek": "هذا الأسبوع",
+        "lastWeek": "الأسبوع الماضي",
+        "1M": "شهر",
+        "3M": "3 أشهر",
+        "6M": "6 أشهر",
+        "yearly": "سنوي"
+      },
+      "eyebrowByPeriod": {
+        "thisWeek": "ربح هذا الأسبوع",
+        "lastWeek": "ربح الأسبوع الماضي",
+        "1M": "ربح آخر 30 يومًا",
+        "3M": "ربح آخر 90 يومًا",
+        "6M": "ربح آخر 6 أشهر",
+        "yearly": "ربح هذا العام"
+      }
     },
     "overview": {
       "expenses": "المصروفات"

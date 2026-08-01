@@ -105,7 +105,24 @@
       "profitScore": "Puntaje de Ganancia",
       "vsLastWeek": "vs. semana pasada",
       "vsLastWeekAmount": "{{delta}} vs. la semana pasada",
-      "newThisWeek": "Nuevo esta semana"
+      "vsPreviousPeriodAmount": "{{delta}} vs. el período anterior",
+      "newThisWeek": "Nuevo esta semana",
+      "periodTabs": {
+        "thisWeek": "Esta Semana",
+        "lastWeek": "Semana Pasada",
+        "1M": "1M",
+        "3M": "3M",
+        "6M": "6M",
+        "yearly": "Anual"
+      },
+      "eyebrowByPeriod": {
+        "thisWeek": "Ganancia de esta semana",
+        "lastWeek": "Ganancia de la semana pasada",
+        "1M": "Ganancia de los últimos 30 días",
+        "3M": "Ganancia de los últimos 90 días",
+        "6M": "Ganancia de los últimos 6 meses",
+        "yearly": "Ganancia de este año"
+      }
     },
     "overview": {
       "expenses": "Gastos"

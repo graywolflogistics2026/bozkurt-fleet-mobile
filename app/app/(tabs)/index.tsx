@@ -42,6 +42,7 @@ import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrend, buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
 import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
+import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { calcFleetHealthScore, type ChipStatus } from '@/src/stats/fleetHealthScore';
 import { filterTrendByRange, TREND_RANGES, type TrendRange } from '@/src/stats/trendRange';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
@@ -92,38 +93,39 @@ const CHART_HEIGHT = 110;
 // src/stats/cashFlowTrend.ts's buildWeeklyRevenueExpenseTrend()). Hand-
 // rolled overlay bars, same dependency-free approach as Cash Flow's weekly
 // trend chart (no chart library installed).
+// UX MEGA-PASS item G(2) (owner decision 2026-07-31): restyled from thick
+// opaque bars to the same thin-line "Apple Stocks style" every other
+// trend chart app-wide uses (CLAUDE.md's CHART LANGUAGE CONSISTENCY
+// invariant) — buildPolylinePoints/buildAreaPoints (src/stats/
+// chartHelpers.ts), the same shared primitive Hero/Cash-Flow already use.
+// Two thin lines share one axis (revenue green, expenses red); only
+// revenue gets the subtle translucent fill underneath, matching the Hero
+// Card's single-metric fill treatment — filling both would just muddy the
+// overlap.
 function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
   const { t } = useTranslation();
   const { money: moneyFmt, date } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const max = Math.max(1, ...points.map((p) => Math.max(p.revenue, p.expenses)));
+  const [width, setWidth] = useState(0);
+  const height = CHART_HEIGHT;
+  const revenueValues = points.map((p) => p.revenue);
+  const expenseValues = points.map((p) => p.expenses);
+  const max = Math.max(1, ...revenueValues, ...expenseValues);
+  const domain: [number, number] = [0, max];
+  const revenuePolyline = buildPolylinePoints(revenueValues, width, height, domain);
+  const expensePolyline = buildPolylinePoints(expenseValues, width, height, domain);
+  const revenueArea = width > 0 && revenueValues.length >= 2 ? buildAreaPoints(revenuePolyline, width, height) : '';
+
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 4 }}>
-        {points.map((p) => (
-          <View key={p.weekEnding} style={{ flex: 1, alignItems: 'center' }}>
-            <View style={{ width: '100%', height: CHART_HEIGHT, justifyContent: 'flex-end' }}>
-              <View
-                style={{
-                  width: '100%',
-                  height: Math.max(2, (p.revenue / max) * CHART_HEIGHT),
-                  backgroundColor: 'rgba(34,197,94,0.35)',
-                  borderRadius: 2,
-                  position: 'absolute',
-                  bottom: 0,
-                }}
-              />
-              <View
-                style={{
-                  width: '100%',
-                  height: Math.max(2, (p.expenses / max) * CHART_HEIGHT),
-                  backgroundColor: colors.red,
-                  borderRadius: 2,
-                }}
-              />
-            </View>
-          </View>
-        ))}
+      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
+        {points.length >= 2 && width > 0 && (
+          <Svg width={width} height={height}>
+            <Polygon points={revenueArea} fill="rgba(34,197,94,0.15)" stroke="none" />
+            <Polyline points={revenuePolyline} fill="none" stroke={colors.green} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+            <Polyline points={expensePolyline} fill="none" stroke={colors.red} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+          </Svg>
+        )}
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
         <MutedText>{points[0] ? date(points[0].weekEnding) : ''}</MutedText>
@@ -131,13 +133,13 @@ function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }
       </View>
       <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: 'rgba(34,197,94,0.35)' }} />
+          <View style={{ width: 10, height: 2, borderRadius: 1, backgroundColor: colors.green }} />
           <MutedText>
             {t('dashboard.chartRevenueLegend', { amount: money(Math.max(...points.map((p) => p.revenue))) })}
           </MutedText>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.red }} />
+          <View style={{ width: 10, height: 2, borderRadius: 1, backgroundColor: colors.red }} />
           <MutedText>{t('dashboard.chartExpensesLegend')}</MutedText>
         </View>
       </View>
@@ -388,10 +390,12 @@ function HeroChange({
   change,
   deltaAmount,
   goodDirection,
+  isWeekPeriod = true,
 }: {
   change: WeekOverWeekChange;
   deltaAmount: number | null;
   goodDirection: 'up' | 'down';
+  isWeekPeriod?: boolean;
 }) {
   const { t } = useTranslation();
   const { money: moneyFmt } = useFormatters();
@@ -402,7 +406,9 @@ function HeroChange({
   const color = change.direction === 'flat' ? 'rgba(240,240,245,0.65)' : isGood ? colors.green : colors.red;
   return (
     <Text style={[styles.heroChange, { color }]}>
-      {t('dashboard.hero.vsLastWeekAmount', { delta: formattedDelta(deltaAmount, moneyFmt) })}
+      {t(isWeekPeriod ? 'dashboard.hero.vsLastWeekAmount' : 'dashboard.hero.vsPreviousPeriodAmount', {
+        delta: formattedDelta(deltaAmount, moneyFmt),
+      })}
     </Text>
   );
 }
@@ -440,7 +446,47 @@ function HeroAreaChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
 // sees first. Reuses calcScorecard() (src/stats/scorecard.ts, legacy
 // rScore() port) for the Profit Score bar rather than inventing a second
 // business-health formula.
+// UX MEGA-PASS item G(1) (owner decision 2026-07-31): period tabs above
+// the eyebrow — This Week/Last Week/1M/3M/6M/Yearly — driving the number,
+// delta, and chart all together via src/stats/heroPeriod.ts's
+// calcHeroPeriod(). thisWeek/lastWeek keep the "vs last week" $-delta
+// copy (a real week-to-week comparison); every other period uses the
+// generic "vs previous period" copy since the comparison is a rolling
+// window, not literally a week.
+function HeroPeriodTabs({ period, onChange }: { period: HeroPeriod; onChange: (p: HeroPeriod) => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
+      {HERO_PERIODS.map((p) => {
+        const selected = p === period;
+        return (
+          <Pressable
+            key={p}
+            onPress={() => onChange(p)}
+            style={{
+              paddingVertical: 4,
+              paddingHorizontal: 10,
+              borderRadius: radii.sm,
+              borderWidth: 1,
+              borderColor: selected ? 'rgba(240,240,245,0.9)' : 'rgba(240,240,245,0.25)',
+              backgroundColor: selected ? 'rgba(240,240,245,0.15)' : 'transparent',
+              marginEnd: spacing.xs,
+              marginBottom: spacing.xs,
+            }}
+          >
+            <Text style={{ color: 'rgba(240,240,245,0.9)', fontSize: typography.size.xs, fontWeight: '700' }}>
+              {t(`dashboard.hero.periodTabs.${p}`)}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function HeroCard({
+  period,
+  onPeriodChange,
   weekNetProfit,
   netProfitChange,
   netProfitDeltaAmount,
@@ -448,6 +494,8 @@ function HeroCard({
   profitScore,
   onPress,
 }: {
+  period: HeroPeriod;
+  onPeriodChange: (p: HeroPeriod) => void;
   weekNetProfit: number;
   netProfitChange: WeekOverWeekChange;
   netProfitDeltaAmount: number | null;
@@ -459,13 +507,16 @@ function HeroCard({
   const { money: moneyFmt } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const animatedNetProfit = useAnimatedNumber(weekNetProfit);
+  const isWeekPeriod = period === 'thisWeek' || period === 'lastWeek';
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
-      <LinearGradient colors={['#0f1a3d', colors.bg]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
-        <Text style={styles.heroEyebrow}>{t('dashboard.hero.eyebrow')}</Text>
-        <Text style={[styles.heroBigValue, weekNetProfit < 0 && { color: colors.red }]}>{money(animatedNetProfit)}</Text>
-        <HeroChange change={netProfitChange} deltaAmount={netProfitDeltaAmount} goodDirection="up" />
+    <View>
+      <HeroPeriodTabs period={period} onChange={onPeriodChange} />
+      <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
+        <LinearGradient colors={['#0f1a3d', colors.bg]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
+          <Text style={styles.heroEyebrow}>{t(`dashboard.hero.eyebrowByPeriod.${period}`)}</Text>
+          <Text style={[styles.heroBigValue, weekNetProfit < 0 && { color: colors.red }]}>{money(animatedNetProfit)}</Text>
+          <HeroChange change={netProfitChange} deltaAmount={netProfitDeltaAmount} goodDirection="up" isWeekPeriod={isWeekPeriod} />
         {profitScore != null && (
           <View style={{ marginTop: spacing.lg }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
@@ -477,9 +528,10 @@ function HeroCard({
             </View>
           </View>
         )}
-        <HeroAreaChart points={chartPoints} />
-      </LinearGradient>
-    </Pressable>
+          <HeroAreaChart points={chartPoints} />
+        </LinearGradient>
+      </Pressable>
+    </View>
   );
 }
 
@@ -1040,9 +1092,22 @@ export default function Dashboard() {
   );
   const revenueExpenseTrend = useMemo(() => fullWeeklyRevenueExpenseTrend.slice(-8), [fullWeeklyRevenueExpenseTrend]);
 
-  // Zone 2's Net to Owner sparkline.
   const weeklyNetTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
-  const netSparkValues = useMemo(() => weeklyNetTrend.slice(-8).map((p) => p.net), [weeklyNetTrend]);
+  // UX MEGA-PASS item G(5) audit fix (owner decision 2026-07-31): this
+  // used to read weeklyNetTrend's bare settlement `.net` (net PAY —
+  // gross minus carrier-WITHHELD deductions only), which silently ignores
+  // out-of-pocket business expenses (fuel, maintenance, store purchases —
+  // any deduction with source != 'settlement'). Net to Owner now sources
+  // from fullWeeklyRevenueExpenseTrend, whose `revenue - expenses` already
+  // nets ALL deductions (withheld + out-of-pocket) — the same formula
+  // src/stats/profitLoss.ts's buildProfitLoss() (Operating P&L) uses,
+  // verified equivalent by that module's own header comment: "gross -
+  // withheld already equals settlement net by definition, so netting ALL
+  // deductions against gross produces the same operating net income."
+  const netSparkValues = useMemo(
+    () => fullWeeklyRevenueExpenseTrend.slice(-8).map((p) => p.revenue - p.expenses),
+    [fullWeeklyRevenueExpenseTrend]
+  );
 
   // Zone 4's per-mile trend arrows — current week vs. the prior 4-week
   // average (src/stats/cpmTrend.ts).
@@ -1069,6 +1134,15 @@ export default function Dashboard() {
   const heroNetProfitChange = calcWeekOverWeekChange(heroWeekNetProfit, lastWeekNetProfit);
   // Session 9e-B2: Hero Card's "vs last week" line is a $ delta, not a %.
   const heroNetProfitDeltaAmount = lastWeekNetProfit == null ? null : heroWeekNetProfit - lastWeekNetProfit;
+  // UX MEGA-PASS item G(1): period tabs drive the Hero Card's number/
+  // delta/chart together via calcHeroPeriod() — reads the FULL (unsliced)
+  // weekly trend so 1M/3M/6M/yearly can window arbitrarily far back, not
+  // just the last 8 weeks revenueExpenseTrend is capped to.
+  const [heroPeriod, setHeroPeriod] = useState<HeroPeriod>('thisWeek');
+  const heroPeriodResult = useMemo(
+    () => calcHeroPeriod(fullWeeklyRevenueExpenseTrend, heroPeriod),
+    [fullWeeklyRevenueExpenseTrend, heroPeriod]
+  );
   const fuelCost = useMemo(
     () => (fuelQuery.data ?? []).reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
     [fuelQuery.data]
@@ -1272,16 +1346,24 @@ export default function Dashboard() {
         <StatValue label={label} value={stats ? money(stats.totalDeductions) : '—'} valueColor={colors.red} />
       </TappableCard>
     ),
-    netToOwner: (label) => (
-      <TappableCard key="netToOwner" onPress={() => goToCard('netToOwner')}>
-        <StatValue
-          label={label}
-          value={stats ? money(stats.netRevenue) : '—'}
-          valueColor={stats && stats.netRevenue < 0 ? colors.red : colors.green}
-        />
-        <Sparkline values={netSparkValues} />
-      </TappableCard>
-    ),
+    netToOwner: (label) => {
+      // UX MEGA-PASS item G(5) audit fix: was stats.netRevenue (settlement
+      // net PAY only — see the netSparkValues comment above for the full
+      // finding). True net-to-owner = grossRevenue - totalDeductions
+      // (ALL deductions, withheld + out-of-pocket), matching
+      // src/stats/profitLoss.ts's Operating P&L netIncome formula exactly.
+      const trueNetToOwner = stats ? stats.grossRevenue - stats.totalDeductions : null;
+      return (
+        <TappableCard key="netToOwner" onPress={() => goToCard('netToOwner')}>
+          <StatValue
+            label={label}
+            value={trueNetToOwner != null ? money(trueNetToOwner) : '—'}
+            valueColor={trueNetToOwner != null && trueNetToOwner < 0 ? colors.red : colors.green}
+          />
+          <Sparkline values={netSparkValues} />
+        </TappableCard>
+      );
+    },
     milesDriven: (label) => (
       <TappableCard key="milesDriven" onPress={() => goToCard('milesDriven')}>
         <StatValue label={label} value={stats ? number(stats.totalMiles) : '—'} />
@@ -1503,11 +1585,11 @@ export default function Dashboard() {
           <View>
             {label !== t('dashboard.recentLoadsTitle') && <MutedText style={{ marginBottom: spacing.xs }}>{label}</MutedText>}
             {recentLoads.map((l) => (
-              <View key={l.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-                <MutedText>
+              <View key={l.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+                <MutedText style={{ flex: 1, marginEnd: spacing.sm }} numberOfLines={1}>
                   {l.order_number ?? '—'} · {l.origin ?? '—'} → {l.destination ?? '—'}
                 </MutedText>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(l.revenue)}</Text>
+                <Text style={{ color: colors.text, fontWeight: '600', flexShrink: 0 }}>{money(l.revenue)}</Text>
               </View>
             ))}
           </View>
@@ -1605,10 +1687,12 @@ export default function Dashboard() {
         </View>
 
         <HeroCard
-          weekNetProfit={heroWeekNetProfit}
-          netProfitChange={heroNetProfitChange}
-          netProfitDeltaAmount={heroNetProfitDeltaAmount}
-          chartPoints={revenueExpenseTrend}
+          period={heroPeriod}
+          onPeriodChange={setHeroPeriod}
+          weekNetProfit={heroPeriodResult.netProfit}
+          netProfitChange={heroPeriodResult.change}
+          netProfitDeltaAmount={heroPeriodResult.deltaAmount}
+          chartPoints={heroPeriodResult.chartPoints}
           profitScore={profitScore}
           onPress={() => router.push('/(tabs)/more/cash-flow')}
         />

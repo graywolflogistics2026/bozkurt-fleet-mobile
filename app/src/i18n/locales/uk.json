@@ -105,7 +105,24 @@
       "profitScore": "Profit Score",
       "vsLastWeek": "vs last week",
       "vsLastWeekAmount": "{{delta}} vs last week",
-      "newThisWeek": "New this week"
+      "vsPreviousPeriodAmount": "{{delta}} vs previous period",
+      "newThisWeek": "New this week",
+      "periodTabs": {
+        "thisWeek": "This Week",
+        "lastWeek": "Last Week",
+        "1M": "1M",
+        "3M": "3M",
+        "6M": "6M",
+        "yearly": "Yearly"
+      },
+      "eyebrowByPeriod": {
+        "thisWeek": "This week's profit",
+        "lastWeek": "Last week's profit",
+        "1M": "Last 30 days' profit",
+        "3M": "Last 90 days' profit",
+        "6M": "Last 6 months' profit",
+        "yearly": "This year's profit"
+      }
     },
     "overview": {
       "expenses": "Expenses"
