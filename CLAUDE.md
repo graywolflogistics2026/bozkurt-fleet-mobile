@@ -971,3 +971,20 @@
   row, so this reuses 100% existing plumbing rather than adding a new
   per-docType route table), **Import Another** (unchanged, calls the
   existing `reset()`), and **Done** (routes to `/(tabs)`, Home).
+- UX MEGA-PASS item E — DOCUMENT TITLES (owner decision 2026-07-31,
+  device evidence: a document's title/label must reflect the actual
+  store or document subject, e.g. "Walmart," not the raw docType label
+  "Store/Amazon Purchase"). `documents.parsed_json` always holds the FULL
+  raw `Extraction` regardless of docType (D3 audit trail,
+  `aiImportSave.ts`), and `Extraction.vendor` is populated by the AI-
+  import prompt for any document that names a vendor/shop on its face —
+  not just purchase receipts. `app/src/data/documentTitle.ts`'s pure
+  `deriveDocumentTitle(parsedJson, fallbackLabel)` reads that vendor and
+  falls back to the docType's own `docTypeMeta(...).label` when none was
+  extracted (unchanged behavior for docTypes that never carry a vendor,
+  e.g. a bank statement). Wired into both the Documents list row and the
+  viewer's `SheetTitle` (`app/(tabs)/more/documents.tsx`) — the docType
+  label is kept as a secondary muted line whenever it differs from the
+  title, so the document category is never lost, just demoted from
+  "the only thing you see" to "context under the actual name." The
+  viewer's close X came for free from item B's ModalSheet upgrade.

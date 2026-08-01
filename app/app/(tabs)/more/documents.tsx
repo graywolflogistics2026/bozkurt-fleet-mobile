@@ -18,6 +18,7 @@ import {
   type LinkedRecordRef,
 } from '@/src/data/documentsFilter';
 import { getSignedDocumentUrl, shareDocumentFile } from '@/src/data/documentViewer';
+import { deriveDocumentTitle } from '@/src/data/documentTitle';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { DOC_TYPE_ICON, useDocTypeMeta } from '@/src/import/docTypes';
 import { useFormatters } from '@/src/i18n/format';
@@ -238,13 +239,15 @@ export default function DocumentsArchive() {
         ) : (
           rows.map((doc) => {
             const meta = docTypeMeta((doc.doc_type as DocType) ?? 'other');
+            const title = deriveDocumentTitle(doc.parsed_json, meta.label);
             return (
               <TappableCard key={doc.id} onPress={() => setSelected(doc)}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={{ fontSize: 24, marginEnd: spacing.sm }}>{DOC_TYPE_ICON[(doc.doc_type as DocType) ?? 'other'] ?? '📄'}</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>{meta.label}</Text>
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{title}</Text>
                     <MutedText>
+                      {title !== meta.label ? `${meta.label} · ` : ''}
                       {doc.doc_date ? date(doc.doc_date) : date(doc.imported_at)}
                       {doc.filename ? ` · ${doc.filename}` : ''}
                     </MutedText>
@@ -258,9 +261,13 @@ export default function DocumentsArchive() {
       </ScrollView>
 
       <ModalSheet visible={!!selected} onClose={closeViewer}>
-        {selected && (
+        {selected && (() => {
+          const selectedMeta = docTypeMeta((selected.doc_type as DocType) ?? 'other');
+          const selectedTitle = deriveDocumentTitle(selected.parsed_json, selectedMeta.label);
+          return (
             <>
-              <SheetTitle>{docTypeMeta((selected.doc_type as DocType) ?? 'other').label}</SheetTitle>
+              <SheetTitle>{selectedTitle}</SheetTitle>
+              {selectedTitle !== selectedMeta.label && <MutedText>{selectedMeta.label}</MutedText>}
               <MutedText>{selected.doc_date ? date(selected.doc_date) : date(selected.imported_at)}</MutedText>
               {selected.filename && <MutedText>{selected.filename}</MutedText>}
               {selected.amount != null && (
@@ -318,9 +325,10 @@ export default function DocumentsArchive() {
 
               {sharing && <MutedText style={{ marginTop: spacing.sm }}>{t('documentsArchive.preparingShare')}</MutedText>}
 
-            <SecondaryButton title={t('common.cancel')} onPress={closeViewer} />
-          </>
-        )}
+              <SecondaryButton title={t('common.cancel')} onPress={closeViewer} />
+            </>
+          );
+        })()}
       </ModalSheet>
     </Screen>
   );
