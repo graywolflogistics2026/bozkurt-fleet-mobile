@@ -1027,7 +1027,9 @@
     "diagnosticsLastError": "Last error: {{error}}",
     "diagnosticsNone": "none",
     "screenCrashed": "{{screenName}} crashed",
-    "syncingHint": "Syncing your saved layout…"
+    "syncingHint": "Syncing your saved layout…",
+    "simpleSubtitle": "Show, hide, or reorder your dashboard cards.",
+    "advancedEditor": "Advanced editor (drag, labels, sections) →"
   },
   "categoryPicker": {
     "newCategory": "New Category",

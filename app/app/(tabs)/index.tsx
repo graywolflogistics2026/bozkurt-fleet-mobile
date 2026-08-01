@@ -57,6 +57,7 @@ import {
 } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
+import { SimpleCustomizeDashboardModal } from '@/src/components/SimpleCustomizeDashboardModal';
 import { CircularGauge } from '@/src/components/CircularGauge';
 import { DonutChart, type DonutSlice } from '@/src/components/DonutChart';
 import { useFormatters } from '@/src/i18n/format';
@@ -937,6 +938,14 @@ export default function Dashboard() {
     const route = DASHBOARD_CARD_ROUTES[id];
     if (route) router.push(route as Href);
   };
+  // UX MEGA-PASS item C: the "Customize" header link now opens the plain,
+  // zero-external-lib fallback modal directly (see
+  // SimpleCustomizeDashboardModal.tsx) instead of navigating to the
+  // separate dashboard-customize route — that route's own crash history
+  // is exactly why this link can no longer depend on it being reachable.
+  // The fancy drag/label/section screen is still one tap away from
+  // inside this modal ("Advanced editor").
+  const [simpleCustomizeOpen, setSimpleCustomizeOpen] = useState(false);
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [reasonableSalaryInput, setReasonableSalaryInput] = useState('');
@@ -1588,7 +1597,7 @@ export default function Dashboard() {
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <DashboardGreeting name={heroFirstName} />
-          <Pressable onPress={() => router.push('/(tabs)/more/dashboard-customize')} hitSlop={8} style={{ marginTop: spacing.md }}>
+          <Pressable onPress={() => setSimpleCustomizeOpen(true)} hitSlop={8} style={{ marginTop: spacing.md }}>
             <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
               {t('dashboard.customize')}
             </Text>
@@ -1655,6 +1664,8 @@ export default function Dashboard() {
           <MutedText style={{ marginBottom: spacing.sm }}>• {t('dashboard.fleetHealth.infoCashFlow')}</MutedText>
           <LegalFootnote />
         </ModalSheet>
+
+        <SimpleCustomizeDashboardModal visible={simpleCustomizeOpen} onClose={() => setSimpleCustomizeOpen(false)} />
 
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>

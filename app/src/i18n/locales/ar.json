@@ -1128,7 +1128,9 @@
     "diagnosticsLastError": "آخر خطأ: {{error}}",
     "diagnosticsNone": "لا يوجد",
     "screenCrashed": "تعطلت شاشة {{screenName}}",
-    "syncingHint": "جارٍ مزامنة التخطيط المحفوظ…"
+    "syncingHint": "جارٍ مزامنة التخطيط المحفوظ…",
+    "simpleSubtitle": "إظهار أو إخفاء أو إعادة ترتيب بطاقات لوحة معلوماتك.",
+    "advancedEditor": "المحرر المتقدم (سحب، تسميات، أقسام) ←"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",

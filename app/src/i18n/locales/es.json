@@ -1128,7 +1128,9 @@
     "diagnosticsLastError": "Último error: {{error}}",
     "diagnosticsNone": "ninguno",
     "screenCrashed": "{{screenName}} falló",
-    "syncingHint": "Sincronizando tu diseño guardado…"
+    "syncingHint": "Sincronizando tu diseño guardado…",
+    "simpleSubtitle": "Muestra, oculta o reordena las tarjetas de tu panel.",
+    "advancedEditor": "Editor avanzado (arrastrar, etiquetas, secciones) →"
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",

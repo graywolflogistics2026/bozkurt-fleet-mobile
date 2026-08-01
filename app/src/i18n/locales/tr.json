@@ -1128,7 +1128,9 @@
     "diagnosticsLastError": "Son hata: {{error}}",
     "diagnosticsNone": "yok",
     "screenCrashed": "{{screenName}} çöktü",
-    "syncingHint": "Kayıtlı düzeniniz senkronize ediliyor…"
+    "syncingHint": "Kayıtlı düzeniniz senkronize ediliyor…",
+    "simpleSubtitle": "Panel kartlarınızı gösterin, gizleyin veya yeniden sıralayın.",
+    "advancedEditor": "Gelişmiş düzenleyici (sürükleme, etiketler, bölümler) →"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

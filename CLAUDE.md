@@ -923,3 +923,30 @@
   `app/(tabs)/_layout.tsx`) that routes straight to Home, same "always a
   way out" principle. Any FUTURE sheet just uses `ModalSheet` — the
   close X, scroll, and keyboard-avoidance come for free.
+- UX MEGA-PASS item C — CUSTOMIZE DASHBOARD PLAIN FALLBACK (owner decision
+  2026-07-31, device evidence: "still broken; also unreachable from the
+  'Good morning' header link" — the 4th device report on this screen
+  despite three prior rounds of hardening `app/(tabs)/more/
+  dashboard-customize.tsx` itself: crash-on-mount fix, synchronous-first-
+  paint fix, error boundary, on-screen diagnostics). Rather than a 5th
+  attempt at hardening a screen that depends on a native drag module and
+  lives behind its own route — either one a fresh place for a device-
+  specific failure to hide — the Dashboard's "Customize" header link no
+  longer navigates to that route at all. It now opens
+  `app/src/components/SimpleCustomizeDashboardModal.tsx` directly, in
+  place, via `ModalSheet` (so it gets item B's close X/scroll/keyboard-
+  avoidance for free): pure local component state, zero external
+  libraries (no `react-native-draggable-flatlist`, no reanimated/gesture-
+  handler dependency at all), show/hide toggles + ▲▼ reorder only — the
+  same `useDashboardLayout`/`useUpdateDashboardLayout` hooks and
+  `DashboardCardConfig`/`mergeDashboardLayout` types as the fancy screen,
+  just a dumber, bulletproof renderer on top. This is now the PRIMARY
+  path. The fancy screen (drag, per-card labels, section assignment) is
+  demoted to a secondary, opt-in "Advanced editor" button inside this
+  modal — still fully intact, still reachable, just no longer the only
+  door in. `dashboardCustomize.simpleSubtitle`/`advancedEditor` are the
+  two new i18n keys this required (all 7 locales, hi/uk as untranslated
+  English copies per invariant #11). Any future "this screen might not
+  mount" risk elsewhere in the app should default to this same pattern —
+  a plain, dependency-free primary path with the risky/fancy version kept
+  as an opt-in upgrade, not the reverse.

@@ -1128,7 +1128,9 @@
     "diagnosticsLastError": "Последняя ошибка: {{error}}",
     "diagnosticsNone": "нет",
     "screenCrashed": "Сбой экрана «{{screenName}}»",
-    "syncingHint": "Синхронизация сохранённого макета…"
+    "syncingHint": "Синхронизация сохранённого макета…",
+    "simpleSubtitle": "Показывайте, скрывайте или меняйте порядок карточек панели.",
+    "advancedEditor": "Расширенный редактор (перетаскивание, подписи, разделы) →"
   },
   "categoryPicker": {
     "newCategory": "Новая категория",
