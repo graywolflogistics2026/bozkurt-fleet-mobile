@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTolls, useInsertToll, useDeleteToll } from '@/src/data/tolls';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -174,19 +175,24 @@ export default function Tolls() {
           </View>
         </Card>
 
-        <Card>
-          {tollsQuery.isLoading ? (
-            <MutedText>{t('common.loading')}</MutedText>
-          ) : rows.length === 0 ? (
-            <MutedText>{t('tolls.empty')}</MutedText>
-          ) : (
-            rows.map((x, i) => (
-              <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <TollRow x={x} networkLabel={networkLabel(x.network)} onDelete={() => handleDelete(x)} />
-              </View>
-            ))
+        <MonthGroupedList
+          screenKey="tolls"
+          rows={rows}
+          getDate={(x) => x.toll_date}
+          getAmount={(x) => x.amount ?? 0}
+          loading={tollsQuery.isLoading}
+          loadingLabel={t('common.loading')}
+          emptyLabel={t('tolls.empty')}
+          renderRows={(monthRows) => (
+            <Card>
+              {monthRows.map((x, i) => (
+                <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
+                  <TollRow x={x} networkLabel={networkLabel(x.network)} onDelete={() => handleDelete(x)} />
+                </View>
+              ))}
+            </Card>
           )}
-        </Card>
+        />
       </ScrollView>
 
       <ModalSheet visible={adding} onClose={() => setAdding(false)}>

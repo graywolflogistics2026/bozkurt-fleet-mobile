@@ -7,6 +7,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
 import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
 import { defaultTaxDeductible } from '@/src/import/category';
@@ -74,6 +75,7 @@ function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; o
 }
 
 function DedSection({
+  screenKey,
   title,
   subtitle,
   rows,
@@ -82,6 +84,7 @@ function DedSection({
   onEdit,
   onDelete,
 }: {
+  screenKey: string;
   title: string;
   subtitle: string;
   rows: Deduction[];
@@ -98,23 +101,29 @@ function DedSection({
         <Text style={styles.sectionTitle}>{title}</Text>
         <MutedText>{subtitle}</MutedText>
       </View>
-      <Card>
-        {rows.length === 0 ? (
-          <MutedText>{emptyLabel}</MutedText>
-        ) : (
-          <>
-            {rows.map((x, i) => (
+      {rows.length > 0 && (
+        <View style={[styles.row, styles.totalRow, { marginBottom: spacing.xs }]}>
+          <Text style={styles.totalLabel}>{t('deductions.total')}</Text>
+          <Text style={styles.totalAmount}>{money(total)}</Text>
+        </View>
+      )}
+      <MonthGroupedList
+        screenKey={screenKey}
+        rows={rows}
+        getDate={(x) => x.ded_date}
+        getAmount={(x) => x.amount}
+        loadingLabel={t('common.loading')}
+        emptyLabel={emptyLabel}
+        renderRows={(monthRows) => (
+          <Card>
+            {monthRows.map((x, i) => (
               <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
                 <DedRow x={x} onPress={() => onEdit(x)} onDelete={() => onDelete(x)} />
               </View>
             ))}
-            <View style={[styles.row, styles.totalRow]}>
-              <Text style={styles.totalLabel}>{t('deductions.total')}</Text>
-              <Text style={styles.totalAmount}>{money(total)}</Text>
-            </View>
-          </>
+          </Card>
         )}
-      </Card>
+      />
     </>
   );
 }
@@ -340,6 +349,7 @@ export default function Deductions() {
         ) : (
           <>
             <DedSection
+              screenKey="deductions-outOfPocket"
               title={t('deductions.outOfPocketTitle')}
               subtitle={t('deductions.outOfPocketSubtitle')}
               rows={outOfPocket}
@@ -349,6 +359,7 @@ export default function Deductions() {
               onDelete={handleDelete}
             />
             <DedSection
+              screenKey="deductions-withheld"
               title={t('deductions.withheldTitle')}
               subtitle={t('deductions.withheldSubtitle')}
               rows={withheld}

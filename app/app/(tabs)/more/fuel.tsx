@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useFuelPurchases, useInsertFuelPurchase, useDeleteFuelPurchase } from '@/src/data/fuelPurchases';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -159,7 +160,17 @@ export default function Fuel() {
     ]);
   }
 
-  function FuelSection({ title, list, stats }: { title: string; list: FuelPurchase[]; stats: ReturnType<typeof summarize> }) {
+  function FuelSection({
+    screenKey,
+    title,
+    list,
+    stats,
+  }: {
+    screenKey: string;
+    title: string;
+    list: FuelPurchase[];
+    stats: ReturnType<typeof summarize>;
+  }) {
     return (
       <>
         <Text style={styles.sectionTitle}>{title}</Text>
@@ -179,17 +190,23 @@ export default function Fuel() {
             </View>
           </View>
         </Card>
-        <Card>
-          {list.length === 0 ? (
-            <MutedText>{t('fuel.empty')}</MutedText>
-          ) : (
-            list.map((x, i) => (
-              <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <FuelRow x={x} onDelete={() => handleDelete(x)} />
-              </View>
-            ))
+        <MonthGroupedList
+          screenKey={screenKey}
+          rows={list}
+          getDate={(x) => x.purchase_date}
+          getAmount={(x) => Number(x.amount ?? 0) - Number(x.discount ?? 0)}
+          loadingLabel={t('common.loading')}
+          emptyLabel={t('fuel.empty')}
+          renderRows={(monthRows) => (
+            <Card>
+              {monthRows.map((x, i) => (
+                <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
+                  <FuelRow x={x} onDelete={() => handleDelete(x)} />
+                </View>
+              ))}
+            </Card>
           )}
-        </Card>
+        />
       </>
     );
   }
@@ -221,8 +238,8 @@ export default function Fuel() {
           </Card>
         ) : (
           <>
-            <FuelSection title={t('fuel.tractorFuel')} list={tractorRows} stats={tractorStats} />
-            <FuelSection title={t('fuel.reeferFuel')} list={reeferRows} stats={reeferStats} />
+            <FuelSection screenKey="fuel-tractor" title={t('fuel.tractorFuel')} list={tractorRows} stats={tractorStats} />
+            <FuelSection screenKey="fuel-reefer" title={t('fuel.reeferFuel')} list={reeferRows} stats={reeferStats} />
           </>
         )}
       </ScrollView>

@@ -152,7 +152,8 @@
       "profit": "الربح",
       "totalCaption": "{{amount}} الإجمالي",
       "thisMonth": "هذا الشهر",
-      "lastMonth": "الشهر الماضي"
+      "lastMonth": "الشهر الماضي",
+      "ytd": "منذ بداية السنة"
     },
     "taxProgress": {
       "title": "تقدم الضرائب",
@@ -1131,6 +1132,10 @@
     "captionTemplate": "{{weekSummary}} — بمتابعة {{brand}}",
     "weekPickerLabel": "الأسبوع",
     "share": "مشاركة"
+  },
+  "monthGroups": {
+    "itemCount": "{{count}} عنصر",
+    "unknownMonth": "بدون تاريخ"
   },
   "dashboardCustomize": {
     "title": "تخصيص لوحة التحكم",

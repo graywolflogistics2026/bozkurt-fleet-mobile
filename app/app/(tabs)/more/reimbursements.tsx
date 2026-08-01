@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useReimbursements, useInsertReimbursement, useDeleteReimbursement } from '@/src/data/reimbursements';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -146,19 +147,24 @@ export default function Reimbursements() {
           <Text style={styles.statValue}>{money(total)}</Text>
         </Card>
 
-        <Card>
-          {reimbQuery.isLoading ? (
-            <MutedText>{t('common.loading')}</MutedText>
-          ) : rows.length === 0 ? (
-            <MutedText>{t('reimbursements.empty')}</MutedText>
-          ) : (
-            rows.map((x, i) => (
-              <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <ReimbRow x={x} onDelete={() => handleDelete(x)} />
-              </View>
-            ))
+        <MonthGroupedList
+          screenKey="reimbursements"
+          rows={rows}
+          getDate={(x) => x.reimb_date}
+          getAmount={(x) => x.amount ?? 0}
+          loading={reimbQuery.isLoading}
+          loadingLabel={t('common.loading')}
+          emptyLabel={t('reimbursements.empty')}
+          renderRows={(monthRows) => (
+            <Card>
+              {monthRows.map((x, i) => (
+                <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
+                  <ReimbRow x={x} onDelete={() => handleDelete(x)} />
+                </View>
+              ))}
+            </Card>
           )}
-        </Card>
+        />
       </ScrollView>
 
       <ModalSheet visible={adding} onClose={() => setAdding(false)}>

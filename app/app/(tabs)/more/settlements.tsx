@@ -12,6 +12,7 @@ import { useDocuments } from '@/src/data/documents';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import {
   Screen,
@@ -197,34 +198,35 @@ export default function Settlements() {
           </View>
         </Card>
 
-        {settlementsQuery.isLoading ? (
-          <Card>
-            <MutedText>{t('common.loading')}</MutedText>
-          </Card>
-        ) : rows.length === 0 ? (
-          <Card>
-            <MutedText>{t('settlementsScreen.empty')}</MutedText>
-          </Card>
-        ) : (
-          rows.map((x) => (
-            <TappableCard key={x.id} onPress={() => setSelected(x)}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <View>
-                  <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
-                  <MutedText>{number(x.miles ?? 0)} mi</MutedText>
-                  {/* UX MEGA-PASS item H: the per-settlement day count
-                      breakdown visible at a glance in the list, not just
-                      after tapping into the detail sheet. */}
-                  <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
+        <MonthGroupedList
+          screenKey="settlements"
+          rows={rows}
+          getDate={(x) => x.week_ending}
+          getAmount={(x) => x.net}
+          loading={settlementsQuery.isLoading}
+          loadingLabel={t('common.loading')}
+          emptyLabel={t('settlementsScreen.empty')}
+          renderRows={(monthRows) =>
+            monthRows.map((x) => (
+              <TappableCard key={x.id} onPress={() => setSelected(x)}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <View>
+                    <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
+                    <MutedText>{number(x.miles ?? 0)} mi</MutedText>
+                    {/* UX MEGA-PASS item H: the per-settlement day count
+                        breakdown visible at a glance in the list, not just
+                        after tapping into the detail sheet. */}
+                    <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.amount}>{money(x.net)}</Text>
+                    <MutedText>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
+                  </View>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.amount}>{money(x.net)}</Text>
-                  <MutedText>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
-                </View>
-              </View>
-            </TappableCard>
-          ))
-        )}
+              </TappableCard>
+            ))
+          }
+        />
       </ScrollView>
 
       <ModalSheet visible={!!selected} onClose={() => setSelected(null)}>

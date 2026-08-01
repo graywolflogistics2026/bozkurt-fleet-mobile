@@ -614,7 +614,10 @@ function FleetHealthCard({
   );
 }
 
-export type MoneyBreakdownRange = 'thisMonth' | 'lastMonth';
+// BETA FEEDBACK ROUND (owner decision 2026-07-31): added 'ytd' alongside
+// This Month/Last Month — same donut + legend behavior, just a wider date
+// window (see moneyBreakdownProfitLoss below for the filter logic).
+export type MoneyBreakdownRange = 'thisMonth' | 'lastMonth' | 'ytd';
 
 // Expenses Breakdown donut card (Session 9d item 4, restyled Session
 // 9e-B6 into "Expenses Breakdown" per the mockup — legend rows now show a
@@ -651,7 +654,7 @@ function MoneyBreakdownCard({
           {t('dashboard.moneyBreakdown.title')}
         </Text>
         <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-          {(['thisMonth', 'lastMonth'] as const).map((r) => (
+          {(['thisMonth', 'lastMonth', 'ytd'] as const).map((r) => (
             <Pressable key={r} onPress={() => onRangeChange(r)} style={[styles.rangePill, range === r && styles.rangePillActive]}>
               <Text style={[styles.rangePillText, range === r && styles.rangePillTextActive]}>
                 {t(`dashboard.moneyBreakdown.${r}`)}
@@ -1217,18 +1220,20 @@ export default function Dashboard() {
   const [moneyBreakdownRange, setMoneyBreakdownRange] = useState<MoneyBreakdownRange>('thisMonth');
   const moneyBreakdownProfitLoss = useMemo(() => {
     const now = new Date();
-    const monthOffset = moneyBreakdownRange === 'lastMonth' ? 1 : 0;
-    const targetDate = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
-    const year = targetDate.getFullYear();
-    const month = targetDate.getMonth();
-    const inMonth = (dateStr: string | null | undefined) => {
+    // 'ytd' matches this calendar year regardless of month — same
+    // calendar-year convention every other YTD figure in the app uses
+    // (YTD Per Diem Days, contract labor YTD), not a rolling 365 days.
+    const inRange = (dateStr: string | null | undefined) => {
       if (!dateStr) return false;
       const d = new Date(`${dateStr}T00:00:00`);
-      return d.getFullYear() === year && d.getMonth() === month;
+      if (moneyBreakdownRange === 'ytd') return d.getFullYear() === now.getFullYear();
+      const monthOffset = moneyBreakdownRange === 'lastMonth' ? 1 : 0;
+      const targetDate = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
+      return d.getFullYear() === targetDate.getFullYear() && d.getMonth() === targetDate.getMonth();
     };
-    const monthSettlements = (settlementsQuery.data ?? []).filter((s) => inMonth(s.week_ending));
-    const monthDeductions = (dedQuery.data ?? []).filter((d) => inMonth(d.ded_date));
-    return buildProfitLoss(monthSettlements, monthDeductions, userCategoriesQuery.data ?? []);
+    const rangeSettlements = (settlementsQuery.data ?? []).filter((s) => inRange(s.week_ending));
+    const rangeDeductions = (dedQuery.data ?? []).filter((d) => inRange(d.ded_date));
+    return buildProfitLoss(rangeSettlements, rangeDeductions, userCategoriesQuery.data ?? []);
   }, [settlementsQuery.data, dedQuery.data, userCategoriesQuery.data, moneyBreakdownRange]);
   const moneyBreakdownSlices = useMemo<DonutSlice[]>(() => {
     const palette = [colors.red, colors.orange, colors.purple];
@@ -1751,10 +1756,12 @@ export default function Dashboard() {
 
         <SimpleCustomizeDashboardModal visible={simpleCustomizeOpen} onClose={() => setSimpleCustomizeOpen(false)} />
 
-        <Card>
-          <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>
-          {profile?.company_name ? <MutedText>{profile.company_name}</MutedText> : null}
-        </Card>
+        {/* BETA FEEDBACK ROUND (owner decision 2026-07-31): the company-
+            name + email Card that used to sit here was out of place and
+            non-functional when tapped. Company name now lives in the top
+            bar (see _layout.tsx's DashboardHeaderTitle, tappable to
+            Settings > Business Profile); email is dropped from Home
+            entirely — it belongs in Settings, not the dashboard. */}
 
         {tax?.isFallback && !bannerDismissed && (
           <Card>

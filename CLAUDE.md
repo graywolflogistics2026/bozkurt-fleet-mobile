@@ -1107,3 +1107,64 @@
   each list row so the breakdown is visible without an extra tap, per the
   directive's "show the day count breakdown per settlement somewhere
   visible."
+- BETA FEEDBACK ROUND (owner decision 2026-07-31, real device tester
+  report). Four items:
+  1. MONTH GROUPING: every long chronological list gets collapsible month
+     sections — implemented ONCE as `app/src/stats/monthGroups.ts` (pure
+     `groupByMonth()`: buckets rows into `{monthKey, count, total, rows}`,
+     descending, a row with no parseable date lands in a trailing
+     `'unknown'` bucket rather than being dropped) +
+     `app/src/components/monthGroups/useMonthCollapse.ts` (session-scoped
+     collapse state — a module-level `Map`, deliberately NOT
+     AsyncStorage/a saved profile field, keyed by `${screenKey}:
+     ${monthKey}`, so it survives a screen unmount/remount for the life
+     of the JS process and resets on a real app restart, exactly matching
+     "remembered... for the session") +
+     `app/src/components/monthGroups/MonthGroupedList.tsx` (the header
+     row: month label + item count + $ total, tap to expand/collapse;
+     current month expanded by default, every older month collapsed).
+     `MonthGroupedList` deliberately does NOT impose a single row-
+     container style — it takes a `renderRows(rows)` slot rather than a
+     per-row renderer, because this app's list screens already render a
+     month's worth of rows two different ways (Settlements/Loads/
+     Documents: one TappableCard per row; Reimbursements/Deductions/Fuel/
+     Tolls/Other Income/Maintenance: bordered rows inside one shared
+     Card) and forcing a single container would have meant restructuring
+     visuals nobody asked to change. Wired into Settlements,
+     Reimbursements, Deductions (both the out-of-pocket and withheld
+     sections independently — `screenKey`s `deductions-outOfPocket`/
+     `deductions-withheld` — each keeps its own overall total displayed
+     above the grouped list now, instead of inline in the same card as
+     the rows), Fuel (tractor/reefer sections independently), Tolls,
+     Loads, Other Income, Documents, and Maintenance — 9 screens total
+     (the 8 named explicitly plus Maintenance, judged the same kind of
+     long chronological list). Registries that aren't primarily date-
+     browsed lists (Trucks, Drivers, Equipment, Compliance, Loans, Asset
+     Register, Bank Statements, Credit Cards) were deliberately left
+     alone — `MonthGroupedList` is available for any of them later via
+     the exact same 3-file import.
+  2. HOME HEADER: the mid-page company-name + email Card (non-functional
+     when tapped) is gone. Company name now renders in the Dashboard's
+     top bar, under the wordmark where the tagline normally sits —
+     `BrandWordmark` (`app/src/components/BrandWordmark.tsx`) gained an
+     opt-in `companyName` prop that swaps in for the tagline only when
+     passed and non-empty; every OTHER `BrandWordmark` call site (CEO
+     Mode's own in-page header block, share-card footers, the wide
+     sidebar) is untouched and keeps showing the real tagline, since this
+     is per-call-site, not a global behavior change. The whole header
+     title block (`DashboardHeaderTitle` in `app/(tabs)/_layout.tsx`) is
+     now a `Pressable` straight to Settings (`/(tabs)/more/settings`,
+     where the Business Profile section already lives). Email is dropped
+     from Home entirely — it was never actionable there and belongs in
+     Settings.
+  3. EXPENSES BREAKDOWN: added a `'ytd'` third option to
+     `MoneyBreakdownRange` (`app/(tabs)/index.tsx`) alongside This Month/
+     Last Month — same donut + legend + tap-through-to-Deductions
+     behavior, just a wider date window (matches this calendar year
+     regardless of month, the same YTD convention every other YTD figure
+     in the app already uses — not a rolling 365 days).
+  4. VISUAL CONSISTENCY: satisfied as a direct consequence of item 1 —
+     all 9 list screens now share the literal same month-header
+     component/styling/tap-target size, so "consistent headers, spacing,
+     tap targets" across those screens is structural, not a matter of
+     each screen separately matching a style guide.

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useMiscIncome, useInsertMiscIncome, useDeleteMiscIncome } from '@/src/data/miscIncome';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -132,19 +133,24 @@ export default function OtherIncome() {
           <Text style={styles.statValue}>{money(total)}</Text>
         </Card>
 
-        <Card>
-          {incomeQuery.isLoading ? (
-            <MutedText>{t('common.loading')}</MutedText>
-          ) : rows.length === 0 ? (
-            <MutedText>{t('otherIncome.empty')}</MutedText>
-          ) : (
-            rows.map((x, i) => (
-              <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <IncomeRow x={x} onDelete={() => handleDelete(x)} />
-              </View>
-            ))
+        <MonthGroupedList
+          screenKey="otherIncome"
+          rows={rows}
+          getDate={(x) => x.income_date}
+          getAmount={(x) => x.amount ?? 0}
+          loading={incomeQuery.isLoading}
+          loadingLabel={t('common.loading')}
+          emptyLabel={t('otherIncome.empty')}
+          renderRows={(monthRows) => (
+            <Card>
+              {monthRows.map((x, i) => (
+                <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
+                  <IncomeRow x={x} onDelete={() => handleDelete(x)} />
+                </View>
+              ))}
+            </Card>
           )}
-        </Card>
+        />
       </ScrollView>
 
       <ModalSheet visible={adding} onClose={() => setAdding(false)}>

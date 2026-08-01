@@ -152,7 +152,8 @@
       "profit": "Kâr",
       "totalCaption": "{{amount}} toplam",
       "thisMonth": "Bu Ay",
-      "lastMonth": "Geçen Ay"
+      "lastMonth": "Geçen Ay",
+      "ytd": "Yıl Başından Bugüne"
     },
     "taxProgress": {
       "title": "Vergi İlerlemesi",
@@ -1131,6 +1132,10 @@
     "captionTemplate": "{{weekSummary}} — {{brand}} ile takip edildi",
     "weekPickerLabel": "Hafta",
     "share": "Paylaş"
+  },
+  "monthGroups": {
+    "itemCount": "{{count}} öğe",
+    "unknownMonth": "Tarih yok"
   },
   "dashboardCustomize": {
     "title": "Paneli Özelleştir",

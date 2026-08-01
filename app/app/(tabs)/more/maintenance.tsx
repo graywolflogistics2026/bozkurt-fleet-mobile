@@ -13,6 +13,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { MAINTENANCE_TYPES, MAINTENANCE_TYPE_ICON, type MaintenanceType } from '@/src/truck/categories';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -374,44 +375,45 @@ export default function Maintenance() {
           </View>
         </Card>
 
-        {recordsQuery.isLoading ? (
-          <Card>
-            <MutedText>{t('common.loading')}</MutedText>
-          </Card>
-        ) : rows.length === 0 ? (
-          <Card>
-            <MutedText>{t('maintenance.empty')}</MutedText>
-          </Card>
-        ) : (
-          <Card>
-            {rows.map((rec, i) => (
-              <Pressable
-                key={rec.id}
-                onPress={() => openEdit(rec)}
-                style={[{ paddingVertical: spacing.sm }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>
-                      {MAINTENANCE_TYPE_ICON[(rec.service_type as MaintenanceType) ?? 'general']} {t(`maintenance.types.${rec.service_type ?? 'general'}`)}
-                    </Text>
-                    <MutedText>
-                      {rec.service_date ? date(rec.service_date) : '—'} · {rec.odometer ? `${number(rec.odometer)} ${t('truckHealth.milesUnit')}` : '—'}
-                    </MutedText>
-                    {rec.description ? <MutedText>{rec.description}</MutedText> : null}
-                    {rec.invoice_number ? <MutedText>{t('maintenance.invoiceLabel')}: {rec.invoice_number}</MutedText> : null}
+        <MonthGroupedList
+          screenKey="maintenance"
+          rows={rows}
+          getDate={(rec) => rec.service_date}
+          getAmount={(rec) => rec.cost ?? 0}
+          loading={recordsQuery.isLoading}
+          loadingLabel={t('common.loading')}
+          emptyLabel={t('maintenance.empty')}
+          renderRows={(monthRows) => (
+            <Card>
+              {monthRows.map((rec, i) => (
+                <Pressable
+                  key={rec.id}
+                  onPress={() => openEdit(rec)}
+                  style={[{ paddingVertical: spacing.sm }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>
+                        {MAINTENANCE_TYPE_ICON[(rec.service_type as MaintenanceType) ?? 'general']} {t(`maintenance.types.${rec.service_type ?? 'general'}`)}
+                      </Text>
+                      <MutedText>
+                        {rec.service_date ? date(rec.service_date) : '—'} · {rec.odometer ? `${number(rec.odometer)} ${t('truckHealth.milesUnit')}` : '—'}
+                      </MutedText>
+                      {rec.description ? <MutedText>{rec.description}</MutedText> : null}
+                      {rec.invoice_number ? <MutedText>{t('maintenance.invoiceLabel')}: {rec.invoice_number}</MutedText> : null}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ color: colors.text, fontWeight: '700' }}>{money(rec.cost ?? 0)}</Text>
+                      <Pressable onPress={() => handleDelete(rec)} hitSlop={8} style={{ marginTop: spacing.xs }}>
+                        <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ color: colors.text, fontWeight: '700' }}>{money(rec.cost ?? 0)}</Text>
-                    <Pressable onPress={() => handleDelete(rec)} hitSlop={8} style={{ marginTop: spacing.xs }}>
-                      <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </Card>
-        )}
+                </Pressable>
+              ))}
+            </Card>
+          )}
+        />
 
         <PrimaryButton title={t('maintenance.addRecord')} onPress={() => setShowAddForm(true)} />
 

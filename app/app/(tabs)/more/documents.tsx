@@ -19,6 +19,7 @@ import {
 } from '@/src/data/documentsFilter';
 import { getSignedDocumentUrl, shareDocumentFile } from '@/src/data/documentViewer';
 import { deriveDocumentTitle } from '@/src/data/documentTitle';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { DOC_TYPE_ICON, useDocTypeMeta } from '@/src/import/docTypes';
 import { useFormatters } from '@/src/i18n/format';
@@ -228,36 +229,37 @@ export default function DocumentsArchive() {
           </View>
         </View>
 
-        {documentsQuery.isLoading ? (
-          <Card>
-            <MutedText>{t('common.loading')}</MutedText>
-          </Card>
-        ) : rows.length === 0 ? (
-          <Card>
-            <MutedText>{allDocs.length === 0 ? t('documentsArchive.emptyState') : t('documentsArchive.noMatches')}</MutedText>
-          </Card>
-        ) : (
-          rows.map((doc) => {
-            const meta = docTypeMeta((doc.doc_type as DocType) ?? 'other');
-            const title = deriveDocumentTitle(doc.parsed_json, meta.label);
-            return (
-              <TappableCard key={doc.id} onPress={() => setSelected(doc)}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 24, marginEnd: spacing.sm }}>{DOC_TYPE_ICON[(doc.doc_type as DocType) ?? 'other'] ?? '📄'}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>{title}</Text>
-                    <MutedText>
-                      {title !== meta.label ? `${meta.label} · ` : ''}
-                      {doc.doc_date ? date(doc.doc_date) : date(doc.imported_at)}
-                      {doc.filename ? ` · ${doc.filename}` : ''}
-                    </MutedText>
+        <MonthGroupedList
+          screenKey="documents"
+          rows={rows}
+          getDate={(doc) => doc.doc_date ?? doc.imported_at}
+          getAmount={(doc) => doc.amount ?? 0}
+          loading={documentsQuery.isLoading}
+          loadingLabel={t('common.loading')}
+          emptyLabel={allDocs.length === 0 ? t('documentsArchive.emptyState') : t('documentsArchive.noMatches')}
+          renderRows={(monthRows) =>
+            monthRows.map((doc) => {
+              const meta = docTypeMeta((doc.doc_type as DocType) ?? 'other');
+              const title = deriveDocumentTitle(doc.parsed_json, meta.label);
+              return (
+                <TappableCard key={doc.id} onPress={() => setSelected(doc)}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 24, marginEnd: spacing.sm }}>{DOC_TYPE_ICON[(doc.doc_type as DocType) ?? 'other'] ?? '📄'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>{title}</Text>
+                      <MutedText>
+                        {title !== meta.label ? `${meta.label} · ` : ''}
+                        {doc.doc_date ? date(doc.doc_date) : date(doc.imported_at)}
+                        {doc.filename ? ` · ${doc.filename}` : ''}
+                      </MutedText>
+                    </View>
+                    {doc.amount != null && <Text style={{ color: colors.text, fontWeight: '700' }}>{money(doc.amount)}</Text>}
                   </View>
-                  {doc.amount != null && <Text style={{ color: colors.text, fontWeight: '700' }}>{money(doc.amount)}</Text>}
-                </View>
-              </TappableCard>
-            );
-          })
-        )}
+                </TappableCard>
+              );
+            })
+          }
+        />
       </ScrollView>
 
       <ModalSheet visible={!!selected} onClose={closeViewer}>

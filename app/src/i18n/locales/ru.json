@@ -152,7 +152,8 @@
       "profit": "Прибыль",
       "totalCaption": "{{amount}} всего",
       "thisMonth": "Этот месяц",
-      "lastMonth": "Прошлый месяц"
+      "lastMonth": "Прошлый месяц",
+      "ytd": "С начала года"
     },
     "taxProgress": {
       "title": "Прогресс по налогам",
@@ -1131,6 +1132,10 @@
     "captionTemplate": "{{weekSummary}} — отслеживается в {{brand}}",
     "weekPickerLabel": "Неделя",
     "share": "Поделиться"
+  },
+  "monthGroups": {
+    "itemCount": "{{count}} записей",
+    "unknownMonth": "Без даты"
   },
   "dashboardCustomize": {
     "title": "Настроить панель",

@@ -9,6 +9,7 @@ import { MenuTabButton } from '@/src/components/MenuTabButton';
 import { MenuSheet } from '@/src/components/MenuSheet';
 import { WideSidebar } from '@/src/components/WideSidebar';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
+import { useAuth } from '@/src/context/AuthContext';
 import { useAlertsData } from '@/src/data/alerts';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -100,6 +101,23 @@ function ImportCloseButton() {
   );
 }
 
+// BETA FEEDBACK ROUND (owner decision 2026-07-31, device tester report):
+// the company-name + email block used to sit mid-page in a plain, non-
+// tappable Card — out of place and functionally dead. Company name now
+// lives here, under the wordmark where the tagline normally shows
+// (BrandWordmark's companyName prop), and the whole block is tappable
+// straight to Settings > Business Profile. Email is dropped from Home
+// entirely — it belongs in Settings, not the dashboard.
+function DashboardHeaderTitle() {
+  const router = useRouter();
+  const { profile } = useAuth();
+  return (
+    <Pressable onPress={() => router.push('/(tabs)/more/settings')} hitSlop={4}>
+      <BrandWordmark fontSize={16} showTagline companyName={profile?.company_name} />
+    </Pressable>
+  );
+}
+
 function DashboardBell() {
   const router = useRouter();
   const { count } = useAlertsData();
@@ -184,7 +202,7 @@ export default function TabsLayout() {
           title: t('nav.dashboard'),
           tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} />,
           headerLeft: () => <DashboardHamburger onPress={() => setMenuOpen(true)} />,
-          headerTitle: () => <BrandWordmark fontSize={16} showTagline />,
+          headerTitle: () => <DashboardHeaderTitle />,
           headerRight: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <TopBarImportButton isWide={isWide} />

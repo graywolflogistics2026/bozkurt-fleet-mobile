@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useLoads, useDeleteLoad } from '@/src/data/loads';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -117,19 +118,24 @@ export default function Loads() {
           </View>
         </Card>
 
-        <Card>
-          {loadsQuery.isLoading ? (
-            <MutedText>{t('common.loading')}</MutedText>
-          ) : rows.length === 0 ? (
-            <MutedText>{t('loads.empty')}</MutedText>
-          ) : (
-            rows.map((x, i) => (
-              <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <LoadRow x={x} onDelete={() => handleDelete(x)} />
-              </View>
-            ))
+        <MonthGroupedList
+          screenKey="loads"
+          rows={rows}
+          getDate={(x) => x.load_date}
+          getAmount={(x) => x.revenue ?? 0}
+          loading={loadsQuery.isLoading}
+          loadingLabel={t('common.loading')}
+          emptyLabel={t('loads.empty')}
+          renderRows={(monthRows) => (
+            <Card>
+              {monthRows.map((x, i) => (
+                <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
+                  <LoadRow x={x} onDelete={() => handleDelete(x)} />
+                </View>
+              ))}
+            </Card>
           )}
-        </Card>
+        />
       </ScrollView>
     </Screen>
   );

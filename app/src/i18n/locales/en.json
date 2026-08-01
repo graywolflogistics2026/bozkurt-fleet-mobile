@@ -152,7 +152,8 @@
       "profit": "Profit",
       "totalCaption": "{{amount}} total",
       "thisMonth": "This Month",
-      "lastMonth": "Last Month"
+      "lastMonth": "Last Month",
+      "ytd": "Year to Date"
     },
     "taxProgress": {
       "title": "Tax Progress",
@@ -1030,6 +1031,10 @@
     "captionTemplate": "{{weekSummary}} — tracked with {{brand}}",
     "weekPickerLabel": "Week",
     "share": "Share"
+  },
+  "monthGroups": {
+    "itemCount": "{{count}} items",
+    "unknownMonth": "No date"
   },
   "dashboardCustomize": {
     "title": "Customize Dashboard",

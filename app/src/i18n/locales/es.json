@@ -152,7 +152,8 @@
       "profit": "Ganancia",
       "totalCaption": "{{amount}} total",
       "thisMonth": "Este Mes",
-      "lastMonth": "Mes Pasado"
+      "lastMonth": "Mes Pasado",
+      "ytd": "Año hasta la Fecha"
     },
     "taxProgress": {
       "title": "Progreso de Impuestos",
@@ -1131,6 +1132,10 @@
     "captionTemplate": "{{weekSummary}} — con seguimiento de {{brand}}",
     "weekPickerLabel": "Semana",
     "share": "Compartir"
+  },
+  "monthGroups": {
+    "itemCount": "{{count}} elementos",
+    "unknownMonth": "Sin fecha"
   },
   "dashboardCustomize": {
     "title": "Personalizar Panel",
