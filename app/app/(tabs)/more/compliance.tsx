@@ -293,26 +293,22 @@ export default function ComplianceTracker() {
       </ScrollView>
 
       <ModalSheet visible={adding} onClose={() => setAdding(false)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('compliance.addTitle')}</SheetTitle>
-          {renderForm(addForm, setAddForm)}
-          <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveAdd} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setAdding(false)} />
-        </ScrollView>
+        <SheetTitle>{t('compliance.addTitle')}</SheetTitle>
+        {renderForm(addForm, setAddForm)}
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveAdd} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setAdding(false)} />
       </ModalSheet>
 
       <ModalSheet visible={!!editing} onClose={() => setEditing(null)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('compliance.editTitle')}</SheetTitle>
-          {renderForm(editForm, setEditForm)}
-          <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={saving} />
-          {editing && (
-            <Pressable onPress={() => handleDelete(editing)} hitSlop={8} style={{ marginTop: spacing.sm, alignItems: 'center' }}>
-              <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>{t('compliance.delete')}</Text>
-            </Pressable>
-          )}
-          <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
-        </ScrollView>
+        <SheetTitle>{t('compliance.editTitle')}</SheetTitle>
+        {renderForm(editForm, setEditForm)}
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={saving} />
+        {editing && (
+          <Pressable onPress={() => handleDelete(editing)} hitSlop={8} style={{ marginTop: spacing.sm, alignItems: 'center' }}>
+            <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>{t('compliance.delete')}</Text>
+          </Pressable>
+        )}
+        <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
       </ModalSheet>
     </Screen>
   );

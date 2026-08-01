@@ -279,21 +279,17 @@ export default function Trucks() {
       </ScrollView>
 
       <ModalSheet visible={showAddForm} onClose={() => setShowAddForm(false)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('trucks.addTruck')}</SheetTitle>
-          {renderForm(addForm, setAddForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
-        </ScrollView>
+        <SheetTitle>{t('trucks.addTruck')}</SheetTitle>
+        {renderForm(addForm, setAddForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
       </ModalSheet>
 
       <ModalSheet visible={!!editing} onClose={() => setEditing(null)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('trucks.editTruck')}</SheetTitle>
-          {renderForm(editForm, setEditForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
-        </ScrollView>
+        <SheetTitle>{t('trucks.editTruck')}</SheetTitle>
+        {renderForm(editForm, setEditForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
       </ModalSheet>
     </Screen>
   );

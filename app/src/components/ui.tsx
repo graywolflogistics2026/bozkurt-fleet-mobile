@@ -1,4 +1,18 @@
-import { ActivityIndicator, I18nManager, Modal, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type TextStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  I18nManager,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+  type TextStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -116,6 +130,25 @@ export function ErrorText({ children }: { children?: string | null }) {
 // Capital Account's record-draw/update-balance sheets, and future forms) —
 // a lightweight equivalent of legacy's fixed-overlay modal pattern
 // (legacy/index.html editDedItem()). Tapping outside the card closes it.
+//
+// UX MEGA-PASS item B (owner decision 2026-07-31, device evidence:
+// "deduction edit has no save/cancel/close and doesn't scroll and doesn't
+// save"). Root cause: modalCard had no height cap and children were never
+// wrapped in a ScrollView — on a sheet with enough content (category
+// picker + tax-deductible pills + amount field + all 9 payment-method
+// pills), the card grew taller than the viewport and the overlay's
+// centered, non-scrolling layout simply clipped the overflow, so the Save/
+// Cancel buttons at the bottom were rendered but physically unreachable —
+// "doesn't save" was a symptom of "can't reach the Save button," not a
+// mutation bug. Every ModalSheet now gets this fix for free, with zero
+// call-site changes required: (1) content is capped to 85% of the window
+// height and wrapped in a ScrollView, so it always scrolls instead of
+// silently overflowing; (2) a consistent ✕ close button in the top-right
+// corner, wired to the same onClose every call site already passes, so
+// "every modal/sheet gets a consistent header: title + X close" holds
+// without each screen adding its own; (3) KeyboardAvoidingView so an open
+// keyboard (editing the amount/description field) never covers the Save
+// button either.
 export function ModalSheet({
   visible,
   onClose,
@@ -127,11 +160,30 @@ export function ModalSheet({
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-          {children}
-        </Pressable>
-      </Pressable>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.modalCard}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            style={styles.modalCloseButton}
+          >
+            <Text style={styles.modalCloseButtonText}>✕</Text>
+          </Pressable>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScroll}
+          >
+            {children}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -242,9 +294,32 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radii.md,
-    padding: spacing.lg,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '85%',
+    position: 'relative',
+  },
+  modalScroll: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg + spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: spacing.sm,
+    end: spacing.sm,
+    zIndex: 1,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card2,
+  },
+  modalCloseButtonText: {
+    color: colors.muted,
+    fontSize: typography.size.md,
+    fontWeight: '700',
   },
   sheetTitle: {
     color: colors.text,

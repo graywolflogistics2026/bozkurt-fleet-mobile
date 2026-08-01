@@ -224,8 +224,7 @@ export default function Settlements() {
       </ScrollView>
 
       <ModalSheet visible={!!selected} onClose={() => setSelected(null)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          {selected && (
+        {selected && (
             <>
               <SheetTitle>{t('settlementsScreen.weekOf', { date: date(selected.week_ending) })}</SheetTitle>
 
@@ -339,11 +338,10 @@ export default function Settlements() {
                 />
               )}
 
-              <SecondaryButton title={`🗑 ${t('common.delete')}`} onPress={() => handleDelete(selected)} />
-              <SecondaryButton title={t('common.cancel')} onPress={() => setSelected(null)} />
-            </>
-          )}
-        </ScrollView>
+            <SecondaryButton title={`🗑 ${t('common.delete')}`} onPress={() => handleDelete(selected)} />
+            <SecondaryButton title={t('common.cancel')} onPress={() => setSelected(null)} />
+          </>
+        )}
       </ModalSheet>
     </Screen>
   );

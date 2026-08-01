@@ -108,8 +108,7 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
 
   return (
     <ModalSheet visible onClose={onClose}>
-      <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
-        <SheetTitle>{t('drivers.paymentsTitle', { name: driver.name })}</SheetTitle>
+      <SheetTitle>{t('drivers.paymentsTitle', { name: driver.name })}</SheetTitle>
 
         {payments.length === 0 ? (
           <MutedText>{t('drivers.paymentsEmpty')}</MutedText>
@@ -140,9 +139,8 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
           <MutedText>{t('drivers.employerTaxesNote', { pct: employerFicaRate ? `${(employerFicaRate * 100).toFixed(2)}%` : '—' })}</MutedText>
         )}
 
-        <PrimaryButton title={t('drivers.recordPayment')} onPress={handleAdd} loading={saving} />
-        <SecondaryButton title={t('common.cancel')} onPress={onClose} />
-      </ScrollView>
+      <PrimaryButton title={t('drivers.recordPayment')} onPress={handleAdd} loading={saving} />
+      <SecondaryButton title={t('common.cancel')} onPress={onClose} />
     </ModalSheet>
   );
 }
@@ -309,21 +307,17 @@ export default function Drivers() {
       </ScrollView>
 
       <ModalSheet visible={showAddForm} onClose={() => setShowAddForm(false)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('drivers.addDriver')}</SheetTitle>
-          {renderForm(addForm, setAddForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
-        </ScrollView>
+        <SheetTitle>{t('drivers.addDriver')}</SheetTitle>
+        {renderForm(addForm, setAddForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
       </ModalSheet>
 
       <ModalSheet visible={!!editing} onClose={() => setEditing(null)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('drivers.editDriver')}</SheetTitle>
-          {renderForm(editForm, setEditForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
-        </ScrollView>
+        <SheetTitle>{t('drivers.editDriver')}</SheetTitle>
+        {renderForm(editForm, setEditForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
       </ModalSheet>
 
       {paymentsFor && <DriverPaymentsSheet driver={paymentsFor} employerFicaRate={employerFicaRate} onClose={() => setPaymentsFor(null)} />}

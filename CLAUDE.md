@@ -858,3 +858,68 @@
   hardcode a color from that old palette going forward — always import
   from `theme.ts`. (Superseded rule, kept for context: dark theme colors
   used to come verbatim from the CSS variables in legacy/index.html.)
+- UX MEGA-PASS item A — NAVIGATION ROOT CAUSE (owner decision 2026-07-31,
+  device evidence: "back always lands on Truck page," "per diem card opens
+  Tax Estimator," "Recent Loads opens Cash Flow"). Two distinct root
+  causes, one pass: (1) `app/(tabs)/_layout.tsx`'s `<Tabs>` never set
+  `backBehavior`, so it defaulted to React Navigation's `'history'` — once
+  a tab's own stack is back at its root, hardware/gesture back jumps to
+  whichever OTHER tab was most recently active, not Home. `truck-health`
+  (href: null, but still its own sibling `Tabs.Screen`, not a route nested
+  under `more`) is reached from many shortcuts (Home's Truck Status card,
+  Reports' Intelligence group), so it was very often "the last other tab,"
+  making it the constant back target. Fixed by setting
+  `backBehavior="initialRoute"` — back now deterministically returns to
+  this navigator's initial route (index / Home) once a tab's stack is
+  exhausted. (2) Dashboard card destinations were ad-hoc inline
+  `router.push()` calls scattered through `app/(tabs)/index.tsx` with no
+  single place to audit — several routed to a generic catch-all instead of
+  their actual content (per diem cards → Tax Estimator, which has no per
+  diem breakdown at all; Recent Loads → Cash Flow instead of Loads). Fixed
+  by extracting one table, `app/src/stats/dashboardLayout.ts`'s
+  `DASHBOARD_CARD_ROUTES` (card id → route), which `index.tsx`'s
+  `goToCard()` helper reads instead of hardcoding a push per card — per
+  diem cards now route to Settlements (where `per_diem_days` actually
+  lives and is user-editable, CLAUDE.md invariant #25), Recent Loads
+  routes to Loads. `src/stats/__tests__/dashboardLayout.test.ts` regression-
+  guards both the specific reported bugs and the general "every route
+  starts with `/(tabs)/`" sanity check. Any future card with a fixed
+  destination goes in this table, not an inline `router.push()`.
+- UX MEGA-PASS item B — MODAL/SHEET CONSISTENCY (owner decision
+  2026-07-31, device evidence: "deduction edit has no save/cancel/close
+  and doesn't scroll and doesn't save"). Root cause: the shared
+  `ModalSheet` (`app/src/components/ui.tsx`) had no height cap and never
+  wrapped its children in a ScrollView — on a sheet with enough content
+  (category picker + tax-deductible pills + amount field + all 9 payment-
+  method pills), the card grew taller than the viewport and the overlay's
+  centered, non-scrolling layout silently clipped the overflow, so Save/
+  Cancel at the bottom were rendered but physically unreachable —
+  "doesn't save" was a reachability symptom, not a mutation bug (the
+  `updateDeduction.mutateAsync({ id, values })` call itself was already
+  correct). Some screens (Settlements, Trucks, Maintenance, etc.) had
+  independently worked around this with their own ad-hoc
+  `<ScrollView style={{ maxHeight: 480 }}>` wrapper; others (Deductions,
+  Capital Account, Loans, ...) had not, which is why the bug was
+  inconsistent across screens. Fixed centrally, once, with zero required
+  call-site changes: `ModalSheet` now (1) caps `modalCard` to 85% of the
+  window height and wraps `children` in its own `ScrollView`
+  (`keyboardShouldPersistTaps="handled"`) so a sheet ALWAYS scrolls
+  instead of silently overflowing; (2) renders a consistent ✕ close button
+  in the top-right corner wired to the same `onClose` every call site
+  already passes, satisfying "every modal/sheet gets a consistent header:
+  title + X close" without an API change; (3) wraps the overlay in a
+  `KeyboardAvoidingView` so an open keyboard never covers Save either. The
+  now-redundant ad-hoc `<ScrollView style={{ maxHeight: N }}>` wrappers
+  were removed from every screen that had one (truck-health, asset-
+  register, equipment, drivers, trucks, compliance, maintenance, tax-
+  estimator, settlements, documents) to avoid nesting two same-axis
+  ScrollViews — bank-statements.tsx's inner `maxHeight: 360` ScrollView
+  around its transaction list was deliberately left alone, since that one
+  bounds a sub-list inside a longer sheet rather than duplicating the
+  sheet's own scroll. The Import tab (reached via the raised center [+]
+  button / action sheet, not a natural back-push, and — as its own
+  sibling `Tabs.Screen` — with no default back arrow) gained an explicit
+  `headerLeft` ✕ close button (`ImportCloseButton` in
+  `app/(tabs)/_layout.tsx`) that routes straight to Home, same "always a
+  way out" principle. Any FUTURE sheet just uses `ModalSheet` — the
+  close X, scroll, and keyboard-avoidance come for free.

@@ -1,4 +1,34 @@
-import { mergeDashboardLayout, isDefaultLayout, DEFAULT_CARD_ORDER } from '@/src/stats/dashboardLayout';
+import { mergeDashboardLayout, isDefaultLayout, DEFAULT_CARD_ORDER, DASHBOARD_CARD_ROUTES } from '@/src/stats/dashboardLayout';
+
+// UX MEGA-PASS item A (owner decision 2026-07-31, device evidence: "per
+// diem card opens Tax Estimator", "Recent Loads opens Cash Flow" — wrong
+// destinations). Regression guard for the exact reported bugs, plus a
+// general sanity check that every route in the table is a plausible app
+// route (starts with the tabs group) so a future typo fails a test
+// instead of shipping a dead link.
+describe('DASHBOARD_CARD_ROUTES', () => {
+  it('routes per diem cards to Settlements (where per_diem_days actually lives), not Tax Estimator', () => {
+    expect(DASHBOARD_CARD_ROUTES.ytdPerDiemDays).toBe('/(tabs)/more/settlements');
+    expect(DASHBOARD_CARD_ROUTES.perDiemDeduction).toBe('/(tabs)/more/settlements');
+    expect(DASHBOARD_CARD_ROUTES.perDiemSummary).toBe('/(tabs)/more/settlements');
+  });
+
+  it('routes Recent Loads to the Loads screen, not Cash Flow', () => {
+    expect(DASHBOARD_CARD_ROUTES.recentLoads).toBe('/(tabs)/more/loads');
+  });
+
+  it('routes revenue/deduction/net cards to their matching detail screens', () => {
+    expect(DASHBOARD_CARD_ROUTES.totalRevenue).toBe('/(tabs)/more/cash-flow');
+    expect(DASHBOARD_CARD_ROUTES.netToOwner).toBe('/(tabs)/more/cash-flow');
+    expect(DASHBOARD_CARD_ROUTES.totalDeductions).toBe('/(tabs)/deductions');
+  });
+
+  it('every registered route starts with the (tabs) group segment', () => {
+    for (const [id, route] of Object.entries(DASHBOARD_CARD_ROUTES)) {
+      expect(route!.startsWith('/(tabs)/')).toBe(true);
+    }
+  });
+});
 
 describe('isDefaultLayout', () => {
   it('treats null and undefined as default, everything else as customized', () => {

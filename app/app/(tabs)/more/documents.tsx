@@ -258,8 +258,7 @@ export default function DocumentsArchive() {
       </ScrollView>
 
       <ModalSheet visible={!!selected} onClose={closeViewer}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
-          {selected && (
+        {selected && (
             <>
               <SheetTitle>{docTypeMeta((selected.doc_type as DocType) ?? 'other').label}</SheetTitle>
               <MutedText>{selected.doc_date ? date(selected.doc_date) : date(selected.imported_at)}</MutedText>
@@ -319,10 +318,9 @@ export default function DocumentsArchive() {
 
               {sharing && <MutedText style={{ marginTop: spacing.sm }}>{t('documentsArchive.preparingShare')}</MutedText>}
 
-              <SecondaryButton title={t('common.cancel')} onPress={closeViewer} />
-            </>
-          )}
-        </ScrollView>
+            <SecondaryButton title={t('common.cancel')} onPress={closeViewer} />
+          </>
+        )}
       </ModalSheet>
     </Screen>
   );

@@ -190,22 +190,18 @@ export default function EquipmentScreen() {
       </ScrollView>
 
       <ModalSheet visible={showAddForm} onClose={() => setShowAddForm(false)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('equipmentScreen.addEquipment')}</SheetTitle>
-          {renderForm(addForm, setAddForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
-        </ScrollView>
+        <SheetTitle>{t('equipmentScreen.addEquipment')}</SheetTitle>
+        {renderForm(addForm, setAddForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
       </ModalSheet>
 
       <ModalSheet visible={!!editing} onClose={() => setEditing(null)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('equipmentScreen.editEquipment')}</SheetTitle>
-          {editing && renderForm(editForm, setEditForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
-          {editing && <SecondaryButton title={`🗑 ${t('common.delete')}`} onPress={() => handleDelete(editing)} />}
-          <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
-        </ScrollView>
+        <SheetTitle>{t('equipmentScreen.editEquipment')}</SheetTitle>
+        {editing && renderForm(editForm, setEditForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
+        {editing && <SecondaryButton title={`🗑 ${t('common.delete')}`} onPress={() => handleDelete(editing)} />}
+        <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
       </ModalSheet>
     </Screen>
   );

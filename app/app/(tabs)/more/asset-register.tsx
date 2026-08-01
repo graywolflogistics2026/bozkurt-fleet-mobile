@@ -438,21 +438,17 @@ export default function AssetRegister() {
       </ScrollView>
 
       <ModalSheet visible={adding} onClose={closeAdd}>
-        <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
-          <SheetTitle>{t('assetRegister.addTitle')}</SheetTitle>
-          <AssetFormFields values={addForm} onChange={setAddForm} />
-          <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveAdd} loading={addSaving} />
-          <SecondaryButton title={t('common.cancel')} onPress={closeAdd} />
-        </ScrollView>
+        <SheetTitle>{t('assetRegister.addTitle')}</SheetTitle>
+        <AssetFormFields values={addForm} onChange={setAddForm} />
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveAdd} loading={addSaving} />
+        <SecondaryButton title={t('common.cancel')} onPress={closeAdd} />
       </ModalSheet>
 
       <ModalSheet visible={!!editing} onClose={closeEdit}>
-        <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
-          <SheetTitle>{t('assetRegister.editTitle')}</SheetTitle>
-          <AssetFormFields values={editForm} onChange={setEditForm} />
-          <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={editSaving} />
-          <SecondaryButton title={t('common.cancel')} onPress={closeEdit} />
-        </ScrollView>
+        <SheetTitle>{t('assetRegister.editTitle')}</SheetTitle>
+        <AssetFormFields values={editForm} onChange={setEditForm} />
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveEdit} loading={editSaving} />
+        <SecondaryButton title={t('common.cancel')} onPress={closeEdit} />
       </ModalSheet>
     </Screen>
   );

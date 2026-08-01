@@ -34,6 +34,45 @@ export const DEFAULT_CARD_ORDER = [
 
 export type DashboardCardId = (typeof DEFAULT_CARD_ORDER)[number];
 
+// UX MEGA-PASS item A (owner decision 2026-07-31, device evidence: "per
+// diem card opens Tax Estimator", "Recent Loads opens Cash Flow" — both
+// were symptoms of card onPress targets living as ad-hoc inline
+// `router.push()` calls scattered across app/(tabs)/index.tsx with no
+// single place to audit or test them against). One table, one source of
+// truth for "which screen does tapping this card open" — app/(tabs)/
+// index.tsx's cardRenderers reads from this instead of hardcoding a
+// route per card, and this table is what a route-target test actually
+// exercises. Per diem cards route to Settlements (where per-settlement
+// per_diem_days actually lives and is editable — CLAUDE.md invariant
+// #25) rather than Tax Estimator (which has no per diem breakdown at
+// all, making it a dead-end destination). Recent Loads routes to Loads
+// (its own record list) rather than Cash Flow. Cards not listed here
+// (scorpPreview, truckCard, fleetOverview, driverOverview) render their
+// own destination inline because it depends on runtime data (e.g. which
+// truck), not a fixed route.
+export const DASHBOARD_CARD_ROUTES: Partial<Record<DashboardCardId, string>> = {
+  totalRevenue: '/(tabs)/more/cash-flow',
+  totalDeductions: '/(tabs)/deductions',
+  netToOwner: '/(tabs)/more/cash-flow',
+  milesDriven: '/(tabs)/more/cash-flow',
+  ytdPerDiemDays: '/(tabs)/more/settlements',
+  perDiemDeduction: '/(tabs)/more/settlements',
+  perDiemSummary: '/(tabs)/more/settlements',
+  weeksInService: '/(tabs)/more/cash-flow',
+  avgNetPerWeek: '/(tabs)/more/cash-flow',
+  businessBalance: '/(tabs)/more/cash-flow',
+  revenuePerMile: '/(tabs)/more/cash-flow',
+  costPerMile: '/(tabs)/more/cash-flow',
+  profitPerMile: '/(tabs)/more/cash-flow',
+  revenueExpenseTrend: '/(tabs)/more/cash-flow',
+  estTotalTax: '/(tabs)/more/tax-estimator',
+  quarterlyPayment: '/(tabs)/more/tax-estimator',
+  weeklyTaxReserve: '/(tabs)/more/tax-estimator',
+  effectiveRate: '/(tabs)/more/tax-estimator',
+  capitalAccountStrip: '/(tabs)/more/capital-account',
+  recentLoads: '/(tabs)/more/loads',
+};
+
 // Dashboard redesign (device feedback round 2, owner decision 2026-07-13):
 // these cards are hidden from the fresh/never-touched default layout —
 // absorbed into the new zoned design (perDiemSummary merges

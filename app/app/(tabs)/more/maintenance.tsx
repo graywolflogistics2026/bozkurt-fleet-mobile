@@ -436,31 +436,27 @@ export default function Maintenance() {
       </ScrollView>
 
       <ModalSheet visible={showAddForm} onClose={() => setShowAddForm(false)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('maintenance.addRecord')}</SheetTitle>
-          {renderForm(addForm, setAddForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
-        </ScrollView>
+        <SheetTitle>{t('maintenance.addRecord')}</SheetTitle>
+        {renderForm(addForm, setAddForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
       </ModalSheet>
 
       <ModalSheet visible={!!editing} onClose={() => setEditing(null)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('maintenance.editRecord')}</SheetTitle>
-          {renderForm(editForm, setEditForm)}
-          <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
-          {editing?.document_id && (
-            <SecondaryButton
-              title={`📄 ${t('common.viewOriginalDocument')}`}
-              onPress={() => {
-                const documentId = editing.document_id as string;
-                setEditing(null);
-                router.push({ pathname: '/(tabs)/more/documents', params: { openId: documentId } } as unknown as Href);
-              }}
-            />
-          )}
-          <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
-        </ScrollView>
+        <SheetTitle>{t('maintenance.editRecord')}</SheetTitle>
+        {renderForm(editForm, setEditForm)}
+        <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
+        {editing?.document_id && (
+          <SecondaryButton
+            title={`📄 ${t('common.viewOriginalDocument')}`}
+            onPress={() => {
+              const documentId = editing.document_id as string;
+              setEditing(null);
+              router.push({ pathname: '/(tabs)/more/documents', params: { openId: documentId } } as unknown as Href);
+            }}
+          />
+        )}
+        <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
       </ModalSheet>
     </Screen>
   );

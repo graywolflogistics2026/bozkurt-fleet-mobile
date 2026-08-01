@@ -379,8 +379,7 @@ export default function TruckHealth() {
       </ScrollView>
 
       <ModalSheet visible={editingIntervals} onClose={() => setEditingIntervals(false)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('truckHealth.editIntervalsTitle')}</SheetTitle>
+        <SheetTitle>{t('truckHealth.editIntervalsTitle')}</SheetTitle>
           {(intervalsQuery.data ?? [])
             .slice()
             .sort((a, b) => HEALTH_CATEGORIES.indexOf(a.category as HealthCategory) - HEALTH_CATEGORIES.indexOf(b.category as HealthCategory))
@@ -417,9 +416,8 @@ export default function TruckHealth() {
                 </View>
               );
             })}
-          <PrimaryButton title={t('common.save')} onPress={handleSaveIntervals} loading={savingIntervals} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setEditingIntervals(false)} />
-        </ScrollView>
+        <PrimaryButton title={t('common.save')} onPress={handleSaveIntervals} loading={savingIntervals} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setEditingIntervals(false)} />
       </ModalSheet>
 
       <ModalSheet visible={editingOdometer} onClose={() => setEditingOdometer(false)}>

@@ -85,6 +85,21 @@ function TopBarImportButton({ isWide }: { isWide: boolean }) {
   );
 }
 
+// UX MEGA-PASS item B (owner decision 2026-07-31, device evidence: "Import
+// needs a close button"). Import is reached via the raised center [+]
+// button / action sheet, not a natural "back" push, and as its own sibling
+// Tabs.Screen it gets no default back arrow — this gives it an explicit,
+// always-present way out, straight to Home (consistent with item A's
+// "top-level screen returns Home" rule).
+function ImportCloseButton() {
+  const router = useRouter();
+  return (
+    <Pressable onPress={() => router.push('/(tabs)')} hitSlop={12} style={{ paddingHorizontal: spacing.md }}>
+      <Text style={{ fontSize: 20, color: colors.text }}>✕</Text>
+    </Pressable>
+  );
+}
+
 function DashboardBell() {
   const router = useRouter();
   const { count } = useAlertsData();
@@ -138,6 +153,20 @@ export default function TabsLayout() {
 
   const tabs = (
     <Tabs
+      // UX MEGA-PASS item A (owner decision 2026-07-31, device evidence:
+      // "back always lands on Truck page" from many unrelated screens).
+      // Root cause: bottom-tabs' default backBehavior is 'history' — the
+      // hardware/gesture back button, once a tab's own stack is back at
+      // its root, jumps to whichever OTHER tab was most recently active,
+      // not necessarily Home. truck-health (href: null, but still its own
+      // sibling Tabs.Screen — see below) is reached from many shortcuts
+      // (Home's Truck Status card, Reports' Intelligence group), so it
+      // was very often "the last other tab," making it the constant,
+      // seemingly-random back target reported. 'initialRoute' makes back
+      // deterministic: once a tab's stack is exhausted, back always
+      // returns to THIS navigator's initial route (index / Home) —
+      // matching the requirement "from a top-level screen returns Home."
+      backBehavior="initialRoute"
       screenOptions={{
         headerStyle: { backgroundColor: colors.side },
         headerTitleStyle: { color: colors.text },
@@ -176,6 +205,7 @@ export default function TabsLayout() {
           // sheet (Import / Ask AI) instead of navigating straight to the
           // import tab — same pattern as the Menu tab below.
           tabBarButton: (props) => <CenterImportButton {...props} onOpenActionSheet={() => setActionSheetOpen(true)} />,
+          headerLeft: () => <ImportCloseButton />,
         }}
       />
       <Tabs.Screen

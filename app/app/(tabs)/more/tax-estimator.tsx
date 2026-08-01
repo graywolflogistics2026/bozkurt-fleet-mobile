@@ -485,35 +485,33 @@ export default function TaxEstimator() {
       </ScrollView>
 
       <ModalSheet visible={addingIncome} onClose={() => setAddingIncome(false)}>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-          <SheetTitle>{t('taxEstimator.household.addTitle')}</SheetTitle>
+        <SheetTitle>{t('taxEstimator.household.addTitle')}</SheetTitle>
 
-          <MutedText>{t('taxEstimator.household.nameLabel')}</MutedText>
-          <Field value={incomeName} onChangeText={setIncomeName} placeholder={t('taxEstimator.household.namePlaceholder')} />
+        <MutedText>{t('taxEstimator.household.nameLabel')}</MutedText>
+        <Field value={incomeName} onChangeText={setIncomeName} placeholder={t('taxEstimator.household.namePlaceholder')} />
 
-          <MutedText>{t('taxEstimator.household.relationLabel')}</MutedText>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {RELATIONS.map((r) => (
-              <Pill key={r} label={t(`taxEstimator.household.relation.${r}`)} selected={incomeRelation === r} onPress={() => setIncomeRelation(r)} />
-            ))}
-          </View>
+        <MutedText>{t('taxEstimator.household.relationLabel')}</MutedText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {RELATIONS.map((r) => (
+            <Pill key={r} label={t(`taxEstimator.household.relation.${r}`)} selected={incomeRelation === r} onPress={() => setIncomeRelation(r)} />
+          ))}
+        </View>
 
-          <MutedText>{t('taxEstimator.household.incomeTypeLabel')}</MutedText>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {INCOME_TYPES.map((it) => (
-              <Pill key={it} label={t(`taxEstimator.household.incomeType.${it}`)} selected={incomeType === it} onPress={() => setIncomeType(it)} />
-            ))}
-          </View>
+        <MutedText>{t('taxEstimator.household.incomeTypeLabel')}</MutedText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {INCOME_TYPES.map((it) => (
+            <Pill key={it} label={t(`taxEstimator.household.incomeType.${it}`)} selected={incomeType === it} onPress={() => setIncomeType(it)} />
+          ))}
+        </View>
 
-          <MutedText>{t('taxEstimator.household.annualAmountLabel')}</MutedText>
-          <Field keyboardType="numeric" value={incomeAmount} onChangeText={setIncomeAmount} placeholder="0.00" />
+        <MutedText>{t('taxEstimator.household.annualAmountLabel')}</MutedText>
+        <Field keyboardType="numeric" value={incomeAmount} onChangeText={setIncomeAmount} placeholder="0.00" />
 
-          <MutedText>{t('taxEstimator.household.federalWithheldLabel')}</MutedText>
-          <Field keyboardType="numeric" value={incomeWithheld} onChangeText={setIncomeWithheld} placeholder="0.00" />
+        <MutedText>{t('taxEstimator.household.federalWithheldLabel')}</MutedText>
+        <Field keyboardType="numeric" value={incomeWithheld} onChangeText={setIncomeWithheld} placeholder="0.00" />
 
-          <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveIncome} loading={incomeSaving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setAddingIncome(false)} />
-        </ScrollView>
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveIncome} loading={incomeSaving} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setAddingIncome(false)} />
       </ModalSheet>
     </Screen>
   );

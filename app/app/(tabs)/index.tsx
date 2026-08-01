@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -50,6 +50,7 @@ import {
   CARD_LABEL_KEYS,
   SECTION_IDS,
   SECTION_LABEL_KEYS,
+  DASHBOARD_CARD_ROUTES,
   type DashboardCardId,
   type DashboardCardConfig,
   type SectionId,
@@ -929,6 +930,13 @@ export default function Dashboard() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const userId = session?.user.id;
+  // UX MEGA-PASS item A: every card with a fixed destination reads it
+  // from DASHBOARD_CARD_ROUTES (src/stats/dashboardLayout.ts) instead of
+  // a hardcoded router.push() inline — one table, testable, audited.
+  const goToCard = (id: DashboardCardId) => {
+    const route = DASHBOARD_CARD_ROUTES[id];
+    if (route) router.push(route as Href);
+  };
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [reasonableSalaryInput, setReasonableSalaryInput] = useState('');
@@ -1245,18 +1253,18 @@ export default function Dashboard() {
   // what used to be separate groups.
   const cardRenderers: Partial<Record<DashboardCardId, (label: string) => React.ReactNode>> = {
     totalRevenue: (label) => (
-      <TappableCard key="totalRevenue" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="totalRevenue" onPress={() => goToCard('totalRevenue')}>
         <StatValue label={label} value={stats ? money(stats.grossRevenue) : '—'} valueColor={colors.green} />
         <MutedText>{t('dashboard.importToStart')}</MutedText>
       </TappableCard>
     ),
     totalDeductions: (label) => (
-      <TappableCard key="totalDeductions" onPress={() => router.push('/(tabs)/deductions')}>
+      <TappableCard key="totalDeductions" onPress={() => goToCard('totalDeductions')}>
         <StatValue label={label} value={stats ? money(stats.totalDeductions) : '—'} valueColor={colors.red} />
       </TappableCard>
     ),
     netToOwner: (label) => (
-      <TappableCard key="netToOwner" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="netToOwner" onPress={() => goToCard('netToOwner')}>
         <StatValue
           label={label}
           value={stats ? money(stats.netRevenue) : '—'}
@@ -1266,18 +1274,18 @@ export default function Dashboard() {
       </TappableCard>
     ),
     milesDriven: (label) => (
-      <TappableCard key="milesDriven" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="milesDriven" onPress={() => goToCard('milesDriven')}>
         <StatValue label={label} value={stats ? number(stats.totalMiles) : '—'} />
       </TappableCard>
     ),
     ytdPerDiemDays: (label) => (
-      <TappableCard key="ytdPerDiemDays" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+      <TappableCard key="ytdPerDiemDays" onPress={() => goToCard('ytdPerDiemDays')}>
         <StatValue label={label} value={stats ? `${stats.perDiemDays}` : '—'} valueColor={colors.accent} />
         <MutedText>{t('dashboard.daysOnRoad')}</MutedText>
       </TappableCard>
     ),
     perDiemDeduction: (label) => (
-      <TappableCard key="perDiemDeduction" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+      <TappableCard key="perDiemDeduction" onPress={() => goToCard('perDiemDeduction')}>
         <StatValue label={label} value={tax ? money(tax.perDiemDeduction) : '—'} valueColor={colors.green} />
         {perDiemCaption(tax?.taxYearData.per_diem, t) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem, t)}</MutedText>}
       </TappableCard>
@@ -1288,7 +1296,7 @@ export default function Dashboard() {
     // stay registered above too (hidden by default, still individually
     // toggleable via Customize) rather than being removed.
     perDiemSummary: (label) => (
-      <TappableCard key="perDiemSummary" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+      <TappableCard key="perDiemSummary" onPress={() => goToCard('perDiemSummary')}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <View>
             <MutedText>{t('dashboard.daysOnRoad')}</MutedText>
@@ -1308,19 +1316,19 @@ export default function Dashboard() {
       </TappableCard>
     ),
     weeksInService: (label) => (
-      <TappableCard key="weeksInService" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="weeksInService" onPress={() => goToCard('weeksInService')}>
         <StatValue label={label} value={stats ? `${stats.settlementCount}` : '—'} />
         <MutedText>{t('dashboard.settlementsImported')}</MutedText>
       </TappableCard>
     ),
     avgNetPerWeek: (label) => (
-      <TappableCard key="avgNetPerWeek" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="avgNetPerWeek" onPress={() => goToCard('avgNetPerWeek')}>
         <StatValue label={label} value={stats ? money(stats.avgNetPerWeek) : '—'} />
         <MutedText>{t('dashboard.directDepositAvg')}</MutedText>
       </TappableCard>
     ),
     businessBalance: (label) => (
-      <TappableCard key="businessBalance" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="businessBalance" onPress={() => goToCard('businessBalance')}>
         <StatValue
           label={label}
           value={money(capital?.businessBalance ?? 0)}
@@ -1332,7 +1340,7 @@ export default function Dashboard() {
       </TappableCard>
     ),
     revenuePerMile: (label) => (
-      <TappableCard key="revenuePerMile" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="revenuePerMile" onPress={() => goToCard('revenuePerMile')}>
         <StatValue
           label={label}
           value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
@@ -1342,7 +1350,7 @@ export default function Dashboard() {
       </TappableCard>
     ),
     costPerMile: (label) => (
-      <TappableCard key="costPerMile" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="costPerMile" onPress={() => goToCard('costPerMile')}>
         <StatValue
           label={label}
           value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
@@ -1352,7 +1360,7 @@ export default function Dashboard() {
       </TappableCard>
     ),
     profitPerMile: (label) => (
-      <TappableCard key="profitPerMile" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="profitPerMile" onPress={() => goToCard('profitPerMile')}>
         <StatValue
           label={label}
           value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
@@ -1363,13 +1371,13 @@ export default function Dashboard() {
     ),
     revenueExpenseTrend: (label) =>
       revenueExpenseTrend.length === 0 ? null : (
-        <TappableCard key="revenueExpenseTrend" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+        <TappableCard key="revenueExpenseTrend" onPress={() => goToCard('revenueExpenseTrend')}>
           {label !== t('dashboard.revenueExpenseTrendTitle') && <MutedText style={{ marginBottom: spacing.xs }}>{label}</MutedText>}
           <RevenueExpenseChart points={revenueExpenseTrend} />
         </TappableCard>
       ),
     estTotalTax: (label) => (
-      <TappableCard key="estTotalTax" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+      <TappableCard key="estTotalTax" onPress={() => goToCard('estTotalTax')}>
         <StatValue label={label} value={tax ? money(tax.estimate.totalTax) : '—'} valueColor={colors.red} />
         {tax && (
           <MutedText>
@@ -1381,7 +1389,7 @@ export default function Dashboard() {
       </TappableCard>
     ),
     quarterlyPayment: (label) => (
-      <TappableCard key="quarterlyPayment" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+      <TappableCard key="quarterlyPayment" onPress={() => goToCard('quarterlyPayment')}>
         <StatValue label={label} value={tax ? money(tax.estimate.quarterlyPayment) : '—'} valueColor={colors.red} />
         {deadline ? (
           <Text style={{ color: urgencyColor(deadline.urgency), fontSize: typography.size.sm, marginTop: 2 }}>
@@ -1396,13 +1404,13 @@ export default function Dashboard() {
       </TappableCard>
     ),
     weeklyTaxReserve: (label) => (
-      <TappableCard key="weeklyTaxReserve" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+      <TappableCard key="weeklyTaxReserve" onPress={() => goToCard('weeklyTaxReserve')}>
         <StatValue label={label} value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'} />
         <Text style={{ color: colors.orange, fontSize: typography.size.sm, marginTop: 2 }}>{t('dashboard.setAsideWeekly')}</Text>
       </TappableCard>
     ),
     effectiveRate: (label) => (
-      <TappableCard key="effectiveRate" onPress={() => router.push('/(tabs)/more/tax-estimator')}>
+      <TappableCard key="effectiveRate" onPress={() => goToCard('effectiveRate')}>
         <StatValue label={label} value={tax?.estimate.effectiveRate != null ? `${tax.estimate.effectiveRate.toFixed(1)}%` : '—'} />
         <MutedText>{t('dashboard.ofNetProfit')}</MutedText>
         {tax?.estimate.stateTax.label === 'estimate' && (
@@ -1444,7 +1452,7 @@ export default function Dashboard() {
         </Card>
       ) : null,
     capitalAccountStrip: (label) => (
-      <TappableCard key="capitalAccountStrip" onPress={() => router.push('/(tabs)/more/capital-account')}>
+      <TappableCard key="capitalAccountStrip" onPress={() => goToCard('capitalAccountStrip')}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <View>
             <MutedText>{t('dashboard.contributed')}</MutedText>
@@ -1479,7 +1487,7 @@ export default function Dashboard() {
       </TappableCard>
     ),
     recentLoads: (label) => (
-      <TappableCard key="recentLoads" onPress={() => router.push('/(tabs)/more/cash-flow')}>
+      <TappableCard key="recentLoads" onPress={() => goToCard('recentLoads')}>
         {recentLoads.length === 0 ? (
           <MutedText>{t('dashboard.noLoadsYet')}</MutedText>
         ) : (
