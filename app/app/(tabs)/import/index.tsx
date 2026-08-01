@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -22,7 +22,7 @@ import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMiss
 import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
-import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
+import { isPersonalPayment, normalizePaymentMethod, withPaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useDocTypeMeta } from '@/src/import/docTypes';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
@@ -37,6 +37,26 @@ type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
 function money(n: number | undefined | null, locale: string) {
   if (n == null) return '—';
   return formatMoney(n, locale);
+}
+
+function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: radii.sm,
+        borderWidth: 1,
+        borderColor: selected ? colors.accent : colors.border,
+        backgroundColor: selected ? colors.accent : colors.card2,
+        marginEnd: spacing.xs,
+        marginBottom: spacing.xs,
+      }}
+    >
+      <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{label}</Text>
+    </Pressable>
+  );
 }
 
 type PreviewLine = { label: string; value: string; color?: string };
@@ -333,6 +353,10 @@ export default function Import() {
     if (isSettlementWeekEndingMissing(extraction)) return;
 
     const isPurchase = extraction.docType === 'amazon' || extraction.docType === 'store';
+    // UX MEGA-PASS item D: payment method is auto-detected AND stays
+    // user-editable in the preview (see the payment-method Pill row
+    // below) — Save always reads whatever's currently on `extraction`,
+    // which withPaymentMethod() keeps in sync with the user's own edits.
     const payMethod = normalizePaymentMethod(extraction.purchase?.paymentMethod);
     const hasPersonalPurchase = isPurchase && isPersonalPayment(payMethod);
     const createContribution = hasPersonalPurchase ? await confirmOwnerContribution(payMethod) : false;
@@ -496,6 +520,27 @@ export default function Import() {
                 <Text style={{ color: line.color ?? colors.text, fontWeight: '600' }}>{line.value}</Text>
               </View>
             ))}
+
+            {(extraction.docType === 'amazon' || extraction.docType === 'store') && (
+              <View style={{ marginTop: spacing.sm }}>
+                <MutedText>{t('importScreen.previewLabels.paymentMethod')}</MutedText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs }}>
+                  {PAYMENT_METHODS.map((pm) => (
+                    <Pill
+                      key={pm}
+                      label={pm}
+                      selected={normalizePaymentMethod(extraction.purchase?.paymentMethod) === pm}
+                      onPress={() => setExtraction(withPaymentMethod(extraction, pm))}
+                    />
+                  ))}
+                </View>
+                {isPersonalPayment(normalizePaymentMethod(extraction.purchase?.paymentMethod)) && (
+                  <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
+                    {t('deductions.personalPaymentNote')}
+                  </MutedText>
+                )}
+              </View>
+            )}
 
             {extraction.docType === 'other' && (
               <View style={{ marginTop: spacing.sm }}>
@@ -673,7 +718,18 @@ export default function Import() {
               </MutedText>
             )}
             {result.storagePath && <MutedText>{t('importScreen.savedToPath', { path: result.storagePath })}</MutedText>}
+            {/* UX MEGA-PASS item D: three explicit choices instead of one
+                "import another" — View Record reopens the just-saved
+                document (with its own "linked records" jump to the
+                actual settlement/deduction/etc. row), Done returns Home. */}
+            <PrimaryButton
+              title={t('importScreen.viewRecord')}
+              onPress={() =>
+                router.push({ pathname: '/(tabs)/more/documents', params: { openId: result.documentId } } as unknown as Href)
+              }
+            />
             <SecondaryButton title={t('importScreen.importAnother')} onPress={reset} />
+            <SecondaryButton title={t('importScreen.done')} onPress={() => router.push('/(tabs)')} />
           </Card>
         )}
 

@@ -950,3 +950,24 @@
   mount" risk elsewhere in the app should default to this same pattern —
   a plain, dependency-free primary path with the risky/fancy version kept
   as an opt-in upgrade, not the reverse.
+- UX MEGA-PASS item D — IMPORT FLOW (owner decision 2026-07-31): (1)
+  payment method was already auto-detected at Save time
+  (`normalizePaymentMethod(extraction.purchase?.paymentMethod)`,
+  `app/(tabs)/import/index.tsx`) but had NO editable UI anywhere in the
+  preview — a wrong AI guess had no fix short of editing the deduction
+  after the fact. The import preview now shows the same 9-pill payment-
+  method picker Deductions uses (`app/(tabs)/import/index.tsx`'s local
+  `Pill`), for `amazon`/`store` (purchase) extractions only, wired
+  through a new pure helper, `app/src/import/paymentMethods.ts`'s
+  `withPaymentMethod(extraction, method)` — mirrors `dateGuard.ts`'s
+  `withPrimaryExtractionDate()`/`perDiem.ts`'s `withPerDiemDays()` pattern
+  so the screen's single `extraction` state stays the one source of truth
+  Save reads from, no separate override state to drift out of sync. (2)
+  The post-save screen's single "Import Another" button is now three:
+  **View Record** (opens `/(tabs)/more/documents?openId=<documentId>` —
+  `SaveExtractionResult.documentId` is always available regardless of
+  docType, and the Documents viewer's existing "linked records" list
+  already jumps from there to the actual settlement/deduction/maintenance
+  row, so this reuses 100% existing plumbing rather than adding a new
+  per-docType route table), **Import Another** (unchanged, calls the
+  existing `reset()`), and **Done** (routes to `/(tabs)`, Home).

@@ -347,6 +347,8 @@
     "contributionAdded": "💰 أُضيف كمساهمة في حساب رأس المال: {{amount}} (مدفوع من أموال شخصية)",
     "savedToPath": "📁 حُفظ في {{path}}",
     "importAnother": "استيراد آخر",
+    "viewRecord": "عرض السجل",
+    "done": "تم (الرئيسية)",
     "saveFailed": "فشل الحفظ.",
     "tryAgain": "حاول مرة أخرى",
     "previewLabels": {

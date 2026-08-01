@@ -1,3 +1,5 @@
+import type { Extraction } from '@/src/import/types';
+
 // Owner decision 2026-07-07 (web app v2026.07.07-H) — payment methods
 // collapse to exactly these 9 generic values. Never a bank-brand string
 // like "BofA Business" (CLAUDE.md invariant #2).
@@ -57,4 +59,18 @@ export function normalizePaymentMethod(raw: string | undefined | null): PaymentM
   if (PAYMENT_METHOD_SET.has(trimmed)) return trimmed as PaymentMethod;
   const mapped = LEGACY_PAYMENT_MAP[trimmed.toLowerCase()];
   return mapped ?? 'Business Credit Card';
+}
+
+// UX MEGA-PASS item D (owner decision 2026-07-31): the import preview's
+// payment method must be auto-detected (already true — normalizePaymentMethod
+// above) but also stay user-editable before Save. Only 'amazon'/'store'
+// (purchase) extractions carry a paymentMethod at all — same
+// docType-gating the preview already uses (app/(tabs)/import/index.tsx's
+// isPurchase). Mirrors dateGuard.ts's withPrimaryExtractionDate()/
+// withPerDiemDays() pattern: a pure function returning a new Extraction,
+// so the preview screen's single `extraction` state stays the one source
+// of truth Save reads from — no separate override state that could drift.
+export function withPaymentMethod(extraction: Extraction, method: PaymentMethod): Extraction {
+  if (!extraction.purchase) return extraction;
+  return { ...extraction, purchase: { ...extraction.purchase, paymentMethod: method } };
 }

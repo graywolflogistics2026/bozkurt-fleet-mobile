@@ -347,6 +347,8 @@
     "contributionAdded": "💰 Sermaye Hesabı katkısı olarak eklendi: {{amount}} (kişisel fonlardan ödendi)",
     "savedToPath": "📁 Şuraya kaydedildi: {{path}}",
     "importAnother": "Başka Bir Tane İçe Aktar",
+    "viewRecord": "Kaydı Görüntüle",
+    "done": "Bitti (Ana Sayfa)",
     "saveFailed": "Kaydetme başarısız.",
     "tryAgain": "Tekrar Dene",
     "previewLabels": {

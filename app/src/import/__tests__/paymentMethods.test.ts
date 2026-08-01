@@ -1,4 +1,5 @@
-import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
+import { isPersonalPayment, normalizePaymentMethod, withPaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
+import type { Extraction } from '@/src/import/types';
 
 describe('normalizePaymentMethod', () => {
   it('passes through any of the 9 generic values unchanged', () => {
@@ -44,5 +45,27 @@ describe('isPersonalPayment', () => {
     expect(isPersonalPayment('Business Checking')).toBe(false);
     expect(isPersonalPayment('Business Credit Card')).toBe(false);
     expect(isPersonalPayment('Zelle Business')).toBe(false);
+  });
+});
+
+// UX MEGA-PASS item D (owner decision 2026-07-31): the import preview's
+// auto-detected payment method must stay user-editable before Save.
+describe('withPaymentMethod', () => {
+  it('sets purchase.paymentMethod on a purchase extraction', () => {
+    const extraction: Extraction = { docType: 'amazon', purchase: { total: 50 } };
+    const updated = withPaymentMethod(extraction, 'Cash');
+    expect(updated.purchase?.paymentMethod).toBe('Cash');
+    expect(updated.purchase?.total).toBe(50);
+  });
+
+  it('overwrites an existing paymentMethod rather than merging incorrectly', () => {
+    const extraction: Extraction = { docType: 'store', purchase: { total: 50, paymentMethod: 'Business Credit Card' } };
+    const updated = withPaymentMethod(extraction, 'Zelle Personal');
+    expect(updated.purchase?.paymentMethod).toBe('Zelle Personal');
+  });
+
+  it('is a no-op when the extraction has no purchase (non-purchase docType)', () => {
+    const extraction: Extraction = { docType: 'fuel' };
+    expect(withPaymentMethod(extraction, 'Cash')).toBe(extraction);
   });
 });

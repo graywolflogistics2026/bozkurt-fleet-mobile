@@ -347,6 +347,8 @@
     "contributionAdded": "💰 Добавлено как взнос в Капитальный Счёт: {{amount}} (оплачено личными средствами)",
     "savedToPath": "📁 Сохранено в {{path}}",
     "importAnother": "Импортировать Другой",
+    "viewRecord": "Просмотреть Запись",
+    "done": "Готово (Домой)",
     "saveFailed": "Ошибка сохранения.",
     "tryAgain": "Повторить",
     "previewLabels": {

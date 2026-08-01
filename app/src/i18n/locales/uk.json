@@ -347,6 +347,8 @@
     "contributionAdded": "💰 Added as a Capital Account contribution: {{amount}} (paid from personal funds)",
     "savedToPath": "📁 Saved to {{path}}",
     "importAnother": "Import Another",
+    "viewRecord": "View Record",
+    "done": "Done (Home)",
     "saveFailed": "Save failed.",
     "tryAgain": "Try Again",
     "previewLabels": {

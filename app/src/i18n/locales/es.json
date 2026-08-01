@@ -347,6 +347,8 @@
     "contributionAdded": "💰 Agregado como aporte a la Cuenta de Capital: {{amount}} (pagado con fondos personales)",
     "savedToPath": "📁 Guardado en {{path}}",
     "importAnother": "Importar Otro",
+    "viewRecord": "Ver Registro",
+    "done": "Listo (Inicio)",
     "saveFailed": "Error al guardar.",
     "tryAgain": "Intentar de Nuevo",
     "previewLabels": {
