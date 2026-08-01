@@ -1080,3 +1080,30 @@
   found and fixed for the Dashboard specifically. Fixing those three
   needs its own pass (they're a different card/screen from the one this
   audit item named) rather than a scope-creeping side effect here.
+- UX MEGA-PASS item H — PER DIEM RE-CHECK (owner decision 2026-07-31,
+  device evidence: re-verify `calcPerDiemDays` end to end). Traced the
+  full pipeline and found it correct at every stage, already covered by
+  `src/tax/__tests__/perDiem.test.ts`'s existing 0-mile/dedup/clamp
+  cases: (1) import preview — `applyDefaultPerDiemDays()` smart-defaults
+  a new settlement's `perDiemDays` to 0 for a 0-mile "home week," 7
+  otherwise, editable via `withPerDiemDays()`; (2) save —
+  `mapExtraction.ts`'s `mapSettlement()` writes
+  `clampPerDiemDays(s.perDiemDays ?? defaultPerDiemDaysForMiles(miles))`,
+  the same smart default as a fallback if the preview step was somehow
+  skipped; (3) settlement detail (`settlements.tsx`) — freely editable
+  after the fact; (4) `fetchFleetStats()` selects `per_diem_days` and
+  calls `calcPerDiemDays(rows)`, which SUMS whatever's stored per
+  settlement (deduped by `week_ending`, taking the MIN on a multi-truck
+  fleet's same-week duplicate) — it never re-derives from miles, so a
+  user's manual edit always sticks. Computed a concrete 2-settlement
+  dataset to verify end to end: one full OTR week (W/E 2026-07-18, 2,500
+  mi, `per_diem_days: 7`) + one home week (W/E 2026-07-25, 0 mi,
+  `per_diem_days: 0`) → `calcPerDiemDays()` returns **7**, matching the
+  expected 7 + 0 = 7 exactly (verified by direct test run, not just
+  manual arithmetic). The one real gap found: the day-count breakdown was
+  only visible after tapping into a settlement's detail sheet, not at a
+  glance in the Settlements list — added
+  `settlementsScreen.perDiemDaysCount` ("{{count}}/7 per diem days") to
+  each list row so the breakdown is visible without an extra tap, per the
+  directive's "show the day count breakdown per settlement somewhere
+  visible."

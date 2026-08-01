@@ -831,6 +831,7 @@
     "netLabelShort": "Net",
     "milesLabelShort": "Miles",
     "perDiemDaysLabel": "Per Diem Days (0-7)",
+    "perDiemDaysCount": "{{count}}/7 per diem days",
     "perDiemSaveFailedTitle": "Could not save per diem days",
     "incomeLines": "Income Lines",
     "chargebacks": "Chargebacks",

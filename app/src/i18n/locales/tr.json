@@ -831,6 +831,7 @@
     "netLabelShort": "Net",
     "milesLabelShort": "Mil",
     "perDiemDaysLabel": "Per Diem Günleri (0-7)",
+    "perDiemDaysCount": "{{count}}/7 per diem günü",
     "perDiemSaveFailedTitle": "Per diem günleri kaydedilemedi",
     "incomeLines": "Gelir Kalemleri",
     "chargebacks": "Kesintiler",

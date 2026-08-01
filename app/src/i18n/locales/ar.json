@@ -831,6 +831,7 @@
     "netLabelShort": "الصافي",
     "milesLabelShort": "الأميال",
     "perDiemDaysLabel": "أيام الـ per diem (0-7)",
+    "perDiemDaysCount": "{{count}}/7 أيام per diem",
     "perDiemSaveFailedTitle": "تعذّر حفظ أيام الـ per diem",
     "incomeLines": "بنود الدخل",
     "chargebacks": "الخصومات المحتجزة",

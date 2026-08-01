@@ -831,6 +831,7 @@
     "netLabelShort": "Нетто",
     "milesLabelShort": "Мили",
     "perDiemDaysLabel": "Дни per diem (0-7)",
+    "perDiemDaysCount": "{{count}}/7 дней per diem",
     "perDiemSaveFailedTitle": "Не удалось сохранить дни per diem",
     "incomeLines": "Статьи Дохода",
     "chargebacks": "Удержания",

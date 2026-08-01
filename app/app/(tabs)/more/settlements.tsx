@@ -212,6 +212,10 @@ export default function Settlements() {
                 <View>
                   <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
                   <MutedText>{number(x.miles ?? 0)} mi</MutedText>
+                  {/* UX MEGA-PASS item H: the per-settlement day count
+                      breakdown visible at a glance in the list, not just
+                      after tapping into the detail sheet. */}
+                  <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.amount}>{money(x.net)}</Text>
