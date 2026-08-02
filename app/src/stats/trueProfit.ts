@@ -44,15 +44,43 @@ export function isDeductibleExpense(d: { tax_deductible: boolean | null }): bool
   return d.tax_deductible !== false;
 }
 
+// CRITICAL BUG FIX (device feedback 2026-07-31, "Cash Flow shows revenue
+// with none of the settlement's expenses subtracted"): mapSettlement()
+// stamps EVERY settlement-withheld row tax_deductible:false unconditionally
+// (CLAUDE.md invariant #1 defense-in-depth, so a withheld chargeback is
+// never double-counted as a TAX deduction) — but isDeductibleExpense() was
+// also being used here to decide whether a row reduces TRUE PROFIT, which
+// is a different question. That made calcTrueProfit() silently skip every
+// withheld dollar (fuel advance, insurance, ELD fees, tolls, escrow...)
+// instead of subtracting it, exactly contradicting this file's own header
+// comment ("gross - every deduction row, withheld + out-of-pocket, once").
+// A withheld row genuinely left the settlement check — it must count —
+// UNLESS it's one of the two specific non-expense categories (owner
+// decision 2026-07-17): a per-diem-covered meal (already covered by the
+// per diem allowance, never a new expense) or an Advance Repayment (loan
+// principal being returned, not a new expense either). Those two stay
+// excluded regardless of source; every other withheld row now counts.
+const TRUE_PROFIT_EXCLUDED_CATEGORIES = new Set(['Meals (per diem covered)', 'Advance Repayment']);
+
+export function reducesTrueProfit(d: {
+  source?: string | null;
+  category?: string | null;
+  tax_deductible: boolean | null;
+}): boolean {
+  if (TRUE_PROFIT_EXCLUDED_CATEGORIES.has(d.category ?? '')) return false;
+  if (d.source === 'settlement') return true;
+  return isDeductibleExpense(d);
+}
+
 export function calcTrueProfit(
   settlements: Array<{ gross: number | null }>,
-  deductions: Array<{ amount: number | null; tax_deductible: boolean | null }>
+  deductions: Array<{ amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null }>
 ): number {
   const grossRevenue = settlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const deductibleExpenses = deductions
-    .filter(isDeductibleExpense)
+  const trueExpenses = deductions
+    .filter(reducesTrueProfit)
     .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
-  return grossRevenue - deductibleExpenses;
+  return grossRevenue - trueExpenses;
 }
 
 // Same {weekEnding, gross, net} shape as cashFlowTrend.ts's
@@ -73,9 +101,9 @@ export function buildWeeklyTrueProfitTrend(settlements: Settlement[], deductions
     const gross = weekSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
     const start = weekStartFromEnding(weekEnding);
     const weekDeductions = deductions.filter((d) => d.ded_date && d.ded_date >= start && d.ded_date <= weekEnding);
-    const deductibleExpenses = weekDeductions
-      .filter(isDeductibleExpense)
+    const trueExpenses = weekDeductions
+      .filter(reducesTrueProfit)
       .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
-    return { weekEnding, gross, net: gross - deductibleExpenses };
+    return { weekEnding, gross, net: gross - trueExpenses };
   });
 }

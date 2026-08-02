@@ -85,11 +85,11 @@ function toReimbInsert(r: ExtractedReimbursementItem, userId: string, fallbackDa
   };
 }
 
-function toTollInsert(t: ExtractedToll, network: 'ezpass' | 'drivewyze', userId: string): TollInsert {
+function toTollInsert(t: ExtractedToll, network: 'ezpass' | 'drivewyze', userId: string, fallbackDate?: string): TollInsert {
   return {
     user_id: userId,
     network,
-    toll_date: t.date ?? null,
+    toll_date: t.date ?? fallbackDate ?? null,
     amount: num(t.amount),
     plaza: t.plaza ?? t.location ?? null,
   };
@@ -102,6 +102,19 @@ export function mapSettlement(
   driverId: string | null = null
 ): SettlementMapping {
   const s = d.settlement ?? {};
+
+  // CRITICAL BUG FIX (device feedback 2026-07-31, "settlement child rows
+  // missing/unreachable"): every child-row date below used to fall back to
+  // the extraction's TOP-LEVEL `d.date`, which the AI extraction prompt
+  // deliberately leaves empty for docType:'settlement' — settlements use
+  // settlement.weekEnding as their authoritative date (CLAUDE.md's DATE
+  // HARDENING rounds; see dateGuard.ts's getPrimaryExtractionDate()), not
+  // the top-level `date` field. That meant every fuel/reimbursement/
+  // withheld-deduction/toll/maintenance row saved from a settlement with no
+  // PER-LINE date of its own got purchase_date/reimb_date/ded_date/
+  // toll_date/service_date = NULL — which then landed every one of those
+  // rows in the UI's "unknown month" bucket instead of a real month.
+  const settlementFallbackDate = s.weekEnding || d.date || undefined;
 
   const miles = num(s.totalMiles);
   const settlement: SettlementInsert = {
@@ -125,7 +138,7 @@ export function mapSettlement(
   // day-range calc (app/src/tax/perDiem.ts) — load_date stays populated too
   // for existing display code that only reads the single column.
   const loads: LoadInsert[] = (s.loads ?? []).map((l) => {
-    const pickupDate = l.pickupDate ?? l.date ?? d.date ?? null;
+    const pickupDate = l.pickupDate ?? l.date ?? settlementFallbackDate ?? null;
     const deliveryDate = l.deliveryDate ?? l.dropDate ?? pickupDate;
     return {
       user_id: userId,
@@ -144,8 +157,8 @@ export function mapSettlement(
   });
 
   const fuel: FuelPurchaseInsert[] = [
-    ...(s.tractorFuel ?? []).map((f) => toFuelInsert(f, 'tractor', userId, truckId, driverId, d.date)),
-    ...(s.reeferFuel ?? []).map((f) => toFuelInsert(f, 'reefer', userId, truckId, driverId, d.date)),
+    ...(s.tractorFuel ?? []).map((f) => toFuelInsert(f, 'tractor', userId, truckId, driverId, settlementFallbackDate)),
+    ...(s.reeferFuel ?? []).map((f) => toFuelInsert(f, 'reefer', userId, truckId, driverId, settlementFallbackDate)),
   ];
 
   // Settlement-withheld line items — CLAUDE.md invariant #1 (net-pay
@@ -168,7 +181,7 @@ export function mapSettlement(
     user_id: userId,
     settlement_id: null,
     driver_id: driverId,
-    ded_date: d.date ?? null,
+    ded_date: settlementFallbackDate ?? null,
     code: x.code ?? null,
     description: x.desc ?? null,
     amount: num(x.amount),
@@ -183,7 +196,7 @@ export function mapSettlement(
   const maintenance: MaintenanceRecordInsert[] = (s.maintenance ?? []).map((m) => ({
     user_id: userId,
     truck_id: truckId,
-    service_date: d.date ?? null,
+    service_date: settlementFallbackDate ?? null,
     service_type: toDbServiceType(m.serviceType || detectMaintType(m.desc)),
     description: m.desc ?? null,
     odometer: num(m.odometer),
@@ -193,11 +206,13 @@ export function mapSettlement(
 
   // legacy/index.html:2516 — a real gap, not previously ported: settlement
   // reimbursementItems were extracted but never turned into DB rows.
-  const reimbursements: ReimbursementInsert[] = (s.reimbursementItems ?? []).map((r) => toReimbInsert(r, userId, d.date));
+  const reimbursements: ReimbursementInsert[] = (s.reimbursementItems ?? []).map((r) =>
+    toReimbInsert(r, userId, settlementFallbackDate)
+  );
 
   const tolls: TollInsert[] = [
-    ...(s.tolls?.ezpass?.items ?? []).map((t) => toTollInsert(t, 'ezpass', userId)),
-    ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, 'drivewyze', userId)),
+    ...(s.tolls?.ezpass?.items ?? []).map((t) => toTollInsert(t, 'ezpass', userId, settlementFallbackDate)),
+    ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, 'drivewyze', userId, settlementFallbackDate)),
   ];
 
   const loans: LoanInsert[] = (s.loans ?? []).map((l) => ({

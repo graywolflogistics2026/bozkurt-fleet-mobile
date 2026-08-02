@@ -9,6 +9,8 @@
 // Every unset input now contributes exactly $0 to the forecast; the tax
 // reserve % may be SUGGESTED as 25% in the UI copy, but it is never
 // applied to the math unless the user has actually entered a value.
+import { reducesTrueProfit } from '@/src/stats/trueProfit';
+
 export type CashFlowBudgetInputs = {
   bankBalance: number | null;
   weeklyRevenue: number | null;
@@ -54,6 +56,56 @@ export function trailingWeeklyRevenueAverage(
   if (recentWeeks.length === 0) return 0;
   const total = recentWeeks.reduce((sum, w) => sum + (byWeek.get(w) ?? 0), 0);
   return total / recentWeeks.length;
+}
+
+// CRITICAL BUG FIX (device feedback 2026-07-31, item 3: "Cash Flow shows
+// only revenue... none of the settlement's expenses subtracted" —
+// settlement-derived expenses must feed the forecast/actuals, not just
+// revenue): trailing 28-day average of ACTUAL out-of-pocket fuel cost
+// (net of discount), expressed as a weekly figure — same "from your
+// settlements" trailing-average pattern as trailingWeeklyRevenueAverage
+// above, just for an expense input instead of the revenue one. A 28-day
+// window (not "distinct fuel-purchase weeks") is used because fuel rows
+// don't carry a week_ending of their own the way settlements do; dividing
+// by exactly 4 keeps the result comparable to a weekly budget figure.
+export function trailingWeeklyFuelAverage(
+  fuelPurchases: { purchase_date: string | null; amount: number | null; discount: number | null }[],
+  now: Date = new Date(),
+  windowDays = 28
+): number {
+  const start = new Date(now);
+  start.setUTCDate(start.getUTCDate() - windowDays);
+  const startIso = start.toISOString().slice(0, 10);
+  const total = fuelPurchases
+    .filter((f) => (f.purchase_date ?? '') >= startIso)
+    .reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0);
+  return total / (windowDays / 7);
+}
+
+// Same pattern for the budget's "Other Weekly" expense input: settlement-
+// withheld deductions (fuel advances excepted — those are already counted
+// via trailingWeeklyFuelAverage above when the driver ALSO logs pump
+// receipts; withheld chargebacks like insurance/ELD/tolls/escrow are not
+// otherwise represented anywhere in Cash Flow) plus tolls, using the same
+// reducesTrueProfit() rule (src/stats/trueProfit.ts) so a per-diem-covered
+// meal or an advance repayment — never a real new expense — isn't counted
+// here either.
+export function trailingWeeklyOtherExpenseAverage(
+  deductions: { ded_date: string | null; amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null }[],
+  tolls: { toll_date: string | null; amount: number | null }[],
+  now: Date = new Date(),
+  windowDays = 28
+): number {
+  const start = new Date(now);
+  start.setUTCDate(start.getUTCDate() - windowDays);
+  const startIso = start.toISOString().slice(0, 10);
+  const dedTotal = deductions
+    .filter((d) => (d.ded_date ?? '') >= startIso && reducesTrueProfit(d) && d.category !== 'Fuel & DEF')
+    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const tollTotal = tolls
+    .filter((t) => (t.toll_date ?? '') >= startIso)
+    .reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  return (dedTotal + tollTotal) / (windowDays / 7);
 }
 
 export function calcCashFlowForecast(inputs: CashFlowBudgetInputs): CashFlowForecast {

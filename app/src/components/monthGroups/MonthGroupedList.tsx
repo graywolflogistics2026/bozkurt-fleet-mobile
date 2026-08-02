@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { groupByMonth, currentMonthKey } from '@/src/stats/monthGroups';
+import { groupByMonth, currentMonthKey, UNKNOWN_MONTH_KEY } from '@/src/stats/monthGroups';
 import { useMonthCollapse } from '@/src/components/monthGroups/useMonthCollapse';
 import { useFormatters } from '@/src/i18n/format';
 import { Card, MutedText } from '@/src/components/ui';
@@ -50,7 +50,19 @@ export function MonthGroupedList<T>({
   const { money, date } = useFormatters();
   const groups = groupByMonth(rows, getDate, getAmount);
   const thisMonth = currentMonthKey();
-  const { isCollapsed, toggle } = useMonthCollapse(screenKey, (monthKey) => monthKey !== thisMonth);
+  // CRITICAL BUG FIX (device feedback 2026-07-31): a row with no parseable
+  // date lands in the 'unknown' bucket (monthGroups.ts never drops rows),
+  // but this bucket used to collapse by default like any other past month
+  // — since it also always sorts LAST, a settlement-derived row with a
+  // null date (see mapExtraction.ts's date-fallback fix) rendered as a
+  // single collapsed header at the bottom of the list, which reads as
+  // "completely empty" to a user skimming the screen. The current month
+  // and the unknown bucket both start expanded; only real past months
+  // default to collapsed.
+  const { isCollapsed, toggle } = useMonthCollapse(
+    screenKey,
+    (monthKey) => monthKey !== thisMonth && monthKey !== UNKNOWN_MONTH_KEY
+  );
 
   if (loading) {
     return (

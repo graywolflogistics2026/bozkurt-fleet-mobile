@@ -206,3 +206,52 @@ export function mergeDashboardLayout(stored: unknown, defaultOrder: readonly str
 export function isDefaultLayout(stored: unknown): boolean {
   return stored == null;
 }
+
+// CRITICAL BUG FIX (device feedback 2026-07-31, "5th report": "using the
+// arrows/toggles in the Simple editor changes NOTHING on Home"). Root
+// cause: the Simple editor (SimpleCustomizeDashboardModal) presents ONE
+// flat, globally-reorderable list, but Home's customized-layout rendering
+// grouped cards by their fixed `section` and always rendered the 4
+// sections in the same constant SECTION_IDS order, with every unsectioned
+// card trailing after ALL of them — so reordering two cards that happen
+// to sit in different sections (the common case: most default-visible
+// cards ARE in different sections) produced zero visible change, even
+// though the save/invalidate/refetch data path itself was working
+// correctly. This groups the user's flat, already-reordered `visible`
+// list into blocks (one block per section, one singleton block per
+// unsectioned card) and orders the BLOCKS by the earliest index any of
+// their member cards holds in that flat order — so moving a card earlier
+// in the Simple editor visibly moves its whole section (or itself, if
+// unsectioned) earlier on Home, while cards that share a section still
+// render together, in their own relative order, under one header.
+export type DashboardBlock = { section: SectionId | null; rows: DashboardCardConfig[] };
+
+export function buildCustomizedDashboardBlocks(
+  visible: DashboardCardConfig[],
+  sectionIds: readonly SectionId[] = SECTION_IDS
+): DashboardBlock[] {
+  const sectionIdSet = new Set<string>(sectionIds);
+  const bySection = new Map<SectionId, DashboardCardConfig[]>();
+  const firstIndex = new Map<SectionId, number>();
+  const singles: { row: DashboardCardConfig; index: number }[] = [];
+
+  visible.forEach((row, index) => {
+    const section = row.section && sectionIdSet.has(row.section) ? (row.section as SectionId) : null;
+    if (section) {
+      if (!bySection.has(section)) {
+        bySection.set(section, []);
+        firstIndex.set(section, index);
+      }
+      bySection.get(section)!.push(row);
+    } else {
+      singles.push({ row, index });
+    }
+  });
+
+  const blocks: { section: SectionId | null; rows: DashboardCardConfig[]; index: number }[] = [
+    ...[...bySection.entries()].map(([section, rows]) => ({ section, rows, index: firstIndex.get(section)! })),
+    ...singles.map(({ row, index }) => ({ section: null, rows: [row], index })),
+  ];
+  blocks.sort((a, b) => a.index - b.index);
+  return blocks.map(({ section, rows }) => ({ section, rows }));
+}

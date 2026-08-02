@@ -5,10 +5,19 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
 import { useLoads } from '@/src/data/loads';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useDeductions } from '@/src/data/deductions';
+import { useTolls } from '@/src/data/tolls';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { buildWeeklyTrend, rankLoadsByRpm, type RankedLoad } from '@/src/stats/cashFlowTrend';
-import { calcCashFlowForecast, trailingWeeklyRevenueAverage, type CashFlowBudgetInputs } from '@/src/stats/cashFlowForecast';
+import {
+  calcCashFlowForecast,
+  trailingWeeklyRevenueAverage,
+  trailingWeeklyFuelAverage,
+  trailingWeeklyOtherExpenseAverage,
+  type CashFlowBudgetInputs,
+} from '@/src/stats/cashFlowForecast';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton } from '@/src/components/ui';
@@ -128,6 +137,9 @@ export default function CashFlow() {
   const { money } = useFormatters();
   const settlementsQuery = useSettlements();
   const loadsQuery = useLoads();
+  const fuelQuery = useFuelPurchases();
+  const deductionsQuery = useDeductions();
+  const tollsQuery = useTolls();
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
   const queryClient = useQueryClient();
@@ -176,10 +188,28 @@ export default function CashFlow() {
     () => trailingWeeklyRevenueAverage(settlementsQuery.data ?? []),
     [settlementsQuery.data]
   );
+  // CRITICAL BUG FIX (device feedback 2026-07-31, item 3: "settlement-
+  // derived expenses must feed the forecast/actuals, not just revenue"):
+  // same trailing-average fallback pattern as Weekly Revenue above, now
+  // also for Fuel Weekly and Other Weekly — a manual entry still always
+  // wins, this only fills the gap while the field is empty.
+  const trailingAvgFuel = useMemo(
+    () => trailingWeeklyFuelAverage(fuelQuery.data ?? []),
+    [fuelQuery.data]
+  );
+  const trailingAvgOther = useMemo(
+    () => trailingWeeklyOtherExpenseAverage(deductionsQuery.data ?? [], tollsQuery.data ?? []),
+    [deductionsQuery.data, tollsQuery.data]
+  );
   const forecastInputs = useMemo(() => {
     const base = toBudgetInputs(budget);
-    return { ...base, weeklyRevenue: base.weeklyRevenue ?? trailingAvgRevenue };
-  }, [budget, trailingAvgRevenue]);
+    return {
+      ...base,
+      weeklyRevenue: base.weeklyRevenue ?? trailingAvgRevenue,
+      fuelWeekly: base.fuelWeekly ?? trailingAvgFuel,
+      otherWeekly: base.otherWeekly ?? trailingAvgOther,
+    };
+  }, [budget, trailingAvgRevenue, trailingAvgFuel, trailingAvgOther]);
   const forecast = useMemo(() => calcCashFlowForecast(forecastInputs), [forecastInputs]);
 
   async function handleSaveBudget() {
@@ -245,6 +275,9 @@ export default function CashFlow() {
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.fuelWeeklyLabel')}</MutedText>
               <Field keyboardType="numeric" value={budget.fuelWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, fuelWeekly: v }))} placeholder="0" />
+              {!budget.fuelWeekly && (
+                <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(trailingAvgFuel) })}</MutedText>
+              )}
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.insuranceMonthlyLabel')}</MutedText>
@@ -253,6 +286,9 @@ export default function CashFlow() {
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.otherWeeklyLabel')}</MutedText>
               <Field keyboardType="numeric" value={budget.otherWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, otherWeekly: v }))} placeholder="0" />
+              {!budget.otherWeekly && (
+                <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(trailingAvgOther) })}</MutedText>
+              )}
             </View>
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.taxReservePctLabel')}</MutedText>
@@ -296,7 +332,7 @@ export default function CashFlow() {
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.fuelWeeklyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((Number(budget.fuelWeekly) || 0) * 4.33)}</Text>
+              <Text style={{ color: colors.red }}>-{money((forecastInputs.fuelWeekly || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.insuranceMonthlyLabel')}</MutedText>
@@ -304,7 +340,7 @@ export default function CashFlow() {
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.otherWeeklyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((Number(budget.otherWeekly) || 0) * 4.33)}</Text>
+              <Text style={{ color: colors.red }}>-{money((forecastInputs.otherWeekly || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.taxReserveLabel')}</MutedText>

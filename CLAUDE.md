@@ -1319,3 +1319,107 @@
   `net`; a Meal-covered-by-per-diem row and an Advance Repayment row are
   each proven to leave profit completely unchanged whether present or
   absent.
+- CRITICAL DATA BUG — settlement child rows, true profit's own math, Cash
+  Flow expenses, dashboard reorder (device feedback 2026-07-31, "2
+  settlements imported: Fuel/Reimbursements empty, Cash Flow shows only
+  revenue, Best/Worst Lanes empty, Customize Dashboard's simple editor
+  changes nothing"). Five separate, independently-confirmed root causes,
+  found by tracing the actual write→read path end to end rather than
+  guessing:
+  1. **Date-fallback bug, `mapExtraction.ts`'s `mapSettlement()`**: every
+     fuel/reimbursement/withheld-deduction/toll/maintenance row with no
+     PER-LINE date of its own fell back to the extraction's TOP-LEVEL
+     `d.date` — which the AI extraction prompt deliberately leaves empty
+     for `docType:'settlement'` (settlements use `settlement.weekEnding`
+     as their authoritative date, per the DATE HARDENING rounds above).
+     Every such row therefore saved with `purchase_date`/`reimb_date`/
+     `ded_date`/`toll_date`/`service_date` = NULL. Fixed: a single
+     `settlementFallbackDate = s.weekEnding || d.date || undefined`
+     computed once in `mapSettlement()`, threaded through
+     `toFuelInsert()`/`toReimbInsert()`/`toTollInsert()` (which gained a
+     `fallbackDate` param it didn't have before) and the inline
+     deductions/maintenance mappers.
+  2. **`MonthGroupedList` collapsed the 'unknown' bucket by default**: a
+     null-dated row (bug 1, or any other cause) lands in
+     `monthGroups.ts`'s `'unknown'` bucket, which always sorts LAST — and
+     the collapse-by-default predicate (`monthKey !== thisMonth`) treated
+     it like any other past month, collapsing it. The combination meant
+     an entire screen's worth of rows could render as a single collapsed
+     "▸ Unknown · N items · $X" header at the very bottom of the list —
+     which reads as "completely empty" to a user skimming the screen even
+     though `groupByMonth()` itself never drops rows. Fixed: the current
+     month AND the 'unknown' bucket both now start expanded; only real
+     past months default to collapsed (`UNKNOWN_MONTH_KEY` exported from
+     `monthGroups.ts` for this check).
+  3. **`calcTrueProfit()`/`buildWeeklyTrueProfitTrend()` (`src/stats/
+     trueProfit.ts`) silently excluded EVERY settlement-withheld
+     deduction**, not just the two intentional exceptions (a per-diem-
+     covered meal, an Advance Repayment). Root cause: `mapSettlement()`
+     stamps `tax_deductible:false` on EVERY withheld row unconditionally
+     (invariant #1's defense-in-depth, so a withheld chargeback is never
+     double-counted as a TAX deduction) — but `isDeductibleExpense()`
+     (`tax_deductible !== false`) was reused here to decide whether a row
+     reduces TRUE PROFIT, a different question entirely. That silently
+     skipped every withheld dollar (fuel advance, insurance, ELD fees,
+     tolls, escrow...) instead of subtracting it — directly contradicting
+     this module's own header comment ("gross − every deduction row,
+     withheld + out-of-pocket, once" — verified against
+     `profitLoss.ts`'s "gross − withheld already equals settlement net by
+     definition" identity) and OVERSTATING true profit by the full
+     withheld amount on every settlement, on every screen that reads it
+     (Home, Scorecard, CEO Mode, Share Weekly Profit, Profit Analysis —
+     this was live in the already-shipped "True-profit consistency"
+     update). The existing test suite didn't catch it because its own
+     withheld-row fixture set `tax_deductible:true` — a shape
+     `mapSettlement()` never actually produces. Fixed: new
+     `reducesTrueProfit()` predicate — a row counts if `source ===
+     'settlement'` (it left the check, period) OR it's a real deductible
+     out-of-pocket expense, UNLESS its category is a Meal (per diem
+     covered) or Advance Repayment, which stay excluded regardless of
+     source. `profitAnalysis.ts`'s `netIncome` had the identical bug
+     (same `isDeductibleExpense` reuse) and got the identical fix.
+  4. **Cash Flow's budget forecast had zero connection to
+     settlement-derived EXPENSES** (only Weekly Revenue had a trailing-
+     average fallback, from the earlier DATA-FLOW AUDIT FIX). Fixed:
+     `cashFlowForecast.ts` gained `trailingWeeklyFuelAverage()` (trailing
+     28-day average of net fuel cost from `fuel_purchases`) and
+     `trailingWeeklyOtherExpenseAverage()` (trailing 28-day average of
+     `reducesTrueProfit()`-qualifying withheld deductions, excluding
+     Fuel & DEF to avoid double-counting against the fuel average, plus
+     tolls) — same "manual entry always wins, this only fills the gap
+     while empty, labeled 'from your settlements'" pattern as Weekly
+     Revenue. `cash-flow.tsx`'s itemized breakdown rows (which used to
+     read the raw, possibly-empty `budget.fuelWeekly`/`budget.otherWeekly`
+     form strings directly) now read `forecastInputs.fuelWeekly`/
+     `otherWeekly` so the breakdown list and the top stat cards can never
+     disagree about what's actually being subtracted.
+  5. **Customize Dashboard's Simple editor (`SimpleCustomizeDashboardModal`)
+     genuinely saved and invalidated correctly — Home just couldn't show
+     the effect**: Home's customized-layout rendering always rendered the
+     4 sections in the fixed `SECTION_IDS` order (with unsectioned cards
+     always trailing last), completely ignoring WHERE in the user's own
+     flat, reordered list those sections' cards actually landed. Since
+     most default-visible cards sit in DIFFERENT default sections,
+     reordering two of them via the Simple editor's single flat arrows
+     list produced literally zero visible change on Home — matching "the
+     arrows/toggles change nothing" exactly, even though the save →
+     invalidate → refetch data path itself worked. Fixed:
+     `dashboardLayout.ts`'s new `buildCustomizedDashboardBlocks()` groups
+     the flat, already-reordered `visible` list into blocks (one per
+     section, one singleton per unsectioned card) and orders the BLOCKS
+     THEMSELVES by the earliest flat-list index any of their member cards
+     holds — so moving a card earlier in the Simple editor now visibly
+     moves its whole section (or itself, if unsectioned) earlier on Home,
+     while same-section cards still render together under one header, in
+     their own relative order.
+  Tests: `src/data/__tests__/aiImportSave.settlementChildren.test.ts`
+  (new) is the requested end-to-end proof — imports a realistic
+  settlement (fuel/reimbursements/loads/withheld deductions, none with
+  their own per-line dates) through the REAL `saveExtraction()` against
+  the fake Supabase client, then feeds the actual saved rows through the
+  actual screen-facing calculations (`groupByMonth`, `calcTrueProfit`,
+  the new trailing-average functions, `rankLoadsByRpm`) — proving the
+  whole chain, not just that a mapper returns the right shape in
+  isolation. `src/stats/__tests__/dashboardLayout.test.ts` gained
+  `buildCustomizedDashboardBlocks` coverage, including the exact
+  reordering-across-sections regression this bug report describes.

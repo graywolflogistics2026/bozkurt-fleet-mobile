@@ -50,11 +50,10 @@ import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { calcTaxProgressColor, calcTaxProgressPct } from '@/src/stats/taxProgress';
 import {
   CARD_LABEL_KEYS,
-  SECTION_IDS,
   SECTION_LABEL_KEYS,
   DASHBOARD_CARD_ROUTES,
+  buildCustomizedDashboardBlocks,
   type DashboardCardId,
-  type DashboardCardConfig,
   type SectionId,
 } from '@/src/stats/dashboardLayout';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field, ModalSheet, SheetTitle } from '@/src/components/ui';
@@ -1701,24 +1700,16 @@ export default function Dashboard() {
   const isCustomized = layoutQuery.data?.isCustomized ?? false;
 
   // Customized-path grouping (Dashboard sections addition): the flat,
-  // user-ordered list gets split into the 4 collapsible sections (in
-  // SECTION_IDS order) plus a trailing unsectioned group — preserving
-  // each card's relative order within its own group, same as before.
+  // user-ordered list gets split into blocks (one per section, one
+  // singleton per unsectioned card), and the BLOCKS are ordered by where
+  // the user's own flat order (Simple editor's arrows) placed them — see
+  // buildCustomizedDashboardBlocks()'s own comment for why this replaced
+  // a fixed-SECTION_IDS-order grouping (device feedback 2026-07-31, "5th
+  // report": reordering across sections visibly did nothing on Home).
   const groupedCustomized = useMemo(() => {
     if (!layoutQuery.data) return null;
     const visible = layoutQuery.data.layout.filter((row) => row.visible);
-    const bySection = new Map<SectionId, DashboardCardConfig[]>();
-    const unsectioned: DashboardCardConfig[] = [];
-    for (const row of visible) {
-      const section = row.section;
-      if (section && (SECTION_IDS as readonly string[]).includes(section)) {
-        if (!bySection.has(section)) bySection.set(section, []);
-        bySection.get(section)!.push(row);
-      } else {
-        unsectioned.push(row);
-      }
-    }
-    return { bySection, unsectioned };
+    return buildCustomizedDashboardBlocks(visible);
   }, [layoutQuery.data]);
 
   return (
@@ -1846,25 +1837,22 @@ export default function Dashboard() {
           // treatment below is a DEFAULT-layout-only visual, same as
           // before Dashboard sections existed).
           <>
-            {SECTION_IDS.map((sectionId) => {
-              const rows = groupedCustomized.bySection.get(sectionId);
-              if (!rows || rows.length === 0) return null;
-              return (
+            {groupedCustomized.map((block) =>
+              block.section ? (
                 <DashboardSection
-                  key={sectionId}
-                  title={t(SECTION_LABEL_KEYS[sectionId])}
-                  collapsed={!!sectionsCollapsed[sectionId]}
-                  onToggle={() => toggleSection(sectionId)}
+                  key={block.section}
+                  title={t(SECTION_LABEL_KEYS[block.section])}
+                  collapsed={!!sectionsCollapsed[block.section]}
+                  onToggle={() => toggleSection(block.section as SectionId)}
                 >
-                  {rows.map((row) => (
+                  {block.rows.map((row) => (
                     <View key={row.id}>{renderCard(row.id as DashboardCardId, row.label)}</View>
                   ))}
                 </DashboardSection>
-              );
-            })}
-            {groupedCustomized.unsectioned.map((row) => (
-              <View key={row.id}>{renderCard(row.id as DashboardCardId, row.label)}</View>
-            ))}
+              ) : (
+                <View key={block.rows[0].id}>{renderCard(block.rows[0].id as DashboardCardId, block.rows[0].label)}</View>
+              )
+            )}
           </>
         ) : (
           // New zoned default layout (device feedback round 2, owner

@@ -1,4 +1,11 @@
-import { mergeDashboardLayout, isDefaultLayout, DEFAULT_CARD_ORDER, DASHBOARD_CARD_ROUTES } from '@/src/stats/dashboardLayout';
+import {
+  mergeDashboardLayout,
+  isDefaultLayout,
+  DEFAULT_CARD_ORDER,
+  DASHBOARD_CARD_ROUTES,
+  buildCustomizedDashboardBlocks,
+  type DashboardCardConfig,
+} from '@/src/stats/dashboardLayout';
 
 // UX MEGA-PASS item A (owner decision 2026-07-31, device evidence: "per
 // diem card opens Tax Estimator", "Recent Loads opens Cash Flow" — wrong
@@ -135,6 +142,59 @@ describe('mergeDashboardLayout', () => {
     }
   });
 
+});
+
+// CRITICAL BUG FIX (device feedback 2026-07-31, "5th report": "using the
+// arrows/toggles in the Simple editor changes NOTHING on Home"). Root
+// cause: Home used to always render the 4 sections in the fixed
+// SECTION_IDS order (plus unsectioned cards always trailing last),
+// completely ignoring WHERE in the user's own flat, reordered list those
+// sections' cards actually landed — so reordering two cards from
+// different default sections (the common case) was invisible on Home even
+// though the save/refetch path worked. buildCustomizedDashboardBlocks()
+// orders the rendered blocks by each block's earliest member's position
+// in the flat list instead.
+describe('buildCustomizedDashboardBlocks', () => {
+  function row(id: string, section: DashboardCardConfig['section']): DashboardCardConfig {
+    return { id, visible: true, label: null, section };
+  }
+
+  it('groups same-section cards into one block, in their relative order', () => {
+    const visible = [row('netToOwner', 'money'), row('totalDeductions', 'money')];
+    const blocks = buildCustomizedDashboardBlocks(visible);
+    expect(blocks).toEqual([{ section: 'money', rows: visible }]);
+  });
+
+  it('orders blocks by the flat position of their first member — reordering across sections actually moves things', () => {
+    // Default-ish order: an 'overview' card, then a 'money' card.
+    const defaultish = [row('revenueExpenseTrend', 'overview'), row('netToOwner', 'money')];
+    expect(buildCustomizedDashboardBlocks(defaultish).map((b) => b.section)).toEqual(['overview', 'money']);
+
+    // User drags the 'money' card above the 'overview' card in the Simple
+    // editor's single flat list — the BLOCK order must flip too.
+    const reordered = [row('netToOwner', 'money'), row('revenueExpenseTrend', 'overview')];
+    expect(buildCustomizedDashboardBlocks(reordered).map((b) => b.section)).toEqual(['money', 'overview']);
+  });
+
+  it('treats an unsectioned card as its own singleton block, positioned by its own flat index', () => {
+    const visible = [row('recentLoads', null), row('netToOwner', 'money')];
+    const blocks = buildCustomizedDashboardBlocks(visible);
+    expect(blocks).toEqual([
+      { section: null, rows: [row('recentLoads', null)] },
+      { section: 'money', rows: [row('netToOwner', 'money')] },
+    ]);
+
+    // Move the unsectioned card AFTER the sectioned one — block order flips.
+    const reordered = [row('netToOwner', 'money'), row('recentLoads', null)];
+    expect(buildCustomizedDashboardBlocks(reordered).map((b) => b.section)).toEqual(['money', null]);
+  });
+
+  it('an empty visible list produces no blocks', () => {
+    expect(buildCustomizedDashboardBlocks([])).toEqual([]);
+  });
+});
+
+describe('mergeDashboardLayout section defaults (continued)', () => {
   it('defaults a never-stored card to its DEFAULT_CARD_SECTIONS entry', () => {
     const merged = mergeDashboardLayout(null);
     const byId = Object.fromEntries(merged.map((m) => [m.id, m.section]));

@@ -14,7 +14,7 @@ export type MonthGroup<T> = {
   rows: T[];
 };
 
-const UNKNOWN_MONTH_KEY = 'unknown';
+export const UNKNOWN_MONTH_KEY = 'unknown';
 
 function monthKeyFor(dateStr: string | null | undefined): string {
   if (!dateStr) return UNKNOWN_MONTH_KEY;
