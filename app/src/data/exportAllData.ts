@@ -17,6 +17,10 @@ export const EXPORT_TABLES = [
   'tax_config',
   'trucks',
   'drivers',
+  'equipment', // pre-launch hardening (owner decision 2026-08-02) — was
+              // added to TABLES_IN_DELETION_ORDER (delete-account/
+              // reset-data) in PENDING_SQL.md §36 but never added here,
+              // so a full-data export silently omitted every equipment row.
   'settlements',
   'loads',
   'fuel_purchases',

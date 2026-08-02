@@ -1565,6 +1565,53 @@ Session 10's scope, not blocking the Part 1 beta build):**
   not a device-local flag like legacy's `gw_readonly`. Needs a separate,
   explicit owner decision on scope (which screens/tables are visible,
   expiry, revocation UX) before implementation starts.
+
+- PRE-LAUNCH HARDENING PASS backlog (owner decision 2026-08-02,
+  independent code review — items explicitly deferred rather than rushed):
+  - Deleting a document should also remove its Storage file (its
+    `storage_path`), and deleting a record that referenced a document
+    (a deduction/settlement/etc via `document_id`) should clean up the
+    now-orphaned document row + file too. NOT implemented this pass —
+    there is currently NO delete action anywhere in the Documents screen
+    UI at all (`useDeleteDocument` exists as a generic entity-delete hook
+    but nothing calls it), so this would be new feature work (a delete
+    action + confirmation flow + i18n across 7 locales), not a bug fix to
+    an existing one. Build the UI feature and the storage-cleanup data
+    layer function together when that's actually prioritized.
+  - List pagination / FlatList virtualization for Documents, Deductions,
+    Settlements, Fuel, Loads, Maintenance, Transactions — every one of
+    these currently fetches its FULL table via `useEntityList()`
+    (`src/data/entityHooks.ts`) with no limit/offset and renders every row
+    through a plain `.map()` inside a `ScrollView`, not a virtualized
+    list. Fine at today's data volumes; a multi-year account will
+    eventually feel this. v1.1 performance track.
+  - Server-side dashboard aggregates — `fetchFleetStats()`/Home currently
+    compute every rollup (revenue, deductions, CPM, per diem, ...)
+    client-side from full-table fetches. A Postgres view/RPC that
+    pre-aggregates would cut payload size and client compute as account
+    history grows. v1.1 performance track.
+  - Documents screen: search has no debounce (filters on every keystroke
+    against the full in-memory list), no server-side filtering, and the
+    list query selects every column instead of a lighter projection for
+    the row view (full `parsed_json` blob included even when just
+    rendering titles/dates). v1.1 performance track.
+  - No measurement exists of the persisted AsyncStorage query-cache's
+    actual on-device size (`src/lib/queryClient.ts`, 7-day gcTime) —
+    worth instrumenting before it's a real problem, not after.
+  - Import writes (`app/src/data/aiImportSave.ts`) are a sequence of
+    individual Supabase calls, not one Postgres transaction/RPC — CLAUDE.md
+    invariant work already made re-import ordering safe (insert-then-
+    delete, owner decision 2026-08-02) and validation-before-write, which
+    covers the two most likely partial-failure scenarios, but a genuine
+    multi-statement DB transaction (wrapping the whole settlement branch
+    in one RPC) would be strictly safer still. Explicitly NOT done this
+    pass (the request that prompted this hardening round said so
+    directly) — v1.1 track.
+  - Duplicate-import detection (`app/src/import/duplicateCheck.ts`) checks
+    content/filename matches across a user's ENTIRE document history, not
+    scoped by truck — a multi-truck fleet where two different trucks
+    happen to have a similar-looking receipt could produce a false-
+    positive duplicate warning. Low-frequency edge case; v1.1 track.
 ```
 
 ## Supported document types (rolling status — universal AI capture, owner decision 2026-07-10)

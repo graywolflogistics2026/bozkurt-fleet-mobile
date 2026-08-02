@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { invalidateFinancialData, removeFinancialDataFromCache } from '@/src/data/queryInvalidation';
 
 // 2026-07-30 tablet-testing fix: Reset All Data correctly nulled
 // weekly_goal/cf_* on profiles server-side, but the Cash Flow forecast
@@ -70,5 +70,35 @@ describe('invalidateFinancialData', () => {
     const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
     const missing = TABLES_IN_DELETION_ORDER.filter((table) => !invalidatedKeys.includes(table));
     expect(missing).toEqual([]);
+  });
+});
+
+// PRE-LAUNCH HARDENING (owner decision 2026-08-02, independent code
+// review item — second tier): "reset must remove queries from the
+// persistent cache, not just invalidate them" — removeQueries() deletes
+// the cache entry immediately/synchronously, unlike invalidateQueries()
+// which depends on a refetch actually succeeding before the persisted
+// AsyncStorage snapshot reflects the change.
+describe('removeFinancialDataFromCache', () => {
+  it('removes every query the reset flow needs cleared from the persistent cache', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['settlements', 'list', 'u1', null], [{ id: 's1' }]);
+    queryClient.setQueryData(['profile', 'u1'], { business_balance: 500 });
+
+    removeFinancialDataFromCache(queryClient);
+
+    expect(queryClient.getQueryData(['settlements', 'list', 'u1', null])).toBeUndefined();
+    expect(queryClient.getQueryData(['profile', 'u1'])).toBeUndefined();
+  });
+
+  it('actually calls removeQueries (not invalidateQueries) for every affected key', () => {
+    const queryClient = new QueryClient();
+    const removeSpy = jest.spyOn(queryClient, 'removeQueries');
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    removeFinancialDataFromCache(queryClient);
+
+    expect(removeSpy).toHaveBeenCalled();
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 });

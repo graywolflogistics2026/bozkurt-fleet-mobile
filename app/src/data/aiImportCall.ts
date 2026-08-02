@@ -66,7 +66,10 @@ export function friendlyAiImportError(err: AiImportError): string {
     case 'unauthenticated':
       return 'Your session expired — sign out and back in, then try again.';
     case 'bad_request':
-      return 'This file could not be sent for processing.';
+      // PDF/file size guard (owner decision 2026-08-02): ai-import returns
+      // a specific, user-friendly message for an oversized file — prefer
+      // it over the generic fallback whenever the server provided one.
+      return err.message || 'This file could not be sent for processing.';
     case 'anthropic_error':
       return 'The import service had a problem. Try again in a moment.';
     case 'network_error':

@@ -347,6 +347,20 @@ Deno.serve(async (req: Request) => {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
   }
 
+  // PDF/FILE SIZE GUARD (pre-launch hardening, owner decision 2026-08-02):
+  // the same 10 MB limit the client already enforces before ever
+  // base64-encoding a file — checked again here so a client bug/bypass is
+  // never the only thing standing between a huge request and this
+  // function (which would otherwise burn tokens on a doomed Anthropic call
+  // or simply time out with no useful error). Base64 inflates the original
+  // byte count by ~4/3 (plus up to 2 padding chars); reversing that gives
+  // a decoded-size estimate without actually decoding the string.
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+  const approxDecodedBytes = Math.floor((fileBase64.length * 3) / 4);
+  if (approxDecodedBytes > MAX_FILE_SIZE_BYTES) {
+    return errorResponse("bad_request", "This file is too large — try splitting it or exporting a smaller version.", 413);
+  }
+
   // Per-user rate limit: 30 imports/day, counted from documents rows already
   // saved today. RLS on `documents` already scopes this to the caller's own
   // rows since we're using their JWT, not a service-role client.

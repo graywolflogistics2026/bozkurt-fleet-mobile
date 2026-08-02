@@ -1080,7 +1080,11 @@ export default function Dashboard() {
       trucks.length > 1
         ? trucks.map((truck) => ({
             queryKey: ['fleet-stats', userId, truck.id],
-            queryFn: () => fetchFleetStats(userId as string, truck.id),
+            // Pass the already-fetched user-wide deductions (dedQuery
+            // above) so an N-truck fleet issues one deductions query
+            // total instead of N identical ones (pre-launch hardening,
+            // owner decision 2026-08-02).
+            queryFn: () => fetchFleetStats(userId as string, truck.id, dedQuery.data),
             enabled: !!userId,
           }))
         : [],
@@ -1096,7 +1100,8 @@ export default function Dashboard() {
       drivers.length > 1
         ? drivers.map((driver) => ({
             queryKey: ['driver-stats', userId, driver.id],
-            queryFn: () => fetchDriverStats(userId as string, driver.id),
+            // Same shared-deductions shortcut as fleetQueries above.
+            queryFn: () => fetchDriverStats(userId as string, driver.id, dedQuery.data),
             enabled: !!userId,
           }))
         : [],

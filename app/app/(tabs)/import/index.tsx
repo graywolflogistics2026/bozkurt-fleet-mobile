@@ -34,6 +34,17 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 
 type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
 
+// PDF/FILE SIZE GUARD (pre-launch hardening, owner decision 2026-08-02):
+// reject an oversized file before ever base64-encoding/uploading it —
+// base64 inflates the payload ~33%, and a huge upload either times out or
+// produces a cryptic server error. 10 MB comfortably covers any real
+// carrier settlement/receipt scan while still catching a genuinely
+// oversized file early with a friendly message. The same limit is
+// enforced again server-side in ai-import (belt and suspenders — a client
+// bug/bypass must never be the only thing standing between a huge
+// request and the Edge Function).
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
 function money(n: number | undefined | null, locale: string) {
   if (n == null) return '—';
   return formatMoney(n, locale);
@@ -158,7 +169,7 @@ export default function Import() {
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [fileMeta, setFileMeta] = useState<{ uri: string; ext: string; mediaType: string; name?: string } | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
-  const [existingSettlementWeek, setExistingSettlementWeek] = useState<{ id: string } | null>(null);
+  const [existingSettlementWeek, setExistingSettlementWeek] = useState<{ id: string; business_balance_credit: number | null } | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
   const [needsTruckPicker, setNeedsTruckPicker] = useState(false);
   const [driverId, setDriverId] = useState<string | null>(null);
@@ -308,6 +319,12 @@ export default function Import() {
         compress: 0.8,
         format: SaveFormat.JPEG,
       });
+      const compressedSize = new File(compressed.uri).size;
+      if (compressedSize > MAX_FILE_SIZE_BYTES) {
+        setErrorMessage(t('importScreen.fileTooLargeMessage'));
+        setPhase('error');
+        return;
+      }
       setFileMeta({ uri: compressed.uri, ext: 'jpg', mediaType: 'image/jpeg' });
       setWorkingLabel(t('importScreen.readingDocument'));
       const base64 = await new File(compressed.uri).base64();
@@ -331,6 +348,11 @@ export default function Import() {
     const picked = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
     if (picked.canceled || !picked.assets?.[0]) return;
     const asset = picked.assets[0];
+    const size = asset.size ?? new File(asset.uri).size;
+    if (size > MAX_FILE_SIZE_BYTES) {
+      Alert.alert(t('importScreen.fileTooLargeTitle'), t('importScreen.fileTooLargeMessage'));
+      return;
+    }
     setPhase('working');
     setWorkingLabel(t('importScreen.readingDocument'));
     try {
@@ -709,8 +731,18 @@ export default function Import() {
                   : t('importScreen.savedSettlementNew', { date: result.settlementWeekEnding })}
               </MutedText>
             )}
-            {result.netPayAdded != null && (
-              <MutedText>{t('importScreen.balanceAdded', { amount: money(result.netPayAdded, i18n.language) })}</MutedText>
+            {result.netPayAdded != null && result.netPayAdded !== 0 && (
+              // Re-import ordering / balance delta (owner decision
+              // 2026-08-02): a corrected settlement can now REDUCE the
+              // balance (negative delta) — money() already renders a
+              // negative amount with its own "-" sign, so only a positive
+              // delta gets an explicit "+" prefix here (never hardcoded
+              // into the i18n string itself).
+              <MutedText>
+                {t('importScreen.balanceAdded', {
+                  amount: `${result.netPayAdded > 0 ? '+' : ''}${money(result.netPayAdded, i18n.language)}`,
+                })}
+              </MutedText>
             )}
             {result.contributionTotal > 0 && (
               <MutedText>

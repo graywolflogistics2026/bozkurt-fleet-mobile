@@ -1220,16 +1220,81 @@ redeploying too since their source changed).
 
 ---
 
+## 37. settlements.business_balance_credit + apply_business_balance_delta() RPC (pre-launch hardening, owner decision 2026-08-02) — ☐ NOT YET RUN
+
+Independent code review finding: re-importing a settlement with a
+corrected net pay (e.g. a carrier statement that was mis-read the first
+time, 2000 -> 2500) applied NOTHING to `profiles.business_balance` on a
+re-import — the crediting code was gated on `!isReimport` entirely, so a
+corrected week silently left the balance wrong forever. Also, the
+ORIGINAL credit itself was a plain client-side select-then-update
+(read-modify-write), not atomic — two concurrent imports could race.
+
+Fixed both at once: `settlements.business_balance_credit` tracks how much
+of THAT settlement's net pay has actually been applied to
+`business_balance` so far (0 for a settlement that's never contributed,
+e.g. its net was <= 0). Every save (new OR re-import) now computes
+`newCredit = netPay > 0 ? netPay : 0`, reads `previousCredit` from the
+settlement row (0 for a brand-new settlement, whatever's stored for a
+re-import), and applies `delta = newCredit - previousCredit` via the new
+`apply_business_balance_delta(p_user_id, p_delta)` RPC — a single atomic
+`UPDATE ... SET business_balance = business_balance + p_delta` instead of
+a JS read-modify-write. A brand-new settlement is just the delta=newCredit,
+previousCredit=0 case, so this is one code path for both, not two.
+
+```sql
+alter table settlements
+  add column business_balance_credit numeric(12,2) not null default 0;
+
+create or replace function apply_business_balance_delta(p_user_id uuid, p_delta numeric)
+returns numeric
+language plpgsql
+security invoker
+as $$
+declare
+  new_balance numeric;
+begin
+  update profiles
+  set business_balance = coalesce(business_balance, 0) + p_delta
+  where user_id = p_user_id and user_id = auth.uid()
+  returning business_balance into new_balance;
+  return new_balance;
+end;
+$$;
+
+grant execute on function apply_business_balance_delta(uuid, numeric) to authenticated;
+```
+
+- [ ] 37a run (settlements.business_balance_credit + the RPC function)
+- [ ] 37b `supabase gen types` re-run to pick up the new column (app/src/types/db.ts already hand-edited ahead of this — see "Also still open" below)
+
+---
+
 ## Also still open (not part of any pass above)
 
-- `supabase gen types` needs to be re-run against `app/src/types/db.ts` to
-  pick up `tax_config`, `tax_year_data`, `household_members`,
-  `household_income`, and the dropped `profiles.filing_status` — nothing
-  above ran this.
+- `supabase gen types` needs to be re-run against `app/src/types/db.ts` —
+  this requires the project's own Supabase credentials/project ref, which
+  this environment doesn't have (`npx supabase login` + `supabase link` +
+  `supabase gen types typescript --linked > app/src/types/db.ts`, run by
+  whoever has dashboard access). `db.ts` has been hand-maintained in step
+  with every PENDING_SQL section as it shipped (all of tax_config,
+  tax_year_data, household_members, household_income, equipment,
+  misc_income, benchmarks, and settlements.business_balance_credit
+  already have matching TS types) — this item is about catching any
+  SILENT drift a hand-edit could have missed (a renamed/dropped column,
+  a constraint that changed shape), not about missing types outright.
 - MA's own `flat` rate entry (see the note at the end of section 3) —
   not yet part of a verification pass.
-- No follow-up migration file exists yet consolidating sections 1, 3, and 4
-  into `supabase/migrations/` — `0001_init.sql` on disk still does NOT
-  reflect any of this (it's the live DB that's ahead of the repo's migration
-  files, not the other way around). Worth doing before the next schema
-  change, so this file can finally be retired.
+- ~~No follow-up migration file exists yet consolidating sections 1, 3,
+  and 4~~ — RESOLVED 2026-08-02:
+  `supabase/migrations/0002_consolidated_pending_sql.sql` replays every
+  applied section (1, 3-36) as one idempotent file (see its own header for
+  the full rationale, including two real ordering/content bugs the
+  consolidation itself caught — §17's two SQL blocks were fenced in
+  explanation order rather than execution order, and §34's second fenced
+  block was a diagnostic query, not migration SQL). It was assembled from
+  this file's own text, NOT verified against the live database (this
+  environment has no credentials to do that) — review it against the
+  actual Supabase dashboard schema before trusting it for anything
+  destructive. Section 37 is the one section NOT yet folded in (not yet
+  run against the live project as of this writing).

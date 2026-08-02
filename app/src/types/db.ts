@@ -159,6 +159,14 @@ export type Settlement = {
   // 0 miles -> 0 days ("home week"), miles > 0 -> 7. Never recomputed from
   // miles after the row exists — once a user edits it, their value sticks.
   per_diem_days: number;
+  // BUSINESS BALANCE DELTA ON RE-IMPORT (pre-launch hardening, owner
+  // decision 2026-08-02, docs/PENDING_SQL.md §37): how much of THIS
+  // settlement's net pay has actually been credited to
+  // profiles.business_balance so far. Re-importing a corrected net pay
+  // computes delta = newCredit - business_balance_credit and applies only
+  // that delta (via the apply_business_balance_delta RPC), instead of the
+  // old behavior of crediting nothing at all on a re-import.
+  business_balance_credit: number;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
   updated_at: string;

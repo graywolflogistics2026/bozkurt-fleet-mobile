@@ -41,13 +41,17 @@ export async function findExistingSettlement(
   userId: string,
   weekEnding: string,
   truckId: string | null
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; business_balance_credit: number | null } | null> {
   if (!weekEnding) return null;
-  let query = supabase.from('settlements').select('id').eq('user_id', userId).eq('week_ending', weekEnding);
+  let query = supabase
+    .from('settlements')
+    .select('id, business_balance_credit')
+    .eq('user_id', userId)
+    .eq('week_ending', weekEnding);
   query = truckId ? query.eq('truck_id', truckId) : query.is('truck_id', null);
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
-  return (data as { id: string } | null) ?? null;
+  return (data as { id: string; business_balance_credit: number | null } | null) ?? null;
 }
 
 export type SaveExtractionParams = {
@@ -82,6 +86,12 @@ export type SaveExtractionParams = {
 export type SaveExtractionResult = {
   documentId: string;
   storagePath: string | null;
+  // The amount actually applied to profiles.business_balance by THIS save
+  // — null when nothing changed (delta 0). For a brand-new settlement this
+  // is always >= 0 (matches the old "netPayAdded" meaning exactly); for a
+  // re-import with a CORRECTED net pay (owner decision 2026-08-02) this can
+  // be negative (the corrected net pay was lower than what was originally
+  // credited) — the UI must not assume a positive number.
   netPayAdded: number | null;
   contributionTotal: number;
   // Settlement week-ending confirmation (owner decision 2026-07-30): lets
@@ -100,6 +110,36 @@ export type SaveExtractionResult = {
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
   const { extraction: d, userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution, categoryOverride } = params;
+
+  // 0. VALIDATE BEFORE WRITING (pre-launch hardening, owner decision
+  // 2026-08-02, independent code review finding): every required-field
+  // check that can throw now runs BEFORE the Storage upload and the
+  // documents insert below — previously these ran after both, so a
+  // rejected import (missing week_ending, missing driver) still left an
+  // orphaned uploaded file and an orphaned documents row behind. Settlement
+  // mapping is computed here once and reused by the settlement branch
+  // further down (mapSettlement() is pure — no reason to call it twice).
+  let settlementMapping: ReturnType<typeof mapSettlement> | null = null;
+  if (d.docType === 'settlement' && d.settlement) {
+    settlementMapping = mapSettlement(d, userId, truckId, driverId);
+    // A week_ending we can't pin down must never silently fall back to an
+    // empty-string match key — two different weeks that both failed to
+    // extract a date would otherwise collide on '' and replace each other
+    // (the exact "second import replaces the first" bug this guards
+    // against). The import preview's date field (CLAUDE.md DATE HARDENING
+    // round 2) already requires the user to see/edit this value, so an
+    // empty one here means it was left blank, not a legitimate settlement.
+    if (!settlementMapping.settlement.week_ending) {
+      throw new Error('This settlement has no week-ending date. Please set the document date before saving.');
+    }
+  }
+  if (d.docType === 'driver_payment' && !driverId) {
+    // Universal AI capture (owner decision 2026-07-10): driver_payments.
+    // driver_id is NOT NULL — the import screen forces a driver pick for
+    // this docType before Save is even enabled (needsDriverPicker), so
+    // driverId being null here would be a UI bug, not a legitimate state.
+    throw new Error('A driver must be selected to save a driver payment.');
+  }
 
   // 1. Upload the original file to the documents bucket FIRST (CLAUDE.md
   // storage convention: {user_id}/{month}/...) so the documents row can
@@ -143,18 +183,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   let isSettlementReimport = false;
 
   if (d.docType === 'settlement' && d.settlement) {
-    const mapping = mapSettlement(d, userId, truckId, driverId);
-
-    // A week_ending we can't pin down must never silently fall back to an
-    // empty-string match key — two different weeks that both failed to
-    // extract a date would otherwise collide on '' and replace each other
-    // (the exact "second import replaces the first" bug this guards
-    // against). The import preview's date field (CLAUDE.md DATE HARDENING
-    // round 2) already requires the user to see/edit this value, so an
-    // empty one here means it was left blank, not a legitimate settlement.
-    if (!mapping.settlement.week_ending) {
-      throw new Error('This settlement has no week-ending date. Please set the document date before saving.');
-    }
+    const mapping = settlementMapping!;
 
     // Web v2026.07.09-A re-import-replace: importing the same
     // (week_ending, truck) again REPLACES that week's batch-tagged rows
@@ -170,11 +199,23 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     settlementWeekEnding = mapping.settlement.week_ending;
     isSettlementReimport = isReimport;
 
+    // BUSINESS BALANCE ON RE-IMPORT (pre-launch hardening, owner decision
+    // 2026-08-02): a re-import used to credit nothing at all, leaving the
+    // balance wrong after a corrected net pay. Every save now applies the
+    // DELTA between what this settlement SHOULD have credited
+    // (newCredit — same "only a positive net pay counts" rule as before)
+    // and what it actually credited last time (previousCredit, read from
+    // the row's own business_balance_credit — 0 for a brand-new
+    // settlement, so this is one formula for both new and re-imports).
+    const previousCredit = isReimport ? Number(existingSett!.business_balance_credit ?? 0) : 0;
+    const newCredit = mapping.netPay > 0 ? mapping.netPay : 0;
+    const balanceDelta = newCredit - previousCredit;
+
     let settlementId: string;
     if (isReimport) {
       const { data: settRow, error: settError } = await supabase
         .from('settlements')
-        .update({ ...mapping.settlement, document_id: documentId })
+        .update({ ...mapping.settlement, document_id: documentId, business_balance_credit: newCredit })
         .eq('id', existingSett!.id)
         .select('id')
         .single();
@@ -183,36 +224,46 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     } else {
       const { data: settRow, error: settError } = await supabase
         .from('settlements')
-        .insert({ ...mapping.settlement, document_id: documentId })
+        .insert({ ...mapping.settlement, document_id: documentId, business_balance_credit: newCredit })
         .select('id')
         .single();
       if (settError) throw settError;
       settlementId = settRow.id as string;
     }
 
+    // RE-IMPORT ORDERING (pre-launch hardening, owner decision 2026-08-02):
+    // capture the PREVIOUS batch's row ids now (read-only) but do not
+    // delete them yet — the new rows are inserted FIRST, further down, and
+    // only once every insert has succeeded do we delete these captured old
+    // ids. This avoids the worst case of the old ordering (delete-then-
+    // insert): if a new insert failed partway through, the previous week's
+    // data was already gone. Deleting by explicit captured id (not by a
+    // fresh `eq('settlement_id', settlementId)` match) is what makes this
+    // safe — the newly-inserted rows share the same settlement_id and must
+    // never be swept up in the same delete.
+    let oldLoadIds: string[] = [];
+    let oldFuelIds: string[] = [];
+    let oldReimbIds: string[] = [];
+    let oldDedIds: string[] = [];
+    let oldPayIds: string[] = [];
     if (isReimport) {
-      // Clear this week's previously-imported batch-tagged rows first —
-      // settlement, loads, fuel, reimbursements, withheld deductions
-      // (CLAUDE.md invariant #10). Maintenance/tolls/loans are NOT part of
-      // this replace — they're left as-is, matching the web app's scope.
-      const { error: delLoadsErr } = await supabase.from('loads').delete().eq('settlement_id', settlementId);
-      if (delLoadsErr) throw delLoadsErr;
-      const { error: delFuelErr } = await supabase.from('fuel_purchases').delete().eq('settlement_id', settlementId);
-      if (delFuelErr) throw delFuelErr;
-      const { error: delReimbErr } = await supabase.from('reimbursements').delete().eq('settlement_id', settlementId);
-      if (delReimbErr) throw delReimbErr;
-      const { error: delDedErr } = await supabase
-        .from('deductions')
-        .delete()
-        .eq('settlement_id', settlementId)
-        .eq('source', 'settlement');
-      if (delDedErr) throw delDedErr;
-      // Driver compensation types (owner decision 2026-07-10): a re-import
-      // replaces the prior split payment for this settlement same as every
-      // other batch-tagged row (CLAUDE.md invariant #10) — otherwise
-      // re-confirming a changed split would duplicate the payment record.
-      const { error: delPayErr } = await supabase.from('driver_payments').delete().eq('settlement_id', settlementId);
-      if (delPayErr) throw delPayErr;
+      const [loadsOld, fuelOld, reimbOld, dedOld, payOld] = await Promise.all([
+        supabase.from('loads').select('id').eq('settlement_id', settlementId),
+        supabase.from('fuel_purchases').select('id').eq('settlement_id', settlementId),
+        supabase.from('reimbursements').select('id').eq('settlement_id', settlementId),
+        supabase.from('deductions').select('id').eq('settlement_id', settlementId).eq('source', 'settlement'),
+        supabase.from('driver_payments').select('id').eq('settlement_id', settlementId),
+      ]);
+      if (loadsOld.error) throw loadsOld.error;
+      if (fuelOld.error) throw fuelOld.error;
+      if (reimbOld.error) throw reimbOld.error;
+      if (dedOld.error) throw dedOld.error;
+      if (payOld.error) throw payOld.error;
+      oldLoadIds = (loadsOld.data ?? []).map((r) => r.id as string);
+      oldFuelIds = (fuelOld.data ?? []).map((r) => r.id as string);
+      oldReimbIds = (reimbOld.data ?? []).map((r) => r.id as string);
+      oldDedIds = (dedOld.data ?? []).map((r) => r.id as string);
+      oldPayIds = (payOld.data ?? []).map((r) => r.id as string);
     }
 
     if (mapping.loads.length > 0) {
@@ -276,29 +327,50 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       });
       if (payErr) throw payErr;
     }
-    // Net pay only credits business_balance once per settlement week — a
-    // replace-import must not re-credit it a second time.
-    if (mapping.netPay > 0 && !isReimport) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('business_balance')
-        .eq('user_id', userId)
-        .maybeSingle();
-      const newBalance = Number(profile?.business_balance ?? 0) + mapping.netPay;
-      await supabase.from('profiles').update({ business_balance: newBalance }).eq('user_id', userId);
-      netPayAdded = mapping.netPay;
+
+    // Only now — every new insert above has already succeeded — delete the
+    // previous batch's captured rows, by explicit id.
+    if (oldLoadIds.length > 0) {
+      const { error } = await supabase.from('loads').delete().in('id', oldLoadIds);
+      if (error) throw error;
+    }
+    if (oldFuelIds.length > 0) {
+      const { error } = await supabase.from('fuel_purchases').delete().in('id', oldFuelIds);
+      if (error) throw error;
+    }
+    if (oldReimbIds.length > 0) {
+      const { error } = await supabase.from('reimbursements').delete().in('id', oldReimbIds);
+      if (error) throw error;
+    }
+    if (oldDedIds.length > 0) {
+      const { error } = await supabase.from('deductions').delete().in('id', oldDedIds);
+      if (error) throw error;
+    }
+    if (oldPayIds.length > 0) {
+      const { error } = await supabase.from('driver_payments').delete().in('id', oldPayIds);
+      if (error) throw error;
+    }
+
+    // Business balance: one atomic SQL increment (apply_business_balance_delta,
+    // docs/SCHEMA.sql / PENDING_SQL.md §37) instead of a client-side
+    // select-then-update — never a race, and correct on both a brand-new
+    // settlement (previousCredit 0) and a re-import (delta only).
+    if (balanceDelta !== 0) {
+      const { error: balErr } = await supabase.rpc('apply_business_balance_delta', {
+        p_user_id: userId,
+        p_delta: balanceDelta,
+      });
+      if (balErr) throw balErr;
+      netPayAdded = balanceDelta;
     }
   } else if (d.docType === 'fuel' && d.fuel) {
     const row = mapFuel(d, userId, truckId);
     const { error } = await supabase.from('fuel_purchases').insert(row);
     if (error) throw error;
   } else if (d.docType === 'driver_payment') {
-    // Universal AI capture (owner decision 2026-07-10): driver_payments.
-    // driver_id is NOT NULL — the import screen forces a driver pick for
-    // this docType before Save is even enabled (needsDriverPicker), so
-    // driverId being null here would be a UI bug, not a legitimate state.
-    if (!driverId) throw new Error('A driver must be selected to save a driver payment.');
-    const row = mapDriverPayment(d, userId, driverId);
+    // driverId is validated non-null at the top of this function (step 0)
+    // before any Storage/DB write ever happens.
+    const row = mapDriverPayment(d, userId, driverId as string);
     const { error } = await supabase.from('driver_payments').insert(row);
     if (error) throw error;
   } else if ((FINANCIAL_DOC_TYPES as readonly string[]).includes(d.docType) && d.financialDoc) {

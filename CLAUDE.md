@@ -1423,3 +1423,128 @@
   isolation. `src/stats/__tests__/dashboardLayout.test.ts` gained
   `buildCustomizedDashboardBlocks` coverage, including the exact
   reordering-across-sections regression this bug report describes.
+- PRE-LAUNCH HARDENING (owner decision 2026-08-02, independent code
+  review, "CRITICAL" set — see PROMPTS.md's backlog entry for the same
+  date for the deferred "second tier"/"backlog" items this pass also
+  triaged):
+  1. **Storage deletion integrity** (`delete-account`/`reset-data` Edge
+     Functions): `deleteStorageFolder()` used to ignore every list()/
+     remove() error, hardcode a 3-level-deep recursion, and never
+     paginate past list()'s 1000-item page — the caller still returned
+     `success:true` regardless. Rewritten: `walkAndDelete()` recurses to
+     whatever depth the folder tree actually has (no hardcoded limit),
+     `listAllEntries()` paginates in 1000-item pages until exhausted, and
+     every failure is collected into `{failedPaths, errors}` — the
+     handler now returns a 502 with "Some files could not be removed —
+     please try again" instead of `success:true` on ANY partial failure.
+     Both functions' STORAGE step is naturally idempotent/safe to re-run
+     (list() on an already-emptied folder returns `[]`, remove() on an
+     already-gone path is a no-op), so a failed attempt is always
+     retryable — delete-account still deletes the auth user LAST, so a
+     storage failure leaves the account intact for a retry; reset-data
+     still resets `profiles`' data fields LAST, same reasoning.
+  2. **Business balance on settlement re-import**
+     (`app/src/data/aiImportSave.ts`): a re-import used to credit
+     `business_balance` NOTHING at all (gated on `!isReimport`), so a
+     corrected net pay (e.g. 2000 -> 2500) left the balance permanently
+     wrong. Fixed via `settlements.business_balance_credit`
+     (docs/PENDING_SQL.md §37, NOT YET RUN against the live project as of
+     this writing) — tracks how much of THIS settlement's net pay has
+     actually been credited so far; every save (new or re-import)
+     computes `delta = newCredit - previousCredit` (0 for a brand-new
+     settlement) and applies just that delta. The update itself is now a
+     single atomic Postgres statement via the new
+     `apply_business_balance_delta(p_user_id, p_delta)` RPC (`security
+     invoker`, scoped to `user_id = auth.uid()`) instead of a client-side
+     select-then-update (a real race between two concurrent imports
+     before this). `SaveExtractionResult.netPayAdded` can now be
+     NEGATIVE (a corrected net pay lower than before) — the import
+     screen's `balanceAdded` i18n string had its hardcoded "+" removed
+     from all 7 locales; the sign is now computed in JS
+     (`(delta > 0 ? '+' : '') + money(delta)`), since `money()` already
+     renders its own "-" for a negative amount.
+  3. **Validate before writing** (`saveExtraction()`): the settlement
+     week_ending check and the driver_payment driver-required check both
+     used to run AFTER the Storage upload and the `documents` insert — a
+     rejected import left an orphaned uploaded file and an orphaned
+     `documents` row. Both checks now run as step 0, before any
+     Storage/DB write; `mapSettlement()` is computed once there and
+     reused (never called twice).
+  4. **Re-import ordering** (`saveExtraction()`): the old order deleted
+     the previous week's child rows (loads/fuel/reimbursements/withheld
+     deductions/driver_payments) BEFORE inserting the new batch — if any
+     new insert failed partway through, the previous week's data was
+     already gone with nothing to replace it. Now: the previous batch's
+     row ids are captured (read-only) BEFORE any write, every new row is
+     inserted first, and only once every insert has succeeded are the
+     captured old ids deleted (`delete().in('id', oldIds)` — by explicit
+     id, never a fresh `eq('settlement_id', ...)` match, since the newly-
+     inserted rows share that same settlement_id and must never be swept
+     up in the same delete).
+  5. **PDF/file size guard**: files over 10 MB are rejected client-side
+     (`app/(tabs)/import/index.tsx`, checked via `expo-file-system`'s
+     `File.size` / `DocumentPickerAsset.size` before ever base64-encoding)
+     with a friendly "This file is too large — try splitting it or
+     exporting a smaller version" message (all 7 locales), and again
+     server-side in `ai-import` (`approxDecodedBytes = base64Length *
+     3/4`, since decoding the full string just to check its size would
+     defeat the point) — belt and suspenders, never trusting the client
+     check alone.
+  6. **exportAllData**: `equipment` (docs/PENDING_SQL.md §36) was added
+     to both Edge Functions' `TABLES_IN_DELETION_ORDER` but never to
+     `src/data/exportAllData.ts`'s `EXPORT_TABLES`, so a full-data export
+     silently omitted every equipment row — the same class of gap
+     invariant #24/the DATA-FLOW CONSISTENCY audit already found and
+     fixed for query invalidation. `src/data/__tests__/
+     exportAllData.test.ts` mirrors `TABLES_IN_DELETION_ORDER` as a
+     regression guard, same pattern as `queryInvalidation.test.ts`.
+     Settings' "Export All My Data" button also gained real scope text
+     (`exportAllDataNote`, all 7 locales) — it never said the original
+     uploaded photos/PDFs aren't included in the JSON export.
+  7. **Schema consolidation**: `supabase/migrations/
+     0002_consolidated_pending_sql.sql` replays every APPLIED
+     docs/PENDING_SQL.md section (1, 3-36 — §2 needed no SQL, §37 is not
+     yet run) as one file, assembled programmatically from that file's
+     own fenced SQL blocks. Investigating this surfaced a real, separate
+     finding: `0001_init.sql` is NOT a clean "before any PENDING_SQL
+     section" baseline — it already contains some later tables (`drivers`
+     from §13, `user_categories` from §21, `compliance_items` from §23)
+     while still missing others (`tax_config`, `tax_year_data`,
+     `household_members`/`household_income`, `equipment`) and `profiles`
+     is missing at least 7 columns later sections added. Because of that
+     drift, every statement in 0002 is written idempotent (`create table
+     if not exists` / `add column if not exists` / drop-then-recreate for
+     policies and triggers / named indexes with `if not exists` /
+     constraint adds wrapped in a `do $$ ... exception when
+     duplicate_object` block) rather than assuming a specific starting
+     point — safe to run against either a fresh project (after
+     `0001_init.sql`) or the current live project (every statement is a
+     no-op for whatever already exists). Two real bugs were caught and
+     fixed while assembling it: §17's two SQL blocks are fenced in
+     EXPLANATION order in the prose, not execution order (the doc's own
+     text says "Run the column-add FIRST" despite that block being fenced
+     second) — 0002 runs it first; §34's prose has a second fenced block
+     that's a DIAGNOSTIC query for the person doing the manual apply, not
+     part of the migration — excluded. This was assembled from
+     docs/PENDING_SQL.md's own text, NOT verified against the live
+     database (no credentials in this environment to do that) — review
+     against the actual Supabase dashboard schema before trusting it for
+     anything destructive.
+  Second-tier fixes also completed this pass (PROMPTS.md's backlog entry
+  covers what was deferred instead): `AuthContext.signOut()` now clears
+  the persisted React Query cache (`queryClient.clear()` +
+  `asyncStoragePersister.removeClient()`) — it used to leave the previous
+  session's financial data sitting in AsyncStorage for the next person
+  who signs in on the same device to briefly see. Reset All Data now
+  calls the new `removeFinancialDataFromCache()` (real `removeQueries()`,
+  not `invalidateQueries()` — synchronous and unconditional, not
+  dependent on a refetch succeeding before the app might be backgrounded)
+  before its existing `invalidateFinancialData()` call.
+  `fetchFleetStats()`/`fetchDriverStats()` (`src/data/dashboardStats.ts`)
+  each used to issue their OWN full-table `deductions` query even though
+  deductions are always user-wide, never truck/driver-scoped — an
+  N-truck, M-driver account's Dashboard Fleet Overview issued N+M
+  identical redundant fetches. Both now accept an optional pre-fetched
+  `deductions` array (`computeFleetStats()` extracted as the shared pure
+  aggregation); Home passes its own already-fetched `useDeductions()`
+  result into every per-truck/per-driver call.

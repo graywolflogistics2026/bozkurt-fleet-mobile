@@ -85,7 +85,7 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     }
   });
 
-  test('re-importing the same week replaces it — exactly one settlement remains', async () => {
+  test('re-importing the same week with a CORRECTED net pay applies only the delta (owner decision 2026-08-02)', async () => {
     const first = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1000)));
     const second = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1500)));
 
@@ -93,9 +93,15 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     expect(settlements).toHaveLength(1);
     expect(settlements[0].net).toBe(1500);
 
-    // business_balance credited only once (first import), not twice.
+    // First import credits the full 1000; the re-import corrects net pay
+    // to 1500, so the balance applies just the +500 delta (1000 -> 1500),
+    // not "credited once and never again."
     const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
-    expect(profile?.business_balance).toBe(1000);
+    expect(profile?.business_balance).toBe(1500);
+    expect(settlements[0].business_balance_credit).toBe(1500);
+
+    expect(first.netPayAdded).toBe(1000);
+    expect(second.netPayAdded).toBe(500);
 
     // Save-confirmation fields (owner decision 2026-07-30): the caller can
     // tell the user plainly whether this was a new week or a replace.
@@ -103,6 +109,29 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     expect(first.isSettlementReimport).toBe(false);
     expect(second.settlementWeekEnding).toBe('2026-07-05');
     expect(second.isSettlementReimport).toBe(true);
+  });
+
+  test('re-importing with a LOWER corrected net pay reduces the balance by the negative delta', async () => {
+    await saveExtraction(baseParams(settlementExtraction('2026-07-05', 2000)));
+    const second = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1200)));
+
+    const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
+    expect(profile?.business_balance).toBe(1200);
+    expect(second.netPayAdded).toBe(-800);
+  });
+
+  test('re-import ordering: new child rows exist before old ones are removed, and old rows never survive', async () => {
+    await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1000)));
+    const firstLoads = mockClient.__store.loads.map((l) => l.id);
+
+    await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1500)));
+    const loads = mockClient.__store.loads ?? [];
+
+    // Exactly one settlement's worth of loads remains — the old batch's
+    // row ids are gone, replaced by a freshly-inserted batch (never the
+    // literal same row survives a re-import).
+    expect(loads).toHaveLength(1);
+    expect(firstLoads).not.toContain(loads[0].id as string);
   });
 
   test('replacing one week never deletes another week\'s loads/fuel/deductions', async () => {
@@ -148,5 +177,17 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     const extraction = settlementExtraction('', 1000);
     delete extraction.date;
     await expect(saveExtraction(baseParams(extraction))).rejects.toThrow();
+  });
+
+  // VALIDATE BEFORE WRITING (pre-launch hardening, owner decision
+  // 2026-08-02): the week_ending check must run BEFORE the documents
+  // insert (and the Storage upload, not exercised here since baseParams()
+  // passes fileUri: null) — a rejected import must never leave an
+  // orphaned documents row behind.
+  test('a rejected settlement (no week_ending) leaves no orphaned documents row', async () => {
+    const extraction = settlementExtraction('', 1000);
+    delete extraction.date;
+    await expect(saveExtraction(baseParams(extraction))).rejects.toThrow();
+    expect(mockClient.__store.documents ?? []).toHaveLength(0);
   });
 });

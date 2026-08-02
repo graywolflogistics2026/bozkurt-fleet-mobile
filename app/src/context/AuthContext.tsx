@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
+import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { TOS_VERSION } from '@/src/config/termsOfUse';
 import { withTimeout } from '@/src/lib/withTimeout';
 import { isSupportedLocale, LANGUAGE_PICKER_ENABLED } from '@/src/i18n/config';
@@ -122,6 +123,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut();
+    // PRE-LAUNCH HARDENING (owner decision 2026-08-02, independent code
+    // review item — second tier): the query cache is persisted to
+    // AsyncStorage (src/lib/queryClient.ts, kept up to 7 days). Signing
+    // out used to leave it completely untouched — the NEXT person who
+    // signs in on this device (a different user, or the same one) would
+    // see the previous session's stale financial data flash on screen
+    // before each individual query happened to refetch, since nothing
+    // ever invalidated the whole cache at once. queryClient.clear() drops
+    // every query/mutation from memory immediately; removeClient() also
+    // deletes the persisted AsyncStorage blob directly rather than
+    // relying on the persister's own throttled save cycle to notice the
+    // clear before the app is closed.
+    queryClient.clear();
+    await asyncStoragePersister.removeClient();
   }
 
   async function acceptTos() {

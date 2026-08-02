@@ -55,6 +55,7 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
       delete: () => typeof builder;
       eq: (col: string, val: unknown) => typeof builder;
       is: (col: string, val: null) => typeof builder;
+      in: (col: string, vals: unknown[]) => typeof builder;
       maybeSingle: () => Promise<{ data: Row | null; error: null }>;
       single: () => Promise<{ data: Row | null; error: null }>;
     } = {
@@ -84,6 +85,11 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
         filters.push((row) => (row[col] ?? null) === val);
         return builder;
       },
+      in(col: string, vals: unknown[]) {
+        const set = new Set(vals);
+        filters.push((row) => set.has(row[col]));
+        return builder;
+      },
       async maybeSingle() {
         const rows = execute();
         return { data: rows[0] ?? null, error: null };
@@ -100,8 +106,25 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
     return builder;
   }
 
+  // Minimal fake of apply_business_balance_delta() (docs/SCHEMA.sql,
+  // PENDING_SQL.md §37) — the only RPC this codebase calls today. Mirrors
+  // the real function's atomic-increment semantics against the in-memory
+  // `profiles` table.
+  async function rpc(fnName: string, params: Record<string, unknown>) {
+    if (fnName === 'apply_business_balance_delta') {
+      const { p_user_id, p_delta } = params as { p_user_id: string; p_delta: number };
+      const profile = (store.profiles ?? []).find((p) => p.user_id === p_user_id);
+      if (!profile) return { data: null, error: { message: 'profile not found' } };
+      const newBalance = Number(profile.business_balance ?? 0) + Number(p_delta);
+      profile.business_balance = newBalance;
+      return { data: newBalance, error: null };
+    }
+    return { data: null, error: { message: `fakeSupabase: unknown RPC "${fnName}"` } };
+  }
+
   return {
     from,
+    rpc,
     storage: {
       from() {
         return { upload: async () => ({ data: {}, error: null }) };

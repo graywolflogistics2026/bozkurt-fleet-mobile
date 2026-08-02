@@ -95,39 +95,91 @@ const TABLES_IN_DELETION_ORDER = [
 // every file this user ever uploaded lives under one of these two.
 const STORAGE_BUCKETS = ["documents", "backups"];
 
-function errorResponse(message: string, status: number) {
-  return new Response(JSON.stringify({ error: { message } }), {
+function errorResponse(message: string, status: number, extra?: Record<string, unknown>) {
+  return new Response(JSON.stringify({ error: { message, ...extra } }), {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
 }
 
-async function deleteStorageFolder(admin: ReturnType<typeof createClient>, bucket: string, userId: string) {
-  const { data: files, error: listError } = await admin.storage.from(bucket).list(userId, { limit: 1000 });
-  if (listError || !files || files.length === 0) return;
-  // list() only returns one level — recurse one directory deep, which is
-  // as deep as this app's storage paths ever go (CLAUDE.md:
-  // {user_id}/{month}/{Category}/{filename} or {user_id}/backups/{file}).
-  const allPaths: string[] = [];
-  for (const entry of files) {
+// STORAGE DELETION INTEGRITY (pre-launch hardening, owner decision
+// 2026-08-02, independent code review finding): the old version ignored
+// every list()/remove() error, hardcoded a 3-level-deep recursion (this
+// app's paths are only ever 2-3 levels deep TODAY, but a fixed depth is a
+// silent data-loss bug waiting for the day a path gets one segment
+// longer), and never paginated past list()'s 1000-item page — an account
+// with 1000+ files in one folder would silently leave the remainder
+// behind. The caller now gets a real result it MUST check before ever
+// reporting success:true — walking/removing is naturally idempotent
+// (list() on an emptied folder returns [], remove() on an already-gone
+// path is a no-op), so a partial failure is always safe to retry.
+type StorageFolderResult = { failedPaths: string[]; errors: string[] };
+
+async function listAllEntries(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  folder: string
+): Promise<{ entries: { id: string | null; name: string }[] | null; error: string | null }> {
+  const entries: { id: string | null; name: string }[] = [];
+  const limit = 1000;
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await admin.storage.from(bucket).list(folder, { limit, offset });
+    if (error) return { entries: null, error: error.message };
+    if (!data || data.length === 0) break;
+    entries.push(...data);
+    if (data.length < limit) break;
+    offset += limit;
+  }
+  return { entries, error: null };
+}
+
+// Recurses the folder tree to whatever depth it actually goes — no
+// hardcoded level count — collecting every failed list/remove into the
+// shared result rather than silently swallowing it.
+async function walkAndDelete(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  folder: string,
+  result: StorageFolderResult
+): Promise<void> {
+  const { entries, error } = await listAllEntries(admin, bucket, folder);
+  if (error) {
+    result.errors.push(`list ${bucket}/${folder}: ${error}`);
+    return;
+  }
+  if (!entries || entries.length === 0) return;
+
+  const filePaths: string[] = [];
+  for (const entry of entries) {
+    const path = `${folder}/${entry.name}`;
     if (entry.id === null) {
-      // A "directory" placeholder — list one level deeper.
-      const { data: nested } = await admin.storage.from(bucket).list(`${userId}/${entry.name}`, { limit: 1000 });
-      for (const nestedEntry of nested ?? []) {
-        if (nestedEntry.id === null) {
-          const { data: nested2 } = await admin.storage.from(bucket).list(`${userId}/${entry.name}/${nestedEntry.name}`, { limit: 1000 });
-          for (const f of nested2 ?? []) {
-            if (f.id !== null) allPaths.push(`${userId}/${entry.name}/${nestedEntry.name}/${f.name}`);
-          }
-        } else {
-          allPaths.push(`${userId}/${entry.name}/${nestedEntry.name}`);
-        }
-      }
+      // A "directory" placeholder — recurse, no depth limit.
+      await walkAndDelete(admin, bucket, path, result);
     } else {
-      allPaths.push(`${userId}/${entry.name}`);
+      filePaths.push(path);
     }
   }
-  if (allPaths.length > 0) await admin.storage.from(bucket).remove(allPaths);
+
+  const REMOVE_BATCH = 1000;
+  for (let i = 0; i < filePaths.length; i += REMOVE_BATCH) {
+    const batch = filePaths.slice(i, i + REMOVE_BATCH);
+    const { error: removeError } = await admin.storage.from(bucket).remove(batch);
+    if (removeError) {
+      result.errors.push(`remove ${bucket}/${folder}: ${removeError.message}`);
+      result.failedPaths.push(...batch);
+    }
+  }
+}
+
+async function deleteStorageFolder(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  userId: string
+): Promise<StorageFolderResult> {
+  const result: StorageFolderResult = { failedPaths: [], errors: [] };
+  await walkAndDelete(admin, bucket, userId, result);
+  return result;
 }
 
 Deno.serve(async (req: Request) => {
@@ -169,8 +221,25 @@ Deno.serve(async (req: Request) => {
       if (error) throw new Error(`Failed deleting from ${table}: ${error.message}`);
     }
 
+    // STORAGE DELETION INTEGRITY: collect every bucket's failures before
+    // deciding success — a partial failure must never be reported as
+    // success:true, and must never proceed to delete the auth user (that
+    // stays the deliberate last step; leaving the account intact is what
+    // makes a retry safe — re-running this function is a no-op over
+    // everything that already succeeded).
+    const allFailedPaths: string[] = [];
+    const allErrors: string[] = [];
     for (const bucket of STORAGE_BUCKETS) {
-      await deleteStorageFolder(admin, bucket, userId);
+      const result = await deleteStorageFolder(admin, bucket, userId);
+      allFailedPaths.push(...result.failedPaths);
+      allErrors.push(...result.errors);
+    }
+    if (allErrors.length > 0 || allFailedPaths.length > 0) {
+      return errorResponse(
+        "Some files could not be removed — please try again.",
+        502,
+        { failedFileCount: allFailedPaths.length, storageErrors: allErrors.slice(0, 10) }
+      );
     }
 
     // Last step, deliberately — every data row and file is already gone

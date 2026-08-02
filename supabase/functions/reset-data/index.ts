@@ -98,38 +98,85 @@ const CORS_HEADERS = {
 
 const STORAGE_BUCKETS = ["documents", "backups"];
 
-function errorResponse(message: string, status: number) {
-  return new Response(JSON.stringify({ error: { message } }), {
+function errorResponse(message: string, status: number, extra?: Record<string, unknown>) {
+  return new Response(JSON.stringify({ error: { message, ...extra } }), {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
 }
 
-// Same recursive one-level-deep Storage listing as delete-account's own
-// helper (duplicated rather than shared — each Edge Function in this repo
-// is self-contained).
-async function deleteStorageFolder(admin: ReturnType<typeof createClient>, bucket: string, userId: string) {
-  const { data: files, error: listError } = await admin.storage.from(bucket).list(userId, { limit: 1000 });
-  if (listError || !files || files.length === 0) return;
-  const allPaths: string[] = [];
-  for (const entry of files) {
+// STORAGE DELETION INTEGRITY (pre-launch hardening, owner decision
+// 2026-08-02, independent code review finding — identical fix to
+// delete-account's own copy, duplicated rather than shared per this
+// repo's "each Edge Function is self-contained" convention): the old
+// version ignored every list()/remove() error, hardcoded a 3-level-deep
+// recursion, and never paginated past list()'s 1000-item page. The
+// caller now gets a real result it MUST check before ever reporting
+// success:true — walking/removing is naturally idempotent, so a partial
+// failure is always safe to retry.
+type StorageFolderResult = { failedPaths: string[]; errors: string[] };
+
+async function listAllEntries(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  folder: string
+): Promise<{ entries: { id: string | null; name: string }[] | null; error: string | null }> {
+  const entries: { id: string | null; name: string }[] = [];
+  const limit = 1000;
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await admin.storage.from(bucket).list(folder, { limit, offset });
+    if (error) return { entries: null, error: error.message };
+    if (!data || data.length === 0) break;
+    entries.push(...data);
+    if (data.length < limit) break;
+    offset += limit;
+  }
+  return { entries, error: null };
+}
+
+async function walkAndDelete(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  folder: string,
+  result: StorageFolderResult
+): Promise<void> {
+  const { entries, error } = await listAllEntries(admin, bucket, folder);
+  if (error) {
+    result.errors.push(`list ${bucket}/${folder}: ${error}`);
+    return;
+  }
+  if (!entries || entries.length === 0) return;
+
+  const filePaths: string[] = [];
+  for (const entry of entries) {
+    const path = `${folder}/${entry.name}`;
     if (entry.id === null) {
-      const { data: nested } = await admin.storage.from(bucket).list(`${userId}/${entry.name}`, { limit: 1000 });
-      for (const nestedEntry of nested ?? []) {
-        if (nestedEntry.id === null) {
-          const { data: nested2 } = await admin.storage.from(bucket).list(`${userId}/${entry.name}/${nestedEntry.name}`, { limit: 1000 });
-          for (const f of nested2 ?? []) {
-            if (f.id !== null) allPaths.push(`${userId}/${entry.name}/${nestedEntry.name}/${f.name}`);
-          }
-        } else {
-          allPaths.push(`${userId}/${entry.name}/${nestedEntry.name}`);
-        }
-      }
+      await walkAndDelete(admin, bucket, path, result);
     } else {
-      allPaths.push(`${userId}/${entry.name}`);
+      filePaths.push(path);
     }
   }
-  if (allPaths.length > 0) await admin.storage.from(bucket).remove(allPaths);
+
+  const REMOVE_BATCH = 1000;
+  for (let i = 0; i < filePaths.length; i += REMOVE_BATCH) {
+    const batch = filePaths.slice(i, i + REMOVE_BATCH);
+    const { error: removeError } = await admin.storage.from(bucket).remove(batch);
+    if (removeError) {
+      result.errors.push(`remove ${bucket}/${folder}: ${removeError.message}`);
+      result.failedPaths.push(...batch);
+    }
+  }
+}
+
+async function deleteStorageFolder(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  userId: string
+): Promise<StorageFolderResult> {
+  const result: StorageFolderResult = { failedPaths: [], errors: [] };
+  await walkAndDelete(admin, bucket, userId, result);
+  return result;
 }
 
 Deno.serve(async (req: Request) => {
@@ -168,8 +215,24 @@ Deno.serve(async (req: Request) => {
       if (error) throw new Error(`Failed deleting from ${table}: ${error.message}`);
     }
 
+    // STORAGE DELETION INTEGRITY: never proceed to reset the profile's
+    // data fields on a partial storage failure — a failed/incomplete
+    // cleanup must stay retryable (re-running this function safely skips
+    // everything that already succeeded) rather than silently reporting
+    // success while orphaned files remain.
+    const allFailedPaths: string[] = [];
+    const allErrors: string[] = [];
     for (const bucket of STORAGE_BUCKETS) {
-      await deleteStorageFolder(admin, bucket, userId);
+      const result = await deleteStorageFolder(admin, bucket, userId);
+      allFailedPaths.push(...result.failedPaths);
+      allErrors.push(...result.errors);
+    }
+    if (allErrors.length > 0 || allFailedPaths.length > 0) {
+      return errorResponse(
+        "Some files could not be removed — please try again.",
+        502,
+        { failedFileCount: allFailedPaths.length, storageErrors: allErrors.slice(0, 10) }
+      );
     }
 
     // Last step — reset the profile's data fields only after every row

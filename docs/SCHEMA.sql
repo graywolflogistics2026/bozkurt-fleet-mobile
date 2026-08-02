@@ -307,6 +307,15 @@ create table settlements (
   tags         text,  -- added retroactively, PENDING_SQL.md §22 (flexible fields, owner decision
                        -- 2026-07-10) — the user's own ad-hoc labeling, separate from any AI/system
                        -- description; same rationale on every other table below that gets this column.
+  business_balance_credit numeric(12,2) not null default 0,
+                       -- added retroactively, PENDING_SQL.md §37 (business
+                       -- balance delta on re-import, owner decision
+                       -- 2026-08-02) — how much of THIS settlement's net pay
+                       -- has actually been credited to
+                       -- profiles.business_balance so far; a re-import
+                       -- applies only (new net − this value) as the delta,
+                       -- via the apply_business_balance_delta() RPC, instead
+                       -- of crediting nothing at all on a re-import.
   created_at   timestamptz default now()
   -- one settlement per (user, week, truck) — see PENDING_SQL.md §34 for the
   -- two partial unique indexes below; NOT a plain `unique(user_id,
@@ -320,6 +329,35 @@ create unique index settlements_user_week_truck_uidx
 create unique index settlements_user_week_notruck_uidx
   on settlements (user_id, week_ending)
   where truck_id is null;
+
+-- ---------- RPC: atomic business_balance delta (PENDING_SQL.md §37,
+-- owner decision 2026-08-02) ----------
+-- The mobile client can only ever set explicit column VALUES via
+-- supabase-js, never a column-referencing expression like
+-- `business_balance = business_balance + delta` — so a plain
+-- select-then-update from the client is a read-modify-write race. This
+-- function does the increment in ONE atomic UPDATE statement instead.
+-- security invoker (NOT definer): RLS stays active, so the `profiles_owner_all`
+-- policy (user_id = auth.uid()) already prevents touching another user's
+-- row; the explicit `and user_id = auth.uid()` below is belt-and-suspenders,
+-- not the only thing standing between this function and a cross-user write.
+create or replace function apply_business_balance_delta(p_user_id uuid, p_delta numeric)
+returns numeric
+language plpgsql
+security invoker
+as $$
+declare
+  new_balance numeric;
+begin
+  update profiles
+  set business_balance = coalesce(business_balance, 0) + p_delta
+  where user_id = p_user_id and user_id = auth.uid()
+  returning business_balance into new_balance;
+  return new_balance;
+end;
+$$;
+
+grant execute on function apply_business_balance_delta(uuid, numeric) to authenticated;
 
 -- ---------- Driver payments (NEW, owner decision 2026-07-10 — driver
 -- compensation types). What the owner actually paid a driver — the tax

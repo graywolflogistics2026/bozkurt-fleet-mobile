@@ -12,7 +12,7 @@ import { useTaxConfig, useUpdateTaxConfig } from '@/src/data/taxConfig';
 import { callDeleteAccount } from '@/src/data/deleteAccountCall';
 import { callResetData } from '@/src/data/resetDataCall';
 import { fetchAllUserData } from '@/src/data/exportAllData';
-import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { invalidateFinancialData, removeFinancialDataFromCache } from '@/src/data/queryInvalidation';
 import type { EntityType } from '@/src/tax/types';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -235,6 +235,10 @@ export default function Settings() {
       }
       setResetConfirming(false);
       await refreshProfile();
+      // removeFinancialDataFromCache() first (owner decision 2026-08-02):
+      // deletes these queries from the persisted AsyncStorage cache
+      // immediately, not just marks them stale — see its own comment.
+      removeFinancialDataFromCache(queryClient);
       await invalidateFinancialData(queryClient);
       Alert.alert(t('settings.resetSuccessTitle'));
     } catch (err) {
@@ -302,8 +306,14 @@ export default function Settings() {
 
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>{t('settings.dataTitle')}</Text>
-          <MutedText>{t('settings.dataNote')}</MutedText>
+          {/* exportAllDataNote (pre-launch hardening, owner decision
+              2026-08-02): accurate scope text for the export itself —
+              dataNote below describes the legacy-import button, not this
+              one, and neither used to say the original uploaded photos/
+              PDFs aren't bundled into the export. */}
+          <MutedText>{t('settings.exportAllDataNote')}</MutedText>
           <PrimaryButton title={`⬇️ ${t('settings.exportAllDataButton')}`} onPress={handleExportAllData} loading={exportingData} />
+          <MutedText style={{ marginTop: spacing.sm }}>{t('settings.dataNote')}</MutedText>
           <SecondaryButton title={t('settings.importLegacyButton')} onPress={() => router.push('/(tabs)/more/import-legacy')} />
         </Card>
 

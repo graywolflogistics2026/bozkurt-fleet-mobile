@@ -87,3 +87,24 @@ export async function invalidateFinancialData(queryClient: QueryClient): Promise
     )
   );
 }
+
+// PRE-LAUNCH HARDENING (owner decision 2026-08-02, independent code
+// review item — second tier): Reset All Data used to call ONLY
+// invalidateFinancialData() above — which marks these queries stale and
+// (with refetchType 'all') eagerly refetches them, but never removes the
+// PERSISTED AsyncStorage snapshot (src/lib/queryClient.ts) those queries
+// were saved under. If the refetch didn't finish before the app was
+// backgrounded/closed (a slow network right after Reset is a realistic
+// case for a trucker), the persister's next save cycle could still write
+// — or simply never overwrite — the pre-reset data, so a cold relaunch
+// could show STALE pre-reset numbers again until each screen happened to
+// refetch on its own. queryClient.removeQueries() deletes these entries
+// from the in-memory cache immediately and unconditionally (not
+// dependent on a network round-trip succeeding), which is what actually
+// guarantees the persisted snapshot can never resurrect them. Call this
+// BEFORE invalidateFinancialData() so the two never race.
+export function removeFinancialDataFromCache(queryClient: QueryClient): void {
+  for (const key of [...AFFECTED_TABLES, ...AFFECTED_AGGREGATES]) {
+    queryClient.removeQueries({ queryKey: [key] });
+  }
+}
