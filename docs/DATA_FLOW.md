@@ -40,6 +40,61 @@ eager refetch even for screens that aren't currently mounted.
 | **Reset All Data** | Every table in `supabase/functions/reset-data/index.ts`'s `TABLES_IN_DELETION_ORDER` (23 tables) + `profiles.*` DATA fields (business_balance, initial_capital, weekly_goal, cf_*, dashboard_layout, dashboard_sections_collapsed) reset to empty/0/null | EVERY screen in the app — this is the "prove nothing survives" case | `settings.tsx`'s reset handler → `refreshProfile()` + `invalidateFinancialData(queryClient)` — **audit fix (2026-07-30): 8 of the 23 wiped tables (`trucks`, `drivers`, `driver_payments`, `household_income`, `household_members`, `compliance_items`, `maintenance_intervals`, `truck_health_config`) were silently missing from `AFFECTED_TABLES`, so Truck Health/Drivers/Compliance Tracker/household-income-fed Tax Estimator kept showing pre-reset data until something else forced a refetch. Fixed — see `queryInvalidation.ts` and its regression test mirroring `TABLES_IN_DELETION_ORDER`.** |
 | **Delete Account** | Same table list as Reset, plus the `profiles` row and the `auth.users` row itself | N/A — user is signed out, no screen to reflect it | Not applicable (session ends) |
 
+## Navigation intent — how routes must be opened from now on
+
+BETA FEEDBACK ROUND 2 (owner decision 2026-07-31, device tester report:
+"pressing back lands on the SETTLEMENTS screen instead of Home"). Root
+cause (confirmed by reading the installed expo-router/react-navigation
+source, not guessed): every screen under `app/(tabs)/more/` shares ONE
+nested Stack navigator (`more/_layout.tsx`). Cross-tab navigation into it
+— from Home cards, the Reports hub, CEO Mode recommendations, Scorecard,
+anywhere OUTSIDE the "more" tab — always uses plain `router.push(href)`,
+which is correct and does not need to change, but a plain `push` onto an
+already-mounted nested Stack appends to whatever is CURRENTLY on top of
+it rather than resetting it. Across a session, visiting different
+Home cards (cash-flow, then later settlements, then later
+tax-estimator, ...) without returning all the way to Home in between
+silently left the "more" stack several screens deep, so back popped
+through THAT accumulated history — landing on an unrelated screen,
+never Home. `backBehavior="initialRoute"`
+(`app/(tabs)/_layout.tsx`) only governs what happens once a tab's OWN
+stack is already empty; it does nothing to stop that stack from
+accumulating in the first place, which is why it didn't fix the reported
+bug.
+
+**The fix — and the rule going forward:** `app/(tabs)/more/index.tsx`
+(the shared stack's always-mounted root screen) calls
+`useResetStackOnTabBlur()` (`app/src/navigation/useResetStackOnTabBlur.ts`),
+which resets that stack to just its root every time the "more" tab loses
+focus. This means:
+
+- **Every existing `router.push('/(tabs)/more/X')` call site keeps working
+  unchanged** — the fix lives in exactly one place (the shared stack's
+  root screen), not at each of the 20+ call sites across Home, Reports,
+  CEO Mode, etc. Nobody needs to remember a special navigation pattern
+  when linking to a `more/X` screen.
+- **Do not remove or bypass `useResetStackOnTabBlur()`** from
+  `more/index.tsx` — every screen nested under `more/` depends on it for
+  predictable back behavior. If `more/index.tsx` is ever restructured,
+  this hook call must move with it.
+- **A new top-level tab** (sibling to `index`/`transactions`/`reports`,
+  not nested under `more/`) needs no special handling — back already
+  reaches Home directly via `backBehavior="initialRoute"`.
+- **A new screen nested under `more/`** automatically inherits the reset-
+  on-blur guarantee — no per-screen wiring needed, same as the existing
+  ones.
+
+`app/src/navigation/backIntent.ts`'s `backTargetFor(href)` is the
+resulting intent table — every route classifies to `'home'` (top-level
+tabs and `more/index` itself: back reaches Home in one press) or
+`'moreIndex'` (any screen nested under `more/`: back reaches `more/index`
+first, then Home on a second press — bounded and deterministic now,
+never unbounded). `src/navigation/__tests__/backIntent.test.ts`
+regression-guards this against every route in the shared nav registry
+(`navRegistry.ts`'s `RAW_NAV_GROUPS`), so a new route that's classified
+inconsistently with where it actually lives in the navigator tree fails
+a test instead of shipping as a fresh version of this exact bug.
+
 ## The known symptom this audit fixed
 
 **Cash Flow revenue stayed $0 after a settlement import.** Root cause:

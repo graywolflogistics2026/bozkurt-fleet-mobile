@@ -2,6 +2,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { moreTabItems } from '@/src/navigation/navRegistry';
+import { useResetStackOnTabBlur } from '@/src/navigation/useResetStackOnTabBlur';
 import { Screen } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -19,6 +20,13 @@ const MENU_ITEMS = moreTabItems();
 export default function More() {
   const { t } = useTranslation();
   const router = useRouter();
+  // BETA FEEDBACK ROUND 2: resets the shared "more" Stack to its root
+  // every time this tab loses focus — see useResetStackOnTabBlur.ts for
+  // the full root-cause writeup. Registered here (the stack's always-
+  // mounted root screen) rather than in more/_layout.tsx, since only a
+  // screen INSIDE the stack has a navigation object whose dispatch()
+  // actually targets that stack.
+  useResetStackOnTabBlur();
 
   return (
     <Screen>

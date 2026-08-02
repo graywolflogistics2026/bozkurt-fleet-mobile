@@ -1168,3 +1168,49 @@
      component/styling/tap-target size, so "consistent headers, spacing,
      tap targets" across those screens is structural, not a matter of
      each screen separately matching a style guide.
+- BETA FEEDBACK ROUND 2 — BACK NAVIGATION, THE ACTUAL FIX (owner decision
+  2026-07-31, device tester report: "back lands on Settlements instead
+  of Home" — the prior `backBehavior="initialRoute"` change did NOT fix
+  it in practice). Root cause this time confirmed by reading the
+  INSTALLED expo-router/react-navigation source in `node_modules`
+  (`@react-navigation/routers/src/StackRouter.tsx`,
+  `expo-router/build/global-state/routing.js`), not guessed a second
+  time: every screen under `app/(tabs)/more/` shares ONE nested Stack
+  navigator (`more/_layout.tsx`). Cross-tab `router.push('/(tabs)/more/X')`
+  calls (Home cards, Reports hub, CEO Mode, Scorecard, ...) dispatch a
+  PUSH action against that Stack's OWN existing state — StackRouter's
+  PUSH handler always appends to `state.routes`, there is no implicit
+  reset for an already-mounted nested navigator. Visiting different Home
+  cards across a session (cash-flow, later settlements, later
+  tax-estimator, ...) without returning all the way to Home in between
+  silently left the "more" stack several screens deep, so back popped
+  through THAT accumulated history, landing on whatever unrelated screen
+  was still sitting there. `backBehavior="initialRoute"` only governs
+  what happens once a tab's own stack is already EMPTY — it never
+  addressed the accumulation itself, which is why it didn't fix the
+  reported bug. Fix: `app/src/navigation/useResetStackOnTabBlur.ts`,
+  called once from `more/index.tsx` (the shared stack's always-mounted
+  root screen) — resets that stack to just its root every time the
+  "more" tab loses focus, via `navigation.getParent().addListener('blur',
+  ...)` + `navigation.dispatch(StackActions.popToTop())`. This means
+  re-entering "more" from ANY origin always starts clean
+  (`[index, target]`, never a stale accumulation), making back
+  deterministic and bounded: at most 2 presses to Home (target ->
+  more/index -> Home) instead of unbounded/unpredictable. Applies
+  identically to the header back arrow and the Android hardware back
+  button (both dispatch through the same navigator tree). Zero changes
+  needed at any of the 20+ existing `router.push('/(tabs)/more/X')` call
+  sites — the fix lives in exactly one place.
+  `app/src/navigation/backIntent.ts`'s `backTargetFor(href)` is the
+  resulting per-route intent table (`'home'` vs `'moreIndex'`),
+  regression-guarded against every route in `navRegistry.ts` by
+  `src/navigation/__tests__/backIntent.test.ts`. See
+  `docs/DATA_FLOW.md`'s new "Navigation intent" section for the full
+  "how routes must be opened from now on" rule. Known, honestly-flagged
+  remaining limitation: this guarantees back is never unbounded/wrong,
+  but a screen opened from Home still takes 2 back-presses to reach Home
+  (through more/index), not 1 — true 1-press-to-opener for every
+  cross-tab screen would require moving these ~30 screens off the shared
+  "more" Stack onto the root stack (sibling of `(tabs)`), a much larger
+  structural migration intentionally NOT done in this pass; flagged here
+  as a scoped-out follow-up rather than silently claimed as fully solved.
