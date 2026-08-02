@@ -1250,3 +1250,72 @@
   candidate types, so it wasn't reliably visible; the new chip always
   shows and taps straight through to Deductions with the "Needs review
   only" filter pre-enabled via a `?filter=needsReview` route param.
+- TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31, follow-up to the UX
+  mega-pass's Net-to-Owner audit fix, which fixed Home but flagged that
+  Scorecard/CEO Mode/Share Weekly Profit still used the wrong figure).
+  ONE canonical calculation now: `app/src/stats/trueProfit.ts`'s
+  `calcTrueProfit()` (aggregate) / `buildWeeklyTrueProfitTrend()` (weekly
+  series, same `{weekEnding, gross, net}` shape as `cashFlowTrend.ts`'s
+  `buildWeeklyTrend()` so it's a drop-in replacement) — `profit =
+  grossRevenue − every deductible expense (withheld + out-of-pocket
+  alike, tax_deductible !== false)`. Two things this gets right: (1)
+  always starts from GROSS and subtracts every deduction row once, never
+  from a settlement's own `net` (which already has withheld chargebacks
+  baked in) plus ALSO subtracting deductions again — proven equal to the
+  net-pay shortcut by `profitLoss.ts`'s own header comment, but this
+  module always takes the gross route so no caller has to reason about
+  which rows are already "in" `net`; (2) EXCLUDES deductions marked
+  `tax_deductible: false` — `NON_DEDUCTIBLE_CATEGORIES`
+  (`src/import/category.ts`): a Meal already covered by the per diem
+  allowance, or an Advance Repayment (literally returning already-
+  received money, never a real expense). Deliberately NOT used by
+  `buildProfitLoss()` (Operating P&L, a verbatim legacy `rOper()` port —
+  counts every deduction unconditionally, by design, for accountant/
+  legacy-parity purposes) or `calcScorecard()` (a verbatim legacy
+  `rScore()` port, same "operating" ALL-deductions definition by design,
+  used for the 0-100 score/grade only) — both stay exactly as documented;
+  this module is for every OTHER "what's my profit" dollar figure.
+  **Before → after, per screen:**
+  - **Home**: Net to Owner card was `grossRevenue − totalDeductions`
+    (ALL deductions unconditionally, the mega-pass's own fix) → now
+    `calcTrueProfit()`. Its sparkline, the Hero Card's headline number +
+    chart (via `calcHeroPeriod`, fed a true-profit-derived series), the
+    Overview trio's "Net Profit" tile, and Goal Progress's current-week
+    figure were all `revenue − ALL expenses` for the week → now the
+    true-profit weekly trend. (The Overview trio's own "Expenses" tile is
+    UNCHANGED on purpose — it's the broader "everything spent" total,
+    matching the "Total Deductions" card elsewhere; only "Net Profit"
+    needed the exclusion.)
+  - **Scorecard**: the "Weekly" trend list showed `buildWeeklyTrend()`'s
+    bare settlement `.net` (pay only, zero out-of-pocket expenses
+    subtracted at all) → now the true-profit weekly trend. The 0-100
+    score/grade and its `netPerMile` ratio (shown on Scorecard's own
+    Share card) are UNCHANGED — verbatim legacy parity, see above.
+  - **CEO Mode / AI Coach**: `thisWeekRevenue`/`thisWeekProfit` cards,
+    the Share card, Goal Progress's `latestWeek` input, and — critically —
+    the AI Coach briefing's OWN PROMPT TEXT ("This week's revenue: X,
+    profit: Y") were all sourced from `buildWeeklyTrend()`'s bare `.net`
+    → now the true-profit weekly trend, one shared source (`weeklyTrend`)
+    fixing every one of these at once.
+  - **Share Weekly Profit**: the "Profit" metric on the share card was
+    `selected.net` (the one settlement's own net pay) → now looked up
+    from the true-profit weekly trend for the selected week (aggregating
+    every settlement sharing that `week_ending`, same convention per
+    diem dedup already uses for a multi-truck fleet).
+  - **Profit Analysis**: `buildProfitAnalysis()`'s `netIncome` was
+    `sum(settlement.net)` — didn't subtract ANY out-of-pocket deduction
+    at all, not just fuel/maintenance (which this rollup already tracks
+    separately) → the function gained a `deductions` parameter and now
+    computes true profit for the window. The screen's own "Weekly" trend
+    list had the same `buildWeeklyTrend()` bug as Scorecard/CEO
+    Mode → fixed identically. (Home's and CEO Mode's OWN calls to
+    `buildProfitAnalysis()` were updated to pass real deduction data too,
+    for consistency, even though neither currently displays
+    `.netIncome` — only `.fuelPctOfRevenue`/`.revenue`.)
+  Tests (`src/stats/__tests__/trueProfit.test.ts`,
+  `src/stats/__tests__/profitAnalysis.test.ts`): a dataset with a
+  settlement's `net` plus separate out-of-pocket receipts proves the
+  formula never double-counts a withheld chargeback already reflected in
+  `net`; a Meal-covered-by-per-diem row and an Advance Repayment row are
+  each proven to leave profit completely unchanged whether present or
+  absent.

@@ -4,7 +4,9 @@ import ViewShot from 'react-native-view-shot';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSettlements } from '@/src/data/settlements';
+import { useDeductions } from '@/src/data/deductions';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
 import { useShareCapture } from '@/src/components/shareCard/useShareCapture';
 import { useShareMessages } from '@/src/components/shareCard/useShareMessages';
@@ -40,6 +42,7 @@ export default function ShareProfit() {
   const { money, number } = useFormatters();
   const { profile } = useAuth();
   const settlementsQuery = useSettlements();
+  const dedQuery = useDeductions();
   const { activeTruck } = useActiveTruck();
   const { shotRef, sharing, shareTo } = useShareCapture();
   const messages = useShareMessages();
@@ -51,6 +54,21 @@ export default function ShareProfit() {
     [settlementsQuery.data]
   );
   const selected = selectedWeekEnding ? weeks.find((w) => w.week_ending === selectedWeekEnding) ?? weeks[0] : weeks[0];
+
+  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): the "Profit"
+  // metric used to be selected.net (settlement net PAY only, ignoring
+  // out-of-pocket expenses). Now the same canonical src/stats/
+  // trueProfit.ts weekly figure Home/Scorecard/CEO Mode/Profit Analysis
+  // all use, looked up for the selected week (aggregates every
+  // settlement sharing that week_ending, same "one calendar week" scoping
+  // per diem dedup already uses for a multi-truck fleet).
+  const trueProfitByWeek = useMemo(
+    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
+    [settlementsQuery.data, dedQuery.data]
+  );
+  const selectedTrueProfit = selected
+    ? trueProfitByWeek.find((p) => p.weekEnding === selected.week_ending)?.net ?? selected.net
+    : 0;
 
   // BRAND VISIBILITY guarantee (owner decision 2026-07-30): the app
   // wordmark is rendered unconditionally at the bottom of the share card
@@ -136,7 +154,7 @@ export default function ShareProfit() {
                   {included.profit && (
                     <View style={styles.shareMetric}>
                       <Text style={styles.shareMetricLabel}>{t('shareProfit.metrics.profit')}</Text>
-                      <Text style={[styles.shareMetricValue, { color: colors.green }]}>{money(selected.net)}</Text>
+                      <Text style={[styles.shareMetricValue, { color: colors.green }]}>{money(selectedTrueProfit)}</Text>
                     </View>
                   )}
                   {included.mpg && activeTruck?.fleet_mpg != null && (

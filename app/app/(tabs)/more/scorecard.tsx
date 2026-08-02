@@ -6,10 +6,11 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useSettlements } from '@/src/data/settlements';
+import { useDeductions } from '@/src/data/deductions';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
-import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
+import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
@@ -37,6 +38,7 @@ export default function Scorecard() {
   const statsQuery = useFleetStats(null);
   const fuelQuery = useFuelPurchases();
   const settlementsQuery = useSettlements();
+  const dedQuery = useDeductions();
   const { activeTruck } = useActiveTruck();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -62,9 +64,17 @@ export default function Scorecard() {
     return calcScorecard(statsQuery.data.grossRevenue, statsQuery.data.totalDeductions, statsQuery.data.totalMiles, fuelCost);
   }, [statsQuery.data, fuelCost]);
 
-  const weeklyTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []).slice(-8), [settlementsQuery.data]);
+  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
+  // buildWeeklyTrend()'s bare settlement `.net` (net PAY only, ignoring
+  // out-of-pocket expenses entirely). Now the same canonical
+  // src/stats/trueProfit.ts figure Home/CEO Mode/Share Weekly
+  // Profit/Profit Analysis all use.
+  const weeklyTrend = useMemo(
+    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []).slice(-8),
+    [settlementsQuery.data, dedQuery.data]
+  );
 
-  const loading = statsQuery.isLoading || fuelQuery.isLoading || settlementsQuery.isLoading;
+  const loading = statsQuery.isLoading || fuelQuery.isLoading || settlementsQuery.isLoading || dedQuery.isLoading;
 
   return (
     <Screen>

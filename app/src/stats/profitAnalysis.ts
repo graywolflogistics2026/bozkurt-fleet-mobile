@@ -1,4 +1,5 @@
 import type { Benchmark } from '@/src/types/db';
+import { isDeductibleExpense } from '@/src/stats/trueProfit';
 
 // Profit Analysis v1 (PROMPTS.md Session 9a item 11, CLAUDE.md invariant
 // #22 — composed ONLY from the user's own account data, no external
@@ -19,6 +20,7 @@ export type ProfitAnalysisRollup = {
 type SettlementLike = { week_ending: string; gross: number | null; net: number | null; miles: number | null };
 type FuelLike = { purchase_date: string | null; amount: number | null; discount: number | null };
 type MaintenanceLike = { service_date: string | null; cost: number | null };
+type DeductionLike = { ded_date: string | null; amount: number | null; tax_deductible: boolean | null };
 
 export function windowStartIso(windowDays: number, now: Date = new Date()): string {
   const d = new Date(now);
@@ -26,10 +28,18 @@ export function windowStartIso(windowDays: number, now: Date = new Date()): stri
   return d.toISOString().slice(0, 10);
 }
 
+// TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): `netIncome` used
+// to be sum(settlement.net) — settlement net PAY only, silently ignoring
+// EVERY out-of-pocket deduction (not just fuel/maintenance, which this
+// rollup already tracks as their own separate figures). Now the same
+// canonical src/stats/trueProfit.ts formula (grossRevenue minus every
+// deductible — tax_deductible !== false — deduction dated within the
+// window) every other "profit" surface in the app uses.
 export function buildProfitAnalysis(
   settlements: SettlementLike[],
   fuelPurchases: FuelLike[],
   maintenanceRecords: MaintenanceLike[],
+  deductions: DeductionLike[],
   windowDays = 30,
   now: Date = new Date()
 ): ProfitAnalysisRollup {
@@ -37,7 +47,10 @@ export function buildProfitAnalysis(
 
   const inWindow = settlements.filter((s) => (s.week_ending ?? '') >= start);
   const revenue = inWindow.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const netIncome = inWindow.reduce((sum, s) => sum + Number(s.net ?? 0), 0);
+  const deductibleExpenses = deductions
+    .filter((d) => (d.ded_date ?? '') >= start && isDeductibleExpense(d))
+    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const netIncome = revenue - deductibleExpenses;
   const totalMiles = inWindow.reduce((sum, s) => sum + Number(s.miles ?? 0), 0);
 
   const fuelExpense = fuelPurchases

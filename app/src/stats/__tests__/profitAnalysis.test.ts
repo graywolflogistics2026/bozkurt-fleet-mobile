@@ -39,24 +39,36 @@ describe('buildProfitAnalysis', () => {
     { service_date: '2026-06-10', cost: 300 }, // in window
     { service_date: '2026-01-01', cost: 999 }, // outside window
   ];
+  const deductions = [
+    { ded_date: '2026-06-12', amount: 200, tax_deductible: true }, // in window, deductible
+    { ded_date: '2026-06-13', amount: 40, tax_deductible: false }, // in window, non-deductible (excluded)
+    { ded_date: '2026-01-02', amount: 999, tax_deductible: true }, // outside window
+  ];
 
   it('sums only rows within the trailing window', () => {
-    const result = buildProfitAnalysis(settlements, fuel, maintenance, 30, NOW);
+    const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, 30, NOW);
     expect(result.revenue).toBe(3000);
-    expect(result.netIncome).toBe(2200);
+    // netIncome = revenue (3000) - deductible-in-window deductions (200) = 2800
+    // (settlement.net's own 2200 is NOT used — TRUE-PROFIT CONSISTENCY)
+    expect(result.netIncome).toBe(2800);
     expect(result.totalMiles).toBe(2000);
     expect(result.fuelExpense).toBe(650); // 700 - 50 discount
     expect(result.maintenanceExpense).toBe(300);
   });
 
+  it('excludes non-deductible rows (a Meal covered by per diem, an Advance Repayment) from netIncome', () => {
+    const result = buildProfitAnalysis(settlements, [], [], deductions, 30, NOW);
+    expect(result.netIncome).toBe(2800); // the $40 non-deductible row never subtracted
+  });
+
   it('computes fuel % of revenue and maintenance $/mile ratios', () => {
-    const result = buildProfitAnalysis(settlements, fuel, maintenance, 30, NOW);
+    const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, 30, NOW);
     expect(result.fuelPctOfRevenue).toBeCloseTo(650 / 3000, 5);
     expect(result.maintenanceCostPerMile).toBeCloseTo(300 / 2000, 5);
   });
 
   it('returns null ratios rather than dividing by zero when revenue/miles are 0', () => {
-    const result = buildProfitAnalysis([], [], [], 30, NOW);
+    const result = buildProfitAnalysis([], [], [], [], 30, NOW);
     expect(result.fuelPctOfRevenue).toBeNull();
     expect(result.maintenanceCostPerMile).toBeNull();
   });

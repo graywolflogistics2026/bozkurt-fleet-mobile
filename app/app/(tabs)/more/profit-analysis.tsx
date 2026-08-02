@@ -5,11 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useDeductions } from '@/src/data/deductions';
 import { useBenchmarks } from '@/src/data/benchmarks';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { buildProfitAnalysis, compareToBenchmark, type RangeStatus } from '@/src/stats/profitAnalysis';
-import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
+import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, PrimaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -27,6 +28,7 @@ export default function ProfitAnalysis() {
   const settlementsQuery = useSettlements();
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
+  const dedQuery = useDeductions();
   const benchmarksQuery = useBenchmarks();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -43,14 +45,21 @@ export default function ProfitAnalysis() {
     }
   }, [queryClient]);
 
-  const loading = settlementsQuery.isLoading || fuelQuery.isLoading || maintenanceQuery.isLoading;
+  const loading = settlementsQuery.isLoading || fuelQuery.isLoading || maintenanceQuery.isLoading || dedQuery.isLoading;
 
   const rollup30d = useMemo(
-    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], maintenanceQuery.data ?? [], 30),
-    [settlementsQuery.data, fuelQuery.data, maintenanceQuery.data]
+    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], maintenanceQuery.data ?? [], dedQuery.data ?? [], 30),
+    [settlementsQuery.data, fuelQuery.data, maintenanceQuery.data, dedQuery.data]
   );
 
-  const weeklyTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
+  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
+  // buildWeeklyTrend()'s bare settlement `.net` — now the same canonical
+  // src/stats/trueProfit.ts figure Home/Scorecard/CEO Mode/Share Weekly
+  // Profit all use.
+  const weeklyTrend = useMemo(
+    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
+    [settlementsQuery.data, dedQuery.data]
+  );
   const recentWeeks = weeklyTrend.slice(-8);
 
   // benchmarks table may not exist yet (docs/PENDING_SQL.md §25 not run) —

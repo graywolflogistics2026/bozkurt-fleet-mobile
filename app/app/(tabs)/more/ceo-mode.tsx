@@ -16,7 +16,7 @@ import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
 import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
-import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
+import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { calcWeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcBusinessScore, type StarRating } from '@/src/stats/aiBusinessScore';
 import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
@@ -127,7 +127,16 @@ export default function CeoMode() {
   const loadingData =
     settlementsQuery.isLoading || deductionsQuery.isLoading || documentsQuery.isLoading || complianceQuery.isLoading || profileQuery.isLoading;
 
-  const weeklyTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
+  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
+  // buildWeeklyTrend()'s bare settlement `.net` (net PAY only) — fed
+  // straight into the AI Coach briefing prompt, the Share card, the
+  // thisWeekProfit dashboard tile, and Goal Progress, all silently
+  // ignoring out-of-pocket expenses. Now the same canonical
+  // src/stats/trueProfit.ts figure every other "profit" surface uses.
+  const weeklyTrend = useMemo(
+    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], deductionsQuery.data ?? []),
+    [settlementsQuery.data, deductionsQuery.data]
+  );
   const latestWeek = weeklyTrend[weeklyTrend.length - 1] ?? null;
 
   const weeklyGoal = profileQuery.data?.weekly_goal ?? null;
@@ -225,8 +234,8 @@ export default function CeoMode() {
   // dollar gap (quarterlyPayment - business_balance), never a fabricated
   // estimate (src/stats/aiRecommendations.ts).
   const profitAnalysisRollup = useMemo(
-    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], 30),
-    [settlementsQuery.data, fuelQuery.data]
+    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], deductionsQuery.data ?? [], 30),
+    [settlementsQuery.data, fuelQuery.data, deductionsQuery.data]
   );
   const fuelBenchmark = useMemo(
     () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,

@@ -39,7 +39,8 @@ import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/q
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import { ppmColor } from '@/src/stats/cpm';
 import { calcScorecard } from '@/src/stats/scorecard';
-import { buildWeeklyTrend, buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
+import { buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
+import { calcTrueProfit, buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
@@ -1117,21 +1118,25 @@ export default function Dashboard() {
   );
   const revenueExpenseTrend = useMemo(() => fullWeeklyRevenueExpenseTrend.slice(-8), [fullWeeklyRevenueExpenseTrend]);
 
-  const weeklyNetTrend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
-  // UX MEGA-PASS item G(5) audit fix (owner decision 2026-07-31): this
-  // used to read weeklyNetTrend's bare settlement `.net` (net PAY —
-  // gross minus carrier-WITHHELD deductions only), which silently ignores
-  // out-of-pocket business expenses (fuel, maintenance, store purchases —
-  // any deduction with source != 'settlement'). Net to Owner now sources
-  // from fullWeeklyRevenueExpenseTrend, whose `revenue - expenses` already
-  // nets ALL deductions (withheld + out-of-pocket) — the same formula
-  // src/stats/profitLoss.ts's buildProfitLoss() (Operating P&L) uses,
-  // verified equivalent by that module's own header comment: "gross -
-  // withheld already equals settlement net by definition, so netting ALL
-  // deductions against gross produces the same operating net income."
+  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31, follow-up to the
+  // UX mega-pass's Net-to-Owner audit fix): weeklyNetTrend used to be
+  // buildWeeklyTrend()'s bare settlement `.net` (net PAY only). The
+  // mega-pass fix moved Net to Owner to `grossRevenue - totalDeductions`
+  // (ALL deductions, unconditionally) — closer, but that OVER-subtracts
+  // a Meal already covered by per diem or an Advance Repayment (both
+  // marked `tax_deductible: false`, CLAUDE.md's NON_DEDUCTIBLE_CATEGORIES),
+  // neither of which is a real expense reduction. Every "profit" figure
+  // on this screen (this sparkline, the Hero Card, the Overview trio's
+  // Net Profit tile, Goal Progress) now sources from the single
+  // canonical src/stats/trueProfit.ts, which excludes exactly those rows.
+  const fullWeeklyTrueProfitTrend = useMemo(
+    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
+    [settlementsQuery.data, dedQuery.data]
+  );
+  const weeklyNetTrend = fullWeeklyTrueProfitTrend;
   const netSparkValues = useMemo(
-    () => fullWeeklyRevenueExpenseTrend.slice(-8).map((p) => p.revenue - p.expenses),
-    [fullWeeklyRevenueExpenseTrend]
+    () => fullWeeklyTrueProfitTrend.slice(-8).map((p) => p.net),
+    [fullWeeklyTrueProfitTrend]
   );
 
   // Zone 4's per-mile trend arrows — current week vs. the prior 4-week
@@ -1142,18 +1147,25 @@ export default function Dashboard() {
   );
   const cpmTrends = useMemo(() => calcCpmTrends(weeklyCpmTrend), [weeklyCpmTrend]);
 
-  // Hero Card (Session 9d item 1) — this week vs. last week, both read
-  // straight off revenueExpenseTrend's last two points rather than a
-  // separate fetch. "Net Profit" here = revenue - ALL deductions for the
-  // week, same definition the Overview chart right below it already uses.
+  // Hero Card (Session 9d item 1) — this week vs. last week. Revenue/
+  // Expenses still read off revenueExpenseTrend (unchanged — "Expenses"
+  // here is intentionally the broader ALL-deductions total, matching the
+  // "Total Deductions" card elsewhere); "Net Profit" now reads off the
+  // canonical true-profit trend (TRUE-PROFIT CONSISTENCY, owner decision
+  // 2026-07-31) instead of this same revenue-minus-ALL-expenses window,
+  // so it excludes a Meal-covered-by-per-diem or Advance Repayment the
+  // same way every other "profit" figure in the app now does.
   const heroFirstName =
     profile?.owner_name?.trim().split(/\s+/)[0] || session?.user?.email?.split('@')[0] || t('dashboard.hero.fallbackName');
   const thisWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 1];
   const lastWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 2];
   const heroWeekRevenue = thisWeekPoint?.revenue ?? 0;
   const heroWeekExpenses = thisWeekPoint?.expenses ?? 0;
-  const heroWeekNetProfit = thisWeekPoint ? thisWeekPoint.revenue - thisWeekPoint.expenses : 0;
-  const lastWeekNetProfit = lastWeekPoint ? lastWeekPoint.revenue - lastWeekPoint.expenses : null;
+  const trueProfitTrend8 = fullWeeklyTrueProfitTrend.slice(-8);
+  const thisWeekTrueProfitPoint = trueProfitTrend8[trueProfitTrend8.length - 1];
+  const lastWeekTrueProfitPoint = trueProfitTrend8[trueProfitTrend8.length - 2];
+  const heroWeekNetProfit = thisWeekTrueProfitPoint?.net ?? 0;
+  const lastWeekNetProfit = lastWeekTrueProfitPoint ? lastWeekTrueProfitPoint.net : null;
   const heroRevenueChange = calcWeekOverWeekChange(heroWeekRevenue, lastWeekPoint?.revenue);
   const heroExpensesChange = calcWeekOverWeekChange(heroWeekExpenses, lastWeekPoint?.expenses);
   const heroNetProfitChange = calcWeekOverWeekChange(heroWeekNetProfit, lastWeekNetProfit);
@@ -1162,11 +1174,21 @@ export default function Dashboard() {
   // UX MEGA-PASS item G(1): period tabs drive the Hero Card's number/
   // delta/chart together via calcHeroPeriod() — reads the FULL (unsliced)
   // weekly trend so 1M/3M/6M/yearly can window arbitrarily far back, not
-  // just the last 8 weeks revenueExpenseTrend is capped to.
+  // just the last 8 weeks revenueExpenseTrend is capped to. Mapped into
+  // calcHeroPeriod's existing {weekEnding, revenue, expenses} shape from
+  // the true-profit trend's {weekEnding, gross, net} — `expenses` here
+  // is a derived "gross minus true profit" figure purely so
+  // calcHeroPeriod's unmodified revenue-minus-expenses math reconstructs
+  // the correct (deductible-only) profit, not a claim that this equals
+  // the broader "Total Deductions" figure.
+  const fullWeeklyTrueProfitAsRevenueExpense = useMemo(
+    () => fullWeeklyTrueProfitTrend.map((p) => ({ weekEnding: p.weekEnding, revenue: p.gross, expenses: p.gross - p.net })),
+    [fullWeeklyTrueProfitTrend]
+  );
   const [heroPeriod, setHeroPeriod] = useState<HeroPeriod>('thisWeek');
   const heroPeriodResult = useMemo(
-    () => calcHeroPeriod(fullWeeklyRevenueExpenseTrend, heroPeriod),
-    [fullWeeklyRevenueExpenseTrend, heroPeriod]
+    () => calcHeroPeriod(fullWeeklyTrueProfitAsRevenueExpense, heroPeriod),
+    [fullWeeklyTrueProfitAsRevenueExpense, heroPeriod]
   );
   const fuelCost = useMemo(
     () => (fuelQuery.data ?? []).reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
@@ -1276,8 +1298,8 @@ export default function Dashboard() {
     [dedQuery.data]
   );
   const profitAnalysisRollup = useMemo(
-    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], 30),
-    [settlementsQuery.data, fuelQuery.data]
+    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], dedQuery.data ?? [], 30),
+    [settlementsQuery.data, fuelQuery.data, dedQuery.data]
   );
   const fuelBenchmark = useMemo(
     () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,
@@ -1374,12 +1396,15 @@ export default function Dashboard() {
       </TappableCard>
     ),
     netToOwner: (label) => {
-      // UX MEGA-PASS item G(5) audit fix: was stats.netRevenue (settlement
-      // net PAY only — see the netSparkValues comment above for the full
-      // finding). True net-to-owner = grossRevenue - totalDeductions
-      // (ALL deductions, withheld + out-of-pocket), matching
-      // src/stats/profitLoss.ts's Operating P&L netIncome formula exactly.
-      const trueNetToOwner = stats ? stats.grossRevenue - stats.totalDeductions : null;
+      // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): was
+      // stats.grossRevenue - stats.totalDeductions (the UX mega-pass's
+      // Net-to-Owner audit fix) — closer than the original settlement-net
+      // bug, but ALL deductions unconditionally over-subtracts a Meal
+      // already covered by per diem or an Advance Repayment (both
+      // tax_deductible: false, never real expense reductions). Now the
+      // single canonical src/stats/trueProfit.ts calcTrueProfit(), the
+      // same figure every other "profit" surface in the app uses.
+      const trueNetToOwner = settlementsQuery.data ? calcTrueProfit(settlementsQuery.data, dedQuery.data ?? []) : null;
       return (
         <TappableCard key="netToOwner" onPress={() => goToCard('netToOwner')}>
           <StatValue
