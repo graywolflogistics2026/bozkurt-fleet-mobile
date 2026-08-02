@@ -10,6 +10,7 @@ import { useReimbursements } from '@/src/data/reimbursements';
 import { useLoads } from '@/src/data/loads';
 import { useDocuments } from '@/src/data/documents';
 import { useFleetStats } from '@/src/data/dashboardStats';
+import { calcEscrowBalance } from '@/src/stats/escrowBalance';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
@@ -179,6 +180,13 @@ export default function Settlements() {
         .reduce((sum, x) => sum + Number(x.amount ?? 0), 0),
     [dedQuery.data]
   );
+  // ESCROW & DEPOSITS running balance (owner decision 2026-08-02): what
+  // the carrier currently HOLDS — a performance bond/escrow reserve/tire
+  // fund/emergency fund/maintenance reserve is a refundable deposit, not
+  // an expense, so it's tracked separately from allSettlementDedTotal
+  // above (which still includes it, since it genuinely was withheld from
+  // pay — just never counted against true profit/tax deductions).
+  const escrowBalance = useMemo(() => calcEscrowBalance(dedQuery.data ?? []), [dedQuery.data]);
 
   function handleDelete(x: Settlement) {
     Alert.alert(t('settlementsScreen.deleteConfirmTitle'), t('settlementsScreen.deleteConfirmBody'), [
@@ -232,6 +240,14 @@ export default function Settlements() {
           </View>
         </Card>
 
+        {escrowBalance > 0 && (
+          <Card>
+            <MutedText>{t('settlementsScreen.escrowHeldLabel')}</MutedText>
+            <Text style={styles.statValue}>{money(escrowBalance)}</Text>
+            <MutedText>{t('settlementsScreen.escrowHeldNote')}</MutedText>
+          </Card>
+        )}
+
         <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
           <Pill
             label={t('needsReview.filterOnly')}
@@ -264,8 +280,18 @@ export default function Settlements() {
                       {needsReview && <NeedsReviewChip />}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.amount}>{money(x.net)}</Text>
-                      <MutedText>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
+                      {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02):
+                          a losing week (net < 0, e.g. heavy chargebacks
+                          against a low/zero-mile week) is real money owed
+                          BACK to the carrier — shown in red with an
+                          explicit label rather than looking like an
+                          ordinary (smaller) payout. */}
+                      <Text style={[styles.amount, x.net < 0 && { color: colors.red }]}>{money(x.net)}</Text>
+                      {x.net < 0 ? (
+                        <MutedText style={{ color: colors.red }}>{t('settlementsScreen.oweCarrier')}</MutedText>
+                      ) : (
+                        <MutedText>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
+                      )}
                     </View>
                   </View>
                 </TappableCard>
@@ -287,7 +313,8 @@ export default function Settlements() {
                 </View>
                 <View>
                   <MutedText>{t('settlementsScreen.netLabelShort')}</MutedText>
-                  <Text style={styles.detailAmount}>{money(selected.net)}</Text>
+                  <Text style={[styles.detailAmount, selected.net < 0 && { color: colors.red }]}>{money(selected.net)}</Text>
+                  {selected.net < 0 && <MutedText style={{ color: colors.red }}>{t('settlementsScreen.oweCarrier')}</MutedText>}
                 </View>
                 <View>
                   <MutedText>{t('settlementsScreen.milesLabelShort')}</MutedText>

@@ -4,6 +4,7 @@ import {
   detectMaintType,
   getCatNote,
   guessCategory,
+  isEscrowDeposit,
   isRestaurantPurchase,
   toDbServiceType,
 } from '@/src/import/category';
@@ -174,9 +175,17 @@ export function mapSettlement(
   // food-purchase description (a truck-stop restaurant charge, a carrier
   // point-of-sale meal) wins over whatever category/chargebackType the AI
   // guessed, since these are common trucking-tax mistakes to mislabel.
-  // tax_deductible is set false on every withheld row here too (defense in
-  // depth) even though source='settlement' already excludes it from every
-  // tax total on its own.
+  // Escrow & deposits (owner decision 2026-08-02, verified against a real
+  // statement's "PERFORMNCE BOND" OCR-damaged line): same text-based
+  // override, checked next — a performance bond/escrow reserve/tire fund/
+  // emergency fund/maintenance reserve deduction is a REFUNDABLE DEPOSIT
+  // the carrier holds, never a real expense (CLAUDE.md's
+  // NON_DEDUCTIBLE_CATEGORIES, src/stats/trueProfit.ts's
+  // TRUE_PROFIT_EXCLUDED_CATEGORIES) — this catches it even when the AI's
+  // own chargebackType classification (ai-import's prompt, "escrow_reserve")
+  // was missed. tax_deductible is set false on every withheld row here too
+  // (defense in depth) even though source='settlement' already excludes it
+  // from every tax total on its own.
   const deductions: DeductionInsert[] = (s.deductions ?? []).map((x) => ({
     user_id: userId,
     settlement_id: null,
@@ -187,7 +196,9 @@ export function mapSettlement(
     amount: num(x.amount),
     category: isRestaurantPurchase(x.desc)
       ? 'Meals (per diem covered)'
-      : (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
+      : isEscrowDeposit(x.desc)
+        ? 'Escrow & Deposits'
+        : (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
     payment_method: 'Settlement Withheld',
     source: 'settlement',
     tax_deductible: false,

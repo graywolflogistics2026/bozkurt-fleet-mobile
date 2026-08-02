@@ -1,4 +1,4 @@
-import { calcTrueProfit, buildWeeklyTrueProfitTrend, isDeductibleExpense } from '@/src/stats/trueProfit';
+import { calcTrueProfit, buildWeeklyTrueProfitTrend, isDeductibleExpense, reducesTrueProfit } from '@/src/stats/trueProfit';
 import type { Deduction, Settlement } from '@/src/types/db';
 
 function sett(overrides: Partial<Settlement>): Settlement {
@@ -42,6 +42,17 @@ function ded(overrides: Partial<Deduction>): Deduction {
     ...overrides,
   } as Deduction;
 }
+
+describe('reducesTrueProfit', () => {
+  it('excludes Escrow & Deposits regardless of source', () => {
+    expect(reducesTrueProfit({ source: 'settlement', category: 'Escrow & Deposits', tax_deductible: false })).toBe(false);
+    expect(reducesTrueProfit({ source: 'manual', category: 'Escrow & Deposits', tax_deductible: true })).toBe(false);
+  });
+
+  it('counts a withheld row that is neither Meals, Advance Repayment, nor Escrow & Deposits', () => {
+    expect(reducesTrueProfit({ source: 'settlement', category: 'Insurance—Truck', tax_deductible: false })).toBe(true);
+  });
+});
 
 describe('isDeductibleExpense', () => {
   it('is true when tax_deductible is true', () => {
@@ -95,6 +106,38 @@ describe('calcTrueProfit', () => {
       ded({ id: 'advance', amount: 800, category: 'Advance Repayment', tax_deductible: false }),
     ];
     expect(calcTrueProfit(settlements, deductions)).toBe(2700); // advance repayment excluded entirely
+  });
+
+  it('excludes an Escrow & Deposits deduction — a refundable deposit, never a real expense (owner decision 2026-08-02)', () => {
+    const settlements = [sett({ gross: 3000, net: 3000 })];
+    const deductions = [
+      ded({ id: 'fuel', amount: 300, tax_deductible: true }),
+      ded({ id: 'escrow', amount: 100, source: 'settlement', category: 'Escrow & Deposits', tax_deductible: false }),
+    ];
+    expect(calcTrueProfit(settlements, deductions)).toBe(2700); // escrow excluded entirely
+  });
+
+  it('a negative-gross-relative settlement still computes correctly, uncapped (never clamped to 0)', () => {
+    // Verified against a real statement: W/E 2026-07-24, 0 miles, gross
+    // $5.16, deductions $1,160.51 total (66.95 meals + 550.00 advance
+    // repayment + 100.00 escrow excluded from true profit — a refundable
+    // deposit/non-expense, same as meals/advance repayment; 443.56
+    // genuinely deductible). NOTE: true profit here (-438.4) is
+    // deliberately DIFFERENT from the settlement's own reported net pay
+    // (-1155.35, gross minus EVERY withheld row including the excluded
+    // ones) — that distinction, and the business-balance-delta/per-diem
+    // consequences of the real net pay, are covered end-to-end in
+    // src/data/__tests__/aiImportSave.negativeSettlement.test.ts.
+    const settlements = [sett({ gross: 5.16, net: -1155.35, miles: 0, week_ending: '2026-07-24' })];
+    const deductions = [
+      ded({ id: 'meal', amount: 66.95, source: 'settlement', category: 'Meals (per diem covered)', tax_deductible: false }),
+      ded({ id: 'advance', amount: 550, source: 'settlement', category: 'Advance Repayment', tax_deductible: false }),
+      ded({ id: 'escrow', amount: 100, source: 'settlement', category: 'Escrow & Deposits', tax_deductible: false }),
+      ded({ id: 'other', amount: 443.56, source: 'settlement', category: 'Fuel & DEF', tax_deductible: false }),
+    ];
+    // 5.16 - 443.56 = -438.4 (only the truly-deductible portion counts —
+    // the other 716.95 in withheld rows are excluded non-expenses).
+    expect(calcTrueProfit(settlements, deductions)).toBeCloseTo(-438.4, 2);
   });
 
   it('sums across multiple settlements and deductions', () => {

@@ -345,6 +345,12 @@ function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.slimCard, pressed && { opacity: 0.85 }]}>
       <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>💰 {t('dashboard.businessBalance')}</Text>
       <Text style={{ color, fontWeight: '700', fontSize: typography.size.lg }}>{money(balance)}</Text>
+      {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02): a losing week
+          is real money owed back to the carrier — the balance itself can
+          now go negative (never clamped to 0), so this makes what a
+          negative number MEANS explicit rather than reading as an
+          unusually small positive figure. */}
+      {balance < 0 && <Text style={{ color: colors.red, fontSize: typography.size.xs }}>{t('dashboard.businessBalanceOwed')}</Text>}
     </Pressable>
   );
 }
@@ -1483,7 +1489,11 @@ export default function Dashboard() {
             (capital?.businessBalance ?? 0) > 10000 ? colors.green : (capital?.businessBalance ?? 0) > 3000 ? colors.orange : colors.red
           }
         />
-        <MutedText>{t('dashboard.checkingAccount')}</MutedText>
+        {(capital?.businessBalance ?? 0) < 0 ? (
+          <MutedText style={{ color: colors.red }}>{t('dashboard.businessBalanceOwed')}</MutedText>
+        ) : (
+          <MutedText>{t('dashboard.checkingAccount')}</MutedText>
+        )}
       </TappableCard>
     ),
     revenuePerMile: (label) => (

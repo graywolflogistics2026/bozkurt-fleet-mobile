@@ -55,7 +55,7 @@ double-counted.
 | `insurance_workers_comp` | Workers' compensation |
 | `eld_communications` | ELD/e-log device fee |
 | `plates_permits` | Plates/permits — often amortized weekly (e.g. an 18-week plate payback schedule) |
-| `escrow_reserve` | Escrow/reserve account contribution |
+| `escrow_reserve` | Performance bond / escrow reserve / tire fund / emergency fund / maintenance reserve — a REFUNDABLE DEPOSIT the carrier holds on the driver's behalf, not an expense (owner decision 2026-08-02) — maps to category `Escrow & Deposits` below. Also matched client-side on OCR-damaged spellings (e.g. "PERFORMNCE BOND") via `isEscrowDeposit()` (`app/src/import/category.ts`) as a safety net when the AI misses this classification |
 | `lease_purchase_payment` | Truck lease-purchase payment (owner-operators leasing FROM the carrier) |
 | `trailer_fee` | Trailer rental fee charged BY the carrier |
 | `cash_advance` | A cash advance, deducted back |
@@ -110,6 +110,7 @@ are left as-is (free text, no migration) and still display fine.
 | Other | Manual-entry / low-confidence catch-all (see docType `'other'`, CLAUDE.md invariant #14) — NEVER auto-assigned by `guessCategory()`, only ever a manual pick or an AI `suggestedCategory` string that happens not to match a canonical name |
 | Meals (per diem covered) | NOT deductible — restaurant/cafe/food-purchase lines are covered by the per diem deduction already (CLAUDE.md invariant #9); `deductions.tax_deductible` defaults to `false` for this category but is a smart default, freely user-editable (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
 | Advance Repayment | NOT deductible — loan principal (repaying a prior advance), same smart-default/editable treatment as Meals above (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
+| Escrow & Deposits | NOT deductible — a performance bond/escrow reserve/tire fund/emergency fund/maintenance reserve is a REFUNDABLE DEPOSIT the carrier holds, never a real business cost; excluded from true profit (`src/stats/trueProfit.ts`) the same way Meals/Advance Repayment are, and tracked as a running "held by carrier" balance (`src/stats/escrowBalance.ts`) on the Settlements screen (owner decision 2026-08-02) |
 
 Old app categories fold in as follows (renamed, not duplicated):
 `Insurance` → `Insurance—Truck` · `Licensing & Permits` → `Permits, Licenses

@@ -203,12 +203,22 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // 2026-08-02): a re-import used to credit nothing at all, leaving the
     // balance wrong after a corrected net pay. Every save now applies the
     // DELTA between what this settlement SHOULD have credited
-    // (newCredit — same "only a positive net pay counts" rule as before)
-    // and what it actually credited last time (previousCredit, read from
-    // the row's own business_balance_credit — 0 for a brand-new
+    // (newCredit) and what it actually credited last time (previousCredit,
+    // read from the row's own business_balance_credit — 0 for a brand-new
     // settlement, so this is one formula for both new and re-imports).
+    //
+    // NEGATIVE SETTLEMENTS (owner decision 2026-08-02, verified against a
+    // real statement: W/E 2026-07-24, 0 miles, $5.16 revenue, $1,160.51
+    // deductions, net -$1,155.35 — the owner OWES the carrier that week):
+    // newCredit used to clamp a negative netPay to 0, so a losing week
+    // silently left business_balance untouched instead of decreasing it
+    // by what's actually owed. A losing week is real money leaving the
+    // business the same as a positive week is real money entering it —
+    // newCredit is now the SIGNED net pay, uncapped in either direction,
+    // and business_balance is allowed to go negative (no DB check
+    // constraint enforces >= 0 — see docs/SCHEMA.sql).
     const previousCredit = isReimport ? Number(existingSett!.business_balance_credit ?? 0) : 0;
-    const newCredit = mapping.netPay > 0 ? mapping.netPay : 0;
+    const newCredit = mapping.netPay;
     const balanceDelta = newCredit - previousCredit;
 
     let settlementId: string;

@@ -55,12 +55,17 @@ export function isDeductibleExpense(d: { tax_deductible: boolean | null }): bool
 // instead of subtracting it, exactly contradicting this file's own header
 // comment ("gross - every deduction row, withheld + out-of-pocket, once").
 // A withheld row genuinely left the settlement check — it must count —
-// UNLESS it's one of the two specific non-expense categories (owner
-// decision 2026-07-17): a per-diem-covered meal (already covered by the
-// per diem allowance, never a new expense) or an Advance Repayment (loan
-// principal being returned, not a new expense either). Those two stay
-// excluded regardless of source; every other withheld row now counts.
-const TRUE_PROFIT_EXCLUDED_CATEGORIES = new Set(['Meals (per diem covered)', 'Advance Repayment']);
+// UNLESS it's one of three specific non-expense categories: a per-diem-
+// covered meal (owner decision 2026-07-17, already covered by the per
+// diem allowance, never a new expense), an Advance Repayment (owner
+// decision 2026-07-17, loan principal being returned, not a new expense
+// either), or Escrow & Deposits (owner decision 2026-08-02, verified
+// against a real statement with a "PERFORMNCE BOND" line — a performance
+// bond/escrow reserve/tire fund/emergency fund/maintenance reserve is a
+// REFUNDABLE DEPOSIT the carrier holds, not a cost that reduces profit).
+// These three stay excluded regardless of source; every other withheld
+// row still counts.
+const TRUE_PROFIT_EXCLUDED_CATEGORIES = new Set(['Meals (per diem covered)', 'Advance Repayment', 'Escrow & Deposits']);
 
 export function reducesTrueProfit(d: {
   source?: string | null;

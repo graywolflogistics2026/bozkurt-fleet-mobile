@@ -738,7 +738,7 @@ export default function Import() {
               // negative amount with its own "-" sign, so only a positive
               // delta gets an explicit "+" prefix here (never hardcoded
               // into the i18n string itself).
-              <MutedText>
+              <MutedText style={result.netPayAdded < 0 ? { color: colors.red } : undefined}>
                 {t('importScreen.balanceAdded', {
                   amount: `${result.netPayAdded > 0 ? '+' : ''}${money(result.netPayAdded, i18n.language)}`,
                 })}

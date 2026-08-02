@@ -1,14 +1,17 @@
 import {
   applyScheduleCDefault,
   CANONICAL_CATEGORIES,
+  CHARGEBACK_CATEGORY_LABEL,
   DEFAULT_SCHEDULE_C_BUCKET,
   defaultTaxDeductible,
   detectMaintType,
   getCatNote,
   guessCategory,
+  isEscrowDeposit,
   isPersonalPayment,
   isRestaurantPurchase,
   mergeCategoryOptions,
+  NON_DEDUCTIBLE_CATEGORIES,
   toDbServiceType,
 } from '@/src/import/category';
 import type { UserCategory } from '@/src/types/db';
@@ -210,6 +213,30 @@ describe('isRestaurantPurchase (meals & advance repayments, owner decision 2026-
   });
 });
 
+describe('isEscrowDeposit (escrow & deposits, owner decision 2026-08-02)', () => {
+  it('matches a correctly-spelled performance bond/escrow/reserve line', () => {
+    expect(isEscrowDeposit('Performance Bond')).toBe(true);
+    expect(isEscrowDeposit('Escrow Reserve')).toBe(true);
+    expect(isEscrowDeposit('Maintenance Reserve')).toBe(true);
+    expect(isEscrowDeposit('Tire Fund')).toBe(true);
+    expect(isEscrowDeposit('Emergency Fund')).toBe(true);
+  });
+
+  it('matches the real, OCR-damaged spelling this rule was verified against', () => {
+    expect(isEscrowDeposit('PERFORMNCE BOND')).toBe(true);
+  });
+
+  it('does not match a bare "bond" or "security deposit" (a different, existing concept)', () => {
+    expect(isEscrowDeposit('Surety Bond Co.')).toBe(false);
+    expect(isEscrowDeposit('Security Deposit')).toBe(false);
+  });
+
+  it('returns false for unrelated/empty text', () => {
+    expect(isEscrowDeposit('Milwaukee Drill')).toBe(false);
+    expect(isEscrowDeposit(undefined)).toBe(false);
+  });
+});
+
 describe('guessCategory restaurant detection (meals & advance repayments, owner decision 2026-07-17)', () => {
   it('tags a restaurant store name as Meals (per diem covered)', () => {
     expect(guessCategory('Combo #3', 'Waffle House')).toBe('Meals (per diem covered)');
@@ -220,10 +247,25 @@ describe('guessCategory restaurant detection (meals & advance repayments, owner 
   });
 });
 
-describe('defaultTaxDeductible (meals & advance repayments, owner decision 2026-07-17)', () => {
-  it('is false for Meals (per diem covered) and Advance Repayment', () => {
+describe('defaultTaxDeductible (meals & advance repayments, owner decision 2026-07-17; escrow & deposits, owner decision 2026-08-02)', () => {
+  it('is false for Meals (per diem covered), Advance Repayment, and Escrow & Deposits', () => {
     expect(defaultTaxDeductible('Meals (per diem covered)')).toBe(false);
     expect(defaultTaxDeductible('Advance Repayment')).toBe(false);
+    expect(defaultTaxDeductible('Escrow & Deposits')).toBe(false);
+  });
+
+  it('NON_DEDUCTIBLE_CATEGORIES contains exactly these three', () => {
+    expect([...NON_DEDUCTIBLE_CATEGORIES].sort()).toEqual(
+      ['Advance Repayment', 'Escrow & Deposits', 'Meals (per diem covered)'].sort()
+    );
+  });
+
+  it('CANONICAL_CATEGORIES includes Escrow & Deposits', () => {
+    expect((CANONICAL_CATEGORIES as readonly string[]).includes('Escrow & Deposits')).toBe(true);
+  });
+
+  it('CHARGEBACK_CATEGORY_LABEL maps escrow_reserve to Escrow & Deposits', () => {
+    expect(CHARGEBACK_CATEGORY_LABEL.escrow_reserve).toBe('Escrow & Deposits');
   });
 
   it('is true for every other category, including null/undefined', () => {

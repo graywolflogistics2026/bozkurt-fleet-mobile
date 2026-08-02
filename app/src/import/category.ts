@@ -55,6 +55,14 @@ export const CANONICAL_CATEGORIES = [
   // from tax deductible totals by default — the user can flip that per row.
   'Meals (per diem covered)',
   'Advance Repayment',
+  // Escrow & deposits (owner decision 2026-08-02, verified against a real
+  // statement's "PERFORMNCE BOND" OCR-damaged line) — a performance bond,
+  // escrow reserve, tire fund, emergency fund, or maintenance reserve the
+  // carrier HOLDS on the driver's behalf (money that's typically returned
+  // later) is a REFUNDABLE DEPOSIT, not a business expense — same
+  // non-deductible treatment as Meals/Advance Repayment above, for the
+  // same reason: it never actually left the business as a cost.
+  'Escrow & Deposits',
   'Misc',
   'Other',
 ] as const;
@@ -64,7 +72,7 @@ export const CANONICAL_CATEGORIES = [
 // false at save time. SMART DEFAULT, NOT A LOCK: the user can still flip
 // tax_deductible per row regardless of category, and that edit is never
 // re-overridden by a migration or a re-import of the same document.
-export const NON_DEDUCTIBLE_CATEGORIES: readonly string[] = ['Meals (per diem covered)', 'Advance Repayment'];
+export const NON_DEDUCTIBLE_CATEGORIES: readonly string[] = ['Meals (per diem covered)', 'Advance Repayment', 'Escrow & Deposits'];
 
 export function defaultTaxDeductible(category: string | null | undefined): boolean {
   return !NON_DEDUCTIBLE_CATEGORIES.includes(category ?? '');
@@ -84,6 +92,28 @@ export function isRestaurantPurchase(text: string | undefined): boolean {
   return RESTAURANT_RE.test(text ?? '');
 }
 
+// Escrow/deposit detection (owner decision 2026-08-02, verified against a
+// real statement with a "PERFORMNCE BOND" line — OCR/scan artifacts drop
+// letters from these words often enough that a strict spelling match would
+// miss real rows). This is the CLIENT-SIDE fallback: mapSettlement() checks
+// this FIRST, same priority as isRestaurantPurchase(), so a deduction lands
+// in "Escrow & Deposits" even when the AI didn't set chargebackType
+// "escrow_reserve" (an older/legacy-imported row, or a model miss) — the
+// AI's own chargebackType classification (ai-import's prompt) is the
+// primary signal; this regex is the safety net, not a replacement for it.
+// `bond` alone is deliberately NOT matched (too many false positives —
+// "surety bond," a person's name, etc.) — only in combination with
+// "performance"/"perform" (allowing dropped letters) or as part of an
+// unambiguous escrow/reserve/fund phrase. Deliberately does NOT match a
+// bare "security deposit" — that's an existing, DIFFERENT ai-import
+// non-deductible-trap concept (a deposit the DRIVER paid, flagged
+// "PERSONAL — REVIEW:" unless forfeited), not a carrier-held escrow.
+const ESCROW_RE = /perform\w*\s*bond|escrow|maint\w*\s*rese?rv\w*|tire\s*f(u|n)nd|emergency\s*f(u|n)nd/i;
+
+export function isEscrowDeposit(text: string | undefined): boolean {
+  return ESCROW_RE.test(text ?? '');
+}
+
 // docs/INDUSTRY_TAXONOMY.md §A chargeback_type enum → a display category
 // for the settlement-withheld deduction row (app/src/import/mapExtraction.ts
 // mapSettlement()). These rows are NEVER counted as tax deductions
@@ -99,7 +129,7 @@ export const CHARGEBACK_CATEGORY_LABEL: Record<string, string> = {
   insurance_workers_comp: 'Insurance—Truck',
   eld_communications: 'ELD & Communications',
   plates_permits: 'Permits, Licenses & Road Taxes',
-  escrow_reserve: 'Misc',
+  escrow_reserve: 'Escrow & Deposits',
   lease_purchase_payment: 'Truck/Trailer Payments',
   trailer_fee: 'Lease & Rent',
   cash_advance: 'Misc',

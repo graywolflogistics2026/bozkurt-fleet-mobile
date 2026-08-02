@@ -1548,3 +1548,92 @@
   `deductions` array (`computeFleetStats()` extracted as the shared pure
   aggregation); Home passes its own already-fetched `useDeductions()`
   result into every per-truck/per-driver call.
+- NEGATIVE SETTLEMENTS + MILES TRAPS + ESCROW (owner decision 2026-08-02,
+  verified against a real statement: W/E 2026-07-24, 0 miles, $5.16
+  revenue, $1,160.51 deductions, net -$1,155.35 — the owner OWES the
+  carrier that week). Three fixes:
+  1. **Negative net pay never credits business_balance**: `newCredit =
+     mapping.netPay > 0 ? mapping.netPay : 0` in `aiImportSave.ts` clamped
+     a losing week's net pay to $0 before computing the balance delta —
+     a losing week silently left `business_balance` untouched instead of
+     DECREASING it by what's actually owed. Fixed: `newCredit =
+     mapping.netPay` (the signed figure, uncapped either direction) — the
+     delta math itself (`newCredit - previousCredit`, docs/PENDING_SQL.md
+     §37's `apply_business_balance_delta` RPC) was already correct and
+     needed no change. `business_balance` has no DB check constraint
+     enforcing `>= 0` (docs/SCHEMA.sql), so allowing it to go negative
+     required no schema change. `SaveExtractionResult.netPayAdded` can
+     now be negative; the import result screen, the Settlements list row,
+     the Settlements detail sheet, and both Dashboard business-balance
+     cards all show a red "you owe the carrier" / "you owe this much
+     overall" label whenever the figure is negative (`oweCarrier`/
+     `businessBalanceOwed` i18n keys, all 7 locales) rather than reading
+     as an unusually small positive number. `calcTrueProfit()`/
+     `calcCashFlowForecast()`/every other true-profit-derived figure
+     already never clamped negative math (verified, not changed).
+  2. **MILES TRAP**: carrier statements routinely print a cumulative
+     "LTD MILES"/"MILES QTD"/"YTD MILES" figure right next to the week's
+     own revenue/loads section — the AI extraction had a real, verified
+     case of grabbing that lifetime figure as `settlement.totalMiles`
+     for a week with ZERO loads. Fixed two ways: (a) the `ai-import`
+     extraction prompt gained an explicit instruction that `totalMiles`
+     must be THIS WEEK's own figure only, never LTD/QTD/YTD, and should
+     match the sum of the week's own loads' mileage; (b) a new client-side
+     deterministic guard, `app/src/import/milesGuard.ts`'s
+     `sanitizeExtractionMiles()` — applied once in `aiImportCall.ts`
+     immediately after the extraction is received (same placement as
+     `dateGuard.ts`'s `sanitizeExtractionDates()`, so every downstream
+     consumer — `mapSettlement()` AND the import preview's
+     `applyDefaultPerDiemDays()` — sees the corrected value automatically,
+     with no separate fix needed at either call site): (1) no loads this
+     week but a nonzero `totalMiles` → silently corrected to 0 (unambiguous
+     — zero loads means zero miles driven for pay); (2) loads exist with
+     real mileage but `totalMiles` is more than 1.5× their own summed
+     mileage → the loads' own sum is used instead, AND the extraction's
+     `confidence` is downgraded to `"low"` so the existing needs-review
+     machinery (`src/import/needsReview.ts`, CLAUDE.md invariant #14)
+     surfaces it for confirmation — rule 1 is a certainty (no flag needed),
+     rule 2 is a judgment call (flagged). This drives per-diem (0 miles =
+     0 days), CPM, and RPM correctly since all three read the corrected,
+     already-saved `settlements.miles`/loads figures, not the raw AI
+     output.
+  3. **ESCROW vs EXPENSE**: a performance bond / escrow reserve / tire
+     fund / emergency fund / maintenance reserve settlement deduction is
+     a REFUNDABLE DEPOSIT the carrier holds on the driver's behalf, not a
+     business expense — a real statement had a "PERFORMNCE BOND" line
+     (OCR-damaged spelling) that needed this treatment. New category
+     `'Escrow & Deposits'` added to `CANONICAL_CATEGORIES` and
+     `NON_DEDUCTIBLE_CATEGORIES` (`app/src/import/category.ts`), and to
+     `src/stats/trueProfit.ts`'s `TRUE_PROFIT_EXCLUDED_CATEGORIES` (same
+     treatment as Meals/Advance Repayment — excluded from true profit,
+     Cash Flow's trailing-expense averages, and every other
+     true-profit-derived figure, since the money never left the business
+     as a real cost). Classified via TWO signals with the AI's own
+     structured `chargebackType: "escrow_reserve"` (ai-import prompt,
+     `docs/INDUSTRY_TAXONOMY.md` §A) as primary, and a client-side text
+     regex, `isEscrowDeposit()` (`app/src/import/category.ts`), as a
+     safety net that catches OCR-damaged spellings (verified against
+     "PERFORMNCE BOND") even when the AI didn't set chargebackType —
+     same priority/pattern as the existing `isRestaurantPurchase()`
+     meals detector. Deliberately does NOT match a bare "security
+     deposit" (an existing, different ai-import non-deductible-trap
+     concept — a deposit the DRIVER paid, not one the carrier holds).
+     Smart default, freely user-editable per row (same as every other
+     category). A running "what does the carrier currently hold" balance
+     — `src/stats/escrowBalance.ts`'s `calcEscrowBalance()`, a simple
+     cumulative sum (no refund/release tracking exists yet in this app,
+     so this is a HELD total, not net-of-refunds; a future refund docType
+     would need its own product decision to net against this) — is shown
+     on the Settlements screen whenever it's greater than $0.
+  Tests: `src/import/__tests__/milesGuard.test.ts` (new),
+  `src/import/__tests__/category.test.ts` (escrow detection + category
+  additions), `src/stats/__tests__/trueProfit.test.ts` (escrow exclusion
+  + uncapped-negative math), and
+  `src/data/__tests__/aiImportSave.negativeSettlement.test.ts` (new) —
+  an end-to-end test using the EXACT real-statement numbers from the
+  device report (gross $5.16, deductions $1,160.51 = $66.95 meals +
+  $550.00 advance repayment + $100.00 escrow + $443.56 genuinely
+  deductible, net -$1,155.35, 0 per-diem days, business_balance
+  decreasing by the full $1,155.35, true profit correctly computing
+  -$438.40 from the $443.56 deductible portion only) through the REAL
+  `saveExtraction()` against the fake Supabase client.
