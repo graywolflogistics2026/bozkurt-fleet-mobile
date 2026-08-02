@@ -8,6 +8,8 @@ import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeducti
 import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
+import { isDeductionNeedsReview } from '@/src/import/needsReview';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
 import { defaultTaxDeductible } from '@/src/import/category';
@@ -44,8 +46,9 @@ function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; o
   const { t } = useTranslation();
   const { money } = useFormatters();
   const personal = isPersonalPayment(x.payment_method);
+  const needsReview = isDeductionNeedsReview(x);
   return (
-    <Pressable onPress={onPress} style={styles.row}>
+    <Pressable onPress={onPress} style={[styles.row, needsReviewRowStyle(needsReview)]}>
       <View style={{ flex: 1 }}>
         <Text style={styles.desc} numberOfLines={2}>
           {x.description ?? '—'}
@@ -63,6 +66,7 @@ function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; o
             {t('deductions.nonDeductibleTag')}
           </Text>
         )}
+        {needsReview && <NeedsReviewChip />}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.amount)}</Text>
@@ -134,7 +138,10 @@ export default function Deductions() {
   const { session } = useAuth();
   const userId = session?.user.id;
   const router = useRouter();
-  const { openId } = useLocalSearchParams<{ openId?: string }>();
+  const { openId, filter } = useLocalSearchParams<{ openId?: string; filter?: string }>();
+  // BETA FEEDBACK ROUND 2: Home's needs-review counter chip links here
+  // with ?filter=needsReview to land with the toggle already on.
+  const [needsReviewOnly, setNeedsReviewOnly] = useState(filter === 'needsReview');
   const autoOpenedRef = useRef(false);
   const dedQuery = useDeductions();
   const insertDeduction = useInsertDeduction();
@@ -177,7 +184,11 @@ export default function Deductions() {
     }
   }, [queryClient]);
 
-  const rows = dedQuery.data ?? [];
+  const allRows = dedQuery.data ?? [];
+  const rows = useMemo(
+    () => (needsReviewOnly ? allRows.filter(isDeductionNeedsReview) : allRows),
+    [allRows, needsReviewOnly]
+  );
   const { outOfPocket, withheld, outOfPocketTotal, withheldTotal } = useMemo(() => groupDeductions(rows), [rows]);
 
   function openEdit(x: Deduction) {
@@ -198,12 +209,12 @@ export default function Deductions() {
   // 2026-07-30) jumps here with ?openId=<deductionId> — auto-opens it
   // exactly once (findRowToAutoOpen's "already opened" guard).
   useEffect(() => {
-    const match = findRowToAutoOpen(rows, openId, autoOpenedRef.current);
+    const match = findRowToAutoOpen(allRows, openId, autoOpenedRef.current);
     if (match) {
       autoOpenedRef.current = true;
       openEdit(match);
     }
-  }, [rows, openId]);
+  }, [allRows, openId]);
 
   async function handleSaveEdit() {
     if (!editing || !userId) return;
@@ -340,6 +351,14 @@ export default function Deductions() {
               + {t('deductions.add')}
             </Text>
           </Pressable>
+        </View>
+
+        <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
+          <Pill
+            label={t('needsReview.filterOnly')}
+            selected={needsReviewOnly}
+            onPress={() => setNeedsReviewOnly((v) => !v)}
+          />
         </View>
 
         {dedQuery.isLoading ? (

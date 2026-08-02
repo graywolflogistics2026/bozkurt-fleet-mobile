@@ -7,6 +7,7 @@ import type {
   MaintenanceRecord,
   Settlement,
 } from '@/src/types/db';
+import { isDocumentNeedsReview } from '@/src/import/needsReview';
 
 // DOCUMENTS ARCHIVE (owner decision 2026-07-30): a chronological, user-
 // facing view of every document ever imported (D3 audit trail —
@@ -19,6 +20,9 @@ export type DocumentFilter = {
   docType?: string | null; // null/undefined = all types
   dateFrom?: string | null; // YYYY-MM-DD, inclusive
   dateTo?: string | null; // YYYY-MM-DD, inclusive
+  // BETA FEEDBACK ROUND 2: "Needs review only" toggle — a document whose
+  // extraction confidence was low (src/import/needsReview.ts).
+  needsReviewOnly?: boolean;
 };
 
 // A document's OWN date — doc_date when the AI extracted one, else the
@@ -36,6 +40,7 @@ export function filterDocuments(docs: DocumentRow[], filter: DocumentFilter = {}
       const docDate = primaryDocumentDate(doc);
       if (filter.dateFrom && docDate < filter.dateFrom) return false;
       if (filter.dateTo && docDate > filter.dateTo) return false;
+      if (filter.needsReviewOnly && !isDocumentNeedsReview(doc)) return false;
       if (search) {
         const haystack = `${doc.filename ?? ''} ${doc.doc_type ?? ''} ${doc.amount ?? ''}`.toLowerCase();
         if (!haystack.includes(search)) return false;

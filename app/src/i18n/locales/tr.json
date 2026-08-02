@@ -1137,6 +1137,11 @@
     "itemCount": "{{count}} öğe",
     "unknownMonth": "Tarih yok"
   },
+  "needsReview": {
+    "badge": "İnceleme gerekiyor",
+    "filterOnly": "Yalnızca inceleme gerekenler",
+    "homeCounter": "{{count}} öğe incelemenizi bekliyor"
+  },
   "dashboardCustomize": {
     "title": "Paneli Özelleştir",
     "subtitle": "Herhangi bir kartı yeniden sıralayın, gizleyin veya yeniden adlandırın. Dil değişikliği, yeniden adlandırmadığınız bir kartı asla etkilemez.",

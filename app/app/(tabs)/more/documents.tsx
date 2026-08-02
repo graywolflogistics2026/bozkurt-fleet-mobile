@@ -20,6 +20,8 @@ import {
 import { getSignedDocumentUrl, shareDocumentFile } from '@/src/data/documentViewer';
 import { deriveDocumentTitle } from '@/src/data/documentTitle';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
+import { isDocumentNeedsReview } from '@/src/import/needsReview';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { DOC_TYPE_ICON, useDocTypeMeta } from '@/src/import/docTypes';
 import { useFormatters } from '@/src/i18n/format';
@@ -82,6 +84,8 @@ export default function DocumentsArchive() {
   const [docTypeFilter, setDocTypeFilter] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // BETA FEEDBACK ROUND 2: "Needs review only" filter toggle.
+  const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const [selected, setSelected] = useState<DocumentRow | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
@@ -97,8 +101,9 @@ export default function DocumentsArchive() {
         docType: docTypeFilter,
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
+        needsReviewOnly,
       }),
-    [allDocs, search, docTypeFilter, dateFrom, dateTo]
+    [allDocs, search, docTypeFilter, dateFrom, dateTo, needsReviewOnly]
   );
 
   // "View original document" from a settlement/deduction/maintenance detail
@@ -229,6 +234,14 @@ export default function DocumentsArchive() {
           </View>
         </View>
 
+        <View style={{ flexDirection: 'row', marginTop: spacing.sm, marginBottom: spacing.sm }}>
+          <Pill
+            label={t('needsReview.filterOnly')}
+            selected={needsReviewOnly}
+            onPress={() => setNeedsReviewOnly((v) => !v)}
+          />
+        </View>
+
         <MonthGroupedList
           screenKey="documents"
           rows={rows}
@@ -241,8 +254,9 @@ export default function DocumentsArchive() {
             monthRows.map((doc) => {
               const meta = docTypeMeta((doc.doc_type as DocType) ?? 'other');
               const title = deriveDocumentTitle(doc.parsed_json, meta.label);
+              const needsReview = isDocumentNeedsReview(doc);
               return (
-                <TappableCard key={doc.id} onPress={() => setSelected(doc)}>
+                <TappableCard key={doc.id} onPress={() => setSelected(doc)} style={needsReviewRowStyle(needsReview)}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={{ fontSize: 24, marginEnd: spacing.sm }}>{DOC_TYPE_ICON[(doc.doc_type as DocType) ?? 'other'] ?? '📄'}</Text>
                     <View style={{ flex: 1 }}>
@@ -252,6 +266,7 @@ export default function DocumentsArchive() {
                         {doc.doc_date ? date(doc.doc_date) : date(doc.imported_at)}
                         {doc.filename ? ` · ${doc.filename}` : ''}
                       </MutedText>
+                      {needsReview && <NeedsReviewChip />}
                     </View>
                     {doc.amount != null && <Text style={{ color: colors.text, fontWeight: '700' }}>{money(doc.amount)}</Text>}
                   </View>
@@ -270,6 +285,7 @@ export default function DocumentsArchive() {
             <>
               <SheetTitle>{selectedTitle}</SheetTitle>
               {selectedTitle !== selectedMeta.label && <MutedText>{selectedMeta.label}</MutedText>}
+              {isDocumentNeedsReview(selected) && <NeedsReviewChip />}
               <MutedText>{selected.doc_date ? date(selected.doc_date) : date(selected.imported_at)}</MutedText>
               {selected.filename && <MutedText>{selected.filename}</MutedText>}
               {selected.amount != null && (

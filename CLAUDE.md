@@ -1214,3 +1214,39 @@
   "more" Stack onto the root stack (sibling of `(tabs)`), a much larger
   structural migration intentionally NOT done in this pass; flagged here
   as a scoped-out follow-up rather than silently claimed as fully solved.
+- BETA FEEDBACK ROUND 2 — NEEDS-REVIEW VISIBILITY (owner decision
+  2026-07-31, device tester report): items the AI flagged as needing
+  review are now visually loud everywhere they appear, via one shared
+  pure definition (`app/src/import/needsReview.ts`) two underlying
+  signals both get the identical treatment for, per the directive ("low-
+  confidence AI extractions use the same treatment"): (1) a deduction
+  description prefixed `"NEEDS REVIEW: "` at save time (CLAUDE.md
+  invariants #3/#14 — an unrecognized-but-financial document, or a fee
+  line with nothing to fold into); (2) any extraction with
+  `documents.parsed_json.confidence === 'low'` (CLAUDE.md invariant #14),
+  looked up via a settlement/transaction's `document_id` where the row
+  itself carries no confidence of its own. The shared visual —
+  `app/src/components/NeedsReviewBadge.tsx`'s `needsReviewRowStyle()`
+  (amber `borderStartWidth`/`borderStartColor`, logical not
+  `borderLeftWidth` per invariant #11's RTL rule — Arabic renders it
+  trailing automatically) + `NeedsReviewChip` (a small "Needs review"
+  chip) — is wired into every row in Deductions, Settlements, Documents
+  (both the list row and the viewer), and Transactions, each screen also
+  gaining a "Needs review only" filter toggle
+  (`needsReview.filterOnly`). `TappableCard` (`src/components/ui.tsx`)
+  gained an optional `style` prop to make this possible on the screens
+  that use it (Settlements/Documents/Transactions), since it previously
+  had no way to accept an external style override.
+  `app/src/data/documentsFilter.ts`'s `filterDocuments()` gained a
+  `needsReviewOnly` option (tested) rather than the Documents screen
+  filtering ad hoc, keeping the pure filter logic in one place. Amber —
+  not red — is the deliberate color choice: red already means "expense/
+  cost/negative" everywhere else in this app, so reusing it here would
+  read as an error rather than "please confirm this." Home gained a
+  PERSISTENT counter chip (`NeedsReviewCounterChip`, only rendered when
+  `needsReviewDeductions.length > 0`) separate from the existing rotating
+  AI Insight card — the rotating card only shows a needs-review message
+  when that happens to be the one daily-selected insight among several
+  candidate types, so it wasn't reliably visible; the new chip always
+  shows and taps straight through to Deductions with the "Needs review
+  only" filter pre-enabled via a `?filter=needsReview` route param.

@@ -1137,6 +1137,11 @@
     "itemCount": "{{count}} elementos",
     "unknownMonth": "Sin fecha"
   },
+  "needsReview": {
+    "badge": "Necesita revisión",
+    "filterOnly": "Solo necesita revisión",
+    "homeCounter": "{{count}} elemento(s) necesitan tu revisión"
+  },
   "dashboardCustomize": {
     "title": "Personalizar Panel",
     "subtitle": "Reordena, oculta o renombra cualquier tarjeta. Tu idioma nunca afecta una tarjeta que no hayas renombrado.",

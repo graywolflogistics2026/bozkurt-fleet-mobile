@@ -13,6 +13,8 @@ import { useFleetStats } from '@/src/data/dashboardStats';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
+import { isSettlementNeedsReview } from '@/src/import/needsReview';
 import { useFormatters } from '@/src/i18n/format';
 import {
   Screen,
@@ -25,9 +27,29 @@ import {
   SecondaryButton,
   Field,
 } from '@/src/components/ui';
-import { colors, spacing, typography } from '@/src/theme';
+import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Settlement } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
+
+function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: radii.sm,
+        borderWidth: 1,
+        borderColor: selected ? colors.accent : colors.border,
+        backgroundColor: selected ? colors.accent : colors.card2,
+        marginEnd: spacing.xs,
+        marginBottom: spacing.xs,
+      }}
+    >
+      <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{label}</Text>
+    </Pressable>
+  );
+}
 
 function extractRevenueItems(parsedJson: Record<string, unknown> | null | undefined): ExtractedRevenueItem[] {
   const settlement = parsedJson?.settlement;
@@ -53,6 +75,9 @@ export default function Settlements() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<Settlement | null>(null);
+  // BETA FEEDBACK ROUND 2: "Needs review only" filter, same treatment as
+  // Deductions/Documents/Transactions.
+  const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   // PER DIEM INTELLIGENCE (owner decision 2026-07-30): per_diem_days is
   // editable right here on the detail sheet, not just at import time — a
   // user correcting an old "home week" that got the wrong smart default.
@@ -87,21 +112,30 @@ export default function Settlements() {
     }
   }, [queryClient]);
 
-  const rows = useMemo(() => {
+  const documentsById = useMemo(
+    () => new Map((documentsQuery.data ?? []).map((d) => [d.id, d])),
+    [documentsQuery.data]
+  );
+
+  const allRows = useMemo(() => {
     const list = settlementsQuery.data ?? [];
     return [...list].sort((a, b) => b.week_ending.localeCompare(a.week_ending));
   }, [settlementsQuery.data]);
+  const rows = useMemo(
+    () => (needsReviewOnly ? allRows.filter((s) => isSettlementNeedsReview(s, documentsById)) : allRows),
+    [allRows, needsReviewOnly, documentsById]
+  );
 
   // "View linked records" from the Documents Archive viewer (owner decision
   // 2026-07-30) jumps here with ?openId=<settlementId> — auto-selects it
   // exactly once so re-selecting a fresh settlement later isn't overridden.
   useEffect(() => {
-    const match = findRowToAutoOpen(rows, openId, autoOpenedRef.current);
+    const match = findRowToAutoOpen(allRows, openId, autoOpenedRef.current);
     if (match) {
       autoOpenedRef.current = true;
       setSelected(match);
     }
-  }, [rows, openId]);
+  }, [allRows, openId]);
 
   const chargebacks = useMemo(() => {
     if (!selected) return [];
@@ -198,6 +232,14 @@ export default function Settlements() {
           </View>
         </Card>
 
+        <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
+          <Pill
+            label={t('needsReview.filterOnly')}
+            selected={needsReviewOnly}
+            onPress={() => setNeedsReviewOnly((v) => !v)}
+          />
+        </View>
+
         <MonthGroupedList
           screenKey="settlements"
           rows={rows}
@@ -207,24 +249,28 @@ export default function Settlements() {
           loadingLabel={t('common.loading')}
           emptyLabel={t('settlementsScreen.empty')}
           renderRows={(monthRows) =>
-            monthRows.map((x) => (
-              <TappableCard key={x.id} onPress={() => setSelected(x)}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <View>
-                    <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
-                    <MutedText>{number(x.miles ?? 0)} mi</MutedText>
-                    {/* UX MEGA-PASS item H: the per-settlement day count
-                        breakdown visible at a glance in the list, not just
-                        after tapping into the detail sheet. */}
-                    <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
+            monthRows.map((x) => {
+              const needsReview = isSettlementNeedsReview(x, documentsById);
+              return (
+                <TappableCard key={x.id} onPress={() => setSelected(x)} style={needsReviewRowStyle(needsReview)}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <View>
+                      <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
+                      <MutedText>{number(x.miles ?? 0)} mi</MutedText>
+                      {/* UX MEGA-PASS item H: the per-settlement day count
+                          breakdown visible at a glance in the list, not just
+                          after tapping into the detail sheet. */}
+                      <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
+                      {needsReview && <NeedsReviewChip />}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.amount}>{money(x.net)}</Text>
+                      <MutedText>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.amount}>{money(x.net)}</Text>
-                    <MutedText>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
-                  </View>
-                </View>
-              </TappableCard>
-            ))
+                </TappableCard>
+              );
+            })
           }
         />
       </ScrollView>

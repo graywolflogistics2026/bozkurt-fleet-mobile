@@ -68,6 +68,17 @@ describe('filterDocuments', () => {
     expect(result.map((d) => d.id)).toEqual(['c']);
   });
 
+  // BETA FEEDBACK ROUND 2: needsReviewOnly toggle.
+  it('filters by needsReviewOnly (low-confidence extractions)', () => {
+    const withConfidence = [
+      doc({ id: 'x', parsed_json: { confidence: 'low' } }),
+      doc({ id: 'y', parsed_json: { confidence: 'high' } }),
+      doc({ id: 'z', parsed_json: null }),
+    ];
+    const result = filterDocuments(withConfidence, { needsReviewOnly: true });
+    expect(result.map((d) => d.id)).toEqual(['x']);
+  });
+
   it('returns everything with no filter', () => {
     expect(filterDocuments(docs)).toHaveLength(3);
   });

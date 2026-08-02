@@ -12,6 +12,7 @@ import {
   View,
   type TextInputProps,
   type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -37,11 +38,19 @@ export function Card({ children }: { children: React.ReactNode }) {
 // stat card/section navigates somewhere, with a visible chevron affordance
 // so it reads as tappable rather than purely informational (PROMPTS.md
 // Session 5).
-export function TappableCard({ onPress, children }: { onPress: () => void; children: React.ReactNode }) {
+export function TappableCard({
+  onPress,
+  children,
+  style,
+}: {
+  onPress: () => void;
+  children: React.ReactNode;
+  style?: ViewStyle;
+}) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, styles.tappableCard, pressed && styles.buttonPressed]}
+      style={({ pressed }) => [styles.card, styles.tappableCard, style, pressed && styles.buttonPressed]}
     >
       <View style={{ flex: 1 }}>{children}</View>
       <Text style={styles.chevron}>{I18nManager.isRTL ? '‹' : '›'}</Text>

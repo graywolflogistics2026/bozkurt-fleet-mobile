@@ -734,6 +734,28 @@ function TaxProgressCard({
 // network latency/cost to a purely informational card render) — still
 // locale-aware across all 7 supported languages, just via t() instead of
 // a server call.
+// BETA FEEDBACK ROUND 2 (owner decision 2026-07-31, device tester
+// report): the rotating AI Insight card below only shows a needs-review
+// message when THAT happens to be the daily-selected insight (one of
+// several candidate types) — so it wasn't reliably visible even when
+// items genuinely needed review. This is a separate, PERSISTENT chip
+// that shows whenever needsReviewDeductions is non-empty, regardless of
+// what the rotating card is currently showing, tapping straight through
+// to Deductions with the "Needs review only" filter pre-enabled.
+function NeedsReviewCounterChip({ count, onPress }: { count: number; onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <TappableCard onPress={onPress}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={{ fontSize: 20, marginEnd: spacing.sm }}>🔍</Text>
+        <Text style={{ color: colors.orange, fontWeight: '700', flex: 1 }}>
+          {t('needsReview.homeCounter', { count })}
+        </Text>
+      </View>
+    </TappableCard>
+  );
+}
+
 function AiInsightsCard({ insight, onViewDetails }: { insight: Insight; onViewDetails: (type: Insight['type']) => void }) {
   const { t } = useTranslation();
   const { money: moneyFmt } = useFormatters();
@@ -1732,6 +1754,13 @@ export default function Dashboard() {
         <CashBalanceSlimCard balance={capital?.businessBalance ?? 0} onPress={() => router.push('/(tabs)/more/cash-flow')} />
 
         <FleetHealthCard score={fleetHealth.score} chips={fleetHealth.chips} onInfoPress={() => setHealthInfoOpen(true)} />
+
+        {needsReviewDeductions.length > 0 && (
+          <NeedsReviewCounterChip
+            count={needsReviewDeductions.length}
+            onPress={() => router.push({ pathname: '/(tabs)/deductions', params: { filter: 'needsReview' } } as unknown as Href)}
+          />
+        )}
 
         {dailyInsight && <AiInsightsCard insight={dailyInsight} onViewDetails={handleInsightViewDetails} />}
 

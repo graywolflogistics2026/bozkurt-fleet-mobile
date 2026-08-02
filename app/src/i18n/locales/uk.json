@@ -1137,6 +1137,11 @@
     "itemCount": "{{count}} items",
     "unknownMonth": "No date"
   },
+  "needsReview": {
+    "badge": "Needs review",
+    "filterOnly": "Needs review only",
+    "homeCounter": "{{count}} item(s) need your review"
+  },
   "dashboardCustomize": {
     "title": "Customize Dashboard",
     "subtitle": "Reorder, hide, or rename any card. Your language never affects a card you haven't renamed.",
