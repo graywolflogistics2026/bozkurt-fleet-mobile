@@ -47,9 +47,9 @@
 -- migration itself — excluded here.
 --
 -- section 37 (settlements.business_balance_credit + apply_business_
--- balance_delta RPC) is NOT YET RUN against the live project as of this
--- writing and is deliberately excluded; once it's applied, append it here
--- or as its own 0003 file.
+-- balance_delta RPC) was applied directly via pending_37.sql AFTER this
+-- file was assembled, so it is not yet folded in here — append it here
+-- or as its own 0003 file the next time this snapshot gets revisited.
 
 -- ============================================================
 -- PENDING_SQL.md §1: 1. Tax engine product-readiness (D7 + D8, docs/SCHEMA.sql) — ✅ APPLIED

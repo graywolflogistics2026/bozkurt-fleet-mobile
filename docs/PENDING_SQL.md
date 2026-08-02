@@ -1220,7 +1220,7 @@ redeploying too since their source changed).
 
 ---
 
-## 37. settlements.business_balance_credit + apply_business_balance_delta() RPC (pre-launch hardening, owner decision 2026-08-02) — ☐ NOT YET RUN
+## 37. settlements.business_balance_credit + apply_business_balance_delta() RPC (pre-launch hardening, owner decision 2026-08-02) — ✅ APPLIED
 
 Independent code review finding: re-importing a settlement with a
 corrected net pay (e.g. a carrier statement that was mis-read the first
@@ -1265,7 +1265,7 @@ $$;
 grant execute on function apply_business_balance_delta(uuid, numeric) to authenticated;
 ```
 
-- [ ] 37a run (settlements.business_balance_credit + the RPC function)
+- [x] 37a run (settlements.business_balance_credit + the RPC function)
 - [ ] 37b `supabase gen types` re-run to pick up the new column (app/src/types/db.ts already hand-edited ahead of this — see "Also still open" below)
 
 ---
@@ -1296,5 +1296,7 @@ grant execute on function apply_business_balance_delta(uuid, numeric) to authent
   this file's own text, NOT verified against the live database (this
   environment has no credentials to do that) — review it against the
   actual Supabase dashboard schema before trusting it for anything
-  destructive. Section 37 is the one section NOT yet folded in (not yet
-  run against the live project as of this writing).
+  destructive. Section 37 is the one applied section NOT yet folded into
+  0002 (it was applied via `pending_37.sql`, run directly, after 0002 was
+  assembled) — fold it into 0002 or a new 0003 file the next time this
+  snapshot gets revisited.
