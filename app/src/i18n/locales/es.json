@@ -352,7 +352,7 @@
     "driverShareLabel": "Parte de {{name}} en este settlement ($)",
     "driverSharePlaceholder": "Monto",
     "pagesProcessedTitle": "📄 Documento importado parcialmente",
-    "pagesProcessedBody": "Se importaron las páginas 1-{{through}} de {{total}}. Las páginas posteriores (por ejemplo, anexos o facturas) no se procesaron — impórtelas por separado si es necesario.",
+    "pagesProcessedBody": "Se importaron {{covered}} de {{total}} páginas. La(s) página(s) {{missingPages}} no se pudieron procesar — impórtelas por separado si es necesario.",
     "reconciliationTitle": "🚫 No se puede guardar — las cifras no coinciden",
     "reconciliationDeductionsMismatch": "El total de deducciones del documento ({{stated}}) no coincide con los {{summed}} capturados en las líneas de deducción. Intente reimportar este settlement — si sigue sin coincidir, agregue los montos faltantes como deducciones independientes desde la pantalla de Deducciones.",
     "reconciliationZeroNet": "El pago neto muestra {{zero}} aunque los ingresos brutos son {{gross}} — este settlement no parece completo. Intente reimportarlo.",

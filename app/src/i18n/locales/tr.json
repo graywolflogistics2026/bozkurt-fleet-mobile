@@ -352,7 +352,7 @@
     "driverShareLabel": "{{name}} adlı sürücünün bu settlement'taki payı ($)",
     "driverSharePlaceholder": "Tutar",
     "pagesProcessedTitle": "📄 Belge kısmen içe aktarıldı",
-    "pagesProcessedBody": "{{total}} sayfadan 1-{{through}} arası içe aktarıldı. Sonraki sayfalar (ör. ekler, faturalar) işlenmedi — gerekirse ayrıca içe aktarın.",
+    "pagesProcessedBody": "{{total}} sayfadan {{covered}} tanesi içe aktarıldı. {{missingPages}} numaralı sayfa(lar) işlenemedi — gerekirse ayrıca içe aktarın.",
     "reconciliationTitle": "🚫 Kaydedilemiyor — rakamlar tutmuyor",
     "reconciliationDeductionsMismatch": "Belgedeki toplam kesinti tutarı ({{stated}}) kesinti satırlarından elde edilen {{summed}} tutarıyla eşleşmiyor. Bu settlement'ı yeniden içe aktarmayı deneyin — hâlâ eşleşmiyorsa, eksik tutarları Kesintiler ekranından ayrı kesintiler olarak ekleyin.",
     "reconciliationZeroNet": "Brüt gelir {{gross}} olmasına rağmen net ödeme {{zero}} gösteriyor — bu settlement tam görünmüyor. Yeniden içe aktarmayı deneyin.",

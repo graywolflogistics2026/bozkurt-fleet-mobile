@@ -352,7 +352,7 @@
     "driverShareLabel": "حصة {{name}} من هذا Settlement ($)",
     "driverSharePlaceholder": "المبلغ",
     "pagesProcessedTitle": "📄 تم استيراد المستند جزئيًا",
-    "pagesProcessedBody": "تم استيراد الصفحات 1-{{through}} من {{total}}. لم تتم معالجة الصفحات اللاحقة (مثل المرفقات والفواتير) — استوردها بشكل منفصل إذا لزم الأمر.",
+    "pagesProcessedBody": "تم استيراد {{covered}} من {{total}} صفحات. تعذّرت معالجة الصفحة/الصفحات {{missingPages}} — استوردها بشكل منفصل إذا لزم الأمر.",
     "reconciliationTitle": "🚫 يتعذر الحفظ — الأرقام غير متطابقة",
     "reconciliationDeductionsMismatch": "إجمالي الخصومات المذكور في الكشف ({{stated}}) لا يطابق مبلغ {{summed}} الموجود في بنود الخصم. حاول إعادة استيراد هذا settlement — وإذا ظل غير متطابق، أضف المبالغ الناقصة كخصومات منفصلة من شاشة الخصومات.",
     "reconciliationZeroNet": "صافي الدفع يظهر {{zero}} رغم أن الإيراد الإجمالي هو {{gross}} — يبدو أن هذا settlement غير مكتمل. حاول إعادة استيراده.",

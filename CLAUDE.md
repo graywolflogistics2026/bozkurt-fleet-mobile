@@ -2164,3 +2164,137 @@
   `console.log` timing added in round 2 remains the mechanism for getting
   real numbers from the next actual device import
   (`supabase functions logs ai-import`).
+- MULTI-PAGE SETTLEMENT CHUNKING, ROUND 4 — SINGLE CALL IS THE DEFAULT
+  AGAIN (owner decision 2026-08-03, "STOP AND SIMPLIFY" device evidence:
+  round 3's batch-continuation design made things WORSE — a real 11-page
+  settlement's banner read "Imported pages 1-1 of 11," meaning the
+  client's round-trip loop stopped after a single page, capturing gross
+  revenue but $0 net/deductions again via a different failure mode than
+  round 2's fixed cap). Four passes in, "prioritize WORKING over elegant"
+  was the explicit instruction. Restored the ORIGINAL, previously-working
+  shape: ONE call over the WHOLE document is the DEFAULT for every
+  document, image or PDF, any page count — exactly like this function's
+  very first implementation, before any chunking pass — carrying forward
+  only the two real, verified improvements from rounds 1-2 (the raised
+  timeout budget, the retry-on-timeout bug fix). The round-3 continuation
+  protocol was NOT deleted — it became the FALLBACK, entered ONLY when
+  the single call itself returns `timeout` or `truncated` (a clean
+  4xx/parse-failure/refusal is not something splitting into pages can
+  fix, so those still surface as a normal error). This inverted round 3's
+  priority exactly as instructed: single call first, chunking is the
+  exception, not the reverse. Every decision (single-call outcome,
+  fallback trigger, per-batch/per-page result) was logged so the next
+  real device test's function logs would show exactly what happened
+  instead of guessing again — this pass's own numbers were explicitly
+  marked PROVISIONAL pending real measured data, which arrived in round 5
+  below.
+- MULTI-PAGE SETTLEMENT CHUNKING, ROUND 5 — MEASURED EVIDENCE (owner
+  decision 2026-08-03, binding numbers — record these so nobody re-
+  guesses these thresholds again). Real per-page Anthropic call durations
+  from Supabase's own `ai-import` function logs (round 4's per-attempt
+  `console.log`):
+  ```
+  03:01:37  attempt 1/2: 23866ms, status 200   (page succeeded)
+  03:02:17  attempt 1/2: 40003ms, TIMED OUT    (killed at round 3's 40s cap)
+  02:37:59  attempt 1/2: 39121ms, status 200   (barely made it under 40s)
+  ```
+  Owner's own diagnosis, confirmed by these numbers: **this was a BUDGET
+  problem, not an architecture problem.** A single page can legitimately
+  need up to (and apparently sometimes just past) 40 seconds — the
+  system's own 40s `AbortController` was killing legitimate, still-
+  working calls. THAT is why round 4's device test showed "Imported
+  pages 1-1 of 11": page 2 didn't fail because of a real error, it failed
+  because the timeout was too tight, and round 3/4's design then stopped
+  the entire continuation at that first failure (round 3's
+  `mergeSequentialPageResults` treated any failure as a hard stop).
+  **Three changes, precisely targeted at the evidence:**
+  1. **`PAGE_TIMEOUT_MS` raised 40s → 110s** (per-page, first attempt) —
+     comfortable margin over the ~40s worst case actually observed, while
+     leaving real headroom under Supabase's VERIFIED 150s wall-clock
+     ceiling for one invocation.
+  2. **`PAGES_PER_BATCH` reduced 3 → 2** — fewer pages attempted per
+     invocation keeps the common-case invocation short. Combined with
+     dynamic per-invocation time-budget tracking (next point), the SAME
+     code stays safe even if a page takes far longer than the 24-40s
+     typically measured — a fixed "2 pages always fits" assumption would
+     be the exact same class of guess that caused this bug, since the
+     measured evidence shows single-page duration is NOT constant (23.9s
+     to >40s within the SAME document).
+  3. **A single-page timeout is no longer fatal to the whole document.**
+     `runPageWithRetry()` (index.ts) gives a timed-out page ONE extra
+     attempt at a shorter `PAGE_RETRY_TIMEOUT_MS` (30s) budget; if that
+     ALSO fails (or there isn't enough remaining invocation budget to
+     even try), the page is recorded MISSING and the loop moves on to
+     EVERY remaining page regardless — "the loop must always attempt
+     every page" (owner decision), never stopping the whole document over
+     one bad page. A non-timeout failure (4xx/parse-failure/refusal) is
+     never retried — that's not what a retry can fix — and marks the page
+     missing immediately instead of wasting the retry budget.
+  **Gap-tolerant merge** (`chunking.ts`'s `mergeAllPages()`, replacing
+  round 3's stop-at-first-failure `mergeSequentialPageResults()`): pages
+  are now tagged with their own page NUMBER (not positional order), so a
+  missing MIDDLE page no longer prevents LATER pages from being merged —
+  the exact "1 of 11" bug is now structurally impossible, since nothing
+  ever stops the loop early over a single page's failure. `confidence` is
+  forced `'low'` whenever ANY page is missing, regardless of how many
+  merged cleanly — same needs-review trigger as before, just gap-aware.
+  A genuinely incomplete result still can't be saved: the settlement
+  reconciliation hard guard (`settlementReconciliation.ts`, unchanged
+  this pass — verified still correct) independently catches the
+  resulting mismatched totals (summed deductions vs. the statement's own
+  stated total; net pay showing exactly $0 while gross is nonzero) and
+  blocks Save regardless of which mechanism produced the incomplete data.
+  **Dynamic time-budget tracking** (why a fixed page count alone isn't
+  safe): `remainingInvocationBudgetMs()` (index.ts, computed fresh INSIDE
+  the `Deno.serve` handler on every request — a module-level constant
+  would only reflect the FIRST invocation's start time, since Deno keeps
+  this module loaded across many invocations) tracks real elapsed wall-
+  clock time since THIS invocation started; every page attempt's own
+  timeout is capped at `min(PAGE_TIMEOUT_MS, remaining budget - 5s safety
+  margin)` (`HARD_INVOCATION_BUDGET_MS = 145_000`, 5s under Supabase's
+  150s ceiling; `MIN_USEFUL_BUDGET_MS = 20_000` — below this, don't even
+  start another attempt). If there isn't enough budget left to safely
+  attempt (or retry) another page, the loop stops THERE — not mid-attempt
+  — and hands off to a fresh invocation via `nextPageStart`, which gets
+  its own full 150s budget. This guarantees the platform's hard ceiling
+  is never at risk no matter how slow any individual page turns out to
+  be — "more round trips is fine — they are cheap" (owner decision).
+  **Wire protocol extended** to carry page NUMBERS, not just counts:
+  request gains `priorMissingPages: number[]` alongside the existing
+  `priorPageExtractions` (now `{page, extraction}[]`, tagged); response
+  gains `rawMissingPages`/`pagesProcessed: {total, missingPages: number[]}`
+  (replacing the old `{through, total}` shape, which couldn't represent a
+  gap). `aiImportCall.ts`'s `callAiImport()` round-trip loop threads all
+  of this through unchanged in spirit (still sequential, one round-trip
+  at a time, never concurrent) and now logs every round
+  (`console.log('[ai-import client] round N: ...')`) alongside index.ts's
+  own per-page/per-invocation logs — "the next diagnosis takes one
+  screenshot" (owner decision). The import screen's
+  `pagesProcessedBody` banner now lists the SPECIFIC missing page
+  numbers (`"Imported {{covered}} of {{total}} pages. Page(s)
+  {{missingPages}} could not be processed..."`) instead of a contiguous
+  "pages 1-N" range, since gaps are now representable and worth surfacing
+  precisely.
+  Tests: `app/src/import/__tests__/chunking.test.ts`'s
+  `mergeSequentialPageResults` suite was replaced with `mergeAllPages`
+  coverage — a middle page failing does NOT stop later pages from being
+  merged (the exact bug this fixes, reproduced directly), confidence
+  forced low on any gap, the 11-page/8-deduction-page full-coverage case
+  carried over, plus a new "retried-then-skipped page" case matching the
+  measured-evidence scenario. `app/src/data/__tests__/aiImportCall.test.ts`
+  (new) is the requested regression suite for this whole area against a
+  mocked `supabase.functions.invoke`: an 11-page document completes all 6
+  expected round trips (`ceil(11/2)`) with the continuation state
+  correctly threaded through each one; a page that fails even after the
+  server's retry does NOT kill the run — the loop continues and the
+  final result honestly reports `pagesProcessed: {total, missingPages}`;
+  a small single-call document makes exactly one request; the
+  `onProgress` callback fires once per intermediate round, never on the
+  terminal one; a genuine server error on any round trip stops the loop
+  immediately rather than being silently absorbed. Full suite: 66 suites
+  / 1504 tests pass; `tsc --noEmit` clean; all 7 locales confirmed
+  key-parity after updating `pagesProcessedBody`'s interpolation params.
+  `settlementReconciliation.ts` and its 10 tests were verified unchanged
+  and still passing — it operates purely on the final merged extraction's
+  own fields, independent of however many pages/retries/gaps produced it,
+  so it needed no changes to keep blocking an incomplete save correctly.

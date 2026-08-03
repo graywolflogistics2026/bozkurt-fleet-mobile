@@ -352,7 +352,7 @@
     "driverShareLabel": "{{name}}'s share of this settlement ($)",
     "driverSharePlaceholder": "Amount",
     "pagesProcessedTitle": "📄 Partial document imported",
-    "pagesProcessedBody": "Imported pages 1-{{through}} of {{total}}. Later pages (e.g. attachments, invoices) weren't processed — import them separately if needed.",
+    "pagesProcessedBody": "Imported {{covered}} of {{total}} pages. Page(s) {{missingPages}} could not be processed — import them separately if needed.",
     "reconciliationTitle": "🚫 Can't save — numbers don't add up",
     "reconciliationDeductionsMismatch": "The statement's total deductions ({{stated}}) don't match the {{summed}} captured in deduction line items. Try reimporting this settlement — if it still doesn't match, add the missing amounts as separate deductions from the Deductions screen.",
     "reconciliationZeroNet": "Net pay shows {{zero}} even though gross revenue is {{gross}} — this settlement doesn't look complete. Try reimporting it.",

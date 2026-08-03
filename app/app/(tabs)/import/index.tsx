@@ -198,13 +198,15 @@ export default function Import() {
   const [creatingDriver, setCreatingDriver] = useState(false);
   const [driverShareAmount, setDriverShareAmount] = useState('');
   const [categoryOverride, setCategoryOverride] = useState('');
-  // PAGES-PROCESSED NOTE (owner decision 2026-08-03, "still failing after
-  // chunking" fix): set whenever ai-import didn't cover every page of the
-  // original document — see aiImportCall.ts's AiImportCallResult.
-  // pagesProcessed for the full reasoning. Shown as a plain banner on the
-  // preview screen so the user knows exactly what was and wasn't
-  // imported, rather than a silently incomplete-looking result.
-  const [pagesProcessedNote, setPagesProcessedNote] = useState<{ through: number; total: number } | null>(null);
+  // PAGES-PROCESSED NOTE (owner decision 2026-08-03): set whenever
+  // ai-import didn't cover every page of the original document — see
+  // aiImportCall.ts's AiImportCallResult.pagesProcessed for the full
+  // reasoning. `missingPages` lists the specific pages that failed even
+  // after the server's own retry (gaps are possible; a missing middle
+  // page no longer means later pages were lost too). Shown as a plain
+  // banner on the preview screen so the user knows exactly what was and
+  // wasn't imported, rather than a silently incomplete-looking result.
+  const [pagesProcessedNote, setPagesProcessedNote] = useState<{ total: number; missingPages: number[] } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device
   // feedback: "settlement imports failing frequently"): instead of one
@@ -379,7 +381,7 @@ export default function Import() {
     setPhase('error');
   }
 
-  async function afterExtraction(d: Extraction, fname: string | undefined, pagesProcessed?: { through: number; total: number }) {
+  async function afterExtraction(d: Extraction, fname: string | undefined, pagesProcessed?: { total: number; missingPages: number[] }) {
     if (!userId) return;
     setPagesProcessedNote(pagesProcessed ?? null);
     const existingDocs = await fetchExistingDocsForDuplicateCheck(userId);
@@ -656,7 +658,11 @@ export default function Import() {
               <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
                 <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.pagesProcessedTitle')}</Text>
                 <MutedText>
-                  {t('importScreen.pagesProcessedBody', { through: pagesProcessedNote.through, total: pagesProcessedNote.total })}
+                  {t('importScreen.pagesProcessedBody', {
+                    covered: pagesProcessedNote.total - pagesProcessedNote.missingPages.length,
+                    total: pagesProcessedNote.total,
+                    missingPages: pagesProcessedNote.missingPages.join(', '),
+                  })}
                 </MutedText>
               </View>
             )}

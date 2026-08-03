@@ -4,16 +4,20 @@ import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
 import type { Extraction } from '@/src/import/types';
 
 export type AiImportError = { type: string; message: string; detail?: string };
-// pagesProcessed (owner decision 2026-08-03): present only when ai-import
-// didn't cover every page of the original document — a later page failed
-// after earlier ones succeeded (there is no longer a deliberate page cap,
-// see the CONTINUATION PROTOCOL comment below). The import screen turns
-// this into a plain "imported pages 1-N of M" banner instead of silently
-// showing a result that looks complete when it isn't.
+// pagesProcessed (owner decision 2026-08-03, round 5): present only when
+// ai-import didn't cover every page of the original document — one or
+// more pages failed even after the server's own one non-fatal retry
+// (there is no longer a deliberate page cap; see the CONTINUATION
+// PROTOCOL comment below). `missingPages` lists the specific page
+// numbers that couldn't be processed (gaps are possible — a missing
+// middle page no longer stops later pages from being captured, round 4's
+// "1 of 11" bug). The import screen turns this into a plain "imported
+// N of M pages; pages X, Y couldn't be processed" banner instead of
+// silently showing a result that looks complete when it isn't.
 export type AiImportCallResult = {
   data?: Extraction;
   error?: AiImportError;
-  pagesProcessed?: { through: number; total: number };
+  pagesProcessed?: { total: number; missingPages: number[] };
 };
 
 // Raw server response shape for one ai-import invocation (before this
@@ -21,9 +25,10 @@ export type AiImportCallResult = {
 type AiImportInvokeResponse = {
   error?: AiImportError;
   data?: unknown;
-  pagesProcessed?: { through: number; total: number };
+  pagesProcessed?: { total: number; missingPages: number[] };
   nextPageStart?: number;
-  rawPageExtractions?: unknown[];
+  rawPageExtractions?: { page: number; extraction: unknown }[];
+  rawMissingPages?: number[];
 };
 
 // CLIENT-SIDE TIMEOUT (owner decision 2026-08-02, raised again 2026-08-03
@@ -55,11 +60,12 @@ async function invokeAiImportOnce(
   locale: string | undefined,
   customCategories: string[] | undefined,
   pageRangeStart: number | undefined,
-  priorPageExtractions: unknown[] | undefined,
+  priorPageExtractions: { page: number; extraction: unknown }[] | undefined,
+  priorMissingPages: number[] | undefined,
 ): Promise<{ response?: AiImportInvokeResponse; error?: AiImportError }> {
   const timeout = mediaType.startsWith('image/') ? IMAGE_CLIENT_TIMEOUT_MS : PDF_CLIENT_TIMEOUT_MS;
   const { data, error } = await supabase.functions.invoke('ai-import', {
-    body: { fileBase64, mediaType, docHint, locale, customCategories, pageRangeStart, priorPageExtractions },
+    body: { fileBase64, mediaType, docHint, locale, customCategories, pageRangeStart, priorPageExtractions, priorMissingPages },
     timeout,
   });
 
@@ -95,24 +101,28 @@ async function invokeAiImportOnce(
   return { response: data as AiImportInvokeResponse };
 }
 
-// CONTINUATION PROTOCOL (owner decision 2026-08-03, round 3 — a real
+// CONTINUATION PROTOCOL (owner decision 2026-08-03, round 5 — a real
 // 11-page settlement's deduction line items live well past page 3;
 // capping extraction at a fixed page count silently produced a
 // zero-expense, zero-net "settlement," a genuine tax-accuracy bug, not
-// just an incomplete import). ai-import now processes a document in
-// small batches (server-side PAGES_PER_BATCH, index.ts) — a response
-// carrying `nextPageStart` means there's more document left and nothing
-// has gone wrong yet, so this function calls ai-import AGAIN, passing
-// `pageRangeStart`/`priorPageExtractions` straight through, SEQUENTIALLY
-// (one full round-trip at a time, never concurrent) until the whole
-// document is covered or a page genuinely fails. Every intermediate
-// call's own client-side timeout (`invokeAiImportOnce`'s `timeout`
-// option) still applies per round-trip — a long document just means more
-// round-trips, not one single unbounded wait.
+// just an incomplete import). ai-import now processes a document PAGE BY
+// PAGE in small batches (server-side PAGES_PER_BATCH, index.ts), and a
+// single page's failure — even after the server's own one retry — no
+// longer stops the whole document (round 4's "1 of 11" bug: a middle
+// page timing out used to abort everything after it). A response
+// carrying `nextPageStart` means there's more document left, so this
+// function calls ai-import AGAIN, passing `pageRangeStart`/
+// `priorPageExtractions`/`priorMissingPages` straight through,
+// SEQUENTIALLY (one full round-trip at a time, never concurrent) until
+// the whole document is covered. Every intermediate call's own client-
+// side timeout (`invokeAiImportOnce`'s `timeout` option) still applies
+// per round-trip — a long document just means more round-trips, not one
+// single unbounded wait.
 // onProgress (optional): called after every intermediate response with
-// how much of the document has been covered so far, so a caller can
-// update a "still working — processing page N of M" style message
-// instead of one static label for the whole multi-minute operation.
+// how much of the document has been ATTEMPTED so far (not necessarily
+// all successful — some pages may be missing), so a caller can update a
+// "still working — processing page N of M" style message instead of one
+// static label for the whole multi-minute operation.
 // locale/customCategories: see the original per-parameter comments below.
 export async function callAiImport(
   fileBase64: string,
@@ -123,12 +133,14 @@ export async function callAiImport(
   onProgress?: (progress: { through: number; total: number }) => void
 ): Promise<AiImportCallResult> {
   let pageRangeStart: number | undefined;
-  let priorPageExtractions: unknown[] | undefined;
+  let priorPageExtractions: { page: number; extraction: unknown }[] | undefined;
+  let priorMissingPages: number[] | undefined;
 
   // Bounded the same way the server bounds itself (MAX_TOTAL_PAGES,
   // index.ts) — a defensive stop against an infinite client-side loop if
   // a future server bug ever returned nextPageStart forever.
   for (let round = 0; round < 60; round++) {
+    console.log(`[ai-import client] round ${round + 1}: pageRangeStart=${pageRangeStart ?? 1}, priorCovered=${priorPageExtractions?.length ?? 0}, priorMissing=${priorMissingPages?.length ?? 0}`);
     const { response, error } = await invokeAiImportOnce(
       fileBase64,
       mediaType,
@@ -136,19 +148,28 @@ export async function callAiImport(
       locale,
       customCategories,
       pageRangeStart,
-      priorPageExtractions
+      priorPageExtractions,
+      priorMissingPages
     );
-    if (error) return { error };
+    if (error) {
+      console.log(`[ai-import client] round ${round + 1} failed: ${error.type} — ${error.message}`);
+      return { error };
+    }
 
     if (response?.nextPageStart) {
+      console.log(`[ai-import client] round ${round + 1} succeeded, continuing: nextPageStart=${response.nextPageStart}`);
       pageRangeStart = response.nextPageStart;
       priorPageExtractions = response.rawPageExtractions;
+      priorMissingPages = response.rawMissingPages;
       if (onProgress) onProgress({ through: response.nextPageStart - 1, total: response.pagesProcessed?.total ?? response.nextPageStart });
       continue;
     }
 
     const extraction = response?.data as Extraction | undefined;
     if (!extraction) return { data: extraction };
+    console.log(
+      `[ai-import client] round ${round + 1}: complete${response?.pagesProcessed ? `, pagesProcessed=${JSON.stringify(response.pagesProcessed)}` : ''}`
+    );
     // DATE HARDENING round 2 (2026-07-30) — see src/import/dateGuard.ts.
     // MILES TRAP (owner decision 2026-08-02) — see src/import/milesGuard.ts.
     // Both applied once, right here, so every downstream consumer
