@@ -706,7 +706,10 @@ complete, just not real Hindi/Ukrainian text yet.
 ## Personalization & onboarding package (owner decision 2026-07-10, PRODUCT DECISION — binding)
 
 ```
-1. Customizable dashboard — SCHEMA RECORDED THIS PASS (docs/PENDING_SQL.md
+1. Customizable dashboard — RETIRED 2026-08-02 (DASHBOARD SIMPLIFICATION,
+   see the Backlog section) — was built per the spec below, then removed
+   in favor of a fixed Home layout. Left here for history only.
+   SCHEMA RECORDED THIS PASS (docs/PENDING_SQL.md
    §19, profiles.dashboard_layout jsonb; CLAUDE.md invariant #17), UI
    implementation is Session 9a item 8 above. Every card (16-card parity
    set + Capital strip + any future card) gets drag-to-reorder, show/hide,
@@ -1124,7 +1127,10 @@ Maintenance is Session 8, Deductions/Capital Account are Session 7):
    settlements.driver_id the same way Fleet Overview aggregates truck_id
    (fetchFleetStats() pattern, app/src/data/dashboardStats.ts) — no new
    calculation engine, just a driver_id-scoped query variant.
-8. Customizable dashboard (NEW, owner decision 2026-07-10 — personalization
+8. Customizable dashboard — RETIRED 2026-08-02 (DASHBOARD SIMPLIFICATION,
+   see the Backlog section) — was built per the spec below, then removed
+   in favor of a fixed Home layout. Left here for history only.
+   (NEW, owner decision 2026-07-10 — personalization
    & onboarding package, PRODUCT DECISION, CLAUDE.md invariant #17): every
    Dashboard card (the full parity set above + Capital strip + any future
    card — Revenue, Profit, Fuel, MPG, Maintenance, Taxes, IFTA, Cash Flow,
@@ -1612,6 +1618,22 @@ Session 10's scope, not blocking the Part 1 beta build):**
     scoped by truck — a multi-truck fleet where two different trucks
     happen to have a similar-looking receipt could produce a false-
     positive duplicate warning. Low-frequency edge case; v1.1 track.
+
+- Customizable dashboard (owner decision 2026-08-02, DASHBOARD
+  SIMPLIFICATION — RETIRED, supersedes "Personalization & onboarding
+  package" item 1 and Session 9a item 8 above, and CLAUDE.md's former
+  invariant #17): drag-to-reorder/show-hide/rename card customization was
+  fully built, then removed — Home is now a fixed, non-customizable 5-card
+  layout (Hero, Revenue/Expenses/Net trio, Business Balance, AI Coach,
+  Recent Loads + Best/Worst Lanes) that every user sees. The screen, its
+  simple-editor modal, its lazy drag-module loader, its nav entry, and
+  `src/data/dashboardLayout.ts` / `src/stats/dashboardLayout.ts` (the
+  hooks + card-registry it was built on) are all deleted. `profiles.
+  dashboard_layout`/`dashboard_sections_collapsed` remain as harmless,
+  unused DB columns — no migration, nothing reads or writes them anymore.
+  Per-card customization may return in a v2 pass ONLY if users actually
+  ask for it — not a standing roadmap item, needs its own fresh owner
+  decision before any part of it is rebuilt.
 ```
 
 ## Supported document types (rolling status — universal AI capture, owner decision 2026-07-10)

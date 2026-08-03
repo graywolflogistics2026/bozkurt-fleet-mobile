@@ -54,7 +54,6 @@
     "ceoMode": "AI-коуч",
     "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
-    "dashboardCustomize": "Настроить панель",
     "compliance": "Отслеживание соответствия",
     "documents": "Документы",
     "accountantPackage": "Пакет для бухгалтера"
@@ -249,8 +248,7 @@
     "truckUnit": "Юнит: {{unit}}",
     "fleetOverviewTitle": "Обзор Автопарка",
     "truckCardLabel": "Грузовик",
-    "driverOverviewTitle": "Обзор водителей",
-    "customize": "✏️ Настроить"
+    "driverOverviewTitle": "Обзор водителей"
   },
   "deductions": {
     "title": "Вычеты",
@@ -1163,33 +1161,6 @@
     "badge": "Требует проверки",
     "filterOnly": "Только требующие проверки",
     "homeCounter": "{{count}} элемент(ов) требуют вашей проверки"
-  },
-  "dashboardCustomize": {
-    "title": "Настроить панель",
-    "subtitle": "Меняйте порядок, скрывайте или переименовывайте любую карточку. Смена языка никогда не затронет карточку, которую вы переименовали.",
-    "savedTitle": "✅ Сохранено",
-    "saveFailedTitle": "Не удалось сохранить",
-    "resetToDefault": "Сбросить по умолчанию",
-    "labelPlaceholder": "{{defaultLabel}} (по умолчанию)",
-    "visible": "Видимо",
-    "hidden": "Скрыто",
-    "dragHint": "Нажмите и удерживайте ☰, затем перетащите, чтобы изменить порядок.",
-    "arrowHint": "Используйте стрелки ▲▼ или Вверх/Вниз для изменения порядка.",
-    "moveToTop": "Вверх",
-    "moveToBottom": "Вниз",
-    "noSection": "—",
-    "loadErrorFallback": "Не удалось загрузить сохранённый макет — показан макет по умолчанию. Вы всё ещё можете переставлять и сохранять.",
-    "diagnosticsTitle": "Диагностика (тройное нажатие на заголовок скрывает)",
-    "diagnosticsMode": "Режим: {{mode}}",
-    "diagnosticsCards": "Карточек: {{count}}",
-    "diagnosticsLayoutLength": "Длина JSON макета: {{length}}",
-    "diagnosticsQueryStatus": "Статус запроса: {{status}}",
-    "diagnosticsLastError": "Последняя ошибка: {{error}}",
-    "diagnosticsNone": "нет",
-    "screenCrashed": "Сбой экрана «{{screenName}}»",
-    "syncingHint": "Синхронизация сохранённого макета…",
-    "simpleSubtitle": "Показывайте, скрывайте или меняйте порядок карточек панели.",
-    "advancedEditor": "Расширенный редактор (перетаскивание, подписи, разделы) →"
   },
   "categoryPicker": {
     "newCategory": "Новая категория",

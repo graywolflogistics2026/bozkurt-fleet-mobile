@@ -54,7 +54,6 @@
     "ceoMode": "AI Coach",
     "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
-    "dashboardCustomize": "Customize Dashboard",
     "compliance": "Compliance Tracker",
     "documents": "Documents",
     "accountantPackage": "Accountant Package"
@@ -249,8 +248,7 @@
     "truckUnit": "Unit: {{unit}}",
     "fleetOverviewTitle": "Fleet Overview",
     "truckCardLabel": "Truck",
-    "driverOverviewTitle": "Driver Overview",
-    "customize": "✏️ Customize"
+    "driverOverviewTitle": "Driver Overview"
   },
   "deductions": {
     "title": "Deductions",
@@ -1163,33 +1161,6 @@
     "badge": "Needs review",
     "filterOnly": "Needs review only",
     "homeCounter": "{{count}} item(s) need your review"
-  },
-  "dashboardCustomize": {
-    "title": "Customize Dashboard",
-    "subtitle": "Reorder, hide, or rename any card. Your language never affects a card you haven't renamed.",
-    "savedTitle": "✅ Saved",
-    "saveFailedTitle": "Save failed",
-    "resetToDefault": "Reset to Default",
-    "labelPlaceholder": "{{defaultLabel}} (default)",
-    "visible": "Visible",
-    "hidden": "Hidden",
-    "dragHint": "Long-press and drag ☰ to reorder.",
-    "arrowHint": "Use the ▲▼ arrows or Top/Bottom to reorder.",
-    "moveToTop": "Top",
-    "moveToBottom": "Bottom",
-    "noSection": "—",
-    "loadErrorFallback": "Couldn't load your saved layout — showing the default. You can still reorder and save.",
-    "diagnosticsTitle": "Diagnostics (triple-tap title to hide)",
-    "diagnosticsMode": "Mode: {{mode}}",
-    "diagnosticsCards": "Cards: {{count}}",
-    "diagnosticsLayoutLength": "Layout JSON length: {{length}}",
-    "diagnosticsQueryStatus": "Query status: {{status}}",
-    "diagnosticsLastError": "Last error: {{error}}",
-    "diagnosticsNone": "none",
-    "screenCrashed": "{{screenName}} crashed",
-    "syncingHint": "Syncing your saved layout…",
-    "simpleSubtitle": "Show, hide, or reorder your dashboard cards.",
-    "advancedEditor": "Advanced editor (drag, labels, sections) →"
   },
   "categoryPicker": {
     "newCategory": "New Category",

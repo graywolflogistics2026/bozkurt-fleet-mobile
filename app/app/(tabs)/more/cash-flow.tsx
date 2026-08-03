@@ -158,7 +158,7 @@ export default function CashFlow() {
 
   // One-time hydration from the stored budget (profiles.cf_* columns,
   // docs/PENDING_SQL.md §29) once it loads — same pattern as tax-
-  // estimator.tsx/dashboard-customize.tsx's draft-state hydration.
+  // estimator.tsx's draft-state hydration.
   useEffect(() => {
     if (budgetHydrated || !profileQuery.data) return;
     const p = profileQuery.data;

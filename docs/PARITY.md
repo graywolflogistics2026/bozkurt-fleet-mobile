@@ -62,20 +62,31 @@ see the note at the end of this file about updating PROMPTS.md.
 
 ## Overview
 
-### 1. Dashboard — 🟡 partial (chart gap RESOLVED 2026-07-12)
-Has all 3 legacy stat rows (revenue/deductions/net/miles; per-diem
-days/$/weeks-in-service/avg-net-per-week; business balance/RPM/CPM/PPM),
-the tax row (estimate/quarterly countdown/weekly reserve/effective
-rate), a clickable Capital Account strip, Recent Loads, and a truck
-mini-card — plus beyond-legacy additions (S-corp preview, 1099-NEC
-reminders, fleet/driver overview, customizable card layout, invariant
-#17). Now has the Revenue-vs-Expenses trend chart, a hand-rolled
-monthly overlay-bar chart (`src/stats/cashFlowTrend.ts`
-`buildMonthlyRevenueExpenseTrend()`, a cited port of legacy `rChart()`'s
-month-grouping — revenue = sum settlement gross, expenses = sum ALL
-deductions per calendar month, same "every deduction" scope as CPM/
-Operating P&L) — a customizable dashboard card (invariant #17) like
-every other card on this screen, not a fixed fifth row.
+### 1. Dashboard — 🟡 partial (DASHBOARD SIMPLIFICATION 2026-08-02)
+DASHBOARD SIMPLIFICATION (owner decision 2026-08-02): Home is now a
+FIXED, non-customizable layout of exactly 5 things — the Hero profit
+card (period tabs + area chart), a Revenue/Expenses/Net Profit trio with
+% deltas, a Business Balance slim card, an AI Coach entry-point card, and
+Recent Loads followed by Best/Worst Lanes. The Customize Dashboard
+feature (drag-to-reorder, show/hide, per-card rename, CLAUDE.md's former
+invariant #17) is RETIRED entirely — see CLAUDE.md's DASHBOARD
+SIMPLIFICATION decision block for the full list of what was deleted.
+Everything that used to sit on Home beyond the 5 fixed cards — the Fleet
+Health Score gauge, the rotating AI Insight card, the Capital Account
+strip, the needs-review counter chip, the tax row (estimate/quarterly
+countdown/weekly reserve/effective rate), per-diem summary, the Revenue
+vs Expenses trend chart + monthly overlay-bar chart, the Expenses
+Breakdown donut, Goal Progress, the Road Days heat map, the truck mini-
+card, S-corp preview, 1099-NEC reminders, and fleet/driver overview — is
+gone from Home. None of that underlying data/functionality was deleted
+from the product: Capital Account, Tax Estimator, Truck Health, Profit
+Analysis, Scorecard, and Cash Flow (which now also carries the full
+Best/Worst Lanes list Home's teaser links to) all remain full screens,
+reachable from the Menu exactly as before — only the Home summary cards
+for them are gone. `profiles.dashboard_layout`/
+`dashboard_sections_collapsed` stay as harmless, unused DB columns.
+- **Backlog**: per-card customization (reorder/hide/rename) may return in
+  a v2 pass if users actually ask for it — not reopened speculatively.
 - **Still not literally ported**: the "Last Settlement" breakdown card
   legacy shows directly on the Dashboard. That detail lives one tap away
   on the Settlements screen instead — a deliberate simplification, not

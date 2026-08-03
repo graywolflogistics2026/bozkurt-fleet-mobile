@@ -61,13 +61,17 @@ const AFFECTED_TABLES = [
 // invalidated this query key — reset-data (and any future flow that
 // changes profiles columns outside useUpdateProfile's own mutation,
 // which already invalidates it) needs this listed explicitly.
+//
+// 'dashboard-layout' was removed here (DASHBOARD SIMPLIFICATION, owner
+// decision 2026-08-02) — the Customize Dashboard feature that owned that
+// query key (useDashboardLayout(), src/data/dashboardLayout.ts) was
+// deleted entirely along with its screen; nothing reads that key anymore.
 const AFFECTED_AGGREGATES = [
   'fleet-stats',
   'driver-stats',
   'capital-account-summary',
   'tax_config',
   'tax_year_data',
-  'dashboard-layout',
   'profit-loss',
   'profile',
 ];

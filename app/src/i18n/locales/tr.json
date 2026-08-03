@@ -54,7 +54,6 @@
     "ceoMode": "Yapay Zeka Koçu",
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
-    "dashboardCustomize": "Paneli Özelleştir",
     "compliance": "Uyumluluk Takibi",
     "documents": "Belgeler",
     "accountantPackage": "Muhasebeci Paketi"
@@ -249,8 +248,7 @@
     "truckUnit": "Ünite: {{unit}}",
     "fleetOverviewTitle": "Filo Genel Bakışı",
     "truckCardLabel": "Kamyon",
-    "driverOverviewTitle": "Sürücü Özeti",
-    "customize": "✏️ Özelleştir"
+    "driverOverviewTitle": "Sürücü Özeti"
   },
   "deductions": {
     "title": "Kesintiler",
@@ -1163,33 +1161,6 @@
     "badge": "İnceleme gerekiyor",
     "filterOnly": "Yalnızca inceleme gerekenler",
     "homeCounter": "{{count}} öğe incelemenizi bekliyor"
-  },
-  "dashboardCustomize": {
-    "title": "Paneli Özelleştir",
-    "subtitle": "Herhangi bir kartı yeniden sıralayın, gizleyin veya yeniden adlandırın. Dil değişikliği, yeniden adlandırmadığınız bir kartı asla etkilemez.",
-    "savedTitle": "✅ Kaydedildi",
-    "saveFailedTitle": "Kaydetme başarısız",
-    "resetToDefault": "Varsayılana Sıfırla",
-    "labelPlaceholder": "{{defaultLabel}} (varsayılan)",
-    "visible": "Görünür",
-    "hidden": "Gizli",
-    "dragHint": "Sıralamak için ☰ simgesine basılı tutup sürükleyin.",
-    "arrowHint": "Yeniden sıralamak için ▲▼ oklarını veya Üst/Alt'ı kullanın.",
-    "moveToTop": "Üste",
-    "moveToBottom": "Alta",
-    "noSection": "—",
-    "loadErrorFallback": "Kayıtlı düzeniniz yüklenemedi — varsayılan gösteriliyor. Yine de yeniden sıralayıp kaydedebilirsiniz.",
-    "diagnosticsTitle": "Tanılama (gizlemek için başlığa üç kez dokunun)",
-    "diagnosticsMode": "Mod: {{mode}}",
-    "diagnosticsCards": "Kartlar: {{count}}",
-    "diagnosticsLayoutLength": "Düzen JSON uzunluğu: {{length}}",
-    "diagnosticsQueryStatus": "Sorgu durumu: {{status}}",
-    "diagnosticsLastError": "Son hata: {{error}}",
-    "diagnosticsNone": "yok",
-    "screenCrashed": "{{screenName}} çöktü",
-    "syncingHint": "Kayıtlı düzeniniz senkronize ediliyor…",
-    "simpleSubtitle": "Panel kartlarınızı gösterin, gizleyin veya yeniden sıralayın.",
-    "advancedEditor": "Gelişmiş düzenleyici (sürükleme, etiketler, bölümler) →"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",

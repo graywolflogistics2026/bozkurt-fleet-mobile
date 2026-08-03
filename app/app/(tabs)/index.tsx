@@ -1,365 +1,51 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { useFleetStats, fetchFleetStats, fetchDriverStats } from '@/src/data/dashboardStats';
-import { useDrivers } from '@/src/data/drivers';
+import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
-import { useTrucksList } from '@/src/data/trucks';
-import { useProfile } from '@/src/data/profile';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
-import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useLoads } from '@/src/data/loads';
 import { useDeductions } from '@/src/data/deductions';
 import { useSettlements } from '@/src/data/settlements';
-import { useUserCategories } from '@/src/data/userCategories';
-import { useBenchmarks } from '@/src/data/benchmarks';
-import { buildProfitLoss } from '@/src/stats/profitLoss';
-import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
-import { buildInsightCandidates, selectDailyInsight, type Insight } from '@/src/stats/aiInsights';
-import { buildRoadDaysGrid, type RoadDayCell } from '@/src/stats/roadDaysHeatmap';
-import { calcGoalProgressPct, calcTruckLoanProgress } from '@/src/stats/goalProgress';
-import { useLoanRows } from '@/src/data/loans';
-import { useComplianceItems } from '@/src/data/complianceItems';
-import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
-import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
-import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
-import { calcTruckHealth, type HealthOverrides, type HealthResult } from '@/src/truck/health';
-import { HEALTH_CATEGORY_ICON, type HealthCategory } from '@/src/truck/categories';
-import { calcComplianceStatus } from '@/src/compliance/status';
-import { useDashboardLayout, useUpdateSectionsCollapsed, type SectionsCollapsed } from '@/src/data/dashboardLayout';
-import { invalidateFinancialData } from '@/src/data/queryInvalidation';
-import { nextQuarterlyDeadline, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
-import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
-import { ppmColor } from '@/src/stats/cpm';
+import { buildWeeklyRevenueExpenseTrend, rankLoadsByRpm, type WeeklyRevenueExpensePoint, type RankedLoad } from '@/src/stats/cashFlowTrend';
 import { calcScorecard } from '@/src/stats/scorecard';
-import { buildWeeklyRevenueExpenseTrend, type WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
-import { calcTrueProfit, buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
-import { buildWeeklyCpmTrend, calcCpmTrends, type MetricTrend } from '@/src/stats/cpmTrend';
+import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
-import { calcFleetHealthScore, type ChipStatus } from '@/src/stats/fleetHealthScore';
-import { filterTrendByRange, TREND_RANGES, type TrendRange } from '@/src/stats/trendRange';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
-import { calcTaxProgressColor, calcTaxProgressPct } from '@/src/stats/taxProgress';
-import {
-  CARD_LABEL_KEYS,
-  SECTION_LABEL_KEYS,
-  DASHBOARD_CARD_ROUTES,
-  buildCustomizedDashboardBlocks,
-  type DashboardCardId,
-  type SectionId,
-} from '@/src/stats/dashboardLayout';
-import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, Field, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { Screen, ScreenTitle, TappableCard, MutedText, SecondaryButton } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
-import { SimpleCustomizeDashboardModal } from '@/src/components/SimpleCustomizeDashboardModal';
-import { CircularGauge } from '@/src/components/CircularGauge';
-import { DonutChart, type DonutSlice } from '@/src/components/DonutChart';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
-const FILING_STATUS_LABEL: Record<string, string> = { single: 'Single', mfj: 'MFJ', hoh: 'HOH' };
-
-// "@$64/day (80% of $80)" — the 80% and $80 are both derived from
-// tax_year_data.per_diem (docs/PENDING_SQL.md §10), never hardcoded
-// (CLAUDE.md invariant #6). Degrades to just "@$64/day" until that
-// migration has run and full_daily_rate exists on the live row.
-function perDiemCaption(
-  perDiem: { daily_rate: number; full_daily_rate?: number } | undefined,
-  t: TFunction
-): string | null {
-  if (!perDiem) return null;
-  if (!perDiem.full_daily_rate) return t('dashboard.perDiemCaptionSimple', { rate: perDiem.daily_rate });
-  const pct = Math.round((perDiem.daily_rate / perDiem.full_daily_rate) * 100);
-  return t('dashboard.perDiemCaptionFull', { rate: perDiem.daily_rate, pct, fullRate: perDiem.full_daily_rate });
-}
-
-function urgencyColor(urgency: QuarterlyDeadlineStatus['urgency']) {
-  if (urgency === 'urgent') return colors.red;
-  if (urgency === 'warn') return colors.orange;
-  return colors.muted;
-}
-
-const CHART_HEIGHT = 110;
-
-// Revenue-vs-Expenses trend (Dashboard Zone 1 hero, device feedback round
-// 2 — weekly, superseding the earlier monthly version; see
-// src/stats/cashFlowTrend.ts's buildWeeklyRevenueExpenseTrend()). Hand-
-// rolled overlay bars, same dependency-free approach as Cash Flow's weekly
-// trend chart (no chart library installed).
-// UX MEGA-PASS item G(2) (owner decision 2026-07-31): restyled from thick
-// opaque bars to the same thin-line "Apple Stocks style" every other
-// trend chart app-wide uses (CLAUDE.md's CHART LANGUAGE CONSISTENCY
-// invariant) — buildPolylinePoints/buildAreaPoints (src/stats/
-// chartHelpers.ts), the same shared primitive Hero/Cash-Flow already use.
-// Two thin lines share one axis (revenue green, expenses red); only
-// revenue gets the subtle translucent fill underneath, matching the Hero
-// Card's single-metric fill treatment — filling both would just muddy the
-// overlap.
-function RevenueExpenseChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
-  const { t } = useTranslation();
-  const { money: moneyFmt, date } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const [width, setWidth] = useState(0);
-  const height = CHART_HEIGHT;
-  const revenueValues = points.map((p) => p.revenue);
-  const expenseValues = points.map((p) => p.expenses);
-  const max = Math.max(1, ...revenueValues, ...expenseValues);
-  const domain: [number, number] = [0, max];
-  const revenuePolyline = buildPolylinePoints(revenueValues, width, height, domain);
-  const expensePolyline = buildPolylinePoints(expenseValues, width, height, domain);
-  const revenueArea = width > 0 && revenueValues.length >= 2 ? buildAreaPoints(revenuePolyline, width, height) : '';
-
-  return (
-    <View>
-      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
-        {points.length >= 2 && width > 0 && (
-          <Svg width={width} height={height}>
-            <Polygon points={revenueArea} fill="rgba(34,197,94,0.15)" stroke="none" />
-            <Polyline points={revenuePolyline} fill="none" stroke={colors.green} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            <Polyline points={expensePolyline} fill="none" stroke={colors.red} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-          </Svg>
-        )}
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
-        <MutedText>{points[0] ? date(points[0].weekEnding) : ''}</MutedText>
-        <MutedText>{points.length > 1 ? date(points[points.length - 1].weekEnding) : ''}</MutedText>
-      </View>
-      <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 10, height: 2, borderRadius: 1, backgroundColor: colors.green }} />
-          <MutedText>
-            {t('dashboard.chartRevenueLegend', { amount: money(Math.max(...points.map((p) => p.revenue))) })}
-          </MutedText>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 10, height: 2, borderRadius: 1, backgroundColor: colors.red }} />
-          <MutedText>{t('dashboard.chartExpensesLegend')}</MutedText>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// Revenue Trend line chart (Session 9d item 3) — "Apple Stocks style":
-// plain green react-native-svg Polyline, no chart library, with 7D/30D/
-// 90D/YTD range toggles (src/stats/trendRange.ts). Measures its own width
-// via onLayout since it lives inside a full-width Card whose exact pixel
-// width depends on the device.
-function RevenueTrendChart({ weeklyRevenue }: { weeklyRevenue: WeeklyRevenueExpensePoint[] }) {
-  const { t } = useTranslation();
-  const { money: moneyFmt, date } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const [range, setRange] = useState<TrendRange>('30D');
-  const [width, setWidth] = useState(0);
-  const height = 90;
-
-  const filtered = useMemo(() => filterTrendByRange(weeklyRevenue, range), [weeklyRevenue, range]);
-  const values = filtered.map((p) => p.revenue);
-  const polylinePoints = buildPolylinePoints(values, width, height);
-
-  return (
-    <View>
-      <View style={{ flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.sm }}>
-        {TREND_RANGES.map((r) => (
-          <Pressable
-            key={r}
-            onPress={() => setRange(r)}
-            style={[styles.rangePill, range === r && styles.rangePillActive]}
-          >
-            <Text style={[styles.rangePillText, range === r && styles.rangePillTextActive]}>{r}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
-        {filtered.length < 2 ? (
-          <MutedText>{t('dashboard.revenueTrendChart.notEnoughData')}</MutedText>
-        ) : (
-          <Svg width={width} height={height}>
-            <Polyline points={polylinePoints} fill="none" stroke={colors.green} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-          </Svg>
-        )}
-      </View>
-      {filtered.length >= 2 && (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
-          <MutedText>{date(filtered[0].weekEnding)}</MutedText>
-          <MutedText>{money(Math.max(...values))} {t('dashboard.revenueTrendChart.maxSuffix')}</MutedText>
-          <MutedText>{date(filtered[filtered.length - 1].weekEnding)}</MutedText>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// Tiny hand-rolled sparkline (device feedback round 2: "where sensible add
-// tiny sparklines to cards") — last bar full-opacity, older bars dimmed,
-// bar color reflects sign (a net-loss week reads red even mid-sparkline).
-function Sparkline({ values }: { values: number[] }) {
-  if (values.length < 2) return null;
-  const max = Math.max(1, ...values.map((v) => Math.abs(v)));
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 20, gap: 2, marginTop: spacing.xs }}>
-      {values.map((v, i) => (
-        <View
-          key={i}
-          style={{
-            flex: 1,
-            height: Math.max(2, (Math.abs(v) / max) * 20),
-            backgroundColor: v >= 0 ? colors.green : colors.red,
-            borderRadius: 1,
-            opacity: i === values.length - 1 ? 1 : 0.45,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
-// Zone 4's per-mile trend arrows (device feedback round 2) — purely
-// reports current-vs-prior-4-week-average direction; "up" is colored
-// green for revenue/profit-per-mile but red for cost-per-mile, which is
-// why the caller passes goodDirection rather than this component guessing.
-function TrendArrow({ trend, goodDirection }: { trend: MetricTrend; goodDirection: 'up' | 'down' }) {
-  if (trend.direction === 'flat') return null;
-  const isGood = trend.direction === goodDirection;
-  return (
-    <Text style={{ color: isGood ? colors.green : colors.red, fontSize: 11, fontWeight: '700', marginStart: 3 }}>
-      {trend.direction === 'up' ? '▲' : '▼'}
-    </Text>
-  );
-}
-
-function StatValue({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
-  return (
-    <View>
-      <MutedText>{label}</MutedText>
-      <Text style={{ color: valueColor ?? colors.text, fontSize: typography.size.xl, fontWeight: '700', marginTop: 2 }}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-// Zone 4/5's compact trio tiles (device feedback round 2) — smaller and
-// side-by-side, unlike the full-width TappableCard every other Dashboard
-// stat uses; deliberately has no chevron (three of them in a row would be
-// visually noisy) but is still tappable.
-function CompactTile({
-  label,
-  value,
-  valueColor,
-  caption,
-  captionColor,
-  trend,
-  goodDirection,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  caption?: string;
-  captionColor?: string;
-  trend?: MetricTrend;
-  goodDirection?: 'up' | 'down';
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.compactTile, pressed && { opacity: 0.85 }]}>
-      <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
-        {label}
-      </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Text style={{ color: valueColor ?? colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
-          {value}
-        </Text>
-        {trend && goodDirection && <TrendArrow trend={trend} goodDirection={goodDirection} />}
-      </View>
-      {caption ? (
-        <Text style={{ color: captionColor ?? colors.muted, fontSize: 10, marginTop: 2 }} numberOfLines={1}>
-          {caption}
-        </Text>
-      ) : null}
-    </Pressable>
-  );
-}
-
-// Session 9e-B3: Overview Revenue/Expenses/Net trio (replaces the old 2x2
-// compact stat grid) — a tiny vs-last-week % delta per tile, reusing
-// WeekOverWeekChange (pct + direction) directly rather than CompactTile's
-// MetricTrend shape (which only carries direction, no %, and is shared by
-// several per-mile trend call sites this pass deliberately leaves alone).
-function OverviewTile({
-  label,
-  value,
-  valueColor,
-  change,
-  goodDirection,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  change: WeekOverWeekChange;
-  goodDirection: 'up' | 'down';
-  onPress: () => void;
-}) {
-  const { t } = useTranslation();
-  const isGood = change.direction === goodDirection;
-  const deltaColor = change.pct == null || change.direction === 'flat' ? colors.muted : isGood ? colors.green : colors.red;
-  const arrow = change.direction === 'up' ? '▲' : change.direction === 'down' ? '▼' : '—';
-
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.compactTile, pressed && { opacity: 0.85 }]}>
-      <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text style={{ color: valueColor ?? colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={{ color: deltaColor, fontSize: 10, marginTop: 2, fontWeight: '700' }} numberOfLines={1}>
-        {change.pct == null ? t('dashboard.hero.newThisWeek') : `${arrow} ${Math.abs(change.pct).toFixed(1)}%`}
-      </Text>
-    </Pressable>
-  );
-}
-
-// Session 9e-B4: a slim Cash Balance (business_balance) row, visible by
-// default in the new zoned layout — this design decision brings it back
-// to default visibility (it's `businessBalance` in DEFAULT_HIDDEN_CARD_IDS,
-// src/stats/dashboardLayout.ts, still fully available via Customize as the
-// larger StatValue-style card too). Same balance-tier coloring as that
-// card, just a single compact row instead of a full-height block.
-function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: () => void }) {
-  const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const color = balance > 10000 ? colors.green : balance > 3000 ? colors.orange : colors.red;
-
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.slimCard, pressed && { opacity: 0.85 }]}>
-      <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>💰 {t('dashboard.businessBalance')}</Text>
-      <Text style={{ color, fontWeight: '700', fontSize: typography.size.lg }}>{money(balance)}</Text>
-      {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02): a losing week
-          is real money owed back to the carrier — the balance itself can
-          now go negative (never clamped to 0), so this makes what a
-          negative number MEANS explicit rather than reading as an
-          unusually small positive figure. */}
-      {balance < 0 && <Text style={{ color: colors.red, fontSize: typography.size.xs }}>{t('dashboard.businessBalanceOwed')}</Text>}
-    </Pressable>
-  );
-}
-
-function profitScoreColor(score: number): string {
-  if (score >= 75) return colors.green;
-  if (score >= 60) return colors.orange;
-  return colors.red;
-}
+// DASHBOARD SIMPLIFICATION (owner decision 2026-08-02): Home is now a
+// FIXED, non-customizable layout — the Customize Dashboard feature
+// (drag-to-reorder, show/hide, per-card rename, invariant #17) has been
+// retired entirely (CLAUDE.md, PROMPTS.md backlog) in favor of one
+// well-designed layout every user sees, in this exact order:
+//   a) Hero profit card (period tabs + area chart)
+//   b) Revenue / Expenses / Net Profit trio with % deltas
+//   c) Business Balance slim card
+//   d) AI Coach card (fixed entry point into the ceo-mode briefing screen
+//      — no rotating insight logic anymore, see AiCoachCard below)
+//   e) Recent Loads, then Best/Worst Lanes
+// Everything else that used to live on Home (Fleet Health Score gauge,
+// the rotating AI Insight card, the Capital Account strip, the needs-
+// review counter chip, the 4 collapsible Overview/Money/On-the-Road/
+// Taxes sections and every card inside them, S-corp/1099/tax banners,
+// fleet & driver overview) is REMOVED from Home — those underlying
+// screens (Capital Account, Tax Estimator, Truck Health, Profit
+// Analysis, ...) remain fully reachable from the Menu, only the Home
+// summary cards are gone. profiles.dashboard_layout/
+// dashboard_sections_collapsed stay as harmless, unused DB columns (no
+// migration needed) — nothing in the app reads or writes them anymore.
 
 function greetingKey(hour: number): string {
   if (hour < 12) return 'dashboard.greeting.morning';
@@ -368,8 +54,8 @@ function greetingKey(hour: number): string {
 }
 
 // Session 9e-B1: greeting moved out of the Hero Card into the page body,
-// below the new top bar (hamburger/wordmark/bell, see _layout.tsx) —
-// time-of-day aware, same three-way split the old in-hero greeting used.
+// below the top bar (hamburger/wordmark/bell, see _layout.tsx) — time-of-
+// day aware, same three-way split the old in-hero greeting used.
 function DashboardGreeting({ name }: { name: string }) {
   const { t } = useTranslation();
   const hour = new Date().getHours();
@@ -388,8 +74,8 @@ function formattedDelta(amount: number, moneyFmt: (n: number, opts?: Intl.Number
   return amount < 0 ? `-${abs}` : `+${abs}`;
 }
 
-// Hero Card's "vs last week" line (Session 9e-B2: dollar delta, not a
-// %, per the "TODAY'S PROFIT" mockup) — pct==null on the underlying change
+// Hero Card's "vs last week" line (Session 9e-B2: dollar delta, not a %,
+// per the "TODAY'S PROFIT" mockup) — pct==null on the underlying change
 // means there's no prior week yet (first-ever settlement), which reads as
 // "New" rather than a misleading $0.
 function HeroChange({
@@ -420,12 +106,11 @@ function HeroChange({
 }
 
 // Filled area chart under the Hero Card's big profit number (Session
-// 9e-B2) — adapted from RevenueTrendChart's Polyline-only line-drawing
-// (buildPolylinePoints, above) by also drawing a translucent-green Polygon
-// under the same points. Weekly net-profit points (this app's settlements
-// are weekly, CLAUDE.md invariant #7-adjacent) rather than fabricated daily
-// granularity — "30D" reads as "recent weeks" the same way
-// RevenueTrendChart's own 30D range already does.
+// 9e-B2) — adapted from the earlier RevenueTrendChart's Polyline-only
+// line-drawing (buildPolylinePoints) by also drawing a translucent-green
+// Polygon under the same points. Weekly net-profit points (this app's
+// settlements are weekly, CLAUDE.md invariant #7-adjacent) rather than
+// fabricated daily granularity.
 function HeroAreaChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
   const [width, setWidth] = useState(0);
   const height = 64;
@@ -445,15 +130,8 @@ function HeroAreaChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
   );
 }
 
-// Dashboard 2.0 Hero Card (Session 9d item 1, restyled Session 9e-B2
-// toward the "TODAY'S PROFIT" mockup — owner + design-advisor vision "from
-// list to cockpit"). Now singularly about this week's PROFIT (Revenue/
-// Expenses moved to the Overview trio below, B3) — the one thing a user
-// sees first. Reuses calcScorecard() (src/stats/scorecard.ts, legacy
-// rScore() port) for the Profit Score bar rather than inventing a second
-// business-health formula.
-// UX MEGA-PASS item G(1) (owner decision 2026-07-31): period tabs above
-// the eyebrow — This Week/Last Week/1M/3M/6M/Yearly — driving the number,
+// UX MEGA-PASS item G (owner decision 2026-07-31): period tabs above the
+// eyebrow — This Week/Last Week/1M/3M/6M/Yearly — driving the number,
 // delta, and chart all together via src/stats/heroPeriod.ts's
 // calcHeroPeriod(). thisWeek/lastWeek keep the "vs last week" $-delta
 // copy (a real week-to-week comparison); every other period uses the
@@ -490,6 +168,17 @@ function HeroPeriodTabs({ period, onChange }: { period: HeroPeriod; onChange: (p
   );
 }
 
+function profitScoreColor(score: number): string {
+  if (score >= 75) return colors.green;
+  if (score >= 60) return colors.orange;
+  return colors.red;
+}
+
+// Dashboard Hero Card (Session 9d item 1, restyled Session 9e-B2 toward
+// the "TODAY'S PROFIT" mockup — owner + design-advisor vision "from list
+// to cockpit"). Singularly about this week's PROFIT. Reuses
+// calcScorecard() (src/stats/scorecard.ts, legacy rScore() port) for the
+// Profit Score bar rather than inventing a second business-health formula.
 function HeroCard({
   period,
   onPeriodChange,
@@ -541,502 +230,153 @@ function HeroCard({
   );
 }
 
-// Visual polish (Session 9d item 13) — a subtle card-to-card2 vertical
-// gradient for the composite "cockpit" cards (Fleet Health), giving them
-// a touch more depth than a flat Card without going as bold as the Hero
-// Card's dark-blue gradient. Deliberately NOT applied to every TappableCard
-// in the app (that's the shared ui.tsx primitive used everywhere, out of
-// scope for a targeted polish pass) and expo-blur/glass is explicitly
-// skipped this pass — the spec calls it optional/performance-sensitive,
-// and neither expo-blur nor react-native-svg's gauge/donut work needed it.
-function GradientCard({ children }: { children: React.ReactNode }) {
+// Session 9e-B3: Revenue/Expenses/Net trio — a tiny vs-last-week % delta
+// per tile, reusing WeekOverWeekChange (pct + direction) directly.
+function OverviewTile({
+  label,
+  value,
+  valueColor,
+  change,
+  goodDirection,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  change: WeekOverWeekChange;
+  goodDirection: 'up' | 'down';
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const isGood = change.direction === goodDirection;
+  const deltaColor = change.pct == null || change.direction === 'flat' ? colors.muted : isGood ? colors.green : colors.red;
+  const arrow = change.direction === 'up' ? '▲' : change.direction === 'down' ? '▼' : '—';
+
   return (
-    <LinearGradient colors={[colors.card2, colors.card]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.gradientCard}>
-      {children}
-    </LinearGradient>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.compactTile, pressed && { opacity: 0.85 }]}>
+      <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={{ color: valueColor ?? colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={{ color: deltaColor, fontSize: 10, marginTop: 2, fontWeight: '700' }} numberOfLines={1}>
+        {change.pct == null ? t('dashboard.hero.newThisWeek') : `${arrow} ${Math.abs(change.pct).toFixed(1)}%`}
+      </Text>
+    </Pressable>
   );
 }
 
-function chipColor(status: ChipStatus): string {
-  if (status === 'green') return colors.green;
-  if (status === 'amber') return colors.orange;
-  return colors.red;
+// Session 9e-B4: a slim Business Balance row.
+function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: () => void }) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const color = balance > 10000 ? colors.green : balance > 3000 ? colors.orange : colors.red;
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.slimCard, pressed && { opacity: 0.85 }]}>
+      <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>💰 {t('dashboard.businessBalance')}</Text>
+      <Text style={{ color, fontWeight: '700', fontSize: typography.size.lg }}>{money(balance)}</Text>
+      {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02): a losing week
+          is real money owed back to the carrier — the balance itself can
+          now go negative (never clamped to 0), so this makes what a
+          negative number MEANS explicit rather than reading as an
+          unusually small positive figure. */}
+      {balance < 0 && <Text style={{ color: colors.red, fontSize: typography.size.xs }}>{t('dashboard.businessBalanceOwed')}</Text>}
+    </Pressable>
+  );
 }
 
-function StatusChip({ label, status }: { label: string; status: ChipStatus }) {
+// DASHBOARD SIMPLIFICATION (owner decision 2026-08-02): fixed entry point
+// into the AI Coach briefing (ceo-mode.tsx) — replaces the old rotating
+// AI Insight card. Same visual container/treatment (icon + bold title +
+// one sentence, tappable) as the retired AiInsightsCard, but the content
+// no longer rotates through candidate insight types; it always reads as
+// an invitation into the Coach. Reuses the existing `ceoMode.title`/
+// `ceoMode.subtitle` i18n strings ("AI Coach" / "Your weekly business
+// briefing, composed from your own data.") rather than adding new keys —
+// they already say exactly this, in all 7 supported locales.
+function AiCoachCard({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
   return (
-    <View style={styles.statusChip}>
-      <View style={[styles.statusChipDot, { backgroundColor: chipColor(status) }]} />
-      <Text style={styles.statusChipLabel} numberOfLines={1}>
-        {label}
+    <TappableCard onPress={onPress}>
+      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>🧑‍✈️ {t('ceoMode.title')}</Text>
+      <Text style={{ color: colors.text }}>{t('ceoMode.subtitle')}</Text>
+    </TappableCard>
+  );
+}
+
+// One lane row inside the Best/Worst Lanes card — mirrors Cash Flow's own
+// LaneRow (app/(tabs)/more/cash-flow.tsx) so the "good/bad" presentation
+// reads identically wherever a user sees it.
+function HomeLaneRow({ load, good }: { load: RankedLoad; good: boolean }) {
+  const { money, number } = useFormatters();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+      <View style={{ flex: 1, marginEnd: spacing.sm }}>
+        <Text style={{ color: colors.text }} numberOfLines={1}>
+          {load.origin ?? '—'} → {load.destination ?? '—'}
+        </Text>
+        <MutedText numberOfLines={1}>
+          {load.order_number ?? '—'} · {number(load.loaded_miles)} mi · {money(load.revenue)}
+        </MutedText>
+      </View>
+      <Text style={{ color: good ? colors.green : colors.red, fontWeight: '700', flexShrink: 0 }}>
+        {money(load.rpm, { maximumFractionDigits: 2 })}/mi
       </Text>
     </View>
   );
 }
 
-// Fleet Health Score card (Session 9d item 2) — circular gauge (react-
-// native-svg, no chart library) + 4 status chips explaining the score's
-// composition, tap opens a methodology info sheet. Scoped to the active
-// truck, same "n=1 is just the default presentation" convention every
-// other truck-specific Dashboard stat already follows (CLAUDE.md
-// invariant #7) — CEO Mode's maintenanceAlertCount uses the identical
-// active-truck scoping for the same reason.
-function FleetHealthCard({
-  score,
-  chips,
-  onInfoPress,
-}: {
-  score: number;
-  chips: { truck: ChipStatus; maintenance: ChipStatus; taxes: ChipStatus; cashFlow: ChipStatus };
-  onInfoPress: () => void;
-}) {
-  const { t } = useTranslation();
-  const gaugeColor = score >= 75 ? colors.green : score >= 60 ? colors.orange : colors.red;
-
-  return (
-    <GradientCard>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
-        <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('dashboard.fleetHealth.title')}</Text>
-        <Pressable onPress={onInfoPress} hitSlop={8}>
-          <Text style={{ color: colors.muted, fontSize: typography.size.md }}>ⓘ</Text>
-        </Pressable>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-        <View style={{ width: 96, height: 96, alignItems: 'center', justifyContent: 'center' }}>
-          <CircularGauge score={score} color={gaugeColor} />
-          <View style={{ position: 'absolute', alignItems: 'center' }}>
-            <Text style={{ color: colors.text, fontSize: 24, fontWeight: '800' }}>{score}</Text>
-            <MutedText>/100</MutedText>
-          </View>
-        </View>
-        <View style={{ flex: 1, gap: spacing.xs }}>
-          <StatusChip label={t('dashboard.fleetHealth.chipTruck')} status={chips.truck} />
-          <StatusChip label={t('dashboard.fleetHealth.chipMaintenance')} status={chips.maintenance} />
-          <StatusChip label={t('dashboard.fleetHealth.chipTaxes')} status={chips.taxes} />
-          <StatusChip label={t('dashboard.fleetHealth.chipCashFlow')} status={chips.cashFlow} />
-        </View>
-      </View>
-    </GradientCard>
-  );
-}
-
-// BETA FEEDBACK ROUND (owner decision 2026-07-31): added 'ytd' alongside
-// This Month/Last Month — same donut + legend behavior, just a wider date
-// window (see moneyBreakdownProfitLoss below for the filter logic).
-export type MoneyBreakdownRange = 'thisMonth' | 'lastMonth' | 'ytd';
-
-// Expenses Breakdown donut card (Session 9d item 4, restyled Session
-// 9e-B6 into "Expenses Breakdown" per the mockup — legend rows now show a
-// $ amount alongside the %, plus a This Month/Last Month selector).
-// Category slices reuse buildProfitLoss()'s expensesByBucket (same
-// Schedule C bucket rollup Operating P&L already shows) rather than a
-// second category-grouping function. Capped at the top 3 buckets + an
-// "Other" fold-in (dataviz anti-pattern: never a generated hue per
-// category) — Profit only appears when netIncome > 0, since expenses +
-// profit summing to exactly revenue is what makes "% of revenue" a
-// meaningful donut in the first place. Tapping any slice/row goes to
-// Deductions, same destination the existing Total Deductions card
-// already uses.
-function MoneyBreakdownCard({
-  slices,
-  range,
-  onRangeChange,
+// DASHBOARD SIMPLIFICATION (owner decision 2026-08-02): Best/Worst Lanes,
+// new to Home — reuses src/stats/cashFlowTrend.ts's rankLoadsByRpm()
+// (already powering Cash Flow's own "Best & Worst Lanes" section) rather
+// than a second ranking implementation. Capped at 3 each (vs Cash Flow's
+// full 5) to keep this a Home teaser, not a duplicate of the full screen;
+// tapping through goes to Cash Flow for the complete ranked list. Reuses
+// the existing `cashFlowScreen.lanesTitle`/`bestLanes`/`worstLanes` i18n
+// strings rather than adding new dashboard-scoped ones — same text, same
+// meaning, no new 7-locale translation needed.
+function BestWorstLanesCard({
+  lanes,
   onPress,
 }: {
-  slices: DonutSlice[];
-  range: MoneyBreakdownRange;
-  onRangeChange: (range: MoneyBreakdownRange) => void;
+  lanes: { best: RankedLoad[]; worst: RankedLoad[]; avgRpm: number | null };
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const total = slices.reduce((sum, s) => sum + Math.max(0, s.value), 0);
-
-  return (
-    <Card>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
-        <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>
-          {t('dashboard.moneyBreakdown.title')}
-        </Text>
-        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-          {(['thisMonth', 'lastMonth', 'ytd'] as const).map((r) => (
-            <Pressable key={r} onPress={() => onRangeChange(r)} style={[styles.rangePill, range === r && styles.rangePillActive]}>
-              <Text style={[styles.rangePillText, range === r && styles.rangePillTextActive]}>
-                {t(`dashboard.moneyBreakdown.${r}`)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-      {total <= 0 ? (
-        <MutedText>{t('dashboard.moneyBreakdown.empty')}</MutedText>
-      ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-          <Pressable onPress={onPress}>
-            <DonutChart slices={slices} />
-          </Pressable>
-          <View style={{ flex: 1, gap: spacing.xs }}>
-            {slices.map((s) => (
-              <Pressable key={s.label} onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: s.color }} />
-                <Text style={{ color: colors.text, fontSize: typography.size.xs, flex: 1 }} numberOfLines={1}>
-                  {s.label}
-                </Text>
-                <Text style={{ color: colors.muted, fontSize: typography.size.xs }}>{money(s.value)}</Text>
-                <Text style={{ color: colors.muted, fontSize: typography.size.xs, minWidth: 32, textAlign: 'right' }}>
-                  {Math.round((s.value / total) * 100)}%
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      )}
-      <MutedText style={{ marginTop: spacing.sm }}>{t('dashboard.moneyBreakdown.totalCaption', { amount: money(total) })}</MutedText>
-    </Card>
-  );
-}
-
-// Tax Progress bar (Session 9d item 5) — fill = reserved business_balance
-// ÷ the full-year Federal+SE estimated tax; color reflects days until the
-// next quarterly deadline (src/stats/taxProgress.ts), not the fill ratio
-// itself — a fully-reserved user still sees the bar go red in the final
-// week before a deadline, which is the point (a reminder to actually pay).
-function TaxProgressCard({
-  reserved,
-  target,
-  daysUntil,
-  onPress,
-}: {
-  reserved: number;
-  target: number;
-  daysUntil: number | null;
-  onPress: () => void;
-}) {
-  const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const pct = calcTaxProgressPct(reserved, target);
-  const barColor = chipColor(calcTaxProgressColor(daysUntil));
+  if (lanes.best.length === 0) return null;
 
   return (
     <TappableCard onPress={onPress}>
-      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('dashboard.taxProgress.title')}</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-        <MutedText>{t('dashboard.taxProgress.reservedOfTarget', { reserved: money(reserved), target: money(target) })}</MutedText>
-        <Text style={{ color: barColor, fontWeight: '700' }}>{pct}%</Text>
-      </View>
-      <View style={styles.heroScoreTrack}>
-        <View style={[styles.heroScoreFill, { width: `${pct}%`, backgroundColor: barColor }]} />
-      </View>
-    </TappableCard>
-  );
-}
-
-// AI Insights rotating card (Session 9d item 6) — one sentence, deterministic
-// day-of-year rotation through whichever insights are actually applicable
-// (src/stats/aiInsights.ts). Phrased via this app's own i18n strings rather
-// than an ai-advisor round-trip on every dashboard load (that would add
-// network latency/cost to a purely informational card render) — still
-// locale-aware across all 7 supported languages, just via t() instead of
-// a server call.
-// BETA FEEDBACK ROUND 2 (owner decision 2026-07-31, device tester
-// report): the rotating AI Insight card below only shows a needs-review
-// message when THAT happens to be the daily-selected insight (one of
-// several candidate types) — so it wasn't reliably visible even when
-// items genuinely needed review. This is a separate, PERSISTENT chip
-// that shows whenever needsReviewDeductions is non-empty, regardless of
-// what the rotating card is currently showing, tapping straight through
-// to Deductions with the "Needs review only" filter pre-enabled.
-function NeedsReviewCounterChip({ count, onPress }: { count: number; onPress: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <TappableCard onPress={onPress}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Text style={{ fontSize: 20, marginEnd: spacing.sm }}>🔍</Text>
-        <Text style={{ color: colors.orange, fontWeight: '700', flex: 1 }}>
-          {t('needsReview.homeCounter', { count })}
-        </Text>
-      </View>
-    </TappableCard>
-  );
-}
-
-function AiInsightsCard({ insight, onViewDetails }: { insight: Insight; onViewDetails: (type: Insight['type']) => void }) {
-  const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-
-  let sentence: string;
-  if (insight.type === 'fuelBenchmark') {
-    sentence = t('dashboard.aiInsights.fuelBenchmark', {
-      pct: insight.pctPointsAboveRange.toFixed(1),
-      amount: money(insight.estMonthlyDelta),
-    });
-  } else if (insight.type === 'needsReview') {
-    sentence = t('dashboard.aiInsights.needsReview', { count: insight.count, amount: money(insight.estValue) });
-  } else if (insight.type === 'cpmTarget') {
-    sentence = t('dashboard.aiInsights.cpmTarget', {
-      rate: moneyFmt(insight.targetRate, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    });
-  } else {
-    sentence = t('dashboard.aiInsights.paceProjection', { amount: money(insight.projectedNet) });
-  }
-
-  return (
-    <TappableCard onPress={() => onViewDetails(insight.type)}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
-        <Text style={{ color: colors.text, fontWeight: '700' }}>⚡ {t('dashboard.aiInsights.title')}</Text>
-        <View style={styles.newBadge}>
-          <Text style={styles.newBadgeText}>{t('dashboard.aiInsights.newBadge')}</Text>
-        </View>
-      </View>
-      <Text style={{ color: colors.text }}>{sentence}</Text>
-      {insight.type === 'fuelBenchmark' && (
-        <MutedText style={{ marginTop: spacing.xs }}>{t('dashboard.aiInsights.industryReferenceNote')}</MutedText>
-      )}
-    </TappableCard>
-  );
-}
-
-// Road Days heat map (Session 9d item 8) — GitHub-style grid, 12 weeks of
-// 7-day columns, oldest-to-newest left-to-right (matches every other
-// trend chart's reading direction in this app). Cell color is binary
-// (on-road / not) rather than a shaded scale, since src/stats/
-// roadDaysHeatmap.ts's grid is itself binary (a day is either inside a
-// settlement week or it isn't) — a shade gradient would just be
-// decorative noise here, unlike a real GitHub contribution count.
-function RoadDaysHeatmap({ cells }: { cells: RoadDayCell[] }) {
-  const weeks: RoadDayCell[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-
-  return (
-    <View style={{ flexDirection: 'row', gap: 3 }}>
-      {weeks.map((week, wi) => (
-        <View key={wi} style={{ gap: 3 }}>
-          {week.map((day) => (
-            <View
-              key={day.date}
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                backgroundColor: day.onRoad ? colors.green : colors.border,
-              }}
-            />
-          ))}
-        </View>
+      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.sm }}>{t('cashFlowScreen.lanesTitle')}</Text>
+      <Text style={{ color: colors.green, fontWeight: '700', fontSize: typography.size.sm, marginBottom: spacing.xs }}>
+        🏆 {t('cashFlowScreen.bestLanes')}
+      </Text>
+      {lanes.best.map((l) => (
+        <HomeLaneRow key={l.id} load={l} good />
       ))}
-    </View>
-  );
-}
-
-function ProgressBar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <View style={styles.heroScoreTrack}>
-      <View style={[styles.heroScoreFill, { width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }]} />
-    </View>
-  );
-}
-
-// Goal Progress + Truck Paid card (Session 9d item 9) — weekly goal
-// (profiles.weekly_goal, same field CEO Mode's first-open prompt sets)
-// against this week's net, and a "Truck Paid" bar (paid principal ÷
-// original_amount) for whichever loan is the biggest one on file (see
-// src/stats/goalProgress.ts for why — no truck_id on LoanRow to scope by
-// precisely). Either half renders independently: a user with no goal set
-// still sees the Truck Paid bar if a loan exists, and vice versa.
-function GoalProgressCard({
-  goalPct,
-  current,
-  goal,
-  truckLoan,
-  onGoalPress,
-  onLoanPress,
-}: {
-  goalPct: number | null;
-  current: number;
-  goal: number | null;
-  truckLoan: { paidPrincipal: number; originalAmount: number; pct: number } | null;
-  onGoalPress: () => void;
-  onLoanPress: () => void;
-}) {
-  const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-
-  if (goalPct == null && !truckLoan) return null;
-
-  return (
-    <Card>
-      {goalPct != null ? (
-        <Pressable onPress={onGoalPress}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-            <Text style={{ color: colors.text, fontWeight: '700' }}>{t('dashboard.goalProgress.title')}</Text>
-            <Text style={{ color: colors.accent, fontWeight: '700' }}>{goalPct}%</Text>
-          </View>
-          <MutedText style={{ marginBottom: spacing.xs }}>
-            {t('dashboard.goalProgress.currentOfGoal', { current: money(current), goal: money(goal ?? 0) })}
-          </MutedText>
-          <ProgressBar pct={goalPct} color={colors.accent} />
-        </Pressable>
-      ) : (
-        <Pressable onPress={onGoalPress}>
-          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('dashboard.goalProgress.title')}</Text>
-          <MutedText>{t('dashboard.goalProgress.setGoalPrompt')}</MutedText>
-        </Pressable>
-      )}
-      {truckLoan && (
-        <Pressable onPress={onLoanPress} style={{ marginTop: goalPct != null ? spacing.md : 0 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-            <Text style={{ color: colors.text, fontWeight: '700' }}>{t('dashboard.goalProgress.truckPaidTitle')}</Text>
-            <Text style={{ color: colors.green, fontWeight: '700' }}>{truckLoan.pct}%</Text>
-          </View>
-          <MutedText style={{ marginBottom: spacing.xs }}>
-            {t('dashboard.goalProgress.paidOfOriginal', {
-              paid: money(truckLoan.paidPrincipal),
-              original: money(truckLoan.originalAmount),
-            })}
-          </MutedText>
-          <ProgressBar pct={truckLoan.pct} color={colors.green} />
-        </Pressable>
-      )}
-    </Card>
-  );
-}
-
-function healthStatusColor(status: HealthResult['status']): string {
-  if (status === 'overdue') return colors.red;
-  if (status === 'due_soon') return colors.orange;
-  if (status === 'ok') return colors.green;
-  return colors.muted;
-}
-
-// Remaining-life percentage for one Truck Health category — the inverse
-// of truck-health.tsx's own pctUsed (100 - pctUsed), since this mini card
-// reads as "how much health is LEFT", matching the icon's implicit
-// "green = healthy" framing. null for 'no_data' (nothing to show a % of
-// yet) rather than a misleading 0%/100%.
-function truckHealthRemainingPct(result: HealthResult): number | null {
-  if (result.status === 'no_data') return null;
-  const interval = result.trackingMode === 'hours' ? result.intervalHours ?? 0 : result.intervalMiles ?? 0;
-  if (interval <= 0) return null;
-  const pctUsed = Math.min(100, Math.max(0, ((interval - result.remaining) / interval) * 100));
-  return Math.round(100 - pctUsed);
-}
-
-// Truck Status mini card (Session 9d item 10) — unit name + per-category
-// interval health (Oil %, Tires %, ...) reusing calcTruckHealth()'s own
-// math, no telemetry/battery/external data of any kind (CLAUDE.md
-// invariant #22). Renders nothing when there are no enabled categories
-// yet (a brand-new truck before its maintenance_intervals seed has
-// loaded) rather than an empty card.
-function TruckStatusCard({
-  truckLabel,
-  unitLabel,
-  results,
-  onPress,
-}: {
-  truckLabel: string;
-  unitLabel: string;
-  results: HealthResult[];
-  onPress: () => void;
-}) {
-  const { t } = useTranslation();
-  if (results.length === 0) return null;
-
-  return (
-    <TappableCard onPress={onPress}>
-      <Text style={{ color: colors.text, fontWeight: '700' }}>{truckLabel}</Text>
-      <MutedText style={{ marginBottom: spacing.sm }}>{unitLabel}</MutedText>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-        {results.map((r) => {
-          const pct = truckHealthRemainingPct(r);
-          const color = healthStatusColor(r.status);
-          return (
-            <View key={r.category} style={{ alignItems: 'center', minWidth: 56 }}>
-              <Text style={{ fontSize: 16 }}>{HEALTH_CATEGORY_ICON[r.category as HealthCategory] ?? '🔧'}</Text>
-              <Text style={{ color, fontWeight: '700', fontSize: typography.size.xs, marginTop: 2 }}>
-                {pct != null ? `${pct}%` : '—'}
-              </Text>
-              <Text style={{ color: colors.muted, fontSize: 9 }} numberOfLines={1}>
-                {t(`truckHealth.categories.${r.category}`)}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
+      <Text style={{ color: colors.red, fontWeight: '700', fontSize: typography.size.sm, marginTop: spacing.sm, marginBottom: spacing.xs }}>
+        ⚠️ {t('cashFlowScreen.worstLanes')}
+      </Text>
+      {lanes.worst.map((l) => (
+        <HomeLaneRow key={l.id} load={l} good={false} />
+      ))}
     </TappableCard>
-  );
-}
-
-// Collapsible titled section (Dashboard sections addition, owner
-// decision 2026-07-13) — mirrors the sidebar/menu-sheet grouping
-// language (OVERVIEW/MONEY/ON THE ROAD/TAXES). Renders nothing but the
-// header when collapsed; children unmount entirely rather than just
-// being hidden, so a collapsed section costs nothing to render.
-function DashboardSection({
-  title,
-  collapsed,
-  onToggle,
-  children,
-}: {
-  title: string;
-  collapsed: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={{ marginBottom: spacing.sm }}>
-      <Pressable
-        onPress={onToggle}
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          paddingVertical: spacing.xs,
-        }}
-      >
-        <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '700' }}>{title}</Text>
-        <Text style={{ color: colors.muted, fontSize: typography.size.md }}>{collapsed ? '▸' : '▾'}</Text>
-      </Pressable>
-      {!collapsed && <View>{children}</View>}
-    </View>
   );
 }
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { money: moneyFmt, number } = useFormatters();
+  const { money: moneyFmt } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const { session, profile, signOut } = useAuth();
-  const { trucks, activeTruck, loading: trucksLoading } = useActiveTruck();
+  const { activeTruck } = useActiveTruck();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const userId = session?.user.id;
-  // UX MEGA-PASS item A: every card with a fixed destination reads it
-  // from DASHBOARD_CARD_ROUTES (src/stats/dashboardLayout.ts) instead of
-  // a hardcoded router.push() inline — one table, testable, audited.
-  const goToCard = (id: DashboardCardId) => {
-    const route = DASHBOARD_CARD_ROUTES[id];
-    if (route) router.push(route as Href);
-  };
-  // UX MEGA-PASS item C: the "Customize" header link now opens the plain,
-  // zero-external-lib fallback modal directly (see
-  // SimpleCustomizeDashboardModal.tsx) instead of navigating to the
-  // separate dashboard-customize route — that route's own crash history
-  // is exactly why this link can no longer depend on it being reachable.
-  // The fancy drag/label/section screen is still one tap away from
-  // inside this modal ("Advanced editor").
-  const [simpleCustomizeOpen, setSimpleCustomizeOpen] = useState(false);
 
-  const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [reasonableSalaryInput, setReasonableSalaryInput] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  // Local-first collapse toggling (Dashboard sections addition) — flips
-  // instantly in the UI while the mutation persists in the background,
-  // rather than waiting a round-trip for every tap to visually register.
-  const [localSectionsCollapsed, setLocalSectionsCollapsed] = useState<SectionsCollapsed | null>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1049,122 +389,34 @@ export default function Dashboard() {
 
   const statsQuery = useFleetStats(activeTruck?.id ?? null);
   const capitalQuery = useCapitalAccountSummary();
-  const taxQuery = useTaxEstimate();
   const loadsQuery = useLoads();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
-  const layoutQuery = useDashboardLayout();
-  const updateSectionsCollapsed = useUpdateSectionsCollapsed();
-  const driversQuery = useDrivers({ active: true });
-  const drivers = driversQuery.data ?? [];
   const fuelQuery = useFuelPurchases();
-  const complianceQuery = useComplianceItems();
-  const userCategoriesQuery = useUserCategories();
-  const benchmarksQuery = useBenchmarks();
-  const loansQuery = useLoanRows();
-  const fullProfileQuery = useProfile();
-  const activeTruckId = activeTruck?.id ?? null;
-  const trucksListQuery = useTrucksList();
-  const maintRecordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
-  const maintIntervalsQuery = useMaintenanceIntervals(activeTruckId);
-  const healthConfigQuery = useTruckHealthConfig(activeTruckId);
-  const [healthInfoOpen, setHealthInfoOpen] = useState(false);
-
-  const sectionsCollapsed = localSectionsCollapsed ?? layoutQuery.data?.sectionsCollapsed ?? {};
-  function toggleSection(id: SectionId) {
-    const next = { ...sectionsCollapsed, [id]: !sectionsCollapsed[id] };
-    setLocalSectionsCollapsed(next);
-    updateSectionsCollapsed.mutate(next);
-  }
-
-  // Fleet scalability (owner decision 2026-07-03): the per-truck ranking
-  // below re-uses the SAME fetchFleetStats() function the single-truck
-  // cards above call — parameterized by truck_id, no separate fleet code
-  // path. Only fetched at all once there's a second truck to rank.
-  const fleetQueries = useQueries({
-    queries:
-      trucks.length > 1
-        ? trucks.map((truck) => ({
-            queryKey: ['fleet-stats', userId, truck.id],
-            // Pass the already-fetched user-wide deductions (dedQuery
-            // above) so an N-truck fleet issues one deductions query
-            // total instead of N identical ones (pre-launch hardening,
-            // owner decision 2026-08-02).
-            queryFn: () => fetchFleetStats(userId as string, truck.id, dedQuery.data),
-            enabled: !!userId,
-          }))
-        : [],
-  });
-
-  // Per-driver dashboard breakdown (PROMPTS.md Session 9a item 7): same
-  // useQueries-per-entity pattern as Fleet Overview above, gated on 2+
-  // active drivers (an account with 0-1 drivers never sees it — the same
-  // n≤1 shortcut fleet-scalability uses everywhere else, CLAUDE.md
-  // invariant #7).
-  const driverQueries = useQueries({
-    queries:
-      drivers.length > 1
-        ? drivers.map((driver) => ({
-            queryKey: ['driver-stats', userId, driver.id],
-            // Same shared-deductions shortcut as fleetQueries above.
-            queryFn: () => fetchDriverStats(userId as string, driver.id, dedQuery.data),
-            enabled: !!userId,
-          }))
-        : [],
-  });
 
   const stats = statsQuery.data;
   const capital = capitalQuery.data;
-  const tax = taxQuery.data;
-  const deadline = tax ? nextQuarterlyDeadline(tax.taxYearData.quarterly_deadlines) : null;
 
-  // Zone 1 hero chart — last 8 completed weeks (matching Scorecard/Cash
-  // Flow's established "last 8 weeks" trend convention elsewhere in the
-  // app) so the chart stays legible regardless of how much settlement
-  // history exists.
+  // Zone 1 hero chart data — last 8 completed weeks (matching Scorecard/
+  // Cash Flow's established "last 8 weeks" trend convention elsewhere in
+  // the app) so the Revenue/Expenses trio stays legible regardless of how
+  // much settlement history exists.
   const fullWeeklyRevenueExpenseTrend = useMemo(
     () => buildWeeklyRevenueExpenseTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
     [settlementsQuery.data, dedQuery.data]
   );
   const revenueExpenseTrend = useMemo(() => fullWeeklyRevenueExpenseTrend.slice(-8), [fullWeeklyRevenueExpenseTrend]);
 
-  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31, follow-up to the
-  // UX mega-pass's Net-to-Owner audit fix): weeklyNetTrend used to be
-  // buildWeeklyTrend()'s bare settlement `.net` (net PAY only). The
-  // mega-pass fix moved Net to Owner to `grossRevenue - totalDeductions`
-  // (ALL deductions, unconditionally) — closer, but that OVER-subtracts
-  // a Meal already covered by per diem or an Advance Repayment (both
-  // marked `tax_deductible: false`, CLAUDE.md's NON_DEDUCTIBLE_CATEGORIES),
-  // neither of which is a real expense reduction. Every "profit" figure
-  // on this screen (this sparkline, the Hero Card, the Overview trio's
-  // Net Profit tile, Goal Progress) now sources from the single
-  // canonical src/stats/trueProfit.ts, which excludes exactly those rows.
+  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): every "profit"
+  // figure on this screen (the Hero Card, the Net Profit tile) sources
+  // from the single canonical src/stats/trueProfit.ts, which excludes a
+  // Meal already covered by per diem or an Advance Repayment — neither
+  // of which is a real expense reduction.
   const fullWeeklyTrueProfitTrend = useMemo(
     () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
     [settlementsQuery.data, dedQuery.data]
   );
-  const weeklyNetTrend = fullWeeklyTrueProfitTrend;
-  const netSparkValues = useMemo(
-    () => fullWeeklyTrueProfitTrend.slice(-8).map((p) => p.net),
-    [fullWeeklyTrueProfitTrend]
-  );
 
-  // Zone 4's per-mile trend arrows — current week vs. the prior 4-week
-  // average (src/stats/cpmTrend.ts).
-  const weeklyCpmTrend = useMemo(
-    () => buildWeeklyCpmTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
-    [settlementsQuery.data, dedQuery.data]
-  );
-  const cpmTrends = useMemo(() => calcCpmTrends(weeklyCpmTrend), [weeklyCpmTrend]);
-
-  // Hero Card (Session 9d item 1) — this week vs. last week. Revenue/
-  // Expenses still read off revenueExpenseTrend (unchanged — "Expenses"
-  // here is intentionally the broader ALL-deductions total, matching the
-  // "Total Deductions" card elsewhere); "Net Profit" now reads off the
-  // canonical true-profit trend (TRUE-PROFIT CONSISTENCY, owner decision
-  // 2026-07-31) instead of this same revenue-minus-ALL-expenses window,
-  // so it excludes a Meal-covered-by-per-diem or Advance Repayment the
-  // same way every other "profit" figure in the app now does.
   const heroFirstName =
     profile?.owner_name?.trim().split(/\s+/)[0] || session?.user?.email?.split('@')[0] || t('dashboard.hero.fallbackName');
   const thisWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 1];
@@ -1179,18 +431,10 @@ export default function Dashboard() {
   const heroRevenueChange = calcWeekOverWeekChange(heroWeekRevenue, lastWeekPoint?.revenue);
   const heroExpensesChange = calcWeekOverWeekChange(heroWeekExpenses, lastWeekPoint?.expenses);
   const heroNetProfitChange = calcWeekOverWeekChange(heroWeekNetProfit, lastWeekNetProfit);
-  // Session 9e-B2: Hero Card's "vs last week" line is a $ delta, not a %.
-  const heroNetProfitDeltaAmount = lastWeekNetProfit == null ? null : heroWeekNetProfit - lastWeekNetProfit;
   // UX MEGA-PASS item G(1): period tabs drive the Hero Card's number/
   // delta/chart together via calcHeroPeriod() — reads the FULL (unsliced)
   // weekly trend so 1M/3M/6M/yearly can window arbitrarily far back, not
-  // just the last 8 weeks revenueExpenseTrend is capped to. Mapped into
-  // calcHeroPeriod's existing {weekEnding, revenue, expenses} shape from
-  // the true-profit trend's {weekEnding, gross, net} — `expenses` here
-  // is a derived "gross minus true profit" figure purely so
-  // calcHeroPeriod's unmodified revenue-minus-expenses math reconstructs
-  // the correct (deductible-only) profit, not a claim that this equals
-  // the broader "Total Deductions" figure.
+  // just the last 8 weeks revenueExpenseTrend is capped to.
   const fullWeeklyTrueProfitAsRevenueExpense = useMemo(
     () => fullWeeklyTrueProfitTrend.map((p) => ({ weekEnding: p.weekEnding, revenue: p.gross, expenses: p.gross - p.net })),
     [fullWeeklyTrueProfitTrend]
@@ -1209,540 +453,23 @@ export default function Dashboard() {
     return calcScorecard(stats.grossRevenue, stats.totalDeductions, stats.totalMiles, fuelCost)?.score ?? null;
   }, [stats, fuelCost]);
 
-  // Fleet Health Score (Session 9d item 2) — 4 inputs, each also a status
-  // chip: Truck Health interval statuses (maintenance), compliance item
-  // urgencies (truck/legal), business_balance vs. the upcoming quarterly
-  // payment (taxes), and this-week-vs-last-week net profit direction
-  // (cash flow — reuses heroNetProfitChange rather than a second trend
-  // calculation).
-  const activeTruckRow = useMemo(
-    () => trucksListQuery.data?.find((tr) => tr.id === activeTruckId) ?? null,
-    [trucksListQuery.data, activeTruckId]
-  );
-  const truckHealthResults = useMemo(() => {
-    if (!activeTruckRow || !maintIntervalsQuery.data) return [];
-    const intervals = maintIntervalsQuery.data.map((iv) => ({
-      category: iv.category,
-      trackingMode: iv.tracking_mode,
-      intervalMiles: iv.interval_miles,
-      intervalHours: iv.interval_hours,
-      bundledWithCategory: iv.bundled_with_category,
-      enabled: iv.enabled,
-    }));
-    const records = (maintRecordsQuery.data ?? []).map((r) => ({
-      serviceType: r.service_type,
-      odometer: r.odometer,
-      engineHours: r.engine_hours,
-      serviceDate: r.service_date,
-    }));
-    const overrides = (healthConfigQuery.data?.overrides ?? {}) as HealthOverrides;
-    return calcTruckHealth(intervals, records, activeTruckRow.current_odometer ?? 0, activeTruckRow.apu_hours ?? 0, overrides);
-  }, [activeTruckRow, maintIntervalsQuery.data, maintRecordsQuery.data, healthConfigQuery.data]);
-  const truckHealthStatuses = useMemo(() => truckHealthResults.map((r) => r.status), [truckHealthResults]);
-
-  const complianceUrgencies = useMemo(
-    () => (complianceQuery.data ?? []).map((item) => calcComplianceStatus(item.due_date).urgency),
-    [complianceQuery.data]
-  );
-
-  const taxReserveRatio =
-    tax && tax.estimate.quarterlyPayment > 0 ? (capital?.businessBalance ?? 0) / tax.estimate.quarterlyPayment : null;
-
-  const fleetHealth = useMemo(
-    () =>
-      calcFleetHealthScore({
-        truckHealthStatuses,
-        complianceUrgencies,
-        taxReserveRatio,
-        cashFlowDirection: heroNetProfitChange.direction,
-      }),
-    [truckHealthStatuses, complianceUrgencies, taxReserveRatio, heroNetProfitChange.direction]
-  );
-
-  // All-time P&L (Money section's Net to Owner/Total Deductions cards) —
-  // distinct from the Expenses Breakdown donut below, which is
-  // month-scoped (Session 9e-B6).
-  const profitLoss = useMemo(
-    () => buildProfitLoss(settlementsQuery.data ?? [], dedQuery.data ?? [], userCategoriesQuery.data ?? []),
-    [settlementsQuery.data, dedQuery.data, userCategoriesQuery.data]
-  );
-
-  // Expenses Breakdown donut (Session 9d item 4, restyled Session 9e-B6
-  // with a This Month/Last Month selector — the donut now scopes
-  // buildProfitLoss()'s inputs to the selected calendar month via
-  // week_ending/ded_date instead of reading the all-time profitLoss above).
-  const [moneyBreakdownRange, setMoneyBreakdownRange] = useState<MoneyBreakdownRange>('thisMonth');
-  const moneyBreakdownProfitLoss = useMemo(() => {
-    const now = new Date();
-    // 'ytd' matches this calendar year regardless of month — same
-    // calendar-year convention every other YTD figure in the app uses
-    // (YTD Per Diem Days, contract labor YTD), not a rolling 365 days.
-    const inRange = (dateStr: string | null | undefined) => {
-      if (!dateStr) return false;
-      const d = new Date(`${dateStr}T00:00:00`);
-      if (moneyBreakdownRange === 'ytd') return d.getFullYear() === now.getFullYear();
-      const monthOffset = moneyBreakdownRange === 'lastMonth' ? 1 : 0;
-      const targetDate = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
-      return d.getFullYear() === targetDate.getFullYear() && d.getMonth() === targetDate.getMonth();
-    };
-    const rangeSettlements = (settlementsQuery.data ?? []).filter((s) => inRange(s.week_ending));
-    const rangeDeductions = (dedQuery.data ?? []).filter((d) => inRange(d.ded_date));
-    return buildProfitLoss(rangeSettlements, rangeDeductions, userCategoriesQuery.data ?? []);
-  }, [settlementsQuery.data, dedQuery.data, userCategoriesQuery.data, moneyBreakdownRange]);
-  const moneyBreakdownSlices = useMemo<DonutSlice[]>(() => {
-    const palette = [colors.red, colors.orange, colors.purple];
-    const top = moneyBreakdownProfitLoss.expensesByBucket.slice(0, 3);
-    const otherTotal = moneyBreakdownProfitLoss.expensesByBucket.slice(3).reduce((sum, b) => sum + b.amount, 0);
-    const slices: DonutSlice[] = top.map((b, i) => ({ label: b.category, value: b.amount, color: palette[i] }));
-    if (otherTotal > 0) slices.push({ label: t('dashboard.moneyBreakdown.other'), value: otherTotal, color: colors.muted });
-    if (moneyBreakdownProfitLoss.netIncome > 0) {
-      slices.push({ label: t('dashboard.moneyBreakdown.profit'), value: moneyBreakdownProfitLoss.netIncome, color: colors.green });
-    }
-    return slices;
-  }, [moneyBreakdownProfitLoss, t]);
-
-  // AI Insights (Session 9d item 6) — needsReviewCount/estValue mirrors
-  // CEO Mode's own "NEEDS REVIEW:" prefix count (CLAUDE.md invariant #14).
-  const needsReviewDeductions = useMemo(
-    () => (dedQuery.data ?? []).filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:')),
-    [dedQuery.data]
-  );
-  const profitAnalysisRollup = useMemo(
-    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], dedQuery.data ?? [], 30),
-    [settlementsQuery.data, fuelQuery.data, dedQuery.data]
-  );
-  const fuelBenchmark = useMemo(
-    () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,
-    [benchmarksQuery.data]
-  );
-  const insightCandidates = useMemo(
-    () =>
-      buildInsightCandidates({
-        fuelPctOfRevenue: profitAnalysisRollup.fuelPctOfRevenue,
-        fuelBenchmarkHigh: fuelBenchmark?.high ?? null,
-        monthlyRevenue: profitAnalysisRollup.revenue,
-        needsReviewCount: needsReviewDeductions.length,
-        needsReviewEstValue: needsReviewDeductions.reduce((sum, d) => sum + Number(d.amount ?? 0), 0),
-        costPerMile: stats?.cpm.costPerMile ?? null,
-        avgNetPerWeek: stats?.avgNetPerWeek ?? 0,
-      }),
-    [profitAnalysisRollup, fuelBenchmark, needsReviewDeductions, stats]
-  );
-  const dailyInsight = useMemo(() => selectDailyInsight(insightCandidates), [insightCandidates]);
-
-  // Road Days heat map (Session 9d item 8).
-  const roadDaysGrid = useMemo(
-    () => buildRoadDaysGrid((settlementsQuery.data ?? []).map((s) => s.week_ending).filter(Boolean) as string[]),
-    [settlementsQuery.data]
-  );
-
-  // Goal Progress + Truck Paid (Session 9d item 9).
-  const currentWeekNet = weeklyNetTrend[weeklyNetTrend.length - 1]?.net ?? 0;
-  const goalPct = useMemo(() => calcGoalProgressPct(currentWeekNet, fullProfileQuery.data?.weekly_goal), [currentWeekNet, fullProfileQuery.data?.weekly_goal]);
-  const truckLoanProgress = useMemo(() => calcTruckLoanProgress(loansQuery.data ?? []), [loansQuery.data]);
-  function handleInsightViewDetails(type: Insight['type']) {
-    if (type === 'fuelBenchmark') router.push('/(tabs)/more/profit-analysis');
-    else if (type === 'needsReview') router.push('/(tabs)/deductions');
-    else router.push('/(tabs)/more/cash-flow');
-  }
-
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
       .sort((a, b) => new Date(b.load_date ?? 0).getTime() - new Date(a.load_date ?? 0).getTime())
       .slice(0, 4);
   }, [loadsQuery.data]);
 
-  const isScorp = tax?.taxConfig.entity_type === 'scorp';
-  const scorpPreview = useMemo(() => {
-    if (!tax || isScorp) return null;
-    const netProfit = tax.estimate.netProfit;
-    const defaultSalary = Math.round((netProfit * 0.4) / 1000) * 1000;
-    const salary = reasonableSalaryInput === '' ? defaultSalary : Number(reasonableSalaryInput) || 0;
-    return { salary, defaultSalary, ...calcScorpSavingsPreview(netProfit, salary, tax.taxYearData.se_tax) };
-  }, [tax, isScorp, reasonableSalaryInput]);
-
-  const fleetRanking = useMemo(() => {
-    if (trucks.length <= 1) return [];
-    return trucks
-      .map((truck, i) => {
-        const data = fleetQueries[i]?.data;
-        const ppm = data?.cpm.profitPerMile ?? null;
-        return { truck, stats: data, ppm };
-      })
-      .filter((r) => r.stats)
-      .sort((a, b) => (b.ppm ?? -Infinity) - (a.ppm ?? -Infinity));
-  }, [trucks, fleetQueries]);
-
-  const driverRanking = useMemo(() => {
-    if (drivers.length <= 1) return [];
-    return drivers
-      .map((driver, i) => ({ driver, stats: driverQueries[i]?.data }))
-      .filter((r) => r.stats);
-  }, [drivers, driverQueries]);
-
-  const drawsLabel = isScorp ? t('dashboard.distributions') : t('dashboard.draws');
-
-  // Customizable dashboard (CLAUDE.md invariant #17, PROMPTS.md Session 9a
-  // item 8): every reorderable/hideable/renamable card's JSX lives in this
-  // renderer map, keyed by the stable id from src/stats/dashboardLayout.ts.
-  // The DEFAULT (never-customized) render path below calls these in their
-  // fixed, grouped, section-headered order — identical output to before
-  // this feature existed, zero behavior change for the common case. The
-  // CUSTOMIZED path (dashboard-customize.tsx has been used at least once)
-  // renders the same functions as one flat list in the user's chosen
-  // order/visibility/labels — deliberately without the section headers,
-  // since headers stop making sense once cards can move freely between
-  // what used to be separate groups.
-  const cardRenderers: Partial<Record<DashboardCardId, (label: string) => React.ReactNode>> = {
-    totalRevenue: (label) => (
-      <TappableCard key="totalRevenue" onPress={() => goToCard('totalRevenue')}>
-        <StatValue label={label} value={stats ? money(stats.grossRevenue) : '—'} valueColor={colors.green} />
-        <MutedText>{t('dashboard.importToStart')}</MutedText>
-      </TappableCard>
-    ),
-    totalDeductions: (label) => (
-      <TappableCard key="totalDeductions" onPress={() => goToCard('totalDeductions')}>
-        <StatValue label={label} value={stats ? money(stats.totalDeductions) : '—'} valueColor={colors.red} />
-      </TappableCard>
-    ),
-    netToOwner: (label) => {
-      // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): was
-      // stats.grossRevenue - stats.totalDeductions (the UX mega-pass's
-      // Net-to-Owner audit fix) — closer than the original settlement-net
-      // bug, but ALL deductions unconditionally over-subtracts a Meal
-      // already covered by per diem or an Advance Repayment (both
-      // tax_deductible: false, never real expense reductions). Now the
-      // single canonical src/stats/trueProfit.ts calcTrueProfit(), the
-      // same figure every other "profit" surface in the app uses.
-      const trueNetToOwner = settlementsQuery.data ? calcTrueProfit(settlementsQuery.data, dedQuery.data ?? []) : null;
-      return (
-        <TappableCard key="netToOwner" onPress={() => goToCard('netToOwner')}>
-          <StatValue
-            label={label}
-            value={trueNetToOwner != null ? money(trueNetToOwner) : '—'}
-            valueColor={trueNetToOwner != null && trueNetToOwner < 0 ? colors.red : colors.green}
-          />
-          <Sparkline values={netSparkValues} />
-        </TappableCard>
-      );
-    },
-    milesDriven: (label) => (
-      <TappableCard key="milesDriven" onPress={() => goToCard('milesDriven')}>
-        <StatValue label={label} value={stats ? number(stats.totalMiles) : '—'} />
-      </TappableCard>
-    ),
-    ytdPerDiemDays: (label) => (
-      <TappableCard key="ytdPerDiemDays" onPress={() => goToCard('ytdPerDiemDays')}>
-        <StatValue label={label} value={stats ? `${stats.perDiemDays}` : '—'} valueColor={colors.accent} />
-        <MutedText>{t('dashboard.daysOnRoad')}</MutedText>
-      </TappableCard>
-    ),
-    perDiemDeduction: (label) => (
-      <TappableCard key="perDiemDeduction" onPress={() => goToCard('perDiemDeduction')}>
-        <StatValue label={label} value={tax ? money(tax.perDiemDeduction) : '—'} valueColor={colors.green} />
-        {perDiemCaption(tax?.taxYearData.per_diem, t) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem, t)}</MutedText>}
-      </TappableCard>
-    ),
-    // Zone 3 (device feedback round 2) — days-on-road count + deduction $
-    // merged into one compact card, same "several stats, one card" pattern
-    // capitalAccountStrip already uses. ytdPerDiemDays/perDiemDeduction
-    // stay registered above too (hidden by default, still individually
-    // toggleable via Customize) rather than being removed.
-    perDiemSummary: (label) => (
-      <TappableCard key="perDiemSummary" onPress={() => goToCard('perDiemSummary')}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <View>
-            <MutedText>{t('dashboard.daysOnRoad')}</MutedText>
-            <Text style={{ color: colors.accent, fontWeight: '700', fontSize: typography.size.lg }}>
-              {stats ? `${stats.perDiemDays}` : '—'}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <MutedText>{t('dashboard.perDiemDeduction')}</MutedText>
-            <Text style={{ color: colors.green, fontWeight: '700', fontSize: typography.size.lg }}>
-              {tax ? money(tax.perDiemDeduction) : '—'}
-            </Text>
-          </View>
-        </View>
-        {perDiemCaption(tax?.taxYearData.per_diem, t) && <MutedText>{perDiemCaption(tax?.taxYearData.per_diem, t)}</MutedText>}
-        {label !== t('dashboard.perDiemSummaryTitle') && <MutedText>{label}</MutedText>}
-      </TappableCard>
-    ),
-    weeksInService: (label) => (
-      <TappableCard key="weeksInService" onPress={() => goToCard('weeksInService')}>
-        <StatValue label={label} value={stats ? `${stats.settlementCount}` : '—'} />
-        <MutedText>{t('dashboard.settlementsImported')}</MutedText>
-      </TappableCard>
-    ),
-    avgNetPerWeek: (label) => (
-      <TappableCard key="avgNetPerWeek" onPress={() => goToCard('avgNetPerWeek')}>
-        <StatValue label={label} value={stats ? money(stats.avgNetPerWeek) : '—'} />
-        <MutedText>{t('dashboard.directDepositAvg')}</MutedText>
-      </TappableCard>
-    ),
-    businessBalance: (label) => (
-      <TappableCard key="businessBalance" onPress={() => goToCard('businessBalance')}>
-        <StatValue
-          label={label}
-          value={money(capital?.businessBalance ?? 0)}
-          valueColor={
-            (capital?.businessBalance ?? 0) > 10000 ? colors.green : (capital?.businessBalance ?? 0) > 3000 ? colors.orange : colors.red
-          }
-        />
-        {(capital?.businessBalance ?? 0) < 0 ? (
-          <MutedText style={{ color: colors.red }}>{t('dashboard.businessBalanceOwed')}</MutedText>
-        ) : (
-          <MutedText>{t('dashboard.checkingAccount')}</MutedText>
-        )}
-      </TappableCard>
-    ),
-    revenuePerMile: (label) => (
-      <TappableCard key="revenuePerMile" onPress={() => goToCard('revenuePerMile')}>
-        <StatValue
-          label={label}
-          value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-          valueColor={colors.green}
-        />
-        <MutedText>{t('dashboard.grossDividedByMiles')}</MutedText>
-      </TappableCard>
-    ),
-    costPerMile: (label) => (
-      <TappableCard key="costPerMile" onPress={() => goToCard('costPerMile')}>
-        <StatValue
-          label={label}
-          value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-          valueColor={colors.red}
-        />
-        <MutedText>{t('dashboard.allCostsDividedByMiles')}</MutedText>
-      </TappableCard>
-    ),
-    profitPerMile: (label) => (
-      <TappableCard key="profitPerMile" onPress={() => goToCard('profitPerMile')}>
-        <StatValue
-          label={label}
-          value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-          valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
-        />
-        <MutedText>{t('dashboard.acceptLoadsAboveCpm')}</MutedText>
-      </TappableCard>
-    ),
-    revenueExpenseTrend: (label) =>
-      revenueExpenseTrend.length === 0 ? null : (
-        <TappableCard key="revenueExpenseTrend" onPress={() => goToCard('revenueExpenseTrend')}>
-          {label !== t('dashboard.revenueExpenseTrendTitle') && <MutedText style={{ marginBottom: spacing.xs }}>{label}</MutedText>}
-          <RevenueExpenseChart points={revenueExpenseTrend} />
-        </TappableCard>
-      ),
-    estTotalTax: (label) => (
-      <TappableCard key="estTotalTax" onPress={() => goToCard('estTotalTax')}>
-        <StatValue label={label} value={tax ? money(tax.estimate.totalTax) : '—'} valueColor={colors.red} />
-        {tax && (
-          <MutedText>
-            {t('dashboard.filingStatusCaption', {
-              filingStatus: FILING_STATUS_LABEL[tax.taxConfig.filing_status] ?? tax.taxConfig.filing_status,
-            })}
-          </MutedText>
-        )}
-      </TappableCard>
-    ),
-    quarterlyPayment: (label) => (
-      <TappableCard key="quarterlyPayment" onPress={() => goToCard('quarterlyPayment')}>
-        <StatValue label={label} value={tax ? money(tax.estimate.quarterlyPayment) : '—'} valueColor={colors.red} />
-        {deadline ? (
-          <Text style={{ color: urgencyColor(deadline.urgency), fontSize: typography.size.sm, marginTop: 2 }}>
-            {t('dashboard.deadlineDueWithDate', {
-              deadline: t('dashboard.deadlineDue', { label: deadline.label, count: deadline.daysUntil }),
-              date: deadline.date,
-            })}
-          </Text>
-        ) : (
-          <MutedText>{t('dashboard.nextDueDate')}</MutedText>
-        )}
-      </TappableCard>
-    ),
-    weeklyTaxReserve: (label) => (
-      <TappableCard key="weeklyTaxReserve" onPress={() => goToCard('weeklyTaxReserve')}>
-        <StatValue label={label} value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'} />
-        <Text style={{ color: colors.orange, fontSize: typography.size.sm, marginTop: 2 }}>{t('dashboard.setAsideWeekly')}</Text>
-      </TappableCard>
-    ),
-    effectiveRate: (label) => (
-      <TappableCard key="effectiveRate" onPress={() => goToCard('effectiveRate')}>
-        <StatValue label={label} value={tax?.estimate.effectiveRate != null ? `${tax.estimate.effectiveRate.toFixed(1)}%` : '—'} />
-        <MutedText>{t('dashboard.ofNetProfit')}</MutedText>
-        {tax?.estimate.stateTax.label === 'estimate' && (
-          <MutedText>{t('dashboard.stateTaxEstimateNote', { state: tax.taxConfig.state })}</MutedText>
-        )}
-      </TappableCard>
-    ),
-    // Registered as a real card (device feedback round 2) so it's still
-    // reachable via Customize despite being hidden from the fresh default
-    // layout — was previously an unconditional inline block, never
-    // customizable at all. Gating (!isScorp && scorpPreview) is unchanged.
-    scorpPreview: (label) =>
-      !isScorp && scorpPreview ? (
-        <Card key="scorpPreview">
-          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{label}</Text>
-          <MutedText>{t('dashboard.scorpPreviewNote')}</MutedText>
-          <Field
-            keyboardType="numeric"
-            placeholder={String(scorpPreview.defaultSalary)}
-            value={reasonableSalaryInput}
-            onChangeText={setReasonableSalaryInput}
-            style={{ marginTop: spacing.xs, marginBottom: spacing.sm }}
-          />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View>
-              <MutedText>{t('dashboard.currentSeTax')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{money(scorpPreview.currentSeTax)}</Text>
-            </View>
-            <View>
-              <MutedText>{t('dashboard.seTaxAtSalary')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{money(scorpPreview.scorpSeTax)}</Text>
-            </View>
-            <View>
-              <MutedText>{t('dashboard.potentialSavings')}</MutedText>
-              <Text style={{ color: colors.green, fontWeight: '700' }}>{money(scorpPreview.savings)}</Text>
-            </View>
-          </View>
-          <LegalFootnote />
-        </Card>
-      ) : null,
-    capitalAccountStrip: (label) => (
-      <TappableCard key="capitalAccountStrip" onPress={() => goToCard('capitalAccountStrip')}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <View>
-            <MutedText>{t('dashboard.contributed')}</MutedText>
-            <Text style={{ color: colors.text, fontWeight: '700' }}>{capital ? money(capital.effectiveContribution) : '—'}</Text>
-          </View>
-          <View>
-            <MutedText>{drawsLabel}</MutedText>
-            <Text style={{ color: colors.text, fontWeight: '700' }}>{capital ? money(capital.totalDraws) : '—'}</Text>
-          </View>
-          <View>
-            <MutedText>{t('dashboard.taxFreeLeft')}</MutedText>
-            <Text
-              style={{
-                fontWeight: '700',
-                color: capital && capital.effectiveContribution - capital.totalDraws > 0 ? colors.green : colors.red,
-              }}
-            >
-              {capital ? money(capital.taxFreeRemaining) : '—'}
-            </Text>
-          </View>
-        </View>
-        {capital && capital.contributionCount > 0 && (
-          <MutedText>
-            {t('dashboard.extraContribution', {
-              count: capital.contributionCount,
-              note: (capital.latestContributionNote ?? '').split(' — ')[0].slice(0, 45),
-              date: capital.latestContributionDate,
-            })}
-          </MutedText>
-        )}
-        {label !== t('dashboard.capitalAccountTitle') && <MutedText>{label}</MutedText>}
-      </TappableCard>
-    ),
-    recentLoads: (label) => (
-      <TappableCard key="recentLoads" onPress={() => goToCard('recentLoads')}>
-        {recentLoads.length === 0 ? (
-          <MutedText>{t('dashboard.noLoadsYet')}</MutedText>
-        ) : (
-          <View>
-            {label !== t('dashboard.recentLoadsTitle') && <MutedText style={{ marginBottom: spacing.xs }}>{label}</MutedText>}
-            {recentLoads.map((l) => (
-              <View key={l.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
-                <MutedText style={{ flex: 1, marginEnd: spacing.sm }} numberOfLines={1}>
-                  {l.order_number ?? '—'} · {l.origin ?? '—'} → {l.destination ?? '—'}
-                </MutedText>
-                <Text style={{ color: colors.text, fontWeight: '600', flexShrink: 0 }}>{money(l.revenue)}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </TappableCard>
-    ),
-    truckCard: (label) =>
-      activeTruck ? (
-        <TappableCard key="truckCard" onPress={() => router.push('/(tabs)/truck-health')}>
-          {label !== t('dashboard.truckCardLabel') && <MutedText>{label}</MutedText>}
-          <Text style={{ color: colors.text, fontWeight: '600' }}>
-            {activeTruck.year ?? ''} {activeTruck.make ?? ''} {activeTruck.model ?? ''}
-          </Text>
-          <MutedText>{t('dashboard.truckUnit', { unit: activeTruck.unit_number ?? '—' })}</MutedText>
-        </TappableCard>
-      ) : null,
-    fleetOverview: (label) =>
-      trucks.length > 1 ? (
-        <Card key="fleetOverview">
-          {label !== t('dashboard.fleetOverviewTitle') && (
-            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{label}</Text>
-          )}
-          {fleetRanking.map((r, i) => (
-            <View key={r.truck.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-              <MutedText>
-                {i === fleetRanking.length - 1 ? '⚠ ' : ''}
-                {t('common.unit', { unit: r.truck.unit_number ?? r.truck.id })}
-              </MutedText>
-              <Text style={{ color: r.ppm != null ? colors[ppmColor(r.ppm)] : colors.text, fontWeight: '700' }}>
-                {r.ppm != null ? `${moneyFmt(r.ppm, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mi` : '—'}
-              </Text>
-            </View>
-          ))}
-        </Card>
-      ) : null,
-    driverOverview: (label) =>
-      drivers.length > 1 ? (
-        <Card key="driverOverview">
-          {label !== t('dashboard.driverOverviewTitle') && (
-            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{label}</Text>
-          )}
-          {driverRanking.map((r) => (
-            <View key={r.driver.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-              <MutedText>{r.driver.name}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{r.stats ? money(r.stats.netRevenue) : '—'}</Text>
-            </View>
-          ))}
-        </Card>
-      ) : null,
-  };
-
-  function renderCard(id: DashboardCardId, overrideLabel: string | null) {
-    const defaultLabel = t(CARD_LABEL_KEYS[id] ?? id);
-    return cardRenderers[id]?.(overrideLabel || defaultLabel) ?? null;
-  }
-
-  const isCustomized = layoutQuery.data?.isCustomized ?? false;
-
-  // Customized-path grouping (Dashboard sections addition): the flat,
-  // user-ordered list gets split into blocks (one per section, one
-  // singleton per unsectioned card), and the BLOCKS are ordered by where
-  // the user's own flat order (Simple editor's arrows) placed them — see
-  // buildCustomizedDashboardBlocks()'s own comment for why this replaced
-  // a fixed-SECTION_IDS-order grouping (device feedback 2026-07-31, "5th
-  // report": reordering across sections visibly did nothing on Home).
-  const groupedCustomized = useMemo(() => {
-    if (!layoutQuery.data) return null;
-    const visible = layoutQuery.data.layout.filter((row) => row.visible);
-    return buildCustomizedDashboardBlocks(visible);
-  }, [layoutQuery.data]);
+  // Best/Worst Lanes (item e) — capped at 3 each for a Home teaser, see
+  // BestWorstLanesCard's own comment.
+  const lanes = useMemo(() => rankLoadsByRpm(loadsQuery.data ?? [], 3), [loadsQuery.data]);
 
   return (
     <Screen>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <DashboardGreeting name={heroFirstName} />
-          <Pressable onPress={() => setSimpleCustomizeOpen(true)} hitSlop={8} style={{ marginTop: spacing.md }}>
-            <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
-              {t('dashboard.customize')}
-            </Text>
-          </Pressable>
-        </View>
+        <DashboardGreeting name={heroFirstName} />
 
         <HeroCard
           period={heroPeriod}
@@ -1784,304 +511,25 @@ export default function Dashboard() {
 
         <CashBalanceSlimCard balance={capital?.businessBalance ?? 0} onPress={() => router.push('/(tabs)/more/cash-flow')} />
 
-        <FleetHealthCard score={fleetHealth.score} chips={fleetHealth.chips} onInfoPress={() => setHealthInfoOpen(true)} />
+        <AiCoachCard onPress={() => router.push('/(tabs)/more/ceo-mode')} />
 
-        {needsReviewDeductions.length > 0 && (
-          <NeedsReviewCounterChip
-            count={needsReviewDeductions.length}
-            onPress={() => router.push({ pathname: '/(tabs)/deductions', params: { filter: 'needsReview' } } as unknown as Href)}
-          />
-        )}
-
-        {dailyInsight && <AiInsightsCard insight={dailyInsight} onViewDetails={handleInsightViewDetails} />}
-
-        {activeTruck && (
-          <TruckStatusCard
-            truckLabel={`${activeTruck.year ?? ''} ${activeTruck.make ?? ''} ${activeTruck.model ?? ''}`.trim() || t('dashboard.truckCardLabel')}
-            unitLabel={t('dashboard.truckUnit', { unit: activeTruck.unit_number ?? '—' })}
-            results={truckHealthResults}
-            onPress={() => router.push('/(tabs)/truck-health')}
-          />
-        )}
-
-        <ModalSheet visible={healthInfoOpen} onClose={() => setHealthInfoOpen(false)}>
-          <SheetTitle>{t('dashboard.fleetHealth.infoTitle')}</SheetTitle>
-          <MutedText style={{ marginBottom: spacing.sm }}>{t('dashboard.fleetHealth.infoBody')}</MutedText>
-          <MutedText style={{ marginBottom: spacing.xs }}>• {t('dashboard.fleetHealth.infoTruck')}</MutedText>
-          <MutedText style={{ marginBottom: spacing.xs }}>• {t('dashboard.fleetHealth.infoMaintenance')}</MutedText>
-          <MutedText style={{ marginBottom: spacing.xs }}>• {t('dashboard.fleetHealth.infoTaxes')}</MutedText>
-          <MutedText style={{ marginBottom: spacing.sm }}>• {t('dashboard.fleetHealth.infoCashFlow')}</MutedText>
-          <LegalFootnote />
-        </ModalSheet>
-
-        <SimpleCustomizeDashboardModal visible={simpleCustomizeOpen} onClose={() => setSimpleCustomizeOpen(false)} />
-
-        {/* BETA FEEDBACK ROUND (owner decision 2026-07-31): the company-
-            name + email Card that used to sit here was out of place and
-            non-functional when tapped. Company name now lives in the top
-            bar (see _layout.tsx's DashboardHeaderTitle, tappable to
-            Settings > Business Profile); email is dropped from Home
-            entirely — it belongs in Settings, not the dashboard. */}
-
-        {tax?.isFallback && !bannerDismissed && (
-          <Card>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-              <MutedText>
-                {t('dashboard.yearFallbackBanner', { requestedYear: tax.requestedYear, resolvedYear: tax.resolvedYear })}
-              </MutedText>
-              <Pressable onPress={() => setBannerDismissed(true)} hitSlop={8}>
-                <Text style={{ color: colors.muted, fontSize: typography.size.md, marginStart: spacing.sm }}>✕</Text>
-              </Pressable>
-            </View>
-          </Card>
-        )}
-
-        {trucksLoading ? (
-          <Card>
-            <MutedText>{t('common.loading')}</MutedText>
-          </Card>
-        ) : trucks.length === 0 ? (
-          <Card>
-            <MutedText>{t('dashboard.noTrucks')}</MutedText>
-          </Card>
-        ) : isCustomized && layoutQuery.data && groupedCustomized ? (
-          // Customized layout, grouped into the same 4 collapsible
-          // sections by each card's own `section` (settable via
-          // Customize), plus a trailing flat list of unsectioned cards —
-          // individual full-width cards throughout (the compact trio/pair
-          // treatment below is a DEFAULT-layout-only visual, same as
-          // before Dashboard sections existed).
-          <>
-            {groupedCustomized.map((block) =>
-              block.section ? (
-                <DashboardSection
-                  key={block.section}
-                  title={t(SECTION_LABEL_KEYS[block.section])}
-                  collapsed={!!sectionsCollapsed[block.section]}
-                  onToggle={() => toggleSection(block.section as SectionId)}
-                >
-                  {block.rows.map((row) => (
-                    <View key={row.id}>{renderCard(row.id as DashboardCardId, row.label)}</View>
-                  ))}
-                </DashboardSection>
-              ) : (
-                <View key={block.rows[0].id}>{renderCard(block.rows[0].id as DashboardCardId, block.rows[0].label)}</View>
-              )
-            )}
-          </>
-        ) : (
-          // New zoned default layout (device feedback round 2, owner
-          // decision 2026-07-13), organized into 4 collapsible titled
-          // sections (Dashboard sections addition) mirroring the sidebar/
-          // menu-sheet grouping language. Business Balance/Miles/Weeks in
-          // Service/Avg Net-Week/Total Revenue/effectiveRate/S-Corp
-          // preview are hidden from this default (DEFAULT_HIDDEN_CARD_IDS,
-          // src/stats/dashboardLayout.ts) but remain fully available via
-          // Customize.
-          <>
-            <DashboardSection
-              title={t(SECTION_LABEL_KEYS.overview)}
-              collapsed={!!sectionsCollapsed.overview}
-              onToggle={() => toggleSection('overview')}
-            >
-              {/* The old all-time 2x2 Revenue/Net/Miles/CPM grid (Session 9d
-                  item 12) was replaced Session 9e-B3 by the weekly
-                  Revenue/Expenses/Net trio now shown right under the Hero
-                  Card — those all-time figures stay reachable via Customize
-                  (totalRevenue/milesDriven are DEFAULT_HIDDEN_CARD_IDS) and
-                  Cash Flow; Cost/Mile remains visible below in "On the
-                  Road" (revenuePerMile/costPerMile pair). */}
-              {renderCard('revenueExpenseTrend', null)}
-              <Card>
-                <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
-                  {t('dashboard.revenueTrendChart.title')}
-                </Text>
-                <RevenueTrendChart weeklyRevenue={fullWeeklyRevenueExpenseTrend} />
-              </Card>
-            </DashboardSection>
-
-            <DashboardSection
-              title={t(SECTION_LABEL_KEYS.money)}
-              collapsed={!!sectionsCollapsed.money}
-              onToggle={() => toggleSection('money')}
-            >
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <View style={{ flex: 1 }}>{renderCard('netToOwner', null)}</View>
-                <View style={{ flex: 1 }}>{renderCard('totalDeductions', null)}</View>
-              </View>
-              <MoneyBreakdownCard
-                slices={moneyBreakdownSlices}
-                range={moneyBreakdownRange}
-                onRangeChange={setMoneyBreakdownRange}
-                onPress={() => router.push('/(tabs)/deductions')}
-              />
-              <GoalProgressCard
-                goalPct={goalPct}
-                current={currentWeekNet}
-                goal={fullProfileQuery.data?.weekly_goal ?? null}
-                truckLoan={truckLoanProgress}
-                onGoalPress={() => router.push('/(tabs)/more/ceo-mode')}
-                onLoanPress={() => router.push('/(tabs)/more/loans')}
-              />
-            </DashboardSection>
-
-            <DashboardSection
-              title={t(SECTION_LABEL_KEYS.onTheRoad)}
-              collapsed={!!sectionsCollapsed.onTheRoad}
-              onToggle={() => toggleSection('onTheRoad')}
-            >
-              {renderCard('perDiemSummary', null)}
-              <Card>
-                <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.sm }}>
-                  {t('dashboard.roadDaysHeatmap.title')}
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <RoadDaysHeatmap cells={roadDaysGrid} />
-                </ScrollView>
-                <MutedText style={{ marginTop: spacing.sm }}>{t('dashboard.roadDaysHeatmap.caption')}</MutedText>
-              </Card>
-              <View style={styles.compactRow}>
-                <CompactTile
-                  label={t('dashboard.revenuePerMile')}
-                  value={stats?.cpm.revenuePerMile != null ? moneyFmt(stats.cpm.revenuePerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                  valueColor={colors.green}
-                  trend={cpmTrends.revenuePerMile}
-                  goodDirection="up"
-                  onPress={() => router.push('/(tabs)/more/cash-flow')}
-                />
-                <CompactTile
-                  label={t('dashboard.costPerMile')}
-                  value={stats?.cpm.costPerMile != null ? moneyFmt(stats.cpm.costPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                  valueColor={colors.red}
-                  trend={cpmTrends.costPerMile}
-                  goodDirection="down"
-                  onPress={() => router.push('/(tabs)/more/cash-flow')}
-                />
-                <CompactTile
-                  label={t('dashboard.profitPerMile')}
-                  value={stats?.cpm.profitPerMile != null ? moneyFmt(stats.cpm.profitPerMile, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                  valueColor={stats?.cpm.profitPerMile != null ? colors[ppmColor(stats.cpm.profitPerMile)] : undefined}
-                  trend={cpmTrends.profitPerMile}
-                  goodDirection="up"
-                  onPress={() => router.push('/(tabs)/more/cash-flow')}
-                />
-              </View>
-            </DashboardSection>
-
-            <DashboardSection
-              title={t(SECTION_LABEL_KEYS.taxes)}
-              collapsed={!!sectionsCollapsed.taxes}
-              onToggle={() => toggleSection('taxes')}
-            >
-              <TaxProgressCard
-                reserved={capital?.businessBalance ?? 0}
-                target={tax?.estimate.totalTax ?? 0}
-                daysUntil={deadline?.daysUntil ?? null}
-                onPress={() => router.push('/(tabs)/more/tax-estimator')}
-              />
-              <View style={styles.compactRow}>
-                <CompactTile
-                  label={t('dashboard.estTotalTax')}
-                  value={tax ? money(tax.estimate.totalTax) : '—'}
-                  valueColor={colors.red}
-                  onPress={() => router.push('/(tabs)/more/tax-estimator')}
-                />
-                <CompactTile
-                  label={t('dashboard.quarterlyPayment')}
-                  value={tax ? money(tax.estimate.quarterlyPayment) : '—'}
-                  valueColor={colors.red}
-                  caption={deadline ? t('dashboard.deadlineDue', { label: deadline.label, count: deadline.daysUntil }) : undefined}
-                  captionColor={deadline ? urgencyColor(deadline.urgency) : undefined}
-                  onPress={() => router.push('/(tabs)/more/tax-estimator')}
-                />
-                <CompactTile
-                  label={t('dashboard.weeklyTaxReserve')}
-                  value={tax ? money(tax.estimate.weeklyTaxReserve) : '—'}
-                  valueColor={colors.orange}
-                  onPress={() => router.push('/(tabs)/more/tax-estimator')}
-                />
-              </View>
-            </DashboardSection>
-          </>
-        )}
-
-        {/* CLAUDE.md invariant #8: every screen showing tax figures needs
-            this disclaimer — rendered unconditionally here (not only inside
-            the default-layout tax section above) so a customized layout
-            that still shows tax cards never loses it. */}
-        <LegalFootnote />
-
-        {/* Driver compensation types (owner decision 2026-07-10): 1099
-            contractors crossing the NEC filing threshold YTD. Informational
-            banners, not part of the customizable card set. */}
-        {tax && tax.contractLaborYtd.some((c) => c.needsNecReminder) && (
-          <Card>
-            <Text style={{ color: colors.orange, fontWeight: '700', marginBottom: spacing.xs }}>
-              {t('dashboard.necReminderTitle')}
-            </Text>
-            {tax.contractLaborYtd
-              .filter((c) => c.needsNecReminder)
-              .map((c) => (
-                <MutedText key={c.driverId}>
-                  {t('dashboard.necReminderBody', {
-                    name: c.driverName,
-                    amount: money(c.ytdTotal),
-                    deadline: tax.taxYearData.nec_1099?.filing_deadline ?? t('common.dash'),
-                  })}
+        <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>
+        <TappableCard onPress={() => router.push('/(tabs)/more/loads')}>
+          {recentLoads.length === 0 ? (
+            <MutedText>{t('dashboard.noLoadsYet')}</MutedText>
+          ) : (
+            recentLoads.map((l) => (
+              <View key={l.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+                <MutedText style={{ flex: 1, marginEnd: spacing.sm }} numberOfLines={1}>
+                  {l.order_number ?? '—'} · {l.origin ?? '—'} → {l.destination ?? '—'}
                 </MutedText>
-              ))}
-          </Card>
-        )}
+                <Text style={{ color: colors.text, fontWeight: '600', flexShrink: 0 }}>{money(l.revenue)}</Text>
+              </View>
+            ))
+          )}
+        </TappableCard>
 
-        {isScorp && (
-          <Card>
-            <Text style={{ color: colors.orange, fontWeight: '700', marginBottom: spacing.xs }}>
-              {t('dashboard.scorpPayrollTitle')}
-            </Text>
-            <MutedText>{t('dashboard.scorpPayrollNote')}</MutedText>
-            <Text style={{ color: colors.text, marginTop: spacing.sm }}>
-              {tax?.taxConfig.scorp_payroll_tax_handled ? '☑' : '☐'} {t('dashboard.payrollHandledByProvider')}
-            </Text>
-          </Card>
-        )}
-
-        {/* S-Corp preview (device feedback round 2): hidden from the fresh
-            default layout (DEFAULT_HIDDEN_CARD_IDS, src/stats/
-            dashboardLayout.ts) — the customized flat-list loop above
-            already renders it if a user explicitly re-enabled it via
-            Customize, so there is nothing to render here for the default
-            (non-customized) path. */}
-
-        {(!isCustomized || !layoutQuery.data) && (
-          <>
-            {/* Capital Account strip */}
-            <ScreenTitle>{t('dashboard.capitalAccountTitle')}</ScreenTitle>
-            {renderCard('capitalAccountStrip', null)}
-
-            {/* Recent loads */}
-            <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>
-            {renderCard('recentLoads', null)}
-
-            {/* Truck card */}
-            {renderCard('truckCard', null)}
-
-            {/* Fleet Overview — only renders with 2+ trucks (owner decision
-                2026-07-03: 1→100 trucks, no separate code path). */}
-            {trucks.length > 1 && (
-              <>
-                <ScreenTitle>{t('dashboard.fleetOverviewTitle')}</ScreenTitle>
-                {renderCard('fleetOverview', null)}
-              </>
-            )}
-
-            {drivers.length > 1 && (
-              <>
-                <ScreenTitle>{t('dashboard.driverOverviewTitle')}</ScreenTitle>
-                {renderCard('driverOverview', null)}
-              </>
-            )}
-          </>
-        )}
+        <BestWorstLanesCard lanes={lanes} onPress={() => router.push('/(tabs)/more/cash-flow')} />
 
         <SecondaryButton title={t('common.signOut')} onPress={signOut} />
       </ScrollView>
@@ -2121,13 +569,6 @@ const styles = {
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
-  gradientCard: {
-    borderRadius: radii.lg,
-    borderColor: colors.border,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
   heroEyebrow: {
     color: 'rgba(240,240,245,0.65)',
     fontSize: typography.size.xs,
@@ -2146,19 +587,6 @@ const styles = {
     fontWeight: '700' as const,
     marginTop: spacing.xs,
   },
-  newBadge: {
-    backgroundColor: 'rgba(37,99,235,0.18)',
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 1,
-    marginStart: spacing.xs,
-  },
-  newBadgeText: {
-    color: colors.accent,
-    fontSize: 9,
-    fontWeight: '700' as const,
-    textTransform: 'uppercase' as const,
-  },
   heroScoreLabel: {
     color: 'rgba(240,240,245,0.65)',
     fontSize: typography.size.xs,
@@ -2173,40 +601,5 @@ const styles = {
   heroScoreFill: {
     height: 8,
     borderRadius: 4,
-  },
-  statusChip: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: spacing.xs,
-  },
-  statusChipDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusChipLabel: {
-    color: colors.text,
-    fontSize: typography.size.sm,
-    flexShrink: 1,
-  },
-  rangePill: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radii.sm,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  rangePillActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  rangePillText: {
-    color: colors.muted,
-    fontSize: typography.size.xs,
-    fontWeight: '700' as const,
-  },
-  rangePillTextActive: {
-    color: colors.text,
   },
 };

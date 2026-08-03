@@ -15,7 +15,6 @@ describe('invalidateFinancialData', () => {
 
     const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
     expect(invalidatedKeys).toContain('profile');
-    expect(invalidatedKeys).toContain('dashboard-layout');
   });
 
   it('always forces an eager refetch (refetchType "all"), not just marking queries stale', async () => {

@@ -54,7 +54,6 @@
     "ceoMode": "مدرب الذكاء الاصطناعي",
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
-    "dashboardCustomize": "تخصيص لوحة التحكم",
     "compliance": "متتبع الامتثال",
     "documents": "المستندات",
     "accountantPackage": "حزمة المحاسب"
@@ -249,8 +248,7 @@
     "truckUnit": "الوحدة: {{unit}}",
     "fleetOverviewTitle": "نظرة عامة على الأسطول",
     "truckCardLabel": "الشاحنة",
-    "driverOverviewTitle": "نظرة عامة على السائقين",
-    "customize": "✏️ تخصيص"
+    "driverOverviewTitle": "نظرة عامة على السائقين"
   },
   "deductions": {
     "title": "الخصومات",
@@ -1163,33 +1161,6 @@
     "badge": "يحتاج إلى مراجعة",
     "filterOnly": "يحتاج إلى مراجعة فقط",
     "homeCounter": "{{count}} عنصر يحتاج إلى مراجعتك"
-  },
-  "dashboardCustomize": {
-    "title": "تخصيص لوحة التحكم",
-    "subtitle": "أعد ترتيب أي بطاقة أو أخفها أو أعد تسميتها. لغتك لا تؤثر أبدًا على بطاقة لم تُعد تسميتها.",
-    "savedTitle": "✅ تم الحفظ",
-    "saveFailedTitle": "فشل الحفظ",
-    "resetToDefault": "إعادة التعيين إلى الافتراضي",
-    "labelPlaceholder": "{{defaultLabel}} (افتراضي)",
-    "visible": "ظاهر",
-    "hidden": "مخفي",
-    "dragHint": "اضغط مطولاً واسحب ☰ لإعادة الترتيب.",
-    "arrowHint": "استخدم الأسهم ▲▼ أو أعلى/أسفل لإعادة الترتيب.",
-    "moveToTop": "الأعلى",
-    "moveToBottom": "الأسفل",
-    "noSection": "—",
-    "loadErrorFallback": "تعذّر تحميل التخطيط المحفوظ — يتم عرض التخطيط الافتراضي. لا يزال بإمكانك إعادة الترتيب والحفظ.",
-    "diagnosticsTitle": "التشخيص (اضغط ثلاث مرات على العنوان للإخفاء)",
-    "diagnosticsMode": "الوضع: {{mode}}",
-    "diagnosticsCards": "البطاقات: {{count}}",
-    "diagnosticsLayoutLength": "طول JSON للتخطيط: {{length}}",
-    "diagnosticsQueryStatus": "حالة الاستعلام: {{status}}",
-    "diagnosticsLastError": "آخر خطأ: {{error}}",
-    "diagnosticsNone": "لا يوجد",
-    "screenCrashed": "تعطلت شاشة {{screenName}}",
-    "syncingHint": "جارٍ مزامنة التخطيط المحفوظ…",
-    "simpleSubtitle": "إظهار أو إخفاء أو إعادة ترتيب بطاقات لوحة معلوماتك.",
-    "advancedEditor": "المحرر المتقدم (سحب، تسميات، أقسام) ←"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",

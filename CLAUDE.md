@@ -450,7 +450,13 @@
       accidentally translates a glossary term fails `npx jest`, not just
       review. Binding on PROMPTS.md Session 9c (Hindi/Ukrainian real
       translation) same as every other locale.
-  17. CUSTOMIZABLE DASHBOARD (owner decision 2026-07-10, PRODUCT DECISION,
+  17. ~~CUSTOMIZABLE DASHBOARD~~ — RETIRED (owner decision 2026-08-02, see
+      the DASHBOARD SIMPLIFICATION decision block below). Home is now a
+      FIXED layout; this invariant no longer binds. Kept here, struck
+      through, for history — do not re-implement any part of it without a
+      fresh owner decision superseding the retirement.
+      Original text follows, historical only:
+      CUSTOMIZABLE DASHBOARD (owner decision 2026-07-10, PRODUCT DECISION,
       binding, not yet implemented — PROMPTS.md Session 9a): every
       dashboard card (the full parity set + Capital strip + any future
       card) must support drag-to-reorder, show/hide, and rename (a user's
@@ -1870,3 +1876,101 @@
   no Deno test runtime is available in this environment; `chunking.ts`
   carries 100% of the testable, deterministic logic by design specifically
   so this gap is as small as possible.
+- DASHBOARD SIMPLIFICATION (owner decision 2026-08-02, binding — "remove
+  Customize entirely and ship one well-designed fixed layout"): Home
+  (`app/(tabs)/index.tsx`) is a FIXED, non-customizable layout now,
+  exactly this order, nothing else:
+  a) Hero profit card (period tabs + area chart) — unchanged.
+  b) Revenue / Expenses / Net Profit trio with % deltas — unchanged.
+  c) Business Balance slim card — unchanged, including the negative-
+     balance "you owe the carrier" red treatment.
+  d) AI Coach card (`AiCoachCard`, new) — a FIXED entry point into the
+     `ceo-mode` briefing screen, replacing the old rotating AI Insight
+     card. Same visual container/treatment as the retired card (icon +
+     bold title + one sentence, tappable) but the content no longer
+     rotates through candidate insight types — it's a static invitation
+     into AI Coach. Deliberately reuses the EXISTING `ceoMode.title`/
+     `ceoMode.subtitle` i18n strings ("AI Coach" / "Your weekly business
+     briefing, composed from your own data.") instead of adding new
+     keys — no 7-locale translation pass needed for this card.
+  e) Recent Loads, then Best/Worst Lanes (`BestWorstLanesCard`, new) —
+     reuses `src/stats/cashFlowTrend.ts`'s existing `rankLoadsByRpm()`
+     (already powering Cash Flow's own "Best & Worst Lanes" section)
+     capped at 3 each (a Home teaser, not a duplicate of the full
+     screen — tapping through goes to Cash Flow for the complete
+     5-and-5 ranked list). Also reuses existing i18n
+     (`cashFlowScreen.lanesTitle`/`bestLanes`/`worstLanes`) rather than
+     adding dashboard-scoped duplicates of the same text.
+  REMOVED from Home entirely (invariant #17 above is retired, struck
+  through, kept for history): the Fleet Health Score gauge, the rotating
+  AI Insight card, the Capital Account strip, the needs-review counter
+  chip, and every card that lived inside the 4 collapsible Overview/
+  Money/On-the-Road/Taxes sections (the tax row, per-diem summary, the
+  Revenue-vs-Expenses trend + monthly overlay chart, the Expenses
+  Breakdown donut, Goal Progress, the Road Days heat map, the truck
+  mini-card, the S-corp preview, 1099-NEC reminders, and fleet/driver
+  overview) — none of that underlying data or functionality was deleted
+  from the PRODUCT, only from the Home screen: Capital Account, Tax
+  Estimator, Truck Health, Profit Analysis, Scorecard, and Cash Flow all
+  remain full screens reachable from the Menu exactly as before.
+  **Deleted outright** (fully dead once Home no longer references them,
+  confirmed by grep before removal — nothing else in the app imported
+  them): `app/(tabs)/more/dashboard-customize.tsx` (the fancy drag-editor
+  screen), `src/components/SimpleCustomizeDashboardModal.tsx` (the plain-
+  fallback editor UX MEGA-PASS item C introduced), `src/dashboard/
+  dragModuleLoader.ts` + its test (the lazy drag-module loader that
+  screen depended on), `src/data/dashboardLayout.ts` (the
+  `useDashboardLayout`/`useUpdateDashboardLayout`/
+  `useUpdateSectionsCollapsed` hooks — nothing reads/writes
+  `profiles.dashboard_layout`/`dashboard_sections_collapsed` anymore),
+  `src/stats/dashboardLayout.ts` + its test (the card-id/route/label/
+  section registry + `buildCustomizedDashboardBlocks()` the whole feature
+  was built on), and — because they lost their only caller once the Fleet
+  Health gauge and Expenses Breakdown donut left Home —
+  `src/components/CircularGauge.tsx` and `src/components/DonutChart.tsx`.
+  Six Home-only pure stats modules also lost their only caller and were
+  deleted with their tests: `aiInsights.ts`, `roadDaysHeatmap.ts`,
+  `fleetHealthScore.ts`, `taxProgress.ts`, `goalProgress.ts`,
+  `cpmTrend.ts`, `trendRange.ts` (all confirmed via grep to have zero
+  importers outside Home and their own test files before deletion).
+  `'dashboard-layout'` was removed from `queryInvalidation.ts`'s
+  `AFFECTED_AGGREGATES` (and its regression test) since nothing queries
+  that key anymore. Nav: the `/(tabs)/more/dashboard-customize` entry was
+  removed from `navRegistry.ts`'s `GROUPS` (which every nav surface —
+  phone Menu, wide sidebar, Reports hub — derives from, so this is one
+  edit, not three, per the NAV PARITY invariant above) and its
+  `Stack.Screen` from `more/_layout.tsx`; the orphaned `nav.
+  dashboardCustomize`/`dashboard.customize`/the entire `dashboardCustomize.*`
+  i18n block were deleted from all 7 locale files (same "confirmed unused
+  everywhere first, then delete" convention as the NAV PARITY invariant's
+  orphaned `more.*` block cleanup). `ScreenErrorBoundary.tsx` (a reusable,
+  generic component still used by `settings.tsx` and others) had its
+  design-history comments referencing the deleted `dashboard-customize.tsx`/
+  `dragModuleLoader.ts` lightly trimmed rather than left dangling, but the
+  component itself is untouched — it remains available for reuse on any
+  future screen with a risky native-module dependency.
+  **Deliberately NOT deleted**: `profiles.dashboard_layout`/
+  `dashboard_sections_collapsed` DB columns (harmless, no migration —
+  Reset All Data still clears them as a no-op) and the many Home-specific
+  i18n strings for the removed cards (`dashboard.aiInsights.*`,
+  `dashboard.fleetHealth.*`, `dashboard.moneyBreakdown.*`,
+  `dashboard.taxProgress.*`, `dashboard.goalProgress.*`,
+  `dashboard.roadDaysHeatmap.*`, `dashboard.capitalAccountTitle`,
+  `dashboard.truckCardLabel`, `dashboard.fleetOverviewTitle`,
+  `dashboard.driverOverviewTitle`, `dashboard.necReminder*`,
+  `dashboard.scorpPayroll*`, `dashboard.yearFallbackBanner`,
+  `needsReview.homeCounter`) — a deliberate scope decision, not an
+  oversight: no test in this repo enforces "every i18n key must be
+  used," deleting ~50 keys across 7 locale files precisely and safely is
+  a large, error-prone undertaking for zero functional benefit, and
+  leaving them costs nothing (unused JSON entries, never rendered). If a
+  future pass wants that cleanup, do it as its own explicit task.
+  PARITY.md's Dashboard section and PROMPTS.md (both the original
+  Session 9a item 8 / Personalization-package item 1 specs, marked
+  RETIRED in place for history, and a new Backlog entry) were updated to
+  match — per-card customization may return in a v2 pass, but only on a
+  fresh, explicit owner decision, not as a standing roadmap item.
+  Tests: `tsc --noEmit` clean; the full `jest` suite (64 suites — down
+  from 73, matching the 9 deleted test files) passes; all 7 locale files
+  confirmed to still have identical key sets after the i18n cleanup
+  (`glossary.test.ts` re-passed as the existing parity guard).

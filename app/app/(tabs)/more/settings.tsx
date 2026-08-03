@@ -78,8 +78,8 @@ export default function Settings() {
   const [resetting, setResetting] = useState(false);
 
   // One-time hydration once both queries resolve (same pattern as
-  // dashboard-customize.tsx/tax-estimator.tsx) — never re-hydrates over a
-  // user's in-progress edits on subsequent refetches.
+  // tax-estimator.tsx) — never re-hydrates over a user's in-progress
+  // edits on subsequent refetches.
   useEffect(() => {
     if (businessHydrated || !profileQuery.data || !taxConfigQuery.data) return;
     setCompanyName(profileQuery.data.company_name ?? '');

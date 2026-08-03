@@ -21,21 +21,19 @@ import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 // on the ScrollView's own style), so the dark background is guaranteed
 // to paint the full screen even if the ScrollView's content is short and
 // some ancestor in the navigator's flex chain doesn't stretch it. This
-// is a defensive reinforcement, not a fix for a located bug — if a
-// genuinely white screen is still seen after this, it's not coming from
-// THIS component (see dashboard-customize.tsx's own comment on what else
-// was investigated and ruled out).
+// is a defensive reinforcement, not a fix for a located bug.
 //
 // This only catches JS errors thrown during React's render/commit/
 // lifecycle phases of its children — not errors in event handlers
-// (already handled by their own try/catch where relevant, e.g.
-// dashboard-customize.tsx's onDragEnd) and not a throw during module
-// evaluation/`require()` itself, which happens before any component
-// (including this boundary) ever mounts. Guarding against THAT class of
-// crash is what src/dashboard/dragModuleLoader.ts's lazy, try/catch-
-// wrapped loading is for — the two fixes are complementary, not
-// redundant: this boundary is the safety net for everything else that
-// could still go wrong after the module successfully loads.
+// (already handled by their own try/catch where relevant) and not a
+// throw during module evaluation/`require()` itself, which happens
+// before any component (including this boundary) ever mounts. This
+// component was originally paired with a lazy, try/catch-wrapped module
+// loader (src/dashboard/dragModuleLoader.ts) on the now-retired Customize
+// Dashboard screen (DASHBOARD SIMPLIFICATION, owner decision 2026-08-02
+// — that screen and loader are deleted) — this boundary itself stays as
+// a reusable, generic safety net for any other screen with a similarly
+// risky dependency.
 //
 // `title`/`copyLabel`/`copiedLabel` are pre-localized by the caller (a
 // function component, which can call useTranslation() — this class
