@@ -46,13 +46,12 @@
 -- first') for the person doing the original manual apply, not part of the
 -- migration itself — excluded here.
 --
--- section 37 (settlements.business_balance_credit + apply_business_
--- balance_delta RPC) was applied directly via pending_37.sql AFTER this
--- file was assembled, so it is not yet folded in here. Section 38 (the
--- same RPC gains a "raise on zero-row update" guard, owner decision
--- 2026-08-02) is NOT YET RUN against the live project as of this writing
--- — see pending_38.sql. Fold both into this file, or as their own 0003
--- file, the next time this snapshot gets revisited.
+-- sections 37 (settlements.business_balance_credit + apply_business_
+-- balance_delta RPC) and 38 (the same RPC gains a "raise on zero-row
+-- update" guard, owner decision 2026-08-02) were both applied directly
+-- via pending_37.sql/pending_38.sql AFTER this file was assembled, so
+-- neither is folded in here yet. Fold both into this file, or as their
+-- own 0003 file, the next time this snapshot gets revisited.
 
 -- ============================================================
 -- PENDING_SQL.md §1: 1. Tax engine product-readiness (D7 + D8, docs/SCHEMA.sql) — ✅ APPLIED

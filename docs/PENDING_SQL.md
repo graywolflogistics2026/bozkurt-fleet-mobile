@@ -1270,7 +1270,7 @@ grant execute on function apply_business_balance_delta(uuid, numeric) to authent
 
 ---
 
-## 38. apply_business_balance_delta() raises on zero-row update (pre-launch hardening, owner decision 2026-08-02, "settlement imports failing frequently" audit) — ☐ NOT YET RUN
+## 38. apply_business_balance_delta() raises on zero-row update (pre-launch hardening, owner decision 2026-08-02, "settlement imports failing frequently" audit) — ✅ APPLIED
 
 Independent audit of the §37 RPC found a real silent-failure gap: `update
 profiles set ... returning business_balance into new_balance` leaves
@@ -1316,7 +1316,7 @@ $$;
 `create or replace function` is idempotent — this safely replaces the
 §37 version in place, no column/table changes, no data migration needed.
 
-- [ ] 38a run (replace apply_business_balance_delta with the `if not found` guard)
+- [x] 38a run (replace apply_business_balance_delta with the `if not found` guard)
 
 ---
 
