@@ -1270,6 +1270,56 @@ grant execute on function apply_business_balance_delta(uuid, numeric) to authent
 
 ---
 
+## 38. apply_business_balance_delta() raises on zero-row update (pre-launch hardening, owner decision 2026-08-02, "settlement imports failing frequently" audit) — ☐ NOT YET RUN
+
+Independent audit of the §37 RPC found a real silent-failure gap: `update
+profiles set ... returning business_balance into new_balance` leaves
+`new_balance` as `NULL` (never assigned) when the `WHERE` clause matches
+ZERO rows — a mismatched `p_user_id`/`auth.uid()`, or a profiles row that
+somehow doesn't exist for that user. PL/pgSQL does NOT raise an error for
+an UPDATE that matches 0 rows by default — the function just returned
+`NULL` with `error: null`, so the CLIENT believed the balance update
+succeeded when it silently never touched anything. This is a genuine
+"the app said it worked but the business balance is wrong" bug class,
+distinct from (and quieter than) the RPC actually throwing.
+
+Fixed with a single `if not found then raise exception ...` check
+immediately after the `UPDATE ... RETURNING INTO` — `FOUND` is a
+PL/pgSQL built-in that reflects whether the most recent statement
+affected any rows. Now a 0-row update is a REAL, visible Postgres error
+(`errcode 'P0002'`, "no data found" — same code PL/pgSQL itself uses for
+an analogous case) that the client's `SaveExtractionError` reports as
+step `'balance-update'` instead of a quiet no-op.
+
+```sql
+create or replace function apply_business_balance_delta(p_user_id uuid, p_delta numeric)
+returns numeric
+language plpgsql
+security invoker
+as $$
+declare
+  new_balance numeric;
+begin
+  update profiles
+  set business_balance = coalesce(business_balance, 0) + p_delta
+  where user_id = p_user_id and user_id = auth.uid()
+  returning business_balance into new_balance;
+  if not found then
+    raise exception 'apply_business_balance_delta: no profiles row updated for user %', p_user_id
+      using errcode = 'P0002';
+  end if;
+  return new_balance;
+end;
+$$;
+```
+
+`create or replace function` is idempotent — this safely replaces the
+§37 version in place, no column/table changes, no data migration needed.
+
+- [ ] 38a run (replace apply_business_balance_delta with the `if not found` guard)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

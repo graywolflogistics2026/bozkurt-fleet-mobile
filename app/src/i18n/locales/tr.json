@@ -372,6 +372,20 @@
     "done": "Bitti (Ana Sayfa)",
     "saveFailed": "Kaydetme başarısız.",
     "tryAgain": "Tekrar Dene",
+    "errorDuplicateRace": "Bu settlement haftası az önce içe aktarılmış olabilir — başka bir cihazdan veya Kaydet'e çift dokunma nedeniyle. Tekrar denemeden önce Settlements ekranını kontrol edin.",
+    "errorPartialSaveNote": "Verilerinizin bir kısmı zaten kaydedilmiş olabilir. Yinelemeleri önlemek için tekrar içe aktarmadan önce Belgeler/Settlements bölümünü kontrol edin.",
+    "errorSteps": {
+      "checking": "Belge kontrol edilirken başarısız oldu",
+      "uploading": "Dosya yüklenirken başarısız oldu",
+      "savingDocument": "Belge kaydı kaydedilirken başarısız oldu",
+      "savingSettlement": "Settlement kaydedilirken başarısız oldu",
+      "savingRecords": "Yükler/yakıt/kesintiler kaydedilirken başarısız oldu",
+      "cleaningUpPreviousWeek": "Geçen haftanın kayıtları değiştirilirken başarısız oldu",
+      "updatingBalance": "Kaydedildi, ancak işletme bakiyeniz güncellenirken başarısız oldu",
+      "savingCompliance": "Uyumluluk kaydı kaydedilirken başarısız oldu",
+      "savingContribution": "Sahip katkısı kaydedilirken başarısız oldu",
+      "savingLoan": "Kredi/finansman kaydı kaydedilirken başarısız oldu"
+    },
     "previewLabels": {
       "grossRevenue": "Brüt Gelir",
       "netPay": "Net Ödeme",

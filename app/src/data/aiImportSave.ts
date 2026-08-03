@@ -18,6 +18,12 @@ import { resolveLoanAssetMatch } from '@/src/import/loanAssetMatch';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
+import {
+  SaveExtractionError,
+  emptyPartialState,
+  type SaveExtractionPartialState,
+  type SaveExtractionStep,
+} from '@/src/data/saveExtractionError';
 
 export async function fetchExistingDocsForDuplicateCheck(userId: string): Promise<ExistingDocSummary[]> {
   const { data, error } = await supabase
@@ -102,6 +108,20 @@ export type SaveExtractionResult = {
   isSettlementReimport: boolean;
 };
 
+// RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device feedback:
+// "settlement imports failing frequently"). Wraps a single Supabase
+// call's `{ data, error }` result: throws a step-tagged SaveExtractionError
+// on failure (carrying a snapshot of what's already durably saved so far —
+// see saveExtractionError.ts), otherwise returns `data` unwrapped. Every
+// write in this file goes through this instead of a bare
+// `if (error) throw error` so NO step can silently swallow a failure or
+// leave the caller unable to say which step broke.
+function must<T>(step: SaveExtractionStep, data: T | null, error: unknown, partial: SaveExtractionPartialState): T {
+  if (error) throw new SaveExtractionError(step, error, partial);
+  if (data == null) throw new SaveExtractionError(step, new Error('Expected a saved row but none was returned.'), partial);
+  return data;
+}
+
 // Writes rows exactly like legacy saveImport() (legacy/index.html:2502) —
 // see app/src/import/mapExtraction.ts for the per-docType field mapping,
 // ported verbatim from that function. This is the impure orchestration
@@ -110,6 +130,8 @@ export type SaveExtractionResult = {
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
   const { extraction: d, userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution, categoryOverride } = params;
+
+  const partial: SaveExtractionPartialState = emptyPartialState();
 
   // 0. VALIDATE BEFORE WRITING (pre-launch hardening, owner decision
   // 2026-08-02, independent code review finding): every required-field
@@ -130,7 +152,11 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // round 2) already requires the user to see/edit this value, so an
     // empty one here means it was left blank, not a legitimate settlement.
     if (!settlementMapping.settlement.week_ending) {
-      throw new Error('This settlement has no week-ending date. Please set the document date before saving.');
+      throw new SaveExtractionError(
+        'validation',
+        new Error('This settlement has no week-ending date. Please set the document date before saving.'),
+        partial
+      );
     }
   }
   if (d.docType === 'driver_payment' && !driverId) {
@@ -138,7 +164,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // driver_id is NOT NULL — the import screen forces a driver pick for
     // this docType before Save is even enabled (needsDriverPicker), so
     // driverId being null here would be a UI bug, not a legitimate state.
-    throw new Error('A driver must be selected to save a driver payment.');
+    throw new SaveExtractionError('validation', new Error('A driver must be selected to save a driver payment.'), partial);
   }
 
   // 1. Upload the original file to the documents bucket FIRST (CLAUDE.md
@@ -147,11 +173,17 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   let storagePath: string | null = null;
   if (fileUri) {
     storagePath = buildStoragePath(userId, d, fileExt);
-    const bytes = await new File(fileUri).bytes();
+    partial.storagePath = storagePath;
+    let bytes: Uint8Array;
+    try {
+      bytes = await new File(fileUri).bytes();
+    } catch (err) {
+      throw new SaveExtractionError('storage-upload', err, partial);
+    }
     const { error: uploadError } = await supabase.storage
       .from('documents')
       .upload(storagePath, bytes, { contentType: mediaType, upsert: true });
-    if (uploadError) throw uploadError;
+    if (uploadError) throw new SaveExtractionError('storage-upload', uploadError, partial);
   }
 
   // 2. documents row — D3 audit trail: parsed_json holds the FULL raw
@@ -174,8 +206,8 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     })
     .select('id')
     .single();
-  if (docError) throw docError;
-  const documentId = docRow.id as string;
+  const documentId = must('documents-insert', docRow, docError, partial).id as string;
+  partial.documentId = documentId;
 
   let netPayAdded: number | null = null;
   let contributionTotal = 0;
@@ -194,7 +226,12 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // can never disagree. An explicit select-then-update-or-insert (not a
     // Postgres upsert/onConflict) — the match key includes a nullable
     // truck_id, which onConflict's column-list inference can't express.
-    const existingSett = await findExistingSettlement(userId, mapping.settlement.week_ending, truckId);
+    let existingSett: { id: string; business_balance_credit: number | null } | null;
+    try {
+      existingSett = await findExistingSettlement(userId, mapping.settlement.week_ending, truckId);
+    } catch (err) {
+      throw new SaveExtractionError('settlements-lookup', err, partial);
+    }
     const isReimport = !!existingSett;
     settlementWeekEnding = mapping.settlement.week_ending;
     isSettlementReimport = isReimport;
@@ -229,17 +266,17 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         .eq('id', existingSett!.id)
         .select('id')
         .single();
-      if (settError) throw settError;
-      settlementId = settRow.id as string;
+      settlementId = must('settlements-save', settRow, settError, partial).id as string;
     } else {
       const { data: settRow, error: settError } = await supabase
         .from('settlements')
         .insert({ ...mapping.settlement, document_id: documentId, business_balance_credit: newCredit })
         .select('id')
         .single();
-      if (settError) throw settError;
-      settlementId = settRow.id as string;
+      settlementId = must('settlements-save', settRow, settError, partial).id as string;
     }
+    partial.settlementId = settlementId;
+    partial.settlementSaved = true;
 
     // RE-IMPORT ORDERING (pre-launch hardening, owner decision 2026-08-02):
     // capture the PREVIOUS batch's row ids now (read-only) but do not
@@ -264,11 +301,8 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         supabase.from('deductions').select('id').eq('settlement_id', settlementId).eq('source', 'settlement'),
         supabase.from('driver_payments').select('id').eq('settlement_id', settlementId),
       ]);
-      if (loadsOld.error) throw loadsOld.error;
-      if (fuelOld.error) throw fuelOld.error;
-      if (reimbOld.error) throw reimbOld.error;
-      if (dedOld.error) throw dedOld.error;
-      if (payOld.error) throw payOld.error;
+      const firstError = [loadsOld, fuelOld, reimbOld, dedOld, payOld].find((r) => r.error)?.error;
+      if (firstError) throw new SaveExtractionError('reimport-lookup', firstError, partial);
       oldLoadIds = (loadsOld.data ?? []).map((r) => r.id as string);
       oldFuelIds = (fuelOld.data ?? []).map((r) => r.id as string);
       oldReimbIds = (reimbOld.data ?? []).map((r) => r.id as string);
@@ -280,48 +314,56 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       const { error } = await supabase
         .from('loads')
         .insert(mapping.loads.map((l) => ({ ...l, settlement_id: settlementId })));
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('loads-insert', error, partial);
     }
     if (mapping.fuel.length > 0) {
       const { error } = await supabase
         .from('fuel_purchases')
         .insert(mapping.fuel.map((f) => ({ ...f, settlement_id: settlementId })));
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('fuel-insert', error, partial);
     }
     if (mapping.deductions.length > 0) {
       const { error } = await supabase
         .from('deductions')
         .insert(mapping.deductions.map((x) => ({ ...x, settlement_id: settlementId, document_id: documentId })));
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('deductions-insert', error, partial);
     }
     if (mapping.reimbursements.length > 0) {
       const { error } = await supabase
         .from('reimbursements')
         .insert(mapping.reimbursements.map((r) => ({ ...r, settlement_id: settlementId })));
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('reimbursements-insert', error, partial);
     }
     if (mapping.maintenance.length > 0) {
       const { error } = await supabase
         .from('maintenance_records')
         .insert(mapping.maintenance.map((m) => ({ ...m, document_id: documentId })));
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('maintenance-insert', error, partial);
     }
     if (mapping.tolls.length > 0) {
       const { error } = await supabase.from('tolls').insert(mapping.tolls);
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('tolls-insert', error, partial);
     }
+    // Loans upsert — PRE-LAUNCH ERROR-VISIBILITY FIX (owner decision
+    // 2026-08-02): this loop previously never checked ANY of these three
+    // calls' `error` field (including the lookup select), so a loan
+    // save/update failure was completely silent — the import would report
+    // success while a loan row silently failed to save/update.
     for (const loan of mapping.loans) {
       if (!loan.name) continue;
-      const { data: existingLoan } = await supabase
+      const { data: existingLoan, error: lookupError } = await supabase
         .from('loans')
         .select('id')
         .eq('user_id', userId)
         .eq('name', loan.name)
         .maybeSingle();
+      if (lookupError) throw new SaveExtractionError('loans-upsert', lookupError, partial);
       if (existingLoan) {
-        await supabase.from('loans').update(loan).eq('id', existingLoan.id);
+        const { error } = await supabase.from('loans').update(loan).eq('id', existingLoan.id);
+        if (error) throw new SaveExtractionError('loans-upsert', error, partial);
       } else {
-        await supabase.from('loans').insert(loan);
+        const { error } = await supabase.from('loans').insert(loan);
+        if (error) throw new SaveExtractionError('loans-upsert', error, partial);
       }
     }
     // Driver compensation types (owner decision 2026-07-10): the owner's
@@ -335,83 +377,92 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         gross_pay: driverShareAmount,
         notes: 'Settlement split (entered at import)',
       });
-      if (payErr) throw payErr;
+      if (payErr) throw new SaveExtractionError('driver-payment-insert', payErr, partial);
     }
+    partial.childRowsSaved = true;
 
     // Only now — every new insert above has already succeeded — delete the
     // previous batch's captured rows, by explicit id.
     if (oldLoadIds.length > 0) {
       const { error } = await supabase.from('loads').delete().in('id', oldLoadIds);
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
     }
     if (oldFuelIds.length > 0) {
       const { error } = await supabase.from('fuel_purchases').delete().in('id', oldFuelIds);
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
     }
     if (oldReimbIds.length > 0) {
       const { error } = await supabase.from('reimbursements').delete().in('id', oldReimbIds);
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
     }
     if (oldDedIds.length > 0) {
       const { error } = await supabase.from('deductions').delete().in('id', oldDedIds);
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
     }
     if (oldPayIds.length > 0) {
       const { error } = await supabase.from('driver_payments').delete().in('id', oldPayIds);
-      if (error) throw error;
+      if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
     }
+    partial.oldRowsCleanedUp = true;
 
     // Business balance: one atomic SQL increment (apply_business_balance_delta,
-    // docs/SCHEMA.sql / PENDING_SQL.md §37) instead of a client-side
+    // docs/SCHEMA.sql / PENDING_SQL.md §37/§38) instead of a client-side
     // select-then-update — never a race, and correct on both a brand-new
-    // settlement (previousCredit 0) and a re-import (delta only).
+    // settlement (previousCredit 0) and a re-import (delta only). §38
+    // (owner decision 2026-08-02) made the RPC itself raise a genuine
+    // Postgres error if it ever updates ZERO rows (a mismatched
+    // p_user_id/auth.uid(), or a missing profiles row) instead of silently
+    // returning NULL — the old version would report "success" here while
+    // never actually touching the balance.
     if (balanceDelta !== 0) {
       const { error: balErr } = await supabase.rpc('apply_business_balance_delta', {
         p_user_id: userId,
         p_delta: balanceDelta,
       });
-      if (balErr) throw balErr;
+      if (balErr) throw new SaveExtractionError('balance-update', balErr, partial);
       netPayAdded = balanceDelta;
     }
+    partial.balanceUpdated = true;
   } else if (d.docType === 'fuel' && d.fuel) {
     const row = mapFuel(d, userId, truckId);
     const { error } = await supabase.from('fuel_purchases').insert(row);
-    if (error) throw error;
+    if (error) throw new SaveExtractionError('fuel-standalone-insert', error, partial);
   } else if (d.docType === 'driver_payment') {
     // driverId is validated non-null at the top of this function (step 0)
     // before any Storage/DB write ever happens.
     const row = mapDriverPayment(d, userId, driverId as string);
     const { error } = await supabase.from('driver_payments').insert(row);
-    if (error) throw error;
+    if (error) throw new SaveExtractionError('driver-payment-insert', error, partial);
   } else if ((FINANCIAL_DOC_TYPES as readonly string[]).includes(d.docType) && d.financialDoc) {
     // insurance/lease_rent/factoring_statement/utility_subscription — real
     // out-of-pocket business expenses, routed like any other deduction.
     const row = mapFinancialDocDeduction(d, userId);
     const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
-    if (error) throw error;
+    if (error) throw new SaveExtractionError('financial-doc-insert', error, partial);
   } else if ((COMPLIANCE_DOC_TYPES as readonly string[]).includes(d.docType)) {
     // AI feature package (owner decision 2026-07-10) — find-or-update by
     // (user_id, type): a re-scanned renewal replaces the old due date on
     // the SAME row rather than piling up duplicate compliance items.
     const row = mapCompliance(d, userId);
     if (row) {
-      const { data: existing } = await supabase
+      const { data: existing, error: lookupError } = await supabase
         .from('compliance_items')
         .select('id')
         .eq('user_id', userId)
         .eq('type', row.type)
         .maybeSingle();
+      if (lookupError) throw new SaveExtractionError('compliance-lookup', lookupError, partial);
       if (existing) {
         const { error } = await supabase
           .from('compliance_items')
           .update({ label: row.label, due_date: row.due_date, source_document_id: documentId })
           .eq('id', existing.id);
-        if (error) throw error;
+        if (error) throw new SaveExtractionError('compliance-save', error, partial);
       } else {
         const { error } = await supabase
           .from('compliance_items')
           .insert({ ...row, source_document_id: documentId });
-        if (error) throw error;
+        if (error) throw new SaveExtractionError('compliance-save', error, partial);
       }
     }
     // row === null: no due date was extracted — the document is still
@@ -422,33 +473,35 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     const { error } = await supabase
       .from('maintenance_records')
       .insert({ ...maintenance, document_id: documentId });
-    if (error) throw error;
+    if (error) throw new SaveExtractionError('maintenance-standalone-insert', error, partial);
     if (reimbursement) {
-      await supabase.from('reimbursements').insert(reimbursement);
+      const { error: reimbError } = await supabase.from('reimbursements').insert(reimbursement);
+      if (reimbError) throw new SaveExtractionError('maintenance-warranty-reimbursement-insert', reimbError, partial);
     }
   } else if ((d.docType === 'amazon' || d.docType === 'store') && d.purchase) {
     const lines = mapPurchase(d, userId);
     for (const line of lines) {
-      const { data: dedRow, error } = await supabase
+      const { data: dedRow, error: dedError } = await supabase
         .from('deductions')
         .insert({ ...line.insert, document_id: documentId })
         .select('id')
         .single();
-      if (error) throw error;
+      const savedDed = must('purchase-deduction-insert', dedRow, dedError, partial);
       // CLAUDE.md invariant #2: a personal-payment purchase only becomes an
       // id-linked capital contribution once the caller has confirmed it
       // with the user (once per receipt) — see confirmOwnerContribution()
       // in app/(tabs)/import/index.tsx.
       if (line.isPersonalPayment && createContribution) {
         const contributionNote = `${(line.insert.description ?? 'Deduction').split(' — ')[0]} — paid personally (${line.insert.payment_method ?? ''})`;
-        await supabase.from('capital_transactions').insert({
+        const { error: contribError } = await supabase.from('capital_transactions').insert({
           user_id: userId,
           tx_type: 'contribution',
           amount: line.insert.amount,
           tx_date: d.date ?? new Date().toISOString().slice(0, 10),
           note: contributionNote,
-          linked_deduction_id: dedRow.id,
+          linked_deduction_id: savedDed.id,
         });
+        if (contribError) throw new SaveExtractionError('capital-transaction-insert', contribError, partial);
         contributionTotal += line.insert.amount;
       }
     }
@@ -460,36 +513,40 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // asset (resolveLoanAssetMatch() — never a forced picker, same "bonus,
     // not a blocker" spirit as the rest of this docType).
     const loanRow = mapLoanAgreement(d, userId);
-    const { data: insertedLoan, error: loanError } = await supabase
-      .from('loans')
-      .insert(loanRow)
-      .select('id')
-      .single();
-    if (loanError) throw loanError;
+    const { data: insertedLoanRow, error: loanInsertError } = await supabase.from('loans').insert(loanRow).select('id').single();
+    const insertedLoan = must('loan-agreement-insert', insertedLoanRow, loanInsertError, partial);
 
-    const [{ data: trucksData }, { data: equipmentData }] = await Promise.all([
+    const [trucksRes, equipmentRes] = await Promise.all([
       supabase.from('trucks').select('id, unit_number, trailer_unit_number').eq('user_id', userId),
       supabase.from('equipment').select('id, name').eq('user_id', userId),
     ]);
+    const lookupError = trucksRes.error ?? equipmentRes.error;
+    if (lookupError) throw new SaveExtractionError('asset-link-lookup', lookupError, partial);
     const match = resolveLoanAssetMatch(
       d.loanAgreement?.assetType,
       d.loanAgreement?.assetName,
-      (trucksData ?? []) as { id: string; unit_number: string | null; trailer_unit_number: string | null }[],
-      (equipmentData ?? []) as { id: string; name: string }[]
+      (trucksRes.data ?? []) as { id: string; unit_number: string | null; trailer_unit_number: string | null }[],
+      (equipmentRes.data ?? []) as { id: string; name: string }[]
     );
     if (match.kind === 'truck') {
-      await supabase.from('trucks').update({ financing: 'loan', loan_id: insertedLoan.id }).eq('id', match.truckId);
+      const { error } = await supabase.from('trucks').update({ financing: 'loan', loan_id: insertedLoan.id }).eq('id', match.truckId);
+      if (error) throw new SaveExtractionError('asset-link-update', error, partial);
     } else if (match.kind === 'trailer') {
-      await supabase.from('trucks').update({ trailer_financing: 'loan', trailer_loan_id: insertedLoan.id }).eq('id', match.truckId);
+      const { error } = await supabase
+        .from('trucks')
+        .update({ trailer_financing: 'loan', trailer_loan_id: insertedLoan.id })
+        .eq('id', match.truckId);
+      if (error) throw new SaveExtractionError('asset-link-update', error, partial);
     } else if (match.kind === 'equipment') {
-      await supabase.from('equipment').update({ financing: 'loan', loan_id: insertedLoan.id }).eq('id', match.equipmentId);
+      const { error } = await supabase.from('equipment').update({ financing: 'loan', loan_id: insertedLoan.id }).eq('id', match.equipmentId);
+      if (error) throw new SaveExtractionError('asset-link-update', error, partial);
     }
   } else if (d.docType !== 'w2' && d.docType !== 'government_or_misc_income') {
     // Generic fallback (toll/loan/other) — legacy's actual saveImport()
     // else-branch behavior, not the richer routing DTYPES hints at.
     const row = mapGenericDeduction(d, userId, categoryOverride);
     const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
-    if (error) throw error;
+    if (error) throw new SaveExtractionError('generic-deduction-insert', error, partial);
   }
   // d.docType === 'w2' / 'government_or_misc_income': document saved above,
   // no financial row created — both are INCOME with no dedicated ledger yet

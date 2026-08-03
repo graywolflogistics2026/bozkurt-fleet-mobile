@@ -372,6 +372,20 @@
     "done": "Listo (Inicio)",
     "saveFailed": "Error al guardar.",
     "tryAgain": "Intentar de Nuevo",
+    "errorDuplicateRace": "Es posible que esta semana del settlement ya se haya importado — quizás desde otro dispositivo, o por un doble toque en Guardar. Revise la pantalla de Settlements antes de intentarlo de nuevo.",
+    "errorPartialSaveNote": "Parte de sus datos ya podrían estar guardados. Revise Documentos/Settlements antes de importar de nuevo para evitar duplicados.",
+    "errorSteps": {
+      "checking": "Falló al verificar el documento",
+      "uploading": "Falló al subir el archivo",
+      "savingDocument": "Falló al guardar el registro del documento",
+      "savingSettlement": "Falló al guardar el settlement",
+      "savingRecords": "Falló al guardar cargas/combustible/deducciones",
+      "cleaningUpPreviousWeek": "Falló al reemplazar los registros de la semana anterior",
+      "updatingBalance": "Guardado, pero falló al actualizar su saldo comercial",
+      "savingCompliance": "Falló al guardar el registro de cumplimiento",
+      "savingContribution": "Falló al guardar la contribución del propietario",
+      "savingLoan": "Falló al guardar el registro de préstamo/financiamiento"
+    },
     "previewLabels": {
       "grossRevenue": "Ingreso Bruto",
       "netPay": "Pago Neto",

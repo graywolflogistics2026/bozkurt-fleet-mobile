@@ -1637,3 +1637,96 @@
   decreasing by the full $1,155.35, true profit correctly computing
   -$438.40 from the $443.56 deductible portion only) through the REAL
   `saveExtraction()` against the fake Supabase client.
+- IMPORT FAILURE VISIBILITY + AUDIT (owner decision 2026-08-02, device
+  feedback: "settlement imports failing frequently"):
+  1. **Rich, step-tagged errors**: `saveExtraction()` (`aiImportSave.ts`)
+     no longer throws bare/anonymous errors — every write goes through a
+     new `SaveExtractionError` (`src/data/saveExtractionError.ts`)
+     tagging exactly which of ~27 granular steps failed (upload / documents
+     row / settlement row / which child table's insert / the balance RPC /
+     ...) plus the underlying Postgres error's message/code/hint/details,
+     AND a snapshot of what was already durably saved before the failing
+     step (`partial: {documentId, settlementId, settlementSaved,
+     childRowsSaved, oldRowsCleanedUp, balanceUpdated}` — there is still no
+     single transaction wrapping the whole save, a known v1.1 "full RPC
+     transaction for imports" backlog item, so a later step's failure does
+     NOT mean nothing was saved). The import screen's error card groups
+     the 27 steps into 10 user-legible buckets for the visible headline
+     (`src/import/errorStepGroups.ts` — "Saving loads" vs "Saving fuel"
+     vs "Saving withheld deductions" all read as "saving your settlement's
+     records" to a non-developer; the exact granular step stays in the
+     Copy Details report for real debugging) and shows a "Copy Details"
+     button (reusing `ScreenErrorBoundary`'s build-info + Clipboard
+     pattern) with the full report. AI-extraction failures
+     (`aiImportCall.ts`'s `AiImportError`) and local file-read/compression
+     failures get the same Copy Details treatment via
+     `buildAiImportErrorReport()`/`buildLocalErrorReport()`.
+  2. **Four previously-silent failures now throw**: `aiImportSave.ts`'s
+     loans upsert loop, the personal-payment `capital_transactions`
+     insert, the `loan_agreement` docType's truck/trailer/equipment
+     asset-link update (and its own trucks/equipment lookup), and the
+     maintenance-warranty reimbursement insert ALL used to discard their
+     `{error}` entirely — a failure in any of them was completely
+     invisible, the import screen reported success while that one row
+     silently never saved. All four now throw a step-tagged
+     `SaveExtractionError` like every other write in the file.
+     `fakeSupabase.ts` gained error-injection support
+     (`createFakeSupabase(seed, {failures: [...]})`) specifically to let
+     `aiImportSave.errorReporting.test.ts` prove all four actually throw
+     now, plus the step-tagging/partial-state/duplicate-race behavior,
+     against the real `saveExtraction()`.
+  3. **`apply_business_balance_delta` RPC audit** (docs/PENDING_SQL.md
+     §38, NOT YET RUN as of this writing): the signature was already
+     correct (`p_user_id uuid, p_delta numeric`, matching the client's
+     call exactly) and a failure already correctly aborts the whole save
+     (throws) — but a genuine bug was found: `update ... returning
+     business_balance into new_balance` left `new_balance` as `NULL`
+     (PL/pgSQL does not raise on a 0-row UPDATE by default) whenever the
+     `WHERE` clause matched zero rows (a mismatched `p_user_id`/
+     `auth.uid()`, or a missing profiles row) — the RPC returned `NULL`
+     with `error: null`, so the client believed the balance update
+     succeeded when it silently never touched anything. Fixed with a
+     single `if not found then raise exception ... using errcode =
+     'P0002'` right after the UPDATE — now a real, visible error the
+     client reports as step `'balance-update'`.
+  4. **§34/§37 unique-index race, addressed**: `findExistingSettlement()`'s
+     check-then-insert-or-update is not atomic — a double-tap on Save
+     (or two devices importing the same account's same settlement week
+     within the same instant) could race past the check and hit
+     `settlements_user_week_truck_uidx`/`_notruck_uidx` on INSERT.
+     `SaveExtractionError.isDuplicateSettlementRace` (true when
+     `step === 'settlements-save'` and the Postgres error code is
+     `23505`, unique_violation) lets the import screen show a specific,
+     actionable "this week may have just been imported — check
+     Settlements before retrying" message instead of a raw constraint-
+     violation string. The import screen also gained a synchronous
+     `savingRef` double-tap guard (checked/set before any `await`, reset
+     in `finally`) closing the narrow window where two fast taps could
+     both start `saveExtraction()` before React re-renders the Save
+     button away.
+  5. **File-size guard audited, left at 10 MB**: correctly checked
+     client-side (post-compression for photos, pre-upload for PDFs) and
+     server-side (base64-length-derived estimate) before any network
+     call — belt and suspenders, no bug found. Flagged as an open risk,
+     not changed: a legitimate multi-page camera-scanned settlement PDF
+     could plausibly exceed 10 MB; worth monitoring real-world import
+     failures for this specific cause before raising it blind.
+  6. **`ai-import`'s own failure modes, audited and hardened**
+     (`supabase/functions/ai-import/index.ts`): `ANTHROPIC_MAX_TOKENS`
+     raised 8000 → 16000 — a busy multi-page settlement's full structured
+     JSON extraction (many loads/tolls/withheld deductions) can genuinely
+     need more than 8000 output tokens, and a truncated response used to
+     fail every JSON.parse() fallback attempt and surface as a generic,
+     misleading `parse_failed`. The response's own `stop_reason ===
+     "max_tokens"` is now checked FIRST and returns a new, specific
+     `"truncated"` error type ("try splitting a multi-page settlement
+     into smaller batches") instead. The Anthropic fetch itself gained a
+     client-controlled `ANTHROPIC_TIMEOUT_MS` (55s, via `AbortController`)
+     instead of relying on the platform's own undocumented execution
+     ceiling, plus ONE retry (`MAX_ANTHROPIC_ATTEMPTS = 2`,
+     `RETRY_BACKOFF_MS` 800ms) for genuinely transient failures (a
+     network-level throw, or a 5xx/529-overloaded response) — never for a
+     4xx, which a retry can't fix. A new `"timeout"` error type
+     distinguishes "this took too long" from a plain network error. Both
+     new types get their own `friendlyAiImportError()` messages
+     (`aiImportCall.ts`).

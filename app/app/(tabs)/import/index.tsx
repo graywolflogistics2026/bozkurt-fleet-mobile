@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { File } from 'expo-file-system';
+import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -13,8 +14,10 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useInsertTruck } from '@/src/data/trucks';
 import { useDrivers, useInsertDriver } from '@/src/data/drivers';
 import { useUserCategories } from '@/src/data/userCategories';
-import { callAiImport, friendlyAiImportError, type AiImportError } from '@/src/data/aiImportCall';
+import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
 import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
+import { isSaveExtractionError, buildErrorReport } from '@/src/data/saveExtractionError';
+import { groupStepForDisplay, type DisplayStepGroup } from '@/src/import/errorStepGroups';
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
@@ -30,6 +33,7 @@ import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
 import { formatMoney } from '@/src/i18n/format';
+import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
@@ -48,6 +52,17 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 function money(n: number | undefined | null, locale: string) {
   if (n == null) return '—';
   return formatMoney(n, locale);
+}
+
+// RICH IMPORT ERROR REPORTING (owner decision 2026-08-02): a local
+// (client-side, pre-network) failure — reading/compressing a picked
+// file — has no "step"/postgres-shaped error to report, but still gets
+// the same Copy Details treatment for consistency, using whatever the
+// JS runtime actually threw.
+function buildLocalErrorReport(stepDescription: string, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error && err.stack ? `\n\nStack:\n${err.stack}` : '';
+  return `Build: ${formatBuildInfoLine(getBuildInfo())}\nFailed step: ${stepDescription}\nError: ${message}${stack}`;
 }
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
@@ -183,7 +198,44 @@ export default function Import() {
   const [driverShareAmount, setDriverShareAmount] = useState('');
   const [categoryOverride, setCategoryOverride] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device
+  // feedback: "settlement imports failing frequently"): instead of one
+  // generic "save failed" string, the error card now shows WHICH step
+  // failed (grouped into a user-legible bucket, errorStepGroup — the
+  // exact granular step is still in errorReport for support/debugging),
+  // whether records may already be partially saved, and a "Copy Details"
+  // button carrying the full raw report (build info, exact step, error
+  // message/code/hint). null when the current error is a simple
+  // validation-style rejection with nothing more useful to add.
+  const [errorStepGroup, setErrorStepGroup] = useState<DisplayStepGroup | null>(null);
+  const [errorHasPartialSave, setErrorHasPartialSave] = useState(false);
+  const [errorIsDuplicateRace, setErrorIsDuplicateRace] = useState(false);
+  const [errorReport, setErrorReport] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Double-tap guard (owner decision 2026-08-02, §34/§37 unique-index
+  // audit): a ref (not state) so it's read/set synchronously within the
+  // same event-handler call, closing the narrow window where two fast
+  // taps on Save before React re-renders could both start
+  // saveExtraction() concurrently — the second attempt racing the first
+  // insert-vs-update decision and hitting the settlements unique index.
+  const savingRef = useRef(false);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
+
+  const [copyLabel, copiedLabel] = [t('common.copyDetails'), t('common.copied')];
+
+  async function handleCopyDetails() {
+    if (!errorReport) return;
+    try {
+      await Clipboard.setStringAsync(errorReport);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      setCopied(true);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard failing is not itself worth a second error UI for — the
+      // report text is still visible/selectable on screen regardless.
+    }
+  }
 
   useFocusEffect(() => {
     const uri = consumePendingCapture();
@@ -207,6 +259,11 @@ export default function Import() {
     setDriverShareAmount('');
     setCategoryOverride('');
     setErrorMessage(null);
+    setErrorStepGroup(null);
+    setErrorHasPartialSave(false);
+    setErrorIsDuplicateRace(false);
+    setErrorReport(null);
+    setCopied(false);
     setResult(null);
   }
 
@@ -278,6 +335,10 @@ export default function Import() {
 
   function handleAiError(err: AiImportError) {
     setErrorMessage(friendlyAiImportError(err));
+    setErrorStepGroup(null);
+    setErrorHasPartialSave(false);
+    setErrorIsDuplicateRace(false);
+    setErrorReport(buildAiImportErrorReport(err, formatBuildInfoLine(getBuildInfo())));
     setPhase('error');
   }
 
@@ -322,6 +383,10 @@ export default function Import() {
       const compressedSize = new File(compressed.uri).size;
       if (compressedSize > MAX_FILE_SIZE_BYTES) {
         setErrorMessage(t('importScreen.fileTooLargeMessage'));
+        setErrorStepGroup(null);
+        setErrorHasPartialSave(false);
+        setErrorIsDuplicateRace(false);
+        setErrorReport(null);
         setPhase('error');
         return;
       }
@@ -334,6 +399,10 @@ export default function Import() {
       if (data) await afterExtraction(data, undefined);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessPhoto'));
+      setErrorStepGroup(null);
+      setErrorHasPartialSave(false);
+      setErrorIsDuplicateRace(false);
+      setErrorReport(buildLocalErrorReport('Reading/compressing the photo', err));
       setPhase('error');
     }
   }
@@ -364,27 +433,40 @@ export default function Import() {
       if (data) await afterExtraction(data, asset.name);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
+      setErrorStepGroup(null);
+      setErrorHasPartialSave(false);
+      setErrorIsDuplicateRace(false);
+      setErrorReport(buildLocalErrorReport('Reading the file', err));
       setPhase('error');
     }
   }
 
   async function handleSave() {
+    // Double-tap guard (owner decision 2026-08-02, §34/§37 unique-index
+    // audit): synchronous ref check-and-set, closing the gap between a
+    // fast double-tap and React re-rendering the Save button away once
+    // phase becomes 'saving'. A second concurrent call to handleSave()
+    // for the SAME settlement week could otherwise race past
+    // findExistingSettlement()'s insert-vs-update check and hit the
+    // settlements table's partial unique index on INSERT.
+    if (savingRef.current) return;
     if (!extraction || !fileMeta || !userId) return;
     if (needsTruckPicker && !truckId) return;
     if (needsDriverPicker && !driverId) return;
     if (isSettlementWeekEndingMissing(extraction)) return;
+    savingRef.current = true;
 
-    const isPurchase = extraction.docType === 'amazon' || extraction.docType === 'store';
-    // UX MEGA-PASS item D: payment method is auto-detected AND stays
-    // user-editable in the preview (see the payment-method Pill row
-    // below) — Save always reads whatever's currently on `extraction`,
-    // which withPaymentMethod() keeps in sync with the user's own edits.
-    const payMethod = normalizePaymentMethod(extraction.purchase?.paymentMethod);
-    const hasPersonalPurchase = isPurchase && isPersonalPayment(payMethod);
-    const createContribution = hasPersonalPurchase ? await confirmOwnerContribution(payMethod) : false;
-
-    setPhase('saving');
     try {
+      const isPurchase = extraction.docType === 'amazon' || extraction.docType === 'store';
+      // UX MEGA-PASS item D: payment method is auto-detected AND stays
+      // user-editable in the preview (see the payment-method Pill row
+      // below) — Save always reads whatever's currently on `extraction`,
+      // which withPaymentMethod() keeps in sync with the user's own edits.
+      const payMethod = normalizePaymentMethod(extraction.purchase?.paymentMethod);
+      const hasPersonalPurchase = isPurchase && isPersonalPayment(payMethod);
+      const createContribution = hasPersonalPurchase ? await confirmOwnerContribution(payMethod) : false;
+
+      setPhase('saving');
       const saved = await saveExtraction({
         extraction,
         userId,
@@ -402,8 +484,31 @@ export default function Import() {
       await invalidateFinancialData(queryClient);
       buildAndUploadBackupSnapshot(userId); // fire-and-forget
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : t('importScreen.saveFailed'));
+      // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02): a
+      // SaveExtractionError carries WHICH step failed, a snapshot of what
+      // was already durably saved before that step, and (for a settlements
+      // unique-index race) a distinguishable flag — see
+      // saveExtractionError.ts for the full rationale. Any other thrown
+      // value (shouldn't normally happen — saveExtraction() wraps every
+      // write in a SaveExtractionError — but defensive regardless) falls
+      // back to the same generic report every OTHER catch block in this
+      // screen already builds.
+      if (isSaveExtractionError(err)) {
+        setErrorMessage(err.message);
+        setErrorStepGroup(groupStepForDisplay(err.step));
+        setErrorHasPartialSave(err.partial.documentId != null);
+        setErrorIsDuplicateRace(err.isDuplicateSettlementRace);
+        setErrorReport(buildErrorReport(err, formatBuildInfoLine(getBuildInfo())));
+      } else {
+        setErrorMessage(err instanceof Error ? err.message : t('importScreen.saveFailed'));
+        setErrorStepGroup(null);
+        setErrorHasPartialSave(false);
+        setErrorIsDuplicateRace(false);
+        setErrorReport(buildLocalErrorReport('Saving', err));
+      }
       setPhase('error');
+    } finally {
+      savingRef.current = false;
     }
   }
 
@@ -767,7 +872,32 @@ export default function Import() {
 
         {phase === 'error' && (
           <Card>
+            {/* RICH IMPORT ERROR REPORTING (owner decision 2026-08-02,
+                device feedback: "settlement imports failing frequently"):
+                a headline naming WHICH step failed (grouped into a
+                user-legible bucket — the exact granular step is always in
+                the Copy Details report), a duplicate-settlement-race note
+                when applicable, a partial-save note when some records may
+                already exist, the raw underlying error message, and a
+                Copy Details button carrying the full report (build info +
+                exact step + error message/code/hint). */}
+            {errorStepGroup && (
+              <Text style={{ color: colors.orange, fontWeight: '700', fontSize: typography.size.md, marginBottom: spacing.xs }}>
+                {t(`importScreen.errorSteps.${errorStepGroup}`)}
+              </Text>
+            )}
+            {errorIsDuplicateRace && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <MutedText>{t('importScreen.errorDuplicateRace')}</MutedText>
+              </View>
+            )}
+            {!errorIsDuplicateRace && errorHasPartialSave && (
+              <MutedText style={{ marginBottom: spacing.sm }}>{t('importScreen.errorPartialSaveNote')}</MutedText>
+            )}
             <ErrorText>{errorMessage}</ErrorText>
+            {errorReport && (
+              <SecondaryButton title={copied ? copiedLabel : copyLabel} onPress={handleCopyDetails} />
+            )}
             <SecondaryButton title={t('importScreen.tryAgain')} onPress={reset} />
           </Card>
         )}

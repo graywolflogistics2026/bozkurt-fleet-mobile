@@ -353,6 +353,18 @@ begin
   set business_balance = coalesce(business_balance, 0) + p_delta
   where user_id = p_user_id and user_id = auth.uid()
   returning business_balance into new_balance;
+  -- §38 (owner decision 2026-08-02, "settlement imports failing
+  -- frequently" audit): a mismatched p_user_id/auth.uid(), or a missing
+  -- profiles row, makes this UPDATE affect ZERO rows — before this fix,
+  -- RETURNING INTO left new_balance NULL and the function returned NULL
+  -- with no error, so the client saw {error: null} and believed the
+  -- balance was updated when it silently was not. Raising here turns
+  -- that into a real, visible failure the client's SaveExtractionError
+  -- reports as step 'balance-update' instead of a quiet no-op.
+  if not found then
+    raise exception 'apply_business_balance_delta: no profiles row updated for user %', p_user_id
+      using errcode = 'P0002';
+  end if;
   return new_balance;
 end;
 $$;

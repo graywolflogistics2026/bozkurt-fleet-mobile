@@ -11,10 +11,33 @@ type Row = Record<string, unknown>;
 
 export type FakeSupabaseStore = Record<string, Row[]>;
 
-export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
+export type FakeSupabaseError = { message: string; code?: string; hint?: string; details?: string };
+
+// RICH IMPORT ERROR REPORTING (owner decision 2026-08-02): error-injection
+// support so tests can prove a specific write step's failure is surfaced
+// (step-tagged, not silently swallowed) instead of only ever exercising
+// the all-succeeds happy path. `count` limits how many times the failure
+// fires (default: every matching call, i.e. Infinity) — set to 1 to
+// simulate "failed once, would succeed on retry."
+export type FakeSupabaseFailure = {
+  table: string;
+  mode?: 'select' | 'insert' | 'update' | 'delete';
+  error: FakeSupabaseError;
+  count?: number;
+};
+
+export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { failures?: FakeSupabaseFailure[] } = {}) {
   const store: FakeSupabaseStore = {};
   for (const [table, rows] of Object.entries(seed)) store[table] = rows.map((r) => ({ ...r }));
   let idCounter = 1;
+  const failures = (options.failures ?? []).map((f) => ({ ...f, remaining: f.count ?? Infinity }));
+
+  function takeFailure(table: string, mode: string): FakeSupabaseError | null {
+    const match = failures.find((f) => f.table === table && (f.mode == null || f.mode === mode) && f.remaining > 0);
+    if (!match) return null;
+    match.remaining -= 1;
+    return match.error;
+  }
 
   function from(table: string) {
     if (!store[table]) store[table] = [];
@@ -48,7 +71,7 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
       return tableRows.filter((row) => filters.every((f) => f(row)));
     }
 
-    const builder: PromiseLike<{ data: Row[]; error: null }> & {
+    const builder: PromiseLike<{ data: Row[] | null; error: FakeSupabaseError | null }> & {
       select: (cols?: string) => typeof builder;
       insert: (rows: Row | Row[]) => typeof builder;
       update: (patch: Row) => typeof builder;
@@ -56,8 +79,8 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
       eq: (col: string, val: unknown) => typeof builder;
       is: (col: string, val: null) => typeof builder;
       in: (col: string, vals: unknown[]) => typeof builder;
-      maybeSingle: () => Promise<{ data: Row | null; error: null }>;
-      single: () => Promise<{ data: Row | null; error: null }>;
+      maybeSingle: () => Promise<{ data: Row | null; error: FakeSupabaseError | null }>;
+      single: () => Promise<{ data: Row | null; error: FakeSupabaseError | null }>;
     } = {
       select(_cols?: string) {
         if (!mode) mode = 'select';
@@ -91,15 +114,21 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
         return builder;
       },
       async maybeSingle() {
+        const injected = takeFailure(table, mode ?? 'select');
+        if (injected) return { data: null, error: injected };
         const rows = execute();
         return { data: rows[0] ?? null, error: null };
       },
       async single() {
+        const injected = takeFailure(table, mode ?? 'select');
+        if (injected) return { data: null, error: injected };
         const rows = execute();
         return { data: rows[0] ?? null, error: null };
       },
       then(onfulfilled, onrejected) {
-        return Promise.resolve({ data: execute(), error: null }).then(onfulfilled, onrejected);
+        const injected = takeFailure(table, mode ?? 'select');
+        const result = injected ? { data: null, error: injected } : { data: execute(), error: null };
+        return Promise.resolve(result).then(onfulfilled, onrejected);
       },
     };
 
@@ -111,10 +140,15 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}) {
   // the real function's atomic-increment semantics against the in-memory
   // `profiles` table.
   async function rpc(fnName: string, params: Record<string, unknown>) {
+    const injected = takeFailure(`rpc:${fnName}`, 'select');
+    if (injected) return { data: null, error: injected };
     if (fnName === 'apply_business_balance_delta') {
       const { p_user_id, p_delta } = params as { p_user_id: string; p_delta: number };
       const profile = (store.profiles ?? []).find((p) => p.user_id === p_user_id);
-      if (!profile) return { data: null, error: { message: 'profile not found' } };
+      // §38 (owner decision 2026-08-02): the real RPC now raises when it
+      // updates zero rows instead of silently returning NULL — mirrored
+      // here so a test can prove the client surfaces this as a real error.
+      if (!profile) return { data: null, error: { message: 'No profile row matched — update affected 0 rows.', code: 'P0002' } };
       const newBalance = Number(profile.business_balance ?? 0) + Number(p_delta);
       profile.business_balance = newBalance;
       return { data: newBalance, error: null };

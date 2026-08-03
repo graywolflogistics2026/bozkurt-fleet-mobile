@@ -66,6 +66,15 @@ export function friendlyAiImportError(err: AiImportError): string {
       return 'The AI declined to process this document. Try a clearer photo, or a different file.';
     case 'parse_failed':
       return 'Could not read structured data from this document — try retaking the photo with better lighting/focus.';
+    // "settlement imports failing frequently" audit (owner decision
+    // 2026-08-02): 'truncated'/'timeout' both carry their own specific,
+    // actionable message from ai-import (see supabase/functions/ai-import/
+    // index.ts) — prefer it over a generic fallback, same pattern as
+    // 'bad_request' below.
+    case 'truncated':
+      return err.message || 'This document was too complex for the AI to fully process. Try splitting it into fewer pages.';
+    case 'timeout':
+      return err.message || 'The AI service took too long to respond. Try again.';
     case 'unauthenticated':
       return 'Your session expired — sign out and back in, then try again.';
     case 'bad_request':
@@ -80,4 +89,21 @@ export function friendlyAiImportError(err: AiImportError): string {
     default:
       return err.message || 'Import failed.';
   }
+}
+
+// RICH IMPORT ERROR REPORTING (owner decision 2026-08-02): the "Copy
+// Details" report for an AI-extraction failure (as opposed to a SAVE
+// failure — see saveExtractionError.ts's buildErrorReport() for that
+// side) — same shared shape (build line, failed step, error
+// type/message/detail) so a device bug report always looks the same
+// regardless of which half of the import pipeline failed.
+export function buildAiImportErrorReport(err: AiImportError, buildLine: string): string {
+  return [
+    `Build: ${buildLine}`,
+    `Failed step: AI processing (${err.type})`,
+    `Error: ${err.message}`,
+    err.detail ? `Detail: ${err.detail}` : null,
+  ]
+    .filter((line): line is string => line != null)
+    .join('\n');
 }

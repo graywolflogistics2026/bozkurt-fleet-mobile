@@ -372,6 +372,20 @@
     "done": "تم (الرئيسية)",
     "saveFailed": "فشل الحفظ.",
     "tryAgain": "حاول مرة أخرى",
+    "errorDuplicateRace": "قد يكون أسبوع الـ settlement هذا قد استُورد للتو — ربما من جهاز آخر، أو بسبب ضغطة مزدوجة على حفظ. تحقق من شاشة Settlements قبل المحاولة مرة أخرى.",
+    "errorPartialSaveNote": "قد تكون بعض بياناتك محفوظة بالفعل. تحقق من المستندات/Settlements قبل الاستيراد مرة أخرى لتجنب التكرار.",
+    "errorSteps": {
+      "checking": "فشل أثناء التحقق من المستند",
+      "uploading": "فشل أثناء رفع الملف",
+      "savingDocument": "فشل أثناء حفظ سجل المستند",
+      "savingSettlement": "فشل أثناء حفظ الـ settlement",
+      "savingRecords": "فشل أثناء حفظ الحمولات/الوقود/الخصومات",
+      "cleaningUpPreviousWeek": "فشل أثناء استبدال سجلات الأسبوع الماضي",
+      "updatingBalance": "تم الحفظ، لكن فشل تحديث رصيد عملك",
+      "savingCompliance": "فشل أثناء حفظ سجل الامتثال",
+      "savingContribution": "فشل أثناء حفظ مساهمة المالك",
+      "savingLoan": "فشل أثناء حفظ سجل القرض/التمويل"
+    },
     "previewLabels": {
       "grossRevenue": "الإيراد الإجمالي",
       "netPay": "صافي الأجر",

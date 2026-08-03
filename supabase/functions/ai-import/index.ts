@@ -17,7 +17,32 @@ const CORS_HEADERS = {
 
 const DAILY_IMPORT_LIMIT = 30;
 const ANTHROPIC_MODEL = "claude-sonnet-4-6";
-const ANTHROPIC_MAX_TOKENS = 8000;
+// RAISED (owner decision 2026-08-02, "settlement imports failing
+// frequently" audit): a busy multi-page carrier settlement's extraction
+// — many loads + tolls + withheld deductions, all as structured JSON —
+// can genuinely need more than 8000 output tokens; a truncated response
+// fails every one of this function's own JSON.parse() fallback attempts
+// and surfaces as a generic "parse_failed" with no indication that the
+// real cause was hitting this ceiling, not a genuinely malformed
+// response. 16000 is a conservative near-doubling for any current Claude
+// Sonnet-class model's output limit — monitor Anthropic API responses
+// after deploy for a 400 validation error on this parameter, which would
+// mean the actual model in use supports less than this value.
+const ANTHROPIC_MAX_TOKENS = 16000;
+// Client-controlled timeout for the Anthropic call, instead of relying on
+// whatever the platform's own (undocumented, from this codebase's
+// perspective) execution-time ceiling happens to be — a request that
+// hangs past this is aborted with a SPECIFIC, actionable "this took too
+// long" error rather than a generic platform timeout the client can only
+// report as "could not reach the import service."
+const ANTHROPIC_TIMEOUT_MS = 55_000;
+// ONE retry for TRANSIENT failures only (a network-level fetch failure,
+// or a 5xx/529-overloaded response from Anthropic) — never for 4xx
+// (bad request/auth/billing, which retrying can't fix). Keeps worst-case
+// added latency bounded (one extra attempt, not a loop) while measurably
+// reducing "frequent failures" from a single transient blip.
+const MAX_ANTHROPIC_ATTEMPTS = 2;
+const RETRY_BACKOFF_MS = 800;
 
 // ============================================================================
 // Extraction prompt — ported VERBATIM from legacy/index.html's handleFile()
@@ -299,7 +324,79 @@ type ErrorType =
   | "rate_limited"
   | "anthropic_error"
   | "model_refusal"
-  | "parse_failed";
+  | "parse_failed"
+  // Owner decision 2026-08-02 ("settlement imports failing frequently"
+  // audit): the model's response hit ANTHROPIC_MAX_TOKENS and was cut off
+  // mid-JSON — a genuinely different, actionable failure from a malformed
+  // response (parse_failed), which the client should message distinctly
+  // ("try splitting this into fewer pages" rather than "try a clearer
+  // photo").
+  | "truncated"
+  // Same audit: the Anthropic call itself timed out (ANTHROPIC_TIMEOUT_MS)
+  // even after the one retry — distinct from a plain network error so the
+  // client can say "this took too long" rather than "could not connect."
+  | "timeout";
+
+// Owner decision 2026-08-02 ("settlement imports failing frequently"
+// audit): the Anthropic call now runs through this helper instead of a
+// single inline fetch — a client-controlled timeout (ANTHROPIC_TIMEOUT_MS,
+// via AbortController) replaces relying on whatever the platform's own
+// execution ceiling happens to be, and ONE retry fires for genuinely
+// transient failures (a network-level throw, or a 5xx/overloaded response
+// from Anthropic) — never for a 4xx, which retrying can't fix. Returns
+// either the successful Response, or a terminal {errorType, message} the
+// caller turns into a structured error response.
+async function callAnthropicMessages(
+  anthropicKey: string,
+  contentBlock: Record<string, unknown>,
+  prompt: string,
+): Promise<{ resp: Response } | { errorType: "timeout" | "anthropic_error"; message: string }> {
+  for (let attempt = 1; attempt <= MAX_ANTHROPIC_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ANTHROPIC_TIMEOUT_MS);
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: ANTHROPIC_MODEL,
+          max_tokens: ANTHROPIC_MAX_TOKENS,
+          messages: [{ role: "user", content: [contentBlock, { type: "text", text: prompt }] }],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      // Retry once on a transient 5xx (including 529 "overloaded") —
+      // never on a 4xx (bad request/auth/billing/Anthropic's own rate
+      // limit), which a retry cannot fix.
+      if (!resp.ok && resp.status >= 500 && attempt < MAX_ANTHROPIC_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+        continue;
+      }
+      return { resp };
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      if (attempt < MAX_ANTHROPIC_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+        continue;
+      }
+      if (isAbort) {
+        return {
+          errorType: "timeout",
+          message: `The AI service took too long to respond (over ${Math.round(ANTHROPIC_TIMEOUT_MS / 1000)}s) — try again, or split a multi-page document into fewer pages.`,
+        };
+      }
+      return { errorType: "anthropic_error", message: `Network error calling Anthropic: ${(err as Error).message}` };
+    }
+  }
+  // Unreachable given MAX_ANTHROPIC_ATTEMPTS >= 1, but keeps TS satisfied.
+  return { errorType: "anthropic_error", message: "Unknown error calling Anthropic." };
+}
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
   return new Response(
@@ -398,24 +495,11 @@ Deno.serve(async (req: Request) => {
 
   const prompt = buildExtractionPrompt(docHint, locale, customCategories);
 
-  let anthropicResp: Response;
-  try {
-    anthropicResp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: ANTHROPIC_MAX_TOKENS,
-        messages: [{ role: "user", content: [contentBlock, { type: "text", text: prompt }] }],
-      }),
-    });
-  } catch (err) {
-    return errorResponse("anthropic_error", `Network error calling Anthropic: ${(err as Error).message}`, 502);
+  const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt);
+  if ("errorType" in callResult) {
+    return errorResponse(callResult.errorType, callResult.message, callResult.errorType === "timeout" ? 504 : 502);
   }
+  const anthropicResp = callResult.resp;
 
   if (!anthropicResp.ok) {
     const bodyText = await anthropicResp.text().catch(() => "");
@@ -433,6 +517,19 @@ Deno.serve(async (req: Request) => {
   }
   if (data.stop_reason === "refusal") {
     return errorResponse("model_refusal", "The model declined to process this document.", 422);
+  }
+  // Owner decision 2026-08-02 ("settlement imports failing frequently"
+  // audit): a response cut off by ANTHROPIC_MAX_TOKENS is a genuinely
+  // different, actionable case from a malformed response — every one of
+  // the JSON.parse() fallback attempts below would fail on truncated JSON
+  // and land in the generic "parse_failed" bucket with no hint that the
+  // real cause was hitting the token ceiling, not a garbled response.
+  if (data.stop_reason === "max_tokens") {
+    return errorResponse(
+      "truncated",
+      "This document was too complex for the AI to fully process in one pass (the response was cut off). Try splitting a multi-page settlement into smaller batches, or a clearer/smaller scan.",
+      422,
+    );
   }
 
   const raw = (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");

@@ -372,6 +372,20 @@
     "done": "Done (Home)",
     "saveFailed": "Save failed.",
     "tryAgain": "Try Again",
+    "errorDuplicateRace": "This settlement week may have just been imported — possibly from another device, or a duplicate tap on Save. Check the Settlements screen before trying again.",
+    "errorPartialSaveNote": "Some of your data may already be saved. Check Documents/Settlements before importing again to avoid duplicates.",
+    "errorSteps": {
+      "checking": "Failed while checking the document",
+      "uploading": "Failed while uploading the file",
+      "savingDocument": "Failed while saving the document record",
+      "savingSettlement": "Failed while saving the settlement",
+      "savingRecords": "Failed while saving loads/fuel/deductions",
+      "cleaningUpPreviousWeek": "Failed while replacing last week's records",
+      "updatingBalance": "Saved, but failed while updating your business balance",
+      "savingCompliance": "Failed while saving the compliance record",
+      "savingContribution": "Failed while saving the owner contribution",
+      "savingLoan": "Failed while saving the loan/financing record"
+    },
     "previewLabels": {
       "grossRevenue": "Gross Revenue",
       "netPay": "Net Pay",
