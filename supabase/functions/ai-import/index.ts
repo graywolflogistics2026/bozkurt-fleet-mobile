@@ -12,8 +12,9 @@ import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import {
   computeChunkPageRanges,
   buildChunkPromptAddendum,
-  mergeChunkedExtractions,
+  mergeSequentialPageResults,
   type ChunkExtraction,
+  type PageAttemptResult,
   type PageRange,
 } from "./chunking.ts";
 
@@ -40,53 +41,81 @@ const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 // 16000 is comfortably more headroom per call than before, not less.
 const ANTHROPIC_MAX_TOKENS = 16000;
 
-// TIMEOUT/CHUNKING BUDGET (owner decision 2026-08-02, device evidence:
-// real 8-page Prime settlements consistently exceeded the prior 55s
-// timeout). VERIFIED against Supabase's own docs
-// (https://supabase.com/docs/guides/functions/limits): Edge Functions
-// have a 150s wall-clock/request-idle-timeout ceiling for a SYNCHRONOUS
-// request/response invocation like this one, on BOTH the Free and Pro
-// plans — the commonly-cited "400s" figure is a DIFFERENT limit that only
-// applies to background work continued via `EdgeRuntime.waitUntil()`
-// AFTER a response has already been sent, which this function never does
-// (it always awaits its own single response). Every budget below is sized
-// to leave real margin under that 150s ceiling for the function's own
-// non-Anthropic overhead (the daily-import-count query, PDF
-// parsing/splitting via pdf-lib, prompt building, JSON merging, response
-// serialization) — NOT just the Anthropic call time itself.
+// TIMEOUT/PAGE-BUDGET (owner decision 2026-08-03, "still failing after
+// chunking" device evidence: real Prime settlements STILL timed out —
+// "Could not process this multi-page document (4 sections attempted):
+// ...over 50s" — even after the 2026-08-02 chunking pass. Root-caused two
+// real problems with that design, not just "raise the number again":
 //
-// Three paths, three budgets:
-//   1. Image upload: one call, no chunking (images are fast/single-page).
-//   2. PDF at or under CHUNK_PAGE_THRESHOLD pages: ONE quick, NO-RETRY
-//      attempt at the full document first (most small PDFs succeed here,
-//      fast). If that attempt fails with a size-related error (timeout or
-//      truncated — NOT a clean 4xx/parse failure/refusal, which chunking
-//      can't fix), automatically fall back to chunking it into
-//      FALLBACK_PAGES_PER_CHUNK-page pieces (item 4's "retry once
-//      automatically with the chunked path" — extended to `truncated`
-//      too, since a token-ceiling hit is the same class of "too much
-//      content per call" problem timeout is).
-//   3. PDF over CHUNK_PAGE_THRESHOLD pages: straight to chunking, no
-//      wasted single-call attempt first.
-// Worst-case wall-clock math (path 2, the tightest budget): 40s (single
-// no-retry attempt) + [50s × 2 attempts + 0.8s backoff ≈ 100.8s]
-// (chunked fallback, but PARALLEL across chunks so bounded by the
-// SLOWEST single chunk, not the sum) ≈ 140.8s — leaves ~9s margin. Path 3
-// alone: 50s × 2 + 0.8 ≈ 100.8s, parallel-bounded — leaves ~49s margin.
-const IMAGE_TIMEOUT_MS = 60_000;
-const PDF_SINGLE_ATTEMPT_TIMEOUT_MS = 40_000;
-const PDF_CHUNK_TIMEOUT_MS = 50_000;
-const CHUNK_PAGE_THRESHOLD = 3;
-const PAGES_PER_CHUNK = 3;
-const FALLBACK_PAGES_PER_CHUNK = 1;
+// 1. It chunked into PAGES_PER_CHUNK(3)-page pieces and ran them all in
+//    PARALLEL via Promise.all. Each chunk's PDF WAS genuinely cropped to
+//    just its own pages (pdf-lib copyPages — never re-sent the whole
+//    document, confirmed by reading splitPdfIntoChunks below), but 3
+//    pages of a scanned/photographed settlement can still carry a lot of
+//    image data, and firing 4 of those at Anthropic simultaneously from
+//    one account risks real contention/queueing on top of each call's
+//    own processing time — the opposite of "smaller and more reliable."
+// 2. A genuine bug in callAnthropicMessages' retry loop: on ANY caught
+//    error — including an AbortError from OUR OWN timeout — the old code
+//    unconditionally retried before checking whether it was an abort.
+//    That silently DOUBLED the worst-case wait on every timeout (fire a
+//    50s attempt, time out, retry, fire ANOTHER 50s attempt) instead of
+//    failing fast — exactly why real-world failures were taking notably
+//    longer than the "50s" in the error message. Fixed below: retry is
+//    now ONLY for a genuine transient error (a real network throw, or a
+//    5xx/529 response) — a timeout returns immediately, no retry.
+//
+// NEW STRATEGY, "prefer what demonstrably works" (owner decision
+// 2026-08-03): stop trying to capture the WHOLE document by default.
+// SETTLEMENT_MAX_PAGES caps extraction at the first 3 pages — the
+// header/revenue/reimbursement/deduction/recap sections of a carrier
+// settlement are always there; the operating-statement/EZ-Pass/repair-
+// invoice pages that follow are a duplicate YTD rollup and separate
+// documents the user can import on their own. This is not "settlement-
+// only" in code (docType isn't known until AFTER extraction) — it's
+// applied to any oversized PDF, which in practice means settlements,
+// since that's what triggers this path.
+//   - totalPages <= SETTLEMENT_MAX_PAGES (or pdf-lib couldn't even
+//     determine a page count): ONE call over the WHOLE original file, no
+//     cropping needed, SINGLE_CALL_TIMEOUT_MS budget.
+//   - totalPages > SETTLEMENT_MAX_PAGES: go STRAIGHT to page-by-page
+//     SEQUENTIAL calls for pages 1, 2, 3 ONLY (never page 4+, and never
+//     in parallel) — each a genuinely single-page PDF via pdf-lib. Stops
+//     at the first page that fails and saves whatever pages succeeded
+//     before it (mergeSequentialPageResults, chunking.ts) rather than
+//     losing the whole import on one bad page.
+// Every response — whether all 3 pages came through or the document
+// genuinely only has 1-2 pages — that didn't cover the FULL original
+// page count carries `pagesProcessed: {through, total}` so the client
+// can tell the user plainly what was and wasn't imported.
+//
+// Budget math against Supabase's VERIFIED 150s wall-clock ceiling for a
+// synchronous request/response Edge Function invocation
+// (https://supabase.com/docs/guides/functions/limits — the "400s" figure
+// is a different limit for `EdgeRuntime.waitUntil()` background work,
+// which this function never uses):
+//   - Single-call path: one attempt at SINGLE_CALL_TIMEOUT_MS(90s), plus
+//     ONE retry ONLY if that first attempt was a fast 5xx (not a
+//     timeout, per the retry fix above) — worst case ~91s, ~59s margin.
+//   - Sequential path: 3 pages × SEQUENTIAL_PAGE_TIMEOUT_MS(40s), each
+//     with the same 5xx-only retry headroom (~41s worst case per page)
+//     ≈ 123s for all 3, leaving ~25s margin for pdf-lib parsing/
+//     splitting (×3), the daily-import-count query, and response
+//     serialization. This is a REAL increase in per-page budget versus
+//     the prior pass despite the raw number (40s) being less than the
+//     old 50s: the old 50s covered 3 PAGES per call (~17s/page); this is
+//     40s for exactly ONE page — roughly 2.3x more time per page, with
+//     zero parallel contention.
+const IMAGE_TIMEOUT_MS = 90_000;
+const SINGLE_CALL_TIMEOUT_MS = 90_000;
+const SEQUENTIAL_PAGE_TIMEOUT_MS = 40_000;
+const SETTLEMENT_MAX_PAGES = 3;
 
-// ONE retry for TRANSIENT failures only (a network-level fetch failure,
-// or a 5xx/529-overloaded response from Anthropic) — never for 4xx
-// (bad request/auth/billing, which retrying can't fix). Keeps worst-case
-// added latency bounded (one extra attempt, not a loop) while measurably
-// reducing "frequent failures" from a single transient blip. The initial
-// no-retry attempt for a small PDF (above) deliberately passes
-// maxAttempts=1 instead of this constant — see the budget math above.
+// Retry ONLY for a genuine TRANSIENT failure (a real network-level throw,
+// or a 5xx/529-overloaded response from Anthropic) — never for a 4xx
+// (bad request/auth/billing, which retrying can't fix) and, as of this
+// pass, never for a timeout/AbortError either (see callAnthropicMessages
+// below — that used to retry too, silently doubling the wait).
 const MAX_ANTHROPIC_ATTEMPTS = 2;
 const RETRY_BACKOFF_MS = 800;
 
@@ -407,6 +436,7 @@ async function callAnthropicMessages(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const startedAt = performance.now();
     try {
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -423,6 +453,13 @@ async function callAnthropicMessages(
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
+      // MEASURED TIMING (owner decision 2026-08-03, item 6 of the "still
+      // failing" bug report): there is no way to make a real Anthropic
+      // API call from a dev sandbox to measure actual latency — this logs
+      // the REAL elapsed ms for every call so the next genuine device
+      // import shows the true per-call budget in `supabase functions logs
+      // ai-import`, rather than a guessed number.
+      console.log(`[ai-import] anthropic call attempt ${attempt}/${maxAttempts}: ${Math.round(performance.now() - startedAt)}ms, status ${resp.status}`);
       // Retry once on a transient 5xx (including 529 "overloaded") —
       // never on a 4xx (bad request/auth/billing/Anthropic's own rate
       // limit), which a retry cannot fix.
@@ -434,15 +471,22 @@ async function callAnthropicMessages(
     } catch (err) {
       clearTimeout(timeoutId);
       const isAbort = err instanceof Error && err.name === "AbortError";
-      if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
-        continue;
-      }
+      console.log(`[ai-import] anthropic call attempt ${attempt}/${maxAttempts}: ${Math.round(performance.now() - startedAt)}ms, ${isAbort ? "TIMED OUT" : "threw"}`);
+      // BUG FIX (owner decision 2026-08-03): a timeout used to fall
+      // through to the same retry branch as a genuine network error,
+      // silently DOUBLING the worst-case wait (fire another full-length
+      // attempt after already waiting the full timeout once). A timeout
+      // now fails fast, no retry — only a real network-level throw gets
+      // the transient-failure retry.
       if (isAbort) {
         return {
           errorType: "timeout",
           message: `The AI service took too long to respond (over ${Math.round(timeoutMs / 1000)}s) — try again, or split a multi-page document into fewer pages.`,
         };
+      }
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+        continue;
       }
       return { errorType: "anthropic_error", message: `Network error calling Anthropic: ${(err as Error).message}` };
     }
@@ -584,45 +628,54 @@ async function splitPdfIntoChunks(fileBase64: string, ranges: PageRange[]): Prom
   return chunks;
 }
 
-// Runs every chunk's extraction IN PARALLEL (this is what keeps the
-// whole operation bounded by the SLOWEST single chunk instead of the sum
-// of all of them — essential to staying under the 150s platform ceiling)
-// and merges the results. Any single chunk's terminal failure fails the
-// whole extraction — a partial-but-silently-incomplete result (missing
-// a whole page's worth of deductions/loads) would be worse than a clear
-// error, per this codebase's "no dollar silently lost" convention
-// (CLAUDE.md invariant #3).
-// Chunking only ever applies to PDFs (images are single-page and always
-// go through the plain extractOnePass path) — every chunk pdf-lib
-// produces is itself a PDF regardless of the original upload's media
-// type, so this always builds a "document" content block, never "image".
-async function extractChunked(
+type ExtractSequentialResult =
+  | { extraction: unknown; processedThrough: number; truncated: boolean }
+  | { errorType: ErrorType; message: string; extra?: Record<string, unknown> };
+
+// SEQUENTIAL, NOT PARALLEL (owner decision 2026-08-03, replaces the prior
+// pass's Promise.all-across-chunks design — see the budget comment block
+// near the top of this file for the full root-cause reasoning). Processes
+// pages ONE AT A TIME, in order, up to `maxPages`, STOPPING at the first
+// page that fails rather than attempting the rest — a later page's own
+// slow/failed call never wastes time or shares rate-limit/contention risk
+// with an earlier one. Every chunk pdf-lib produces really is cropped to
+// just that one page (confirmed by reading splitPdfIntoChunks — this was
+// never sending the whole document per call, in this pass or the last).
+// mergeSequentialPageResults (chunking.ts) does the actual merge/stop
+// logic — this function's only job is to run the real network calls in
+// order and hand it the results.
+async function extractSequentialPages(
   anthropicKey: string,
   fileBase64: string,
-  ranges: PageRange[],
   totalPages: number,
+  maxPages: number,
   basePrompt: string,
-): Promise<ExtractOneResult> {
-  const chunkBase64s = await splitPdfIntoChunks(fileBase64, ranges);
-  const results = await Promise.all(
-    chunkBase64s.map((chunkB64, i) => {
-      const chunkContentBlock = { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunkB64 } };
-      const chunkPrompt = basePrompt + buildChunkPromptAddendum(ranges[i], totalPages);
-      return extractOnePass(anthropicKey, chunkContentBlock, chunkPrompt, PDF_CHUNK_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
-    }),
-  );
+): Promise<ExtractSequentialResult> {
+  const pagesToAttempt = Math.min(maxPages, totalPages);
+  const ranges = computeChunkPageRanges(pagesToAttempt, 1);
+  const pageResults: PageAttemptResult[] = [];
+  let lastFailure: { errorType: ErrorType; message: string; extra?: Record<string, unknown> } | null = null;
 
-  const failed = results.find((r): r is Extract<ExtractOneResult, { errorType: ErrorType }> => "errorType" in r);
-  if (failed) {
-    return {
-      errorType: failed.errorType,
-      message: `Could not process this multi-page document (${ranges.length} sections attempted): ${failed.message}`,
-      extra: failed.extra,
-    };
+  for (const range of ranges) {
+    const [chunkB64] = await splitPdfIntoChunks(fileBase64, [range]);
+    const contentBlock = { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunkB64 } };
+    const chunkPrompt = basePrompt + buildChunkPromptAddendum(range, totalPages);
+    const result = await extractOnePass(anthropicKey, contentBlock, chunkPrompt, SEQUENTIAL_PAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+    if ("errorType" in result) {
+      lastFailure = result;
+      pageResults.push({ success: false });
+      break; // sequential: never attempt a later page once one has failed
+    }
+    pageResults.push({ success: true, extraction: result.extraction as ChunkExtraction });
   }
 
-  const extractions = (results as Extract<ExtractOneResult, { extraction: unknown }>[]).map((r) => r.extraction as ChunkExtraction);
-  return { extraction: mergeChunkedExtractions(extractions) };
+  const merged = mergeSequentialPageResults(pageResults, totalPages);
+  if (!merged) {
+    // Page 1 itself failed — nothing to save. Surface page 1's own real
+    // error (timeout/parse_failed/...) rather than a generic wrapper.
+    return lastFailure ?? { errorType: "anthropic_error", message: "Could not process page 1 of this document." };
+  }
+  return { extraction: merged.extraction, processedThrough: merged.processedThrough, truncated: merged.truncated };
 }
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
@@ -722,21 +775,19 @@ Deno.serve(async (req: Request) => {
 
   const prompt = buildExtractionPrompt(docHint, locale, customCategories);
 
-  // THREE-PATH ORCHESTRATION (owner decision 2026-08-02, chunking pass —
-  // see the budget constants block near the top of this file for the full
-  // reasoning and worst-case wall-clock math for each path):
-  //   1. Image: one call, IMAGE_TIMEOUT_MS, the standard retry count.
-  //   2. PDF at or under CHUNK_PAGE_THRESHOLD pages (or a PDF whose page
-  //      count couldn't be determined at all — pdf-lib failed to parse
-  //      it, so chunking isn't possible anyway): ONE quick, NO-RETRY
-  //      attempt at the full document first; ONLY on a timeout/truncated
-  //      result (never a clean 4xx/parse/refusal failure, which chunking
-  //      can't fix) does it fall back to chunking at
-  //      FALLBACK_PAGES_PER_CHUNK pages/chunk (item 4 of the bug report:
-  //      "retry once automatically with the chunked path before
-  //      surfacing an error").
-  //   3. PDF over CHUNK_PAGE_THRESHOLD pages: straight to chunking at
-  //      PAGES_PER_CHUNK pages/chunk, no wasted single-call attempt first.
+  // TWO-PATH ORCHESTRATION (owner decision 2026-08-03 — see the budget
+  // comment block near the top of this file for the full root-cause
+  // reasoning and wall-clock math):
+  //   1. Image, or a PDF at/under SETTLEMENT_MAX_PAGES pages, or a PDF
+  //      whose page count couldn't even be determined (pdf-lib failed to
+  //      parse it — page-capping isn't possible anyway, send the whole
+  //      original file as-is): ONE call over the whole document,
+  //      SINGLE_CALL_TIMEOUT_MS / IMAGE_TIMEOUT_MS.
+  //   2. A PDF over SETTLEMENT_MAX_PAGES pages: go STRAIGHT to page-by-
+  //      page SEQUENTIAL extraction of pages 1..SETTLEMENT_MAX_PAGES —
+  //      never a single big multi-page call (that's what was failing),
+  //      never in parallel, never page SETTLEMENT_MAX_PAGES+1 or later.
+  let pagesProcessed: { through: number; total: number } | null = null;
   let result: ExtractOneResult;
 
   if (isImage) {
@@ -744,17 +795,16 @@ Deno.serve(async (req: Request) => {
   } else {
     const pageCount = await getPdfPageCount(fileBase64);
 
-    if (pageCount !== null && pageCount > CHUNK_PAGE_THRESHOLD) {
-      const ranges = computeChunkPageRanges(pageCount, PAGES_PER_CHUNK);
-      result = await extractChunked(anthropicKey, fileBase64, ranges, pageCount, prompt);
-    } else {
-      result = await extractOnePass(anthropicKey, contentBlock, prompt, PDF_SINGLE_ATTEMPT_TIMEOUT_MS, 1);
-
-      const canFallBackToChunking = pageCount !== null && pageCount > 1;
-      if ("errorType" in result && (result.errorType === "timeout" || result.errorType === "truncated") && canFallBackToChunking) {
-        const ranges = computeChunkPageRanges(pageCount as number, FALLBACK_PAGES_PER_CHUNK);
-        result = await extractChunked(anthropicKey, fileBase64, ranges, pageCount as number, prompt);
+    if (pageCount !== null && pageCount > SETTLEMENT_MAX_PAGES) {
+      const seqResult = await extractSequentialPages(anthropicKey, fileBase64, pageCount, SETTLEMENT_MAX_PAGES, prompt);
+      if ("errorType" in seqResult) {
+        result = seqResult;
+      } else {
+        result = { extraction: seqResult.extraction };
+        if (seqResult.truncated) pagesProcessed = { through: seqResult.processedThrough, total: pageCount };
       }
+    } else {
+      result = await extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
     }
   }
 
@@ -763,7 +813,7 @@ Deno.serve(async (req: Request) => {
     return errorResponse(result.errorType, result.message, status, result.extra);
   }
 
-  return new Response(JSON.stringify({ data: result.extraction }), {
+  return new Response(JSON.stringify({ data: result.extraction, ...(pagesProcessed ? { pagesProcessed } : {}) }), {
     status: 200,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });

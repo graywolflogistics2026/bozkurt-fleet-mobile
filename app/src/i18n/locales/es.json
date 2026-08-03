@@ -350,6 +350,8 @@
     "createDriverFailedTitle": "No se pudo crear el conductor",
     "driverShareLabel": "Parte de {{name}} en este settlement ($)",
     "driverSharePlaceholder": "Monto",
+    "pagesProcessedTitle": "📄 Documento importado parcialmente",
+    "pagesProcessedBody": "Se importaron las páginas 1-{{through}} de {{total}}. Las páginas posteriores (por ejemplo, anexos o facturas) no se procesaron — impórtelas por separado si es necesario.",
     "lowConfidenceTitle": "⚠️ Revise antes de guardar",
     "lowConfidenceBody": "La IA no estuvo totalmente segura al leer este documento — revise los datos antes de guardar.",
     "miscIncomeNoteTitle": "💵 Ingreso comercial detectado",

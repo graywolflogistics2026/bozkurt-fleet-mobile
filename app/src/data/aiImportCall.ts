@@ -4,23 +4,34 @@ import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
 import type { Extraction } from '@/src/import/types';
 
 export type AiImportError = { type: string; message: string; detail?: string };
-export type AiImportCallResult = { data?: Extraction; error?: AiImportError };
+// pagesProcessed (owner decision 2026-08-03, "still failing after
+// chunking" fix): present only when ai-import didn't cover every page of
+// the original document — either because it was deliberately capped at
+// SETTLEMENT_MAX_PAGES (index.ts) or because a later page failed after
+// earlier ones succeeded. The import screen turns this into a plain
+// "imported pages 1-N of M" banner instead of silently showing a result
+// that looks complete when it isn't.
+export type AiImportCallResult = {
+  data?: Extraction;
+  error?: AiImportError;
+  pagesProcessed?: { through: number; total: number };
+};
 
-// CLIENT-SIDE TIMEOUT (owner decision 2026-08-02, device evidence: real
-// 8-page Prime settlements consistently exceeded the SERVER's own 55s
-// timeout — there was no CLIENT timeout at all before this pass, so
-// `supabase.functions.invoke()` just waited on whatever the platform/
-// network layer eventually did). Sized against ai-import's own documented
-// worst-case wall-clock budgets (supabase/functions/ai-import/index.ts's
-// TIMEOUT/CHUNKING BUDGET comment) with real margin on top of each:
-// the tightest server-side path (a small PDF's single attempt + chunked
-// fallback) tops out around 140.8s, and the image path around 120.8s
-// (two IMAGE_TIMEOUT_MS attempts + backoff) — PDF_CLIENT_TIMEOUT_MS stays
-// well above the "at least 180s" the bug report asked for, IMAGE_CLIENT_
-// TIMEOUT_MS shorter, per the same report ("keep a shorter one for single
-// images").
-const PDF_CLIENT_TIMEOUT_MS = 190_000;
-const IMAGE_CLIENT_TIMEOUT_MS = 130_000;
+// CLIENT-SIDE TIMEOUT (owner decision 2026-08-02, raised again 2026-08-03
+// per explicit device evidence that real settlements were STILL timing
+// out — "raise per-call to 90s server-side and 240s client-side"). Sized
+// against ai-import's own documented worst-case wall-clock budgets
+// (supabase/functions/ai-import/index.ts's TIMEOUT/PAGE-BUDGET comment):
+// the sequential 3-page path tops out around 123s server-side, well
+// under this 240s client budget — the large gap is deliberate headroom
+// for real-world network variance on top of the server's own (already
+// Supabase-150s-ceiling-bounded) processing time, not a sign the server
+// itself is expected to take anywhere near 240s. IMAGE_CLIENT_TIMEOUT_MS
+// stays shorter, per the same report ("keep a shorter one for single
+// images") — images are always a single IMAGE_TIMEOUT_MS(90s) call,
+// worst case ~91s with the one 5xx-only retry.
+const PDF_CLIENT_TIMEOUT_MS = 240_000;
+const IMAGE_CLIENT_TIMEOUT_MS = 120_000;
 
 // Calls the ai-import Edge Function (supabase/functions/ai-import) with the
 // signed-in user's JWT (supabase.functions.invoke attaches it automatically
@@ -87,7 +98,11 @@ export async function callAiImport(
   // Both applied once, right here, so every downstream consumer
   // (mapExtraction mappers, the import preview screen) automatically sees
   // the corrected date/miles without needing its own fix.
-  return { data: sanitizeExtractionMiles(sanitizeExtractionDates(extraction)) };
+  const pagesProcessed = data?.pagesProcessed as { through: number; total: number } | undefined;
+  return {
+    data: sanitizeExtractionMiles(sanitizeExtractionDates(extraction)),
+    ...(pagesProcessed ? { pagesProcessed } : {}),
+  };
 }
 
 // User-facing message per structured error type (PROMPTS.md Session 6).

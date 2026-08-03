@@ -350,6 +350,8 @@
     "createDriverFailedTitle": "Could not create driver",
     "driverShareLabel": "{{name}}'s share of this settlement ($)",
     "driverSharePlaceholder": "Amount",
+    "pagesProcessedTitle": "📄 Partial document imported",
+    "pagesProcessedBody": "Imported pages 1-{{through}} of {{total}}. Later pages (e.g. attachments, invoices) weren't processed — import them separately if needed.",
     "lowConfidenceTitle": "⚠️ Please review before saving",
     "lowConfidenceBody": "The AI wasn't fully confident reading this document — check the details below before saving.",
     "miscIncomeNoteTitle": "💵 Business income detected",

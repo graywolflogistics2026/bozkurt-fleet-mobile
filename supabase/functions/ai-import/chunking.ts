@@ -210,3 +210,46 @@ export function mergeChunkedExtractions(chunks: ChunkExtraction[]): ChunkExtract
 
   return merged;
 }
+
+// SEQUENTIAL PAGE-BY-PAGE MERGE (owner decision 2026-08-03, "still
+// failing after chunking" device evidence: real Prime settlements kept
+// timing out even when split into 3-page PARALLEL chunks — the fix
+// replaces that with 1-PAGE-AT-A-TIME SEQUENTIAL calls, capped at
+// SETTLEMENT_MAX_PAGES pages by default (index.ts), never attempting
+// page 4+ automatically). This is the pure, testable merge/stop logic —
+// the actual per-page Anthropic calls happen in index.ts (Deno-only) and
+// are handed to this function as an already-resolved, in-page-order
+// array of PageAttemptResult.
+//
+// STOPS at the first failed page (sequential, not parallel — a later
+// page's own failure never wastes time on pages that would come after
+// it) and merges only the pages that succeeded BEFORE that failure, so a
+// partial result is saved instead of losing the whole import (CLAUDE.md
+// "no dollar silently lost" convention, extended here to "no PARTIAL
+// result silently lost either"). Returns null only when the very FIRST
+// page failed — there is nothing to save in that case, same as today's
+// total-failure behavior.
+export type PageAttemptResult = { success: true; extraction: ChunkExtraction } | { success: false };
+
+export type SequentialMergeResult = { extraction: ChunkExtraction; processedThrough: number; truncated: boolean };
+
+export function mergeSequentialPageResults(results: PageAttemptResult[], totalPages: number): SequentialMergeResult | null {
+  const successes: ChunkExtraction[] = [];
+  for (const r of results) {
+    if (!r.success) break;
+    successes.push(r.extraction);
+  }
+  if (successes.length === 0) return null;
+
+  const merged = successes.length === 1 ? { ...successes[0] } : mergeChunkedExtractions(successes);
+  const processedThrough = successes.length;
+  const truncated = processedThrough < totalPages;
+  // A single successfully-processed page is still a COMPLETE, coherent
+  // read of that one page (mergeChunkedExtractions' own "confidence
+  // forced low" rule only fires for a 2+-chunk merge) — but if we know
+  // there's more document we never got to, the RESULT as a whole is
+  // incomplete data for whatever this document actually is, so the
+  // needs-review machinery should still see it regardless of chunk count.
+  if (truncated) merged.confidence = 'low';
+  return { extraction: merged, processedThrough, truncated };
+}

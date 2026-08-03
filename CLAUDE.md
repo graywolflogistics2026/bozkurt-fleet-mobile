@@ -1974,3 +1974,96 @@
   from 73, matching the 9 deleted test files) passes; all 7 locale files
   confirmed to still have identical key sets after the i18n cleanup
   (`glossary.test.ts` re-passed as the existing parity guard).
+- MULTI-PAGE SETTLEMENT CHUNKING, ROUND 2 — "STILL FAILING" FIX (owner
+  decision 2026-08-03, device evidence: real Prime settlements STILL
+  timed out after the 2026-08-02 chunking pass — "Could not process this
+  multi-page document (4 sections attempted): ...over 50s"). Diagnosis
+  requested first, answered plainly: NO, a chunk was never re-sending the
+  whole document — `splitPdfIntoChunks()` (index.ts) genuinely crops each
+  chunk to only its own pages via pdf-lib's `copyPages()`/`addPage()`,
+  confirmed by reading the code line by line before writing anything new.
+  The real, separate root causes:
+  1. **A genuine retry-doubling bug**: `callAnthropicMessages()`'s catch
+     block retried on ANY caught error — including an `AbortError` from
+     OUR OWN client-side timeout — before ever checking whether it was an
+     abort. A chunk that timed out at (the prior pass's) 50s silently got
+     a full SECOND 50s attempt before surfacing the "over 50s" message,
+     meaning real failures were taking ~2x as long as the error implied.
+     Fixed: an abort now returns the `timeout` error immediately, no
+     retry — retry is reserved for a genuine transient failure (a real
+     network throw, or a 5xx/529 response), which a repeat attempt can
+     actually help with.
+  2. **Parallel contention across chunks**: the prior pass fired all of a
+     document's 3-page chunks at Anthropic simultaneously via
+     `Promise.all`. Real-world evidence (still failing at the raised
+     budget) points to this adding genuine contention/queueing risk on
+     top of each call's own processing time, exactly as the bug report
+     suspected ("parallel adds rate-limit and memory risk").
+  **New strategy — "prefer what demonstrably works," pragmatic default
+  over exhaustive coverage**: `SETTLEMENT_MAX_PAGES = 3` (index.ts) caps
+  extraction at the FIRST 3 pages by default — the header/revenue/
+  reimbursement/deduction/recap sections of a carrier settlement are
+  always there; the operating-statement/EZ-Pass/repair-invoice pages that
+  typically follow are a duplicate YTD rollup and separate documents the
+  user can import on their own. This isn't gated on docType (unknown
+  until AFTER extraction) — it applies to any oversized PDF, which in
+  practice means settlements, since that's what triggers this path.
+  Two paths now, replacing the prior pass's three:
+  1. **Single call** (`totalPages <= SETTLEMENT_MAX_PAGES`, or a PDF whose
+     page count pdf-lib couldn't even determine — page-capping isn't
+     possible anyway, so the whole original file is sent as-is):
+     `SINGLE_CALL_TIMEOUT_MS` (90s), the standard 5xx-only retry.
+  2. **Sequential, page-by-page** (`totalPages > SETTLEMENT_MAX_PAGES`):
+     pages 1, 2, 3 — ONE AT A TIME, in order, NEVER in parallel, NEVER
+     page 4+. `SEQUENTIAL_PAGE_TIMEOUT_MS` (40s) per page. STOPS at the
+     first page that fails rather than attempting the rest (sequential,
+     not parallel, means a doomed later page never wastes time
+     alongside — or contends with — an earlier one). This is a REAL
+     increase in per-page budget despite 40s being less than the old
+     50s: the old 50s covered 3 PAGES per call (~17s/page); this is 40s
+     for exactly ONE page — roughly 2.3x more time per page, with zero
+     parallel contention.
+  Both budgets are sized against Supabase's VERIFIED 150s wall-clock
+  ceiling for a synchronous request/response Edge Function invocation:
+  single-call worst case ≈91s (~59s margin); sequential worst case ≈123s
+  for all 3 pages (~25s margin for pdf-lib parsing/splitting ×3, the
+  daily-import-count query, response serialization).
+  **Graceful degradation, never lose the whole import again**: if page 1
+  succeeds but page 2 or 3 fails, the sequential path SAVES whatever
+  pages succeeded before the failure instead of discarding everything —
+  `mergeSequentialPageResults()` (chunking.ts, pure and unit-tested, same
+  "chunking.ts carries 100% of the testable logic" convention as the
+  prior pass) merges only the pages before the first failure and forces
+  `confidence: 'low'` whenever the result doesn't cover every page of the
+  original document (whether by deliberate 3-page cap or a mid-sequence
+  failure) — reusing the EXISTING needs-review machinery (invariant #14)
+  rather than inventing a second one. Every response that doesn't cover
+  every original page — capped-by-design or failure-truncated alike —
+  now carries a `pagesProcessed: {through, total}` field alongside `data`;
+  `aiImportCall.ts` forwards it, and the import preview screen shows a
+  plain "📄 Partial document imported — imported pages 1-N of M, later
+  pages weren't processed, import them separately if needed" banner (new
+  `importScreen.pagesProcessed*` i18n keys, all 7 locales) rather than
+  silently looking complete when it isn't. A total failure (page 1 itself
+  fails) still surfaces page 1's own real error, same as before.
+  **Timeouts raised end to end, not just server-side**: client
+  (`aiImportCall.ts`) `PDF_CLIENT_TIMEOUT_MS` raised 190s → 240s per the
+  explicit ask, `IMAGE_CLIENT_TIMEOUT_MS` 130s → 120s (still shorter than
+  the PDF budget, images are always one `IMAGE_TIMEOUT_MS`(90s, raised
+  from 60s) call). **Measured per-call duration (item 6 of the bug
+  report), answered honestly**: this dev environment cannot make a real
+  Anthropic API call to measure actual latency — rather than invent a
+  number, `callAnthropicMessages()` now logs the REAL elapsed ms for
+  every attempt (`console.log`, visible via `supabase functions logs
+  ai-import`), so the next genuine device import reports the true
+  per-call budget instead of a guess.
+  Tests: `app/src/import/__tests__/chunking.test.ts` gained 6 new tests
+  for `mergeSequentialPageResults()` — first-page failure returns null
+  (nothing to save), a single successful page passes through untruncated
+  when it's the whole document, truncated results force `confidence:
+  'low'`, stopping at the first failed page merges only the pages before
+  it (never a page that would have come after), a fully-covered 3-page
+  merge is not marked truncated, and a real-world-shaped 3-of-12-page
+  case reproduces the exact NEGATIVE SETTLEMENTS fixture numbers. Full
+  suite: 64 suites / 1475 tests pass; `tsc --noEmit` clean; all 7 locales
+  confirmed key-parity after adding the 2 new `importScreen.*` keys.

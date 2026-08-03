@@ -350,6 +350,8 @@
     "createDriverFailedTitle": "Не удалось создать водителя",
     "driverShareLabel": "Доля {{name}} в этом settlement ($)",
     "driverSharePlaceholder": "Сумма",
+    "pagesProcessedTitle": "📄 Документ импортирован частично",
+    "pagesProcessedBody": "Импортированы страницы 1-{{through}} из {{total}}. Последующие страницы (например, вложения, счета) не обработаны — при необходимости импортируйте их отдельно.",
     "lowConfidenceTitle": "⚠️ Проверьте перед сохранением",
     "lowConfidenceBody": "ИИ не был полностью уверен при чтении этого документа — проверьте данные перед сохранением.",
     "miscIncomeNoteTitle": "💵 Обнаружен доход бизнеса",

@@ -197,6 +197,13 @@ export default function Import() {
   const [creatingDriver, setCreatingDriver] = useState(false);
   const [driverShareAmount, setDriverShareAmount] = useState('');
   const [categoryOverride, setCategoryOverride] = useState('');
+  // PAGES-PROCESSED NOTE (owner decision 2026-08-03, "still failing after
+  // chunking" fix): set whenever ai-import didn't cover every page of the
+  // original document — see aiImportCall.ts's AiImportCallResult.
+  // pagesProcessed for the full reasoning. Shown as a plain banner on the
+  // preview screen so the user knows exactly what was and wasn't
+  // imported, rather than a silently incomplete-looking result.
+  const [pagesProcessedNote, setPagesProcessedNote] = useState<{ through: number; total: number } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device
   // feedback: "settlement imports failing frequently"): instead of one
@@ -267,6 +274,7 @@ export default function Import() {
     setNewDriverName('');
     setDriverShareAmount('');
     setCategoryOverride('');
+    setPagesProcessedNote(null);
     setErrorMessage(null);
     setErrorStepGroup(null);
     setErrorHasPartialSave(false);
@@ -370,8 +378,9 @@ export default function Import() {
     setPhase('error');
   }
 
-  async function afterExtraction(d: Extraction, fname: string | undefined) {
+  async function afterExtraction(d: Extraction, fname: string | undefined, pagesProcessed?: { through: number; total: number }) {
     if (!userId) return;
+    setPagesProcessedNote(pagesProcessed ?? null);
     const existingDocs = await fetchExistingDocsForDuplicateCheck(userId);
     setDuplicates(checkDuplicateImport(d, fname, existingDocs));
 
@@ -423,10 +432,10 @@ export default function Import() {
       const base64 = await new File(compressed.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
       startStillWorkingTimer();
-      const { data, error } = await callAiImport(base64, 'image/jpeg', undefined, i18n.language, customCategoryNames);
+      const { data, error, pagesProcessed } = await callAiImport(base64, 'image/jpeg', undefined, i18n.language, customCategoryNames);
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
-      if (data) await afterExtraction(data, undefined);
+      if (data) await afterExtraction(data, undefined, pagesProcessed);
     } catch (err) {
       clearStillWorkingTimer();
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessPhoto'));
@@ -460,10 +469,10 @@ export default function Import() {
       const base64 = await new File(asset.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
       startStillWorkingTimer();
-      const { data, error } = await callAiImport(base64, 'application/pdf', undefined, i18n.language, customCategoryNames);
+      const { data, error, pagesProcessed } = await callAiImport(base64, 'application/pdf', undefined, i18n.language, customCategoryNames);
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
-      if (data) await afterExtraction(data, asset.name);
+      if (data) await afterExtraction(data, asset.name, pagesProcessed);
     } catch (err) {
       clearStillWorkingTimer();
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
@@ -610,6 +619,15 @@ export default function Import() {
                 <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.settlementReplaceTitle')}</Text>
                 <MutedText>
                   {t('importScreen.settlementReplaceBody', { date: settlementPrimaryDate ?? '' })}
+                </MutedText>
+              </View>
+            )}
+
+            {pagesProcessedNote && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.pagesProcessedTitle')}</Text>
+                <MutedText>
+                  {t('importScreen.pagesProcessedBody', { through: pagesProcessedNote.through, total: pagesProcessedNote.total })}
                 </MutedText>
               </View>
             )}

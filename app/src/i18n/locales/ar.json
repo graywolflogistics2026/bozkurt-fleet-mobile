@@ -350,6 +350,8 @@
     "createDriverFailedTitle": "تعذّر إنشاء السائق",
     "driverShareLabel": "حصة {{name}} من هذا Settlement ($)",
     "driverSharePlaceholder": "المبلغ",
+    "pagesProcessedTitle": "📄 تم استيراد المستند جزئيًا",
+    "pagesProcessedBody": "تم استيراد الصفحات 1-{{through}} من {{total}}. لم تتم معالجة الصفحات اللاحقة (مثل المرفقات والفواتير) — استوردها بشكل منفصل إذا لزم الأمر.",
     "lowConfidenceTitle": "⚠️ يرجى المراجعة قبل الحفظ",
     "lowConfidenceBody": "لم يكن الذكاء الاصطناعي واثقًا تمامًا من قراءة هذا المستند — راجع التفاصيل قبل الحفظ.",
     "miscIncomeNoteTitle": "💵 تم اكتشاف دخل تجاري",

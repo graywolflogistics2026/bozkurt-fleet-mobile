@@ -350,6 +350,8 @@
     "createDriverFailedTitle": "Sürücü oluşturulamadı",
     "driverShareLabel": "{{name}} adlı sürücünün bu settlement'taki payı ($)",
     "driverSharePlaceholder": "Tutar",
+    "pagesProcessedTitle": "📄 Belge kısmen içe aktarıldı",
+    "pagesProcessedBody": "{{total}} sayfadan 1-{{through}} arası içe aktarıldı. Sonraki sayfalar (ör. ekler, faturalar) işlenmedi — gerekirse ayrıca içe aktarın.",
     "lowConfidenceTitle": "⚠️ Kaydetmeden önce inceleyin",
     "lowConfidenceBody": "Yapay zeka bu belgeyi okurken tam emin değildi — kaydetmeden önce ayrıntıları kontrol edin.",
     "miscIncomeNoteTitle": "💵 İşletme geliri tespit edildi",

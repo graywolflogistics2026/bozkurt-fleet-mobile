@@ -2,7 +2,9 @@ import {
   computeChunkPageRanges,
   mergeChunkedExtractions,
   buildChunkPromptAddendum,
+  mergeSequentialPageResults,
   type ChunkExtraction,
+  type PageAttemptResult,
 } from '../../../../supabase/functions/ai-import/chunking';
 
 // PDF CHUNKING FOR MULTI-PAGE SETTLEMENTS (owner decision 2026-08-02,
@@ -157,6 +159,73 @@ describe('mergeChunkedExtractions', () => {
     expect(merged.settlement?.netPay).toBe(-1155.35);
     expect(merged.settlement?.totalMiles).toBe(0);
     const total = (merged.settlement?.deductions as { amount: number }[]).reduce((sum, d) => sum + d.amount, 0);
+    expect(total).toBeCloseTo(1160.51, 2);
+  });
+});
+
+function ok(overrides: Partial<NonNullable<ChunkExtraction['settlement']>>): PageAttemptResult {
+  return { success: true, extraction: settlementChunk(overrides) };
+}
+const FAIL: PageAttemptResult = { success: false };
+
+// SEQUENTIAL PAGE-BY-PAGE MERGE (owner decision 2026-08-03, "still failing
+// after chunking" fix) — replaces the old parallel N-chunk-or-nothing
+// design with per-page sequential calls that stop at the first failure
+// and save whatever succeeded before it, instead of losing the whole
+// import on one bad page.
+describe('mergeSequentialPageResults', () => {
+  it('returns null when the very first page fails — nothing to save', () => {
+    expect(mergeSequentialPageResults([FAIL], 5)).toBeNull();
+    expect(mergeSequentialPageResults([FAIL, ok({ weekEnding: '2026-07-24' })], 5)).toBeNull();
+  });
+
+  it('passes a single successfully-processed page through, not truncated when it is the whole document', () => {
+    const result = mergeSequentialPageResults([ok({ weekEnding: '2026-07-24', grossRevenue: 5.16 })], 1);
+    expect(result).not.toBeNull();
+    expect(result?.processedThrough).toBe(1);
+    expect(result?.truncated).toBe(false);
+    expect(result?.extraction.settlement?.weekEnding).toBe('2026-07-24');
+  });
+
+  it('marks truncated=true and forces confidence "low" when fewer pages succeeded than the document actually has', () => {
+    const result = mergeSequentialPageResults([ok({ weekEnding: '2026-07-24' })], 8);
+    expect(result?.processedThrough).toBe(1);
+    expect(result?.truncated).toBe(true);
+    expect(result?.extraction.confidence).toBe('low');
+  });
+
+  it('stops at the first failed page and merges only the pages before it (sequential, not parallel)', () => {
+    const page1 = ok({ weekEnding: '2026-07-24', grossRevenue: 2000, deductions: [{ code: 'INS', amount: 100 }] });
+    const page2 = ok({ deductions: [{ code: 'FUEL', amount: 200 }] });
+    const page3FailsButNeverReached = FAIL;
+    const page4WouldSucceedButNeverAttempted = ok({ deductions: [{ code: 'TOLL', amount: 50 }] });
+    const result = mergeSequentialPageResults([page1, page2, page3FailsButNeverReached, page4WouldSucceedButNeverAttempted], 10);
+    expect(result?.processedThrough).toBe(2);
+    expect(result?.truncated).toBe(true);
+    const deductions = result?.extraction.settlement?.deductions as { code: string; amount: number }[];
+    expect(deductions.map((d) => d.code)).toEqual(['INS', 'FUEL']);
+    expect(result?.extraction.settlement?.grossRevenue).toBe(2000);
+  });
+
+  it('all attempted pages succeeding and covering the whole document is not truncated', () => {
+    const result = mergeSequentialPageResults([ok({ weekEnding: '2026-07-24' }), ok({}), ok({})], 3);
+    expect(result?.processedThrough).toBe(3);
+    expect(result?.truncated).toBe(false);
+    expect(result?.extraction.confidence).toBe('low'); // still a 3-way merge, mergeChunkedExtractions' own rule
+  });
+
+  it('a real-world case: pages 1-3 of a 12-page settlement succeed, page 4+ deliberately never attempted', () => {
+    const results: PageAttemptResult[] = [
+      ok({ weekEnding: '2026-07-24', carrier: 'Prime Inc.', grossRevenue: 5.16, netPay: -1155.35, totalMiles: 0 }),
+      ok({ deductions: [{ code: 'MEAL', amount: 66.95 }, { code: 'ADV', amount: 550 }] }),
+      ok({ deductions: [{ code: 'BOND', amount: 100 }, { code: 'INS', amount: 443.56 }] }),
+    ];
+    const result = mergeSequentialPageResults(results, 12);
+    expect(result?.processedThrough).toBe(3);
+    expect(result?.truncated).toBe(true);
+    expect(result?.extraction.settlement?.weekEnding).toBe('2026-07-24');
+    expect(result?.extraction.settlement?.netPay).toBe(-1155.35);
+    const total = (result?.extraction.settlement?.deductions as { amount: number }[]).reduce((s, d) => s + d.amount, 0);
     expect(total).toBeCloseTo(1160.51, 2);
   });
 });
