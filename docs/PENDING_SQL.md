@@ -1320,7 +1320,7 @@ $$;
 
 ---
 
-## 39. profiles.cf_insurance_weekly (Cash Flow auto-fill fix, owner decision 2026-08-04, device report)
+## 39. profiles.cf_insurance_weekly (Cash Flow auto-fill fix, owner decision 2026-08-04, device report) — ✅ APPLIED
 
 Device report: a real carrier settlement withholds FOUR separate
 insurance charges EVERY WEEK (bobtail/deadhead, physical damage,
@@ -1347,7 +1347,7 @@ alter table profiles
 
 No RLS change needed — `profiles` is already owner-scoped.
 
-- [ ] 39a run (add profiles.cf_insurance_weekly)
+- [x] 39a run (add profiles.cf_insurance_weekly)
 
 ---
 
