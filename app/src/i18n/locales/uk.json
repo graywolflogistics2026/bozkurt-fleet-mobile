@@ -318,6 +318,7 @@
     "compressingPhoto": "Compressing photo…",
     "readingDocument": "Reading document…",
     "aiProcessing": "AI processing…",
+    "stillWorkingLargeDoc": "Still working — large documents can take a couple of minutes.",
     "couldNotProcessPhoto": "Could not process that photo.",
     "couldNotProcessFile": "Could not process that file.",
     "fileTooLargeTitle": "File too large",

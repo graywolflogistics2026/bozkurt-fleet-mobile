@@ -6,6 +6,22 @@ import type { Extraction } from '@/src/import/types';
 export type AiImportError = { type: string; message: string; detail?: string };
 export type AiImportCallResult = { data?: Extraction; error?: AiImportError };
 
+// CLIENT-SIDE TIMEOUT (owner decision 2026-08-02, device evidence: real
+// 8-page Prime settlements consistently exceeded the SERVER's own 55s
+// timeout — there was no CLIENT timeout at all before this pass, so
+// `supabase.functions.invoke()` just waited on whatever the platform/
+// network layer eventually did). Sized against ai-import's own documented
+// worst-case wall-clock budgets (supabase/functions/ai-import/index.ts's
+// TIMEOUT/CHUNKING BUDGET comment) with real margin on top of each:
+// the tightest server-side path (a small PDF's single attempt + chunked
+// fallback) tops out around 140.8s, and the image path around 120.8s
+// (two IMAGE_TIMEOUT_MS attempts + backoff) — PDF_CLIENT_TIMEOUT_MS stays
+// well above the "at least 180s" the bug report asked for, IMAGE_CLIENT_
+// TIMEOUT_MS shorter, per the same report ("keep a shorter one for single
+// images").
+const PDF_CLIENT_TIMEOUT_MS = 190_000;
+const IMAGE_CLIENT_TIMEOUT_MS = 130_000;
+
 // Calls the ai-import Edge Function (supabase/functions/ai-import) with the
 // signed-in user's JWT (supabase.functions.invoke attaches it automatically
 // — docs/DEPLOY_FUNCTIONS.md). The function returns structured errors as
@@ -29,13 +45,30 @@ export async function callAiImport(
   locale?: string,
   customCategories?: string[]
 ): Promise<AiImportCallResult> {
+  const timeout = mediaType.startsWith('image/') ? IMAGE_CLIENT_TIMEOUT_MS : PDF_CLIENT_TIMEOUT_MS;
   const { data, error } = await supabase.functions.invoke('ai-import', {
     body: { fileBase64, mediaType, docHint, locale, customCategories },
+    timeout,
   });
 
   if (error) {
-    const ctx = (error as { context?: Response }).context;
-    if (ctx) {
+    const ctx = (error as { context?: unknown }).context;
+    // A client-side timeout (this function's own `timeout` option above)
+    // aborts the underlying fetch and surfaces as a FunctionsFetchError
+    // whose `context` is the raw AbortError/DOMException, NOT a Response
+    // — must be checked before the ctx.json() Response path below, which
+    // would otherwise just silently fall through to the generic
+    // 'network_error' message and lose the "this was a timeout, not a
+    // connectivity problem" distinction.
+    if (ctx && typeof ctx === 'object' && (ctx as { name?: string }).name === 'AbortError') {
+      return {
+        error: {
+          type: 'timeout',
+          message: 'The AI service took too long to respond — try again, or split a multi-page document into fewer pages.',
+        },
+      };
+    }
+    if (ctx instanceof Response) {
       try {
         const body = await ctx.json();
         if (body?.error) return { error: body.error as AiImportError };

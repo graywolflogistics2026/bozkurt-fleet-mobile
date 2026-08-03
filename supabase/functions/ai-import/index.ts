@@ -8,6 +8,14 @@
 // Auth: Supabase JWT in the Authorization header (required).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
+import {
+  computeChunkPageRanges,
+  buildChunkPromptAddendum,
+  mergeChunkedExtractions,
+  type ChunkExtraction,
+  type PageRange,
+} from "./chunking.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -27,20 +35,58 @@ const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 // response. 16000 is a conservative near-doubling for any current Claude
 // Sonnet-class model's output limit — monitor Anthropic API responses
 // after deploy for a 400 validation error on this parameter, which would
-// mean the actual model in use supports less than this value.
+// mean the actual model in use supports less than this value. Chunking
+// (below) also means each INDIVIDUAL call now covers fewer pages, so
+// 16000 is comfortably more headroom per call than before, not less.
 const ANTHROPIC_MAX_TOKENS = 16000;
-// Client-controlled timeout for the Anthropic call, instead of relying on
-// whatever the platform's own (undocumented, from this codebase's
-// perspective) execution-time ceiling happens to be — a request that
-// hangs past this is aborted with a SPECIFIC, actionable "this took too
-// long" error rather than a generic platform timeout the client can only
-// report as "could not reach the import service."
-const ANTHROPIC_TIMEOUT_MS = 55_000;
+
+// TIMEOUT/CHUNKING BUDGET (owner decision 2026-08-02, device evidence:
+// real 8-page Prime settlements consistently exceeded the prior 55s
+// timeout). VERIFIED against Supabase's own docs
+// (https://supabase.com/docs/guides/functions/limits): Edge Functions
+// have a 150s wall-clock/request-idle-timeout ceiling for a SYNCHRONOUS
+// request/response invocation like this one, on BOTH the Free and Pro
+// plans — the commonly-cited "400s" figure is a DIFFERENT limit that only
+// applies to background work continued via `EdgeRuntime.waitUntil()`
+// AFTER a response has already been sent, which this function never does
+// (it always awaits its own single response). Every budget below is sized
+// to leave real margin under that 150s ceiling for the function's own
+// non-Anthropic overhead (the daily-import-count query, PDF
+// parsing/splitting via pdf-lib, prompt building, JSON merging, response
+// serialization) — NOT just the Anthropic call time itself.
+//
+// Three paths, three budgets:
+//   1. Image upload: one call, no chunking (images are fast/single-page).
+//   2. PDF at or under CHUNK_PAGE_THRESHOLD pages: ONE quick, NO-RETRY
+//      attempt at the full document first (most small PDFs succeed here,
+//      fast). If that attempt fails with a size-related error (timeout or
+//      truncated — NOT a clean 4xx/parse failure/refusal, which chunking
+//      can't fix), automatically fall back to chunking it into
+//      FALLBACK_PAGES_PER_CHUNK-page pieces (item 4's "retry once
+//      automatically with the chunked path" — extended to `truncated`
+//      too, since a token-ceiling hit is the same class of "too much
+//      content per call" problem timeout is).
+//   3. PDF over CHUNK_PAGE_THRESHOLD pages: straight to chunking, no
+//      wasted single-call attempt first.
+// Worst-case wall-clock math (path 2, the tightest budget): 40s (single
+// no-retry attempt) + [50s × 2 attempts + 0.8s backoff ≈ 100.8s]
+// (chunked fallback, but PARALLEL across chunks so bounded by the
+// SLOWEST single chunk, not the sum) ≈ 140.8s — leaves ~9s margin. Path 3
+// alone: 50s × 2 + 0.8 ≈ 100.8s, parallel-bounded — leaves ~49s margin.
+const IMAGE_TIMEOUT_MS = 60_000;
+const PDF_SINGLE_ATTEMPT_TIMEOUT_MS = 40_000;
+const PDF_CHUNK_TIMEOUT_MS = 50_000;
+const CHUNK_PAGE_THRESHOLD = 3;
+const PAGES_PER_CHUNK = 3;
+const FALLBACK_PAGES_PER_CHUNK = 1;
+
 // ONE retry for TRANSIENT failures only (a network-level fetch failure,
 // or a 5xx/529-overloaded response from Anthropic) — never for 4xx
 // (bad request/auth/billing, which retrying can't fix). Keeps worst-case
 // added latency bounded (one extra attempt, not a loop) while measurably
-// reducing "frequent failures" from a single transient blip.
+// reducing "frequent failures" from a single transient blip. The initial
+// no-retry attempt for a small PDF (above) deliberately passes
+// maxAttempts=1 instead of this constant — see the budget math above.
 const MAX_ANTHROPIC_ATTEMPTS = 2;
 const RETRY_BACKOFF_MS = 800;
 
@@ -346,14 +392,21 @@ type ErrorType =
 // from Anthropic) — never for a 4xx, which retrying can't fix. Returns
 // either the successful Response, or a terminal {errorType, message} the
 // caller turns into a structured error response.
+// `timeoutMs`/`maxAttempts` are now CALLER-supplied (owner decision
+// 2026-08-02, chunking pass) instead of fixed global constants — the
+// three call paths (plain image, small-PDF first attempt, per-chunk
+// call) each need a different budget; see the constants block above for
+// the full reasoning and worst-case math.
 async function callAnthropicMessages(
   anthropicKey: string,
   contentBlock: Record<string, unknown>,
   prompt: string,
+  timeoutMs: number,
+  maxAttempts: number,
 ): Promise<{ resp: Response } | { errorType: "timeout" | "anthropic_error"; message: string }> {
-  for (let attempt = 1; attempt <= MAX_ANTHROPIC_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), ANTHROPIC_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -373,7 +426,7 @@ async function callAnthropicMessages(
       // Retry once on a transient 5xx (including 529 "overloaded") —
       // never on a 4xx (bad request/auth/billing/Anthropic's own rate
       // limit), which a retry cannot fix.
-      if (!resp.ok && resp.status >= 500 && attempt < MAX_ANTHROPIC_ATTEMPTS) {
+      if (!resp.ok && resp.status >= 500 && attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
         continue;
       }
@@ -381,21 +434,195 @@ async function callAnthropicMessages(
     } catch (err) {
       clearTimeout(timeoutId);
       const isAbort = err instanceof Error && err.name === "AbortError";
-      if (attempt < MAX_ANTHROPIC_ATTEMPTS) {
+      if (attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
         continue;
       }
       if (isAbort) {
         return {
           errorType: "timeout",
-          message: `The AI service took too long to respond (over ${Math.round(ANTHROPIC_TIMEOUT_MS / 1000)}s) — try again, or split a multi-page document into fewer pages.`,
+          message: `The AI service took too long to respond (over ${Math.round(timeoutMs / 1000)}s) — try again, or split a multi-page document into fewer pages.`,
         };
       }
       return { errorType: "anthropic_error", message: `Network error calling Anthropic: ${(err as Error).message}` };
     }
   }
-  // Unreachable given MAX_ANTHROPIC_ATTEMPTS >= 1, but keeps TS satisfied.
+  // Unreachable given maxAttempts >= 1, but keeps TS satisfied.
   return { errorType: "anthropic_error", message: "Unknown error calling Anthropic." };
+}
+
+// JSON EXTRACTION, ONE PASS (owner decision 2026-08-02, chunking pass):
+// factors the "call Anthropic, then interpret its response" logic
+// (previously inline in the Deno.serve handler) into a reusable function
+// so it can be called ONCE for a plain image/small-PDF, or MULTIPLE TIMES
+// IN PARALLEL — once per page-chunk — without duplicating the
+// stop_reason/JSON-parse-fallback logic. Returns either the parsed
+// extraction object, or a structured error the caller turns into an HTTP
+// response (or, for a single chunk, into "this one chunk failed").
+type ExtractOneResult =
+  | { extraction: unknown }
+  | { errorType: ErrorType; message: string; extra?: Record<string, unknown> };
+
+async function extractOnePass(
+  anthropicKey: string,
+  contentBlock: Record<string, unknown>,
+  prompt: string,
+  timeoutMs: number,
+  maxAttempts: number,
+): Promise<ExtractOneResult> {
+  const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt, timeoutMs, maxAttempts);
+  if ("errorType" in callResult) return callResult;
+  const anthropicResp = callResult.resp;
+
+  if (!anthropicResp.ok) {
+    const bodyText = await anthropicResp.text().catch(() => "");
+    return {
+      errorType: "anthropic_error",
+      message: `Anthropic API returned HTTP ${anthropicResp.status}.`,
+      extra: { detail: bodyText.slice(0, 500) },
+    };
+  }
+
+  const data = await anthropicResp.json();
+  if (data.error) {
+    return { errorType: "anthropic_error", message: data.error.message ?? "Unknown Anthropic error." };
+  }
+  if (data.stop_reason === "refusal") {
+    return { errorType: "model_refusal", message: "The model declined to process this document." };
+  }
+  // Owner decision 2026-08-02 ("settlement imports failing frequently"
+  // audit): a response cut off by ANTHROPIC_MAX_TOKENS is a genuinely
+  // different, actionable case from a malformed response — every one of
+  // the JSON.parse() fallback attempts below would fail on truncated JSON
+  // and land in the generic "parse_failed" bucket with no hint that the
+  // real cause was hitting the token ceiling, not a garbled response.
+  if (data.stop_reason === "max_tokens") {
+    return {
+      errorType: "truncated",
+      message: "This document was too complex for the AI to fully process in one pass (the response was cut off). Try splitting a multi-page settlement into smaller batches, or a clearer/smaller scan.",
+    };
+  }
+
+  const raw = (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
+
+  let parsed: unknown = null;
+  for (const attempt of [
+    (t: string) => JSON.parse(t),
+    (t: string) => JSON.parse(t.replace(/```json|```/g, "").trim()),
+    (t: string) => {
+      const m = t.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error("no json found");
+      return JSON.parse(m[0]);
+    },
+  ]) {
+    try {
+      parsed = attempt(raw);
+      break;
+    } catch {
+      // try the next strategy
+    }
+  }
+
+  if (!parsed) {
+    return {
+      errorType: "parse_failed",
+      message: "Could not parse a JSON extraction from the model's response.",
+      extra: { raw: raw.slice(0, 2000) },
+    };
+  }
+
+  return { extraction: parsed };
+}
+
+// PDF PAGE COUNT + SPLITTING (owner decision 2026-08-02, chunking pass) —
+// the Deno-only half of chunking (chunking.ts holds the pure, Deno-free
+// half: page-range arithmetic and JSON merging). base64<->bytes uses the
+// Web-standard atob/btoa (both available as Deno globals) — bytesToBase64
+// chunks the String.fromCharCode(...) spread in 0x8000-byte batches to
+// avoid a call-stack overflow on a large PDF's byte array.
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// Returns null (never throws) when the PDF can't be parsed for a page
+// count — the caller falls back to the plain, non-chunked path in that
+// case, exactly as if this feature didn't exist. Chunking is purely
+// additive; it must never become a NEW way for an otherwise-fine import
+// to fail.
+async function getPdfPageCount(fileBase64: string): Promise<number | null> {
+  try {
+    const doc = await PDFDocument.load(base64ToBytes(fileBase64), { ignoreEncryption: true });
+    return doc.getPageCount();
+  } catch {
+    return null;
+  }
+}
+
+async function splitPdfIntoChunks(fileBase64: string, ranges: PageRange[]): Promise<string[]> {
+  const srcDoc = await PDFDocument.load(base64ToBytes(fileBase64), { ignoreEncryption: true });
+  const chunks: string[] = [];
+  for (const range of ranges) {
+    const chunkDoc = await PDFDocument.create();
+    const indices: number[] = [];
+    for (let p = range.start; p <= range.end; p++) indices.push(p - 1); // pdf-lib is 0-indexed
+    const copiedPages = await chunkDoc.copyPages(srcDoc, indices);
+    copiedPages.forEach((page) => chunkDoc.addPage(page));
+    chunks.push(bytesToBase64(await chunkDoc.save()));
+  }
+  return chunks;
+}
+
+// Runs every chunk's extraction IN PARALLEL (this is what keeps the
+// whole operation bounded by the SLOWEST single chunk instead of the sum
+// of all of them — essential to staying under the 150s platform ceiling)
+// and merges the results. Any single chunk's terminal failure fails the
+// whole extraction — a partial-but-silently-incomplete result (missing
+// a whole page's worth of deductions/loads) would be worse than a clear
+// error, per this codebase's "no dollar silently lost" convention
+// (CLAUDE.md invariant #3).
+// Chunking only ever applies to PDFs (images are single-page and always
+// go through the plain extractOnePass path) — every chunk pdf-lib
+// produces is itself a PDF regardless of the original upload's media
+// type, so this always builds a "document" content block, never "image".
+async function extractChunked(
+  anthropicKey: string,
+  fileBase64: string,
+  ranges: PageRange[],
+  totalPages: number,
+  basePrompt: string,
+): Promise<ExtractOneResult> {
+  const chunkBase64s = await splitPdfIntoChunks(fileBase64, ranges);
+  const results = await Promise.all(
+    chunkBase64s.map((chunkB64, i) => {
+      const chunkContentBlock = { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunkB64 } };
+      const chunkPrompt = basePrompt + buildChunkPromptAddendum(ranges[i], totalPages);
+      return extractOnePass(anthropicKey, chunkContentBlock, chunkPrompt, PDF_CHUNK_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+    }),
+  );
+
+  const failed = results.find((r): r is Extract<ExtractOneResult, { errorType: ErrorType }> => "errorType" in r);
+  if (failed) {
+    return {
+      errorType: failed.errorType,
+      message: `Could not process this multi-page document (${ranges.length} sections attempted): ${failed.message}`,
+      extra: failed.extra,
+    };
+  }
+
+  const extractions = (results as Extract<ExtractOneResult, { extraction: unknown }>[]).map((r) => r.extraction as ChunkExtraction);
+  return { extraction: mergeChunkedExtractions(extractions) };
 }
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
@@ -495,73 +722,48 @@ Deno.serve(async (req: Request) => {
 
   const prompt = buildExtractionPrompt(docHint, locale, customCategories);
 
-  const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt);
-  if ("errorType" in callResult) {
-    return errorResponse(callResult.errorType, callResult.message, callResult.errorType === "timeout" ? 504 : 502);
-  }
-  const anthropicResp = callResult.resp;
+  // THREE-PATH ORCHESTRATION (owner decision 2026-08-02, chunking pass —
+  // see the budget constants block near the top of this file for the full
+  // reasoning and worst-case wall-clock math for each path):
+  //   1. Image: one call, IMAGE_TIMEOUT_MS, the standard retry count.
+  //   2. PDF at or under CHUNK_PAGE_THRESHOLD pages (or a PDF whose page
+  //      count couldn't be determined at all — pdf-lib failed to parse
+  //      it, so chunking isn't possible anyway): ONE quick, NO-RETRY
+  //      attempt at the full document first; ONLY on a timeout/truncated
+  //      result (never a clean 4xx/parse/refusal failure, which chunking
+  //      can't fix) does it fall back to chunking at
+  //      FALLBACK_PAGES_PER_CHUNK pages/chunk (item 4 of the bug report:
+  //      "retry once automatically with the chunked path before
+  //      surfacing an error").
+  //   3. PDF over CHUNK_PAGE_THRESHOLD pages: straight to chunking at
+  //      PAGES_PER_CHUNK pages/chunk, no wasted single-call attempt first.
+  let result: ExtractOneResult;
 
-  if (!anthropicResp.ok) {
-    const bodyText = await anthropicResp.text().catch(() => "");
-    return errorResponse(
-      "anthropic_error",
-      `Anthropic API returned HTTP ${anthropicResp.status}.`,
-      502,
-      { detail: bodyText.slice(0, 500) },
-    );
-  }
+  if (isImage) {
+    result = await extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+  } else {
+    const pageCount = await getPdfPageCount(fileBase64);
 
-  const data = await anthropicResp.json();
-  if (data.error) {
-    return errorResponse("anthropic_error", data.error.message ?? "Unknown Anthropic error.", 502);
-  }
-  if (data.stop_reason === "refusal") {
-    return errorResponse("model_refusal", "The model declined to process this document.", 422);
-  }
-  // Owner decision 2026-08-02 ("settlement imports failing frequently"
-  // audit): a response cut off by ANTHROPIC_MAX_TOKENS is a genuinely
-  // different, actionable case from a malformed response — every one of
-  // the JSON.parse() fallback attempts below would fail on truncated JSON
-  // and land in the generic "parse_failed" bucket with no hint that the
-  // real cause was hitting the token ceiling, not a garbled response.
-  if (data.stop_reason === "max_tokens") {
-    return errorResponse(
-      "truncated",
-      "This document was too complex for the AI to fully process in one pass (the response was cut off). Try splitting a multi-page settlement into smaller batches, or a clearer/smaller scan.",
-      422,
-    );
-  }
+    if (pageCount !== null && pageCount > CHUNK_PAGE_THRESHOLD) {
+      const ranges = computeChunkPageRanges(pageCount, PAGES_PER_CHUNK);
+      result = await extractChunked(anthropicKey, fileBase64, ranges, pageCount, prompt);
+    } else {
+      result = await extractOnePass(anthropicKey, contentBlock, prompt, PDF_SINGLE_ATTEMPT_TIMEOUT_MS, 1);
 
-  const raw = (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
-
-  let parsed: unknown = null;
-  for (const attempt of [
-    (t: string) => JSON.parse(t),
-    (t: string) => JSON.parse(t.replace(/```json|```/g, "").trim()),
-    (t: string) => {
-      const m = t.match(/\{[\s\S]*\}/);
-      if (!m) throw new Error("no json found");
-      return JSON.parse(m[0]);
-    },
-  ]) {
-    try {
-      parsed = attempt(raw);
-      break;
-    } catch {
-      // try the next strategy
+      const canFallBackToChunking = pageCount !== null && pageCount > 1;
+      if ("errorType" in result && (result.errorType === "timeout" || result.errorType === "truncated") && canFallBackToChunking) {
+        const ranges = computeChunkPageRanges(pageCount as number, FALLBACK_PAGES_PER_CHUNK);
+        result = await extractChunked(anthropicKey, fileBase64, ranges, pageCount as number, prompt);
+      }
     }
   }
 
-  if (!parsed) {
-    return errorResponse(
-      "parse_failed",
-      "Could not parse a JSON extraction from the model's response.",
-      422,
-      { raw: raw.slice(0, 2000) },
-    );
+  if ("errorType" in result) {
+    const status = result.errorType === "timeout" ? 504 : result.errorType === "anthropic_error" ? 502 : 422;
+    return errorResponse(result.errorType, result.message, status, result.extra);
   }
 
-  return new Response(JSON.stringify({ data: parsed }), {
+  return new Response(JSON.stringify({ data: result.extraction }), {
     status: 200,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });

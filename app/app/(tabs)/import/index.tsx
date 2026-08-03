@@ -221,6 +221,15 @@ export default function Import() {
   // insert-vs-update decision and hitting the settlements unique index.
   const savingRef = useRef(false);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
+  // "STILL WORKING" PROGRESS STATE (owner decision 2026-08-02, device
+  // evidence: "The AI service took too long to respond" on real 8-page
+  // Prime settlements — the bare spinner gave no signal the app hadn't
+  // frozen during a genuinely long, multi-minute chunked extraction).
+  // Swaps workingLabel to a reassuring "still working" message once the
+  // AI call has been running long enough that the user might otherwise
+  // wonder if it's stuck — cleared the moment the call actually resolves,
+  // success or failure, so it never lingers into a later phase.
+  const workingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [copyLabel, copiedLabel] = [t('common.copyDetails'), t('common.copied')];
 
@@ -333,6 +342,25 @@ export default function Import() {
     }
   }
 
+  // Fires once, after `delayMs`, swapping workingLabel to the "still
+  // working — large documents can take a couple of minutes" message.
+  // 15s comfortably covers a normal single-page call (which finishes long
+  // before then) while still kicking in well before a multi-page chunked
+  // extraction's real, much longer runtime.
+  function startStillWorkingTimer(delayMs = 15_000) {
+    clearStillWorkingTimer();
+    workingTimerRef.current = setTimeout(() => {
+      setWorkingLabel(t('importScreen.stillWorkingLargeDoc'));
+    }, delayMs);
+  }
+  function clearStillWorkingTimer() {
+    if (workingTimerRef.current) {
+      clearTimeout(workingTimerRef.current);
+      workingTimerRef.current = null;
+    }
+  }
+  useEffect(() => () => clearStillWorkingTimer(), []);
+
   function handleAiError(err: AiImportError) {
     setErrorMessage(friendlyAiImportError(err));
     setErrorStepGroup(null);
@@ -394,10 +422,13 @@ export default function Import() {
       setWorkingLabel(t('importScreen.readingDocument'));
       const base64 = await new File(compressed.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
+      startStillWorkingTimer();
       const { data, error } = await callAiImport(base64, 'image/jpeg', undefined, i18n.language, customCategoryNames);
+      clearStillWorkingTimer();
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, undefined);
     } catch (err) {
+      clearStillWorkingTimer();
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessPhoto'));
       setErrorStepGroup(null);
       setErrorHasPartialSave(false);
@@ -428,10 +459,13 @@ export default function Import() {
       setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
       const base64 = await new File(asset.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
+      startStillWorkingTimer();
       const { data, error } = await callAiImport(base64, 'application/pdf', undefined, i18n.language, customCategoryNames);
+      clearStillWorkingTimer();
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, asset.name);
     } catch (err) {
+      clearStillWorkingTimer();
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
       setErrorStepGroup(null);
       setErrorHasPartialSave(false);

@@ -1730,3 +1730,143 @@
      distinguishes "this took too long" from a plain network error. Both
      new types get their own `friendlyAiImportError()` messages
      (`aiImportCall.ts`).
+- MULTI-PAGE SETTLEMENT CHUNKING (owner decision 2026-08-02, device
+  evidence: "The AI service took too long to respond (over 55s)" — real
+  Prime settlements are 8 pages and consistently exceeded the prior
+  pass's `ANTHROPIC_TIMEOUT_MS`). Root cause was two-layered: the client
+  had NO timeout at all (an unbounded wait on whatever the network/
+  platform did), and the single 55s server-side attempt was never going
+  to survive a genuinely large document however it was retried. Fixed
+  end to end rather than just raising a number:
+  1. **Platform ceiling, verified not assumed**: checked Supabase's own
+     docs (https://supabase.com/docs/guides/functions/limits) rather than
+     trusting the commonly-cited "400s" figure — that number is for
+     background work continued via `EdgeRuntime.waitUntil()` AFTER a
+     response is already sent, which `ai-import` never does (it always
+     awaits its own single response). The real ceiling for THIS
+     function's synchronous request/response execution model is **150s**,
+     on both Free and Pro plans — the load-bearing constraint for every
+     budget below.
+  2. **Deterministic PDF chunking**: `supabase/functions/ai-import/
+     chunking.ts` is a new, deliberately Deno-free, dependency-free pure
+     module (page-range arithmetic + JSON merge only) — unit-tested
+     directly from the app's Jest suite via a relative import
+     (`app/src/import/__tests__/chunking.test.ts`, 14 tests) without
+     needing a Deno runtime in CI, avoiding a second copy of the same
+     algorithm to keep in sync (same "each Edge Function is self-
+     contained" convention as `delete-account`/`reset-data`'s duplicated
+     `deleteStorageFolder()` — `ChunkExtraction` is a minimal LOCAL type,
+     not an import of `app/src/import/types.ts`'s `Extraction`).
+     `computeChunkPageRanges()` splits a PDF into non-overlapping 1-
+     indexed page ranges; `mergeChunkedExtractions()` combines one
+     extraction per chunk back into a single result: header/summary
+     SCALARS (weekEnding, carrier, grossRevenue, netPay, totalMiles, ...)
+     take chunk[0]'s value UNCONDITIONALLY for numerics — a `0` is very
+     often a legitimate value (e.g. a genuine 0-mile home week, the exact
+     miles-trap case CLAUDE.md's NEGATIVE SETTLEMENTS pass already
+     hardened) and "first non-zero across chunks" would wrongly skip past
+     a correct 0 in favor of a later chunk's guess; line-item ARRAYS
+     (loads, fuel, deductions, maintenance, tolls items, loans) are
+     concatenated across every chunk in page order, safe because page
+     ranges never overlap so the same physical line can never appear
+     twice; tolls subtotals/the optional "operating" section scan every
+     chunk for the first meaningful value since they're not guaranteed to
+     be on page 1; `confidence` is ALWAYS forced `"low"` on a 2+-chunk
+     merge regardless of what any individual chunk reported, so CLAUDE.md
+     invariant #14's needs-review machinery always surfaces a merged
+     result for the user to confirm before saving — a multi-chunk merge
+     is inherently more guess-prone (heuristic header placement, array-
+     concatenation assumes clean boundaries) than one coherent read.
+     `buildChunkPromptAddendum()` tells the model it's seeing only a page
+     subset and to leave any field not visible on THOSE pages at its
+     normal schema default rather than guessing/reconstructing it — the
+     merge's "chunk[0] priority" rule depends on this instruction
+     actually being followed.
+  3. **Three-path server orchestration** (`index.ts`'s `Deno.serve`
+     handler, budgets sized to leave real margin under the 150s ceiling
+     for the function's OWN non-Anthropic overhead too — the daily-import
+     count query, pdf-lib parsing/splitting, prompt building, JSON
+     merging — not just the Anthropic call time): (a) an image — one
+     call, `IMAGE_TIMEOUT_MS` (60s), the standard 2-attempt retry, no
+     chunking (images are single-page); (b) a PDF at or under
+     `CHUNK_PAGE_THRESHOLD` (3) pages, OR one whose page count couldn't
+     even be determined (pdf-lib failed to parse it, so chunking isn't
+     possible anyway) — ONE quick, deliberately NO-RETRY attempt at the
+     full document first (`PDF_SINGLE_ATTEMPT_TIMEOUT_MS`, 40s; most small
+     PDFs succeed here, fast); ONLY a `timeout` or `truncated` result (not
+     a clean 4xx/parse-failure/refusal, which chunking can't fix) falls
+     back automatically to chunking at `FALLBACK_PAGES_PER_CHUNK` (1)
+     page per chunk — extending "truncated" into this retry-once trigger
+     was a deliberate choice: hitting the token ceiling is the same class
+     of "too much content in one call" problem a timeout is; (c) a PDF
+     over the threshold — straight to chunking at `PAGES_PER_CHUNK` (3)
+     pages/chunk, no wasted single-call attempt first. Every chunk in a
+     batch is called via `Promise.all` (parallel), which is what keeps
+     the WHOLE chunked operation bounded by the slowest SINGLE chunk
+     instead of the sum of all of them — essential to staying under 150s.
+     Worst-case wall-clock, computed not guessed: path (b)'s fallback ≈
+     40s + (50s × 2 attempts + 0.8s backoff, parallel-bounded) ≈ 140.8s
+     (~9s margin under 150s); path (c) alone ≈ 100.8s (~49s margin). Any
+     single chunk's terminal failure fails the WHOLE extraction rather
+     than silently returning an incomplete merge — a partial-but-quiet
+     result (missing a whole page's worth of deductions/loads) would
+     violate CLAUDE.md invariant #3's "no dollar silently lost"
+     convention more than a clear error would.
+     `callAnthropicMessages()`/the new `extractOnePass()` wrapper (JSON-
+     parse/stop_reason handling factored out so it's reusable per-chunk,
+     not duplicated) both now take `timeoutMs`/`maxAttempts` as CALLER-
+     supplied parameters instead of fixed globals, since the three paths
+     each need a different budget.
+  4. **Client-side timeout, added (there was none before)**:
+     `aiImportCall.ts`'s `callAiImport()` now passes `timeout` to
+     `supabase.functions.invoke()` — `PDF_CLIENT_TIMEOUT_MS` (190s,
+     satisfying the "at least 180s" ask with real margin over path (b)'s
+     ~140.8s server-side worst case) for PDFs, `IMAGE_CLIENT_TIMEOUT_MS`
+     (130s, shorter per the report, with margin over the image path's
+     ~120.8s worst case) for images. A client-side timeout abort surfaces
+     from `@supabase/functions-js` as a `FunctionsFetchError` whose
+     `context` is the raw `AbortError`/`DOMException`, NOT a `Response` —
+     detected explicitly (`context.name === 'AbortError'`) BEFORE the
+     existing `ctx.json()` Response-parsing path, which would otherwise
+     silently fall through to a generic `'network_error'` and lose the
+     "this was a timeout, not a connectivity problem" distinction.
+  5. **"Still working" progress UI**: the import screen's working-phase
+     spinner used to show one static label through the whole AI call, no
+     matter how long it ran — indistinguishable from a frozen app on a
+     genuinely multi-minute chunked extraction. A `startStillWorkingTimer()`/
+     `clearStillWorkingTimer()` pair (`app/(tabs)/import/index.tsx`)
+     swaps `workingLabel` to `importScreen.stillWorkingLargeDoc` ("Still
+     working — large documents can take a couple of minutes.") 15s into
+     the AI call if it hasn't resolved yet, cleared the moment the call
+     actually settles (success or failure) so it never lingers into a
+     later phase — wired into both the photo and PDF import paths. New
+     key added to all 7 locales (`hi`/`uk` as untranslated English copies
+     per invariant #11, same as every other string added since that
+     rule).
+  6. **Reduce work per call, audited**: `ANTHROPIC_MAX_TOKENS` stays at
+     16000 (chunking gives even MORE headroom per call now, not less, per
+     the explicit ask to keep it); lowering scanned-image resolution was
+     confirmed ALREADY satisfied for photo uploads (`processImage()`
+     already downscales to 1600px width via `expo-image-manipulator`
+     before ever calling `ai-import`). Two optimizations considered and
+     deliberately NOT implemented, flagged rather than silently skipped:
+     stripping financially-blank pages before sending (not cheaply
+     detectable without an extra AI pass or rasterizing+OCR-ing every
+     page first — the cost of detecting it could exceed the cost of just
+     sending it); lowering DPI of a raster image EMBEDDED inside a PDF
+     page (`pdf-lib` can split/merge pages but cannot re-rasterize an
+     embedded image at a lower resolution without a much heavier
+     rendering dependency this function doesn't have) — both left as
+     explicitly-flagged future work, not silently absent.
+  Tests: `app/src/import/__tests__/chunking.test.ts` (14 tests) covers
+  `computeChunkPageRanges`, `buildChunkPromptAddendum`, and
+  `mergeChunkedExtractions` — including a real-world regression case
+  using the exact numbers from the NEGATIVE SETTLEMENTS pass's own fixture
+  (W/E 2026-07-24, $5.16 gross, -$1,155.35 net, 0 miles, $1,160.51 in
+  deductions split across simulated header/deduction chunks) to prove the
+  merge reproduces a genuine multi-page statement's numbers exactly. The
+  orchestration logic itself (the three-path branching, the Deno-only
+  `getPdfPageCount()`/`splitPdfIntoChunks()` helpers) is NOT unit-tested —
+  no Deno test runtime is available in this environment; `chunking.ts`
+  carries 100% of the testable, deterministic logic by design specifically
+  so this gap is as small as possible.

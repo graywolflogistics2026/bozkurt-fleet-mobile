@@ -318,6 +318,7 @@
     "compressingPhoto": "Fotoğraf sıkıştırılıyor…",
     "readingDocument": "Belge okunuyor…",
     "aiProcessing": "Yapay zeka işliyor…",
+    "stillWorkingLargeDoc": "Hâlâ çalışıyor — büyük belgeler birkaç dakika sürebilir.",
     "couldNotProcessPhoto": "Bu fotoğraf işlenemedi.",
     "couldNotProcessFile": "Bu dosya işlenemedi.",
     "fileTooLargeTitle": "Dosya çok büyük",

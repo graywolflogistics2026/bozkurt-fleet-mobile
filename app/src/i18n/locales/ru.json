@@ -318,6 +318,7 @@
     "compressingPhoto": "Сжатие фото…",
     "readingDocument": "Чтение документа…",
     "aiProcessing": "Обработка ИИ…",
+    "stillWorkingLargeDoc": "Всё ещё обрабатываем — большие документы могут занять пару минут.",
     "couldNotProcessPhoto": "Не удалось обработать это фото.",
     "couldNotProcessFile": "Не удалось обработать этот файл.",
     "fileTooLargeTitle": "Файл слишком большой",

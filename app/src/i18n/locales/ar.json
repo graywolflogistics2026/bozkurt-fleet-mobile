@@ -318,6 +318,7 @@
     "compressingPhoto": "جارٍ ضغط الصورة…",
     "readingDocument": "جارٍ قراءة المستند…",
     "aiProcessing": "معالجة بالذكاء الاصطناعي…",
+    "stillWorkingLargeDoc": "لا تزال المعالجة جارية — قد تستغرق المستندات الكبيرة بضع دقائق.",
     "couldNotProcessPhoto": "تعذّرت معالجة هذه الصورة.",
     "couldNotProcessFile": "تعذّرت معالجة هذا الملف.",
     "fileTooLargeTitle": "الملف كبير جدًا",
