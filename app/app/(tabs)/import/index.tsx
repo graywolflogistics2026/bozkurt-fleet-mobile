@@ -22,6 +22,7 @@ import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
+import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
 import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
@@ -469,7 +470,23 @@ export default function Import() {
       const base64 = await new File(asset.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
       startStillWorkingTimer();
-      const { data, error, pagesProcessed } = await callAiImport(base64, 'application/pdf', undefined, i18n.language, customCategoryNames);
+      const { data, error, pagesProcessed } = await callAiImport(
+        base64,
+        'application/pdf',
+        undefined,
+        i18n.language,
+        customCategoryNames,
+        // CONTINUATION PROTOCOL (owner decision 2026-08-03): a long
+        // settlement is now processed in several sequential round-trips
+        // — this fires between them so the user sees real progress
+        // instead of one static "AI processing…" label for however many
+        // minutes a many-page document takes.
+        (progress) => {
+          clearStillWorkingTimer();
+          setWorkingLabel(t('importScreen.processingPageProgress', { through: progress.through, total: progress.total }));
+          startStillWorkingTimer();
+        }
+      );
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, asset.name, pagesProcessed);
@@ -497,6 +514,12 @@ export default function Import() {
     if (needsTruckPicker && !truckId) return;
     if (needsDriverPicker && !driverId) return;
     if (isSettlementWeekEndingMissing(extraction)) return;
+    // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03) —
+    // same check the Save button's `disabled` prop already renders; this
+    // is defense in depth against any path that could reach handleSave()
+    // without going through that button (e.g. a stale re-render racing a
+    // state update), same spirit as the double-tap guard above.
+    if (!checkSettlementReconciliation(extraction).ok) return;
     savingRef.current = true;
 
     try {
@@ -557,6 +580,12 @@ export default function Import() {
 
   const hasDuplicate = !!duplicates && (duplicates.byContent.length > 0 || duplicates.byFilename.length > 0);
   const settlementWeekEndingMissing = extraction ? isSettlementWeekEndingMissing(extraction) : false;
+  // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03) —
+  // see src/import/settlementReconciliation.ts for the full reasoning.
+  // Recomputed on every extraction change, not memoized further — this
+  // is a handful of arithmetic operations over a settlement's own
+  // (already-in-memory) deduction array, not worth a useMemo.
+  const reconciliation = checkSettlementReconciliation(extraction);
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
   // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
   // team_split/trainee drivers get a split-entry field on the settlement
@@ -629,6 +658,29 @@ export default function Import() {
                 <MutedText>
                   {t('importScreen.pagesProcessedBody', { through: pagesProcessedNote.through, total: pagesProcessedNote.total })}
                 </MutedText>
+              </View>
+            )}
+
+            {!reconciliation.ok && (
+              <View style={{ backgroundColor: 'rgba(239,68,68,0.12)', borderColor: colors.red, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.red, fontWeight: '700' }}>{t('importScreen.reconciliationTitle')}</Text>
+                {reconciliation.issues.map((issue, i) =>
+                  issue.type === 'deductionsMismatch' ? (
+                    <MutedText key={i}>
+                      {t('importScreen.reconciliationDeductionsMismatch', {
+                        stated: money(issue.stated, i18n.language),
+                        summed: money(issue.summed, i18n.language),
+                      })}
+                    </MutedText>
+                  ) : (
+                    <MutedText key={i}>
+                      {t('importScreen.reconciliationZeroNet', {
+                        zero: money(0, i18n.language),
+                        gross: money(issue.grossRevenue, i18n.language),
+                      })}
+                    </MutedText>
+                  )
+                )}
               </View>
             )}
 
@@ -863,7 +915,12 @@ export default function Import() {
             <PrimaryButton
               title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
               onPress={handleSave}
-              disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing}
+              disabled={
+                (needsTruckPicker && !truckId) ||
+                (needsDriverPicker && !driverId) ||
+                settlementWeekEndingMissing ||
+                !reconciliation.ok
+              }
             />
             <SecondaryButton title={t('importScreen.discard')} onPress={reset} />
           </Card>

@@ -2067,3 +2067,100 @@
   case reproduces the exact NEGATIVE SETTLEMENTS fixture numbers. Full
   suite: 64 suites / 1475 tests pass; `tsc --noEmit` clean; all 7 locales
   confirmed key-parity after adding the 2 new `importScreen.*` keys.
+- MULTI-PAGE SETTLEMENT CHUNKING, ROUND 3 — NO MORE PAGE CAP + HARD
+  RECONCILIATION GUARD (owner decision 2026-08-03, device evidence: round
+  2's 3-page cap DID fix the timeout — "Partial document imported — pages
+  1-3 of 11" came back correctly, with the right week/loads/miles/gross —
+  but the deduction LINE ITEMS on that real 11-page settlement live past
+  page 3. The result showed Net Pay $0.00 and Deductions $0.00 while the
+  AI's own summary text said "Total deductions from truck: $4,637.15" —
+  gross income with zero recorded expenses. Saving that would be a real
+  tax-accuracy bug, not just an incomplete import: CLAUDE.md invariant #1's
+  net-pay tax model depends on out-of-pocket/withheld deductions actually
+  being captured). Two changes, together:
+  1. **No fixed page cap, ever** — there is no page count that's safe to
+     assume covers every settlement's financial sections, so capping
+     itself was the bug, not its size. Replaced with a CLIENT-DRIVEN
+     CONTINUATION protocol: `ai-import` processes a document in small,
+     safe batches (`PAGES_PER_BATCH = 3` pages, sequential, never
+     parallel — same per-page granularity and contention-avoidance as
+     round 2) and, whenever a batch fully succeeds but pages remain,
+     returns `nextPageStart` + `rawPageExtractions` (the raw per-page
+     extractions gathered so far) instead of a terminal result.
+     `aiImportCall.ts`'s `callAiImport()` loops: sees `nextPageStart`,
+     calls `ai-import` AGAIN passing those two values straight through,
+     SEQUENTIALLY (one full round-trip at a time, never concurrent),
+     until the whole document is covered or a page genuinely fails. This
+     is what makes "process ALL pages" compatible with Supabase's
+     VERIFIED 150s-per-invocation wall-clock ceiling (round 1) even for a
+     document with dozens of pages: no single invocation ever tries to
+     cover more than `PAGES_PER_BATCH` pages, so the per-invocation budget
+     math is UNCHANGED from round 2 (≈123s worst case, ~25s margin) no
+     matter how many total batches a long settlement needs — the platform
+     ceiling is never at risk regardless of document length. The merge
+     logic itself never moved off the server — `chunking.ts`'s existing,
+     tested `mergeSequentialPageResults()` still does 100% of the actual
+     merging (the server just feeds it the combined prior+new extraction
+     list each round); the client's only job is to store and resend the
+     raw array between calls, never to reimplement any merge semantics.
+     Defensive-only ceilings added on both sides (`MAX_TOTAL_PAGES = 60`
+     server-side, a 60-round loop cap client-side) guard against a
+     pathological/corrupt PDF driving an unbounded number of round-trips
+     — real settlements are nowhere near this long. The import screen's
+     "still working" message now updates per round-trip
+     (`importScreen.processingPageProgress`, "Processing page N of M…")
+     instead of showing one static label for however long a many-page
+     document's full sequence takes.
+  2. **Settlement reconciliation hard guard, must-have** — a new pure,
+     unit-tested `checkSettlementReconciliation()`
+     (`app/src/import/settlementReconciliation.ts`) BLOCKS Save entirely
+     (no override — a half-settlement that looks complete is worse than
+     no settlement) whenever either of two concrete, high-confidence
+     signals fires: (a) the settlement's own stated `totalDeductions`
+     figure doesn't match what the `deductions` line items actually sum
+     to (beyond a $1 rounding tolerance — deliberately narrow, per the
+     bug report's own framing "prefer the AI's stated section totals as a
+     cross-check EVERYWHERE," not a broader gross-minus-deductions-
+     equals-net arithmetic identity that would false-positive on
+     legitimate cases this app already handles, like escrow holdbacks or
+     NEGATIVE SETTLEMENTS' real negative nets); (b) `netPay` is exactly
+     `0` (or missing) while `grossRevenue` is nonzero — the precise
+     signature of a never-reached net-pay figure, not a real business
+     outcome (a real settlement's net is essentially never EXACTLY
+     $0.00). Wired into the import screen's Save button `disabled` prop
+     AND as a second, defense-in-depth check inside `handleSave()` itself
+     (same "double guard" pattern as the existing double-tap-guard/
+     duplicate-race checks), with a red (not the usual amber) blocking
+     banner listing the specific issue(s) and telling the user to
+     reimport, or add the missing amounts as standalone deductions from
+     the Deductions screen (settlements have no manual-add UI of their
+     own — a standalone deduction is the one real fallback that exists
+     today for capturing the expense even if the settlement itself can't
+     be saved). Deliberately does NOT gate on `pagesProcessed`/truncation
+     status — it re-checks the ACTUAL numbers on every settlement
+     extraction regardless of how it was obtained, as defense in depth
+     against any other path that could produce the same incomplete shape.
+  Tests: `app/src/import/__tests__/settlementReconciliation.test.ts` (new,
+  10 tests) — passes a complete/reconciled settlement, a genuinely
+  deduction-free one, a legitimate NEGATIVE SETTLEMENTS case (negative net
+  is fine, only an exact-zero net alongside nonzero gross blocks), item
+  4's own example (stated $4,637.15 vs. summed $500), the exact reported
+  failure mode (gross $8,235.47, net $0, deductions $0), a missing-net
+  case, rounding tolerance, and both signals firing at once.
+  `app/src/import/__tests__/chunking.test.ts` gained an 11-page,
+  8-deduction-page test proving `mergeSequentialPageResults()` correctly
+  accumulates deductions spread across many pages into a complete,
+  correctly-summed, non-zero-net result when every page succeeds — the
+  actual multi-invocation orchestration (`extractPageBatch`/
+  `priorPageExtractions` continuation in index.ts) is Deno-only and not
+  unit-tested here, same "no Deno runtime available" gap as every prior
+  pass's server orchestration logic. Full suite: 65 suites / 1498 tests
+  pass; `tsc --noEmit` clean; all 7 locales confirmed key-parity
+  (glossary test caught and fixed one real slip — the Spanish
+  translation of the new reconciliation strings initially translated
+  "settlement" to "liquidación," violating the DO-NOT-TRANSLATE glossary
+  rule; fixed before commit). Measured per-call timing (item 6, both
+  rounds): still cannot be produced from this dev sandbox — the
+  `console.log` timing added in round 2 remains the mechanism for getting
+  real numbers from the next actual device import
+  (`supabase functions logs ai-import`).

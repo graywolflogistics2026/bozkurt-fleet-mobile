@@ -4,13 +4,18 @@
 // the Anthropic API. ANTHROPIC_API_KEY lives only in this function's
 // environment secrets; the mobile app never holds it (CLAUDE.md).
 //
-// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[] }
+// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], pageRangeStart?: number, priorPageExtractions?: unknown[] }
+// pageRangeStart/priorPageExtractions (owner decision 2026-08-03, round 3
+// continuation protocol) are set by the CLIENT on every call after the
+// first one for a long multi-page PDF — see the PAGE-BUDGET comment
+// below for the full reasoning. A response may include `nextPageStart` +
+// `rawPageExtractions`, meaning: call again with those two values to
+// keep going.
 // Auth: Supabase JWT in the Authorization header (required).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import {
-  computeChunkPageRanges,
   buildChunkPromptAddendum,
   mergeSequentialPageResults,
   type ChunkExtraction,
@@ -41,75 +46,59 @@ const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 // 16000 is comfortably more headroom per call than before, not less.
 const ANTHROPIC_MAX_TOKENS = 16000;
 
-// TIMEOUT/PAGE-BUDGET (owner decision 2026-08-03, "still failing after
-// chunking" device evidence: real Prime settlements STILL timed out —
-// "Could not process this multi-page document (4 sections attempted):
-// ...over 50s" — even after the 2026-08-02 chunking pass. Root-caused two
-// real problems with that design, not just "raise the number again":
+// TIMEOUT/PAGE-BUDGET, ROUND 3 (owner decision 2026-08-03, device
+// evidence: round 2's 3-page cap DID fix the timeout — "pages 1-3 of 11"
+// came back correctly — but a real 11-page settlement's deduction LINE
+// ITEMS live beyond page 3 (revenue/header is early; the full deduction
+// breakdown, recap, and operating statement come later on a long
+// statement). Capping at 3 pages silently produced Net Pay $0.00 /
+// Deductions $0.00 while the AI's OWN summary text said "Total
+// deductions from truck: $4,637.15" — i.e. gross income with zero
+// recorded expenses. Saving that would be a real tax-accuracy bug, not
+// just an incomplete import. There is NO fixed page count that's safe to
+// assume covers every settlement's financial sections — the cap itself
+// was the bug, not its size.
 //
-// 1. It chunked into PAGES_PER_CHUNK(3)-page pieces and ran them all in
-//    PARALLEL via Promise.all. Each chunk's PDF WAS genuinely cropped to
-//    just its own pages (pdf-lib copyPages — never re-sent the whole
-//    document, confirmed by reading splitPdfIntoChunks below), but 3
-//    pages of a scanned/photographed settlement can still carry a lot of
-//    image data, and firing 4 of those at Anthropic simultaneously from
-//    one account risks real contention/queueing on top of each call's
-//    own processing time — the opposite of "smaller and more reliable."
-// 2. A genuine bug in callAnthropicMessages' retry loop: on ANY caught
-//    error — including an AbortError from OUR OWN timeout — the old code
-//    unconditionally retried before checking whether it was an abort.
-//    That silently DOUBLED the worst-case wait on every timeout (fire a
-//    50s attempt, time out, retry, fire ANOTHER 50s attempt) instead of
-//    failing fast — exactly why real-world failures were taking notably
-//    longer than the "50s" in the error message. Fixed below: retry is
-//    now ONLY for a genuine transient error (a real network throw, or a
-//    5xx/529 response) — a timeout returns immediately, no retry.
+// FIX: no more page cap. A multi-page PDF is now processed across AS
+// MANY PAGES AS IT HAS, via a CLIENT-DRIVEN CONTINUATION protocol
+// instead of trying to do it all in one Edge Function invocation (which
+// the 150s Supabase wall-clock ceiling — verified in the round-1 pass —
+// makes impossible for a genuinely long document at a reliable per-page
+// budget). Each invocation processes one small, safe BATCH of
+// PAGES_PER_BATCH(3) pages sequentially (never in parallel — same
+// contention finding as round 2) and, if there's more document left AND
+// the batch fully succeeded, returns `nextPageStart` + the raw per-page
+// extractions gathered SO FAR (`rawPageExtractions`) instead of a
+// terminal result. The client (aiImportCall.ts) loops: sees
+// `nextPageStart`, calls this function AGAIN passing `pageRangeStart`
+// and the accumulated `priorPageExtractions` it was just handed back,
+// and keeps going — sequentially, one invocation at a time, never
+// parallel — until the whole document is covered or a page genuinely
+// fails. The merge logic itself never moves off the server (still
+// chunking.ts's pure, tested functions) — the client's only job is to
+// store and resend the raw array between calls, never to re-implement
+// any merge semantics itself.
 //
-// NEW STRATEGY, "prefer what demonstrably works" (owner decision
-// 2026-08-03): stop trying to capture the WHOLE document by default.
-// SETTLEMENT_MAX_PAGES caps extraction at the first 3 pages — the
-// header/revenue/reimbursement/deduction/recap sections of a carrier
-// settlement are always there; the operating-statement/EZ-Pass/repair-
-// invoice pages that follow are a duplicate YTD rollup and separate
-// documents the user can import on their own. This is not "settlement-
-// only" in code (docType isn't known until AFTER extraction) — it's
-// applied to any oversized PDF, which in practice means settlements,
-// since that's what triggers this path.
-//   - totalPages <= SETTLEMENT_MAX_PAGES (or pdf-lib couldn't even
-//     determine a page count): ONE call over the WHOLE original file, no
-//     cropping needed, SINGLE_CALL_TIMEOUT_MS budget.
-//   - totalPages > SETTLEMENT_MAX_PAGES: go STRAIGHT to page-by-page
-//     SEQUENTIAL calls for pages 1, 2, 3 ONLY (never page 4+, and never
-//     in parallel) — each a genuinely single-page PDF via pdf-lib. Stops
-//     at the first page that fails and saves whatever pages succeeded
-//     before it (mergeSequentialPageResults, chunking.ts) rather than
-//     losing the whole import on one bad page.
-// Every response — whether all 3 pages came through or the document
-// genuinely only has 1-2 pages — that didn't cover the FULL original
-// page count carries `pagesProcessed: {through, total}` so the client
-// can tell the user plainly what was and wasn't imported.
-//
-// Budget math against Supabase's VERIFIED 150s wall-clock ceiling for a
-// synchronous request/response Edge Function invocation
-// (https://supabase.com/docs/guides/functions/limits — the "400s" figure
-// is a different limit for `EdgeRuntime.waitUntil()` background work,
-// which this function never uses):
-//   - Single-call path: one attempt at SINGLE_CALL_TIMEOUT_MS(90s), plus
-//     ONE retry ONLY if that first attempt was a fast 5xx (not a
-//     timeout, per the retry fix above) — worst case ~91s, ~59s margin.
-//   - Sequential path: 3 pages × SEQUENTIAL_PAGE_TIMEOUT_MS(40s), each
-//     with the same 5xx-only retry headroom (~41s worst case per page)
-//     ≈ 123s for all 3, leaving ~25s margin for pdf-lib parsing/
-//     splitting (×3), the daily-import-count query, and response
-//     serialization. This is a REAL increase in per-page budget versus
-//     the prior pass despite the raw number (40s) being less than the
-//     old 50s: the old 50s covered 3 PAGES per call (~17s/page); this is
-//     40s for exactly ONE page — roughly 2.3x more time per page, with
-//     zero parallel contention.
+// Budget math per INVOCATION against Supabase's VERIFIED 150s wall-clock
+// ceiling (https://supabase.com/docs/guides/functions/limits — the
+// "400s" figure is for `EdgeRuntime.waitUntil()` background work, which
+// this function never uses) is UNCHANGED from round 2, since each batch
+// is its own fresh invocation: PAGES_PER_BATCH(3) ×
+// SEQUENTIAL_PAGE_TIMEOUT_MS(40s), each with the same 5xx-only retry
+// headroom (~41s worst case per page) ≈ 123s for a full batch, leaving
+// ~25s margin per invocation regardless of how many total batches a
+// long document needs — the platform ceiling is never at risk no matter
+// how many pages a settlement has, because no single invocation ever
+// tries to cover more than PAGES_PER_BATCH pages.
 const IMAGE_TIMEOUT_MS = 90_000;
 const SINGLE_CALL_TIMEOUT_MS = 90_000;
 const SEQUENTIAL_PAGE_TIMEOUT_MS = 40_000;
-const SETTLEMENT_MAX_PAGES = 3;
+const PAGES_PER_BATCH = 3;
+// Defensive ceiling only — real settlements are nowhere near this long;
+// stops a pathological/corrupt PDF (that still passed the 10MB size
+// guard) from driving an unbounded number of client-side continuation
+// round-trips.
+const MAX_TOTAL_PAGES = 60;
 
 // Retry ONLY for a genuine TRANSIENT failure (a real network-level throw,
 // or a 5xx/529-overloaded response from Anthropic) — never for a 4xx
@@ -628,54 +617,53 @@ async function splitPdfIntoChunks(fileBase64: string, ranges: PageRange[]): Prom
   return chunks;
 }
 
-type ExtractSequentialResult =
-  | { extraction: unknown; processedThrough: number; truncated: boolean }
-  | { errorType: ErrorType; message: string; extra?: Record<string, unknown> };
+type PageBatchResult = {
+  newExtractions: ChunkExtraction[];
+  failure: { errorType: ErrorType; message: string; extra?: Record<string, unknown> } | null;
+  lastAttemptedPage: number;
+};
 
-// SEQUENTIAL, NOT PARALLEL (owner decision 2026-08-03, replaces the prior
-// pass's Promise.all-across-chunks design — see the budget comment block
-// near the top of this file for the full root-cause reasoning). Processes
-// pages ONE AT A TIME, in order, up to `maxPages`, STOPPING at the first
-// page that fails rather than attempting the rest — a later page's own
-// slow/failed call never wastes time or shares rate-limit/contention risk
-// with an earlier one. Every chunk pdf-lib produces really is cropped to
-// just that one page (confirmed by reading splitPdfIntoChunks — this was
-// never sending the whole document per call, in this pass or the last).
-// mergeSequentialPageResults (chunking.ts) does the actual merge/stop
-// logic — this function's only job is to run the real network calls in
-// order and hand it the results.
-async function extractSequentialPages(
+// SEQUENTIAL, NOT PARALLEL, ONE BATCH (owner decision 2026-08-03, round 3
+// — see the budget comment block near the top of this file for why this
+// no longer tries to cover a whole long document in one invocation).
+// Processes pages `startPage..min(startPage+batchSize-1, totalPages)` ONE
+// AT A TIME, in order, STOPPING at the first page that fails — a later
+// page's own slow/failed call never wastes time or shares rate-limit/
+// contention risk with an earlier one. Every chunk pdf-lib produces
+// really is cropped to just that one page (confirmed by reading
+// splitPdfIntoChunks — this was never sending the whole document per
+// call, in any pass). Returns only THIS batch's own new successes plus
+// whatever failure stopped it (if any) — merging with previously-
+// gathered pages from earlier batches happens in the caller (Deno.serve
+// handler), via chunking.ts's existing mergeSequentialPageResults.
+async function extractPageBatch(
   anthropicKey: string,
   fileBase64: string,
   totalPages: number,
-  maxPages: number,
+  startPage: number,
+  batchSize: number,
   basePrompt: string,
-): Promise<ExtractSequentialResult> {
-  const pagesToAttempt = Math.min(maxPages, totalPages);
-  const ranges = computeChunkPageRanges(pagesToAttempt, 1);
-  const pageResults: PageAttemptResult[] = [];
-  let lastFailure: { errorType: ErrorType; message: string; extra?: Record<string, unknown> } | null = null;
+): Promise<PageBatchResult> {
+  const endPage = Math.min(startPage + batchSize - 1, totalPages);
+  const newExtractions: ChunkExtraction[] = [];
+  let failure: PageBatchResult["failure"] = null;
+  let lastAttemptedPage = startPage - 1;
 
-  for (const range of ranges) {
+  for (let page = startPage; page <= endPage; page++) {
+    lastAttemptedPage = page;
+    const range: PageRange = { start: page, end: page };
     const [chunkB64] = await splitPdfIntoChunks(fileBase64, [range]);
     const contentBlock = { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunkB64 } };
     const chunkPrompt = basePrompt + buildChunkPromptAddendum(range, totalPages);
     const result = await extractOnePass(anthropicKey, contentBlock, chunkPrompt, SEQUENTIAL_PAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
     if ("errorType" in result) {
-      lastFailure = result;
-      pageResults.push({ success: false });
+      failure = result;
       break; // sequential: never attempt a later page once one has failed
     }
-    pageResults.push({ success: true, extraction: result.extraction as ChunkExtraction });
+    newExtractions.push(result.extraction as ChunkExtraction);
   }
 
-  const merged = mergeSequentialPageResults(pageResults, totalPages);
-  if (!merged) {
-    // Page 1 itself failed — nothing to save. Surface page 1's own real
-    // error (timeout/parse_failed/...) rather than a generic wrapper.
-    return lastFailure ?? { errorType: "anthropic_error", message: "Could not process page 1 of this document." };
-  }
-  return { extraction: merged.extraction, processedThrough: merged.processedThrough, truncated: merged.truncated };
+  return { newExtractions, failure, lastAttemptedPage };
 }
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
@@ -716,6 +704,15 @@ Deno.serve(async (req: Request) => {
     docHint?: string;
     locale?: string;
     customCategories?: string[];
+    // CONTINUATION PROTOCOL (owner decision 2026-08-03, round 3): set by
+    // the client on every call AFTER the first one for a long PDF — see
+    // the PAGE-BUDGET comment block near the top of this file. Absent/1
+    // on the initial call.
+    pageRangeStart?: number;
+    // Raw per-page extractions already gathered from EARLIER invocations
+    // (in page order) — this function never persists state between
+    // invocations itself, so the client hands it back every time.
+    priorPageExtractions?: unknown[];
   };
   try {
     body = await req.json();
@@ -723,7 +720,8 @@ Deno.serve(async (req: Request) => {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
   }
 
-  const { fileBase64, mediaType, docHint, locale, customCategories } = body;
+  const { fileBase64, mediaType, docHint, locale, customCategories, priorPageExtractions } = body;
+  const pageRangeStart = body.pageRangeStart ?? 1;
   if (!fileBase64 || !mediaType) {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
   }
@@ -775,36 +773,65 @@ Deno.serve(async (req: Request) => {
 
   const prompt = buildExtractionPrompt(docHint, locale, customCategories);
 
-  // TWO-PATH ORCHESTRATION (owner decision 2026-08-03 — see the budget
-  // comment block near the top of this file for the full root-cause
-  // reasoning and wall-clock math):
-  //   1. Image, or a PDF at/under SETTLEMENT_MAX_PAGES pages, or a PDF
-  //      whose page count couldn't even be determined (pdf-lib failed to
-  //      parse it — page-capping isn't possible anyway, send the whole
-  //      original file as-is): ONE call over the whole document,
-  //      SINGLE_CALL_TIMEOUT_MS / IMAGE_TIMEOUT_MS.
-  //   2. A PDF over SETTLEMENT_MAX_PAGES pages: go STRAIGHT to page-by-
-  //      page SEQUENTIAL extraction of pages 1..SETTLEMENT_MAX_PAGES —
-  //      never a single big multi-page call (that's what was failing),
-  //      never in parallel, never page SETTLEMENT_MAX_PAGES+1 or later.
+  // CONTINUATION ORCHESTRATION (owner decision 2026-08-03, round 3 — see
+  // the budget comment block near the top of this file for the full
+  // root-cause reasoning): no more fixed page cap. Every response that
+  // doesn't cover the whole document either carries `nextPageStart` (the
+  // client must call again to keep going) or `pagesProcessed` (a genuine
+  // stopping point — total success or an unrecoverable failure).
   let pagesProcessed: { through: number; total: number } | null = null;
+  let nextPageStart: number | null = null;
+  let rawPageExtractions: unknown[] | null = null;
   let result: ExtractOneResult;
 
   if (isImage) {
     result = await extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
   } else {
-    const pageCount = await getPdfPageCount(fileBase64);
+    const rawPageCount = await getPdfPageCount(fileBase64);
 
-    if (pageCount !== null && pageCount > SETTLEMENT_MAX_PAGES) {
-      const seqResult = await extractSequentialPages(anthropicKey, fileBase64, pageCount, SETTLEMENT_MAX_PAGES, prompt);
-      if ("errorType" in seqResult) {
-        result = seqResult;
-      } else {
-        result = { extraction: seqResult.extraction };
-        if (seqResult.truncated) pagesProcessed = { through: seqResult.processedThrough, total: pageCount };
-      }
-    } else {
+    if (rawPageCount === null) {
+      // Can't determine a page count at all — page-batching isn't
+      // possible, send the whole original file as one call, exactly as
+      // if this feature didn't exist (chunking is purely additive).
       result = await extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+    } else if (pageRangeStart === 1 && rawPageCount <= PAGES_PER_BATCH) {
+      // Whole document already fits in one batch — no cropping needed.
+      result = await extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+    } else {
+      // MAX_TOTAL_PAGES is a defensive-only ceiling (see its own comment
+      // above) — the user-facing `total` below always reports the REAL
+      // page count, even on the rare document long enough to hit it.
+      const clampedTotal = Math.min(rawPageCount, MAX_TOTAL_PAGES);
+      const batch = await extractPageBatch(anthropicKey, fileBase64, clampedTotal, pageRangeStart, PAGES_PER_BATCH, prompt);
+      const allExtractions = [...(priorPageExtractions ?? []), ...batch.newExtractions] as ChunkExtraction[];
+      const attemptResults: PageAttemptResult[] = allExtractions.map((e) => ({ success: true, extraction: e }));
+      if (batch.failure) attemptResults.push({ success: false });
+
+      const merged = mergeSequentialPageResults(attemptResults, clampedTotal);
+      if (!merged) {
+        // The very first page of this batch failed — nothing (from this
+        // batch OR any prior one, though prior batches always succeed by
+        // construction or the client wouldn't have continued) to save.
+        result = batch.failure ?? { errorType: "anthropic_error", message: `Could not process page ${pageRangeStart} of this document.` };
+      } else {
+        result = { extraction: merged.extraction };
+        const batchFullySucceeded = !batch.failure && batch.lastAttemptedPage === Math.min(pageRangeStart + PAGES_PER_BATCH - 1, clampedTotal);
+        if (batchFullySucceeded && merged.processedThrough < clampedTotal) {
+          // More document left and nothing went wrong yet — tell the
+          // client to keep going, carrying forward every page gathered
+          // so far (this batch's own new successes plus every earlier
+          // batch's).
+          nextPageStart = merged.processedThrough + 1;
+          rawPageExtractions = allExtractions;
+        } else if (merged.truncated || clampedTotal < rawPageCount) {
+          // Either a page failed partway (batch.failure set), or we hit
+          // MAX_TOTAL_PAGES (merged.truncated alone wouldn't catch this —
+          // it's computed against clampedTotal, not the real page count)
+          // — either way, this is where we stop; report exactly how much
+          // of the REAL document was actually covered.
+          pagesProcessed = { through: merged.processedThrough, total: rawPageCount };
+        }
+      }
     }
   }
 
@@ -813,8 +840,12 @@ Deno.serve(async (req: Request) => {
     return errorResponse(result.errorType, result.message, status, result.extra);
   }
 
-  return new Response(JSON.stringify({ data: result.extraction, ...(pagesProcessed ? { pagesProcessed } : {}) }), {
-    status: 200,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({
+      data: result.extraction,
+      ...(pagesProcessed ? { pagesProcessed } : {}),
+      ...(nextPageStart ? { nextPageStart, rawPageExtractions } : {}),
+    }),
+    { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+  );
 });

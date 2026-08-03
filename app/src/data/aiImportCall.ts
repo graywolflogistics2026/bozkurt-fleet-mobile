@@ -4,17 +4,26 @@ import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
 import type { Extraction } from '@/src/import/types';
 
 export type AiImportError = { type: string; message: string; detail?: string };
-// pagesProcessed (owner decision 2026-08-03, "still failing after
-// chunking" fix): present only when ai-import didn't cover every page of
-// the original document — either because it was deliberately capped at
-// SETTLEMENT_MAX_PAGES (index.ts) or because a later page failed after
-// earlier ones succeeded. The import screen turns this into a plain
-// "imported pages 1-N of M" banner instead of silently showing a result
-// that looks complete when it isn't.
+// pagesProcessed (owner decision 2026-08-03): present only when ai-import
+// didn't cover every page of the original document — a later page failed
+// after earlier ones succeeded (there is no longer a deliberate page cap,
+// see the CONTINUATION PROTOCOL comment below). The import screen turns
+// this into a plain "imported pages 1-N of M" banner instead of silently
+// showing a result that looks complete when it isn't.
 export type AiImportCallResult = {
   data?: Extraction;
   error?: AiImportError;
   pagesProcessed?: { through: number; total: number };
+};
+
+// Raw server response shape for one ai-import invocation (before this
+// module's own date/miles sanitizing and error normalization).
+type AiImportInvokeResponse = {
+  error?: AiImportError;
+  data?: unknown;
+  pagesProcessed?: { through: number; total: number };
+  nextPageStart?: number;
+  rawPageExtractions?: unknown[];
 };
 
 // CLIENT-SIDE TIMEOUT (owner decision 2026-08-02, raised again 2026-08-03
@@ -33,32 +42,24 @@ export type AiImportCallResult = {
 const PDF_CLIENT_TIMEOUT_MS = 240_000;
 const IMAGE_CLIENT_TIMEOUT_MS = 120_000;
 
-// Calls the ai-import Edge Function (supabase/functions/ai-import) with the
-// signed-in user's JWT (supabase.functions.invoke attaches it automatically
-// — docs/DEPLOY_FUNCTIONS.md). The function returns structured errors as
-// { error: { type, message } } for expected failure modes (rate_limited,
-// model_refusal, parse_failed, ...); supabase-js surfaces a non-2xx
-// response as a FunctionsHttpError with the real body reachable via
-// `error.context` (the raw Response) rather than in `data`.
-// locale (owner decision 2026-07-10, PRODUCT DECISION — "AI in user's
-// language"): the app's current i18n locale, forwarded so the model
-// responds in that language for user-facing free-text fields (summary,
-// descriptions) — standard financial terms (e.g. "per diem") may stay
-// English regardless (see ai-import's prompt addition).
-// customCategories (owner decision 2026-07-10, PRODUCT DECISION — custom
-// categories): the user's own active category names (both kinds), so
-// classification can suggest one of THEM too instead of only ever
-// matching the canonical taxonomy (docs/INDUSTRY_TAXONOMY.md §B).
-export async function callAiImport(
+// One call to the ai-import Edge Function (supabase/functions/ai-import)
+// with the signed-in user's JWT (supabase.functions.invoke attaches it
+// automatically — docs/DEPLOY_FUNCTIONS.md). Returns the raw response
+// (before this module's date/miles sanitizing) or a normalized
+// AiImportError — no looping/continuation logic here, that lives in
+// callAiImport() below.
+async function invokeAiImportOnce(
   fileBase64: string,
   mediaType: string,
-  docHint?: string,
-  locale?: string,
-  customCategories?: string[]
-): Promise<AiImportCallResult> {
+  docHint: string | undefined,
+  locale: string | undefined,
+  customCategories: string[] | undefined,
+  pageRangeStart: number | undefined,
+  priorPageExtractions: unknown[] | undefined,
+): Promise<{ response?: AiImportInvokeResponse; error?: AiImportError }> {
   const timeout = mediaType.startsWith('image/') ? IMAGE_CLIENT_TIMEOUT_MS : PDF_CLIENT_TIMEOUT_MS;
   const { data, error } = await supabase.functions.invoke('ai-import', {
-    body: { fileBase64, mediaType, docHint, locale, customCategories },
+    body: { fileBase64, mediaType, docHint, locale, customCategories, pageRangeStart, priorPageExtractions },
     timeout,
   });
 
@@ -91,17 +92,76 @@ export async function callAiImport(
   }
 
   if (data?.error) return { error: data.error as AiImportError };
-  const extraction = data?.data as Extraction | undefined;
-  if (!extraction) return { data: extraction };
-  // DATE HARDENING round 2 (2026-07-30) — see src/import/dateGuard.ts.
-  // MILES TRAP (owner decision 2026-08-02) — see src/import/milesGuard.ts.
-  // Both applied once, right here, so every downstream consumer
-  // (mapExtraction mappers, the import preview screen) automatically sees
-  // the corrected date/miles without needing its own fix.
-  const pagesProcessed = data?.pagesProcessed as { through: number; total: number } | undefined;
+  return { response: data as AiImportInvokeResponse };
+}
+
+// CONTINUATION PROTOCOL (owner decision 2026-08-03, round 3 — a real
+// 11-page settlement's deduction line items live well past page 3;
+// capping extraction at a fixed page count silently produced a
+// zero-expense, zero-net "settlement," a genuine tax-accuracy bug, not
+// just an incomplete import). ai-import now processes a document in
+// small batches (server-side PAGES_PER_BATCH, index.ts) — a response
+// carrying `nextPageStart` means there's more document left and nothing
+// has gone wrong yet, so this function calls ai-import AGAIN, passing
+// `pageRangeStart`/`priorPageExtractions` straight through, SEQUENTIALLY
+// (one full round-trip at a time, never concurrent) until the whole
+// document is covered or a page genuinely fails. Every intermediate
+// call's own client-side timeout (`invokeAiImportOnce`'s `timeout`
+// option) still applies per round-trip — a long document just means more
+// round-trips, not one single unbounded wait.
+// onProgress (optional): called after every intermediate response with
+// how much of the document has been covered so far, so a caller can
+// update a "still working — processing page N of M" style message
+// instead of one static label for the whole multi-minute operation.
+// locale/customCategories: see the original per-parameter comments below.
+export async function callAiImport(
+  fileBase64: string,
+  mediaType: string,
+  docHint?: string,
+  locale?: string,
+  customCategories?: string[],
+  onProgress?: (progress: { through: number; total: number }) => void
+): Promise<AiImportCallResult> {
+  let pageRangeStart: number | undefined;
+  let priorPageExtractions: unknown[] | undefined;
+
+  // Bounded the same way the server bounds itself (MAX_TOTAL_PAGES,
+  // index.ts) — a defensive stop against an infinite client-side loop if
+  // a future server bug ever returned nextPageStart forever.
+  for (let round = 0; round < 60; round++) {
+    const { response, error } = await invokeAiImportOnce(
+      fileBase64,
+      mediaType,
+      docHint,
+      locale,
+      customCategories,
+      pageRangeStart,
+      priorPageExtractions
+    );
+    if (error) return { error };
+
+    if (response?.nextPageStart) {
+      pageRangeStart = response.nextPageStart;
+      priorPageExtractions = response.rawPageExtractions;
+      if (onProgress) onProgress({ through: response.nextPageStart - 1, total: response.pagesProcessed?.total ?? response.nextPageStart });
+      continue;
+    }
+
+    const extraction = response?.data as Extraction | undefined;
+    if (!extraction) return { data: extraction };
+    // DATE HARDENING round 2 (2026-07-30) — see src/import/dateGuard.ts.
+    // MILES TRAP (owner decision 2026-08-02) — see src/import/milesGuard.ts.
+    // Both applied once, right here, so every downstream consumer
+    // (mapExtraction mappers, the import preview screen) automatically
+    // sees the corrected date/miles without needing its own fix.
+    return {
+      data: sanitizeExtractionMiles(sanitizeExtractionDates(extraction)),
+      ...(response?.pagesProcessed ? { pagesProcessed: response.pagesProcessed } : {}),
+    };
+  }
+
   return {
-    data: sanitizeExtractionMiles(sanitizeExtractionDates(extraction)),
-    ...(pagesProcessed ? { pagesProcessed } : {}),
+    error: { type: 'anthropic_error', message: 'This document has too many pages to process — try splitting it into smaller files.' },
   };
 }
 

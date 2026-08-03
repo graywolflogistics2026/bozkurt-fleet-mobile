@@ -228,4 +228,57 @@ describe('mergeSequentialPageResults', () => {
     const total = (result?.extraction.settlement?.deductions as { amount: number }[]).reduce((s, d) => s + d.amount, 0);
     expect(total).toBeCloseTo(1160.51, 2);
   });
+
+  // ROUND 3 FIX (owner decision 2026-08-03, "still failing" device
+  // evidence): the round-2 3-page cap silently produced Net Pay $0.00 /
+  // Deductions $0.00 on an 11-page settlement because the deduction line
+  // items live past page 3. This proves the underlying merge itself
+  // (chunking.ts is what the new client-driven continuation protocol,
+  // index.ts, ultimately calls once per invocation-batch) correctly
+  // accumulates EVERY page's deductions and produces a complete,
+  // non-zero-net result when all 11 pages succeed — the actual server
+  // orchestration (extractPageBatch/priorPageExtractions) that calls this
+  // across multiple invocations is Deno-only and not unit-tested here,
+  // same "no Deno runtime available" gap as the orchestration logic in
+  // the prior pass.
+  it('an 11-page settlement with deductions spread across many pages yields complete deductions and a non-zero net', () => {
+    const header = ok({
+      weekEnding: '2026-07-31',
+      carrier: 'Prime Inc.',
+      grossRevenue: 8235.47,
+      totalDeductions: 4637.15,
+      netPay: 3598.32,
+      totalMiles: 3265,
+      loads: [{ order: 'L1' }, { order: 'L2' }, { order: 'L3' }],
+    });
+    // Deduction line items genuinely spread across pages 2-9, matching
+    // the reported document shape (revenue/header early, full deduction
+    // breakdown much later on a long statement).
+    const deductionPages = [
+      ok({ deductions: [{ code: 'INS', desc: 'Weekly Insurance', amount: 500 }] }),
+      ok({ deductions: [{ code: 'ESC', desc: 'Escrow', amount: 300 }] }),
+      ok({ deductions: [{ code: 'FUEL', desc: 'Fuel Advance', amount: 1200 }] }),
+      ok({ deductions: [{ code: 'ELD', desc: 'ELD Fee', amount: 45 }] }),
+      ok({ deductions: [{ code: 'TOLL', desc: 'Tolls', amount: 187.15 }] }),
+      ok({ deductions: [{ code: 'MAINT', desc: 'Maintenance Reserve', amount: 900 }] }),
+      ok({ deductions: [{ code: 'ADV', desc: 'Advance Repayment', amount: 1200 }] }),
+      ok({ deductions: [{ code: 'MISC', desc: 'Misc Fee', amount: 305 }] }),
+    ];
+    // Pages 10-11: operating statement / recap, no new deduction lines.
+    const tailPages = [ok({}), ok({})];
+    const allPages = [header, ...deductionPages, ...tailPages];
+    expect(allPages).toHaveLength(11);
+
+    const result = mergeSequentialPageResults(allPages, 11);
+    expect(result?.processedThrough).toBe(11);
+    expect(result?.truncated).toBe(false);
+    expect(result?.extraction.settlement?.weekEnding).toBe('2026-07-31');
+    expect(result?.extraction.settlement?.netPay).toBe(3598.32);
+    expect(result?.extraction.settlement?.netPay).not.toBe(0);
+    const deductions = result?.extraction.settlement?.deductions as { amount: number }[];
+    expect(deductions).toHaveLength(8);
+    const total = deductions.reduce((s, d) => s + d.amount, 0);
+    expect(total).toBeCloseTo(4637.15, 2);
+    expect(total).toBe(result?.extraction.settlement?.totalDeductions);
+  });
 });
