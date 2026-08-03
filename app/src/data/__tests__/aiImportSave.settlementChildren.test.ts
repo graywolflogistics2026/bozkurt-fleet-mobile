@@ -29,7 +29,7 @@ import { createFakeSupabase } from './fakeSupabase';
 import { saveExtraction } from '@/src/data/aiImportSave';
 import { groupByMonth, UNKNOWN_MONTH_KEY } from '@/src/stats/monthGroups';
 import { calcTrueProfit } from '@/src/stats/trueProfit';
-import { trailingWeeklyFuelAverage, trailingWeeklyOtherExpenseAverage } from '@/src/stats/cashFlowForecast';
+import { trailingWeeklyFuelAverage, trailingWeeklyOtherExpenseAverage, trailingWeeklyInsuranceAverage } from '@/src/stats/cashFlowForecast';
 import { rankLoadsByRpm } from '@/src/stats/cashFlowTrend';
 import type { Deduction, FuelPurchase, Load, Reimbursement, Settlement } from '@/src/types/db';
 
@@ -132,7 +132,7 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     expect(calcTrueProfit(settlements, deductions)).toBe(3800);
   });
 
-  test('Cash Flow budget defaults: trailing fuel/other-expense averages reflect the imported settlement', async () => {
+  test('Cash Flow budget defaults: trailing fuel/insurance averages reflect the imported settlement', async () => {
     await saveExtraction(baseParams(settlementExtraction()));
 
     const fuel = mockClient.__store.fuel_purchases as FuelPurchase[];
@@ -141,10 +141,18 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
 
     const today = new Date(`${WEEK_ENDING}T12:00:00`);
     const fuelAvg = trailingWeeklyFuelAverage(fuel, today);
+    const insuranceAvg = trailingWeeklyInsuranceAverage(deductions);
     const otherAvg = trailingWeeklyOtherExpenseAverage(deductions, tolls, today);
 
     expect(fuelAvg).toBeGreaterThan(0); // (480 + 160) / 4 weeks
-    expect(otherAvg).toBeGreaterThan(0); // 200 / 4 weeks
+    // "Weekly insurance" (owner decision 2026-08-04, Cash Flow auto-fill
+    // fix) is now correctly classified as Insurance—Truck via
+    // isInsuranceChargeback()'s text fallback (this fixture's row has no
+    // chargebackType/category set), so it counts toward the DEDICATED
+    // Insurance average, not the generic "Other" bucket — proving the
+    // fix end to end, not just in isolation.
+    expect(insuranceAvg).toBeGreaterThan(0); // 200 / 4 weeks
+    expect(otherAvg).toBe(0); // no longer double-counted here
   });
 
   test('Best/Worst Lanes: loads with origin/destination/loaded miles/revenue rank correctly', async () => {

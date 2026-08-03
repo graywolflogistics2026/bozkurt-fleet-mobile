@@ -5,6 +5,7 @@ import {
   getCatNote,
   guessCategory,
   isEscrowDeposit,
+  isInsuranceChargeback,
   isRestaurantPurchase,
   toDbServiceType,
 } from '@/src/import/category';
@@ -198,7 +199,9 @@ export function mapSettlement(
       ? 'Meals (per diem covered)'
       : isEscrowDeposit(x.desc)
         ? 'Escrow & Deposits'
-        : (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
+        : isInsuranceChargeback(x.desc)
+          ? 'Insurance—Truck'
+          : (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
     payment_method: 'Settlement Withheld',
     source: 'settlement',
     tax_deductible: false,

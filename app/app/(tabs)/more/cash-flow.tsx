@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,9 @@ import {
   trailingWeeklyRevenueAverage,
   trailingWeeklyFuelAverage,
   trailingWeeklyOtherExpenseAverage,
+  trailingWeeklyInsuranceAverage,
+  trailingWeeklyTruckPaymentAverage,
+  mergeForecastInputsWithAverages,
   type CashFlowBudgetInputs,
 } from '@/src/stats/cashFlowForecast';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
@@ -39,7 +42,7 @@ type BudgetFormState = {
   weeklyRevenue: string;
   truckPayment: string;
   fuelWeekly: string;
-  insuranceMonthly: string;
+  insuranceWeekly: string;
   otherWeekly: string;
   taxReservePct: string;
 };
@@ -50,7 +53,7 @@ function toBudgetInputs(form: BudgetFormState): CashFlowBudgetInputs {
     weeklyRevenue: form.weeklyRevenue ? Number(form.weeklyRevenue) : null,
     truckPayment: form.truckPayment ? Number(form.truckPayment) : null,
     fuelWeekly: form.fuelWeekly ? Number(form.fuelWeekly) : null,
-    insuranceMonthly: form.insuranceMonthly ? Number(form.insuranceMonthly) : null,
+    insuranceWeekly: form.insuranceWeekly ? Number(form.insuranceWeekly) : null,
     otherWeekly: form.otherWeekly ? Number(form.otherWeekly) : null,
     taxReservePct: form.taxReservePct ? Number(form.taxReservePct) : null,
   };
@@ -113,6 +116,47 @@ function WeeklyTrendChart({ points }: { points: ReturnType<typeof buildWeeklyTre
   );
 }
 
+// AUTO-FILL FIELD (owner decision 2026-08-04, Cash Flow auto-fill fix):
+// shared by every forecast input that has real settlement data behind
+// it (Weekly Revenue, Fuel, Insurance, Truck Payment, Other) — an empty
+// field shows the trailing-4-week-average as a caption ("avg of last 4
+// weeks: $X"); once the user types a manual value, the caption is
+// replaced by a "↺ Reset to average" action that clears the field
+// (letting the computed average take back over) rather than making the
+// user manually select-all-and-delete. Extracted once so all 5 fields
+// behave identically instead of five hand-rolled copies drifting apart.
+function AutoFillField({
+  label,
+  value,
+  onChangeText,
+  average,
+  onReset,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  average: number;
+  onReset: () => void;
+}) {
+  const { t } = useTranslation();
+  const { money } = useFormatters();
+  return (
+    <View style={{ flex: 1, minWidth: 140 }}>
+      <MutedText>{label}</MutedText>
+      <Field keyboardType="numeric" value={value} onChangeText={onChangeText} placeholder="0" />
+      {value ? (
+        <Pressable onPress={onReset} hitSlop={8}>
+          <Text style={{ color: colors.accent, fontSize: typography.size.xs }}>
+            {t('cashFlowScreen.resetToAverage', { amount: money(average) })}
+          </Text>
+        </Pressable>
+      ) : (
+        <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(average) })}</MutedText>
+      )}
+    </View>
+  );
+}
+
 function LaneRow({ l, good }: { l: RankedLoad; good: boolean }) {
   const { money, number } = useFormatters();
   return (
@@ -151,13 +195,13 @@ export default function CashFlow() {
     weeklyRevenue: '',
     truckPayment: '',
     fuelWeekly: '',
-    insuranceMonthly: '',
+    insuranceWeekly: '',
     otherWeekly: '',
     taxReservePct: '',
   });
 
   // One-time hydration from the stored budget (profiles.cf_* columns,
-  // docs/PENDING_SQL.md §29) once it loads — same pattern as tax-
+  // docs/PENDING_SQL.md §29/§39) once it loads — same pattern as tax-
   // estimator.tsx's draft-state hydration.
   useEffect(() => {
     if (budgetHydrated || !profileQuery.data) return;
@@ -167,7 +211,11 @@ export default function CashFlow() {
       weeklyRevenue: p.cf_weekly_revenue != null ? String(p.cf_weekly_revenue) : '',
       truckPayment: p.cf_truck_payment != null ? String(p.cf_truck_payment) : '',
       fuelWeekly: p.cf_fuel_weekly != null ? String(p.cf_fuel_weekly) : '',
-      insuranceMonthly: p.cf_insurance_monthly != null ? String(p.cf_insurance_monthly) : '',
+      // docs/PENDING_SQL.md §39 (owner decision 2026-08-04): reads the new
+      // WEEKLY column — cf_insurance_monthly (§29) is deprecated, left
+      // unread here on purpose so an already-saved monthly figure is
+      // never silently misread as weekly.
+      insuranceWeekly: p.cf_insurance_weekly != null ? String(p.cf_insurance_weekly) : '',
       otherWeekly: p.cf_other_weekly != null ? String(p.cf_other_weekly) : '',
       taxReservePct: p.cf_tax_reserve_pct != null ? String(p.cf_tax_reserve_pct) : '',
     });
@@ -201,15 +249,29 @@ export default function CashFlow() {
     () => trailingWeeklyOtherExpenseAverage(deductionsQuery.data ?? [], tollsQuery.data ?? []),
     [deductionsQuery.data, tollsQuery.data]
   );
-  const forecastInputs = useMemo(() => {
-    const base = toBudgetInputs(budget);
-    return {
-      ...base,
-      weeklyRevenue: base.weeklyRevenue ?? trailingAvgRevenue,
-      fuelWeekly: base.fuelWeekly ?? trailingAvgFuel,
-      otherWeekly: base.otherWeekly ?? trailingAvgOther,
-    };
-  }, [budget, trailingAvgRevenue, trailingAvgFuel, trailingAvgOther]);
+  // CASH FLOW AUTO-FILL FIX (owner decision 2026-08-04, device report: a
+  // real carrier settlement withholds FOUR separate insurance charges
+  // EVERY WEEK, plus a truck/trailer payment chargeback) — same trailing-
+  // average fallback pattern, now for Insurance and Truck Payment too.
+  const trailingAvgInsurance = useMemo(
+    () => trailingWeeklyInsuranceAverage(deductionsQuery.data ?? []),
+    [deductionsQuery.data]
+  );
+  const trailingAvgTruckPayment = useMemo(
+    () => trailingWeeklyTruckPaymentAverage(deductionsQuery.data ?? []),
+    [deductionsQuery.data]
+  );
+  const forecastInputs = useMemo(
+    () =>
+      mergeForecastInputsWithAverages(toBudgetInputs(budget), {
+        weeklyRevenue: trailingAvgRevenue,
+        fuelWeekly: trailingAvgFuel,
+        insuranceWeekly: trailingAvgInsurance,
+        truckPayment: trailingAvgTruckPayment,
+        otherWeekly: trailingAvgOther,
+      }),
+    [budget, trailingAvgRevenue, trailingAvgFuel, trailingAvgInsurance, trailingAvgTruckPayment, trailingAvgOther]
+  );
   const forecast = useMemo(() => calcCashFlowForecast(forecastInputs), [forecastInputs]);
 
   async function handleSaveBudget() {
@@ -221,7 +283,7 @@ export default function CashFlow() {
         cf_weekly_revenue: values.weeklyRevenue,
         cf_truck_payment: values.truckPayment,
         cf_fuel_weekly: values.fuelWeekly,
-        cf_insurance_monthly: values.insuranceMonthly,
+        cf_insurance_weekly: values.insuranceWeekly,
         cf_other_weekly: values.otherWeekly,
         cf_tax_reserve_pct: values.taxReservePct,
       });
@@ -261,35 +323,41 @@ export default function CashFlow() {
               <MutedText>{t('cashFlowScreen.bankBalanceLabel')}</MutedText>
               <Field keyboardType="numeric" value={budget.bankBalance} onChangeText={(v) => setBudget((f) => ({ ...f, bankBalance: v }))} placeholder="0" />
             </View>
-            <View style={{ flex: 1, minWidth: 140 }}>
-              <MutedText>{t('cashFlowScreen.weeklyRevenueLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.weeklyRevenue} onChangeText={(v) => setBudget((f) => ({ ...f, weeklyRevenue: v }))} placeholder="0" />
-              {!budget.weeklyRevenue && (
-                <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(trailingAvgRevenue) })}</MutedText>
-              )}
-            </View>
-            <View style={{ flex: 1, minWidth: 140 }}>
-              <MutedText>{t('cashFlowScreen.truckPaymentLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.truckPayment} onChangeText={(v) => setBudget((f) => ({ ...f, truckPayment: v }))} placeholder="0" />
-            </View>
-            <View style={{ flex: 1, minWidth: 140 }}>
-              <MutedText>{t('cashFlowScreen.fuelWeeklyLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.fuelWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, fuelWeekly: v }))} placeholder="0" />
-              {!budget.fuelWeekly && (
-                <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(trailingAvgFuel) })}</MutedText>
-              )}
-            </View>
-            <View style={{ flex: 1, minWidth: 140 }}>
-              <MutedText>{t('cashFlowScreen.insuranceMonthlyLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.insuranceMonthly} onChangeText={(v) => setBudget((f) => ({ ...f, insuranceMonthly: v }))} placeholder="0" />
-            </View>
-            <View style={{ flex: 1, minWidth: 140 }}>
-              <MutedText>{t('cashFlowScreen.otherWeeklyLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.otherWeekly} onChangeText={(v) => setBudget((f) => ({ ...f, otherWeekly: v }))} placeholder="0" />
-              {!budget.otherWeekly && (
-                <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(trailingAvgOther) })}</MutedText>
-              )}
-            </View>
+            <AutoFillField
+              label={t('cashFlowScreen.weeklyRevenueLabel')}
+              value={budget.weeklyRevenue}
+              onChangeText={(v) => setBudget((f) => ({ ...f, weeklyRevenue: v }))}
+              average={trailingAvgRevenue}
+              onReset={() => setBudget((f) => ({ ...f, weeklyRevenue: '' }))}
+            />
+            <AutoFillField
+              label={t('cashFlowScreen.truckPaymentLabel')}
+              value={budget.truckPayment}
+              onChangeText={(v) => setBudget((f) => ({ ...f, truckPayment: v }))}
+              average={trailingAvgTruckPayment}
+              onReset={() => setBudget((f) => ({ ...f, truckPayment: '' }))}
+            />
+            <AutoFillField
+              label={t('cashFlowScreen.fuelWeeklyLabel')}
+              value={budget.fuelWeekly}
+              onChangeText={(v) => setBudget((f) => ({ ...f, fuelWeekly: v }))}
+              average={trailingAvgFuel}
+              onReset={() => setBudget((f) => ({ ...f, fuelWeekly: '' }))}
+            />
+            <AutoFillField
+              label={t('cashFlowScreen.insuranceWeeklyLabel')}
+              value={budget.insuranceWeekly}
+              onChangeText={(v) => setBudget((f) => ({ ...f, insuranceWeekly: v }))}
+              average={trailingAvgInsurance}
+              onReset={() => setBudget((f) => ({ ...f, insuranceWeekly: '' }))}
+            />
+            <AutoFillField
+              label={t('cashFlowScreen.otherWeeklyLabel')}
+              value={budget.otherWeekly}
+              onChangeText={(v) => setBudget((f) => ({ ...f, otherWeekly: v }))}
+              average={trailingAvgOther}
+              onReset={() => setBudget((f) => ({ ...f, otherWeekly: '' }))}
+            />
             <View style={{ flex: 1, minWidth: 140 }}>
               <MutedText>{t('cashFlowScreen.taxReservePctLabel')}</MutedText>
               <Field keyboardType="numeric" value={budget.taxReservePct} onChangeText={(v) => setBudget((f) => ({ ...f, taxReservePct: v }))} placeholder="0" />
@@ -328,15 +396,15 @@ export default function CashFlow() {
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.truckPaymentLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((Number(budget.truckPayment) || 0) * 4.33)}</Text>
+              <Text style={{ color: colors.red }}>-{money((forecastInputs.truckPayment || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.fuelWeeklyLabel')}</MutedText>
               <Text style={{ color: colors.red }}>-{money((forecastInputs.fuelWeekly || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.insuranceMonthlyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money(Number(budget.insuranceMonthly) || 0)}</Text>
+              <MutedText>{t('cashFlowScreen.insuranceWeeklyLabel')}</MutedText>
+              <Text style={{ color: colors.red }}>-{money((forecastInputs.insuranceWeekly || 0) * 4.33)}</Text>
             </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.otherWeeklyLabel')}</MutedText>

@@ -594,7 +594,9 @@
         always-a-number balances, never "unset"); `weekly_goal`; every
         Cash Flow forecast budget input (`cf_bank_balance`,
         `cf_weekly_revenue`, `cf_truck_payment`, `cf_fuel_weekly`,
-        `cf_insurance_monthly`, `cf_other_weekly`, `cf_tax_reserve_pct`,
+        `cf_insurance_monthly` — deprecated (docs/PENDING_SQL.md §39,
+        owner decision 2026-08-04), cleared anyway for tidiness —
+        `cf_insurance_weekly`, `cf_other_weekly`, `cf_tax_reserve_pct`,
         docs/PENDING_SQL.md §29); `dashboard_layout`;
         `dashboard_sections_collapsed`.
       - KEPT (never touched by the reset, on purpose): `company_name`,
@@ -2298,3 +2300,94 @@
   and still passing — it operates purely on the final merged extraction's
   own fields, independent of however many pages/retries/gaps produced it,
   so it needed no changes to keep blocking an incomplete save correctly.
+- CASH FLOW AUTO-FILL FROM SETTLEMENT DATA (owner decision 2026-08-04,
+  device report: the Insurance field showed 0 and was monthly-only, while
+  a real carrier withholds FOUR separate insurance charges EVERY WEEK —
+  bobtail/deadhead, physical damage, occupational accident, cargo/workers
+  comp). Two root causes, one pass:
+  1. **Wrong shape**: `cf_insurance_monthly` (docs/PENDING_SQL.md §29)
+     assumed a manually-entered monthly bill; a carrier's insurance
+     withholding is weekly, per-settlement, and already sitting in the
+     user's own imported data — it should never have needed manual entry
+     at all.
+  2. **Miscategorized on import**: the settlement JSON extraction schema's
+     own deduction category enum includes the literal string `"Insurance"`
+     (not either canonical `'Insurance—Truck'`/`'Insurance—Health'` value)
+     — a line landing there via the loose `x.category` fallback (no
+     chargebackType set) was an unrecognized category string, invisible
+     to any category-based filter.
+  **Fix**: `app/src/import/category.ts`'s new `isInsuranceChargeback()` —
+  a text-based fallback (same "AI classification is primary, regex is
+  the safety net" pattern as `isEscrowDeposit()`/`isRestaurantPurchase()`)
+  matching the real abbreviated carrier codes from the device report
+  (`BT/DH INS`, `PHY DAM`, `OCCUP ACC`, `CARGO`, `WORKERS COMP`) plus
+  spelled-out/generic insurance wording — wired into
+  `mapExtraction.ts`'s `mapSettlement()` at the SAME override priority as
+  escrow/restaurant detection, so a settlement-withheld insurance line
+  now reliably lands as `'Insurance—Truck'` regardless of whether the AI
+  set chargebackType.
+  **New column, not a reinterpretation** (docs/PENDING_SQL.md §39):
+  `profiles.cf_insurance_weekly` — `cf_insurance_monthly` is left in
+  place, unused, same "harmless deprecated column" precedent as
+  `dashboard_layout` after the Customize Dashboard retirement. A renamed/
+  reinterpreted column would have silently misread an already-saved
+  monthly figure as weekly (a 4.33x error) for any existing user.
+  **Auto-fill extended to every input with real data behind it** (not
+  just Insurance) — `app/src/stats/cashFlowForecast.ts` gained
+  `trailingWeeklyInsuranceAverage()` and `trailingWeeklyTruckPaymentAverage()`,
+  both using a NEW shared `trailingWeeklyWithheldAverage()` helper that
+  groups settlement-withheld (`source==='settlement'`) deductions by
+  `ded_date` (which for a withheld row IS the settlement's own
+  `week_ending`, `mapSettlement()`'s `settlementFallbackDate`) and
+  averages the trailing 4 distinct weeks — the SAME "distinct settlement
+  weeks, not a raw calendar window" pattern `trailingWeeklyRevenueAverage`
+  already used, deliberately different from `trailingWeeklyFuelAverage`/
+  `trailingWeeklyOtherExpenseAverage`'s 28-day-window approach (fuel/
+  generic-other data isn't tied to a settlement week the way a carrier
+  withholding is). `trailingWeeklyOtherExpenseAverage` now EXCLUDES
+  `'Insurance—Truck'`/`'Insurance—Health'`/`'Truck/Trailer Payments'`
+  (alongside the existing `'Fuel & DEF'` exclusion) so these dollars are
+  never double-counted into both a dedicated field AND "Other Weekly."
+  `insuranceMonthly` was renamed `insuranceWeekly` throughout
+  `CashFlowBudgetInputs`/`calcCashFlowForecast()` — the old `/4.33`
+  monthly→weekly conversion is gone; it now sums into weekly expenses
+  directly like every other budget input.
+  **Manual override survives a new import, with an explicit reset
+  action**: a new pure `mergeForecastInputsWithAverages()` function
+  (previously this merge logic was inline in the screen's own
+  `useMemo`) makes "an empty field falls back to the trailing average;
+  a manual entry always wins" directly unit-testable without mounting
+  the screen. `cash-flow.tsx` gained a shared `AutoFillField` component
+  (replacing 5 near-identical hand-rolled field blocks) used by all 5
+  auto-fillable inputs (Weekly Revenue, Fuel, Insurance, Truck Payment,
+  Other) — an empty field shows the "avg of last 4 weeks: $X" caption
+  (`cashFlowScreen.weeklyRevenueFromSettlements`, reused across all 5 for
+  consistency); once the user types a manual value, the caption is
+  replaced by a "↺ Reset to average ($X)" action
+  (`cashFlowScreen.resetToAverage`, new key, all 7 locales) that clears
+  the field rather than requiring the user to manually select-all-and-
+  delete. Truck Payment (label already said "(wk)" even before this
+  pass) and Insurance both gained this auto-fill treatment for the first
+  time; Weekly Revenue/Fuel/Other keep their existing averages, now with
+  the same reset action they lacked before.
+  Tests: `app/src/import/__tests__/category.test.ts` gained
+  `isInsuranceChargeback()` coverage (the exact real carrier codes,
+  spelled-out variants, and a false-positive check).
+  `app/src/import/__tests__/mapExtraction.test.ts` proves a settlement
+  deduction landing on the schema's generic `"Insurance"` category still
+  resolves to `'Insurance—Truck'` via the text fallback, and that a
+  correctly-set `chargebackType` still works unchanged.
+  `app/src/stats/__tests__/cashFlowForecast.test.ts` gained coverage for
+  both new trailing averages (including the exact 4-separate-weekly-
+  insurance-lines shape from the device report), the "Other Weekly"
+  double-counting exclusion, and `mergeForecastInputsWithAverages()`
+  (empty falls back, a manual override survives a simulated new import
+  changing the average, an explicit `0` is a real value not "empty").
+  A pre-existing integration test
+  (`aiImportSave.settlementChildren.test.ts`) needed updating — its
+  fixture's unlabeled "Weekly insurance" deduction used to fall into the
+  generic "Other" bucket by accident (no category match existed before
+  this pass); it now correctly lands in the dedicated Insurance average
+  instead, exactly proving the fix end to end rather than in isolation.
+  Full suite: 66 suites / 1520 tests pass; `tsc --noEmit` clean; all 7
+  locales confirmed key-parity.

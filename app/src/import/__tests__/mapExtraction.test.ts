@@ -130,6 +130,44 @@ describe('mapSettlement', () => {
     expect(r.deductions[0].tax_deductible).toBe(false);
   });
 
+  it('an insurance chargeback description wins over the settlement schema\'s own generic "Insurance" category (Cash Flow auto-fill fix, owner decision 2026-08-04)', () => {
+    // The base settlement JSON schema's own deduction category enum
+    // includes literally "Insurance" (not either canonical value) — a
+    // real device report showed this landing as an unrecognized string,
+    // which meant it never counted toward the Cash Flow forecast's
+    // Insurance auto-fill. isInsuranceChargeback() catches the real
+    // carrier line codes (BT/DH INS, PHY DAM, OCCUP ACC, CARGO, WORKERS
+    // COMP) even when chargebackType was never set.
+    const d: Extraction = {
+      docType: 'settlement',
+      date: '2026-06-27',
+      settlement: {
+        weekEnding: '2026-06-27',
+        deductions: [
+          { code: 'BTDH', desc: 'BT/DH INS', amount: 45, category: 'Insurance' },
+          { code: 'PHYDAM', desc: 'PHY DAM', amount: 60, category: 'Insurance' },
+          { code: 'OCCACC', desc: 'OCCUP ACC', amount: 20, category: 'Insurance' },
+          { code: 'CARGO', desc: 'CARGO', amount: 15, category: 'Insurance' },
+        ],
+      },
+    };
+    const r = mapSettlement(d, 'user-1', 'truck-1');
+    expect(r.deductions.every((x) => x.category === 'Insurance—Truck')).toBe(true);
+  });
+
+  it('still respects a correctly-set insurance chargebackType (industry knowledge base, owner decision 2026-07-10)', () => {
+    const d: Extraction = {
+      docType: 'settlement',
+      date: '2026-06-27',
+      settlement: {
+        weekEnding: '2026-06-27',
+        deductions: [{ code: 'WC', desc: 'Workers Comp', amount: 25, chargebackType: 'insurance_workers_comp' }],
+      },
+    };
+    const r = mapSettlement(d, 'user-1', 'truck-1');
+    expect(r.deductions[0].category).toBe('Insurance—Truck');
+  });
+
   it('maps chargebackType "advance_repayment" to the Advance Repayment category', () => {
     const d: Extraction = {
       docType: 'settlement',

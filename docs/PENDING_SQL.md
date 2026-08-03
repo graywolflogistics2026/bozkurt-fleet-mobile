@@ -1320,6 +1320,37 @@ $$;
 
 ---
 
+## 39. profiles.cf_insurance_weekly (Cash Flow auto-fill fix, owner decision 2026-08-04, device report)
+
+Device report: a real carrier settlement withholds FOUR separate
+insurance charges EVERY WEEK (bobtail/deadhead, physical damage,
+occupational accident, cargo/workers comp) — not a monthly bill — so
+§29's `cf_insurance_monthly` field was the wrong shape for what this
+input actually needs to represent, and the Cash Flow forecast now
+auto-fills it from the user's own trailing 4-week average of settlement-
+withheld insurance deductions (same "from your settlements" pattern as
+`cf_weekly_revenue`/`cf_fuel_weekly`/`cf_other_weekly`), which only makes
+sense as a weekly figure.
+
+ADDS a new column rather than renaming/reinterpreting `cf_insurance_monthly`
+in place — a user who already saved a monthly figure there must never
+have that same stored number silently reinterpreted as a WEEKLY one (a
+4.33x error) the next time they open Cash Flow. `cf_insurance_monthly`
+is left in place, unused going forward — same "harmless deprecated
+column" precedent as `profiles.dashboard_layout` after the Customize
+Dashboard retirement (CLAUDE.md).
+
+```sql
+alter table profiles
+  add column cf_insurance_weekly numeric(12,2);
+```
+
+No RLS change needed — `profiles` is already owner-scoped.
+
+- [ ] 39a run (add profiles.cf_insurance_weekly)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

@@ -114,6 +114,34 @@ export function isEscrowDeposit(text: string | undefined): boolean {
   return ESCROW_RE.test(text ?? '');
 }
 
+// Insurance chargeback detection (owner decision 2026-08-04, Cash Flow
+// auto-fill fix — device report: a real carrier settlement withholds
+// FOUR separate weekly insurance charges under abbreviated codes:
+// "BT/DH INS" (bobtail/deadhead), "PHY DAM" (physical damage), "OCCUP
+// ACC" (occupational accident), and "CARGO"/"WORKERS COMP". The AI's own
+// chargebackType classification (insurance_bobtail/
+// insurance_physical_damage/insurance_occ_acc/insurance_cargo/
+// insurance_workers_comp, all mapping to 'Insurance—Truck' via
+// CHARGEBACK_CATEGORY_LABEL below) is the primary signal — this is the
+// CLIENT-SIDE fallback for when chargebackType was missed (an older/
+// legacy-imported row, or a model miss that left the settlement schema's
+// own generic "Insurance" category string, which does NOT match either
+// canonical 'Insurance—Truck'/'Insurance—Health' value), same priority
+// as isEscrowDeposit()/isRestaurantPurchase() above. Bare "insurance"/
+// "premium"/"policy" are included too (mirrors guessCategory()'s own
+// insurance regex for standalone, non-settlement purchases) since a
+// carrier statement's insurance line is rarely ambiguous with anything
+// else. Bare "cargo" is deliberately included despite being a generic
+// word — in the settlement-withheld-deduction context this function is
+// used in, there is no other common "cargo" chargeback type, so a line
+// coded just "CARGO" is, in practice, always the cargo insurance premium.
+const INSURANCE_CHARGEBACK_RE =
+  /\bbt\W?dh\s*ins\b|\bphy\.?\s*dam(age)?\b|physical\s*damage|\bocc(up)?\.?\s*acc(ident)?\b|occupational\s*accident|\bworkers.?\s*comp(ensation)?\b|\bbobtail\b|\bcargo\b|\binsurance\b|\bpremium\b|\bpolicy\b/i;
+
+export function isInsuranceChargeback(text: string | undefined): boolean {
+  return INSURANCE_CHARGEBACK_RE.test(text ?? '');
+}
+
 // docs/INDUSTRY_TAXONOMY.md §A chargeback_type enum → a display category
 // for the settlement-withheld deduction row (app/src/import/mapExtraction.ts
 // mapSettlement()). These rows are NEVER counted as tax deductions

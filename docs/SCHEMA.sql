@@ -61,9 +61,16 @@ create table profiles (
   cf_weekly_revenue     numeric(12,2),
   cf_truck_payment      numeric(12,2),
   cf_fuel_weekly        numeric(12,2),
-  cf_insurance_monthly  numeric(12,2),
+  cf_insurance_monthly  numeric(12,2), -- deprecated (§39); unused, kept harmless
   cf_other_weekly       numeric(12,2),
   cf_tax_reserve_pct    numeric(5,2),
+  -- PENDING_SQL.md §39 (Cash Flow auto-fill fix, owner decision
+  -- 2026-08-04): a real carrier settlement withholds insurance WEEKLY
+  -- (4 separate chargeback types), not monthly like cf_insurance_monthly
+  -- above assumed — a new column rather than reinterpreting the old one,
+  -- so an already-saved monthly figure is never silently misread as
+  -- weekly (a 4.33x error).
+  cf_insurance_weekly   numeric(12,2),
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );

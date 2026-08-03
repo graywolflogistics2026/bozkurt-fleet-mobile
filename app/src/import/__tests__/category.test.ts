@@ -8,6 +8,7 @@ import {
   getCatNote,
   guessCategory,
   isEscrowDeposit,
+  isInsuranceChargeback,
   isPersonalPayment,
   isRestaurantPurchase,
   mergeCategoryOptions,
@@ -234,6 +235,31 @@ describe('isEscrowDeposit (escrow & deposits, owner decision 2026-08-02)', () =>
   it('returns false for unrelated/empty text', () => {
     expect(isEscrowDeposit('Milwaukee Drill')).toBe(false);
     expect(isEscrowDeposit(undefined)).toBe(false);
+  });
+});
+
+describe('isInsuranceChargeback (Cash Flow auto-fill fix, owner decision 2026-08-04)', () => {
+  it('matches the exact real carrier line codes from the device report', () => {
+    expect(isInsuranceChargeback('BT/DH INS')).toBe(true);
+    expect(isInsuranceChargeback('PHY DAM')).toBe(true);
+    expect(isInsuranceChargeback('OCCUP ACC')).toBe(true);
+    expect(isInsuranceChargeback('CARGO')).toBe(true);
+    expect(isInsuranceChargeback('WORKERS COMP')).toBe(true);
+  });
+
+  it('matches spelled-out variants and generic insurance wording', () => {
+    expect(isInsuranceChargeback('Physical Damage')).toBe(true);
+    expect(isInsuranceChargeback('Occupational Accident')).toBe(true);
+    expect(isInsuranceChargeback('Workers Compensation')).toBe(true);
+    expect(isInsuranceChargeback('Bobtail Insurance')).toBe(true);
+    expect(isInsuranceChargeback('Weekly Insurance Premium')).toBe(true);
+    expect(isInsuranceChargeback('Insurance Policy')).toBe(true);
+  });
+
+  it('returns false for unrelated/empty text', () => {
+    expect(isInsuranceChargeback('Milwaukee Drill')).toBe(false);
+    expect(isInsuranceChargeback('Fuel Advance')).toBe(false);
+    expect(isInsuranceChargeback(undefined)).toBe(false);
   });
 });
 

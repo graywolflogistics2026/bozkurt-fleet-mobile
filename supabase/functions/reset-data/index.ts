@@ -81,7 +81,8 @@ const PROFILE_DATA_RESET = {
   cf_weekly_revenue: null,
   cf_truck_payment: null,
   cf_fuel_weekly: null,
-  cf_insurance_monthly: null,
+  cf_insurance_monthly: null, // deprecated (§39), cleared anyway for tidiness
+  cf_insurance_weekly: null,
   cf_other_weekly: null,
   cf_tax_reserve_pct: null,
   dashboard_layout: null,

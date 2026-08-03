@@ -523,7 +523,12 @@ export type Profile = {
   cf_weekly_revenue: number | null;
   cf_truck_payment: number | null;
   cf_fuel_weekly: number | null;
+  // Deprecated (docs/PENDING_SQL.md §39, owner decision 2026-08-04) —
+  // unused going forward, kept as a harmless column; cf_insurance_weekly
+  // below replaced it (a real settlement withholds insurance weekly, not
+  // monthly).
   cf_insurance_monthly: number | null;
+  cf_insurance_weekly: number | null;
   cf_other_weekly: number | null;
   cf_tax_reserve_pct: number | null;
   created_at: string;
