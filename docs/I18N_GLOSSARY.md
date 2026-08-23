@@ -15,7 +15,7 @@ per diem · coolant · DPF · DEF · ELD · IFTA · IRP · HVUT/2290 · settleme
 (and its plural, "settlements") · linehaul · fuel surcharge · detention ·
 layover · lumper · bobtail · deadhead · reefer · APU · CDL · DOT ·
 MC number · escrow · factoring · Schedule C · 1099 · W-2 · K-1 · S-Corp ·
-LLC
+LLC · MACRS · Section 179
 
 ## How to apply it in a translated string
 
@@ -37,7 +37,7 @@ Canonical casing to use when embedding: `Per Diem`, `Coolant`, `DPF`,
 `Linehaul`, `Fuel Surcharge`, `Detention`, `Layover`, `Lumper`,
 `Bobtail`, `Deadhead`, `Reefer`, `APU`, `CDL`, `DOT`, `MC Number`,
 `Escrow`, `Factoring`, `Schedule C`, `1099`, `W-2`, `K-1`, `S-Corp`,
-`LLC`.
+`LLC`, `MACRS`, `Section 179`.
 
 ## Verification
 

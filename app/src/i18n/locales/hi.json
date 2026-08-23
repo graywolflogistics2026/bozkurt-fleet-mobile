@@ -696,7 +696,21 @@
     "costBasisPaidSpreadMonthsLabel": "Spread purchase price over how many months?",
     "costBasisLeaseNote": "A lease payment is already counted from your settlement withholdings — nothing extra to enter here.",
     "costBasisWarrantyCostLabel": "Extended warranty cost (optional)",
-    "costBasisWarrantyTermMonthsLabel": "Extended warranty term (months)"
+    "costBasisWarrantyTermMonthsLabel": "Extended warranty term (months)",
+    "depreciationTitle": "Depreciation Election (tax)",
+    "depreciationNote": "For your Tax Estimator's current-year depreciation line — a separate concept from the Cost Basis above, which is about your economic Cost/Mile, not the tax deduction. Purchased trucks only; a leased truck skips this entirely.",
+    "depreciationNotSet": "Not set — depreciation is $0 in your Tax Estimator until you choose a method.",
+    "depreciationSkippedLease": "Leased — depreciation doesn't apply since you don't own this truck.",
+    "depreciationMethod": {
+      "full": "Full (Section 179/bonus)",
+      "macrs": "MACRS",
+      "spread": "Straight-line",
+      "ask": "Ask my CPA"
+    },
+    "depreciationYearPlacedInServiceLabel": "Year placed in service",
+    "depreciationSpreadYearsLabel": "Spread over how many years?",
+    "depreciationAskNote": "Depreciation will show as $0 in your Tax Estimator until you set a method or your CPA advises you.",
+    "trailerDepreciationTitle": "Trailer Depreciation Election (tax)"
   },
   "equipmentScreen": {
     "title": "Equipment",
@@ -1281,6 +1295,9 @@
     "sepContributionLabel": "SEP-IRA Contribution",
     "healthInsuranceLabel": "Health Insurance Premiums",
     "breakdownTitle": "Full Breakdown",
+    "netProfitBeforeDepreciation": "Net Profit (before depreciation)",
+    "depreciation": "Depreciation",
+    "depreciationCpaNote": "One or more of your trucks/trailers has depreciation set to \"Ask my CPA\" — depreciation is $0 in this estimate until you set a method or your CPA advises you.",
     "netProfit": "Net Profit",
     "employerPayrollTax": "Employer Payroll Tax (Est.)",
     "ownerShareOfProfit": "Your Share of Profit",

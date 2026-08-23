@@ -39,6 +39,8 @@ const GLOSSARY_TERMS = [
   'K-1',
   'S-Corp',
   'LLC',
+  'MACRS',
+  'Section 179',
 ];
 
 const LOCALES: Record<string, unknown> = { es, ru, ar, tr, hi, uk };

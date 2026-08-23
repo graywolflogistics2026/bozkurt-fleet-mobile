@@ -5,10 +5,12 @@ import { useFleetStats } from '@/src/data/dashboardStats';
 import { useDrivers } from '@/src/data/drivers';
 import { useDriverPayments } from '@/src/data/driverPayments';
 import { useHouseholdIncome } from '@/src/data/householdIncome';
+import { useTrucksList } from '@/src/data/trucks';
 import { calcTaxEstimate } from '@/src/tax/calcTaxEstimate';
 import { calcPerDiemDeduction } from '@/src/tax/perDiem';
 import { sumHouseholdIncome } from '@/src/tax/household';
 import { calcContractLaborYtd, sumDeductibleDriverPayroll, type ContractLaborYtd } from '@/src/tax/driverPayroll';
+import { sumFleetDepreciation } from '@/src/tax/depreciation';
 import type { TaxConfig, TaxYearData } from '@/src/types/db';
 import type { TaxEstimateResult } from '@/src/tax/types';
 
@@ -24,6 +26,13 @@ export type TaxEstimateBundle = {
   driverPayrollExpense: number;
   contractLaborYtd: ContractLaborYtd[];
   householdIncome: number;
+  // DEPRECIATION ELECTION (owner decision 2026-08-05, FULL PARITY
+  // follow-up item E) — src/tax/depreciation.ts's sumFleetDepreciation().
+  // netProfitBeforeDepreciation lets the breakdown show depreciation as
+  // its own visible line: before -> - depreciation -> estimate.netProfit.
+  depreciationTotal: number;
+  depreciationRequiresCpaNote: boolean;
+  netProfitBeforeDepreciation: number;
 };
 
 // Combines Session 4's tax_year_data hook + tax_config + fleet-wide stats
@@ -39,6 +48,7 @@ export function useTaxEstimate() {
   const driversQuery = useDrivers();
   const driverPaymentsQuery = useDriverPayments();
   const householdIncomeQuery = useHouseholdIncome();
+  const trucksQuery = useTrucksList();
 
   const isLoading = taxYearDataQuery.isLoading || taxConfigQuery.isLoading || fleetStatsQuery.isLoading;
   const error = taxYearDataQuery.error ?? taxConfigQuery.error ?? fleetStatsQuery.error ?? null;
@@ -58,7 +68,12 @@ export function useTaxEstimate() {
     // team_split/trainee shares) reduces net profit the same way any other
     // out-of-pocket business expense does.
     const driverPayrollExpense = sumDeductibleDriverPayroll(driverPayments);
-    const netProfit = stats.netRevenue - stats.outOfPocketDeductions - perDiemDeduction - driverPayrollExpense;
+    const { total: depreciationTotal, anyRequiresCpaNote: depreciationRequiresCpaNote } = sumFleetDepreciation(
+      trucksQuery.data ?? [],
+      resolvedYear
+    );
+    const netProfitBeforeDepreciation = stats.netRevenue - stats.outOfPocketDeductions - perDiemDeduction - driverPayrollExpense;
+    const netProfit = netProfitBeforeDepreciation - depreciationTotal;
 
     const estimate = calcTaxEstimate({
       taxYearData,
@@ -89,6 +104,9 @@ export function useTaxEstimate() {
       driverPayrollExpense,
       contractLaborYtd,
       householdIncome,
+      depreciationTotal,
+      depreciationRequiresCpaNote,
+      netProfitBeforeDepreciation,
     };
   }, [
     taxYearDataQuery.data,
@@ -97,6 +115,7 @@ export function useTaxEstimate() {
     driversQuery.data,
     driverPaymentsQuery.data,
     householdIncomeQuery.data,
+    trucksQuery.data,
   ]);
 
   return { data, isLoading, error };

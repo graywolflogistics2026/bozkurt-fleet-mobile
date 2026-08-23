@@ -3164,3 +3164,83 @@
   Full suite: 70 suites / 1725 tests pass; `tsc --noEmit` clean; all 7
   locales confirmed key-parity (`dashboard.expenseExplainer.*`, hi/uk as
   untranslated English copies per invariant #11).
+- FULL PARITY FOLLOW-UP, PART E — DEPRECIATION ELECTION (owner decision
+  2026-08-05, web v2026.08.05-W chase, spec item E). Purchased trucks/
+  trailers only. `app/src/tax/depreciation.ts`'s `calcCurrentYearDepreciation()`
+  computes ONE tax year's depreciation expense from an owner's election:
+  method `'full'` (Section 179/bonus — 100% expensed in the placed-in-
+  service year, $0 every year after), `'macrs'` (IRS Pub. 946 half-year-
+  convention percentages — tractor 3-year property `33.33/44.45/14.81/
+  7.41`, trailer 5-year property `20/32/19.2/11.52/11.52/5.76`, applied
+  by recovery year, $0 once the table is exhausted), `'spread'` (straight
+  line over the owner's own chosen number of years, defaulting to 5 when
+  unset), or `'ask'` (defers to the CPA — $0 in the estimate, flagged
+  with `requiresCpaNote` rather than guessing a method on the owner's
+  behalf). A truck whose `cost_basis_ownership_mode` (PART C) is
+  `'lease'` skips entirely (`skippedAsLease: true`) — the owner doesn't
+  own a leased truck, so it's never depreciable, regardless of any other
+  field. An unconfigured asset (no method, no purchase price, or no year
+  placed in service) contributes exactly $0 with `isConfigured: false`
+  — never a guess. THE MACRS PERCENTAGE TABLES ARE HARDCODED, not sourced
+  from `tax_year_data` — a deliberate, documented exception to CLAUDE.md
+  invariant #6: they're fixed by IRC §168/Pub. 946 structure and do NOT
+  change per tax year (unlike brackets/SE-tax rate/per diem, which DO and
+  which invariant #6 requires sourcing server-side) — same "fixed by IRS
+  form/code structure, not an annually-published figure" precedent
+  already established by `app/src/import/category.ts`'s `SCHEDULE_C_LINE`
+  mapping. Deliberately kept SEPARATE from PART C's `truckCostBasis.ts`
+  "economic monthly spread" (a paid-off truck's CPM/per-mile cost TODAY)
+  — the two numbers answer different questions and must never be
+  confused or summed together.
+  `docs/PENDING_SQL.md` §46 (NOT YET RUN as of this writing) adds
+  `trucks.depreciation_method`/`depreciation_year_placed_in_service`/
+  `depreciation_spread_years` (tractor) and the `trailer_`-prefixed
+  equivalents (independent of the tractor's own election, same "trailer
+  financing is independent of its tractor's" pattern as CLAUDE.md
+  invariant #25). `sumFleetDepreciation()` sums current-year depreciation
+  across every truck AND its own trailer (via `useTrucksList()`, which —
+  unlike `useActiveTruck()` — includes retired trucks too, since a
+  retired-but-still-owned truck can still generate a real depreciation
+  deduction).
+  TAX ESTIMATE WIRING: `app/src/data/taxEstimate.ts`'s `useTaxEstimate()`
+  now subtracts `depreciationTotal` from net profit BEFORE calling
+  `calcTaxEstimate()` (that function itself, a verbatim legacy port, is
+  UNCHANGED) and exposes `depreciationTotal`/`depreciationRequiresCpaNote`/
+  `netProfitBeforeDepreciation` in its bundle so the Tax Estimator screen
+  can show depreciation as its own visible line (spec item E's explicit
+  ask) rather than silently folding it into net profit: "Net Profit
+  (before depreciation)" → "Depreciation: -$X" → the existing "Net
+  Profit" row (now the post-depreciation figure, unchanged formula/
+  position) — only rendered when `depreciationTotal > 0`, so an account
+  with no purchased/configured trucks sees zero change to this screen. An
+  orange CPA-decision note appears below the breakdown whenever any asset
+  is set to `'ask'`.
+  TRUCKS SCREEN: a new "Depreciation Election (tax)" section (tractor)
+  and, only when a trailer purchase price is entered, a second "Trailer
+  Depreciation Election (tax)" section — 4-pill method picker, year-
+  placed-in-service field (hidden for 'ask'), spread-years field (only
+  for 'spread'), and a "not set" prompt (amber) whenever no method is
+  chosen yet, exactly matching PART C's Cost Basis section's own "not
+  set" convention. When the tractor's cost-basis ownership mode is
+  'lease', the whole depreciation picker is replaced by a plain
+  "Leased — depreciation doesn't apply" note instead of showing controls
+  that would have no effect.
+  GLOSSARY: `MACRS` and `Section 179` added to `docs/I18N_GLOSSARY.md`'s
+  DO-NOT-TRANSLATE list and `glossary.test.ts`'s `GLOSSARY_TERMS` — both
+  are IRS-specific terms with no natural translation, same rationale as
+  every other glossary entry. Catching this ALSO caught a pre-existing,
+  unrelated miss: the Accountant Package's `capitalAssetsNote` string
+  (from an earlier pass) already used "Section 179" in `en.json` but
+  Spanish had translated it to "la Sección 179" — fixed as part of this
+  pass's glossary addition, confirming the glossary test's own value
+  (a term added for a NEW feature caught an OLD, previously-unenforced
+  drift).
+  Tests: `src/tax/__tests__/depreciation.test.ts` (new, 14 tests) — every
+  method's math (full/macrs both tables/spread with and without an
+  explicit year count/ask), the lease skip, the not-yet-placed-in-service
+  $0 case, the unconfigured-$0 case, and `sumFleetDepreciation()`'s
+  tractor+trailer independence (including a leased tractor with a
+  purchased trailer depreciating only the trailer) and CPA-note
+  aggregation. Full suite: 71 suites / 1757 tests pass; `tsc --noEmit`
+  clean; all 7 locales confirmed key-parity, including the newly-enforced
+  MACRS/Section 179 glossary terms.

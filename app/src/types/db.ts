@@ -55,6 +55,14 @@ export type Truck = {
   cost_basis_paid_spread_months: number | null;
   cost_basis_warranty_cost: number | null;
   cost_basis_warranty_term_months: number | null;
+  // docs/PENDING_SQL.md §46 (owner decision 2026-08-05) — see
+  // app/src/tax/depreciation.ts.
+  depreciation_method: 'full' | 'macrs' | 'spread' | 'ask' | null;
+  depreciation_year_placed_in_service: number | null;
+  depreciation_spread_years: number | null;
+  trailer_depreciation_method: 'full' | 'macrs' | 'spread' | 'ask' | null;
+  trailer_depreciation_year_placed_in_service: number | null;
+  trailer_depreciation_spread_years: number | null;
   created_at: string;
   updated_at: string;
 };

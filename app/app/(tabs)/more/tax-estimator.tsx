@@ -415,6 +415,12 @@ export default function TaxEstimator() {
             {/* --- Full breakdown --- */}
             <Text style={styles.sectionTitle}>{t('taxEstimator.breakdownTitle')}</Text>
             <Card>
+              {tax.depreciationTotal > 0 && (
+                <>
+                  <Row label={t('taxEstimator.netProfitBeforeDepreciation')} value={money(tax.netProfitBeforeDepreciation)} />
+                  <Row label={t('taxEstimator.depreciation')} value={`- ${money(tax.depreciationTotal)}`} valueColor={colors.red} />
+                </>
+              )}
               <Row label={t('taxEstimator.netProfit')} value={money(tax.estimate.netProfit)} />
               {tax.estimate.employerPayrollTax > 0 && (
                 <Row label={t('taxEstimator.employerPayrollTax')} value={`- ${money(tax.estimate.employerPayrollTax)}`} valueColor={colors.red} />
@@ -440,6 +446,9 @@ export default function TaxEstimator() {
               <Row label={t('taxEstimator.totalTax')} value={money(tax.estimate.totalTax)} valueColor={colors.red} bold />
               <Row label={t('taxEstimator.effectiveRate')} value={tax.estimate.effectiveRate != null ? `${tax.estimate.effectiveRate.toFixed(1)}%` : '—'} />
             </Card>
+            {tax.depreciationRequiresCpaNote && (
+              <MutedText style={{ color: colors.orange }}>{t('taxEstimator.depreciationCpaNote')}</MutedText>
+            )}
 
             {/* --- Quarterly schedule --- */}
             <Text style={styles.sectionTitle}>{t('taxEstimator.quarterlyTitle')}</Text>

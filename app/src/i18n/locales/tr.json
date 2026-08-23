@@ -696,7 +696,21 @@
     "costBasisPaidSpreadMonthsLabel": "Satın alma fiyatı kaç aya yayılsın?",
     "costBasisLeaseNote": "Bir kiralama ödemesi zaten settlement kesintilerinizden sayılıyor — burada ekstra bir şey girmenize gerek yok.",
     "costBasisWarrantyCostLabel": "Uzatılmış garanti maliyeti (isteğe bağlı)",
-    "costBasisWarrantyTermMonthsLabel": "Uzatılmış garanti süresi (ay)"
+    "costBasisWarrantyTermMonthsLabel": "Uzatılmış garanti süresi (ay)",
+    "depreciationTitle": "Amortisman Seçimi (vergi)",
+    "depreciationNote": "Vergi Tahmincinizin cari yıl amortisman satırı için — yukarıdaki Maliyet Tabanından ayrı bir kavram; o, ekonomik Maliyet/Mil'inizle ilgilidir, vergi indirimi değil. Yalnızca satın alınan kamyonlar; kiralanan bir kamyon bunu tamamen atlar.",
+    "depreciationNotSet": "Ayarlanmadı — bir yöntem seçene kadar Vergi Tahmincinizde amortisman 0 $'dır.",
+    "depreciationSkippedLease": "Kiralık — bu kamyonun sahibi olmadığınız için amortisman uygulanmaz.",
+    "depreciationMethod": {
+      "full": "Tam (Section 179/bonus)",
+      "macrs": "MACRS",
+      "spread": "Doğrusal",
+      "ask": "Muhasebecime sor"
+    },
+    "depreciationYearPlacedInServiceLabel": "Hizmete alınma yılı",
+    "depreciationSpreadYearsLabel": "Kaç yıla yayılsın?",
+    "depreciationAskNote": "Bir yöntem belirleyene veya muhasebeciniz sizi yönlendirene kadar Vergi Tahmincinizde amortisman 0 $ olarak görünecektir.",
+    "trailerDepreciationTitle": "Römork Amortisman Seçimi (vergi)"
   },
   "equipmentScreen": {
     "title": "Ekipman",
@@ -1281,6 +1295,9 @@
     "sepContributionLabel": "SEP-IRA Katkısı",
     "healthInsuranceLabel": "Sağlık Sigortası Primleri",
     "breakdownTitle": "Tam Döküm",
+    "netProfitBeforeDepreciation": "Net Kâr (amortisman öncesi)",
+    "depreciation": "Amortisman",
+    "depreciationCpaNote": "Kamyonlarınızdan/römorklarınızdan biri veya birkaçı için amortisman \"Muhasebecime sor\" olarak ayarlandı — bir yöntem belirleyene veya muhasebeciniz sizi yönlendirene kadar bu tahminde amortisman 0 $'dır.",
     "netProfit": "Net Kâr",
     "employerPayrollTax": "İşveren Bordro Vergisi (Tah.)",
     "ownerShareOfProfit": "Kârdaki Payınız",

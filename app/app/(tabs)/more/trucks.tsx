@@ -35,6 +35,16 @@ type FormState = {
   costBasisPaidSpreadMonths: string;
   costBasisWarrantyCost: string;
   costBasisWarrantyTermMonths: string;
+  // DEPRECIATION ELECTION (owner decision 2026-08-05, FULL PARITY
+  // follow-up item E) — purchased trucks/trailers only. See
+  // app/src/tax/depreciation.ts. Separate TAX concept from the cost-basis
+  // fields above (CPM's economic spread).
+  depreciationMethod: 'full' | 'macrs' | 'spread' | 'ask' | '';
+  depreciationYearPlacedInService: string;
+  depreciationSpreadYears: string;
+  trailerDepreciationMethod: 'full' | 'macrs' | 'spread' | 'ask' | '';
+  trailerDepreciationYearPlacedInService: string;
+  trailerDepreciationSpreadYears: string;
 };
 
 function emptyForm(): FormState {
@@ -54,6 +64,12 @@ function emptyForm(): FormState {
     costBasisPaidSpreadMonths: '',
     costBasisWarrantyCost: '',
     costBasisWarrantyTermMonths: '',
+    depreciationMethod: '',
+    depreciationYearPlacedInService: '',
+    depreciationSpreadYears: '',
+    trailerDepreciationMethod: '',
+    trailerDepreciationYearPlacedInService: '',
+    trailerDepreciationSpreadYears: '',
   };
 }
 
@@ -84,6 +100,13 @@ function truckToForm(t: Truck): FormState {
     costBasisPaidSpreadMonths: t.cost_basis_paid_spread_months != null ? String(t.cost_basis_paid_spread_months) : '',
     costBasisWarrantyCost: t.cost_basis_warranty_cost != null ? String(t.cost_basis_warranty_cost) : '',
     costBasisWarrantyTermMonths: t.cost_basis_warranty_term_months != null ? String(t.cost_basis_warranty_term_months) : '',
+    depreciationMethod: t.depreciation_method ?? '',
+    depreciationYearPlacedInService: t.depreciation_year_placed_in_service != null ? String(t.depreciation_year_placed_in_service) : '',
+    depreciationSpreadYears: t.depreciation_spread_years != null ? String(t.depreciation_spread_years) : '',
+    trailerDepreciationMethod: t.trailer_depreciation_method ?? '',
+    trailerDepreciationYearPlacedInService:
+      t.trailer_depreciation_year_placed_in_service != null ? String(t.trailer_depreciation_year_placed_in_service) : '',
+    trailerDepreciationSpreadYears: t.trailer_depreciation_spread_years != null ? String(t.trailer_depreciation_spread_years) : '',
   };
 }
 
@@ -134,6 +157,14 @@ export default function Trucks() {
       cost_basis_paid_spread_months: form.costBasisPaidSpreadMonths ? Number(form.costBasisPaidSpreadMonths) || null : null,
       cost_basis_warranty_cost: form.costBasisWarrantyCost ? Number(form.costBasisWarrantyCost) || null : null,
       cost_basis_warranty_term_months: form.costBasisWarrantyTermMonths ? Number(form.costBasisWarrantyTermMonths) || null : null,
+      depreciation_method: form.depreciationMethod || null,
+      depreciation_year_placed_in_service: form.depreciationYearPlacedInService ? Number(form.depreciationYearPlacedInService) || null : null,
+      depreciation_spread_years: form.depreciationSpreadYears ? Number(form.depreciationSpreadYears) || null : null,
+      trailer_depreciation_method: form.trailerDepreciationMethod || null,
+      trailer_depreciation_year_placed_in_service: form.trailerDepreciationYearPlacedInService
+        ? Number(form.trailerDepreciationYearPlacedInService) || null
+        : null,
+      trailer_depreciation_spread_years: form.trailerDepreciationSpreadYears ? Number(form.trailerDepreciationSpreadYears) || null : null,
     };
   }
 
@@ -319,6 +350,105 @@ export default function Trucks() {
           onChangeText={(v) => setForm({ ...form, costBasisWarrantyTermMonths: v })}
           placeholder="0"
         />
+
+        <Text style={styles.sectionTitle}>{t('trucks.depreciationTitle')}</Text>
+        <MutedText>{t('trucks.depreciationNote')}</MutedText>
+        {form.costBasisOwnershipMode === 'lease' ? (
+          <MutedText style={{ marginTop: spacing.xs }}>{t('trucks.depreciationSkippedLease')}</MutedText>
+        ) : (
+          <>
+            {!form.depreciationMethod && <MutedText style={{ color: colors.orange }}>{t('trucks.depreciationNotSet')}</MutedText>}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs }}>
+              {(['full', 'macrs', 'spread', 'ask'] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setForm({ ...form, depreciationMethod: option })}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: form.depreciationMethod === option ? colors.accent : colors.border,
+                    backgroundColor: form.depreciationMethod === option ? colors.accent : colors.card2,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>{t(`trucks.depreciationMethod.${option}`)}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {form.depreciationMethod && form.depreciationMethod !== 'ask' && (
+              <>
+                <MutedText>{t('trucks.depreciationYearPlacedInServiceLabel')}</MutedText>
+                <Field
+                  keyboardType="numeric"
+                  value={form.depreciationYearPlacedInService}
+                  onChangeText={(v) => setForm({ ...form, depreciationYearPlacedInService: v })}
+                  placeholder="2026"
+                />
+              </>
+            )}
+            {form.depreciationMethod === 'spread' && (
+              <>
+                <MutedText>{t('trucks.depreciationSpreadYearsLabel')}</MutedText>
+                <Field
+                  keyboardType="numeric"
+                  value={form.depreciationSpreadYears}
+                  onChangeText={(v) => setForm({ ...form, depreciationSpreadYears: v })}
+                  placeholder="5"
+                />
+              </>
+            )}
+            {form.depreciationMethod === 'ask' && <MutedText>{t('trucks.depreciationAskNote')}</MutedText>}
+          </>
+        )}
+
+        {form.trailerFinancing.purchase_price && (
+          <>
+            <Text style={styles.sectionTitle}>{t('trucks.trailerDepreciationTitle')}</Text>
+            {!form.trailerDepreciationMethod && <MutedText style={{ color: colors.orange }}>{t('trucks.depreciationNotSet')}</MutedText>}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs }}>
+              {(['full', 'macrs', 'spread', 'ask'] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setForm({ ...form, trailerDepreciationMethod: option })}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: form.trailerDepreciationMethod === option ? colors.accent : colors.border,
+                    backgroundColor: form.trailerDepreciationMethod === option ? colors.accent : colors.card2,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>{t(`trucks.depreciationMethod.${option}`)}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {form.trailerDepreciationMethod && form.trailerDepreciationMethod !== 'ask' && (
+              <>
+                <MutedText>{t('trucks.depreciationYearPlacedInServiceLabel')}</MutedText>
+                <Field
+                  keyboardType="numeric"
+                  value={form.trailerDepreciationYearPlacedInService}
+                  onChangeText={(v) => setForm({ ...form, trailerDepreciationYearPlacedInService: v })}
+                  placeholder="2026"
+                />
+              </>
+            )}
+            {form.trailerDepreciationMethod === 'spread' && (
+              <>
+                <MutedText>{t('trucks.depreciationSpreadYearsLabel')}</MutedText>
+                <Field
+                  keyboardType="numeric"
+                  value={form.trailerDepreciationSpreadYears}
+                  onChangeText={(v) => setForm({ ...form, trailerDepreciationSpreadYears: v })}
+                  placeholder="5"
+                />
+              </>
+            )}
+            {form.trailerDepreciationMethod === 'ask' && <MutedText>{t('trucks.depreciationAskNote')}</MutedText>}
+          </>
+        )}
       </>
     );
   }

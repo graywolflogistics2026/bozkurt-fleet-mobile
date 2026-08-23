@@ -696,7 +696,21 @@
     "costBasisPaidSpreadMonthsLabel": "¿En cuántos meses distribuir el precio de compra?",
     "costBasisLeaseNote": "Un pago de arrendamiento ya se cuenta desde las retenciones de su settlement — no hay nada más que ingresar aquí.",
     "costBasisWarrantyCostLabel": "Costo de garantía extendida (opcional)",
-    "costBasisWarrantyTermMonthsLabel": "Plazo de la garantía extendida (meses)"
+    "costBasisWarrantyTermMonthsLabel": "Plazo de la garantía extendida (meses)",
+    "depreciationTitle": "Elección de Depreciación (impuestos)",
+    "depreciationNote": "Para la línea de depreciación del año actual de su Estimador de Impuestos — un concepto distinto del Costo Base anterior, que trata sobre su Costo/Milla económico, no la deducción fiscal. Solo camiones comprados; un camión arrendado omite esto por completo.",
+    "depreciationNotSet": "No configurado — la depreciación es $0 en su Estimador de Impuestos hasta que elija un método.",
+    "depreciationSkippedLease": "Arrendado — la depreciación no aplica ya que no es dueño de este camión.",
+    "depreciationMethod": {
+      "full": "Completa (Section 179/bono)",
+      "macrs": "MACRS",
+      "spread": "Línea recta",
+      "ask": "Preguntar a mi contador"
+    },
+    "depreciationYearPlacedInServiceLabel": "Año de puesta en servicio",
+    "depreciationSpreadYearsLabel": "¿En cuántos años distribuir?",
+    "depreciationAskNote": "La depreciación se mostrará como $0 en su Estimador de Impuestos hasta que configure un método o su contador lo asesore.",
+    "trailerDepreciationTitle": "Elección de Depreciación del Remolque (impuestos)"
   },
   "equipmentScreen": {
     "title": "Equipo",
@@ -1281,6 +1295,9 @@
     "sepContributionLabel": "Contribución SEP-IRA",
     "healthInsuranceLabel": "Primas de Seguro Médico",
     "breakdownTitle": "Desglose Completo",
+    "netProfitBeforeDepreciation": "Ganancia Neta (antes de depreciación)",
+    "depreciation": "Depreciación",
+    "depreciationCpaNote": "Uno o más de sus camiones/remolques tiene la depreciación configurada como \"Preguntar a mi contador\" — la depreciación es $0 en esta estimación hasta que configure un método o su contador lo asesore.",
     "netProfit": "Ganancia Neta",
     "employerPayrollTax": "Impuesto de Nómina del Empleador (Est.)",
     "ownerShareOfProfit": "Tu Parte de la Ganancia",
@@ -1565,7 +1582,7 @@
     "saveFailedTitle": "Error al guardar",
     "deleteFailedTitle": "Error al eliminar",
     "capitalAssetsTitle": "Activos de Capital",
-    "capitalAssetsNote": "Depreciable — la Sección 179 / depreciación acelerada es decisión de su CPA. Nunca se cuenta en los totales de gastos anteriores.",
+    "capitalAssetsNote": "Depreciable — Section 179 / depreciación acelerada es decisión de su CPA. Nunca se cuenta en los totales de gastos anteriores.",
     "noCapitalAssets": "Aún no hay compras de activos de capital registradas.",
     "financingCash": "efectivo",
     "financingLoan": "préstamo",

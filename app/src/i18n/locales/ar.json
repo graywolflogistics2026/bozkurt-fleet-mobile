@@ -696,7 +696,21 @@
     "costBasisPaidSpreadMonthsLabel": "على كم شهرًا يُوزَّع سعر الشراء؟",
     "costBasisLeaseNote": "دفعة الإيجار محتسبة بالفعل من استقطاعات settlement الخاص بك — لا حاجة لإدخال شيء إضافي هنا.",
     "costBasisWarrantyCostLabel": "تكلفة الضمان الممتد (اختياري)",
-    "costBasisWarrantyTermMonthsLabel": "مدة الضمان الممتد (بالأشهر)"
+    "costBasisWarrantyTermMonthsLabel": "مدة الضمان الممتد (بالأشهر)",
+    "depreciationTitle": "اختيار الإهلاك (ضريبي)",
+    "depreciationNote": "لسطر إهلاك السنة الحالية في مقدّر الضرائب الخاص بك — مفهوم منفصل عن الأساس المالي أعلاه، الذي يتعلق بـ Cost/Mile الاقتصادي وليس الخصم الضريبي. للشاحنات المُشتراة فقط؛ الشاحنة المؤجرة تتخطى هذا تمامًا.",
+    "depreciationNotSet": "غير مضبوط — الإهلاك يساوي 0 دولار في مقدّر الضرائب حتى تختار طريقة.",
+    "depreciationSkippedLease": "مؤجرة — لا ينطبق الإهلاك لأنك لا تملك هذه الشاحنة.",
+    "depreciationMethod": {
+      "full": "كامل (Section 179/بونص)",
+      "macrs": "MACRS",
+      "spread": "القسط الثابت",
+      "ask": "اسأل محاسبي"
+    },
+    "depreciationYearPlacedInServiceLabel": "سنة بدء الخدمة",
+    "depreciationSpreadYearsLabel": "على كم سنة يُوزَّع؟",
+    "depreciationAskNote": "سيظهر الإهلاك كـ 0 دولار في مقدّر الضرائب حتى تحدد طريقة أو ينصحك محاسبك.",
+    "trailerDepreciationTitle": "اختيار إهلاك المقطورة (ضريبي)"
   },
   "equipmentScreen": {
     "title": "المعدات",
@@ -1281,6 +1295,9 @@
     "sepContributionLabel": "مساهمة SEP-IRA",
     "healthInsuranceLabel": "أقساط التأمين الصحي",
     "breakdownTitle": "التفصيل الكامل",
+    "netProfitBeforeDepreciation": "صافي الربح (قبل الإهلاك)",
+    "depreciation": "الإهلاك",
+    "depreciationCpaNote": "واحدة أو أكثر من شاحناتك/مقطوراتك تم ضبط الإهلاك لها على \"اسأل محاسبي\" — الإهلاك يساوي 0 دولار في هذا التقدير حتى تحدد طريقة أو ينصحك محاسبك.",
     "netProfit": "صافي الربح",
     "employerPayrollTax": "ضريبة رواتب صاحب العمل (تقديري)",
     "ownerShareOfProfit": "حصتك من الربح",

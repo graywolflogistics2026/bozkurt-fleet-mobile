@@ -204,6 +204,16 @@ create table trucks (
   cost_basis_paid_spread_months integer,
   cost_basis_warranty_cost numeric(12,2),
   cost_basis_warranty_term_months integer,
+  -- PENDING_SQL.md §46 (owner decision 2026-08-05) — purchased-truck
+  -- depreciation election, tractor/trailer independent. See
+  -- app/src/tax/depreciation.ts. A separate TAX concept from the
+  -- cost_basis_* fields above (CPM's economic spread).
+  depreciation_method text check (depreciation_method in ('full','macrs','spread','ask')),
+  depreciation_year_placed_in_service integer,
+  depreciation_spread_years integer,
+  trailer_depreciation_method text check (trailer_depreciation_method in ('full','macrs','spread','ask')),
+  trailer_depreciation_year_placed_in_service integer,
+  trailer_depreciation_spread_years integer,
   created_at   timestamptz default now()
 );
 

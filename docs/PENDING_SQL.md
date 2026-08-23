@@ -1645,6 +1645,33 @@ owner-scoped.
 
 ---
 
+## 46. trucks depreciation election (FULL PARITY follow-up, owner decision 2026-08-05, spec item E)
+
+Purchased-truck depreciation election, tractor and trailer independent
+of each other (same "trailer's financing is independent of its
+tractor's" pattern as CLAUDE.md invariant #25) — a separate TAX concept
+from §45's cost-basis fields, which are about economic CPM spread, not
+the tax-deductible depreciation expense. See
+`app/src/tax/depreciation.ts`.
+
+```sql
+alter table trucks
+  add column depreciation_method text check (depreciation_method in ('full','macrs','spread','ask')),
+  add column depreciation_year_placed_in_service integer,
+  add column depreciation_spread_years integer,
+  add column trailer_depreciation_method text check (trailer_depreciation_method in ('full','macrs','spread','ask')),
+  add column trailer_depreciation_year_placed_in_service integer,
+  add column trailer_depreciation_spread_years integer;
+```
+
+All nullable; an unconfigured truck contributes $0 to the tax estimate's
+depreciation line with a "not set" prompt, never a guess. No RLS change
+needed — `trucks` is already owner-scoped.
+
+- [ ] 46a run (add trucks depreciation-election columns)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —
