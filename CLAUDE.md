@@ -2749,3 +2749,101 @@
   `findImplausibleDates` coverage (plausible/before-2020/beyond-next-year/
   boundary/null cases). Full suite: 66 suites / 1576 tests pass; `tsc
   --noEmit` clean.
+- FULL PARITY WITH WEB v2026.08.05-K, PART B — ACCOUNTANT PACKAGE REWORK
+  (owner decision 2026-08-05). The owner's accountant needs OUT-OF-POCKET
+  expenses only (the carrier's own accountant already has the withheld
+  side) — this is now the screen's DEFAULT scope, not an afterthought.
+  1. **ORIGIN RULE, the missing piece** (docs/PENDING_SQL.md §43):
+     `deductions.source` already distinguished settlement/import/manual,
+     but `maintenance_records` and `tolls` had NO equivalent column at
+     all — a settlement's own maintenance/toll line items were
+     structurally indistinguishable from a standalone out-of-pocket
+     import. New `source` columns (same 3-value enum) on both tables,
+     backfilled for existing rows (a transponder toll defaults to
+     withheld; a maintenance row linked to a standalone `docType:
+     'maintenance'` document defaults to out-of-pocket, everything else
+     to withheld — matching the spec's own stated default). `fuel_
+     purchases` needed no new column — its existing nullable
+     `settlement_id` already IS the origin signal (also reused by PART
+     C's canonical expense engine's own double-count guard).
+     `mapExtraction.ts`'s settlement/standalone maintenance mappers and
+     the settlement toll mapper now stamp `source` explicitly; every
+     manual-entry screen (`maintenance.tsx`, `tolls.tsx`,
+     `truck-health.tsx`'s Mark as Done) stamps `source: 'manual'`.
+  2. **`src/stats/accountantPackage.ts` gained a whole new, additive
+     pipeline** on top of the original `buildAccountantPackage()` (kept,
+     untouched, no other caller): `matchesAccountantScope()` (the 3-way
+     out-of-pocket/withheld/combined filter, driven by the ORIGIN RULE
+     above) → `buildLineItems()` (deductions + fuel + maintenance + tolls
+     flattened into ONE typed, period+scope-filtered, zero-amount-row-
+     skipped list — CLAUDE.md's C.1 "zero-cost rows never reach the
+     report" requirement lives here) → `buildScheduleCTotals()` (category
+     subtotals with each category's Schedule C line attached, PART A's
+     `scheduleCLineFor()`) → `buildLumperFees()` (a dedicated table,
+     filtered straight from the same line items) →
+     `buildPerDiemBlock()` (MONTH figure and YEAR-TO-DATE figure computed
+     side by side, both via the existing `calcPerDiemDays()` — never
+     re-derived, only re-scoped which settlements are summed) →
+     `buildCapitalAssets()` (reads `trucks`/`equipment`'s EXISTING
+     purchase_price/purchase_date/financing columns, §36 — never counted
+     in expense totals, labeled "depreciable, your CPA's decision") →
+     `buildOwnersEquity()` (reuses Part E's `summarizeContributions()` —
+     cash + linked contributions counted ONCE EACH and summed, never a
+     hidden constant; `unmatchedOwnerPaidCount` is a WARNING, never a
+     silent mis-total, whenever this period's owner-paid line items
+     outnumber the linked contributions that should have auto-synced for
+     them).
+  3. **Screen rework** (`accountant-package.tsx`, fully rewritten): Year
+     pill row (populated from every year that actually has a settlement,
+     plus the current year) / Month pill row (+ "All Year") / Scope pill
+     row (Out-of-pocket only — default — / Settlement-withheld only /
+     Everything combined, with an explanatory note under the out-of-
+     pocket choice). SECTION ORDER matches the spec exactly: header
+     (company name — Unit N · year/make/model, cleanly omitted when
+     unset) → summary tiles (gross income + a conditional "+ $X
+     reimbursements" sub-line, reading the EXISTING `reimbursements`
+     table by period; deductible expenses; a compact per-diem figure) →
+     dedicated Per Diem section (month + YTD, side by side) → an
+     implausible-date warning card (`findImplausibleDates()`, PART D.2 —
+     this is the first screen it's actually wired into) → Lumper Fees
+     table (above the category table, not buried at the bottom) →
+     category expense table with BOLD, larger category headers (each
+     showing its Schedule C line) and grand total → Capital Assets →
+     Owner's Equity (with its own unmatched-owner-paid warning) → 4
+     exports. EVERY ROW is tappable-to-edit (`CategoryPicker`, the SAME
+     shared component `deductions.tsx` already uses) and deletable (✕,
+     confirmed). Changing a fuel/maintenance/toll row's category
+     (spec item B.4) converts it into a manual deduction row so the new
+     category actually sticks — insert the new deduction FIRST, delete
+     the original typed row only after the insert succeeds. A row's
+     category-grouping in the UI resolves through the SAME
+     `resolveScheduleCBucket()` `buildScheduleCTotals()` itself uses
+     (not a raw `category` string match) — a custom category whose
+     Schedule C bucket differs from its own name (e.g. "Detention
+     Software" → "ELD & Communications") would otherwise silently vanish
+     from its bucket's row list while still counting toward the bucket's
+     total, a real display bug caught and fixed before commit. OWNER-PAID
+     rows (`isPersonalPayment(payment_method)`) render with a subtle
+     amber row background + a "💰 OWNER PAID" badge inline (screen, PDF,
+     and the Excel export's own inline row highlight).
+  4. **4 exports**: PDF month / PDF year (existing `expo-print`
+     `printToFileAsync()` pattern, extended with the new sections) and
+     Excel month / Excel year — the SAME HTML template rendered to a
+     `.xls`-extensioned file with MIME `application/vnd.ms-excel`
+     (Excel opens an HTML table given this extension/MIME, a standard,
+     dependency-free trick — no new native module needed). Both share
+     ONE `buildReportHtml(year, month)` function so the screen, the PDF,
+     and the Excel export can never disagree about what a given
+     period/scope actually contains.
+  Tests: `accountantPackage.test.ts` gained full coverage for every new
+  function — `matchesAccountantScope`'s 3-way matrix,
+  `buildLineItems`'s zero-row-skip/ORIGIN-RULE/period-filter/owner-paid-
+  detection cases, `buildScheduleCTotals`'s Schedule-C-line attachment,
+  `buildLumperFees`, `buildPerDiemBlock`'s month-vs-YTD scoping,
+  `buildCapitalAssets` (truck + trailer + equipment as separate rows,
+  never a row with no purchase price), and `buildOwnersEquity` (cash +
+  linked summed once each, a draw never counts, the unmatched-warning
+  triggers/clears correctly). Full suite: 66 suites / 1614 tests pass;
+  `tsc --noEmit` clean; all 7 locales confirmed key-parity (glossary test
+  re-passed clean — every new string was written scope-checked against
+  the DO-NOT-TRANSLATE list up front this time, no post-hoc fix needed).

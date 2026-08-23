@@ -530,7 +530,8 @@ create table maintenance_records (
   cost         numeric(12,2) default 0,
   vendor       text,
   invoice_number text,
-  tags         text                           -- PENDING_SQL.md §22
+  tags         text,                          -- PENDING_SQL.md §22
+  source       text not null default 'import' check (source in ('settlement','import','manual')) -- PENDING_SQL.md §43 (Accountant Package ORIGIN RULE)
 );
 
 -- ---------- Maintenance intervals (per-truck, user-editable — NEW, owner decision 2026-07-03) ----------
@@ -601,7 +602,8 @@ create table tolls (
   toll_date    date,
   amount       numeric(12,2),
   plaza        text,
-  tags         text  -- PENDING_SQL.md §22
+  tags         text, -- PENDING_SQL.md §22
+  source       text not null default 'import' check (source in ('settlement','import','manual')) -- PENDING_SQL.md §43 (Accountant Package ORIGIN RULE)
 );
 
 -- ---------- Reimbursements (was DB.reimb) ----------

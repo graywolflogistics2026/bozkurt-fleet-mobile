@@ -291,6 +291,7 @@ export type MaintenanceRecord = {
   vendor: string | null;
   invoice_number: string | null;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  source: 'settlement' | 'import' | 'manual'; // docs/PENDING_SQL.md §43 (Accountant Package ORIGIN RULE, owner decision 2026-08-05)
   created_at: string;
   updated_at: string;
 };
@@ -334,6 +335,7 @@ export type Toll = {
   amount: number | null;
   plaza: string | null;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  source: 'settlement' | 'import' | 'manual'; // docs/PENDING_SQL.md §43 (Accountant Package ORIGIN RULE, owner decision 2026-08-05)
   created_at: string;
   updated_at: string;
 };

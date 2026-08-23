@@ -93,6 +93,10 @@ function toTollInsert(t: ExtractedToll, network: 'ezpass' | 'drivewyze', userId:
     toll_date: t.date ?? fallbackDate ?? null,
     amount: num(t.amount),
     plaza: t.plaza ?? t.location ?? null,
+    // Accountant Package ORIGIN RULE (docs/PENDING_SQL.md §43, owner
+    // decision 2026-08-05) — a toll extracted from a settlement's own
+    // tolls section is settlement-withheld, never out-of-pocket.
+    source: 'settlement',
   };
 }
 
@@ -204,6 +208,10 @@ export function mapSettlement(
     odometer: num(m.odometer),
     cost: num(m.total),
     invoice_number: m.invoice ?? null,
+    // Accountant Package ORIGIN RULE (docs/PENDING_SQL.md §43, owner
+    // decision 2026-08-05) — maintenance extracted from a settlement's
+    // own maintenance section is settlement-withheld, never out-of-pocket.
+    source: 'settlement',
   }));
 
   // legacy/index.html:2516 — a real gap, not previously ported: settlement
@@ -264,6 +272,11 @@ export function mapMaintenance(d: Extraction, userId: string, truckId: string | 
     cost: num(m.total),
     vendor: m.shop ?? null,
     invoice_number: m.invoice ?? null,
+    // Accountant Package ORIGIN RULE (docs/PENDING_SQL.md §43, owner
+    // decision 2026-08-05) — a standalone maintenance-invoice import is
+    // a real out-of-pocket expense, distinct from a settlement's own
+    // maintenance section.
+    source: 'import',
   };
   const reimbursement: ReimbursementInsert | null =
     m.warrantyCredit && m.warrantyCredit > 0

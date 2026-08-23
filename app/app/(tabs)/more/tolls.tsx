@@ -115,6 +115,7 @@ export default function Tolls() {
         plaza: plaza || null,
         amount: amt,
         toll_date: tollDate || null,
+        source: 'manual',
       });
       await invalidateFinancialData(queryClient);
       setAdding(false);

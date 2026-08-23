@@ -223,6 +223,7 @@ export default function Maintenance() {
         cost: total,
         vendor: addForm.vendor || null,
         invoice_number: addForm.invoice || null,
+        source: 'manual',
       });
       await bumpTruckReading(odometer, hours, addForm.type);
       await createWarrantyReimbursement(addForm.description || t(`maintenance.types.${addForm.type}`), addForm.invoice, covered, addForm.date);

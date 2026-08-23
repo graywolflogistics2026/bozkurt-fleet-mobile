@@ -1537,6 +1537,60 @@ this doc).
 
 ---
 
+## 43. maintenance_records.source / tolls.source (Accountant Package ORIGIN RULE, owner decision 2026-08-05, FULL PARITY pass item B.1)
+
+The Accountant Package's Out-of-pocket/Settlement-withheld/Everything
+scope filter needs to know whether a row came FROM a settlement import or
+was captured standalone — `deductions.source` (`'settlement'|'import'|
+'manual'`) already carries this. `fuel_purchases` gets it for free from
+its existing nullable `settlement_id` (set when mapSettlement() extracts
+it, null for a standalone fuel receipt). `maintenance_records` and
+`tolls` have NO equivalent signal at all — this section adds the same
+`source` column deductions already has, so the app can filter/tag rows
+by origin exactly like every other financial table already does the
+same three-way check.
+
+BACKFILL for existing rows (best-effort, per the spec's own stated
+default): `tolls` — a transponder toll (`network` in `'ezpass'`/
+`'drivewyze'`) defaults to `'settlement'` (carrier statements
+overwhelmingly report transponder tolls as a settlement line item); any
+other network defaults to `'import'`. `maintenance_records` — a row
+linked to a document whose `parsed_json->>'docType'` is `'maintenance'`
+(a standalone maintenance-invoice import) is tagged `'import'`; every
+other existing row (including one with no document at all, or one linked
+to a settlement's own document) defaults to `'settlement'`, matching the
+spec's literal "carrier shop invoices default to withheld unless a
+payment method says otherwise" — maintenance_records has no payment-
+method field to check otherwise against.
+
+```sql
+alter table maintenance_records
+  add column source text not null default 'import'
+    check (source in ('settlement', 'import', 'manual'));
+
+alter table tolls
+  add column source text not null default 'import'
+    check (source in ('settlement', 'import', 'manual'));
+
+update maintenance_records m
+  set source = case
+    when exists (
+      select 1 from documents d
+      where d.id = m.document_id and d.parsed_json ->> 'docType' = 'maintenance'
+    ) then 'import'
+    else 'settlement'
+  end;
+
+update tolls
+  set source = case when network in ('ezpass', 'drivewyze') then 'settlement' else 'import' end;
+```
+
+No RLS change needed — both tables are already owner-scoped.
+
+- [ ] 43a run (add maintenance_records.source + tolls.source, backfill existing rows)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

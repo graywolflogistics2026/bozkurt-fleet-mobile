@@ -299,6 +299,7 @@ export default function TruckHealth() {
         engine_hours: isHours ? reading || null : null,
         cost,
         description: markDoneNote || null,
+        source: 'manual',
       });
 
       // Same "latest reading from any source drives next-due math" rule

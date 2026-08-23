@@ -1,5 +1,16 @@
-import { buildAccountantPackage, estimateLoanInterest, matchReimbursementCategory } from '@/src/stats/accountantPackage';
-import type { Deduction, MaintenanceRecord, FuelPurchase, LoanRow, CreditCardRow, UserCategory } from '@/src/types/db';
+import {
+  buildAccountantPackage,
+  estimateLoanInterest,
+  matchReimbursementCategory,
+  matchesAccountantScope,
+  buildLineItems,
+  buildScheduleCTotals,
+  buildLumperFees,
+  buildPerDiemBlock,
+  buildCapitalAssets,
+  buildOwnersEquity,
+} from '@/src/stats/accountantPackage';
+import type { Deduction, Equipment, MaintenanceRecord, FuelPurchase, LoanRow, CreditCardRow, Toll, Truck, UserCategory } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
 
 function deduction(overrides: Partial<Deduction>): Deduction {
@@ -41,6 +52,7 @@ function maintenance(overrides: Partial<MaintenanceRecord>): MaintenanceRecord {
     vendor: null,
     invoice_number: null,
     tags: null,
+    source: 'import',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -97,6 +109,74 @@ function card(overrides: Partial<CreditCardRow>): CreditCardRow {
     balance: 0,
     apr: null,
     due_day: null,
+    tags: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function toll(overrides: Partial<Toll>): Toll {
+  return {
+    id: 't1',
+    user_id: 'u1',
+    network: 'ezpass',
+    toll_date: '2026-01-01',
+    amount: 0,
+    plaza: null,
+    tags: null,
+    source: 'import',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function truckRow(overrides: Partial<Truck>): Truck {
+  return {
+    id: 'tr1',
+    user_id: 'u1',
+    unit_number: 'Unit 100',
+    vin: null,
+    year: null,
+    make: null,
+    model: null,
+    engine: null,
+    current_odometer: null,
+    fleet_mpg: null,
+    apu_hours: null,
+    is_active: true,
+    trailer_unit_number: null,
+    trailer_vin: null,
+    trailer_year: null,
+    trailer_make: null,
+    trailer_model: null,
+    purchase_price: null,
+    purchase_date: null,
+    financing: null,
+    loan_id: null,
+    trailer_purchase_price: null,
+    trailer_purchase_date: null,
+    trailer_financing: null,
+    trailer_loan_id: null,
+    tags: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  } as Truck;
+}
+
+function equipmentRow(overrides: Partial<Equipment>): Equipment {
+  return {
+    id: 'e1',
+    user_id: 'u1',
+    name: 'Reefer Unit',
+    category: null,
+    purchase_price: null,
+    purchase_date: null,
+    financing: null,
+    loan_id: null,
+    notes: null,
     tags: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -336,5 +416,272 @@ describe('buildAccountantPackage', () => {
     ]);
     expect(result.loansAndCards.totalCardBalance).toBe(500);
     expect(result.loansAndCards.cards).toEqual([{ name: 'Business Visa', balance: 500, limit: 5000 }]);
+  });
+});
+
+describe('matchesAccountantScope (ORIGIN RULE, owner decision 2026-08-05, FULL PARITY pass item B.1)', () => {
+  it('combined always matches regardless of origin', () => {
+    expect(matchesAccountantScope('settlement', 'combined')).toBe(true);
+    expect(matchesAccountantScope('import', 'combined')).toBe(true);
+    expect(matchesAccountantScope(null, 'combined')).toBe(true);
+  });
+
+  it('outOfPocket matches import/manual, never settlement', () => {
+    expect(matchesAccountantScope('import', 'outOfPocket')).toBe(true);
+    expect(matchesAccountantScope('manual', 'outOfPocket')).toBe(true);
+    expect(matchesAccountantScope('settlement', 'outOfPocket')).toBe(false);
+  });
+
+  it('withheld matches ONLY settlement', () => {
+    expect(matchesAccountantScope('settlement', 'withheld')).toBe(true);
+    expect(matchesAccountantScope('import', 'withheld')).toBe(false);
+    expect(matchesAccountantScope('manual', 'withheld')).toBe(false);
+  });
+});
+
+describe('buildLineItems (owner decision 2026-08-05, FULL PARITY pass item B.1/C.1)', () => {
+  it('skips zero-amount rows entirely (spec item C.1)', () => {
+    const items = buildLineItems(
+      [deduction({ amount: 0, ded_date: '2026-06-01' })],
+      [fuel({ amount: 0, purchase_date: '2026-06-01' })],
+      [maintenance({ cost: 0, service_date: '2026-06-01' })],
+      [toll({ amount: 0, toll_date: '2026-06-01' })],
+      2026,
+      6,
+      'combined'
+    );
+    expect(items).toHaveLength(0);
+  });
+
+  it('ORIGIN RULE: a settlement-linked fuel/maintenance/toll row never appears in the out-of-pocket scope', () => {
+    const items = buildLineItems(
+      [],
+      [fuel({ id: 'fuel-settlement', amount: 100, purchase_date: '2026-06-05', settlement_id: 'sett-1' })],
+      [maintenance({ id: 'maint-settlement', cost: 200, service_date: '2026-06-05', source: 'settlement' })],
+      [toll({ id: 'toll-settlement', amount: 20, toll_date: '2026-06-05', source: 'settlement' })],
+      2026,
+      6,
+      'outOfPocket'
+    );
+    expect(items).toHaveLength(0);
+  });
+
+  it('a standalone (non-settlement) fuel/maintenance/toll row DOES appear in the out-of-pocket scope', () => {
+    const items = buildLineItems(
+      [],
+      [fuel({ id: 'fuel-standalone', amount: 100, purchase_date: '2026-06-05', settlement_id: null })],
+      [maintenance({ id: 'maint-standalone', cost: 200, service_date: '2026-06-05', source: 'import' })],
+      [toll({ id: 'toll-standalone', amount: 20, toll_date: '2026-06-05', source: 'manual' })],
+      2026,
+      6,
+      'outOfPocket'
+    );
+    expect(items.map((i) => i.id).sort()).toEqual(['fuel-standalone', 'maint-standalone', 'toll-standalone']);
+  });
+
+  it('withheld scope shows only settlement-origin rows', () => {
+    const items = buildLineItems(
+      [
+        deduction({ id: 'ded-out', amount: 50, ded_date: '2026-06-05', source: 'manual' }),
+        deduction({ id: 'ded-withheld', amount: 60, ded_date: '2026-06-05', source: 'settlement' }),
+      ],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'withheld'
+    );
+    expect(items.map((i) => i.id)).toEqual(['ded-withheld']);
+  });
+
+  it('filters by year and month', () => {
+    const items = buildLineItems(
+      [
+        deduction({ id: 'in-month', amount: 50, ded_date: '2026-06-15' }),
+        deduction({ id: 'wrong-month', amount: 50, ded_date: '2026-05-15' }),
+        deduction({ id: 'wrong-year', amount: 50, ded_date: '2025-06-15' }),
+      ],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    expect(items.map((i) => i.id)).toEqual(['in-month']);
+  });
+
+  it('month=null rolls up the whole year', () => {
+    const items = buildLineItems(
+      [deduction({ id: 'jan', amount: 50, ded_date: '2026-01-15' }), deduction({ id: 'dec', amount: 50, ded_date: '2026-12-15' })],
+      [],
+      [],
+      [],
+      2026,
+      null,
+      'combined'
+    );
+    expect(items.map((i) => i.id).sort()).toEqual(['dec', 'jan']);
+  });
+
+  it('marks a personally-paid deduction as owner-paid', () => {
+    const items = buildLineItems(
+      [deduction({ amount: 50, ded_date: '2026-06-05', payment_method: 'Personal Credit Card' })],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    expect(items[0].isOwnerPaid).toBe(true);
+  });
+});
+
+describe('buildScheduleCTotals (owner decision 2026-08-05, FULL PARITY pass item A.5/B.2)', () => {
+  it('sums line items by category and attaches a Schedule C line', () => {
+    const items = buildLineItems(
+      [deduction({ amount: 100, category: 'Insurance—Truck', ded_date: '2026-06-05', tax_deductible: true, source: 'manual' })],
+      [fuel({ amount: 200, purchase_date: '2026-06-05', settlement_id: null })],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    const totals = buildScheduleCTotals(items, noUserCategories);
+    const byCategory = Object.fromEntries(totals.map((t) => [t.category, t]));
+    expect(byCategory['Insurance—Truck'].amount).toBe(100);
+    expect(byCategory['Insurance—Truck'].scheduleCLine).toBe('15');
+    expect(byCategory['Fuel & DEF'].amount).toBe(200);
+    expect(byCategory['Fuel & DEF'].scheduleCLine).toBe('22');
+  });
+});
+
+describe('buildLumperFees (owner decision 2026-08-05, FULL PARITY pass item B.2)', () => {
+  it('returns only Lumper Fees line items', () => {
+    const items = buildLineItems(
+      [
+        deduction({ id: 'lumper', amount: 75, category: 'Lumper Fees', ded_date: '2026-06-05', tax_deductible: true, source: 'manual' }),
+        deduction({ id: 'other', amount: 50, category: 'Misc', ded_date: '2026-06-05', tax_deductible: true, source: 'manual' }),
+      ],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    expect(buildLumperFees(items).map((i) => i.id)).toEqual(['lumper']);
+  });
+});
+
+describe('buildPerDiemBlock (owner decision 2026-08-05, FULL PARITY pass item B.2)', () => {
+  const perDiem = { daily_rate: 80, deductible_pct: 80, full_daily_rate: 80 };
+
+  it('computes month days/deduction separately from YTD', () => {
+    const settlements = [
+      { week_ending: '2026-06-06', per_diem_days: 7 },
+      { week_ending: '2026-06-13', per_diem_days: 7 },
+      { week_ending: '2026-01-10', per_diem_days: 7 },
+    ];
+    const result = buildPerDiemBlock(settlements, 2026, 6, perDiem);
+    expect(result.monthDays).toBe(14);
+    expect(result.monthDeduction).toBeCloseTo(14 * 80 * 0.8, 5);
+    expect(result.ytdDays).toBe(21); // includes the January week too
+    expect(result.ytdDeduction).toBeCloseTo(21 * 80 * 0.8, 5);
+  });
+
+  it('a settlement from a different year never counts toward YTD', () => {
+    const settlements = [{ week_ending: '2025-12-31', per_diem_days: 7 }];
+    const result = buildPerDiemBlock(settlements, 2026, null, perDiem);
+    expect(result.ytdDays).toBe(0);
+  });
+});
+
+describe('buildCapitalAssets (owner decision 2026-08-05, FULL PARITY pass item B.6)', () => {
+  it('includes a truck, its trailer, and equipment as separate rows, each with financing', () => {
+    const trucks = [
+      truckRow({
+        unit_number: 'Unit 100',
+        purchase_price: 150000,
+        purchase_date: '2025-01-01',
+        financing: 'loan',
+        trailer_unit_number: 'Trailer 200',
+        trailer_purchase_price: 40000,
+        trailer_purchase_date: '2025-02-01',
+        trailer_financing: 'cash',
+      }),
+    ];
+    const equipment = [equipmentRow({ name: 'Reefer Unit', purchase_price: 20000, purchase_date: '2025-03-01', financing: 'loan' })];
+    const rows = buildCapitalAssets(trucks, equipment);
+    expect(rows).toHaveLength(3);
+    expect(rows.find((r) => r.type === 'truck')).toMatchObject({ name: 'Unit 100', price: 150000, financing: 'loan' });
+    expect(rows.find((r) => r.type === 'trailer')).toMatchObject({ name: 'Trailer 200', price: 40000, financing: 'cash' });
+    expect(rows.find((r) => r.type === 'equipment')).toMatchObject({ name: 'Reefer Unit', price: 20000, financing: 'loan' });
+  });
+
+  it('never includes a truck/equipment with no purchase price recorded', () => {
+    const rows = buildCapitalAssets([truckRow({ purchase_price: null })], [equipmentRow({ purchase_price: null })]);
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe('buildOwnersEquity (owner decision 2026-08-05, FULL PARITY pass item B.7)', () => {
+  it('sums cash + linked contributions once each, never a hidden base constant', () => {
+    const contributions = [
+      { id: 'c1', tx_type: 'contribution' as const, amount: 60000, tx_date: '2026-01-01' },
+      { id: 'c2', tx_type: 'contribution' as const, amount: 448, tx_date: '2026-06-05', linked_deduction_id: 'ded-1' },
+    ];
+    const result = buildOwnersEquity(contributions, []);
+    expect(result.cashAmount).toBe(60000);
+    expect(result.linkedAmount).toBe(448);
+    expect(result.total).toBe(60448); // counted once each, summed
+  });
+
+  it('never counts a draw as equity', () => {
+    const contributions = [
+      { id: 'c1', tx_type: 'contribution' as const, amount: 1000, tx_date: '2026-01-01' },
+      { id: 'd1', tx_type: 'draw' as const, amount: 500, tx_date: '2026-01-02' },
+    ];
+    const result = buildOwnersEquity(contributions, []);
+    expect(result.total).toBe(1000);
+  });
+
+  it('flags a warning (never mis-totals) when owner-paid line items outnumber linked contributions', () => {
+    const contributions = [{ id: 'c1', tx_type: 'contribution' as const, amount: 100, tx_date: '2026-06-01', linked_deduction_id: 'ded-1' }];
+    const lineItems = buildLineItems(
+      [
+        deduction({ id: 'owner-1', amount: 100, ded_date: '2026-06-05', payment_method: 'Personal Credit Card' }),
+        deduction({ id: 'owner-2', amount: 200, ded_date: '2026-06-06', payment_method: 'Cash' }),
+      ],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    const result = buildOwnersEquity(contributions, lineItems);
+    expect(result.unmatchedOwnerPaidCount).toBe(1); // 2 owner-paid line items, only 1 linked contribution
+  });
+
+  it('unmatchedOwnerPaidCount is 0 when every owner-paid line item has a matching linked contribution', () => {
+    const contributions = [
+      { id: 'c1', tx_type: 'contribution' as const, amount: 100, tx_date: '2026-06-01', linked_deduction_id: 'ded-1' },
+      { id: 'c2', tx_type: 'contribution' as const, amount: 200, tx_date: '2026-06-02', linked_deduction_id: 'ded-2' },
+    ];
+    const lineItems = buildLineItems(
+      [deduction({ amount: 100, ded_date: '2026-06-05', payment_method: 'Personal Credit Card' })],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    const result = buildOwnersEquity(contributions, lineItems);
+    expect(result.unmatchedOwnerPaidCount).toBe(0);
   });
 });
