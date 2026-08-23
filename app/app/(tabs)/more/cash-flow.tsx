@@ -473,6 +473,12 @@ export default function CashFlow() {
                 </Card>
               </>
             )}
+
+            {lanes.excluded.length > 0 && (
+              <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
+                ⚠️ {t('cashFlowScreen.excludedLanesNotice', { count: lanes.excluded.length })}
+              </MutedText>
+            )}
           </>
         )}
       </ScrollView>

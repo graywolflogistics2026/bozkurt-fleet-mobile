@@ -77,14 +77,70 @@ export function reducesTrueProfit(d: {
   return isDeductibleExpense(d);
 }
 
+// FULL PARITY pass (owner decision 2026-08-05, spec item C.2 "ONE
+// CANONICAL EXPENSE ENGINE... INCLUDING fuel, maintenance and tolls — the
+// dashboard total must never be just the deductions table"). Audit
+// finding: fuel_purchases/maintenance_records/tolls are their OWN tables,
+// never mirrored into `deductions` — a standalone (non-settlement) fuel
+// receipt, maintenance invoice, or toll charge was a REAL out-of-pocket
+// cost that calcTrueProfit()/calcCpm()/buildProfitLoss() ALL silently
+// missed entirely, since every one of them only ever summed `deductions`.
+// (`src/stats/accountantPackage.ts`'s buildAccountantPackage() already
+// folds fuel_purchases/maintenance_records in — this is what extends that
+// same fix to every OTHER "what's my profit/cost" figure in the app, per
+// the spec's explicit "one canonical engine" requirement.)
+//
+// DOUBLE-COUNT GUARD, fuel only: a settlement's own withheld deductions
+// can include a `fuel_advance` chargeback (→ category 'Fuel & DEF') —
+// an informational categorization of the SAME underlying fuel cost that
+// ALSO has its own itemized row(s) in fuel_purchases (mapSettlement()
+// stamps a settlement-derived fuel_purchases row's `settlement_id`,
+// aiImportSave.ts). Counting both would double the real cost, so a
+// SETTLEMENT-LINKED fuel_purchases row (settlement_id set) is excluded
+// here — its cost is already represented by the settlement's own
+// withheld deductions, exactly as `reducesTrueProfit()` already decided.
+// Only STANDALONE fuel (settlement_id null — a fuel receipt imported on
+// its own, never previously reflected anywhere) is added. tolls/
+// maintenance_records have no settlement_id column at all to filter by —
+// same as `buildAccountantPackage()`'s own established precedent, they're
+// added unconditionally; the corresponding `tolls_transponder` chargeback
+// (rare in practice — most carriers bill toll-transponder fees as a flat
+// rental fee, not a per-toll pass-through) is an accepted, pre-existing
+// class of edge case, not a regression this pass introduces.
+
+type CanonicalFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null };
+type CanonicalMaintenance = { cost: number | null };
+type CanonicalToll = { amount: number | null };
+type CanonicalDeduction = { amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null };
+
+// Exported so every OTHER "what's my profit/cost" module (currently
+// src/stats/profitAnalysis.ts's buildProfitAnalysis()) can share the
+// exact same canonical total instead of re-deriving its own — the whole
+// point of spec item C.2's "ONE canonical expense engine."
+export function sumCanonicalExpenses(
+  deductions: CanonicalDeduction[],
+  fuelPurchases: CanonicalFuel[],
+  maintenanceRecords: CanonicalMaintenance[],
+  tolls: CanonicalToll[]
+): number {
+  const dedTotal = deductions.filter(reducesTrueProfit).reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const fuelTotal = fuelPurchases
+    .filter((f) => !f.settlement_id)
+    .reduce((sum, f) => sum + Math.max(0, Number(f.amount ?? 0) - Number(f.discount ?? 0)), 0);
+  const maintTotal = maintenanceRecords.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
+  const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  return dedTotal + fuelTotal + maintTotal + tollsTotal;
+}
+
 export function calcTrueProfit(
   settlements: Array<{ gross: number | null }>,
-  deductions: Array<{ amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null }>
+  deductions: CanonicalDeduction[],
+  fuelPurchases: CanonicalFuel[] = [],
+  maintenanceRecords: CanonicalMaintenance[] = [],
+  tolls: CanonicalToll[] = []
 ): number {
   const grossRevenue = settlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const trueExpenses = deductions
-    .filter(reducesTrueProfit)
-    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const trueExpenses = sumCanonicalExpenses(deductions, fuelPurchases, maintenanceRecords, tolls);
   return grossRevenue - trueExpenses;
 }
 
@@ -92,23 +148,33 @@ export function calcTrueProfit(
 // buildWeeklyTrend() — a deliberate drop-in replacement wherever `.net`
 // was being read as "profit" rather than literally "this settlement's
 // own net pay field." `net` here is calcTrueProfit()'s figure for that
-// week's settlements + deductions dated within the settlement's 7-day
-// window (weekStartFromEnding..weekEnding, same window
-// buildWeeklyRevenueExpenseTrend uses), not the settlement row's own
-// `net` column.
+// week's settlements + deductions/fuel/maintenance/tolls dated within the
+// settlement's 7-day window (weekStartFromEnding..weekEnding, same
+// window buildWeeklyRevenueExpenseTrend uses), not the settlement row's
+// own `net` column. fuelPurchases/maintenanceRecords/tolls default to
+// `[]` so existing callers keep compiling/working exactly as before while
+// each screen is migrated to pass real data (spec item C.2).
 export type TrueProfitWeeklyPoint = { weekEnding: string; gross: number; net: number };
 
-export function buildWeeklyTrueProfitTrend(settlements: Settlement[], deductions: Deduction[]): TrueProfitWeeklyPoint[] {
+export function buildWeeklyTrueProfitTrend(
+  settlements: Settlement[],
+  deductions: Deduction[],
+  fuelPurchases: Array<CanonicalFuel & { purchase_date?: string | null }> = [],
+  maintenanceRecords: Array<CanonicalMaintenance & { service_date?: string | null }> = [],
+  tolls: Array<CanonicalToll & { toll_date?: string | null }> = []
+): TrueProfitWeeklyPoint[] {
   const weekEndings = [...new Set(settlements.filter((s) => s.week_ending).map((s) => s.week_ending as string))].sort();
 
   return weekEndings.map((weekEnding) => {
     const weekSettlements = settlements.filter((s) => s.week_ending === weekEnding);
     const gross = weekSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
     const start = weekStartFromEnding(weekEnding);
-    const weekDeductions = deductions.filter((d) => d.ded_date && d.ded_date >= start && d.ded_date <= weekEnding);
-    const trueExpenses = weekDeductions
-      .filter(reducesTrueProfit)
-      .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+    const inWindow = (dateStr: string | null | undefined) => !!dateStr && dateStr >= start && dateStr <= weekEnding;
+    const weekDeductions = deductions.filter((d) => inWindow(d.ded_date));
+    const weekFuel = fuelPurchases.filter((f) => inWindow(f.purchase_date));
+    const weekMaintenance = maintenanceRecords.filter((m) => inWindow(m.service_date));
+    const weekTolls = tolls.filter((t) => inWindow(t.toll_date));
+    const trueExpenses = sumCanonicalExpenses(weekDeductions, weekFuel, weekMaintenance, weekTolls);
     return { weekEnding, gross, net: gross - trueExpenses };
   });
 }

@@ -151,6 +151,39 @@ describe('calcTrueProfit', () => {
   });
 });
 
+describe('calcTrueProfit — canonical expense engine (owner decision 2026-08-05, FULL PARITY pass item C.2)', () => {
+  it('subtracts standalone fuel/maintenance/tolls, not just deductions', () => {
+    const settlements = [sett({ gross: 5000 })];
+    const deductions = [ded({ amount: 100 })];
+    const fuel = [{ amount: 500, discount: 20, settlement_id: null }];
+    const maintenance = [{ cost: 300 }];
+    const tolls = [{ amount: 50 }];
+    // 5000 - 100(ded) - 480(fuel net of discount) - 300(maint) - 50(toll) = 4070
+    expect(calcTrueProfit(settlements, deductions, fuel, maintenance, tolls)).toBe(4070);
+  });
+
+  it('excludes a SETTLEMENT-LINKED fuel purchase (already represented by the settlement\'s own withheld deductions) — no double count', () => {
+    const settlements = [sett({ gross: 5000 })];
+    const deductions = [ded({ amount: 100, source: 'settlement', category: 'Fuel & DEF' })];
+    const linkedFuel = [{ amount: 480, discount: 0, settlement_id: 'sett-1' }];
+    // The withheld Fuel & DEF deduction counts (100); the settlement-linked
+    // fuel_purchases row does NOT get added on top of it.
+    expect(calcTrueProfit(settlements, deductions, linkedFuel)).toBe(4900);
+  });
+
+  it('a standalone fuel purchase (settlement_id null) with no matching deduction is a real, previously-missed expense', () => {
+    const settlements = [sett({ gross: 5000, net: 5000 })];
+    const standaloneFuel = [{ amount: 480, discount: 0, settlement_id: null }];
+    expect(calcTrueProfit(settlements, [], standaloneFuel)).toBe(4520);
+  });
+
+  it('defaults fuel/maintenance/tolls to empty arrays for backward compatibility', () => {
+    const settlements = [sett({ gross: 3000 })];
+    const deductions = [ded({ amount: 200 })];
+    expect(calcTrueProfit(settlements, deductions)).toBe(2800);
+  });
+});
+
 describe('buildWeeklyTrueProfitTrend', () => {
   it('produces a {weekEnding, gross, net} point per week, net excluding non-deductible rows', () => {
     const settlements = [sett({ week_ending: '2026-07-18', gross: 3000 })];
@@ -173,6 +206,20 @@ describe('buildWeeklyTrueProfitTrend', () => {
       { weekEnding: '2026-07-18', gross: 1000, net: 900 },
       { weekEnding: '2026-07-25', gross: 2000, net: 1800 },
     ]);
+  });
+
+  it('scopes standalone fuel/maintenance/tolls to each settlement week\'s window too (owner decision 2026-08-05, FULL PARITY pass item C.2)', () => {
+    const settlements = [sett({ week_ending: '2026-07-18', gross: 3000 })];
+    const fuel = [
+      { purchase_date: '2026-07-16', amount: 200, discount: 0, settlement_id: null }, // in window
+      { purchase_date: '2026-07-01', amount: 999, discount: 0, settlement_id: null }, // outside window
+      { purchase_date: '2026-07-17', amount: 300, discount: 0, settlement_id: 'sett-x' }, // settlement-linked, excluded regardless of window
+    ];
+    const maintenance = [{ service_date: '2026-07-15', cost: 150 }];
+    const tolls = [{ toll_date: '2026-07-14', amount: 25 }];
+    const trend = buildWeeklyTrueProfitTrend(settlements, [], fuel, maintenance, tolls);
+    // 3000 - 200(fuel, in-window standalone only) - 150(maint) - 25(toll) = 2625
+    expect(trend).toEqual([{ weekEnding: '2026-07-18', gross: 3000, net: 2625 }]);
   });
 
   it('sorts ascending by week_ending', () => {

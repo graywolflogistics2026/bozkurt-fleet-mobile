@@ -48,9 +48,14 @@ describe('buildProfitAnalysis', () => {
   it('sums only rows within the trailing window', () => {
     const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, 30, NOW);
     expect(result.revenue).toBe(3000);
-    // netIncome = revenue (3000) - deductible-in-window deductions (200) = 2800
-    // (settlement.net's own 2200 is NOT used — TRUE-PROFIT CONSISTENCY)
-    expect(result.netIncome).toBe(2800);
+    // FULL PARITY pass (owner decision 2026-08-05, spec item C.2): netIncome
+    // now genuinely subtracts fuel/maintenance too, not just deductions —
+    // netIncome = revenue (3000) - deductions (200) - fuel (650) - maintenance
+    // (300) = 1850 (settlement.net's own 2200 is NOT used — TRUE-PROFIT
+    // CONSISTENCY). Before this pass, fuelExpense/maintenanceExpense were
+    // computed and displayed as their own tiles but silently never actually
+    // reduced netIncome — this is the fix, not a regression.
+    expect(result.netIncome).toBe(1850);
     expect(result.totalMiles).toBe(2000);
     expect(result.fuelExpense).toBe(650); // 700 - 50 discount
     expect(result.maintenanceExpense).toBe(300);
@@ -58,7 +63,14 @@ describe('buildProfitAnalysis', () => {
 
   it('excludes non-deductible rows (a Meal covered by per diem, an Advance Repayment) from netIncome', () => {
     const result = buildProfitAnalysis(settlements, [], [], deductions, 30, NOW);
-    expect(result.netIncome).toBe(2800); // the $40 non-deductible row never subtracted
+    expect(result.netIncome).toBe(2800); // the $40 non-deductible row never subtracted (no fuel/maintenance passed here)
+  });
+
+  it('excludes a SETTLEMENT-LINKED fuel purchase from netIncome (already represented by the settlement\'s own withheld deductions) but still shows it in the fuelExpense tile', () => {
+    const linkedFuel = [{ purchase_date: '2026-06-20', amount: 700, discount: 50, settlement_id: 'sett-1' }];
+    const result = buildProfitAnalysis(settlements, linkedFuel, [], [], 30, NOW);
+    expect(result.netIncome).toBe(3000); // settlement-linked fuel not double-subtracted
+    expect(result.fuelExpense).toBe(650); // still shown in the display tile
   });
 
   it('computes fuel % of revenue and maintenance $/mile ratios', () => {

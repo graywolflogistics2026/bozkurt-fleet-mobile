@@ -594,7 +594,7 @@
     "markDoneDateLabel": "Tarih",
     "markDoneOdometerLabel": "Kilometre",
     "markDoneHoursLabel": "Motor Saati",
-    "markDoneCostLabel": "Maliyet (opsiyonel)",
+    "markDoneCostLabel": "Cebinizden ne kadar ödediniz? (Hiçbir şey ödemediyseniz 0)",
     "markDoneNoteLabel": "Not (opsiyonel)",
     "markDoneNotePlaceholder": "örn. Yolda kendim yaptım",
     "markDoneConfirm": "Onayla",
@@ -1100,6 +1100,7 @@
     "noLoadData": "Güzergâh sıralamasını görmek için yük verisi olan settlement PDF'leri içe aktarın.",
     "bestLanes": "En İyi Güzergâhlar",
     "worstLanes": "En Kötü Güzergâhlar",
+    "excludedLanesNotice": "{{count}} yük hariç tutuldu — oran yanlış okunmuş görünüyor ($0.80–$12/mil dışında). Yükler sayfasından düzeltin.",
     "forecastTitle": "30 Günlük Tahmin",
     "bankBalanceLabel": "Banka Bakiyesi ($)",
     "weeklyRevenueLabel": "Haftalık Gelir ($)",
@@ -1521,6 +1522,8 @@
     "netPerMile": "Net/Mil",
     "costPerMile": "Maliyet/Mil (CPM)",
     "mpg": "Filo MPG",
+    "cpmBreakdownTitle": "Maliyet/Mil Dökümü",
+    "cpmExcludedTotal": "Hariç tutulan (yemekler, avanslar, escrow)",
     "trendTitle": "Haftalık Net Trend"
   },
   "sidebar": {

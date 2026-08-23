@@ -9,6 +9,8 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useTolls } from '@/src/data/tolls';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useLoads } from '@/src/data/loads';
 import { useDeductions } from '@/src/data/deductions';
@@ -393,6 +395,8 @@ export default function Dashboard() {
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
   const fuelQuery = useFuelPurchases();
+  const maintenanceQuery = useMaintenanceRecords();
+  const tollsQuery = useTolls();
 
   const stats = statsQuery.data;
   const capital = capitalQuery.data;
@@ -413,8 +417,15 @@ export default function Dashboard() {
   // Meal already covered by per diem or an Advance Repayment — neither
   // of which is a real expense reduction.
   const fullWeeklyTrueProfitTrend = useMemo(
-    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
-    [settlementsQuery.data, dedQuery.data]
+    () =>
+      buildWeeklyTrueProfitTrend(
+        settlementsQuery.data ?? [],
+        dedQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        tollsQuery.data ?? []
+      ),
+    [settlementsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
   );
 
   const heroFirstName =

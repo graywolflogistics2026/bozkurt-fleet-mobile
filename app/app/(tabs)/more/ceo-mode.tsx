@@ -13,6 +13,7 @@ import { useBenchmarks } from '@/src/data/benchmarks';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList } from '@/src/data/trucks';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useTolls } from '@/src/data/tolls';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
 import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
@@ -115,6 +116,12 @@ export default function CeoMode() {
   const recordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
   const intervalsQuery = useMaintenanceIntervals(activeTruckId);
   const healthConfigQuery = useTruckHealthConfig(activeTruckId);
+  // Fleet-wide (not truck-scoped like recordsQuery above, which is only
+  // for Truck Health) — matches Home's/Scorecard's/Profit Analysis' own
+  // unscoped true-profit inputs so this screen's "This Week Profit"
+  // figure can never disagree with theirs for a multi-truck fleet.
+  const allMaintenanceQuery = useMaintenanceRecords();
+  const tollsQuery = useTolls();
 
   const [goalInput, setGoalInput] = useState('');
   const [goalSaving, setGoalSaving] = useState(false);
@@ -134,8 +141,15 @@ export default function CeoMode() {
   // ignoring out-of-pocket expenses. Now the same canonical
   // src/stats/trueProfit.ts figure every other "profit" surface uses.
   const weeklyTrend = useMemo(
-    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], deductionsQuery.data ?? []),
-    [settlementsQuery.data, deductionsQuery.data]
+    () =>
+      buildWeeklyTrueProfitTrend(
+        settlementsQuery.data ?? [],
+        deductionsQuery.data ?? [],
+        fuelQuery.data ?? [],
+        allMaintenanceQuery.data ?? [],
+        tollsQuery.data ?? []
+      ),
+    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, allMaintenanceQuery.data, tollsQuery.data]
   );
   const latestWeek = weeklyTrend[weeklyTrend.length - 1] ?? null;
 
@@ -234,8 +248,17 @@ export default function CeoMode() {
   // dollar gap (quarterlyPayment - business_balance), never a fabricated
   // estimate (src/stats/aiRecommendations.ts).
   const profitAnalysisRollup = useMemo(
-    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], [], deductionsQuery.data ?? [], 30),
-    [settlementsQuery.data, fuelQuery.data, deductionsQuery.data]
+    () =>
+      buildProfitAnalysis(
+        settlementsQuery.data ?? [],
+        fuelQuery.data ?? [],
+        allMaintenanceQuery.data ?? [],
+        deductionsQuery.data ?? [],
+        30,
+        new Date(),
+        tollsQuery.data ?? []
+      ),
+    [settlementsQuery.data, fuelQuery.data, allMaintenanceQuery.data, deductionsQuery.data, tollsQuery.data]
   );
   const fuelBenchmark = useMemo(
     () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,

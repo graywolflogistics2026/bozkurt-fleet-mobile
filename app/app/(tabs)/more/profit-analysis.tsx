@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useTolls } from '@/src/data/tolls';
 import { useDeductions } from '@/src/data/deductions';
 import { useBenchmarks } from '@/src/data/benchmarks';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
@@ -28,6 +29,7 @@ export default function ProfitAnalysis() {
   const settlementsQuery = useSettlements();
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
+  const tollsQuery = useTolls();
   const dedQuery = useDeductions();
   const benchmarksQuery = useBenchmarks();
   const queryClient = useQueryClient();
@@ -48,8 +50,17 @@ export default function ProfitAnalysis() {
   const loading = settlementsQuery.isLoading || fuelQuery.isLoading || maintenanceQuery.isLoading || dedQuery.isLoading;
 
   const rollup30d = useMemo(
-    () => buildProfitAnalysis(settlementsQuery.data ?? [], fuelQuery.data ?? [], maintenanceQuery.data ?? [], dedQuery.data ?? [], 30),
-    [settlementsQuery.data, fuelQuery.data, maintenanceQuery.data, dedQuery.data]
+    () =>
+      buildProfitAnalysis(
+        settlementsQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        dedQuery.data ?? [],
+        30,
+        new Date(),
+        tollsQuery.data ?? []
+      ),
+    [settlementsQuery.data, fuelQuery.data, maintenanceQuery.data, dedQuery.data, tollsQuery.data]
   );
 
   // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
@@ -57,8 +68,15 @@ export default function ProfitAnalysis() {
   // src/stats/trueProfit.ts figure Home/Scorecard/CEO Mode/Share Weekly
   // Profit all use.
   const weeklyTrend = useMemo(
-    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
-    [settlementsQuery.data, dedQuery.data]
+    () =>
+      buildWeeklyTrueProfitTrend(
+        settlementsQuery.data ?? [],
+        dedQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        tollsQuery.data ?? []
+      ),
+    [settlementsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
   );
   const recentWeeks = weeklyTrend.slice(-8);
 

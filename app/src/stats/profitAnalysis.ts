@@ -1,5 +1,5 @@
 import type { Benchmark } from '@/src/types/db';
-import { reducesTrueProfit } from '@/src/stats/trueProfit';
+import { sumCanonicalExpenses } from '@/src/stats/trueProfit';
 
 // Profit Analysis v1 (PROMPTS.md Session 9a item 11, CLAUDE.md invariant
 // #22 — composed ONLY from the user's own account data, no external
@@ -20,6 +20,7 @@ export type ProfitAnalysisRollup = {
 type SettlementLike = { week_ending: string; gross: number | null; net: number | null; miles: number | null };
 type FuelLike = { purchase_date: string | null; amount: number | null; discount: number | null };
 type MaintenanceLike = { service_date: string | null; cost: number | null };
+type TollLike = { toll_date: string | null; amount: number | null };
 type DeductionLike = {
   ded_date: string | null;
   amount: number | null;
@@ -34,38 +35,47 @@ export function windowStartIso(windowDays: number, now: Date = new Date()): stri
   return d.toISOString().slice(0, 10);
 }
 
-// TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): `netIncome` used
-// to be sum(settlement.net) — settlement net PAY only, silently ignoring
-// EVERY out-of-pocket deduction (not just fuel/maintenance, which this
-// rollup already tracks as their own separate figures). Now the same
-// canonical src/stats/trueProfit.ts formula (grossRevenue minus every
-// deductible — tax_deductible !== false — deduction dated within the
-// window) every other "profit" surface in the app uses.
+// TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31, extended 2026-08-05
+// FULL PARITY pass item C.2): `netIncome` used to be sum(settlement.net)
+// — settlement net PAY only, silently ignoring EVERY out-of-pocket
+// deduction. Fixed then to use `reducesTrueProfit()` on `deductions`
+// alone — but that STILL silently ignored this rollup's own
+// `fuelExpense`/`maintenanceExpense` figures (computed and DISPLAYED as
+// their own tiles, but never actually subtracted into `netIncome`) and
+// never had a `tolls` input at all. Now uses the SAME canonical
+// `sumCanonicalExpenses()` (src/stats/trueProfit.ts) every other
+// "profit" surface in the app shares — fuel/maintenance/tolls all
+// genuinely reduce `netIncome` here too. Note: `sumCanonicalExpenses()`
+// excludes a SETTLEMENT-LINKED fuel_purchases row from the total it
+// subtracts (its cost is already represented by the settlement's own
+// withheld deductions) — the `fuelExpense` TILE below is deliberately
+// still the FULL fuel total (every purchase, settlement-linked or not),
+// since "how much fuel did I buy" is a different, wider question than
+// "how much of that reduced my net profit."
 export function buildProfitAnalysis(
   settlements: SettlementLike[],
   fuelPurchases: FuelLike[],
   maintenanceRecords: MaintenanceLike[],
   deductions: DeductionLike[],
   windowDays = 30,
-  now: Date = new Date()
+  now: Date = new Date(),
+  tolls: TollLike[] = []
 ): ProfitAnalysisRollup {
   const start = windowStartIso(windowDays, now);
 
   const inWindow = settlements.filter((s) => (s.week_ending ?? '') >= start);
   const revenue = inWindow.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const trueExpenses = deductions
-    .filter((d) => (d.ded_date ?? '') >= start && reducesTrueProfit(d))
-    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const windowDeductions = deductions.filter((d) => (d.ded_date ?? '') >= start);
+  const windowFuel = fuelPurchases.filter((f) => (f.purchase_date ?? '') >= start);
+  const windowMaintenance = maintenanceRecords.filter((m) => (m.service_date ?? '') >= start);
+  const windowTolls = tolls.filter((t) => (t.toll_date ?? '') >= start);
+  const trueExpenses = sumCanonicalExpenses(windowDeductions, windowFuel, windowMaintenance, windowTolls);
   const netIncome = revenue - trueExpenses;
   const totalMiles = inWindow.reduce((sum, s) => sum + Number(s.miles ?? 0), 0);
 
-  const fuelExpense = fuelPurchases
-    .filter((f) => (f.purchase_date ?? '') >= start)
-    .reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0);
+  const fuelExpense = windowFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0);
 
-  const maintenanceExpense = maintenanceRecords
-    .filter((m) => (m.service_date ?? '') >= start)
-    .reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
+  const maintenanceExpense = windowMaintenance.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
 
   return {
     windowDays,

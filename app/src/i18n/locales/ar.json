@@ -594,7 +594,7 @@
     "markDoneDateLabel": "التاريخ",
     "markDoneOdometerLabel": "عداد المسافة",
     "markDoneHoursLabel": "ساعات المحرك",
-    "markDoneCostLabel": "التكلفة (اختياري)",
+    "markDoneCostLabel": "كم كلفك ذلك من جيبك الخاص؟ (0 إذا لم يكن هناك شيء)",
     "markDoneNoteLabel": "ملاحظة (اختياري)",
     "markDoneNotePlaceholder": "مثال: تم تنفيذه ذاتيًا على الطريق",
     "markDoneConfirm": "تأكيد",
@@ -1100,6 +1100,7 @@
     "noLoadData": "قم باستيراد ملفات PDF لـ settlement تحتوي على بيانات الأحمال لعرض تصنيف المسارات.",
     "bestLanes": "أفضل المسارات",
     "worstLanes": "أسوأ المسارات",
+    "excludedLanesNotice": "تم استبعاد {{count}} حمولة — يبدو أن السعر قُرئ بشكل خاطئ (خارج نطاق $0.80–$12/ميل). قم بالتصحيح في صفحة الحمولات.",
     "forecastTitle": "توقعات 30 يومًا",
     "bankBalanceLabel": "رصيد البنك ($)",
     "weeklyRevenueLabel": "الإيرادات الأسبوعية ($)",
@@ -1521,6 +1522,8 @@
     "netPerMile": "الصافي/الميل",
     "costPerMile": "التكلفة/الميل (CPM)",
     "mpg": "معدل استهلاك الوقود للأسطول (MPG)",
+    "cpmBreakdownTitle": "تفصيل التكلفة/الميل",
+    "cpmExcludedTotal": "مستبعد (الوجبات، السلف، escrow)",
     "trendTitle": "اتجاه صافي الربح الأسبوعي"
   },
   "sidebar": {

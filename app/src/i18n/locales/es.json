@@ -594,7 +594,7 @@
     "markDoneDateLabel": "Fecha",
     "markDoneOdometerLabel": "Odómetro",
     "markDoneHoursLabel": "Horas de Motor",
-    "markDoneCostLabel": "Costo (opcional)",
+    "markDoneCostLabel": "¿Cuánto le costó de su bolsillo? (0 si nada)",
     "markDoneNoteLabel": "Nota (opcional)",
     "markDoneNotePlaceholder": "ej. Realizado uno mismo en la carretera",
     "markDoneConfirm": "Confirmar",
@@ -1100,6 +1100,7 @@
     "noLoadData": "Importa PDFs de settlement con datos de carga para ver la clasificación de rutas.",
     "bestLanes": "Mejores Rutas",
     "worstLanes": "Peores Rutas",
+    "excludedLanesNotice": "{{count}} carga(s) excluida(s) — la tarifa parece mal leída (fuera de $0.80–$12/milla). Corríjalo en la página de Cargas.",
     "forecastTitle": "Pronóstico a 30 Días",
     "bankBalanceLabel": "Saldo Bancario ($)",
     "weeklyRevenueLabel": "Ingreso Semanal ($)",
@@ -1521,6 +1522,8 @@
     "netPerMile": "Neto/Milla",
     "costPerMile": "Costo/Milla (CPM)",
     "mpg": "MPG de la Flota",
+    "cpmBreakdownTitle": "Desglose de Costo/Milla",
+    "cpmExcludedTotal": "Excluido (comidas, adelantos, escrow)",
     "trendTitle": "Tendencia Neta Semanal"
   },
   "sidebar": {

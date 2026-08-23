@@ -2572,3 +2572,123 @@
   translated; hi/uk as untranslated English copies per invariant #11),
   key-parity confirmed. Full suite: 66 suites / 1544 tests pass; `tsc
   --noEmit` clean.
+- FULL PARITY WITH WEB v2026.08.05-K, PART C — ARITHMETIC CORRECTNESS
+  (owner decision 2026-08-05). Audit finding, root cause of every item
+  below: `fuel_purchases`/`maintenance_records`/`tolls` are their OWN
+  tables, never mirrored into `deductions` — `calcTrueProfit()`/
+  `calcCpm()`/`buildProfitAnalysis()`'s `netIncome` ALL silently missed a
+  standalone (non-settlement) fuel receipt, maintenance invoice, or toll
+  charge entirely, since every one of them only ever summed `deductions`.
+  (`buildAccountantPackage()` already folded fuel/maintenance in — this
+  pass extends that same fix to every OTHER "what's my profit/cost"
+  figure, the spec's "ONE canonical expense engine.")
+  1. **`sumCanonicalExpenses()`** (`src/stats/trueProfit.ts`, exported) is
+     now the shared total both `calcTrueProfit()`/
+     `buildWeeklyTrueProfitTrend()` and `buildProfitAnalysis()`
+     (`src/stats/profitAnalysis.ts`) read from: deductions (via the
+     EXISTING `reducesTrueProfit()`, unchanged — still excludes Meals/
+     Advance Repayment/Escrow & Deposits) + fuel_purchases + maintenance
+     + tolls. DOUBLE-COUNT GUARD: a SETTLEMENT-LINKED fuel_purchases row
+     (`settlement_id` set — mapSettlement() extracts both the itemized
+     fuel section AND the settlement's own fuel_advance chargeback from
+     the same document) is excluded from the total, since its cost is
+     already represented by the settlement's own withheld deduction —
+     only STANDALONE fuel (`settlement_id` null) is added. First attempt
+     at this guard tried excluding the WITHHELD DEDUCTION's category
+     instead (assuming fuel_purchases was always the more authoritative
+     source) — caught by `trueProfit.test.ts`'s own pre-existing negative-
+     settlement regression test, which proved that under-counts a real
+     genuinely-deductible withheld Fuel & DEF row that has NO
+     corresponding fuel_purchases entry at all; the settlement_id-based
+     filter (excluding the fuel_purchases SIDE, never the deduction side)
+     is the correct, safer direction. `maintenance_records`/`tolls` have
+     no settlement_id column to filter by at all — added unconditionally,
+     matching `buildAccountantPackage()`'s own established precedent (no
+     `chargebackType` maps to "Maintenance & Repairs" at all, so no
+     double-count risk exists there; a `tolls_transponder` chargeback
+     colliding with an itemized toll row is a rare, accepted edge case,
+     not a regression this pass introduces). Wired into all 5 true-profit
+     consumers (Home, Scorecard, CEO Mode, Share Weekly Profit, Profit
+     Analysis) — each now fetches fuel/maintenance/tolls (CEO Mode/Profit
+     Analysis gained a fleet-wide, non-truck-scoped maintenance query
+     distinct from Truck Health's own truck-scoped one, so this figure
+     can never disagree with Home's for a multi-truck fleet).
+  2. **CPM = canonical cost per TOTAL mile with a per-bucket breakdown**
+     (`src/stats/cpm.ts` `calcCanonicalCpm()`) — replaces the Scorecard
+     screen's only real CPM display (grep-confirmed the ONE UI call site
+     app-wide), which read `FleetStats.cpm` (the legacy `calcCpm()`'s raw
+     "ALL deductions unconditionally" total — counting a per-diem-covered
+     meal, an advance repayment, or a refundable escrow deposit as if
+     they were real operating costs). Buckets: Fuel & DEF, Maintenance &
+     Repairs (folding Truck Parts/Tires/Major Repairs/Truck Wash),
+     Insurance, Permits & Road Taxes, Tolls, Parking & Lodging, ELD &
+     Software, Dispatch & Factoring, Dues, Professional Services, Driver
+     Pay, Loan/Lease Payment, Other — shown as a new "Cost/Mile
+     Breakdown" card under the existing Cost/Mile KPI row, plus an
+     "Excluded (meals, advances, escrow)" informational line. Loan/lease
+     payment is estimated from Loan Center (`loans` table,
+     `normalizeToWeeklyPayment()` converts each loan's free-text
+     `frequency` to its weekly-equivalent, summed and scaled by
+     `settlementCount`) ONLY when no settlement-withheld
+     'Truck/Trailer Payments' deduction already exists — otherwise the
+     withheld row alone represents that cost, and adding the estimate on
+     top would double it. `calcCpm()` (the old legacy-verbatim function)
+     is left in place, untouched, for any future caller that specifically
+     wants the literal `rDash()` figure.
+  3. **Best/Worst Lanes — three real bugs in `rankLoadsByRpm()`**
+     (`src/stats/cashFlowTrend.ts`, shared by Cash Flow's full 5-and-5
+     list and Home's 3-and-3 teaser): (a) DE-DUPLICATES by
+     `order_number|origin|destination` before ranking — a re-imported
+     settlement or a load logged twice no longer pads a ranking with the
+     same lane counted more than once (keeps the first-seen row, same
+     convention as Capital Account's `findDuplicateTransactionIds()`);
+     (b) EXCLUDES implausible rates outside $0.80–$12/loaded-mile (almost
+     always a mis-read amount/mileage — a decimal-point OCR error, a
+     swapped total-vs-per-mile field) into a new `excluded` array, shown
+     as an amber "N load(s) excluded — rate looks mis-read... fix on the
+     Loads page" notice on the Cash Flow screen rather than silently
+     corrupting best/worst/avgRpm; (c) `avgRpm` is now TOTAL REVENUE ÷
+     TOTAL LOADED MILES (a mileage-weighted average) instead of the
+     unweighted mean of each load's own rate — a handful of tiny,
+     high-rate loads no longer skews the average far above what the
+     fleet is actually earning per mile.
+  4. **Mark as Done's cost prompt reworded** (Truck Health,
+     `truckHealth.markDoneCostLabel`) from "Cost (optional)" to "What did
+     it cost you out of pocket? (0 if nothing)" per the spec's exact
+     framing — the field itself (defaulting to `'0'`, already flowing
+     into a real `maintenance_records.cost` the same as any invoiced
+     record) was already correct; only the label undersold that a $0
+     self-service repair is a deliberate, common answer, not a skipped
+     field. Zero-amount maintenance/fuel/toll/deduction rows were
+     confirmed to ALREADY not pollute any total (`buildAccountantPackage`/
+     `calcCanonicalCpm`'s own `add()` helpers both already guard `if
+     (!amount) return`) — the remaining "skip $0 rows in the report's
+     LINE-ITEM LISTING" half of this spec item is Part B's Accountant
+     Package rework (not yet built at time of this entry), since the
+     current `buildAccountantPackage()` only returns bucketed totals, no
+     individual line items yet.
+  Tests: `trueProfit.test.ts` gained a dedicated "canonical expense
+  engine" describe block (standalone fuel/maintenance/tolls subtract;
+  settlement-linked fuel does NOT double-count; a standalone fuel
+  purchase with no matching deduction is a real, previously-missed
+  expense; backward-compat default-empty-arrays) plus a
+  `buildWeeklyTrueProfitTrend` window-scoping case.
+  `profitAnalysis.test.ts`'s existing "sums only rows within the trailing
+  window" test's own `netIncome` expectation was corrected from 2800 to
+  1850 — the OLD value was itself proof of the bug (fuelExpense/
+  maintenanceExpense were computed and asserted as their own tiles in
+  that SAME test but never actually subtracted into netIncome); a new
+  settlement-linked-fuel case added alongside it. `cpm.test.ts` gained a
+  `calcCanonicalCpm`/`normalizeToWeeklyPayment` describe block (exclusion,
+  bucketing, settlement-linked-fuel guard, loan-payment-only-if-not-
+  withheld, divide-by-zero). `cashFlowTrend.test.ts`'s `rankLoadsByRpm`
+  suite gained dedup/exclusion/weighted-average cases; its own pre-
+  existing "ranks best/worst" test had a fixture bug fixed alongside
+  (all 3 loads shared the same default `origin: 'A', destination: 'B',
+  order_number: null`, which the new dedup logic would have collapsed to
+  1 row — each now gets a distinct `order_number`). Full suite: 66 suites
+  / 1568 tests pass; `tsc --noEmit` clean; all 7 locales confirmed
+  key-parity (the glossary test caught a real slip mid-pass: the Spanish/
+  Russian/Arabic translations of the new `cpmExcludedTotal` string
+  translated "escrow" instead of keeping it in the DO-NOT-TRANSLATE
+  glossary's Latin script — fixed before commit).

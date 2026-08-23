@@ -5,11 +5,15 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useTolls } from '@/src/data/tolls';
 import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
+import { useLoanRows } from '@/src/data/loans';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
+import { calcCanonicalCpm, normalizeToWeeklyPayment } from '@/src/stats/cpm';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
@@ -37,8 +41,11 @@ export default function Scorecard() {
   const queryClient = useQueryClient();
   const statsQuery = useFleetStats(null);
   const fuelQuery = useFuelPurchases();
+  const maintenanceQuery = useMaintenanceRecords();
+  const tollsQuery = useTolls();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
+  const loansQuery = useLoanRows();
   const { activeTruck } = useActiveTruck();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -64,14 +71,51 @@ export default function Scorecard() {
     return calcScorecard(statsQuery.data.grossRevenue, statsQuery.data.totalDeductions, statsQuery.data.totalMiles, fuelCost);
   }, [statsQuery.data, fuelCost]);
 
+  // FULL PARITY pass (owner decision 2026-08-05, spec item C.4) —
+  // Cost/Mile now reads the canonical, per-bucket CPM engine
+  // (src/stats/cpm.ts calcCanonicalCpm(), sharing calcTrueProfit()'s own
+  // Meals/Advance Repayment/Escrow exclusions and fuel/maintenance/tolls
+  // inclusion) instead of the legacy calcCpm()'s raw "ALL deductions"
+  // total, which counted non-expenses as if they were real operating
+  // costs. The estimated loan/lease payment is only added when NO
+  // settlement-withheld 'Truck/Trailer Payments' row already exists —
+  // see calcCanonicalCpm()'s own header comment for why.
+  const loanPaymentEstimate = useMemo(() => {
+    const weeklyTotal = (loansQuery.data ?? []).reduce(
+      (sum, l) => sum + normalizeToWeeklyPayment(Number(l.payment ?? 0), l.frequency),
+      0
+    );
+    return weeklyTotal * (statsQuery.data?.settlementCount ?? 0);
+  }, [loansQuery.data, statsQuery.data]);
+
+  const canonicalCpm = useMemo(() => {
+    if (!statsQuery.data) return null;
+    return calcCanonicalCpm(
+      statsQuery.data.grossRevenue,
+      statsQuery.data.totalMiles,
+      dedQuery.data ?? [],
+      fuelQuery.data ?? [],
+      maintenanceQuery.data ?? [],
+      tollsQuery.data ?? [],
+      loanPaymentEstimate
+    );
+  }, [statsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, loanPaymentEstimate]);
+
   // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
   // buildWeeklyTrend()'s bare settlement `.net` (net PAY only, ignoring
   // out-of-pocket expenses entirely). Now the same canonical
   // src/stats/trueProfit.ts figure Home/CEO Mode/Share Weekly
   // Profit/Profit Analysis all use.
   const weeklyTrend = useMemo(
-    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []).slice(-8),
-    [settlementsQuery.data, dedQuery.data]
+    () =>
+      buildWeeklyTrueProfitTrend(
+        settlementsQuery.data ?? [],
+        dedQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        tollsQuery.data ?? []
+      ).slice(-8),
+    [settlementsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
   );
 
   const loading = statsQuery.isLoading || fuelQuery.isLoading || settlementsQuery.isLoading || dedQuery.isLoading;
@@ -133,11 +177,11 @@ export default function Scorecard() {
                   {money(scorecard.netPerMile, { maximumFractionDigits: 2 })}
                 </Text>
               </View>
-              {statsQuery.data && (
+              {canonicalCpm && (
                 <View style={[styles.row, styles.rowBorder]}>
                   <MutedText>{t('scorecard.costPerMile')}</MutedText>
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
-                    {statsQuery.data.cpm.costPerMile != null ? money(statsQuery.data.cpm.costPerMile, { maximumFractionDigits: 2 }) : '—'}
+                    {canonicalCpm.costPerMile != null ? money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }) : '—'}
                   </Text>
                 </View>
               )}
@@ -148,6 +192,26 @@ export default function Scorecard() {
                 </View>
               )}
             </Card>
+
+            {canonicalCpm && canonicalCpm.buckets.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>{t('scorecard.cpmBreakdownTitle')}</Text>
+                <Card>
+                  {canonicalCpm.buckets.map((b, i) => (
+                    <View key={b.category} style={[styles.row, i > 0 && styles.rowBorder]}>
+                      <MutedText>{b.category}</MutedText>
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>{money(b.amount)}</Text>
+                    </View>
+                  ))}
+                  {canonicalCpm.excludedTotal > 0 && (
+                    <View style={[styles.row, styles.rowBorder]}>
+                      <MutedText>{t('scorecard.cpmExcludedTotal')}</MutedText>
+                      <MutedText>{money(canonicalCpm.excludedTotal)}</MutedText>
+                    </View>
+                  )}
+                </Card>
+              </>
+            )}
 
             {weeklyTrend.length > 0 && (
               <>

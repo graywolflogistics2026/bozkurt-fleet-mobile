@@ -594,7 +594,7 @@
     "markDoneDateLabel": "Date",
     "markDoneOdometerLabel": "Odometer",
     "markDoneHoursLabel": "Engine Hours",
-    "markDoneCostLabel": "Cost (optional)",
+    "markDoneCostLabel": "What did it cost you out of pocket? (0 if nothing)",
     "markDoneNoteLabel": "Note (optional)",
     "markDoneNotePlaceholder": "e.g. Self-performed on the road",
     "markDoneConfirm": "Confirm",
@@ -999,6 +999,7 @@
     "noLoadData": "Import settlement PDFs with load data to see lane rankings.",
     "bestLanes": "Best Lanes",
     "worstLanes": "Worst Lanes",
+    "excludedLanesNotice": "{{count}} load(s) excluded — rate looks mis-read (outside $0.80–$12/mi). Fix on the Loads page.",
     "forecastTitle": "30-Day Forecast",
     "bankBalanceLabel": "Bank Balance ($)",
     "weeklyRevenueLabel": "Weekly Revenue ($)",
@@ -1521,6 +1522,8 @@
     "netPerMile": "Net/Mile",
     "costPerMile": "Cost/Mile (CPM)",
     "mpg": "Fleet MPG",
+    "cpmBreakdownTitle": "Cost/Mile Breakdown",
+    "cpmExcludedTotal": "Excluded (meals, advances, escrow)",
     "trendTitle": "Weekly Net Trend"
   },
   "sidebar": {

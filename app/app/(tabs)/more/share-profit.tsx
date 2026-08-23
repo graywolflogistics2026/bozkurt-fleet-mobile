@@ -5,6 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useTolls } from '@/src/data/tolls';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
@@ -43,6 +46,9 @@ export default function ShareProfit() {
   const { profile } = useAuth();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
+  const fuelQuery = useFuelPurchases();
+  const maintenanceQuery = useMaintenanceRecords();
+  const tollsQuery = useTolls();
   const { activeTruck } = useActiveTruck();
   const { shotRef, sharing, shareTo } = useShareCapture();
   const messages = useShareMessages();
@@ -63,8 +69,15 @@ export default function ShareProfit() {
   // settlement sharing that week_ending, same "one calendar week" scoping
   // per diem dedup already uses for a multi-truck fleet).
   const trueProfitByWeek = useMemo(
-    () => buildWeeklyTrueProfitTrend(settlementsQuery.data ?? [], dedQuery.data ?? []),
-    [settlementsQuery.data, dedQuery.data]
+    () =>
+      buildWeeklyTrueProfitTrend(
+        settlementsQuery.data ?? [],
+        dedQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        tollsQuery.data ?? []
+      ),
+    [settlementsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
   );
   const selectedTrueProfit = selected
     ? trueProfitByWeek.find((p) => p.weekEnding === selected.week_ending)?.net ?? selected.net

@@ -52,16 +52,55 @@ export function buildWeeklyRevenueExpenseTrend(settlements: Settlement[], deduct
 // meaningful rate and would skew the ranking).
 export type RankedLoad = Load & { rpm: number };
 
-export function rankLoadsByRpm(loads: Load[], n = 5): { best: RankedLoad[]; worst: RankedLoad[]; avgRpm: number | null } {
-  const ranked = loads
+// FULL PARITY pass (owner decision 2026-08-05, spec item C.5) — three
+// real bugs fixed together:
+// 1. DE-DUPLICATE by order+lane: a re-imported settlement, or a load
+//    photographed twice, could otherwise show the SAME load as both a
+//    "best" and (its duplicate) padding the "worst" list, or simply
+//    double-count it in the average. Keys on `${order_number}|${origin}|
+//    ${destination}` — the first-seen row wins (matches capitalAccount's
+//    findDuplicateTransactionIds's own "keep first" convention).
+// 2. EXCLUDE implausible rates: a load whose rate-per-loaded-mile falls
+//    outside $0.80-$12/mi is almost always a mis-read amount/mileage
+//    (a decimal-point OCR error, a swapped total-vs-per-mile rate field)
+//    rather than a real lane — these are excluded from best/worst/avgRpm
+//    and returned separately so the screen can show an amber "looks
+//    mis-read — fix on the Loads page" notice instead of silently
+//    corrupting the ranking.
+// 3. avgRpm = TOTAL REVENUE / TOTAL LOADED MILES (a mileage-weighted
+//    average), not the unweighted mean of each load's own rate — a
+//    handful of tiny, high-rate loads no longer skews the average far
+//    above what the fleet is actually earning per mile.
+const MIN_PLAUSIBLE_RPM = 0.8;
+const MAX_PLAUSIBLE_RPM = 12;
+
+export function rankLoadsByRpm(
+  loads: Load[],
+  n = 5
+): { best: RankedLoad[]; worst: RankedLoad[]; avgRpm: number | null; excluded: RankedLoad[] } {
+  const seen = new Set<string>();
+  const deduped: Load[] = [];
+  for (const l of loads) {
+    const key = `${l.order_number ?? ''}|${l.origin ?? ''}|${l.destination ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(l);
+  }
+
+  const withRpm = deduped
     .filter((l) => Number(l.loaded_miles ?? 0) > 0 && Number(l.revenue ?? 0) > 0)
     .map((l) => ({ ...l, rpm: Number(l.revenue) / Number(l.loaded_miles) }));
 
-  if (ranked.length === 0) return { best: [], worst: [], avgRpm: null };
+  const ranked = withRpm.filter((l) => l.rpm >= MIN_PLAUSIBLE_RPM && l.rpm <= MAX_PLAUSIBLE_RPM);
+  const excluded = withRpm.filter((l) => l.rpm < MIN_PLAUSIBLE_RPM || l.rpm > MAX_PLAUSIBLE_RPM);
+
+  if (ranked.length === 0) return { best: [], worst: [], avgRpm: null, excluded };
 
   const sorted = [...ranked].sort((a, b) => b.rpm - a.rpm);
-  const avgRpm = ranked.reduce((sum, l) => sum + l.rpm, 0) / ranked.length;
+  const totalRevenue = ranked.reduce((sum, l) => sum + Number(l.revenue), 0);
+  const totalLoadedMiles = ranked.reduce((sum, l) => sum + Number(l.loaded_miles), 0);
+  const avgRpm = totalLoadedMiles > 0 ? totalRevenue / totalLoadedMiles : null;
   const best = sorted.slice(0, n);
   const worst = sorted.slice(-n).reverse();
-  return { best, worst, avgRpm };
+  return { best, worst, avgRpm, excluded };
 }

@@ -594,7 +594,7 @@
     "markDoneDateLabel": "Дата",
     "markDoneOdometerLabel": "Одометр",
     "markDoneHoursLabel": "Моточасы",
-    "markDoneCostLabel": "Стоимость (необязательно)",
+    "markDoneCostLabel": "Сколько это стоило вам из своего кармана? (0, если ничего)",
     "markDoneNoteLabel": "Заметка (необязательно)",
     "markDoneNotePlaceholder": "напр. Выполнено самостоятельно в дороге",
     "markDoneConfirm": "Подтвердить",
@@ -1100,6 +1100,7 @@
     "noLoadData": "Импортируйте PDF settlement с данными о грузах, чтобы увидеть рейтинг маршрутов.",
     "bestLanes": "Лучшие маршруты",
     "worstLanes": "Худшие маршруты",
+    "excludedLanesNotice": "{{count}} рейс(ов) исключено — тариф выглядит неверно распознанным (вне $0.80–$12/милю). Исправьте на странице Грузы.",
     "forecastTitle": "Прогноз на 30 дней",
     "bankBalanceLabel": "Баланс банка ($)",
     "weeklyRevenueLabel": "Недельный доход ($)",
@@ -1521,6 +1522,8 @@
     "netPerMile": "Чистая прибыль/миля",
     "costPerMile": "Стоимость/миля (CPM)",
     "mpg": "MPG флота",
+    "cpmBreakdownTitle": "Разбивка Стоимость/миля",
+    "cpmExcludedTotal": "Исключено (питание, авансы, escrow)",
     "trendTitle": "Недельный тренд чистой прибыли"
   },
   "sidebar": {
