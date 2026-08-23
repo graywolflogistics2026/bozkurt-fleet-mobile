@@ -1351,7 +1351,7 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
-## 40. Category taxonomy rename migration (FULL PARITY pass, owner decision 2026-08-05)
+## 40. Category taxonomy rename migration (FULL PARITY pass, owner decision 2026-08-05) — ✅ APPLIED
 
 CLAUDE.md's category renames (`app/src/import/category.ts`
 `CANONICAL_CATEGORIES`, docs/INDUSTRY_TAXONOMY.md §B) have historically
@@ -1391,11 +1391,11 @@ update user_categories set schedule_c_bucket = 'Misc' where schedule_c_bucket in
 No RLS change needed — both tables are already owner-scoped; these
 `UPDATE`s only touch existing rows' `category`/`schedule_c_bucket` text.
 
-- [ ] 40a run (rename legacy category strings on deductions + user_categories)
+- [x] 40a run (rename legacy category strings on deductions + user_categories)
 
 ---
 
-## 41. capital_transactions.business_balance_applied (FULL PARITY pass, owner decision 2026-08-05, spec item E.3 "equity moves cash, not tax")
+## 41. capital_transactions.business_balance_applied (FULL PARITY pass, owner decision 2026-08-05, spec item E.3 "equity moves cash, not tax") — ✅ APPLIED
 
 Recording a manual Draw or Contribution on the Capital Account screen
 previously touched ONLY `capital_transactions` — `profiles.business_balance`
@@ -1432,11 +1432,11 @@ alter table capital_transactions
 No RLS change needed — `capital_transactions` is already owner-scoped, and
 `apply_business_balance_delta` itself already checks `auth.uid()`.
 
-- [ ] 41a run (add capital_transactions.business_balance_applied)
+- [x] 41a run (add capital_transactions.business_balance_applied)
 
 ---
 
-## 42. One-time date repair migration (FULL PARITY pass, owner decision 2026-08-05, spec item D.1)
+## 42. One-time date repair migration (FULL PARITY pass, owner decision 2026-08-05, spec item D.1) — ✅ APPLIED
 
 A one-time repair pass over every ALREADY-STORED date column, applying
 the SAME year↔day-swap rule `app/src/import/dateGuard.ts`'s
@@ -1533,11 +1533,11 @@ their already-enforced owner-scoped RLS policies (run as the project
 owner/service_role via the SQL editor, same as every other migration in
 this doc).
 
-- [ ] 42a run (create repair_implausible_date() + repair every dated column)
+- [x] 42a run (create repair_implausible_date() + repair every dated column)
 
 ---
 
-## 43. maintenance_records.source / tolls.source (Accountant Package ORIGIN RULE, owner decision 2026-08-05, FULL PARITY pass item B.1)
+## 43. maintenance_records.source / tolls.source (Accountant Package ORIGIN RULE, owner decision 2026-08-05, FULL PARITY pass item B.1) — ✅ APPLIED
 
 The Accountant Package's Out-of-pocket/Settlement-withheld/Everything
 scope filter needs to know whether a row came FROM a settlement import or
@@ -1587,7 +1587,7 @@ update tolls
 
 No RLS change needed — both tables are already owner-scoped.
 
-- [ ] 43a run (add maintenance_records.source + tolls.source, backfill existing rows)
+- [x] 43a run (add maintenance_records.source + tolls.source, backfill existing rows)
 
 ---
 
