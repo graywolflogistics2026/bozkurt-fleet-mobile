@@ -1395,6 +1395,47 @@ No RLS change needed — both tables are already owner-scoped; these
 
 ---
 
+## 41. capital_transactions.business_balance_applied (FULL PARITY pass, owner decision 2026-08-05, spec item E.3 "equity moves cash, not tax")
+
+Recording a manual Draw or Contribution on the Capital Account screen
+previously touched ONLY `capital_transactions` — `profiles.business_balance`
+was left completely untouched by that action (only ever moved by settlement
+import or the separate "Update Business Balance" manual-correction button).
+That's wrong: a manual cash draw/contribution genuinely moves money into or
+out of the business checking account the same way a settlement's net pay
+does, and the Dashboard/Cash-Flow-starting-balance/Accountant-Package all
+read `business_balance` as if it already reflected that.
+
+Scope decision: this applies to MANUAL (non-linked) draws/contributions
+only — a LINKED contribution (`linked_deduction_id` set, auto-synced from a
+personally-paid deduction via `planContributionSync()`) represents equity
+the owner built by paying a business expense out of pocket; no cash
+actually moved into business checking for that event, so it must NOT also
+credit `business_balance` (doing so would fabricate cash that was never
+deposited). Manual contributions/draws are real bank-account movements the
+owner is directly telling the app about — the same class of fact a
+settlement import represents.
+
+Same atomic-delta pattern as `settlements.business_balance_credit` (§37) —
+reusing the EXISTING `apply_business_balance_delta(p_user_id, p_delta)` RPC,
+no new function needed. `business_balance_applied` tracks exactly how much
+of THIS transaction has been applied so far (signed: positive for a
+contribution, negative for a draw) so an edit or delete can reverse the
+EXACT applied amount with no drift, never re-derive it from the row's
+current `amount`/`tx_type` (which could have already changed).
+
+```sql
+alter table capital_transactions
+  add column business_balance_applied numeric(12,2) not null default 0;
+```
+
+No RLS change needed — `capital_transactions` is already owner-scoped, and
+`apply_business_balance_delta` itself already checks `auth.uid()`.
+
+- [ ] 41a run (add capital_transactions.business_balance_applied)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

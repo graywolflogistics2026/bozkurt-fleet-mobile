@@ -511,6 +511,7 @@ create table capital_transactions (
   -- ^ personal-payment purchases: contribution auto-created, cascades on delete.
   --   Postgres FK does the cascade the web app had to hand-code. NULL for manual draws.
   tags         text,                          -- PENDING_SQL.md §22
+  business_balance_applied numeric(12,2) not null default 0, -- PENDING_SQL.md §41 (manual draw/contribution only, never a linked row)
   created_at   timestamptz default now()
 );
 -- Tax-free remaining = profiles.initial_capital + sum(contributions) - sum(draws)

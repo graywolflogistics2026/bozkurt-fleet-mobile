@@ -263,6 +263,7 @@ export type CapitalTransaction = {
   note: string | null;
   linked_deduction_id: string | null;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  business_balance_applied: number; // docs/PENDING_SQL.md §41 (manual draw/contribution only, never a linked row)
   created_at: string;
   updated_at: string;
 };

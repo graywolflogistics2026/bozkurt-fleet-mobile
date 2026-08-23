@@ -5,9 +5,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCapitalAccountSummary, useUpdateBusinessBalance } from '@/src/data/capitalAccount';
-import { useCapitalTransactions, useInsertCapitalTransaction, useDeleteCapitalTransaction } from '@/src/data/capitalTransactions';
+import {
+  useCapitalTransactions,
+  useDeleteManualCapitalTransaction,
+  useRecordManualCapitalTransaction,
+} from '@/src/data/capitalTransactions';
 import { useTaxConfig } from '@/src/data/taxConfig';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { findDuplicateTransactionIds, summarizeContributions } from '@/src/stats/capitalAccount';
 import {
   Screen,
   ScreenTitle,
@@ -27,14 +32,22 @@ import type { CapitalTransaction } from '@/src/types/db';
 function HistoryRow({
   tx,
   onDeleteDraw,
+  onDeleteContribution,
   onTapContribution,
 }: {
   tx: CapitalTransaction;
   onDeleteDraw: () => void;
+  onDeleteContribution: () => void;
   onTapContribution: () => void;
 }) {
   const { money } = useFormatters();
   const isDraw = tx.tx_type === 'draw';
+  // FULL PARITY pass (owner decision 2026-08-05, spec item E.1) — a
+  // LINKED contribution (auto-created from a personally-paid deduction)
+  // stays read-only here (🔗, tap through to the deduction, "edit the
+  // deduction instead"); a MANUAL cash contribution is a real row this
+  // screen owns and must be deletable, same as a draw.
+  const isLinkedContribution = !isDraw && !!tx.linked_deduction_id;
   const content = (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm }}>
       <View style={{ flex: 1 }}>
@@ -48,20 +61,20 @@ function HistoryRow({
           {isDraw ? '-' : '+'}
           {money(tx.amount)}
         </Text>
-        {isDraw ? (
-          <Pressable onPress={onDeleteDraw} hitSlop={8}>
+        {isLinkedContribution ? (
+          <Text style={{ color: colors.muted, fontSize: typography.size.md }}>🔗</Text>
+        ) : (
+          <Pressable onPress={isDraw ? onDeleteDraw : onDeleteContribution} hitSlop={8}>
             <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700', paddingHorizontal: 4 }}>
               ✕
             </Text>
           </Pressable>
-        ) : (
-          <Text style={{ color: colors.muted, fontSize: typography.size.md }}>🔗</Text>
         )}
       </View>
     </View>
   );
 
-  if (isDraw) return content;
+  if (!isLinkedContribution) return content;
   return <Pressable onPress={onTapContribution}>{content}</Pressable>;
 }
 
@@ -76,14 +89,24 @@ export default function CapitalAccount() {
   const summaryQuery = useCapitalAccountSummary();
   const txQuery = useCapitalTransactions();
   const taxConfigQuery = useTaxConfig();
-  const insertTx = useInsertCapitalTransaction();
-  const deleteTx = useDeleteCapitalTransaction();
+  // FULL PARITY pass (owner decision 2026-08-05, spec item E.3) — manual
+  // draws/contributions from THIS screen apply a real business_balance
+  // delta (useRecordManualCapitalTransaction/useDeleteManualCapitalTransaction);
+  // a LINKED contribution never reaches this screen's own insert/delete
+  // path (it's read-only here, auto-synced from deductionMutations.ts).
+  const insertTx = useRecordManualCapitalTransaction();
+  const deleteTx = useDeleteManualCapitalTransaction();
   const updateBalance = useUpdateBusinessBalance();
 
   const [drawModalOpen, setDrawModalOpen] = useState(false);
   const [drawAmount, setDrawAmount] = useState('');
   const [drawNote, setDrawNote] = useState('');
   const [savingDraw, setSavingDraw] = useState(false);
+
+  const [contributionModalOpen, setContributionModalOpen] = useState(false);
+  const [contributionAmount, setContributionAmount] = useState('');
+  const [contributionNote, setContributionNote] = useState('');
+  const [savingContribution, setSavingContribution] = useState(false);
 
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
@@ -98,6 +121,12 @@ export default function CapitalAccount() {
     () => [...rows].sort((a, b) => new Date(b.tx_date).getTime() - new Date(a.tx_date).getTime()),
     [rows]
   );
+  const contributionBreakdown = useMemo(
+    () => summarizeContributions(rows.filter((t) => t.tx_type === 'contribution')),
+    [rows]
+  );
+  const duplicateIds = useMemo(() => findDuplicateTransactionIds(rows), [rows]);
+  const isPastCapital = !!summary && summary.effectiveContribution - summary.totalDraws < 0;
 
   async function handleRecordDraw() {
     const amount = Number(drawAmount) || 0;
@@ -122,7 +151,7 @@ export default function CapitalAccount() {
     }
   }
 
-  function handleDeleteDraw(id: string) {
+  function handleDeleteDraw(tx: CapitalTransaction) {
     const drawSingular = isScorp ? t('capitalAccount.distributionSingular') : t('capitalAccount.drawSingular');
     Alert.alert(
       t('capitalAccount.deleteDrawConfirmTitle', { label: drawSingular }),
@@ -134,8 +163,81 @@ export default function CapitalAccount() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteTx.mutateAsync(id);
+              await deleteTx.mutateAsync(tx);
               await invalidateFinancialData(queryClient);
+            } catch (err) {
+              Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleRecordContribution() {
+    const amount = Number(contributionAmount) || 0;
+    if (amount <= 0 || !userId) return;
+    setSavingContribution(true);
+    try {
+      await insertTx.mutateAsync({
+        user_id: userId,
+        tx_type: 'contribution',
+        amount,
+        tx_date: new Date().toISOString().slice(0, 10),
+        note: contributionNote || null,
+      });
+      await invalidateFinancialData(queryClient);
+      setContributionModalOpen(false);
+      setContributionAmount('');
+      setContributionNote('');
+    } catch (err) {
+      Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
+    } finally {
+      setSavingContribution(false);
+    }
+  }
+
+  function handleDeleteContribution(tx: CapitalTransaction) {
+    Alert.alert(
+      t('capitalAccount.deleteContributionConfirmTitle'),
+      t('capitalAccount.deleteContributionConfirmBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTx.mutateAsync(tx);
+              await invalidateFinancialData(queryClient);
+            } catch (err) {
+              Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleRemoveDuplicates() {
+    const duplicates = history.filter((tx) => duplicateIds.includes(tx.id));
+    if (duplicates.length === 0) {
+      Alert.alert(t('capitalAccount.removeDuplicates'), t('capitalAccount.noDuplicatesFound'));
+      return;
+    }
+    Alert.alert(
+      t('capitalAccount.removeDuplicatesConfirmTitle', { count: duplicates.length }),
+      t('capitalAccount.removeDuplicatesConfirmBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await Promise.all(duplicates.map((tx) => deleteTx.mutateAsync(tx)));
+              await invalidateFinancialData(queryClient);
+              Alert.alert(t('capitalAccount.removeDuplicates'), t('capitalAccount.duplicatesRemoved', { count: duplicates.length }));
             } catch (err) {
               Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
             }
@@ -191,6 +293,11 @@ export default function CapitalAccount() {
               </Text>
             </View>
           </View>
+          {isPastCapital && (
+            <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>
+              ⚠️ {t('capitalAccount.pastCapitalWarning')}
+            </MutedText>
+          )}
         </Card>
 
         <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
@@ -198,11 +305,33 @@ export default function CapitalAccount() {
           <Text style={styles.statValue}>{money(summary?.businessBalance ?? 0)}</Text>
         </TappableCard>
 
+        <MutedText style={{ marginTop: spacing.xs }}>{t('capitalAccount.cashMovesNotTaxNote')}</MutedText>
+
+        <SecondaryButton title={t('capitalAccount.recordContribution')} onPress={() => setContributionModalOpen(true)} />
         <SecondaryButton
           title={isScorp ? t('capitalAccount.recordDistribution') : t('capitalAccount.recordDraw')}
           onPress={() => setDrawModalOpen(true)}
         />
         <SecondaryButton title={t('capitalAccount.updateBusinessBalance')} onPress={() => setBalanceModalOpen(true)} />
+        {duplicateIds.length > 0 && (
+          <SecondaryButton title={t('capitalAccount.removeDuplicates')} onPress={handleRemoveDuplicates} />
+        )}
+
+        {(contributionBreakdown.cashCount > 0 || contributionBreakdown.linkedCount > 0) && (
+          <Card>
+            <MutedText>
+              {t('capitalAccount.contributionBreakdown', {
+                cashAmount: money(contributionBreakdown.cashAmount),
+                cashCount: contributionBreakdown.cashCount,
+                linkedAmount: money(contributionBreakdown.linkedAmount),
+                linkedCount: contributionBreakdown.linkedCount,
+              })}
+            </MutedText>
+            {contributionBreakdown.cashCount === 0 && contributionBreakdown.linkedCount > 0 && (
+              <MutedText style={{ marginTop: spacing.xs }}>{t('capitalAccount.noCashTransferNote')}</MutedText>
+            )}
+          </Card>
+        )}
 
         <View style={{ marginTop: spacing.lg, marginBottom: spacing.xs }}>
           <Text style={styles.sectionTitle}>{t('capitalAccount.historyTitle')}</Text>
@@ -215,7 +344,8 @@ export default function CapitalAccount() {
               <View key={tx.id} style={i > 0 ? styles.rowBorder : undefined}>
                 <HistoryRow
                   tx={tx}
-                  onDeleteDraw={() => handleDeleteDraw(tx.id)}
+                  onDeleteDraw={() => handleDeleteDraw(tx)}
+                  onDeleteContribution={() => handleDeleteContribution(tx)}
                   onTapContribution={() => router.push('/(tabs)/deductions')}
                 />
               </View>
@@ -235,6 +365,21 @@ export default function CapitalAccount() {
         <Field value={drawNote} onChangeText={setDrawNote} placeholder={t('capitalAccount.notePlaceholder')} />
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleRecordDraw} loading={savingDraw} disabled={!drawAmount} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setDrawModalOpen(false)} />
+      </ModalSheet>
+
+      <ModalSheet visible={contributionModalOpen} onClose={() => setContributionModalOpen(false)}>
+        <SheetTitle>{t('capitalAccount.recordContributionSheetTitle')}</SheetTitle>
+        <MutedText>{t('capitalAccount.amountLabel')}</MutedText>
+        <Field keyboardType="numeric" value={contributionAmount} onChangeText={setContributionAmount} placeholder="0.00" />
+        <MutedText>{t('capitalAccount.noteLabel')}</MutedText>
+        <Field value={contributionNote} onChangeText={setContributionNote} placeholder={t('capitalAccount.notePlaceholder')} />
+        <PrimaryButton
+          title={`💾 ${t('common.save')}`}
+          onPress={handleRecordContribution}
+          loading={savingContribution}
+          disabled={!contributionAmount}
+        />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setContributionModalOpen(false)} />
       </ModalSheet>
 
       <ModalSheet visible={balanceModalOpen} onClose={() => setBalanceModalOpen(false)}>

@@ -2470,3 +2470,105 @@
   Full suite passes; `tsc --noEmit` clean. No new user-facing i18n
   strings were needed for this part — category names are domain values
   that stay English in every locale (CLAUDE.md invariant #11).
+- FULL PARITY WITH WEB v2026.08.05-K, PART E — CAPITAL ACCOUNT (owner
+  decision 2026-08-05, "worst bug of the day" class fixes — see PART A
+  above and PARTS B-D/F/G elsewhere in this pass). Audited this app's
+  existing capital-account code against every item in the spec first:
+  items E.1 (no "Record Money In" action / no inline-editable manual
+  rows) and E.5 (Tax-Free Remaining clamped at $0, hiding a real negative
+  balance) were genuine gaps/bugs here; items E.2 (orphan-cleanup
+  deleting manual equity) and E.4's "no hidden base constant tripling the
+  total" were confirmed ALREADY NOT PRESENT in this codebase by design —
+  `capital_transactions.linked_deduction_id` is `on delete cascade`
+  (docs/SCHEMA.sql) so a linked contribution can never outlive its
+  deduction without any cleanup job needed at all (the legacy-backup
+  importer's own comment, `importLegacyBackup.ts`, already calls this out
+  explicitly: "structurally impossible here"), and contribution totals
+  have always summed real `capital_transactions` rows only, never a
+  hidden seeded constant.
+  1. **Tax-Free Remaining no longer clamped at $0**
+     (`app/src/stats/capitalAccount.ts` `calcCapitalAccount()`) — legacy's
+     OWN `rCapital()` clamped the DISPLAYED number
+     (`Math.max(0,capRemain)`) while the screen's color logic already
+     compared the UNCLAMPED value for red/green, a real inconsistency: the
+     figure silently floored at $0 even when the color already knew it
+     was negative. `taxFreeRemaining` is now the live, unclamped value;
+     `capital-account.tsx` shows a red "⚠️ You've drawn past your
+     capital — further draws come out of profit" banner
+     (`capitalAccount.pastCapitalWarning`) whenever it goes negative.
+  2. **Record Contribution + inline delete for manual rows**
+     (spec item E.1) — a new "➕ Record Contribution" button/sheet mirrors
+     the existing draw flow. `HistoryRow` now distinguishes a MANUAL
+     contribution (deletable, ✕) from a LINKED one (`linked_deduction_id`
+     set — stays read-only, 🔗, tap-through to the deduction, "edit the
+     deduction instead" — unchanged). A manual contribution's delete
+     confirmation (`capitalAccount.deleteContributionConfirmTitle`) is
+     separate copy from the existing draw-delete confirmation.
+  3. **Equity moves cash, not tax — genuinely wired this pass** (spec item
+     E.3): recording/deleting a MANUAL draw or contribution on this
+     screen previously touched ONLY `capital_transactions` —
+     `profiles.business_balance` was left completely untouched by that
+     action (only ever moved by settlement import or the separate
+     "Update Business Balance" manual-correction button), even though the
+     Dashboard/Cash-Flow-starting-balance/Accountant-Package all read
+     `business_balance` as if it already reflected every cash movement.
+     Fixed with the SAME atomic-delta pattern as
+     `settlements.business_balance_credit` (§37/§38) — reusing the
+     EXISTING `apply_business_balance_delta(p_user_id, p_delta)` RPC, no
+     new SQL function needed. `capital_transactions.
+     business_balance_applied` (docs/PENDING_SQL.md §41) tracks exactly
+     how much of THAT transaction has been applied so far (signed:
+     positive for a contribution, negative for a draw) so a delete
+     reverses the EXACT applied amount — read from the row, never
+     re-derived from its current `amount`/`tx_type` — with no drift.
+     `app/src/data/capitalTransactions.ts`'s new
+     `useRecordManualCapitalTransaction()`/
+     `useDeleteManualCapitalTransaction()` wrap the plain insert/delete
+     with this RPC call, invalidating `capital_transactions`,
+     `capital-account-summary`, AND `profile` (the Dashboard/Cash-Flow
+     balance figures) together. SCOPE DECISION, deliberately narrow: this
+     applies to MANUAL (non-linked) draws/contributions ONLY — a LINKED
+     contribution (auto-synced from a personally-paid deduction via
+     `deductionMutations.ts`'s `planContributionSync()`) represents
+     equity the owner built by paying a business expense out of pocket;
+     no cash actually moved into business checking for that event, so it
+     must NOT also credit `business_balance` (doing so would fabricate a
+     deposit that never happened) — `manualTransactionBalanceDelta()`'s
+     own header comment documents this reasoning; the linked path keeps
+     using the plain `useInsertCapitalTransaction`/
+     `useDeleteCapitalTransaction` hooks, untouched. Verified (and
+     directly tested) that this change reaches NOTHING in the tax
+     engine — `calcCapitalAccount()`'s signature has no `tax_config`/
+     `deductions` input at all, so a $5,000 draw or a $60,000
+     contribution structurally cannot alter a tax estimate through this
+     code path, matching the spec's own required test.
+  4. **"Remove duplicate entries" action** (spec item E.4) —
+     `findDuplicateTransactionIds()` groups by `(tx_type, tx_date,
+     amount)`, keeps the first-seen row per group, and — critically —
+     skips every row with `linked_deduction_id` set entirely (a linked
+     row is never eligible to be flagged OR removed as a "duplicate," no
+     matter how many share its date+amount, since it's driven by its own
+     deduction, not user data-entry error). The screen only shows the
+     "🧹 Remove Duplicate Entries" button when at least one real duplicate
+     exists.
+  5. **Contribution breakdown line** (spec item E.4's "cash transfers $X
+     (n) · paid personally $Y (m)") — `summarizeContributions()` splits
+     manual (cash) vs. linked (paid-personally) contributions; the screen
+     shows a "no cash-transfer contributions yet" note
+     (`capitalAccount.noCashTransferNote`) whenever every contribution on
+     the account is linked and none is a real cash deposit.
+  6. **"Draws and contributions move cash, not taxable income" note**
+     (spec item E.3's required UI copy) — shown as a permanent
+     `MutedText` line under the Business Balance card
+     (`capitalAccount.cashMovesNotTaxNote`).
+  Tests: `src/stats/__tests__/capitalAccount.test.ts` gained coverage for
+  the unclamped negative `taxFreeRemaining`, `manualTransactionBalanceDelta`
+  (contribution = positive, draw = negative), `findDuplicateTransactionIds`
+  (same date+amount flagged, a lone manual contribution survives, a
+  LINKED row is never touched even when it collides on date+amount, a
+  contribution never cross-matches a draw), and `summarizeContributions`
+  (cash vs. linked split, the "no cash transfer" signal). i18n: 8 new
+  `capitalAccount.*` keys across all 7 locales (es/ru/ar/tr fully
+  translated; hi/uk as untranslated English copies per invariant #11),
+  key-parity confirmed. Full suite: 66 suites / 1544 tests pass; `tsc
+  --noEmit` clean.
