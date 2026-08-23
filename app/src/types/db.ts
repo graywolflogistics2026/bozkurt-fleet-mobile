@@ -43,6 +43,10 @@ export type Truck = {
   trailer_purchase_date: string | null;
   trailer_financing: 'cash' | 'loan' | null;
   trailer_loan_id: string | null;
+  // docs/PENDING_SQL.md §44 (owner decision 2026-08-05) — a user-entered
+  // odometer/ELD total that supersedes calcMiles()'s own calculated
+  // total for CPM/RPM. null = not set.
+  manual_total_miles_override: number | null;
   created_at: string;
   updated_at: string;
 };

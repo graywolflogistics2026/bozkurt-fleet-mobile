@@ -11,15 +11,17 @@ import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
 import { useLoanRows } from '@/src/data/loans';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { useUpdateTruck } from '@/src/data/trucks';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
 import { calcCanonicalCpm, normalizeToWeeklyPayment } from '@/src/stats/cpm';
+import { resolveMilesTotal } from '@/src/stats/miles';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { BRAND_NAME } from '@/src/brand';
-import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 function gradeColor(grade: ScorecardGrade): string {
@@ -46,11 +48,28 @@ export default function Scorecard() {
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
   const loansQuery = useLoanRows();
-  const { activeTruck } = useActiveTruck();
+  const { activeTruck, refreshTrucks } = useActiveTruck();
+  const updateTruck = useUpdateTruck();
 
   const [refreshing, setRefreshing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const companyName = profile?.company_name?.trim() || null;
+
+  // MANUAL TOTAL OVERRIDE (owner decision 2026-08-05, FULL PARITY
+  // follow-up item B.3) — a user-entered odometer/ELD total supersedes
+  // the settlement/loads-derived total entirely for CPM/RPM. Lives on
+  // the ACTIVE truck; for a multi-truck fleet this is a deliberate
+  // simplification (an odometer reading is inherently per-truck, but
+  // this screen's stats are fleet-wide) — acceptable for the common
+  // single-truck (n=1) case CLAUDE.md invariant #7 treats as the default
+  // presentation, flagged here rather than silently assumed correct for
+  // every fleet size.
+  const [overrideDraft, setOverrideDraft] = useState('');
+  const [savingOverride, setSavingOverride] = useState(false);
+  const [editingOverride, setEditingOverride] = useState(false);
+  const milesSource = statsQuery.data
+    ? resolveMilesTotal({ totalMiles: statsQuery.data.totalMiles }, activeTruck?.manual_total_miles_override)
+    : null;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -60,6 +79,40 @@ export default function Scorecard() {
       setRefreshing(false);
     }
   }, [queryClient]);
+
+  function openOverrideEditor() {
+    setOverrideDraft(activeTruck?.manual_total_miles_override != null ? String(activeTruck.manual_total_miles_override) : '');
+    setEditingOverride(true);
+  }
+
+  async function handleSaveOverride() {
+    if (!activeTruck) return;
+    const value = Number(overrideDraft);
+    setSavingOverride(true);
+    try {
+      await updateTruck.mutateAsync({
+        id: activeTruck.id,
+        values: { manual_total_miles_override: Number.isFinite(value) && value > 0 ? value : null },
+      });
+      await refreshTrucks();
+      await invalidateFinancialData(queryClient);
+      setEditingOverride(false);
+    } finally {
+      setSavingOverride(false);
+    }
+  }
+
+  async function handleUseSettlementsInstead() {
+    if (!activeTruck) return;
+    setSavingOverride(true);
+    try {
+      await updateTruck.mutateAsync({ id: activeTruck.id, values: { manual_total_miles_override: null } });
+      await refreshTrucks();
+      await invalidateFinancialData(queryClient);
+    } finally {
+      setSavingOverride(false);
+    }
+  }
 
   const fuelCost = useMemo(
     () => (fuelQuery.data ?? []).reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
@@ -89,17 +142,17 @@ export default function Scorecard() {
   }, [loansQuery.data, statsQuery.data]);
 
   const canonicalCpm = useMemo(() => {
-    if (!statsQuery.data) return null;
+    if (!statsQuery.data || !milesSource) return null;
     return calcCanonicalCpm(
       statsQuery.data.grossRevenue,
-      statsQuery.data.totalMiles,
+      milesSource.totalMiles,
       dedQuery.data ?? [],
       fuelQuery.data ?? [],
       maintenanceQuery.data ?? [],
       tollsQuery.data ?? [],
       loanPaymentEstimate
     );
-  }, [statsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, loanPaymentEstimate]);
+  }, [statsQuery.data, milesSource, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, loanPaymentEstimate]);
 
   // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
   // buildWeeklyTrend()'s bare settlement `.net` (net PAY only, ignoring
@@ -165,6 +218,14 @@ export default function Scorecard() {
                   {money(scorecard.revenuePerMile, { maximumFractionDigits: 2 })}
                 </Text>
               </View>
+              {statsQuery.data && statsQuery.data.loadedMiles > 0 && (
+                <View style={[styles.row, styles.rowBorder]}>
+                  <MutedText>{t('scorecard.revenuePerLoadedMile')}</MutedText>
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {money(statsQuery.data.grossRevenue / statsQuery.data.loadedMiles, { maximumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              )}
               <View style={[styles.row, styles.rowBorder]}>
                 <MutedText>{t('scorecard.fuelPerMile')}</MutedText>
                 <Text style={{ color: scorecard.fuelPerMile <= 0.65 ? colors.green : colors.red, fontWeight: '700' }}>
@@ -192,6 +253,35 @@ export default function Scorecard() {
                 </View>
               )}
             </Card>
+
+            {statsQuery.data && statsQuery.data.duplicateWeeksIgnored > 0 && (
+              <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
+                ⚠️ {t('scorecard.duplicateWeeksIgnored', { count: statsQuery.data.duplicateWeeksIgnored })}
+              </MutedText>
+            )}
+
+            {/* MANUAL TOTAL OVERRIDE (owner decision 2026-08-05, FULL
+                PARITY follow-up item B.3) — a banner naming which mile
+                source is currently driving CPM/RPM, with a one-tap way
+                back to the calculated figure. */}
+            {activeTruck && milesSource && (
+              <Card>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <MutedText>
+                      {milesSource.source === 'manual'
+                        ? t('scorecard.milesSourceManual', { miles: number(milesSource.totalMiles) })
+                        : t('scorecard.milesSourceSettlements', { miles: number(milesSource.totalMiles) })}
+                    </MutedText>
+                  </View>
+                  {milesSource.source === 'manual' ? (
+                    <SecondaryButton title={t('scorecard.useSettlementsInstead')} onPress={handleUseSettlementsInstead} loading={savingOverride} />
+                  ) : (
+                    <SecondaryButton title={t('scorecard.setManualTotal')} onPress={openOverrideEditor} />
+                  )}
+                </View>
+              </Card>
+            )}
 
             {canonicalCpm && canonicalCpm.buckets.length > 0 && (
               <>
@@ -273,6 +363,14 @@ export default function Scorecard() {
           )}
         />
       )}
+
+      <ModalSheet visible={editingOverride} onClose={() => setEditingOverride(false)}>
+        <SheetTitle>{t('scorecard.setManualTotalTitle')}</SheetTitle>
+        <MutedText>{t('scorecard.setManualTotalNote')}</MutedText>
+        <Field keyboardType="numeric" value={overrideDraft} onChangeText={setOverrideDraft} placeholder="0" />
+        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveOverride} loading={savingOverride} disabled={!overrideDraft} />
+        <SecondaryButton title={t('common.cancel')} onPress={() => setEditingOverride(false)} />
+      </ModalSheet>
     </Screen>
   );
 }

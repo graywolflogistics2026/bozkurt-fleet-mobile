@@ -15,6 +15,10 @@ export type Truck = {
   model: string | null;
   fleet_mpg: number | null;
   is_active: boolean;
+  // docs/PENDING_SQL.md §44 (owner decision 2026-08-05) — a user-entered
+  // odometer/ELD total that supersedes calcMiles()'s own calculated
+  // total for CPM/RPM. null = not set.
+  manual_total_miles_override: number | null;
 };
 
 type ActiveTruckContextValue = {
@@ -50,7 +54,7 @@ export function ActiveTruckProvider({ children }: { children: ReactNode }) {
       const result = await withTimeout(
         supabase
           .from('trucks')
-          .select('id, unit_number, vin, year, make, model, fleet_mpg, is_active')
+          .select('id, unit_number, vin, year, make, model, fleet_mpg, is_active, manual_total_miles_override')
           .eq('is_active', true)
           .order('created_at', { ascending: true }),
         STARTUP_TIMEOUT_MS,

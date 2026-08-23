@@ -2948,3 +2948,94 @@
   fragile against refactors; the query-key contract test is the durable
   regression guard, the grep audit itself was a one-time manual sweep.
   Full suite: 67 suites / 1628 tests pass; `tsc --noEmit` clean.
+- FULL PARITY FOLLOW-UP, PART B — CANONICAL MILES (owner decision
+  2026-08-05, web v2026.08.05-W chase, spec item B). Web computed miles
+  as a raw `sum(settlements.miles)` independently in several places, with
+  no dedup — a duplicate settlement week (two rows sharing the same
+  truck+week_ending, structurally rare on mobile thanks to CLAUDE.md
+  invariant #10's unique constraint, but real for any row saved before
+  that constraint existed or a legacy-backup import) silently DOUBLED
+  the miles total, which cascades into CPM/RPM being wrong by the same
+  factor. `app/src/stats/miles.ts`'s `calcMiles(settlements, loads)` is
+  now the ONE shared calculation: (1) dedupes by `${truck_id}|
+  ${week_ending}` (NOT `week_ending` alone — a real multi-truck fleet
+  routinely has every truck settle the same week, which must NOT be
+  treated as a duplicate) keeping whichever duplicate has the higher
+  reconciled total and counting the rest as `duplicateWeeksIgnored`; (2)
+  per week, `totalMiles = MAX(the settlement's own printed total, that
+  week's loads' loaded+empty sum)` — never SUMMED, which would double-
+  count whichever source is more complete; loaded/empty stay exactly
+  what the loads table says even when the settlement's own total wins
+  (never inflated to force a match); (3) exposes `loadedMiles`/
+  `emptyMiles`/`deadheadPct` (null, never NaN, when totalMiles is 0)
+  aggregated across all weeks. `app/src/data/dashboardStats.ts`'s
+  `computeFleetStats()`/`fetchFleetStats()`/`fetchDriverStats()` all now
+  route through `calcMiles()` (fetching `loads` alongside settlements) —
+  `FleetStats` gained `loadedMiles`/`emptyMiles`/`deadheadPct`/
+  `duplicateWeeksIgnored`. `calcCpm()` itself is UNCHANGED (still divides
+  by whatever total it's given — CLAUDE.md's existing CPM invariant that
+  it divides by TOTAL miles, not loaded, is preserved); only the total
+  fed into it is now the deduped/reconciled figure.
+  MANUAL TOTAL OVERRIDE (spec item B.3, docs/PENDING_SQL.md §44 —
+  `trucks.manual_total_miles_override numeric(12,2)`, NOT YET RUN as of
+  this writing): an odometer/ELD-sourced total the user enters
+  supersedes `calcMiles()`'s own calculated total for CPM/RPM purposes
+  only — loaded/empty/deadhead% stay from the weekly calc regardless
+  (an odometer reading has no loaded-vs-empty split of its own).
+  `resolveMilesTotal(calculated, manualOverride)` (`miles.ts`) is the
+  pure switch: a positive override wins, otherwise falls back to the
+  calculated total, returning which `source` is active so the UI can
+  label it. Wired into Scorecard (`app/(tabs)/more/scorecard.tsx`): a
+  banner names the active source ("Using manual total: N mi (odometer/
+  ELD)" vs. "Using settlements total: N mi") with a one-tap action to
+  either open the override editor (`ModalSheet` + `Field`, saves via
+  `useUpdateTruck()` then `refreshTrucks()` + `invalidateFinancialData()`
+  so every screen reading `activeTruck` or truck-derived stats picks up
+  the change) or revert to settlements (`handleUseSettlementsInstead()`,
+  clears the column back to null). `canonicalCpm` recomputes from
+  `resolveMilesTotal()`'s resolved total, not the raw calculated one.
+  KNOWN LIMITATION, flagged not hidden: the override lives on the
+  per-truck `trucks` row, but `useFleetStats()` is a fleet-wide (not
+  per-truck) query — applying a single active truck's override to a
+  fleet-wide total is only fully correct for the common single-truck
+  case (CLAUDE.md invariant #7's "n=1 is just the default presentation"
+  reasoning); a true multi-truck-aware override would need its own
+  per-truck stats plumbing, deferred as a v1.x follow-up rather than
+  silently claimed as fully correct for every fleet size.
+  SETTLEMENTS SCREEN (spec item B.3's "inline miles input on each
+  settlement row... plus a per-week editor"): the settlements list row
+  now shows an amber "⚠️ Miles missing — tap to add" in place of the
+  mileage figure whenever `x.miles` is falsy, and the settlement detail
+  sheet's existing Miles field gained the same amber treatment plus
+  inline editable input (`settlementsScreen.milesEditLabel`/
+  `milesEditLabelMissing`/`milesSaveFailedTitle`, all 7 locales) —
+  editing here writes directly to that settlement's own `miles` column
+  (the per-week figure `calcMiles()` itself reads), not the truck-level
+  manual override.
+  DUPLICATE SURFACING (spec item B.4): Scorecard shows an orange "N
+  duplicate settlement week(s) ignored — you may want to delete them"
+  banner whenever `duplicateWeeksIgnored > 0`, directly under the KPI
+  card.
+  REVENUE/LOADED MILE (spec item B.2's "show revenue per total mile AND
+  per loaded mile" — per-TOTAL-mile already existed as `revenuePerMile`,
+  reading from the canonical CPM's own total): added as its own row,
+  computed directly in the Scorecard screen component
+  (`grossRevenue / loadedMiles`, only rendered when `loadedMiles > 0`) —
+  deliberately NOT added inside `calcScorecard()` itself, which stays an
+  untouched verbatim legacy `rScore()` port per this file's own standing
+  rule.
+  Tests: `src/stats/__tests__/miles.test.ts` (new, 11 tests) — MAX()
+  reconciliation both directions, loaded/empty tracked independently,
+  deadhead% including the null-on-zero case, multi-truck-same-week NOT
+  deduped, same-truck-same-week duplicate correctly deduped (keeps the
+  higher total), null `week_ending` skipped, multi-week summing, and
+  every `resolveMilesTotal()` branch (null/undefined/manual/zero-or-
+  negative-treated-as-unset). `src/data/__tests__/dashboardStats.test.ts`
+  gained 3 tests: the loads pre-fetch shortcut (never re-queries `loads`
+  when already passed), the fallback-fetch path, and an end-to-end
+  duplicate-week dedup case seeding two same-truck-same-week settlement
+  rows and asserting the returned `totalMiles`/`duplicateWeeksIgnored`/
+  `cpm.costPerMile` all reflect the deduped figure, not a doubled one.
+  Full suite: 68 suites / 1678 tests pass; `tsc --noEmit` clean; all 7
+  locales confirmed key-parity (7 new `scorecard.*`/`settlementsScreen.*`
+  keys, hi/uk as untranslated English copies per invariant #11).

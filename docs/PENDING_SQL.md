@@ -1591,6 +1591,29 @@ No RLS change needed — both tables are already owner-scoped.
 
 ---
 
+## 44. trucks.manual_total_miles_override (FULL PARITY follow-up, owner decision 2026-08-05, spec item B.3)
+
+A user-entered odometer/ELD total that SUPERSEDES the app's own
+settlement/loads-derived mile calculation (`app/src/stats/miles.ts`
+`calcMiles()`) for CPM/RPM purposes — the spec's own explicit ask: "a
+manual TOTAL override (odometer/ELD) that supersedes the weekly figures
+— with a banner naming which source is in use and a one-tap 'use
+settlements instead'." Lives on `trucks` (miles are inherently a
+per-truck figure) — nullable, so "not set" (the default for every
+existing truck) falls straight back to the calculated total with zero
+behavior change.
+
+```sql
+alter table trucks
+  add column manual_total_miles_override numeric(12,2);
+```
+
+No RLS change needed — `trucks` is already owner-scoped.
+
+- [ ] 44a run (add trucks.manual_total_miles_override)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

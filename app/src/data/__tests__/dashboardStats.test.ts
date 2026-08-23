@@ -56,6 +56,44 @@ describe('fetchFleetStats deductions shortcut', () => {
   });
 });
 
+describe('fetchFleetStats canonical miles (owner decision 2026-08-05, FULL PARITY follow-up item B.1-2)', () => {
+  test('uses the passed-in loads array and never queries the loads table', async () => {
+    const fromSpy = jest.spyOn(mockClient, 'from');
+    const preloadedLoads = [{ settlement_id: 's1', loaded_miles: 900, empty_miles: 200 }];
+
+    const stats = await fetchFleetStats(USER_ID, 'truck-A', undefined, preloadedLoads);
+
+    expect(fromSpy.mock.calls.some((call) => call[0] === 'loads')).toBe(false);
+    expect(stats.loadedMiles).toBe(900);
+    expect(stats.emptyMiles).toBe(200);
+  });
+
+  test('falls back to fetching loads itself when none is passed', async () => {
+    // No loads seeded in the fake store — falls back to the settlement's
+    // own printed `miles` figure via calcMiles()'s max() reconciliation.
+    const stats = await fetchFleetStats(USER_ID, 'truck-A');
+    expect(stats.totalMiles).toBe(1000);
+    expect(stats.loadedMiles).toBe(0);
+    expect(stats.duplicateWeeksIgnored).toBe(0);
+  });
+
+  test('CPM divides by the canonical (deduped) totalMiles, not a raw sum', async () => {
+    mockClient = createFakeSupabase({
+      settlements: [
+        { id: 's1', user_id: USER_ID, truck_id: 'truck-A', driver_id: 'driver-A', week_ending: '2026-07-05', gross: 2000, net: 1600, miles: 1000, per_diem_days: 7 },
+        // A genuine duplicate — same truck, same week — must be deduped,
+        // never double-counted into totalMiles/CPM.
+        { id: 's1-dup', user_id: USER_ID, truck_id: 'truck-A', driver_id: 'driver-A', week_ending: '2026-07-05', gross: 0, net: 0, miles: 500, per_diem_days: 0 },
+      ],
+      deductions: [{ id: 'd1', user_id: USER_ID, amount: 300, source: 'manual', tax_deductible: true }],
+    });
+    const stats = await fetchFleetStats(USER_ID, 'truck-A');
+    expect(stats.totalMiles).toBe(1000); // the higher-total duplicate wins, never 1500
+    expect(stats.duplicateWeeksIgnored).toBe(1);
+    expect(stats.cpm.costPerMile).toBeCloseTo(300 / 1000, 5);
+  });
+});
+
 describe('fetchDriverStats deductions shortcut', () => {
   test('uses the passed-in deductions array and never queries the deductions table', async () => {
     const fromSpy = jest.spyOn(mockClient, 'from');

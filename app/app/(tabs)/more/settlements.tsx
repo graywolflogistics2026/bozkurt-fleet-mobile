@@ -84,9 +84,15 @@ export default function Settlements() {
   // user correcting an old "home week" that got the wrong smart default.
   const [perDiemDraft, setPerDiemDraft] = useState('');
   const [savingPerDiem, setSavingPerDiem] = useState(false);
+  // MILES MUST BE USER-CORRECTABLE (owner decision 2026-08-05, FULL
+  // PARITY follow-up item B.3) — miles is otherwise AI-extracted-only,
+  // with no way to fix a misread total short of re-importing.
+  const [milesDraft, setMilesDraft] = useState('');
+  const [savingMiles, setSavingMiles] = useState(false);
 
   useEffect(() => {
     setPerDiemDraft(selected ? String(selected.per_diem_days ?? 0) : '');
+    setMilesDraft(selected ? String(selected.miles ?? 0) : '');
   }, [selected]);
 
   async function handleSavePerDiem() {
@@ -101,6 +107,21 @@ export default function Settlements() {
       Alert.alert(t('settlementsScreen.perDiemSaveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
       setSavingPerDiem(false);
+    }
+  }
+
+  async function handleSaveMiles() {
+    if (!selected) return;
+    const miles = Math.max(0, Number(milesDraft) || 0);
+    setSavingMiles(true);
+    try {
+      const updated = await updateSettlement.mutateAsync({ id: selected.id, values: { miles } });
+      setSelected(updated);
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('settlementsScreen.milesSaveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setSavingMiles(false);
     }
   }
 
@@ -272,7 +293,9 @@ export default function Settlements() {
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <View>
                       <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
-                      <MutedText>{number(x.miles ?? 0)} mi</MutedText>
+                      <MutedText style={!x.miles ? { color: colors.orange, fontWeight: '700' } : undefined}>
+                        {!x.miles ? `⚠️ ${t('settlementsScreen.milesMissing')}` : `${number(x.miles)} mi`}
+                      </MutedText>
                       {/* UX MEGA-PASS item H: the per-settlement day count
                           breakdown visible at a glance in the list, not just
                           after tapping into the detail sheet. */}
@@ -319,6 +342,23 @@ export default function Settlements() {
                 <View>
                   <MutedText>{t('settlementsScreen.milesLabelShort')}</MutedText>
                   <Text style={styles.detailAmount}>{number(selected.miles ?? 0)}</Text>
+                </View>
+              </View>
+
+              <View style={{ marginBottom: spacing.sm }}>
+                <MutedText style={!selected.miles ? { color: colors.orange, fontWeight: '700' } : undefined}>
+                  {!selected.miles ? `⚠️ ${t('settlementsScreen.milesEditLabelMissing')}` : t('settlementsScreen.milesEditLabel')}
+                </MutedText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <View style={{ width: 100 }}>
+                    <Field keyboardType="numeric" value={milesDraft} onChangeText={setMilesDraft} placeholder="0" />
+                  </View>
+                  <SecondaryButton
+                    title={t('common.save')}
+                    onPress={handleSaveMiles}
+                    loading={savingMiles}
+                    disabled={milesDraft === String(selected.miles ?? 0)}
+                  />
                 </View>
               </View>
 

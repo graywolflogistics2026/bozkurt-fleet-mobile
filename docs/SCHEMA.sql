@@ -190,6 +190,11 @@ create table trucks (
   trailer_purchase_date  date,
   trailer_financing      text check (trailer_financing in ('cash', 'loan')),
   trailer_loan_id        uuid references loans on delete set null,
+  -- PENDING_SQL.md §44 (owner decision 2026-08-05) — a user-entered
+  -- odometer/ELD total mile reading that supersedes calcMiles()'s own
+  -- settlement/loads-derived total for CPM/RPM. null = not set, falls
+  -- back to the calculated total with zero behavior change.
+  manual_total_miles_override numeric(12,2),
   created_at   timestamptz default now()
 );
 
