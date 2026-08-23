@@ -2847,3 +2847,67 @@
   `tsc --noEmit` clean; all 7 locales confirmed key-parity (glossary test
   re-passed clean — every new string was written scope-checked against
   the DO-NOT-TRANSLATE list up front this time, no post-hoc fix needed).
+- FULL PARITY WITH WEB v2026.08.05-K, PART F — CASCADE DELETE, ASSET
+  REGISTER, DEDUCTIONS FILTER (owner decision 2026-08-05).
+  1. **CASCADE DELETE, the real gap**: `deductionMutations.ts`'s
+     `cleanupOrphanedDocument()` (already used by `deductions.tsx`'s
+     delete handler) used to only delete the `documents` DB ROW — the
+     actual uploaded file stayed in Storage forever, an invisible orphan.
+     Now reads the row's `storage_path` first and removes the Storage
+     object too (same `documents` bucket every upload writes to) BEFORE
+     deleting the row; a Storage-removal failure is logged but never
+     blocks the DB-row delete, since a broken "View Document" link (row
+     survives, storage_path 404s) is worse than a harmless orphaned
+     Storage object (row is gone, nothing points at it, sweepable later).
+     Second real gap: `maintenance.tsx`'s own delete handler never called
+     `cleanupOrphanedDocument()` at all — a maintenance record's linked
+     document/photo was NEVER cleaned up on delete, only a deduction's.
+     Fixed by wiring the same call there (fuel_purchases/tolls have no
+     `document_id` column at all, confirmed by re-checking their schemas,
+     so no equivalent gap exists for them). Truck Health's "last done"
+     mark needed NO code change — `calcTruckHealth()` already recomputes
+     baselines live from whatever `maintenance_records` rows currently
+     exist (no separate cached value to go stale), confirmed by re-
+     reading `src/truck/health.ts`'s `buildBaselines()`. Delete
+     confirmations on both screens now list what else gets removed
+     (`deductions.deleteConfirmBody`/`maintenance.deleteConfirmBody`) —
+     previously a bare title with no body text at all.
+  2. **Asset Register — audited, confirmed ALREADY unified**: the list
+     (`filteredAssets`), the stat cards (`buildAssetCategoryBreakdown`),
+     and the category filter pills all already derive from the SAME
+     `buildAssetRegister(deductions, todayIso)` call and the SAME
+     `ASSET_CATEGORIES` constant (`src/stats/assetRegister.ts`) — no
+     divergent "EQUIP-coded rows vs. category list" bug exists in this
+     codebase (that class of bug was specific to the web app this pass
+     is chasing parity with). The one real, fixed gap: selecting a
+     category filter with zero matching rows showed a generic "no
+     assets" message even when OTHER categories had real assets — now
+     shows `assetRegister.emptyFilterNote` plus a "Show All" link
+     (`assetRegister.showAllLink`) that resets the filter, instead of a
+     dead-end blank screen.
+  3. **Deductions screen — segmented origin filter** (spec item F.3):
+     the screen already showed BOTH Out-of-Pocket and Withheld sections
+     stacked, each with its own subtotal — a new All/Out-of-pocket/
+     Settlement pill row (`deductions.originFilterAll/OutOfPocket/
+     Withheld`) now lets a user show ONLY one section at a time, using
+     the exact same `groupDeductions()`/`isSettlementDed()` origin split
+     the stacked-sections view already computed — no new filtering
+     logic, just a toggle over which of the two existing sections render.
+  Tests: `deductionMutations.test.ts` (new) — exercises the REAL
+  `cleanupOrphanedDocument()` against an in-memory fake Supabase client:
+  a document with no remaining references gets both its row AND Storage
+  object removed; a document still referenced by a deduction/settlement/
+  maintenance_records row is untouched (row AND storage); a document
+  with no `storage_path` skips the Storage call entirely. Required
+  extending `fakeSupabase.ts`'s `.select()` to actually support
+  `{count:'exact', head:true}` (previously a no-op — `count` was always
+  `undefined`, which meant the 3 "still referenced" test cases silently
+  passed for the wrong reason: `cleanupOrphanedDocument` was deleting
+  referenced documents anyway, not correctly detecting them as
+  referenced — caught by the new tests failing, not a pre-existing
+  bug in the real function) and `.storage.from().remove()` (previously
+  entirely absent), both now shared by every other test file that
+  imports `fakeSupabase.ts`. Full suite: 67 suites / 1627 tests pass;
+  `tsc --noEmit` clean; all 7 locales confirmed key-parity (`Settlement`
+  correctly kept untranslated per the glossary's DO-NOT-TRANSLATE list
+  in every locale's new `originFilterWithheld` string).

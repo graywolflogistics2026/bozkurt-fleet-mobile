@@ -142,6 +142,14 @@ export default function Deductions() {
   // BETA FEEDBACK ROUND 2: Home's needs-review counter chip links here
   // with ?filter=needsReview to land with the toggle already on.
   const [needsReviewOnly, setNeedsReviewOnly] = useState(filter === 'needsReview');
+  // Segmented origin filter (owner decision 2026-08-05, FULL PARITY pass
+  // item F.3) — the SAME origin rule Part B's Accountant Package screen
+  // uses (a settlement-withheld row is never out-of-pocket): "All" keeps
+  // showing both sections stacked (unchanged default behavior); the other
+  // two options show ONLY that section, letting a user quickly answer
+  // "what did I pay out of pocket this month" without scrolling past the
+  // withheld section (or vice versa).
+  const [originFilter, setOriginFilter] = useState<'all' | 'outOfPocket' | 'withheld'>('all');
   const autoOpenedRef = useRef(false);
   const dedQuery = useDeductions();
   const insertDeduction = useInsertDeduction();
@@ -317,7 +325,7 @@ export default function Deductions() {
   }
 
   function handleDelete(x: Deduction) {
-    Alert.alert(t('deductions.deleteConfirmTitle'), undefined, [
+    Alert.alert(t('deductions.deleteConfirmTitle'), t('deductions.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
         text: t('common.delete'),
@@ -361,32 +369,50 @@ export default function Deductions() {
           />
         </View>
 
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
+          <Pill label={t('deductions.originFilterAll')} selected={originFilter === 'all'} onPress={() => setOriginFilter('all')} />
+          <Pill
+            label={t('deductions.originFilterOutOfPocket')}
+            selected={originFilter === 'outOfPocket'}
+            onPress={() => setOriginFilter('outOfPocket')}
+          />
+          <Pill
+            label={t('deductions.originFilterWithheld')}
+            selected={originFilter === 'withheld'}
+            onPress={() => setOriginFilter('withheld')}
+          />
+        </View>
+
         {dedQuery.isLoading ? (
           <Card>
             <MutedText>{t('common.loading')}</MutedText>
           </Card>
         ) : (
           <>
-            <DedSection
-              screenKey="deductions-outOfPocket"
-              title={t('deductions.outOfPocketTitle')}
-              subtitle={t('deductions.outOfPocketSubtitle')}
-              rows={outOfPocket}
-              total={outOfPocketTotal}
-              emptyLabel={t('deductions.outOfPocketEmpty')}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-            />
-            <DedSection
-              screenKey="deductions-withheld"
-              title={t('deductions.withheldTitle')}
-              subtitle={t('deductions.withheldSubtitle')}
-              rows={withheld}
-              total={withheldTotal}
-              emptyLabel={t('deductions.withheldEmpty')}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-            />
+            {originFilter !== 'withheld' && (
+              <DedSection
+                screenKey="deductions-outOfPocket"
+                title={t('deductions.outOfPocketTitle')}
+                subtitle={t('deductions.outOfPocketSubtitle')}
+                rows={outOfPocket}
+                total={outOfPocketTotal}
+                emptyLabel={t('deductions.outOfPocketEmpty')}
+                onEdit={openEdit}
+                onDelete={handleDelete}
+              />
+            )}
+            {originFilter !== 'outOfPocket' && (
+              <DedSection
+                screenKey="deductions-withheld"
+                title={t('deductions.withheldTitle')}
+                subtitle={t('deductions.withheldSubtitle')}
+                rows={withheld}
+                total={withheldTotal}
+                emptyLabel={t('deductions.withheldEmpty')}
+                onEdit={openEdit}
+                onDelete={handleDelete}
+              />
+            )}
           </>
         )}
       </ScrollView>

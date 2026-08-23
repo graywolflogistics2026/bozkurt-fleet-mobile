@@ -7,6 +7,7 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList, useUpdateTruck } from '@/src/data/trucks';
 import { useMaintenanceRecords, useInsertMaintenanceRecord, useUpdateMaintenanceRecord, useDeleteMaintenanceRecord } from '@/src/data/maintenanceRecords';
 import { useReimbursements } from '@/src/data/reimbursements';
+import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
@@ -285,7 +286,7 @@ export default function Maintenance() {
   }
 
   function handleDelete(rec: MaintenanceRecord) {
-    Alert.alert(t('maintenance.deleteConfirmTitle'), undefined, [
+    Alert.alert(t('maintenance.deleteConfirmTitle'), t('maintenance.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
         text: t('common.delete'),
@@ -299,6 +300,10 @@ export default function Maintenance() {
             // rather than a derived/cached value (CLAUDE.md invariant #5:
             // deleting recomputes from remaining records).
             await deleteRecord.mutateAsync(rec.id);
+            // CASCADE DELETE (owner decision 2026-08-05, FULL PARITY pass
+            // item F.1) — the linked document record + its Storage file,
+            // same cleanup deductions.tsx's own delete handler already does.
+            if (rec.document_id) await cleanupOrphanedDocument(rec.document_id);
             await invalidateFinancialData(queryClient);
           } catch (err) {
             Alert.alert(t('maintenance.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));

@@ -58,6 +58,20 @@ export async function applyContributionSync(
 // multiple deduction rows (qty/tax-fold lines all share one document_id —
 // app/src/import/mapExtraction.ts mapPurchase()), so only delete the
 // documents row once NOTHING still references it.
+//
+// CASCADE DELETE (owner decision 2026-08-05, FULL PARITY pass item F.1):
+// this used to only delete the `documents` DB ROW, leaving the actual
+// uploaded file sitting in Storage forever — an orphan the user would
+// never see again but that still counted against their storage. Now
+// reads the row's `storage_path` FIRST and removes the Storage object
+// too, in the same "documents" bucket every upload writes to
+// (CLAUDE.md's Storage-path convention). A Storage removal failure does
+// NOT block the documents-row delete from completing — the row itself
+// (the thing the user actually sees/searches) is the more important
+// half to clean up; a stray Storage object with no DB row pointing to it
+// is inert and can be swept up later, whereas a DB row with a 404'd
+// storage_path is a broken "View Document" link the user would hit
+// immediately.
 export async function cleanupOrphanedDocument(documentId: string): Promise<void> {
   const [dedResult, settResult, maintResult] = await Promise.all([
     supabase.from('deductions').select('id', { count: 'exact', head: true }).eq('document_id', documentId),
@@ -70,6 +84,14 @@ export async function cleanupOrphanedDocument(documentId: string): Promise<void>
 
   const stillReferenced = (dedResult.count ?? 0) > 0 || (settResult.count ?? 0) > 0 || (maintResult.count ?? 0) > 0;
   if (stillReferenced) return;
+
+  const { data: doc, error: fetchError } = await supabase.from('documents').select('storage_path').eq('id', documentId).maybeSingle();
+  if (fetchError) throw fetchError;
+
+  if (doc?.storage_path) {
+    const { error: storageError } = await supabase.storage.from('documents').remove([doc.storage_path]);
+    if (storageError) console.warn('cleanupOrphanedDocument: failed to remove Storage object', storageError);
+  }
 
   const { error } = await supabase.from('documents').delete().eq('id', documentId);
   if (error) throw error;

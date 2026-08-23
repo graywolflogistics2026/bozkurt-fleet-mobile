@@ -44,6 +44,7 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
     const filters: Array<(row: Row) => boolean> = [];
     let mode: 'select' | 'insert' | 'update' | 'delete' | null = null;
     let payload: Row | Row[] | null = null;
+    let wantsCount = false;
 
     function execute(): Row[] {
       const tableRows = store[table];
@@ -71,8 +72,8 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
       return tableRows.filter((row) => filters.every((f) => f(row)));
     }
 
-    const builder: PromiseLike<{ data: Row[] | null; error: FakeSupabaseError | null }> & {
-      select: (cols?: string) => typeof builder;
+    const builder: PromiseLike<{ data: Row[] | null; error: FakeSupabaseError | null; count?: number }> & {
+      select: (cols?: string, options?: { count?: 'exact'; head?: boolean }) => typeof builder;
       insert: (rows: Row | Row[]) => typeof builder;
       update: (patch: Row) => typeof builder;
       delete: () => typeof builder;
@@ -82,8 +83,9 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
       maybeSingle: () => Promise<{ data: Row | null; error: FakeSupabaseError | null }>;
       single: () => Promise<{ data: Row | null; error: FakeSupabaseError | null }>;
     } = {
-      select(_cols?: string) {
+      select(_cols?: string, options?: { count?: 'exact'; head?: boolean }) {
         if (!mode) mode = 'select';
+        if (options?.count) wantsCount = true;
         return builder;
       },
       insert(rows: Row | Row[]) {
@@ -127,7 +129,10 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
       },
       then(onfulfilled, onrejected) {
         const injected = takeFailure(table, mode ?? 'select');
-        const result = injected ? { data: null, error: injected } : { data: execute(), error: null };
+        const rows = injected ? null : execute();
+        const result = injected
+          ? { data: null, error: injected, ...(wantsCount ? { count: 0 } : {}) }
+          : { data: rows, error: null, ...(wantsCount ? { count: (rows as Row[]).length } : {}) };
         return Promise.resolve(result).then(onfulfilled, onrejected);
       },
     };
@@ -156,14 +161,29 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
     return { data: null, error: { message: `fakeSupabase: unknown RPC "${fnName}"` } };
   }
 
+  const removedStoragePaths: string[] = [];
+
   return {
     from,
     rpc,
     storage: {
       from() {
-        return { upload: async () => ({ data: {}, error: null }) };
+        return {
+          upload: async () => ({ data: {}, error: null }),
+          // CASCADE DELETE (owner decision 2026-08-05, FULL PARITY pass
+          // item F.1) — deductionMutations.ts's cleanupOrphanedDocument()
+          // calls this to remove the underlying Storage object once no
+          // row references its documents record anymore. Tracked in
+          // __removedStoragePaths so a test can assert exactly which
+          // paths got removed without needing a real Storage backend.
+          remove: async (paths: string[]) => {
+            removedStoragePaths.push(...paths);
+            return { data: paths.map((p) => ({ name: p })), error: null };
+          },
+        };
       },
     },
     __store: store,
+    __removedStoragePaths: removedStoragePaths,
   };
 }

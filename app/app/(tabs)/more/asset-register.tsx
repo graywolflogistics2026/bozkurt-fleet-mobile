@@ -426,7 +426,18 @@ export default function AssetRegister() {
           {dedQuery.isLoading ? (
             <MutedText>{t('common.loading')}</MutedText>
           ) : filteredAssets.length === 0 ? (
-            <MutedText>{t('assetRegister.empty')}</MutedText>
+            <>
+              <MutedText>
+                {filterCategory !== CATEGORY_FILTER_ALL && assets.length > 0
+                  ? t('assetRegister.emptyFilterNote', { category: filterCategory })
+                  : t('assetRegister.empty')}
+              </MutedText>
+              {filterCategory !== CATEGORY_FILTER_ALL && assets.length > 0 && (
+                <Pressable onPress={() => setFilterCategory(CATEGORY_FILTER_ALL)} hitSlop={8} style={{ marginTop: spacing.xs }}>
+                  <Text style={{ color: colors.accent, fontWeight: '700' }}>{t('assetRegister.showAllLink')}</Text>
+                </Pressable>
+              )}
+            </>
           ) : (
             filteredAssets.map((x, i) => (
               <View key={x.deduction.id} style={i > 0 ? styles.rowBorder : undefined}>
