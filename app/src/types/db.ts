@@ -47,6 +47,14 @@ export type Truck = {
   // odometer/ELD total that supersedes calcMiles()'s own calculated
   // total for CPM/RPM. null = not set.
   manual_total_miles_override: number | null;
+  // docs/PENDING_SQL.md §45 (owner decision 2026-08-05) — see
+  // app/src/stats/truckCostBasis.ts for how these are used. All null =
+  // "not set", never a silent $0-cost guess.
+  cost_basis_ownership_mode: 'paid' | 'loan' | 'lease' | null;
+  cost_basis_loan_monthly_payment: number | null;
+  cost_basis_paid_spread_months: number | null;
+  cost_basis_warranty_cost: number | null;
+  cost_basis_warranty_term_months: number | null;
   created_at: string;
   updated_at: string;
 };

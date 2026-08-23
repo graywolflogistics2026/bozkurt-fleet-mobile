@@ -7,14 +7,14 @@ import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
-import { useSettlements } from '@/src/data/settlements';
+import { useSettlements, useUpdateSettlement } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
-import { useLoanRows } from '@/src/data/loans';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useUpdateTruck } from '@/src/data/trucks';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
-import { calcCanonicalCpm, normalizeToWeeklyPayment } from '@/src/stats/cpm';
+import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
+import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import { resolveMilesTotal } from '@/src/stats/miles';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
@@ -47,13 +47,21 @@ export default function Scorecard() {
   const tollsQuery = useTolls();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
-  const loansQuery = useLoanRows();
   const { activeTruck, refreshTrucks } = useActiveTruck();
   const updateTruck = useUpdateTruck();
+  const updateSettlement = useUpdateSettlement();
 
   const [refreshing, setRefreshing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const companyName = profile?.company_name?.trim() || null;
+
+  // CPM "Why?" breakdown (owner decision 2026-08-05, FULL PARITY
+  // follow-up item C.4) — the KPI card stays clean; the full per-bucket/
+  // fixed-vs-variable/excluded-one-offs/settlements-missing-miles detail
+  // lives behind this one action.
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [missingMilesDrafts, setMissingMilesDrafts] = useState<Record<string, string>>({});
+  const [savingMissingMilesId, setSavingMissingMilesId] = useState<string | null>(null);
 
   // MANUAL TOTAL OVERRIDE (owner decision 2026-08-05, FULL PARITY
   // follow-up item B.3) — a user-entered odometer/ELD total supersedes
@@ -114,6 +122,27 @@ export default function Scorecard() {
     }
   }
 
+  async function handleSaveMissingMiles(settlementId: string) {
+    const draft = missingMilesDrafts[settlementId];
+    const miles = Math.max(0, Number(draft) || 0);
+    setSavingMissingMilesId(settlementId);
+    try {
+      await updateSettlement.mutateAsync({ id: settlementId, values: { miles } });
+      await invalidateFinancialData(queryClient);
+    } finally {
+      setSavingMissingMilesId(null);
+    }
+  }
+
+  // "settlements with revenue but no miles" (spec item C.4) — surfaced in
+  // the Why? breakdown with an inline miles input, same fix as
+  // Settlements' own inline editing (item B.3) but reachable right from
+  // the CPM breakdown that's actually affected by the gap.
+  const settlementsMissingMiles = useMemo(
+    () => (settlementsQuery.data ?? []).filter((s) => !s.miles && Number(s.gross ?? 0) > 0),
+    [settlementsQuery.data]
+  );
+
   const fuelCost = useMemo(
     () => (fuelQuery.data ?? []).reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
     [fuelQuery.data]
@@ -124,23 +153,33 @@ export default function Scorecard() {
     return calcScorecard(statsQuery.data.grossRevenue, statsQuery.data.totalDeductions, statsQuery.data.totalMiles, fuelCost);
   }, [statsQuery.data, fuelCost]);
 
+  // TRUCK COST BASIS (owner decision 2026-08-05, FULL PARITY follow-up
+  // item C.1-2) — the active truck's OWN declared ownership cost
+  // (paid/loan/lease + extended warranty), NEVER a synthetic estimate
+  // summed from every Loan Center row on the account (the approach that
+  // produced $8.48/mi on web). See src/stats/truckCostBasis.ts for the
+  // full rule set.
+  const carrierWithholdsLoan = useMemo(() => carrierWithholdsLoanPayment(dedQuery.data ?? []), [dedQuery.data]);
+
+  const truckCostBasis = useMemo(() => {
+    if (!activeTruck) return null;
+    return calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan);
+  }, [activeTruck, carrierWithholdsLoan]);
+
+  const truckFixedCostTotal = useMemo(() => {
+    if (!truckCostBasis) return 0;
+    return truckCostBasis.weeklyFixedTotal * (statsQuery.data?.settlementCount ?? 0);
+  }, [truckCostBasis, statsQuery.data]);
+
   // FULL PARITY pass (owner decision 2026-08-05, spec item C.4) —
   // Cost/Mile now reads the canonical, per-bucket CPM engine
   // (src/stats/cpm.ts calcCanonicalCpm(), sharing calcTrueProfit()'s own
   // Meals/Advance Repayment/Escrow exclusions and fuel/maintenance/tolls
   // inclusion) instead of the legacy calcCpm()'s raw "ALL deductions"
   // total, which counted non-expenses as if they were real operating
-  // costs. The estimated loan/lease payment is only added when NO
-  // settlement-withheld 'Truck/Trailer Payments' row already exists —
-  // see calcCanonicalCpm()'s own header comment for why.
-  const loanPaymentEstimate = useMemo(() => {
-    const weeklyTotal = (loansQuery.data ?? []).reduce(
-      (sum, l) => sum + normalizeToWeeklyPayment(Number(l.payment ?? 0), l.frequency),
-      0
-    );
-    return weeklyTotal * (statsQuery.data?.settlementCount ?? 0);
-  }, [loansQuery.data, statsQuery.data]);
-
+  // costs. The truck cost basis is only added when NO settlement-withheld
+  // 'Truck/Trailer Payments' row already exists — see
+  // calcCanonicalCpm()'s own header comment for why.
   const canonicalCpm = useMemo(() => {
     if (!statsQuery.data || !milesSource) return null;
     return calcCanonicalCpm(
@@ -150,9 +189,9 @@ export default function Scorecard() {
       fuelQuery.data ?? [],
       maintenanceQuery.data ?? [],
       tollsQuery.data ?? [],
-      loanPaymentEstimate
+      truckFixedCostTotal
     );
-  }, [statsQuery.data, milesSource, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, loanPaymentEstimate]);
+  }, [statsQuery.data, milesSource, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, truckFixedCostTotal]);
 
   // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
   // buildWeeklyTrend()'s bare settlement `.net` (net PAY only, ignoring
@@ -240,7 +279,14 @@ export default function Scorecard() {
               </View>
               {canonicalCpm && (
                 <View style={[styles.row, styles.rowBorder]}>
-                  <MutedText>{t('scorecard.costPerMile')}</MutedText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <MutedText>{t('scorecard.costPerMile')}</MutedText>
+                    <Pressable onPress={() => setWhyOpen(true)} hitSlop={8}>
+                      <Text style={{ color: colors.accent, fontWeight: '700', fontSize: typography.size.xs }}>
+                        {t('scorecard.whyLink')}
+                      </Text>
+                    </Pressable>
+                  </View>
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
                     {canonicalCpm.costPerMile != null ? money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }) : '—'}
                   </Text>
@@ -253,6 +299,30 @@ export default function Scorecard() {
                 </View>
               )}
             </Card>
+
+            {/* FIXED vs VARIABLE (spec item C.3) — "variable adds cash
+                today, total covers everything." */}
+            {canonicalCpm && canonicalCpm.costPerMile != null && (
+              <MutedText style={{ marginTop: spacing.xs }}>
+                {t('scorecard.fixedVariableSummary', {
+                  variable: money(canonicalCpm.variableCostPerMile ?? 0, { maximumFractionDigits: 2 }),
+                  total: money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }),
+                })}
+              </MutedText>
+            )}
+
+            {/* CPM/MILES WARNINGS (spec item C.4: "warn when CPM > $4 or
+                miles missing"). */}
+            {canonicalCpm && canonicalCpm.costPerMile != null && canonicalCpm.costPerMile > 4 && (
+              <MutedText style={{ color: colors.red, marginTop: spacing.xs, fontWeight: '700' }}>
+                ⚠️ {t('scorecard.cpmTooHighWarning', { cpm: money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }) })}
+              </MutedText>
+            )}
+            {statsQuery.data && statsQuery.data.totalMiles <= 0 && (
+              <MutedText style={{ color: colors.orange, marginTop: spacing.xs, fontWeight: '700' }}>
+                ⚠️ {t('scorecard.milesMissingWarning')}
+              </MutedText>
+            )}
 
             {statsQuery.data && statsQuery.data.duplicateWeeksIgnored > 0 && (
               <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
@@ -281,26 +351,6 @@ export default function Scorecard() {
                   )}
                 </View>
               </Card>
-            )}
-
-            {canonicalCpm && canonicalCpm.buckets.length > 0 && (
-              <>
-                <Text style={styles.sectionTitle}>{t('scorecard.cpmBreakdownTitle')}</Text>
-                <Card>
-                  {canonicalCpm.buckets.map((b, i) => (
-                    <View key={b.category} style={[styles.row, i > 0 && styles.rowBorder]}>
-                      <MutedText>{b.category}</MutedText>
-                      <Text style={{ color: colors.text, fontWeight: '600' }}>{money(b.amount)}</Text>
-                    </View>
-                  ))}
-                  {canonicalCpm.excludedTotal > 0 && (
-                    <View style={[styles.row, styles.rowBorder]}>
-                      <MutedText>{t('scorecard.cpmExcludedTotal')}</MutedText>
-                      <MutedText>{money(canonicalCpm.excludedTotal)}</MutedText>
-                    </View>
-                  )}
-                </Card>
-              </>
             )}
 
             {weeklyTrend.length > 0 && (
@@ -371,6 +421,159 @@ export default function Scorecard() {
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveOverride} loading={savingOverride} disabled={!overrideDraft} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setEditingOverride(false)} />
       </ModalSheet>
+
+      {/* CPM "Why?" full breakdown (spec item C.4) — everything the clean
+          KPI card intentionally leaves out. */}
+      <ModalSheet visible={whyOpen} onClose={() => setWhyOpen(false)}>
+        <SheetTitle>{t('scorecard.whyTitle')}</SheetTitle>
+        {statsQuery.data && (
+          <>
+            <Text style={styles.whySectionTitle}>{t('scorecard.whyMilesTitle')}</Text>
+            <View style={styles.row}>
+              <MutedText>{t('scorecard.whyTotalMiles')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(statsQuery.data.totalMiles)}</Text>
+            </View>
+            <View style={[styles.row, styles.rowBorder]}>
+              <MutedText>{t('scorecard.whyLoadedMiles')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(statsQuery.data.loadedMiles)}</Text>
+            </View>
+            <View style={[styles.row, styles.rowBorder]}>
+              <MutedText>{t('scorecard.whyEmptyMiles')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(statsQuery.data.emptyMiles)}</Text>
+            </View>
+            {statsQuery.data.deadheadPct != null && (
+              <View style={[styles.row, styles.rowBorder]}>
+                <MutedText>{t('scorecard.whyDeadheadPct')}</MutedText>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>
+                  {number(statsQuery.data.deadheadPct * 100, { maximumFractionDigits: 1 })}%
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {canonicalCpm && (
+          <>
+            {canonicalCpm.revenuePerMile != null && (
+              <>
+                <Text style={styles.whySectionTitle}>{t('scorecard.whyRpmPpmTitle')}</Text>
+                <View style={styles.row}>
+                  <MutedText>{t('scorecard.whyRpm')}</MutedText>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>
+                    {money(canonicalCpm.revenuePerMile, { maximumFractionDigits: 2 })}
+                  </Text>
+                </View>
+                <View style={[styles.row, styles.rowBorder]}>
+                  <MutedText>{t('scorecard.whyPpm')}</MutedText>
+                  <Text style={{ color: canonicalCpm.profitPerMile != null && canonicalCpm.profitPerMile >= 0 ? colors.green : colors.red, fontWeight: '600' }}>
+                    {canonicalCpm.profitPerMile != null ? money(canonicalCpm.profitPerMile, { maximumFractionDigits: 2 }) : '—'}
+                  </Text>
+                </View>
+              </>
+            )}
+
+            <Text style={styles.whySectionTitle}>{t('scorecard.whyBucketsTitle')}</Text>
+            {canonicalCpm.buckets.map((b, i) => (
+              <View key={b.category} style={[styles.row, i > 0 && styles.rowBorder]}>
+                <MutedText>
+                  {b.category} · {t(`scorecard.cpmType.${b.type}`)}
+                </MutedText>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>{money(b.amount)}</Text>
+                  {statsQuery.data && statsQuery.data.totalMiles > 0 && (
+                    <MutedText style={{ fontSize: typography.size.xs }}>
+                      {money(b.amount / statsQuery.data.totalMiles, { maximumFractionDigits: 2 })}/mi
+                    </MutedText>
+                  )}
+                </View>
+              </View>
+            ))}
+            <View style={[styles.row, styles.rowBorder]}>
+              <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyFixedTotal')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{money(canonicalCpm.fixedTotal)}</Text>
+            </View>
+            <View style={[styles.row, styles.rowBorder]}>
+              <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyVariableTotal')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{money(canonicalCpm.variableTotal)}</Text>
+            </View>
+
+            {truckCostBasis && (
+              <>
+                <Text style={styles.whySectionTitle}>{t('scorecard.whyFixedSpreadTitle')}</Text>
+                {!truckCostBasis.isConfigured ? (
+                  <MutedText>{t('scorecard.whyFixedSpreadNotSet')}</MutedText>
+                ) : (
+                  <>
+                    <View style={styles.row}>
+                      <MutedText>{t('scorecard.whyOwnershipMode')}</MutedText>
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>
+                        {t(`scorecard.ownershipMode.${activeTruck?.cost_basis_ownership_mode ?? 'paid'}`)}
+                      </Text>
+                    </View>
+                    <View style={[styles.row, styles.rowBorder]}>
+                      <MutedText>{t('scorecard.whyWeeklyTruckPayment')}</MutedText>
+                      <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyTruckPayment)}</Text>
+                    </View>
+                    {truckCostBasis.weeklyWarranty > 0 && (
+                      <View style={[styles.row, styles.rowBorder]}>
+                        <MutedText>{t('scorecard.whyWeeklyWarranty')}</MutedText>
+                        <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyWarranty)}</Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {canonicalCpm.excludedOneOffs.length > 0 && (
+              <>
+                <Text style={styles.whySectionTitle}>{t('scorecard.whyExcludedOneOffsTitle')}</Text>
+                <MutedText>{t('scorecard.whyExcludedOneOffsNote')}</MutedText>
+                {canonicalCpm.excludedOneOffs.map((item, i) => (
+                  <View key={`${item.description}-${i}`} style={[styles.row, i > 0 && styles.rowBorder]}>
+                    <MutedText style={{ flex: 1 }}>{item.description}</MutedText>
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{money(item.amount)}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {canonicalCpm.excludedTotal > 0 && (
+              <View style={[styles.row, styles.rowBorder]}>
+                <MutedText>{t('scorecard.cpmExcludedTotal')}</MutedText>
+                <MutedText>{money(canonicalCpm.excludedTotal)}</MutedText>
+              </View>
+            )}
+          </>
+        )}
+
+        {settlementsMissingMiles.length > 0 && (
+          <>
+            <Text style={styles.whySectionTitle}>{t('scorecard.whyMissingMilesTitle')}</Text>
+            {settlementsMissingMiles.map((s) => (
+              <View key={s.id} style={[styles.row, styles.rowBorder, { alignItems: 'center' }]}>
+                <MutedText style={{ flex: 1 }}>{s.week_ending}</MutedText>
+                <View style={{ width: 90 }}>
+                  <Field
+                    keyboardType="numeric"
+                    value={missingMilesDrafts[s.id] ?? ''}
+                    onChangeText={(v) => setMissingMilesDrafts((prev) => ({ ...prev, [s.id]: v }))}
+                    placeholder="0"
+                  />
+                </View>
+                <SecondaryButton
+                  title={t('common.save')}
+                  onPress={() => handleSaveMissingMiles(s.id)}
+                  loading={savingMissingMilesId === s.id}
+                  disabled={!missingMilesDrafts[s.id]}
+                />
+              </View>
+            ))}
+          </>
+        )}
+
+        <SecondaryButton title={t('common.close')} onPress={() => setWhyOpen(false)} />
+      </ModalSheet>
     </Screen>
   );
 }
@@ -379,6 +582,13 @@ const styles = {
   sectionTitle: {
     color: colors.text,
     fontSize: typography.size.md,
+    fontWeight: '700' as const,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  whySectionTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
     fontWeight: '700' as const,
     marginTop: spacing.md,
     marginBottom: spacing.xs,

@@ -27,6 +27,14 @@ type FormState = {
   financing: AssetFinancingValue;
   trailer_unit_number: string;
   trailerFinancing: AssetFinancingValue;
+  // TRUCK COST BASIS (owner decision 2026-08-05, FULL PARITY follow-up
+  // item C.1) — feeds the Scorecard CPM "Why?" breakdown's fixed truck
+  // payment. See app/src/stats/truckCostBasis.ts.
+  costBasisOwnershipMode: 'paid' | 'loan' | 'lease' | '';
+  costBasisLoanMonthlyPayment: string;
+  costBasisPaidSpreadMonths: string;
+  costBasisWarrantyCost: string;
+  costBasisWarrantyTermMonths: string;
 };
 
 function emptyForm(): FormState {
@@ -41,6 +49,11 @@ function emptyForm(): FormState {
     financing: emptyAssetFinancing(),
     trailer_unit_number: '',
     trailerFinancing: emptyAssetFinancing(),
+    costBasisOwnershipMode: '',
+    costBasisLoanMonthlyPayment: '',
+    costBasisPaidSpreadMonths: '',
+    costBasisWarrantyCost: '',
+    costBasisWarrantyTermMonths: '',
   };
 }
 
@@ -66,6 +79,11 @@ function truckToForm(t: Truck): FormState {
       financing: t.trailer_financing ?? '',
       loan_id: t.trailer_loan_id,
     },
+    costBasisOwnershipMode: t.cost_basis_ownership_mode ?? '',
+    costBasisLoanMonthlyPayment: t.cost_basis_loan_monthly_payment != null ? String(t.cost_basis_loan_monthly_payment) : '',
+    costBasisPaidSpreadMonths: t.cost_basis_paid_spread_months != null ? String(t.cost_basis_paid_spread_months) : '',
+    costBasisWarrantyCost: t.cost_basis_warranty_cost != null ? String(t.cost_basis_warranty_cost) : '',
+    costBasisWarrantyTermMonths: t.cost_basis_warranty_term_months != null ? String(t.cost_basis_warranty_term_months) : '',
   };
 }
 
@@ -111,6 +129,11 @@ export default function Trucks() {
       trailer_purchase_date: form.trailerFinancing.purchase_date || null,
       trailer_financing: form.trailerFinancing.financing || null,
       trailer_loan_id: form.trailerFinancing.financing === 'loan' ? form.trailerFinancing.loan_id : null,
+      cost_basis_ownership_mode: form.costBasisOwnershipMode || null,
+      cost_basis_loan_monthly_payment: form.costBasisLoanMonthlyPayment ? Number(form.costBasisLoanMonthlyPayment) || null : null,
+      cost_basis_paid_spread_months: form.costBasisPaidSpreadMonths ? Number(form.costBasisPaidSpreadMonths) || null : null,
+      cost_basis_warranty_cost: form.costBasisWarrantyCost ? Number(form.costBasisWarrantyCost) || null : null,
+      cost_basis_warranty_term_months: form.costBasisWarrantyTermMonths ? Number(form.costBasisWarrantyTermMonths) || null : null,
     };
   }
 
@@ -236,6 +259,65 @@ export default function Trucks() {
           onChange={(trailerFinancing) => setForm({ ...form, trailerFinancing })}
           loans={loans}
           onCreateLoan={createLoan}
+        />
+
+        <Text style={styles.sectionTitle}>{t('trucks.costBasisTitle')}</Text>
+        <MutedText>{t('trucks.costBasisNote')}</MutedText>
+        <MutedText>{t('trucks.costBasisOwnershipModeLabel')}</MutedText>
+        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs }}>
+          {(['paid', 'loan', 'lease'] as const).map((option) => (
+            <Pressable
+              key={option}
+              onPress={() => setForm({ ...form, costBasisOwnershipMode: option })}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 14,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: form.costBasisOwnershipMode === option ? colors.accent : colors.border,
+                backgroundColor: form.costBasisOwnershipMode === option ? colors.accent : colors.card2,
+              }}
+            >
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{t(`trucks.ownershipMode.${option}`)}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {form.costBasisOwnershipMode === 'loan' && (
+          <>
+            <MutedText>{t('trucks.costBasisLoanMonthlyPaymentLabel')}</MutedText>
+            <Field
+              keyboardType="numeric"
+              value={form.costBasisLoanMonthlyPayment}
+              onChangeText={(v) => setForm({ ...form, costBasisLoanMonthlyPayment: v })}
+              placeholder="0"
+            />
+          </>
+        )}
+        {form.costBasisOwnershipMode === 'paid' && (
+          <>
+            <MutedText>{t('trucks.costBasisPaidSpreadMonthsLabel')}</MutedText>
+            <Field
+              keyboardType="numeric"
+              value={form.costBasisPaidSpreadMonths}
+              onChangeText={(v) => setForm({ ...form, costBasisPaidSpreadMonths: v })}
+              placeholder="60"
+            />
+          </>
+        )}
+        {form.costBasisOwnershipMode === 'lease' && <MutedText>{t('trucks.costBasisLeaseNote')}</MutedText>}
+        <MutedText>{t('trucks.costBasisWarrantyCostLabel')}</MutedText>
+        <Field
+          keyboardType="numeric"
+          value={form.costBasisWarrantyCost}
+          onChangeText={(v) => setForm({ ...form, costBasisWarrantyCost: v })}
+          placeholder="0"
+        />
+        <MutedText>{t('trucks.costBasisWarrantyTermMonthsLabel')}</MutedText>
+        <Field
+          keyboardType="numeric"
+          value={form.costBasisWarrantyTermMonths}
+          onChangeText={(v) => setForm({ ...form, costBasisWarrantyTermMonths: v })}
+          placeholder="0"
         />
       </>
     );

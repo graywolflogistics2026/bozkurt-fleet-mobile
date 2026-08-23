@@ -3039,3 +3039,90 @@
   Full suite: 68 suites / 1678 tests pass; `tsc --noEmit` clean; all 7
   locales confirmed key-parity (7 new `scorecard.*`/`settlementsScreen.*`
   keys, hi/uk as untranslated English copies per invariant #11).
+- FULL PARITY FOLLOW-UP, PART C — CPM DONE THE WAY OWNER-OPERATORS DO IT
+  (owner decision 2026-08-05, web v2026.08.05-W chase, spec item C).
+  TRUCK COST BASIS (docs/PENDING_SQL.md §45, NOT YET RUN as of this
+  writing — `trucks.cost_basis_ownership_mode` (`'paid'|'loan'|'lease'`),
+  `cost_basis_loan_monthly_payment`, `cost_basis_paid_spread_months`,
+  `cost_basis_warranty_cost`, `cost_basis_warranty_term_months`;
+  `purchase_price` from docs/PENDING_SQL.md §36 is reused as-is for the
+  'paid' mode's spread) replaces CPM's previous "sum every Loan Center
+  row on the account and multiply by settlement count" approach — a
+  synthetic estimate with no relationship to the ACTIVE truck's own
+  financing that produced $8.48/mi on web (spec item C.2, "NEVER a
+  synthetic loan estimate"). `app/src/stats/truckCostBasis.ts`'s
+  `calcTruckCostBasisWeekly(truck, carrierAlreadyWithholdsLoanPayment)`
+  is the one rule set: `lease` adds $0 (the settlement withholding
+  already counts it — adding a second figure would double it); `loan`
+  uses the FIXED `cost_basis_loan_monthly_payment` the owner enters once
+  (never re-derived from a Loan Center schedule, which may not exist for
+  this truck or may reflect a refinance this module can't reason about),
+  skipped when the carrier already withholds it; `paid` spreads
+  `purchase_price / cost_basis_paid_spread_months`. An extended warranty
+  (`cost_basis_warranty_cost / cost_basis_warranty_term_months`) is a
+  separate fixed cost added on top of whichever mode applies. Editable on
+  the Trucks screen's existing add/edit form, right under Purchase &
+  Financing — an unconfigured truck (`cost_basis_ownership_mode` null)
+  contributes exactly $0, never a guess, with a "not set" prompt in the
+  CPM "Why?" breakdown (below) rather than silently assuming zero fixed
+  cost is correct.
+  FIXED vs VARIABLE (spec item C.3): `app/src/stats/cpm.ts`'s
+  `CanonicalCpmResult` gained `fixedTotal`/`variableTotal`/
+  `fixedCostPerMile`/`variableCostPerMile`, and every `CpmBucket` now
+  carries its own `type: 'fixed'|'variable'`
+  (`CPM_BUCKET_TYPE` — Insurance/Permits/ELD & Software/Dues/Professional
+  Services/Loan-Lease Payment are fixed; Fuel/Maintenance/Tolls/Parking &
+  Lodging/Dispatch & Factoring/Driver Pay are variable; an unmapped
+  category defaults to variable, the safer assumption for "how much does
+  one more mile cost"). Scorecard shows this as one line: "Variable
+  $X/mi adds cash today. Total $Y/mi covers everything"
+  (`scorecard.fixedVariableSummary`).
+  EXCLUDED ONE-OFFS (spec item C.2's "exclude multi-year one-offs and
+  vehicle purchases from per-mile while keeping them as expenses/
+  assets"): `calcCanonicalCpm()` now excludes (a) any deduction category
+  `'Major Repairs & Overhauls'` (the existing >$2,500 major-component
+  threshold from the category-taxonomy pass) and (b) any deduction whose
+  description matches `app/src/import/category.ts`'s new
+  `isVehiclePurchaseOneOff()` (down payment/truck-trailer-tractor-vehicle
+  purchase phrasing — covers a purchase logged as a plain deduction
+  instead of via `trucks.purchase_price`) from the per-mile figure
+  ENTIRELY — a five-figure one-time cost divided across one week's miles
+  would spike CPM to something meaningless. These rows are NEVER excluded
+  from P&L/tax/true-profit — this function doesn't touch those totals —
+  only from CPM's own per-mile math. Returned as `excludedOneOffs:
+  {description, amount, reason}[]`, kept deliberately separate from the
+  pre-existing `excludedTotal` (Meals/Advance Repayment/Escrow — non-
+  expenses, not one-offs) so the Why? breakdown can label each correctly.
+  WARNINGS (spec item C.4's "warn when CPM > $4 or miles missing"):
+  Scorecard shows a red banner when `costPerMile > 4`
+  (`scorecard.cpmTooHighWarning`) and an orange one when
+  `statsQuery.data.totalMiles <= 0` (`scorecard.milesMissingWarning`).
+  "WHY?" BREAKDOWN (spec item C.4's "keep the card clean, full breakdown
+  behind a 'Why?' action"): the KPI card's Cost/Mile row now shows a
+  small "Why?" link instead of an always-visible bucket list (the
+  previous pass's inline `cpmBreakdownTitle` Card was removed). Opens a
+  `ModalSheet` with: total/loaded/empty miles + deadhead % (from
+  `calcMiles()`, PART B); RPM/PPM; every cost bucket with its per-mile
+  share and fixed/variable tag; fixed vs. variable subtotals; "how your
+  fixed truck cost was spread" (the truck cost basis's own ownership
+  mode + weekly truck payment + weekly warranty, or a "not set" prompt
+  linking to the Trucks screen); the excluded-one-offs list with an
+  explanatory note; the pre-existing excluded (meals/advances/escrow)
+  total; and — spec item C.4's own explicit ask — every settlement with
+  revenue but no miles, each with an inline miles `Field` + Save button
+  wired to the same `useUpdateSettlement()`/`invalidateFinancialData()`
+  pattern as Settlements' own inline editing (PART B), reachable right
+  from the breakdown that's actually affected by the gap instead of only
+  from the Settlements screen.
+  Tests: `src/stats/__tests__/truckCostBasis.test.ts` (new, 8 tests) —
+  unconfigured/lease/loan/paid modes, the loan-skip-when-withheld guard,
+  a zero-months divide-by-zero guard, warranty as an additive fixed cost,
+  and the weeklyFixedTotal sum. `src/stats/__tests__/cpm.test.ts` gained
+  5 tests — the fixed/variable split, a truck-cost-basis payment
+  classified fixed, a Major Repairs & Overhauls one-off excluded from
+  cost/mile while listed separately, and a vehicle-purchase-shaped
+  deduction (e.g. "Truck down payment") excluded the same way.
+  Full suite: 69 suites / 1720 tests pass; `tsc --noEmit` clean; all 7
+  locales confirmed key-parity (new `scorecard.why*`/`scorecard.cpmType.*`/
+  `scorecard.ownershipMode.*` and `trucks.costBasis*`/
+  `trucks.ownershipMode.*` keys, hi/uk as untranslated English copies).

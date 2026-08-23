@@ -195,6 +195,15 @@ create table trucks (
   -- settlement/loads-derived total for CPM/RPM. null = not set, falls
   -- back to the calculated total with zero behavior change.
   manual_total_miles_override numeric(12,2),
+  -- PENDING_SQL.md §45 (owner decision 2026-08-05) — the truck's own
+  -- fixed weekly cost basis, replacing CPM's old "sum every Loan Center
+  -- row" synthetic estimate. All nullable; app/src/stats/truckCostBasis.ts
+  -- computes $0 (with a "not set" UI prompt) when unconfigured.
+  cost_basis_ownership_mode text check (cost_basis_ownership_mode in ('paid','loan','lease')),
+  cost_basis_loan_monthly_payment numeric(12,2),
+  cost_basis_paid_spread_months integer,
+  cost_basis_warranty_cost numeric(12,2),
+  cost_basis_warranty_term_months integer,
   created_at   timestamptz default now()
 );
 

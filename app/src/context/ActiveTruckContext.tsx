@@ -15,10 +15,18 @@ export type Truck = {
   model: string | null;
   fleet_mpg: number | null;
   is_active: boolean;
+  purchase_price: number | null;
   // docs/PENDING_SQL.md §44 (owner decision 2026-08-05) — a user-entered
   // odometer/ELD total that supersedes calcMiles()'s own calculated
   // total for CPM/RPM. null = not set.
   manual_total_miles_override: number | null;
+  // docs/PENDING_SQL.md §45 (owner decision 2026-08-05) — see
+  // app/src/stats/truckCostBasis.ts.
+  cost_basis_ownership_mode: 'paid' | 'loan' | 'lease' | null;
+  cost_basis_loan_monthly_payment: number | null;
+  cost_basis_paid_spread_months: number | null;
+  cost_basis_warranty_cost: number | null;
+  cost_basis_warranty_term_months: number | null;
 };
 
 type ActiveTruckContextValue = {
@@ -54,7 +62,9 @@ export function ActiveTruckProvider({ children }: { children: ReactNode }) {
       const result = await withTimeout(
         supabase
           .from('trucks')
-          .select('id, unit_number, vin, year, make, model, fleet_mpg, is_active, manual_total_miles_override')
+          .select(
+            'id, unit_number, vin, year, make, model, fleet_mpg, is_active, purchase_price, manual_total_miles_override, cost_basis_ownership_mode, cost_basis_loan_monthly_payment, cost_basis_paid_spread_months, cost_basis_warranty_cost, cost_basis_warranty_term_months'
+          )
           .eq('is_active', true)
           .order('created_at', { ascending: true }),
         STARTUP_TIMEOUT_MS,

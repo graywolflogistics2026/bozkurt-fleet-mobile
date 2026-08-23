@@ -673,7 +673,20 @@
     "hideRetired": "Скрыть выведенные грузовики",
     "purchaseFinancingTitle": "Покупка и финансирование",
     "trailerSectionTitle": "Прицеп",
-    "trailerUnitLabel": "Номер прицепа"
+    "trailerUnitLabel": "Номер прицепа",
+    "costBasisTitle": "Базовая стоимость (для Стоимость/миля)",
+    "costBasisNote": "Используется для расчёта постоянной еженедельной стоимости вашего грузовика для Стоимость/миля в Scorecard — никогда не догадка из вашего Loan Center.",
+    "costBasisOwnershipModeLabel": "Режим владения",
+    "ownershipMode": {
+      "paid": "Выплачен",
+      "loan": "Кредит",
+      "lease": "Лизинг"
+    },
+    "costBasisLoanMonthlyPaymentLabel": "Ежемесячный платёж по кредиту",
+    "costBasisPaidSpreadMonthsLabel": "На сколько месяцев распределить цену покупки?",
+    "costBasisLeaseNote": "Лизинговый платёж уже учтён из удержаний вашего settlement — здесь вводить больше нечего.",
+    "costBasisWarrantyCostLabel": "Стоимость расширенной гарантии (необязательно)",
+    "costBasisWarrantyTermMonthsLabel": "Срок расширенной гарантии (месяцев)"
   },
   "equipmentScreen": {
     "title": "Оборудование",
@@ -1582,7 +1595,40 @@
     "mpg": "MPG флота",
     "cpmBreakdownTitle": "Разбивка Стоимость/миля",
     "cpmExcludedTotal": "Исключено (питание, авансы, escrow)",
+    "cpmType": {
+      "fixed": "постоянные",
+      "variable": "переменные"
+    },
     "duplicateWeeksIgnored": "{{count}} дублирующаяся(-иеся) неделя(-и) settlement проигнорирована(-ы) — возможно, стоит их удалить.",
+    "whyLink": "Почему?",
+    "fixedVariableSummary": "Переменные {{variable}}/милю добавляют деньги сегодня. Всего {{total}}/милю покрывает всё.",
+    "cpmTooHighWarning": "Ваша Стоимость/миля ({{cpm}}) необычно высока — проверьте разбивку «Почему?» на предмет разового расхода, который мог её исказить.",
+    "milesMissingWarning": "Пробег пока не зафиксирован — Стоимость/миля и Доход/миля нельзя рассчитать, пока вы не добавите мили в свои settlements.",
+    "whyTitle": "Почему моя Стоимость/миля такая?",
+    "whyMilesTitle": "Мили",
+    "whyTotalMiles": "Всего миль",
+    "whyLoadedMiles": "Загруженные мили",
+    "whyEmptyMiles": "Пустые мили (deadhead)",
+    "whyDeadheadPct": "% Deadhead",
+    "whyRpmPpmTitle": "Доход и прибыль на милю",
+    "whyRpm": "Доход/миля (RPM)",
+    "whyPpm": "Прибыль/миля (PPM)",
+    "whyBucketsTitle": "Категории расходов",
+    "whyFixedTotal": "Итого постоянные",
+    "whyVariableTotal": "Итого переменные",
+    "whyFixedSpreadTitle": "Как был распределён ваш постоянный расход на грузовик",
+    "whyFixedSpreadNotSet": "Не задано — добавьте базовую стоимость вашего грузовика (режим владения, платёж, гарантия) на экране «Грузовики», чтобы включить её сюда.",
+    "whyOwnershipMode": "Режим владения",
+    "ownershipMode": {
+      "paid": "Выплачен",
+      "loan": "Кредит",
+      "lease": "Лизинг"
+    },
+    "whyWeeklyTruckPayment": "Еженедельный платёж за грузовик (экономический)",
+    "whyWeeklyWarranty": "Еженедельная расширенная гарантия",
+    "whyExcludedOneOffsTitle": "Исключённые разовые расходы",
+    "whyExcludedOneOffsNote": "Это реальные расходы (учитываются в вашем P&L и налоговой оценке), но исключены из Стоимости/мили — разовый ремонт или покупка, разделённые на мили одной недели, исказили бы показатель до бессмысленного значения.",
+    "whyMissingMilesTitle": "Settlements с доходом, но без миль",
     "trendTitle": "Недельный тренд чистой прибыли"
   },
   "sidebar": {

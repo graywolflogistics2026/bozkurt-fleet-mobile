@@ -673,7 +673,20 @@
     "hideRetired": "Ocultar camiones retirados",
     "purchaseFinancingTitle": "Compra y Financiamiento",
     "trailerSectionTitle": "Remolque",
-    "trailerUnitLabel": "Número de Unidad del Remolque"
+    "trailerUnitLabel": "Número de Unidad del Remolque",
+    "costBasisTitle": "Costo Base (para Costo/Milla)",
+    "costBasisNote": "Se usa para calcular el costo fijo semanal de su camión para el Costo/Milla del Scorecard — nunca una suposición de su Centro de Préstamos.",
+    "costBasisOwnershipModeLabel": "Modo de propiedad",
+    "ownershipMode": {
+      "paid": "Pagado",
+      "loan": "Préstamo",
+      "lease": "Arrendamiento"
+    },
+    "costBasisLoanMonthlyPaymentLabel": "Pago mensual del préstamo",
+    "costBasisPaidSpreadMonthsLabel": "¿En cuántos meses distribuir el precio de compra?",
+    "costBasisLeaseNote": "Un pago de arrendamiento ya se cuenta desde las retenciones de su settlement — no hay nada más que ingresar aquí.",
+    "costBasisWarrantyCostLabel": "Costo de garantía extendida (opcional)",
+    "costBasisWarrantyTermMonthsLabel": "Plazo de la garantía extendida (meses)"
   },
   "equipmentScreen": {
     "title": "Equipo",
@@ -1582,7 +1595,40 @@
     "mpg": "MPG de la Flota",
     "cpmBreakdownTitle": "Desglose de Costo/Milla",
     "cpmExcludedTotal": "Excluido (comidas, adelantos, escrow)",
+    "cpmType": {
+      "fixed": "fijo",
+      "variable": "variable"
+    },
     "duplicateWeeksIgnored": "{{count}} semana(s) de settlement duplicada(s) ignorada(s) — considere eliminarlas.",
+    "whyLink": "¿Por qué?",
+    "fixedVariableSummary": "Variable {{variable}}/mi agrega efectivo hoy. Total {{total}}/mi lo cubre todo.",
+    "cpmTooHighWarning": "Su Costo/Milla ({{cpm}}) es inusualmente alto — revise el desglose ¿Por qué? para ver un gasto único que pueda estar distorsionándolo.",
+    "milesMissingWarning": "Aún no hay millas registradas — Costo/Milla e Ingreso/Milla no se pueden calcular hasta que agregue millas a sus settlements.",
+    "whyTitle": "¿Por qué es este mi Costo/Milla?",
+    "whyMilesTitle": "Millas",
+    "whyTotalMiles": "Millas totales",
+    "whyLoadedMiles": "Millas cargadas",
+    "whyEmptyMiles": "Millas vacías (deadhead)",
+    "whyDeadheadPct": "% Deadhead",
+    "whyRpmPpmTitle": "Ingreso y Ganancia por Milla",
+    "whyRpm": "Ingreso/Milla (RPM)",
+    "whyPpm": "Ganancia/Milla (PPM)",
+    "whyBucketsTitle": "Categorías de Costo",
+    "whyFixedTotal": "Total fijo",
+    "whyVariableTotal": "Total variable",
+    "whyFixedSpreadTitle": "Cómo se distribuyó su costo fijo del camión",
+    "whyFixedSpreadNotSet": "No configurado — agregue el costo base de su camión (modo de propiedad, pago, garantía) en la pantalla de Camiones para incluirlo aquí.",
+    "whyOwnershipMode": "Modo de propiedad",
+    "ownershipMode": {
+      "paid": "Pagado",
+      "loan": "Préstamo",
+      "lease": "Arrendamiento"
+    },
+    "whyWeeklyTruckPayment": "Pago semanal del camión (económico)",
+    "whyWeeklyWarranty": "Garantía extendida semanal",
+    "whyExcludedOneOffsTitle": "Gastos únicos excluidos",
+    "whyExcludedOneOffsNote": "Estos son gastos reales (se mantienen en su P&L y estimación de impuestos) pero excluidos de Costo/Milla — una reparación o compra única dividida entre las millas de una semana distorsionaría la cifra a algo sin sentido.",
+    "whyMissingMilesTitle": "Settlements con ingresos pero sin millas",
     "trendTitle": "Tendencia Neta Semanal"
   },
   "sidebar": {

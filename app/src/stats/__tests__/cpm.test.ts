@@ -76,6 +76,63 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
     expect(result.revenuePerMile).toBeNull();
     expect(result.costPerMile).toBeNull();
     expect(result.profitPerMile).toBeNull();
+    expect(result.fixedCostPerMile).toBeNull();
+    expect(result.variableCostPerMile).toBeNull();
+  });
+
+  it('splits FIXED vs VARIABLE buckets (spec item C.3)', () => {
+    const deductions = [
+      { amount: 100, source: 'settlement', category: 'Insurance—Truck', tax_deductible: false }, // fixed
+      { amount: 60, source: 'manual', category: 'Association Dues', tax_deductible: true }, // fixed
+    ];
+    const fuel = [{ amount: 480, discount: 0, settlement_id: null }]; // variable
+    const tolls = [{ amount: 40 }]; // variable
+    const result = calcCanonicalCpm(5000, 1000, deductions, fuel, [], tolls);
+    expect(result.fixedTotal).toBe(160);
+    expect(result.variableTotal).toBe(520);
+    expect(result.fixedCostPerMile).toBeCloseTo(0.16, 5);
+    expect(result.variableCostPerMile).toBeCloseTo(0.52, 5);
+    expect(result.costPerMile).toBeCloseTo((result.fixedTotal + result.variableTotal) / 1000, 5);
+  });
+
+  it('a truck cost basis payment (5th param) is classified fixed', () => {
+    const result = calcCanonicalCpm(5000, 1000, [], [], [], [], 300);
+    expect(result.fixedTotal).toBe(300);
+    expect(result.variableTotal).toBe(0);
+  });
+
+  it('excludes a Major Repairs & Overhauls one-off from cost/mile while listing it separately (spec item C.2)', () => {
+    const deductions = [
+      { amount: 400, source: 'manual', category: 'Fuel & DEF', tax_deductible: true },
+      {
+        amount: 6500,
+        source: 'manual',
+        category: 'Major Repairs & Overhauls',
+        tax_deductible: true,
+        description: 'Engine in-frame overhaul',
+      },
+    ];
+    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], []);
+    expect(result.costPerMile).toBeCloseTo(0.4, 5); // only the $400 fuel line
+    expect(result.excludedOneOffs).toHaveLength(1);
+    expect(result.excludedOneOffs[0]).toMatchObject({
+      description: 'Engine in-frame overhaul',
+      amount: 6500,
+      reason: 'major_repair_overhaul',
+    });
+    // Major-repair exclusion never touches the meals/advance/escrow excludedTotal.
+    expect(result.excludedTotal).toBe(0);
+  });
+
+  it('excludes a vehicle-purchase-shaped deduction (e.g. a down payment logged as a deduction) from cost/mile', () => {
+    const deductions = [
+      { amount: 400, source: 'manual', category: 'Fuel & DEF', tax_deductible: true },
+      { amount: 15000, source: 'manual', category: 'Other', tax_deductible: true, description: 'Truck down payment' },
+    ];
+    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], []);
+    expect(result.costPerMile).toBeCloseTo(0.4, 5);
+    expect(result.excludedOneOffs).toHaveLength(1);
+    expect(result.excludedOneOffs[0].reason).toBe('vehicle_purchase');
   });
 });
 

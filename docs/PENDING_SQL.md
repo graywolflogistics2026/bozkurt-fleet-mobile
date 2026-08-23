@@ -1614,6 +1614,37 @@ No RLS change needed — `trucks` is already owner-scoped.
 
 ---
 
+## 45. trucks cost basis (FULL PARITY follow-up, owner decision 2026-08-05, spec item C.1)
+
+The way real owner-operators think about their truck's fixed weekly
+cost — replaces the previous CPM engine's "sum every Loan Center row
+and multiply by settlement count" approach (a synthetic estimate that
+produced $8.48/mi on web, spec item C.2). All nullable; a truck with no
+cost basis configured yet computes a $0 contribution here and shows a
+"not set" prompt (`app/src/stats/truckCostBasis.ts`
+`calcTruckCostBasisWeekly()`), never a guess.
+
+```sql
+alter table trucks
+  add column cost_basis_ownership_mode text check (cost_basis_ownership_mode in ('paid','loan','lease')),
+  add column cost_basis_loan_monthly_payment numeric(12,2),
+  add column cost_basis_paid_spread_months integer,
+  add column cost_basis_warranty_cost numeric(12,2),
+  add column cost_basis_warranty_term_months integer;
+```
+
+`purchase_price` (docs/PENDING_SQL.md §36) is reused as-is for the
+'paid' mode's spread calculation — no new purchase-price column needed.
+`cost_basis_loan_monthly_payment` is a FIXED figure the owner enters
+directly (never re-derived from a Loan Center schedule, which may not
+exist for this truck or may not reflect a refinance/payoff this module
+has no way to reason about). No RLS change needed — `trucks` is already
+owner-scoped.
+
+- [ ] 45a run (add trucks cost-basis columns)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

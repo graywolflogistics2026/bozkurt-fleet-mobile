@@ -673,7 +673,20 @@
     "hideRetired": "Hide retired trucks",
     "purchaseFinancingTitle": "Purchase & Financing",
     "trailerSectionTitle": "Trailer",
-    "trailerUnitLabel": "Trailer Unit Number"
+    "trailerUnitLabel": "Trailer Unit Number",
+    "costBasisTitle": "Cost Basis (for Cost/Mile)",
+    "costBasisNote": "Used to compute your truck's fixed weekly cost for the Scorecard's Cost/Mile — never a guess from your Loan Center.",
+    "costBasisOwnershipModeLabel": "Ownership mode",
+    "ownershipMode": {
+      "paid": "Paid off",
+      "loan": "Loan",
+      "lease": "Lease"
+    },
+    "costBasisLoanMonthlyPaymentLabel": "Loan monthly payment",
+    "costBasisPaidSpreadMonthsLabel": "Spread purchase price over how many months?",
+    "costBasisLeaseNote": "A lease payment is already counted from your settlement withholdings — nothing extra to enter here.",
+    "costBasisWarrantyCostLabel": "Extended warranty cost (optional)",
+    "costBasisWarrantyTermMonthsLabel": "Extended warranty term (months)"
   },
   "equipmentScreen": {
     "title": "Equipment",
@@ -1582,7 +1595,40 @@
     "mpg": "Fleet MPG",
     "cpmBreakdownTitle": "Cost/Mile Breakdown",
     "cpmExcludedTotal": "Excluded (meals, advances, escrow)",
+    "cpmType": {
+      "fixed": "fixed",
+      "variable": "variable"
+    },
     "duplicateWeeksIgnored": "{{count}} duplicate settlement week(s) ignored — you may want to delete them.",
+    "whyLink": "Why?",
+    "fixedVariableSummary": "Variable {{variable}}/mi adds cash today. Total {{total}}/mi covers everything.",
+    "cpmTooHighWarning": "Your Cost/Mile ({{cpm}}) is unusually high — check the Why? breakdown for a one-time expense that may be skewing it.",
+    "milesMissingWarning": "No miles recorded yet — Cost/Mile and Revenue/Mile can't be calculated until you add miles to your settlements.",
+    "whyTitle": "Why is my Cost/Mile this number?",
+    "whyMilesTitle": "Miles",
+    "whyTotalMiles": "Total miles",
+    "whyLoadedMiles": "Loaded miles",
+    "whyEmptyMiles": "Empty (deadhead) miles",
+    "whyDeadheadPct": "Deadhead %",
+    "whyRpmPpmTitle": "Revenue & Profit per Mile",
+    "whyRpm": "Revenue/Mile (RPM)",
+    "whyPpm": "Profit/Mile (PPM)",
+    "whyBucketsTitle": "Cost Buckets",
+    "whyFixedTotal": "Total fixed",
+    "whyVariableTotal": "Total variable",
+    "whyFixedSpreadTitle": "How your fixed truck cost was spread",
+    "whyFixedSpreadNotSet": "Not set — add your truck's cost basis (ownership mode, payment, warranty) on the Trucks screen to include it here.",
+    "whyOwnershipMode": "Ownership mode",
+    "ownershipMode": {
+      "paid": "Paid off",
+      "loan": "Loan",
+      "lease": "Lease"
+    },
+    "whyWeeklyTruckPayment": "Weekly truck payment (economic)",
+    "whyWeeklyWarranty": "Weekly extended warranty",
+    "whyExcludedOneOffsTitle": "Excluded one-time expenses",
+    "whyExcludedOneOffsNote": "These are real expenses (kept in your P&L and tax estimate) but excluded from Cost/Mile — a one-time repair or purchase divided across one week's miles would spike the figure to something meaningless.",
+    "whyMissingMilesTitle": "Settlements with revenue but no miles",
     "trendTitle": "Weekly Net Trend"
   },
   "sidebar": {

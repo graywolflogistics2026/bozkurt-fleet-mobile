@@ -40,8 +40,20 @@ export function ppmColor(ppm: number): 'green' | 'orange' | 'red' {
 // wants the literal legacy `rDash()` figure — this is the NEW canonical
 // CPM every screen should read from.
 import { reducesTrueProfit } from '@/src/stats/trueProfit';
+import { isVehiclePurchaseOneOff } from '@/src/import/category';
 
-export type CpmBucket = { category: string; amount: number };
+export type CpmCostType = 'fixed' | 'variable';
+export type CpmBucket = { category: string; amount: number; type: CpmCostType };
+
+// FULL PARITY follow-up (owner decision 2026-08-05, spec item C.2) — a
+// deduction excluded from the per-mile figure because it's a multi-year
+// one-off (a major repair/overhaul) or a vehicle purchase logged as a
+// plain deduction rather than an asset's own purchase_price. Kept
+// separate from `excludedTotal` (which covers Meals/Advance
+// Repayment/Escrow — non-expenses, not one-offs) so the "Why?" breakdown
+// can list exactly which real expenses were deliberately left out of CPM
+// and why, per the spec's "show... excluded one-offs."
+export type CpmExcludedOneOff = { description: string; amount: number; reason: 'major_repair_overhaul' | 'vehicle_purchase' };
 
 export type CanonicalCpmResult = {
   revenuePerMile: number | null;
@@ -56,6 +68,14 @@ export type CanonicalCpmResult = {
   // deliberately left OUT of the cost-per-mile figure, per the spec's
   // "show... the excluded total."
   excludedTotal: number;
+  excludedOneOffs: CpmExcludedOneOff[];
+  // FIXED vs VARIABLE split (spec item C.3) — "variable $X/mi adds cash
+  // today, total $Y/mi covers everything." fixedCostPerMile +
+  // variableCostPerMile === costPerMile (modulo rounding).
+  fixedTotal: number;
+  variableTotal: number;
+  fixedCostPerMile: number | null;
+  variableCostPerMile: number | null;
 };
 
 // Maps a canonical (or legacy/custom) category string to the wider CPM
@@ -88,6 +108,33 @@ const CPM_BUCKET_MAP: Record<string, string> = {
 
 const CPM_EXCLUDED_CATEGORIES = new Set(['Meals (per diem covered)', 'Advance Repayment', 'Escrow & Deposits']);
 
+// FIXED vs VARIABLE (spec item C.3) — a fixed cost is owed regardless of
+// how many miles are driven this week (insurance, permits, software,
+// dues, professional services, the truck payment/warranty itself); a
+// variable cost scales with activity (fuel, repairs tied to wear, tolls,
+// dispatch/factoring's percentage-of-revenue fee, driver pay tied to
+// loads). An unmapped/custom category defaults to 'variable' — the safer
+// assumption for "how much extra does one more mile cost me."
+const CPM_BUCKET_TYPE: Record<string, CpmCostType> = {
+  'Fuel & DEF': 'variable',
+  'Maintenance & Repairs': 'variable',
+  Insurance: 'fixed',
+  'Permits & Road Taxes': 'fixed',
+  Tolls: 'variable',
+  'Parking & Lodging': 'variable',
+  'ELD & Software': 'fixed',
+  'Dispatch & Factoring': 'variable',
+  Dues: 'fixed',
+  'Professional Services': 'fixed',
+  'Driver Pay': 'variable',
+  'Loan/Lease Payment': 'fixed',
+  Other: 'variable',
+};
+
+function typeFor(bucket: string): CpmCostType {
+  return CPM_BUCKET_TYPE[bucket] ?? 'variable';
+}
+
 // Loan Center rows (loans table) store a recurring `payment` + free-text
 // `frequency` ("monthly", "weekly", "bi-weekly", ...) rather than a
 // normalized cadence — this converts one loan's payment to its
@@ -109,19 +156,37 @@ function bucketFor(category: string | null | undefined): string {
   return CPM_BUCKET_MAP[category] ?? 'Other';
 }
 
-type CpmDeduction = { amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null };
+type CpmDeduction = {
+  amount: number | null;
+  source?: string | null;
+  category?: string | null;
+  tax_deductible: boolean | null;
+  description?: string | null;
+};
 type CpmFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null };
 type CpmMaintenance = { cost: number | null };
 type CpmToll = { amount: number | null };
 
-// `loanPaymentEstimate`/`carrierAlreadyWithholdsLoanPayment` implement the
-// spec's "ONLY estimate from the loan schedule when the carrier isn't
-// already withholding it (otherwise counted twice)" rule: a settlement
-// whose withheld deductions already include a 'Truck/Trailer Payments'
-// category row (chargebackType `loan_payment`/`lease_purchase_payment`)
-// has that cost counted via the deductions bucket already — adding an
-// ESTIMATED payment on top would double it. Only when NO such withheld
-// row exists does the caller's own Loan Center estimate get added.
+// Shared so a caller (Scorecard) can decide whether to even ask
+// src/stats/truckCostBasis.ts for a loan-payment figure BEFORE calling
+// calcCanonicalCpm — calcCanonicalCpm applies the identical check
+// internally as its own double-count guard.
+export function carrierWithholdsLoanPayment(deductions: Pick<CpmDeduction, 'source' | 'category'>[]): boolean {
+  return deductions.some((d) => d.source === 'settlement' && d.category === 'Truck/Trailer Payments');
+}
+
+// `truckFixedCostTotal`/`carrierAlreadyWithholdsLoanPayment` implement the
+// spec's "ONLY charge the truck's own cost basis when the carrier isn't
+// already withholding a loan/lease payment (otherwise counted twice)"
+// rule: a settlement whose withheld deductions already include a
+// 'Truck/Trailer Payments' category row (chargebackType `loan_payment`/
+// `lease_purchase_payment`) has that cost counted via the deductions
+// bucket already — adding the truck cost basis's own estimate on top
+// would double it. `truckFixedCostTotal` is the caller's own
+// src/stats/truckCostBasis.ts `calcTruckCostBasisWeekly()` result,
+// already multiplied by the number of settlement weeks this call covers
+// — NEVER a synthetic estimate derived from unrelated Loan Center rows
+// (the bug that produced $8.48/mi on web, spec item C.2).
 export function calcCanonicalCpm(
   grossRevenue: number,
   totalMiles: number,
@@ -129,11 +194,9 @@ export function calcCanonicalCpm(
   fuelPurchases: CpmFuel[],
   maintenanceRecords: CpmMaintenance[],
   tolls: CpmToll[],
-  loanPaymentEstimate = 0
+  truckFixedCostTotal = 0
 ): CanonicalCpmResult {
-  const carrierAlreadyWithholdsLoanPayment = deductions.some(
-    (d) => d.source === 'settlement' && d.category === 'Truck/Trailer Payments'
-  );
+  const carrierAlreadyWithholdsLoanPayment = carrierWithholdsLoanPayment(deductions);
 
   const buckets = new Map<string, number>();
   function add(category: string, amount: number) {
@@ -142,6 +205,7 @@ export function calcCanonicalCpm(
   }
 
   let excludedTotal = 0;
+  const excludedOneOffs: CpmExcludedOneOff[] = [];
   for (const d of deductions) {
     const amount = Number(d.amount ?? 0);
     if (CPM_EXCLUDED_CATEGORIES.has(d.category ?? '')) {
@@ -149,6 +213,19 @@ export function calcCanonicalCpm(
       continue;
     }
     if (!reducesTrueProfit(d)) continue; // e.g. an out-of-pocket row marked non-deductible for some other reason
+    // Multi-year one-offs (spec item C.2): a major repair/overhaul or a
+    // vehicle-purchase-shaped deduction would spike CPM to something
+    // meaningless if divided across one week's miles — excluded from the
+    // per-mile figure while still counting normally toward P&L/tax
+    // (this function never touches those totals).
+    if (d.category === 'Major Repairs & Overhauls') {
+      excludedOneOffs.push({ description: d.description ?? d.category, amount, reason: 'major_repair_overhaul' });
+      continue;
+    }
+    if (isVehiclePurchaseOneOff(d.description ?? undefined)) {
+      excludedOneOffs.push({ description: d.description ?? 'Vehicle purchase', amount, reason: 'vehicle_purchase' });
+      continue;
+    }
     add(bucketFor(d.category), amount);
   }
 
@@ -162,19 +239,44 @@ export function calcCanonicalCpm(
   const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
   add('Tolls', tollsTotal);
 
-  if (!carrierAlreadyWithholdsLoanPayment && loanPaymentEstimate > 0) {
-    add('Loan/Lease Payment', loanPaymentEstimate);
+  if (!carrierAlreadyWithholdsLoanPayment && truckFixedCostTotal > 0) {
+    add('Loan/Lease Payment', truckFixedCostTotal);
   }
 
   const totalCost = [...buckets.values()].reduce((sum, v) => sum + v, 0);
   const bucketList = [...buckets.entries()]
-    .map(([category, amount]) => ({ category, amount }))
+    .map(([category, amount]) => ({ category, amount, type: typeFor(category) }))
     .sort((a, b) => b.amount - a.amount);
 
+  const fixedTotal = bucketList.filter((b) => b.type === 'fixed').reduce((sum, b) => sum + b.amount, 0);
+  const variableTotal = bucketList.filter((b) => b.type === 'variable').reduce((sum, b) => sum + b.amount, 0);
+
   if (totalMiles <= 0) {
-    return { revenuePerMile: null, costPerMile: null, profitPerMile: null, buckets: bucketList, excludedTotal };
+    return {
+      revenuePerMile: null,
+      costPerMile: null,
+      profitPerMile: null,
+      buckets: bucketList,
+      excludedTotal,
+      excludedOneOffs,
+      fixedTotal,
+      variableTotal,
+      fixedCostPerMile: null,
+      variableCostPerMile: null,
+    };
   }
   const revenuePerMile = grossRevenue / totalMiles;
   const costPerMile = totalCost / totalMiles;
-  return { revenuePerMile, costPerMile, profitPerMile: revenuePerMile - costPerMile, buckets: bucketList, excludedTotal };
+  return {
+    revenuePerMile,
+    costPerMile,
+    profitPerMile: revenuePerMile - costPerMile,
+    buckets: bucketList,
+    excludedTotal,
+    excludedOneOffs,
+    fixedTotal,
+    variableTotal,
+    fixedCostPerMile: fixedTotal / totalMiles,
+    variableCostPerMile: variableTotal / totalMiles,
+  };
 }

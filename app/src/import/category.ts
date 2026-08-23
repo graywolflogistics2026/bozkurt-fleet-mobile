@@ -250,6 +250,23 @@ export function isMajorRepairOverhaul(text: string | undefined, amount: number):
   return amount > 2500 && MAJOR_REPAIR_RE.test(text ?? '');
 }
 
+// FULL PARITY follow-up (owner decision 2026-08-05, spec item C.2) — a
+// truck/trailer PURCHASE occasionally gets logged as a plain deduction
+// row instead of via `trucks.purchase_price`/`equipment.purchase_price`
+// (CLAUDE.md invariant #25) — e.g. a down payment paid separately from
+// the asset record, or a user who hasn't filled in the asset's own
+// purchase fields yet. calcCanonicalCpm() (src/stats/cpm.ts) excludes any
+// deduction matching this from the per-mile CPM figure — a five-figure
+// one-time purchase divided across one week's miles would spike CPM to
+// something meaningless — while the row still counts normally toward
+// P&L/tax (this only affects CPM's own per-mile math, nothing else).
+const VEHICLE_PURCHASE_RE =
+  /down\s*payment|truck\s*purchase|tractor\s*purchase|trailer\s*purchase|vehicle\s*purchase|purchase\s*price|purchased\s*(a\s*)?(truck|tractor|trailer)/i;
+
+export function isVehiclePurchaseOneOff(text: string | undefined): boolean {
+  return VEHICLE_PURCHASE_RE.test(text ?? '');
+}
+
 // Lodging — extended for inn/lodge/Airbnb/truck-parking reservations.
 // \binn\b requires "inn" as its OWN word, so "Inner tube" (where "Inner"
 // is a single token) never matches.

@@ -673,7 +673,20 @@
     "hideRetired": "Hizmet Dışı Kamyonları Gizle",
     "purchaseFinancingTitle": "Satın Alma ve Finansman",
     "trailerSectionTitle": "Römork",
-    "trailerUnitLabel": "Römork Birim Numarası"
+    "trailerUnitLabel": "Römork Birim Numarası",
+    "costBasisTitle": "Maliyet Tabanı (Maliyet/Mil için)",
+    "costBasisNote": "Scorecard'ın Maliyet/Mil'i için kamyonunuzun sabit haftalık maliyetini hesaplamak amacıyla kullanılır — Kredi Merkezinizden asla bir tahmin değildir.",
+    "costBasisOwnershipModeLabel": "Sahiplik modu",
+    "ownershipMode": {
+      "paid": "Ödenmiş",
+      "loan": "Kredi",
+      "lease": "Kiralama"
+    },
+    "costBasisLoanMonthlyPaymentLabel": "Kredi aylık ödemesi",
+    "costBasisPaidSpreadMonthsLabel": "Satın alma fiyatı kaç aya yayılsın?",
+    "costBasisLeaseNote": "Bir kiralama ödemesi zaten settlement kesintilerinizden sayılıyor — burada ekstra bir şey girmenize gerek yok.",
+    "costBasisWarrantyCostLabel": "Uzatılmış garanti maliyeti (isteğe bağlı)",
+    "costBasisWarrantyTermMonthsLabel": "Uzatılmış garanti süresi (ay)"
   },
   "equipmentScreen": {
     "title": "Ekipman",
@@ -1582,7 +1595,40 @@
     "mpg": "Filo MPG",
     "cpmBreakdownTitle": "Maliyet/Mil Dökümü",
     "cpmExcludedTotal": "Hariç tutulan (yemekler, avanslar, escrow)",
+    "cpmType": {
+      "fixed": "sabit",
+      "variable": "değişken"
+    },
     "duplicateWeeksIgnored": "{{count}} yinelenen settlement haftası yok sayıldı — silmek isteyebilirsiniz.",
+    "whyLink": "Neden?",
+    "fixedVariableSummary": "Değişken {{variable}}/mil bugün nakit ekler. Toplam {{total}}/mil her şeyi kapsar.",
+    "cpmTooHighWarning": "Maliyet/Mil değeriniz ({{cpm}}) alışılmadık şekilde yüksek — bunu etkileyebilecek tek seferlik bir gider için Neden? dökümünü kontrol edin.",
+    "milesMissingWarning": "Henüz mil kaydedilmedi — settlement'lerinize mil eklemeden Maliyet/Mil ve Gelir/Mil hesaplanamaz.",
+    "whyTitle": "Maliyet/Milim neden bu rakam?",
+    "whyMilesTitle": "Mil",
+    "whyTotalMiles": "Toplam mil",
+    "whyLoadedMiles": "Yüklü mil",
+    "whyEmptyMiles": "Boş (deadhead) mil",
+    "whyDeadheadPct": "Deadhead %",
+    "whyRpmPpmTitle": "Mil Başına Gelir ve Kâr",
+    "whyRpm": "Gelir/Mil (RPM)",
+    "whyPpm": "Kâr/Mil (PPM)",
+    "whyBucketsTitle": "Maliyet Kategorileri",
+    "whyFixedTotal": "Toplam sabit",
+    "whyVariableTotal": "Toplam değişken",
+    "whyFixedSpreadTitle": "Sabit kamyon maliyetiniz nasıl yayıldı",
+    "whyFixedSpreadNotSet": "Ayarlanmadı — bunu burada göstermek için kamyonunuzun maliyet tabanını (sahiplik modu, ödeme, garanti) Kamyonlar ekranına ekleyin.",
+    "whyOwnershipMode": "Sahiplik modu",
+    "ownershipMode": {
+      "paid": "Ödenmiş",
+      "loan": "Kredi",
+      "lease": "Kiralama"
+    },
+    "whyWeeklyTruckPayment": "Haftalık kamyon ödemesi (ekonomik)",
+    "whyWeeklyWarranty": "Haftalık uzatılmış garanti",
+    "whyExcludedOneOffsTitle": "Hariç tutulan tek seferlik giderler",
+    "whyExcludedOneOffsNote": "Bunlar gerçek giderlerdir (P&L ve vergi tahmininizde tutulur) ancak Maliyet/Mil'den hariç tutulur — bir haftanın miline bölünen tek seferlik bir onarım veya satın alma, rakamı anlamsız bir şeye sıçratır.",
+    "whyMissingMilesTitle": "Geliri olan ama mili olmayan settlement'ler",
     "trendTitle": "Haftalık Net Trend"
   },
   "sidebar": {

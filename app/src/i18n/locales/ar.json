@@ -673,7 +673,20 @@
     "hideRetired": "إخفاء الشاحنات المتوقفة",
     "purchaseFinancingTitle": "الشراء والتمويل",
     "trailerSectionTitle": "المقطورة",
-    "trailerUnitLabel": "رقم وحدة المقطورة"
+    "trailerUnitLabel": "رقم وحدة المقطورة",
+    "costBasisTitle": "الأساس المالي (لـ Cost/Mile)",
+    "costBasisNote": "يُستخدم لحساب التكلفة الأسبوعية الثابتة لشاحنتك لأجل Cost/Mile في Scorecard — أبدًا تخمين من Loan Center الخاص بك.",
+    "costBasisOwnershipModeLabel": "نمط الملكية",
+    "ownershipMode": {
+      "paid": "مدفوعة بالكامل",
+      "loan": "قرض",
+      "lease": "إيجار"
+    },
+    "costBasisLoanMonthlyPaymentLabel": "الدفعة الشهرية للقرض",
+    "costBasisPaidSpreadMonthsLabel": "على كم شهرًا يُوزَّع سعر الشراء؟",
+    "costBasisLeaseNote": "دفعة الإيجار محتسبة بالفعل من استقطاعات settlement الخاص بك — لا حاجة لإدخال شيء إضافي هنا.",
+    "costBasisWarrantyCostLabel": "تكلفة الضمان الممتد (اختياري)",
+    "costBasisWarrantyTermMonthsLabel": "مدة الضمان الممتد (بالأشهر)"
   },
   "equipmentScreen": {
     "title": "المعدات",
@@ -1582,7 +1595,40 @@
     "mpg": "معدل استهلاك الوقود للأسطول (MPG)",
     "cpmBreakdownTitle": "تفصيل التكلفة/الميل",
     "cpmExcludedTotal": "مستبعد (الوجبات، السلف، escrow)",
+    "cpmType": {
+      "fixed": "ثابتة",
+      "variable": "متغيرة"
+    },
     "duplicateWeeksIgnored": "تم تجاهل {{count}} أسبوع (أسابيع) settlement مكرر — قد ترغب في حذفها.",
+    "whyLink": "لماذا؟",
+    "fixedVariableSummary": "التكلفة المتغيرة {{variable}}/ميل تضيف نقدًا اليوم. الإجمالي {{total}}/ميل يغطي كل شيء.",
+    "cpmTooHighWarning": "تكلفتك/الميل ({{cpm}}) مرتفعة بشكل غير معتاد — تحقق من تفصيل لماذا؟ لمعرفة مصروف لمرة واحدة قد يكون السبب.",
+    "milesMissingWarning": "لم يتم تسجيل أي أميال بعد — لا يمكن حساب التكلفة/الميل والإيراد/الميل حتى تضيف أميالاً إلى settlements الخاصة بك.",
+    "whyTitle": "لماذا تكلفتي/الميل بهذا الرقم؟",
+    "whyMilesTitle": "الأميال",
+    "whyTotalMiles": "إجمالي الأميال",
+    "whyLoadedMiles": "الأميال المحمّلة",
+    "whyEmptyMiles": "الأميال الفارغة (deadhead)",
+    "whyDeadheadPct": "نسبة Deadhead",
+    "whyRpmPpmTitle": "الإيراد والربح لكل ميل",
+    "whyRpm": "الإيراد/الميل (RPM)",
+    "whyPpm": "الربح/الميل (PPM)",
+    "whyBucketsTitle": "فئات التكلفة",
+    "whyFixedTotal": "إجمالي الثابت",
+    "whyVariableTotal": "إجمالي المتغير",
+    "whyFixedSpreadTitle": "كيف تم توزيع تكلفة شاحنتك الثابتة",
+    "whyFixedSpreadNotSet": "غير مضبوط — أضف الأساس المالي لشاحنتك (نمط الملكية، الدفعة، الضمان) في شاشة الشاحنات لتضمينه هنا.",
+    "whyOwnershipMode": "نمط الملكية",
+    "ownershipMode": {
+      "paid": "مدفوعة بالكامل",
+      "loan": "قرض",
+      "lease": "إيجار"
+    },
+    "whyWeeklyTruckPayment": "الدفعة الأسبوعية للشاحنة (اقتصادية)",
+    "whyWeeklyWarranty": "الضمان الممتد الأسبوعي",
+    "whyExcludedOneOffsTitle": "المصاريف لمرة واحدة المستبعدة",
+    "whyExcludedOneOffsNote": "هذه مصاريف حقيقية (تبقى في تقرير الأرباح والخسائر وتقدير الضرائب) لكنها مستبعدة من التكلفة/الميل — إصلاح أو شراء لمرة واحدة مقسوم على أميال أسبوع واحد سيؤدي إلى رقم غير منطقي.",
+    "whyMissingMilesTitle": "settlements بإيراد لكن بدون أميال",
     "trendTitle": "اتجاه صافي الربح الأسبوعي"
   },
   "sidebar": {
