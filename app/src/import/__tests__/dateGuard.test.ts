@@ -5,6 +5,8 @@ import {
   isOlderThanMonths,
   isSettlementWeekEndingMissing,
   resolveWeekEndingWithAnchor,
+  isImplausibleDate,
+  findImplausibleDates,
 } from '@/src/import/dateGuard';
 import type { Extraction } from '@/src/import/types';
 
@@ -232,5 +234,47 @@ describe('isSettlementWeekEndingMissing (DATE HARDENING round 3)', () => {
   it('is false for every non-settlement docType regardless of date', () => {
     expect(isSettlementWeekEndingMissing({ docType: 'fuel' })).toBe(false);
     expect(isSettlementWeekEndingMissing({ docType: 'other' })).toBe(false);
+  });
+});
+
+describe('isImplausibleDate (owner decision 2026-08-05, FULL PARITY pass item D.2)', () => {
+  it('is false for a plausible recent date', () => {
+    expect(isImplausibleDate('2026-07-18', NOW)).toBe(false);
+  });
+
+  it('is true for a date before 2020', () => {
+    expect(isImplausibleDate('2017-07-26', NOW)).toBe(true);
+  });
+
+  it('is true for a date beyond next year', () => {
+    expect(isImplausibleDate('2028-01-01', NOW)).toBe(true);
+  });
+
+  it('is false right at the boundary (next year itself is still plausible)', () => {
+    expect(isImplausibleDate('2027-12-31', NOW)).toBe(false);
+  });
+
+  it('is false for null/undefined/non-ISO strings — not this function\'s concern', () => {
+    expect(isImplausibleDate(null, NOW)).toBe(false);
+    expect(isImplausibleDate(undefined, NOW)).toBe(false);
+    expect(isImplausibleDate('not-a-date', NOW)).toBe(false);
+  });
+});
+
+describe('findImplausibleDates (owner decision 2026-08-05, FULL PARITY pass item D.2)', () => {
+  it('returns only the rows with an implausible date', () => {
+    const rows = [
+      { id: 'a', ded_date: '2026-07-18' },
+      { id: 'b', ded_date: '2017-07-26' },
+      { id: 'c', ded_date: null },
+      { id: 'd', ded_date: '2099-01-01' },
+    ];
+    const result = findImplausibleDates(rows, (r) => r.ded_date, NOW);
+    expect(result.map((r) => r.id)).toEqual(['b', 'd']);
+  });
+
+  it('returns an empty array when every date is plausible', () => {
+    const rows = [{ id: 'a', ded_date: '2026-07-18' }];
+    expect(findImplausibleDates(rows, (r) => r.ded_date, NOW)).toEqual([]);
   });
 });

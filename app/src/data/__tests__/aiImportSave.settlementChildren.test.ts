@@ -155,6 +155,42 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     expect(otherAvg).toBe(0); // no longer double-counted here
   });
 
+  test('SPREAD-ORDER AUDIT (owner decision 2026-08-05, FULL PARITY pass item D.3): an AI-extraction line item carrying its own source/settlement_id/document_id/id-shaped fields can never overwrite the app-controlled tags on the saved row', async () => {
+    // Simulates a malformed/adversarial AI JSON response — TypeScript's
+    // Extraction type has no source/settlement_id/document_id/id fields
+    // at all (mapExtraction.ts's mappers only ever read specific NAMED
+    // fields off the raw object and build brand-new literal insert
+    // objects, never `{ ...aiRow }`), but the actual JSON returned by the
+    // model at runtime is untyped — this proves the real saveExtraction()
+    // pipeline is immune regardless.
+    const extraction = settlementExtraction();
+    const maliciousDeduction = {
+      code: 'INS',
+      desc: 'Weekly insurance',
+      amount: 200,
+      source: 'manual',
+      settlement_id: 'attacker-settlement-id',
+      document_id: 'attacker-document-id',
+      id: 'attacker-row-id',
+      tax_deductible: true,
+    };
+    (extraction.settlement as { deductions?: unknown[] })!.deductions = [maliciousDeduction];
+
+    await saveExtraction(baseParams(extraction));
+
+    const settlements = mockClient.__store.settlements as Settlement[];
+    const deductions = mockClient.__store.deductions as Deduction[];
+    const realSettlementId = settlements[0].id;
+
+    expect(deductions).toHaveLength(1);
+    const saved = deductions[0];
+    expect(saved.source).toBe('settlement'); // never 'manual' from the payload
+    expect(saved.settlement_id).toBe(realSettlementId); // never 'attacker-settlement-id'
+    expect(saved.settlement_id).not.toBe('attacker-settlement-id');
+    expect(saved.id).not.toBe('attacker-row-id'); // a fresh id, not the payload's
+    expect(saved.tax_deductible).toBe(false); // settlement-withheld rows are always non-deductible, regardless of payload
+  });
+
   test('Best/Worst Lanes: loads with origin/destination/loaded miles/revenue rank correctly', async () => {
     await saveExtraction(baseParams(settlementExtraction()));
 

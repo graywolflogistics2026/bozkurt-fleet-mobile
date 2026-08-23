@@ -1436,6 +1436,107 @@ No RLS change needed — `capital_transactions` is already owner-scoped, and
 
 ---
 
+## 42. One-time date repair migration (FULL PARITY pass, owner decision 2026-08-05, spec item D.1)
+
+A one-time repair pass over every ALREADY-STORED date column, applying
+the SAME year↔day-swap rule `app/src/import/dateGuard.ts`'s
+`trySwapYearAndDay()`/`correctImplausibleDate()` already applies at
+IMPORT time (client-side, before a new row is ever saved) — this closes
+the gap for rows that were saved BEFORE that guard existed, or where the
+guard's own "must land within a tight recent window" condition didn't
+fire. A date is "implausible" here per the spec's own definition: before
+2020, or beyond next year (computed dynamically off `current_date` at the
+time this SQL actually runs — not a hardcoded year, so this migration
+stays correct whenever it's actually applied). `repair_implausible_date()`
+is a reusable PL/pgSQL function (same "one shared function, not N copies"
+precedent as `apply_business_balance_delta`, §37): swap the year and day
+digits within the same century (month untouched — mirrors
+`trySwapYearAndDay()`'s own logic exactly), and only apply the swap if
+the result is BOTH a real calendar date (invalid dates, e.g. day 31 in a
+30-day month, are caught and left alone) AND itself falls inside the
+plausible window — a genuinely old/future date that doesn't resolve to
+anything plausible either way is left untouched (still implausible,
+still flaggable by the app's own red-banner detection, spec item D.2 —
+never silently "fixed" into a wrong date).
+
+Covers every dated column named in the spec: `settlements.week_ending`,
+`loads.pickup_date`/`delivery_date`/`load_date`, `deductions.ded_date`,
+`reimbursements.reimb_date`, `fuel_purchases.purchase_date`,
+`maintenance_records.service_date`, `tolls.toll_date`.
+
+```sql
+create or replace function repair_implausible_date(d date, year_floor int, year_ceiling int)
+returns date
+language plpgsql
+as $$
+declare
+  yr int := extract(year from d)::int;
+  mo int := extract(month from d)::int;
+  dy int := extract(day from d)::int;
+  century int := (yr / 100) * 100;
+  swapped_year int := century + dy;
+  swapped_day int := yr % 100;
+  candidate date;
+begin
+  if yr >= year_floor and yr <= year_ceiling then
+    return d; -- already plausible, no repair needed
+  end if;
+  if swapped_day < 1 or swapped_day > 31 then
+    return d; -- can't form a valid day-of-month from the swap — leave as-is
+  end if;
+  begin
+    candidate := make_date(swapped_year, mo, swapped_day);
+  exception when others then
+    return d; -- not a real calendar date (e.g. day 31 in April) — leave as-is
+  end;
+  if swapped_year < year_floor or swapped_year > year_ceiling then
+    return d; -- the swapped reading is ALSO implausible — leave as-is
+  end if;
+  return candidate;
+end;
+$$;
+
+do $$
+declare
+  y_floor int := 2020;
+  y_ceiling int := extract(year from current_date)::int + 1;
+begin
+  update settlements set week_ending = repair_implausible_date(week_ending, y_floor, y_ceiling)
+    where week_ending is not null and (extract(year from week_ending) < y_floor or extract(year from week_ending) > y_ceiling);
+
+  update loads set pickup_date = repair_implausible_date(pickup_date, y_floor, y_ceiling)
+    where pickup_date is not null and (extract(year from pickup_date) < y_floor or extract(year from pickup_date) > y_ceiling);
+  update loads set delivery_date = repair_implausible_date(delivery_date, y_floor, y_ceiling)
+    where delivery_date is not null and (extract(year from delivery_date) < y_floor or extract(year from delivery_date) > y_ceiling);
+  update loads set load_date = repair_implausible_date(load_date, y_floor, y_ceiling)
+    where load_date is not null and (extract(year from load_date) < y_floor or extract(year from load_date) > y_ceiling);
+
+  update deductions set ded_date = repair_implausible_date(ded_date, y_floor, y_ceiling)
+    where ded_date is not null and (extract(year from ded_date) < y_floor or extract(year from ded_date) > y_ceiling);
+
+  update reimbursements set reimb_date = repair_implausible_date(reimb_date, y_floor, y_ceiling)
+    where reimb_date is not null and (extract(year from reimb_date) < y_floor or extract(year from reimb_date) > y_ceiling);
+
+  update fuel_purchases set purchase_date = repair_implausible_date(purchase_date, y_floor, y_ceiling)
+    where purchase_date is not null and (extract(year from purchase_date) < y_floor or extract(year from purchase_date) > y_ceiling);
+
+  update maintenance_records set service_date = repair_implausible_date(service_date, y_floor, y_ceiling)
+    where service_date is not null and (extract(year from service_date) < y_floor or extract(year from service_date) > y_ceiling);
+
+  update tolls set toll_date = repair_implausible_date(toll_date, y_floor, y_ceiling)
+    where toll_date is not null and (extract(year from toll_date) < y_floor or extract(year from toll_date) > y_ceiling);
+end $$;
+```
+
+No RLS change needed — every `UPDATE` above targets existing rows via
+their already-enforced owner-scoped RLS policies (run as the project
+owner/service_role via the SQL editor, same as every other migration in
+this doc).
+
+- [ ] 42a run (create repair_implausible_date() + repair every dated column)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

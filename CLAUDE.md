@@ -2692,3 +2692,60 @@
   Russian/Arabic translations of the new `cpmExcludedTotal` string
   translated "escrow" instead of keeping it in the DO-NOT-TRANSLATE
   glossary's Latin script — fixed before commit).
+- FULL PARITY WITH WEB v2026.08.05-K, PART D — DATES + SPREAD-ORDER AUDIT
+  (owner decision 2026-08-05).
+  1. **One-time date repair migration** (docs/PENDING_SQL.md §42) — a
+     PL/pgSQL `repair_implausible_date(d, year_floor, year_ceiling)`
+     function applies the SAME year↔day-swap rule
+     `app/src/import/dateGuard.ts`'s `trySwapYearAndDay()` already applies
+     at IMPORT time to every ALREADY-STORED dated column: `settlements.
+     week_ending`, `loads.pickup_date`/`delivery_date`/`load_date`,
+     `deductions.ded_date`, `reimbursements.reimb_date`, `fuel_purchases.
+     purchase_date`, `maintenance_records.service_date`, `tolls.
+     toll_date`. Implausible = before 2020 or beyond next year, computed
+     dynamically off `current_date` at the time the SQL runs (never a
+     hardcoded year, so the migration stays correct whenever it's
+     actually applied) — only repairs a row when the swapped reading is
+     BOTH a real calendar date AND itself lands inside the plausible
+     window; a genuinely unrecoverable date is left untouched rather than
+     "fixed" into a wrong one, and stays flaggable (item 2 below).
+  2. **`isImplausibleDate()`/`findImplausibleDates()`**
+     (`app/src/import/dateGuard.ts`) — the pure, client-side counterpart
+     for "flag any remaining impossible date in the report with a red
+     banner": same before-2020-or-beyond-next-year window as §42's SQL
+     migration, so the two can never disagree about what counts as
+     implausible. Not yet wired into a screen — the Accountant Package
+     rework (FULL PARITY part B, not yet built at time of this entry) is
+     where the actual red banner lives; these two functions are ready for
+     that screen to import directly.
+  3. **SPREAD-ORDER AUDIT, confirmed NOT a bug in this codebase** — the
+     spec's described failure mode (`{ id, _batch, source:'settlement',
+     ...aiRow }`, where spreading the untrusted AI payload LAST lets it
+     clobber id/source/batch tags set BEFORE it) was checked against
+     every object-spread in `app/src/data/aiImportSave.ts` (there are 12)
+     and every array-spread in `app/src/import/mapExtraction.ts` (there
+     are 4, all array CONCATENATION, not object spreads). Every one of
+     aiImportSave.ts's object spreads already follows the SAFE order —
+     `{ ...mapping.settlement, document_id: documentId, ... }`, spreading
+     an ALREADY-MAPPED insert object (built by mapExtraction.ts's own
+     literal-field mappers, never a raw spread of untyped AI JSON) FIRST,
+     then overriding the real id fields LAST, exactly the pattern the
+     spec recommends. Deeper reason this bug class can't reach this
+     codebase at all: `mapExtraction.ts`'s mapper functions (mapSettlement/
+     mapFuel/mapMaintenance/mapPurchase/...) build BRAND-NEW literal
+     objects reading only specific NAMED fields off the AI's JSON
+     (`s.weekEnding`, `x.desc`, `x.amount`, ...) — none of them ever does
+     `{ ...aiRow }`, so an unexpected/malicious field in the raw AI
+     response has no path into a saved row's `source`/`settlement_id`/
+     `document_id`/`id` regardless of spread order. Verified with a new
+     end-to-end regression test (`aiImportSave.settlementChildren.test.ts`)
+     that runs the REAL `saveExtraction()` against a settlement deduction
+     line item carrying its own (adversarial) `source`/`settlement_id`/
+     `document_id`/`id`-shaped fields at runtime (bypassing TypeScript via
+     an explicit cast, since the `Extraction` type has no such fields to
+     begin with) and proves the saved row's tags are always the
+     app-controlled ones, never the payload's.
+  Tests: `dateGuard.test.ts` gained `isImplausibleDate`/
+  `findImplausibleDates` coverage (plausible/before-2020/beyond-next-year/
+  boundary/null cases). Full suite: 66 suites / 1576 tests pass; `tsc
+  --noEmit` clean.

@@ -56,6 +56,35 @@ export function trySwapYearAndDay(dateStr: string): string | null {
   return `${String(swappedYear).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(swappedDay).padStart(2, '0')}`;
 }
 
+// FULL PARITY pass (owner decision 2026-08-05, spec item D.2) — "flag any
+// remaining impossible date in the report with a red banner." A date is
+// implausible when it's before 2020 or beyond next year (dynamically
+// computed off `now`, never a hardcoded year) — same window
+// docs/PENDING_SQL.md §42's `repair_implausible_date()` SQL migration
+// uses to decide whether a STORED row needs repairing. This is the pure,
+// client-side counterpart: a row the migration couldn't repair (its
+// year/day swap either wasn't a real calendar date, or was ALSO
+// implausible) stays implausible forever unless a user manually edits
+// it — the app must surface that, never silently show a wrong or
+// nonsensical date as if it were normal.
+export function isImplausibleDate(dateStr: string | null | undefined, now: Date = new Date()): boolean {
+  if (!dateStr) return false;
+  const d = parseIsoDate(dateStr);
+  if (!d) return false; // not a plain YYYY-MM-DD string — not this function's concern
+  const year = d.getUTCFullYear();
+  const nextYear = now.getUTCFullYear() + 1;
+  return year < 2020 || year > nextYear;
+}
+
+// Scans an arbitrary list of dated rows (settlements/loads/deductions/
+// reimbursements/fuel/maintenance/tolls — anything with a date field) and
+// returns just the ones with an implausible date, for a report screen's
+// red banner. `getDate` lets the caller point at whichever field that
+// row type uses (week_ending, ded_date, purchase_date, ...).
+export function findImplausibleDates<T>(rows: T[], getDate: (row: T) => string | null | undefined, now: Date = new Date()): T[] {
+  return rows.filter((row) => isImplausibleDate(getDate(row), now));
+}
+
 // Only corrects when the AS-EXTRACTED reading is meaningfully stale
 // (>13 months before `now`) AND the swapped reading lands within a tight,
 // plausible recent window (13 months back through 1 month forward, to
