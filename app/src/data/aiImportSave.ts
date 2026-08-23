@@ -13,11 +13,12 @@ import {
   mapMaintenance,
   mapPurchase,
   mapSettlement,
+  numOrNull,
 } from '@/src/import/mapExtraction';
 import { resolveLoanAssetMatch } from '@/src/import/loanAssetMatch';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
-import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
+import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import {
   SaveExtractionError,
@@ -123,6 +124,12 @@ export type SaveExtractionResult = {
   // settlement docType.
   settlementWeekEnding: string | null;
   isSettlementReimport: boolean;
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — rows that failed to
+  // save even after the per-row fallback (insertBatchResilient), so the
+  // import screen can tell the user exactly which rows were skipped and
+  // why instead of a silently-incomplete-looking success. Empty for the
+  // common case (nothing skipped).
+  skippedRows: SkippedImportRow[];
 };
 
 // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device feedback:
@@ -139,6 +146,56 @@ function must<T>(step: SaveExtractionStep, data: T | null, error: unknown, parti
   return data;
 }
 
+// IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report: "Failed
+// while saving loads/fuel/deductions — invalid input syntax for type
+// date: \"\""). A single malformed row (whatever the cause — the date/
+// numeric sanitizers above should now prevent the reported bug class
+// entirely, but this is the general-purpose safety net) should never take
+// down an ENTIRE batch of otherwise-good rows. Tries the batch insert
+// first (the fast, common-case path — one round trip); only on failure
+// does it fall back to inserting rows ONE AT A TIME, so exactly the bad
+// row(s) — never the good ones — end up skipped and reported.
+type ResilientInsertTable = 'loads' | 'fuel_purchases' | 'deductions' | 'reimbursements' | 'maintenance_records' | 'tolls';
+
+export type SkippedImportRow = { table: string; description: string; reason: string };
+
+async function insertBatchResilient<T extends Record<string, unknown>>(
+  table: ResilientInsertTable,
+  rows: T[],
+  describe: (row: T) => string,
+  step: SaveExtractionStep,
+  isReimport: boolean,
+  partial: SaveExtractionPartialState,
+  skipped: SkippedImportRow[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  const { error } = await supabase.from(table).insert(rows as never[]);
+  if (!error) return;
+
+  let anyFailed = false;
+  for (const row of rows) {
+    const { error: rowError } = await supabase.from(table).insert(row as never);
+    if (rowError) {
+      anyFailed = true;
+      skipped.push({ table, description: describe(row), reason: rowError.message });
+    }
+  }
+  // A RE-IMPORT's old-row deletion (further down in saveExtraction())
+  // only runs once every NEW row has actually saved — the exact same
+  // "capture old ids, delete only after every insert succeeds" safety
+  // invariant its own comment already documents. A partial save is only
+  // safe to tolerate silently for a BRAND-NEW import, where there is no
+  // prior week's data at risk of being deleted out from under an
+  // incomplete replacement.
+  if (anyFailed && isReimport) {
+    throw new SaveExtractionError(
+      step,
+      new Error(`${skipped.filter((s) => s.table === table).length} row(s) in ${table} could not be saved — stopping before removing last week's data.`),
+      partial
+    );
+  }
+}
+
 // Writes rows exactly like legacy saveImport() (legacy/index.html:2502) —
 // see app/src/import/mapExtraction.ts for the per-docType field mapping,
 // ported verbatim from that function. This is the impure orchestration
@@ -149,6 +206,11 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   const { extraction: d, userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution, categoryOverride } = params;
 
   const partial: SaveExtractionPartialState = emptyPartialState();
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — rows that failed
+  // even after the per-row fallback (insertBatchResilient), collected so
+  // the caller can tell the user EXACTLY which rows were skipped and why
+  // instead of the whole import silently looking complete.
+  const skippedRows: SkippedImportRow[] = [];
 
   // 0. VALIDATE BEFORE WRITING (pre-launch hardening, owner decision
   // 2026-08-02, independent code review finding): every required-field
@@ -217,7 +279,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       // and its duplicate-check comparison can never disagree (bug fixed
       // 2026-07-30).
       doc_date: getPrimaryExtractionDate(d) || null,
-      amount: d.totalAmount ?? null,
+      amount: numOrNull(d.totalAmount),
       storage_path: storagePath,
       parsed_json: d as unknown as Record<string, unknown>,
     })
@@ -335,40 +397,67 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       oldPayIds = (payOld.data ?? []).map((r) => r.id as string);
     }
 
-    if (mapping.loads.length > 0) {
-      const { error } = await supabase
-        .from('loads')
-        .insert(mapping.loads.map((l) => ({ ...l, settlement_id: settlementId })));
-      if (error) throw new SaveExtractionError('loads-insert', error, partial);
-    }
-    if (mapping.fuel.length > 0) {
-      const { error } = await supabase
-        .from('fuel_purchases')
-        .insert(mapping.fuel.map((f) => ({ ...f, settlement_id: settlementId })));
-      if (error) throw new SaveExtractionError('fuel-insert', error, partial);
-    }
-    if (mapping.deductions.length > 0) {
-      const { error } = await supabase
-        .from('deductions')
-        .insert(mapping.deductions.map((x) => ({ ...x, settlement_id: settlementId, document_id: documentId })));
-      if (error) throw new SaveExtractionError('deductions-insert', error, partial);
-    }
-    if (mapping.reimbursements.length > 0) {
-      const { error } = await supabase
-        .from('reimbursements')
-        .insert(mapping.reimbursements.map((r) => ({ ...r, settlement_id: settlementId })));
-      if (error) throw new SaveExtractionError('reimbursements-insert', error, partial);
-    }
-    if (mapping.maintenance.length > 0) {
-      const { error } = await supabase
-        .from('maintenance_records')
-        .insert(mapping.maintenance.map((m) => ({ ...m, document_id: documentId })));
-      if (error) throw new SaveExtractionError('maintenance-insert', error, partial);
-    }
-    if (mapping.tolls.length > 0) {
-      const { error } = await supabase.from('tolls').insert(mapping.tolls);
-      if (error) throw new SaveExtractionError('tolls-insert', error, partial);
-    }
+    // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — each batch tries
+    // the normal single-insert fast path first; a single bad row only
+    // falls back to per-row insertion (and gets reported in
+    // `skippedRows`) rather than aborting the whole settlement save. A
+    // RE-IMPORT still throws if any row is unrecoverable (insertBatchResilient's
+    // own safety gate), preserving the existing "never delete last
+    // week's data unless the full replacement actually saved" invariant.
+    await insertBatchResilient(
+      'loads',
+      mapping.loads.map((l) => ({ ...l, settlement_id: settlementId })),
+      (l) => `Load ${l.order_number ?? ''} ${l.origin ?? ''}→${l.destination ?? ''}`.trim(),
+      'loads-insert',
+      isReimport,
+      partial,
+      skippedRows
+    );
+    await insertBatchResilient(
+      'fuel_purchases',
+      mapping.fuel.map((f) => ({ ...f, settlement_id: settlementId })),
+      (f) => `Fuel ${f.purchase_date ?? ''} ${f.location ?? ''}`.trim(),
+      'fuel-insert',
+      isReimport,
+      partial,
+      skippedRows
+    );
+    await insertBatchResilient(
+      'deductions',
+      mapping.deductions.map((x) => ({ ...x, settlement_id: settlementId, document_id: documentId })),
+      (x) => x.description ?? x.category ?? 'Deduction',
+      'deductions-insert',
+      isReimport,
+      partial,
+      skippedRows
+    );
+    await insertBatchResilient(
+      'reimbursements',
+      mapping.reimbursements.map((r) => ({ ...r, settlement_id: settlementId })),
+      (r) => r.description ?? 'Reimbursement',
+      'reimbursements-insert',
+      isReimport,
+      partial,
+      skippedRows
+    );
+    await insertBatchResilient(
+      'maintenance_records',
+      mapping.maintenance.map((m) => ({ ...m, document_id: documentId })),
+      (m) => m.description ?? m.service_type ?? 'Maintenance',
+      'maintenance-insert',
+      isReimport,
+      partial,
+      skippedRows
+    );
+    await insertBatchResilient(
+      'tolls',
+      mapping.tolls,
+      (t) => `Toll ${t.toll_date ?? ''} ${t.plaza ?? ''}`.trim(),
+      'tolls-insert',
+      isReimport,
+      partial,
+      skippedRows
+    );
     // Loans upsert — PRE-LAUNCH ERROR-VISIBILITY FIX (owner decision
     // 2026-08-02): this loop previously never checked ANY of these three
     // calls' `error` field (including the lookup select), so a loan
@@ -526,7 +615,14 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
           user_id: userId,
           tx_type: 'contribution',
           amount: line.insert.amount,
-          tx_date: d.date ?? new Date().toISOString().slice(0, 10),
+          // IMPORT SAVE BUG FIX (owner decision 2026-08-05, device
+          // report): `d.date` is optional/loosely-typed AI text — a
+          // present-but-empty '' used to bypass `??` (which only treats
+          // null/undefined as absent) straight into this NOT NULL date
+          // column, reproducing Postgres's "invalid input syntax for
+          // type date: \"\"". toDateOrNull() normalizes '' to null first
+          // so the real fallback actually fires.
+          tx_date: toDateOrNull(d.date) ?? new Date().toISOString().slice(0, 10),
           note: contributionNote,
           linked_deduction_id: savedDed.id,
         });
@@ -589,5 +685,5 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // (see mapExtraction.ts's mapGenericDeduction comment; universal AI
   // capture, owner decision 2026-07-10 — v1.x backlog, PROMPTS.md).
 
-  return { documentId, storagePath, netPayAdded, contributionTotal, settlementWeekEnding, isSettlementReimport };
+  return { documentId, storagePath, netPayAdded, contributionTotal, settlementWeekEnding, isSettlementReimport, skippedRows };
 }

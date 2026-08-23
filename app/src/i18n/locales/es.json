@@ -398,6 +398,7 @@
     "saved": "✅ Guardado",
     "savedSettlementNew": "Settlement guardado W/E {{date}} (nuevo)",
     "savedSettlementReplaced": "Settlement guardado W/E {{date}} (reemplazado)",
+    "skippedRowsWarning": "{{count}} fila(s) no se pudieron guardar y fueron omitidas:",
     "balanceAdded": "💰 Saldo {{amount}}",
     "contributionAdded": "💰 Agregado como aporte a la Cuenta de Capital: {{amount}} (pagado con fondos personales)",
     "savedToPath": "📁 Guardado en {{path}}",

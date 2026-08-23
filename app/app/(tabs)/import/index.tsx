@@ -965,6 +965,17 @@ export default function Import() {
             <Text style={{ color: colors.green, fontWeight: '700', fontSize: typography.size.lg, marginBottom: spacing.sm }}>
               {t('importScreen.saved')}
             </Text>
+            {/* IMPORT SAVE BUG FIX (owner decision 2026-08-05) — a row
+                that couldn't be saved even after the per-row fallback is
+                never silently dropped; this names exactly which rows and
+                why, right on the same screen that just said "Saved." */}
+            {result.skippedRows.length > 0 && (
+              <MutedText style={{ color: colors.orange }}>
+                ⚠️ {t('importScreen.skippedRowsWarning', { count: result.skippedRows.length })}
+                {'\n'}
+                {result.skippedRows.map((r) => `• ${r.table}: ${r.description} — ${r.reason}`).join('\n')}
+              </MutedText>
+            )}
             {result.settlementWeekEnding && (
               <MutedText>
                 {result.isSettlementReimport

@@ -135,21 +135,19 @@ describe('step-tagged errors', () => {
     }
   });
 
-  test('a deductions-insert failure is tagged and the partial state shows the settlement row already saved', async () => {
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — superseded: a
+  // deductions-insert failure on a BRAND-NEW (non-reimport) settlement no
+  // longer aborts the whole save. insertBatchResilient() falls back to
+  // per-row inserts, and since this fake failure is table-wide (every
+  // insert to 'deductions' fails, batch AND per-row), the one deduction
+  // row ends up in the result's skippedRows instead of throwing — see
+  // the "IMPORT SAVE BUG FIX (resilient batch insert)" describe block
+  // below for the full behavior this replaces the old expectation with.
+  test('a deductions-insert failure on a NEW settlement no longer aborts the whole save — it is reported in skippedRows', async () => {
     withFailure({ table: 'deductions', mode: 'insert', error: { message: 'value too long for column "category"', code: '22001' } });
-    try {
-      await saveExtraction(baseParams(settlementExtraction()));
-      throw new Error('expected saveExtraction to throw');
-    } catch (err) {
-      expect(isSaveExtractionError(err)).toBe(true);
-      if (isSaveExtractionError(err)) {
-        expect(err.step).toBe('deductions-insert');
-        expect(err.partial.documentId).not.toBeNull();
-        expect(err.partial.settlementId).not.toBeNull();
-        expect(err.partial.settlementSaved).toBe(true);
-        expect(err.partial.childRowsSaved).toBe(false);
-      }
-    }
+    const result = await saveExtraction(baseParams(settlementExtraction()));
+    expect(result.skippedRows).toHaveLength(1);
+    expect(result.skippedRows[0]).toMatchObject({ table: 'deductions', reason: 'value too long for column "category"' });
   });
 
   test('a balance-update (RPC) failure is tagged and shows every child row already saved', async () => {
@@ -187,7 +185,10 @@ describe('step-tagged errors', () => {
   });
 
   test('buildErrorReport includes the step, message, code, and what was already saved', async () => {
-    withFailure({ table: 'deductions', mode: 'insert', error: { message: 'boom', code: '22001', hint: 'check the value' } });
+    // documents-insert (not one of the resilient-batch tables) still
+    // throws immediately, same as before — a good, still-fatal step to
+    // exercise buildErrorReport()'s own formatting.
+    withFailure({ table: 'documents', mode: 'insert', error: { message: 'boom', code: '22001', hint: 'check the value' } });
     try {
       await saveExtraction(baseParams(settlementExtraction()));
       throw new Error('expected saveExtraction to throw');
@@ -195,13 +196,60 @@ describe('step-tagged errors', () => {
       expect(isSaveExtractionError(err)).toBe(true);
       if (isSaveExtractionError(err)) {
         const report = buildErrorReport(err, 'v1.0.0 · embedded build');
-        expect(report).toContain('deductions-insert');
+        expect(report).toContain('documents-insert');
         expect(report).toContain('boom');
         expect(report).toContain('22001');
         expect(report).toContain('check the value');
-        expect(report).toContain('settlement row');
       }
     }
+  });
+});
+
+// IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report: "Failed
+// while saving loads/fuel/deductions — invalid input syntax for type
+// date: \"\""). insertBatchResilient()'s own behavior, proven against the
+// real saveExtraction().
+describe('IMPORT SAVE BUG FIX (resilient batch insert)', () => {
+  test('a transient batch failure recovers via the per-row fallback (count:1 — fails once, succeeds on retry)', async () => {
+    withFailure({ table: 'loads', mode: 'insert', error: { message: 'transient', code: '40001' }, count: 1 });
+    const result = await saveExtraction(baseParams(settlementExtraction()));
+    // The batch insert fails once (consuming the count:1 failure), then
+    // the per-row fallback succeeds for the single load — nothing
+    // skipped, no throw.
+    expect(result.skippedRows).toHaveLength(0);
+  });
+
+  test('a persistent per-row failure on a NEW settlement is skipped and reported, never thrown', async () => {
+    withFailure({ table: 'fuel_purchases', mode: 'insert', error: { message: 'bad fuel row', code: '22001' } });
+    const result = await saveExtraction(baseParams(settlementExtraction()));
+    expect(result.skippedRows).toEqual([{ table: 'fuel_purchases', description: expect.any(String), reason: 'bad fuel row' }]);
+  });
+
+  test('a persistent per-row failure on a RE-IMPORT still throws — never deletes last week\'s data over an incomplete replacement', async () => {
+    mockClient = createFakeSupabase(
+      {
+        profiles: [{ user_id: USER_ID, business_balance: 0 }],
+        trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: 'Unit 4471', trailer_unit_number: null }],
+        settlements: [{ id: 'sett-old', user_id: USER_ID, week_ending: '2026-07-05', truck_id: null, business_balance_credit: 500 }],
+      },
+      { failures: [{ table: 'deductions', mode: 'insert', error: { message: 'bad deduction row', code: '22001' } }] }
+    );
+    await expect(saveExtraction(baseParams(settlementExtraction()))).rejects.toMatchObject({ step: 'deductions-insert' });
+  });
+
+  test('rows that save successfully alongside a skipped row are still saved (not all-or-nothing within the batch)', async () => {
+    withFailure({ table: 'deductions', mode: 'insert', error: { message: 'bad row', code: '22001' } });
+    const extraction = settlementExtraction();
+    // Two loads, so even though every 'deductions' insert fails, both
+    // loads (a different table, unaffected by the deductions failure)
+    // must still save normally.
+    extraction.settlement!.loads = [
+      { order: 'L1', from: 'A', to: 'B', loadedMiles: 500, revenue: 1000 },
+      { order: 'L2', from: 'B', to: 'C', loadedMiles: 400, revenue: 800 },
+    ];
+    const result = await saveExtraction(baseParams(extraction));
+    expect(result.skippedRows).toHaveLength(1);
+    expect(result.skippedRows[0].table).toBe('deductions');
   });
 });
 

@@ -7,6 +7,7 @@ import {
   resolveWeekEndingWithAnchor,
   isImplausibleDate,
   findImplausibleDates,
+  toDateOrNull,
 } from '@/src/import/dateGuard';
 import type { Extraction } from '@/src/import/types';
 
@@ -276,5 +277,37 @@ describe('findImplausibleDates (owner decision 2026-08-05, FULL PARITY pass item
   it('returns an empty array when every date is plausible', () => {
     const rows = [{ id: 'a', ded_date: '2026-07-18' }];
     expect(findImplausibleDates(rows, (r) => r.ded_date, NOW)).toEqual([]);
+  });
+});
+
+describe('toDateOrNull (owner decision 2026-08-05, IMPORT SAVE BUG FIX — device report: "invalid input syntax for type date: \\"\\"")', () => {
+  it('passes through a valid YYYY-MM-DD date unchanged', () => {
+    expect(toDateOrNull('2026-07-18')).toBe('2026-07-18');
+  });
+
+  it('returns null for an empty string — the exact bug: Postgres rejects "" for a date column', () => {
+    expect(toDateOrNull('')).toBeNull();
+  });
+
+  it('returns null for whitespace-only text', () => {
+    expect(toDateOrNull('   ')).toBeNull();
+  });
+
+  it('returns null for "N/A" or other non-calendar-date text', () => {
+    expect(toDateOrNull('N/A')).toBeNull();
+    expect(toDateOrNull('unknown')).toBeNull();
+  });
+
+  it('returns null for null/undefined', () => {
+    expect(toDateOrNull(null)).toBeNull();
+    expect(toDateOrNull(undefined)).toBeNull();
+  });
+
+  it('returns null for a malformed calendar date (e.g. month 13)', () => {
+    expect(toDateOrNull('2026-13-45')).toBeNull();
+  });
+
+  it('trims surrounding whitespace around an otherwise-valid date', () => {
+    expect(toDateOrNull('  2026-07-18  ')).toBe('2026-07-18');
   });
 });

@@ -9,6 +9,7 @@ import {
   toDbServiceType,
 } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
+import { toDateOrNull } from '@/src/import/dateGuard';
 import { clampPerDiemDays, defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import type {
   ComplianceItemInsert,
@@ -35,6 +36,20 @@ import type {
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
   return Number.isFinite(n) ? (n as number) : fallback;
+}
+
+// IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report) — the
+// `number | null` counterpart to num()'s `number` (which always has a
+// fallback, appropriate for NOT NULL columns like amount/miles). For a
+// NULLABLE numeric column (gallons, a loan's balance/payment, warranty
+// years, a document's top-level amount), a value the AI returned as ''/
+// 'N/A'/anything non-numeric must become NULL, never a 0 that would
+// falsely claim "we know this is zero" — same "never guess" spirit as
+// toDateOrNull() below.
+export function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+  return Number.isFinite(n) ? (n as number) : null;
 }
 
 // ---------- settlement (legacy saveImport() settlement branch, legacy/index.html:2510-2527) ----------
@@ -67,11 +82,11 @@ function toFuelInsert(
     driver_id: driverId,
     settlement_id: null,
     fuel_type: fuelType,
-    purchase_date: f.date ?? fallbackDate ?? null,
+    purchase_date: toDateOrNull(f.date) ?? fallbackDate ?? null,
     location: f.location ?? null,
     state: f.state ?? null,
-    gallons: f.gallons ?? null,
-    amount: f.amount ?? null,
+    gallons: numOrNull(f.gallons),
+    amount: numOrNull(f.amount),
     discount: num(f.discount),
   };
 }
@@ -90,7 +105,7 @@ function toTollInsert(t: ExtractedToll, network: 'ezpass' | 'drivewyze', userId:
   return {
     user_id: userId,
     network,
-    toll_date: t.date ?? fallbackDate ?? null,
+    toll_date: toDateOrNull(t.date) ?? fallbackDate ?? null,
     amount: num(t.amount),
     plaza: t.plaza ?? t.location ?? null,
     // Accountant Package ORIGIN RULE (docs/PENDING_SQL.md §43, owner
@@ -119,14 +134,19 @@ export function mapSettlement(
   // PER-LINE date of its own got purchase_date/reimb_date/ded_date/
   // toll_date/service_date = NULL — which then landed every one of those
   // rows in the UI's "unknown month" bucket instead of a real month.
-  const settlementFallbackDate = s.weekEnding || d.date || undefined;
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report): both
+  // candidates are routed through toDateOrNull() first — a `||` chain
+  // alone already tolerates '' correctly (falsy), but toDateOrNull()
+  // additionally rejects whitespace-only/"N/A"/any other non-calendar-
+  // date text the AI might return instead of a clean empty string.
+  const settlementFallbackDate = toDateOrNull(s.weekEnding) ?? toDateOrNull(d.date) ?? undefined;
 
   const miles = num(s.totalMiles);
   const settlement: SettlementInsert = {
     user_id: userId,
     truck_id: truckId,
     driver_id: driverId,
-    week_ending: s.weekEnding || d.date || '',
+    week_ending: settlementFallbackDate ?? '',
     gross: num(s.grossRevenue),
     net: num(s.netPay),
     miles,
@@ -143,8 +163,8 @@ export function mapSettlement(
   // day-range calc (app/src/tax/perDiem.ts) — load_date stays populated too
   // for existing display code that only reads the single column.
   const loads: LoadInsert[] = (s.loads ?? []).map((l) => {
-    const pickupDate = l.pickupDate ?? l.date ?? settlementFallbackDate ?? null;
-    const deliveryDate = l.deliveryDate ?? l.dropDate ?? pickupDate;
+    const pickupDate = toDateOrNull(l.pickupDate) ?? toDateOrNull(l.date) ?? settlementFallbackDate ?? null;
+    const deliveryDate = toDateOrNull(l.deliveryDate) ?? toDateOrNull(l.dropDate) ?? pickupDate;
     return {
       user_id: userId,
       settlement_id: null,
@@ -228,10 +248,10 @@ export function mapSettlement(
   const loans: LoanInsert[] = (s.loans ?? []).map((l) => ({
     user_id: userId,
     name: l.name,
-    balance: l.balance ?? null,
-    payment: l.payment ?? null,
+    balance: numOrNull(l.balance),
+    payment: numOrNull(l.payment),
     frequency: l.frequency ?? null,
-    next_due: l.nextDue || null,
+    next_due: toDateOrNull(l.nextDue),
   }));
 
   return { settlement, loads, fuel, deductions, maintenance, reimbursements, tolls, loans, netPay: num(s.netPay) };
@@ -245,11 +265,11 @@ export function mapFuel(d: Extraction, userId: string, truckId: string | null): 
     truck_id: truckId,
     settlement_id: null,
     fuel_type: f.type === 'reefer' ? 'reefer' : 'tractor',
-    purchase_date: d.date ?? null,
+    purchase_date: toDateOrNull(d.date),
     location: f.station ?? null,
     state: f.state ?? null,
-    gallons: f.gallons ?? null,
-    amount: f.gross ?? null,
+    gallons: numOrNull(f.gallons),
+    amount: numOrNull(f.gross),
     discount: num(f.discount),
   };
 }
@@ -265,7 +285,7 @@ export function mapMaintenance(d: Extraction, userId: string, truckId: string | 
   const maintenance: MaintenanceRecordInsert = {
     user_id: userId,
     truck_id: truckId,
-    service_date: d.date ?? null,
+    service_date: toDateOrNull(d.date),
     service_type: toDbServiceType(m.serviceType || detectMaintType(m.description)),
     description: m.description ?? null,
     odometer: num(m.odometer),
@@ -278,14 +298,20 @@ export function mapMaintenance(d: Extraction, userId: string, truckId: string | 
     // maintenance section.
     source: 'import',
   };
+  // numOrNull() guard (owner decision 2026-08-05, device report): the old
+  // `m.warrantyCredit && m.warrantyCredit > 0` gate would pass for a
+  // STRING like "150.00" (JS loosely coerces `"150.00" > 0` to true) and
+  // then insert that raw string into a numeric column — compute the
+  // sanitized number FIRST, gate on that.
+  const warrantyAmount = numOrNull(m.warrantyCredit);
   const reimbursement: ReimbursementInsert | null =
-    m.warrantyCredit && m.warrantyCredit > 0
+    warrantyAmount && warrantyAmount > 0
       ? {
           user_id: userId,
-          reimb_date: d.date ?? null,
+          reimb_date: toDateOrNull(d.date),
           description: `Warranty — ${m.description ?? ''}`,
           reference: m.invoice ?? null,
-          amount: m.warrantyCredit,
+          amount: warrantyAmount,
         }
       : null;
   return { maintenance, reimbursement };
@@ -359,7 +385,7 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
       const parentMatch = name.match(PARENT_REF_RE);
       serviceLines.push({ name, cost, parent: parentMatch?.[1]?.trim() ?? (item as { warrantyFor?: string }).warrantyFor });
     } else {
-      realItems.push({ name, qty, cost, warrantyYears: item.warrantyYears, extra: 0 });
+      realItems.push({ name, qty, cost, warrantyYears: numOrNull(item.warrantyYears) ?? undefined, extra: 0 });
     }
   }
 
@@ -369,7 +395,7 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
   const buildRow = (desc: string, amount: number, category: string, warrantyYears: number | null = null): PurchaseDeductionMapping => ({
     insert: {
       user_id: userId,
-      ded_date: d.date ?? null,
+      ded_date: toDateOrNull(d.date),
       code: 'EQUIP',
       description: desc,
       amount,
@@ -467,7 +493,7 @@ export function mapDriverPayment(d: Extraction, userId: string, driverId: string
     user_id: userId,
     driver_id: driverId,
     settlement_id: null,
-    date: d.date || new Date().toISOString().slice(0, 10),
+    date: toDateOrNull(d.date) ?? new Date().toISOString().slice(0, 10),
     gross_pay: num(p.amount ?? d.totalAmount),
     notes: p.notes || p.method || null,
   };
@@ -501,7 +527,7 @@ export function mapFinancialDocDeduction(d: Extraction, userId: string): Deducti
   const periodSuffix = f.period ? ` — ${f.period}` : '';
   return {
     user_id: userId,
-    ded_date: d.date ?? null,
+    ded_date: toDateOrNull(d.date),
     code: 'FINDOC',
     description: `${f.description || d.summary || d.vendor || 'Business expense'}${refSuffix}${periodSuffix}`,
     amount: num(f.amount ?? d.totalAmount),
@@ -546,7 +572,7 @@ export function mapCompliance(d: Extraction, userId: string): ComplianceItemInse
   const c = d.compliance ?? {};
   const docType = (c.type ?? d.docType) as ComplianceDocType;
   const type = COMPLIANCE_TYPE_MAP[docType];
-  const dueDate = c.dueDate || d.date;
+  const dueDate = toDateOrNull(c.dueDate) ?? toDateOrNull(d.date);
   // Never guess a due date — if the document genuinely doesn't show one,
   // there is nothing to track yet (matches every other "never guess, flag
   // for review" rule elsewhere in ai-import); the caller still archives
@@ -578,10 +604,10 @@ export function mapLoanAgreement(d: Extraction, userId: string): LoanInsert {
     lender: l.lender ?? d.vendor ?? null,
     original_amount: num(l.amount ?? d.totalAmount) || null,
     balance: num(l.amount ?? d.totalAmount) || null,
-    payment: l.payment ? num(l.payment) : null,
-    apr: l.apr ? num(l.apr) : null,
+    payment: numOrNull(l.payment),
+    apr: numOrNull(l.apr),
     frequency: l.frequency ?? null,
-    next_due: l.nextDue || null,
+    next_due: toDateOrNull(l.nextDue),
   };
 }
 
@@ -605,7 +631,7 @@ export function mapGenericDeduction(d: Extraction, userId: string, categoryOverr
   const category = categoryOverride || (isOther && d.suggestedCategory) || 'Other';
   return {
     user_id: userId,
-    ded_date: d.date ?? null,
+    ded_date: toDateOrNull(d.date),
     code: 'OTHER',
     description: isOther ? `NEEDS REVIEW: ${d.summary || d.suggestedCategory || 'Document'}` : d.summary || 'Document',
     amount: num(d.totalAmount),

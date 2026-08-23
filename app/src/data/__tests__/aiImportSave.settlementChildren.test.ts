@@ -204,3 +204,81 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     expect(best[0].origin).toBe('Atlanta, GA');
   });
 });
+
+// IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report: "Failed
+// while saving loads/fuel/deductions — invalid input syntax for type
+// date: \"\""). Postgres rejects an empty string for a `date` column —
+// only a real date or NULL is allowed. Every AI-extracted date/numeric
+// field is optional/loosely-typed text (app/src/import/types.ts's own
+// header comment: "never trust it hasn't dropped a key") — a field the
+// model returned as PRESENT-BUT-EMPTY ('', whitespace, "N/A") used to
+// slip past a `??` check (which only treats null/undefined as absent)
+// straight into the database. This end-to-end test proves the real fix
+// (toDateOrNull()/numOrNull(), routed through every mapper in
+// mapExtraction.ts) against the REAL saveExtraction() — the import
+// succeeds, nothing throws, and every child row lands with a sane
+// fallback instead of a raw '' reaching Postgres.
+function malformedDatesAndNumericsExtraction(): Extraction {
+  return {
+    docType: 'settlement',
+    settlement: {
+      weekEnding: WEEK_ENDING,
+      grossRevenue: 4000,
+      netPay: 3200,
+      totalMiles: 2200,
+      loads: [
+        // pickupDate/deliveryDate/date all empty or malformed — must fall
+        // back to the settlement's own week_ending, never reach the DB as ''.
+        { order: 'L1', from: 'Dallas, TX', to: 'Atlanta, GA', loadedMiles: 800, revenue: 2000, pickupDate: '', deliveryDate: 'N/A' as unknown as string },
+      ],
+      tractorFuel: [{ location: 'Pilot #212', gallons: '' as unknown as number, amount: 'N/A' as unknown as number, date: '' }],
+      reeferFuel: [{ location: 'Pilot #212', gallons: 40, amount: 160, date: '   ' }],
+      reimbursementItems: [{ desc: 'Lumper fee', ref: 'L1', amount: 75 }],
+      deductions: [{ code: 'INS', desc: 'Weekly insurance', amount: 200 }],
+      loans: [{ name: 'Truck Note', balance: '' as unknown as number, payment: 'N/A' as unknown as number, nextDue: '' }],
+    },
+  };
+}
+
+describe('IMPORT SAVE BUG FIX — empty-string/malformed dates and numerics never reach the database', () => {
+  test('the import succeeds without throwing', async () => {
+    await expect(saveExtraction(baseParams(malformedDatesAndNumericsExtraction()))).resolves.toBeDefined();
+  });
+
+  test('every child row with a blank/malformed own date lands with the settlement week_ending, never an empty string', async () => {
+    await saveExtraction(baseParams(malformedDatesAndNumericsExtraction()));
+
+    const loads = mockClient.__store.loads as Load[];
+    const fuel = mockClient.__store.fuel_purchases as FuelPurchase[];
+
+    expect(loads[0].pickup_date).toBe(WEEK_ENDING);
+    expect(loads[0].delivery_date).toBe(WEEK_ENDING);
+    for (const f of fuel) {
+      expect(f.purchase_date).toBe(WEEK_ENDING);
+      expect(f.purchase_date).not.toBe('');
+    }
+  });
+
+  test('empty-string/"N/A" numeric fields become null, never a raw empty string', async () => {
+    await saveExtraction(baseParams(malformedDatesAndNumericsExtraction()));
+
+    const fuel = mockClient.__store.fuel_purchases as FuelPurchase[];
+    const loans = mockClient.__store.loans as { balance: number | null; payment: number | null; next_due: string | null }[];
+
+    const tractorFuel = fuel.find((f) => f.fuel_type === 'tractor')!;
+    expect(tractorFuel.gallons).toBeNull();
+    expect(tractorFuel.amount).toBeNull();
+
+    expect(loans[0].balance).toBeNull();
+    expect(loans[0].payment).toBeNull();
+    expect(loans[0].next_due).toBeNull();
+  });
+
+  test('the settlement row itself still saves correctly despite every child row having a bad date', async () => {
+    await saveExtraction(baseParams(malformedDatesAndNumericsExtraction()));
+
+    const settlements = mockClient.__store.settlements as Settlement[];
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0].week_ending).toBe(WEEK_ENDING);
+  });
+});

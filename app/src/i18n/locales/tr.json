@@ -398,6 +398,7 @@
     "saved": "✅ Kaydedildi",
     "savedSettlementNew": "Settlement kaydedildi W/E {{date}} (yeni)",
     "savedSettlementReplaced": "Settlement kaydedildi W/E {{date}} (değiştirildi)",
+    "skippedRowsWarning": "{{count}} satır kaydedilemedi ve atlandı:",
     "balanceAdded": "💰 Bakiye {{amount}}",
     "contributionAdded": "💰 Sermaye Hesabı katkısı olarak eklendi: {{amount}} (kişisel fonlardan ödendi)",
     "savedToPath": "📁 Şuraya kaydedildi: {{path}}",

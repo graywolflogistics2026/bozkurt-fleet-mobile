@@ -34,6 +34,38 @@ function parseIsoDate(dateStr: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report): Postgres
+// rejects an empty string for a `date` column ("invalid input syntax for
+// type date: \"\"") — only a real date or NULL is allowed. Every AI-
+// extracted date field is typed as optional `string` (never `string |
+// null`, see import/types.ts's own header comment), so a field the model
+// returned as a PRESENT-BUT-EMPTY key ('') looks "there" to a `??` check
+// (which only treats null/undefined as absent) and sails straight through
+// to the database. This is the ONE shared guard every date written to the
+// database must be routed through: valid `YYYY-MM-DD` in, that same
+// string out; '', whitespace-only, "N/A", or any other non-calendar-date
+// text in, `null` out — never an empty string reaching a DB write.
+export function toDateOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const d = parseIsoDate(trimmed);
+  if (!d) return null;
+  // parseIsoDate() alone is too lenient for this guard's purpose: JS Date
+  // arithmetic silently ROLLS OVER an out-of-range month/day (e.g. month
+  // 13 becomes January of the next year) instead of rejecting it, so
+  // "2026-13-45" would otherwise parse "successfully" into some other
+  // real date entirely — not the "real calendar date" the input actually
+  // claimed to be. Round-tripping the parsed Date's own fields back
+  // against the original digits (same pattern trySwapYearAndDay() uses
+  // below) catches this.
+  const m = ISO_DATE_RE.exec(trimmed)!;
+  if (d.getUTCFullYear() !== Number(m[1]) || d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) {
+    return null;
+  }
+  return trimmed;
+}
+
 // Swaps a YYYY-MM-DD date's year and day within the same century (month
 // untouched) — e.g. 2024-07-26 -> 2026-07-24. Returns null when the swap
 // wouldn't produce a value that could plausibly be a day-of-month (>31),

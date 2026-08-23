@@ -3606,3 +3606,90 @@
   hi/uk as untranslated English copies per invariant #11; "Schedule C"
   correctly kept untranslated in the final slide's body per the
   glossary).
+- IMPORT SAVE BUG FIX — empty-string dates/numerics never reach the
+  database (owner decision 2026-08-23, device evidence: "Failed while
+  saving loads/fuel/deductions — invalid input syntax for type date:
+  \"\"" from the step-tagged error UI). Root cause: every AI-extracted
+  field in `app/src/import/types.ts`'s `Extraction` type is typed as
+  optional `string` (never `string | null`), so the model can return a
+  key with an EMPTY-STRING value rather than omitting it; several date/
+  numeric fallback chains across `mapExtraction.ts`/`aiImportSave.ts`
+  used `??` (nullish coalescing), which only treats `null`/`undefined`
+  as "absent" — a present-but-empty `''` sailed straight through to a
+  Postgres `date`/`numeric` column, which rejects `''` (only a real
+  value or `NULL` is valid). `||`-based chains were already safe (falsy
+  includes `''`); this was specifically a `??` bug.
+  1. **`app/src/import/dateGuard.ts`'s `toDateOrNull(value)`** is now the
+     ONE guard every date written to the database routes through:
+     `null`/undefined/non-string/whitespace-only/anything that isn't a
+     real calendar date all return `null`. It's stricter than the
+     existing lenient `parseIsoDate()` alone — that helper's
+     `Date.UTC()` arithmetic silently ROLLS OVER an out-of-range month/
+     day (month 13 becomes January of the next year) instead of
+     rejecting it, so `toDateOrNull()` round-trips the parsed date's own
+     year/month/day back against the original digits (same pattern
+     `trySwapYearAndDay()` already uses in the same file) and returns
+     `null` on any mismatch.
+  2. **`app/src/import/mapExtraction.ts`'s `numOrNull(v)`** is the
+     nullable counterpart to the existing `num(v, fallback=0)` — used
+     wherever a `0` fallback would falsely claim "we know this is zero"
+     on a nullable numeric column (gallons, loan balance/payment/APR,
+     warranty years, document amount) as opposed to a NOT NULL column
+     with a real 0 default, which keeps using `num()`.
+  3. **Every mapper in `mapExtraction.ts` routes its own date/numeric
+     fields through these two** (settlements, loads, fuel, maintenance,
+     tolls, deductions, reimbursements, compliance, driver payments,
+     loan agreements) — `mapSettlement()`'s own
+     `settlementFallbackDate = toDateOrNull(s.weekEnding) ??
+     toDateOrNull(d.date) ?? undefined` is the ONE settlement-level
+     fallback every child mapper (`toFuelInsert()`/`toTollInsert()`, the
+     inline load/deduction/maintenance mappers) receives as a
+     `fallbackDate` param — implementing the exact "row's own date, else
+     week_ending, else document date, else NULL" chain from the bug
+     report: a child row is never rejected just because the AI left its
+     own date blank. `aiImportSave.ts`'s `capital_transactions` insert
+     (`tx_date: toDateOrNull(d.date) ?? new Date().toISOString().slice(0,
+     10)`, a `NOT NULL` column) and `documents.amount`
+     (`numOrNull(d.totalAmount)`) got the identical fix.
+  4. **Resilient batch insert, `aiImportSave.ts`'s
+     `insertBatchResilient()`**: loads/fuel_purchases/deductions/
+     reimbursements/maintenance_records/tolls each try a fast full-batch
+     `.insert()` first; on any failure, falls back to inserting ONE ROW
+     AT A TIME, collecting `{table, description, reason}` for whichever
+     rows still fail into `SaveExtractionResult.skippedRows` rather than
+     discarding the whole import over one bad row. Carefully preserves
+     the PRE-EXISTING re-import safety invariant (CLAUDE.md invariant
+     #10's "old rows are deleted only after every new row succeeds"): on
+     a REIMPORT, a persisting per-row failure still THROWS a
+     `SaveExtractionError` (never silently deletes last week's data over
+     an incomplete replacement); on a brand-new import (no prior data at
+     risk), a partial failure is tolerated and reported instead. The
+     import screen (`app/(tabs)/import/index.tsx`) shows an amber
+     `importScreen.skippedRowsWarning` banner listing exactly which rows
+     were skipped and why, whenever `skippedRows.length > 0`.
+  Tests: `app/src/import/__tests__/dateGuard.test.ts` gained a
+  `toDateOrNull` describe block (valid passthrough, empty/whitespace/
+  "N/A"/null/undefined → null, malformed calendar date → null,
+  whitespace-trimming). `app/src/import/__tests__/mapExtraction.test.ts`
+  gained a `numOrNull` describe block plus edge-case coverage inside
+  `mapSettlement`/`mapFuel`/`mapMaintenance`/`mapGenericDeduction`/
+  `mapCompliance` (empty-string/malformed dates and numerics sanitizing
+  correctly, settlement week_ending fallback, a string warrantyCredit
+  like `"150.00"` still creating a correct numeric reimbursement despite
+  JS's loose `>` comparison coercion risk). `app/src/data/__tests__/
+  aiImportSave.errorReporting.test.ts` gained an "IMPORT SAVE BUG FIX
+  (resilient batch insert)" block (transient-failure recovery, a
+  persistent NEW-import failure reported not thrown, a persistent
+  REIMPORT failure still throwing, good rows in the same batch still
+  saving alongside a skipped one) and had its two pre-existing tests
+  that asserted the OLD always-throw-on-any-failure behavior updated to
+  match this deliberate behavior change. `app/src/data/__tests__/
+  aiImportSave.settlementChildren.test.ts` gained an end-to-end
+  "empty-string/malformed dates and numerics never reach the database"
+  block proving a realistic malformed extraction (empty pickup/delivery
+  dates, `'N/A'` gallons/amount, empty loan balance/payment/nextDue)
+  saves without throwing, with every child row correctly inheriting the
+  settlement's `week_ending` and every bad numeric landing as `null`.
+  Full suite: 74 suites / 1839 tests pass; `tsc --noEmit` clean; all 7
+  locales confirmed key-parity (`importScreen.skippedRowsWarning`, hi/uk
+  as untranslated English copies per invariant #11).

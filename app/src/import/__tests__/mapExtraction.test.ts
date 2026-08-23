@@ -8,8 +8,44 @@ import {
   mapMaintenance,
   mapPurchase,
   mapSettlement,
+  numOrNull,
 } from '@/src/import/mapExtraction';
 import type { Extraction } from '@/src/import/types';
+
+// IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report:
+// "invalid input syntax for type date: \"\""). numOrNull() is the
+// `number | null` counterpart to num()'s always-a-fallback `number` —
+// used for nullable numeric columns (gallons, a loan's balance/payment,
+// warranty years, a document's top-level amount) where 0 would falsely
+// claim "we know this is zero" instead of "we don't know."
+describe('numOrNull', () => {
+  it('parses a valid numeric string', () => {
+    expect(numOrNull('150.5')).toBe(150.5);
+  });
+
+  it('passes through a real number unchanged', () => {
+    expect(numOrNull(42)).toBe(42);
+  });
+
+  it('returns null for an empty string', () => {
+    expect(numOrNull('')).toBeNull();
+  });
+
+  it('returns null for "N/A" or other non-numeric text', () => {
+    expect(numOrNull('N/A')).toBeNull();
+    expect(numOrNull('unknown')).toBeNull();
+  });
+
+  it('returns null for null/undefined', () => {
+    expect(numOrNull(null)).toBeNull();
+    expect(numOrNull(undefined)).toBeNull();
+  });
+
+  it('returns null for NaN/Infinity', () => {
+    expect(numOrNull(NaN)).toBeNull();
+    expect(numOrNull(Infinity)).toBeNull();
+  });
+});
 
 describe('mapSettlement', () => {
   const extraction: Extraction = {
@@ -86,6 +122,46 @@ describe('mapSettlement', () => {
   it('falls back to the document date as week_ending when weekEnding is missing', () => {
     const r = mapSettlement({ docType: 'settlement', date: '2026-06-27', settlement: {} }, 'user-1', null);
     expect(r.settlement.week_ending).toBe('2026-06-27');
+  });
+
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report:
+  // "invalid input syntax for type date: \"\"") — an empty-string
+  // weekEnding must not count as "present" (a `||` chain already
+  // tolerates this, but toDateOrNull() additionally rejects "N/A"-style
+  // garbage a `||` chain alone would not catch).
+  it('an empty-string weekEnding falls through to the document date, never a raw empty string', () => {
+    const r = mapSettlement({ docType: 'settlement', date: '2026-06-27', settlement: { weekEnding: '' } }, 'user-1', null);
+    expect(r.settlement.week_ending).toBe('2026-06-27');
+  });
+
+  it('week_ending is "" (never a garbage string) when neither weekEnding nor date can be resolved — the caller throws on this, never Postgres', () => {
+    const r = mapSettlement({ docType: 'settlement', settlement: { weekEnding: 'N/A' } }, 'user-1', null);
+    expect(r.settlement.week_ending).toBe('');
+  });
+
+  it('a load with an empty-string pickupDate/deliveryDate inherits the settlement week_ending, never a raw empty string', () => {
+    const d: Extraction = {
+      docType: 'settlement',
+      settlement: {
+        weekEnding: '2026-06-27',
+        loads: [{ order: 'L1', from: 'A', to: 'B', loadedMiles: 100, revenue: 200, pickupDate: '', deliveryDate: 'N/A' }],
+      },
+    };
+    const r = mapSettlement(d, 'user-1', null);
+    expect(r.loads[0].pickup_date).toBe('2026-06-27');
+    expect(r.loads[0].delivery_date).toBe('2026-06-27');
+  });
+
+  it('settlement-embedded loan balance/payment/next_due sanitize empty-string/"N/A" values to null', () => {
+    const d: Extraction = {
+      docType: 'settlement',
+      settlement: {
+        weekEnding: '2026-06-27',
+        loans: [{ name: 'Truck Note', balance: '' as unknown as number, payment: 'N/A' as unknown as number, nextDue: '' }],
+      },
+    };
+    const r = mapSettlement(d, 'user-1', null);
+    expect(r.loans[0]).toMatchObject({ balance: null, payment: null, next_due: null });
   });
 
   it('maps chargebackType to a canonical display category (industry knowledge base, owner decision 2026-07-10)', () => {
@@ -204,6 +280,25 @@ describe('mapFuel', () => {
     const d: Extraction = { docType: 'fuel', date: '2026-06-15', fuel: { type: 'reefer' } };
     expect(mapFuel(d, 'user-1', null).fuel_type).toBe('reefer');
   });
+
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report:
+  // "invalid input syntax for type date: \"\"") — an empty-string date/
+  // numeric from the AI must never reach the database as a raw ''.
+  it('an empty-string date becomes null, never a raw empty string', () => {
+    const d: Extraction = { docType: 'fuel', date: '', fuel: { type: 'tractor' } };
+    expect(mapFuel(d, 'user-1', null).purchase_date).toBeNull();
+  });
+
+  it('empty-string/"N/A" gallons and amount become null, not the literal text', () => {
+    const d: Extraction = {
+      docType: 'fuel',
+      date: '2026-06-15',
+      fuel: { type: 'tractor', gallons: '' as unknown as number, gross: 'N/A' as unknown as number },
+    };
+    const r = mapFuel(d, 'user-1', null);
+    expect(r.gallons).toBeNull();
+    expect(r.amount).toBeNull();
+  });
 });
 
 describe('mapMaintenance', () => {
@@ -229,6 +324,33 @@ describe('mapMaintenance', () => {
     const d: Extraction = { docType: 'maintenance', date: '2026-05-19', maintenance: { description: 'Brake repair', warrantyCredit: 150 } };
     const r = mapMaintenance(d, 'user-1', null);
     expect(r.reimbursement).toMatchObject({ amount: 150, description: 'Warranty — Brake repair' });
+  });
+
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — an empty-string
+  // date must never reach service_date; a string warrantyCredit like
+  // "150.00" must not defeat the `> 0` gate and insert a string amount.
+  it('an empty-string date becomes null service_date, never a raw empty string', () => {
+    const d: Extraction = { docType: 'maintenance', date: '', maintenance: { description: 'Brake repair' } };
+    expect(mapMaintenance(d, 'user-1', null).maintenance.service_date).toBeNull();
+  });
+
+  it('a string warrantyCredit ("150.00") still creates a correctly-numeric reimbursement', () => {
+    const d: Extraction = {
+      docType: 'maintenance',
+      date: '2026-05-19',
+      maintenance: { description: 'Brake repair', warrantyCredit: '150.00' as unknown as number },
+    };
+    const r = mapMaintenance(d, 'user-1', null);
+    expect(r.reimbursement?.amount).toBe(150);
+  });
+
+  it('an empty-string/"N/A" warrantyCredit never creates a reimbursement', () => {
+    const d: Extraction = {
+      docType: 'maintenance',
+      date: '2026-05-19',
+      maintenance: { description: 'Brake repair', warrantyCredit: 'N/A' as unknown as number },
+    };
+    expect(mapMaintenance(d, 'user-1', null).reimbursement).toBeNull();
   });
 });
 
@@ -430,6 +552,13 @@ describe('mapGenericDeduction', () => {
     const d: Extraction = { docType: 'toll', date: '2026-06-10', totalAmount: 42, summary: 'Toll bill' };
     expect(mapGenericDeduction(d, 'user-1').tax_deductible).toBe(true);
   });
+
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — an empty-string
+  // top-level date must never reach ded_date.
+  it('an empty-string date becomes null ded_date, never a raw empty string', () => {
+    const d: Extraction = { docType: 'toll', date: '', totalAmount: 42, summary: 'Toll bill' };
+    expect(mapGenericDeduction(d, 'user-1').ded_date).toBeNull();
+  });
 });
 
 describe('mapDriverPayment (universal AI capture, owner decision 2026-07-10)', () => {
@@ -560,6 +689,20 @@ describe('mapCompliance (AI feature package, owner decision 2026-07-10 — compl
 
   it('never guesses a due date — returns null when neither dueDate nor date is present', () => {
     const d: Extraction = { docType: 'medical_card', compliance: {} };
+    expect(mapCompliance(d, 'user-1')).toBeNull();
+  });
+
+  // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — an empty-string
+  // dueDate must not count as "present" (which would write '' to a NOT
+  // NULL due_date column) — it must fall through to d.date, same as if
+  // dueDate had been omitted entirely.
+  it('an empty-string dueDate falls through to the document date, not a raw empty string', () => {
+    const d: Extraction = { docType: 'medical_card', date: '2026-06-10', compliance: { dueDate: '' } };
+    expect(mapCompliance(d, 'user-1')?.due_date).toBe('2026-06-10');
+  });
+
+  it('an empty-string dueDate with no document date either returns null, never ""', () => {
+    const d: Extraction = { docType: 'medical_card', compliance: { dueDate: '' } };
     expect(mapCompliance(d, 'user-1')).toBeNull();
   });
 

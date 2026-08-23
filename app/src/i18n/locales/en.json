@@ -398,6 +398,7 @@
     "saved": "✅ Saved",
     "savedSettlementNew": "Saved settlement W/E {{date}} (new)",
     "savedSettlementReplaced": "Saved settlement W/E {{date}} (replaced)",
+    "skippedRowsWarning": "{{count}} row(s) could not be saved and were skipped:",
     "balanceAdded": "💰 Balance {{amount}}",
     "contributionAdded": "💰 Added as a Capital Account contribution: {{amount}} (paid from personal funds)",
     "savedToPath": "📁 Saved to {{path}}",

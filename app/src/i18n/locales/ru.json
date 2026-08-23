@@ -398,6 +398,7 @@
     "saved": "✅ Сохранено",
     "savedSettlementNew": "Settlement сохранён W/E {{date}} (новый)",
     "savedSettlementReplaced": "Settlement сохранён W/E {{date}} (заменён)",
+    "skippedRowsWarning": "{{count}} строк(а/и) не удалось сохранить, они были пропущены:",
     "balanceAdded": "💰 Баланс {{amount}}",
     "contributionAdded": "💰 Добавлено как взнос в Капитальный Счёт: {{amount}} (оплачено личными средствами)",
     "savedToPath": "📁 Сохранено в {{path}}",
