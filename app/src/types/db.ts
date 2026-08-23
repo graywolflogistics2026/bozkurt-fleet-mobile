@@ -476,6 +476,31 @@ export type UserCategoryInsert = Partial<Omit<UserCategory, 'id' | 'created_at' 
 };
 export type UserCategoryUpdate = Partial<Omit<UserCategory, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
+// CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
+// follow-up item G, docs/PENDING_SQL.md §47) — a keyword→category rule
+// learned from a user's own manual re-categorization. `keyword` is
+// app/src/import/categoryLearning.ts's `normalizeKeyword()` output (never
+// raw free text) so matching stays consistent between save-time and
+// match-time. Unique per (user_id, keyword) — re-correcting the same
+// vendor again just bumps `hit_count` and overwrites `category`, never
+// creates a second row. PROMPT-CONTEXT ONLY: sent to ai-import as plain
+// text hints, never used to fine-tune/retrain any model.
+export type CategoryLearningRule = {
+  id: string;
+  user_id: string;
+  keyword: string;
+  category: string;
+  hit_count: number;
+  created_at: string;
+  updated_at: string;
+};
+export type CategoryLearningRuleInsert = Partial<Omit<CategoryLearningRule, 'id' | 'created_at' | 'updated_at'>> & {
+  user_id: string;
+  keyword: string;
+  category: string;
+};
+export type CategoryLearningRuleUpdate = Partial<Omit<CategoryLearningRule, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
 // docs/PENDING_SQL.md §23 (AI feature package — compliance tracker, owner
 // decision 2026-07-10, PRODUCT DECISION). Optional/additive — zero rows
 // means an empty tracker. type covers all 8 categories named in the spec;

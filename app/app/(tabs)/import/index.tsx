@@ -14,6 +14,7 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useInsertTruck } from '@/src/data/trucks';
 import { useDrivers, useInsertDriver } from '@/src/data/drivers';
 import { useUserCategories } from '@/src/data/userCategories';
+import { useCategoryLearningRules } from '@/src/data/categoryLearningRules';
 import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
 import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { isSaveExtractionError, buildErrorReport } from '@/src/data/saveExtractionError';
@@ -175,6 +176,11 @@ export default function Import() {
   // PROMPTS.md Session 9a — this is just the ai-import awareness plumbing.
   const { data: userCategoriesData } = useUserCategories({ active: true });
   const customCategoryNames = (userCategoriesData ?? []).map((c) => c.name);
+  // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
+  // follow-up item G) — forwarded to ai-import as plain prompt-context
+  // "USER CORRECTIONS" hints, never used to train/fine-tune any model.
+  const { data: learningRulesData } = useCategoryLearningRules();
+  const learningRules = (learningRulesData ?? []).map((r) => ({ keyword: r.keyword, category: r.category }));
   const insertTruck = useInsertTruck();
   const insertDriver = useInsertDriver();
   const queryClient = useQueryClient();
@@ -435,7 +441,14 @@ export default function Import() {
       const base64 = await new File(compressed.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
       startStillWorkingTimer();
-      const { data, error, pagesProcessed } = await callAiImport(base64, 'image/jpeg', undefined, i18n.language, customCategoryNames);
+      const { data, error, pagesProcessed } = await callAiImport(
+        base64,
+        'image/jpeg',
+        undefined,
+        i18n.language,
+        customCategoryNames,
+        learningRules
+      );
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
       if (data) await afterExtraction(data, undefined, pagesProcessed);
@@ -478,6 +491,7 @@ export default function Import() {
         undefined,
         i18n.language,
         customCategoryNames,
+        learningRules,
         // CONTINUATION PROTOCOL (owner decision 2026-08-03): a long
         // settlement is now processed in several sequential round-trips
         // — this fires between them so the user sees real progress

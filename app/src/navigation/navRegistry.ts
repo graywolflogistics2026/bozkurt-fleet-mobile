@@ -88,6 +88,7 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
       { href: '/(tabs)/more/share-profit', labelKey: 'nav.shareProfit', emoji: '📤' },
       { href: '/(tabs)/more/compliance', labelKey: 'nav.compliance', emoji: '🪪' },
       { href: '/(tabs)/more/documents' as Href, labelKey: 'nav.documents', emoji: '🗃️' },
+      { href: '/(tabs)/more/category-learning' as Href, labelKey: 'nav.categoryLearning', emoji: '🧠' },
     ],
   },
   {

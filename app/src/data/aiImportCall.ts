@@ -59,13 +59,14 @@ async function invokeAiImportOnce(
   docHint: string | undefined,
   locale: string | undefined,
   customCategories: string[] | undefined,
+  learningRules: { keyword: string; category: string }[] | undefined,
   pageRangeStart: number | undefined,
   priorPageExtractions: { page: number; extraction: unknown }[] | undefined,
   priorMissingPages: number[] | undefined,
 ): Promise<{ response?: AiImportInvokeResponse; error?: AiImportError }> {
   const timeout = mediaType.startsWith('image/') ? IMAGE_CLIENT_TIMEOUT_MS : PDF_CLIENT_TIMEOUT_MS;
   const { data, error } = await supabase.functions.invoke('ai-import', {
-    body: { fileBase64, mediaType, docHint, locale, customCategories, pageRangeStart, priorPageExtractions, priorMissingPages },
+    body: { fileBase64, mediaType, docHint, locale, customCategories, learningRules, pageRangeStart, priorPageExtractions, priorMissingPages },
     timeout,
   });
 
@@ -124,12 +125,17 @@ async function invokeAiImportOnce(
 // "still working — processing page N of M" style message instead of one
 // static label for the whole multi-minute operation.
 // locale/customCategories: see the original per-parameter comments below.
+// learningRules (owner decision 2026-08-05, FULL PARITY follow-up item
+// G): the user's own category_learning_rules, forwarded as plain
+// prompt-context hints ("USER CORRECTIONS") — never used to fine-tune or
+// retrain any model. See app/src/import/categoryLearning.ts.
 export async function callAiImport(
   fileBase64: string,
   mediaType: string,
   docHint?: string,
   locale?: string,
   customCategories?: string[],
+  learningRules?: { keyword: string; category: string }[],
   onProgress?: (progress: { through: number; total: number }) => void
 ): Promise<AiImportCallResult> {
   let pageRangeStart: number | undefined;
@@ -147,6 +153,7 @@ export async function callAiImport(
       docHint,
       locale,
       customCategories,
+      learningRules,
       pageRangeStart,
       priorPageExtractions,
       priorMissingPages

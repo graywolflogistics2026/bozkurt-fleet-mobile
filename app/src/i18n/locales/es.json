@@ -56,6 +56,7 @@
     "shareProfit": "Compartir Ganancias Semanales",
     "compliance": "Seguimiento de Cumplimiento",
     "documents": "Documentos",
+    "categoryLearning": "Aprendizaje de Categorías",
     "accountantPackage": "Paquete para el Contador"
   },
   "auth": {
@@ -1528,6 +1529,18 @@
     "failedTitle": "No se pudo conectar con el asesor",
     "inputPlaceholder": "Haz una pregunta...",
     "send": "Enviar"
+  },
+  "categoryLearning": {
+    "title": "Aprendizaje de Categorías",
+    "subtitle": "Reglas aprendidas de sus propias correcciones manuales de categoría.",
+    "notTrainedNote": "Esto solo ajusta las sugerencias enviadas junto con sus futuras importaciones — el modelo de IA en sí nunca se entrena ni se ajusta con sus datos.",
+    "empty": "Aún no hay reglas aprendidas — corregir la categoría de una deducción enseña una automáticamente.",
+    "hitCount": "Corregido {{count}} vez/veces",
+    "clearAll": "Borrar Todo",
+    "clearAllConfirmTitle": "¿Borrar todas las reglas aprendidas?",
+    "clearAllConfirmBody": "Esto elimina las {{count}} regla(s) aprendida(s). Las futuras importaciones volverán a depender del adivinador de categorías integrado hasta que corrija una categoría y enseñe una nueva regla.",
+    "deleteConfirmTitle": "¿Eliminar esta regla?",
+    "deleteFailedTitle": "Error al eliminar"
   },
   "accountantPackage": {
     "title": "Paquete para el Contador",

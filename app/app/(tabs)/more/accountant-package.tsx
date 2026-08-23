@@ -15,6 +15,7 @@ import { useTrucksList } from '@/src/data/trucks';
 import { useEquipment } from '@/src/data/equipment';
 import { useCapitalTransactions } from '@/src/data/capitalTransactions';
 import { useUserCategories } from '@/src/data/userCategories';
+import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
 import { useTaxYearData } from '@/src/data/taxYearData';
 import { useAuth } from '@/src/context/AuthContext';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -122,6 +123,7 @@ export default function AccountantPackage() {
   const taxYearDataQuery = useTaxYearData();
 
   const updateDeduction = useUpdateDeduction();
+  const learnCategoryCorrection = useLearnCategoryCorrection();
   const deleteDeduction = useDeleteDeduction();
   const insertDeduction = useInsertDeduction();
   const deleteFuel = useDeleteFuelPurchase();
@@ -270,6 +272,11 @@ export default function AccountantPackage() {
         if (editingItem.kind === 'fuel') await deleteFuel.mutateAsync(editingItem.id);
         else if (editingItem.kind === 'maintenance') await deleteMaintenance.mutateAsync(editingItem.id);
         else if (editingItem.kind === 'toll') await deleteToll.mutateAsync(editingItem.id);
+      }
+      // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
+      // follow-up item G) — best-effort, never blocks the save.
+      if (editCategory && editCategory !== editingItem.category) {
+        learnCategoryCorrection.mutate({ userId, description: editingItem.description, category: editCategory });
       }
       await invalidateFinancialData(queryClient);
       setEditingItem(null);

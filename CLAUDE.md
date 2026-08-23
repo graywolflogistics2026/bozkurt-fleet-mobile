@@ -3307,3 +3307,79 @@
   only that one linked row, leaving the other deduction's linked
   contribution AND the manual contribution both untouched.
   Full suite: 71 suites / 1758 tests pass; `tsc --noEmit` clean.
+- FULL PARITY FOLLOW-UP, PART G — CATEGORY LEARNING LAYER (owner decision
+  2026-08-05, web v2026.08.05-W chase, spec item G). Every manual
+  re-categorization of a deduction now teaches a normalized keyword→
+  category rule, per user (`category_learning_rules`, docs/PENDING_SQL.md
+  §47, NOT YET RUN as of this writing). `app/src/import/categoryLearning.ts`
+  is the one pure module: `normalizeKeyword()` takes the first 3
+  significant, non-stopword, non-numeric-only tokens of a description
+  (e.g. "AMAZON.COM ORDER #123-4567" → "amazon com order") — deliberately
+  dropping the numeric order-id suffix so the SAME vendor across many
+  receipts keeps matching even though the trailing digits differ every
+  time. `matchLearnedCategory()` is FUZZY (spec's own word): exact/
+  substring match first (the common, fast path), then a word-level
+  Levenshtein-distance fallback (within 25% of the longer string) for
+  typo/OCR-damaged vendor names. `applyLearnedCategories()` is applied
+  to a batch of mapped deduction rows BEFORE they're saved — spec's
+  "applied before the built-in guesser" — a learned rule wins over
+  whatever the AI/`guessCategory()` fallback already assigned, since it
+  represents the user's own explicit, repeated correction; the one
+  exception is the generic-fallback docType's `categoryOverride` (the
+  NEEDS-REVIEW confirm flow, CLAUDE.md invariant #14) — an even more
+  explicit, just-given signal that a learned rule never overrides.
+  **Where a rule gets taught**: `app/src/data/categoryLearningRules.ts`'s
+  `useLearnCategoryCorrection()` — called (best-effort, `.mutate()` not
+  awaited, never blocks the actual save) from both places a user can
+  hand-edit a deduction's category: `deductions.tsx`'s edit-save handler
+  and `accountant-package.tsx`'s category-picker save handler — ONLY when
+  the new category genuinely differs from what was already there (not a
+  re-save of the same value). Upserts on `(user_id, keyword)`: correcting
+  the same vendor again overwrites the category (most recent correction
+  wins) and bumps `hit_count`, never creates a duplicate row.
+  **Where a rule gets applied at import time**: `app/src/data/aiImportSave.ts`'s
+  `saveExtraction()` fetches the user's rules ONCE (`fetchLearningRules()`,
+  wrapped in try/catch defaulting to `[]` — this feature must never be
+  able to BREAK an import, including before §47 has been run and the
+  table doesn't exist yet) and applies them to all three
+  deduction-producing paths: the settlement's own `mapping.deductions`
+  batch, each purchase line item (`mapPurchase()`'s output), and the
+  generic-fallback single row.
+  **Prompt-context only, never training** (spec's own explicit
+  requirement, stated plainly in the viewer UI too): the same rules are
+  also forwarded to `ai-import` as a "USER CORRECTIONS" text block
+  appended to the extraction prompt (`app/src/data/aiImportCall.ts`'s
+  `callAiImport()` gained a `learningRules` param threaded the identical
+  way `customCategories` already was;
+  `supabase/functions/ai-import/index.ts`'s `buildExtractionPrompt()`
+  appends `USER CORRECTIONS (...): "keyword" -> category; ...` right
+  after the existing custom-categories block) — capped at 30 rules
+  client-side (`buildUserCorrectionsPromptText()`, unused server-side
+  since the server just joins whatever array it receives, but kept as
+  the one shared cap definition) to keep the prompt bounded for a
+  long-time user. This is PLAIN TEXT PROMPT CONTEXT for that one request
+  only — no fine-tuning, no persistent model change, exactly like every
+  other `APPROVED ADDITION` block in that prompt.
+  **Viewer** (`app/(tabs)/more/category-learning.tsx`, wired into
+  `navRegistry.ts`'s `tools` group — one shared registry edit, same NAV
+  PARITY pattern as every other route): lists every rule (keyword →
+  category, correction count), per-row delete, and a "Clear All" action.
+  A permanent note states plainly: "This only adjusts the hints sent
+  along with your own future imports — the AI model itself is never
+  trained or fine-tuned on your data."
+  **Wired into the standing 4-point new-table checklist** (Reset All
+  Data's `TABLES_IN_DELETION_ORDER`, Delete Account's same list,
+  `queryInvalidation.ts`'s `AFFECTED_TABLES`, `exportAllData.ts`'s
+  `EXPORT_TABLES` — the exact "a new table wired into Reset but not
+  invalidation" bug class CLAUDE.md's own PRE-LAUNCH HARDENING pass
+  found and fixed for `equipment`) — `category_learning_rules` was added
+  to all four in this same change, right alongside `user_categories`,
+  which every one of those four lists already had.
+  Tests: `src/import/__tests__/categoryLearning.test.ts` (new, 15 tests)
+  — `normalizeKeyword()`'s tokenization/stopword/numeric-stripping/cap
+  behavior, `matchLearnedCategory()`'s exact/substring/fuzzy-typo/
+  no-match cases, `applyLearnedCategories()`'s override/pass-through
+  behavior, and `buildUserCorrectionsPromptText()`'s formatting/30-rule
+  cap. Full suite: 72 suites / 1773 tests pass; `tsc --noEmit` clean; all
+  7 locales confirmed key-parity (`nav.categoryLearning`/
+  `categoryLearning.*` keys, hi/uk as untranslated English copies).

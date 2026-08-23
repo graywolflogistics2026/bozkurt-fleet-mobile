@@ -37,6 +37,7 @@ const AFFECTED_TABLES = [
   'bank_transactions',
   'misc_income',
   'user_categories',
+  'category_learning_rules',
   'trucks',
   'equipment',
   'drivers',

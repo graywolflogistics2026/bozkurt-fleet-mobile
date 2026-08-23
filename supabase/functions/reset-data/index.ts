@@ -44,6 +44,7 @@ const TABLES_IN_DELETION_ORDER = [
   "household_income",
   "household_members",
   "user_categories",
+  "category_learning_rules",
   "compliance_items",
   "misc_income",
   "documents",

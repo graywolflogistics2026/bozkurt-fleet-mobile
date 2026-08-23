@@ -1672,6 +1672,36 @@ needed — `trucks` is already owner-scoped.
 
 ---
 
+## 47. category_learning_rules (FULL PARITY follow-up, owner decision 2026-08-05, spec item G)
+
+CATEGORY LEARNING LAYER — every manual re-categorization of a deduction
+stores a normalized keyword→category rule (per user), applied before the
+built-in category guesser with fuzzy matching, and sent to `ai-import` as
+plain-text "USER CORRECTIONS" prompt hints. See
+`app/src/import/categoryLearning.ts`. PROMPT-CONTEXT ONLY — no model is
+ever fine-tuned or retrained on this data.
+
+```sql
+create table category_learning_rules (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users on delete cascade,
+  keyword      text not null,
+  category     text not null,
+  hit_count    int not null default 1,
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now(),
+  unique (user_id, keyword)
+);
+
+alter table category_learning_rules enable row level security;
+create policy "category_learning_rules_owner_all" on category_learning_rules
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+- [ ] 47a run (create category_learning_rules table + RLS policy)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

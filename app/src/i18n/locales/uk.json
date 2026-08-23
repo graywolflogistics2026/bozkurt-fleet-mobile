@@ -56,6 +56,7 @@
     "shareProfit": "Share Weekly Profit",
     "compliance": "Compliance Tracker",
     "documents": "Documents",
+    "categoryLearning": "Category Learning",
     "accountantPackage": "Accountant Package"
   },
   "auth": {
@@ -1528,6 +1529,18 @@
     "failedTitle": "Could not reach the advisor",
     "inputPlaceholder": "Ask a question...",
     "send": "Send"
+  },
+  "categoryLearning": {
+    "title": "Category Learning",
+    "subtitle": "Rules learned from your own manual category corrections.",
+    "notTrainedNote": "This only adjusts the hints sent along with your own future imports — the AI model itself is never trained or fine-tuned on your data.",
+    "empty": "No learned rules yet — correcting a category on a deduction teaches one automatically.",
+    "hitCount": "Corrected {{count}} time(s)",
+    "clearAll": "Clear All",
+    "clearAllConfirmTitle": "Clear all learned rules?",
+    "clearAllConfirmBody": "This removes all {{count}} learned rule(s). Future imports will rely on the built-in category guesser again until you correct a category and teach a new rule.",
+    "deleteConfirmTitle": "Delete this rule?",
+    "deleteFailedTitle": "Delete failed"
   },
   "accountantPackage": {
     "title": "Accountant Package",

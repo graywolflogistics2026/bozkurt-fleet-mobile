@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
 import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
+import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
@@ -154,6 +155,7 @@ export default function Deductions() {
   const dedQuery = useDeductions();
   const insertDeduction = useInsertDeduction();
   const updateDeduction = useUpdateDeduction();
+  const learnCategoryCorrection = useLearnCategoryCorrection();
   const deleteDeduction = useDeleteDeduction();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -254,6 +256,14 @@ export default function Deductions() {
         values: { category: editCategory, payment_method: editPayment, amount, tax_deductible: editTaxDeductible },
       });
       await applyContributionSync(userId, editing.id, plan);
+      // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
+      // follow-up item G) — a genuine manual re-categorization (the user
+      // picked something DIFFERENT from what was already there, not just
+      // re-saving the same value) teaches a keyword->category rule for
+      // next time. Best-effort: never blocks the save on failure.
+      if (editCategory && editCategory !== (editing.category || 'Misc')) {
+        learnCategoryCorrection.mutate({ userId, description: editing.description, category: editCategory });
+      }
       await invalidateFinancialData(queryClient);
       setEditing(null);
     } catch (err) {

@@ -18,12 +18,29 @@ import { resolveLoanAssetMatch } from '@/src/import/loanAssetMatch';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
+import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import {
   SaveExtractionError,
   emptyPartialState,
   type SaveExtractionPartialState,
   type SaveExtractionStep,
 } from '@/src/data/saveExtractionError';
+
+// CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
+// follow-up item G) — best-effort read, never blocks a save. Returns []
+// (no learned overrides applied, identical to today's behavior) if the
+// table doesn't exist yet (docs/PENDING_SQL.md §47 not yet run) or the
+// fetch otherwise fails — this feature must never be able to break an
+// import.
+async function fetchLearningRules(userId: string): Promise<LearningRule[]> {
+  try {
+    const { data, error } = await supabase.from('category_learning_rules').select('keyword, category').eq('user_id', userId);
+    if (error || !data) return [];
+    return data as LearningRule[];
+  } catch {
+    return [];
+  }
+}
 
 export async function fetchExistingDocsForDuplicateCheck(userId: string): Promise<ExistingDocSummary[]> {
   const { data, error } = await supabase
@@ -214,8 +231,16 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   let settlementWeekEnding: string | null = null;
   let isSettlementReimport = false;
 
+  // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
+  // follow-up item G) — checked BEFORE this deduction row is saved, same
+  // "applied before the built-in guesser" priority as the spec's own
+  // wording; a user's own repeated correction wins over whatever the
+  // AI/built-in guesser already assigned.
+  const learningRules = await fetchLearningRules(userId);
+
   if (d.docType === 'settlement' && d.settlement) {
     const mapping = settlementMapping!;
+    mapping.deductions = applyLearnedCategories(mapping.deductions, learningRules);
 
     // Web v2026.07.09-A re-import-replace: importing the same
     // (week_ending, truck) again REPLACES that week's batch-tagged rows
@@ -481,6 +506,10 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   } else if ((d.docType === 'amazon' || d.docType === 'store') && d.purchase) {
     const lines = mapPurchase(d, userId);
     for (const line of lines) {
+      const learned = matchLearnedCategory(line.insert.description, learningRules);
+      if (learned) line.insert = { ...line.insert, category: learned };
+    }
+    for (const line of lines) {
       const { data: dedRow, error: dedError } = await supabase
         .from('deductions')
         .insert({ ...line.insert, document_id: documentId })
@@ -545,6 +574,13 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // Generic fallback (toll/loan/other) — legacy's actual saveImport()
     // else-branch behavior, not the richer routing DTYPES hints at.
     const row = mapGenericDeduction(d, userId, categoryOverride);
+    // A learned rule never overrides an explicit categoryOverride (the
+    // NEEDS-REVIEW confirm flow, CLAUDE.md invariant #14) — that's an
+    // even more explicit, just-given signal than a past correction.
+    if (!categoryOverride) {
+      const learned = matchLearnedCategory(row.description, learningRules);
+      if (learned) row.category = learned;
+    }
     const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
     if (error) throw new SaveExtractionError('generic-deduction-insert', error, partial);
   }

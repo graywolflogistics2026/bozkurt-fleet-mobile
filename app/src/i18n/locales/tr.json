@@ -56,6 +56,7 @@
     "shareProfit": "Haftalık Kârı Paylaş",
     "compliance": "Uyumluluk Takibi",
     "documents": "Belgeler",
+    "categoryLearning": "Kategori Öğrenimi",
     "accountantPackage": "Muhasebeci Paketi"
   },
   "auth": {
@@ -1528,6 +1529,18 @@
     "failedTitle": "Danışmana ulaşılamadı",
     "inputPlaceholder": "Bir soru sorun...",
     "send": "Gönder"
+  },
+  "categoryLearning": {
+    "title": "Kategori Öğrenimi",
+    "subtitle": "Kendi manuel kategori düzeltmelerinizden öğrenilen kurallar.",
+    "notTrainedNote": "Bu yalnızca gelecekteki içe aktarımlarınızla birlikte gönderilen ipuçlarını ayarlar — yapay zeka modelinin kendisi asla verilerinizle eğitilmez veya ince ayar yapılmaz.",
+    "empty": "Henüz öğrenilmiş kural yok — bir kesintinin kategorisini düzeltmek otomatik olarak bir tane öğretir.",
+    "hitCount": "{{count}} kez düzeltildi",
+    "clearAll": "Tümünü Temizle",
+    "clearAllConfirmTitle": "Öğrenilen tüm kurallar temizlensin mi?",
+    "clearAllConfirmBody": "Bu, {{count}} öğrenilmiş kuralın tümünü kaldırır. Bir kategoriyi düzeltip yeni bir kural öğretene kadar gelecekteki içe aktarımlar yine yerleşik kategori tahmincisine güvenecek.",
+    "deleteConfirmTitle": "Bu kural silinsin mi?",
+    "deleteFailedTitle": "Silme başarısız"
   },
   "accountantPackage": {
     "title": "Muhasebeci Paketi",

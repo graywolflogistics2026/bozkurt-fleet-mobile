@@ -485,6 +485,23 @@ create table user_categories (
   check (kind = 'income' or schedule_c_bucket is not null)
 );
 
+-- CATEGORY LEARNING LAYER (PENDING_SQL.md §47, owner decision 2026-08-05,
+-- FULL PARITY follow-up item G) — a normalized keyword->category rule
+-- learned from a user's own manual re-categorization, applied before the
+-- built-in guesser with fuzzy matching, and sent to ai-import as
+-- plain-text prompt hints. See app/src/import/categoryLearning.ts.
+-- PROMPT-CONTEXT ONLY — no model is ever fine-tuned/retrained on this.
+create table category_learning_rules (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users on delete cascade,
+  keyword      text not null,
+  category     text not null,
+  hit_count    int not null default 1,
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now(),
+  unique (user_id, keyword)
+);
+
 -- ---------- Deductions (was DB.ded — the tax heart) ----------
 create table deductions (
   id           uuid primary key default gen_random_uuid(),

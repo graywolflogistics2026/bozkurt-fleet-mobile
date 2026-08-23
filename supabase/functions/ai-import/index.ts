@@ -4,7 +4,13 @@
 // the Anthropic API. ANTHROPIC_API_KEY lives only in this function's
 // environment secrets; the mobile app never holds it (CLAUDE.md).
 //
-// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], pageRangeStart?: number, priorPageExtractions?: { page: number, extraction: unknown }[], priorMissingPages?: number[] }
+// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], learningRules?: { keyword: string, category: string }[], pageRangeStart?: number, priorPageExtractions?: { page: number, extraction: unknown }[], priorMissingPages?: number[] }
+// learningRules (owner decision 2026-08-05, FULL PARITY follow-up item
+// G, app/src/import/categoryLearning.ts) — the user's own learned
+// keyword->category corrections, appended to the prompt as plain-text
+// "USER CORRECTIONS" hints. PROMPT-CONTEXT ONLY: never used to fine-tune
+// or retrain the model — the same one-shot-per-request behavior as every
+// other prompt input here.
 // pageRangeStart/priorPageExtractions/priorMissingPages (owner decision
 // 2026-08-03) are set by the CLIENT on every call after the first one
 // for a long multi-page PDF — see the TIMEOUT/PAGE-BUDGET comment below
@@ -354,7 +360,12 @@ const LOCALE_LANGUAGE_NAME: Record<string, string> = {
   uk: "Ukrainian",
 };
 
-function buildExtractionPrompt(docHint?: string, locale?: string, customCategories?: string[]): string {
+function buildExtractionPrompt(
+  docHint?: string,
+  locale?: string,
+  customCategories?: string[],
+  learningRules?: { keyword: string; category: string }[]
+): string {
   let prompt = LEGACY_EXTRACTION_PROMPT
     .replace(FUEL_SCHEMA_BEFORE, FUEL_SCHEMA_AFTER)
     .replace(DOCTYPE_ENUM_BEFORE, DOCTYPE_ENUM_AFTER)
@@ -414,6 +425,15 @@ function buildExtractionPrompt(docHint?: string, locale?: string, customCategori
   }
   if (customCategories && customCategories.length > 0) {
     prompt += `\nAPPROVED ADDITION (custom categories, owner decision 2026-07-10): this user has also defined their own categories beyond the standard list above: ${customCategories.join(", ")}. When categorizing a purchase item (guessCategory-equivalent) or an unrecognized document's suggestedCategory (docType "other"), suggest one of THESE if it fits better than a standard category — never invent a new custom category name yourself, only pick from this exact list or fall back to a standard category.\n`;
+  }
+  // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
+  // follow-up item G) — plain prompt-context hints only, applied the SAME
+  // way every session: this is NOT a fine-tuning/training signal, just
+  // extra context appended to this one request's prompt, exactly like
+  // docHint/customCategories above.
+  if (learningRules && learningRules.length > 0) {
+    const hints = learningRules.map((r) => `"${r.keyword}" -> ${r.category}`).join("; ");
+    prompt += `\nUSER CORRECTIONS (this user has manually corrected these categorizations before — prefer these when a description matches, but this is a hint, not an override of clear evidence on the document itself): ${hints}\n`;
   }
   return prompt;
 }
@@ -802,6 +822,7 @@ Deno.serve(async (req: Request) => {
     docHint?: string;
     locale?: string;
     customCategories?: string[];
+    learningRules?: { keyword: string; category: string }[];
     // CONTINUATION PROTOCOL (owner decision 2026-08-03): set by the
     // client on every call AFTER the first one for a long PDF — see the
     // PAGE-BUDGET comment block near the top of this file. Absent/1 on
@@ -822,7 +843,7 @@ Deno.serve(async (req: Request) => {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
   }
 
-  const { fileBase64, mediaType, docHint, locale, customCategories, priorPageExtractions, priorMissingPages } = body;
+  const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, priorPageExtractions, priorMissingPages } = body;
   const pageRangeStart = body.pageRangeStart ?? 1;
   if (!fileBase64 || !mediaType) {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
@@ -873,7 +894,7 @@ Deno.serve(async (req: Request) => {
     ? { type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } }
     : { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } };
 
-  const prompt = buildExtractionPrompt(docHint, locale, customCategories);
+  const prompt = buildExtractionPrompt(docHint, locale, customCategories, learningRules);
 
   // SINGLE CALL IS THE DEFAULT (owner decision 2026-08-03 — see the
   // budget comment block near the top of this file). `isFirstCall`

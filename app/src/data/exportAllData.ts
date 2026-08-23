@@ -40,6 +40,7 @@ export const EXPORT_TABLES = [
   'household_members',
   'household_income',
   'user_categories',
+  'category_learning_rules',
   'compliance_items',
   'misc_income',
 ] as const;
