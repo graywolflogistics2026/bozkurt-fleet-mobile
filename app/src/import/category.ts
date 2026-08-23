@@ -20,8 +20,32 @@ import type { UserCategory, UserCategoryInsert } from '@/src/types/db';
 // auto-assigned by guessCategory().
 export const CANONICAL_CATEGORIES = [
   'Fuel & DEF',
+  // Fuel Additives (owner decision 2026-08-05, FULL PARITY pass) — anti-
+  // gel, diesel treatment, cetane booster, injector cleaner (Howes, Power
+  // Service, Hot Shot's, Lucas, Archoil, Stanadyne, Diesel 911). Distinct
+  // from "Fuel & DEF", which is pump diesel + DEF only.
+  'Fuel Additives',
   'Maintenance & Repairs',
+  // Major Repairs & Overhauls (owner decision 2026-08-05) — a single
+  // invoice over $2,500 rebuilding a major component (engine in-frame,
+  // transmission, differential, cab, repaint). Flagged in the accountant
+  // report as "may be a capital improvement, confirm with your CPA"
+  // (Schedule C line 21*, same numeric line as Maintenance & Repairs,
+  // footnoted separately) rather than silently lumped into routine repairs.
+  'Major Repairs & Overhauls',
+  // Truck Parts (owner decision 2026-08-05) — a CONSUMED part the owner
+  // buys and installs himself (APU fan, alternator, starter, battery,
+  // belts, hoses, air dryer cartridge, filters, mirrors, lights, sensors,
+  // wheel seals, brake shoes, mud flaps, wiper blades, fifth-wheel parts,
+  // oil/coolant/grease) — distinct from Tools & Equipment (a reusable TOOL
+  // kept after the job: wrench, impact gun, jack, tool box, blower, grease
+  // gun).
+  'Truck Parts',
   'Tires',
+  // Truck Wash & Detailing (owner decision 2026-08-05) — distinct from a
+  // routine repair; guarded so "windshield washer fluid" never false-hits
+  // (isTruckWash() below only matches "wash"/"detail" as their own words).
+  'Truck Wash & Detailing',
   'Truck/Trailer Payments',
   'Insurance—Truck',
   'Insurance—Health',
@@ -31,13 +55,24 @@ export const CANONICAL_CATEGORIES = [
   'ELD & Communications',
   'Software & Subscriptions',
   'Dispatch & Factoring Fees',
-  'Professional Services',
+  // Renamed from 'Professional Services' (owner decision 2026-08-05) —
+  // Schedule C Line 17's official wording ("Legal and professional
+  // services"). Old rows saved under either 'Professional Services' or the
+  // even-older 'Legal & Accounting Fees' are re-classified by the one-time
+  // rename migration (docs/PENDING_SQL.md §40), not left to drift.
+  'Legal & Professional Services',
   'Office & Admin',
   'Safety Gear & Workwear',
   'Truck Supplies & Equipment',
   'Tools & Equipment',
   'Electronics',
   'Comfort & Sleeper',
+  // Warranty & Service Contracts / Lumper Fees (owner decision 2026-08-05)
+  // — both were previously falling into 'Misc' with zero accountant-usable
+  // detail; see classifySettlementLine() below for the settlement-specific
+  // wiring ("EXTEND WR PURCH" / "ADV FOR OUTSIDE LUMPER").
+  'Warranty & Service Contracts',
+  'Lumper Fees',
   'Contract Labor (1099)',
   'Wages & Payroll Taxes (W-2)',
   'Bank & Merchant Fees',
@@ -142,6 +177,145 @@ export function isInsuranceChargeback(text: string | undefined): boolean {
   return INSURANCE_CHARGEBACK_RE.test(text ?? '');
 }
 
+// ---------------------------------------------------------------------------
+// FULL PARITY pass (owner decision 2026-08-05) — new discrimination rules,
+// §A.3/A.4. Every regex below is deliberately word-boundary-guarded against
+// the specific false-hit cases the spec called out ("windshield washer
+// fluid" is not a wash, a truck "grille" is not a restaurant grill — already
+// handled by RESTAURANT_RE above — and "Inner tube" is not an inn).
+// ---------------------------------------------------------------------------
+
+// Fuel additives (anti-gel, diesel treatment, cetane booster, injector
+// cleaner) — brand names plus generic wording. Deliberately does NOT match
+// bare "fuel" (that stays Fuel & DEF for pump diesel/DEF purchases).
+const FUEL_ADDITIVE_RE =
+  /\banti-?gel\b|diesel treatment|cetane (booster|plus)|injector cleaner|\bhowes\b|power service|hot shot'?s( secret)?|\blucas\b.*(oil|fuel|treatment)|\barchoil\b|stanadyne|diesel 911|fuel additive|fuel stabilizer/i;
+
+export function isFuelAdditive(text: string | undefined): boolean {
+  return FUEL_ADDITIVE_RE.test(text ?? '');
+}
+
+// Consumed truck PARTS the owner installs himself — distinct from a
+// reusable TOOL (Tools & Equipment's own regex, guessCategory() below).
+const TRUCK_PART_RE =
+  /\bapu fan\b|\balternator\b|\bstarter\b|\bbattery\b|\bbatteries\b|\bbelt\b|\bbelts\b|\bhose\b|\bhoses\b|air dryer cartridge|\bfilter\b|\bmirror\b|headlight|taillight|marker light|\bsensor\b|wheel seal|brake shoe|brake pad|mud flap|wiper blade|fifth-?wheel (part|plate|jaw)|\bgasket\b|\bu-?joint\b|\bwheel bearing\b/i;
+
+export function isTruckPart(text: string | undefined): boolean {
+  return TRUCK_PART_RE.test(text ?? '');
+}
+
+// Truck wash & detailing — \bwash\b (word-boundary) never matches "washer"
+// ("windshield washer fluid" stays whatever its own category resolves to,
+// never Truck Wash & Detailing).
+const TRUCK_WASH_RE = /truck ?wash\b|\bwash\b|\bdetail(ing)?\b|pressure wash|blaster wash/i;
+
+export function isTruckWash(text: string | undefined): boolean {
+  return TRUCK_WASH_RE.test(text ?? '');
+}
+
+// Warranty & service contracts — matches the settlement code "EXTEND WR
+// PURCH" (extended warranty purchase) as well as spelled-out variants.
+const WARRANTY_SERVICE_RE = /extend\w*\s*wr\w*\s*purch|extended warranty|service contract|warranty (plan|purchase|contract)/i;
+
+export function isWarrantyService(text: string | undefined): boolean {
+  return WARRANTY_SERVICE_RE.test(text ?? '');
+}
+
+// Lumper fees — a specific ADVANCE-shaped settlement line ("ADV FOR
+// OUTSIDE LUMPER") stays deductible Lumper Fees rather than falling into
+// the generic Advance Repayment bucket (see classifySettlementLine()'s
+// ORDER MATTERS comment below for why this must be checked first).
+const LUMPER_FEE_RE = /\badv\w*\s*(for\s*)?outside\s*lumper\b|\blumper\b/i;
+
+export function isLumperFee(text: string | undefined): boolean {
+  return LUMPER_FEE_RE.test(text ?? '');
+}
+
+// A generic/plain ADVANCE line (no more specific match above) is loan
+// principal being repaid, not a new expense — same non-deductible
+// treatment as the existing chargebackType 'advance_repayment'.
+const GENERIC_ADVANCE_RE = /\badvance\b|\badv\b/i;
+
+export function isGenericAdvance(text: string | undefined): boolean {
+  return GENERIC_ADVANCE_RE.test(text ?? '');
+}
+
+// Major repair/overhaul — only relevant above the $2,500 single-invoice
+// threshold from the spec; a cheap "engine tune-up" line must never trip
+// this even if it loosely matches "engine".
+const MAJOR_REPAIR_RE =
+  /engine (in-?frame|rebuild|overhaul|replacement)|transmission (rebuild|overhaul|replacement)|differential (rebuild|overhaul)|\bcab\b\s*(replace(ment)?|swap)|\brepaint\b|frame (repair|straighten(ing)?)/i;
+
+export function isMajorRepairOverhaul(text: string | undefined, amount: number): boolean {
+  return amount > 2500 && MAJOR_REPAIR_RE.test(text ?? '');
+}
+
+// Lodging — extended for inn/lodge/Airbnb/truck-parking reservations.
+// \binn\b requires "inn" as its OWN word, so "Inner tube" (where "Inner"
+// is a single token) never matches.
+const LODGING_RE =
+  /\bhotel\b|\bmotel\b|\blodging\b|\blodge\b|\binn\b|air\s*bnb|overnight parking|truck.?stop parking|truck parking (reservation|spot|space)|\bparking\b/i;
+
+export function isLodging(text: string | undefined): boolean {
+  return LODGING_RE.test(text ?? '');
+}
+
+// Accounting/CPA/legal — settlement-specific wording ("ACCOUNTING SERV",
+// "trust service") in addition to guessCategory()'s existing professional-
+// services regex.
+const ACCOUNTING_SERVICE_RE = /accounting serv|trust service|\bbookkeep/i;
+
+// ---------------------------------------------------------------------------
+// SETTLEMENT-LINE CLASSIFIER (docs/INDUSTRY_TAXONOMY.md §A extension, owner
+// decision 2026-08-05, FULL PARITY pass) — a real carrier statement's
+// unmapped chargeback codes/descriptions were landing in "Misc" with zero
+// accountant-usable detail (an $18k Misc pile on one real account). This is
+// the ONE place `mapExtraction.ts`'s mapSettlement() reads a settlement
+// deduction line's category from — replaces the previous inline ternary
+// chain (isRestaurantPurchase -> isEscrowDeposit -> isInsuranceChargeback)
+// with a single ordered rule list that ALSO covers the new codes below.
+//
+// ORDER MATTERS — checked top to bottom, first match wins:
+//   1. A LUMPER-shaped advance ("ADV FOR OUTSIDE LUMPER") stays deductible
+//      Lumper Fees — checked BEFORE the generic advance rule so the bare
+//      word "ADV" doesn't swallow it.
+//   2. A plain/generic ADVANCE line is Advance Repayment (non-deductible
+//      loan principal) — this wins over the warranty rule below: the
+//      ORIGINAL "EXTEND WR PURCH" line (the actual warranty purchase) is a
+//      real deductible expense, but a LATER "ADVANCE" line repaying it in
+//      installments is not a new expense.
+// Every other rule after that is a specific settlement chargeback code;
+// isRestaurantPurchase (Meals) stays last since its net is the widest.
+// ---------------------------------------------------------------------------
+const FED_HWY_TAX_RE = /fed\.?\s*h?wy\.?\s*tax|federal highway (use )?tax|\blicense(s)?\b|\bpermits?\b/i;
+const ELD_COMMS_CHARGE_RE = /qual\w*\s*rental|geo\w*\s*rental|navigation charge|image trips?/i;
+const TOLLS_SCALES_CHARGE_RE = /ez\s*fast\s*ln|prepass|pre-pass|drivewyze|\bscale\b|weigh station|ezpass|e-zpass/i;
+const COMPANY_STORE_RE = /company store/i;
+const BANK_MERCHANT_CHARGE_RE = /wire charge|fuel card charge|trip ?xpress|bank fee|wire fee|merchant fee|processing fee|card fee/i;
+const STATEMENT_PREP_RE = /statement preparation|statement prep\b/i;
+// Carrier point-of-sale meal charge (e.g. "PRIME POINT-OF-SALE") — a
+// settlement-specific meal signal distinct from RESTAURANT_RE's brand/venue
+// name list, since a POS chargeback line rarely names an actual restaurant.
+const CARRIER_POS_MEAL_RE = /point.?of.?sale|\bpos\b purchase/i;
+
+export function classifySettlementLine(desc: string | undefined): string | null {
+  const text = desc ?? '';
+  if (isLumperFee(text)) return 'Lumper Fees';
+  if (isGenericAdvance(text)) return 'Advance Repayment';
+  if (isEscrowDeposit(text)) return 'Escrow & Deposits';
+  if (isWarrantyService(text)) return 'Warranty & Service Contracts';
+  if (ACCOUNTING_SERVICE_RE.test(text)) return 'Legal & Professional Services';
+  if (isInsuranceChargeback(text)) return 'Insurance—Truck';
+  if (FED_HWY_TAX_RE.test(text)) return 'Permits, Licenses & Road Taxes';
+  if (ELD_COMMS_CHARGE_RE.test(text)) return 'ELD & Communications';
+  if (TOLLS_SCALES_CHARGE_RE.test(text)) return 'Tolls & Scales';
+  if (COMPANY_STORE_RE.test(text)) return 'Truck Supplies & Equipment';
+  if (BANK_MERCHANT_CHARGE_RE.test(text)) return 'Bank & Merchant Fees';
+  if (STATEMENT_PREP_RE.test(text)) return 'Office & Admin';
+  if (CARRIER_POS_MEAL_RE.test(text) || isRestaurantPurchase(text)) return 'Meals (per diem covered)';
+  return null;
+}
+
 // docs/INDUSTRY_TAXONOMY.md §A chargeback_type enum → a display category
 // for the settlement-withheld deduction row (app/src/import/mapExtraction.ts
 // mapSettlement()). These rows are NEVER counted as tax deductions
@@ -162,7 +336,7 @@ export const CHARGEBACK_CATEGORY_LABEL: Record<string, string> = {
   trailer_fee: 'Lease & Rent',
   cash_advance: 'Misc',
   loan_payment: 'Truck/Trailer Payments',
-  drug_consortium: 'Professional Services',
+  drug_consortium: 'Legal & Professional Services',
   tolls_transponder: 'Tolls & Scales',
   admin_processing_fee: 'Bank & Merchant Fees',
   factoring_fee: 'Dispatch & Factoring Fees',
@@ -170,6 +344,65 @@ export const CHARGEBACK_CATEGORY_LABEL: Record<string, string> = {
   advance_repayment: 'Advance Repayment',
   other_chargeback: 'Misc',
 };
+
+// Schedule C LINE reference (owner decision 2026-08-05, FULL PARITY pass,
+// Accountant Package item A.5) — shown next to every category subtotal so
+// the accountant can see where a bucket lands on the actual form. This is
+// INFORMATIONAL ONLY (CLAUDE.md invariant #8 — "Estimates only, not tax
+// advice") — a best-effort standard mapping, not a filing determination.
+// 'Insurance—Health'/'Meals (per diem covered)'/'Advance Repayment'/
+// 'Escrow & Deposits' map to null: health premiums are an above-the-line
+// Form 1040 adjustment (not a Schedule C line at all), and the other three
+// are excluded from Schedule C entirely (never real business expenses).
+// Major Repairs & Overhauls shares line 21 with Maintenance & Repairs but
+// carries its own '21*' footnoted value ("may be a capital improvement —
+// confirm with your CPA") rather than silently blending into routine
+// repairs.
+export const SCHEDULE_C_LINE: Record<string, string | null> = {
+  'Fuel & DEF': '22',
+  'Fuel Additives': '22',
+  'Maintenance & Repairs': '21',
+  'Major Repairs & Overhauls': '21*',
+  'Truck Parts': '21',
+  Tires: '21',
+  'Truck Wash & Detailing': '21',
+  'Truck/Trailer Payments': '20a',
+  'Insurance—Truck': '15',
+  'Insurance—Health': null,
+  'Permits, Licenses & Road Taxes': '23',
+  'Tolls & Scales': '27a',
+  'Parking & Lodging': '24a',
+  'ELD & Communications': '25',
+  'Software & Subscriptions': '25',
+  'Dispatch & Factoring Fees': '10',
+  'Legal & Professional Services': '17',
+  'Office & Admin': '18',
+  'Safety Gear & Workwear': '22',
+  'Truck Supplies & Equipment': '22',
+  'Tools & Equipment': '22',
+  Electronics: '22',
+  'Comfort & Sleeper': '22',
+  'Warranty & Service Contracts': '27a',
+  'Lumper Fees': '27a',
+  'Contract Labor (1099)': '11',
+  'Wages & Payroll Taxes (W-2)': '26',
+  'Bank & Merchant Fees': '27a',
+  Advertising: '8',
+  'Training & Education': '27a',
+  'Association Dues': '27a',
+  'Lease & Rent': '20b',
+  'Utilities & Subscriptions': '25',
+  'Meals (per diem covered)': null,
+  'Advance Repayment': null,
+  'Escrow & Deposits': null,
+  Misc: '27a',
+  Other: '27a',
+};
+
+export function scheduleCLineFor(category: string): string | null {
+  if (category in SCHEDULE_C_LINE) return SCHEDULE_C_LINE[category];
+  return '27a';
+}
 
 // docs/PENDING_SQL.md §21 (custom categories, owner decision 2026-07-10,
 // PRODUCT DECISION) — pure logic lives here (no React/Supabase deps, unit
@@ -226,7 +459,11 @@ export function guessCategory(name: string | undefined, store: string | undefine
   const combined = n + ' ' + s;
 
   if (isRestaurantPurchase(combined)) return 'Meals (per diem covered)';
+  if (isFuelAdditive(combined)) return 'Fuel Additives';
   if (/comdata|efs\b|fuelman|fuel card|def\b|diesel exhaust fluid/.test(combined)) return 'Fuel & DEF';
+  if (isWarrantyService(combined)) return 'Warranty & Service Contracts';
+  if (/\blumper\b/.test(combined)) return 'Lumper Fees';
+  if (isTruckWash(combined)) return 'Truck Wash & Detailing';
   if (/prepass|pre-pass|ezpass|e-zpass|drivewyze|cat scale|weigh station/.test(combined)) return 'Tolls & Scales';
   if (/\booida\b|owner-?operator independent drivers|association due|union due|membership due/.test(combined))
     return 'Association Dues';
@@ -238,35 +475,54 @@ export function guessCategory(name: string | undefined, store: string | undefine
       combined
     )
   )
-    return 'Professional Services';
-  if (/motive|keeptruckin|samsara|eld\b|omnitracs|peoplenet|qualcomm|e-?log device/.test(combined))
+    return 'Legal & Professional Services';
+  // ELD/GPS/load board (owner decision 2026-08-05, FULL PARITY pass — moved
+  // off Software & Subscriptions per the spec's explicit "ELD/GPS/load
+  // board = ELD & Communications" grouping).
+  if (
+    /motive|keeptruckin|samsara|eld\b|omnitracs|peoplenet|qualcomm|e-?log device|trucker path|garmin|rand mcnally|hammer.?maps?|maps? (subscription|purchase|app)|gps (app|subscription|unit|device)|dat load|truckstop\.com|load board/.test(
+      combined
+    )
+  )
     return 'ELD & Communications';
   if (
-    /anthropic|claude|openai|chatgpt|api credit|github|google workspace|gsuite|dropbox|icloud|microsoft 365|office 365|subscription|saas|software license|trucker path|garmin|rand mcnally|hammer.?maps?|maps? (subscription|purchase|app)|gps (app|subscription)|dat load|truckstop\.com|load board/.test(
+    /anthropic|claude|openai|chatgpt|api credit|github|google workspace|gsuite|dropbox|icloud|microsoft 365|office 365|subscription|saas|software license/.test(
       combined
     )
   )
     return 'Software & Subscriptions';
   if (/health insurance|medical insurance|dental insurance|vision insurance|health premium/.test(combined))
     return 'Insurance—Health';
-  if (/insurance|premium|policy|bobtail|occ.?acc|cargo insurance|workers.?comp/.test(combined)) return 'Insurance—Truck';
+  if (isInsuranceChargeback(combined)) return 'Insurance—Truck';
   if (
-    /permit|license|licensing|dot number|mc number|ifta|irp|ucr\b|hvut|form 2290|boc-?3|cdl\b|dot physical|kyu\b|ny-?hut|nm-?wdt|weight.?mile tax/.test(
+    /permit|licensing|dot number|mc number|ifta|irp|ucr\b|hvut|form 2290|boc-?3|cdl\b|dot physical|kyu\b|ny-?hut|nm-?wdt|weight.?mile tax/.test(
       combined
     )
   )
     return 'Permits, Licenses & Road Taxes';
+  // Major Repairs & Overhauls needs the dollar amount (>$2,500 threshold,
+  // isMajorRepairOverhaul() above) which this function's signature doesn't
+  // carry — applied instead at the call site that has both a description
+  // AND an amount (mapExtraction.ts's mapPurchase()/mapMaintenance()),
+  // overriding this function's plain 'Maintenance & Repairs'/'Truck Parts'
+  // guess when the threshold is met.
+  // SHOP INVOICE with labor = Maintenance & Repairs (checked before the
+  // Truck Parts/Tools splits below, so a shop's combined parts+labor
+  // invoice doesn't get misread as a single consumed part).
+  if (/shop invoice|repair invoice|\bmechanic\b|repair shop|repair labor|labor (charge|cost|fee)/i.test(combined))
+    return 'Maintenance & Repairs';
+  if (isTruckPart(combined)) return 'Truck Parts';
   if (/\btire\b|tires|\btyre\b|recap|retread/.test(combined)) return 'Tires';
   if (/truck payment|trailer payment|equipment loan|installment payment|lease.?purchase/.test(combined))
     return 'Truck/Trailer Payments';
-  if (/hotel|motel|lodging|overnight parking|truck stop parking|\bparking\b/.test(combined)) return 'Parking & Lodging';
+  if (isLodging(combined)) return 'Parking & Lodging';
   if (/office suppl|printer|paper|stapler|postage|shipping label|po box/.test(combined)) return 'Office & Admin';
   if (/bank fee|wire fee|merchant fee|processing fee|overdraft|nsf fee|card fee/.test(combined)) return 'Bank & Merchant Fees';
   if (/advertis|marketing|vehicle wrap|sign lettering|business card/.test(combined)) return 'Advertising';
   if (/training|\bcourse\b|certification|cdl school|continuing education/.test(combined)) return 'Training & Education';
   if (/1099 contractor|independent contractor payment/.test(combined)) return 'Contract Labor (1099)';
   if (
-    /drill|saw|wrench|socket|screwdriver|hammer|plier|ratchet|impact|blower|milwaukee|dewalt|ryobi|makita|bosch|craftsman|combo kit|power tool|torque|grease|jack|lift|air compressor|generator|m18|m12|fuel kit/.test(
+    /drill|saw|wrench|socket|screwdriver|hammer|plier|ratchet|impact|blower|milwaukee|dewalt|ryobi|makita|bosch|craftsman|combo kit|power tool|torque|grease gun|\bjack\b|\blift\b|air compressor|generator|m18|m12|fuel kit/.test(
       n
     )
   )
@@ -306,6 +562,12 @@ export function getCatNote(category: string): string {
     'Truck Supplies & Equipment': 'Truck operating supply — business expense',
     'Safety Gear & Workwear': 'Safety equipment — truck operations',
     Maintenance: 'Truck repair/maintenance expense',
+    'Truck Parts': 'Truck repair part — installed by owner',
+    'Fuel Additives': 'Fuel treatment/additive — truck operations',
+    'Truck Wash & Detailing': 'Truck wash/detailing — business expense',
+    'Warranty & Service Contracts': 'Extended warranty/service contract',
+    'Lumper Fees': 'Lumper fee — load unloading/loading labor',
+    'Major Repairs & Overhauls': 'Major component overhaul — confirm capitalization with your CPA',
     Misc: 'Business supply — OTR operations',
   };
   return notes[category] ?? 'Business expense — OTR truck driver';

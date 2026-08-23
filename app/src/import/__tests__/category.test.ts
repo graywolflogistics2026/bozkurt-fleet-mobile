@@ -2,17 +2,28 @@ import {
   applyScheduleCDefault,
   CANONICAL_CATEGORIES,
   CHARGEBACK_CATEGORY_LABEL,
+  classifySettlementLine,
   DEFAULT_SCHEDULE_C_BUCKET,
   defaultTaxDeductible,
   detectMaintType,
   getCatNote,
   guessCategory,
   isEscrowDeposit,
+  isFuelAdditive,
+  isGenericAdvance,
   isInsuranceChargeback,
+  isLodging,
+  isLumperFee,
+  isMajorRepairOverhaul,
   isPersonalPayment,
   isRestaurantPurchase,
+  isTruckPart,
+  isTruckWash,
+  isWarrantyService,
   mergeCategoryOptions,
   NON_DEDUCTIBLE_CATEGORIES,
+  SCHEDULE_C_LINE,
+  scheduleCLineFor,
   toDbServiceType,
 } from '@/src/import/category';
 import type { UserCategory } from '@/src/types/db';
@@ -57,9 +68,9 @@ describe('isPersonalPayment', () => {
 });
 
 describe('guessCategory', () => {
-  it('tags legal/accounting/drug-consortium as Professional Services (renamed 2026-07-10)', () => {
-    expect(guessCategory('Abacus bookkeeping fee', '')).toBe('Professional Services');
-    expect(guessCategory('Drug and alcohol consortium fee', '')).toBe('Professional Services');
+  it('tags legal/accounting/drug-consortium as Legal & Professional Services (renamed 2026-08-05, Schedule C Line 17 wording)', () => {
+    expect(guessCategory('Abacus bookkeeping fee', '')).toBe('Legal & Professional Services');
+    expect(guessCategory('Drug and alcohol consortium fee', '')).toBe('Legal & Professional Services');
   });
 
   it('tags ELD brands as ELD & Communications, distinct from Software & Subscriptions (industry knowledge base, owner decision 2026-07-10)', () => {
@@ -67,9 +78,13 @@ describe('guessCategory', () => {
     expect(guessCategory('Samsara device fee', '')).toBe('ELD & Communications');
   });
 
-  it('still tags non-ELD software/load-board services as Software & Subscriptions', () => {
+  it('still tags non-ELD software as Software & Subscriptions', () => {
     expect(guessCategory('GitHub Copilot subscription', '')).toBe('Software & Subscriptions');
-    expect(guessCategory('DAT load board subscription', '')).toBe('Software & Subscriptions');
+  });
+
+  it('tags GPS/load-board services as ELD & Communications (owner decision 2026-08-05, FULL PARITY pass)', () => {
+    expect(guessCategory('DAT load board subscription', '')).toBe('ELD & Communications');
+    expect(guessCategory('Garmin GPS unit', '')).toBe('ELD & Communications');
   });
 
   it('tags tools before electronics for power-tool brands', () => {
@@ -299,6 +314,130 @@ describe('defaultTaxDeductible (meals & advance repayments, owner decision 2026-
     expect(defaultTaxDeductible('Misc')).toBe(true);
     expect(defaultTaxDeductible(null)).toBe(true);
     expect(defaultTaxDeductible(undefined)).toBe(true);
+  });
+});
+
+describe('FULL PARITY pass discrimination rules (owner decision 2026-08-05)', () => {
+  it('isFuelAdditive matches additive brands/wording, not bare fuel purchases', () => {
+    expect(isFuelAdditive('Howes Diesel Treat')).toBe(true);
+    expect(isFuelAdditive('Power Service Diesel Kleen')).toBe(true);
+    expect(isFuelAdditive("Hot Shot's Secret Diesel Extreme")).toBe(true);
+    expect(isFuelAdditive('Lucas Oil Fuel Treatment')).toBe(true);
+    expect(isFuelAdditive('Archoil AR6200')).toBe(true);
+    expect(isFuelAdditive('Anti-gel additive')).toBe(true);
+    expect(isFuelAdditive('Pilot diesel fuel purchase')).toBe(false);
+  });
+
+  it('isTruckPart matches consumed parts, distinct from Tools & Equipment', () => {
+    expect(isTruckPart('Alternator replacement')).toBe(true);
+    expect(isTruckPart('Battery - Group 31')).toBe(true);
+    expect(isTruckPart('Serpentine belt')).toBe(true);
+    expect(isTruckPart('Air dryer cartridge')).toBe(true);
+    expect(isTruckPart('Wiper blades')).toBe(true);
+    expect(isTruckPart('Milwaukee M18 impact wrench')).toBe(false);
+  });
+
+  it('isTruckWash matches wash/detail, guarded against "washer fluid"', () => {
+    expect(isTruckWash('Truck wash')).toBe(true);
+    expect(isTruckWash('Full detailing service')).toBe(true);
+    expect(isTruckWash('Windshield washer fluid')).toBe(false);
+  });
+
+  it('isWarrantyService matches "EXTEND WR PURCH" and spelled-out variants', () => {
+    expect(isWarrantyService('EXTEND WR PURCH')).toBe(true);
+    expect(isWarrantyService('Extended warranty')).toBe(true);
+    expect(isWarrantyService('Service contract')).toBe(true);
+    expect(isWarrantyService('Milwaukee Drill')).toBe(false);
+  });
+
+  it('isLumperFee matches "ADV FOR OUTSIDE LUMPER" and bare "lumper"', () => {
+    expect(isLumperFee('ADV FOR OUTSIDE LUMPER')).toBe(true);
+    expect(isLumperFee('Lumper fee')).toBe(true);
+    expect(isLumperFee('Milwaukee Drill')).toBe(false);
+  });
+
+  it('isGenericAdvance matches a plain ADVANCE/ADV line', () => {
+    expect(isGenericAdvance('ADVANCE')).toBe(true);
+    expect(isGenericAdvance('ADV')).toBe(true);
+    expect(isGenericAdvance('Milwaukee Drill')).toBe(false);
+  });
+
+  it('isMajorRepairOverhaul requires BOTH the >$2,500 threshold AND a major-component keyword', () => {
+    expect(isMajorRepairOverhaul('Engine in-frame overhaul', 8000)).toBe(true);
+    expect(isMajorRepairOverhaul('Transmission rebuild', 3200)).toBe(true);
+    expect(isMajorRepairOverhaul('Differential rebuild', 2600)).toBe(true);
+    // Below the threshold — stays a normal repair, even with matching wording.
+    expect(isMajorRepairOverhaul('Engine in-frame overhaul', 2000)).toBe(false);
+    // Above the threshold but not a major-component keyword.
+    expect(isMajorRepairOverhaul('Oil change', 3000)).toBe(false);
+  });
+
+  it('isLodging matches inn/lodge/Airbnb/truck-parking, guarded against "Inner tube"', () => {
+    expect(isLodging('Hampton Inn')).toBe(true);
+    expect(isLodging("Trucker's Lodge")).toBe(true);
+    expect(isLodging('Airbnb stay')).toBe(true);
+    expect(isLodging('Truck parking reservation')).toBe(true);
+    expect(isLodging('Inner tube')).toBe(false);
+  });
+
+  it('SCHEDULE_C_LINE / scheduleCLineFor covers every canonical category with a defensible line', () => {
+    for (const category of CANONICAL_CATEGORIES) {
+      expect(scheduleCLineFor(category)).toBe(SCHEDULE_C_LINE[category]);
+    }
+    expect(scheduleCLineFor('Legal & Professional Services')).toBe('17');
+    expect(scheduleCLineFor('Insurance—Truck')).toBe('15');
+    expect(scheduleCLineFor('Maintenance & Repairs')).toBe('21');
+    expect(scheduleCLineFor('Major Repairs & Overhauls')).toBe('21*');
+    // Non-Schedule-C categories map to null, not a fabricated line number.
+    expect(scheduleCLineFor('Insurance—Health')).toBeNull();
+    expect(scheduleCLineFor('Meals (per diem covered)')).toBeNull();
+    expect(scheduleCLineFor('Escrow & Deposits')).toBeNull();
+  });
+});
+
+describe('classifySettlementLine (settlement-line classifier, owner decision 2026-08-05, FULL PARITY pass)', () => {
+  it('classifies every new settlement code from the spec', () => {
+    expect(classifySettlementLine('EXTEND WR PURCH')).toBe('Warranty & Service Contracts');
+    expect(classifySettlementLine('ACCOUNTING SERV')).toBe('Legal & Professional Services');
+    expect(classifySettlementLine('MAYFR BT/DH INS')).toBe('Insurance—Truck');
+    expect(classifySettlementLine('PHY DAM')).toBe('Insurance—Truck');
+    expect(classifySettlementLine('OCCUP ACC')).toBe('Insurance—Truck');
+    expect(classifySettlementLine('FED HWY TAX')).toBe('Permits, Licenses & Road Taxes');
+    expect(classifySettlementLine('LICENSE/PERMITS')).toBe('Permits, Licenses & Road Taxes');
+    expect(classifySettlementLine('QUAL RENTAL')).toBe('ELD & Communications');
+    expect(classifySettlementLine('GEO RENTAL')).toBe('ELD & Communications');
+    expect(classifySettlementLine('NAVIGATION CHARGE')).toBe('ELD & Communications');
+    expect(classifySettlementLine('IMAGE TRIPS')).toBe('ELD & Communications');
+    expect(classifySettlementLine('EZ FAST LN')).toBe('Tolls & Scales');
+    expect(classifySettlementLine('PrePass')).toBe('Tolls & Scales');
+    expect(classifySettlementLine('Drivewyze')).toBe('Tolls & Scales');
+    expect(classifySettlementLine('PERFORMNCE BOND')).toBe('Escrow & Deposits');
+    expect(classifySettlementLine('PRIME POINT-OF-SALE')).toBe('Meals (per diem covered)');
+    expect(classifySettlementLine('COMPANY STORE')).toBe('Truck Supplies & Equipment');
+    expect(classifySettlementLine('WIRE CHARGE')).toBe('Bank & Merchant Fees');
+    expect(classifySettlementLine('FUEL CARD CHARGE')).toBe('Bank & Merchant Fees');
+    expect(classifySettlementLine('TRIP XPRESS')).toBe('Bank & Merchant Fees');
+    expect(classifySettlementLine('STATEMENT PREPARATION')).toBe('Office & Admin');
+    expect(classifySettlementLine('ADV FOR OUTSIDE LUMPER')).toBe('Lumper Fees');
+  });
+
+  it('ORDER MATTERS: a plain ADVANCE line is non-deductible repayment, beating the warranty rule', () => {
+    expect(classifySettlementLine('ADVANCE')).toBe('Advance Repayment');
+    expect(classifySettlementLine('ADV')).toBe('Advance Repayment');
+  });
+
+  it('ORDER MATTERS: a lumper advance stays deductible despite containing "ADV"', () => {
+    expect(classifySettlementLine('ADV FOR OUTSIDE LUMPER')).toBe('Lumper Fees');
+    expect(classifySettlementLine('ADV OUTSIDE LUMPER')).toBe('Lumper Fees');
+  });
+
+  it('the original warranty PURCHASE line (no "advance" wording) is deductible', () => {
+    expect(classifySettlementLine('EXTEND WR PURCH')).toBe('Warranty & Service Contracts');
+  });
+
+  it('returns null for an unrecognized line, falling through to chargebackType/category', () => {
+    expect(classifySettlementLine('Some Unrecognized Code')).toBeNull();
+    expect(classifySettlementLine(undefined)).toBeNull();
   });
 });
 

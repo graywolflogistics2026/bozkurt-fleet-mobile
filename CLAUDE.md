@@ -2391,3 +2391,82 @@
   instead, exactly proving the fix end to end rather than in isolation.
   Full suite: 66 suites / 1520 tests pass; `tsc --noEmit` clean; all 7
   locales confirmed key-parity.
+- FULL PARITY WITH WEB v2026.08.05-K, PART A — CATEGORY TAXONOMY (owner
+  decision 2026-08-05, accounting-correctness + accountant-package pass —
+  see PARTS B-G below for the rest of this multi-part pass).
+  `app/src/import/category.ts` `CANONICAL_CATEGORIES` gains 6 new
+  categories (Fuel Additives, Truck Parts, Major Repairs & Overhauls,
+  Truck Wash & Detailing, Warranty & Service Contracts, Lumper Fees) and
+  renames `Professional Services` → `Legal & Professional Services`
+  (Schedule C Line 17's official wording) — old rows saved under either
+  that or the even-older `Legal & Accounting Fees` are re-classified by a
+  one-time SQL migration (docs/PENDING_SQL.md §40), a deliberate change
+  from this taxonomy's previous "free text, no migration, old rows just
+  display as-is" convention: the new Accountant Package groups/subtotals
+  by EXACT category string, so a stale string would silently create an
+  orphaned second bucket instead of rolling up with its renamed
+  successor. The same migration folds the ORIGINAL single-user web app's
+  `Fixed`/`Variable` 3-bucket classification into `Misc` — the CURRENT
+  canonical `Other` catch-all is deliberately left untouched, since it's
+  a distinct, valid, still-in-use category (CLAUDE.md invariant #14), not
+  a legacy string being retired.
+  CRITICAL BUG FIX: `supabase/functions/ai-import/index.ts`'s settlement
+  deductions schema had a STALE, SHORTER category enum baked into its
+  JSON-schema example string — 7 old values (`Software & Subscriptions|
+  Legal & Accounting Fees|Insurance|Licensing & Permits|Fixed|Variable|
+  Other`) that didn't even match the current `CANONICAL_CATEGORIES` the
+  app's own picker reads from, meaning the AI could return (and did
+  return) a category string the app doesn't recognize. Replaced with
+  `CATEGORY_ENUM_STRING`, generated from the same canonical list
+  (manually kept in sync — this Deno function can't import a TS module
+  from `app/`, same constraint as every other "keep in sync" comment in
+  that file; docs/INDUSTRY_TAXONOMY.md §B is the source of truth to check
+  first).
+  SETTLEMENT-LINE CLASSIFIER: a real device statement's unmapped
+  chargeback codes (EXTEND WR PURCH, ACCOUNTING SERV, FED HWY TAX, QUAL/
+  GEO RENTAL, EZ FAST LN, PRIME POINT-OF-SALE, COMPANY STORE, WIRE
+  CHARGE, STATEMENT PREPARATION, ADV FOR OUTSIDE LUMPER) were all landing
+  in "Misc" with zero accountant-usable detail — an $18k Misc pile on one
+  real account. `classifySettlementLine()` (`category.ts`) is now the ONE
+  ordered rule list `mapExtraction.ts`'s `mapSettlement()` reads a
+  settlement-withheld deduction's category from, replacing the previous
+  inline 3-branch ternary chain (isRestaurantPurchase → isEscrowDeposit →
+  isInsuranceChargeback) with a fuller ordered list, checked ahead of the
+  AI's own `chargebackType` and the older loose `category` string (both
+  remain as fallbacks). ORDER MATTERS, and is now directly tested
+  (`category.test.ts`): a LUMPER-shaped advance ("ADV FOR OUTSIDE
+  LUMPER") is checked BEFORE the generic advance rule so the bare word
+  "ADV" doesn't misclassify it as a repayment; a plain/generic `ADVANCE`
+  line wins over the warranty rule (the ORIGINAL "EXTEND WR PURCH" line —
+  the actual purchase — is a real deductible expense, but a LATER
+  "ADVANCE" line repaying it in installments is not a new expense).
+  Also added: `isFuelAdditive()`, `isTruckPart()` (a CONSUMED part —
+  alternator, belts, filters — distinct from `Tools & Equipment`'s
+  reusable TOOL), `isTruckWash()` (word-boundary-guarded so "windshield
+  washer fluid" never false-hits), `isWarrantyService()`, `isLumperFee()`,
+  `isGenericAdvance()`, `isMajorRepairOverhaul(text, amount)` (requires
+  BOTH the >$2,500 threshold AND a major-component keyword — applied at
+  `mapExtraction.ts`'s `mapPurchase()` call site, which has both a
+  description and an amount, rather than inside `guessCategory()`, whose
+  signature has no amount param), and `isLodging()` (extended for inn/
+  lodge/Airbnb/truck-parking reservations, guarded so "Inner tube" never
+  matches `\binn\b`). `guessCategory()` also gained a shop-invoice-with-
+  labor rule (→ Maintenance & Repairs) and reclassified GPS/load-board
+  brands (Garmin, DAT, Truckstop.com, "load board") from Software &
+  Subscriptions to ELD & Communications per the spec's explicit "ELD/GPS/
+  load board" grouping.
+  SCHEDULE C LINE: `SCHEDULE_C_LINE`/`scheduleCLineFor()` (`category.ts`)
+  maps every canonical category to a Schedule C line for the Accountant
+  Package (informational only, CLAUDE.md invariant #8) — `Major Repairs &
+  Overhauls` shares numeric line 21 with `Maintenance & Repairs` but
+  carries its own footnoted `'21*'` value rather than silently blending
+  into routine repairs; `Insurance—Health`/`Meals (per diem covered)`/
+  `Advance Repayment`/`Escrow & Deposits` map to `null` (not a Schedule C
+  line at all, or excluded entirely).
+  Tests: `category.test.ts` gained coverage for every new detection
+  function, `scheduleCLineFor()` across every canonical category, and
+  `classifySettlementLine()`'s full code list plus both ORDER MATTERS
+  cases (lumper-beats-generic-advance, generic-advance-beats-warranty).
+  Full suite passes; `tsc --noEmit` clean. No new user-facing i18n
+  strings were needed for this part — category names are domain values
+  that stay English in every locale (CLAUDE.md invariant #11).

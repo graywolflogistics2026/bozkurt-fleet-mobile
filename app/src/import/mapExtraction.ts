@@ -1,12 +1,11 @@
 import {
   CHARGEBACK_CATEGORY_LABEL,
+  classifySettlementLine,
   defaultTaxDeductible,
   detectMaintType,
   getCatNote,
   guessCategory,
-  isEscrowDeposit,
-  isInsuranceChargeback,
-  isRestaurantPurchase,
+  isMajorRepairOverhaul,
   toDbServiceType,
 } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
@@ -169,24 +168,19 @@ export function mapSettlement(
   // driver_id here (payroll auto-routing, owner decision 2026-07-09) is
   // scoped to withheld rows only — standalone purchase deductions
   // (mapPurchase, below) aren't part of a settlement and have no driver.
-  // docs/INDUSTRY_TAXONOMY.md §A — chargebackType (when the AI classified
-  // it) takes priority over the older loose `category` string; both are
-  // display-only, never re-counted as a tax deduction (source='settlement').
-  // Meals & advance repayments (owner decision 2026-07-17): a restaurant/
-  // food-purchase description (a truck-stop restaurant charge, a carrier
-  // point-of-sale meal) wins over whatever category/chargebackType the AI
-  // guessed, since these are common trucking-tax mistakes to mislabel.
-  // Escrow & deposits (owner decision 2026-08-02, verified against a real
-  // statement's "PERFORMNCE BOND" OCR-damaged line): same text-based
-  // override, checked next — a performance bond/escrow reserve/tire fund/
-  // emergency fund/maintenance reserve deduction is a REFUNDABLE DEPOSIT
-  // the carrier holds, never a real expense (CLAUDE.md's
-  // NON_DEDUCTIBLE_CATEGORIES, src/stats/trueProfit.ts's
-  // TRUE_PROFIT_EXCLUDED_CATEGORIES) — this catches it even when the AI's
-  // own chargebackType classification (ai-import's prompt, "escrow_reserve")
-  // was missed. tax_deductible is set false on every withheld row here too
-  // (defense in depth) even though source='settlement' already excludes it
-  // from every tax total on its own.
+  // docs/INDUSTRY_TAXONOMY.md §A — classifySettlementLine() (category.ts,
+  // owner decision 2026-08-05, FULL PARITY pass) is the text-based
+  // SETTLEMENT-LINE CLASSIFIER covering the full ordered rule set (lumper
+  // advances, generic advance repayments, escrow, warranty purchases,
+  // accounting/legal, insurance, highway tax/permits, ELD rental/nav
+  // charges, tolls/scales, company store, bank/wire charges, statement
+  // prep, meals) — checked FIRST, ahead of the AI's own chargebackType
+  // classification and the older loose `category` string, both of which
+  // remain as fallbacks for a line this classifier doesn't recognize. All
+  // three are display-only, never re-counted as a tax deduction
+  // (source='settlement'). tax_deductible is set false on every withheld
+  // row here too (defense in depth) even though source='settlement'
+  // already excludes it from every tax total on its own.
   const deductions: DeductionInsert[] = (s.deductions ?? []).map((x) => ({
     user_id: userId,
     settlement_id: null,
@@ -195,13 +189,7 @@ export function mapSettlement(
     code: x.code ?? null,
     description: x.desc ?? null,
     amount: num(x.amount),
-    category: isRestaurantPurchase(x.desc)
-      ? 'Meals (per diem covered)'
-      : isEscrowDeposit(x.desc)
-        ? 'Escrow & Deposits'
-        : isInsuranceChargeback(x.desc)
-          ? 'Insurance—Truck'
-          : (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
+    category: classifySettlementLine(x.desc) || (x.chargebackType && CHARGEBACK_CATEGORY_LABEL[x.chargebackType]) || x.category || null,
     payment_method: 'Settlement Withheld',
     source: 'settlement',
     tax_deductible: false,
@@ -434,10 +422,18 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
   }
 
   return realItems.map((item) => {
-    const cat = wholeReceiptIsMeal ? 'Meals (per diem covered)' : guessCategory(item.name, storeName);
+    const finalCost = Number((item.cost + item.extra).toFixed(2));
+    // Major Repairs & Overhauls (owner decision 2026-08-05) — needs the
+    // dollar amount, only available here (guessCategory()'s own signature
+    // has no amount param), so this override is applied at this call site
+    // rather than inside guessCategory() itself.
+    const cat = wholeReceiptIsMeal
+      ? 'Meals (per diem covered)'
+      : isMajorRepairOverhaul(item.name, finalCost)
+        ? 'Major Repairs & Overhauls'
+        : guessCategory(item.name, storeName);
     const note = getCatNote(cat);
     const qtyLabel = item.qty > 1 ? `${item.qty}× ` : '';
-    const finalCost = Number((item.cost + item.extra).toFixed(2));
     const foldSuffix = item.extra > 0.009 ? ` (incl. ${money(item.extra)} tax/fees/services)` : '';
     const desc = `${qtyLabel}${item.name} — ${note}${foldSuffix} | ${storeName} | ${payMethod}${personal ? ' — Owner Contribution' : ''}`;
     return buildRow(desc, finalCost, cat, item.warrantyYears ?? null);

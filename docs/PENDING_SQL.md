@@ -1351,6 +1351,50 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
+## 40. Category taxonomy rename migration (FULL PARITY pass, owner decision 2026-08-05)
+
+CLAUDE.md's category renames (`app/src/import/category.ts`
+`CANONICAL_CATEGORIES`, docs/INDUSTRY_TAXONOMY.md §B) have historically
+been display-only — old free-text category strings on existing rows were
+left as-is, no migration, per that doc's own "no DB migration by itself"
+note. This pass changes that on purpose: the new Accountant Package groups
+and subtotals rows by EXACT category string (`app/src/stats/
+accountantPackage.ts`), so a stale pre-rename string (`Professional
+Services`, `Legal & Accounting Fees`, `Insurance`, `Licensing & Permits`,
+`Truck Supplies`, `Safety Equipment`, or the original single-user web
+app's `Fixed`/`Variable` 3-bucket classification) would silently create a
+SECOND, orphaned bucket next to the current canonical one instead of
+rolling up together. `deductions.category` and `user_categories.
+schedule_c_bucket` (a custom category could have been pointed at the old
+bucket name) both get the same rename. The canonical `Other` catch-all is
+deliberately NOT touched — it's a distinct, valid category from `Misc`
+(CLAUDE.md invariant #14), not a legacy string being retired.
+
+```sql
+update deductions set category = 'Legal & Professional Services'
+  where category in ('Professional Services', 'Legal & Accounting Fees');
+update deductions set category = 'Insurance—Truck' where category = 'Insurance';
+update deductions set category = 'Permits, Licenses & Road Taxes' where category = 'Licensing & Permits';
+update deductions set category = 'Truck Supplies & Equipment' where category = 'Truck Supplies';
+update deductions set category = 'Safety Gear & Workwear' where category = 'Safety Equipment';
+update deductions set category = 'Misc' where category in ('Fixed', 'Variable');
+
+update user_categories set schedule_c_bucket = 'Legal & Professional Services'
+  where schedule_c_bucket in ('Professional Services', 'Legal & Accounting Fees');
+update user_categories set schedule_c_bucket = 'Insurance—Truck' where schedule_c_bucket = 'Insurance';
+update user_categories set schedule_c_bucket = 'Permits, Licenses & Road Taxes' where schedule_c_bucket = 'Licensing & Permits';
+update user_categories set schedule_c_bucket = 'Truck Supplies & Equipment' where schedule_c_bucket = 'Truck Supplies';
+update user_categories set schedule_c_bucket = 'Safety Gear & Workwear' where schedule_c_bucket = 'Safety Equipment';
+update user_categories set schedule_c_bucket = 'Misc' where schedule_c_bucket in ('Fixed', 'Variable');
+```
+
+No RLS change needed — both tables are already owner-scoped; these
+`UPDATE`s only touch existing rows' `category`/`schedule_c_bucket` text.
+
+- [ ] 40a run (rename legacy category strings on deductions + user_categories)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

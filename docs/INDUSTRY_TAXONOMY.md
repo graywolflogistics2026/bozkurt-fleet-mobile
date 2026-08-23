@@ -73,53 +73,67 @@ double-counted.
 ## B. Canonical expense category taxonomy (Schedule-C aligned)
 
 `CANONICAL_CATEGORIES` (`app/src/import/category.ts`) — the ONE shared
-constant every screen/dropdown/guesser reads from. Supersedes the smaller
-pre-2026-07-10 list; old category strings already saved on existing rows
-are left as-is (free text, no migration) and still display fine.
+constant every screen/dropdown/guesser reads from. `SCHEDULE_C_LINE`/
+`scheduleCLineFor()` (same file, owner decision 2026-08-05, FULL PARITY
+pass) maps each category to a Schedule C line for the Accountant Package —
+informational only (CLAUDE.md invariant #8, "estimates only, not tax
+advice"), not a filing determination.
 
-| Category | Deductibility note |
-|---|---|
-| Fuel & DEF | Fully deductible |
-| Maintenance & Repairs | Fully deductible |
-| Tires | Fully deductible |
-| Truck/Trailer Payments | Loan **interest** deductible, principal is NOT; a lease payment is 100% deductible (leases and loans are different — a lease payment is never split) |
-| Insurance—Truck | Fully deductible (liability, physical damage, cargo, bobtail, occ/acc) |
-| Insurance—Health | Health/medical insurance premiums — handled specially by the tax engine (`TaxEstimateInputs.healthInsurancePremiums`), not a flat Schedule-C line item |
-| Permits, Licenses & Road Taxes | IFTA, IRP, UCR, HVUT/Form 2290, BOC-3, CDL, DOT physical, state-specific permits (KYU, NY-HUT, NM-WDT, OR weight-mile tax) — fully deductible |
-| Tolls & Scales | Fully deductible |
-| Parking & Lodging | Fully deductible |
-| ELD & Communications | ELD/e-log device + cab communications (phone, radio) — fully deductible |
-| Software & Subscriptions | Fully deductible |
-| Dispatch & Factoring Fees | Fully deductible |
-| Professional Services | CPA, attorney, drug/alcohol testing consortium — fully deductible |
-| Office & Admin | Fully deductible |
-| Safety Gear & Workwear | Fully deductible for OTR-specific gear; see non-deductible traps below for everyday clothing |
-| Truck Supplies & Equipment | Fully deductible |
-| Tools & Equipment | Fully deductible |
-| Electronics | Fully deductible (OTR sleeper-cab rule — CLAUDE.md's ported OTR-deductibility instruction) |
-| Comfort & Sleeper | Fully deductible (same OTR sleeper-cab rule) |
-| Contract Labor (1099) | Fully deductible — feeds the 1099-NEC YTD tracker (`app/src/tax/driverPayroll.ts`) |
-| Wages & Payroll Taxes (W-2) | Wages + employer-side payroll taxes fully deductible (`calcTrueCostOfEmployee()`) |
-| Bank & Merchant Fees | Fully deductible |
-| Advertising | Fully deductible |
-| Training & Education | Fully deductible |
-| Association Dues | Fully deductible (e.g. OOIDA membership) |
-| Lease & Rent | Fully deductible (truck/trailer lease, parking, office) |
-| Utilities & Subscriptions | Fully deductible |
-| Misc | Fully deductible — catch-all for a real business expense that doesn't fit a more specific category |
-| Other | Manual-entry / low-confidence catch-all (see docType `'other'`, CLAUDE.md invariant #14) — NEVER auto-assigned by `guessCategory()`, only ever a manual pick or an AI `suggestedCategory` string that happens not to match a canonical name |
-| Meals (per diem covered) | NOT deductible — restaurant/cafe/food-purchase lines are covered by the per diem deduction already (CLAUDE.md invariant #9); `deductions.tax_deductible` defaults to `false` for this category but is a smart default, freely user-editable (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
-| Advance Repayment | NOT deductible — loan principal (repaying a prior advance), same smart-default/editable treatment as Meals above (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
-| Escrow & Deposits | NOT deductible — a performance bond/escrow reserve/tire fund/emergency fund/maintenance reserve is a REFUNDABLE DEPOSIT the carrier holds, never a real business cost; excluded from true profit (`src/stats/trueProfit.ts`) the same way Meals/Advance Repayment are, and tracked as a running "held by carrier" balance (`src/stats/escrowBalance.ts`) on the Settlements screen (owner decision 2026-08-02) |
+| Category | Schedule C line | Deductibility note |
+|---|---|---|
+| Fuel & DEF | 22 | Fully deductible |
+| Fuel Additives | 22 | Fully deductible — anti-gel, diesel treatment, cetane booster, injector cleaner; distinct from Fuel & DEF (pump diesel/DEF only) |
+| Maintenance & Repairs | 21 | Fully deductible |
+| Major Repairs & Overhauls | 21* | Fully deductible, but flagged "may be a capital improvement, confirm with your CPA" — a single invoice over $2,500 rebuilding a major component (engine in-frame, transmission, differential, cab, repaint) |
+| Truck Parts | 21 | Fully deductible — a CONSUMED part the owner installs himself (alternator, belts, filters, etc.), distinct from Tools & Equipment (a reusable tool) |
+| Tires | 21 | Fully deductible |
+| Truck Wash & Detailing | 21 | Fully deductible |
+| Truck/Trailer Payments | 20a | Loan **interest** deductible, principal is NOT; a lease payment is 100% deductible (leases and loans are different — a lease payment is never split) |
+| Insurance—Truck | 15 | Fully deductible (liability, physical damage, cargo, bobtail, occ/acc) |
+| Insurance—Health | — (Form 1040) | Health/medical insurance premiums — handled specially by the tax engine (`TaxEstimateInputs.healthInsurancePremiums`), an above-the-line adjustment, not a Schedule-C line item |
+| Permits, Licenses & Road Taxes | 23 | IFTA, IRP, UCR, HVUT/Form 2290, BOC-3, CDL, DOT physical, state-specific permits (KYU, NY-HUT, NM-WDT, OR weight-mile tax) — fully deductible |
+| Tolls & Scales | 27a | Fully deductible |
+| Parking & Lodging | 24a | Fully deductible |
+| ELD & Communications | 25 | ELD/e-log device + cab communications (phone, radio) + GPS/load-board services (owner decision 2026-08-05) — fully deductible |
+| Software & Subscriptions | 25 | Fully deductible |
+| Dispatch & Factoring Fees | 10 | Fully deductible |
+| Legal & Professional Services | 17 | Renamed from `Professional Services` (owner decision 2026-08-05, Schedule C Line 17's official wording) — CPA, attorney, drug/alcohol testing consortium — fully deductible |
+| Office & Admin | 18 | Fully deductible |
+| Safety Gear & Workwear | 22 | Fully deductible for OTR-specific gear; see non-deductible traps below for everyday clothing |
+| Truck Supplies & Equipment | 22 | Fully deductible |
+| Tools & Equipment | 22 | Fully deductible — a reusable TOOL kept after the job |
+| Electronics | 22 | Fully deductible (OTR sleeper-cab rule — CLAUDE.md's ported OTR-deductibility instruction) |
+| Comfort & Sleeper | 22 | Fully deductible (same OTR sleeper-cab rule) |
+| Warranty & Service Contracts | 27a | Fully deductible — an extended-warranty/service-contract PURCHASE (settlement code "EXTEND WR PURCH") |
+| Lumper Fees | 27a | Fully deductible — including a settlement line coded "ADV FOR OUTSIDE LUMPER" (stays deductible despite the "ADV" wording — see §A.4 classifier order below) |
+| Contract Labor (1099) | 11 | Fully deductible — feeds the 1099-NEC YTD tracker (`app/src/tax/driverPayroll.ts`) |
+| Wages & Payroll Taxes (W-2) | 26 | Wages + employer-side payroll taxes fully deductible (`calcTrueCostOfEmployee()`) |
+| Bank & Merchant Fees | 27a | Fully deductible |
+| Advertising | 8 | Fully deductible |
+| Training & Education | 27a | Fully deductible |
+| Association Dues | 27a | Fully deductible (e.g. OOIDA membership) |
+| Lease & Rent | 20b | Fully deductible (truck/trailer lease, parking, office) |
+| Utilities & Subscriptions | 25 | Fully deductible |
+| Misc | 27a | Fully deductible — catch-all for a real business expense that doesn't fit a more specific category |
+| Other | 27a | Manual-entry / low-confidence catch-all (see docType `'other'`, CLAUDE.md invariant #14) — NEVER auto-assigned by `guessCategory()`, only ever a manual pick or an AI `suggestedCategory` string that happens not to match a canonical name |
+| Meals (per diem covered) | — (excluded) | NOT deductible — restaurant/cafe/food-purchase lines (including a carrier POINT-OF-SALE meal charge) are covered by the per diem deduction already (CLAUDE.md invariant #9); `deductions.tax_deductible` defaults to `false` for this category but is a smart default, freely user-editable (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
+| Advance Repayment | — (excluded) | NOT deductible — loan principal (repaying a prior advance), same smart-default/editable treatment as Meals above (owner decision 2026-07-17, mirrors web v2026.07.17-D) |
+| Escrow & Deposits | — (excluded) | NOT deductible — a performance bond/escrow reserve/tire fund/emergency fund/maintenance reserve is a REFUNDABLE DEPOSIT the carrier holds, never a real business cost; excluded from true profit (`src/stats/trueProfit.ts`) the same way Meals/Advance Repayment are, and tracked as a running "held by carrier" balance (`src/stats/escrowBalance.ts`) on the Settlements screen (owner decision 2026-08-02) |
 
-Old app categories fold in as follows (renamed, not duplicated):
+Old app categories fold in as follows (renamed via the one-time migration,
+docs/PENDING_SQL.md §40, owner decision 2026-08-05 — NOT left as free text
+this time, since the accountant report groups by exact category string):
 `Insurance` → `Insurance—Truck` · `Licensing & Permits` → `Permits, Licenses
-& Road Taxes` · `Legal & Accounting Fees` → `Professional Services` ·
-`Truck Supplies` → `Truck Supplies & Equipment` · `Safety Equipment` →
-`Safety Gear & Workwear` · `Factoring Fees` (added 2026-07-10, universal AI
+& Road Taxes` · `Legal & Accounting Fees` and `Professional Services` →
+`Legal & Professional Services` · `Truck Supplies` → `Truck Supplies &
+Equipment` · `Safety Equipment` → `Safety Gear & Workwear` · `Fixed` and
+`Variable` (the original single-user web app's 3-bucket expense
+classification) → `Misc`. `Factoring Fees` (added 2026-07-10, universal AI
 capture pass) → `Dispatch & Factoring Fees`. `Lease & Rent` and `Utilities &
 Subscriptions` (also added 2026-07-10) match the canonical name exactly, no
-rename needed.
+rename needed. The canonical `Other` catch-all (CLAUDE.md invariant #14,
+"never auto-assigned, only a manual pick") is deliberately NOT touched by
+this migration — it stays a distinct, valid category from `Misc`.
 
 ---
 
@@ -160,6 +174,34 @@ invariant #14) rather than silently booking a full deduction:
   Truck/Trailer Payment is deductible; the AI should note when a payment
   breakdown shows a principal/interest split rather than booking the full
   payment.
+
+---
+
+## A.4. Settlement-line classifier (owner decision 2026-08-05, FULL PARITY pass)
+
+`classifySettlementLine()` (`app/src/import/category.ts`) is the ONE
+ordered rule list `mapExtraction.ts`'s `mapSettlement()` reads a
+settlement-withheld deduction line's category from — checked ahead of the
+AI's own `chargebackType` classification and the older loose `category`
+string, both of which remain as fallbacks. Written after a real device
+statement's unmapped chargeback codes (EXTEND WR PURCH, ACCOUNTING SERV,
+FED HWY TAX, QUAL/GEO RENTAL, EZ FAST LN, COMPANY STORE, WIRE CHARGE,
+STATEMENT PREPARATION, ADV FOR OUTSIDE LUMPER, ...) all landed in "Misc"
+with zero accountant-usable detail — an $18k Misc pile on one real account.
+
+**ORDER MATTERS** — checked top to bottom, first match wins:
+1. A LUMPER-shaped advance ("ADV FOR OUTSIDE LUMPER") stays deductible
+   `Lumper Fees` — checked BEFORE the generic advance rule so the bare word
+   "ADV" doesn't swallow it.
+2. A plain/generic `ADVANCE`/`ADV` line is `Advance Repayment`
+   (non-deductible loan principal) — this wins over the warranty rule: the
+   ORIGINAL "EXTEND WR PURCH" line (the actual warranty purchase) is a real
+   deductible expense, but a LATER "ADVANCE" line repaying it in
+   installments is not a new expense.
+3. Escrow/deposit, warranty purchase, accounting/legal service, insurance
+   chargeback, highway tax/permits, ELD rental/nav charges, tolls/scales,
+   company store, bank/wire/card charges, statement preparation, then
+   (widest net, checked last) a restaurant/carrier-POS meal charge.
 
 ---
 
