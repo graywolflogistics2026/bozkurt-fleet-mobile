@@ -564,6 +564,11 @@ export type Profile = {
   dot_number: string | null;
   mc_number: string | null;
   onboarding_completed_at: string | null;
+  // docs/PENDING_SQL.md §48 (owner decision 2026-08-05, FULL PARITY
+  // follow-up item I) — null means the first-run tutorial has never been
+  // seen/skipped, same "null = never done, set once" pattern as
+  // onboarding_completed_at.
+  tutorial_seen_at: string | null;
   // Cash Flow 30-day forecast budget inputs: docs/PENDING_SQL.md §29
   // (Session 9b parity-gap decision #3) — all nullable; the app supplies
   // legacy's own placeholder defaults (1145/1800/0/500/25) when null.

@@ -1250,6 +1250,39 @@
     "bucketNote": "Required so this category always counts toward your tax estimate.",
     "saveFailedTitle": "Save failed"
   },
+  "tutorial": {
+    "skip": "Skip",
+    "next": "Next",
+    "done": "Done",
+    "howItWorksButton": "How It Works",
+    "seeHowLink": "See how it works",
+    "slides": {
+      "snap": {
+        "title": "Snap It",
+        "body": "Take a photo of any settlement, receipt, or document — no scanner needed."
+      },
+      "aiReads": {
+        "title": "AI Reads It",
+        "body": "Our AI extracts every line item — amounts, categories, dates — in seconds."
+      },
+      "confirm": {
+        "title": "You Confirm",
+        "body": "Review what the AI found and fix anything before it's saved. You're always in control."
+      },
+      "landsEverywhere": {
+        "title": "It Lands Everywhere",
+        "body": "One document updates your settlements, deductions, fuel, taxes, and reports automatically."
+      },
+      "documentsKept": {
+        "title": "Your Documents Are Kept",
+        "body": "Every upload stays private to you, linked to its record, and ready for an audit — always."
+      },
+      "readyForAccountant": {
+        "title": "Ready for Your Accountant",
+        "body": "Export a clean, organized package any time — Schedule C categories, totals, and all."
+      }
+    }
+  },
   "taxEstimator": {
     "title": "Tax Estimator",
     "savedTitle": "✅ Saved",

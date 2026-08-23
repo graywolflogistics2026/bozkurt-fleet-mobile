@@ -4,6 +4,7 @@ function inputs(overrides: Partial<RootRedirectInputs> = {}): RootRedirectInputs
   return {
     hasSession: false,
     needsTos: false,
+    needsTutorial: false,
     needsOnboarding: false,
     introSeen: false,
     segment: undefined,
@@ -37,6 +38,30 @@ describe('resolveRootRedirect — intro gate (2026-07-29 redirect-loop fix)', ()
     expect(resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsTos: true, segment: 'tos' }))).toBeNull();
   });
 
+  it('a logged-in user past ToS but not the tutorial is sent to /tutorial (owner decision 2026-08-05, FULL PARITY follow-up item I)', () => {
+    expect(
+      resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsTos: false, needsTutorial: true, segment: undefined }))
+    ).toBe('/tutorial');
+    expect(
+      resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsTos: false, needsTutorial: true, segment: 'tutorial' }))
+    ).toBeNull();
+  });
+
+  it('a logged-in user still needing the tutorial is NOT sent to /onboarding yet, even if onboarding is also incomplete', () => {
+    expect(
+      resolveRootRedirect(
+        inputs({
+          hasSession: true,
+          introSeen: true,
+          needsTos: false,
+          needsTutorial: true,
+          needsOnboarding: true,
+          segment: undefined,
+        })
+      )
+    ).toBe('/tutorial');
+  });
+
   it('a logged-in user past ToS but not onboarded is sent to /onboarding', () => {
     expect(
       resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsTos: false, needsOnboarding: true, segment: undefined }))
@@ -48,8 +73,8 @@ describe('resolveRootRedirect — intro gate (2026-07-29 redirect-loop fix)', ()
     ).toBeNull();
   });
 
-  it('a fully-cleared logged-in user lands in (tabs) from auth/tos/onboarding/intro', () => {
-    for (const segment of ['(auth)', 'tos', 'onboarding', 'intro']) {
+  it('a fully-cleared logged-in user lands in (tabs) from auth/tos/tutorial/onboarding/intro', () => {
+    for (const segment of ['(auth)', 'tos', 'tutorial', 'onboarding', 'intro']) {
       expect(
         resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsTos: false, needsOnboarding: false, segment }))
       ).toBe('/(tabs)');

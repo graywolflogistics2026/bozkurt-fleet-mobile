@@ -623,6 +623,13 @@ export default function Import() {
             <PrimaryButton title={t('importScreen.takePhoto')} onPress={() => router.push('/(tabs)/import/camera')} />
             <SecondaryButton title={t('importScreen.chooseFromGallery')} onPress={pickFromGallery} />
             <SecondaryButton title={t('importScreen.choosePdf')} onPress={pickPdf} />
+            {/* FIRST-RUN TUTORIAL replay (owner decision 2026-08-05, FULL
+                PARITY follow-up item I) — "See how" from the empty state. */}
+            <Pressable onPress={() => router.push('/tutorial?replay=true' as Href)} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'center' }}>
+              <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>
+                {t('tutorial.seeHowLink')}
+              </Text>
+            </Pressable>
           </Card>
         )}
 

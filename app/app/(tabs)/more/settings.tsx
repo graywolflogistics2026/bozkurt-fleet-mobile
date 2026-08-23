@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import * as Sharing from 'expo-sharing';
@@ -359,6 +359,10 @@ export default function Settings() {
             hash/platform/user id, NEVER financial data. */}
         <Text style={styles.sectionTitle}>{t('settings.supportTitle')}</Text>
         <Card>
+          {/* FIRST-RUN TUTORIAL (owner decision 2026-08-05, FULL PARITY
+              follow-up item I) — replayable any time, ?replay=true so
+              tutorial.tsx never re-touches tutorial_seen_at again. */}
+          <SecondaryButton title={t('tutorial.howItWorksButton')} onPress={() => router.push('/tutorial?replay=true' as Href)} />
           <MutedText>{t('settings.supportNote')}</MutedText>
           <SecondaryButton title={t('settings.contactSupportButton')} onPress={handleContactSupport} />
           <SecondaryButton title={t('settings.reportProblemButton')} onPress={handleReportProblem} />

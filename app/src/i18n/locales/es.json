@@ -1250,6 +1250,39 @@
     "bucketNote": "Requerido para que esta categoría siempre cuente en tu estimado de impuestos.",
     "saveFailedTitle": "Error al guardar"
   },
+  "tutorial": {
+    "skip": "Omitir",
+    "next": "Siguiente",
+    "done": "Listo",
+    "howItWorksButton": "Cómo Funciona",
+    "seeHowLink": "Vea cómo funciona",
+    "slides": {
+      "snap": {
+        "title": "Tómele una Foto",
+        "body": "Tome una foto de cualquier settlement, recibo o documento — no necesita escáner."
+      },
+      "aiReads": {
+        "title": "La IA lo Lee",
+        "body": "Nuestra IA extrae cada partida — montos, categorías, fechas — en segundos."
+      },
+      "confirm": {
+        "title": "Usted Confirma",
+        "body": "Revise lo que encontró la IA y corrija cualquier cosa antes de guardarlo. Usted siempre tiene el control."
+      },
+      "landsEverywhere": {
+        "title": "Llega a Todas Partes",
+        "body": "Un solo documento actualiza automáticamente sus settlements, deducciones, combustible, impuestos y reportes."
+      },
+      "documentsKept": {
+        "title": "Sus Documentos se Conservan",
+        "body": "Cada carga permanece privada para usted, vinculada a su registro y lista para una auditoría — siempre."
+      },
+      "readyForAccountant": {
+        "title": "Listo para su Contador",
+        "body": "Exporte un paquete limpio y organizado en cualquier momento — categorías de Schedule C, totales y todo."
+      }
+    }
+  },
   "taxEstimator": {
     "title": "Estimador de Impuestos",
     "savedTitle": "✅ Guardado",

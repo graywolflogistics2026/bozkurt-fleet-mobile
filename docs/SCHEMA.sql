@@ -51,6 +51,13 @@ create table profiles (
   dot_number   text,
   mc_number    text,
   onboarding_completed_at timestamptz,
+  -- FIRST-RUN TUTORIAL (PENDING_SQL.md §48, owner decision 2026-08-05,
+  -- FULL PARITY follow-up item I) — null means the 6-slide walkthrough
+  -- has never been seen/skipped, same "null = never done, set once"
+  -- pattern as onboarding_completed_at. Shown after ToS acceptance and
+  -- before the onboarding wizard; replayable afterward from Settings/
+  -- empty states without touching this column again.
+  tutorial_seen_at timestamptz,
   -- Cash Flow 30-day forecast budget inputs (added retroactively,
   -- PENDING_SQL.md §29, Session 9b parity-gap decision #3) — legacy's
   -- own calcCF() form fields have no persistence either (recomputed on

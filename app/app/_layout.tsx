@@ -66,7 +66,7 @@ function LoadingScreen() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, needsTos, needsOnboarding } = useAuth();
+  const { session, loading, needsTos, needsTutorial, needsOnboarding } = useAuth();
   const { introSeen } = useIntro();
   const segments = useSegments();
   const router = useRouter();
@@ -84,16 +84,17 @@ function RootLayoutNav() {
     const target = resolveRootRedirect({
       hasSession: !!session,
       needsTos,
+      needsTutorial,
       needsOnboarding,
       introSeen,
       segment: segments[0] as string | undefined,
     });
-    // "intro" (app/intro.tsx, added Session 9e-B9) isn't in the last
-    // generated .expo/types/router.d.ts yet — same typed-routes regen lag
-    // as _layout.tsx (tabs)'s ALERTS_ROUTE, hence the Href cast rather than
-    // a general-purpose `any`.
+    // "intro"/"tutorial" (app/intro.tsx, app/tutorial.tsx) aren't in the
+    // last generated .expo/types/router.d.ts yet — same typed-routes
+    // regen lag as _layout.tsx (tabs)'s ALERTS_ROUTE, hence the Href cast
+    // rather than a general-purpose `any`.
     if (target) router.replace(target as Href);
-  }, [session, loading, needsTos, needsOnboarding, introSeen, segments, router]);
+  }, [session, loading, needsTos, needsTutorial, needsOnboarding, introSeen, segments, router]);
 
   if (loading || introSeen === null) return <LoadingScreen />;
 
@@ -102,6 +103,7 @@ function RootLayoutNav() {
       <Stack.Screen name="intro" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="tos" />
+      <Stack.Screen name="tutorial" />
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="(tabs)" />
     </Stack>

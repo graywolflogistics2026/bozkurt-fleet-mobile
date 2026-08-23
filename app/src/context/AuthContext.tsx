@@ -31,6 +31,10 @@ type Profile = {
   // wizard) — null means the wizard has never been completed/skipped, same
   // "null = never done" pattern as tos_accepted_at.
   onboarding_completed_at: string | null;
+  // docs/PENDING_SQL.md §48 (owner decision 2026-08-05, FULL PARITY
+  // follow-up item I) — null means the first-run tutorial has never been
+  // seen/skipped, same "null = never done" pattern.
+  tutorial_seen_at: string | null;
 };
 
 type AuthContextValue = {
@@ -38,6 +42,7 @@ type AuthContextValue = {
   profile: Profile | null;
   loading: boolean;
   needsTos: boolean;
+  needsTutorial: boolean;
   needsOnboarding: boolean;
   signUp: (email: string, password: string) => Promise<SignUpOutcome>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -57,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await withTimeout(
       supabase
         .from('profiles')
-        .select('user_id, company_name, owner_name, locale, tos_accepted_at, tos_version, onboarding_completed_at')
+        .select('user_id, company_name, owner_name, locale, tos_accepted_at, tos_version, onboarding_completed_at, tutorial_seen_at')
         .eq('user_id', userId)
         .maybeSingle(),
       STARTUP_TIMEOUT_MS,
@@ -176,20 +181,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return profile.tos_accepted_at === null || profile.tos_version !== TOS_VERSION;
   }, [session, profile]);
 
-  // Runs AFTER ToS acceptance (PROMPTS.md Session 9b — "after sign-up +
-  // ToS acceptance, walk the user through..."), so this only ever
-  // evaluates true once needsTos is already false.
-  const needsOnboarding = useMemo(() => {
+  // FIRST-RUN TUTORIAL (owner decision 2026-08-05, FULL PARITY follow-up
+  // item I) — runs after ToS acceptance and BEFORE the onboarding wizard
+  // (spec's own explicit ordering), so this only ever evaluates true once
+  // needsTos is already false, and needsOnboarding below additionally
+  // waits for this to clear too.
+  const needsTutorial = useMemo(() => {
     if (!session || needsTos) return false;
     if (!profile) return false;
-    return profile.onboarding_completed_at === null;
+    return profile.tutorial_seen_at === null;
   }, [session, needsTos, profile]);
+
+  // Runs AFTER ToS acceptance AND the first-run tutorial (PROMPTS.md
+  // Session 9b — "after sign-up + ToS acceptance, walk the user
+  // through..."; the tutorial slots in between per its own spec).
+  const needsOnboarding = useMemo(() => {
+    if (!session || needsTos || needsTutorial) return false;
+    if (!profile) return false;
+    return profile.onboarding_completed_at === null;
+  }, [session, needsTos, needsTutorial, profile]);
 
   const value: AuthContextValue = {
     session,
     profile,
     loading,
     needsTos,
+    needsTutorial,
     needsOnboarding,
     signUp,
     signIn,

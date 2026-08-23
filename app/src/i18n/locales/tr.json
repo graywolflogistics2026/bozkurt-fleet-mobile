@@ -1250,6 +1250,39 @@
     "bucketNote": "Bu kategorinin vergi tahmininize her zaman dahil olması için gereklidir.",
     "saveFailedTitle": "Kaydetme başarısız"
   },
+  "tutorial": {
+    "skip": "Atla",
+    "next": "İleri",
+    "done": "Bitti",
+    "howItWorksButton": "Nasıl Çalışır",
+    "seeHowLink": "Nasıl çalıştığını gör",
+    "slides": {
+      "snap": {
+        "title": "Fotoğrafını Çek",
+        "body": "Herhangi bir settlement, fiş veya belgenin fotoğrafını çekin — tarayıcıya gerek yok."
+      },
+      "aiReads": {
+        "title": "Yapay Zeka Okur",
+        "body": "Yapay zekamız her kalemi — tutarlar, kategoriler, tarihler — saniyeler içinde çıkarır."
+      },
+      "confirm": {
+        "title": "Siz Onaylarsınız",
+        "body": "Yapay zekanın bulduklarını gözden geçirin ve kaydedilmeden önce her şeyi düzeltin. Kontrol her zaman sizde."
+      },
+      "landsEverywhere": {
+        "title": "Her Yere Ulaşır",
+        "body": "Tek bir belge settlement'lerinizi, kesintilerinizi, yakıtınızı, vergilerinizi ve raporlarınızı otomatik olarak günceller."
+      },
+      "documentsKept": {
+        "title": "Belgeleriniz Saklanır",
+        "body": "Her yükleme size özel kalır, kendi kaydına bağlanır ve her zaman denetime hazırdır."
+      },
+      "readyForAccountant": {
+        "title": "Muhasebeciniz İçin Hazır",
+        "body": "İstediğiniz zaman düzenli, temiz bir paket dışa aktarın — Schedule C kategorileri, toplamlar ve daha fazlası."
+      }
+    }
+  },
   "taxEstimator": {
     "title": "Vergi Hesaplayıcı",
     "savedTitle": "✅ Kaydedildi",

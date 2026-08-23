@@ -1702,6 +1702,25 @@ create policy "category_learning_rules_owner_all" on category_learning_rules
 
 ---
 
+## 48. profiles.tutorial_seen_at (FULL PARITY follow-up, owner decision 2026-08-05, spec item I)
+
+FIRST-RUN TUTORIAL — the 6-slide illustrated walkthrough shown after ToS
+acceptance and before the onboarding wizard (`app/app/tutorial.tsx`,
+`app/src/navigation/rootRedirect.ts`). Null means never seen/skipped,
+same "null = never done, set once" pattern as
+`onboarding_completed_at` (§28).
+
+```sql
+alter table profiles
+  add column tutorial_seen_at timestamptz;
+```
+
+No RLS change needed — `profiles` is already owner-scoped.
+
+- [ ] 48a run (add profiles.tutorial_seen_at)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

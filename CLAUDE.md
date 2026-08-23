@@ -3519,3 +3519,90 @@
   (`settings.support*`/`settings.contactSupportButton`/
   `settings.reportProblemButton`/`settings.noMailApp*`, hi/uk as
   untranslated English copies per invariant #11).
+- FULL PARITY FOLLOW-UP, PART I — FIRST-RUN TUTORIAL (owner decision
+  2026-08-05, web v2026.08.05-W chase, spec item I). A 6-slide illustrated
+  walkthrough — Snap it · AI reads it · You confirm · It lands everywhere
+  · Your documents are kept · Ready for your accountant — shown once,
+  gated between ToS acceptance and the onboarding wizard, and replayable
+  any time from Settings > "How It Works" and the Import screen's empty-
+  state "See how" link.
+  **Gating**: `docs/PENDING_SQL.md` §48 (NOT YET RUN as of this writing)
+  adds `profiles.tutorial_seen_at` (null = never seen, same "set once,
+  never reset" pattern as `onboarding_completed_at`, §28).
+  `AuthContext.tsx` gained `needsTutorial` (true once `!needsTos` and the
+  column is null) and `needsOnboarding` now ALSO requires `!needsTutorial`
+  — the tutorial must clear before onboarding ever shows, matching the
+  spec's own explicit ordering. `app/src/navigation/rootRedirect.ts`'s
+  pure gate function (`resolveRootRedirect()`) got a new priority rung
+  slotted between the existing `tos`/`onboarding` lines: `needsTos` →
+  `needsTutorial` → `needsOnboarding` → `(tabs)`. `app/app/_layout.tsx`
+  registers the new `tutorial` Stack.Screen and threads `needsTutorial`
+  into the redirect effect, same pattern as every other gated screen.
+  **Screen** (`app/app/tutorial.tsx`): reads an optional `?replay=true`
+  param. First-run (no param): finishing (Skip or reaching the last
+  slide's Done) marks `tutorial_seen_at` then explicitly
+  `router.replace('/onboarding')` — same explicit-navigate pattern as
+  `onboarding.tsx`'s own `finishOnboarding()`, chosen over relying on the
+  root-redirect effect to notice the profile change (faster, no extra
+  render flash); the profile write is best-effort (a failure just means
+  the tutorial shows again next launch, never worth blocking the user
+  over). Replay (`?replay=true`): finishing just calls `router.back()`
+  and never touches `tutorial_seen_at` again.
+  **Pager** (`app/src/components/TutorialPager.tsx`): the ONE shared
+  component every entry point renders — a plain horizontal
+  `ScrollView` with `pagingEnabled` (native swipe support, no gesture
+  library needed), dot indicators (tappable to jump), a "Skip" link
+  top-right, and a bottom Next/Done `PrimaryButton`. REDUCED-MOTION-SAFE
+  BY CONSTRUCTION: there is no `Animated`/`Reanimated`/autoplay anywhere
+  in this component — every page transition is 100% user-driven (a swipe
+  or a tap), so there's no auto-advancing motion an OS "reduce motion"
+  setting would ever need to suppress. PHONE+TABLET: slide width comes
+  from `onLayout` (never a hardcoded pixel value), so it scales cleanly
+  to any screen size; the illustration itself is capped at
+  `min(220, width * 0.55)` so it never grows absurdly large on a tablet.
+  **Visuals** (`app/src/onboarding/slideVisuals.tsx`): ONE registry
+  (`SLIDE_VISUALS`, slide id → component) — today every slide renders an
+  in-app `react-native-svg` line-art scene (no new native dependency,
+  works offline, zero asset weight). `app/assets/tour/README.md`
+  documents the exact future PNG filenames (`tour-01-snap.png` ...
+  `tour-06-report.png`) a future pass would drop in to upgrade to real
+  illustrated artwork — the registry is the ONE place that swap would
+  happen; the pager and every entry point read through it and would
+  never need to change.
+  **Content** (`app/src/onboarding/tutorialSlides.ts`): the ONE shared
+  slide list (id + title/body i18n keys) every entry point reads from —
+  first-run and every replay path render byte-identical content, can
+  never drift apart.
+  **Reset All Data**: `tutorial_seen_at` was deliberately left OUT of
+  `reset-data`'s `PROFILE_DATA_RESET` field list — same KEPT bucket as
+  `onboarding_completed_at` (CLAUDE.md invariant #24) — an explicit
+  decision, not an oversight the way `dashboard_layout` was originally
+  missed: a user resetting their business data shouldn't be forced to
+  re-watch the tutorial any more than they should be forced back through
+  the onboarding wizard.
+  **Scope decision on "every major empty state"**: wired into the two
+  entry points the spec names explicitly (Settings, Import's empty
+  state) — Import is the highest-value placement since it's literally
+  where the "snap it" flow the tutorial explains begins. Other empty
+  states (Documents, Settlements, Deductions, ...) render through a
+  shared list component (`MonthGroupedList`) whose `emptyLabel` prop is
+  plain text with no slot for an inline link — extending that component's
+  API for this was judged out of scope for this pass and is flagged here
+  as a deliberate, not silent, scope limit rather than claimed as full
+  coverage.
+  Tests: `src/onboarding/__tests__/tutorialSlides.test.ts` (new, 4
+  tests) — exact 6-slide count/order/id-uniqueness/non-empty-keys, plus
+  `tutorialSlideIndex()`'s lookup. `src/navigation/__tests__/
+  rootRedirect.test.ts` gained 2 new tests (the tutorial gate fires, and
+  it blocks the onboarding gate from firing even when both are
+  incomplete) plus updated the "fully-cleared" sweep to include the new
+  `tutorial` segment. `jest.config.js`'s `testMatch` gained
+  `src/onboarding/**/*.test.ts` (a new source directory, previously
+  unlisted — would have silently collected 0 tests otherwise). Full
+  suite: 74 suites / 1806 tests pass; `tsc --noEmit` clean; all 7 locales
+  confirmed key-parity (`tutorial.*` — Settings' "How It Works" button
+  and Import's "See how" link both read `tutorial.howItWorksButton`/
+  `tutorial.seeHowLink` directly rather than duplicating a second key,
+  hi/uk as untranslated English copies per invariant #11; "Schedule C"
+  correctly kept untranslated in the final slide's body per the
+  glossary).
