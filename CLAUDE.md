@@ -3244,3 +3244,66 @@
   aggregation. Full suite: 71 suites / 1757 tests pass; `tsc --noEmit`
   clean; all 7 locales confirmed key-parity, including the newly-enforced
   MACRS/Section 179 glossary terms.
+- FULL PARITY FOLLOW-UP, PART F — CAPITAL ACCOUNT "DATA-LOSS BUG" AUDIT
+  (owner decision 2026-08-05, web v2026.08.05-W chase, spec item F,
+  flagged by the owner as the highest-priority item in this pass). Full
+  re-audit of every mechanism that can remove a `capital_transactions`
+  row, specifically checking for the web app's reported failure class: an
+  "orphan cleanup" sweep that scans existing rows and deletes ones that
+  merely LOOK orphaned (wrong on this app's data model, since a manual
+  cash contribution has no deduction to be orphaned FROM in the first
+  place — it would be silently swept up as a false positive).
+  **Confirmed this codebase has no such sweep, and cannot grow one by
+  accident**: there is exactly ONE way a row disappears without an
+  explicit user tap — the DB's own `linked_deduction_id ... on delete
+  cascade` FK (`docs/SCHEMA.sql`) — which by construction can only ever
+  fire for a LINKED row whose OWN deduction was deleted; a manual row's
+  `linked_deduction_id` is always `NULL`, so no FK on earth points at it.
+  The one app-level removal path, `deductionMutations.ts`'s
+  `applyContributionSync()`'s `'remove'` action, deletes by an EXACT id
+  already resolved via `fetchLinkedContributionId(userId, deductionId)`
+  (an exact `linked_deduction_id` match) — never a scan-and-guess. There
+  is no orphan-EXISTENCE-check-then-delete pattern anywhere for
+  `capital_transactions` (unlike `deductionMutations.ts`'s own
+  `cleanupOrphanedDocument()`, which IS that pattern, but for `documents`/
+  Storage, a completely different table with no such invariant to
+  protect). `app/src/data/legacyImport/importLegacyBackup.ts`'s own
+  header comment already documented this exact conclusion from a prior
+  pass ("Remove orphaned contributions... structurally impossible here").
+  Every OTHER spec item F sub-point was independently verified as ALREADY
+  implemented by the immediately-preceding "FULL PARITY WITH WEB
+  v2026.08.05-K, PART E" pass (above): no double-counting cash+linked
+  (`summarizeContributions()` sums the two buckets separately, never
+  both), no hidden base constant (`calcCapitalAccount()`'s
+  `effectiveContribution = initialCapital + totalContributions`, no
+  seeded figure), the "remove duplicate entries" action and the "cash
+  transfers $X (n) · paid personally $Y (m)" breakdown line both already
+  ship on the Capital Account screen, `taxFreeRemaining` is already
+  live/unclamped/red-when-negative, and equity already moves
+  `business_balance` via the tracked, reversible
+  `business_balance_applied` delta (`useRecordManualCapitalTransaction`/
+  `useDeleteManualCapitalTransaction`, `app/src/data/capitalTransactions.ts`)
+  — confirmed this flows to Home/Cash Flow (both read
+  `useCapitalAccountSummary()`, which reads `profiles.business_balance`,
+  invalidated via the same `invalidateFinancialData()`/`'profile'` key
+  every mutation here already calls) and that the tax estimate is
+  provably unaffected (`calcTaxEstimate()`'s own input signature has no
+  capital-account field at all — verified again by reading
+  `app/src/data/taxEstimate.ts` fresh, not just trusting the prior pass's
+  claim). No "explicit idempotent restore" action was added, because
+  there is no wrongful-deletion path for it to restore FROM — the
+  existing "➕ Record Contribution" button already IS the explicit,
+  non-magical way to add equity back if a user made a manual entry
+  mistake, and adding a second "restore" mechanism on top would be the
+  kind of magic-auto-reseed the spec's own point (1) explicitly warns
+  against ("never auto-seed equity").
+  The ONE real, if narrow, gap this audit found: `applyContributionSync()`'s
+  `'remove'` action had a single-row test proving it deletes the intended
+  row, but nothing proving it LEAVES OTHER ROWS ALONE — the exact
+  property this whole audit is about. Fixed by extending
+  `src/data/__tests__/deductionMutations.test.ts` with a 3-row scenario
+  (two different deductions' own linked contributions + one manual cash
+  contribution) proving that removing ONE deduction's sync plan deletes
+  only that one linked row, leaving the other deduction's linked
+  contribution AND the manual contribution both untouched.
+  Full suite: 71 suites / 1758 tests pass; `tsc --noEmit` clean.

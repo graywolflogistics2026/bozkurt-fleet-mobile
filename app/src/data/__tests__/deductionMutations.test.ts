@@ -109,4 +109,26 @@ describe('fetchLinkedContributionId / applyContributionSync (CASCADE DELETE, lin
 
     expect(mockClient.__store.capital_transactions).toHaveLength(0);
   });
+
+  // FULL PARITY follow-up (owner decision 2026-08-05, spec item F.1
+  // "data-loss bug" audit): the removal is scoped to the exact `id`
+  // `fetchLinkedContributionId()` already resolved for THIS deduction —
+  // never a scan-and-sweep of every row that happens to look orphaned.
+  // Proves a manual (unlinked) cash contribution and a DIFFERENT
+  // deduction's own linked contribution both survive untouched when one
+  // specific deduction's contribution sync removes its own row.
+  it('applyContributionSync remove action never touches a manual contribution or a different deduction\'s linked contribution', async () => {
+    mockClient = createFakeSupabase({
+      capital_transactions: [
+        { id: 'c1', user_id: USER_ID, tx_type: 'contribution', linked_deduction_id: 'd1' },
+        { id: 'c2', user_id: USER_ID, tx_type: 'contribution', linked_deduction_id: 'd2' },
+        { id: 'c3', user_id: USER_ID, tx_type: 'contribution', linked_deduction_id: null, note: 'manual cash transfer' },
+      ],
+    });
+
+    await applyContributionSync(USER_ID, 'd1', { action: 'remove', id: 'c1' });
+
+    const remainingIds = mockClient.__store.capital_transactions.map((r) => r.id as string).sort();
+    expect(remainingIds).toEqual(['c2', 'c3']);
+  });
 });
