@@ -1591,7 +1591,7 @@ No RLS change needed — both tables are already owner-scoped.
 
 ---
 
-## 44. trucks.manual_total_miles_override (FULL PARITY follow-up, owner decision 2026-08-05, spec item B.3)
+## 44. trucks.manual_total_miles_override (FULL PARITY follow-up, owner decision 2026-08-05, spec item B.3) — ✅ APPLIED (2026-08-23)
 
 A user-entered odometer/ELD total that SUPERSEDES the app's own
 settlement/loads-derived mile calculation (`app/src/stats/miles.ts`
@@ -1610,11 +1610,11 @@ alter table trucks
 
 No RLS change needed — `trucks` is already owner-scoped.
 
-- [ ] 44a run (add trucks.manual_total_miles_override)
+- [x] 44a run (add trucks.manual_total_miles_override)
 
 ---
 
-## 45. trucks cost basis (FULL PARITY follow-up, owner decision 2026-08-05, spec item C.1)
+## 45. trucks cost basis (FULL PARITY follow-up, owner decision 2026-08-05, spec item C.1) — ✅ APPLIED (2026-08-23)
 
 The way real owner-operators think about their truck's fixed weekly
 cost — replaces the previous CPM engine's "sum every Loan Center row
@@ -1641,11 +1641,11 @@ exist for this truck or may not reflect a refinance/payoff this module
 has no way to reason about). No RLS change needed — `trucks` is already
 owner-scoped.
 
-- [ ] 45a run (add trucks cost-basis columns)
+- [x] 45a run (add trucks cost-basis columns)
 
 ---
 
-## 46. trucks depreciation election (FULL PARITY follow-up, owner decision 2026-08-05, spec item E)
+## 46. trucks depreciation election (FULL PARITY follow-up, owner decision 2026-08-05, spec item E) — ✅ APPLIED (2026-08-23)
 
 Purchased-truck depreciation election, tractor and trailer independent
 of each other (same "trailer's financing is independent of its
@@ -1668,11 +1668,11 @@ All nullable; an unconfigured truck contributes $0 to the tax estimate's
 depreciation line with a "not set" prompt, never a guess. No RLS change
 needed — `trucks` is already owner-scoped.
 
-- [ ] 46a run (add trucks depreciation-election columns)
+- [x] 46a run (add trucks depreciation-election columns)
 
 ---
 
-## 47. category_learning_rules (FULL PARITY follow-up, owner decision 2026-08-05, spec item G)
+## 47. category_learning_rules (FULL PARITY follow-up, owner decision 2026-08-05, spec item G) — ✅ APPLIED (2026-08-23)
 
 CATEGORY LEARNING LAYER — every manual re-categorization of a deduction
 stores a normalized keyword→category rule (per user), applied before the
@@ -1698,11 +1698,11 @@ create policy "category_learning_rules_owner_all" on category_learning_rules
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 ```
 
-- [ ] 47a run (create category_learning_rules table + RLS policy)
+- [x] 47a run (create category_learning_rules table + RLS policy)
 
 ---
 
-## 48. profiles.tutorial_seen_at (FULL PARITY follow-up, owner decision 2026-08-05, spec item I)
+## 48. profiles.tutorial_seen_at (FULL PARITY follow-up, owner decision 2026-08-05, spec item I) — ✅ APPLIED (2026-08-23)
 
 FIRST-RUN TUTORIAL — the 6-slide illustrated walkthrough shown after ToS
 acceptance and before the onboarding wizard (`app/app/tutorial.tsx`,
@@ -1717,7 +1717,7 @@ alter table profiles
 
 No RLS change needed — `profiles` is already owner-scoped.
 
-- [ ] 48a run (add profiles.tutorial_seen_at)
+- [x] 48a run (add profiles.tutorial_seen_at)
 
 ---
 

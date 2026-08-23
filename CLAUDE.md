@@ -2977,8 +2977,8 @@
   it divides by TOTAL miles, not loaded, is preserved); only the total
   fed into it is now the deduped/reconciled figure.
   MANUAL TOTAL OVERRIDE (spec item B.3, docs/PENDING_SQL.md §44 —
-  `trucks.manual_total_miles_override numeric(12,2)`, NOT YET RUN as of
-  this writing): an odometer/ELD-sourced total the user enters
+  `trucks.manual_total_miles_override numeric(12,2)`, ✅ APPLIED
+  2026-08-23): an odometer/ELD-sourced total the user enters
   supersedes `calcMiles()`'s own calculated total for CPM/RPM purposes
   only — loaded/empty/deadhead% stay from the weekly calc regardless
   (an odometer reading has no loaded-vs-empty split of its own).
@@ -3041,8 +3041,8 @@
   keys, hi/uk as untranslated English copies per invariant #11).
 - FULL PARITY FOLLOW-UP, PART C — CPM DONE THE WAY OWNER-OPERATORS DO IT
   (owner decision 2026-08-05, web v2026.08.05-W chase, spec item C).
-  TRUCK COST BASIS (docs/PENDING_SQL.md §45, NOT YET RUN as of this
-  writing — `trucks.cost_basis_ownership_mode` (`'paid'|'loan'|'lease'`),
+  TRUCK COST BASIS (docs/PENDING_SQL.md §45, ✅ APPLIED 2026-08-23 —
+  `trucks.cost_basis_ownership_mode` (`'paid'|'loan'|'lease'`),
   `cost_basis_loan_monthly_payment`, `cost_basis_paid_spread_months`,
   `cost_basis_warranty_cost`, `cost_basis_warranty_term_months`;
   `purchase_price` from docs/PENDING_SQL.md §36 is reused as-is for the
@@ -3192,7 +3192,7 @@
   "economic monthly spread" (a paid-off truck's CPM/per-mile cost TODAY)
   — the two numbers answer different questions and must never be
   confused or summed together.
-  `docs/PENDING_SQL.md` §46 (NOT YET RUN as of this writing) adds
+  `docs/PENDING_SQL.md` §46 (✅ APPLIED 2026-08-23) adds
   `trucks.depreciation_method`/`depreciation_year_placed_in_service`/
   `depreciation_spread_years` (tractor) and the `trailer_`-prefixed
   equivalents (independent of the tractor's own election, same "trailer
@@ -3311,7 +3311,7 @@
   2026-08-05, web v2026.08.05-W chase, spec item G). Every manual
   re-categorization of a deduction now teaches a normalized keyword→
   category rule, per user (`category_learning_rules`, docs/PENDING_SQL.md
-  §47, NOT YET RUN as of this writing). `app/src/import/categoryLearning.ts`
+  §47, ✅ APPLIED 2026-08-23). `app/src/import/categoryLearning.ts`
   is the one pure module: `normalizeKeyword()` takes the first 3
   significant, non-stopword, non-numeric-only tokens of a description
   (e.g. "AMAZON.COM ORDER #123-4567" → "amazon com order") — deliberately
@@ -3526,7 +3526,7 @@
   gated between ToS acceptance and the onboarding wizard, and replayable
   any time from Settings > "How It Works" and the Import screen's empty-
   state "See how" link.
-  **Gating**: `docs/PENDING_SQL.md` §48 (NOT YET RUN as of this writing)
+  **Gating**: `docs/PENDING_SQL.md` §48 (✅ APPLIED 2026-08-23)
   adds `profiles.tutorial_seen_at` (null = never seen, same "set once,
   never reset" pattern as `onboarding_completed_at`, §28).
   `AuthContext.tsx` gained `needsTutorial` (true once `!needsTos` and the
