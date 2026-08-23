@@ -22,6 +22,7 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import {
   buildLineItems,
   buildScheduleCTotals,
+  checkMiscConcentration,
   buildLumperFees,
   buildPerDiemBlock,
   buildCapitalAssets,
@@ -188,6 +189,9 @@ export default function AccountantPackage() {
     [lineItems, userCategoriesQuery.data]
   );
   const totalExpenses = scheduleCTotals.reduce((sum, c) => sum + c.amount, 0);
+  // MISC CONCENTRATION WARNING (owner decision 2026-08-05, FULL PARITY
+  // follow-up item H.1) — informational only, never blocks anything.
+  const miscWarning = useMemo(() => checkMiscConcentration(scheduleCTotals), [scheduleCTotals]);
   const lumperFees = useMemo(() => buildLumperFees(lineItems), [lineItems]);
   const lumperTotal = lumperFees.reduce((sum, i) => sum + i.amount, 0);
 
@@ -315,6 +319,7 @@ export default function AccountantPackage() {
         : buildLineItems(deductionsQuery.data ?? [], fuelQuery.data ?? [], maintenanceQuery.data ?? [], tollsQuery.data ?? [], scopeYear, scopeMonth, scope);
     const totals = buildScheduleCTotals(items, userCategoriesQuery.data ?? []);
     const total = totals.reduce((sum, c) => sum + c.amount, 0);
+    const miscWarningForExport = checkMiscConcentration(totals);
     const lumpers = buildLumperFees(items);
     const periodLabel = scopeMonth == null ? String(scopeYear) : `${scopeYear}-${String(scopeMonth).padStart(2, '0')}`;
     const perDiemForExport =
@@ -387,6 +392,12 @@ export default function AccountantPackage() {
           ${
             implausibleDates.length > 0
               ? `<h2 class="warn">${t('accountantPackage.implausibleDateWarning', { count: implausibleDates.length })}</h2><table>${warningRows}</table>`
+              : ''
+          }
+
+          ${
+            miscWarningForExport
+              ? `<h2 class="warn">${t('accountantPackage.miscConcentrationWarning', { pct: (miscWarningForExport.miscPct * 100).toFixed(0) })}</h2>`
               : ''
           }
 
@@ -521,6 +532,14 @@ export default function AccountantPackage() {
               <Card>
                 <MutedText style={{ color: colors.red }}>
                   ⚠️ {t('accountantPackage.implausibleDateWarning', { count: implausibleDates.length })}
+                </MutedText>
+              </Card>
+            )}
+
+            {miscWarning && (
+              <Card>
+                <MutedText style={{ color: colors.orange }}>
+                  ⚠️ {t('accountantPackage.miscConcentrationWarning', { pct: Math.round(miscWarning.miscPct * 100) })}
                 </MutedText>
               </Card>
             )}

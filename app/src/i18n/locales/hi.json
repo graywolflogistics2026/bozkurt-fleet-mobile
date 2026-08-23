@@ -1584,6 +1584,7 @@
     "perDiemDaysUnit": "days",
     "perDiemNote": "Per diem is claimed separately from these expenses; meal receipts are excluded (covered by per diem).",
     "implausibleDateWarning": "{{count}} row(s) have an implausible date and may need review.",
+    "miscConcentrationWarning": "\"Misc\" makes up {{pct}}% of this month's expenses — consider re-categorizing some of these into a more specific category before sending this to your accountant.",
     "lumperFeesTitle": "Lumper Fees",
     "categoryTableTitle": "Expenses by Category",
     "grandTotal": "Grand Total",

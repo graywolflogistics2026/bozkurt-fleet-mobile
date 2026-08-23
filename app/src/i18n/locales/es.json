@@ -1584,6 +1584,7 @@
     "perDiemDaysUnit": "días",
     "perDiemNote": "El per diem se reclama por separado de estos gastos; los recibos de comidas están excluidos (cubiertos por el per diem).",
     "implausibleDateWarning": "{{count}} registro(s) tienen una fecha implausible y pueden necesitar revisión.",
+    "miscConcentrationWarning": "\"Misc\" representa el {{pct}}% de los gastos de este mes — considere reclasificar algunos de estos en una categoría más específica antes de enviar esto a su contador.",
     "lumperFeesTitle": "Lumper Fees",
     "categoryTableTitle": "Gastos por Categoría",
     "grandTotal": "Total General",

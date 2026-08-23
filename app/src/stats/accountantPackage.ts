@@ -312,6 +312,29 @@ export function buildScheduleCTotals(lineItems: LineItem[], userCategories: User
     .sort((a, b) => b.amount - a.amount);
 }
 
+// MISC CONCENTRATION WARNING (owner decision 2026-08-05, FULL PARITY
+// follow-up item H.1) — "Misc" is the catch-all fallback bucket
+// (CLAUDE.md invariant #19's schedule_c_bucket default) for a category
+// with no clearer Schedule C mapping; a healthy month should have most
+// dollars landing in a real, specific category. Misc pulling more than
+// 20% of a month's total is a signal worth flagging so the user goes
+// back and re-categorizes those rows into something more specific before
+// handing the report to their accountant — informational only, never
+// blocks anything.
+const MISC_WARNING_THRESHOLD = 0.2;
+
+export type MiscConcentrationWarning = { miscAmount: number; miscPct: number };
+
+export function checkMiscConcentration(totals: ScheduleCLineTotal[]): MiscConcentrationWarning | null {
+  const grandTotal = totals.reduce((sum, t) => sum + t.amount, 0);
+  if (grandTotal <= 0) return null;
+  const misc = totals.find((t) => t.category === 'Misc');
+  if (!misc || misc.amount <= 0) return null;
+  const miscPct = misc.amount / grandTotal;
+  if (miscPct <= MISC_WARNING_THRESHOLD) return null;
+  return { miscAmount: misc.amount, miscPct };
+}
+
 // LUMPER FEES table (spec item B.2 — shown above the category table, not
 // buried at the bottom): every line-item already categorized "Lumper
 // Fees" by classifySettlementLine()/guessCategory() (owner decision

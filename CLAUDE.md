@@ -3383,3 +3383,56 @@
   cap. Full suite: 72 suites / 1773 tests pass; `tsc --noEmit` clean; all
   7 locales confirmed key-parity (`nav.categoryLearning`/
   `categoryLearning.*` keys, hi/uk as untranslated English copies).
+- FULL PARITY FOLLOW-UP, PART H — SMALLER FIXES (owner decision
+  2026-08-05, web v2026.08.05-W chase, spec item H). Two real items;
+  every other sub-point was confirmed already shipped by prior passes
+  (the settlement-line classifier, zero-cost-row skipping, Mark-as-Done's
+  cost-prompt wording, bold category headers + truck identifier in the
+  Accountant Package header/exports, the per-diem month+YTD block, the
+  Lumper Fees table above expenses, and the year selector — all already
+  covered by the FULL PARITY pass's own PART A/B/C/D entries above, no
+  further change needed).
+  1. **MISC CONCENTRATION WARNING (spec H.1)**:
+     `app/src/stats/accountantPackage.ts`'s `checkMiscConcentration()` —
+     pure, takes the already-computed `ScheduleCLineTotal[]` (never
+     re-derives a total independently, so it can't disagree with what the
+     screen already shows) and flags when the "Misc" bucket exceeds 20%
+     of the period's grand total, returning `null` (never a false
+     positive) when there's no Misc bucket or the grand total is 0.
+     Informational only — never blocks Save/export. Shown on the
+     Accountant Package screen (amber `Card`, same treatment as the
+     existing implausible-date warning) AND in both PDF/Excel exports
+     (`buildReportHtml()`, right after the implausible-date warning
+     block) so a CPA opening the exported file sees the same signal the
+     owner saw in-app.
+  2. **AI-IMPORT IDENTITY AUDIT (spec H.7)**: re-verified end to end,
+     confirmed ALREADY FIXED by an earlier pass (owner decision
+     2026-07-09, PRODUCT DECISION — predates this FOLLOW-UP spec by
+     nearly a month). `supabase/functions/ai-import/index.ts`'s raw
+     `LEGACY_EXTRACTION_PROMPT` constant still CONTAINS the literal
+     "Graywolf Logistics LLC (Ali Bozkurt, Prime Inc. owner-operator,
+     Unit 830157)" / "Ali Bozkurt is OTR truck driver..." text — but only
+     as the exact-match anchor for two `.replace()` patches
+     (`IDENTITY_LINE_BEFORE`/`AFTER`, `OTR_RULE_BEFORE`/`AFTER`) already
+     wired into `buildExtractionPrompt()`'s replace chain; the ACTUAL
+     prompt text sent to Anthropic on every request already reads
+     "Parse this document for an owner-operator trucking business" /
+     "the user is an OTR truck driver" — fully generic, no leak. Grepped
+     the entire `supabase/functions/` and `app/src/` trees for
+     "Graywolf"/"Ali Bozkurt"/"830157"/"Bozkurt Fleet OS" (as a hardcoded
+     VALUE, not the product brand — which CLAUDE.md's own top rule
+     explicitly allows) beyond this one already-patched spot and found
+     none — every other hit was either a test fixture's arbitrary sample
+     value (`Prime Inc.`/`830157` as a plausible carrier/unit number in
+     `chunking.test.ts`/`storagePath.test.ts`/`truckMatch.test.ts`, no
+     different from using any other placeholder) or a comment documenting
+     that THIS app deliberately does NOT do what legacy did
+     (`ai-advisor/index.ts`'s own header comment). No code change was
+     needed for this item — the web app's reported bug does not exist on
+     mobile, confirmed by reading the actual code path, not assumed.
+  Tests: `src/stats/__tests__/accountantPackage.test.ts` gained a
+  `checkMiscConcentration` describe block (4 tests — over/at-threshold,
+  no-Misc-bucket, zero-total divide-by-zero guard). Full suite: 72
+  suites / 1777 tests pass; `tsc --noEmit` clean; all 7 locales confirmed
+  key-parity (`accountantPackage.miscConcentrationWarning`, "Misc" kept
+  untranslated as a domain category name per invariant #11).

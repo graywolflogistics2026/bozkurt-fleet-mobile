@@ -1584,6 +1584,7 @@
     "perDiemDaysUnit": "أيام",
     "perDiemNote": "يُطالب بـ per diem بشكل منفصل عن هذه المصروفات؛ إيصالات الوجبات مستبعدة (مغطاة بـ per diem).",
     "implausibleDateWarning": "{{count}} سجل (سجلات) لديها تاريخ غير معقول وقد تحتاج إلى مراجعة.",
+    "miscConcentrationWarning": "تشكّل \"Misc\" نسبة {{pct}}% من مصروفات هذا الشهر — فكّر في إعادة تصنيف بعضها إلى فئة أكثر تحديدًا قبل إرسال هذا إلى محاسبك.",
     "lumperFeesTitle": "Lumper Fees",
     "categoryTableTitle": "المصروفات حسب الفئة",
     "grandTotal": "الإجمالي الكلي",

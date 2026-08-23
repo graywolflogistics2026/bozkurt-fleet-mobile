@@ -9,6 +9,7 @@ import {
   buildPerDiemBlock,
   buildCapitalAssets,
   buildOwnersEquity,
+  checkMiscConcentration,
 } from '@/src/stats/accountantPackage';
 import type { Deduction, Equipment, MaintenanceRecord, FuelPurchase, LoanRow, CreditCardRow, Toll, Truck, UserCategory } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
@@ -556,6 +557,36 @@ describe('buildScheduleCTotals (owner decision 2026-08-05, FULL PARITY pass item
     expect(byCategory['Insurance—Truck'].scheduleCLine).toBe('15');
     expect(byCategory['Fuel & DEF'].amount).toBe(200);
     expect(byCategory['Fuel & DEF'].scheduleCLine).toBe('22');
+  });
+});
+
+describe('checkMiscConcentration (owner decision 2026-08-05, FULL PARITY follow-up item H.1)', () => {
+  it('flags Misc when it exceeds 20% of the grand total', () => {
+    const totals = [
+      { category: 'Misc', amount: 300, scheduleCLine: null },
+      { category: 'Fuel & DEF', amount: 700, scheduleCLine: '22' },
+    ];
+    const warning = checkMiscConcentration(totals);
+    expect(warning).not.toBeNull();
+    expect(warning?.miscAmount).toBe(300);
+    expect(warning?.miscPct).toBeCloseTo(0.3, 5);
+  });
+
+  it('does not flag Misc at or under the 20% threshold', () => {
+    const totals = [
+      { category: 'Misc', amount: 200, scheduleCLine: null },
+      { category: 'Fuel & DEF', amount: 800, scheduleCLine: '22' },
+    ];
+    expect(checkMiscConcentration(totals)).toBeNull();
+  });
+
+  it('returns null when there is no Misc bucket at all', () => {
+    const totals = [{ category: 'Fuel & DEF', amount: 800, scheduleCLine: '22' }];
+    expect(checkMiscConcentration(totals)).toBeNull();
+  });
+
+  it('returns null when the grand total is 0 (avoids a divide-by-zero false positive)', () => {
+    expect(checkMiscConcentration([])).toBeNull();
   });
 });
 

@@ -1584,6 +1584,7 @@
     "perDiemDaysUnit": "gün",
     "perDiemNote": "Per diem bu giderlerden ayrı olarak talep edilir; yemek fişleri hariç tutulur (per diem ile karşılanır).",
     "implausibleDateWarning": "{{count}} kayıt makul olmayan bir tarihe sahip ve incelemeye ihtiyaç duyabilir.",
+    "miscConcentrationWarning": "\"Misc\" bu ayın giderlerinin %{{pct}}'ini oluşturuyor — bunu muhasebecinize göndermeden önce bazılarını daha spesifik bir kategoriye yeniden sınıflandırmayı düşünün.",
     "lumperFeesTitle": "Lumper Fees",
     "categoryTableTitle": "Kategoriye Göre Giderler",
     "grandTotal": "Genel Toplam",
