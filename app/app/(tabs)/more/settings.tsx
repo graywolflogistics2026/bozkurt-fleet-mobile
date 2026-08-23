@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,8 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { SUPPORTED_LOCALES, LOCALE_LABELS, LANGUAGE_PICKER_ENABLED, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
+import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
+import { SUPPORT_EMAIL } from '@/src/brand';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { formatDate } from '@/src/i18n/format';
 
@@ -206,6 +208,29 @@ export default function Settings() {
     }
   }
 
+  // SUPPORT EMAIL (owner decision 2026-08-05, FULL PARITY follow-up item
+  // J) — a plain mailto: URL (Linking.openURL, no new native dependency)
+  // prefilled with build/platform/user-id context, never financial data.
+  async function openSupportEmail(subject: string) {
+    const url = buildSupportMailtoUrl({
+      subject,
+      buildInfo: getBuildInfo(),
+      platform: Platform.OS,
+      userId,
+    });
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(t('settings.noMailAppTitle'), t('settings.noMailAppBody', { email: SUPPORT_EMAIL }));
+    }
+  }
+  function handleContactSupport() {
+    openSupportEmail(t('settings.contactSupportSubject'));
+  }
+  function handleReportProblem() {
+    openSupportEmail(t('settings.reportProblemSubject'));
+  }
+
   // Reset All Data (device feedback round 2, owner decision 2026-07-13) —
   // distinct from Delete Account: wipes every business row + Storage file
   // but KEEPS the account/profile, so the user stays signed in to a
@@ -327,6 +352,16 @@ export default function Settings() {
           </MutedText>
           <SecondaryButton title={t('settings.viewTerms')} onPress={() => router.push('/(tabs)/more/terms-of-use')} />
           <SecondaryButton title={t('settings.viewPrivacy')} onPress={() => router.push('/(tabs)/more/privacy-policy')} />
+        </Card>
+
+        {/* SUPPORT EMAIL (owner decision 2026-08-05, FULL PARITY follow-up
+            item J) — prefilled with app version/EAS update id/commit
+            hash/platform/user id, NEVER financial data. */}
+        <Text style={styles.sectionTitle}>{t('settings.supportTitle')}</Text>
+        <Card>
+          <MutedText>{t('settings.supportNote')}</MutedText>
+          <SecondaryButton title={t('settings.contactSupportButton')} onPress={handleContactSupport} />
+          <SecondaryButton title={t('settings.reportProblemButton')} onPress={handleReportProblem} />
         </Card>
 
         <Text style={[styles.sectionTitle, { color: colors.red }]}>{t('settings.dangerZoneTitle')}</Text>

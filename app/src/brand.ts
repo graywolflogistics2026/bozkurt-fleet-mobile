@@ -18,3 +18,12 @@ export const BRAND_SHORT_NAME = 'BOZKA';
 // terms like "per diem"/"settlement," not the brand's own voice).
 export const BRAND_TAGLINE = 'Your AI Business Coach';
 export const BRAND_EMOJI = '🐺';
+
+// SUPPORT EMAIL (owner decision 2026-08-05, FULL PARITY follow-up item J)
+// — the one shared contact address for Settings > Contact Support/Report
+// a Problem, the crash screen's "Email This Error," and the Terms of
+// Use/Privacy Policy contact sections. Deliberately a dedicated product
+// support address, never the owner's own personal email — same identity-
+// separation principle as CLAUDE.md's top invariant (this is a clean
+// multi-tenant product, not a single owner's personal contact).
+export const SUPPORT_EMAIL = 'bozkatruckingai@gmail.com';

@@ -151,3 +151,41 @@ classification re-checked rather than carried over, and any state whose law
 doesn't fit the common shape (Ohio's exemption, Massachusetts' surtax)
 represented via `flat_adjustments` instead of silently squeezed into
 `flat` or skipped.
+
+## Custom SMTP (owner decision 2026-08-05, FULL PARITY follow-up item J)
+
+By default, Supabase Auth sends every system email (signup confirmation,
+password reset, magic link) FROM its own shared sender
+(`noreply@mail.app.supabase.io`) — this works, but it's rate-limited (a
+few emails/hour on the free tier) and doesn't carry the app's own brand
+or support address. Once real user volume justifies it, switch to a
+custom SMTP provider so these emails come from
+`SUPPORT_EMAIL` (`app/src/brand.ts`, currently `bozkatruckingai@gmail.com`)
+or a proper `noreply@<yourdomain>` once a domain exists. Exact dashboard
+steps (Supabase Dashboard, not a SQL/code change):
+
+1. Pick an SMTP provider (Resend, Postmark, SendGrid, or even a Google
+   Workspace account if `bozkatruckingai@gmail.com` is upgraded to one —
+   plain consumer Gmail SMTP works for low volume but Google actively
+   throttles/flags automated sends from a free Gmail account, so a real
+   transactional-email provider is the durable choice once volume grows).
+2. In the provider's own dashboard, generate SMTP credentials (host,
+   port, username, password) and verify sender-domain ownership (SPF/
+   DKIM DNS records) for whatever "from" address/domain you'll use.
+3. Supabase Dashboard → **Project Settings → Authentication → SMTP
+   Settings** (sometimes labeled **Auth → Emails → SMTP Provider**
+   depending on dashboard version) → toggle **Enable Custom SMTP**.
+4. Fill in: **Sender email** (the "from" address, e.g. `SUPPORT_EMAIL` or
+   a domain-based noreply address), **Sender name** (the brand's display
+   name, `app/src/brand.ts`'s `BRAND_NAME`), **Host**, **Port**,
+   **Username**, **Password** from step 2.
+5. Save, then use the dashboard's own "Send test email" action to confirm
+   delivery before relying on it for real signups.
+6. Optionally customize the email TEMPLATES (Authentication → Emails →
+   Templates) — the subject/body HTML for confirmation/reset/magic-link
+   emails — to reference the brand name and `SUPPORT_EMAIL` instead of
+   Supabase's generic default copy.
+7. No app code change is required for any of this — the mobile app never
+   sends these emails itself, it only triggers them via
+   `supabase.auth.signUp()`/`resetPasswordForEmail()`, which always go
+   through whatever SMTP config is active in the dashboard.

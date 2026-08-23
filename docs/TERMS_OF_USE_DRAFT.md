@@ -122,8 +122,11 @@ an updated version constitutes agreement to the updated Terms.
 
 ### 12. Contact
 
-[PLACEHOLDER — contact name/email for legal notices, e.g.
-graywolflogistics@myyahoo.com]
+bozkatruckingai@gmail.com (owner decision 2026-08-05, `app/src/brand.ts`'s
+`SUPPORT_EMAIL` — a dedicated product support address, not the owner's own
+personal email, consistent with this app's multi-tenant identity
+separation). [Final formal legal-notice address/registered-agent details
+still pending attorney review.]
 
 ---
 

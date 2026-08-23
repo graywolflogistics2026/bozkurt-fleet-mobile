@@ -2,6 +2,8 @@
 // Bump TOS_VERSION whenever the accepted text changes; the app re-prompts
 // every user whose stored profiles.tos_version doesn't match (CLAUDE.md
 // invariant #8, PROMPTS.md Session 3).
+import { SUPPORT_EMAIL } from '@/src/brand';
+
 export const TOS_VERSION = 'draft-2026-07-04';
 
 export const TOS_TITLE = 'Terms of Use';
@@ -37,6 +39,9 @@ You agree to indemnify us against claims arising from your use of the app or you
 
 10. Governing law
 These Terms are governed by the laws of the State of Texas. [Placeholder — venue pending attorney review.]
+
+11. Contact
+Questions about these Terms: ${SUPPORT_EMAIL} (final formal legal-notice address pending attorney review).
 
 By tapping Accept below, you confirm you have read and agree to these Terms, including that this app provides estimates only and not professional advice.
 

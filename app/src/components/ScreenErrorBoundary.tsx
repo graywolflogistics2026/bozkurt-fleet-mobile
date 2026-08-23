@@ -1,8 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
+import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
 
 // CRASH-ON-MOUNT FIX (owner decision 2026-07-30): a screen-level React
 // error boundary that renders the error message + component stack ON
@@ -35,13 +36,26 @@ import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 // a reusable, generic safety net for any other screen with a similarly
 // risky dependency.
 //
-// `title`/`copyLabel`/`copiedLabel` are pre-localized by the caller (a
-// function component, which can call useTranslation() — this class
-// component can't use hooks). The error message/stack/build info line
-// themselves are never localized anywhere in this app (every existing
-// Alert.alert() shows `err.message` raw) — they're diagnostic text, not
-// UI copy, same treatment here.
-type Props = { screenName: string; title: string; copyLabel: string; copiedLabel: string; children: ReactNode };
+// `title`/`copyLabel`/`copiedLabel`/`emailLabel` are pre-localized by the
+// caller (a function component, which can call useTranslation() — this
+// class component can't use hooks). The error message/stack/build info
+// line themselves are never localized anywhere in this app (every
+// existing Alert.alert() shows `err.message` raw) — they're diagnostic
+// text, not UI copy, same treatment here.
+// emailLabel/SUPPORT EMAIL (owner decision 2026-08-05, FULL PARITY
+// follow-up item J) — "Email This Error" opens a mailto: prefilled with
+// screen name/error message/build info/platform, same shared builder
+// Settings' Contact Support uses (app/src/lib/supportEmail.ts). No
+// userId here — this class component has no access to AuthContext/
+// session (can't call hooks), so the body simply omits it.
+type Props = {
+  screenName: string;
+  title: string;
+  copyLabel: string;
+  copiedLabel: string;
+  emailLabel: string;
+  children: ReactNode;
+};
 type State = { error: Error | null; componentStack: string | null; copied: boolean };
 
 export class ScreenErrorBoundary extends Component<Props, State> {
@@ -88,6 +102,25 @@ export class ScreenErrorBoundary extends Component<Props, State> {
     }
   };
 
+  handleEmail = async () => {
+    const { error } = this.state;
+    if (!error) return;
+    const url = buildSupportMailtoUrl({
+      subject: `Crash report: ${this.props.screenName}`,
+      buildInfo: getBuildInfo(),
+      platform: Platform.OS,
+      screenName: this.props.screenName,
+      errorMessage: error.message,
+    });
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // No mail app configured — the error/stack text is still
+      // selectable/copyable on screen regardless, same fallback
+      // reasoning as handleCopy's own catch above.
+    }
+  };
+
   render() {
     if (this.state.error) {
       return (
@@ -119,22 +152,38 @@ export class ScreenErrorBoundary extends Component<Props, State> {
                   {this.state.componentStack}
                 </Text>
               )}
-              <Pressable
-                onPress={this.handleCopy}
-                style={({ pressed }) => ({
-                  alignSelf: 'flex-start',
-                  paddingVertical: spacing.sm,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radii.sm,
-                  borderWidth: 1,
-                  borderColor: colors.accent,
-                  backgroundColor: pressed ? colors.card2 : 'transparent',
-                })}
-              >
-                <Text style={{ color: colors.accent, fontWeight: '700' }}>
-                  {this.state.copied ? this.props.copiedLabel : this.props.copyLabel}
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                <Pressable
+                  onPress={this.handleCopy}
+                  style={({ pressed }) => ({
+                    alignSelf: 'flex-start',
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radii.sm,
+                    borderWidth: 1,
+                    borderColor: colors.accent,
+                    backgroundColor: pressed ? colors.card2 : 'transparent',
+                  })}
+                >
+                  <Text style={{ color: colors.accent, fontWeight: '700' }}>
+                    {this.state.copied ? this.props.copiedLabel : this.props.copyLabel}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={this.handleEmail}
+                  style={({ pressed }) => ({
+                    alignSelf: 'flex-start',
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radii.sm,
+                    borderWidth: 1,
+                    borderColor: colors.accent,
+                    backgroundColor: pressed ? colors.card2 : 'transparent',
+                  })}
+                >
+                  <Text style={{ color: colors.accent, fontWeight: '700' }}>{this.props.emailLabel}</Text>
+                </Pressable>
+              </View>
             </View>
           </ScrollView>
         </View>

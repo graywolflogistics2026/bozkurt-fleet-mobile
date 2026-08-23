@@ -3436,3 +3436,86 @@
   suites / 1777 tests pass; `tsc --noEmit` clean; all 7 locales confirmed
   key-parity (`accountantPackage.miscConcentrationWarning`, "Misc" kept
   untranslated as a domain category name per invariant #11).
+- FULL PARITY FOLLOW-UP, PART J — SUPPORT EMAIL (owner decision
+  2026-08-05, web v2026.08.05-W chase, spec item J).
+  `app/src/brand.ts` gained `SUPPORT_EMAIL = 'bozkatruckingai@gmail.com'`
+  — a dedicated product support address, deliberately never the owner's
+  own personal email, the same identity-separation principle as
+  CLAUDE.md's very first invariant (this is a clean multi-tenant
+  product). `app/src/lib/supportEmail.ts`'s `buildSupportMailtoUrl()` is
+  the one shared `mailto:` builder every touch point below uses — a
+  plain `Linking.openURL('mailto:...')` call (react-native's own API,
+  already proven elsewhere in this app for the share-card deep link, per
+  `useShareCapture.ts`) rather than adding a new native dependency like
+  `expo-mail-composer` (so this ships via a normal EAS Update, no new
+  build required). The body always includes build version/EAS update id/
+  commit hash (`app/src/lib/buildInfo.ts`'s existing `getBuildInfo()`,
+  same module Settings' footer and the crash screen already read from)
+  and platform (`Platform.OS`) — optionally a user id and/or screen name/
+  error message depending on the caller — and NEVER any financial data
+  (settlements, deductions, balances, tax figures); there is no code path
+  in `buildSupportMailtoUrl()` that could even reach a financial value,
+  since its input type only has build/platform/user/screen/error fields.
+  **Settings** (`app/(tabs)/more/settings.tsx`): new "Support" section
+  (right after Legal) with "Contact Support" and "Report a Problem"
+  buttons — both open the same mailto builder with a different subject
+  line, including the signed-in user's own id (in scope here via
+  `session?.user.id`). A caught `Linking.openURL()` failure (no mail app
+  configured) falls back to an `Alert` naming `SUPPORT_EMAIL` directly so
+  the user isn't stuck with a silently-failed tap.
+  **Crash screen** (`app/src/components/ScreenErrorBoundary.tsx`): gained
+  an "Email This Error" button next to the existing "Copy Details" one,
+  via a new required `emailLabel` prop (this is a class component with no
+  hook access, so labels are always caller-supplied, same pattern as
+  `title`/`copyLabel`/`copiedLabel`) — sends screen name + error message +
+  build info + platform, no user id (this component has no
+  `AuthContext`/`session` access, confirmed by reading its `Props`/class
+  body — a future caller could thread one through as an additional prop
+  if ever needed). AUDIT NOTE, honestly flagged rather than silently
+  assumed: a repo-wide grep found `ScreenErrorBoundary` is not currently
+  wrapped around ANY live screen (its own header comment already says it
+  was built for the now-deleted Customize Dashboard screen and kept as "a
+  reusable, generic safety net" for later use) — this pass still updates
+  the component correctly since CLAUDE.md's own convention is to keep it
+  ready for the next screen that needs it, but the button has no current
+  way to actually be seen by a user until some screen adopts the
+  boundary.
+  **Terms of Use / Privacy Policy**: both the source docs
+  (`docs/TERMS_OF_USE_DRAFT.md` §12, `docs/PRIVACY_POLICY_DRAFT.md` §8)
+  and the LIVE in-app text (`app/src/config/termsOfUse.ts`'s `TOS_BODY`
+  gained a new "11. Contact" section it didn't have before at all;
+  `app/src/config/privacyPolicy.ts`'s `PRIVACY_BODY` had its existing "8.
+  Contact" placeholder filled via `${SUPPORT_EMAIL}` template
+  interpolation) now name `SUPPORT_EMAIL` — replacing
+  `TERMS_OF_USE_DRAFT.md`'s own placeholder, which had literally
+  suggested the owner's personal `graywolflogistics@myyahoo.com` as an
+  example, exactly the kind of identity leak this pass is about
+  eliminating. Both stay marked "final formal legal-notice address
+  pending attorney review" — filling in a real support inbox is not the
+  same as attorney sign-off on the surrounding legal text, which these
+  drafts still require before anything here is publishable (unchanged
+  from before this pass). `TOS_VERSION` was deliberately NOT bumped — a
+  contact-email addition isn't a substantive change to what a user
+  agreed to, so it shouldn't force an unnecessary re-acceptance prompt
+  (CLAUDE.md invariant #8's re-prompt-on-version-change mechanism is for
+  real Terms changes).
+  **Custom SMTP steps** (spec's own explicit ask, an operator/dashboard
+  task, not a code change): documented as a new section in
+  `docs/ADMIN_RUNBOOK.md` ("Custom SMTP") — exact Supabase Dashboard path
+  (Project Settings → Authentication → SMTP Settings), what to configure
+  (sender email/name, host/port/credentials from a provider), the
+  recommendation to use a real transactional-email provider (Resend/
+  Postmark/SendGrid) rather than raw consumer Gmail SMTP once volume
+  grows (Google throttles/flags automated sends from a free Gmail
+  account), and the explicit confirmation that no app code change is
+  required for any of it (Supabase Auth is what sends these emails, the
+  app only ever triggers them via `supabase.auth.*` calls).
+  Tests: `src/lib/__tests__/supportEmail.test.ts` (new, 5 tests) —
+  targets `SUPPORT_EMAIL`, includes subject/build-info/platform, includes
+  the user id only when provided, includes screen/error only when
+  provided (the crash-report shape), and a dedicated proof the body never
+  contains anything dollar-figure-shaped. Full suite: 73 suites / 1782
+  tests pass; `tsc --noEmit` clean; all 7 locales confirmed key-parity
+  (`settings.support*`/`settings.contactSupportButton`/
+  `settings.reportProblemButton`/`settings.noMailApp*`, hi/uk as
+  untranslated English copies per invariant #11).

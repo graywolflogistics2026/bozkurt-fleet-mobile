@@ -3,6 +3,8 @@
 // version — Settings > Legal is a read-only re-display (PROMPTS.md
 // Session 10), so PRIVACY_VERSION exists only for the "as of" date shown
 // on that screen, not for any gating logic.
+import { SUPPORT_EMAIL } from '@/src/brand';
+
 export const PRIVACY_VERSION = 'draft-2026-07-12';
 
 export const PRIVACY_TITLE = 'Privacy Policy';
@@ -31,6 +33,6 @@ Every database table is protected by row-level security scoped to your own accou
 We may update this policy as the app evolves. Material changes will be reflected here with an updated date.
 
 8. Contact
-[Placeholder — support contact address pending attorney review.]
+Questions about this policy or your data: ${SUPPORT_EMAIL} (final formal legal-notice address pending attorney review).
 
 Full text: docs/PRIVACY_POLICY_DRAFT.md in the project repository.`;

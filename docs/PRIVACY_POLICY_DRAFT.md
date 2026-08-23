@@ -66,7 +66,9 @@ re-notice process pending attorney review, same as Terms of Use.]
 
 ## 8. Contact
 
-[Placeholder — support contact address pending attorney review.]
+Questions about this policy or your data: bozkatruckingai@gmail.com
+(owner decision 2026-08-05, `app/src/brand.ts`'s `SUPPORT_EMAIL` —
+[final formal legal-notice address pending attorney review]).
 
 ---
 
