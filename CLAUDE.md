@@ -2911,3 +2911,40 @@
   `tsc --noEmit` clean; all 7 locales confirmed key-parity (`Settlement`
   correctly kept untranslated per the glossary's DO-NOT-TRANSLATE list
   in every locale's new `originFilterWithheld` string).
+- FULL PARITY FOLLOW-UP, PART A — ONE REFRESH PATH (owner decision
+  2026-08-05, web v2026.08.05-W chase). Web's `rAll()` was called in 19
+  places but never DEFINED — every refresh silently threw, so editing
+  the truck cost basis never moved CPM. Audited whether the mobile
+  equivalent (`app/src/data/queryInvalidation.ts`'s
+  `invalidateFinancialData()`) has the SAME class of gap: it does exist
+  and IS wired into nearly every mutation-bearing screen already, but a
+  grep audit of every `.mutateAsync(` call site under `app/(tabs)` found
+  4 screens calling only a bare per-table entityHooks mutation (whose own
+  `onSuccess` invalidates just `[table]` with the default `refetchType:
+  'active'`, which skips any inactive/unmounted screen's own cached
+  query) with NO broader invalidation at all: `trucks.tsx`,
+  `equipment.tsx` (both feed the CPM "Why?" breakdown and the
+  depreciation election, PARTS C/E below — this is the exact "truck cost
+  basis doesn't move CPM" bug named in the prompt), `drivers.tsx`
+  (feeds `sumDeductibleDriverPayroll()`, CLAUDE.md invariant #7, which
+  Tax Estimator reads), and `compliance.tsx` (had a narrow one-off
+  `compliance_items`-only invalidation in ONE handler, not the other
+  three). All 4 now call `invalidateFinancialData(queryClient)` after
+  every insert/update/delete/toggle, matching the convention every other
+  screen already followed. `ceo-mode.tsx` was the only OTHER screen with
+  zero `invalidateFinancialData` calls — audited and confirmed correct
+  as-is: its one mutation (`useUpdateProfile()`) already invalidates its
+  own `'profile'` key internally, no broader dependency exists.
+  Tests: `queryInvalidation.test.ts` gained a dedicated "ONE REFRESH
+  PATH" test pinning the exact query-key contract the prompt's four
+  named mutation categories require — truck cost basis
+  (`trucks`/`equipment`/`loans`), equity (`capital_transactions`/
+  `capital-account-summary`/`profile`), miles (`settlements`), and
+  categories (`deductions`/`user_categories`) must all appear in
+  `invalidateFinancialData()`'s own invalidated-key list. A filesystem-
+  scanning test (grepping every screen source file for the call) was
+  considered and deliberately NOT added — inconsistent with this
+  codebase's established "pure-function tests only" convention and
+  fragile against refactors; the query-key contract test is the durable
+  regression guard, the grep audit itself was a one-time manual sweep.
+  Full suite: 67 suites / 1628 tests pass; `tsc --noEmit` clean.

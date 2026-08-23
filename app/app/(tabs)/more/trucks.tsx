@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList, useInsertTruck, useUpdateTruck } from '@/src/data/trucks';
 import { useLoanRows, useInsertLoanRow } from '@/src/data/loans';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { AssetFinancingFields, emptyAssetFinancing, type AssetFinancingValue } from '@/src/components/AssetFinancingFields';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
@@ -72,6 +74,7 @@ export default function Trucks() {
   const { number } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const queryClient = useQueryClient();
   const { refreshTrucks } = useActiveTruck();
   const trucksQuery = useTrucksList();
   const insertTruck = useInsertTruck();
@@ -130,6 +133,7 @@ export default function Trucks() {
       // inline-create.
       await insertTruck.mutateAsync({ user_id: userId, ...formToValues(addForm) });
       await refreshTrucks();
+      await invalidateFinancialData(queryClient);
       setAddForm(emptyForm());
       setShowAddForm(false);
     } catch (err) {
@@ -150,6 +154,13 @@ export default function Trucks() {
     try {
       await updateTruck.mutateAsync({ id: editing.id, values: formToValues(editForm) });
       await refreshTrucks();
+      // ONE REFRESH PATH (owner decision 2026-08-05, FULL PARITY follow-up
+      // item A) — a truck's cost basis (purchase_price/financing/loan_id)
+      // feeds the CPM "Why?" breakdown and depreciation election; refreshTrucks()
+      // above only refetches ActiveTruckContext's own narrower state, it
+      // never touches react-query's cache for Scorecard/CEO Mode/Profit
+      // Analysis's own already-fetched 'trucks'/'loans' queries.
+      await invalidateFinancialData(queryClient);
       setEditing(null);
     } catch (err) {
       Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -170,6 +181,7 @@ export default function Trucks() {
             // maintenance record it ever had (CLAUDE.md invariant #7).
             await updateTruck.mutateAsync({ id: tr.id, values: { is_active: false } });
             await refreshTrucks();
+            await invalidateFinancialData(queryClient);
           } catch (err) {
             Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
           }
@@ -181,6 +193,7 @@ export default function Trucks() {
   async function handleReactivate(tr: Truck) {
     await updateTruck.mutateAsync({ id: tr.id, values: { is_active: true } });
     await refreshTrucks();
+    await invalidateFinancialData(queryClient);
   }
 
   function renderForm(form: FormState, setForm: (f: FormState) => void) {

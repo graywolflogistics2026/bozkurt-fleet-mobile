@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useDrivers, useInsertDriver, useUpdateDriver } from '@/src/data/drivers';
 import { useDriverPayments, useInsertDriverPayment } from '@/src/data/driverPayments';
 import { useTaxYearData } from '@/src/data/taxYearData';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcTrueCostOfEmployee, calcW2EmployerTaxes } from '@/src/tax/driverPayroll';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
@@ -66,6 +68,7 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
   const { money, date: fmtDate } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const queryClient = useQueryClient();
   const paymentsQuery = useDriverPayments({ driver_id: driver.id });
   const insertPayment = useInsertDriverPayment();
 
@@ -97,6 +100,10 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
         employer_taxes: employerTaxes,
         notes: notes || null,
       });
+      // ONE REFRESH PATH (owner decision 2026-08-05, FULL PARITY follow-up
+      // item A) — driver_payments feeds sumDeductibleDriverPayroll() in the
+      // tax engine (CLAUDE.md invariant #7), which Tax Estimator reads.
+      await invalidateFinancialData(queryClient);
       setGrossPay('');
       setNotes('');
     } catch (err) {
@@ -149,6 +156,7 @@ export default function Drivers() {
   const { t } = useTranslation();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const queryClient = useQueryClient();
   const { trucks } = useActiveTruck();
   const driversQuery = useDrivers();
   const insertDriver = useInsertDriver();
@@ -188,6 +196,7 @@ export default function Drivers() {
     setSaving(true);
     try {
       await insertDriver.mutateAsync({ user_id: userId, ...formToValues(addForm) });
+      await invalidateFinancialData(queryClient);
       setAddForm(emptyForm());
       setShowAddForm(false);
     } catch (err) {
@@ -207,6 +216,7 @@ export default function Drivers() {
     setSaving(true);
     try {
       await updateDriver.mutateAsync({ id: editing.id, values: formToValues(editForm) });
+      await invalidateFinancialData(queryClient);
       setEditing(null);
     } catch (err) {
       Alert.alert(t('drivers.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -219,6 +229,7 @@ export default function Drivers() {
   // drivers can have settlement/payment history (PROMPTS.md Session 8).
   async function handleToggleActive(d: Driver) {
     await updateDriver.mutateAsync({ id: d.id, values: { active: !d.active } });
+    await invalidateFinancialData(queryClient);
   }
 
   function renderForm(form: FormState, setForm: (f: FormState) => void) {

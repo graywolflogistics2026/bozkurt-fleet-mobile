@@ -24,6 +24,7 @@ import {
   type NotificationPermissionStatus,
 } from '@/src/notifications/complianceNotifications';
 import { useFormatters } from '@/src/i18n/format';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { ComplianceItem } from '@/src/types/db';
@@ -153,6 +154,7 @@ export default function ComplianceTracker() {
         due_date: addForm.dueDate,
         recurrence: addForm.recurrence,
       });
+      await invalidateFinancialData(queryClient);
       setAdding(false);
     } catch (err) {
       Alert.alert(t('compliance.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -178,6 +180,7 @@ export default function ComplianceTracker() {
           recurrence: editForm.recurrence,
         },
       });
+      await invalidateFinancialData(queryClient);
       setEditing(null);
     } catch (err) {
       Alert.alert(t('compliance.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -195,6 +198,7 @@ export default function ComplianceTracker() {
         onPress: async () => {
           try {
             await deleteItem.mutateAsync(item.id);
+            await invalidateFinancialData(queryClient);
             setEditing(null);
           } catch (err) {
             Alert.alert(t('compliance.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

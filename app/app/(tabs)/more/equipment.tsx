@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useEquipment, useInsertEquipment, useUpdateEquipment, useDeleteEquipment } from '@/src/data/equipment';
 import { useLoanRows, useInsertLoanRow } from '@/src/data/loans';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { AssetFinancingFields, emptyAssetFinancing, type AssetFinancingValue } from '@/src/components/AssetFinancingFields';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
@@ -46,6 +48,7 @@ export default function EquipmentScreen() {
   const { money } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const queryClient = useQueryClient();
   const equipmentQuery = useEquipment();
   const insertEquipment = useInsertEquipment();
   const updateEquipment = useUpdateEquipment();
@@ -88,6 +91,7 @@ export default function EquipmentScreen() {
     setSaving(true);
     try {
       await insertEquipment.mutateAsync({ user_id: userId, ...formToValues(addForm) });
+      await invalidateFinancialData(queryClient);
       setAddForm(emptyForm());
       setShowAddForm(false);
     } catch (err) {
@@ -106,7 +110,11 @@ export default function EquipmentScreen() {
     if (!editing) return;
     setSaving(true);
     try {
+      // ONE REFRESH PATH (owner decision 2026-08-05, FULL PARITY follow-up
+      // item A) — equipment's cost basis feeds the CPM breakdown and
+      // depreciation election in other screens.
       await updateEquipment.mutateAsync({ id: editing.id, values: formToValues(editForm) });
+      await invalidateFinancialData(queryClient);
       setEditing(null);
     } catch (err) {
       Alert.alert(t('equipmentScreen.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -124,6 +132,7 @@ export default function EquipmentScreen() {
         onPress: async () => {
           try {
             await deleteEquipment.mutateAsync(e.id);
+            await invalidateFinancialData(queryClient);
             setEditing(null);
           } catch (err) {
             Alert.alert(t('equipmentScreen.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));

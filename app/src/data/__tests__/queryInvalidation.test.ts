@@ -70,6 +70,49 @@ describe('invalidateFinancialData', () => {
     const missing = TABLES_IN_DELETION_ORDER.filter((table) => !invalidatedKeys.includes(table));
     expect(missing).toEqual([]);
   });
+
+  // ONE REFRESH PATH (owner decision 2026-08-05, FULL PARITY follow-up
+  // item A) — web's rAll() was called in 19 places but never DEFINED, so
+  // every refresh silently threw: editing the truck cost basis never
+  // moved CPM, and several "it didn't update" reports trace back to this
+  // exact bug. invalidateFinancialData() IS defined on mobile and IS
+  // wired into every mutation-bearing screen (a grep audit of every
+  // `.mutateAsync(` call site under app/(tabs) found 4 screens —
+  // trucks.tsx, equipment.tsx, drivers.tsx, compliance.tsx — that had
+  // been calling only a bare per-table mutation with no broader
+  // invalidation at all, fixed alongside this test) — but the CONTRACT
+  // that matters is the query-key coverage itself: a change to truck
+  // cost basis, equity, miles, or categories must invalidate every
+  // OTHER screen's already-cached dependent query, not just its own
+  // table. This test pins that contract so a future edit to
+  // AFFECTED_TABLES/AFFECTED_AGGREGATES that silently drops one of these
+  // keys fails loudly here instead of surfacing as a device bug report.
+  it('covers every query key a truck-cost-basis, equity, miles, or category mutation must invalidate', async () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    await invalidateFinancialData(queryClient);
+
+    const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
+
+    // Truck cost basis (purchase_price/financing/loan_id) — feeds the CPM
+    // "Why?" breakdown and depreciation election on other screens.
+    for (const key of ['trucks', 'equipment', 'loans']) expect(invalidatedKeys).toContain(key);
+
+    // Equity (capital_transactions) — feeds Capital Account, the
+    // Dashboard/Cash-Flow business-balance figure, and the Accountant
+    // Package's Owner's Equity section.
+    for (const key of ['capital_transactions', 'capital-account-summary', 'profile']) expect(invalidatedKeys).toContain(key);
+
+    // Miles (settlements.miles, or a future per-week override) — feeds
+    // CPM, RPM, and the Accountant Package's gross-income window.
+    expect(invalidatedKeys).toContain('settlements');
+
+    // Categories (deductions.category, user_categories) — feeds the
+    // Accountant Package's Schedule C rollup and the category picker's
+    // own option list everywhere it's used.
+    for (const key of ['deductions', 'user_categories']) expect(invalidatedKeys).toContain(key);
+  });
 });
 
 // PRE-LAUNCH HARDENING (owner decision 2026-08-02, independent code
