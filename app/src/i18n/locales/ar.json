@@ -126,6 +126,16 @@
     "overview": {
       "expenses": "المصروفات"
     },
+    "expenseExplainer": {
+      "title": "مصروفات هذا الأسبوع",
+      "total": "الإجمالي",
+      "fixed": "ثابتة",
+      "variable": "متغيرة",
+      "excludedVehiclePurchase": "تم استبعاد {{amount}} من مشتريات المركبات — تبقى في سجلاتك لكن لا تُحتسب هنا كمصروف روتيني.",
+      "largestRowsTitle": "أكبر المصروفات",
+      "possibleDepreciableAsset": "مصروف كبير — قد يكون أصلاً قابلاً للاستهلاك، راجع محاسبك",
+      "empty": "لا توجد مصروفات مسجلة لهذا الأسبوع بعد."
+    },
     "fleetHealth": {
       "title": "درجة صحة الأسطول",
       "chipTruck": "الشاحنة",

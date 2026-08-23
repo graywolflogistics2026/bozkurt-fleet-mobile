@@ -131,7 +131,11 @@ const CPM_BUCKET_TYPE: Record<string, CpmCostType> = {
   Other: 'variable',
 };
 
-function typeFor(bucket: string): CpmCostType {
+// Exported for app/src/stats/expenseTotalExplainer.ts (spec item D) so
+// the Expense Total Explainer's fixed/variable split uses the exact same
+// classification as the CPM "Why?" breakdown — one shared definition of
+// "fixed" and "variable," never two.
+export function typeFor(bucket: string): CpmCostType {
   return CPM_BUCKET_TYPE[bucket] ?? 'variable';
 }
 
@@ -151,7 +155,9 @@ export function normalizeToWeeklyPayment(payment: number, frequency: string | nu
   return (payment * 12) / 52; // monthly, or unrecognized — treat as monthly
 }
 
-function bucketFor(category: string | null | undefined): string {
+// Exported for app/src/stats/expenseTotalExplainer.ts — see typeFor()'s
+// comment above.
+export function bucketFor(category: string | null | undefined): string {
   if (!category) return 'Other';
   return CPM_BUCKET_MAP[category] ?? 'Other';
 }

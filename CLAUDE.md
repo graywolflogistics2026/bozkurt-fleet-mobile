@@ -3126,3 +3126,41 @@
   locales confirmed key-parity (new `scorecard.why*`/`scorecard.cpmType.*`/
   `scorecard.ownershipMode.*` and `trucks.costBasis*`/
   `trucks.ownershipMode.*` keys, hi/uk as untranslated English copies).
+- FULL PARITY FOLLOW-UP, PART D — EXPENSE TOTAL EXPLAINER (owner decision
+  2026-08-05, web v2026.08.05-W chase, spec item D). Tapping Home's
+  "Expenses" tile (the Revenue/Expenses/Net Profit trio, DASHBOARD
+  SIMPLIFICATION above) used to just navigate to Deductions — it now
+  opens a breakdown in place, via `app/src/stats/expenseTotalExplainer.ts`'s
+  `buildExpenseTotalExplainer()`: total/fixed/variable (reusing CPM's own
+  `bucketFor()`/`typeFor()`, now exported from `src/stats/cpm.ts`, so the
+  Explainer and the CPM "Why?" breakdown, PART C, can never disagree about
+  what counts as fixed vs. variable) plus the 12 largest rows for the
+  SAME week window the tile's own number already covers
+  (`buildWeeklyRevenueExpenseTrend()`'s `weekStartFromEnding()` boundary,
+  now exported from `src/stats/cashFlowTrend.ts`) — so the breakdown's
+  total always matches the tile exactly, never a second, slightly-
+  different figure. Any row over 15% of the (included) total is flagged
+  "possible depreciable asset — check with your CPA"
+  (`isPossibleDepreciableAsset`, informational only, never reclassifies
+  or excludes the row on that basis). A vehicle-purchase-shaped
+  description (`app/src/import/category.ts`'s `isVehiclePurchaseOneOff()`,
+  introduced in PART C) is auto-excluded from the total/buckets/largest-
+  rows list entirely — the same "capital purchase, not an operating
+  expense, still counted in P&L/tax" principle as CPM's own exclusion —
+  with the excluded amount shown as its own informational line rather
+  than silently vanishing. Each of the 12 rows has a 🗑️ delete action
+  right in the breakdown (spec item D's "12 largest DELETABLE rows"),
+  reusing the exact same confirm-then-delete pattern Deductions' own
+  screen uses (`deductions.deleteConfirmTitle`/`deleteConfirmBody`,
+  `cleanupOrphanedDocument()` for a linked document, the DB's `on delete
+  cascade` for a linked capital contribution per CLAUDE.md invariant #5)
+  so deleting from Home behaves identically to deleting from Deductions,
+  not a second, thinner delete path.
+  Tests: `src/stats/__tests__/expenseTotalExplainer.test.ts` (new, 5
+  tests) — the fixed/variable split, the top-12 cap and descending sort,
+  the >15% depreciable-asset flag (plus a 0-total divide-by-zero guard),
+  and the vehicle-purchase auto-exclusion (from the total, the buckets,
+  AND the largest-rows list).
+  Full suite: 70 suites / 1725 tests pass; `tsc --noEmit` clean; all 7
+  locales confirmed key-parity (`dashboard.expenseExplainer.*`, hi/uk as
+  untranslated English copies per invariant #11).

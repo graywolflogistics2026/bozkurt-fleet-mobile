@@ -126,6 +126,16 @@
     "overview": {
       "expenses": "Gastos"
     },
+    "expenseExplainer": {
+      "title": "Gastos de Esta Semana",
+      "total": "Total",
+      "fixed": "Fijo",
+      "variable": "Variable",
+      "excludedVehiclePurchase": "{{amount}} en compras de vehículos excluidos — se mantienen en sus registros pero no se cuentan aquí como gasto rutinario.",
+      "largestRowsTitle": "Gastos más grandes",
+      "possibleDepreciableAsset": "Gasto grande — posible activo depreciable, consulte a su contador",
+      "empty": "Aún no hay gastos registrados para esta semana."
+    },
     "fleetHealth": {
       "title": "Puntaje de Salud de la Flota",
       "chipTruck": "Camión",

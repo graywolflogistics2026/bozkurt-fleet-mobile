@@ -126,6 +126,16 @@
     "overview": {
       "expenses": "Expenses"
     },
+    "expenseExplainer": {
+      "title": "This Week's Expenses",
+      "total": "Total",
+      "fixed": "Fixed",
+      "variable": "Variable",
+      "excludedVehiclePurchase": "{{amount}} in vehicle purchases excluded — kept in your records but not counted as a routine expense here.",
+      "largestRowsTitle": "Largest expenses",
+      "possibleDepreciableAsset": "Large expense — possible depreciable asset, check with your CPA",
+      "empty": "No expenses recorded for this week yet."
+    },
     "fleetHealth": {
       "title": "Fleet Health Score",
       "chipTruck": "Truck",

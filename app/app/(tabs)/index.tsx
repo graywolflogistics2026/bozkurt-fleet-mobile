@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -13,16 +13,24 @@ import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useLoads } from '@/src/data/loads';
-import { useDeductions } from '@/src/data/deductions';
+import { useDeductions, useDeleteDeduction } from '@/src/data/deductions';
+import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { useSettlements } from '@/src/data/settlements';
-import { buildWeeklyRevenueExpenseTrend, rankLoadsByRpm, type WeeklyRevenueExpensePoint, type RankedLoad } from '@/src/stats/cashFlowTrend';
+import {
+  buildWeeklyRevenueExpenseTrend,
+  weekStartFromEnding,
+  rankLoadsByRpm,
+  type WeeklyRevenueExpensePoint,
+  type RankedLoad,
+} from '@/src/stats/cashFlowTrend';
 import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
+import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
-import { Screen, ScreenTitle, TappableCard, MutedText, SecondaryButton } from '@/src/components/ui';
+import { Screen, ScreenTitle, TappableCard, MutedText, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -379,6 +387,12 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
 
   const [refreshing, setRefreshing] = useState(false);
+  // EXPENSE TOTAL EXPLAINER (owner decision 2026-08-05, FULL PARITY
+  // follow-up item D) — tapping the "Expenses" tile opens this instead of
+  // just navigating to Deductions.
+  const [expenseExplainerOpen, setExpenseExplainerOpen] = useState(false);
+  const [deletingExpenseRowId, setDeletingExpenseRowId] = useState<string | null>(null);
+  const deleteDeduction = useDeleteDeduction();
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -434,6 +448,42 @@ export default function Dashboard() {
   const lastWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 2];
   const heroWeekRevenue = thisWeekPoint?.revenue ?? 0;
   const heroWeekExpenses = thisWeekPoint?.expenses ?? 0;
+
+  // EXPENSE TOTAL EXPLAINER — same week window buildWeeklyRevenueExpenseTrend
+  // itself uses (ded_date within the 7 days ending at week_ending) so the
+  // breakdown's total always matches the tile's own number exactly.
+  const thisWeekExpenseRows = useMemo(() => {
+    if (!thisWeekPoint) return [];
+    const start = weekStartFromEnding(thisWeekPoint.weekEnding);
+    return (dedQuery.data ?? []).filter((d) => d.ded_date && d.ded_date >= start && d.ded_date <= thisWeekPoint.weekEnding);
+  }, [dedQuery.data, thisWeekPoint]);
+  const expenseExplainer = useMemo(() => buildExpenseTotalExplainer(thisWeekExpenseRows), [thisWeekExpenseRows]);
+
+  function handleDeleteExpenseRow(id: string) {
+    Alert.alert(t('deductions.deleteConfirmTitle'), t('deductions.deleteConfirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          setDeletingExpenseRowId(id);
+          try {
+            // Linked capital_transactions row cascades automatically
+            // (docs/SCHEMA.sql: linked_deduction_id ... on delete cascade —
+            // CLAUDE.md invariant #5), same as Deductions' own delete.
+            const row = thisWeekExpenseRows.find((d) => d.id === id);
+            await deleteDeduction.mutateAsync(id);
+            if (row?.document_id) await cleanupOrphanedDocument(row.document_id);
+            await invalidateFinancialData(queryClient);
+          } catch (err) {
+            Alert.alert(t('deductions.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+          } finally {
+            setDeletingExpenseRowId(null);
+          }
+        },
+      },
+    ]);
+  }
   const trueProfitTrend8 = fullWeeklyTrueProfitTrend.slice(-8);
   const thisWeekTrueProfitPoint = trueProfitTrend8[trueProfitTrend8.length - 1];
   const lastWeekTrueProfitPoint = trueProfitTrend8[trueProfitTrend8.length - 2];
@@ -508,7 +558,7 @@ export default function Dashboard() {
             valueColor={colors.red}
             change={heroExpensesChange}
             goodDirection="down"
-            onPress={() => router.push('/(tabs)/deductions')}
+            onPress={() => setExpenseExplainerOpen(true)}
           />
           <OverviewTile
             label={t('dashboard.hero.netProfit')}
@@ -544,6 +594,66 @@ export default function Dashboard() {
 
         <SecondaryButton title={t('common.signOut')} onPress={signOut} />
       </ScrollView>
+
+      {/* EXPENSE TOTAL EXPLAINER (owner decision 2026-08-05, FULL PARITY
+          follow-up item D). */}
+      <ModalSheet visible={expenseExplainerOpen} onClose={() => setExpenseExplainerOpen(false)}>
+        <SheetTitle>{t('dashboard.expenseExplainer.title')}</SheetTitle>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm }}>
+          <MutedText>{t('dashboard.expenseExplainer.total')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{money(expenseExplainer.total)}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
+          <MutedText>{t('dashboard.expenseExplainer.fixed')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>{money(expenseExplainer.fixedTotal)}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs, marginBottom: spacing.sm }}>
+          <MutedText>{t('dashboard.expenseExplainer.variable')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>{money(expenseExplainer.variableTotal)}</Text>
+        </View>
+
+        {expenseExplainer.excludedVehiclePurchaseTotal > 0 && (
+          <MutedText style={{ marginBottom: spacing.sm }}>
+            {t('dashboard.expenseExplainer.excludedVehiclePurchase', { amount: money(expenseExplainer.excludedVehiclePurchaseTotal) })}
+          </MutedText>
+        )}
+
+        {expenseExplainer.largestRows.length === 0 ? (
+          <MutedText>{t('dashboard.expenseExplainer.empty')}</MutedText>
+        ) : (
+          <>
+            <Text style={styles.expenseExplainerSectionTitle}>{t('dashboard.expenseExplainer.largestRowsTitle')}</Text>
+            {expenseExplainer.largestRows.map((row, i) => (
+              <View
+                key={row.id}
+                style={[
+                  { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs },
+                  i > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+                ]}
+              >
+                <View style={{ flex: 1, marginEnd: spacing.sm }}>
+                  <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
+                    {row.description}
+                  </Text>
+                  {row.isPossibleDepreciableAsset && (
+                    <MutedText style={{ color: colors.orange, fontSize: typography.size.xs }}>
+                      {t('dashboard.expenseExplainer.possibleDepreciableAsset')}
+                    </MutedText>
+                  )}
+                </View>
+                <Text style={{ color: colors.text, fontWeight: '700', marginEnd: spacing.sm }}>{money(row.amount)}</Text>
+                <Pressable onPress={() => handleDeleteExpenseRow(row.id)} hitSlop={8} disabled={deletingExpenseRowId === row.id}>
+                  <Text style={{ color: colors.red, fontWeight: '700' }}>
+                    {deletingExpenseRowId === row.id ? '…' : '🗑️'}
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+          </>
+        )}
+
+        <SecondaryButton title={t('common.close')} onPress={() => setExpenseExplainerOpen(false)} />
+      </ModalSheet>
     </Screen>
   );
 }
@@ -552,6 +662,13 @@ const styles = {
   compactRow: {
     flexDirection: 'row' as const,
     gap: spacing.sm,
+  },
+  expenseExplainerSectionTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: '700' as const,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
   slimCard: {
     flexDirection: 'row' as const,
