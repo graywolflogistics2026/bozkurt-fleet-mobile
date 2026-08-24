@@ -4170,7 +4170,8 @@
   legal review, same as Terms of Use/Privacy Policy.
 - FIVE ADDITIONS — UNLOCK NUDGES, CAPITAL CLARITY, GOAL-DRIVEN COACH, COST
   CONTROL, USAGE LIMITS (owner decision 2026-08-24, docs/PENDING_SQL.md
-  §51, NOT YET RUN against the live project as of this writing).
+  §51, ✅ APPLIED 2026-08-24; ai-import and ai-advisor redeployed, client
+  update published to preview).
   PART 1 — "UNLOCK" NUDGES: `src/alerts/missingDataNudges.ts`'s 5 existing
   detectors are joined by 7 more (`weeklyGoalNotSet`, `complianceItemMissing`
   — medical card/CDL/HVUT/IRP, role-filtered via the existing
@@ -4338,12 +4339,13 @@
   `importScreen.usageLimitReached*`/`serviceStatus.*` — es/ru/ar/tr fully
   translated, hi/uk as untranslated English copies per invariant #11).
   `ai-import` and `ai-advisor` were BOTH modified this pass (usage
-  gate/logging and logging respectively) and need redeploying;
+  gate/logging and logging respectively) and have been redeployed;
   `reset-data`/`delete-account` were NOT touched this pass (confirmed no
   table-list change needed, see PART 5 above) — no redeploy needed for
   either. No native rebuild needed — every change is pure JS/TS plus
   SQL/Edge Function work, no new native dependency added; the client
-  side ships via a normal `eas update`. `Card` (`src/components/ui.tsx`)
-  gained an optional `style` prop this pass (needed for
+  side shipped via a normal `eas update`, published to preview. `Card`
+  (`src/components/ui.tsx`) gained an optional `style` prop this pass
+  (needed for
   `ServiceStatusBanner`'s orange border) — a small, backward-compatible
   addition, every existing `<Card>` call site unaffected.

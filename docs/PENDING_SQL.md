@@ -2054,7 +2054,7 @@ touch.
 
 ---
 
-## 51. AI cost control + usage limits + credit packs (owner decision 2026-08-24, FIVE ADDITIONS pass, PARTS 4 + 5)
+## 51. AI cost control + usage limits + credit packs (owner decision 2026-08-24, FIVE ADDITIONS pass, PARTS 4 + 5) — ✅ APPLIED
 
 Four new tables, none of them touched by Reset All Data or Delete Account's
 own explicit deletion LOOPS (they're account-level, not business data —
@@ -2172,10 +2172,10 @@ server-side gate; the two are duplicated by necessity (Deno can't import
 app/src TS) and cross-referenced by comment, same convention as every
 other Edge Function in this repo.
 
-- [ ] 51a run (ai_usage_log table + RLS)
-- [ ] 51b run (ai_usage_config table + RLS + seed row)
-- [ ] 51c run (service_status table + RLS + seed rows)
-- [ ] 51d run (ai_credit_purchases table + RLS)
+- [x] 51a run (ai_usage_log table + RLS)
+- [x] 51b run (ai_usage_config table + RLS + seed row)
+- [x] 51c run (service_status table + RLS + seed rows)
+- [x] 51d run (ai_credit_purchases table + RLS)
 
 ---
 
