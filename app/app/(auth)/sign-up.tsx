@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { validateSignUpInput } from '@/src/auth/signUpFlow';
@@ -18,6 +18,7 @@ import { BRAND_NAME } from '@/src/brand';
 // (email-confirmation on vs. off).
 export default function SignUp() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,7 +44,10 @@ export default function SignUp() {
       if (result.status === 'error') {
         setError(result.message);
       } else if (result.status === 'confirmation_required') {
-        setInfo(t('auth.signUpCheckEmail'));
+        // AUTH COMPLETENESS (owner decision 2026-08-24): a dedicated
+        // blocking screen (resend + change-address) instead of just an
+        // inline message the user could tap past with nothing to do next.
+        router.replace({ pathname: '/(auth)/check-email', params: { email: email.trim() } } as unknown as Href);
       } else {
         // 'signed_in' — Confirm email is OFF on this Supabase project, so
         // signUp() already returned a real session; onAuthStateChange

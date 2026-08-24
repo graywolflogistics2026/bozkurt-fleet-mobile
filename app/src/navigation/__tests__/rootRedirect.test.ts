@@ -3,6 +3,7 @@ import { resolveRootRedirect, type RootRedirectInputs } from '@/src/navigation/r
 function inputs(overrides: Partial<RootRedirectInputs> = {}): RootRedirectInputs {
   return {
     hasSession: false,
+    needsEmailConfirmation: false,
     needsTos: false,
     needsTutorial: false,
     needsOnboarding: false,
@@ -85,5 +86,53 @@ describe('resolveRootRedirect — intro gate (2026-07-29 redirect-loop fix)', ()
     expect(
       resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsTos: false, needsOnboarding: false, segment: '(tabs)' }))
     ).toBeNull();
+  });
+});
+
+describe('resolveRootRedirect — AUTH COMPLETENESS (owner decision 2026-08-24)', () => {
+  it('a session with an unconfirmed email is sent to /confirm-email, ahead of ToS/tutorial/onboarding', () => {
+    expect(
+      resolveRootRedirect(
+        inputs({ hasSession: true, introSeen: true, needsEmailConfirmation: true, needsTos: true, needsTutorial: true, needsOnboarding: true, segment: undefined })
+      )
+    ).toBe('/confirm-email');
+  });
+
+  it('already on /confirm-email with an unconfirmed email triggers no redirect', () => {
+    expect(resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsEmailConfirmation: true, segment: 'confirm-email' }))).toBeNull();
+  });
+
+  it('once confirmed, the normal gate chain resumes (ToS still pending)', () => {
+    expect(
+      resolveRootRedirect(
+        inputs({ hasSession: true, introSeen: true, needsEmailConfirmation: false, needsTos: true, segment: 'confirm-email' })
+      )
+    ).toBe('/tos');
+  });
+
+  it('a fully-cleared user lands in (tabs) from /confirm-email too', () => {
+    expect(
+      resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsEmailConfirmation: false, segment: 'confirm-email' }))
+    ).toBe('/(tabs)');
+  });
+
+  it('/reset-password is reachable with NO session at all (deep link, no prior sign-in)', () => {
+    expect(resolveRootRedirect(inputs({ hasSession: false, introSeen: true, segment: 'reset-password' }))).toBeNull();
+  });
+
+  it('/confirm-email is reachable with NO session at all (deep link, no prior sign-in)', () => {
+    expect(resolveRootRedirect(inputs({ hasSession: false, introSeen: true, segment: 'confirm-email' }))).toBeNull();
+  });
+
+  it('/reset-password is NEVER auto-redirected to (tabs), even once the recovery token grants a fully-cleared session mid-flow', () => {
+    expect(
+      resolveRootRedirect(inputs({ hasSession: true, introSeen: true, needsEmailConfirmation: false, segment: 'reset-password' }))
+    ).toBeNull();
+  });
+
+  it('every other top-level segment still bounces to sign-in with no session', () => {
+    for (const segment of [undefined, 'tos', 'tutorial', 'onboarding', '(tabs)']) {
+      expect(resolveRootRedirect(inputs({ hasSession: false, introSeen: true, segment }))).toBe('/(auth)/sign-in');
+    }
   });
 });

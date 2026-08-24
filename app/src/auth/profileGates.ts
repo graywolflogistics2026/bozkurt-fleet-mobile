@@ -13,6 +13,21 @@
 // not part of this bug report — but is extracted here too for the same
 // testability/consistency reasons.
 
+// AUTH COMPLETENESS (owner decision 2026-08-24): unlike the other three
+// gates, this one reads directly off the Supabase Auth session's own
+// `user.email_confirmed_at` field — part of the session object the instant
+// `session` itself becomes non-null, no separate async `profiles` fetch/
+// race to worry about, so there's no "unknown state" branch needed here.
+// Existing accounts created before email confirmation was ever turned on
+// already have `email_confirmed_at` set (Supabase auto-confirms at signup
+// when the project's "Confirm email" setting is off), so turning the
+// setting on in the dashboard does not retroactively lock out anyone
+// already signed up.
+export function resolveNeedsEmailConfirmation(input: { hasSession: boolean; emailConfirmedAt: string | null | undefined }): boolean {
+  if (!input.hasSession) return false;
+  return input.emailConfirmedAt == null;
+}
+
 export function resolveNeedsTos(input: {
   hasSession: boolean;
   profileLoaded: boolean;

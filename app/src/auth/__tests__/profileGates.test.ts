@@ -1,4 +1,27 @@
-import { resolveNeedsTos, resolveNeedsTutorial, resolveNeedsOnboarding } from '@/src/auth/profileGates';
+import {
+  resolveNeedsEmailConfirmation,
+  resolveNeedsTos,
+  resolveNeedsTutorial,
+  resolveNeedsOnboarding,
+} from '@/src/auth/profileGates';
+
+describe('resolveNeedsEmailConfirmation (owner decision 2026-08-24, AUTH COMPLETENESS)', () => {
+  test('no session — never needed', () => {
+    expect(resolveNeedsEmailConfirmation({ hasSession: false, emailConfirmedAt: null })).toBe(false);
+  });
+
+  test('session with email_confirmed_at null — needed', () => {
+    expect(resolveNeedsEmailConfirmation({ hasSession: true, emailConfirmedAt: null })).toBe(true);
+  });
+
+  test('session with email_confirmed_at undefined — needed', () => {
+    expect(resolveNeedsEmailConfirmation({ hasSession: true, emailConfirmedAt: undefined })).toBe(true);
+  });
+
+  test('session with email_confirmed_at set — not needed', () => {
+    expect(resolveNeedsEmailConfirmation({ hasSession: true, emailConfirmedAt: '2026-08-01T00:00:00Z' })).toBe(false);
+  });
+});
 
 describe('resolveNeedsTos', () => {
   test('no session — never needed', () => {

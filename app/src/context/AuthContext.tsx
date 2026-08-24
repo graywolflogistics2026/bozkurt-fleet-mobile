@@ -8,7 +8,8 @@ import { isSupportedLocale, LANGUAGE_PICKER_ENABLED } from '@/src/i18n/config';
 import { setAppLocale } from '@/src/i18n';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { resolveSignUpOutcome, type SignUpOutcome } from '@/src/auth/signUpFlow';
-import { resolveNeedsTos, resolveNeedsTutorial, resolveNeedsOnboarding } from '@/src/auth/profileGates';
+import { resolveNeedsEmailConfirmation, resolveNeedsTos, resolveNeedsTutorial, resolveNeedsOnboarding } from '@/src/auth/profileGates';
+import { buildAuthRedirectUrl } from '@/src/auth/deepLinkRedirect';
 
 // A network/runtime failure that never reaches Supabase's own {error}
 // contract (e.g. the device is offline) throws instead of resolving —
@@ -48,14 +49,18 @@ type AuthContextValue = {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  needsEmailConfirmation: boolean;
   needsTos: boolean;
   needsTutorial: boolean;
   needsOnboarding: boolean;
   signUp: (email: string, password: string) => Promise<SignUpOutcome>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   acceptTos: () => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
+  sendPasswordResetEmail: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
+  resendConfirmationEmail: (email: string) => Promise<{ error: string | null }>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -133,7 +138,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string): Promise<SignUpOutcome> {
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      // AUTH COMPLETENESS (owner decision 2026-08-24): emailRedirectTo makes
+      // the confirmation email's link open straight back into the app at
+      // /confirm-email (via the custom `scheme`) instead of a generic
+      // Supabase-hosted confirmation page — same redirect the resend button
+      // (resendConfirmationEmail below) uses, so both paths land the user
+      // in the same place.
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: buildAuthRedirectUrl('confirm-email') },
+      });
       return resolveSignUpOutcome({ errorMessage: error?.message ?? null, hasSession: !!data?.session });
     } catch (err) {
       return { status: 'error', message: messageFromUnknownError(err) };
@@ -143,6 +158,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signIn(email: string, password: string) {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // AUTH COMPLETENESS (owner decision 2026-08-24): with "Confirm email"
+      // on, Supabase rejects a sign-in for an unconfirmed account with this
+      // specific error rather than granting a session at all — surfaced as
+      // its own flag so sign-in.tsx can offer "resend confirmation" instead
+      // of just showing the raw error text.
+      const needsEmailConfirmation = !!error && /email not confirmed/i.test(error.message);
+      return { error: error?.message ?? null, needsEmailConfirmation };
+    } catch (err) {
+      return { error: messageFromUnknownError(err) };
+    }
+  }
+
+  async function sendPasswordResetEmail(email: string) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: buildAuthRedirectUrl('reset-password') });
+      return { error: error?.message ?? null };
+    } catch (err) {
+      return { error: messageFromUnknownError(err) };
+    }
+  }
+
+  async function updatePassword(newPassword: string) {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      return { error: error?.message ?? null };
+    } catch (err) {
+      return { error: messageFromUnknownError(err) };
+    }
+  }
+
+  async function resendConfirmationEmail(email: string) {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: buildAuthRedirectUrl('confirm-email') },
+      });
       return { error: error?.message ?? null };
     } catch (err) {
       return { error: messageFromUnknownError(err) };
@@ -198,10 +250,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session) await fetchProfile(session.user.id);
   }
 
-  // needsTos/needsTutorial/needsOnboarding are pure functions in
-  // src/auth/profileGates.ts (extracted 2026-08-24, tutorial-gate bug fix
-  // — see that file's header comment for the "unknown state defaults to
-  // SHOW" rule these three now share and its own regression tests).
+  // needsEmailConfirmation/needsTos/needsTutorial/needsOnboarding are pure
+  // functions in src/auth/profileGates.ts (extracted 2026-08-24, tutorial-
+  // gate bug fix — see that file's header comment for the "unknown state
+  // defaults to SHOW" rule the profile-loaded ones share and their own
+  // regression tests). needsEmailConfirmation reads directly off the
+  // Supabase session's own user object, no profile fetch involved.
+  const needsEmailConfirmation = useMemo(
+    () => resolveNeedsEmailConfirmation({ hasSession: !!session, emailConfirmedAt: session?.user?.email_confirmed_at }),
+    [session]
+  );
+
   const needsTos = useMemo(
     () =>
       resolveNeedsTos({
@@ -243,6 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     profile,
     loading,
+    needsEmailConfirmation,
     needsTos,
     needsTutorial,
     needsOnboarding,
@@ -251,6 +311,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
     acceptTos,
     refreshProfile,
+    sendPasswordResetEmail,
+    updatePassword,
+    resendConfirmationEmail,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
