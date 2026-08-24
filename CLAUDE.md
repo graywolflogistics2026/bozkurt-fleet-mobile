@@ -3988,8 +3988,9 @@
   "Email Confirmation + Custom SMTP" section (added this pass) rather
   than only in chat, so they survive past this conversation.
 - REFERRAL PROGRAM + LIFETIME ACCOUNTS (owner decision 2026-08-24,
-  binding — docs/PENDING_SQL.md §50, NOT YET RUN against the live project
-  as of this writing).
+  binding — docs/PENDING_SQL.md §50, ✅ APPLIED 2026-08-24; `referral-sync`
+  deployed, `reset-data`/`delete-account` redeployed, client update
+  published to preview).
   PART 1 — REFERRAL (3 qualified referrals = 60 days credit): new
   `referrals` (referrer_id, referred_user_id, status
   `pending|qualified|rewarded`, a server-computed `referred_label` — see
@@ -4154,16 +4155,16 @@
   locales confirmed key-parity (`nav.referral`, the full `referral.*`
   block, `auth.referralCodePlaceholder`/`errorInvalidReferralCode`,
   `settings.lifetimeAccessBadge`/`complimentaryAccessBadge` — hi/uk as
-  untranslated English copies per invariant #11). `referral-sync` is a
-  BRAND NEW Edge Function requiring first-time deployment (`supabase
-  functions deploy referral-sync`); `reset-data`/`delete-account` were
-  both MODIFIED this pass and need redeploying; `ai-import`/`ai-advisor`
-  were NOT touched, no redeploy needed for either. No native rebuild is
-  needed — every change in this pass is pure JS/TS plus SQL/Edge
-  Function work, no new native dependency was added (the device-id
-  self-referral check that would have needed one was deliberately
-  deferred, see above) — a normal `eas update` ships the whole client
-  side of this pass. `referral.tnc` is a placeholder T&C line
+  untranslated English copies per invariant #11). `referral-sync` (a
+  BRAND NEW Edge Function), `reset-data`, and `delete-account` (both
+  MODIFIED this pass) have all been deployed/redeployed;
+  `ai-import`/`ai-advisor` were NOT touched, no redeploy needed for
+  either. No native rebuild was needed — every change in this pass is
+  pure JS/TS plus SQL/Edge Function work, no new native dependency was
+  added (the device-id self-referral check that would have needed one
+  was deliberately deferred, see above) — the client side shipped via a
+  normal `eas update`, published to preview. `referral.tnc` is a
+  placeholder T&C line
   (PROMPTS.md's Session 10 entry flags it, same "DRAFT, not attorney-
   reviewed" status as the rest of this app's legal copy) pending real
   legal review, same as Terms of Use/Privacy Policy.

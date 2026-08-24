@@ -1765,7 +1765,7 @@ field names added in the same pass that runs this migration.
 
 ---
 
-## 50. Referral program + lifetime/complimentary accounts (owner decision 2026-08-24)
+## 50. Referral program + lifetime/complimentary accounts (owner decision 2026-08-24) — ✅ APPLIED
 
 **PART 1 — REFERRAL PROGRAM.** `profiles.referral_code` (unique, e.g.
 `BOZKA-7F2K`) is generated once per user by `handle_new_user()` at
@@ -2045,11 +2045,11 @@ already-granted credit or qualified/rewarded count, independent of
 whatever `delete-account`'s own explicit table list does or doesn't
 touch.
 
-- [ ] 50a run (referral program: profiles.referral_code/referred_by,
+- [x] 50a run (referral program: profiles.referral_code/referred_by,
       referrals table + RLS, account_credits table + RLS,
       normalize_email_for_referral(), generate_unique_referral_code(),
       updated handle_new_user())
-- [ ] 50b run (lifetime/complimentary: profiles.plan/plan_note/
+- [x] 50b run (lifetime/complimentary: profiles.plan/plan_note/
       plan_granted_at, protect_profile_plan_fields() trigger)
 
 ---
