@@ -60,6 +60,10 @@ describe('invalidateFinancialData', () => {
       'compliance_items',
       'misc_income',
       'documents',
+      // REFERRAL PROGRAM (owner decision 2026-08-24, §50) — this user's own
+      // earned/spent credit rows, deleted via the standard user_id loop in
+      // both reset-data and delete-account.
+      'account_credits',
     ];
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, 'invalidateQueries');
@@ -69,6 +73,23 @@ describe('invalidateFinancialData', () => {
     const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
     const missing = TABLES_IN_DELETION_ORDER.filter((table) => !invalidatedKeys.includes(table));
     expect(missing).toEqual([]);
+  });
+
+  // REFERRAL PROGRAM (owner decision 2026-08-24, §50) — 'referrals' isn't
+  // in TABLES_IN_DELETION_ORDER (no single user_id column; both Edge
+  // Functions delete it separately, scoped to referrer_id only — see their
+  // own comments), so it can't ride the mirror test above. Asserted
+  // directly instead: a reset/delete changes this account's own outgoing
+  // referrals row, so useMyReferrals()'s ['referrals', 'as-referrer', userId]
+  // key must still be covered.
+  it('invalidates the "referrals" query key (own outgoing referrals, cleared on reset/delete)', async () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    await invalidateFinancialData(queryClient);
+
+    const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
+    expect(invalidatedKeys).toContain('referrals');
   });
 
   // ONE REFRESH PATH (owner decision 2026-08-05, FULL PARITY follow-up

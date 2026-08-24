@@ -47,6 +47,20 @@ const AFFECTED_TABLES = [
   'compliance_items',
   'maintenance_intervals',
   'truck_health_config',
+  // REFERRAL PROGRAM (owner decision 2026-08-24, docs/PENDING_SQL.md §50)
+  // — 'account_credits' is in both Edge Functions' TABLES_IN_DELETION_ORDER
+  // (the user's own earned/spent credit rows, deleted via the standard
+  // user_id loop) so it's included here for the same reason every other
+  // entry in this list is. 'referrals' is NOT in either
+  // TABLES_IN_DELETION_ORDER (it has no single user_id column — both
+  // functions delete it separately, scoped to referrer_id only) but a
+  // reset/delete still changes rows this account can see (its own
+  // outgoing referrals), so it's listed here too — the Referral screen's
+  // useMyReferrals() key (['referrals', 'as-referrer', userId]) is still
+  // matched by react-query's prefix invalidation on the bare 'referrals'
+  // key below.
+  'account_credits',
+  'referrals',
 ];
 
 // Derived/aggregate query keys that read from the tables above but aren't

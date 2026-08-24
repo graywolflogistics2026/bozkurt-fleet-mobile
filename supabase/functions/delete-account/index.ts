@@ -89,6 +89,12 @@ const TABLES_IN_DELETION_ORDER = [
   "misc_income",
   "documents",
   "tax_config",
+  // REFERRAL PROGRAM (owner decision 2026-08-24, docs/PENDING_SQL.md
+  // §50) — this account's OWN earned/spent credit rows (fits the
+  // standard `user_id` loop). `referrals` does NOT fit this loop (no
+  // single `user_id` column) and is deleted separately, right after the
+  // loop, scoped to `referrer_id` only — see that delete's own comment.
+  "account_credits",
   "profiles",
 ];
 
@@ -221,6 +227,20 @@ Deno.serve(async (req: Request) => {
       const { error } = await admin.from(table).delete().eq("user_id", userId);
       if (error) throw new Error(`Failed deleting from ${table}: ${error.message}`);
     }
+
+    // REFERRAL PROGRAM (owner decision 2026-08-24, docs/PENDING_SQL.md
+    // §50) — deletes ONLY this account's own OUTGOING referrals (as
+    // referrer_id). Deliberately does NOT touch any row where this
+    // account is referred_user_id — that row belongs to a DIFFERENT
+    // person's (their referrer's) history. referrals.referred_user_id is
+    // `on delete set null`, so even without this explicit exclusion the
+    // eventual `auth.admin.deleteUser(userId)` call below would only
+    // null that column, never delete the row or the referrer's
+    // already-granted account_credits — this comment is the actual
+    // guarantee the spec asked for ("deleting an account must NOT wipe
+    // the referrer's earned credits"), not just this one line.
+    const { error: referralsError } = await admin.from("referrals").delete().eq("referrer_id", userId);
+    if (referralsError) throw new Error(`Failed deleting from referrals: ${referralsError.message}`);
 
     // STORAGE DELETION INTEGRITY: collect every bucket's failures before
     // deciding success — a partial failure must never be reported as

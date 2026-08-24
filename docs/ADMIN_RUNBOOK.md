@@ -244,3 +244,90 @@ steps (Supabase Dashboard, not a SQL/code change):
    sends these emails itself, it only triggers them via
    `supabase.auth.signUp()`/`resetPasswordForEmail()`, which always go
    through whatever SMTP config is active in the dashboard.
+
+## Lifetime / Complimentary Accounts (owner decision 2026-08-24, PART 2)
+
+`profiles.plan` (docs/PENDING_SQL.md §50) is read-only from the client —
+enforced by a `BEFORE UPDATE` trigger (`protect_profile_plan_fields()`),
+not just app-level convention. The trigger explicitly allows a query run
+directly in the Supabase Dashboard's **SQL Editor** (it connects as the
+`postgres` role) as well as the `service_role` key — you do NOT need to
+go through any Edge Function to grant/revoke a plan; the three recipes
+below are meant to be copy-pasted straight into the SQL Editor.
+
+**1. Grant a plan by email** (`lifetime` or `complimentary` —
+`plan_note` is a short freeform reason shown back to the user in
+Settings, e.g. "family", "beta tester", "accountant partner"):
+
+```sql
+update profiles
+set plan = 'lifetime', -- or 'complimentary'
+    plan_note = 'family',
+    plan_granted_at = now()
+where user_id = (select id from auth.users where email = 'someone@example.com');
+```
+
+**2. List every non-paying account** (everything except a real `'paid'`
+subscription — includes `free_trial` and both owner-granted plans, so
+you can see at a glance who's on what):
+
+```sql
+select
+  u.email,
+  p.plan,
+  p.plan_note,
+  p.plan_granted_at,
+  p.created_at as signed_up_at
+from profiles p
+join auth.users u on u.id = p.user_id
+where p.plan <> 'paid'
+order by p.created_at desc;
+```
+
+**3. Revoke back to `free_trial`** (clears the note/grant timestamp too
+— a half-cleared plan with a stale note would be confusing in Settings):
+
+```sql
+update profiles
+set plan = 'free_trial',
+    plan_note = null,
+    plan_granted_at = null
+where user_id = (select id from auth.users where email = 'someone@example.com');
+```
+
+Every gated feature reads `app/src/entitlement/hasFullAccess.ts`'s
+`hasFullAccess(profile)` — never `profile.plan` directly — so granting/
+revoking here takes effect everywhere at once, with no other app change
+needed. As of this writing there is no billing provider yet (PROMPTS.md
+Session 10 backlog); `'paid'` exists in the schema now specifically so
+that integration can plug into this same column/helper without a second
+migration.
+
+## Referral Program — Known Limitation: No Real Cron Yet (owner decision 2026-08-24, PART 1)
+
+`supabase/functions/referral-sync/index.ts` evaluates whether a referral
+has qualified — but it's only ever triggered by the app itself (the
+"Invite & Earn" screen's own mount, plus one opportunistic call from
+Home per session), never on a fixed schedule. This means a referred
+person who meets every qualification criterion but never reopens the app
+again will never actually get evaluated, and their referrer's reward
+will never fire. **Recommended fix, not yet done**: add a Supabase
+[Scheduled Function](https://supabase.com/docs/guides/functions/schedule-functions)
+(pg_cron calling `referral-sync` — or a small wrapper that loops every
+`referrals` row with `status = 'pending'` and calls the same evaluation
+logic for each `referred_user_id`, since the current function only
+evaluates the CALLER's own single row) running daily. Until that's set
+up, a referral that's gone quiet can be manually nudged along by asking
+the referred user to simply open the app.
+
+**Spot-check a specific referral's status:**
+
+```sql
+select r.id, r.status, r.flagged_for_review, r.flag_reason, r.created_at, r.qualified_at, r.rewarded_at,
+       ru.email as referrer_email, iu.email as referred_email
+from referrals r
+join auth.users ru on ru.id = r.referrer_id
+left join auth.users iu on iu.id = r.referred_user_id
+where ru.email = 'referrer@example.com'
+order by r.created_at desc;
+```

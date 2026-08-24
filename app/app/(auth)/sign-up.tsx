@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
-import { Link, useRouter, type Href } from 'expo-router';
+import { Link, useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { validateSignUpInput } from '@/src/auth/signUpFlow';
+import { isValidReferralCodeFormat, normalizeReferralCode } from '@/src/referral/referralCode';
 import { Screen, ScreenTitle, Field, PrimaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
 import { BRAND_NAME } from '@/src/brand';
@@ -20,8 +21,15 @@ export default function SignUp() {
   const { t } = useTranslation();
   const router = useRouter();
   const { signUp } = useAuth();
+  // REFERRAL PROGRAM (owner decision 2026-08-24, item R4/R5): a shared
+  // invite link (src/referral/referralShare.ts's own bozkurtfleetos://
+  // sign-up?ref=CODE deep link — "(auth)" is a route GROUP, invisible in
+  // the actual URL) prefills this field; the user can also type a code in
+  // by hand. Optional either way.
+  const { ref } = useLocalSearchParams<{ ref?: string }>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState(ref ? normalizeReferralCode(ref) : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -38,9 +46,15 @@ export default function SignUp() {
       return;
     }
 
+    const trimmedCode = referralCode.trim();
+    if (trimmedCode && !isValidReferralCodeFormat(trimmedCode)) {
+      setError(t('auth.errorInvalidReferralCode'));
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await signUp(email.trim(), password);
+      const result = await signUp(email.trim(), password, trimmedCode ? normalizeReferralCode(trimmedCode) : undefined);
       if (result.status === 'error') {
         setError(result.message);
       } else if (result.status === 'confirmation_required') {
@@ -86,6 +100,13 @@ export default function SignUp() {
             onChangeText={setPassword}
             secureTextEntry
             autoComplete="new-password"
+          />
+          <Field
+            placeholder={t('auth.referralCodePlaceholder')}
+            value={referralCode}
+            onChangeText={setReferralCode}
+            autoCapitalize="characters"
+            autoCorrect={false}
           />
           <ErrorText>{error}</ErrorText>
           {info ? <Text style={{ color: colors.green, fontSize: 12, marginBottom: 8 }}>{info}</Text> : null}

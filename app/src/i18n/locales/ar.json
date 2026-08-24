@@ -57,6 +57,7 @@
     "compliance": "متتبع الامتثال",
     "documents": "المستندات",
     "categoryLearning": "تعلّم الفئات",
+    "referral": "دعوة واكسب",
     "accountantPackage": "حزمة المحاسب"
   },
   "auth": {
@@ -75,6 +76,8 @@
     "signUpCheckEmail": "تم إنشاء الحساب! تحقق من بريدك الإلكتروني لتأكيد عنوانك قبل تسجيل الدخول.",
     "signUpWelcome": "تم إنشاء الحساب! جارٍ الدخول...",
     "errorPasswordMismatch": "كلمتا المرور غير متطابقتين.",
+    "referralCodePlaceholder": "رمز الإحالة (اختياري)",
+    "errorInvalidReferralCode": "رمز الإحالة هذا لا يبدو صحيحًا — تحقق منه أو اتركه فارغًا.",
     "forgotPasswordLink": "نسيت كلمة المرور؟",
     "forgotPasswordTitle": "إعادة تعيين كلمة المرور",
     "forgotPasswordSubtitle": "أدخل بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور.",
@@ -537,6 +540,8 @@
   },
   "settings": {
     "title": "الإعدادات",
+    "lifetimeAccessBadge": "وصول مدى الحياة",
+    "complimentaryAccessBadge": "وصول مجاني",
     "tosAccepted": "تم قبول شروط الاستخدام في {{date}} (الإصدار {{version}})",
     "dataTitle": "البيانات",
     "exportAllDataNote": "كل سجل أدخلته — Settlements والخصومات والحمولات والوقود والمزيد — بصيغة JSON. لا يشمل الصور/ملفات PDF الأصلية التي رفعتها.",
@@ -1634,6 +1639,31 @@
     "clearAllConfirmBody": "سيؤدي هذا إلى إزالة جميع القواعد المُتعلَّمة البالغ عددها {{count}}. ستعتمد عمليات الاستيراد المستقبلية مرة أخرى على مُخمّن الفئات المدمج حتى تُصحح فئة وتُعلّم قاعدة جديدة.",
     "deleteConfirmTitle": "حذف هذه القاعدة؟",
     "deleteFailedTitle": "فشل الحذف"
+  },
+  "referral": {
+    "title": "ادعُ واكسب",
+    "subtitle": "ادعُ owner-operators آخرين — 3 إحالات مؤهلة تمنحك شهرين مجانيين.",
+    "progress": "{{qualified}} من 3 مؤهلة — {{remaining}} أخرى لشهرين مجانيين",
+    "progressSubtitle": "تصبح الإحالة مؤهلة بمجرد أن تؤكد دعوتك بريدها الإلكتروني، وتُنهي الإعداد، وتستورد مستندًا، وتبقى نشطة لمدة أسبوع.",
+    "yourCode": "رمزك",
+    "shareGeneric": "مشاركة",
+    "shareSms": "رسالة نصية",
+    "copyLink": "نسخ",
+    "shareBody": "انضم إليّ في BOZKA TRUCKING AI — الـ AI Coach لأعمال owner-operators. استخدم رمز دعوتي عند التسجيل:",
+    "invitesTitle": "دعواتك",
+    "noInvitesYet": "لا توجد دعوات بعد — شارك رمزك للبدء في كسب أشهر مجانية.",
+    "pendingLabel": "التسجيل معلّق",
+    "qualifiedExplainer": "\"مؤهلة\" تعني أن دعوتك أكدت بريدها الإلكتروني، وأنهت الإعداد، واستوردت مستندًا، وظلت نشطة لمدة 7 أيام.",
+    "status": {
+      "pending": "قيد الانتظار",
+      "qualified": "مؤهلة",
+      "rewarded": "تمت المكافأة"
+    },
+    "creditsTitle": "رصيدك",
+    "creditDays": "يوم واحد مكتسب",
+    "creditDays_other": "{{count}} يومًا مكتسبًا",
+    "creditAppliesNote": "يُطبَّق تلقائيًا عند إطلاق الخطط المدفوعة.",
+    "tnc": "رصيد الإحالة ليس له قيمة نقدية ويُطبَّق فقط عند إطلاق الخطط المدفوعة. تقديرات فقط — وليست ضمانًا ماليًا. راجع شروط الاستخدام لمزيد من التفاصيل."
   },
   "accountantPackage": {
     "title": "حزمة المحاسب",

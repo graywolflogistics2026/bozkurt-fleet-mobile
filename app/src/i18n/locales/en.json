@@ -50,6 +50,7 @@
     "compliance": "Compliance Tracker",
     "documents": "Documents",
     "categoryLearning": "Category Learning",
+    "referral": "Invite & Earn",
     "accountantPackage": "Accountant Package",
     "taxEstimator": "Tax Estimator",
     "settings": "Settings",
@@ -73,6 +74,8 @@
     "errorMissingEmail": "Enter your email address.",
     "errorPasswordTooShort": "Password must be at least 6 characters.",
     "errorPasswordMismatch": "Passwords don't match.",
+    "referralCodePlaceholder": "Referral code (optional)",
+    "errorInvalidReferralCode": "That referral code doesn't look right — double-check it or leave it blank.",
     "signUpCheckEmail": "Account created! Check your email to confirm your address before signing in.",
     "signUpWelcome": "Account created! Taking you in...",
     "forgotPasswordLink": "Forgot password?",
@@ -537,6 +540,8 @@
   },
   "settings": {
     "title": "Settings",
+    "lifetimeAccessBadge": "Lifetime access",
+    "complimentaryAccessBadge": "Complimentary access",
     "tosAccepted": "Terms of Use accepted {{date}} (v{{version}})",
     "dataTitle": "Data",
     "exportAllDataNote": "Every record you've entered — settlements, deductions, loads, fuel, and more — as JSON. Does not include the original photos/PDFs you uploaded.",
@@ -1634,6 +1639,31 @@
     "clearAllConfirmBody": "This removes all {{count}} learned rule(s). Future imports will rely on the built-in category guesser again until you correct a category and teach a new rule.",
     "deleteConfirmTitle": "Delete this rule?",
     "deleteFailedTitle": "Delete failed"
+  },
+  "referral": {
+    "title": "Invite & Earn",
+    "subtitle": "Invite other owner-operators — 3 qualified referrals earn you 2 free months.",
+    "progress": "{{qualified}} of 3 qualified — {{remaining}} more for 2 free months",
+    "progressSubtitle": "A referral qualifies once your invite confirms their email, finishes setup, imports a document, and sticks around for a week.",
+    "yourCode": "Your code",
+    "shareGeneric": "Share",
+    "shareSms": "Text Message",
+    "copyLink": "Copy",
+    "shareBody": "Join me on BOZKA TRUCKING AI — the AI business coach for owner-operators. Use my invite code when you sign up:",
+    "invitesTitle": "Your Invites",
+    "noInvitesYet": "No invites yet — share your code to start earning free months.",
+    "pendingLabel": "Pending signup",
+    "qualifiedExplainer": "\"Qualified\" means your invite confirmed their email, finished setup, imported a document, and has been active for 7 days.",
+    "status": {
+      "pending": "Pending",
+      "qualified": "Qualified",
+      "rewarded": "Rewarded"
+    },
+    "creditsTitle": "Your Credit",
+    "creditDays": "{{count}} day earned",
+    "creditDays_other": "{{count}} days earned",
+    "creditAppliesNote": "Applies automatically when paid plans launch.",
+    "tnc": "Referral credit has no cash value and applies only once paid plans launch. Estimates only — not a financial guarantee. See Terms of Use for full details."
   },
   "accountantPackage": {
     "title": "Accountant Package",

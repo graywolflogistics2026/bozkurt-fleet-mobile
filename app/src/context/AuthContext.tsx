@@ -53,7 +53,7 @@ type AuthContextValue = {
   needsTos: boolean;
   needsTutorial: boolean;
   needsOnboarding: boolean;
-  signUp: (email: string, password: string) => Promise<SignUpOutcome>;
+  signUp: (email: string, password: string, referralCode?: string) => Promise<SignUpOutcome>;
   signIn: (email: string, password: string) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   acceptTos: () => Promise<{ error: string | null }>;
@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function signUp(email: string, password: string): Promise<SignUpOutcome> {
+  async function signUp(email: string, password: string, referralCode?: string): Promise<SignUpOutcome> {
     try {
       // AUTH COMPLETENESS (owner decision 2026-08-24): emailRedirectTo makes
       // the confirmation email's link open straight back into the app at
@@ -144,10 +144,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Supabase-hosted confirmation page — same redirect the resend button
       // (resendConfirmationEmail below) uses, so both paths land the user
       // in the same place.
+      // REFERRAL PROGRAM (owner decision 2026-08-24, item R4): a referral
+      // code typed in (or prefilled from a shared deep link) rides along in
+      // signUp options' `data` — this becomes `raw_user_meta_data` on the
+      // new auth.users row, which the handle_new_user() DB trigger
+      // (docs/PENDING_SQL.md §50) reads via `->>'referred_by_code'` to
+      // resolve the referrer and create a pending `referrals` row. There is
+      // no other path to pass this through: signUp() may return with no
+      // session yet (confirmation_required), so a follow-up client write
+      // after the fact isn't reliable — the trigger, which always fires
+      // exactly once at row creation, is the only place this can happen
+      // atomically.
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: buildAuthRedirectUrl('confirm-email') },
+        options: {
+          emailRedirectTo: buildAuthRedirectUrl('confirm-email'),
+          data: referralCode ? { referred_by_code: referralCode } : undefined,
+        },
       });
       return resolveSignUpOutcome({ errorMessage: error?.message ?? null, hasSession: !!data?.session });
     } catch (err) {

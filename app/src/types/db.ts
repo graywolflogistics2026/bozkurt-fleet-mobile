@@ -604,11 +604,33 @@ export type Profile = {
   ai_weekly_review: string | null;
   ai_weekly_review_generated_at: string | null;
   ai_weekly_review_week_ending: string | null;
+  // REFERRAL PROGRAM (owner decision 2026-08-24, PART 1, docs/PENDING_SQL.md
+  // §50) — referral_code is generated once per user by the handle_new_user()
+  // DB trigger (never client-generated for a real account); referred_by is
+  // the raw code THIS user signed up with (audit-only denormalized string —
+  // the authoritative relationship lives in the `referrals` table, which has
+  // no direct TS type here since the app only ever reads it through
+  // src/data/referral.ts's own narrower row shape).
+  referral_code: string | null;
+  referred_by: string | null;
+  // LIFETIME / COMPLIMENTARY ACCOUNTS (owner decision 2026-08-24, PART 2,
+  // docs/PENDING_SQL.md §50) — readable by the owning user, but a
+  // `BEFORE UPDATE` DB trigger blocks any client write to these three
+  // columns (only service_role, i.e. an admin via SQL, can set them) —
+  // see app/src/entitlement/hasFullAccess.ts, the ONE helper every gated
+  // feature must read through instead of checking `plan` directly.
+  plan: 'free_trial' | 'paid' | 'lifetime' | 'complimentary';
+  plan_note: string | null;
+  plan_granted_at: string | null;
   created_at: string;
   updated_at: string;
 };
+// plan/plan_note/plan_granted_at are deliberately excluded here (not just
+// by DB trigger but at the TYPE level too) — a client-side update payload
+// can never even COMPILE with one of these fields, since the DB would
+// reject the write anyway (see protect_profile_plan_fields()).
 export type ProfileUpdate = Partial<
-  Omit<Profile, 'user_id' | 'created_at' | 'updated_at'>
+  Omit<Profile, 'user_id' | 'created_at' | 'updated_at' | 'plan' | 'plan_note' | 'plan_granted_at'>
 >;
 
 // entity_type: 'multi_member_llc' added retroactively, docs/PENDING_SQL.md

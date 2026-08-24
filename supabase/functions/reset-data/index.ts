@@ -48,6 +48,14 @@ const TABLES_IN_DELETION_ORDER = [
   "compliance_items",
   "misc_income",
   "documents",
+  // REFERRAL PROGRAM (owner decision 2026-08-24, docs/PENDING_SQL.md
+  // §50) — this resetting user's OWN earned/spent credit rows only
+  // (fits the standard `user_id` loop below). `referrals` does NOT fit
+  // this loop (no single `user_id` column — see the bespoke delete
+  // right after the loop) and is handled separately, scoped to
+  // `referrer_id` only, never `referred_user_id` — see that delete's
+  // own comment for why.
+  "account_credits",
 ];
 
 // profiles.* fields that hold actual business/financial DATA (a balance,
@@ -225,6 +233,17 @@ Deno.serve(async (req: Request) => {
       const { error } = await admin.from(table).delete().eq("user_id", userId);
       if (error) throw new Error(`Failed deleting from ${table}: ${error.message}`);
     }
+
+    // REFERRAL PROGRAM (owner decision 2026-08-24, docs/PENDING_SQL.md
+    // §50) — deletes ONLY this user's own OUTGOING referrals (as
+    // referrer_id). Deliberately does NOT touch any row where this user
+    // is referred_user_id — that row belongs to a DIFFERENT person's
+    // (their referrer's) history, and referrals.referred_user_id is
+    // `on delete set null` specifically so that row (and whatever credit
+    // it already earned the referrer) is never wiped by anything this
+    // user does to their own account, reset or otherwise.
+    const { error: referralsError } = await admin.from("referrals").delete().eq("referrer_id", userId);
+    if (referralsError) throw new Error(`Failed deleting from referrals: ${referralsError.message}`);
 
     // STORAGE DELETION INTEGRITY: never proceed to reset the profile's
     // data fields on a partial storage failure — a failed/incomplete

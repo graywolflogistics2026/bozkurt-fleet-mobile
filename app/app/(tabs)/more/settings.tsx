@@ -19,6 +19,7 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { SUPPORTED_LOCALES, LOCALE_LABELS, LANGUAGE_PICKER_ENABLED, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
+import { isOwnerGrantedPlan } from '@/src/entitlement/hasFullAccess';
 import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
 import { SUPPORT_EMAIL } from '@/src/brand';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
@@ -280,6 +281,27 @@ export default function Settings() {
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md }}>{session?.user.email}</Text>
         </Card>
+
+        {/* LIFETIME / COMPLIMENTARY ACCOUNTS (owner decision 2026-08-24,
+            PART 2, item L2) — reads the FULL profiles row (useProfile(),
+            not AuthContext's own narrower Profile type, which doesn't
+            select `plan`). isOwnerGrantedPlan() — not hasFullAccess() —
+            is deliberately used here: a future real 'paid' subscriber
+            should see normal billing/renewal UI once that exists, never
+            this "granted for free" badge. */}
+        {isOwnerGrantedPlan(profileQuery.data) && (
+          <Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Text style={{ fontSize: 18 }}>✨</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                  {profileQuery.data?.plan === 'lifetime' ? t('settings.lifetimeAccessBadge') : t('settings.complimentaryAccessBadge')}
+                </Text>
+                {!!profileQuery.data?.plan_note && <MutedText style={{ marginTop: 2 }}>{profileQuery.data.plan_note}</MutedText>}
+              </View>
+            </View>
+          </Card>
+        )}
 
         <Text style={styles.sectionTitle}>{t('settings.businessProfileTitle')}</Text>
         <MutedText>{t('settings.businessProfileSubtitle')}</MutedText>

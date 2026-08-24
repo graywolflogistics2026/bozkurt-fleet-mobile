@@ -36,6 +36,7 @@ import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import { useProactiveCoach } from '@/src/data/proactiveCoach';
 import { coachNudgeText } from '@/src/alerts/periodicCoachNudges';
+import { useReferralSyncOnce } from '@/src/data/referral';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
@@ -580,6 +581,11 @@ export default function Dashboard() {
   const aiCoach = useAiCoachSummary();
   const proactiveCoach = useProactiveCoach();
   const taxQuery = useTaxEstimate();
+  // REFERRAL PROGRAM (owner decision 2026-08-24) — opportunistic, once-
+  // per-session qualification check so a referral can resolve during
+  // normal app use, not only when the user specifically opens the
+  // "Invite & earn" screen (src/data/referral.ts's own header comment).
+  useReferralSyncOnce();
   const loadsQuery = useLoads();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();

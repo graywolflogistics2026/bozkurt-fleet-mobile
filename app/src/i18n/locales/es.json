@@ -57,6 +57,7 @@
     "compliance": "Seguimiento de Cumplimiento",
     "documents": "Documentos",
     "categoryLearning": "Aprendizaje de Categorías",
+    "referral": "Invitar y Ganar",
     "accountantPackage": "Paquete para el Contador"
   },
   "auth": {
@@ -75,6 +76,8 @@
     "signUpCheckEmail": "¡Cuenta creada! Revisa tu correo para confirmar tu dirección antes de iniciar sesión.",
     "signUpWelcome": "¡Cuenta creada! Ingresando...",
     "errorPasswordMismatch": "Las contraseñas no coinciden.",
+    "referralCodePlaceholder": "Código de referido (opcional)",
+    "errorInvalidReferralCode": "Ese código de referido no parece correcto — revísalo o déjalo en blanco.",
     "forgotPasswordLink": "¿Olvidaste tu contraseña?",
     "forgotPasswordTitle": "Restablece tu contraseña",
     "forgotPasswordSubtitle": "Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.",
@@ -537,6 +540,8 @@
   },
   "settings": {
     "title": "Configuración",
+    "lifetimeAccessBadge": "Acceso de por vida",
+    "complimentaryAccessBadge": "Acceso de cortesía",
     "tosAccepted": "Términos de Uso aceptados {{date}} (v{{version}})",
     "dataTitle": "Datos",
     "exportAllDataNote": "Todos los registros que has ingresado — settlements, deducciones, cargas, combustible y más — en formato JSON. No incluye las fotos/PDF originales que subiste.",
@@ -1634,6 +1639,31 @@
     "clearAllConfirmBody": "Esto elimina las {{count}} regla(s) aprendida(s). Las futuras importaciones volverán a depender del adivinador de categorías integrado hasta que corrija una categoría y enseñe una nueva regla.",
     "deleteConfirmTitle": "¿Eliminar esta regla?",
     "deleteFailedTitle": "Error al eliminar"
+  },
+  "referral": {
+    "title": "Invitar y Ganar",
+    "subtitle": "Invita a otros owner-operators — 3 referidos calificados te ganan 2 meses gratis.",
+    "progress": "{{qualified}} de 3 calificados — {{remaining}} más para 2 meses gratis",
+    "progressSubtitle": "Un referido califica cuando tu invitado confirma su correo, termina la configuración, importa un documento y permanece activo una semana.",
+    "yourCode": "Tu código",
+    "shareGeneric": "Compartir",
+    "shareSms": "Mensaje de Texto",
+    "copyLink": "Copiar",
+    "shareBody": "Únete a mí en BOZKA TRUCKING AI — el AI Coach de negocios para owner-operators. Usa mi código de invitación al registrarte:",
+    "invitesTitle": "Tus Invitaciones",
+    "noInvitesYet": "Aún no hay invitaciones — comparte tu código para empezar a ganar meses gratis.",
+    "pendingLabel": "Registro pendiente",
+    "qualifiedExplainer": "\"Calificado\" significa que tu invitado confirmó su correo, terminó la configuración, importó un documento y ha estado activo por 7 días.",
+    "status": {
+      "pending": "Pendiente",
+      "qualified": "Calificado",
+      "rewarded": "Recompensado"
+    },
+    "creditsTitle": "Tu Crédito",
+    "creditDays": "{{count}} día ganado",
+    "creditDays_other": "{{count}} días ganados",
+    "creditAppliesNote": "Se aplica automáticamente cuando se lancen los planes de pago.",
+    "tnc": "El crédito por referidos no tiene valor en efectivo y solo aplica una vez que se lancen los planes de pago. Solo estimaciones — no es una garantía financiera. Consulta los Términos de Uso para más detalles."
   },
   "accountantPackage": {
     "title": "Paquete para el Contador",

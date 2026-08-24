@@ -57,6 +57,7 @@
     "compliance": "Uyumluluk Takibi",
     "documents": "Belgeler",
     "categoryLearning": "Kategori Öğrenimi",
+    "referral": "Davet Et ve Kazan",
     "accountantPackage": "Muhasebeci Paketi"
   },
   "auth": {
@@ -75,6 +76,8 @@
     "signUpCheckEmail": "Hesap oluşturuldu! Giriş yapmadan önce adresinizi onaylamak için e-postanızı kontrol edin.",
     "signUpWelcome": "Hesap oluşturuldu! Giriş yapılıyor...",
     "errorPasswordMismatch": "Şifreler eşleşmiyor.",
+    "referralCodePlaceholder": "Davet kodu (isteğe bağlı)",
+    "errorInvalidReferralCode": "Bu davet kodu doğru görünmüyor — kontrol edin veya boş bırakın.",
     "forgotPasswordLink": "Şifrenizi mi unuttunuz?",
     "forgotPasswordTitle": "Şifrenizi sıfırlayın",
     "forgotPasswordSubtitle": "E-postanızı girin, şifrenizi sıfırlamanız için size bir bağlantı gönderelim.",
@@ -537,6 +540,8 @@
   },
   "settings": {
     "title": "Ayarlar",
+    "lifetimeAccessBadge": "Ömür boyu erişim",
+    "complimentaryAccessBadge": "Ücretsiz erişim",
     "tosAccepted": "Kullanım Şartları {{date}} tarihinde kabul edildi (v{{version}})",
     "dataTitle": "Veri",
     "exportAllDataNote": "Girdiğiniz her kayıt — settlement'lar, kesintiler, yükler, yakıt ve daha fazlası — JSON olarak. Yüklediğiniz orijinal fotoğraf/PDF dosyalarını içermez.",
@@ -1634,6 +1639,31 @@
     "clearAllConfirmBody": "Bu, {{count}} öğrenilmiş kuralın tümünü kaldırır. Bir kategoriyi düzeltip yeni bir kural öğretene kadar gelecekteki içe aktarımlar yine yerleşik kategori tahmincisine güvenecek.",
     "deleteConfirmTitle": "Bu kural silinsin mi?",
     "deleteFailedTitle": "Silme başarısız"
+  },
+  "referral": {
+    "title": "Davet Et ve Kazan",
+    "subtitle": "Diğer owner-operator'ları davet edin — 3 nitelikli davet size 2 ücretsiz ay kazandırır.",
+    "progress": "3 üzerinden {{qualified}} nitelikli — 2 ücretsiz ay için {{remaining}} tane daha",
+    "progressSubtitle": "Bir davet, davet ettiğiniz kişi e-postasını onayladığında, kurulumu tamamladığında, bir belge içe aktardığında ve bir hafta boyunca aktif kaldığında nitelikli hale gelir.",
+    "yourCode": "Kodunuz",
+    "shareGeneric": "Paylaş",
+    "shareSms": "Kısa Mesaj",
+    "copyLink": "Kopyala",
+    "shareBody": "BOZKA TRUCKING AI'da bana katıl — owner-operator'lar için AI Coach. Kayıt olurken davet kodumu kullan:",
+    "invitesTitle": "Davetleriniz",
+    "noInvitesYet": "Henüz davet yok — ücretsiz ay kazanmaya başlamak için kodunuzu paylaşın.",
+    "pendingLabel": "Kayıt bekleniyor",
+    "qualifiedExplainer": "\"Nitelikli\" demek, davet ettiğiniz kişinin e-postasını onayladığı, kurulumu tamamladığı, bir belge içe aktardığı ve 7 gün boyunca aktif kaldığı anlamına gelir.",
+    "status": {
+      "pending": "Beklemede",
+      "qualified": "Nitelikli",
+      "rewarded": "Ödüllendirildi"
+    },
+    "creditsTitle": "Krediniz",
+    "creditDays": "{{count}} gün kazanıldı",
+    "creditDays_other": "{{count}} gün kazanıldı",
+    "creditAppliesNote": "Ücretli planlar başladığında otomatik olarak uygulanır.",
+    "tnc": "Davet kredisinin nakit değeri yoktur ve yalnızca ücretli planlar başladığında uygulanır. Sadece tahminlerdir — finansal bir garanti değildir. Ayrıntılar için Kullanım Şartları'na bakın."
   },
   "accountantPackage": {
     "title": "Muhasebeci Paketi",

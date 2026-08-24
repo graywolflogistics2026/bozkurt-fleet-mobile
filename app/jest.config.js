@@ -24,6 +24,8 @@ module.exports = {
     '<rootDir>/src/components/**/*.test.ts',
     '<rootDir>/src/onboarding/**/*.test.ts',
     '<rootDir>/src/alerts/**/*.test.ts',
+    '<rootDir>/src/referral/**/*.test.ts',
+    '<rootDir>/src/entitlement/**/*.test.ts',
   ],
   // Mirrors tsconfig.json's "@/*" path alias — ts-jest doesn't read tsconfig
   // paths for module resolution on its own.

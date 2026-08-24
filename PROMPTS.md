@@ -1526,6 +1526,28 @@ Session 10's scope, not blocking the Part 1 beta build):**
       `callResetData`).
 - [ ] Rate-limit / AI-cost caps review for `ai-import`/`ai-advisor`
       Edge Functions before public signups are possible.
+- [ ] REFERRAL PROGRAM + LIFETIME ACCOUNTS (owner decision 2026-08-24,
+      binding on whichever billing provider gets picked): the billing
+      integration MUST honor BOTH `account_credits` (the referral
+      program's currency — a signed-up-but-not-yet-paying user can
+      already be accumulating referral credit today, docs/PENDING_SQL.md
+      §50) AND `profiles.plan` (via `app/src/entitlement/
+      hasFullAccess.ts`'s `hasFullAccess()` — `'lifetime'`/
+      `'complimentary'` must NEVER be prompted to pay, `'paid'` must
+      pass every gate `hasFullAccess()` already covers with zero
+      feature-code changes). Concretely: when a user's free trial or
+      current billing period ends, the billing flow must first check for
+      an unexpired `account_credits` balance and apply it (extend access
+      by that many days) BEFORE ever charging/prompting payment — a
+      referral reward that silently does nothing once billing launches
+      would break the entire program's core promise ("applies
+      automatically when paid plans launch," shown in-app on the
+      Referral screen today). Also needs: a short referral-program
+      Terms & Conditions line somewhere reachable in-app (Settings >
+      Legal, or inline on the Referral screen itself) — none exists yet;
+      the Referral screen currently shows a placeholder disclaimer
+      (`referral.tnc`) pending real legal review, same "DRAFT, not
+      attorney-reviewed" status as the rest of this app's legal copy.
 ```
 
 ## Backlog (parked features — do not start without a separate, explicit owner decision)

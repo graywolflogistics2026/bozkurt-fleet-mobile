@@ -1765,6 +1765,295 @@ field names added in the same pass that runs this migration.
 
 ---
 
+## 50. Referral program + lifetime/complimentary accounts (owner decision 2026-08-24)
+
+**PART 1 — REFERRAL PROGRAM.** `profiles.referral_code` (unique, e.g.
+`BOZKA-7F2K`) is generated once per user by `handle_new_user()` at
+signup — never client-generated for a real account (a client can't
+safely guarantee DB-wide uniqueness on its own; `app/src/referral/
+referralCode.ts`'s `generateReferralCode()` exists only for format
+validation/tests, see that file's own header comment).
+`profiles.referred_by` stores the raw CODE the user signed up with (an
+audit-only denormalized string — the AUTHORITATIVE relationship, with
+real user-id FKs and a status lifecycle, lives in the new `referrals`
+table below). A referral becomes `qualified` only once the referred
+person has confirmed their email, completed onboarding, imported a
+document, and is still around 7+ days later
+(`app/src/referral/qualification.ts` `resolveQualification()`) — a
+signup alone earns nothing. Self-referral is blocked at signup time via
+`normalize_email_for_referral()` (the SQL mirror of `app/src/referral/
+selfReferral.ts`'s `isLikelySelfReferral()` — gmail/googlemail dot+tag
+stripping, `+tag` stripping elsewhere; device-install-id matching is
+explicitly OUT of this pass — neither `expo-application` nor
+`expo-device` is an existing dependency, and adding either is a new
+native module requiring a rebuild, not this OTA-safe pass). Every 3
+qualified referrals grants 60 days of credit to the referrer (`app/src/
+referral/reward.ts` `computeNewRewardGrants()`, derived from the raw
+qualified count via floor division rather than a fragile separate
+counter — see that file's own comment); the referred person gets 14
+days on qualifying. Credits are recorded in the new `account_credits`
+table (the currency for now, since billing doesn't exist yet — Session
+10's billing provider consumes this balance automatically, see
+PROMPTS.md). The referrer NEVER sees the referred person's real
+identity — only a masked label (`app/src/referral/maskLabel.ts`
+`buildMaskedReferralLabel()`: initials if a name exists, else "New
+member (Month Year)") computed SERVER-SIDE (the `referral-sync` Edge
+Function, the only thing with service_role access to the referred
+person's real `owner_name`) and cached directly on the `referrals` row
+— RLS on `profiles` already independently prevents the referrer from
+reading the referred person's actual profile via any client-side join,
+so this cached label is the only identity signal that ever reaches the
+referrer.
+
+**PART 2 — LIFETIME/COMPLIMENTARY ACCOUNTS.** `profiles.plan` (default
+`'free_trial'`) plus `plan_note`/`plan_granted_at` — readable by the
+owning user, but a `BEFORE UPDATE` trigger blocks ANY change to these
+three columns unless the caller is `service_role` (an admin, via SQL —
+see `docs/ADMIN_RUNBOOK.md`'s "Grant/List/Revoke a plan" recipes). This
+is a genuinely NEW pattern for this codebase (every prior "admin-only"
+column has been table-level — e.g. `tax_year_data`'s
+service-role-write-only policy — Postgres RLS itself is row-level only,
+it can't natively express "this column is user-read/admin-write while
+these other columns on the SAME row are user-read/user-write," hence
+the trigger). `app/src/entitlement/hasFullAccess.ts`'s `hasFullAccess()`
+is the ONE helper every gated feature must read through — `lifetime`/
+`complimentary`/`paid` all pass; Session 10's real billing provider
+plugs into this same helper with zero feature-code changes once it
+exists.
+
+```sql
+-- ============================================================
+-- PART 1 — referral program
+-- ============================================================
+
+alter table profiles
+  add column referral_code text unique,
+  add column referred_by text;
+
+create table referrals (
+  id uuid primary key default gen_random_uuid(),
+  -- Deleting the REFERRER cascades their own referral history away (no
+  -- one left to attribute rewards to — their account_credits rows are
+  -- gone too via that table's own cascade). Deleting the REFERRED
+  -- person's account, on the other hand, must NEVER retroactively wipe a
+  -- reward the referrer already earned — "on delete set null" keeps this
+  -- row (and therefore the referrer's already-granted credit, and their
+  -- qualified/rewarded COUNT) intact, just with referred_user_id
+  -- nulled out.
+  referrer_id uuid not null references auth.users(id) on delete cascade,
+  referred_user_id uuid references auth.users(id) on delete set null,
+  referred_label text, -- masked identity, see app/src/referral/maskLabel.ts — set by referral-sync, never a raw name/email
+  status text not null default 'pending' check (status in ('pending', 'qualified', 'rewarded')),
+  flagged_for_review boolean not null default false,
+  flag_reason text,
+  created_at timestamptz not null default now(),
+  qualified_at timestamptz,
+  rewarded_at timestamptz,
+  unique (referred_user_id) -- a person can only ever be credited to ONE referrer; NULLs (post-deletion) never conflict with each other
+);
+
+create index referrals_referrer_id_idx on referrals(referrer_id);
+
+alter table referrals enable row level security;
+-- SELECT only — no insert/update/delete policy for regular users AT ALL.
+-- Every write comes from handle_new_user() (security definer, bypasses
+-- RLS) or the referral-sync Edge Function (service_role, always bypasses
+-- RLS) — a client literally cannot create/edit a referrals row itself.
+create policy "referrals_select_own" on referrals
+  for select using (referrer_id = auth.uid() or referred_user_id = auth.uid());
+
+create table account_credits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  days integer not null check (days > 0),
+  reason text not null,
+  source_referral_id uuid references referrals(id) on delete set null,
+  granted_at timestamptz not null default now(),
+  expires_at timestamptz
+);
+
+create index account_credits_user_id_idx on account_credits(user_id);
+
+alter table account_credits enable row level security;
+-- Same "SELECT only, service_role writes" pattern as referrals above.
+create policy "account_credits_select_own" on account_credits
+  for select using (user_id = auth.uid());
+
+-- Mirrors app/src/referral/selfReferral.ts's normalizeEmail() EXACTLY
+-- (same "every trigger/Edge Function is self-contained, duplicates small
+-- helpers rather than importing app/src code" convention as delete-account/
+-- reset-data's own deleteStorageFolder() precedent) — gmail/googlemail
+-- dot+tag stripping, +tag stripping elsewhere.
+create or replace function normalize_email_for_referral(p_email text)
+returns text language plpgsql immutable as $$
+declare
+  v_local text;
+  v_domain text;
+  v_email text := lower(trim(coalesce(p_email, '')));
+begin
+  if position('@' in v_email) = 0 then
+    return v_email;
+  end if;
+  v_local := split_part(v_email, '@', 1);
+  v_domain := split_part(v_email, '@', 2);
+  v_local := split_part(v_local, '+', 1);
+  if v_domain in ('gmail.com', 'googlemail.com') then
+    v_local := replace(v_local, '.', '');
+    v_domain := 'gmail.com';
+  end if;
+  return v_local || '@' || v_domain;
+end;
+$$;
+
+-- Mirrors app/src/referral/referralCode.ts's format exactly (BOZKA-XXXX,
+-- no 0/O/1/I). Bounded retry loop against the real unique constraint —
+-- collision odds are astronomically low at any realistic user count, the
+-- loop is defense-in-depth, not an expected path.
+create or replace function generate_unique_referral_code()
+returns text language plpgsql as $$
+declare
+  v_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  v_code text;
+  v_attempt int := 0;
+  i int;
+begin
+  loop
+    v_code := 'BOZKA-';
+    for i in 1..4 loop
+      v_code := v_code || substr(v_chars, floor(random() * length(v_chars))::int + 1, 1);
+    end loop;
+    exit when not exists (select 1 from profiles where referral_code = v_code);
+    v_attempt := v_attempt + 1;
+    if v_attempt > 20 then
+      raise exception 'could not generate a unique referral code after 20 attempts';
+    end if;
+  end loop;
+  return v_code;
+end;
+$$;
+
+-- Extends the EXISTING handle_new_user() trigger (0001_init.sql) rather
+-- than adding a second trigger — one atomic place a new profiles row (and
+-- now, optionally, a pending referrals row) gets created. Self-referral
+-- is checked here, at creation time, so a blocked self-referral simply
+-- never creates a referrals row at all (nothing to later un-qualify).
+create or replace function handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text;
+  v_referrer_id uuid;
+  v_referrer_email text;
+  v_referred_by_code text := new.raw_user_meta_data ->> 'referred_by_code';
+  v_is_self boolean := false;
+begin
+  v_code := generate_unique_referral_code();
+
+  if v_referred_by_code is not null and length(trim(v_referred_by_code)) > 0 then
+    select user_id into v_referrer_id
+      from profiles
+      where referral_code = upper(trim(v_referred_by_code));
+
+    if v_referrer_id is not null then
+      select email into v_referrer_email from auth.users where id = v_referrer_id;
+      if v_referrer_email is not null
+         and normalize_email_for_referral(v_referrer_email) = normalize_email_for_referral(new.email) then
+        v_is_self := true;
+      end if;
+    end if;
+  end if;
+
+  insert into public.profiles (user_id, referral_code, referred_by)
+    values (new.id, v_code, v_referred_by_code)
+    on conflict (user_id) do nothing;
+
+  if v_referrer_id is not null and not v_is_self then
+    insert into public.referrals (referrer_id, referred_user_id, status)
+      values (v_referrer_id, new.id, 'pending')
+      on conflict (referred_user_id) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ============================================================
+-- PART 2 — lifetime / complimentary accounts
+-- ============================================================
+
+alter table profiles
+  add column plan text not null default 'free_trial' check (plan in ('free_trial', 'paid', 'lifetime', 'complimentary')),
+  add column plan_note text,
+  add column plan_granted_at timestamptz;
+
+-- profiles ALREADY has a broad "owner can update their own row" policy
+-- (company_name, locale, etc. all need normal user read/write) — RLS
+-- itself can't scope write access down to just THESE three columns on
+-- the same row, so a BEFORE UPDATE trigger is what actually enforces
+-- "the user can read their own plan but never write it."
+--
+-- ALLOWED WRITERS, both checked (a client request never satisfies
+-- either): (1) auth.role() = 'service_role' — the referral-sync/any
+-- future admin Edge Function, called with the service_role key, whose
+-- JWT claims literally say so; (2) current_user = 'postgres' — a human
+-- admin running SQL directly in the Supabase Dashboard's SQL Editor
+-- connects as the `postgres` role with NO request.jwt.claims set at
+-- all, so auth.role() alone would NOT reliably read back 'service_role'
+-- in that context — the ADMIN_RUNBOOK.md recipes below rely on this
+-- second check to actually work.
+create or replace function protect_profile_plan_fields()
+returns trigger language plpgsql as $$
+begin
+  if auth.role() is distinct from 'service_role' and current_user <> 'postgres' then
+    if new.plan is distinct from old.plan
+       or new.plan_note is distinct from old.plan_note
+       or new.plan_granted_at is distinct from old.plan_granted_at then
+      raise exception 'plan fields can only be changed by an administrator';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_protect_profile_plan_fields on profiles;
+create trigger trg_protect_profile_plan_fields
+  before update on profiles
+  for each row execute function protect_profile_plan_fields();
+```
+
+No RLS change needed on `profiles` itself beyond the trigger above — it's
+already owner-scoped (`profiles_owner_all`). Reset All Data (CLAUDE.md
+invariant #24): `referral_code`/`referred_by`/`plan`/`plan_note`/
+`plan_granted_at` are all deliberately KEPT (identity/entitlement-level,
+same bucket as `company_name`/`role` — an unlisted column defaults to
+KEPT per invariant #24's own rule, so no `reset-data` code change is
+needed for these five specifically). `account_credits` (the resetting
+user's OWN credit rows only) and `referrals` (rows where the resetting
+user is `referrer_id` only — never `referred_user_id`, so someone else's
+"who referred me" relationship is never touched by MY reset) ARE added
+to `reset-data`'s explicit deletion list — see that Edge Function's own
+updated file-header comment for the exact scoping.
+`supabase/functions/delete-account/index.ts` needs the identical
+`account_credits`/`referrals` scoping (own credits, own outgoing
+referrals-as-referrer) added to its deletion list — the FK design above
+(`referred_user_id on delete set null`) is what actually guarantees a
+REFERRED person deleting their own account never wipes the REFERRER's
+already-granted credit or qualified/rewarded count, independent of
+whatever `delete-account`'s own explicit table list does or doesn't
+touch.
+
+- [ ] 50a run (referral program: profiles.referral_code/referred_by,
+      referrals table + RLS, account_credits table + RLS,
+      normalize_email_for_referral(), generate_unique_referral_code(),
+      updated handle_new_user())
+- [ ] 50b run (lifetime/complimentary: profiles.plan/plan_note/
+      plan_granted_at, protect_profile_plan_fields() trigger)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —
