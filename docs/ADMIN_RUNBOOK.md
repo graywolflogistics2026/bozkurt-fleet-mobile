@@ -152,6 +152,61 @@ doesn't fit the common shape (Ohio's exemption, Massachusetts' surtax)
 represented via `flat_adjustments` instead of silently squeezed into
 `flat` or skipped.
 
+## Email Confirmation + Redirect URLs (owner decision 2026-08-24, NEXT PASS item B2)
+
+The app now has a full email-confirmation flow (`app/app/(auth)/check-email.tsx`,
+`app/app/confirm-email.tsx`) and a forgot-password flow
+(`app/app/(auth)/forgot-password.tsx`, `app/app/reset-password.tsx`) — both
+are already wired in the CODE and require exactly these Supabase Dashboard
+steps to actually activate/work against the live project (no SQL, no app
+release needed for this part):
+
+1. **Enable "Confirm email"**: Supabase Dashboard → **Authentication →
+   Providers → Email** (sometimes **Authentication → Sign In / Providers**
+   depending on dashboard version) → toggle **Confirm email** ON. Until
+   this is enabled, `supabase.auth.signUp()` grants a session immediately
+   and the app's `confirmation_required` code path (check-email.tsx) is
+   simply never reached — this is expected, not a bug, per
+   `src/auth/signUpFlow.ts`'s own documented "two legitimate outcomes"
+   comment.
+2. **Add both deep-link redirect URLs to the allowlist**: Supabase
+   Dashboard → **Authentication → URL Configuration → Redirect URLs** —
+   add:
+   - `bozkurtfleetos://confirm-email`
+   - `bozkurtfleetos://reset-password`
+
+   This step is NOT optional — Supabase Auth rejects/ignores an
+   `emailRedirectTo`/`redirectTo` value that isn't on this allowlist and
+   silently falls back to the project's default Site URL instead, which
+   would NOT deep-link back into the app at all. Both URLs use the app's
+   existing custom `scheme` (`app.config.js`'s `scheme: 'bozkurtfleetos'`,
+   unchanged by this pass) — no native rebuild needed for this step
+   itself, since the scheme was already registered in prior builds.
+3. **Existing accounts are not affected**: Supabase auto-sets
+   `email_confirmed_at` at signup time whenever "Confirm email" is off,
+   so every account created before step 1 already has it set and will
+   never see the app's new confirmation gate (`needsEmailConfirmation`,
+   `src/auth/profileGates.ts`) — only accounts created AFTER this toggle
+   flips will be asked to confirm.
+4. **Test end to end** before considering this done: sign up a fresh
+   test account, confirm the confirmation email arrives, tap its link on
+   a device with the app installed, and confirm it opens the app at
+   `confirm-email.tsx` and clears the gate (rather than opening a browser
+   or a Supabase-hosted generic page). Repeat for a password-reset email
+   via `forgot-password.tsx`.
+5. **Product-email channel note** (owner ask, Session 10 backlog item):
+   once "Confirm email" is on, every confirmed email address is also a
+   verified channel for OCCASIONAL product emails (release notes, major
+   feature announcements) — NOT transactional spam, and always with a
+   working opt-out. This is a genuinely NEW capability this pass enables,
+   not something already built: no opt-in/opt-out preference field, email
+   template, or sending mechanism exists yet anywhere in this codebase.
+   Flagged here as a Session 10 backlog item requiring its own explicit
+   owner decision (a new `profiles` opt-out column, an actual sending
+   pipeline — Supabase Auth's own SMTP is for AUTH emails only, a separate
+   provider integration would be needed for arbitrary product emails) —
+   not something to build speculatively ahead of that decision.
+
 ## Custom SMTP (owner decision 2026-08-05, FULL PARITY follow-up item J)
 
 By default, Supabase Auth sends every system email (signup confirmation,

@@ -3783,3 +3783,207 @@
   `ceoMode.homeAllCaughtUp`/`ceoMode.homeOpenFull` keys added, 11 old
   score keys removed, es/ru/ar/tr fully translated, hi/uk untranslated
   English copies per invariant #11).
+- NEXT PASS — BRANDING, AUTH COMPLETENESS, TAX STRIP, SMART ALERTS, AND
+  PROACTIVE AI COACHING (owner decision 2026-08-24, five coherent commits):
+  A. **BRANDING CLEANUP**: every remaining literal "Bozkurt Fleet OS" was
+     replaced with `BRAND_NAME` ("BOZKA TRUCKING AI") — `app.config.js`'s
+     `name` field and its two native-permission strings (camera/photo),
+     the live `privacyPolicy.ts` body, CLAUDE.md's own rule-defining line
+     (the one two lines above listing what's an allowed hardcoded brand
+     value), and every doc-only mention (AGENTS.md, README.md, docs/*.md,
+     PROMPTS.md, supabase/migrations/0001_init.sql, supabase/seed.sql).
+     `slug`/`scheme`/`bundleIdentifier`/`package` deliberately kept as
+     their original `bozkurt-fleet-os`/`bozkurtfleetos`/
+     `com.bozkurtfleetos.app` values — native store/deep-link identifiers
+     that would need a fresh app-store listing to change, a separate
+     later decision. `legacy/index.html` and one historical CLAUDE.md log
+     entry (FULL PARITY FOLLOW-UP PART H's own grep-audit record) were
+     deliberately left untouched — legacy is never a source of truth for
+     identity (this file's own top rule) and the log entry is a verbatim
+     historical record of what was searched for at the time, not a live
+     rule. **Logo**: `BrandLogo.tsx` (an existing react-native-svg
+     side-profile semi-truck mark, RTL-mirrored) gained `BRAND_LOGO_DARK`/
+     `BRAND_LOGO_LIGHT` color-preset exports so the mark stays legible
+     regardless of background (a captured share-card image, a future
+     white app-icon background) instead of only the in-app dark-theme
+     default; added to `ScreenErrorBoundary.tsx`'s crash screen (the one
+     major surface that didn't already show it — top bar/sidebar/intro/
+     share cards already did). New `BrandAppIcon.tsx` composes a square
+     dark-background + white-truck icon from the same mark via plain View
+     layout (no nested-SVG-viewport complexity) — a SOURCE COMPONENT
+     ready for Session 10's real store-asset export (turning it into
+     actual `app.config.js` icon files still needs a render-to-PNG step
+     this pass didn't do, and a native rebuild to ship it — explicitly
+     flagged, not silently claimed done).
+  B. **AUTH COMPLETENESS**: this Supabase client uses `flowType: 'implicit'`
+     (confirmed by reading the installed `@supabase/auth-js` source, not
+     assumed) and `detectSessionInUrl: false` — both password-recovery and
+     signup-confirmation email links carry their tokens as a URL HASH
+     FRAGMENT (`#access_token=...&type=recovery|signup`), which must be
+     parsed manually. `src/auth/deepLink.ts`'s `parseAuthDeepLink()` (pure,
+     zero `expo-constants`/`react-native` imports — this repo's jest.config.js
+     runs `src/auth/**` under plain ts-jest/Node with NO Expo/RN mocking,
+     same reason `buildInfo.ts`/`buildInfoFormat.ts` are split — the one
+     function that reads `Constants.expoConfig.scheme`,
+     `buildAuthRedirectUrl()`, lives in the separate untested
+     `deepLinkRedirect.ts`) handles the hash-fragment shape, a `?code=`
+     PKCE fallback, and Supabase's own `#error_description=...` shape for
+     an expired/invalid link. `src/auth/deepLinkExchange.ts` dispatches a
+     parsed link to `supabase.auth.setSession()`/`exchangeCodeForSession()`.
+     Deliberately did NOT add `expo-linking` as a new dependency — React
+     Native's own built-in `Linking` API (`getInitialURL`/`addEventListener`)
+     already round-trips through the app's existing custom `scheme`
+     (already configured in `app.config.js` before this pass) with zero
+     native-module change, keeping this whole item OTA-deployable.
+     **Forgot password**: sign-in gets a "Forgot password?" link ->
+     `(auth)/forgot-password.tsx` (email input, 60s client-side resend
+     cooldown on top of Supabase's own server-side rate limiting,
+     `sendPasswordResetEmail()`) -> `reset-password.tsx` (a NEW top-level
+     route, `rootRedirect.ts` exempts it from the normal "no session ->
+     sign-in" bounce since the screen itself establishes a session from
+     the link's token — and, uniquely among every gate screen in this
+     app, is NEVER auto-redirected to `(tabs)` even once that session
+     exists, so a user can't get yanked away before actually submitting
+     their new password; it navigates itself once done, same
+     explicit-navigate pattern as `tutorial.tsx`/`onboarding.tsx`) —
+     handles an expired/invalid link (shows the real Supabase error,
+     offers "Request New Link") and a genuine new-password form
+     (`validateNewPassword()`, `src/auth/resetPasswordFlow.ts`).
+     **Email confirmation**: `signUp()`/`resendConfirmationEmail()` both
+     set `emailRedirectTo`/`options.emailRedirectTo` to
+     `bozkurtfleetos://confirm-email`, so the confirmation email's link
+     opens straight back into the app. Two entry paths, one shared UI
+     pattern: (a) NO session yet (Supabase's "Confirm email" is on, so
+     `signUp()` never granted one) — `sign-up.tsx` now routes to
+     `(auth)/check-email.tsx` (resend + "use a different email address")
+     instead of the old inline message; (b) a session DOES exist but
+     `session.user.email_confirmed_at` is still null — a new
+     `needsEmailConfirmation` gate (`resolveNeedsEmailConfirmation()`,
+     `src/auth/profileGates.ts`, reads the Supabase Auth user object
+     directly, no separate DB fetch/race to worry about) routes to the
+     new top-level `confirm-email.tsx`, which is ALSO the deep-link
+     target for path (a)'s email link — dual purpose, one screen. This
+     gate runs FIRST among the authenticated gates in `resolveRootRedirect()`,
+     ahead of ToS/tutorial/onboarding. `sign-in.tsx` also detects
+     Supabase's specific "Email not confirmed" sign-in error and offers a
+     resend button instead of a dead-end raw error string. Existing
+     accounts are never retroactively locked out — Supabase auto-sets
+     `email_confirmed_at` at signup time whenever "Confirm email" is off,
+     so turning the setting on later doesn't touch already-confirmed
+     users. See DELIVERABLES below for the exact Supabase dashboard steps
+     this item requires (not a code change).
+  C. **HOME TAX STRIP**: three compact, tappable tiles as the LAST content
+     block on Home (ahead of only the Sign Out button) — Weekly Tax
+     Reserve / Next Quarterly Payment (amount + due-date countdown,
+     reusing the Tax Estimator's own `taxEstimator.deadlinePast`/
+     `deadlineToday`/`deadlineInDays` copy rather than duplicating it) /
+     Estimated Yearly Tax — all three reading from the SAME canonical
+     `useTaxEstimate()` every other tax screen already uses (CLAUDE.md
+     invariant #6), with the estimates-only disclaimer. Loading and
+     no-tax-config-yet states both handled explicitly (the latter shows
+     nothing, never a `$0` guess).
+  D. **ROLE-AWARE SMART ALERTS + MISSING-DATA NUDGES + FREQUENCY
+     DISCIPLINE**: `src/alerts/roleFilter.ts`'s `isComplianceTypeVisibleForRole()`
+     filters the Alerts screen's compliance rows by `profiles.role` BEFORE
+     they ever reach the UI — a company driver (or `trainee`, treated the
+     same way — riding along, not operating their own truck) never sees a
+     truck-only compliance item (HVUT 2290, IRP, annual inspection,
+     insurance policy, IFTA — the schema has no separate "state sticker"/
+     "cab card" type, IRP registration covers that ground), only personal
+     ones (medical card, CDL, drug-consortium enrollment — a driver-level
+     DOT requirement regardless of who owns the truck). An owner-operator/
+     lease-operator/1099-contractor (CLAUDE.md invariant #18: 1099 already
+     gets the full Schedule C experience, implying it also handles its own
+     truck-related expenses) sees both. `role === null` shows every item
+     (never silently hides a real deadline) AND a one-time "what's your
+     role?" prompt (`resolveRolePromptNeeded()`) — answering it sets
+     `role` directly; dismissing without answering sets the new
+     `profiles.role_prompt_dismissed_at` (docs/PENDING_SQL.md §49) so it
+     asks only once. New "Worth a look" section surfaces missing-data
+     nudges (`src/alerts/missingDataNudges.ts`, pure detectors): no
+     settlement imported in 10+ days, a settlement with revenue but no
+     miles, truck cost basis / depreciation method not set (owners only —
+     `isOwnerRole()`), receipts stuck in NEEDS REVIEW. Every nudge is
+     frequency-capped (`src/alerts/nudgeFrequency.ts`): at most once per
+     topic per week, never more than 2 a day (counted across ALL topics
+     shown that calendar day, not per-topic), nothing at all in the first
+     24 hours after signup, and silenceable per topic — all persisted
+     server-side as `profiles.nudge_state` (jsonb, §49; also wired into
+     `reset-data`'s `PROFILE_DATA_RESET` CLEARED bucket, per invariant
+     #24's own "a new column missed here is exactly the bug class that
+     audit exists to catch" warning). "Shown" is recorded the instant a
+     nudge is rendered anywhere it's computed (the Alerts screen AND the
+     always-mounted tab-bar bell badge both call `useAlertsData()`) —a
+     deliberate, documented choice: the badge count IS itself a form of
+     notification, so this doesn't under-count "shown" against the daily
+     cap.
+  E. **AI COACH — PROACTIVE, PERIODIC COACHING**: two features sharing the
+     `nudge_state` frequency engine (generalized to a `<Topic extends
+     string>` generic so both D's weekly-cooldown family and E's
+     monthly-cooldown family use the identical, once-tested
+     `selectNudgesToShow`/`recordNudgesShown`/`silenceNudgeTopic` — disjoint
+     topic key sets mean the two families can never collide in the same
+     JSON blob). **Weekly settlement review** (item E1): when a new
+     settlement week becomes available, `src/stats/weeklyReview.ts`'s
+     `shouldGenerateWeeklyReview()` (a new week_ending differs from the
+     cached one, AND 7+ days since the last generation — the spec's own
+     "one ai-advisor call per user per week at most" cap) triggers
+     `buildWeeklyReviewPrompt()` — a rich, data-filled prompt (revenue,
+     net, RPM vs. the user's own trailing 4-week average, deadhead %,
+     fuel % of revenue, biggest settlement chargebacks, per-diem days,
+     YTD profit before/after this week) sent as a single `ai-advisor`
+     call, same "compose client-side from real numbers" pattern
+     `ceo-mode.tsx`'s own briefing already established. Cached in three
+     new `profiles.ai_weekly_review*` columns (§49) so it's lazily
+     generated (and re-cached) the next time Home or Alerts is viewed
+     after a new settlement lands, not synchronously inside the import
+     save transaction. **Periodic nudges** (item E2): a second,
+     conversational nudge family (`src/alerts/periodicCoachNudges.ts`) —
+     no receipt added in 12+ days, a common quarterly expense category
+     with zero spend this quarter (phrased as a question, from a fixed
+     6-category list: Fuel Additives, Safety Gear & Workwear, Tools &
+     Equipment, Parking & Lodging, ELD & Communications, Truck Wash &
+     Detailing — never "invent an expense" advice), the accountant
+     package being ready ahead of a close quarterly deadline, the
+     quarterly tax deadline itself, fuel-% and deadhead-% trending up
+     vs. the user's own trailing 4-week average, and CPM drifting above
+     RPM (computed by reusing the SAME canonical true-profit weekly
+     figure Home/Scorecard already read, `(gross - trueProfitNet) /
+     miles`, never a second cost calculation). Capped to ONE visible
+     nudge at a time (a rotating voice, not a checklist) with a 30-day
+     per-topic cooldown ("never repeat the same one within a month," the
+     spec's own words) via the shared engine's `ONE_MONTH_MS`. **Scope
+     decision on delivery** (item E4's "phrased through ai-advisor...
+     one call per week at most"): that single-call cap is spent entirely
+     on the weekly review, which genuinely benefits from AI composition;
+     the periodic nudges are short, fully-determined single-fact
+     observations (same shape as item D's missing-data nudges) delivered
+     as plain i18n templates instead of a second AI call — this is what
+     keeps total AI usage at the spec's own explicit ceiling rather than
+     silently doubling it. Both surfaces (weekly review + periodic nudge)
+     render in Home's `AiCoachSection` (ahead of the existing top-3
+     recommendation list, since they're the more time-relevant "just
+     happened" content) and the periodic nudge also appears in Alerts'
+     new "From your AI Coach" section, via the shared `coachNudgeText()`
+     presentation helper so the two surfaces can never disagree about
+     wording.
+  DELIVERABLES: 81 suites / 1988 tests pass; `tsc --noEmit` clean; all 7
+  locales confirmed key-parity (glossary test caught and fixed a real
+  slip mid-pass — "deadhead" got translated instead of kept in Latin
+  script in all four of es/ru/ar/tr's `deadheadTrendUp` string, fixed
+  before commit). docs/PENDING_SQL.md §49 (5 new `profiles` columns:
+  `nudge_state`, `role_prompt_dismissed_at`, `ai_weekly_review`,
+  `ai_weekly_review_generated_at`, `ai_weekly_review_week_ending`) is NOT
+  YET RUN against the live project as of this writing.
+  `supabase/functions/reset-data/index.ts` was updated in this pass and
+  needs redeploying; `ai-import`/`ai-advisor` were NOT touched, no
+  redeploy needed for either. A1's `app.config.js` `name` field and its
+  two native-permission strings are NATIVE-LEVEL identifiers baked in at
+  build time — an `eas update` (OTA) cannot change them; the new display
+  name/permission strings only reach a device via a fresh EAS Build.
+  Every other item in this pass (B-E, plus the logo/crash-screen changes
+  in A2) is pure JS, fully OTA-deployable. Supabase dashboard steps for
+  enabling "Confirm email" + configuring custom SMTP from
+  bozkatruckingai@gmail.com are documented in `docs/ADMIN_RUNBOOK.md`'s
+  "Email Confirmation + Custom SMTP" section (added this pass) rather
+  than only in chat, so they survive past this conversation.
