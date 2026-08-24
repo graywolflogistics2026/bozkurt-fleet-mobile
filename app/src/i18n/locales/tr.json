@@ -499,7 +499,8 @@
       "description": "Açıklama",
       "reference": "Referans",
       "period": "Dönem",
-      "suggestedCategory": "Önerilen Kategori"
+      "suggestedCategory": "Önerilen Kategori",
+      "weekEnding": "Hafta Sonu Tarihi"
     },
     "friendlyFailure": {
       "billingAuth": "AI ile okuma geçici olarak kullanılamıyor. Verilerin güvende — manuel olarak kayıt eklemeye devam edebilirsin, biz de sorunu çözüyoruz.",
@@ -512,7 +513,8 @@
     "retryImport": "Tekrar Dene",
     "chooseDifferentFile": "Başka Dosya Seç",
     "backfillOfferTitle": "Eski kayıtları mı tamamlıyorsun?",
-    "backfillOfferBody": "Birkaç aylık geçmiş belgeyi içe aktarıyorsan, Yakalama Yılı paketi (1.000 içe aktarma, 90 gün geçerli) işine yarayabilir. Hesabına eklenmesini istersen destekle iletişime geç."
+    "backfillOfferBody": "Birkaç aylık geçmiş belgeyi içe aktarıyorsan, Yakalama Yılı paketi (1.000 içe aktarma, 90 gün geçerli) işine yarayabilir. Hesabına eklenmesini istersen destekle iletişime geç.",
+    "processingPageProgressWithData": "{{total}} sayfadan {{through}}. sayfa · gelir ve kesintiler alındı"
   },
   "camera": {
     "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",

@@ -499,7 +499,8 @@
       "description": "Descripción",
       "reference": "Referencia",
       "period": "Período",
-      "suggestedCategory": "Categoría Sugerida"
+      "suggestedCategory": "Categoría Sugerida",
+      "weekEnding": "Semana que termina"
     },
     "friendlyFailure": {
       "billingAuth": "La lectura con IA no está disponible temporalmente. Tus datos están seguros — puedes seguir agregando registros manualmente, y ya lo estamos resolviendo.",
@@ -512,7 +513,8 @@
     "retryImport": "Reintentar",
     "chooseDifferentFile": "Elegir Otro Archivo",
     "backfillOfferTitle": "¿Poniéndote al día con registros antiguos?",
-    "backfillOfferBody": "Si estás importando varios meses de documentos anteriores, el paquete Año de Recuperación (1,000 importaciones, válido 90 días) puede ayudarte. Contacta a soporte si quieres que se agregue a tu cuenta."
+    "backfillOfferBody": "Si estás importando varios meses de documentos anteriores, el paquete Año de Recuperación (1,000 importaciones, válido 90 días) puede ayudarte. Contacta a soporte si quieres que se agregue a tu cuenta.",
+    "processingPageProgressWithData": "Página {{through}} de {{total}} · ingresos y deducciones capturados"
   },
   "camera": {
     "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de settlements.",

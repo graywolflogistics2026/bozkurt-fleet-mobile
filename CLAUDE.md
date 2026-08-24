@@ -4613,3 +4613,163 @@
   no redeploy needed for either. `eas update` ships everything in this
   entry EXCEPT the splash/app-icon fix, which needs a native rebuild as
   noted above.
+- SPEED UP SETTLEMENT IMPORT (owner decision 2026-08-24, device report:
+  strictly-sequential one-page-at-a-time processing made an 11-page
+  settlement take 3-5 minutes wall-clock). Six items, all in one pass:
+  1. **CONTROLLED CONCURRENCY**: `supabase/functions/ai-import/
+     chunking.ts`'s new `runWithConcurrencyLimit()` — a generic,
+     order-preserving bounded-concurrency worker pool (each of `limit`
+     workers repeatedly claims the next unclaimed index from a shared
+     cursor until the queue is empty; `results[i]` always matches
+     `items[i]` regardless of which one finishes first). This is the
+     dial between the two failed extremes CLAUDE.md's own MULTI-PAGE
+     SETTLEMENT CHUNKING history already documents: an EARLIER
+     uncontrolled `Promise.all` over a whole batch caused real Anthropic
+     rate-limit/contention failures (which is why processing went fully
+     sequential in the first place, round 5), while strict one-at-a-time
+     processing is correct but slow. `BATCH_CONCURRENCY` (index.ts,
+     default 2, overridable via the `AI_IMPORT_BATCH_CONCURRENCY` env var
+     without a redeploy) governs it. `PAGES_PER_BATCH` is deliberately
+     LEFT AT 2 this pass (not increased) — with concurrency also 2, an
+     invocation's (up to) 2 pages now fire TOGETHER as one wave instead
+     of sequentially, which is the direct, low-risk fix for the reported
+     slowness without the added complexity of multiple waves per
+     invocation. `PAGE_TIMEOUT_MS` (110s per page) and the dynamic
+     `remainingInvocationBudgetMs()` hand-off-before-150s-ceiling
+     mechanism are BOTH unchanged, per the owner's explicit instruction —
+     a wave's budget is snapshotted once before firing its (up to 2)
+     concurrent requests, then re-checked for real before ever starting
+     a NEXT wave.
+  2. **SMART PAGE TRIAGE**: `chunking.ts`'s new `triagePageOrder()` —
+     reorders (never SKIPS — MULTI-PAGE SETTLEMENT CHUNKING ROUND 3's own
+     hard-won lesson is that a fixed page CAP silently produced a
+     $0-deductions settlement because real financial content lived past
+     the cap) pages so financially-meaningful ones are extracted FIRST.
+     CHEAP, NOT EXACT, HONESTLY FLAGGED: there's no OCR/text-extraction
+     library available in this Deno function (a new, heavier dependency,
+     deliberately out of scope for a speed pass) — this uses each page's
+     own single-page-PDF byte size relative to the document's median as a
+     proxy (a page >1.8x the median usually embeds a full-page raster
+     scan — a photographed attachment — rather than the settlement's
+     native, compact text/table content); a misclassification is
+     harmless since every page still gets extracted either way, only the
+     ORDER changes. Computed ONCE per document (the first invocation to
+     enter the continuation path splits every page to measure it, then
+     `pageOrder` is echoed back and forth between client/server on every
+     later round via the new wire-protocol fields below, so the server
+     never re-triages the same document twice).
+  3. **SHRINK THE PAYLOAD**: audited honestly rather than half-built.
+     Real, already-happening reduction, now MEASURED: splitting each page
+     into its own single-page PDF (pre-existing architecture) already
+     excludes every other page's fonts/images/objects via pdf-lib's
+     `copyPages()` — this pass adds `INSTRUMENT` logging of each page's
+     actual byte size so a real device import's real numbers are visible
+     in `supabase functions logs ai-import` instead of assumed. The
+     bytes measured for TRIAGE are also cached and reused for the actual
+     extraction call on whichever pages the SAME invocation processes,
+     avoiding a redundant re-split. True DPI/quality reduction of an
+     embedded RASTER scan is explicitly NOT implemented — same honest
+     limitation this codebase already flagged in the MULTI-PAGE
+     SETTLEMENT CHUNKING ROUND 5 entry: it requires a PDF-rendering/
+     image-codec dependency this Edge Function doesn't have. Duplicate/
+     blank-page stripping was considered and deliberately NOT
+     implemented — genuine risk of double-counting line items for a
+     rare, unconfirmed-real-world case, not worth the risk to a data
+     pipeline that's had multiple hard-won correctness passes.
+  4. **PROGRESSIVE UI**: `index.ts` now returns `partialData` (the
+     merged-so-far extraction) and `progress: {through, total}` on every
+     ONGOING (non-terminal) response — `aiImportCall.ts`'s `onProgress`
+     callback forwards it (sanitized through the same dateGuard/
+     milesGuard pipeline as the final result). The import screen's new
+     shared `handleAiProgress()` (`app/(tabs)/import/index.tsx`, used by
+     both the pickPdf and handleRetryImport call sites so they can never
+     drift apart) swaps the working label to
+     `importScreen.processingPageProgressWithData` ("Page {{through}} of
+     {{total}} · revenue and deductions captured") once the server has
+     real financial figures, and renders a small running preview
+     (Week Ending / Gross Revenue / Deductions / Net Pay, reusing the
+     EXISTING `importScreen.previewLabels.*` keys the post-extraction
+     preview screen already uses — only `previewLabels.weekEnding` was
+     new) below the spinner — the user can start reviewing before the
+     last (often attachment-heavy) page lands.
+  5. **INSTRUMENT AND REPORT**: every page attempt now logs its own page
+     number, payload byte size, duration, and status
+     (`[ai-import] INSTRUMENT page=...`); every wave logs its page set,
+     concurrency, duration, and remaining budget
+     (`INSTRUMENT wave ...`); the one-time triage pass logs page count,
+     average byte size, the computed order, and its own duration
+     (`INSTRUMENT triage ...`). MEASURED BEFORE/AFTER, HONESTLY: this dev
+     sandbox has no credentials to call the real Anthropic API (the same
+     limitation flagged repeatedly throughout this codebase's own prior
+     chunking passes) — no real 11-page settlement was actually run
+     through this code. PROJECTED, not measured: with PAGES_PER_BATCH=2
+     and BATCH_CONCURRENCY=2 both unchanged, an invocation's 2 pages now
+     run concurrently instead of summed sequentially — using the
+     previously MEASURED real per-page durations (23.9s-40s, CLAUDE.md's
+     own ROUND 5 entry), a 2-page wave that used to take ~2×30s≈60s now
+     takes ~max(30s,30s)≈30-40s, so an 11-page document's 6 round trips
+     (unchanged count) should take roughly 6×35s≈210s (~3.5 min) instead
+     of 6×60s≈360s (~6 min) — a projected ~40-45% wall-clock reduction,
+     not a bigger claim than the architecture can honestly support. The
+     new INSTRUMENT logging is what turns this projection into a real
+     measurement on the next actual device import — check `supabase
+     functions logs ai-import` after this deploy.
+  6. **EVERYTHING ELSE STAYS**, verified not just claimed: retry-once on
+     a genuine 5xx (never on timeout) — `callAnthropicMessages()`/
+     `MAX_ANTHROPIC_ATTEMPTS` untouched; gap-tolerant merge — extended,
+     not replaced (`mergeAllPages()` still marks confidence "low" on any
+     missing page, still never stops the whole document over one bad
+     page); the settlement reconciliation hard guard
+     (`settlementReconciliation.ts`) — untouched, still operates purely
+     on the final merged extraction's own fields regardless of how many
+     waves/triage reorders produced it; no partial save without the
+     needs-review flag — unchanged (`confidence` forcing logic in
+     `mergeAllPages`/`mergeChunkedExtractions` untouched).
+  CRITICAL CORRECTNESS FIX REQUIRED BY BOTH #1 AND #2, not optional:
+  `mergeAllPages()` used to assume `outcomes[0]` was always page 1's own
+  extraction (true only when pages were both processed AND returned
+  strictly sequentially) — with triage reordering pages and concurrency
+  letting them complete out of order, that assumption breaks. Fixed by
+  sorting outcomes by PAGE NUMBER before merge, every time, regardless of
+  processing/completion order — `chunking.test.ts`'s new "OUT-OF-ORDER
+  OUTCOMES" tests reproduce exactly this (a scrambled-order input array
+  proven to produce an IDENTICAL merge result to the naturally-ordered
+  one).
+  WIRE PROTOCOL RENAMED (owner decision, this pass — both client and
+  server updated together in the same commit, no backward-compat shim
+  needed): `pageRangeStart` (a raw page NUMBER) → `orderIndex` (a
+  position INTO `pageOrder`, SMART PAGE TRIAGE's ordering) +
+  `pageOrder: number[]` (echoed back and forth so the server never
+  re-triages); `nextPageStart` → `nextOrderIndex`. Compared with `!==
+  null`/`!= null` EVERYWHERE, never truthiness — `nextOrderIndex` can
+  legitimately be `0` (an invocation that hit its budget ceiling before
+  attempting even one page), which the old page-number-based
+  `nextPageStart` never had to worry about (real page numbers start at 1,
+  always truthy) — `aiImportCall.test.ts` gained a dedicated test for
+  exactly this edge case.
+  Tests: `chunking.test.ts` gained `runWithConcurrencyLimit` (limit
+  respected, order preserved regardless of completion order, empty
+  input, limit > item count, limit=1 fully sequential) and
+  `triagePageOrder` (natural order preserved for similar-sized pages, a
+  single/multiple attachment-looking pages moved to the end preserving
+  relative order, never drops a page, degenerate all-zero-bytes input,
+  single page) describe blocks, plus 2 new `mergeAllPages`
+  "OUT-OF-ORDER OUTCOMES" tests. `aiImportCall.test.ts`'s existing
+  continuation-loop suite was updated to the new orderIndex/pageOrder
+  wire shape (same round-trip-count assertions as before, since
+  PAGES_PER_BATCH is unchanged) plus 2 new tests (partialData forwarded
+  through onProgress; the orderIndex=0 edge case). Full suite: 92 suites
+  / 2230 tests pass; `tsc --noEmit` clean (the app-side `tsconfig.json`
+  doesn't cover `supabase/functions/` at all — this repo has no Deno CLI
+  available in this environment either, so the Edge Function's own
+  TypeScript was hand-reviewed line by line rather than compiler-checked,
+  same limitation every prior ai-import pass in this codebase has had).
+  2 new i18n keys added to all 7 locales
+  (`importScreen.processingPageProgressWithData`,
+  `importScreen.previewLabels.weekEnding` — es/ru/ar/tr translated,
+  hi/uk as untranslated English copies per invariant #11); every other
+  preview label reuses the screen's own existing `previewLabels.*` keys.
+  `ai-import` was modified (concurrency, triage, instrumentation, wire
+  protocol) and needs redeploying; `ai-advisor`/`reset-data`/
+  `delete-account` were NOT touched. No native rebuild needed — pure
+  JS/TS work, no new native dependency, ships via a normal `eas update`.

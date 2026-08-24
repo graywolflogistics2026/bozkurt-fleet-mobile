@@ -31,9 +31,18 @@ type AiImportInvokeResponse = {
   error?: AiImportError;
   data?: unknown;
   pagesProcessed?: { total: number; missingPages: number[] };
-  nextPageStart?: number;
+  // SPEED PASS (owner decision 2026-08-24) — see CONTINUATION PROTOCOL
+  // below: `nextOrderIndex`/`pageOrder` replace the old `nextPageStart`
+  // (a raw page number) now that pages are triaged, not necessarily
+  // processed in ascending page-number order. `partialData`/`progress`
+  // are new — a running preview of what's been merged so far, only
+  // present on an ONGOING (non-terminal) response.
+  nextOrderIndex?: number;
+  pageOrder?: number[];
   rawPageExtractions?: { page: number; extraction: unknown }[];
   rawMissingPages?: number[];
+  partialData?: unknown;
+  progress?: { through: number; total: number };
 };
 
 // CLIENT-SIDE TIMEOUT (owner decision 2026-08-02, raised again 2026-08-03
@@ -66,13 +75,14 @@ async function invokeAiImportOnce(
   customCategories: string[] | undefined,
   learningRules: { keyword: string; category: string }[] | undefined,
   carrierCodeMaps: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[] | undefined,
-  pageRangeStart: number | undefined,
+  orderIndex: number | undefined,
+  pageOrder: number[] | undefined,
   priorPageExtractions: { page: number; extraction: unknown }[] | undefined,
   priorMissingPages: number[] | undefined,
 ): Promise<{ response?: AiImportInvokeResponse; error?: AiImportError }> {
   const timeout = mediaType.startsWith('image/') ? IMAGE_CLIENT_TIMEOUT_MS : PDF_CLIENT_TIMEOUT_MS;
   const { data, error } = await supabase.functions.invoke('ai-import', {
-    body: { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, pageRangeStart, priorPageExtractions, priorMissingPages },
+    body: { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, orderIndex, pageOrder, priorPageExtractions, priorMissingPages },
     timeout,
   });
 
@@ -108,28 +118,37 @@ async function invokeAiImportOnce(
   return { response: data as AiImportInvokeResponse };
 }
 
-// CONTINUATION PROTOCOL (owner decision 2026-08-03, round 5 — a real
-// 11-page settlement's deduction line items live well past page 3;
-// capping extraction at a fixed page count silently produced a
-// zero-expense, zero-net "settlement," a genuine tax-accuracy bug, not
-// just an incomplete import). ai-import now processes a document PAGE BY
-// PAGE in small batches (server-side PAGES_PER_BATCH, index.ts), and a
-// single page's failure — even after the server's own one retry — no
-// longer stops the whole document (round 4's "1 of 11" bug: a middle
-// page timing out used to abort everything after it). A response
-// carrying `nextPageStart` means there's more document left, so this
-// function calls ai-import AGAIN, passing `pageRangeStart`/
-// `priorPageExtractions`/`priorMissingPages` straight through,
-// SEQUENTIALLY (one full round-trip at a time, never concurrent) until
-// the whole document is covered. Every intermediate call's own client-
-// side timeout (`invokeAiImportOnce`'s `timeout` option) still applies
-// per round-trip — a long document just means more round-trips, not one
-// single unbounded wait.
+// CONTINUATION PROTOCOL (owner decision 2026-08-03, round 5, extended
+// 2026-08-24 SPEED PASS — a real 11-page settlement's deduction line
+// items live well past page 3; capping extraction at a fixed page count
+// silently produced a zero-expense, zero-net "settlement," a genuine
+// tax-accuracy bug, not just an incomplete import). ai-import now
+// processes a document's pages in small, CONCURRENCY-LIMITED batches
+// (server-side PAGES_PER_BATCH/BATCH_CONCURRENCY, index.ts), in SMART
+// PAGE TRIAGE order (financially-meaningful pages first) rather than
+// raw ascending page order — and a single page's failure — even after
+// the server's own one retry — no longer stops the whole document
+// (round 4's "1 of 11" bug: a middle page timing out used to abort
+// everything after it). A response carrying `nextOrderIndex` means
+// there's more document left, so this function calls ai-import AGAIN,
+// passing `orderIndex`/`pageOrder`/`priorPageExtractions`/
+// `priorMissingPages` straight through, SEQUENTIALLY — one full
+// round-trip at a time, never concurrent (the concurrency this speed
+// pass adds is entirely WITHIN one round-trip, server-side) — until the
+// whole document is covered. Every intermediate call's own client-side
+// timeout (`invokeAiImportOnce`'s `timeout` option) still applies per
+// round-trip — a long document just means more round-trips, not one
+// single unbounded wait. `nextOrderIndex` is compared with `!= null`,
+// never truthiness — 0 is a legitimate "keep going" value (see index.ts's
+// own matching comment on why).
 // onProgress (optional): called after every intermediate response with
 // how much of the document has been ATTEMPTED so far (not necessarily
-// all successful — some pages may be missing), so a caller can update a
-// "still working — processing page N of M" style message instead of one
-// static label for the whole multi-minute operation.
+// all successful — some pages may be missing) and, when the server has
+// merged enough to say something, a `partialData` preview of the
+// settlement so far (SPEED PASS item 4, PROGRESSIVE UI) — so a caller can
+// update a "still working — processing page N of M, revenue/deductions
+// captured" style message instead of one static label for the whole
+// multi-minute operation.
 // locale/customCategories: see the original per-parameter comments below.
 // learningRules (owner decision 2026-08-05, FULL PARITY follow-up item
 // G): the user's own category_learning_rules, forwarded as plain
@@ -143,17 +162,18 @@ export async function callAiImport(
   customCategories?: string[],
   learningRules?: { keyword: string; category: string }[],
   carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[],
-  onProgress?: (progress: { through: number; total: number }) => void
+  onProgress?: (progress: { through: number; total: number; partialData?: Extraction }) => void
 ): Promise<AiImportCallResult> {
-  let pageRangeStart: number | undefined;
+  let orderIndex: number | undefined;
+  let pageOrder: number[] | undefined;
   let priorPageExtractions: { page: number; extraction: unknown }[] | undefined;
   let priorMissingPages: number[] | undefined;
 
   // Bounded the same way the server bounds itself (MAX_TOTAL_PAGES,
   // index.ts) — a defensive stop against an infinite client-side loop if
-  // a future server bug ever returned nextPageStart forever.
+  // a future server bug ever returned nextOrderIndex forever.
   for (let round = 0; round < 60; round++) {
-    console.log(`[ai-import client] round ${round + 1}: pageRangeStart=${pageRangeStart ?? 1}, priorCovered=${priorPageExtractions?.length ?? 0}, priorMissing=${priorMissingPages?.length ?? 0}`);
+    console.log(`[ai-import client] round ${round + 1}: orderIndex=${orderIndex ?? 0}, priorCovered=${priorPageExtractions?.length ?? 0}, priorMissing=${priorMissingPages?.length ?? 0}`);
     const { response, error } = await invokeAiImportOnce(
       fileBase64,
       mediaType,
@@ -162,7 +182,8 @@ export async function callAiImport(
       customCategories,
       learningRules,
       carrierCodeMaps,
-      pageRangeStart,
+      orderIndex,
+      pageOrder,
       priorPageExtractions,
       priorMissingPages
     );
@@ -171,12 +192,18 @@ export async function callAiImport(
       return { error };
     }
 
-    if (response?.nextPageStart) {
-      console.log(`[ai-import client] round ${round + 1} succeeded, continuing: nextPageStart=${response.nextPageStart}`);
-      pageRangeStart = response.nextPageStart;
+    if (response?.nextOrderIndex != null) {
+      console.log(`[ai-import client] round ${round + 1} succeeded, continuing: nextOrderIndex=${response.nextOrderIndex}`);
+      orderIndex = response.nextOrderIndex;
+      pageOrder = response.pageOrder;
       priorPageExtractions = response.rawPageExtractions;
       priorMissingPages = response.rawMissingPages;
-      if (onProgress) onProgress({ through: response.nextPageStart - 1, total: response.pagesProcessed?.total ?? response.nextPageStart });
+      if (onProgress) {
+        const through = response.progress?.through ?? response.nextOrderIndex;
+        const total = response.progress?.total ?? response.pagesProcessed?.total ?? through;
+        const partial = response.partialData as Extraction | undefined;
+        onProgress({ through, total, partialData: partial ? sanitizeExtractionMiles(sanitizeExtractionDates(partial)) : undefined });
+      }
       continue;
     }
 

@@ -244,7 +244,24 @@ export function mergeAllPages(outcomes: PageOutcome[]): FullMergeResult | null {
   const succeeded = outcomes.filter((o): o is { page: number; extraction: ChunkExtraction } => 'extraction' in o);
   if (succeeded.length === 0) return null;
 
-  const extractions = succeeded.map((o) => o.extraction);
+  // SORT BY PAGE NUMBER (owner decision 2026-08-24, SPEED PASS — critical
+  // correctness fix required by BOTH controlled concurrency and smart page
+  // triage below): `outcomes` used to always arrive in natural page order,
+  // since pages were both PROCESSED and RETURNED strictly sequentially —
+  // `succeeded[0]` was always page 1's own extraction, which
+  // mergeChunkedExtractions() relies on as its "primary" source for
+  // header/summary scalars (weekEnding, grossRevenue, netPay, ...). Once
+  // pages can be (a) reordered by triage (financially-meaningful pages
+  // processed first, which is not always page 1's own physical position)
+  // and/or (b) completed out of order under concurrency, that assumption
+  // breaks — `succeeded[0]` could be ANY page. Sorting here, once, before
+  // merge, restores the invariant regardless of processing/completion
+  // order: `extractions[0]` is always the LOWEST-numbered page that
+  // actually succeeded, never merely the one that finished first. This
+  // also keeps every line-item array (loads, deductions, ...) concatenated
+  // in natural page-ascending order, same as before.
+  const sorted = [...succeeded].sort((a, b) => a.page - b.page);
+  const extractions = sorted.map((o) => o.extraction);
   const merged = extractions.length === 1 ? { ...extractions[0] } : mergeChunkedExtractions(extractions);
   const missingPages = outcomes.filter((o): o is { page: number; missing: true } => 'missing' in o).map((o) => o.page);
   // A single successfully-processed page (or a full set with zero gaps)
@@ -254,5 +271,86 @@ export function mergeAllPages(outcomes: PageOutcome[]): FullMergeResult | null {
   // data for whatever this document actually is, so the needs-review
   // machinery must see it regardless of how many pages merged cleanly.
   if (missingPages.length > 0) merged.confidence = 'low';
-  return { extraction: merged, coveredPages: succeeded.map((o) => o.page), missingPages };
+  return { extraction: merged, coveredPages: sorted.map((o) => o.page), missingPages };
+}
+
+// CONTROLLED CONCURRENCY (owner decision 2026-08-24, SPEED PASS — an
+// 11-page settlement processed strictly one page at a time took 3-5
+// minutes; an EARLIER uncontrolled `Promise.all` attempt over a whole
+// batch caused real Anthropic rate-limit/contention failures, which is
+// exactly why processing went sequential in the first place). This is the
+// one dial between those two failed extremes: a generic, order-preserving
+// bounded-concurrency pool — at most `limit` workers run at once
+// (deliberately never "fire everything," never "one at a time"), using
+// the classic worker-pool pattern (each of the `limit` workers repeatedly
+// claims the next unclaimed index from a shared cursor until the queue is
+// empty) rather than batching+`Promise.all`, so a non-multiple-of-`limit`
+// item count never leaves a worker idle. `results[i]` always corresponds
+// to `items[i]` regardless of which one actually finishes first — this is
+// what lets mergeAllPages() above safely sort by PAGE NUMBER rather than
+// needing to reason about completion order itself.
+export async function runWithConcurrencyLimit<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const boundedLimit = Math.max(1, Math.min(limit, items.length));
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  async function runOneWorker(): Promise<void> {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await worker(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: boundedLimit }, () => runOneWorker()));
+  return results;
+}
+
+// SMART PAGE TRIAGE (owner decision 2026-08-24, SPEED PASS): a
+// settlement's financially meaningful pages (header/revenue/
+// reimbursement/deduction/recap) are extracted FIRST so the client can
+// show a running preview of the header/totals while an attachment-heavy
+// tail (a photographed repair invoice, an EZ-Pass statement bundled into
+// the same PDF) is still processing. This REORDERS, it never SKIPS —
+// MULTI-PAGE SETTLEMENT CHUNKING ROUND 3's own hard-won lesson (CLAUDE.md)
+// is that a fixed page CAP silently produced a $0-deductions settlement
+// because real financial content lived past the cap; an
+// attachment-looking page here still gets extracted, just LAST, and if
+// it's ever cut off by the invocation's own time budget it becomes a
+// `missingPages` entry — already gap-tolerant (mergeAllPages above) and
+// already flagged low-confidence, never silently dropped.
+// CHEAP, NOT EXACT, HONESTLY FLAGGED: there is no OCR/text-extraction
+// library available in this Deno function (adding one would be a new,
+// much heavier dependency — deliberately out of scope for a speed pass),
+// so this uses each page's own single-page-PDF byte size as a proxy: a
+// page far larger than the document's own median usually embeds a
+// full-page raster scan (a photographed attachment) rather than the
+// settlement's native, compact text/table content. This is a heuristic,
+// not a guarantee — a short, image-heavy settlement recap page could
+// still be misclassified — which is exactly why misclassifying an
+// attachment as "content" (or vice versa) is harmless: every page still
+// gets extracted, only the ORDER changes.
+export type PageByteSize = { page: number; byteSize: number };
+
+// A page's own single-page-PDF byte size must be at least this many times
+// the document's median page size before it's treated as attachment-like
+// — chosen conservatively (most native settlement pages vary somewhat in
+// size already) so a merely slightly-larger content page is never
+// wrongly deprioritized behind a genuinely smaller one.
+const ATTACHMENT_SIZE_RATIO = 1.8;
+
+export function triagePageOrder(pages: PageByteSize[]): number[] {
+  if (pages.length === 0) return [];
+  const sortedSizes = [...pages.map((p) => p.byteSize)].sort((a, b) => a - b);
+  const median = sortedSizes[Math.floor(sortedSizes.length / 2)];
+  const threshold = median * ATTACHMENT_SIZE_RATIO;
+  // threshold === 0 means every page is (near-)zero bytes — nothing
+  // meaningfully stands out as "larger," so leave every page in its
+  // original, natural order rather than manufacturing a split.
+  if (threshold <= 0) return pages.map((p) => p.page);
+  const content = pages.filter((p) => p.byteSize <= threshold);
+  const attachments = pages.filter((p) => p.byteSize > threshold);
+  return [...content, ...attachments].map((p) => p.page);
 }

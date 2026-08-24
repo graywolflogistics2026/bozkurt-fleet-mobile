@@ -3,7 +3,10 @@ import {
   mergeChunkedExtractions,
   buildChunkPromptAddendum,
   mergeAllPages,
+  runWithConcurrencyLimit,
+  triagePageOrder,
   type ChunkExtraction,
+  type PageByteSize,
   type PageOutcome,
 } from '../../../../supabase/functions/ai-import/chunking';
 
@@ -298,5 +301,188 @@ describe('mergeAllPages', () => {
     // despite page 2 being permanently lost.
     const deductions = result?.extraction.settlement?.deductions as unknown[];
     expect(deductions).toHaveLength(7);
+  });
+
+  // SPEED PASS (owner decision 2026-08-24) — CRITICAL CORRECTNESS FIX:
+  // both SMART PAGE TRIAGE (financially-meaningful pages processed first,
+  // not necessarily page 1's own physical position) and CONTROLLED
+  // CONCURRENCY (pages can complete out of order) mean `outcomes` can no
+  // longer be assumed to arrive in ascending page order the way it always
+  // used to when processing was strictly sequential. mergeAllPages() must
+  // sort by PAGE NUMBER before treating the first entry as "primary" for
+  // header/summary scalars (mergeChunkedExtractions' own convention) —
+  // this proves it does, regardless of what order outcomes are handed in.
+  it('OUT-OF-ORDER OUTCOMES: merge is still correct when pages complete/arrive out of page order (triage + concurrency)', () => {
+    const page1 = pageOk(1, { weekEnding: '2026-07-31', carrier: 'Prime Inc.', grossRevenue: 8235.47, netPay: 3598.32, deductions: [{ code: 'A', amount: 100 }] });
+    const page2 = pageOk(2, { deductions: [{ code: 'B', amount: 200 }] });
+    const page3 = pageOk(3, { deductions: [{ code: 'C', amount: 300 }] });
+    // Pages handed to mergeAllPages in a scrambled order (page 3's own
+    // extraction arrives FIRST in the array, page 1 LAST) — simulating
+    // triage having processed page 3 before page 1, or page 3's own
+    // concurrent request simply resolving first.
+    const scrambled = [page3, page1, page2];
+    const inOrder = [page1, page2, page3];
+
+    const scrambledResult = mergeAllPages(scrambled);
+    const inOrderResult = mergeAllPages(inOrder);
+
+    // Header/summary scalars must come from page 1 (the lowest-numbered
+    // succeeded page) regardless of array position — a bug here would
+    // have silently produced a merge with NO weekEnding/grossRevenue/
+    // netPay at all, since pages 2 and 3 never carry those fields.
+    expect(scrambledResult?.extraction.settlement?.weekEnding).toBe('2026-07-31');
+    expect(scrambledResult?.extraction.settlement?.grossRevenue).toBe(8235.47);
+    expect(scrambledResult?.extraction.settlement?.netPay).toBe(3598.32);
+    // coveredPages is reported in ascending page order regardless of
+    // input order too.
+    expect(scrambledResult?.coveredPages).toEqual([1, 2, 3]);
+    // Line items concatenate in ascending page order either way, so a
+    // scrambled input produces the IDENTICAL final merge as the
+    // naturally-ordered input — completeness never depends on arrival
+    // order.
+    expect(scrambledResult).toEqual(inOrderResult);
+    const codes = (scrambledResult?.extraction.settlement?.deductions as { code: string }[]).map((d) => d.code);
+    expect(codes).toEqual(['A', 'B', 'C']);
+  });
+
+  it('OUT-OF-ORDER OUTCOMES: still gap-tolerant and low-confidence-flagged when a middle page is missing, regardless of arrival order', () => {
+    const page1 = pageOk(1, { weekEnding: '2026-07-31', grossRevenue: 100 });
+    const page3 = pageOk(3, { deductions: [{ code: 'C', amount: 50 }] });
+    const page2Missing = pageMissing(2);
+    // Missing-page entry arrives FIRST, page 3 arrives BEFORE page 1.
+    const result = mergeAllPages([page2Missing, page3, page1]);
+    expect(result?.coveredPages).toEqual([1, 3]);
+    expect(result?.missingPages).toEqual([2]);
+    expect(result?.extraction.confidence).toBe('low');
+    expect(result?.extraction.settlement?.weekEnding).toBe('2026-07-31');
+  });
+});
+
+// CONTROLLED CONCURRENCY (owner decision 2026-08-24, SPEED PASS item 1) —
+// see chunking.ts's own header comment on runWithConcurrencyLimit for the
+// full "not all at once, not one at a time" reasoning. Tests use a
+// manually-controlled deferred-promise pattern (rather than real timers)
+// so completion order is fully deterministic and assertable.
+describe('runWithConcurrencyLimit', () => {
+  type Deferred<T> = { promise: Promise<T>; resolve: (v: T) => void };
+  function deferred<T>(): Deferred<T> {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  }
+
+  it('never runs more than `limit` workers at once', async () => {
+    // A real (tiny) delay per worker rather than manually-staggered gates
+    // — this only needs to prove the AGGREGATE bound (concurrency never
+    // exceeded `limit` at any point across the whole run), not any
+    // specific microtask interleaving, so a small real timer is the more
+    // robust choice here than hand-counting microtask ticks.
+    let current = 0;
+    let maxObserved = 0;
+    const results = await runWithConcurrencyLimit([0, 1, 2, 3, 4], 2, async (i) => {
+      current++;
+      maxObserved = Math.max(maxObserved, current);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      current--;
+      return i * 10;
+    });
+    expect(maxObserved).toBeLessThanOrEqual(2);
+    expect(maxObserved).toBeGreaterThan(0); // sanity: workers actually ran
+    expect(results).toEqual([0, 10, 20, 30, 40]);
+  });
+
+  it('results preserve input order regardless of completion order', async () => {
+    const gates = [deferred<void>(), deferred<void>(), deferred<void>()];
+    const resultsPromise = runWithConcurrencyLimit(['a', 'b', 'c'], 3, async (item, i) => {
+      await gates[i].promise;
+      return item.toUpperCase();
+    });
+    // Resolve in REVERSE order — item 'c' finishes first, 'a' finishes last.
+    gates[2].resolve();
+    gates[1].resolve();
+    gates[0].resolve();
+    const results = await resultsPromise;
+    expect(results).toEqual(['A', 'B', 'C']);
+  });
+
+  it('an empty item list resolves immediately to an empty array', async () => {
+    const worker = jest.fn(async () => 'never called');
+    const results = await runWithConcurrencyLimit([], 2, worker);
+    expect(results).toEqual([]);
+    expect(worker).not.toHaveBeenCalled();
+  });
+
+  it('a limit larger than the item count behaves the same as no limit at all', async () => {
+    const order: number[] = [];
+    const results = await runWithConcurrencyLimit([1, 2, 3], 10, async (n) => {
+      order.push(n);
+      return n * 2;
+    });
+    expect(results).toEqual([2, 4, 6]);
+    expect(order).toHaveLength(3);
+  });
+
+  it('limit=1 runs strictly sequentially, never starting item N+1 before item N resolves', async () => {
+    const gate = deferred<void>();
+    const startedOrder: number[] = [];
+    const resultsPromise = runWithConcurrencyLimit([1, 2], 1, async (n) => {
+      startedOrder.push(n);
+      if (n === 1) await gate.promise;
+      return n;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    // Item 2 must NOT have started yet — item 1 is still blocked on `gate`.
+    expect(startedOrder).toEqual([1]);
+    gate.resolve();
+    await resultsPromise;
+    expect(startedOrder).toEqual([1, 2]);
+  });
+});
+
+// SMART PAGE TRIAGE (owner decision 2026-08-24, SPEED PASS item 2) — see
+// chunking.ts's own header comment for the full "cheap, not exact,
+// honestly flagged" reasoning (byte-size-relative-to-median as a proxy
+// for "looks like an embedded scan," since there's no OCR/text-extraction
+// library available in this Deno function).
+describe('triagePageOrder', () => {
+  function sizes(...byteSize: number[]): PageByteSize[] {
+    return byteSize.map((byteSize, i) => ({ page: i + 1, byteSize }));
+  }
+
+  it('returns an empty order for an empty document', () => {
+    expect(triagePageOrder([])).toEqual([]);
+  });
+
+  it('leaves natural page order alone when every page is a similar size', () => {
+    expect(triagePageOrder(sizes(1000, 1050, 980, 1020))).toEqual([1, 2, 3, 4]);
+  });
+
+  it('moves a single much-larger (attachment-looking) page to the end, preserving relative order otherwise', () => {
+    // Page 2 is ~6x the median — a photographed attachment among native
+    // text pages.
+    expect(triagePageOrder(sizes(1000, 6000, 1100, 950))).toEqual([1, 3, 4, 2]);
+  });
+
+  it('moves MULTIPLE attachment-looking pages to the end, each keeping its own relative order', () => {
+    // Pages 2 and 4 are both large; pages 1, 3, 5 are small.
+    expect(triagePageOrder(sizes(900, 5000, 950, 5200, 1000))).toEqual([1, 3, 5, 2, 4]);
+  });
+
+  it('never drops a page — every input page number appears exactly once in the output', () => {
+    const input = sizes(500, 8000, 600, 550, 7000, 500);
+    const order = triagePageOrder(input);
+    expect(order.slice().sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(new Set(order).size).toBe(order.length);
+  });
+
+  it('leaves order alone when every page is exactly zero bytes (degenerate input, no meaningful "larger")', () => {
+    expect(triagePageOrder(sizes(0, 0, 0))).toEqual([1, 2, 3]);
+  });
+
+  it('a single page is trivially its own order', () => {
+    expect(triagePageOrder(sizes(12345))).toEqual([1]);
   });
 });

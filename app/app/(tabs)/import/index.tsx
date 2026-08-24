@@ -202,6 +202,14 @@ export default function Import() {
 
   const [phase, setPhase] = useState<Phase>('pick');
   const [workingLabel, setWorkingLabel] = useState('');
+  // PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item 4) — a
+  // running preview of the settlement header/totals, filled in as soon as
+  // the financially meaningful pages come back (SMART PAGE TRIAGE
+  // prioritizes them), well before the last (often attachment-heavy) page
+  // lands. Reset to null at the start of every fresh AI call and cleared
+  // the moment the call settles, success or failure, so it never lingers
+  // into the preview/error phase showing stale numbers.
+  const [partialPreview, setPartialPreview] = useState<Extraction['settlement'] | null>(null);
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [fileMeta, setFileMeta] = useState<{ uri: string; ext: string; mediaType: string; name?: string } | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
@@ -399,6 +407,28 @@ export default function Import() {
   }
   useEffect(() => () => clearStillWorkingTimer(), []);
 
+  // PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item 4) — shared
+  // by both PDF call sites (pickPdf/handleRetryImport) so the two never
+  // drift apart. Once the server has merged enough pages to report real
+  // settlement figures (SMART PAGE TRIAGE processes the financially
+  // meaningful pages first), the label switches from a bare page-count to
+  // "Page N of M · revenue and deductions captured" and the settlement
+  // header/totals become visible below the spinner — the user can start
+  // reviewing before the last (often attachment-heavy) page lands.
+  function handleAiProgress(progress: { through: number; total: number; partialData?: Extraction }) {
+    clearStillWorkingTimer();
+    const s = progress.partialData?.settlement;
+    const hasFinancialData = !!s && (!!s.grossRevenue || !!s.totalDeductions || !!s.netPay);
+    setWorkingLabel(
+      t(hasFinancialData ? 'importScreen.processingPageProgressWithData' : 'importScreen.processingPageProgress', {
+        through: progress.through,
+        total: progress.total,
+      })
+    );
+    setPartialPreview(hasFinancialData ? s ?? null : null);
+    startStillWorkingTimer();
+  }
+
   function handleAiError(err: AiImportError) {
     // A usage-limit block isn't a service failure — never counts toward
     // the automatic "the AI service seems to be down" fallback banner.
@@ -480,6 +510,7 @@ export default function Import() {
         return;
       }
       setFileMeta({ uri: compressed.uri, ext: 'jpg', mediaType: 'image/jpeg' });
+      setPartialPreview(null);
       setWorkingLabel(t('importScreen.readingDocument'));
       const base64 = await new File(compressed.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
@@ -523,6 +554,7 @@ export default function Import() {
       return;
     }
     setPhase('working');
+    setPartialPreview(null);
     setWorkingLabel(t('importScreen.readingDocument'));
     try {
       setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
@@ -542,11 +574,7 @@ export default function Import() {
         // — this fires between them so the user sees real progress
         // instead of one static "AI processing…" label for however many
         // minutes a many-page document takes.
-        (progress) => {
-          clearStillWorkingTimer();
-          setWorkingLabel(t('importScreen.processingPageProgress', { through: progress.through, total: progress.total }));
-          startStillWorkingTimer();
-        }
+        handleAiProgress
       );
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
@@ -580,6 +608,7 @@ export default function Import() {
       return;
     }
     setPhase('working');
+    setPartialPreview(null);
     setWorkingLabel(t('importScreen.readingDocument'));
     try {
       const base64 = await new File(fileMeta.uri).base64();
@@ -593,11 +622,7 @@ export default function Import() {
         customCategoryNames,
         learningRules,
         carrierCodeMaps,
-        (progress) => {
-          clearStillWorkingTimer();
-          setWorkingLabel(t('importScreen.processingPageProgress', { through: progress.through, total: progress.total }));
-          startStillWorkingTimer();
-        }
+        handleAiProgress
       );
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
@@ -742,6 +767,39 @@ export default function Import() {
           <Card>
             <ActivityIndicator color={colors.accent} size="large" />
             <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{workingLabel}</Text>
+            {/* PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item
+                4) — a running preview of the settlement header/totals,
+                filled in as soon as the financially meaningful pages
+                (SMART PAGE TRIAGE) come back, so the user can start
+                reviewing before the last page lands. */}
+            {partialPreview && (
+              <View style={{ marginTop: spacing.md, alignSelf: 'stretch' }}>
+                {!!partialPreview.weekEnding && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+                    <MutedText>{t('importScreen.previewLabels.weekEnding')}</MutedText>
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{partialPreview.weekEnding}</Text>
+                  </View>
+                )}
+                {!!partialPreview.grossRevenue && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+                    <MutedText>{t('importScreen.previewLabels.grossRevenue')}</MutedText>
+                    <Text style={{ color: colors.green, fontWeight: '600' }}>{money(partialPreview.grossRevenue, i18n.language)}</Text>
+                  </View>
+                )}
+                {!!partialPreview.totalDeductions && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+                    <MutedText>{t('importScreen.previewLabels.deductions')}</MutedText>
+                    <Text style={{ color: colors.red, fontWeight: '600' }}>{money(partialPreview.totalDeductions, i18n.language)}</Text>
+                  </View>
+                )}
+                {!!partialPreview.netPay && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <MutedText>{t('importScreen.previewLabels.netPay')}</MutedText>
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>{money(partialPreview.netPay, i18n.language)}</Text>
+                  </View>
+                )}
+              </View>
+            )}
           </Card>
         )}
 

@@ -4,19 +4,25 @@
 // the Anthropic API. ANTHROPIC_API_KEY lives only in this function's
 // environment secrets; the mobile app never holds it (CLAUDE.md).
 //
-// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], learningRules?: { keyword: string, category: string }[], carrierCodeMaps?: { carrier: string, code: string, subCode: string | null, label: string, description: string | null }[], pageRangeStart?: number, priorPageExtractions?: { page: number, extraction: unknown }[], priorMissingPages?: number[] }
+// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], learningRules?: { keyword: string, category: string }[], carrierCodeMaps?: { carrier: string, code: string, subCode: string | null, label: string, description: string | null }[], orderIndex?: number, pageOrder?: number[], priorPageExtractions?: { page: number, extraction: unknown }[], priorMissingPages?: number[] }
 // learningRules (owner decision 2026-08-05, FULL PARITY follow-up item
 // G, app/src/import/categoryLearning.ts) — the user's own learned
 // keyword->category corrections, appended to the prompt as plain-text
 // "USER CORRECTIONS" hints. PROMPT-CONTEXT ONLY: never used to fine-tune
 // or retrain the model — the same one-shot-per-request behavior as every
 // other prompt input here.
-// pageRangeStart/priorPageExtractions/priorMissingPages (owner decision
-// 2026-08-03) are set by the CLIENT on every call after the first one
-// for a long multi-page PDF — see the TIMEOUT/PAGE-BUDGET comment below
-// for the full reasoning. A response may include `nextPageStart` +
+// orderIndex/pageOrder/priorPageExtractions/priorMissingPages (owner
+// decision 2026-08-03, renamed/extended 2026-08-24 SPEED PASS) are set by
+// the CLIENT on every call after the first one for a long multi-page PDF
+// — see the TIMEOUT/PAGE-BUDGET comment below for the full reasoning. A
+// response may include `nextOrderIndex` + `pageOrder` +
 // `rawPageExtractions` + `rawMissingPages`, meaning: call again with
-// those three values to keep going.
+// those four values to keep going. `orderIndex` is a position INTO
+// `pageOrder` (SMART PAGE TRIAGE's financially-meaningful-first
+// ordering), not a raw page number — `pageOrder` is computed once (the
+// first time a document enters the continuation path) and echoed back by
+// the client on every later round so the server never needs to
+// re-triage the same document twice.
 // Auth: Supabase JWT in the Authorization header (required).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -24,7 +30,10 @@ import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import {
   buildChunkPromptAddendum,
   mergeAllPages,
+  runWithConcurrencyLimit,
+  triagePageOrder,
   type ChunkExtraction,
+  type PageByteSize,
   type PageOutcome,
   type PageRange,
 } from "./chunking.ts";
@@ -102,7 +111,7 @@ const ANTHROPIC_MAX_TOKENS = 16000;
 // capped at `min(PAGE_TIMEOUT_MS, remaining budget - safety margin)` —
 // if there isn't enough budget left to safely attempt (or retry)
 // another page, the loop stops THERE (not mid-attempt) and hands off to
-// a fresh invocation via `nextPageStart`, which gets its own full 150s
+// a fresh invocation via `nextOrderIndex`, which gets its own full 150s
 // budget. This guarantees the platform's hard ceiling is never at risk
 // regardless of how slow any individual page turns out to be — "more
 // round trips is fine — they are cheap" (owner decision).
@@ -115,6 +124,32 @@ const PAGE_TIMEOUT_MS = 110_000;
 // especially within a batch that still has a 2nd page to get to.
 const PAGE_RETRY_TIMEOUT_MS = 30_000;
 const PAGES_PER_BATCH = 2;
+
+// CONTROLLED CONCURRENCY (owner decision 2026-08-24, SPEED PASS — device
+// report: a strictly-sequential, one-page-at-a-time continuation made an
+// 11-page settlement take 3-5 minutes wall-clock). An EARLIER attempt at
+// speeding this up fired a whole batch via uncontrolled `Promise.all` and
+// caused real Anthropic rate-limit/contention failures — which is
+// precisely why processing went fully sequential in the first place (see
+// this file's own "ROUND 5 — MEASURED EVIDENCE" comment above). This is
+// the middle ground: at most `BATCH_CONCURRENCY` pages run at once
+// (chunking.ts's `runWithConcurrencyLimit`), never the whole batch at
+// once and never strictly one at a time. PAGES_PER_BATCH is deliberately
+// left at 2 this pass (not increased) — with concurrency also 2, this
+// means each invocation's (up to) 2 pages fire TOGETHER as one wave
+// instead of sequentially, which is the direct fix for the reported
+// slowness without adding the multi-wave-per-invocation complexity a
+// larger batch size would need. Configurable server-side via the
+// AI_IMPORT_BATCH_CONCURRENCY environment variable (falls back to the
+// default below on anything missing/invalid) so this can be tuned without
+// a code change/redeploy if real-world timing suggests a different value.
+const DEFAULT_BATCH_CONCURRENCY = 2;
+function readBatchConcurrency(): number {
+  const raw = Deno.env.get("AI_IMPORT_BATCH_CONCURRENCY");
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BATCH_CONCURRENCY;
+}
+const BATCH_CONCURRENCY = readBatchConcurrency();
 // Below this much remaining invocation budget, don't even start another
 // page attempt (first try OR retry) — hand off to a fresh invocation
 // instead, which gets a full new 150s budget. Sized so a page that DOES
@@ -719,7 +754,25 @@ async function splitPdfIntoChunks(fileBase64: string, ranges: PageRange[]): Prom
 // refusal) is never retried — that's not what a retry can fix — and
 // marks the page missing immediately. `remainingBudgetMs` is a live
 // callback (not a snapshot) so this always sees the CURRENT invocation
-// budget, including whatever the first attempt itself just consumed.
+// budget, including whatever the first attempt itself just consumed —
+// under CONTROLLED CONCURRENCY (SPEED PASS, owner decision 2026-08-24)
+// this is now called for up to BATCH_CONCURRENCY pages at once, so the
+// budget it reads may reflect a SIBLING page's own in-flight consumption
+// too, not just this page's — that's fine, it's still a real, live
+// remaining-budget number either way, just shared across the wave.
+// INSTRUMENTATION (SPEED PASS item 5): every attempt logs its own page
+// number, payload byte size (SHRINK THE PAYLOAD's one measurable,
+// already-real reduction — a single-page PDF excludes every other page's
+// fonts/images/objects via pdf-lib's copyPages(), unlike sending the
+// whole original file), duration, and outcome status, so a real device
+// import's exact timing is visible in `supabase functions logs ai-import`
+// without guessing. `cachedPageBase64` (optional): SMART PAGE TRIAGE
+// already had to split every page once up front to measure its size for
+// ordering — reusing those bytes here (instead of re-splitting the same
+// page a second time) is a small, real, free efficiency win for whichever
+// pages happen to be processed in the SAME invocation that computed
+// triage; a page processed in a LATER invocation (after hand-off) has no
+// cached bytes available and is split fresh, same as before.
 async function runPageWithRetry(
   anthropicKey: string,
   fileBase64: string,
@@ -727,14 +780,20 @@ async function runPageWithRetry(
   page: number,
   basePrompt: string,
   remainingBudgetMs: () => number,
+  cachedPageBase64?: string,
 ): Promise<PageOutcome> {
   const range: PageRange = { start: page, end: page };
   const chunkPrompt = basePrompt + buildChunkPromptAddendum(range, totalPages);
 
   async function attempt(timeoutMs: number): Promise<ExtractOneResult> {
-    const [chunkB64] = await splitPdfIntoChunks(fileBase64, [range]);
+    const chunkB64 = cachedPageBase64 ?? (await splitPdfIntoChunks(fileBase64, [range]))[0];
     const contentBlock = { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunkB64 } };
-    return extractOnePass(anthropicKey, contentBlock, chunkPrompt, timeoutMs, MAX_ANTHROPIC_ATTEMPTS);
+    const attemptStartedAt = performance.now();
+    const outcome = await extractOnePass(anthropicKey, contentBlock, chunkPrompt, timeoutMs, MAX_ANTHROPIC_ATTEMPTS);
+    const durationMs = Math.round(performance.now() - attemptStartedAt);
+    const status = "errorType" in outcome ? outcome.errorType : "success";
+    console.log(`[ai-import] INSTRUMENT page=${page} bytes=${chunkB64.length} durationMs=${durationMs} status=${status}`);
+    return outcome;
   }
 
   const firstBudget = remainingBudgetMs();
@@ -770,43 +829,58 @@ async function runPageWithRetry(
   return { page, missing: true };
 }
 
-type PageBatchResult = { outcomes: PageOutcome[]; lastAttemptedPage: number };
+type PageBatchResult = { outcomes: PageOutcome[]; attemptedCount: number };
 
-// SEQUENTIAL, NOT PARALLEL, ONE INVOCATION'S WORTH OF PAGES (owner
-// decision 2026-08-03, round 5 — see the budget comment block near the
-// top of this file for the full measured-evidence reasoning). Processes
-// pages `startPage..min(startPage+batchSize-1, totalPages)` ONE AT A
-// TIME, in order — but UNLIKE round 3/4, a page that fails (even after
-// its own retry) does NOT stop this loop: "the loop must always attempt
-// every page" (owner decision). Also stops EARLY (before attempting a
-// page at all) whenever `remainingBudgetMs()` drops too low, handing the
-// remaining pages off to a fresh invocation instead of risking the
-// platform's own hard kill. Every chunk pdf-lib produces really is
-// cropped to just that one page (confirmed by reading splitPdfIntoChunks
-// — this was never sending the whole document per call, in any pass).
+// CONTROLLED CONCURRENCY, ONE INVOCATION'S WORTH OF PAGES (owner decision
+// 2026-08-24, SPEED PASS — see this file's own CONTROLLED CONCURRENCY
+// comment near the top for the full "not all at once, not one at a time"
+// reasoning). Processes up to `batchSize` pages FROM `pageOrder` (SMART
+// PAGE TRIAGE's financially-meaningful-first ordering — NOT necessarily
+// raw ascending page numbers), starting at index `startIndex`, with at
+// most `concurrency` running at once (chunking.ts's
+// `runWithConcurrencyLimit`) — but UNLIKE the old fully-sequential
+// design, a page that fails (even after its own retry) still does NOT
+// stop the wave: "the loop must always attempt every page" (owner
+// decision, unchanged). Bails out BEFORE starting the wave at all
+// (attempting nothing) whenever `remainingBudgetMs()` is already too low,
+// handing every page in this batch off to a fresh invocation instead —
+// the SAME dynamic time-budget hand-off guarantee as before, just checked
+// once per WAVE instead of once per PAGE (with PAGES_PER_BATCH=2 and
+// BATCH_CONCURRENCY=2 there is normally only ever one wave per
+// invocation, so this is not a meaningfully weaker guarantee in practice
+// today). Every chunk pdf-lib produces really is cropped to just that one
+// page (confirmed by reading splitPdfIntoChunks — this was never sending
+// the whole document per call, in any pass).
 async function extractPagesForInvocation(
   anthropicKey: string,
   fileBase64: string,
   totalPages: number,
-  startPage: number,
+  pageOrder: number[],
+  startIndex: number,
   batchSize: number,
+  concurrency: number,
   basePrompt: string,
   remainingBudgetMs: () => number,
+  pageBytesCache: Map<number, string>,
 ): Promise<PageBatchResult> {
-  const endPage = Math.min(startPage + batchSize - 1, totalPages);
-  const outcomes: PageOutcome[] = [];
-  let lastAttemptedPage = startPage - 1;
+  const endIndex = Math.min(startIndex + batchSize, pageOrder.length);
+  const pagesToAttempt = pageOrder.slice(startIndex, endIndex);
+  if (pagesToAttempt.length === 0) return { outcomes: [], attemptedCount: 0 };
 
-  for (let page = startPage; page <= endPage; page++) {
-    if (remainingBudgetMs() < MIN_USEFUL_BUDGET_MS) {
-      console.log(`[ai-import] stopping this invocation before page ${page} — insufficient budget remaining, handing off`);
-      break;
-    }
-    lastAttemptedPage = page;
-    outcomes.push(await runPageWithRetry(anthropicKey, fileBase64, totalPages, page, basePrompt, remainingBudgetMs));
+  if (remainingBudgetMs() < MIN_USEFUL_BUDGET_MS) {
+    console.log(`[ai-import] stopping this invocation before pages [${pagesToAttempt.join(",")}] — insufficient budget remaining, handing off`);
+    return { outcomes: [], attemptedCount: 0 };
   }
 
-  return { outcomes, lastAttemptedPage };
+  const waveStartedAt = performance.now();
+  const outcomes = await runWithConcurrencyLimit(pagesToAttempt, concurrency, (page) =>
+    runPageWithRetry(anthropicKey, fileBase64, totalPages, page, basePrompt, remainingBudgetMs, pageBytesCache.get(page))
+  );
+  console.log(
+    `[ai-import] INSTRUMENT wave pages=[${pagesToAttempt.join(",")}] concurrency=${concurrency} waveDurationMs=${Math.round(performance.now() - waveStartedAt)} budgetRemainingMs=${Math.round(remainingBudgetMs())}`
+  );
+
+  return { outcomes, attemptedCount: pagesToAttempt.length };
 }
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
@@ -1003,11 +1077,18 @@ Deno.serve(async (req: Request) => {
     // server-side, keeping every request self-contained and avoiding an
     // extra round trip inside the tight per-invocation time budget).
     carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
-    // CONTINUATION PROTOCOL (owner decision 2026-08-03): set by the
-    // client on every call AFTER the first one for a long PDF — see the
-    // PAGE-BUDGET comment block near the top of this file. Absent/1 on
-    // the initial call.
-    pageRangeStart?: number;
+    // CONTINUATION PROTOCOL (owner decision 2026-08-03, renamed/extended
+    // 2026-08-24 SPEED PASS): set by the client on every call AFTER the
+    // first one for a long PDF — see the PAGE-BUDGET comment block near
+    // the top of this file. `orderIndex` is a position INTO `pageOrder`
+    // (SMART PAGE TRIAGE's financially-meaningful-first ordering of page
+    // NUMBERS), not a raw page number — absent/0 on the initial call.
+    // `pageOrder` is computed once, the first time a document enters the
+    // continuation path, and returned to the client so every LATER round
+    // echoes it back instead of the server re-triaging the same document
+    // twice; absent on the initial call, since it doesn't exist yet.
+    orderIndex?: number;
+    pageOrder?: number[];
     // Every page gathered from EARLIER invocations, tagged with its own
     // page number (gaps are possible — a missing page doesn't block a
     // LATER page from having succeeded) — this function never persists
@@ -1024,7 +1105,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;
-  const pageRangeStart = body.pageRangeStart ?? 1;
+  const orderIndex = body.orderIndex ?? 0;
+  const requestPageOrder = body.pageOrder;
   if (!fileBase64 || !mediaType) {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
   }
@@ -1070,7 +1152,7 @@ Deno.serve(async (req: Request) => {
   // must always be allowed to finish once started). A soft limit (80%) is
   // a CLIENT-side quiet notice only (app/src/usage/aiUsage.ts) — this
   // server gate is the hard 100% stop.
-  const isFreshRequestForUsageGate = pageRangeStart === 1 && (!priorPageExtractions || priorPageExtractions.length === 0) && (!priorMissingPages || priorMissingPages.length === 0);
+  const isFreshRequestForUsageGate = orderIndex === 0 && (!priorPageExtractions || priorPageExtractions.length === 0) && (!priorMissingPages || priorMissingPages.length === 0);
   if (isFreshRequestForUsageGate) {
     const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
     if (!usageCheck.allowed) {
@@ -1097,39 +1179,82 @@ Deno.serve(async (req: Request) => {
   // from a client that's already mid-fallback-continuation from an
   // EARLIER response on this same document (go straight to the next
   // batch, never re-attempt the single-call path partway through).
-  const isFirstCall = pageRangeStart === 1 && (!priorPageExtractions || priorPageExtractions.length === 0) && (!priorMissingPages || priorMissingPages.length === 0);
+  const isFirstCall = orderIndex === 0 && (!priorPageExtractions || priorPageExtractions.length === 0) && (!priorMissingPages || priorMissingPages.length === 0);
   console.log(
-    `[ai-import] request: mediaType=${mediaType} isImage=${isImage} isFirstCall=${isFirstCall} pageRangeStart=${pageRangeStart} priorCovered=${priorPageExtractions?.length ?? 0} priorMissing=${priorMissingPages?.length ?? 0}`
+    `[ai-import] request: mediaType=${mediaType} isImage=${isImage} isFirstCall=${isFirstCall} orderIndex=${orderIndex} priorCovered=${priorPageExtractions?.length ?? 0} priorMissing=${priorMissingPages?.length ?? 0}`
   );
 
   let pagesProcessed: { total: number; missingPages: number[] } | null = null;
-  let nextPageStart: number | null = null;
+  // null = no continuation (this response is terminal). Deliberately
+  // compared with `!== null` everywhere below, NEVER truthiness — 0 is a
+  // legitimate "continue, but zero pages were attempted this invocation"
+  // value (e.g. an invocation that hit its budget ceiling before starting
+  // even one page), which `!nextOrderIndex` would have wrongly treated as
+  // "terminal" (the old page-number-based `nextPageStart` never had this
+  // hazard, since real page numbers start at 1 and are always truthy).
+  let nextOrderIndex: number | null = null;
+  let responsePageOrder: number[] | null = null;
   let rawPageExtractions: { page: number; extraction: unknown }[] | null = null;
   let rawMissingPages: number[] | null = null;
+  // PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item 4): the
+  // merged-so-far extraction on every ONGOING (non-terminal) response, so
+  // the client can show a running settlement header/totals preview while
+  // later pages are still processing — the terminal response's own `data`
+  // field already IS the final merged extraction, so this is only ever
+  // set alongside `nextOrderIndex`.
+  let partialData: ChunkExtraction | null = null;
   let result: ExtractOneResult;
 
   // FALLBACK, NOT DEFAULT (owner decision 2026-08-03): the client-driven
   // continuation protocol — this invocation attempts up to
-  // PAGES_PER_BATCH pages (sequential, never parallel; a page's own
-  // failure — even after its one retry — never stops a LATER page from
-  // still being attempted, chunking.ts's gap-tolerant `mergeAllPages`).
-  // Every decision is logged so a real device test's function logs show
-  // exactly which page succeeded/failed/retried and why. Assigns to the
-  // outer `result`/`pagesProcessed`/`nextPageStart`/`rawPageExtractions`/
-  // `rawMissingPages` directly rather than returning a value, since all
-  // five are needed by the shared response-building code below
-  // regardless of which path produced them.
+  // PAGES_PER_BATCH pages from `pageOrder` (SMART PAGE TRIAGE order,
+  // CONTROLLED CONCURRENCY within the batch — see this file's own
+  // comments near the top); a page's own failure — even after its one
+  // retry — never stops a LATER page from still being attempted,
+  // chunking.ts's gap-tolerant `mergeAllPages`. Every decision is logged
+  // so a real device test's function logs show exactly which page
+  // succeeded/failed/retried and why. Assigns to the outer `result`/
+  // `pagesProcessed`/`nextOrderIndex`/`rawPageExtractions`/
+  // `rawMissingPages`/`partialData` directly rather than returning a
+  // value, since all six are needed by the shared response-building code
+  // below regardless of which path produced them.
   async function runContinuation(rawPageCount: number): Promise<void> {
     // MAX_TOTAL_PAGES is a defensive-only ceiling (see its own comment
     // above) — the user-facing `total` in the response always reports
     // the REAL page count, even on the rare document long enough to hit it.
     const clampedTotal = Math.min(rawPageCount, MAX_TOTAL_PAGES);
-    console.log(`[ai-import] continuation: pageRangeStart=${pageRangeStart} rawPageCount=${rawPageCount} clampedTotal=${clampedTotal}`);
+    console.log(`[ai-import] continuation: orderIndex=${orderIndex} rawPageCount=${rawPageCount} clampedTotal=${clampedTotal}`);
+
+    // SMART PAGE TRIAGE (owner decision 2026-08-24, SPEED PASS item 2) —
+    // computed ONCE per document: if the client already has a pageOrder
+    // (echoed back from an earlier response), reuse it verbatim rather
+    // than re-triaging; otherwise this is the FIRST invocation to enter
+    // the continuation path for this document, so split every page once
+    // (to measure its own byte size — SHRINK THE PAYLOAD item 3's
+    // measurement), triage, and cache the split bytes for whichever pages
+    // THIS SAME invocation is about to process (avoids re-splitting them
+    // a second time inside runPageWithRetry).
+    const pageBytesCache = new Map<number, string>();
+    let pageOrder = requestPageOrder;
+    if (!pageOrder || pageOrder.length === 0) {
+      const triageStartedAt = performance.now();
+      const allRanges: PageRange[] = Array.from({ length: clampedTotal }, (_, i) => ({ start: i + 1, end: i + 1 }));
+      const pageChunks = await splitPdfIntoChunks(fileBase64, allRanges);
+      const byteSizes: PageByteSize[] = pageChunks.map((b64, i) => ({ page: i + 1, byteSize: b64.length }));
+      pageChunks.forEach((b64, i) => pageBytesCache.set(i + 1, b64));
+      pageOrder = triagePageOrder(byteSizes);
+      const totalBytes = byteSizes.reduce((sum, p) => sum + p.byteSize, 0);
+      const avgBytes = byteSizes.length > 0 ? Math.round(totalBytes / byteSizes.length) : 0;
+      console.log(
+        `[ai-import] INSTRUMENT triage pages=${byteSizes.length} avgPageBytes=${avgBytes} order=[${pageOrder.join(",")}] triageDurationMs=${Math.round(performance.now() - triageStartedAt)}`
+      );
+    }
+
     const batch = await extractPagesForInvocation(
-      anthropicKey, fileBase64, clampedTotal, pageRangeStart, PAGES_PER_BATCH, prompt, remainingInvocationBudgetMs
+      anthropicKey, fileBase64, clampedTotal, pageOrder, orderIndex, PAGES_PER_BATCH, BATCH_CONCURRENCY, prompt, remainingInvocationBudgetMs, pageBytesCache
     );
     console.log(
-      `[ai-import] this invocation attempted ${batch.outcomes.length} page(s), lastAttemptedPage=${batch.lastAttemptedPage}, budgetRemaining=${Math.round(remainingInvocationBudgetMs())}ms`
+      `[ai-import] this invocation attempted ${batch.attemptedCount} page(s), budgetRemaining=${Math.round(remainingInvocationBudgetMs())}ms`
     );
 
     const priorOutcomes: PageOutcome[] = [
@@ -1140,28 +1265,31 @@ Deno.serve(async (req: Request) => {
 
     const merged = mergeAllPages(allOutcomes);
     if (!merged) {
-      result = { errorType: "anthropic_error", message: `Could not process page ${pageRangeStart} of this document — the AI service was unavailable or timed out even after a retry.` };
+      result = { errorType: "anthropic_error", message: `Could not process this document — the AI service was unavailable or timed out even after a retry.` };
       console.log(`[ai-import] continuation: nothing succeeded at all — total failure`);
       return;
     }
     result = { extraction: merged.extraction };
 
-    const maxAttemptedPage = Math.max(0, ...allOutcomes.map((o) => o.page));
-    if (maxAttemptedPage >= clampedTotal) {
-      // Every page up to the (possibly clamped) total has now been
-      // attempted, successfully or not — this is a terminal result.
+    const attemptedSoFar = orderIndex + batch.attemptedCount;
+    if (attemptedSoFar >= pageOrder.length) {
+      // Every page in the triage order has now been attempted,
+      // successfully or not — this is a terminal result.
       if (merged.missingPages.length > 0 || clampedTotal < rawPageCount) {
         pagesProcessed = { total: rawPageCount, missingPages: merged.missingPages };
       }
       console.log(`[ai-import] continuation complete: covered=${merged.coveredPages.length}/${rawPageCount}, missing=${JSON.stringify(merged.missingPages)}`);
     } else {
       // More pages remain — tell the client to keep going, carrying
-      // forward every page gathered so far (covered AND missing) so the
-      // NEXT invocation's merge sees the complete picture.
-      nextPageStart = maxAttemptedPage + 1;
+      // forward every page gathered so far (covered AND missing), the
+      // SAME pageOrder (so the next invocation never re-triages), and a
+      // partial preview of what's been merged so far.
+      nextOrderIndex = attemptedSoFar;
+      responsePageOrder = pageOrder;
       rawPageExtractions = allOutcomes.filter((o): o is { page: number; extraction: ChunkExtraction } => 'extraction' in o).map((o) => ({ page: o.page, extraction: o.extraction }));
       rawMissingPages = merged.missingPages;
-      console.log(`[ai-import] continuation ongoing: nextPageStart=${nextPageStart}, covered so far=${merged.coveredPages.length}, missing so far=${merged.missingPages.length}`);
+      partialData = merged.extraction;
+      console.log(`[ai-import] continuation ongoing: nextOrderIndex=${nextOrderIndex}/${pageOrder.length}, covered so far=${merged.coveredPages.length}, missing so far=${merged.missingPages.length}`);
     }
   }
 
@@ -1213,14 +1341,16 @@ Deno.serve(async (req: Request) => {
   }
 
   // USAGE LIMITS + LOGGING (owner decision 2026-08-24, FIVE ADDITIONS
-  // pass, PARTS 4+5) — only a genuinely TERMINAL response (no
-  // nextPageStart — the multi-page continuation protocol, if any, is
-  // fully done) counts against the monthly allowance/credits, mirroring
+  // pass, PARTS 4+5) — only a genuinely TERMINAL response (nextOrderIndex
+  // still null — the multi-page continuation protocol, if any, is fully
+  // done) counts against the monthly allowance/credits, mirroring
   // app/src/usage/aiUsage.ts's shouldCountAiImportUsage(hasNextPageStart,
   // hadError) exactly: a multi-page settlement is billed exactly once, on
   // its own final round; an in-progress continuation round is logged as a
-  // success but never counted twice for the same document.
-  const isTerminal = !nextPageStart;
+  // success but never counted twice for the same document. `!== null`,
+  // never truthiness — see nextOrderIndex's own declaration comment above
+  // for why (0 is a legitimate "keep going" value).
+  const isTerminal = nextOrderIndex === null;
   if (isTerminal) {
     await logAiUsage(supabase, userId, true, null);
     await consumeOneCreditIfOverAllowance(supabase, userId);
@@ -1230,7 +1360,16 @@ Deno.serve(async (req: Request) => {
     JSON.stringify({
       data: result.extraction,
       ...(pagesProcessed ? { pagesProcessed } : {}),
-      ...(nextPageStart ? { nextPageStart, rawPageExtractions, rawMissingPages: rawMissingPages ?? [] } : {}),
+      ...(nextOrderIndex !== null
+        ? {
+            nextOrderIndex,
+            pageOrder: responsePageOrder,
+            rawPageExtractions,
+            rawMissingPages: rawMissingPages ?? [],
+            partialData,
+            progress: { through: nextOrderIndex, total: responsePageOrder?.length ?? nextOrderIndex },
+          }
+        : {}),
     }),
     { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
   );

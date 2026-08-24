@@ -499,7 +499,8 @@
       "description": "Description",
       "reference": "Reference",
       "period": "Period",
-      "suggestedCategory": "Suggested Category"
+      "suggestedCategory": "Suggested Category",
+      "weekEnding": "Week Ending"
     },
     "friendlyFailure": {
       "billingAuth": "AI reading is temporarily unavailable. Your data is safe — you can still add entries manually, and we're on it.",
@@ -512,7 +513,8 @@
     "retryImport": "Retry",
     "chooseDifferentFile": "Choose a Different File",
     "backfillOfferTitle": "Catching up on old records?",
-    "backfillOfferBody": "If you're importing several months of past documents, the Catch-Up Year pack (1,000 imports, valid 90 days) may help. Contact support if you'd like one added to your account."
+    "backfillOfferBody": "If you're importing several months of past documents, the Catch-Up Year pack (1,000 imports, valid 90 days) may help. Contact support if you'd like one added to your account.",
+    "processingPageProgressWithData": "Page {{through}} of {{total}} · revenue and deductions captured"
   },
   "camera": {
     "permissionNote": "Camera access is needed to photograph receipts and settlement PDFs.",
