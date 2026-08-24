@@ -1,14 +1,14 @@
-import { I18nManager } from 'react-native';
+import { I18nManager, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { colors } from '@/src/theme';
+import { spacing } from '@/src/theme';
 
 // BRAND REFRESH (owner decision 2026-07-30): the app's logo mark — a
 // minimal line-art semi-truck side profile (sleeper cab + trailer),
-// brand blue on dark, replacing the earlier 🐺 emoji "wordmark icon"
-// everywhere it appeared (BrandWordmark.tsx, the intro slides). Pure
-// react-native-svg (already a dependency, used throughout the Dashboard's
-// own charts) — no image asset, so it stays crisp at any size and themes
-// with a single `color` prop like every other icon in this app.
+// replacing the earlier 🐺 emoji "wordmark icon" everywhere it appeared
+// (BrandWordmark.tsx, the intro slides). Pure react-native-svg (already a
+// dependency, used throughout the Dashboard's own charts) — no image
+// asset, so it stays crisp at any size and themes with a single `color`
+// prop like every other icon in this app.
 //
 // RTL-safe: this is a directional side-profile glyph (the cab reads as
 // "facing" one direction), so it mirrors under I18nManager.isRTL — the
@@ -22,9 +22,23 @@ import { colors } from '@/src/theme';
 // app-store icon background, a printed/exported document. `BRAND_LOGO_DARK`
 // (near-black, for a light/white background) and `BRAND_LOGO_LIGHT`
 // (white, for a dark background — the existing in-app default context)
-// are the two guaranteed-legible presets; `colors.accent` stays available
-// as an explicit opt-in for a small accent touch, never the default for a
-// surface whose background isn't known to be dark.
+// are the two guaranteed-legible presets. `colors.accent` (brand blue) is
+// available as an explicit opt-in for a small accent touch, never the
+// default.
+//
+// LOGO CONSISTENCY BUG FIX (owner decision 2026-08-24, device report:
+// "the app still shows the old blue mark" everywhere a logo renders): the
+// default `color` below used to be `colors.accent` (brand blue) — every
+// call site that didn't pass an explicit color (BrandWordmark.tsx, and
+// therefore the top bar/wide sidebar/CEO Mode header/every share-card
+// footer that renders via BrandWordmark, plus intro.tsx's own bare
+// <BrandLogo>) silently rendered blue instead of the intended
+// theme-appropriate white/black, directly contradicting this file's own
+// MONOCHROME VARIANTS comment above ("never the default"). Fixed at the
+// single source: the default is now BRAND_LOGO_LIGHT (white), matching
+// this app's dark-theme-only in-app default. `colors.accent` must now be
+// passed explicitly wherever a blue accent touch is actually wanted — no
+// call site in this app does today.
 export const BRAND_LOGO_DARK = '#0a0a0f';
 export const BRAND_LOGO_LIGHT = '#ffffff';
 // Common render sizes this mark is asked to stay crisp at (vector SVG, so
@@ -36,7 +50,7 @@ export const BRAND_LOGO_SIZES = { xs: 24, sm: 32, md: 64, xl: 512 } as const;
 const VIEWBOX_WIDTH = 48;
 const VIEWBOX_HEIGHT = 26;
 
-export function BrandLogo({ size = 28, color = colors.accent }: { size?: number; color?: string }) {
+export function BrandLogo({ size = 28, color = BRAND_LOGO_LIGHT }: { size?: number; color?: string }) {
   const width = size;
   const height = size * (VIEWBOX_HEIGHT / VIEWBOX_WIDTH);
   return (
@@ -56,5 +70,21 @@ export function BrandLogo({ size = 28, color = colors.accent }: { size?: number;
       <Circle cx={9} cy={21} r={3} stroke={color} strokeWidth={2} fill="none" />
       <Circle cx={34} cy={21} r={3} stroke={color} strokeWidth={2} fill="none" />
     </Svg>
+  );
+}
+
+// LOGO CONSISTENCY (owner decision 2026-08-24): every auth-flow screen
+// (sign-in, sign-up, forgot-password, check-email, confirm-email,
+// reset-password) previously showed the BRAND_NAME as plain text with no
+// logo mark at all — the one surface named in the device report that
+// wasn't merely showing the wrong (blue) color, but was missing the mark
+// entirely. This is the one shared, centered header block all six use
+// above their own ScreenTitle, so a future logo-size/spacing change is
+// one edit, not six.
+export function AuthBrandHeader({ size = 64 }: { size?: number }) {
+  return (
+    <View style={{ alignItems: 'center', marginBottom: spacing.md }}>
+      <BrandLogo size={size} />
+    </View>
   );
 }

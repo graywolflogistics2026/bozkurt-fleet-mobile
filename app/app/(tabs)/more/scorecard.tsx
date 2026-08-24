@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
@@ -58,8 +59,13 @@ export default function Scorecard() {
   // CPM "Why?" breakdown (owner decision 2026-08-05, FULL PARITY
   // follow-up item C.4) — the KPI card stays clean; the full per-bucket/
   // fixed-vs-variable/excluded-one-offs/settlements-missing-miles detail
-  // lives behind this one action.
-  const [whyOpen, setWhyOpen] = useState(false);
+  // lives behind this one action. Deep-linkable via ?openWhy=true (owner
+  // decision 2026-08-24) — Home's own CPM tile pushes here with the param
+  // already set so tapping it lands straight in the breakdown, same
+  // "?filter=needsReview" pattern Alerts' own deep link into Deductions
+  // already uses (app/(tabs)/deductions.tsx).
+  const { openWhy } = useLocalSearchParams<{ openWhy?: string }>();
+  const [whyOpen, setWhyOpen] = useState(openWhy === 'true');
   const [missingMilesDrafts, setMissingMilesDrafts] = useState<Record<string, string>>({});
   const [savingMissingMilesId, setSavingMissingMilesId] = useState<string | null>(null);
 

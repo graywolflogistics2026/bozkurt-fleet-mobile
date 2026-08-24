@@ -6,6 +6,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Screen, ScreenTitle, Field, PrimaryButton, SecondaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
 import { BRAND_NAME } from '@/src/brand';
+import { AuthBrandHeader } from '@/src/components/BrandLogo';
 
 export default function SignIn() {
   const { t } = useTranslation();
@@ -58,6 +59,7 @@ export default function SignIn() {
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+          <AuthBrandHeader />
           <ScreenTitle>{BRAND_NAME}</ScreenTitle>
           <MutedText>{t('auth.signInSubtitle')}</MutedText>
           <Field

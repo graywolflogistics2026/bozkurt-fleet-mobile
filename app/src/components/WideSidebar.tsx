@@ -4,11 +4,16 @@
 // same route tree the phone tab bar already drives — no screen is ever
 // reachable here that isn't also reachable via the phone tabs/More list.
 //
-// Group/order is ported verbatim from PROMPTS.md's "Parity Checklist"
-// table (Overview/Revenue/Expenses/Business/Intelligence/Tools/System),
-// with this app's own beyond-legacy additions (Other Income, Profit
-// Analysis, CEO Mode, Share Weekly Profit, Compliance Tracker, Dashboard
-// Customize, Drivers) appended into whichever group they fit best.
+// Group order originally ported verbatim from PROMPTS.md's "Parity
+// Checklist" table (Overview/Revenue/Expenses/Business/Intelligence/
+// Tools/System); reordered 2026-08-24 (owner decision, device report) to
+// Overview/Revenue/Expenses/Tools/Business/Intelligence/System — Tools
+// now sits directly under Expenses, ahead of Business, since it's reached
+// far more often. This app's own beyond-legacy additions (Other Income,
+// Profit Analysis, CEO Mode, Share Weekly Profit, Compliance Tracker,
+// Drivers) are appended into whichever group they fit best. See
+// navRegistry.ts's own header comment for the actual group order — this
+// file just renders it.
 //
 // Icon strategy (deliberate scope decision, not an oversight): the design
 // note asks for legacy's inline SVG icons ported via react-native-svg,

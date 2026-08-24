@@ -8,6 +8,7 @@ import { isValidReferralCodeFormat, normalizeReferralCode } from '@/src/referral
 import { Screen, ScreenTitle, Field, PrimaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
 import { BRAND_NAME } from '@/src/brand';
+import { AuthBrandHeader } from '@/src/components/BrandLogo';
 
 // 2026-07-30 bug fix: the button used to be silently `disabled` whenever
 // the password was under 6 characters (React Native never fires onPress
@@ -83,6 +84,7 @@ export default function SignUp() {
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+          <AuthBrandHeader />
           <ScreenTitle>{t('auth.createAccount')}</ScreenTitle>
           <MutedText>{t('auth.signUpTagline', { brand: BRAND_NAME })}</MutedText>
           <Field

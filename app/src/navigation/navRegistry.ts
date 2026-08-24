@@ -17,11 +17,17 @@ import { FEATURE_FLAGS, type FeatureFlagKey } from '@/src/config/featureFlags';
 export type NavItem = { href: Href; labelKey: string; emoji: string };
 export type NavGroup = { titleKey: string; items: NavItem[] };
 
-// Legacy Parity Checklist grouping (Overview/Revenue/Expenses/Business/
-// Intelligence/Tools/System), with this app's beyond-legacy additions
-// appended into whichever group fits best. See WideSidebar.tsx's own
-// header comment for the icon-strategy and "Assets vs Asset Register"
-// naming notes — those design decisions live there, not here.
+// NAV ORDER (owner decision 2026-08-24, device report — Tools was
+// buried below Business/Intelligence in both the wide sidebar and the
+// phone Menu sheet): Overview/Revenue/Expenses/Tools/Business/
+// Intelligence/System — Tools sits directly under Expenses, ahead of
+// Business, since its contents (Accountant Package, AI Advisor, Tax
+// Estimator, Documents, ...) are reached far more often than the
+// asset-management screens in Business. This app's beyond-legacy
+// additions are appended into whichever group fits best. See
+// WideSidebar.tsx's own header comment for the icon-strategy and "Assets
+// vs Asset Register" naming notes — those design decisions live there,
+// not here.
 //
 // RAW — deliberately unfiltered by feature flags (see NAV_GROUPS below,
 // the filtered export every nav surface actually uses). Kept intact and
@@ -56,6 +62,20 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    titleKey: 'sidebar.sections.tools',
+    items: [
+      { href: '/(tabs)/more/asset-register', labelKey: 'nav.assetRegister', emoji: '🗄️' },
+      { href: '/(tabs)/more/accountant-package', labelKey: 'nav.accountantPackage', emoji: '📁' },
+      { href: '/(tabs)/more/ai-advisor', labelKey: 'nav.aiAdvisor', emoji: '🤖' },
+      { href: '/(tabs)/more/tax-estimator', labelKey: 'nav.taxEstimator', emoji: '🧮' },
+      { href: '/(tabs)/more/share-profit', labelKey: 'nav.shareProfit', emoji: '📤' },
+      { href: '/(tabs)/more/compliance', labelKey: 'nav.compliance', emoji: '🪪' },
+      { href: '/(tabs)/more/documents' as Href, labelKey: 'nav.documents', emoji: '🗃️' },
+      { href: '/(tabs)/more/category-learning' as Href, labelKey: 'nav.categoryLearning', emoji: '🧠' },
+      { href: '/(tabs)/more/referral' as Href, labelKey: 'nav.referral', emoji: '🎁' },
+    ],
+  },
+  {
     titleKey: 'sidebar.sections.business',
     items: [
       { href: '/(tabs)/more/trucks', labelKey: 'nav.trucks', emoji: '🚚' },
@@ -76,20 +96,6 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
       { href: '/(tabs)/more/bank-statements', labelKey: 'nav.bankStatements', emoji: '🏛️' },
       { href: '/(tabs)/more/profit-analysis', labelKey: 'nav.profitAnalysis', emoji: '📈' },
       { href: '/(tabs)/more/ceo-mode', labelKey: 'nav.ceoMode', emoji: '🐺' },
-    ],
-  },
-  {
-    titleKey: 'sidebar.sections.tools',
-    items: [
-      { href: '/(tabs)/more/asset-register', labelKey: 'nav.assetRegister', emoji: '🗄️' },
-      { href: '/(tabs)/more/accountant-package', labelKey: 'nav.accountantPackage', emoji: '📁' },
-      { href: '/(tabs)/more/ai-advisor', labelKey: 'nav.aiAdvisor', emoji: '🤖' },
-      { href: '/(tabs)/more/tax-estimator', labelKey: 'nav.taxEstimator', emoji: '🧮' },
-      { href: '/(tabs)/more/share-profit', labelKey: 'nav.shareProfit', emoji: '📤' },
-      { href: '/(tabs)/more/compliance', labelKey: 'nav.compliance', emoji: '🪪' },
-      { href: '/(tabs)/more/documents' as Href, labelKey: 'nav.documents', emoji: '🗃️' },
-      { href: '/(tabs)/more/category-learning' as Href, labelKey: 'nav.categoryLearning', emoji: '🧠' },
-      { href: '/(tabs)/more/referral' as Href, labelKey: 'nav.referral', emoji: '🎁' },
     ],
   },
   {

@@ -7,6 +7,7 @@ import { exchangeAuthDeepLink } from '@/src/auth/deepLinkExchange';
 import { RESEND_COOLDOWN_SECONDS, nextCooldownValue } from '@/src/auth/resetPasswordFlow';
 import { Screen, ScreenTitle, Card, PrimaryButton, SecondaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
+import { AuthBrandHeader } from '@/src/components/BrandLogo';
 
 // EMAIL CONFIRMATION (owner decision 2026-08-24, AUTH COMPLETENESS item
 // B2) — DUAL PURPOSE screen:
@@ -89,6 +90,7 @@ export default function ConfirmEmail() {
 
   return (
     <Screen>
+      <AuthBrandHeader />
       <ScreenTitle>{t('auth.checkEmailTitle')}</ScreenTitle>
       <Card>
         <MutedText>{t('auth.checkEmailBody', { email: session?.user?.email ?? '' })}</MutedText>

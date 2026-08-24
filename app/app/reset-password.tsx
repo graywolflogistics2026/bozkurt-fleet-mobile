@@ -6,6 +6,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { exchangeAuthDeepLink } from '@/src/auth/deepLinkExchange';
 import { validateNewPassword } from '@/src/auth/resetPasswordFlow';
 import { Screen, ScreenTitle, Field, PrimaryButton, ErrorText, MutedText, Card } from '@/src/components/ui';
+import { AuthBrandHeader } from '@/src/components/BrandLogo';
 
 // SET NEW PASSWORD (owner decision 2026-08-24, AUTH COMPLETENESS item B1)
 // — reached ONLY via the password-reset email's deep link
@@ -77,6 +78,7 @@ export default function ResetPassword() {
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+          <AuthBrandHeader />
           <ScreenTitle>{t('auth.resetPasswordTitle')}</ScreenTitle>
 
           {phase === 'exchanging' && <MutedText>{t('common.loading')}</MutedText>}

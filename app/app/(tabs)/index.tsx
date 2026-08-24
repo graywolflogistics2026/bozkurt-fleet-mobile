@@ -25,6 +25,9 @@ import {
 } from '@/src/stats/cashFlowTrend';
 import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
+import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
+import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
+import { resolveMilesTotal } from '@/src/stats/miles';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
@@ -52,6 +55,11 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 // well-designed layout every user sees, in this exact order:
 //   a) Hero profit card (period tabs + area chart)
 //   b) Revenue / Expenses / Net Profit trio with % deltas
+//   b2) Per-Mile trio (owner decision 2026-08-24, device report) —
+//      Revenue/Mile, Cost/Mile (CPM), Profit/Mile, directly under (b),
+//      see PerMileTile/the canonicalCpm block below. Same canonical
+//      calcCanonicalCpm() figures Scorecard's own KPI card and "Why?"
+//      breakdown use (src/stats/cpm.ts) — never a second CPM formula.
 //   c) Business Balance slim card
 //   d) AI Coach section — the full briefing rendered inline (owner
 //      decision 2026-08-24), not just a teaser link, see AiCoachSection
@@ -482,21 +490,24 @@ function BestWorstLanesCard({
   );
 }
 
-// TAX STRIP (owner decision 2026-08-24, NEXT PASS item C) — three compact,
-// tappable tiles, all reading from the SAME canonical useTaxEstimate()
-// every other tax screen in this app uses (CLAUDE.md invariant #6: no tax
-// figure is ever computed a second way anywhere). Reuses the Tax
-// Estimator's own taxEstimator.deadlinePast/deadlineToday/deadlineInDays
-// copy for the countdown subtext rather than duplicating that phrasing.
-function TaxStripTile({
+// SHARED COMPACT TILE (owner decision 2026-08-24) — three-across, small-
+// text, tappable tile, originally built for the Tax Strip (TAX STRIP
+// comment below) and now shared with the Per-Mile trio too, so both rows
+// look and behave identically. `valueColor` is the one addition the
+// Per-Mile trio needed (Profit/Mile is green/red by sign) — optional and
+// defaults to the Tax Strip's plain `colors.text`, so that call site is
+// unaffected.
+function CompactStatTile({
   label,
   value,
+  valueColor,
   subtext,
   subtextColor,
   onPress,
 }: {
   label: string;
   value: string;
+  valueColor?: string;
   subtext?: string;
   subtextColor?: string;
   onPress: () => void;
@@ -506,7 +517,7 @@ function TaxStripTile({
       <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
         {label}
       </Text>
-      <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
+      <Text style={{ color: valueColor ?? colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
         {value}
       </Text>
       {!!subtext && (
@@ -555,15 +566,15 @@ function HomeTaxStrip({ taxQuery }: { taxQuery: ReturnType<typeof useTaxEstimate
     <>
       <ScreenTitle>{t('dashboard.taxStrip.title')}</ScreenTitle>
       <View style={styles.compactRow}>
-        <TaxStripTile label={t('dashboard.taxStrip.weeklyReserve')} value={moneyRounded(estimate.weeklyTaxReserve)} onPress={goToTax} />
-        <TaxStripTile
+        <CompactStatTile label={t('dashboard.taxStrip.weeklyReserve')} value={moneyRounded(estimate.weeklyTaxReserve)} onPress={goToTax} />
+        <CompactStatTile
           label={t('dashboard.taxStrip.nextQuarterly')}
           value={moneyRounded(estimate.quarterlyPayment)}
           subtext={deadlineSubtext}
           subtextColor={deadlineColor}
           onPress={goToTax}
         />
-        <TaxStripTile label={t('dashboard.taxStrip.yearlyEstimate')} value={moneyRounded(estimate.totalTax)} onPress={goToTax} />
+        <CompactStatTile label={t('dashboard.taxStrip.yearlyEstimate')} value={moneyRounded(estimate.totalTax)} onPress={goToTax} />
       </View>
       <LegalFootnote />
     </>
@@ -574,6 +585,7 @@ export default function Dashboard() {
   const { t } = useTranslation();
   const { money: moneyFmt } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
+  const money2 = (n: number) => moneyFmt(n, { maximumFractionDigits: 2 });
   const { session, profile, signOut } = useAuth();
   const { activeTruck } = useActiveTruck();
   const router = useRouter();
@@ -721,6 +733,35 @@ export default function Dashboard() {
     return calcScorecard(stats.grossRevenue, stats.totalDeductions, stats.totalMiles, fuelCost)?.score ?? null;
   }, [stats, fuelCost]);
 
+  // PER-MILE TRIO (owner decision 2026-08-24, device report) — the SAME
+  // canonical calcCanonicalCpm() figures Scorecard's own KPI card and
+  // "Why?" breakdown use (src/stats/cpm.ts), never a second CPM formula.
+  // Mirrors scorecard.tsx's own truck-cost-basis/manual-override block
+  // exactly, reusing dedQuery/fuelQuery/maintenanceQuery/tollsQuery, which
+  // Home already fetches for the true-profit trend above.
+  const carrierWithholdsLoan = useMemo(() => carrierWithholdsLoanPayment(dedQuery.data ?? []), [dedQuery.data]);
+  const truckCostBasis = useMemo(() => {
+    if (!activeTruck) return null;
+    return calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan);
+  }, [activeTruck, carrierWithholdsLoan]);
+  const truckFixedCostTotal = useMemo(() => {
+    if (!truckCostBasis) return 0;
+    return truckCostBasis.weeklyFixedTotal * (stats?.settlementCount ?? 0);
+  }, [truckCostBasis, stats]);
+  const milesSource = stats ? resolveMilesTotal({ totalMiles: stats.totalMiles }, activeTruck?.manual_total_miles_override) : null;
+  const canonicalCpm = useMemo(() => {
+    if (!stats || !milesSource) return null;
+    return calcCanonicalCpm(
+      stats.grossRevenue,
+      milesSource.totalMiles,
+      dedQuery.data ?? [],
+      fuelQuery.data ?? [],
+      maintenanceQuery.data ?? [],
+      tollsQuery.data ?? [],
+      truckFixedCostTotal
+    );
+  }, [stats, milesSource, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, truckFixedCostTotal]);
+
   const recentLoads = useMemo(() => {
     return [...(loadsQuery.data ?? [])]
       .sort((a, b) => new Date(b.load_date ?? 0).getTime() - new Date(a.load_date ?? 0).getTime())
@@ -778,6 +819,36 @@ export default function Dashboard() {
             onPress={() => router.push('/(tabs)/more/cash-flow')}
           />
         </View>
+
+        {/* PER-MILE TRIO (owner decision 2026-08-24, device report) —
+            Revenue/Mile, Cost/Mile (CPM), Profit/Mile, directly under the
+            Revenue/Expenses/Net Profit trio above. RPM/PPM route to
+            Scorecard's own KPI detail; CPM routes straight into Scorecard's
+            "Why?" breakdown via the same ?openWhy param pattern Alerts'
+            needs-review deep link already uses. */}
+        <View style={styles.compactRow}>
+          <CompactStatTile
+            label={t('scorecard.revenuePerMile')}
+            value={canonicalCpm?.revenuePerMile != null ? money2(canonicalCpm.revenuePerMile) : '—'}
+            onPress={() => router.push('/(tabs)/more/scorecard')}
+          />
+          <CompactStatTile
+            label={t('scorecard.costPerMile')}
+            value={canonicalCpm?.costPerMile != null ? money2(canonicalCpm.costPerMile) : '—'}
+            onPress={() => router.push({ pathname: '/(tabs)/more/scorecard', params: { openWhy: 'true' } } as unknown as Href)}
+          />
+          <CompactStatTile
+            label={t('scorecard.whyPpm')}
+            value={canonicalCpm?.profitPerMile != null ? money2(canonicalCpm.profitPerMile) : '—'}
+            valueColor={canonicalCpm?.profitPerMile != null ? (canonicalCpm.profitPerMile >= 0 ? colors.green : colors.red) : undefined}
+            onPress={() => router.push('/(tabs)/more/scorecard')}
+          />
+        </View>
+        {stats && stats.totalMiles <= 0 && (
+          <MutedText style={{ color: colors.orange, fontWeight: '700', marginTop: -spacing.xs, marginBottom: spacing.sm }} numberOfLines={2}>
+            ⚠️ {t('scorecard.milesMissingWarning')}
+          </MutedText>
+        )}
 
         <CashBalanceSlimCard balance={capital?.businessBalance ?? 0} onPress={() => router.push('/(tabs)/more/cash-flow')} />
 

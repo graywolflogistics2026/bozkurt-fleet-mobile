@@ -6,6 +6,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { RESEND_COOLDOWN_SECONDS, nextCooldownValue } from '@/src/auth/resetPasswordFlow';
 import { Screen, ScreenTitle, Field, PrimaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
+import { AuthBrandHeader } from '@/src/components/BrandLogo';
 
 // FORGOT PASSWORD (owner decision 2026-08-24, AUTH COMPLETENESS item B1):
 // email input -> sendPasswordResetEmail() -> "check your email" state.
@@ -57,6 +58,7 @@ export default function ForgotPassword() {
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+          <AuthBrandHeader />
           <ScreenTitle>{t('auth.forgotPasswordTitle')}</ScreenTitle>
           <MutedText>{t('auth.forgotPasswordSubtitle')}</MutedText>
           <Field

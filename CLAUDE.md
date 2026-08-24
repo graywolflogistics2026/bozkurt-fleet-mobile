@@ -4517,3 +4517,99 @@
   shipped via a normal `eas update`, published to preview. No i18n
   changes (no new user-facing strings). docs/PENDING_SQL.md §53 (8 new
   `carrier_code_maps` rows) is ✅ APPLIED.
+- STATUS CHECK + FIX — LOGO, NAV ORDER, PER-MILE TRIO (owner decision
+  2026-08-24, device report: three previously-requested items not visible
+  on device). Audited each against the actual code before touching
+  anything, per the owner's own explicit ask:
+  1. **LOGO — was in the code, but with a real bug** (`src/components/
+     BrandLogo.tsx:39`): `BrandLogo`'s own default `color` prop was
+     `colors.accent` (brand blue, `#2563eb`) — every call site that didn't
+     pass an explicit color rendered blue, directly contradicting this
+     same file's own MONOCHROME VARIANTS comment ("colors.accent... never
+     the default"). That covers `BrandWordmark.tsx:32`'s bare
+     `<BrandLogo>` (used by the top bar `app/(tabs)/_layout.tsx:116`, the
+     wide sidebar `WideSidebar.tsx:77`, CEO Mode's in-page header
+     `ceo-mode.tsx:135`, and every share-card footer — `ceo-mode.tsx:287`/
+     `scorecard.tsx:410`/`share-profit.tsx:185`) and `intro.tsx:59`'s own
+     bare `<BrandLogo size={72} />` — exactly the "top bar, wide sidebar,
+     intro slides, share card" symptoms reported. Fixed at the one source:
+     the default is now `BRAND_LOGO_LIGHT` (white), matching this app's
+     dark-theme-only in-app default; `colors.accent` must be passed
+     explicitly wherever blue is actually wanted (no call site does).
+     `ScreenErrorBoundary.tsx:131` (crash screen) and `BrandAppIcon.tsx:30`
+     (icon source component) already passed `BRAND_LOGO_LIGHT` explicitly
+     — unaffected, already correct. **Auth screens** (`sign-in.tsx`,
+     `sign-up.tsx`, `forgot-password.tsx`, `check-email.tsx`,
+     `confirm-email.tsx`, `reset-password.tsx`) had NO logo at all, not a
+     color bug — confirmed by grep, only `BRAND_NAME` as plain text. Added
+     a new shared `AuthBrandHeader` (`BrandLogo.tsx`) — a centered
+     `<BrandLogo>` above each screen's own `ScreenTitle` — to all six, one
+     import + one line each. **No leftover old logo component/emoji/image
+     asset was found** to delete — grepped for the retired 🐺 emoji
+     "wordmark icon" (only remaining uses are CEO Mode's own unrelated
+     decorative wolf icon on its button/nav entry, a different, intentional
+     feature motif, not a logo) and for any `require(...logo...)`/`Image`
+     reference; none exist. **Splash screen + app icon are a separate,
+     confirmed bug that code cannot fix**: `assets/images/icon.png` (and
+     the matching `splash-icon.png`/Android adaptive-icon images) are
+     still the literal default Expo template placeholder graphic (verified
+     by viewing the file — a blue chevron/boomerang mark with template
+     guide circles, never replaced with the truck brand mark). These are
+     native-level assets baked into the binary at build time
+     (`app.config.js`'s `icon`/`splash`/`adaptiveIcon` fields) — fixing
+     them requires generating real PNG exports of `BrandAppIcon.tsx` (the
+     source component built for exactly this, still not yet rendered to
+     files) and a fresh EAS Build; no `eas update` can touch them. Flagged
+     explicitly rather than silently left broken.
+  2. **NAV ORDER — was NOT in the code**: `navRegistry.ts`'s
+     `RAW_NAV_GROUPS` had Tools listed AFTER Business and Intelligence
+     (Overview/Revenue/Expenses/Business/Intelligence/Tools/System) — the
+     requested order was never implemented, not a shipped-but-not-updated
+     case. Fixed by reordering the Tools group object to sit directly
+     after Expenses: Overview/Revenue/Expenses/Tools/Business/
+     Intelligence/System. Since `WideSidebar.tsx`/`MenuSheet.tsx` both
+     render `GROUPS.map(...)` directly off this one array (NAV PARITY
+     invariant above), this single reorder fixes both the wide sidebar and
+     the phone Menu sheet at once, as expected. `navRegistry.test.ts`'s
+     assertions use `.find()`, not index/order, so no test needed
+     updating. Stale order-description comments in `navRegistry.ts`'s own
+     header and `WideSidebar.tsx`'s header were updated to match.
+  3. **PER-MILE TRIO — was NOT in the code**: grepped Home
+     (`app/(tabs)/index.tsx`) for every plausible name (RPM, CPM,
+     `revenuePerMile`, `costPerMile`, `profitPerMile`, "per-mile") — zero
+     matches; this was never built, not a rendering bug. Added a new
+     compact three-across row directly under the Revenue/Expenses/Net
+     Profit trio, reusing the SAME canonical `calcCanonicalCpm()`
+     (`src/stats/cpm.ts`) Scorecard's own KPI card and "Why?" breakdown
+     already use — never a second CPM formula (mirrors Scorecard's exact
+     truck-cost-basis/manual-override block: `carrierWithholdsLoanPayment()`
+     → `calcTruckCostBasisWeekly()` → `resolveMilesTotal()` →
+     `calcCanonicalCpm()`, fed by the same `dedQuery`/`fuelQuery`/
+     `maintenanceQuery`/`tollsQuery` Home already fetches for the
+     true-profit trend). The shared compact-tile component (previously
+     `TaxStripTile`, Tax Strip-only) was generalized to `CompactStatTile`
+     with a new optional `valueColor` prop — Profit/Mile is green when
+     `>= 0`, red when negative, the Tax Strip's own three tiles are
+     unaffected (no color passed, same as before). Reuses existing i18n
+     verbatim, zero new keys/no 7-locale pass needed:
+     `scorecard.revenuePerMile` ("Revenue/Mile"), `scorecard.costPerMile`
+     ("Cost/Mile (CPM)"), `scorecard.whyPpm` ("Profit/Mile (PPM)"). Revenue/
+     Mile and Profit/Mile tiles route to `/(tabs)/more/scorecard` ("their
+     detail"); the Cost/Mile tile routes to Scorecard with a new
+     `?openWhy=true` param — `scorecard.tsx` now reads it via
+     `useLocalSearchParams()` to initialize `whyOpen`, the exact same
+     `?filter=needsReview`-style deep-link pattern Alerts' own link into
+     Deductions already established — landing directly in the "Why?"
+     breakdown instead of just the KPI card. The ⚠️ miles-missing warning
+     is kept, same condition (`stats.totalMiles <= 0`) and copy
+     (`scorecard.milesMissingWarning`) as Scorecard's own.
+  Tests: no new test files — every underlying function reused here
+  (`calcCanonicalCpm`, `calcTruckCostBasisWeekly`, `resolveMilesTotal`,
+  `carrierWithholdsLoanPayment`) is already covered by its own suite
+  (`cpm.test.ts`, `truckCostBasis.test.ts`, `miles.test.ts`); this pass
+  only wires Home up to call them, the same way Scorecard already does.
+  Full suite: 92 suites / 2215 tests pass (unchanged — no new pure-logic
+  module was added); `tsc --noEmit` clean. No SQL/Edge Function changes;
+  no redeploy needed for either. `eas update` ships everything in this
+  entry EXCEPT the splash/app-icon fix, which needs a native rebuild as
+  noted above.
