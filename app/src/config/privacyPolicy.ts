@@ -3,7 +3,7 @@
 // version — Settings > Legal is a read-only re-display (PROMPTS.md
 // Session 10), so PRIVACY_VERSION exists only for the "as of" date shown
 // on that screen, not for any gating logic.
-import { SUPPORT_EMAIL } from '@/src/brand';
+import { SUPPORT_EMAIL, BRAND_NAME } from '@/src/brand';
 
 export const PRIVACY_VERSION = 'draft-2026-07-12';
 
@@ -12,7 +12,7 @@ export const PRIVACY_TITLE = 'Privacy Policy';
 export const PRIVACY_BODY = `DRAFT — ATTORNEY REVIEW REQUIRED. This is a working draft, not a final legal document.
 
 1. What we collect
-Bozkurt Fleet OS stores the business data you enter or import: settlements, loads, fuel purchases, maintenance records, deductions, compliance items, truck/driver information, and the documents (photos/PDFs) you upload for AI-assisted extraction. This data is stored in Supabase (our database and file storage provider).
+${BRAND_NAME} stores the business data you enter or import: settlements, loads, fuel purchases, maintenance records, deductions, compliance items, truck/driver information, and the documents (photos/PDFs) you upload for AI-assisted extraction. This data is stored in Supabase (our database and file storage provider).
 
 2. We do not collect or track your location
 We do not collect or track your location. This app never requests location permission on iOS or Android, never reads GPS data, and never stores a location value derived from a device sensor. Odometer and mileage figures come exclusively from documents you upload (settlement PDFs, maintenance invoices) — never from GPS.

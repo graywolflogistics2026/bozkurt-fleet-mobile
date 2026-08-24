@@ -11,7 +11,7 @@
 // the app.json this replaces.
 module.exports = {
   expo: {
-    name: 'Bozkurt Fleet OS',
+    name: 'BOZKA TRUCKING AI',
     slug: 'bozkurt-fleet-os',
     version: '1.0.0',
     orientation: 'portrait',
@@ -57,13 +57,13 @@ module.exports = {
       [
         'expo-camera',
         {
-          cameraPermission: 'Bozkurt Fleet OS uses your camera to photograph settlements, receipts, and maintenance invoices for AI-assisted import.',
+          cameraPermission: 'BOZKA TRUCKING AI uses your camera to photograph settlements, receipts, and maintenance invoices for AI-assisted import.',
         },
       ],
       [
         'expo-image-picker',
         {
-          photosPermission: 'Bozkurt Fleet OS accesses your photo library so you can import a saved photo of a settlement, receipt, or invoice.',
+          photosPermission: 'BOZKA TRUCKING AI accesses your photo library so you can import a saved photo of a settlement, receipt, or invoice.',
         },
       ],
       'expo-localization',

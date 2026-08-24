@@ -1,4 +1,4 @@
-# Bozkurt Fleet OS — Mobile
+# BOZKA TRUCKING AI — Mobile
 
 Long-term iOS + Android product for owner-operator trucking businesses, built
 from the proven single-file web app (see `legacy/index.html`, which remains

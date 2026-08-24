@@ -1,5 +1,5 @@
 -- ============================================================================
--- Bozkurt Fleet OS — Draft Postgres Schema (for review BEFORE Session 1)
+-- BOZKA TRUCKING AI — Draft Postgres Schema (for review BEFORE Session 1)
 -- Derived 1:1 from the legacy localStorage model in legacy/index.html
 -- Every table: RLS enabled, user_id = auth.uid() policies (added in migration)
 -- ============================================================================

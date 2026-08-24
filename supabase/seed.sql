@@ -1,5 +1,5 @@
 -- ============================================================================
--- Bozkurt Fleet OS — Dev seed data
+-- BOZKA TRUCKING AI — Dev seed data
 -- LOCAL / DEV SUPABASE INSTANCE ONLY. Never run against a production project
 -- — it inserts a row directly into auth.users with a known password.
 --

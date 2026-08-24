@@ -1,4 +1,4 @@
-# Feature Inventory — `legacy/index.html` ("Bozkurt Fleet OS")
+# Feature Inventory — `legacy/index.html` ("BOZKA TRUCKING AI")
 
 This is the contract for the mobile rebuild. Everything below was read directly out of
 `legacy/index.html` (single-file HTML/CSS/JS app, no build step, `localStorage`-backed).

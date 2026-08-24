@@ -6,8 +6,13 @@
 // the working name should only ever require editing this file — every
 // screen that displays the brand imports from here instead of
 // hardcoding a string or baking it into an i18n translation value.
-// app.config.js's `name`/`slug` (the store-facing identity) stay
-// "Bozkurt Fleet OS" until that Session 10 decision lands.
+// BRANDING CLEANUP (owner decision 2026-08-24): app.config.js's `name`
+// field now matches this constant ("BOZKA TRUCKING AI") — `slug`/`scheme`/
+// `bundleIdentifier`/`package` are left as their original
+// "bozkurt-fleet-os"/"bozkurtfleetos"/"com.bozkurtfleetos.app" values on
+// purpose, since those are native store/deep-link identifiers that would
+// require a fresh app-store listing (not just a rebuild) to change — a
+// separate, later decision, not part of this pass.
 export const BRAND_NAME = 'BOZKA TRUCKING AI';
 export const BRAND_SHORT_NAME = 'BOZKA';
 // Shown under the wordmark (BrandWordmark's `showTagline` prop) — the

@@ -11,7 +11,7 @@ binding, not marketing language to be softened later.
 
 ## 1. What we collect
 
-Bozkurt Fleet OS stores the business data you enter or import: settlements,
+BOZKA TRUCKING AI stores the business data you enter or import: settlements,
 loads, fuel purchases, maintenance records, deductions, compliance items,
 truck/driver information, and the documents (photos/PDFs) you upload for
 AI-assisted extraction. This data is stored in Supabase (our database and
@@ -28,7 +28,7 @@ maintenance invoices) — never from GPS.
 ## 3. Your financial data is yours
 
 **Your financial data is yours — we don't access it without your
-permission.** The operator of this app (Bozkurt Fleet OS) does not view an
+permission.** The operator of this app (BOZKA TRUCKING AI) does not view an
 individual user's settlements, deductions, or other financial records
 except (a) with your explicit consent for a specific support request, or
 (b) where legally required (e.g. a valid subpoena). We only collect

@@ -7,7 +7,7 @@
   single-user app; the mobile app is a clean multi-tenant product (owner
   decision 2026-07-09, PRODUCT DECISION). New users start with ZERO data
   and no owner-specific defaults anywhere: no hardcoded company name
-  ("Bozkurt Fleet OS" the product brand is fine; "Graywolf Logistics LLC"
+  ("BOZKA TRUCKING AI" the product brand is fine; "Graywolf Logistics LLC"
   as a value is not), no hardcoded truck (unit number, year/make/model —
   the legacy-backup importer reads truck identity FROM the backup file's
   `DB.assets.tr`, never a specific truck), no non-zero business-balance/
@@ -333,7 +333,7 @@
   13. USER DATA IS PRIVATE (owner decision 2026-07-10, PRODUCT DECISION,
       binding): each user's financial data (settlements, deductions, loads,
       fuel, capital account, everything RLS-scoped to `auth.uid()`) is
-      private to that user. The operator (Bozkurt Fleet OS / whoever runs
+      private to that user. The operator (BOZKA TRUCKING AI / whoever runs
       the Supabase project) does not access an individual user's data
       except (a) with that user's explicit consent, given for a specific
       support request, or (b) where legally required (e.g. a valid

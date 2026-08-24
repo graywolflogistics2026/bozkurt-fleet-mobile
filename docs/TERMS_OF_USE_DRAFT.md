@@ -18,7 +18,7 @@ PROMPTS.md Session 3 (first-launch acceptance gate) and Session 10
 **Last updated:** [PLACEHOLDER — date of attorney sign-off]
 **Version:** [PLACEHOLDER — matches the `tos_version` value shipped in-app]
 
-Welcome to Bozkurt Fleet OS ("the App"), operated by
+Welcome to BOZKA TRUCKING AI ("the App"), operated by
 [PLACEHOLDER — legal entity name, e.g. "Graywolf Logistics LLC"] ("we,"
 "us," "our"). By creating an account or using the App, you agree to these
 Terms of Use ("Terms"). If you do not agree, do not use the App.

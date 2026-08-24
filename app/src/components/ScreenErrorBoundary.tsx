@@ -4,6 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
+import { BrandLogo, BRAND_LOGO_LIGHT } from '@/src/components/BrandLogo';
 
 // CRASH-ON-MOUNT FIX (owner decision 2026-07-30): a screen-level React
 // error boundary that renders the error message + component stack ON
@@ -126,6 +127,9 @@ export class ScreenErrorBoundary extends Component<Props, State> {
       return (
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }}>
+            <View style={{ alignItems: 'center', marginBottom: spacing.md }}>
+              <BrandLogo size={40} color={BRAND_LOGO_LIGHT} />
+            </View>
             <View
               style={{
                 backgroundColor: colors.card,

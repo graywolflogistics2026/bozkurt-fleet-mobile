@@ -1,4 +1,4 @@
-# Claude Code Prompt Playbook — Bozkurt Fleet OS Mobile
+# Claude Code Prompt Playbook — BOZKA TRUCKING AI Mobile
 
 How to use: run these prompts **one session at a time, in order**. Don't combine sessions.
 After each session: review the diff, run the app/tests, commit, THEN move to the next.
@@ -1209,7 +1209,7 @@ Port each icon from its inline SVG in legacy/index.html (react-native-svg
 `<Path>` equivalents of the same `d`/shape attributes — don't redraw from
 scratch) rather than substituting a different icon set, so the visual
 vocabulary matches the legacy app exactly. The sidebar's own logo header
-("🐺 Bozkurt Fleet OS / Graywolf Logistics LLC"), user footer (initials
+("🐺 BOZKA TRUCKING AI / Graywolf Logistics LLC"), user footer (initials
 avatar + name + company), and version string
 (legacy/index.html:114,146-147) should appear at the top/bottom of the
 wide-screen sidebar too. On phones, nothing changes from Session 3 — this
@@ -1509,7 +1509,7 @@ Session 10's scope, not blocking the Part 1 beta build):**
       description, keywords) and screenshots for both App Store Connect
       and Google Play Console.
 - [ ] Final brand/name decision after a trademark search (working name
-      "BOZKA AI" / "Bozkurt Fleet OS" not yet cleared).
+      "BOZKA AI" / "BOZKA TRUCKING AI" not yet cleared).
 - [ ] ToS/Privacy attorney review of `docs/TERMS_OF_USE_DRAFT.md` and the
       Privacy Policy page from this session (both currently
       English-only, unreviewed drafts).

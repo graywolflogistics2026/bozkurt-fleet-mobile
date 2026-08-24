@@ -1,5 +1,5 @@
 -- ============================================================================
--- Bozkurt Fleet OS — Initial schema migration
+-- BOZKA TRUCKING AI — Initial schema migration
 -- Source of truth: docs/SCHEMA.sql (human-reviewed, FINAL — DECISIONS D1-D6
 -- at its bottom are owner-approved) and docs/FEATURE_INVENTORY.md.
 --

@@ -14,6 +14,25 @@ import { colors } from '@/src/theme';
 // "facing" one direction), so it mirrors under I18nManager.isRTL — the
 // same "logical, not literal, direction" principle CLAUDE.md invariant
 // #11 already requires for RTL layout generally.
+//
+// MONOCHROME VARIANTS (owner decision 2026-08-24, branding pass): this
+// app is dark-theme-only in its own UI (theme.ts), but the mark also
+// appears on surfaces this app doesn't control the background of — a
+// captured share-card image someone posts anywhere, a future white
+// app-store icon background, a printed/exported document. `BRAND_LOGO_DARK`
+// (near-black, for a light/white background) and `BRAND_LOGO_LIGHT`
+// (white, for a dark background — the existing in-app default context)
+// are the two guaranteed-legible presets; `colors.accent` stays available
+// as an explicit opt-in for a small accent touch, never the default for a
+// surface whose background isn't known to be dark.
+export const BRAND_LOGO_DARK = '#0a0a0f';
+export const BRAND_LOGO_LIGHT = '#ffffff';
+// Common render sizes this mark is asked to stay crisp at (vector SVG, so
+// every size is equally crisp — these are just the sizes actually used
+// across the app/store-asset call sites, kept here as the one shared list
+// rather than each call site picking its own arbitrary number).
+export const BRAND_LOGO_SIZES = { xs: 24, sm: 32, md: 64, xl: 512 } as const;
+
 const VIEWBOX_WIDTH = 48;
 const VIEWBOX_HEIGHT = 26;
 
