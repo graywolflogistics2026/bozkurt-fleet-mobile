@@ -3693,3 +3693,93 @@
   Full suite: 74 suites / 1839 tests pass; `tsc --noEmit` clean; all 7
   locales confirmed key-parity (`importScreen.skippedRowsWarning`, hi/uk
   as untranslated English copies per invariant #11).
+- DEVICE TESTING ROUND — THREE ITEMS (owner decision 2026-08-24):
+  1. **TUTORIAL GATE BUG, root cause confirmed and fixed**:
+     `AuthContext.tsx`'s `needsTutorial` had `if (!profile) return false` —
+     an UNLOADED profile (still fetching, or its fetch failed/timed out)
+     was silently treated as "already seen," the exact wrong default.
+     `needsTos` two lines above already had the correct default
+     (`if (!profile) return true`, "block until confirmed"); `needsTutorial`
+     now matches it. This was NOT signup-path-only — `resolveRootRedirect()`
+     and the whole gate chain are driven purely by `profiles.tutorial_seen_at`
+     regardless of signup vs. sign-in, confirmed by re-reading
+     `app/src/navigation/rootRedirect.ts` and `app/app/_layout.tsx` — but the
+     wrong default meant a sign-in transition (session set, profile fetch
+     still in flight) or a stuck fetch could permanently skip it. All three
+     gate functions (`needsTos`/`needsTutorial`/`needsOnboarding`) are now
+     extracted into pure, testable functions,
+     `app/src/auth/profileGates.ts` (`resolveNeedsTos`/`resolveNeedsTutorial`/
+     `resolveNeedsOnboarding`), same convention as `rootRedirect.ts`/
+     `signUpFlow.ts` — `needsOnboarding`'s own pre-existing
+     `if (!profileLoaded) return false` was deliberately left UNCHANGED
+     (not part of this bug report), just extracted for consistency.
+     `AuthContext.tsx`'s `fetchProfile()` also gained a defensive fallback:
+     if the full column select 400s specifically on `tutorial_seen_at`
+     (the migration hasn't actually run against the live DB — §48 IS
+     applied now, but this guards any future column added the same way),
+     it retries once without that column instead of letting the WHOLE
+     profile fetch fail and silently null out `tos_accepted_at`/
+     `onboarding_completed_at` too. Verified BOTH replay entry points
+     (Settings → "How it works", Import's empty-state "See how" link)
+     already render unconditionally and already correctly
+     `router.push('/tutorial?replay=true')` — no code path was found that
+     could break their reachability; no change needed there.
+     Tests: `app/src/auth/__tests__/profileGates.test.ts` (new) —
+     regression-guards the exact bug (`resolveNeedsTutorial` with
+     `profileLoaded: false` must return `true`, not `false`) plus every
+     other branch of all three gate functions.
+  2. **AI COACH FULLY VISIBLE ON HOME**: the shallow `AiCoachCard` teaser
+     (icon + bold title + one static sentence, tap-through only) is
+     replaced by `AiCoachSection` (`app/(tabs)/index.tsx`), which renders
+     the actual briefing inline — a greeting line (time-of-day +
+     first name, same `dashboard.greeting.*` keys the page's own header
+     greeting uses), the profit-opportunity headline with its dollar
+     figure (`ceoMode.recommendations.headerTitle`/`headerTitleZero`),
+     and all three recommendation rows (icon + amount, each independently
+     tappable to its own relevant screen via `recommendationRoute()`) —
+     no truncation, no "see more" gate, `LegalFootnote` disclaimer kept.
+     A "🧑‍✈️ Open full AI Coach →" link stays for the detail/goal-
+     tracking/chat view (`ceo-mode.tsx`, unchanged in scope). Rather than
+     Home re-deriving a second copy of ceo-mode.tsx's recommendation
+     logic (real drift risk — two independently-computed "top 3
+     recommendations" lists that could disagree), the ENTIRE derivation
+     (weekly true-profit trend, needs-review/maintenance/compliance
+     counts, the fuel-benchmark/tax-reserve-shortfall recommendation
+     inputs, `buildRecommendationCandidates`/`selectTopRecommendations`)
+     was extracted out of `ceo-mode.tsx` into the ONE shared
+     `app/src/data/aiCoachSummary.ts`'s `useAiCoachSummary()` hook, which
+     both `ceo-mode.tsx` and Home now call — react-query dedupes by query
+     key, so this does not double-fetch settlements/deductions/fuel/etc.
+     already active elsewhere on either screen. The presentation helpers
+     (`RECOMMENDATION_ICON`, `recommendationText()`, `recommendationRoute()`)
+     moved from being ceo-mode.tsx-local into `src/stats/aiRecommendations.ts`
+     for the same single-source-of-truth reason. A zero-recommendations
+     account (nothing currently flagged) shows `ceoMode.homeAllCaughtUp`
+     ("You're all caught up...") instead of an empty card, still reachable
+     to the full screen.
+  3. **AI BUSINESS SCORE REMOVED ENTIRELY** (owner decision: "a made-up
+     score adds nothing next to real dollar figures"): `src/stats/
+     aiBusinessScore.ts` (`calcBusinessScore()`, the 0-100 composite +
+     four 1-5 star sub-ratings) and its test file are deleted outright.
+     `ceo-mode.tsx` had the only other reference — its Business Score
+     Card, the star-rating info `ModalSheet`, and the Share card's score
+     display are all removed; the Share card now shows the This-Week
+     Revenue/Profit KPI pair as its own headline content instead of a
+     score number. All 11 related i18n keys
+     (`businessScoreTitle`/`starFuelEfficiency`/`starTaxOptimization`/
+     `starMaintenance`/`starCashFlow`/`scoreInfoTitle`/`scoreInfoBody`/
+     `scoreInfoFuel`/`scoreInfoTax`/`scoreInfoMaintenance`/
+     `scoreInfoCashFlow`) were deleted from all 7 locale files — confirmed
+     via repo-wide grep that nothing else imports `aiBusinessScore`,
+     `calcBusinessScore`, `StarRating`, or references any of the deleted
+     keys before removing them. This is UNRELATED to Scorecard's own 0-100
+     score/grade (`calcScorecard()`, `app/(tabs)/more/scorecard.tsx`) or
+     to the Dashboard's already-retired Fleet Health Score gauge (DASHBOARD
+     SIMPLIFICATION above) — neither of those is touched by this item;
+     "AI Business Score" was specifically CEO Mode's own separate 4-star
+     composite.
+  Tests: 74 suites / 1847 tests pass (+8 from `profileGates.test.ts`);
+  `tsc --noEmit` clean; all 7 locales confirmed key-parity (2 new
+  `ceoMode.homeAllCaughtUp`/`ceoMode.homeOpenFull` keys added, 11 old
+  score keys removed, es/ru/ar/tr fully translated, hi/uk untranslated
+  English copies per invariant #11).

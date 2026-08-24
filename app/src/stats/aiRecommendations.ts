@@ -84,3 +84,60 @@ export function selectTopRecommendations(candidates: Recommendation[], count = 3
 export function sumRecommendationImpact(recommendations: Recommendation[]): number {
   return recommendations.reduce((sum, r) => sum + (r.estMonthlyImpact ?? 0), 0);
 }
+
+// Presentation helpers (moved here from ceo-mode.tsx, owner decision
+// 2026-08-24, "AI Coach fully visible on Home" — Home now renders these
+// same recommendation rows inline, so the icon/copy/route mapping is the
+// ONE shared definition both ceo-mode.tsx and Home read from, instead of
+// two copies that could silently drift apart.
+export const RECOMMENDATION_ICON: Record<RecommendationType, string> = {
+  fuelEfficiency: '⛽',
+  needsReview: '🧾',
+  taxReserveShortfall: '💰',
+  maintenanceCatchUp: '🔧',
+  complianceCatchUp: '📋',
+};
+
+export function recommendationText(
+  rec: Recommendation,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  money: (n: number) => string
+): string {
+  switch (rec.type) {
+    case 'fuelEfficiency':
+      return t('ceoMode.recommendations.fuelEfficiency', {
+        amount: money(rec.estMonthlyImpact ?? 0),
+        pct: (rec.detail.pctPointsAboveRange ?? 0).toFixed(1),
+      });
+    case 'needsReview':
+      return t('ceoMode.recommendations.needsReview', { count: rec.detail.count, amount: money(rec.estMonthlyImpact ?? 0) });
+    case 'taxReserveShortfall':
+      return t('ceoMode.recommendations.taxReserveShortfall', { amount: money(rec.estMonthlyImpact ?? 0) });
+    case 'maintenanceCatchUp':
+      return t('ceoMode.recommendations.maintenanceCatchUp', { count: rec.detail.count });
+    case 'complianceCatchUp':
+      return t('ceoMode.recommendations.complianceCatchUp', { count: rec.detail.count });
+  }
+}
+
+export type RecommendationRoute =
+  | '/(tabs)/more/profit-analysis'
+  | '/(tabs)/deductions'
+  | '/(tabs)/more/tax-estimator'
+  | '/(tabs)/truck-health'
+  | '/(tabs)/more/compliance';
+
+export function recommendationRoute(rec: Recommendation): RecommendationRoute {
+  switch (rec.type) {
+    case 'fuelEfficiency':
+      return '/(tabs)/more/profit-analysis';
+    case 'needsReview':
+      return '/(tabs)/deductions';
+    case 'taxReserveShortfall':
+      return '/(tabs)/more/tax-estimator';
+    case 'maintenanceCatchUp':
+      return '/(tabs)/truck-health';
+    case 'complianceCatchUp':
+      return '/(tabs)/more/compliance';
+  }
+}

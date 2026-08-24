@@ -30,7 +30,9 @@ import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroP
 import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
-import { Screen, ScreenTitle, TappableCard, MutedText, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { useAiCoachSummary, type AiCoachSummary } from '@/src/data/aiCoachSummary';
+import { RECOMMENDATION_ICON, recommendationText, recommendationRoute } from '@/src/stats/aiRecommendations';
+import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -43,8 +45,9 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 //   a) Hero profit card (period tabs + area chart)
 //   b) Revenue / Expenses / Net Profit trio with % deltas
 //   c) Business Balance slim card
-//   d) AI Coach card (fixed entry point into the ceo-mode briefing screen
-//      — no rotating insight logic anymore, see AiCoachCard below)
+//   d) AI Coach section — the full briefing rendered inline (owner
+//      decision 2026-08-24), not just a teaser link, see AiCoachSection
+//      below
 //   e) Recent Loads, then Best/Worst Lanes
 // Everything else that used to live on Home (Fleet Health Score gauge,
 // the rotating AI Insight card, the Capital Account strip, the needs-
@@ -298,22 +301,62 @@ function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: (
   );
 }
 
-// DASHBOARD SIMPLIFICATION (owner decision 2026-08-02): fixed entry point
-// into the AI Coach briefing (ceo-mode.tsx) — replaces the old rotating
-// AI Insight card. Same visual container/treatment (icon + bold title +
-// one sentence, tappable) as the retired AiInsightsCard, but the content
-// no longer rotates through candidate insight types; it always reads as
-// an invitation into the Coach. Reuses the existing `ceoMode.title`/
-// `ceoMode.subtitle` i18n strings ("AI Coach" / "Your weekly business
-// briefing, composed from your own data.") rather than adding new keys —
-// they already say exactly this, in all 7 supported locales.
-function AiCoachCard({ onPress }: { onPress: () => void }) {
+// AI COACH FULLY VISIBLE ON HOME (owner decision 2026-08-24, device
+// testing item 2) — replaces the old shallow "AI Coach" teaser card
+// (which just linked to ceo-mode.tsx with a one-sentence subtitle). Now
+// renders the actual briefing inline: a greeting line, the profit-
+// opportunity headline with its dollar figure, and all three
+// recommendation rows (icon + amount, each tappable through to its own
+// relevant screen) — no truncation, no "see more" gate. Reuses the exact
+// same recommendation data/copy/routing ceo-mode.tsx's own Card already
+// used — both screens now read from the shared useAiCoachSummary() hook
+// and the shared RECOMMENDATION_ICON/recommendationText/
+// recommendationRoute helpers (src/stats/aiRecommendations.ts), so the
+// two can never disagree. The dedicated AI Coach screen (ceo-mode.tsx)
+// stays reachable via the "Open full AI Coach" link below for the
+// detail/goal-tracking/chat view.
+function AiCoachSection({ coach, name }: { coach: AiCoachSummary; name: string }) {
   const { t } = useTranslation();
+  const router = useRouter();
+  const { money } = useFormatters();
+  const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
+  const hour = new Date().getHours();
+
   return (
-    <TappableCard onPress={onPress}>
-      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>🧑‍✈️ {t('ceoMode.title')}</Text>
-      <Text style={{ color: colors.text }}>{t('ceoMode.subtitle')}</Text>
-    </TappableCard>
+    <>
+      <ScreenTitle>{t('ceoMode.title')}</ScreenTitle>
+      <Card>
+        <Text style={{ color: colors.muted, fontSize: typography.size.sm, marginBottom: spacing.sm }}>
+          🧑‍✈️ {t(greetingKey(hour), { name })}
+        </Text>
+
+        {coach.recommendations.length === 0 ? (
+          <MutedText>{t('ceoMode.homeAllCaughtUp')}</MutedText>
+        ) : (
+          <>
+            <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.lg, marginBottom: spacing.sm }}>
+              {coach.recommendationsTotalImpact > 0
+                ? t('ceoMode.recommendations.headerTitle', { amount: moneyRounded(coach.recommendationsTotalImpact) })
+                : t('ceoMode.recommendations.headerTitleZero')}
+            </Text>
+            {coach.recommendations.map((rec) => (
+              <TappableCard key={rec.type} onPress={() => router.push(recommendationRoute(rec))}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <Text style={{ fontSize: 20 }}>{RECOMMENDATION_ICON[rec.type]}</Text>
+                  <Text style={{ color: colors.text, flex: 1 }}>{recommendationText(rec, t, moneyRounded)}</Text>
+                </View>
+              </TappableCard>
+            ))}
+          </>
+        )}
+
+        <Pressable onPress={() => router.push('/(tabs)/more/ceo-mode')} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
+          <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('ceoMode.homeOpenFull')}</Text>
+        </Pressable>
+
+        <LegalFootnote />
+      </Card>
+    </>
   );
 }
 
@@ -405,6 +448,7 @@ export default function Dashboard() {
 
   const statsQuery = useFleetStats(activeTruck?.id ?? null);
   const capitalQuery = useCapitalAccountSummary();
+  const aiCoach = useAiCoachSummary();
   const loadsQuery = useLoads();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
@@ -572,7 +616,16 @@ export default function Dashboard() {
 
         <CashBalanceSlimCard balance={capital?.businessBalance ?? 0} onPress={() => router.push('/(tabs)/more/cash-flow')} />
 
-        <AiCoachCard onPress={() => router.push('/(tabs)/more/ceo-mode')} />
+        {aiCoach.isLoading ? (
+          <>
+            <ScreenTitle>{t('ceoMode.title')}</ScreenTitle>
+            <TappableCard onPress={() => router.push('/(tabs)/more/ceo-mode')}>
+              <MutedText>{t('common.loading')}</MutedText>
+            </TappableCard>
+          </>
+        ) : (
+          <AiCoachSection coach={aiCoach} name={heroFirstName} />
+        )}
 
         <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>
         <TappableCard onPress={() => router.push('/(tabs)/more/loads')}>

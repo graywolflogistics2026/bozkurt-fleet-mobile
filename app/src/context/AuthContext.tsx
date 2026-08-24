@@ -8,6 +8,7 @@ import { isSupportedLocale, LANGUAGE_PICKER_ENABLED } from '@/src/i18n/config';
 import { setAppLocale } from '@/src/i18n';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { resolveSignUpOutcome, type SignUpOutcome } from '@/src/auth/signUpFlow';
+import { resolveNeedsTos, resolveNeedsTutorial, resolveNeedsOnboarding } from '@/src/auth/profileGates';
 
 // A network/runtime failure that never reaches Supabase's own {error}
 // contract (e.g. the device is offline) throws instead of resolving —
@@ -19,6 +20,12 @@ function messageFromUnknownError(err: unknown): string {
 }
 
 const STARTUP_TIMEOUT_MS = 8000;
+
+const PROFILE_COLUMNS = 'user_id, company_name, owner_name, locale, tos_accepted_at, tos_version, onboarding_completed_at, tutorial_seen_at';
+// Fallback select used only when the full list above 400s on a missing
+// tutorial_seen_at column (see fetchProfile below) — same field list minus
+// that one newest column.
+const PROFILE_COLUMNS_WITHOUT_TUTORIAL = 'user_id, company_name, owner_name, locale, tos_accepted_at, tos_version, onboarding_completed_at';
 
 type Profile = {
   user_id: string;
@@ -60,19 +67,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchProfile(userId: string) {
     const result = await withTimeout(
-      supabase
-        .from('profiles')
-        .select('user_id, company_name, owner_name, locale, tos_accepted_at, tos_version, onboarding_completed_at, tutorial_seen_at')
-        .eq('user_id', userId)
-        .maybeSingle(),
+      supabase.from('profiles').select(PROFILE_COLUMNS).eq('user_id', userId).maybeSingle(),
       STARTUP_TIMEOUT_MS,
       'fetchProfile'
     );
-    setProfile(result?.data ?? null);
+    let profileData: Profile | null = result?.data ?? null;
+    // ROBUSTNESS (owner decision 2026-08-24, device report "tutorial never
+    // appeared"): tutorial_seen_at (docs/PENDING_SQL.md §48) is newer than
+    // the rest of this select list. If that migration hasn't actually run
+    // against the live DB yet, PostgREST fails the WHOLE select (not just
+    // that one field) — which would otherwise silently null out
+    // tos_accepted_at/onboarding_completed_at too, not just
+    // tutorial_seen_at, breaking every other profile-gated screen along
+    // with it. Retry once without the column so a missing column degrades
+    // to "tutorial state unknown" (which needsTutorial below now correctly
+    // treats as SHOW, not "already seen") instead of nuking the whole
+    // profile fetch.
+    if (result?.error && profileData === null && /tutorial_seen_at/.test(result.error.message ?? '')) {
+      const fallback = await withTimeout(
+        supabase.from('profiles').select(PROFILE_COLUMNS_WITHOUT_TUTORIAL).eq('user_id', userId).maybeSingle(),
+        STARTUP_TIMEOUT_MS,
+        'fetchProfile-fallback'
+      );
+      profileData = fallback?.data ? { ...fallback.data, tutorial_seen_at: null } : null;
+    }
+    setProfile(profileData);
     // Cross-device sync (owner decision 2026-07-09): a manual language choice
     // in Settings is written to profiles.locale, and always wins over this
     // device's own cache/OS language on every subsequent sign-in.
-    const remoteLocale = result?.data?.locale;
+    const remoteLocale = profileData?.locale;
     if (LANGUAGE_PICKER_ENABLED && isSupportedLocale(remoteLocale)) {
       await setAppLocale(remoteLocale);
       applyLocaleDirection(remoteLocale);
@@ -175,31 +198,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session) await fetchProfile(session.user.id);
   }
 
-  const needsTos = useMemo(() => {
-    if (!session) return false;
-    if (!profile) return true; // profile row not yet loaded/created — block until confirmed
-    return profile.tos_accepted_at === null || profile.tos_version !== TOS_VERSION;
-  }, [session, profile]);
+  // needsTos/needsTutorial/needsOnboarding are pure functions in
+  // src/auth/profileGates.ts (extracted 2026-08-24, tutorial-gate bug fix
+  // — see that file's header comment for the "unknown state defaults to
+  // SHOW" rule these three now share and its own regression tests).
+  const needsTos = useMemo(
+    () =>
+      resolveNeedsTos({
+        hasSession: !!session,
+        profileLoaded: !!profile,
+        tosAcceptedAt: profile?.tos_accepted_at,
+        tosVersion: profile?.tos_version,
+        currentTosVersion: TOS_VERSION,
+      }),
+    [session, profile]
+  );
 
   // FIRST-RUN TUTORIAL (owner decision 2026-08-05, FULL PARITY follow-up
   // item I) — runs after ToS acceptance and BEFORE the onboarding wizard
   // (spec's own explicit ordering), so this only ever evaluates true once
   // needsTos is already false, and needsOnboarding below additionally
   // waits for this to clear too.
-  const needsTutorial = useMemo(() => {
-    if (!session || needsTos) return false;
-    if (!profile) return false;
-    return profile.tutorial_seen_at === null;
-  }, [session, needsTos, profile]);
+  const needsTutorial = useMemo(
+    () => resolveNeedsTutorial({ hasSession: !!session, needsTos, profileLoaded: !!profile, tutorialSeenAt: profile?.tutorial_seen_at }),
+    [session, needsTos, profile]
+  );
 
   // Runs AFTER ToS acceptance AND the first-run tutorial (PROMPTS.md
   // Session 9b — "after sign-up + ToS acceptance, walk the user
   // through..."; the tutorial slots in between per its own spec).
-  const needsOnboarding = useMemo(() => {
-    if (!session || needsTos || needsTutorial) return false;
-    if (!profile) return false;
-    return profile.onboarding_completed_at === null;
-  }, [session, needsTos, needsTutorial, profile]);
+  const needsOnboarding = useMemo(
+    () =>
+      resolveNeedsOnboarding({
+        hasSession: !!session,
+        needsTos,
+        needsTutorial,
+        profileLoaded: !!profile,
+        onboardingCompletedAt: profile?.onboarding_completed_at,
+      }),
+    [session, needsTos, needsTutorial, profile]
+  );
 
   const value: AuthContextValue = {
     session,
