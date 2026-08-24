@@ -9,6 +9,7 @@ import { MenuTabButton } from '@/src/components/MenuTabButton';
 import { MenuSheet } from '@/src/components/MenuSheet';
 import { WideSidebar } from '@/src/components/WideSidebar';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
+import { ImportJobsChip } from '@/src/components/ImportJobsChip';
 import { useAuth } from '@/src/context/AuthContext';
 import { useAlertsData } from '@/src/data/alerts';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -271,6 +272,11 @@ export default function TabsLayout() {
           router.push('/(tabs)/more/ai-advisor');
         }}
       />
+      {/* BACKGROUND IMPORT (owner decision 2026-08-24) — always mounted
+          regardless of which tab/screen is active, so a background job's
+          status is visible (and its "ready" notification fires) no matter
+          where the user navigates to. */}
+      <ImportJobsChip />
     </>
   );
 
@@ -280,6 +286,7 @@ export default function TabsLayout() {
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bg }}>
       <WideSidebar />
       <View style={{ flex: 1 }}>{tabs}</View>
+      <ImportJobsChip />
     </View>
   );
 }

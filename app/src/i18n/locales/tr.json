@@ -14,7 +14,8 @@
     "copyDetails": "Ayrıntıları Kopyala",
     "copied": "Kopyalandı!",
     "close": "Kapat",
-    "viewOriginalDocument": "Orijinal Belgeyi Görüntüle"
+    "viewOriginalDocument": "Orijinal Belgeyi Görüntüle",
+    "dismiss": "Yoksay"
   },
   "nav": {
     "dashboard": "Ana Sayfa",
@@ -1879,5 +1880,42 @@
   "serviceStatus": {
     "title": "AI ile okuma etkilenmiş olabilir",
     "autoFallbackMessage": "Bu cihazda tekrarlayan AI içe aktarma hataları görüyoruz. Diğer her şey çalışmaya devam ediyor ve her zaman manuel olarak kayıt ekleyebilirsin. Kısa süre sonra tekrar denemek genellikle sorunu çözer."
+  },
+  "importJobs": {
+    "listTitle": "İçe Aktarma İşleri",
+    "untitledFile": "Adsız dosya",
+    "status": {
+      "queued": "Sırada",
+      "processing": "İşleniyor",
+      "ready": "Hazır",
+      "failed": "Başarısız"
+    },
+    "pageProgress": "{{total}} sayfadan {{through}}.",
+    "starting": "Başlatılıyor…",
+    "genericFailure": "Bir şeyler ters gitti.",
+    "reviewNow": "Şimdi İncele",
+    "retryFailedTitle": "Yeniden Deneme Başarısız",
+    "dismissConfirmTitle": "Bu içe aktarma kaldırılsın mı?",
+    "dismissConfirmBody": "Listenizden kaldırılacak. Bu geri alınamaz.",
+    "empty": "Henüz içe aktarma yok.",
+    "uploading": "Yükleniyor…",
+    "startedTitle": "İçe aktarma başlatıldı",
+    "startedBody": "İncelemeye hazır olduğunda size bildireceğiz. Bu arada uygulamayı kullanmaya devam edebilirsiniz.",
+    "reviewNotReady": "Bu içe aktarma henüz incelemeye hazır değil.",
+    "chip": {
+      "processing": "Settlement’ınız okunuyor… görüntülemek için dokunun",
+      "processingWithProgress": "Settlement’ınız okunuyor — {{total}} sayfadan {{through}}.",
+      "ready": "İçe aktarmanız incelemeye hazır",
+      "readyMultiple": "{{count}} içe aktarma incelemeye hazır",
+      "failed": "Bir içe aktarma başarısız oldu — yeniden denemek için dokunun",
+      "failedMultiple": "{{count}} içe aktarma başarısız oldu — yeniden denemek için dokunun"
+    },
+    "notification": {
+      "readyTitle": "İçe aktarmanız hazır",
+      "readyBody": "İncelemek ve kaydetmek için dokunun.",
+      "readyBodyWithDetail": "Hafta sonu {{weekEnding}} — {{amount}}. İncelemek ve kaydetmek için dokunun.",
+      "failedTitle": "İçe aktarma başarısız",
+      "failedBody": "Ne olduğunu görmek ve yeniden denemek için dokunun."
+    }
   }
 }

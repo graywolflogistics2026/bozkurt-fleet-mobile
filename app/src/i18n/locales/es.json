@@ -14,7 +14,8 @@
     "copyDetails": "Copiar Detalles",
     "copied": "¡Copiado!",
     "close": "Cerrar",
-    "viewOriginalDocument": "Ver documento original"
+    "viewOriginalDocument": "Ver documento original",
+    "dismiss": "Descartar"
   },
   "nav": {
     "dashboard": "Inicio",
@@ -1879,5 +1880,42 @@
   "serviceStatus": {
     "title": "La lectura con IA podría estar afectada",
     "autoFallbackMessage": "Estamos viendo fallas repetidas al importar con IA en este dispositivo. Todo lo demás sigue funcionando, y siempre puedes agregar registros manualmente. Intentar de nuevo en un momento suele resolverlo."
+  },
+  "importJobs": {
+    "listTitle": "Importaciones",
+    "untitledFile": "Archivo sin título",
+    "status": {
+      "queued": "En cola",
+      "processing": "Procesando",
+      "ready": "Listo",
+      "failed": "Fallido"
+    },
+    "pageProgress": "Página {{through}} de {{total}}",
+    "starting": "Iniciando…",
+    "genericFailure": "Algo salió mal.",
+    "reviewNow": "Revisar Ahora",
+    "retryFailedTitle": "Reintento Fallido",
+    "dismissConfirmTitle": "¿Eliminar esta importación?",
+    "dismissConfirmBody": "Se eliminará de tu lista. Esto no se puede deshacer.",
+    "empty": "Aún no hay importaciones.",
+    "uploading": "Subiendo…",
+    "startedTitle": "Importación iniciada",
+    "startedBody": "Te avisaremos cuando esté lista para revisar. Puedes seguir usando la app mientras tanto.",
+    "reviewNotReady": "Esta importación aún no está lista para revisar.",
+    "chip": {
+      "processing": "Leyendo tu settlement… toca para ver",
+      "processingWithProgress": "Leyendo tu settlement — página {{through}} de {{total}}",
+      "ready": "Tu importación está lista para revisar",
+      "readyMultiple": "{{count}} importaciones listas para revisar",
+      "failed": "Una importación falló — toca para reintentar",
+      "failedMultiple": "{{count}} importaciones fallaron — toca para reintentar"
+    },
+    "notification": {
+      "readyTitle": "Tu importación está lista",
+      "readyBody": "Toca para revisar y guardar.",
+      "readyBodyWithDetail": "Semana {{weekEnding}} — {{amount}}. Toca para revisar y guardar.",
+      "failedTitle": "Importación fallida",
+      "failedBody": "Toca para ver qué pasó y reintentar."
+    }
   }
 }

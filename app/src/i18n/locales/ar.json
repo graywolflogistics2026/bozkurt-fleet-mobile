@@ -14,7 +14,8 @@
     "copyDetails": "نسخ التفاصيل",
     "copied": "تم النسخ!",
     "close": "إغلاق",
-    "viewOriginalDocument": "عرض المستند الأصلي"
+    "viewOriginalDocument": "عرض المستند الأصلي",
+    "dismiss": "تجاهل"
   },
   "nav": {
     "dashboard": "الرئيسية",
@@ -1879,5 +1880,42 @@
   "serviceStatus": {
     "title": "قد تكون القراءة بالذكاء الاصطناعي متأثرة",
     "autoFallbackMessage": "نلاحظ فشلًا متكررًا في الاستيراد بالذكاء الاصطناعي على هذا الجهاز. كل شيء آخر يستمر بالعمل، ويمكنك دائمًا إضافة الإدخالات يدويًا. عادةً ما تحل المحاولة مرة أخرى بعد قليل المشكلة."
+  },
+  "importJobs": {
+    "listTitle": "عمليات الاستيراد",
+    "untitledFile": "ملف بدون عنوان",
+    "status": {
+      "queued": "في الانتظار",
+      "processing": "جارٍ المعالجة",
+      "ready": "جاهز",
+      "failed": "فشل"
+    },
+    "pageProgress": "الصفحة {{through}} من {{total}}",
+    "starting": "جارٍ البدء…",
+    "genericFailure": "حدث خطأ ما.",
+    "reviewNow": "راجع الآن",
+    "retryFailedTitle": "فشلت إعادة المحاولة",
+    "dismissConfirmTitle": "إزالة هذا الاستيراد؟",
+    "dismissConfirmBody": "سيتم إزالته من قائمتك. لا يمكن التراجع عن هذا.",
+    "empty": "لا توجد عمليات استيراد بعد.",
+    "uploading": "جارٍ الرفع…",
+    "startedTitle": "بدأ الاستيراد",
+    "startedBody": "سنُعلمك عندما يصبح جاهزًا للمراجعة. يمكنك الاستمرار باستخدام التطبيق في هذه الأثناء.",
+    "reviewNotReady": "هذا الاستيراد غير جاهز للمراجعة بعد.",
+    "chip": {
+      "processing": "جارٍ قراءة settlement الخاص بك… اضغط للعرض",
+      "processingWithProgress": "جارٍ قراءة settlement الخاص بك — الصفحة {{through}} من {{total}}",
+      "ready": "استيرادك جاهز للمراجعة",
+      "readyMultiple": "{{count}} عمليات استيراد جاهزة للمراجعة",
+      "failed": "فشلت عملية استيراد — اضغط لإعادة المحاولة",
+      "failedMultiple": "فشلت {{count}} عمليات استيراد — اضغط لإعادة المحاولة"
+    },
+    "notification": {
+      "readyTitle": "استيرادك جاهز",
+      "readyBody": "اضغط للمراجعة والحفظ.",
+      "readyBodyWithDetail": "الأسبوع المنتهي {{weekEnding}} — {{amount}}. اضغط للمراجعة والحفظ.",
+      "failedTitle": "فشل الاستيراد",
+      "failedBody": "اضغط لمعرفة ما حدث وإعادة المحاولة."
+    }
   }
 }

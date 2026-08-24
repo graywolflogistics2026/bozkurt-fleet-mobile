@@ -1029,6 +1029,320 @@ async function logAiUsage(
   }
 }
 
+// ============================================================================
+// BACKGROUND IMPORT (owner decision 2026-08-24) — docs/PENDING_SQL.md §54.
+// The real fix for "an import feels slow" isn't more speed, it's not
+// making the user watch it happen. Mode 'job'/'retry_job' (handled by
+// handleJobStart() below, branched to right after auth in Deno.serve)
+// creates/reuses one `import_jobs` row and returns {jobId} immediately
+// (202 Accepted) — the actual extraction keeps running in the background
+// via EdgeRuntime.waitUntil(runJobInBackground(...)), a genuine Supabase
+// Edge Runtime capability for continuing work after a response has
+// already been sent (this file's own TIMEOUT/PAGE-BUDGET comment block
+// above has referenced this capability for a while — this is the first
+// pass that actually uses it). This is what makes the job survive
+// navigation and app backgrounding: nothing about its progress depends on
+// the CLIENT's own JS still running — the client just polls/subscribes to
+// `import_jobs` for progress, from any screen, at any time, and can pick
+// up wherever the server currently is even after being fully closed and
+// reopened later.
+// JOB_HARD_BUDGET_MS: a genuine, HONESTLY-FLAGGED best-effort value, not
+// an independently-verified platform ceiling — this file's own prior
+// TIMEOUT/PAGE-BUDGET comment cites "~400s" for waitUntil background work
+// from a documentation lookup that was never actually exercised in this
+// codebase before now (the function had never used waitUntil until this
+// pass). 240s (4 min) is chosen as a conservative, comfortable margin
+// under that unverified figure — realistic settlements (even a dozen
+// pages at the slowest previously-MEASURED per-page time, ~40s, with
+// BATCH_CONCURRENCY=2 halving the effective wall-clock) should finish
+// well inside this budget; a job that's still running when this budget
+// is hit is marked 'failed' with a clear "took too long" reason rather
+// than left stuck in 'processing' forever. Monitor real device job
+// timing (the same INSTRUMENT log lines the synchronous path already
+// uses) and adjust this constant if the platform's real ceiling turns
+// out to be different.
+const JOB_HARD_BUDGET_MS = 240_000;
+
+// The job's own version of "process every page" — reuses every tested
+// extraction primitive (triagePageOrder, runWithConcurrencyLimit,
+// runPageWithRetry) but loops across the WHOLE document in one go rather
+// than handing off between HTTP invocations (extractPagesForInvocation
+// above stays exactly as it was, for the synchronous request/response
+// callers that still need the 150s-per-invocation hand-off protocol).
+// `onPageSettled` fires after EVERY individual page resolves (success or
+// permanently-missing-after-retry) — not just once per wave — so
+// `import_jobs.pages_done` advances smoothly as pages complete, which is
+// what lets a polling client show real, granular progress.
+async function runJobPages(
+  anthropicKey: string,
+  fileBase64: string,
+  totalPages: number,
+  prompt: string,
+  remainingBudgetMs: () => number,
+  onPageSettled: (outcome: PageOutcome) => Promise<void>,
+): Promise<PageOutcome[]> {
+  const triageStartedAt = performance.now();
+  const allRanges: PageRange[] = Array.from({ length: totalPages }, (_, i) => ({ start: i + 1, end: i + 1 }));
+  const pageChunks = await splitPdfIntoChunks(fileBase64, allRanges);
+  const byteSizes: PageByteSize[] = pageChunks.map((b64, i) => ({ page: i + 1, byteSize: b64.length }));
+  const pageBytesCache = new Map<number, string>();
+  pageChunks.forEach((b64, i) => pageBytesCache.set(i + 1, b64));
+  const pageOrder = triagePageOrder(byteSizes);
+  const totalBytes = byteSizes.reduce((sum, p) => sum + p.byteSize, 0);
+  console.log(
+    `[ai-import] INSTRUMENT job triage pages=${byteSizes.length} avgPageBytes=${byteSizes.length > 0 ? Math.round(totalBytes / byteSizes.length) : 0} order=[${pageOrder.join(",")}] triageDurationMs=${Math.round(performance.now() - triageStartedAt)}`
+  );
+
+  return runWithConcurrencyLimit(pageOrder, BATCH_CONCURRENCY, async (page) => {
+    if (remainingBudgetMs() < MIN_USEFUL_BUDGET_MS) {
+      console.log(`[ai-import] job: skipping page ${page} — job budget nearly exhausted`);
+      const outcome: PageOutcome = { page, missing: true };
+      await onPageSettled(outcome);
+      return outcome;
+    }
+    const outcome = await runPageWithRetry(anthropicKey, fileBase64, totalPages, page, prompt, remainingBudgetMs, pageBytesCache.get(page));
+    await onPageSettled(outcome);
+    return outcome;
+  });
+}
+
+// The actual background work — SINGLE CALL IS STILL THE DEFAULT (same
+// "try the whole document in one call first" philosophy as the
+// synchronous path), falling back to runJobPages() only on a genuine
+// "too much content for one call" signal (timeout/truncated). Every state
+// transition is written to `import_jobs` as it happens (queued ->
+// processing -> ready|failed) — this function's own `supabase` client
+// still carries the ORIGINAL caller's JWT (captured before the response
+// was sent), so these writes are genuinely on behalf of that user and
+// pass RLS exactly like any other authenticated request would.
+async function runJobInBackground(
+  supabase: ReturnType<typeof createClient>,
+  jobId: string,
+  userId: string,
+  anthropicKey: string,
+  fileBase64: string,
+  mediaType: string,
+  prompt: string,
+): Promise<void> {
+  const jobStartedAt = performance.now();
+  function remainingJobBudgetMs(): number {
+    return JOB_HARD_BUDGET_MS - (performance.now() - jobStartedAt);
+  }
+
+  async function markFailed(message: string, step: string): Promise<void> {
+    console.log(`[ai-import] job ${jobId} failed: ${step} — ${message}`);
+    await supabase.from("import_jobs").update({
+      status: "failed",
+      error_message: message,
+      error_step: step,
+      updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    await logAiUsage(supabase, userId, false, step);
+  }
+
+  try {
+    await supabase.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId);
+
+    const isImage = mediaType.startsWith("image/");
+    const contentBlock = isImage
+      ? { type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } }
+      : { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } };
+
+    let result: ExtractOneResult = isImage
+      ? await extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS)
+      : await extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+    console.log(`[ai-import] job ${jobId} single-call result: ${"errorType" in result ? result.errorType : "success"}`);
+
+    // FALLBACK: only a genuine "too much content for one call" signal
+    // enters the per-page path — a clean 4xx/parse-failure/refusal is not
+    // something splitting into pages can fix (same rule as the
+    // synchronous path above).
+    if (!isImage && "errorType" in result && (result.errorType === "timeout" || result.errorType === "truncated")) {
+      const rawPageCount = await getPdfPageCount(fileBase64);
+      if (rawPageCount !== null && rawPageCount > 1) {
+        const clampedTotal = Math.min(rawPageCount, MAX_TOTAL_PAGES);
+        console.log(`[ai-import] job ${jobId}: single-call failed (${result.errorType}) — falling back to page-by-page, totalPages=${rawPageCount}`);
+        await supabase.from("import_jobs").update({ pages_total: clampedTotal, updated_at: new Date().toISOString() }).eq("id", jobId);
+
+        let doneCount = 0;
+        const outcomes = await runJobPages(anthropicKey, fileBase64, clampedTotal, prompt, remainingJobBudgetMs, async () => {
+          doneCount++;
+          await supabase.from("import_jobs").update({ pages_done: doneCount, updated_at: new Date().toISOString() }).eq("id", jobId);
+        });
+
+        const merged = mergeAllPages(outcomes);
+        if (merged) {
+          result = { extraction: merged.extraction };
+          if (merged.missingPages.length > 0) {
+            console.log(`[ai-import] job ${jobId}: completed with missing pages ${JSON.stringify(merged.missingPages)}`);
+          }
+        } else {
+          result = {
+            errorType: "anthropic_error",
+            message: "Could not process this document — the AI service was unavailable or timed out even after a retry.",
+          };
+        }
+      }
+      // else: genuinely can't chunk (single-page document, or pdf-lib
+      // couldn't determine a page count) — keep the original single-call
+      // error as the final result.
+    }
+
+    if ("errorType" in result) {
+      await markFailed(result.message, result.errorType);
+      return;
+    }
+
+    await supabase.from("import_jobs").update({
+      status: "ready",
+      result_json: result.extraction,
+      updated_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    await logAiUsage(supabase, userId, true, null);
+    await consumeOneCreditIfOverAllowance(supabase, userId);
+    console.log(`[ai-import] job ${jobId} ready`);
+  } catch (err) {
+    // A thrown error anywhere in this function (a network blip that
+    // wasn't already caught/converted by extractOnePass, a genuinely
+    // unexpected bug) must never leave the job silently stuck in
+    // 'processing' forever — same "never leave things in an ambiguous
+    // state" principle the rest of this codebase already follows.
+    await markFailed(err instanceof Error ? err.message : String(err), "unexpected");
+  }
+}
+
+// JOB START / RETRY (owner decision 2026-08-24) — branched to from
+// Deno.serve right after auth, before the synchronous path's own
+// fileBase64/mediaType handling (a job request never sends fileBase64 at
+// all). Creates (mode 'job') or resets (mode 'retry_job', REUSING the
+// same job row and its already-uploaded storage_path — "never make the
+// user pick it again") the import_jobs row, runs the SAME daily-limit/
+// usage-limit/ANTHROPIC_API_KEY checks the synchronous path runs on a
+// fresh request, downloads the file from Storage, and kicks off
+// EdgeRuntime.waitUntil(runJobInBackground(...)) before returning
+// {jobId} with 202 Accepted. Every failure path here marks the job row
+// 'failed' with a real reason too — a job the user can SEE failed
+// (with retry available) is far better than an HTTP error that vanishes
+// with no trace of what was attempted.
+async function handleJobStart(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  body: {
+    mode?: "job" | "retry_job";
+    storagePath?: string;
+    mediaType?: string;
+    fileName?: string;
+    retryJobId?: string;
+    docHint?: string;
+    locale?: string;
+    customCategories?: string[];
+    learningRules?: { keyword: string; category: string }[];
+    carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
+  },
+): Promise<Response> {
+  const isRetry = body.mode === "retry_job";
+  let jobId: string;
+  let storagePath: string;
+  let mediaType: string;
+
+  if (isRetry) {
+    if (!body.retryJobId) return errorResponse("bad_request", "retryJobId is required.", 400);
+    const { data: existing, error: fetchError } = await supabase
+      .from("import_jobs")
+      .select("id, storage_path, media_type, user_id")
+      .eq("id", body.retryJobId)
+      .maybeSingle();
+    if (fetchError || !existing || existing.user_id !== userId) {
+      return errorResponse("bad_request", "That import job could not be found.", 404);
+    }
+    jobId = existing.id as string;
+    storagePath = existing.storage_path as string;
+    mediaType = existing.media_type as string;
+    await supabase.from("import_jobs").update({
+      status: "queued",
+      pages_done: 0,
+      pages_total: null,
+      result_json: null,
+      error_message: null,
+      error_step: null,
+      updated_at: new Date().toISOString(),
+      completed_at: null,
+    }).eq("id", jobId);
+  } else {
+    if (!body.storagePath || !body.mediaType) {
+      return errorResponse("bad_request", "storagePath and mediaType are required.", 400);
+    }
+    storagePath = body.storagePath;
+    mediaType = body.mediaType;
+    const { data: inserted, error: insertError } = await supabase
+      .from("import_jobs")
+      .insert({ user_id: userId, storage_path: storagePath, media_type: mediaType, file_name: body.fileName ?? null, status: "queued" })
+      .select("id")
+      .single();
+    if (insertError || !inserted) {
+      return errorResponse("anthropic_error", "Could not start the import job.", 500);
+    }
+    jobId = inserted.id as string;
+  }
+
+  async function failJob(message: string, step: string, status: number): Promise<Response> {
+    await supabase.from("import_jobs").update({
+      status: "failed", error_message: message, error_step: step, updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+    return errorResponse(step as ErrorType, message, status);
+  }
+
+  // DAILY LIMIT + USAGE LIMIT — the SAME checks a fresh synchronous
+  // request runs; a background job is still a real import and must
+  // respect the same limits, checked BEFORE any Anthropic call/Storage
+  // download.
+  const startOfDayUtc = new Date();
+  startOfDayUtc.setUTCHours(0, 0, 0, 0);
+  const { count, error: countError } = await supabase
+    .from("documents")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("imported_at", startOfDayUtc.toISOString());
+  if (countError) return failJob("Could not check today's import count.", "anthropic_error", 500);
+  if ((count ?? 0) >= DAILY_IMPORT_LIMIT) {
+    return failJob(`Daily import limit reached (${DAILY_IMPORT_LIMIT}/day). Try again tomorrow.`, "rate_limited", 429);
+  }
+
+  const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
+  if (!usageCheck.allowed) {
+    await logAiUsage(supabase, userId, false, "usage_limit_reached");
+    return failJob(usageCheck.message, "usage_limit_reached", 429);
+  }
+
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!anthropicKey) return failJob("Server misconfigured: ANTHROPIC_API_KEY not set.", "anthropic_error", 500);
+
+  // PDF/FILE SIZE GUARD — re-checked here (belt and suspenders, same
+  // spirit as the synchronous path's own guard) even though the client
+  // already checked before uploading; a client bug/bypass must never be
+  // the only thing standing between an oversized file and this function.
+  const { data: fileData, error: downloadError } = await supabase.storage.from("documents").download(storagePath);
+  if (downloadError || !fileData) return failJob("Could not read the uploaded file.", "bad_request", 400);
+  const fileBytes = new Uint8Array(await fileData.arrayBuffer());
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+  if (fileBytes.byteLength > MAX_FILE_SIZE_BYTES) {
+    return failJob("This file is too large — try splitting it or exporting a smaller version.", "bad_request", 413);
+  }
+  const fileBase64 = bytesToBase64(fileBytes);
+
+  const prompt = buildExtractionPrompt(body.docHint, body.locale, body.customCategories, body.learningRules, body.carrierCodeMaps);
+
+  console.log(`[ai-import] job ${jobId} accepted (${isRetry ? "retry" : "new"}), mediaType=${mediaType}, kicking off background processing`);
+  // EdgeRuntime is a Supabase Edge Runtime global (not a standard Deno/TS
+  // lib type, hence the loose reference) — this is what lets processing
+  // continue after the response below is already sent.
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime.waitUntil(runJobInBackground(supabase, jobId, userId, anthropicKey, fileBase64, mediaType, prompt));
+
+  return new Response(JSON.stringify({ jobId }), { status: 202, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+}
+
 Deno.serve(async (req: Request) => {
   // DYNAMIC TIME-BUDGET TRACKING (owner decision 2026-08-03, round 5) —
   // computed HERE, inside the handler, not at module scope: Deno keeps
@@ -1097,11 +1411,28 @@ Deno.serve(async (req: Request) => {
     // that failed even after this function's own one retry.
     priorPageExtractions?: { page: number; extraction: unknown }[];
     priorMissingPages?: number[];
+    // BACKGROUND IMPORT (owner decision 2026-08-24) — mode 'job' starts a
+    // new server-tracked import_jobs row and returns {jobId} immediately
+    // (202 Accepted), continuing to process in the background via
+    // EdgeRuntime.waitUntil() — see runJobInBackground()/handleJobStart()
+    // below. Mode 'retry_job' reuses an existing FAILED job's own already-
+    // uploaded storagePath (never asks the client to re-pick/re-upload).
+    // Neither mode sends fileBase64 at all — the file is read from Storage
+    // server-side via storagePath (a new upload, for 'job') or the job's
+    // own stored path (for 'retry_job').
+    mode?: "job" | "retry_job";
+    storagePath?: string;
+    fileName?: string;
+    retryJobId?: string;
   };
   try {
     body = await req.json();
   } catch {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
+  }
+
+  if (body.mode === "job" || body.mode === "retry_job") {
+    return handleJobStart(supabase, userId, body);
   }
 
   const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;

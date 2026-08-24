@@ -2512,6 +2512,75 @@ insert into carrier_code_maps (carrier, code, sub_code, label, description, cate
 
 ---
 
+## 54. import_jobs table (BACKGROUND IMPORT, owner decision 2026-08-24)
+
+The real fix for "an import feels slow" isn't more speed, it's not
+making the user watch it happen. `import_jobs` is the one server-tracked
+row a background settlement/document extraction lives in — created the
+instant the user picks a file (after it's uploaded to Storage), updated
+progressively as pages are processed by `ai-import`'s new job mode
+(`EdgeRuntime.waitUntil()`-driven background work, see CLAUDE.md's own
+dated entry for the full design), and read by the client via polling
+(`app/src/data/importJobs.ts`) to drive a persistent status chip, a jobs
+list, and a local "ready to review" notification. `result_json` holds
+the RAW MERGED EXTRACTION only — nothing is ever auto-saved to the
+ledger from a job; the user still confirms through the exact same
+preview/reconciliation-guard/needs-review flow as a live import.
+`storage_path` is what makes RETRY possible without re-picking the file
+— a retry re-reads the same uploaded bytes and restarts processing on
+the SAME job row.
+
+```sql
+create table import_jobs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- Reserved for a future save-time linkage (once the user confirms and
+  -- saves, the resulting documents.id could be written back here) — not
+  -- populated by this pass, nothing reads it yet.
+  document_id uuid references documents(id) on delete set null,
+  storage_path text not null,
+  media_type text not null,
+  file_name text,
+  status text not null default 'queued' check (status in ('queued', 'processing', 'ready', 'failed')),
+  pages_done integer not null default 0,
+  pages_total integer,
+  result_json jsonb,
+  error_message text,
+  error_step text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+create index import_jobs_user_id_idx on import_jobs(user_id, created_at desc);
+
+alter table import_jobs enable row level security;
+create policy "import_jobs_select_own" on import_jobs
+  for select using (auth.uid() = user_id);
+create policy "import_jobs_insert_own" on import_jobs
+  for insert with check (auth.uid() = user_id);
+create policy "import_jobs_update_own" on import_jobs
+  for update using (auth.uid() = user_id);
+create policy "import_jobs_delete_own" on import_jobs
+  for delete using (auth.uid() = user_id);
+```
+
+`user_id ... on delete cascade` means `delete-account` needs NO explicit
+table-list entry (same precedent as `drivers` — `auth.admin.deleteUser()`
+cleans it up automatically); `reset-data` DOES need one (it never deletes
+the auth user) — added to `TABLES_IN_DELETION_ORDER` there. The raw
+uploaded file lives under the EXISTING `documents` Storage bucket at
+`{user_id}/import-jobs/...`, so both functions' already-recursive
+`{user_id}/` storage-folder walk sweeps it up with no bucket-list change
+needed. Deliberately NOT added to `exportAllData.ts`'s `EXPORT_TABLES` —
+this is transient job/processing state, not a permanent financial record
+a "export all my data" dump is for (same reasoning `ai_usage_log`/
+`service_status` are excluded from that list).
+
+- [ ] 54a run (import_jobs table + RLS + index)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

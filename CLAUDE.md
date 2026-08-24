@@ -4773,3 +4773,181 @@
   protocol) and needs redeploying; `ai-advisor`/`reset-data`/
   `delete-account` were NOT touched. No native rebuild needed — pure
   JS/TS work, no new native dependency, ships via a normal `eas update`.
+- BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
+  — "the real fix for perceived slowness... even at best speed, a
+  multi-page settlement takes a minute-plus of AI time. The user should
+  NOT sit and watch it." Six items:
+  1. **FIRE-AND-FORGET FLOW**: picking a PDF now uploads it to Storage
+     and starts a server-tracked `import_jobs` row, returning the user to
+     the app almost immediately (`app/src/data/importJobs.ts`'s
+     `useStartImportJob()`) instead of a multi-minute foreground wait.
+     Photo imports are DELIBERATELY UNCHANGED — a photo is always a
+     single, fast Anthropic call (never chunked/continued, per the
+     existing architecture), so there's no "perceived slowness" problem
+     to fix there; `processImage()`/the synchronous `callAiImport()`
+     stay exactly as the prior SPEED UP pass left them, untouched.
+  2. **SURVIVES NAVIGATION + APP BACKGROUNDING**: the actual extraction
+     runs SERVER-SIDE via `EdgeRuntime.waitUntil()` (`supabase/functions/
+     ai-import/index.ts`'s `runJobInBackground()`) — a genuine Supabase
+     Edge Runtime capability for continuing work after a response has
+     already been sent, referenced by this file's own prior TIMEOUT/
+     PAGE-BUDGET comment for a while but never actually exercised before
+     this pass. The client just polls `import_jobs`
+     (`useImportJobs()`, 3s while anything is queued/processing, 30s once
+     everything's terminal) — since the job's progress is entirely
+     server-owned, nothing about it depends on the client's own JS still
+     running; reopening the app days later and polling once picks up
+     exactly wherever the server currently is. "Poll or subscribe" —
+     polling was chosen over a Realtime channel subscription for
+     simplicity/reliability (no channel lifecycle to manage).
+  3. **"READY TO REVIEW" + confirmation-gated save**: on completion the
+     persistent chip (`app/src/components/ImportJobsChip.tsx`, always
+     mounted from the tab layout in both the phone and wide-screen
+     branches) turns into "Review now" and fires a local notification
+     (`app/src/notifications/importJobNotifications.ts`, same
+     permission/dedupe pattern as truckHealthNotifications.ts/
+     complianceNotifications.ts, mirrored not shared). Tapping "Review
+     now" (or the jobs list's own button) routes to
+     `/(tabs)/import?reviewJobId=X`, which loads the job's
+     `result_json` and feeds it through the EXACT SAME `afterExtraction()`
+     a live synchronous extraction uses — duplicate check, truck/driver
+     match, category confirm, the settlement reconciliation hard guard,
+     the needs-review flag, ALL identical regardless of which path
+     produced the data. Nothing is ever auto-saved from a job.
+     **CRITICAL FIX caught during this pass, not shipped broken**:
+     `handleSave()` requires `fileMeta` to be set (it's how Save knows
+     what to re-upload to the settlement's own final storage path) — the
+     ORIGINAL local file from whatever session started a background job
+     may be long gone by the time it's reviewed (a different app session
+     entirely, after a restart). The reviewJobId effect now downloads the
+     job's own already-uploaded Storage copy back into a fresh local temp
+     file (`downloadImportJobFileToLocal()`) before calling
+     `afterExtraction()`, so Save behaves identically to a live import's
+     own save. Without this, Save would have silently no-opped for every
+     job-sourced review — `fileMeta` would have stayed null forever.
+     A job-sourced save also auto-dismisses its own `import_jobs` row
+     afterward (best-effort, never blocks the save itself) so it doesn't
+     linger in the list as a stale "ready" job pointing at already-saved
+     data.
+  4. **QUEUEING**: multiple jobs coexist independently — `useImportJobs()`
+     is a single polled list; `app/(tabs)/import/jobs.tsx` (a new screen
+     nested in the Import tab's own stack, same precedent as the existing
+     `import/camera.tsx` modal — NOT added to `navRegistry.ts`, since
+     that registry's "every route must appear" rule governs top-level
+     Menu/sidebar destinations, not screens reached only from within a
+     tab's own flow) shows every job with per-item status/progress/retry/
+     dismiss. `app/src/import/importJobs.ts`'s `sortImportJobsForDisplay()`
+     floats active (queued/processing) jobs above terminal ones regardless
+     of age, newest-first within each bucket; `deriveChipSummary()` picks
+     the one headline job the persistent chip shows (processing > ready >
+     failed > hidden priority).
+  5. **RETRY REUSES THE ALREADY-UPLOADED FILE**: a failed job's own
+     `storage_path` is stored server-side from the start — retry
+     (`useRetryImportJob()`, `ai-import`'s `mode:'retry_job'` request,
+     `handleJobStart()`'s retry branch) re-reads that SAME Storage object
+     and resets the SAME job row (never creates a new one, never asks the
+     client to re-upload or re-pick), "never make the user pick it
+     again." The failed job's own step-tagged reason
+     (`error_message`/`error_step`) stays visible in the list until
+     retried.
+  6. **CONCURRENCY KNOB**: `AI_IMPORT_BATCH_CONCURRENCY` was already
+     EXPOSED by the prior SPEED UP pass (default 2, no redeploy needed to
+     change it — just the Supabase dashboard's Edge Function env var);
+     this pass REUSES the same single knob for the job engine's own
+     `runJobPages()` (deliberately one shared dial, not a second
+     job-specific one, for simplicity). Recommendation for the next value
+     to try, given the previously MEASURED real per-page durations
+     (23.9s-40s, this file's own ROUND 5 MEASURED EVIDENCE entry): **try
+     3 next**, not higher — the ORIGINAL failure mode this whole
+     concurrency history is built around (an early uncontrolled
+     `Promise.all` attempt) was real Anthropic rate-limit/contention
+     errors, and this codebase has no visibility into this account's
+     actual Anthropic rate-limit tier, so a modest, one-step-at-a-time
+     increase (2 -> 3) is the responsible move pending real data, not a
+     bigger speculative jump. Watch the `INSTRUMENT` log lines (both the
+     per-page `status` field for an `anthropic_error`/`rate_limited`
+     signal, and per-wave `waveDurationMs`) in
+     `supabase functions logs ai-import` after trying 3 — if durations
+     stay flat (no rate-limit errors, wave time still bounded by the
+     slowest single page rather than growing with queue depth), it's
+     safe to try 4 next; if `anthropic_error`/`529`-shaped failures show
+     up, drop back to 2.
+  HONEST LIMITATIONS, stated plainly rather than silently assumed away:
+  - `JOB_HARD_BUDGET_MS` (240s) is a best-effort value, not an
+    independently-verified platform ceiling for `waitUntil` background
+    work — see `ai-import/index.ts`'s own BACKGROUND IMPORT comment block
+    for the full reasoning. Monitor real job timing and adjust if the
+    platform's real ceiling differs.
+  - The local "ready to review" notification is genuinely best-effort: it
+    depends on this app's own polling loop being alive to notice a
+    transition (the app foregrounded, or backgrounded-but-still-JS-alive)
+    at the moment completion happens. If the app is fully closed/killed
+    while a job finishes, the notification fires on the NEXT time the app
+    is reopened and polls again, not at the exact moment of completion.
+    The JOB ITSELF still finishes correctly either way (server-driven,
+    independent of the client) — only the NOTIFICATION's timing is
+    affected. A guaranteed "notify even fully closed" would need real
+    push notifications (APNs/FCM device token registration + a
+    server-side sender) — a materially larger, separate feature
+    deliberately not attempted this pass.
+  - The staging Storage file (`{user_id}/import-jobs/...`, where a
+    picked-but-not-yet-saved file lives so retry/review can re-read it)
+    is NOT explicitly cleaned up when a job is dismissed — an accepted,
+    minor, sweepable-later leak, same class of tradeoff already accepted
+    elsewhere in this codebase (`cleanupOrphanedDocument()`'s own
+    reasoning: a harmless orphaned Storage object is a smaller problem
+    than the alternative). Both `reset-data`/`delete-account`'s existing
+    recursive `{user_id}/` Storage-folder walk sweeps these up
+    regardless, so this is bounded, not unbounded.
+  - The client-side data-layer hooks (`useStartImportJob`/
+    `useRetryImportJob`/`useDismissImportJob`/`useImportJobs`,
+    `app/src/data/importJobs.ts`) have NO dedicated test file — a
+    deliberate scope decision, not an oversight: they're thin wrappers
+    around `supabase.from(...)`/`.storage.upload(...)`/
+    `.functions.invoke(...)` with react-query boilerplate, the same shape
+    as dozens of OTHER data hooks in this codebase with no test file of
+    their own (`useTolls`, `useLoans`, ...) — the REAL logical complexity
+    (status transitions, chip priority, sort order, retry eligibility) is
+    the PURE `app/src/import/importJobs.ts` module, which does have full
+    test coverage (below). The server-side job engine
+    (`ai-import/index.ts`'s `handleJobStart()`/`runJobInBackground()`/
+    `runJobPages()`) is hand-reviewed, not compiler-checked — no Deno CLI
+    is available in this environment, same limitation every prior
+    ai-import pass in this codebase has had, and genuinely no way to
+    exercise `EdgeRuntime.waitUntil()` or a live Anthropic call from this
+    sandbox.
+  Tests: `app/src/import/__tests__/importJobs.test.ts` (new, 20 tests) —
+  lifecycle status checks (`isActiveJob`/`isRetryableJob`/
+  `isReviewableJob`), QUEUEING (`sortImportJobsForDisplay`: active jobs
+  float above terminal ones regardless of age, newest-first within each
+  bucket, a real multi-job queueing scenario, does not mutate its input),
+  `deriveChipSummary`'s full priority matrix (processing/queued > ready >
+  failed > hidden, correct counts), and a dedicated RESUMING AFTER
+  BACKGROUNDING test proving `deriveChipSummary` is a pure function of
+  whatever the current poll returned — calling it again with a
+  freshly-changed snapshot (simulating the server having made real
+  progress while the app was backgrounded/closed) reflects the new state
+  completely, with the first call's own result provably untouched by the
+  second. Plus `jobProgressFraction`'s edge cases (null total, zero
+  total, clamping). `queryInvalidation.test.ts`'s TABLES_IN_DELETION_ORDER
+  mirror gained `import_jobs`. Full suite: 93 suites / 2262 tests pass;
+  `tsc --noEmit` clean (covers everything under `app/` — the Deno
+  function itself is outside this tsconfig's scope, same as every prior
+  ai-import pass).
+  docs/PENDING_SQL.md §54 (`import_jobs` table + RLS + index) is NOT YET
+  RUN against the live project as of this writing. `import_jobs` was
+  added to `reset-data`'s `TABLES_IN_DELETION_ORDER` (delete-account
+  needs no explicit entry — `user_id ... on delete cascade` handles it
+  automatically, same precedent as `drivers`) and to
+  `queryInvalidation.ts`'s `AFFECTED_TABLES`; deliberately NOT added to
+  `exportAllData.ts`'s `EXPORT_TABLES` (transient job/processing state,
+  not a permanent financial record, same reasoning `ai_usage_log`/
+  `service_status` are excluded for). `ai-import` was modified (new job
+  mode, `EdgeRuntime.waitUntil` background engine) and needs
+  redeploying; `ai-advisor`/`delete-account` were NOT touched;
+  `reset-data` WAS modified (new table-list entry) and needs
+  redeploying too. No new native dependency — `expo-notifications` was
+  ALREADY a dependency and already configured
+  (`app.config.js`'s existing plugin entry, already used by
+  truckHealthNotifications.ts/complianceNotifications.ts) — ships via a
+  normal `eas update`, no native rebuild needed.

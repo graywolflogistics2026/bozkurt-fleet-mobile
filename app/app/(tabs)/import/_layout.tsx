@@ -15,6 +15,7 @@ export default function ImportLayout() {
     >
       <Stack.Screen name="index" options={{ title: t('nav.import'), headerShown: false }} />
       <Stack.Screen name="camera" options={{ title: t('nav.takePhoto'), presentation: 'modal' }} />
+      <Stack.Screen name="jobs" options={{ title: t('importJobs.listTitle') }} />
     </Stack>
   );
 }

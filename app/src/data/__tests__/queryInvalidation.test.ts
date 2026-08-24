@@ -64,6 +64,10 @@ describe('invalidateFinancialData', () => {
       // earned/spent credit rows, deleted via the standard user_id loop in
       // both reset-data and delete-account.
       'account_credits',
+      // BACKGROUND IMPORT (owner decision 2026-08-24, §54) — transient
+      // job/processing state, wiped by reset-data explicitly (unlike
+      // delete-account, which relies on user_id ... on delete cascade).
+      'import_jobs',
     ];
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, 'invalidateQueries');

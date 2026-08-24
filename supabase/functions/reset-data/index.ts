@@ -56,6 +56,15 @@ const TABLES_IN_DELETION_ORDER = [
   // `referrer_id` only, never `referred_user_id` — see that delete's
   // own comment for why.
   "account_credits",
+  // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md
+  // §54) — transient job/processing state (an in-progress or completed
+  // background extraction, holding the same kind of raw financial data a
+  // reset is meant to wipe). Needs an explicit entry here (unlike
+  // delete-account, which never touches this table since
+  // `user_id ... on delete cascade` handles it automatically when the
+  // auth user itself is deleted) — same "drivers" precedent this file's
+  // own header comment already documents.
+  "import_jobs",
 ];
 
 // profiles.* fields that hold actual business/financial DATA (a balance,

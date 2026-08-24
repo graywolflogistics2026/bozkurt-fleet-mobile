@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter, useFocusEffect, type Href } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -17,6 +17,7 @@ import { useUserCategories } from '@/src/data/userCategories';
 import { useCategoryLearningRules } from '@/src/data/categoryLearningRules';
 import { useCarrierCodeMaps } from '@/src/data/carrierCodeMaps';
 import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
+import { useStartImportJob, useDismissImportJob, fetchImportJobForReview, downloadImportJobFileToLocal } from '@/src/data/importJobs';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -199,17 +200,15 @@ export default function Import() {
   // ADDITIONS pass, PART 4 item 3) — tracks consecutive ai-import
   // failures on this device for the automatic fallback banner.
   const aiFailureTracker = useAiFailureTracker();
+  // BACKGROUND IMPORT (owner decision 2026-08-24) — see startBackgroundJob()
+  // below (pickPdf's own path) and the reviewJobId effect further down
+  // ("Review now", opened from the jobs list / persistent chip).
+  const startImportJob = useStartImportJob();
+  const dismissImportJob = useDismissImportJob();
+  const { reviewJobId } = useLocalSearchParams<{ reviewJobId?: string }>();
 
   const [phase, setPhase] = useState<Phase>('pick');
   const [workingLabel, setWorkingLabel] = useState('');
-  // PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item 4) — a
-  // running preview of the settlement header/totals, filled in as soon as
-  // the financially meaningful pages come back (SMART PAGE TRIAGE
-  // prioritizes them), well before the last (often attachment-heavy) page
-  // lands. Reset to null at the start of every fresh AI call and cleared
-  // the moment the call settles, success or failure, so it never lingers
-  // into the preview/error phase showing stale numbers.
-  const [partialPreview, setPartialPreview] = useState<Extraction['settlement'] | null>(null);
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [fileMeta, setFileMeta] = useState<{ uri: string; ext: string; mediaType: string; name?: string } | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
@@ -295,6 +294,60 @@ export default function Import() {
     const uri = consumePendingCapture();
     if (uri) processImage(uri);
   });
+
+  // "REVIEW NOW" (owner decision 2026-08-24, item 3) — opened from the
+  // jobs list/persistent chip via ?reviewJobId=X. Loads the completed
+  // background job's already-sanitized result_json and feeds it through
+  // the EXACT SAME afterExtraction() a live synchronous extraction uses
+  // — duplicate check, truck/driver match, category confirm, the
+  // reconciliation guard, all identical regardless of which path produced
+  // the data. Nothing is auto-saved here; the user still confirms on the
+  // normal preview screen.
+  useEffect(() => {
+    if (!reviewJobId || !userId) return;
+    let cancelled = false;
+    (async () => {
+      setPhase('working');
+      setWorkingLabel(t('common.loading'));
+      try {
+        const job = await fetchImportJobForReview(reviewJobId);
+        if (cancelled) return;
+        if (!job) {
+          setErrorMessage(t('importJobs.reviewNotReady'));
+          setErrorStepGroup(null);
+          setErrorHasPartialSave(false);
+          setErrorIsDuplicateRace(false);
+          setErrorReport(null);
+          setPhase('error');
+          return;
+        }
+        // CRITICAL: handleSave() requires fileMeta to be set (it's how
+        // Save knows what to re-upload to the final storage path) — the
+        // ORIGINAL local file from whatever session started this job may
+        // be long gone by now, so this downloads the job's own already-
+        // uploaded copy back into a fresh local temp file. Without this,
+        // Save would silently no-op on a job-sourced review (fileMeta
+        // would stay null forever).
+        const ext = job.mediaType.startsWith('image/') ? 'jpg' : 'pdf';
+        const localUri = await downloadImportJobFileToLocal(job.storagePath, job.fileName);
+        if (cancelled) return;
+        setFileMeta({ uri: localUri, ext, mediaType: job.mediaType, name: job.fileName });
+        await afterExtraction(job.extraction, job.fileName, undefined);
+      } catch (err) {
+        if (cancelled) return;
+        setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
+        setErrorStepGroup(null);
+        setErrorHasPartialSave(false);
+        setErrorIsDuplicateRace(false);
+        setErrorReport(buildLocalErrorReport('Loading the completed import job', err));
+        setPhase('error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewJobId, userId]);
 
   function reset() {
     setPhase('pick');
@@ -407,28 +460,6 @@ export default function Import() {
   }
   useEffect(() => () => clearStillWorkingTimer(), []);
 
-  // PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item 4) — shared
-  // by both PDF call sites (pickPdf/handleRetryImport) so the two never
-  // drift apart. Once the server has merged enough pages to report real
-  // settlement figures (SMART PAGE TRIAGE processes the financially
-  // meaningful pages first), the label switches from a bare page-count to
-  // "Page N of M · revenue and deductions captured" and the settlement
-  // header/totals become visible below the spinner — the user can start
-  // reviewing before the last (often attachment-heavy) page lands.
-  function handleAiProgress(progress: { through: number; total: number; partialData?: Extraction }) {
-    clearStillWorkingTimer();
-    const s = progress.partialData?.settlement;
-    const hasFinancialData = !!s && (!!s.grossRevenue || !!s.totalDeductions || !!s.netPay);
-    setWorkingLabel(
-      t(hasFinancialData ? 'importScreen.processingPageProgressWithData' : 'importScreen.processingPageProgress', {
-        through: progress.through,
-        total: progress.total,
-      })
-    );
-    setPartialPreview(hasFinancialData ? s ?? null : null);
-    startStillWorkingTimer();
-  }
-
   function handleAiError(err: AiImportError) {
     // A usage-limit block isn't a service failure — never counts toward
     // the automatic "the AI service seems to be down" fallback banner.
@@ -510,7 +541,6 @@ export default function Import() {
         return;
       }
       setFileMeta({ uri: compressed.uri, ext: 'jpg', mediaType: 'image/jpeg' });
-      setPartialPreview(null);
       setWorkingLabel(t('importScreen.readingDocument'));
       const base64 = await new File(compressed.uri).base64();
       setWorkingLabel(t('importScreen.aiProcessing'));
@@ -544,6 +574,43 @@ export default function Import() {
     await processImage(picked.assets[0].uri);
   }
 
+  // BACKGROUND IMPORT (owner decision 2026-08-24) — "the real fix for
+  // perceived slowness... the user should NOT sit and watch it." A PDF
+  // pick (which is where a multi-page settlement's real wait time lives)
+  // now uploads the file and starts a server-tracked import_jobs row
+  // (app/src/data/importJobs.ts), returning the user to the app almost
+  // immediately instead of a multi-minute foreground wait — progress and
+  // completion are then owned by the persistent ImportJobsChip + the jobs
+  // list screen (app/(tabs)/import/jobs.tsx), NOT this screen. Photo
+  // imports (processImage, below) are deliberately UNCHANGED — they are
+  // always a single, fast Anthropic call (never chunked/continued), so
+  // there's no "perceived slowness" problem to fix there, and the existing
+  // synchronous callAiImport() flow stays exactly as it was.
+  async function startBackgroundJob(uri: string, mediaType: string, fileName: string) {
+    setPhase('working');
+    setWorkingLabel(t('importJobs.uploading'));
+    try {
+      await startImportJob.mutateAsync({
+        fileUri: uri,
+        mediaType,
+        fileName,
+        locale: i18n.language,
+        customCategories: customCategoryNames,
+        learningRules,
+        carrierCodeMaps,
+      });
+      reset();
+      Alert.alert(t('importJobs.startedTitle'), t('importJobs.startedBody'));
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
+      setErrorStepGroup(null);
+      setErrorHasPartialSave(false);
+      setErrorIsDuplicateRace(false);
+      setErrorReport(buildLocalErrorReport('Starting the background import', err));
+      setPhase('error');
+    }
+  }
+
   async function pickPdf() {
     const picked = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
     if (picked.canceled || !picked.assets?.[0]) return;
@@ -553,51 +620,17 @@ export default function Import() {
       Alert.alert(t('importScreen.fileTooLargeTitle'), t('importScreen.fileTooLargeMessage'));
       return;
     }
-    setPhase('working');
-    setPartialPreview(null);
-    setWorkingLabel(t('importScreen.readingDocument'));
-    try {
-      setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
-      const base64 = await new File(asset.uri).base64();
-      setWorkingLabel(t('importScreen.aiProcessing'));
-      startStillWorkingTimer();
-      const { data, error, pagesProcessed } = await callAiImport(
-        base64,
-        'application/pdf',
-        undefined,
-        i18n.language,
-        customCategoryNames,
-        learningRules,
-        carrierCodeMaps,
-        // CONTINUATION PROTOCOL (owner decision 2026-08-03): a long
-        // settlement is now processed in several sequential round-trips
-        // — this fires between them so the user sees real progress
-        // instead of one static "AI processing…" label for however many
-        // minutes a many-page document takes.
-        handleAiProgress
-      );
-      clearStillWorkingTimer();
-      if (error) return handleAiError(error);
-      if (data) await afterExtraction(data, asset.name, pagesProcessed);
-    } catch (err) {
-      clearStillWorkingTimer();
-      setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
-      setErrorStepGroup(null);
-      setErrorHasPartialSave(false);
-      setErrorIsDuplicateRace(false);
-      setErrorReport(buildLocalErrorReport('Reading the file', err));
-      setPhase('error');
-    }
+    // COST CONTROL & GRACEFUL DEGRADATION precedent (owner decision
+    // 2026-08-24, FIVE ADDITIONS pass) — fileMeta is set BEFORE the
+    // upload/job-start call and, unlike every other error-phase field, is
+    // deliberately NOT cleared until the user explicitly resets, so a
+    // failed UPLOAD (as opposed to a job that started fine and later
+    // failed server-side — that retries from the jobs list instead) can
+    // still be retried with one tap, no re-picking required.
+    setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
+    await startBackgroundJob(asset.uri, 'application/pdf', asset.name);
   }
 
-  // COST CONTROL & GRACEFUL DEGRADATION (owner decision 2026-08-24, FIVE
-  // ADDITIONS pass, PART 4 item 4 "QUEUE INSTEAD OF FAIL") — `fileMeta`
-  // (uri/ext/mediaType/name) is set BEFORE the AI call and, unlike every
-  // other error-phase field, is deliberately NOT cleared until the user
-  // explicitly resets — so the already-picked file is still right here to
-  // retry with one tap, no re-picking from the camera/gallery/file browser
-  // required. A genuinely different file still needs `reset()` (the
-  // existing "Choose a different file" action), which DOES clear it.
   async function handleRetryImport() {
     if (!fileMeta) {
       reset();
@@ -607,35 +640,7 @@ export default function Import() {
       await processImage(fileMeta.uri);
       return;
     }
-    setPhase('working');
-    setPartialPreview(null);
-    setWorkingLabel(t('importScreen.readingDocument'));
-    try {
-      const base64 = await new File(fileMeta.uri).base64();
-      setWorkingLabel(t('importScreen.aiProcessing'));
-      startStillWorkingTimer();
-      const { data, error, pagesProcessed } = await callAiImport(
-        base64,
-        fileMeta.mediaType,
-        undefined,
-        i18n.language,
-        customCategoryNames,
-        learningRules,
-        carrierCodeMaps,
-        handleAiProgress
-      );
-      clearStillWorkingTimer();
-      if (error) return handleAiError(error);
-      if (data) await afterExtraction(data, fileMeta.name, pagesProcessed);
-    } catch (err) {
-      clearStillWorkingTimer();
-      setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
-      setErrorStepGroup(null);
-      setErrorHasPartialSave(false);
-      setErrorIsDuplicateRace(false);
-      setErrorReport(buildLocalErrorReport('Reading the file', err));
-      setPhase('error');
-    }
+    await startBackgroundJob(fileMeta.uri, fileMeta.mediaType, fileMeta.name ?? 'document.pdf');
   }
 
   async function handleSave() {
@@ -686,6 +691,13 @@ export default function Import() {
       setPhase('done');
       await invalidateFinancialData(queryClient);
       buildAndUploadBackupSnapshot(userId); // fire-and-forget
+      // BACKGROUND IMPORT (owner decision 2026-08-24) — a job-sourced save
+      // (reviewJobId set) is done with its own import_jobs row now; clean
+      // it up so it doesn't linger in the jobs list as a stale "ready" job
+      // pointing at data that's already saved. Best-effort/fire-and-forget
+      // — a failure here must never block or fail the save the user just
+      // successfully completed.
+      if (reviewJobId) dismissImportJob.mutate(reviewJobId);
 
       const savedDate = getPrimaryExtractionDate(extraction);
       if (savedDate) sessionImportedDatesRef.current.push(savedDate);
@@ -767,39 +779,6 @@ export default function Import() {
           <Card>
             <ActivityIndicator color={colors.accent} size="large" />
             <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{workingLabel}</Text>
-            {/* PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item
-                4) — a running preview of the settlement header/totals,
-                filled in as soon as the financially meaningful pages
-                (SMART PAGE TRIAGE) come back, so the user can start
-                reviewing before the last page lands. */}
-            {partialPreview && (
-              <View style={{ marginTop: spacing.md, alignSelf: 'stretch' }}>
-                {!!partialPreview.weekEnding && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-                    <MutedText>{t('importScreen.previewLabels.weekEnding')}</MutedText>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>{partialPreview.weekEnding}</Text>
-                  </View>
-                )}
-                {!!partialPreview.grossRevenue && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-                    <MutedText>{t('importScreen.previewLabels.grossRevenue')}</MutedText>
-                    <Text style={{ color: colors.green, fontWeight: '600' }}>{money(partialPreview.grossRevenue, i18n.language)}</Text>
-                  </View>
-                )}
-                {!!partialPreview.totalDeductions && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-                    <MutedText>{t('importScreen.previewLabels.deductions')}</MutedText>
-                    <Text style={{ color: colors.red, fontWeight: '600' }}>{money(partialPreview.totalDeductions, i18n.language)}</Text>
-                  </View>
-                )}
-                {!!partialPreview.netPay && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <MutedText>{t('importScreen.previewLabels.netPay')}</MutedText>
-                    <Text style={{ color: colors.text, fontWeight: '700' }}>{money(partialPreview.netPay, i18n.language)}</Text>
-                  </View>
-                )}
-              </View>
-            )}
           </Card>
         )}
 

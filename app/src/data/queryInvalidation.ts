@@ -61,6 +61,11 @@ const AFFECTED_TABLES = [
   // key below.
   'account_credits',
   'referrals',
+  // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
+  // — Reset All Data wipes import_jobs (reset-data's own
+  // TABLES_IN_DELETION_ORDER); this key is what useImportJobs() reads
+  // from, so a stale cached job list would otherwise survive a reset.
+  'import_jobs',
 ];
 
 // Derived/aggregate query keys that read from the tables above but aren't

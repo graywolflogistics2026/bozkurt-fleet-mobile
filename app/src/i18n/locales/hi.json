@@ -14,7 +14,8 @@
     "copyDetails": "Copy Details",
     "copied": "Copied!",
     "close": "Close",
-    "viewOriginalDocument": "View Original Document"
+    "viewOriginalDocument": "View Original Document",
+    "dismiss": "Dismiss"
   },
   "nav": {
     "dashboard": "Home",
@@ -1879,5 +1880,42 @@
   "serviceStatus": {
     "title": "AI reading may be affected",
     "autoFallbackMessage": "We're seeing repeated AI import failures on this device. Everything else keeps working, and you can always add entries manually. Trying again shortly usually resolves it."
+  },
+  "importJobs": {
+    "listTitle": "Import Jobs",
+    "untitledFile": "Untitled file",
+    "status": {
+      "queued": "Queued",
+      "processing": "Processing",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "pageProgress": "Page {{through}} of {{total}}",
+    "starting": "Starting…",
+    "genericFailure": "Something went wrong.",
+    "reviewNow": "Review Now",
+    "retryFailedTitle": "Retry Failed",
+    "dismissConfirmTitle": "Remove this import?",
+    "dismissConfirmBody": "This will remove it from your list. This can't be undone.",
+    "empty": "No imports yet.",
+    "uploading": "Uploading…",
+    "startedTitle": "Import started",
+    "startedBody": "We'll notify you when it's ready to review. You can keep using the app in the meantime.",
+    "reviewNotReady": "This import isn't ready to review yet.",
+    "chip": {
+      "processing": "Reading your settlement… tap to view",
+      "processingWithProgress": "Reading your settlement — page {{through}} of {{total}}",
+      "ready": "Your import is ready to review",
+      "readyMultiple": "{{count}} imports ready to review",
+      "failed": "An import failed — tap to retry",
+      "failedMultiple": "{{count}} imports failed — tap to retry"
+    },
+    "notification": {
+      "readyTitle": "Your import is ready",
+      "readyBody": "Tap to review and save.",
+      "readyBodyWithDetail": "W/E {{weekEnding}} — {{amount}}. Tap to review and save.",
+      "failedTitle": "Import failed",
+      "failedBody": "Tap to see what happened and retry."
+    }
   }
 }
