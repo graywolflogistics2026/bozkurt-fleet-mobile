@@ -283,7 +283,13 @@
     "truckUnit": "Юнит: {{unit}}",
     "fleetOverviewTitle": "Обзор Автопарка",
     "truckCardLabel": "Грузовик",
-    "driverOverviewTitle": "Обзор водителей"
+    "driverOverviewTitle": "Обзор водителей",
+    "taxStrip": {
+      "title": "Налоги",
+      "weeklyReserve": "Еженедельный Налоговый Резерв",
+      "nextQuarterly": "Следующий Квартальный Платёж",
+      "yearlyEstimate": "Оценка Годового Налога"
+    }
   },
   "deductions": {
     "title": "Вычеты",

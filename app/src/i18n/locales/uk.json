@@ -283,7 +283,13 @@
     "truckUnit": "Unit: {{unit}}",
     "fleetOverviewTitle": "Fleet Overview",
     "truckCardLabel": "Truck",
-    "driverOverviewTitle": "Driver Overview"
+    "driverOverviewTitle": "Driver Overview",
+    "taxStrip": {
+      "title": "Taxes",
+      "weeklyReserve": "Weekly Tax Reserve",
+      "nextQuarterly": "Next Quarterly Payment",
+      "yearlyEstimate": "Estimated Yearly Tax"
+    }
   },
   "deductions": {
     "title": "Deductions",

@@ -32,6 +32,8 @@ import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useAiCoachSummary, type AiCoachSummary } from '@/src/data/aiCoachSummary';
 import { RECOMMENDATION_ICON, recommendationText, recommendationRoute } from '@/src/stats/aiRecommendations';
+import { useTaxEstimate } from '@/src/data/taxEstimate';
+import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
@@ -49,6 +51,10 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 //      decision 2026-08-24), not just a teaser link, see AiCoachSection
 //      below
 //   e) Recent Loads, then Best/Worst Lanes
+//   f) Tax strip (owner decision 2026-08-24, NEXT PASS item C) — Weekly
+//      Tax Reserve / Next Quarterly Payment / Estimated Yearly Tax, the
+//      LAST content block, ahead of only the Sign Out button, see
+//      HomeTaxStrip below
 // Everything else that used to live on Home (Fleet Health Score gauge,
 // the rotating AI Insight card, the Capital Account strip, the needs-
 // review counter chip, the 4 collapsible Overview/Money/On-the-Road/
@@ -420,6 +426,94 @@ function BestWorstLanesCard({
   );
 }
 
+// TAX STRIP (owner decision 2026-08-24, NEXT PASS item C) — three compact,
+// tappable tiles, all reading from the SAME canonical useTaxEstimate()
+// every other tax screen in this app uses (CLAUDE.md invariant #6: no tax
+// figure is ever computed a second way anywhere). Reuses the Tax
+// Estimator's own taxEstimator.deadlinePast/deadlineToday/deadlineInDays
+// copy for the countdown subtext rather than duplicating that phrasing.
+function TaxStripTile({
+  label,
+  value,
+  subtext,
+  subtextColor,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  subtext?: string;
+  subtextColor?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.compactTile, pressed && { opacity: 0.85 }]}>
+      <Text style={{ color: colors.muted, fontSize: typography.size.xs }} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }} numberOfLines={1}>
+        {value}
+      </Text>
+      {!!subtext && (
+        <Text style={{ color: subtextColor ?? colors.muted, fontSize: 10, marginTop: 2, fontWeight: '700' }} numberOfLines={1}>
+          {subtext}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function HomeTaxStrip({ taxQuery }: { taxQuery: ReturnType<typeof useTaxEstimate> }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { money } = useFormatters();
+  const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
+  const goToTax = () => router.push('/(tabs)/more/tax-estimator');
+
+  if (taxQuery.isLoading) {
+    return (
+      <>
+        <ScreenTitle>{t('dashboard.taxStrip.title')}</ScreenTitle>
+        <TappableCard onPress={goToTax}>
+          <MutedText>{t('common.loading')}</MutedText>
+        </TappableCard>
+      </>
+    );
+  }
+  // tax_config/tax_year_data not resolvable yet (e.g. a brand-new account
+  // before onboarding writes tax_config) — nothing to show, never a $0
+  // guess (CLAUDE.md invariant #6).
+  if (!taxQuery.data) return null;
+
+  const { estimate, taxYearData } = taxQuery.data;
+  const deadline = nextQuarterlyDeadline(taxYearData.quarterly_deadlines);
+  const deadlineSubtext = !deadline
+    ? undefined
+    : deadline.isPast
+      ? t('taxEstimator.deadlinePast')
+      : deadline.daysUntil === 0
+        ? t('taxEstimator.deadlineToday')
+        : t('taxEstimator.deadlineInDays', { count: deadline.daysUntil });
+  const deadlineColor = deadline?.isPast || deadline?.urgency === 'urgent' ? colors.red : deadline?.urgency === 'warn' ? colors.orange : colors.muted;
+
+  return (
+    <>
+      <ScreenTitle>{t('dashboard.taxStrip.title')}</ScreenTitle>
+      <View style={styles.compactRow}>
+        <TaxStripTile label={t('dashboard.taxStrip.weeklyReserve')} value={moneyRounded(estimate.weeklyTaxReserve)} onPress={goToTax} />
+        <TaxStripTile
+          label={t('dashboard.taxStrip.nextQuarterly')}
+          value={moneyRounded(estimate.quarterlyPayment)}
+          subtext={deadlineSubtext}
+          subtextColor={deadlineColor}
+          onPress={goToTax}
+        />
+        <TaxStripTile label={t('dashboard.taxStrip.yearlyEstimate')} value={moneyRounded(estimate.totalTax)} onPress={goToTax} />
+      </View>
+      <LegalFootnote />
+    </>
+  );
+}
+
 export default function Dashboard() {
   const { t } = useTranslation();
   const { money: moneyFmt } = useFormatters();
@@ -449,6 +543,7 @@ export default function Dashboard() {
   const statsQuery = useFleetStats(activeTruck?.id ?? null);
   const capitalQuery = useCapitalAccountSummary();
   const aiCoach = useAiCoachSummary();
+  const taxQuery = useTaxEstimate();
   const loadsQuery = useLoads();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
@@ -644,6 +739,8 @@ export default function Dashboard() {
         </TappableCard>
 
         <BestWorstLanesCard lanes={lanes} onPress={() => router.push('/(tabs)/more/cash-flow')} />
+
+        <HomeTaxStrip taxQuery={taxQuery} />
 
         <SecondaryButton title={t('common.signOut')} onPress={signOut} />
       </ScrollView>

@@ -283,7 +283,13 @@
     "truckUnit": "Ünite: {{unit}}",
     "fleetOverviewTitle": "Filo Genel Bakışı",
     "truckCardLabel": "Kamyon",
-    "driverOverviewTitle": "Sürücü Özeti"
+    "driverOverviewTitle": "Sürücü Özeti",
+    "taxStrip": {
+      "title": "Vergiler",
+      "weeklyReserve": "Haftalık Vergi Rezervi",
+      "nextQuarterly": "Sonraki Üç Aylık Ödeme",
+      "yearlyEstimate": "Tahmini Yıllık Vergi"
+    }
   },
   "deductions": {
     "title": "Kesintiler",

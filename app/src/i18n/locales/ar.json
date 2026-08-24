@@ -283,7 +283,13 @@
     "truckUnit": "الوحدة: {{unit}}",
     "fleetOverviewTitle": "نظرة عامة على الأسطول",
     "truckCardLabel": "الشاحنة",
-    "driverOverviewTitle": "نظرة عامة على السائقين"
+    "driverOverviewTitle": "نظرة عامة على السائقين",
+    "taxStrip": {
+      "title": "الضرائب",
+      "weeklyReserve": "الاحتياطي الضريبي الأسبوعي",
+      "nextQuarterly": "الدفعة الفصلية القادمة",
+      "yearlyEstimate": "الضريبة السنوية المقدرة"
+    }
   },
   "deductions": {
     "title": "الخصومات",

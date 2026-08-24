@@ -283,7 +283,13 @@
     "truckUnit": "Unidad: {{unit}}",
     "fleetOverviewTitle": "Resumen de la Flota",
     "truckCardLabel": "Camión",
-    "driverOverviewTitle": "Resumen de Conductores"
+    "driverOverviewTitle": "Resumen de Conductores",
+    "taxStrip": {
+      "title": "Impuestos",
+      "weeklyReserve": "Reserva Fiscal Semanal",
+      "nextQuarterly": "Próximo Pago Trimestral",
+      "yearlyEstimate": "Impuesto Anual Estimado"
+    }
   },
   "deductions": {
     "title": "Deducciones",
