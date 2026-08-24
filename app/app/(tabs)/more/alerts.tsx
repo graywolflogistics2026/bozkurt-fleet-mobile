@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAlertsData } from '@/src/data/alerts';
+import { useProactiveCoach } from '@/src/data/proactiveCoach';
+import { coachNudgeText } from '@/src/alerts/periodicCoachNudges';
 import { COMPLIANCE_TYPE_ICON } from '@/src/compliance/status';
 import { HEALTH_CATEGORY_ICON, type HealthCategory } from '@/src/truck/categories';
 import type { NudgeTopic } from '@/src/alerts/missingDataNudges';
@@ -56,6 +58,7 @@ export default function Alerts() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { dueMaintenance, dueCompliance, nudges, silenceNudge, rolePromptNeeded, setRole, dismissRolePrompt, isLoading } = useAlertsData();
+  const { periodicNudge } = useProactiveCoach();
   const [refreshing, setRefreshing] = useState(false);
 
   async function onRefresh() {
@@ -64,7 +67,7 @@ export default function Alerts() {
     setRefreshing(false);
   }
 
-  const isEmpty = !isLoading && dueMaintenance.length === 0 && dueCompliance.length === 0 && nudges.length === 0;
+  const isEmpty = !isLoading && dueMaintenance.length === 0 && dueCompliance.length === 0 && nudges.length === 0 && !periodicNudge;
 
   return (
     <Screen>
@@ -120,6 +123,24 @@ export default function Alerts() {
                 </View>
               </TappableCard>
             ))}
+          </View>
+        )}
+
+        {/* AI COACH — PERIODIC NUDGE (owner decision 2026-08-24, NEXT PASS
+            item E2) — the SAME single nudge Home's AI Coach block shows
+            (src/data/proactiveCoach.ts), reusing the shared
+            coachNudgeText() presentation helper so the two surfaces can
+            never disagree about wording. No route/silence action here —
+            just a durable read of what the Coach is currently saying. */}
+        {periodicNudge && (
+          <View style={{ marginTop: spacing.md }}>
+            <Text style={styles.sectionTitle}>{t('alerts.fromCoach')}</Text>
+            <Card>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+                <Text style={{ fontSize: 20 }}>💡</Text>
+                <Text style={{ color: colors.text, flex: 1 }}>{coachNudgeText(periodicNudge, t)}</Text>
+              </View>
+            </Card>
           </View>
         )}
 

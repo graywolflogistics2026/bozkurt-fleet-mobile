@@ -1483,6 +1483,17 @@
       "depreciationNotSet_other": "{{count}} kamyon için amortisman yöntemi seçilmemiş — vergi tahmininize dahil edilmesi için birini seçin.",
       "needsReviewReceipts_one": "{{count}} fiş NEEDS REVIEW'da bekliyor — kesintilerinize sayılması için sınıflandırın.",
       "needsReviewReceipts_other": "{{count}} fiş NEEDS REVIEW'da bekliyor — kesintilerinize sayılması için sınıflandırın."
+    },
+    "fromCoach": "AI Coach'unuzdan",
+    "coachNudges": {
+      "noReceiptRecently": "{{days}} gündür fiş eklemediniz — kaydetmediğiniz kesinti yapılabilir harcamalar masada kalan paradır.",
+      "missingCommonCategory": "Bu çeyrekte herhangi bir {{category}} harcamanız oldu mu? Olduysa ekleyin — her kesinti önemlidir.",
+      "accountantPackageReady": "{{month}} ayı için muhasebeci paketiniz hazır — üç aylık son tarihten önce dışa aktarın.",
+      "quarterlyTaxDueSoon_one": "Bir sonraki üç aylık vergi ödemeniz {{days}} gün içinde.",
+      "quarterlyTaxDueSoon_other": "Bir sonraki üç aylık vergi ödemeniz {{days}} gün içinde.",
+      "fuelPctTrendUp": "Yakıt, son 4 haftanıza göre {{points}} puan daha yüksek — göz atmaya değer.",
+      "deadheadTrendUp": "Deadhead miliniz yükseliyor — son 4 haftanıza göre {{points}} puan daha yüksek.",
+      "cpmAboveRpm": "Bu hafta mil başına maliyetiniz (${{cpm}}) mil başına ücretinizin (${{rpm}}) üzerinde — kağıt üzerinde zararına çalışıyorsunuz."
     }
   },
   "transactions": {
@@ -1591,6 +1602,8 @@
     "briefingFailed": "Şu anda özetiniz alınamadı",
     "homeAllCaughtUp": "Her şey yolunda — şu anda dikkat gerektiren bir şey yok.",
     "homeOpenFull": "Tam AI Coach'u aç →",
+    "weeklyReviewTitle": "Haftalık Değerlendirmeniz",
+    "weeklyReviewGenerating": "Haftalık değerlendirmeniz hazırlanıyor...",
     "recommendations": {
       "headerTitle": "Rakamlarınıza göre aylık kârınızı ~{{amount}} artırabilirsiniz",
       "headerTitleZero": "İşte en önemli önerilerim",

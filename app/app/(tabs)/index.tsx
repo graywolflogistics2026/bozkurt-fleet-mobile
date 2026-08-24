@@ -34,6 +34,8 @@ import { useAiCoachSummary, type AiCoachSummary } from '@/src/data/aiCoachSummar
 import { RECOMMENDATION_ICON, recommendationText, recommendationRoute } from '@/src/stats/aiRecommendations';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
+import { useProactiveCoach } from '@/src/data/proactiveCoach';
+import { coachNudgeText } from '@/src/alerts/periodicCoachNudges';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
@@ -321,7 +323,15 @@ function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: (
 // two can never disagree. The dedicated AI Coach screen (ceo-mode.tsx)
 // stays reachable via the "Open full AI Coach" link below for the
 // detail/goal-tracking/chat view.
-function AiCoachSection({ coach, name }: { coach: AiCoachSummary; name: string }) {
+function AiCoachSection({
+  coach,
+  proactive,
+  name,
+}: {
+  coach: AiCoachSummary;
+  proactive: ReturnType<typeof useProactiveCoach>;
+  name: string;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { money } = useFormatters();
@@ -335,6 +345,21 @@ function AiCoachSection({ coach, name }: { coach: AiCoachSummary; name: string }
         <Text style={{ color: colors.muted, fontSize: typography.size.sm, marginBottom: spacing.sm }}>
           🧑‍✈️ {t(greetingKey(hour), { name })}
         </Text>
+
+        {/* AI COACH — PROACTIVE WEEKLY REVIEW (owner decision 2026-08-24,
+            NEXT PASS item E1) — composed from real settlement numbers,
+            cached at most once per week per user (src/data/
+            proactiveCoach.ts). Shown ahead of the recommendation list since
+            it's the more time-relevant, "just happened" content. */}
+        {proactive.weeklyReviewGenerating && (
+          <MutedText style={{ marginBottom: spacing.sm }}>{t('ceoMode.weeklyReviewGenerating')}</MutedText>
+        )}
+        {!!proactive.weeklyReview && (
+          <View style={{ marginBottom: spacing.md }}>
+            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('ceoMode.weeklyReviewTitle')}</Text>
+            <Text style={{ color: colors.text, lineHeight: 20 }}>{proactive.weeklyReview}</Text>
+          </View>
+        )}
 
         {coach.recommendations.length === 0 ? (
           <MutedText>{t('ceoMode.homeAllCaughtUp')}</MutedText>
@@ -354,6 +379,16 @@ function AiCoachSection({ coach, name }: { coach: AiCoachSummary; name: string }
               </TappableCard>
             ))}
           </>
+        )}
+
+        {/* AI COACH — PERIODIC NUDGE (owner decision 2026-08-24, NEXT PASS
+            item E2) — at most one at a time, rotated with a per-topic
+            monthly cooldown (src/alerts/nudgeFrequency.ts). */}
+        {proactive.periodicNudge && (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm }}>
+            <Text style={{ fontSize: 16 }}>💡</Text>
+            <Text style={{ color: colors.text, flex: 1 }}>{coachNudgeText(proactive.periodicNudge, t)}</Text>
+          </View>
         )}
 
         <Pressable onPress={() => router.push('/(tabs)/more/ceo-mode')} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
@@ -543,6 +578,7 @@ export default function Dashboard() {
   const statsQuery = useFleetStats(activeTruck?.id ?? null);
   const capitalQuery = useCapitalAccountSummary();
   const aiCoach = useAiCoachSummary();
+  const proactiveCoach = useProactiveCoach();
   const taxQuery = useTaxEstimate();
   const loadsQuery = useLoads();
   const settlementsQuery = useSettlements();
@@ -719,7 +755,7 @@ export default function Dashboard() {
             </TappableCard>
           </>
         ) : (
-          <AiCoachSection coach={aiCoach} name={heroFirstName} />
+          <AiCoachSection coach={aiCoach} proactive={proactiveCoach} name={heroFirstName} />
         )}
 
         <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>

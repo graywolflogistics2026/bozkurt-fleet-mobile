@@ -1483,6 +1483,17 @@
       "depreciationNotSet_other": "{{count}} trucks have no depreciation method chosen — pick one so your tax estimate includes it.",
       "needsReviewReceipts_one": "{{count}} receipt is waiting in NEEDS REVIEW — sort it so it counts toward your deductions.",
       "needsReviewReceipts_other": "{{count}} receipts are waiting in NEEDS REVIEW — sort them so they count toward your deductions."
+    },
+    "fromCoach": "From your AI Coach",
+    "coachNudges": {
+      "noReceiptRecently": "You haven't added a receipt in {{days}} days — deductible purchases you don't record are money left on the table.",
+      "missingCommonCategory": "Have you had any {{category}} expenses this quarter? If so, add them — every deduction counts.",
+      "accountantPackageReady": "Your accountant package for {{month}} is ready — export it before the quarterly deadline.",
+      "quarterlyTaxDueSoon_one": "Your next quarterly tax payment is due in {{days}} day.",
+      "quarterlyTaxDueSoon_other": "Your next quarterly tax payment is due in {{days}} days.",
+      "fuelPctTrendUp": "Fuel is running {{points}} points higher than your last 4 weeks — worth a look.",
+      "deadheadTrendUp": "Deadhead miles are trending up — {{points}} points higher than your last 4 weeks.",
+      "cpmAboveRpm": "Your cost per mile (${{cpm}}) is above your rate per mile (${{rpm}}) this week — running at a loss on paper."
     }
   },
   "transactions": {
@@ -1591,6 +1602,8 @@
     "briefingFailed": "Could not get your briefing right now",
     "homeAllCaughtUp": "You're all caught up — nothing needs your attention right now.",
     "homeOpenFull": "Open full AI Coach →",
+    "weeklyReviewTitle": "Your Weekly Review",
+    "weeklyReviewGenerating": "Composing your weekly review...",
     "recommendations": {
       "headerTitle": "Based on your numbers, you can increase your monthly profit by ~{{amount}}",
       "headerTitleZero": "Here are your top recommendations",

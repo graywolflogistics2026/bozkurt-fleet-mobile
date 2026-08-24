@@ -1483,6 +1483,17 @@
       "depreciationNotSet_other": "{{count}} camiones no tienen método de depreciación elegido — elige uno para que tu estimado de impuestos lo incluya.",
       "needsReviewReceipts_one": "{{count}} recibo está esperando en NEEDS REVIEW — clasifícalo para que cuente en tus deducciones.",
       "needsReviewReceipts_other": "{{count}} recibos están esperando en NEEDS REVIEW — clasifícalos para que cuenten en tus deducciones."
+    },
+    "fromCoach": "De tu AI Coach",
+    "coachNudges": {
+      "noReceiptRecently": "No has agregado un recibo en {{days}} días — las compras deducibles que no registras son dinero que dejas sobre la mesa.",
+      "missingCommonCategory": "¿Has tenido gastos de {{category}} este trimestre? Si es así, agrégalos — cada deducción cuenta.",
+      "accountantPackageReady": "Tu paquete para el contador de {{month}} está listo — expórtalo antes de la fecha límite trimestral.",
+      "quarterlyTaxDueSoon_one": "Tu próximo pago trimestral de impuestos vence en {{days}} día.",
+      "quarterlyTaxDueSoon_other": "Tu próximo pago trimestral de impuestos vence en {{days}} días.",
+      "fuelPctTrendUp": "El combustible está corriendo {{points}} puntos más alto que tus últimas 4 semanas — vale la pena revisarlo.",
+      "deadheadTrendUp": "Tus millas deadhead están en aumento — {{points}} puntos más que tus últimas 4 semanas.",
+      "cpmAboveRpm": "Tu costo por milla (${{cpm}}) está por encima de tu tarifa por milla (${{rpm}}) esta semana — operando con pérdida en el papel."
     }
   },
   "transactions": {
@@ -1591,6 +1602,8 @@
     "briefingFailed": "No se pudo obtener tu informe en este momento",
     "homeAllCaughtUp": "Estás al día — nada requiere tu atención ahora mismo.",
     "homeOpenFull": "Abrir AI Coach completo →",
+    "weeklyReviewTitle": "Tu Revisión Semanal",
+    "weeklyReviewGenerating": "Componiendo tu revisión semanal...",
     "recommendations": {
       "headerTitle": "Según tus números, puedes aumentar tu ganancia mensual en ~{{amount}}",
       "headerTitleZero": "Aquí están tus principales recomendaciones",

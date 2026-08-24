@@ -1483,6 +1483,17 @@
       "depreciationNotSet_other": "{{count}} شاحنات بلا طريقة إهلاك مختارة — اخترها ليشملها تقدير ضرائبك.",
       "needsReviewReceipts_one": "إيصال واحد بانتظار NEEDS REVIEW — صنّفه ليُحتسب ضمن خصوماتك.",
       "needsReviewReceipts_other": "{{count}} إيصالات بانتظار NEEDS REVIEW — صنّفها لتُحتسب ضمن خصوماتك."
+    },
+    "fromCoach": "من AI Coach الخاص بك",
+    "coachNudges": {
+      "noReceiptRecently": "لم تُضِف إيصالًا منذ {{days}} يومًا — المشتريات القابلة للخصم التي لا تسجلها هي أموال ضائعة.",
+      "missingCommonCategory": "هل كانت لديك أي مصاريف {{category}} هذا الربع؟ إذا كان الأمر كذلك، أضفها — كل خصم مهم.",
+      "accountantPackageReady": "حزمة المحاسب الخاصة بك لشهر {{month}} جاهزة — صدّرها قبل الموعد النهائي الفصلي.",
+      "quarterlyTaxDueSoon_one": "دفعتك الضريبية الفصلية القادمة مستحقة خلال يوم واحد.",
+      "quarterlyTaxDueSoon_other": "دفعتك الضريبية الفصلية القادمة مستحقة خلال {{days}} أيام.",
+      "fuelPctTrendUp": "الوقود يستهلك أكثر بـ {{points}} نقطة من آخر 4 أسابيع — يستحق نظرة.",
+      "deadheadTrendUp": "deadhead الخاص بك في ازدياد — أعلى بـ {{points}} نقطة من آخر 4 أسابيع.",
+      "cpmAboveRpm": "تكلفتك لكل ميل (${{cpm}}) أعلى من معدلك لكل ميل (${{rpm}}) هذا الأسبوع — أنت تعمل بخسارة على الورق."
     }
   },
   "transactions": {
@@ -1591,6 +1602,8 @@
     "briefingFailed": "تعذر الحصول على تقريرك الآن",
     "homeAllCaughtUp": "كل شيء على ما يرام — لا يوجد ما يستدعي انتباهك الآن.",
     "homeOpenFull": "افتح AI Coach الكامل ←",
+    "weeklyReviewTitle": "مراجعتك الأسبوعية",
+    "weeklyReviewGenerating": "جارٍ إعداد مراجعتك الأسبوعية...",
     "recommendations": {
       "headerTitle": "بناءً على أرقامك، يمكنك زيادة ربحك الشهري بحوالي {{amount}}",
       "headerTitleZero": "إليك أهم توصياتك",
