@@ -88,6 +88,15 @@ const PROFILE_DATA_RESET = {
   cf_tax_reserve_pct: null,
   dashboard_layout: null,
   dashboard_sections_collapsed: null,
+  // SMART ALERTS + PROACTIVE AI COACH STATE (NEXT PASS, owner decision
+  // 2026-08-24, docs/PENDING_SQL.md §49) — a "fresh" account should never
+  // retain stale nudge-shown/silenced history, a dismissed role prompt, or
+  // a cached AI weekly review from before the reset.
+  nudge_state: {},
+  role_prompt_dismissed_at: null,
+  ai_weekly_review: null,
+  ai_weekly_review_generated_at: null,
+  ai_weekly_review_week_ending: null,
 };
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

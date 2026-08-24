@@ -1466,7 +1466,24 @@
     "title": "التنبيهات",
     "empty": "كل شيء على ما يرام — لا توجد عناصر صيانة أو امتثال تحتاج إلى اهتمام الآن.",
     "maintenanceSection": "صحة الشاحنة",
-    "complianceSection": "الامتثال"
+    "complianceSection": "الامتثال",
+    "nudgesSection": "يستحق نظرة",
+    "silence": "عدم إظهار هذا مرة أخرى",
+    "unsilence": "إظهار مرة أخرى",
+    "rolePromptTitle": "ما هو دورك؟",
+    "rolePromptBody": "هذا يساعدنا على إظهار التذكيرات الصحيحة — أوراق الشاحنة للملاك، والعناصر الشخصية للسائقين.",
+    "rolePromptNotNow": "ليس الآن",
+    "nudges": {
+      "noRecentSettlement": "لم يتم استيراد أي settlement منذ {{days}} يومًا — استورد الأحدث للحفاظ على تحديث أرقامك.",
+      "settlementMissingMiles_one": "settlement واحد به إيرادات دون أميال مسجلة — أضفها لتصحيح CPM وper diem.",
+      "settlementMissingMiles_other": "{{count}} من الـ settlements بها إيرادات دون أميال مسجلة — أضفها لتصحيح CPM وper diem.",
+      "truckCostBasisNotSet_one": "شاحنة واحدة بلا أساس تكلفة محدد — أضفه ليعكس التكلفة/الميل تكاليفك الثابتة الحقيقية.",
+      "truckCostBasisNotSet_other": "{{count}} شاحنات بلا أساس تكلفة محدد — أضفه ليعكس التكلفة/الميل تكاليفك الثابتة الحقيقية.",
+      "depreciationNotSet_one": "شاحنة واحدة بلا طريقة إهلاك مختارة — اخترها ليشملها تقدير ضرائبك.",
+      "depreciationNotSet_other": "{{count}} شاحنات بلا طريقة إهلاك مختارة — اخترها ليشملها تقدير ضرائبك.",
+      "needsReviewReceipts_one": "إيصال واحد بانتظار NEEDS REVIEW — صنّفه ليُحتسب ضمن خصوماتك.",
+      "needsReviewReceipts_other": "{{count}} إيصالات بانتظار NEEDS REVIEW — صنّفها لتُحتسب ضمن خصوماتك."
+    }
   },
   "transactions": {
     "title": "المعاملات",

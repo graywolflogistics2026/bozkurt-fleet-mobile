@@ -1466,7 +1466,24 @@
     "title": "Alertas",
     "empty": "Ya estás al día — no hay elementos de mantenimiento o cumplimiento que requieran atención en este momento.",
     "maintenanceSection": "Salud del Camión",
-    "complianceSection": "Cumplimiento"
+    "complianceSection": "Cumplimiento",
+    "nudgesSection": "Vale la pena revisar",
+    "silence": "No mostrar esto de nuevo",
+    "unsilence": "Mostrar de nuevo",
+    "rolePromptTitle": "¿Cuál es tu rol?",
+    "rolePromptBody": "Esto nos ayuda a mostrarte los recordatorios correctos — papeleo del camión para propietarios, elementos personales para conductores.",
+    "rolePromptNotNow": "Ahora no",
+    "nudges": {
+      "noRecentSettlement": "No se ha importado ningún settlement en {{days}} días — importa el más reciente para mantener tus números al día.",
+      "settlementMissingMiles_one": "{{count}} settlement tiene ingresos pero sin millas registradas — agrégalas para corregir tu CPM y per diem.",
+      "settlementMissingMiles_other": "{{count}} settlements tienen ingresos pero sin millas registradas — agrégalas para corregir tu CPM y per diem.",
+      "truckCostBasisNotSet_one": "{{count}} camión no tiene base de costo configurada — agrégala para que tu Costo/Milla refleje tus costos fijos reales.",
+      "truckCostBasisNotSet_other": "{{count}} camiones no tienen base de costo configurada — agrégala para que tu Costo/Milla refleje tus costos fijos reales.",
+      "depreciationNotSet_one": "{{count}} camión no tiene método de depreciación elegido — elige uno para que tu estimado de impuestos lo incluya.",
+      "depreciationNotSet_other": "{{count}} camiones no tienen método de depreciación elegido — elige uno para que tu estimado de impuestos lo incluya.",
+      "needsReviewReceipts_one": "{{count}} recibo está esperando en NEEDS REVIEW — clasifícalo para que cuente en tus deducciones.",
+      "needsReviewReceipts_other": "{{count}} recibos están esperando en NEEDS REVIEW — clasifícalos para que cuenten en tus deducciones."
+    }
   },
   "transactions": {
     "title": "Transacciones",

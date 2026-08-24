@@ -1466,7 +1466,24 @@
     "title": "Uyarılar",
     "empty": "Her şey yolunda — şu anda dikkat gerektiren bakım veya uyumluluk öğesi yok.",
     "maintenanceSection": "Kamyon Sağlığı",
-    "complianceSection": "Uyumluluk"
+    "complianceSection": "Uyumluluk",
+    "nudgesSection": "Göz atmaya değer",
+    "silence": "Bunu bir daha gösterme",
+    "unsilence": "Tekrar göster",
+    "rolePromptTitle": "Rolünüz nedir?",
+    "rolePromptBody": "Bu, doğru hatırlatmaları göstermemize yardımcı olur — sahipler için kamyon evrakları, sürücüler için kişisel öğeler.",
+    "rolePromptNotNow": "Şimdi değil",
+    "nudges": {
+      "noRecentSettlement": "{{days}} gündür settlement içe aktarılmadı — güncel kalmak için en sonuncusunu içe aktarın.",
+      "settlementMissingMiles_one": "{{count}} settlement'ta gelir var ama mil kaydedilmemiş — CPM ve per diem'inizi düzeltmek için ekleyin.",
+      "settlementMissingMiles_other": "{{count}} settlement'ta gelir var ama mil kaydedilmemiş — CPM ve per diem'inizi düzeltmek için ekleyin.",
+      "truckCostBasisNotSet_one": "{{count}} kamyonun maliyet tabanı ayarlanmamış — gerçek sabit maliyetlerinizi yansıtması için ekleyin.",
+      "truckCostBasisNotSet_other": "{{count}} kamyonun maliyet tabanı ayarlanmamış — gerçek sabit maliyetlerinizi yansıtması için ekleyin.",
+      "depreciationNotSet_one": "{{count}} kamyon için amortisman yöntemi seçilmemiş — vergi tahmininize dahil edilmesi için birini seçin.",
+      "depreciationNotSet_other": "{{count}} kamyon için amortisman yöntemi seçilmemiş — vergi tahmininize dahil edilmesi için birini seçin.",
+      "needsReviewReceipts_one": "{{count}} fiş NEEDS REVIEW'da bekliyor — kesintilerinize sayılması için sınıflandırın.",
+      "needsReviewReceipts_other": "{{count}} fiş NEEDS REVIEW'da bekliyor — kesintilerinize sayılması için sınıflandırın."
+    }
   },
   "transactions": {
     "title": "İşlemler",

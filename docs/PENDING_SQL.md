@@ -1721,6 +1721,50 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
+## 49. Smart alerts + proactive AI Coach state (NEXT PASS, owner decision 2026-08-24, items D + E)
+
+Five new nullable/defaulted columns on `profiles`, all additive:
+
+- `nudge_state` (jsonb) — SMART ALERTS (item D3, frequency discipline):
+  one entry per nudge topic ever shown/silenced,
+  `Partial<Record<NudgeTopic, {lastShownAt, silencedAt}>>` — see
+  `app/src/alerts/nudgeFrequency.ts`. Default `{}` means nothing shown or
+  silenced yet, never a missing-column crash.
+- `role_prompt_dismissed_at` (timestamptz) — the "what's your role?"
+  ask-once prompt (item D1, `app/src/alerts/roleFilter.ts`
+  `resolveRolePromptNeeded()`) — null means never dismissed without
+  answering, same "null = never done, set once" pattern as
+  `onboarding_completed_at` (§28) / `tutorial_seen_at` (§48).
+- `ai_weekly_review` / `ai_weekly_review_generated_at` /
+  `ai_weekly_review_week_ending` (text / timestamptz / text) — the
+  proactive weekly settlement review (item E1), cached so it costs at
+  most one `ai-advisor` call per user per week (spec's own explicit cap)
+  — `ai_weekly_review_week_ending` tracks WHICH settlement week the
+  cached text covers, so a genuinely new settlement (not just wall-clock
+  time) is what triggers regeneration — see
+  `app/src/stats/weeklyReview.ts`'s `shouldGenerateWeeklyReview()`.
+
+```sql
+alter table profiles
+  add column nudge_state jsonb not null default '{}'::jsonb,
+  add column role_prompt_dismissed_at timestamptz,
+  add column ai_weekly_review text,
+  add column ai_weekly_review_generated_at timestamptz,
+  add column ai_weekly_review_week_ending text;
+```
+
+No RLS change needed — `profiles` is already owner-scoped. Reset All
+Data (CLAUDE.md invariant #24): all five are sorted into the CLEARED
+bucket — a reset should not leave stale nudge history/role-prompt-
+dismissal/cached AI text behind for a "fresh" account. `supabase/
+functions/reset-data/index.ts`'s `PROFILE_DATA_RESET` needs these five
+field names added in the same pass that runs this migration.
+
+- [ ] 49a run (add profiles nudge_state/role_prompt_dismissed_at/
+      ai_weekly_review*)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

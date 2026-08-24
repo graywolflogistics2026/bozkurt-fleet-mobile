@@ -1466,7 +1466,24 @@
     "title": "Alerts",
     "empty": "You're all caught up — no maintenance or compliance items need attention right now.",
     "maintenanceSection": "Truck Health",
-    "complianceSection": "Compliance"
+    "complianceSection": "Compliance",
+    "nudgesSection": "Worth a look",
+    "silence": "Don't show this again",
+    "unsilence": "Show again",
+    "rolePromptTitle": "What's your role?",
+    "rolePromptBody": "This helps us show the right reminders — truck paperwork for owners, personal items for drivers.",
+    "rolePromptNotNow": "Not now",
+    "nudges": {
+      "noRecentSettlement": "No settlement imported in {{days}} days — import your latest one to keep your numbers current.",
+      "settlementMissingMiles_one": "{{count}} settlement has revenue but no miles recorded — add them to fix your CPM and per diem.",
+      "settlementMissingMiles_other": "{{count}} settlements have revenue but no miles recorded — add them to fix your CPM and per diem.",
+      "truckCostBasisNotSet_one": "{{count}} truck has no cost basis set — add it so your Cost/Mile reflects your real fixed costs.",
+      "truckCostBasisNotSet_other": "{{count}} trucks have no cost basis set — add it so your Cost/Mile reflects your real fixed costs.",
+      "depreciationNotSet_one": "{{count}} truck has no depreciation method chosen — pick one so your tax estimate includes it.",
+      "depreciationNotSet_other": "{{count}} trucks have no depreciation method chosen — pick one so your tax estimate includes it.",
+      "needsReviewReceipts_one": "{{count}} receipt is waiting in NEEDS REVIEW — sort it so it counts toward your deductions.",
+      "needsReviewReceipts_other": "{{count}} receipts are waiting in NEEDS REVIEW — sort them so they count toward your deductions."
+    }
   },
   "transactions": {
     "title": "Transactions",

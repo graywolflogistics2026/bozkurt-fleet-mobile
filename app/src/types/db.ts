@@ -584,6 +584,26 @@ export type Profile = {
   cf_insurance_weekly: number | null;
   cf_other_weekly: number | null;
   cf_tax_reserve_pct: number | null;
+  // SMART ALERTS (owner decision 2026-08-24, NEXT PASS item D, docs/
+  // PENDING_SQL.md §49) — one entry per nudge topic ever shown/silenced,
+  // `Partial<Record<NudgeTopic, {lastShownAt, silencedAt}>>` (see
+  // src/alerts/nudgeFrequency.ts); `{}` (the DB default) means nothing has
+  // ever been shown or silenced yet. role_prompt_dismissed_at: null means
+  // the "what's your role?" ask-once prompt (src/alerts/roleFilter.ts's
+  // resolveRolePromptNeeded) has never been dismissed without answering —
+  // same "null = never done, set once" pattern as onboarding_completed_at.
+  nudge_state: Record<string, { lastShownAt: string | null; silencedAt: string | null }>;
+  role_prompt_dismissed_at: string | null;
+  // AI COACH — PROACTIVE WEEKLY REVIEW (owner decision 2026-08-24, NEXT
+  // PASS item E1, docs/PENDING_SQL.md §49): cached so it costs at most one
+  // ai-advisor call per user per week (spec's own explicit cap) —
+  // ai_weekly_review_week_ending tracks WHICH settlement week the cached
+  // text covers, so a genuinely new settlement (not just wall-clock time)
+  // is what triggers regeneration; see src/stats/weeklyReview.ts's
+  // shouldGenerateWeeklyReview().
+  ai_weekly_review: string | null;
+  ai_weekly_review_generated_at: string | null;
+  ai_weekly_review_week_ending: string | null;
   created_at: string;
   updated_at: string;
 };
