@@ -4511,9 +4511,9 @@
   `'PRIME INC'` via `findCarrierCodeMatch()` and does NOT resolve under a
   different carrier — proving the behavior moved, not vanished); `tsc
   --noEmit` clean. `ai-import` was modified (prompt text only, no
-  behavior/schema change) and needs redeploying; `ai-advisor`/
+  behavior/schema change) and has been redeployed; `ai-advisor`/
   `reset-data`/`delete-account` were NOT touched. No native rebuild
   needed — pure JS/TS/SQL/prompt-text work, no new native dependency,
-  ships via a normal `eas update`. No i18n changes (no new user-facing
-  strings). docs/PENDING_SQL.md §53 (8 new `carrier_code_maps` rows) is
-  NOT YET RUN against the live project as of this writing.
+  shipped via a normal `eas update`, published to preview. No i18n
+  changes (no new user-facing strings). docs/PENDING_SQL.md §53 (8 new
+  `carrier_code_maps` rows) is ✅ APPLIED.

@@ -2457,7 +2457,7 @@ nullable field on an already user-owned row.
 
 ---
 
-## 53. Carrier-scoped bridge codes for real-world text variants (owner decision 2026-08-24, cleanup of the pre-existing generic-classifier leak flagged in CLAUDE.md's CARRIER-SCOPED PAYROLL/SETTLEMENT CODES entry)
+## 53. Carrier-scoped bridge codes for real-world text variants (owner decision 2026-08-24, cleanup of the pre-existing generic-classifier leak flagged in CLAUDE.md's CARRIER-SCOPED PAYROLL/SETTLEMENT CODES entry) — ✅ APPLIED
 
 The §52 pass added the carrier-isolation data model and a hard invariant,
 but two PRE-EXISTING code paths that predate that invariant were left
@@ -2508,7 +2508,7 @@ insert into carrier_code_maps (carrier, code, sub_code, label, description, cate
   ('PRIME INC', 'POINT-OF-SALE', null, 'Point of Sale Purchase (hyphenated)', 'Bridges the already-seeded PO/PPOS 01 "POINT OF SALE" row (spaced) to this hyphenated real-world form (e.g. "PRIME POINT-OF-SALE") — the un-hyphenated spaced form already matches via the existing row''s own label.', 'Meals (per diem covered)', false, 'chargeback', null);
 ```
 
-- [ ] 53a run (8 new PRIME INC carrier_code_maps bridge rows)
+- [x] 53a run (8 new PRIME INC carrier_code_maps bridge rows)
 
 ---
 
