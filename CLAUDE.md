@@ -4350,8 +4350,9 @@
   `ServiceStatusBanner`'s orange border) — a small, backward-compatible
   addition, every existing `<Card>` call site unaffected.
 - CARRIER-SCOPED PAYROLL/SETTLEMENT CODES — HARD INVARIANT (owner
-  decision, docs/PENDING_SQL.md §52, NOT YET RUN against the live project
-  as of this writing). A two-letter carrier settlement/payroll chargeback
+  decision, docs/PENDING_SQL.md §52, ✅ APPLIED 2026-08-24; ai-import
+  redeployed, client update published to preview). A two-letter carrier
+  settlement/payroll chargeback
   code (e.g. "DH", "BT", "AP") means what it means AT THE CARRIER THAT
   ISSUED THE STATEMENT ONLY — never applied globally, never guessed from
   the user's profile, a prior import, or any other carrier's own
@@ -4442,9 +4443,10 @@
   carrier falls back to null — never a guess, and a description
   containing a Prime code/label fragment never matches under a different
   carrier); `tsc --noEmit` clean. `ai-import` was modified (new
-  `carrierCodeMaps` prompt block) and needs redeploying; `ai-advisor`/
+  `carrierCodeMaps` prompt block) and has been redeployed; `ai-advisor`/
   `reset-data`/`delete-account` were NOT touched. No native rebuild
   needed — pure JS/TS plus SQL/Edge Function work, no new native
-  dependency, ships via a normal `eas update`. No i18n changes this pass
-  (no new user-facing strings — the carrier code map is prompt-context
-  and internal classification data, never rendered directly to a user).
+  dependency, shipped via a normal `eas update`, published to preview. No
+  i18n changes this pass (no new user-facing strings — the carrier code
+  map is prompt-context and internal classification data, never rendered
+  directly to a user).

@@ -2179,7 +2179,7 @@ other Edge Function in this repo.
 
 ---
 
-## 52. Carrier-scoped payroll/settlement codes (owner decision, CARRIER-SCOPED PAYROLL CODES pass)
+## 52. Carrier-scoped payroll/settlement codes (owner decision, CARRIER-SCOPED PAYROLL CODES pass) — ✅ APPLIED
 
 CARRIER ISOLATION IS A HARD INVARIANT (see CLAUDE.md's own dated entry) —
 a two-letter settlement code means what it means AT THE CARRIER THAT
@@ -2452,8 +2452,8 @@ No RLS change needed on `category_learning_rules` beyond what already
 exists (owner-scoped) — the new `carrier` column is just another
 nullable field on an already user-owned row.
 
-- [ ] 52a run (carrier_code_maps table + RLS + PRIME INC seed, 205 rows)
-- [ ] 52b run (settlements.carrier, category_learning_rules.carrier)
+- [x] 52a run (carrier_code_maps table + RLS + PRIME INC seed, 205 rows)
+- [x] 52b run (settlements.carrier, category_learning_rules.carrier)
 
 ---
 
