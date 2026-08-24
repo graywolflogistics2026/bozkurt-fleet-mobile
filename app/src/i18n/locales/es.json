@@ -325,7 +325,11 @@
     "addTitle": "➕ Agregar Deducción",
     "descriptionLabel": "Descripción",
     "descriptionPlaceholder": "¿Para qué fue?",
-    "dateLabel": "Fecha"
+    "dateLabel": "Fecha",
+    "reimbursedInFull": "Pagado personalmente · reembolsado por completo ({{amount}})",
+    "reimbursedPartial": "Pagado personalmente · reembolsado {{reimbursed}} de {{total}}",
+    "notYetReimbursed": "Pagado personalmente · aún no reembolsado",
+    "reimburseMyself": "Reembolsarme ({{amount}})"
   },
   "capitalAccount": {
     "title": "Cuenta de Capital",
@@ -367,7 +371,16 @@
     "duplicatesRemoved": "{{count}} entradas duplicadas eliminadas.",
     "saveFailedTitle": "Error al guardar",
     "deleteFailedTitle": "Error al eliminar",
-    "genericRetry": "Por favor, inténtelo de nuevo."
+    "genericRetry": "Por favor, inténtelo de nuevo.",
+    "flowsTitle": "De dónde viene tu capital",
+    "flowCashContributed": "Efectivo aportado",
+    "flowCashContributedExplainer": "Dinero que depositaste en el negocio — capital que entra, no ingreso.",
+    "flowOutstanding": "Gastos pagados personalmente, aún pendientes",
+    "flowOutstandingExplainer": "Gastos del negocio que pagaste de tu bolsillo y que aún no se te han reembolsado — capital que entra.",
+    "flowReimbursements": "Reembolsos recibidos",
+    "flowReimbursementsExplainer": "Dinero que el negocio te devolvió por un gasto que cubriste — capital que sale, no un gasto nuevo.",
+    "flowDrawsExplainer": "Dinero que sacaste del negocio para ti — capital que sale, no un salario.",
+    "flowNetPosition": "Posición neta"
   },
   "importScreen": {
     "title": "Importar",
@@ -487,7 +500,19 @@
       "reference": "Referencia",
       "period": "Período",
       "suggestedCategory": "Categoría Sugerida"
-    }
+    },
+    "friendlyFailure": {
+      "billingAuth": "La lectura con IA no está disponible temporalmente. Tus datos están seguros — puedes seguir agregando registros manualmente, y ya lo estamos resolviendo.",
+      "rateLimit": "Hay muchas importaciones en este momento — intenta de nuevo en unos minutos.",
+      "timeoutOverload": "El documento está tardando demasiado en este momento — intenta de nuevo en un momento.",
+      "offline": "Estás sin conexión. Tu archivo está guardado y se importará cuando vuelvas a conectarte."
+    },
+    "usageLimitReached": "Ya usaste tus importaciones con IA de este mes ({{used}} de {{allowance}}). Aún puedes agregar registros manualmente, y todo lo demás sigue funcionando — tu límite se reinicia el día 1.",
+    "usageLimitReachedGeneric": "Ya usaste tus importaciones con IA de este mes. Aún puedes agregar registros manualmente, y todo lo demás sigue funcionando — tu límite se reinicia el día 1.",
+    "retryImport": "Reintentar",
+    "chooseDifferentFile": "Elegir Otro Archivo",
+    "backfillOfferTitle": "¿Poniéndote al día con registros antiguos?",
+    "backfillOfferBody": "Si estás importando varios meses de documentos anteriores, el paquete Año de Recuperación (1,000 importaciones, válido 90 días) puede ayudarte. Contacta a soporte si quieres que se agregue a tu cuenta."
   },
   "camera": {
     "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de settlements.",
@@ -598,7 +623,23 @@
     "deleteConfirm2Body": "No hay forma de recuperar tus datos después de esto. Escribe la palabra a continuación para confirmar.",
     "deleteTypeToConfirm": "Escribe {{word}} para confirmar",
     "deletePermanently": "Eliminar Permanentemente",
-    "deleteFailedTitle": "No se pudo eliminar la cuenta"
+    "deleteFailedTitle": "No se pudo eliminar la cuenta",
+    "weeklyGoalLabel": "Meta Semanal de Ganancias",
+    "weeklyGoalSuggestedNote": "Sugerido: {{amount}}, según tus últimas 4 semanas",
+    "aiUsageTitle": "Uso de IA",
+    "aiUsageSummary": "Importaciones con IA este mes: {{used}} de {{allowance}} ({{trucks}} camión(es))",
+    "aiUsageExtraCredits": "Créditos extra: {{credits}}",
+    "aiUsageResetsOn": "Se reinicia el {{date}}",
+    "aiUsageSoftLimitNotice": "Te estás acercando al límite de importaciones con IA de este mes.",
+    "aiUsageHardLimitNotice": "Ya usaste tus importaciones con IA de este mes. Aún puedes agregar registros manualmente, y todo lo demás sigue funcionando — tu límite se reinicia el día 1.",
+    "aiUsageCreditPacksIntro": "¿Necesitas más este mes? Agrega un paquete de créditos:",
+    "creditPack": {
+      "pack_25": "25 importaciones — ${{price}}",
+      "pack_100": "100 importaciones — ${{price}}",
+      "pack_300": "300 importaciones — ${{price}}",
+      "catchup_year": "Año de Recuperación — 1,000 importaciones para ponerte al día con un año fiscal anterior, ${{price}} (válido 90 días)"
+    },
+    "aiUsageCreditPacksContact": "Contacta a soporte para agregar un paquete de créditos a tu cuenta."
   },
   "placeholders": {},
   "truckHealth": {
@@ -1472,7 +1513,7 @@
     "empty": "Ya estás al día — no hay elementos de mantenimiento o cumplimiento que requieran atención en este momento.",
     "maintenanceSection": "Salud del Camión",
     "complianceSection": "Cumplimiento",
-    "nudgesSection": "Vale la pena revisar",
+    "nudgesSection": "Aprovecha más la app",
     "silence": "No mostrar esto de nuevo",
     "unsilence": "Mostrar de nuevo",
     "rolePromptTitle": "¿Cuál es tu rol?",
@@ -1487,7 +1528,22 @@
       "depreciationNotSet_one": "{{count}} camión no tiene método de depreciación elegido — elige uno para que tu estimado de impuestos lo incluya.",
       "depreciationNotSet_other": "{{count}} camiones no tienen método de depreciación elegido — elige uno para que tu estimado de impuestos lo incluya.",
       "needsReviewReceipts_one": "{{count}} recibo está esperando en NEEDS REVIEW — clasifícalo para que cuente en tus deducciones.",
-      "needsReviewReceipts_other": "{{count}} recibos están esperando en NEEDS REVIEW — clasifícalos para que cuenten en tus deducciones."
+      "needsReviewReceipts_other": "{{count}} recibos están esperando en NEEDS REVIEW — clasifícalos para que cuenten en tus deducciones.",
+      "weeklyGoalNotSet": "Fija una meta semanal de ganancias → el Coach de IA seguirá tu progreso y te dirá exactamente qué falta para lograrla.",
+      "weeklyGoalNotSet_amount": "Fija una meta semanal de ganancias → prueba con {{suggested}}, según tus últimas 4 semanas. El Coach de IA seguirá tu progreso desde ahí.",
+      "complianceItemMissing": "Agrega tu {{typeLabel}} → recibe un recordatorio antes de que venza, para que nunca te tome por sorpresa.",
+      "entityTypeNotSet": "Confirma el tipo de entidad de tu negocio → obtén una estimación de impuestos precisa y una comparación de ahorros con S-Corp.",
+      "homeStateNotSet": "Indica tu estado de residencia → tu estimación de impuestos podrá incluir el impuesto estatal.",
+      "firstReceiptMissing": "Agrega tu primer recibo pagado de tu bolsillo → desbloquea tu reporte de gastos del Paquete para el Contador.",
+      "businessBalanceNotSet": "Ingresa el saldo de tu cuenta bancaria → desbloquea una proyección real de Flujo de Caja.",
+      "settlementMissingMiles_amount_one": "{{count}} settlement tiene ingresos pero sin millas registradas — agrégalas para corregir tu Costo/Milla (actualmente muestra un inflado {{currentCpm}}/mi).",
+      "settlementMissingMiles_amount_other": "{{count}} settlements tienen ingresos pero sin millas registradas — agrégalas para corregir tu Costo/Milla (actualmente muestra un inflado {{currentCpm}}/mi).",
+      "depreciationNotSet_amount_one": "{{count}} camión no tiene método de depreciación elegido — elige uno para desbloquear hasta {{previewTotal}} en deducciones este año.",
+      "depreciationNotSet_amount_other": "{{count}} camiones no tienen método de depreciación elegido — elige uno para desbloquear hasta {{previewTotal}} en deducciones este año.",
+      "perDiemZeroMileWeek_one": "{{count}} semana en casa tiene 0 días de per diem — confírmalo, o edítalo si en realidad estuviste fuera de casa.",
+      "perDiemZeroMileWeek_other": "{{count}} semanas en casa tienen 0 días de per diem — confírmalas, o edítalas si en realidad estuviste fuera de casa.",
+      "perDiemZeroMileWeek_amount_one": "{{count}} semana en casa tiene 0 días de per diem — si en realidad estuviste fuera de casa, edítala para desbloquear hasta {{potential}} en deducciones de per diem.",
+      "perDiemZeroMileWeek_amount_other": "{{count}} semanas en casa tienen 0 días de per diem — si en realidad estuviste fuera de casa, edítalas para desbloquear hasta {{potential}} en deducciones de per diem."
     },
     "fromCoach": "De tu AI Coach",
     "coachNudges": {
@@ -1498,8 +1554,20 @@
       "quarterlyTaxDueSoon_other": "Tu próximo pago trimestral de impuestos vence en {{days}} días.",
       "fuelPctTrendUp": "El combustible está corriendo {{points}} puntos más alto que tus últimas 4 semanas — vale la pena revisarlo.",
       "deadheadTrendUp": "Tus millas deadhead están en aumento — {{points}} puntos más que tus últimas 4 semanas.",
-      "cpmAboveRpm": "Tu costo por milla (${{cpm}}) está por encima de tu tarifa por milla (${{rpm}}) esta semana — operando con pérdida en el papel."
-    }
+      "cpmAboveRpm": "Tu costo por milla (${{cpm}}) está por encima de tu tarifa por milla (${{rpm}}) esta semana — operando con pérdida en el papel.",
+      "goalStreakOver_one": "Superaste tu meta semanal {{count}} semana seguida — buen trabajo. ¿Consideras subirla?",
+      "goalStreakOver_other": "Superaste tu meta semanal {{count}} semanas seguidas — buen trabajo. ¿Consideras subirla?",
+      "goalStreakUnder_one": "Estuviste por debajo de tu meta semanal durante {{count}} semana — ¿quieres ver qué lo está causando?",
+      "goalStreakUnder_other": "Estuviste por debajo de tu meta semanal durante {{count}} semanas — ¿quieres ver qué lo está causando?",
+      "goalRpmGap": "Para alcanzar tu meta con las millas de esta semana, necesitarías cerca de ${{needed}}/mi — promediaste ${{actual}}/mi.",
+      "goalCostCategoryShortfall": "{{category}} (${{amount}}) fue tu mayor gasto esta semana — una posible razón de no llegar a la meta.",
+      "goalRaiseSuggestion_one": "Superaste tu meta {{count}} semana seguida — ¿quieres subirla?",
+      "goalRaiseSuggestion_other": "Superaste tu meta {{count}} semanas seguidas — ¿quieres subirla?",
+      "goalLowerSuggestion_one": "Llevas {{count}} semana por debajo de tu meta — ¿quieres fijar una más realista por ahora?",
+      "goalLowerSuggestion_other": "Llevas {{count}} semanas por debajo de tu meta — ¿quieres fijar una más realista por ahora?"
+    },
+    "unlockCta": "Desbloquear ahora",
+    "timeEstimate": "~{{minutes}} min"
   },
   "transactions": {
     "title": "Transacciones",
@@ -1805,5 +1873,9 @@
       "tools": "Herramientas",
       "system": "Sistema"
     }
+  },
+  "serviceStatus": {
+    "title": "La lectura con IA podría estar afectada",
+    "autoFallbackMessage": "Estamos viendo fallas repetidas al importar con IA en este dispositivo. Todo lo demás sigue funcionando, y siempre puedes agregar registros manualmente. Intentar de nuevo en un momento suele resolverlo."
   }
 }

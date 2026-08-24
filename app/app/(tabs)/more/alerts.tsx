@@ -9,22 +9,16 @@ import { coachNudgeText } from '@/src/alerts/periodicCoachNudges';
 import { COMPLIANCE_TYPE_ICON } from '@/src/compliance/status';
 import { HEALTH_CATEGORY_ICON, type HealthCategory } from '@/src/truck/categories';
 import type { NudgeTopic } from '@/src/alerts/missingDataNudges';
+import { NUDGE_ICON, NUDGE_ROUTE, NUDGE_TIME_ESTIMATE_MINUTES, unlockNudgeText } from '@/src/alerts/unlockNudgePresentation';
 import type { ProfileRole } from '@/src/alerts/roleFilter';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 
 function urgencyColor(urgency: 'overdue' | 'due_soon'): string {
   return urgency === 'overdue' ? colors.red : colors.orange;
 }
-
-const NUDGE_ICON: Record<NudgeTopic, string> = {
-  noRecentSettlement: '📥',
-  settlementMissingMiles: '🛣️',
-  truckCostBasisNotSet: '🚚',
-  depreciationNotSet: '📉',
-  needsReviewReceipts: '🧾',
-};
 
 // Owner decision 2026-08-24: same "less aggressive, never forced" spirit
 // as every other picker in this app — 5 options, reuses the EXACT same
@@ -33,17 +27,10 @@ const NUDGE_ICON: Record<NudgeTopic, string> = {
 const ROLE_OPTIONS: Exclude<ProfileRole, null>[] = ['owner_operator', 'lease_operator', 'company_driver_w2', 'contractor_1099', 'trainee'];
 
 function nudgeRoute(topic: NudgeTopic): Href {
-  switch (topic) {
-    case 'noRecentSettlement':
-      return '/(tabs)/import' as Href;
-    case 'settlementMissingMiles':
-      return '/(tabs)/more/settlements' as Href;
-    case 'truckCostBasisNotSet':
-    case 'depreciationNotSet':
-      return '/(tabs)/more/trucks' as Href;
-    case 'needsReviewReceipts':
-      return { pathname: '/(tabs)/deductions', params: { filter: 'needsReview' } } as unknown as Href;
+  if (topic === 'needsReviewReceipts') {
+    return { pathname: '/(tabs)/deductions', params: { filter: 'needsReview' } } as unknown as Href;
   }
+  return NUDGE_ROUTE[topic] as Href;
 }
 
 // Session 9e-B1: the screen the Dashboard top-bar bell opens — a simple,
@@ -55,6 +42,8 @@ function nudgeRoute(topic: NudgeTopic): Href {
 // still reading from the ONE useAlertsData() hook (src/data/alerts.ts).
 export default function Alerts() {
   const { t } = useTranslation();
+  const { money } = useFormatters();
+  const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
   const router = useRouter();
   const queryClient = useQueryClient();
   const { dueMaintenance, dueCompliance, nudges, silenceNudge, rolePromptNeeded, setRole, dismissRolePrompt, isLoading } = useAlertsData();
@@ -107,9 +96,15 @@ export default function Alerts() {
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
                   <Text style={{ fontSize: 20 }}>{NUDGE_ICON[n.topic]}</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text }}>
-                      {t(`alerts.nudges.${n.topic}`, { count: n.detail.count ?? 0, days: n.detail.days ?? 0 })}
-                    </Text>
+                    <Text style={{ color: colors.text }}>{unlockNudgeText(n, t, moneyRounded)}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs, gap: spacing.sm }}>
+                      <Text style={{ color: colors.accent, fontSize: typography.size.xs, fontWeight: '700' }}>
+                        {t('alerts.unlockCta')}
+                      </Text>
+                      <Text style={{ color: colors.muted, fontSize: typography.size.xs }}>
+                        {t('alerts.timeEstimate', { minutes: NUDGE_TIME_ESTIMATE_MINUTES[n.topic] })}
+                      </Text>
+                    </View>
                     <Text
                       onPress={(e) => {
                         e.stopPropagation();

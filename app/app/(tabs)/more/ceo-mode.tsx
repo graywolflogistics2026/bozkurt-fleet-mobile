@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useDocuments } from '@/src/data/documents';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useAiCoachSummary } from '@/src/data/aiCoachSummary';
+import { trailingAverageNet } from '@/src/stats/goalProgress';
 import { RECOMMENDATION_ICON, recommendationText, recommendationRoute } from '@/src/stats/aiRecommendations';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
@@ -48,6 +49,27 @@ export default function CeoMode() {
 
   const weeklyGoal = profileQuery.data?.weekly_goal ?? null;
   const goalProgressPct = weeklyGoal && weeklyGoal > 0 && latestWeek ? (latestWeek.net / weeklyGoal) * 100 : null;
+  // WEEKLY GOAL DRIVES THE COACH (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 3 item 4) — "prefilled from the trailing 4-week
+  // average net," the SAME real number the Alerts screen's "set a weekly
+  // goal" unlock nudge names (src/stats/goalProgress.ts's
+  // trailingAverageNet(), one shared function so the two never suggest
+  // different starting points). Only used to PREFILL the field before the
+  // user has ever set a goal — once a real weekly_goal exists, the field
+  // always reflects that saved value, never silently reverts to a moving
+  // average.
+  const suggestedGoal = useMemo(() => trailingAverageNet(coach.weeklyTrend), [coach.weeklyTrend]);
+
+  // Prefill ONLY the first-open goal field (weeklyGoal still null) and
+  // ONLY while the user hasn't typed anything of their own yet — never
+  // overwrites an in-progress edit, and never touches the field once a
+  // real weekly_goal is already saved.
+  useEffect(() => {
+    if (weeklyGoal == null && goalInput === '' && suggestedGoal != null && suggestedGoal > 0) {
+      setGoalInput(String(Math.round(suggestedGoal)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyGoal, suggestedGoal]);
 
   // Tax opportunity hint: archived documents that never resolved past the
   // generic 'other' docType (CLAUDE.md invariant #14) — the same

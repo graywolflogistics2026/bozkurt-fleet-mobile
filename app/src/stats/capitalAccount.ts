@@ -104,3 +104,117 @@ export function summarizeContributions(contributions: CapitalTransactionLike[]):
   }
   return { cashAmount, cashCount, linkedAmount, linkedCount };
 }
+
+// PAYMENT SOURCE & CAPITAL CLARITY (owner decision 2026-08-24, FIVE
+// ADDITIONS pass, PART 2). "Reimburse Myself" on an owner-paid row reuses
+// the EXISTING capital_transactions.linked_deduction_id column, now
+// dual-purpose: on a `tx_type:'contribution'` row it means "this
+// contribution was auto-synced from this deduction" (unchanged, existing
+// behavior); on a `tx_type:'draw'` row it means "this draw reimburses that
+// deduction's own contribution" — no new SQL column needed, since
+// `(tx_type, linked_deduction_id)` together are already unambiguous. No DB
+// CHECK constraint restricts which tx_type may carry this column.
+export type ReimbursementStatus = {
+  contributionAmount: number;
+  reimbursedAmount: number;
+  outstandingAmount: number;
+  fullyReimbursed: boolean;
+};
+
+// "Returned capital must not keep inflating the tax-free base" — the
+// outstanding (still-not-reimbursed) portion of a specific personally-paid
+// expense's linked contribution, floored at $0 (a reimbursement can never
+// exceed what was actually contributed for THAT expense; a caller trying
+// to reimburse more than what's outstanding should clamp to this value
+// before creating the draw, never overpay from the business).
+export function calcReimbursementStatus(
+  contributionAmount: number,
+  reimbursementDraws: { amount: number | null }[]
+): ReimbursementStatus {
+  const reimbursedAmount = reimbursementDraws.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const outstandingAmount = Math.max(0, contributionAmount - reimbursedAmount);
+  return { contributionAmount, reimbursedAmount, outstandingAmount, fullyReimbursed: outstandingAmount <= 0 };
+}
+
+export type CapitalFlowsSummary = {
+  // 1. Cash contributed — capital IN, not income.
+  cashContributed: number;
+  cashContributedCount: number;
+  // 2. Expenses paid personally, STILL OUTSTANDING — capital IN. Netted
+  // against whatever's already been reimbursed for that specific expense
+  // (never the full original amount once part of it has come back).
+  expensesPaidPersonallyOutstanding: number;
+  expensesPaidPersonallyOutstandingCount: number;
+  // 3. Reimbursements taken back — capital OUT, NOT an expense (returning
+  // the owner's own already-contributed money, never a new business cost).
+  reimbursementsTakenBack: number;
+  reimbursementsTakenBackCount: number;
+  // 4. Owner draws — capital OUT, not wages (a plain, unlinked draw).
+  ownerDraws: number;
+  ownerDrawsCount: number;
+  // contributions (full, cash + linked) − draws − reimbursements — the
+  // SAME number calcCapitalAccount()'s effectiveContribution-totalDraws
+  // already produces, computed here from the 4-flow breakdown instead so
+  // the Capital Account screen's own flow cards and headline total can
+  // never silently disagree.
+  netPosition: number;
+};
+
+// Reads DIRECTLY off the full capital_transactions list (both
+// tx_type:'contribution' and tx_type:'draw' rows) — one pass, no separate
+// pre-filtering by the caller required.
+export function summarizeCapitalFlows(transactions: CapitalTransactionLike[]): CapitalFlowsSummary {
+  let cashContributed = 0;
+  let cashContributedCount = 0;
+  let ownerDraws = 0;
+  let ownerDrawsCount = 0;
+  let reimbursementsTakenBack = 0;
+  let reimbursementsTakenBackCount = 0;
+  const contributionByDeduction = new Map<string, number>();
+  const reimbursedByDeduction = new Map<string, number>();
+
+  for (const tx of transactions) {
+    const amount = Number(tx.amount ?? 0);
+    if (tx.tx_type === 'contribution') {
+      if (tx.linked_deduction_id) {
+        contributionByDeduction.set(tx.linked_deduction_id, (contributionByDeduction.get(tx.linked_deduction_id) ?? 0) + amount);
+      } else {
+        cashContributed += amount;
+        cashContributedCount += 1;
+      }
+    } else if (tx.linked_deduction_id) {
+      reimbursementsTakenBack += amount;
+      reimbursementsTakenBackCount += 1;
+      reimbursedByDeduction.set(tx.linked_deduction_id, (reimbursedByDeduction.get(tx.linked_deduction_id) ?? 0) + amount);
+    } else {
+      ownerDraws += amount;
+      ownerDrawsCount += 1;
+    }
+  }
+
+  let expensesPaidPersonallyOutstanding = 0;
+  let expensesPaidPersonallyOutstandingCount = 0;
+  let totalLinkedContributions = 0;
+  for (const [deductionId, contributionAmount] of contributionByDeduction) {
+    totalLinkedContributions += contributionAmount;
+    const status = calcReimbursementStatus(contributionAmount, [{ amount: reimbursedByDeduction.get(deductionId) ?? 0 }]);
+    if (status.outstandingAmount > 0) {
+      expensesPaidPersonallyOutstanding += status.outstandingAmount;
+      expensesPaidPersonallyOutstandingCount += 1;
+    }
+  }
+
+  const netPosition = cashContributed + totalLinkedContributions - ownerDraws - reimbursementsTakenBack;
+
+  return {
+    cashContributed,
+    cashContributedCount,
+    expensesPaidPersonallyOutstanding,
+    expensesPaidPersonallyOutstandingCount,
+    reimbursementsTakenBack,
+    reimbursementsTakenBackCount,
+    ownerDraws,
+    ownerDrawsCount,
+    netPosition,
+  };
+}

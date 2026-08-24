@@ -3,7 +3,12 @@ import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
 import type { Extraction } from '@/src/import/types';
 
-export type AiImportError = { type: string; message: string; detail?: string };
+// USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
+// FIVE ADDITIONS pass, PART 5) — `used`/`allowance` are only ever present
+// when `type === 'usage_limit_reached'` (ai-import/index.ts's own
+// errorResponse `extra` object spreads them onto the error directly, not
+// nested under `detail`).
+export type AiImportError = { type: string; message: string; detail?: string; used?: number; allowance?: number };
 // pagesProcessed (owner decision 2026-08-03, round 5): present only when
 // ai-import didn't cover every page of the original document — one or
 // more pages failed even after the server's own one non-fatal retry

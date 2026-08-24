@@ -325,7 +325,11 @@
     "addTitle": "➕ Add Deduction",
     "descriptionLabel": "Description",
     "descriptionPlaceholder": "What was it for?",
-    "dateLabel": "Date"
+    "dateLabel": "Date",
+    "reimbursedInFull": "Paid personally · reimbursed in full ({{amount}})",
+    "reimbursedPartial": "Paid personally · reimbursed {{reimbursed}} of {{total}}",
+    "notYetReimbursed": "Paid personally · not yet reimbursed",
+    "reimburseMyself": "Reimburse Myself ({{amount}})"
   },
   "capitalAccount": {
     "title": "Capital Account",
@@ -367,7 +371,16 @@
     "duplicatesRemoved": "{{count}} duplicate entries removed.",
     "saveFailedTitle": "Save failed",
     "deleteFailedTitle": "Delete failed",
-    "genericRetry": "Please try again."
+    "genericRetry": "Please try again.",
+    "flowsTitle": "Where your equity comes from",
+    "flowCashContributed": "Cash contributed",
+    "flowCashContributedExplainer": "Money you deposited into the business — capital in, not income.",
+    "flowOutstanding": "Expenses paid personally, still outstanding",
+    "flowOutstandingExplainer": "Business expenses you paid out of pocket that haven't been reimbursed yet — capital in.",
+    "flowReimbursements": "Reimbursements taken back",
+    "flowReimbursementsExplainer": "Money the business paid you back for an expense you covered — capital out, not a new expense.",
+    "flowDrawsExplainer": "Money you took out of the business for yourself — capital out, not wages.",
+    "flowNetPosition": "Net position"
   },
   "importScreen": {
     "title": "Import",
@@ -487,7 +500,19 @@
       "reference": "Reference",
       "period": "Period",
       "suggestedCategory": "Suggested Category"
-    }
+    },
+    "friendlyFailure": {
+      "billingAuth": "AI reading is temporarily unavailable. Your data is safe — you can still add entries manually, and we're on it.",
+      "rateLimit": "Lots of imports right now — try again in a few minutes.",
+      "timeoutOverload": "The document is taking too long right now — try again shortly.",
+      "offline": "You're offline. Your file is saved and will import when you're back."
+    },
+    "usageLimitReached": "You've used this month's AI imports ({{used}} of {{allowance}}). You can still add entries manually, and everything else keeps working — your allowance resets on the 1st.",
+    "usageLimitReachedGeneric": "You've used this month's AI imports. You can still add entries manually, and everything else keeps working — your allowance resets on the 1st.",
+    "retryImport": "Retry",
+    "chooseDifferentFile": "Choose a Different File",
+    "backfillOfferTitle": "Catching up on old records?",
+    "backfillOfferBody": "If you're importing several months of past documents, the Catch-Up Year pack (1,000 imports, valid 90 days) may help. Contact support if you'd like one added to your account."
   },
   "camera": {
     "permissionNote": "Camera access is needed to photograph receipts and settlement PDFs.",
@@ -598,7 +623,23 @@
     "deleteConfirm2Body": "There is no way to recover your data after this. Type the word below to confirm.",
     "deleteTypeToConfirm": "Type {{word}} to confirm",
     "deletePermanently": "Delete Permanently",
-    "deleteFailedTitle": "Could not delete account"
+    "deleteFailedTitle": "Could not delete account",
+    "weeklyGoalLabel": "Weekly Profit Goal",
+    "weeklyGoalSuggestedNote": "Suggested: {{amount}}, based on your last 4 weeks",
+    "aiUsageTitle": "AI Usage",
+    "aiUsageSummary": "AI imports this month: {{used}} of {{allowance}} ({{trucks}} truck(s))",
+    "aiUsageExtraCredits": "Extra credits: {{credits}}",
+    "aiUsageResetsOn": "Resets on {{date}}",
+    "aiUsageSoftLimitNotice": "You're approaching this month's AI import limit.",
+    "aiUsageHardLimitNotice": "You've used this month's AI imports. You can still add entries manually, and everything else keeps working — your allowance resets on the 1st.",
+    "aiUsageCreditPacksIntro": "Need more this month? Add a credit pack:",
+    "creditPack": {
+      "pack_25": "25 imports — ${{price}}",
+      "pack_100": "100 imports — ${{price}}",
+      "pack_300": "300 imports — ${{price}}",
+      "catchup_year": "Catch-Up Year — 1,000 imports for back-filling a past tax year, ${{price}} (valid 90 days)"
+    },
+    "aiUsageCreditPacksContact": "Contact support to add a credit pack to your account."
   },
   "placeholders": {},
   "truckHealth": {
@@ -1472,7 +1513,7 @@
     "empty": "You're all caught up — no maintenance or compliance items need attention right now.",
     "maintenanceSection": "Truck Health",
     "complianceSection": "Compliance",
-    "nudgesSection": "Worth a look",
+    "nudgesSection": "Get more out of the app",
     "silence": "Don't show this again",
     "unsilence": "Show again",
     "rolePromptTitle": "What's your role?",
@@ -1487,7 +1528,22 @@
       "depreciationNotSet_one": "{{count}} truck has no depreciation method chosen — pick one so your tax estimate includes it.",
       "depreciationNotSet_other": "{{count}} trucks have no depreciation method chosen — pick one so your tax estimate includes it.",
       "needsReviewReceipts_one": "{{count}} receipt is waiting in NEEDS REVIEW — sort it so it counts toward your deductions.",
-      "needsReviewReceipts_other": "{{count}} receipts are waiting in NEEDS REVIEW — sort them so they count toward your deductions."
+      "needsReviewReceipts_other": "{{count}} receipts are waiting in NEEDS REVIEW — sort them so they count toward your deductions.",
+      "weeklyGoalNotSet": "Set a weekly profit goal → the AI Coach will track your progress and tell you exactly what closes the gap.",
+      "weeklyGoalNotSet_amount": "Set a weekly profit goal → try {{suggested}}, based on your last 4 weeks. The AI Coach will track your progress from there.",
+      "complianceItemMissing": "Add your {{typeLabel}} → get a reminder before it expires, so you never scramble at the last minute.",
+      "entityTypeNotSet": "Confirm your business entity type → unlock an accurate tax estimate and S-Corp savings comparison.",
+      "homeStateNotSet": "Set your home state → your tax estimate can include state tax.",
+      "firstReceiptMissing": "Add your first out-of-pocket receipt → unlock your Accountant Package expense report.",
+      "businessBalanceNotSet": "Enter your bank balance → unlock real Cash Flow forecasting.",
+      "settlementMissingMiles_amount_one": "{{count}} settlement has revenue but no miles recorded — add them to fix your Cost/Mile (currently showing an inflated {{currentCpm}}/mi).",
+      "settlementMissingMiles_amount_other": "{{count}} settlements have revenue but no miles recorded — add them to fix your Cost/Mile (currently showing an inflated {{currentCpm}}/mi).",
+      "depreciationNotSet_amount_one": "{{count}} truck has no depreciation method chosen — pick one to unlock up to {{previewTotal}} in deductions this year.",
+      "depreciationNotSet_amount_other": "{{count}} trucks have no depreciation method chosen — pick one to unlock up to {{previewTotal}} in deductions this year.",
+      "perDiemZeroMileWeek_one": "{{count}} home week has 0 per diem days set — confirm it, or edit it if you were actually away from home.",
+      "perDiemZeroMileWeek_other": "{{count}} home weeks have 0 per diem days set — confirm them, or edit if you were actually away from home.",
+      "perDiemZeroMileWeek_amount_one": "{{count}} home week has 0 per diem days set — if you were actually away from home, edit it to unlock up to {{potential}} in per diem deductions.",
+      "perDiemZeroMileWeek_amount_other": "{{count}} home weeks have 0 per diem days set — if you were actually away from home, edit them to unlock up to {{potential}} in per diem deductions."
     },
     "fromCoach": "From your AI Coach",
     "coachNudges": {
@@ -1498,8 +1554,20 @@
       "quarterlyTaxDueSoon_other": "Your next quarterly tax payment is due in {{days}} days.",
       "fuelPctTrendUp": "Fuel is running {{points}} points higher than your last 4 weeks — worth a look.",
       "deadheadTrendUp": "Deadhead miles are trending up — {{points}} points higher than your last 4 weeks.",
-      "cpmAboveRpm": "Your cost per mile (${{cpm}}) is above your rate per mile (${{rpm}}) this week — running at a loss on paper."
-    }
+      "cpmAboveRpm": "Your cost per mile (${{cpm}}) is above your rate per mile (${{rpm}}) this week — running at a loss on paper.",
+      "goalStreakOver_one": "You've beaten your weekly goal {{count}} week in a row — nice work. Consider raising it?",
+      "goalStreakOver_other": "You've beaten your weekly goal {{count}} weeks in a row — nice work. Consider raising it?",
+      "goalStreakUnder_one": "You've come in under your weekly goal for {{count}} week — want to look at what's driving it?",
+      "goalStreakUnder_other": "You've come in under your weekly goal for {{count}} weeks — want to look at what's driving it?",
+      "goalRpmGap": "To hit your goal at this week's own miles, you'd need about ${{needed}}/mi — you averaged ${{actual}}/mi.",
+      "goalCostCategoryShortfall": "{{category}} (${{amount}}) was your biggest expense this week — a likely reason the goal slipped.",
+      "goalRaiseSuggestion_one": "You've beaten your goal {{count}} week in a row — want to raise it?",
+      "goalRaiseSuggestion_other": "You've beaten your goal {{count}} weeks in a row — want to raise it?",
+      "goalLowerSuggestion_one": "You've been under your goal for {{count}} week — want to set a more realistic one for now?",
+      "goalLowerSuggestion_other": "You've been under your goal for {{count}} weeks — want to set a more realistic one for now?"
+    },
+    "unlockCta": "Unlock now",
+    "timeEstimate": "~{{minutes}} min"
   },
   "transactions": {
     "title": "Transactions",
@@ -1805,5 +1873,9 @@
       "tools": "Tools",
       "system": "System"
     }
+  },
+  "serviceStatus": {
+    "title": "AI reading may be affected",
+    "autoFallbackMessage": "We're seeing repeated AI import failures on this device. Everything else keeps working, and you can always add entries manually. Trying again shortly usually resolves it."
   }
 }

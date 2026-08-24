@@ -14,6 +14,7 @@ import { calcMiles } from '@/src/stats/miles';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { shouldGenerateWeeklyReview, buildWeeklyReviewPrompt } from '@/src/stats/weeklyReview';
+import { calcGoalProgress, calcGoalStreak, suggestGoalAdjustment } from '@/src/stats/goalProgress';
 import { buildPeriodicCoachNudgeCandidates, type CoachNudgeCandidate, type CoachNudgeTopic } from '@/src/alerts/periodicCoachNudges';
 import { selectNudgesToShow, recordNudgesShown, ONE_MONTH_MS, type NudgeState } from '@/src/alerts/nudgeFrequency';
 
@@ -110,6 +111,42 @@ export function useProactiveCoach() {
 
   const quarterlyDeadline = taxQuery.data ? nextQuarterlyDeadline(taxQuery.data.taxYearData.quarterly_deadlines) : null;
 
+  // ---- WEEKLY GOAL DRIVES THE COACH (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 3) ----
+  const weeklyGoal = profileQuery.data?.weekly_goal ?? null;
+  const latestWeekLoads = latestSettlement ? (loadsQuery.data ?? []).filter((l) => l.settlement_id === latestSettlement.id) : [];
+  const avgRevenuePerLoad =
+    latestWeekLoads.length > 0 ? latestWeekLoads.reduce((sum, l) => sum + Number(l.revenue ?? 0), 0) / latestWeekLoads.length : null;
+  const goalProgress = calcGoalProgress(weeklyGoal, latestWeekTrend?.net ?? null, latestRpm, avgRevenuePerLoad);
+  const goalStreak = calcGoalStreak(
+    weeklyTrend.map((w) => ({ weekEnding: w.weekEnding, net: w.net })),
+    weeklyGoal
+  );
+  const goalAdjustmentSuggestion = suggestGoalAdjustment(goalStreak);
+  // "the RPM needed versus what they're getting" (PART 3 item 2) — if this
+  // week fell short, what RPM would the SAME miles driven have needed to
+  // average to close the gap: actual RPM + (gap $ / miles driven).
+  const goalNeededRpm =
+    goalProgress && !goalProgress.metGoal && latestSettlement && latestSettlement.miles > 0 && latestRpm != null
+      ? latestRpm + goalProgress.gapDollars / latestSettlement.miles
+      : null;
+  // "which cost category explains a shortfall" — the single largest
+  // out-of-pocket/withheld deduction category dated this settlement week.
+  const goalTopCostCategory = useMemo(() => {
+    if (!latestSettlement) return null;
+    const byCategory = new Map<string, number>();
+    for (const d of deductionsQuery.data ?? []) {
+      if (d.ded_date !== latestSettlement.week_ending) continue;
+      const cat = d.category ?? 'Other';
+      byCategory.set(cat, (byCategory.get(cat) ?? 0) + Number(d.amount ?? 0));
+    }
+    let top: { category: string; amount: number } | null = null;
+    for (const [category, amount] of byCategory) {
+      if (!top || amount > top.amount) top = { category, amount };
+    }
+    return top;
+  }, [deductionsQuery.data, latestSettlement]);
+
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const hasOutOfPocketThisMonth = (deductionsQuery.data ?? []).some((d) => d.source !== 'settlement' && d.ded_date && d.ded_date >= monthStart);
@@ -130,9 +167,32 @@ export function useProactiveCoach() {
         cpm: latestCpm,
         rpm: latestRpm,
         now,
+        goalStreak: weeklyGoal != null ? goalStreak : undefined,
+        goalNeededRpm: weeklyGoal != null ? goalNeededRpm : undefined,
+        goalShortByDollars: goalProgress ? goalProgress.gapDollars : undefined,
+        goalTopCostCategory: goalTopCostCategory?.category ?? null,
+        goalTopCostCategoryAmount: goalTopCostCategory?.amount ?? 0,
+        goalAdjustmentSuggestion,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deductionsQuery.data, quarterlyDeadline?.daysUntil, hasOutOfPocketThisMonth, monthLabel, latestFuelPct, trailingAvgFuelPct, latestDeadheadPct, trailingAvgDeadheadPct, latestCpm, latestRpm]
+    [
+      deductionsQuery.data,
+      quarterlyDeadline?.daysUntil,
+      hasOutOfPocketThisMonth,
+      monthLabel,
+      latestFuelPct,
+      trailingAvgFuelPct,
+      latestDeadheadPct,
+      trailingAvgDeadheadPct,
+      latestCpm,
+      latestRpm,
+      weeklyGoal,
+      goalStreak,
+      goalNeededRpm,
+      goalProgress,
+      goalTopCostCategory,
+      goalAdjustmentSuggestion,
+    ]
   );
 
   const coachNudgeState: NudgeState<CoachNudgeTopic> = (profileQuery.data?.nudge_state as NudgeState<CoachNudgeTopic>) ?? {};
@@ -198,6 +258,7 @@ export function useProactiveCoach() {
       perDiemDays: latestSettlement.per_diem_days,
       ytdProfitBefore,
       ytdProfitAfter,
+      goalProgress: weeklyGoal != null && goalProgress ? { weeklyGoal, ...goalProgress } : null,
     });
 
     setGenerating(true);
@@ -219,5 +280,8 @@ export function useProactiveCoach() {
     weeklyReview: cachedReview,
     weeklyReviewGenerating: generating,
     periodicNudge,
+    weeklyGoal,
+    goalProgress,
+    weeklyTrend,
   };
 }

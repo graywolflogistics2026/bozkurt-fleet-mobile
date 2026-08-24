@@ -1524,8 +1524,14 @@ Session 10's scope, not blocking the Part 1 beta build):**
 - [ ] Delete-account / reset-data final live tests against the real
       Supabase project (not just unit tests of `callDeleteAccount`/
       `callResetData`).
-- [ ] Rate-limit / AI-cost caps review for `ai-import`/`ai-advisor`
-      Edge Functions before public signups are possible.
+- [x] Rate-limit / AI-cost caps review for `ai-import`/`ai-advisor`
+      Edge Functions before public signups are possible — DONE 2026-08-24,
+      FIVE ADDITIONS pass PART 5: server-side monthly allowance (60
+      imports/active truck), owner-adjustable ceiling
+      (`ai_usage_config`), and per-call cost logging (`ai_usage_log`,
+      both ai-import AND ai-advisor) all shipped this pass, see
+      docs/PENDING_SQL.md §51 and docs/ADMIN_RUNBOOK.md's "AI Cost
+      Control"/"AI Usage Limits + Credit Packs" sections.
 - [ ] REFERRAL PROGRAM + LIFETIME ACCOUNTS (owner decision 2026-08-24,
       binding on whichever billing provider gets picked): the billing
       integration MUST honor BOTH `account_credits` (the referral
@@ -1548,6 +1554,30 @@ Session 10's scope, not blocking the Part 1 beta build):**
       the Referral screen currently shows a placeholder disclaimer
       (`referral.tnc`) pending real legal review, same "DRAFT, not
       attorney-reviewed" status as the rest of this app's legal copy.
+- [ ] USAGE LIMITS BY FLEET SIZE + CREDIT PACKS — IAP INTEGRATION (owner
+      decision 2026-08-24, FIVE ADDITIONS pass PART 5 item 6): billing
+      isn't built yet — the 4 credit packs (25 imports $9 / 100 $25 / 300
+      $59 / "Catch-Up Year" 1,000 imports $99, 90-day expiry) are
+      currently recorded ONLY as owner-granted `ai_credit_purchases` rows
+      via the SAME admin SQL recipe as lifetime plans
+      (docs/ADMIN_RUNBOOK.md). Whichever IAP/RevenueCat integration Session
+      10 picks: on BOTH iOS and Android these 4 packs MUST be modeled as
+      CONSUMABLE in-app purchases (not subscriptions, not non-consumables
+      — a pack is spent down to zero and can be bought again), and the
+      purchase-completion webhook/callback must insert into
+      `ai_credit_purchases` with the matching `pack_type`/
+      `credits_granted`/`credits_remaining`/`expires_at` (null except
+      `catchup_year`) — `app/src/usage/aiUsage.ts`'s `CREDIT_PACK_OFFERS`
+      is the canonical price/credit-count list to wire the store product
+      IDs against. Separately, the fleet-size SUBSCRIPTION tiers (Solo 1
+      truck $19/mo · Small Fleet 2-3 $39 · Fleet 4-8 $79 · Fleet+ 9+ $79 +
+      $8/extra truck, `app/src/usage/aiUsage.ts`'s `FLEET_TIERS`) are the
+      recorded tier basis for whatever the actual subscription product
+      becomes — these are NOT yet wired to `profiles.plan` at all (that
+      column currently only distinguishes free_trial/paid/lifetime/
+      complimentary, not WHICH paid tier), so mapping a specific
+      subscription product to a specific truck-count tier is still open
+      design work for whoever builds this integration.
 ```
 
 ## Backlog (parked features — do not start without a separate, explicit owner decision)

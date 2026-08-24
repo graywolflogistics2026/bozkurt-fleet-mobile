@@ -79,4 +79,70 @@ describe('buildWeeklyReviewPrompt', () => {
     const prompt = buildWeeklyReviewPrompt(inputs());
     expect(prompt).toContain('Never invent a figure that was not given here.');
   });
+
+  // WEEKLY GOAL DRIVES THE COACH (2026-08-24 FIVE ADDITIONS pass, PART 3
+  // item 1) — no goal set at all -> no goal sentence, never a fabricated
+  // "$0 goal."
+  test('no goal set — omits the goal sentence entirely', () => {
+    const prompt = buildWeeklyReviewPrompt(inputs({ goalProgress: null }));
+    expect(prompt).not.toContain('Weekly profit goal');
+  });
+
+  test('goal met — states progress, no gap-closing terms', () => {
+    const prompt = buildWeeklyReviewPrompt(
+      inputs({
+        goalProgress: {
+          weeklyGoal: 2000,
+          progressDollars: 2800,
+          progressPct: 140,
+          metGoal: true,
+          gapDollars: 0,
+          milesToCloseGap: null,
+          loadsToCloseGap: null,
+        },
+      })
+    );
+    expect(prompt).toContain('Weekly profit goal: $2000.00');
+    expect(prompt).toContain('140% of goal');
+    expect(prompt).toContain('met or beaten');
+    expect(prompt).not.toContain('Short of the goal');
+  });
+
+  test('goal missed — states the real $ gap and the user\'s own miles/loads terms', () => {
+    const prompt = buildWeeklyReviewPrompt(
+      inputs({
+        goalProgress: {
+          weeklyGoal: 3000,
+          progressDollars: 2800,
+          progressPct: 93,
+          metGoal: false,
+          gapDollars: 200,
+          milesToCloseGap: 95.2,
+          loadsToCloseGap: 1.3,
+        },
+      })
+    );
+    expect(prompt).toContain('Short of the goal by $200.00');
+    expect(prompt).toContain('about 95 more miles');
+    expect(prompt).toContain('roughly 2 more load(s)');
+  });
+
+  test('goal missed but no real rpm/avg-revenue-per-load — never fabricates the gap-closing terms', () => {
+    const prompt = buildWeeklyReviewPrompt(
+      inputs({
+        goalProgress: {
+          weeklyGoal: 3000,
+          progressDollars: 2800,
+          progressPct: 93,
+          metGoal: false,
+          gapDollars: 200,
+          milesToCloseGap: null,
+          loadsToCloseGap: null,
+        },
+      })
+    );
+    expect(prompt).toContain('Short of the goal by $200.00');
+    expect(prompt).not.toContain('more miles');
+    expect(prompt).not.toContain('more load(s)');
+  });
 });

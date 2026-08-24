@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
 import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
+import { fetchReimbursementStatus, useReimburseMyself } from '@/src/data/capitalTransactions';
+import type { ReimbursementStatus } from '@/src/stats/capitalAccount';
 import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
@@ -157,6 +159,7 @@ export default function Deductions() {
   const updateDeduction = useUpdateDeduction();
   const learnCategoryCorrection = useLearnCategoryCorrection();
   const deleteDeduction = useDeleteDeduction();
+  const reimburseMyself = useReimburseMyself();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -166,6 +169,13 @@ export default function Deductions() {
   const [editAmount, setEditAmount] = useState('');
   const [editTaxDeductible, setEditTaxDeductible] = useState(true);
   const [saving, setSaving] = useState(false);
+  // PAYMENT SOURCE & CAPITAL CLARITY (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 2 item 1) — fetched fresh each time the edit sheet
+  // opens for an owner-paid row (a per-row fetch on every list render would
+  // be wasteful; this screen already only needs the status for whichever
+  // ONE row is currently open).
+  const [reimbursementStatus, setReimbursementStatus] = useState<ReimbursementStatus | null>(null);
+  const [reimbursing, setReimbursing] = useState(false);
 
   const [adding, setAdding] = useState(false);
   const [addDescription, setAddDescription] = useState('');
@@ -209,10 +219,37 @@ export default function Deductions() {
     setEditPayment(normalizePaymentMethod(x.payment_method));
     setEditAmount(String(x.amount ?? 0));
     setEditTaxDeductible(x.tax_deductible !== false);
+    setReimbursementStatus(null);
+    if (userId) {
+      fetchReimbursementStatus(userId, x.id)
+        .then(setReimbursementStatus)
+        .catch(() => setReimbursementStatus(null));
+    }
   }
 
   function closeEdit() {
     setEditing(null);
+    setReimbursementStatus(null);
+  }
+
+  async function handleReimburseMyself() {
+    if (!editing || !userId || !reimbursementStatus || reimbursementStatus.outstandingAmount <= 0) return;
+    setReimbursing(true);
+    try {
+      await reimburseMyself.mutateAsync({
+        userId,
+        deductionId: editing.id,
+        amount: reimbursementStatus.outstandingAmount,
+        note: `${(editing.description ?? 'Deduction').split(' — ')[0]} — reimbursed to owner`,
+      });
+      const refreshed = await fetchReimbursementStatus(userId, editing.id);
+      setReimbursementStatus(refreshed);
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setReimbursing(false);
+    }
   }
 
   // "View linked records" from the Documents Archive viewer (owner decision
@@ -474,6 +511,33 @@ export default function Deductions() {
             <Text style={{ color: colors.orange, fontSize: typography.size.xs }}>
               {t('deductions.personalPaymentNote')}
             </Text>
+          </View>
+        )}
+
+        {/* PAYMENT SOURCE & CAPITAL CLARITY (owner decision 2026-08-24, FIVE
+            ADDITIONS pass, PART 2 item 1) — only shown for an owner-paid row
+            that actually has a linked contribution (reimbursementStatus is
+            null for a business-paid row, or one whose contribution the
+            owner declined at import time). */}
+        {reimbursementStatus && (
+          <View style={{ marginTop: spacing.sm }}>
+            <MutedText>
+              {reimbursementStatus.fullyReimbursed
+                ? t('deductions.reimbursedInFull', { amount: money(reimbursementStatus.contributionAmount) })
+                : reimbursementStatus.reimbursedAmount > 0
+                  ? t('deductions.reimbursedPartial', {
+                      reimbursed: money(reimbursementStatus.reimbursedAmount),
+                      total: money(reimbursementStatus.contributionAmount),
+                    })
+                  : t('deductions.notYetReimbursed')}
+            </MutedText>
+            {!reimbursementStatus.fullyReimbursed && (
+              <SecondaryButton
+                title={`💰 ${t('deductions.reimburseMyself', { amount: money(reimbursementStatus.outstandingAmount) })}`}
+                onPress={handleReimburseMyself}
+                loading={reimbursing}
+              />
+            )}
           </View>
         )}
 

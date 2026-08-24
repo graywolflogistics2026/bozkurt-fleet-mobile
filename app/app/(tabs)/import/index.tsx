@@ -16,6 +16,10 @@ import { useDrivers, useInsertDriver } from '@/src/data/drivers';
 import { useUserCategories } from '@/src/data/userCategories';
 import { useCategoryLearningRules } from '@/src/data/categoryLearningRules';
 import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
+import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
+import { useAiFailureTracker } from '@/src/data/serviceStatus';
+import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
+import { detectBackfillSession } from '@/src/usage/aiUsage';
 import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { isSaveExtractionError, buildErrorReport } from '@/src/data/saveExtractionError';
 import { groupStepForDisplay, type DisplayStepGroup } from '@/src/import/errorStepGroups';
@@ -185,6 +189,10 @@ export default function Import() {
   const insertDriver = useInsertDriver();
   const queryClient = useQueryClient();
   const userId = session?.user.id;
+  // COST CONTROL & GRACEFUL DEGRADATION (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 4 item 3) — tracks consecutive ai-import
+  // failures on this device for the automatic fallback banner.
+  const aiFailureTracker = useAiFailureTracker();
 
   const [phase, setPhase] = useState<Phase>('pick');
   const [workingLabel, setWorkingLabel] = useState('');
@@ -237,6 +245,13 @@ export default function Import() {
   // insert-vs-update decision and hitting the settlements unique index.
   const savingRef = useRef(false);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
+  // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
+  // FIVE ADDITIONS pass, PART 5 item 5) — "contextually when someone is
+  // clearly back-filling" — a plain in-session list of this session's own
+  // saved-document dates (not persisted; a fresh session starts clean),
+  // shown at most once per session.
+  const sessionImportedDatesRef = useRef<string[]>([]);
+  const backfillOfferShownRef = useRef(false);
   // "STILL WORKING" PROGRESS STATE (owner decision 2026-08-02, device
   // evidence: "The AI service took too long to respond" on real 8-page
   // Prime settlements — the bare spinner gave no signal the app hadn't
@@ -379,7 +394,28 @@ export default function Import() {
   useEffect(() => () => clearStillWorkingTimer(), []);
 
   function handleAiError(err: AiImportError) {
-    setErrorMessage(friendlyAiImportError(err));
+    // A usage-limit block isn't a service failure — never counts toward
+    // the automatic "the AI service seems to be down" fallback banner.
+    if (err.type !== 'usage_limit_reached') aiFailureTracker.recordFailure();
+    // COST CONTROL & GRACEFUL DEGRADATION (owner decision 2026-08-24, FIVE
+    // ADDITIONS pass, PART 4 item 2) — billing/auth, rate-limit, timeout/
+    // overload, and offline all get ONE shared, friendly, localized
+    // message per category (src/import/friendlyAiFailure.ts) instead of
+    // the raw underlying error; every other type keeps its own existing,
+    // already-specific message. The USAGE LIMIT (PART 5) gets its own
+    // dedicated message — it already carries the exact real "X of Y"
+    // figures from the server (usage_limit_reached's `used`/`allowance`
+    // extras), never a generic bucket.
+    if (err.type === 'usage_limit_reached') {
+      setErrorMessage(
+        err.used != null && err.allowance != null
+          ? t('importScreen.usageLimitReached', { used: err.used, allowance: err.allowance })
+          : t('importScreen.usageLimitReachedGeneric')
+      );
+    } else {
+      const category = classifyAiImportFailureCategory(err.type);
+      setErrorMessage(category ? t(`importScreen.friendlyFailure.${category}`) : friendlyAiImportError(err));
+    }
     setErrorStepGroup(null);
     setErrorHasPartialSave(false);
     setErrorIsDuplicateRace(false);
@@ -389,6 +425,7 @@ export default function Import() {
 
   async function afterExtraction(d: Extraction, fname: string | undefined, pagesProcessed?: { total: number; missingPages: number[] }) {
     if (!userId) return;
+    aiFailureTracker.recordSuccess();
     setPagesProcessedNote(pagesProcessed ?? null);
     const existingDocs = await fetchExistingDocsForDuplicateCheck(userId);
     setDuplicates(checkDuplicateImport(d, fname, existingDocs));
@@ -517,6 +554,56 @@ export default function Import() {
     }
   }
 
+  // COST CONTROL & GRACEFUL DEGRADATION (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 4 item 4 "QUEUE INSTEAD OF FAIL") — `fileMeta`
+  // (uri/ext/mediaType/name) is set BEFORE the AI call and, unlike every
+  // other error-phase field, is deliberately NOT cleared until the user
+  // explicitly resets — so the already-picked file is still right here to
+  // retry with one tap, no re-picking from the camera/gallery/file browser
+  // required. A genuinely different file still needs `reset()` (the
+  // existing "Choose a different file" action), which DOES clear it.
+  async function handleRetryImport() {
+    if (!fileMeta) {
+      reset();
+      return;
+    }
+    if (fileMeta.mediaType === 'image/jpeg') {
+      await processImage(fileMeta.uri);
+      return;
+    }
+    setPhase('working');
+    setWorkingLabel(t('importScreen.readingDocument'));
+    try {
+      const base64 = await new File(fileMeta.uri).base64();
+      setWorkingLabel(t('importScreen.aiProcessing'));
+      startStillWorkingTimer();
+      const { data, error, pagesProcessed } = await callAiImport(
+        base64,
+        fileMeta.mediaType,
+        undefined,
+        i18n.language,
+        customCategoryNames,
+        learningRules,
+        (progress) => {
+          clearStillWorkingTimer();
+          setWorkingLabel(t('importScreen.processingPageProgress', { through: progress.through, total: progress.total }));
+          startStillWorkingTimer();
+        }
+      );
+      clearStillWorkingTimer();
+      if (error) return handleAiError(error);
+      if (data) await afterExtraction(data, fileMeta.name, pagesProcessed);
+    } catch (err) {
+      clearStillWorkingTimer();
+      setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
+      setErrorStepGroup(null);
+      setErrorHasPartialSave(false);
+      setErrorIsDuplicateRace(false);
+      setErrorReport(buildLocalErrorReport('Reading the file', err));
+      setPhase('error');
+    }
+  }
+
   async function handleSave() {
     // Double-tap guard (owner decision 2026-08-02, §34/§37 unique-index
     // audit): synchronous ref check-and-set, closing the gap between a
@@ -565,6 +652,13 @@ export default function Import() {
       setPhase('done');
       await invalidateFinancialData(queryClient);
       buildAndUploadBackupSnapshot(userId); // fire-and-forget
+
+      const savedDate = getPrimaryExtractionDate(extraction);
+      if (savedDate) sessionImportedDatesRef.current.push(savedDate);
+      if (!backfillOfferShownRef.current && detectBackfillSession(sessionImportedDatesRef.current)) {
+        backfillOfferShownRef.current = true;
+        Alert.alert(t('importScreen.backfillOfferTitle'), t('importScreen.backfillOfferBody'));
+      }
     } catch (err) {
       // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02): a
       // SaveExtractionError carries WHICH step failed, a snapshot of what
@@ -616,6 +710,8 @@ export default function Import() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScreenTitle>{t('importScreen.title')}</ScreenTitle>
+
+        <ServiceStatusBanner />
 
         {phase === 'pick' && (
           <Card>
@@ -1045,7 +1141,19 @@ export default function Import() {
             {errorReport && (
               <SecondaryButton title={copied ? copiedLabel : copyLabel} onPress={handleCopyDetails} />
             )}
-            <SecondaryButton title={t('importScreen.tryAgain')} onPress={reset} />
+            {/* COST CONTROL & GRACEFUL DEGRADATION (owner decision
+                2026-08-24, FIVE ADDITIONS pass, PART 4 item 4) — the
+                already-picked file is still right here; one tap retries
+                it directly, no re-picking required. A genuinely different
+                file still needs the full reset. */}
+            {fileMeta ? (
+              <>
+                <PrimaryButton title={`🔁 ${t('importScreen.retryImport')}`} onPress={handleRetryImport} />
+                <SecondaryButton title={t('importScreen.chooseDifferentFile')} onPress={reset} />
+              </>
+            ) : (
+              <SecondaryButton title={t('importScreen.tryAgain')} onPress={reset} />
+            )}
           </Card>
         )}
       </ScrollView>

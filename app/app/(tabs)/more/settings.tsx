@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,11 @@ import { File, Paths } from 'expo-file-system';
 import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/lib/supabase';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
+import { useAiCoachSummary } from '@/src/data/aiCoachSummary';
+import { trailingAverageNet } from '@/src/stats/goalProgress';
+import { useAiUsageDisplay } from '@/src/data/aiUsageDisplay';
+import { CREDIT_PACK_OFFERS } from '@/src/usage/aiUsage';
+import { useFormatters } from '@/src/i18n/format';
 import { useTaxConfig, useUpdateTaxConfig } from '@/src/data/taxConfig';
 import { callDeleteAccount } from '@/src/data/deleteAccountCall';
 import { callResetData } from '@/src/data/resetDataCall';
@@ -51,6 +56,8 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 
 export default function Settings() {
   const { t, i18n } = useTranslation();
+  const { money } = useFormatters();
+  const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
   const { session, profile, signOut, refreshProfile } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -69,8 +76,18 @@ export default function Settings() {
   const [mcNumber, setMcNumber] = useState('');
   const [homeState, setHomeState] = useState('');
   const [entityType, setEntityType] = useState<EntityType>('sole_prop');
+  const [weeklyGoalInput, setWeeklyGoalInput] = useState('');
   const [businessHydrated, setBusinessHydrated] = useState(false);
   const [savingBusiness, setSavingBusiness] = useState(false);
+
+  // WEEKLY GOAL DRIVES THE COACH (owner decision 2026-08-24, FIVE ADDITIONS
+  // pass, PART 3 item 4) — "Editable from the AI Coach block AND Settings"
+  // — same field (profiles.weekly_goal), same trailing-4-week-average
+  // prefill as ceo-mode.tsx, so the two screens can never suggest a
+  // different starting number.
+  const coach = useAiCoachSummary();
+  const suggestedWeeklyGoal = useMemo(() => trailingAverageNet(coach.weeklyTrend), [coach.weeklyTrend]);
+  const aiUsage = useAiUsageDisplay();
 
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -90,8 +107,19 @@ export default function Settings() {
     setMcNumber(profileQuery.data.mc_number ?? '');
     setHomeState(profileQuery.data.home_state ?? taxConfigQuery.data.state ?? 'TX');
     setEntityType(taxConfigQuery.data.entity_type);
+    setWeeklyGoalInput(profileQuery.data.weekly_goal != null ? String(profileQuery.data.weekly_goal) : '');
     setBusinessHydrated(true);
   }, [businessHydrated, profileQuery.data, taxConfigQuery.data]);
+
+  // Prefill (never overwrite an in-progress edit or an already-saved goal)
+  // once the trailing average is available — same guarded pattern as
+  // ceo-mode.tsx's own prefill effect.
+  useEffect(() => {
+    if (businessHydrated && profileQuery.data?.weekly_goal == null && weeklyGoalInput === '' && suggestedWeeklyGoal != null && suggestedWeeklyGoal > 0) {
+      setWeeklyGoalInput(String(Math.round(suggestedWeeklyGoal)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessHydrated, suggestedWeeklyGoal]);
 
   async function pickLocale(locale: SupportedLocale) {
     if (!userId || savingLocale) return;
@@ -131,12 +159,14 @@ export default function Settings() {
     setSavingBusiness(true);
     try {
       const state = homeState.trim().toUpperCase() || 'TX';
+      const weeklyGoalValue = Number(weeklyGoalInput);
       await Promise.all([
         updateProfile.mutateAsync({
           company_name: companyName.trim() || null,
           dot_number: dotNumber.trim() || null,
           mc_number: mcNumber.trim() || null,
           home_state: state,
+          weekly_goal: weeklyGoalInput.trim() && weeklyGoalValue > 0 ? weeklyGoalValue : null,
         }),
         updateTaxConfig.mutateAsync({ state, entity_type: entityType }),
       ]);
@@ -303,6 +333,54 @@ export default function Settings() {
           </Card>
         )}
 
+        {/* USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision
+            2026-08-24, FIVE ADDITIONS pass, PART 5 items 4-5) — "Show both
+            plainly in Settings: AI imports this month: 34 of 180 (3
+            trucks) · Extra credits: 275, with the reset date." Display
+            only — the server (ai-import/index.ts) is the sole enforcement
+            point. */}
+        <Text style={styles.sectionTitle}>{t('settings.aiUsageTitle')}</Text>
+        <Card>
+          {aiUsage.isLoading ? (
+            <MutedText>{t('common.loading')}</MutedText>
+          ) : (
+            <>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>
+                {t('settings.aiUsageSummary', {
+                  used: aiUsage.usageStatus.used,
+                  allowance: aiUsage.usageStatus.allowance,
+                  trucks: aiUsage.activeTruckCount,
+                })}
+              </Text>
+              {aiUsage.availableCredits > 0 && (
+                <MutedText style={{ marginTop: 2 }}>
+                  {t('settings.aiUsageExtraCredits', { credits: aiUsage.availableCredits })}
+                </MutedText>
+              )}
+              <MutedText style={{ marginTop: 2 }}>
+                {t('settings.aiUsageResetsOn', { date: aiUsage.resetDate.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' }) })}
+              </MutedText>
+              {aiUsage.usageStatus.softLimitReached && !aiUsage.usageStatus.hardLimitReached && (
+                <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>{t('settings.aiUsageSoftLimitNotice')}</MutedText>
+              )}
+              {aiUsage.usageStatus.hardLimitReached && aiUsage.availableCredits <= 0 && (
+                <MutedText style={{ color: colors.red, marginTop: spacing.xs }}>{t('settings.aiUsageHardLimitNotice')}</MutedText>
+              )}
+              {(aiUsage.usageStatus.softLimitReached || aiUsage.usageStatus.hardLimitReached) && (
+                <View style={{ marginTop: spacing.sm }}>
+                  <MutedText>{t('settings.aiUsageCreditPacksIntro')}</MutedText>
+                  {CREDIT_PACK_OFFERS.map((pack) => (
+                    <Text key={pack.id} style={{ color: colors.text, marginTop: spacing.xs }}>
+                      • {t(`settings.creditPack.${pack.id}`, { credits: pack.credits, price: pack.priceUsd })}
+                    </Text>
+                  ))}
+                  <MutedText style={{ marginTop: spacing.xs }}>{t('settings.aiUsageCreditPacksContact')}</MutedText>
+                </View>
+              )}
+            </>
+          )}
+        </Card>
+
         <Text style={styles.sectionTitle}>{t('settings.businessProfileTitle')}</Text>
         <MutedText>{t('settings.businessProfileSubtitle')}</MutedText>
         <Card>
@@ -326,6 +404,14 @@ export default function Settings() {
           </View>
           {(entityType === 'multi_member_llc' || entityType === 'scorp') && (
             <MutedText style={{ marginTop: spacing.xs }}>{t('settings.entityTypeMoreFieldsNote')}</MutedText>
+          )}
+
+          <MutedText>{t('settings.weeklyGoalLabel')}</MutedText>
+          <Field value={weeklyGoalInput} onChangeText={setWeeklyGoalInput} keyboardType="numeric" placeholder="0.00" />
+          {profileQuery.data?.weekly_goal == null && suggestedWeeklyGoal != null && suggestedWeeklyGoal > 0 && (
+            <MutedText style={{ marginTop: 2 }}>
+              {t('settings.weeklyGoalSuggestedNote', { amount: moneyRounded(suggestedWeeklyGoal) })}
+            </MutedText>
           )}
 
           <PrimaryButton title={t('common.save')} onPress={handleSaveBusinessProfile} loading={savingBusiness} />

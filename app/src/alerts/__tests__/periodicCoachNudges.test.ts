@@ -6,6 +6,10 @@ import {
   detectFuelPctTrendUp,
   detectDeadheadTrendUp,
   detectCpmAboveRpm,
+  detectGoalStreak,
+  detectGoalRpmGap,
+  detectGoalCostCategoryShortfall,
+  detectGoalAdjustmentSuggestion,
   buildPeriodicCoachNudgeCandidates,
   COMMON_QUARTERLY_CATEGORIES,
 } from '@/src/alerts/periodicCoachNudges';
@@ -165,5 +169,88 @@ describe('buildPeriodicCoachNudgeCandidates', () => {
       now: NOW,
     });
     expect(result).toEqual([]);
+  });
+
+  // WEEKLY GOAL DRIVES THE COACH (2026-08-24 FIVE ADDITIONS pass, PART 3
+  // item 2) — the 4 goal fields are omitted here, proving the two tests
+  // above (written before this pass) still behave identically.
+  test('goal fields omitted — never fire', () => {
+    const result = buildPeriodicCoachNudgeCandidates({
+      deductions: [],
+      quarterlyDeadlineDaysUntil: null,
+      hasOutOfPocketThisMonth: false,
+      monthLabel: 'August',
+      thisWeekFuelPct: null,
+      trailingAvgFuelPct: null,
+      thisWeekDeadheadPct: null,
+      trailingAvgDeadheadPct: null,
+      cpm: null,
+      rpm: null,
+      now: NOW,
+    });
+    expect(result.map((c) => c.topic)).not.toEqual(
+      expect.arrayContaining(['goalStreakOver', 'goalStreakUnder', 'goalRpmGap', 'goalCostCategoryShortfall', 'goalRaiseSuggestion', 'goalLowerSuggestion'])
+    );
+  });
+});
+
+describe('detectGoalStreak', () => {
+  test('a single week either way — not worth mentioning yet', () => {
+    expect(detectGoalStreak(1)).toBeNull();
+    expect(detectGoalStreak(-1)).toBeNull();
+    expect(detectGoalStreak(0)).toBeNull();
+  });
+
+  test('2+ consecutive weeks over — fires', () => {
+    expect(detectGoalStreak(3)).toEqual({ topic: 'goalStreakOver', detail: { weeks: 3 } });
+  });
+
+  test('2+ consecutive weeks under — fires', () => {
+    expect(detectGoalStreak(-2)).toEqual({ topic: 'goalStreakUnder', detail: { weeks: 2 } });
+  });
+});
+
+describe('detectGoalRpmGap', () => {
+  test('missing data — null', () => {
+    expect(detectGoalRpmGap(null, 2)).toBeNull();
+  });
+
+  test('needed rpm at or below actual — already on track, null', () => {
+    expect(detectGoalRpmGap(1.9, 2)).toBeNull();
+  });
+
+  test('needed rpm above actual — fires with both real figures', () => {
+    expect(detectGoalRpmGap(2.456, 2.1)).toEqual({ topic: 'goalRpmGap', detail: { needed: 2.46, actual: 2.1 } });
+  });
+});
+
+describe('detectGoalCostCategoryShortfall', () => {
+  test('goal was actually met — null (nothing to explain)', () => {
+    expect(detectGoalCostCategoryShortfall(0, 'Fuel & DEF', 500)).toBeNull();
+  });
+
+  test('short, but no category data — null', () => {
+    expect(detectGoalCostCategoryShortfall(300, null, 0)).toBeNull();
+  });
+
+  test('short, with a real top category and amount — fires', () => {
+    expect(detectGoalCostCategoryShortfall(300, 'Maintenance & Repairs', 612.4)).toEqual({
+      topic: 'goalCostCategoryShortfall',
+      detail: { category: 'Maintenance & Repairs', amount: 612 },
+    });
+  });
+});
+
+describe('detectGoalAdjustmentSuggestion', () => {
+  test('no suggestion — null', () => {
+    expect(detectGoalAdjustmentSuggestion(2, null)).toBeNull();
+  });
+
+  test('raise — fires with the streak', () => {
+    expect(detectGoalAdjustmentSuggestion(3, 'raise')).toEqual({ topic: 'goalRaiseSuggestion', detail: { weeks: 3 } });
+  });
+
+  test('lower — fires with the absolute streak length', () => {
+    expect(detectGoalAdjustmentSuggestion(-5, 'lower')).toEqual({ topic: 'goalLowerSuggestion', detail: { weeks: 5 } });
   });
 });

@@ -2054,6 +2054,131 @@ touch.
 
 ---
 
+## 51. AI cost control + usage limits + credit packs (owner decision 2026-08-24, FIVE ADDITIONS pass, PARTS 4 + 5)
+
+Four new tables, none of them touched by Reset All Data or Delete Account's
+own explicit deletion LOOPS (they're account-level, not business data —
+spec item 8's "balances survive a reset of business data"); `ai_usage_log`/
+`ai_credit_purchases` still disappear automatically on a REAL account
+deletion via their `user_id ... on delete cascade` FK when
+`delete-account`'s existing `auth.admin.deleteUser()` call removes the
+`auth.users` row — no explicit entry needed in either Edge Function's
+table list for that to work correctly.
+
+**`ai_usage_log`** (PART 4 item 1 "log every ai-import/ai-advisor call" +
+PART 5's actual enforcement source) — one row per call, success or
+failure. Monthly usage is COUNT(*) of success rows this calendar month,
+never a separately-maintained counter (no drift risk). Written by the
+Edge Functions themselves via the caller's own JWT-scoped client (RLS
+`user_id = auth.uid()` on INSERT — safe, since it's the SERVER doing the
+insert on behalf of the authenticated caller, not something the app UI
+can forge a row for on someone else's behalf).
+
+**`ai_usage_config`** — one singleton row, service-role-write-only
+(admin-adjustable ceiling "without a release," spec item 5.1).
+
+**`service_status`** (PART 4 item 3) — one row per AI feature, everyone
+reads, only service_role/admin writes (docs/ADMIN_RUNBOOK.md's own
+set/clear recipe).
+
+**`ai_credit_purchases`** (PART 5 items 4+6) — owner-granted rows for now
+(same admin SQL recipe as lifetime plans); INSERT is admin-only (no
+policy for authenticated users), but UPDATE is self-scoped so the
+server-side consumption logic inside ai-import (running as the
+authenticated caller's own JWT) can decrement `credits_remaining` without
+needing service_role for that one operation.
+
+```sql
+create table ai_usage_log (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  call_type text not null check (call_type in ('ai_import', 'ai_advisor')),
+  success boolean not null,
+  failure_reason text,
+  created_at timestamptz not null default now()
+);
+
+create index ai_usage_log_user_month_idx on ai_usage_log(user_id, call_type, created_at);
+
+alter table ai_usage_log enable row level security;
+create policy "ai_usage_log_select_own" on ai_usage_log
+  for select using (user_id = auth.uid());
+create policy "ai_usage_log_insert_own" on ai_usage_log
+  for insert with check (user_id = auth.uid());
+-- No update/delete policy — append-only audit log, by design.
+
+create table ai_usage_config (
+  id boolean primary key default true check (id),
+  imports_per_truck_per_month integer not null default 60,
+  account_ceiling integer,
+  updated_at timestamptz not null default now()
+);
+
+alter table ai_usage_config enable row level security;
+create policy "ai_usage_config_select_all" on ai_usage_config
+  for select using (true);
+-- No write policy for authenticated users — service_role/admin only
+-- (docs/ADMIN_RUNBOOK.md's own "adjust the AI import allowance" recipe).
+
+insert into ai_usage_config (id) values (true) on conflict (id) do nothing;
+
+create table service_status (
+  service text primary key check (service in ('ai_import', 'ai_advisor')),
+  status text not null default 'ok' check (status in ('ok', 'degraded', 'down')),
+  message text,
+  updated_at timestamptz not null default now()
+);
+
+alter table service_status enable row level security;
+create policy "service_status_select_all" on service_status
+  for select using (true);
+-- No write policy for authenticated users — service_role/admin only.
+
+insert into service_status (service, status) values
+  ('ai_import', 'ok'),
+  ('ai_advisor', 'ok')
+on conflict (service) do nothing;
+
+create table ai_credit_purchases (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  pack_type text not null check (pack_type in ('pack_25', 'pack_100', 'pack_300', 'catchup_year')),
+  credits_granted integer not null check (credits_granted > 0),
+  credits_remaining integer not null check (credits_remaining >= 0),
+  granted_at timestamptz not null default now(),
+  expires_at timestamptz -- null for the 3 fixed packs; set (granted_at + 90 days) for catchup_year
+);
+
+create index ai_credit_purchases_user_idx on ai_credit_purchases(user_id);
+
+alter table ai_credit_purchases enable row level security;
+create policy "ai_credit_purchases_select_own" on ai_credit_purchases
+  for select using (user_id = auth.uid());
+create policy "ai_credit_purchases_update_own" on ai_credit_purchases
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+-- No insert/delete policy for authenticated users — a purchase (or grant)
+-- is always recorded by an admin via SQL (docs/ADMIN_RUNBOOK.md), never a
+-- client-writable row; UPDATE is allowed self-scoped ONLY so the
+-- server-side (still user-JWT-scoped) credit-consumption logic inside
+-- ai-import/index.ts can decrement credits_remaining.
+```
+
+`app/src/usage/aiUsage.ts` is the pure client-side mirror of this
+enforcement math (allowance calc, soft/hard limit thresholds, credit
+consumption order, Catch-Up pack expiry) — `supabase/functions/
+ai-import/index.ts`'s own inline copy (checkAiImportUsageAllowed /
+consumeOneCreditIfOverAllowance / logAiUsage) is the actual, authoritative
+server-side gate; the two are duplicated by necessity (Deno can't import
+app/src TS) and cross-referenced by comment, same convention as every
+other Edge Function in this repo.
+
+- [ ] 51a run (ai_usage_log table + RLS)
+- [ ] 51b run (ai_usage_config table + RLS + seed row)
+- [ ] 51c run (service_status table + RLS + seed rows)
+- [ ] 51d run (ai_credit_purchases table + RLS)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

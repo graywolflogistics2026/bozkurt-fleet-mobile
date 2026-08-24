@@ -325,7 +325,11 @@
     "addTitle": "➕ Kesinti Ekle",
     "descriptionLabel": "Açıklama",
     "descriptionPlaceholder": "Ne içindi?",
-    "dateLabel": "Tarih"
+    "dateLabel": "Tarih",
+    "reimbursedInFull": "Şahsen ödendi · tamamen geri ödendi ({{amount}})",
+    "reimbursedPartial": "Şahsen ödendi · {{total}} üzerinden {{reimbursed}} geri ödendi",
+    "notYetReimbursed": "Şahsen ödendi · henüz geri ödenmedi",
+    "reimburseMyself": "Kendime Geri Öde ({{amount}})"
   },
   "capitalAccount": {
     "title": "Sermaye Hesabı",
@@ -367,7 +371,16 @@
     "duplicatesRemoved": "{{count}} yinelenen kayıt kaldırıldı.",
     "saveFailedTitle": "Kaydetme başarısız",
     "deleteFailedTitle": "Silme başarısız",
-    "genericRetry": "Lütfen tekrar deneyin."
+    "genericRetry": "Lütfen tekrar deneyin.",
+    "flowsTitle": "Sermayen nereden geliyor",
+    "flowCashContributed": "Katkıda bulunulan nakit",
+    "flowCashContributedExplainer": "İşletmeye yatırdığın para — sermaye girişi, gelir değil.",
+    "flowOutstanding": "Şahsen ödenen, hâlâ ödenmemiş giderler",
+    "flowOutstandingExplainer": "Cebinden ödediğin ama henüz sana geri ödenmemiş işletme giderleri — sermaye girişi.",
+    "flowReimbursements": "Geri alınan ödemeler",
+    "flowReimbursementsExplainer": "İşletmenin karşıladığın bir gider için sana geri ödediği para — sermaye çıkışı, yeni bir gider değil.",
+    "flowDrawsExplainer": "İşletmeden kendin için çektiğin para — sermaye çıkışı, maaş değil.",
+    "flowNetPosition": "Net durum"
   },
   "importScreen": {
     "title": "İçe Aktar",
@@ -487,7 +500,19 @@
       "reference": "Referans",
       "period": "Dönem",
       "suggestedCategory": "Önerilen Kategori"
-    }
+    },
+    "friendlyFailure": {
+      "billingAuth": "AI ile okuma geçici olarak kullanılamıyor. Verilerin güvende — manuel olarak kayıt eklemeye devam edebilirsin, biz de sorunu çözüyoruz.",
+      "rateLimit": "Şu anda çok fazla içe aktarma var — birkaç dakika içinde tekrar dene.",
+      "timeoutOverload": "Belge şu anda işlenmesi çok uzun sürüyor — kısa süre sonra tekrar dene.",
+      "offline": "Çevrimdışısın. Dosyan kaydedildi ve tekrar bağlandığında içe aktarılacak."
+    },
+    "usageLimitReached": "Bu ayki AI içe aktarmalarını kullandın ({{allowance}} üzerinden {{used}}). Yine de manuel olarak kayıt eklemeye devam edebilirsin, diğer her şey çalışmaya devam ediyor — sınırın ayın 1'inde sıfırlanır.",
+    "usageLimitReachedGeneric": "Bu ayki AI içe aktarmalarını kullandın. Yine de manuel olarak kayıt eklemeye devam edebilirsin, diğer her şey çalışmaya devam ediyor — sınırın ayın 1'inde sıfırlanır.",
+    "retryImport": "Tekrar Dene",
+    "chooseDifferentFile": "Başka Dosya Seç",
+    "backfillOfferTitle": "Eski kayıtları mı tamamlıyorsun?",
+    "backfillOfferBody": "Birkaç aylık geçmiş belgeyi içe aktarıyorsan, Yakalama Yılı paketi (1.000 içe aktarma, 90 gün geçerli) işine yarayabilir. Hesabına eklenmesini istersen destekle iletişime geç."
   },
   "camera": {
     "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
@@ -598,7 +623,23 @@
     "deleteConfirm2Body": "Bundan sonra verilerinizi kurtarmanın bir yolu yoktur. Onaylamak için aşağıdaki kelimeyi yazın.",
     "deleteTypeToConfirm": "Onaylamak için {{word}} yazın",
     "deletePermanently": "Kalıcı Olarak Sil",
-    "deleteFailedTitle": "Hesap silinemedi"
+    "deleteFailedTitle": "Hesap silinemedi",
+    "weeklyGoalLabel": "Haftalık Kâr Hedefi",
+    "weeklyGoalSuggestedNote": "Önerilen: {{amount}}, son 4 haftana göre",
+    "aiUsageTitle": "AI Kullanımı",
+    "aiUsageSummary": "Bu ayki AI içe aktarmaları: {{allowance}} üzerinden {{used}} ({{trucks}} kamyon)",
+    "aiUsageExtraCredits": "Ekstra kredi: {{credits}}",
+    "aiUsageResetsOn": "{{date}} tarihinde sıfırlanır",
+    "aiUsageSoftLimitNotice": "Bu ayki AI içe aktarma sınırına yaklaşıyorsun.",
+    "aiUsageHardLimitNotice": "Bu ayki AI içe aktarmalarını kullandın. Yine de manuel olarak kayıt eklemeye devam edebilirsin, diğer her şey çalışmaya devam ediyor — sınırın ayın 1'inde sıfırlanır.",
+    "aiUsageCreditPacksIntro": "Bu ay daha fazlasına mı ihtiyacın var? Bir kredi paketi ekle:",
+    "creditPack": {
+      "pack_25": "25 içe aktarma — ${{price}}",
+      "pack_100": "100 içe aktarma — ${{price}}",
+      "pack_300": "300 içe aktarma — ${{price}}",
+      "catchup_year": "Yakalama Yılı — geçmiş bir vergi yılını tamamlamak için 1.000 içe aktarma, ${{price}} (90 gün geçerli)"
+    },
+    "aiUsageCreditPacksContact": "Hesabına kredi paketi eklemek için desteğe ulaş."
   },
   "placeholders": {},
   "truckHealth": {
@@ -1472,7 +1513,7 @@
     "empty": "Her şey yolunda — şu anda dikkat gerektiren bakım veya uyumluluk öğesi yok.",
     "maintenanceSection": "Kamyon Sağlığı",
     "complianceSection": "Uyumluluk",
-    "nudgesSection": "Göz atmaya değer",
+    "nudgesSection": "Uygulamadan daha fazlasını al",
     "silence": "Bunu bir daha gösterme",
     "unsilence": "Tekrar göster",
     "rolePromptTitle": "Rolünüz nedir?",
@@ -1487,7 +1528,22 @@
       "depreciationNotSet_one": "{{count}} kamyon için amortisman yöntemi seçilmemiş — vergi tahmininize dahil edilmesi için birini seçin.",
       "depreciationNotSet_other": "{{count}} kamyon için amortisman yöntemi seçilmemiş — vergi tahmininize dahil edilmesi için birini seçin.",
       "needsReviewReceipts_one": "{{count}} fiş NEEDS REVIEW'da bekliyor — kesintilerinize sayılması için sınıflandırın.",
-      "needsReviewReceipts_other": "{{count}} fiş NEEDS REVIEW'da bekliyor — kesintilerinize sayılması için sınıflandırın."
+      "needsReviewReceipts_other": "{{count}} fiş NEEDS REVIEW'da bekliyor — kesintilerinize sayılması için sınıflandırın.",
+      "weeklyGoalNotSet": "Haftalık bir kâr hedefi belirle → AI Coach ilerlemeni takip edip hedefe ulaşmak için tam olarak neyin gerektiğini söyleyecek.",
+      "weeklyGoalNotSet_amount": "Haftalık bir kâr hedefi belirle → son 4 haftana göre {{suggested}} dene. AI Coach oradan itibaren ilerlemeni takip edecek.",
+      "complianceItemMissing": "{{typeLabel}} belgeni ekle → süresi dolmadan önce hatırlatma al, son anda telaşlanma.",
+      "entityTypeNotSet": "İşletme yapı türünü onayla → doğru bir vergi tahmini ve S-Corp tasarruf karşılaştırması aç.",
+      "homeStateNotSet": "Eyaletini belirt → vergi tahminine eyalet vergisi de dahil edilebilir.",
+      "firstReceiptMissing": "Cepten ödediğin ilk fişi ekle → Muhasebeci Paketi gider raporunu aç.",
+      "businessBalanceNotSet": "Banka bakiyeni gir → gerçek Nakit Akışı tahminini aç.",
+      "settlementMissingMiles_amount_one": "{{count}} settlement gelir gösteriyor ama mil kaydı yok — Mil Başına Maliyetini düzeltmek için ekle (şu an şişirilmiş {{currentCpm}}/mil gösteriyor).",
+      "settlementMissingMiles_amount_other": "{{count}} settlement gelir gösteriyor ama mil kaydı yok — Mil Başına Maliyetini düzeltmek için ekle (şu an şişirilmiş {{currentCpm}}/mil gösteriyor).",
+      "depreciationNotSet_amount_one": "{{count}} kamyon için amortisman yöntemi seçilmemiş — bu yıl {{previewTotal}}'a kadar kesinti açmak için birini seç.",
+      "depreciationNotSet_amount_other": "{{count}} kamyon için amortisman yöntemi seçilmemiş — bu yıl {{previewTotal}}'a kadar kesinti açmak için birini seç.",
+      "perDiemZeroMileWeek_one": "{{count}} ev haftası 0 per diem günü olarak ayarlı — bunu onayla, ya da gerçekten evden uzaktaysan düzenle.",
+      "perDiemZeroMileWeek_other": "{{count}} ev haftası 0 per diem günü olarak ayarlı — bunları onayla, ya da gerçekten evden uzaktaysan düzenle.",
+      "perDiemZeroMileWeek_amount_one": "{{count}} ev haftası 0 per diem günü olarak ayarlı — gerçekten evden uzaktaysan, {{potential}}'a kadar per diem kesintisi açmak için düzenle.",
+      "perDiemZeroMileWeek_amount_other": "{{count}} ev haftası 0 per diem günü olarak ayarlı — gerçekten evden uzaktaysan, {{potential}}'a kadar per diem kesintisi açmak için düzenle."
     },
     "fromCoach": "AI Coach'unuzdan",
     "coachNudges": {
@@ -1498,8 +1554,20 @@
       "quarterlyTaxDueSoon_other": "Bir sonraki üç aylık vergi ödemeniz {{days}} gün içinde.",
       "fuelPctTrendUp": "Yakıt, son 4 haftanıza göre {{points}} puan daha yüksek — göz atmaya değer.",
       "deadheadTrendUp": "Deadhead miliniz yükseliyor — son 4 haftanıza göre {{points}} puan daha yüksek.",
-      "cpmAboveRpm": "Bu hafta mil başına maliyetiniz (${{cpm}}) mil başına ücretinizin (${{rpm}}) üzerinde — kağıt üzerinde zararına çalışıyorsunuz."
-    }
+      "cpmAboveRpm": "Bu hafta mil başına maliyetiniz (${{cpm}}) mil başına ücretinizin (${{rpm}}) üzerinde — kağıt üzerinde zararına çalışıyorsunuz.",
+      "goalStreakOver_one": "Haftalık hedefini {{count}} hafta üst üste geçtin — harika iş. Yükseltmeyi düşünür müsün?",
+      "goalStreakOver_other": "Haftalık hedefini {{count}} hafta üst üste geçtin — harika iş. Yükseltmeyi düşünür müsün?",
+      "goalStreakUnder_one": "{{count}} haftadır haftalık hedefinin altındasın — neyin buna sebep olduğuna bakmak ister misin?",
+      "goalStreakUnder_other": "{{count}} haftadır haftalık hedefinin altındasın — neyin buna sebep olduğuna bakmak ister misin?",
+      "goalRpmGap": "Bu haftaki millerinle hedefe ulaşmak için mil başına yaklaşık ${{needed}} gerekirdi — ortalaman ${{actual}}/mil oldu.",
+      "goalCostCategoryShortfall": "{{category}} (${{amount}}) bu haftaki en büyük giderindi — hedefin kaçmasının olası nedeni.",
+      "goalRaiseSuggestion_one": "Hedefini {{count}} hafta üst üste geçtin — yükseltmek ister misin?",
+      "goalRaiseSuggestion_other": "Hedefini {{count}} hafta üst üste geçtin — yükseltmek ister misin?",
+      "goalLowerSuggestion_one": "{{count}} haftadır hedefinin altındasın — şimdilik daha gerçekçi bir hedef belirlemek ister misin?",
+      "goalLowerSuggestion_other": "{{count}} haftadır hedefinin altındasın — şimdilik daha gerçekçi bir hedef belirlemek ister misin?"
+    },
+    "unlockCta": "Şimdi Aç",
+    "timeEstimate": "~{{minutes}} dk"
   },
   "transactions": {
     "title": "İşlemler",
@@ -1805,5 +1873,9 @@
       "tools": "Araçlar",
       "system": "Sistem"
     }
+  },
+  "serviceStatus": {
+    "title": "AI ile okuma etkilenmiş olabilir",
+    "autoFallbackMessage": "Bu cihazda tekrarlayan AI içe aktarma hataları görüyoruz. Diğer her şey çalışmaya devam ediyor ve her zaman manuel olarak kayıt ekleyebilirsin. Kısa süre sonra tekrar denemek genellikle sorunu çözer."
   }
 }

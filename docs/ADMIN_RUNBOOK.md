@@ -331,3 +331,100 @@ left join auth.users iu on iu.id = r.referred_user_id
 where ru.email = 'referrer@example.com'
 order by r.created_at desc;
 ```
+
+## AI Cost Control (owner decision 2026-08-24, FIVE ADDITIONS pass, PART 4)
+
+**1. See ai-import/ai-advisor failures in the last hour:**
+
+```sql
+select l.created_at, l.call_type, l.success, l.failure_reason, u.email
+from ai_usage_log l
+join auth.users u on u.id = l.user_id
+where l.success = false and l.created_at >= now() - interval '1 hour'
+order by l.created_at desc;
+```
+
+**2. Post (or clear) a real outage banner** — shows on Home and Import
+instantly, no app release needed:
+
+```sql
+-- Post an outage message
+update service_status
+set status = 'down', message = 'AI reading is temporarily unavailable while we investigate. You can still add entries manually.', updated_at = now()
+where service = 'ai_import';
+
+-- Clear it once resolved
+update service_status
+set status = 'ok', message = null, updated_at = now()
+where service = 'ai_import';
+```
+
+`status` also accepts `'degraded'` for a lighter-weight "may be slow"
+notice with your own custom `message` text.
+
+**3. Review AI usage/cost per user** (last 30 days, both call types):
+
+```sql
+select u.email,
+       count(*) filter (where l.call_type = 'ai_import') as ai_import_calls,
+       count(*) filter (where l.call_type = 'ai_import' and l.success) as ai_import_successes,
+       count(*) filter (where l.call_type = 'ai_advisor') as ai_advisor_calls,
+       count(*) filter (where l.call_type = 'ai_advisor' and l.success) as ai_advisor_successes
+from ai_usage_log l
+join auth.users u on u.id = l.user_id
+where l.created_at >= now() - interval '30 days'
+group by u.email
+order by ai_import_calls desc;
+```
+
+## AI Usage Limits + Credit Packs (owner decision 2026-08-24, FIVE ADDITIONS pass, PART 5)
+
+**1. Adjust the AI-import allowance without a release** (the default is 60
+imports per active truck per month, with an optional flat account
+ceiling):
+
+```sql
+update ai_usage_config
+set imports_per_truck_per_month = 75, updated_at = now()
+where id = true;
+
+-- Or cap a specific big account at a flat ceiling regardless of truck count
+update ai_usage_config
+set account_ceiling = 1000, updated_at = now()
+where id = true;
+```
+
+Note: `ai_usage_config` is currently a single global row (one setting for
+every account) — a genuinely PER-ACCOUNT override isn't built yet; that
+would need its own `user_id`-scoped table if a specific customer ever
+needs a different number than everyone else.
+
+**2. Grant a credit pack by email** (same "billing isn't built yet, record
+purchases as owner-granted entries" pattern as lifetime plans, §L4
+above). `pack_type` is one of `pack_25` (25 credits) / `pack_100` (100) /
+`pack_300` (300) / `catchup_year` (1,000 credits, expires in 90 days):
+
+```sql
+-- A standard, never-expiring pack
+insert into ai_credit_purchases (user_id, pack_type, credits_granted, credits_remaining)
+select id, 'pack_100', 100, 100
+from auth.users where email = 'someone@example.com';
+
+-- The Catch-Up Year pack (expires 90 days from now)
+insert into ai_credit_purchases (user_id, pack_type, credits_granted, credits_remaining, expires_at)
+select id, 'catchup_year', 1000, 1000, now() + interval '90 days'
+from auth.users where email = 'someone@example.com';
+```
+
+**3. Check a user's current usage + credit balance:**
+
+```sql
+select
+  u.email,
+  (select count(*) from ai_usage_log l where l.user_id = u.id and l.call_type = 'ai_import' and l.success
+     and l.created_at >= date_trunc('month', now())) as imports_used_this_month,
+  (select coalesce(sum(credits_remaining), 0) from ai_credit_purchases c
+     where c.user_id = u.id and (c.expires_at is null or c.expires_at > now())) as credits_remaining
+from auth.users u
+where u.email = 'someone@example.com';
+```

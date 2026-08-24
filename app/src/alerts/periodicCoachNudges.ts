@@ -15,7 +15,16 @@ export type CoachNudgeTopic =
   | 'quarterlyTaxDueSoon'
   | 'fuelPctTrendUp'
   | 'deadheadTrendUp'
-  | 'cpmAboveRpm';
+  | 'cpmAboveRpm'
+  // WEEKLY GOAL DRIVES THE COACH (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 3 item 2) — same rotating-observation family,
+  // same 30-day-per-topic cooldown, disjoint topic keys.
+  | 'goalStreakOver'
+  | 'goalStreakUnder'
+  | 'goalRpmGap'
+  | 'goalCostCategoryShortfall'
+  | 'goalRaiseSuggestion'
+  | 'goalLowerSuggestion';
 
 export type CoachNudgeCandidate = { topic: CoachNudgeTopic; detail: Record<string, number | string> };
 
@@ -140,7 +149,59 @@ export function coachNudgeText(candidate: CoachNudgeCandidate, t: (key: string, 
       return t('alerts.coachNudges.deadheadTrendUp', { points: candidate.detail.points });
     case 'cpmAboveRpm':
       return t('alerts.coachNudges.cpmAboveRpm', { cpm: candidate.detail.cpm, rpm: candidate.detail.rpm });
+    case 'goalStreakOver':
+      return t('alerts.coachNudges.goalStreakOver', { count: candidate.detail.weeks, weeks: candidate.detail.weeks });
+    case 'goalStreakUnder':
+      return t('alerts.coachNudges.goalStreakUnder', { count: candidate.detail.weeks, weeks: candidate.detail.weeks });
+    case 'goalRpmGap':
+      return t('alerts.coachNudges.goalRpmGap', { needed: candidate.detail.needed, actual: candidate.detail.actual });
+    case 'goalCostCategoryShortfall':
+      return t('alerts.coachNudges.goalCostCategoryShortfall', { category: candidate.detail.category, amount: candidate.detail.amount });
+    case 'goalRaiseSuggestion':
+      return t('alerts.coachNudges.goalRaiseSuggestion', { count: candidate.detail.weeks, weeks: candidate.detail.weeks });
+    case 'goalLowerSuggestion':
+      return t('alerts.coachNudges.goalLowerSuggestion', { count: candidate.detail.weeks, weeks: candidate.detail.weeks });
   }
+}
+
+// ---- PART 3 item 2: goal-aware detectors ----
+
+const GOAL_STREAK_MIN_TO_MENTION = 2;
+
+// "consecutive weeks over/under goal" — only worth mentioning at 2+ (a
+// single week is just "this week," not a streak worth naming).
+export function detectGoalStreak(streak: number): CoachNudgeCandidate | null {
+  if (streak >= GOAL_STREAK_MIN_TO_MENTION) return { topic: 'goalStreakOver', detail: { weeks: streak } };
+  if (streak <= -GOAL_STREAK_MIN_TO_MENTION) return { topic: 'goalStreakUnder', detail: { weeks: Math.abs(streak) } };
+  return null;
+}
+
+// "the RPM needed versus what they're getting" — the RPM this week would
+// have needed to average, AT THE SAME MILES actually driven, to hit goal.
+export function detectGoalRpmGap(neededRpm: number | null, actualRpm: number | null): CoachNudgeCandidate | null {
+  if (neededRpm == null || actualRpm == null || neededRpm <= actualRpm) return null;
+  return { topic: 'goalRpmGap', detail: { needed: Math.round(neededRpm * 100) / 100, actual: Math.round(actualRpm * 100) / 100 } };
+}
+
+// "which cost category explains a shortfall" — the single largest expense
+// category this week, named only when the goal was actually missed.
+export function detectGoalCostCategoryShortfall(
+  shortByDollars: number,
+  topCategory: string | null,
+  topCategoryAmount: number
+): CoachNudgeCandidate | null {
+  if (shortByDollars <= 0 || !topCategory || topCategoryAmount <= 0) return null;
+  return { topic: 'goalCostCategoryShortfall', detail: { category: topCategory, amount: Math.round(topCategoryAmount) } };
+}
+
+// "a suggestion to raise the goal after three consecutive beats (or lower
+// it supportively after a long run of misses)" — thin wrapper over
+// src/stats/goalProgress.ts's suggestGoalAdjustment() so this detector
+// stays a pure function of the same streak calcGoalStreak() produces.
+export function detectGoalAdjustmentSuggestion(streak: number, suggestion: 'raise' | 'lower' | null): CoachNudgeCandidate | null {
+  if (suggestion === 'raise') return { topic: 'goalRaiseSuggestion', detail: { weeks: streak } };
+  if (suggestion === 'lower') return { topic: 'goalLowerSuggestion', detail: { weeks: Math.abs(streak) } };
+  return null;
 }
 
 export function buildPeriodicCoachNudgeCandidates(input: {
@@ -155,6 +216,16 @@ export function buildPeriodicCoachNudgeCandidates(input: {
   cpm: number | null;
   rpm: number | null;
   now?: Date;
+  // PART 3 item 2 (goal-aware observations) — all optional; omitted means
+  // "no goal set yet" (Part 3 item 3: the caller simply doesn't pass
+  // these), so none of the 4 goal detectors fire, same "omission is not a
+  // false positive" convention as missingDataNudges.ts.
+  goalStreak?: number;
+  goalNeededRpm?: number | null;
+  goalShortByDollars?: number;
+  goalTopCostCategory?: string | null;
+  goalTopCostCategoryAmount?: number;
+  goalAdjustmentSuggestion?: 'raise' | 'lower' | null;
 }): CoachNudgeCandidate[] {
   const now = input.now ?? new Date();
   return [
@@ -165,5 +236,13 @@ export function buildPeriodicCoachNudgeCandidates(input: {
     detectFuelPctTrendUp(input.thisWeekFuelPct, input.trailingAvgFuelPct),
     detectDeadheadTrendUp(input.thisWeekDeadheadPct, input.trailingAvgDeadheadPct),
     detectCpmAboveRpm(input.cpm, input.rpm),
+    input.goalStreak !== undefined ? detectGoalStreak(input.goalStreak) : null,
+    input.goalNeededRpm !== undefined ? detectGoalRpmGap(input.goalNeededRpm, input.rpm) : null,
+    input.goalShortByDollars !== undefined
+      ? detectGoalCostCategoryShortfall(input.goalShortByDollars, input.goalTopCostCategory ?? null, input.goalTopCostCategoryAmount ?? 0)
+      : null,
+    input.goalStreak !== undefined
+      ? detectGoalAdjustmentSuggestion(input.goalStreak, input.goalAdjustmentSuggestion ?? null)
+      : null,
   ].filter((c): c is CoachNudgeCandidate => c !== null);
 }

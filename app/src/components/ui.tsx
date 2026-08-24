@@ -30,8 +30,8 @@ export function ScreenTitle({ children }: { children: React.ReactNode }) {
   return <Text style={styles.title}>{children}</Text>;
 }
 
-export function Card({ children }: { children: React.ReactNode }) {
-  return <View style={styles.card}>{children}</View>;
+export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+  return <View style={[styles.card, style]}>{children}</View>;
 }
 
 // BINDING UX DECISION (owner, 2026-07-04) — Dashboard is the hub: every

@@ -12,7 +12,7 @@ import {
 } from '@/src/data/capitalTransactions';
 import { useTaxConfig } from '@/src/data/taxConfig';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
-import { findDuplicateTransactionIds, summarizeContributions } from '@/src/stats/capitalAccount';
+import { findDuplicateTransactionIds, summarizeContributions, summarizeCapitalFlows } from '@/src/stats/capitalAccount';
 import {
   Screen,
   ScreenTitle,
@@ -78,6 +78,33 @@ function HistoryRow({
   return <Pressable onPress={onTapContribution}>{content}</Pressable>;
 }
 
+// One flow row: label + amount + a one-line explainer the owner can repeat
+// to an accountant verbatim (owner decision 2026-08-24, FIVE ADDITIONS
+// pass, PART 2 item 2).
+function FlowRow({
+  label,
+  explainer,
+  amount,
+  color,
+  bordered,
+}: {
+  label: string;
+  explainer: string;
+  amount: string;
+  color: string;
+  bordered?: boolean;
+}) {
+  return (
+    <View style={[{ paddingVertical: spacing.sm }, bordered ? styles.rowBorder : undefined]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ color: colors.text, fontWeight: '600' }}>{label}</Text>
+        <Text style={{ color, fontWeight: '700' }}>{amount}</Text>
+      </View>
+      <MutedText style={{ marginTop: 2 }}>{explainer}</MutedText>
+    </View>
+  );
+}
+
 export default function CapitalAccount() {
   const { t } = useTranslation();
   const { money } = useFormatters();
@@ -125,6 +152,10 @@ export default function CapitalAccount() {
     () => summarizeContributions(rows.filter((t) => t.tx_type === 'contribution')),
     [rows]
   );
+  // PAYMENT SOURCE & CAPITAL CLARITY (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 2 item 2) — the 4 distinct flows, each with its
+  // own total, computed directly off the full transaction history.
+  const capitalFlows = useMemo(() => summarizeCapitalFlows(rows), [rows]);
   const duplicateIds = useMemo(() => findDuplicateTransactionIds(rows), [rows]);
   const isPastCapital = !!summary && summary.effectiveContribution - summary.totalDraws < 0;
 
@@ -316,6 +347,51 @@ export default function CapitalAccount() {
         {duplicateIds.length > 0 && (
           <SecondaryButton title={t('capitalAccount.removeDuplicates')} onPress={handleRemoveDuplicates} />
         )}
+
+        {/* PAYMENT SOURCE & CAPITAL CLARITY (owner decision 2026-08-24, FIVE
+            ADDITIONS pass, PART 2 item 2) — the 4 distinct flows, each with
+            its own total AND a one-line explanation the owner can repeat to
+            an accountant verbatim. */}
+        <View style={{ marginTop: spacing.lg, marginBottom: spacing.xs }}>
+          <Text style={styles.sectionTitle}>{t('capitalAccount.flowsTitle')}</Text>
+        </View>
+        <Card>
+          <FlowRow
+            label={t('capitalAccount.flowCashContributed')}
+            explainer={t('capitalAccount.flowCashContributedExplainer')}
+            amount={money(capitalFlows.cashContributed)}
+            color={colors.green}
+          />
+          <FlowRow
+            label={t('capitalAccount.flowOutstanding')}
+            explainer={t('capitalAccount.flowOutstandingExplainer')}
+            amount={money(capitalFlows.expensesPaidPersonallyOutstanding)}
+            color={colors.green}
+            bordered
+          />
+          <FlowRow
+            label={t('capitalAccount.flowReimbursements')}
+            explainer={t('capitalAccount.flowReimbursementsExplainer')}
+            amount={money(capitalFlows.reimbursementsTakenBack)}
+            color={colors.red}
+            bordered
+          />
+          <FlowRow
+            label={drawsLabel}
+            explainer={t('capitalAccount.flowDrawsExplainer')}
+            amount={money(capitalFlows.ownerDraws)}
+            color={colors.red}
+            bordered
+          />
+          <View style={[styles.rowBorder, { paddingTop: spacing.sm, marginTop: spacing.xs }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('capitalAccount.flowNetPosition')}</Text>
+              <Text style={{ color: capitalFlows.netPosition >= 0 ? colors.green : colors.red, fontWeight: '700' }}>
+                {money(capitalFlows.netPosition)}
+              </Text>
+            </View>
+          </View>
+        </Card>
 
         {(contributionBreakdown.cashCount > 0 || contributionBreakdown.linkedCount > 0) && (
           <Card>

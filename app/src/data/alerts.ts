@@ -7,6 +7,11 @@ import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
 import { useComplianceItems } from '@/src/data/complianceItems';
 import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useTolls } from '@/src/data/tolls';
+import { useTaxConfig } from '@/src/data/taxConfig';
+import { useTaxYearData } from '@/src/data/taxYearData';
+import { useFleetStats } from '@/src/data/dashboardStats';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useAuth } from '@/src/context/AuthContext';
 import { calcTruckHealth, type HealthOverrides, type HealthResult } from '@/src/truck/health';
@@ -14,6 +19,9 @@ import { calcComplianceStatus, type ComplianceStatusResult } from '@/src/complia
 import { isComplianceTypeVisibleForRole, resolveRolePromptNeeded, type ProfileRole } from '@/src/alerts/roleFilter';
 import { buildMissingDataNudgeCandidates, type NudgeCandidate } from '@/src/alerts/missingDataNudges';
 import { selectNudgesToShow, recordNudgesShown, silenceNudgeTopic, unsilenceNudgeTopic, type NudgeState } from '@/src/alerts/nudgeFrequency';
+import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
+import { trailingAverageNet } from '@/src/stats/goalProgress';
+import { calcCurrentYearDepreciation } from '@/src/tax/depreciation';
 import type { ComplianceItem } from '@/src/types/db';
 
 export type DueComplianceRow = { item: ComplianceItem; status: ComplianceStatusResult };
@@ -49,6 +57,18 @@ export function useAlertsData() {
   const deductionsQuery = useDeductions();
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
+  // "UNLOCK" NUDGES (owner decision 2026-08-24, FIVE ADDITIONS pass, PART
+  // 1) — additional fetches feeding the new detectors' real numbers: a
+  // fleet-wide true-profit trend for the goal-suggestion figure (same
+  // trailing-4-week convention as Part 3's goal prefill), the fleet-wide
+  // canonical CPM for the missing-miles nudge, tax_config/tax_year_data for
+  // the entity-type/per-diem-rate nudges.
+  const fuelQuery = useFuelPurchases();
+  const tollsQuery = useTolls();
+  const allMaintenanceQuery = useMaintenanceRecords();
+  const taxConfigQuery = useTaxConfig();
+  const taxYearDataQuery = useTaxYearData();
+  const fleetStatsQuery = useFleetStats(null);
 
   const role: ProfileRole = (profileQuery.data?.role as ProfileRole) ?? null;
 
@@ -91,6 +111,34 @@ export function useAlertsData() {
     [complianceQuery.data, role]
   );
 
+  const currentTaxYear = new Date().getFullYear();
+  const depreciationPreviewTotal = useMemo(() => {
+    return (trucksListQuery.data ?? []).reduce((sum, t) => {
+      if (t.cost_basis_ownership_mode === 'lease' || t.depreciation_method) return sum;
+      if (!t.purchase_price) return sum;
+      const yearPlacedInService = t.purchase_date ? new Date(t.purchase_date).getFullYear() : currentTaxYear;
+      const preview = calcCurrentYearDepreciation(
+        { purchasePrice: t.purchase_price, ownershipMode: 'paid', method: 'full', yearPlacedInService, spreadYears: null },
+        'tractor',
+        currentTaxYear
+      );
+      return sum + preview.currentYearDepreciation;
+    }, 0);
+  }, [trucksListQuery.data, currentTaxYear]);
+
+  const weeklyTrend = useMemo(
+    () =>
+      buildWeeklyTrueProfitTrend(
+        settlementsQuery.data ?? [],
+        deductionsQuery.data ?? [],
+        fuelQuery.data ?? [],
+        allMaintenanceQuery.data ?? [],
+        tollsQuery.data ?? []
+      ),
+    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, allMaintenanceQuery.data, tollsQuery.data]
+  );
+  const suggestedWeeklyGoal = trailingAverageNet(weeklyTrend);
+
   const nudgeCandidates = useMemo<NudgeCandidate[]>(
     () =>
       buildMissingDataNudgeCandidates({
@@ -98,8 +146,32 @@ export function useAlertsData() {
         trucks: trucksListQuery.data ?? [],
         deductions: deductionsQuery.data ?? [],
         role,
+        currentCpm: fleetStatsQuery.data?.cpm.costPerMile ?? null,
+        depreciationPreviewTotal,
+        weeklyGoal: profileQuery.data ? (profileQuery.data.weekly_goal ?? null) : undefined,
+        suggestedWeeklyGoal,
+        existingComplianceTypes: complianceQuery.data ? complianceQuery.data.map((c) => c.type) : undefined,
+        isComplianceTypeVisibleForRole,
+        entityTypeSet: taxConfigQuery.data ? !!taxConfigQuery.data.entity_type : undefined,
+        homeState: profileQuery.data ? (profileQuery.data.home_state ?? null) : undefined,
+        deductionsCount: deductionsQuery.data ? deductionsQuery.data.length : undefined,
+        cfBankBalance: profileQuery.data ? (profileQuery.data.cf_bank_balance ?? null) : undefined,
+        perDiemDailyRate: taxYearDataQuery.data?.data.per_diem.daily_rate ?? null,
+        checkPerDiemZeroMileWeek: (settlementsQuery.data?.length ?? 0) > 0,
       }),
-    [settlementsQuery.data, trucksListQuery.data, deductionsQuery.data, role]
+    [
+      settlementsQuery.data,
+      trucksListQuery.data,
+      deductionsQuery.data,
+      role,
+      fleetStatsQuery.data,
+      depreciationPreviewTotal,
+      profileQuery.data,
+      suggestedWeeklyGoal,
+      complianceQuery.data,
+      taxConfigQuery.data,
+      taxYearDataQuery.data,
+    ]
   );
 
   const nudgeState: NudgeState = (profileQuery.data?.nudge_state as NudgeState) ?? {};

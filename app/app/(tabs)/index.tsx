@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,6 +36,9 @@ import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import { useProactiveCoach } from '@/src/data/proactiveCoach';
 import { coachNudgeText } from '@/src/alerts/periodicCoachNudges';
+import { useAlertsData } from '@/src/data/alerts';
+import { NUDGE_ICON, NUDGE_ROUTE, unlockNudgeText } from '@/src/alerts/unlockNudgePresentation';
+import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
 import { useReferralSyncOnce } from '@/src/data/referral';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
@@ -328,10 +331,12 @@ function AiCoachSection({
   coach,
   proactive,
   name,
+  topUnlockNudge,
 }: {
   coach: AiCoachSummary;
   proactive: ReturnType<typeof useProactiveCoach>;
   name: string;
+  topUnlockNudge: ReturnType<typeof useAlertsData>['nudges'][number] | null;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -390,6 +395,21 @@ function AiCoachSection({
             <Text style={{ fontSize: 16 }}>💡</Text>
             <Text style={{ color: colors.text, flex: 1 }}>{coachNudgeText(proactive.periodicNudge, t)}</Text>
           </View>
+        )}
+
+        {/* "UNLOCK" NUDGES (owner decision 2026-08-24, FIVE ADDITIONS pass
+            PART 1) — a one-line teaser for the single top-priority missing
+            field, tapping straight through to where it's entered. The full,
+            richer card (icon/benefit/amount/time-estimate/silence) lives on
+            the Alerts screen; this is deliberately just the headline. */}
+        {topUnlockNudge && (
+          <Pressable
+            onPress={() => router.push(NUDGE_ROUTE[topUnlockNudge.topic] as Href)}
+            style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm }}
+          >
+            <Text style={{ fontSize: 16 }}>{NUDGE_ICON[topUnlockNudge.topic]}</Text>
+            <Text style={{ color: colors.text, flex: 1 }}>{unlockNudgeText(topUnlockNudge, t, moneyRounded)}</Text>
+          </Pressable>
         )}
 
         <Pressable onPress={() => router.push('/(tabs)/more/ceo-mode')} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
@@ -580,6 +600,12 @@ export default function Dashboard() {
   const capitalQuery = useCapitalAccountSummary();
   const aiCoach = useAiCoachSummary();
   const proactiveCoach = useProactiveCoach();
+  // "UNLOCK" NUDGES (owner decision 2026-08-24, FIVE ADDITIONS pass PART 1)
+  // — the SAME frequency-capped nudge list the Alerts screen shows, reused
+  // here for a one-line teaser inside the AI Coach block (react-query
+  // dedupes this against Alerts' own call by query key, no double-fetch).
+  const alertsData = useAlertsData();
+  const topUnlockNudge = alertsData.nudges[0] ?? null;
   const taxQuery = useTaxEstimate();
   // REFERRAL PROGRAM (owner decision 2026-08-24) — opportunistic, once-
   // per-session qualification check so a referral can resolve during
@@ -713,6 +739,8 @@ export default function Dashboard() {
       >
         <DashboardGreeting name={heroFirstName} />
 
+        <ServiceStatusBanner />
+
         <HeroCard
           period={heroPeriod}
           onPeriodChange={setHeroPeriod}
@@ -761,7 +789,7 @@ export default function Dashboard() {
             </TappableCard>
           </>
         ) : (
-          <AiCoachSection coach={aiCoach} proactive={proactiveCoach} name={heroFirstName} />
+          <AiCoachSection coach={aiCoach} proactive={proactiveCoach} name={heroFirstName} topUnlockNudge={topUnlockNudge} />
         )}
 
         <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>

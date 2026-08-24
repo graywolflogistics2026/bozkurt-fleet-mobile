@@ -459,7 +459,14 @@ type ErrorType =
   // Same audit: the Anthropic call itself timed out (ANTHROPIC_TIMEOUT_MS)
   // even after the one retry — distinct from a plain network error so the
   // client can say "this took too long" rather than "could not connect."
-  | "timeout";
+  | "timeout"
+  // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
+  // FIVE ADDITIONS pass, PART 5) — the monthly ai-import allowance (60 per
+  // active truck, docs/PENDING_SQL.md's ai_usage_config) plus any owner-
+  // granted credit packs are both exhausted. Returned BEFORE any Anthropic
+  // call is made (checked only on isFirstCall — an in-progress multi-page
+  // continuation is never cut off mid-document).
+  | "usage_limit_reached";
 
 // Owner decision 2026-08-02 ("settlement imports failing frequently"
 // audit): the Anthropic call now runs through this helper instead of a
@@ -781,6 +788,145 @@ function errorResponse(type: ErrorType, message: string, status: number, extra?:
   );
 }
 
+// USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
+// FIVE ADDITIONS pass, PART 5) — mirrors app/src/usage/aiUsage.ts's pure
+// TS logic inline (Deno can't import app/src code, same "each Edge
+// Function is self-contained" convention as delete-account/reset-data's
+// own duplicated deleteStorageFolder()). This is the ONE, authoritative,
+// server-side enforcement point — counters are computed by counting real
+// `ai_usage_log` rows, never trusted from anything the client sends.
+const DEFAULT_IMPORTS_PER_TRUCK_PER_MONTH = 60;
+
+function monthStartUtcIso(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+}
+
+// Returns null (allowed) or a user-facing message when both the monthly
+// allowance AND every owner-granted credit pack are exhausted. Reads
+// `ai_usage_config` (server-adjustable ceiling, admin-only writes),
+// `trucks` (active truck count — mirrors this account's own active-truck
+// context), `ai_usage_log` (this month's real completed-call count), and
+// `ai_credit_purchases` (any remaining owner-granted credits) — all via
+// the CALLER's own JWT-scoped client, safe because every one of these
+// tables' RLS policy already scopes reads to `user_id = auth.uid()`.
+async function checkAiImportUsageAllowed(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<
+  | { allowed: true; consumesCredit: boolean }
+  | { allowed: false; message: string; used: number; allowance: number }
+> {
+  const [{ data: config }, { count: activeTruckCount }, { count: usedThisMonth }, { data: creditRows }] = await Promise.all([
+    supabase.from("ai_usage_config").select("imports_per_truck_per_month, account_ceiling").maybeSingle(),
+    supabase.from("trucks").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_active", true),
+    supabase
+      .from("ai_usage_log")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("call_type", "ai_import")
+      .eq("success", true)
+      .gte("created_at", monthStartUtcIso()),
+    supabase.from("ai_credit_purchases").select("credits_remaining, expires_at").eq("user_id", userId).gt("credits_remaining", 0),
+  ]);
+
+  const perTruck = config?.imports_per_truck_per_month ?? DEFAULT_IMPORTS_PER_TRUCK_PER_MONTH;
+  const ceiling = config?.account_ceiling ?? null;
+  const rawAllowance = Math.max(1, activeTruckCount ?? 1) * perTruck;
+  const allowance = ceiling != null ? Math.min(rawAllowance, ceiling) : rawAllowance;
+  const used = usedThisMonth ?? 0;
+
+  if (used < allowance) return { allowed: true, consumesCredit: false };
+
+  const now = new Date();
+  const availableCredits = (creditRows ?? [])
+    .filter((r) => !r.expires_at || new Date(r.expires_at as string) > now)
+    .reduce((sum, r) => sum + Number(r.credits_remaining ?? 0), 0);
+  if (availableCredits > 0) return { allowed: true, consumesCredit: true };
+
+  return {
+    allowed: false,
+    used,
+    allowance,
+    message: `You've used this month's AI imports (${used} of ${allowance}). You can still add entries manually, and everything else keeps working — your allowance resets on the 1st.`,
+  };
+}
+
+// Re-checked fresh at the TERMINAL response point (rather than trusting a
+// flag threaded from an earlier, separate Edge Function invocation — a
+// multi-page document's rounds are independent HTTP requests, so nothing
+// computed in round 1 survives in memory to round 3) — decides ONLY which
+// accounting bucket (allowance vs. credits) this now-complete call counts
+// against; the actual pass/fail gate already ran on the fresh request.
+async function consumeOneCreditIfOverAllowance(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<void> {
+  const [{ data: config }, { count: activeTruckCount }, { count: usedThisMonth }] = await Promise.all([
+    supabase.from("ai_usage_config").select("imports_per_truck_per_month, account_ceiling").maybeSingle(),
+    supabase.from("trucks").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_active", true),
+    supabase
+      .from("ai_usage_log")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("call_type", "ai_import")
+      .eq("success", true)
+      .gte("created_at", monthStartUtcIso()),
+  ]);
+  const perTruck = config?.imports_per_truck_per_month ?? DEFAULT_IMPORTS_PER_TRUCK_PER_MONTH;
+  const ceiling = config?.account_ceiling ?? null;
+  const rawAllowance = Math.max(1, activeTruckCount ?? 1) * perTruck;
+  const allowance = ceiling != null ? Math.min(rawAllowance, ceiling) : rawAllowance;
+  // This call's own just-logged success row is already counted in
+  // usedThisMonth by the time this runs (logAiUsage() is awaited first at
+  // every call site) — so "at or past allowance" here correctly means
+  // THIS call was the one that used (or is past) the last allowance slot.
+  const wasOverAllowance = (usedThisMonth ?? 0) > allowance;
+  if (!wasOverAllowance) return;
+
+  const { data: rows } = await supabase
+    .from("ai_credit_purchases")
+    .select("id, credits_remaining, expires_at")
+    .eq("user_id", userId)
+    .gt("credits_remaining", 0);
+  if (!rows || rows.length === 0) return;
+  const now = new Date();
+  const usable = rows.filter((r) => !r.expires_at || new Date(r.expires_at as string) > now);
+  if (usable.length === 0) return;
+  usable.sort((a, b) => {
+    if (!a.expires_at && !b.expires_at) return 0;
+    if (!a.expires_at) return 1;
+    if (!b.expires_at) return -1;
+    return new Date(a.expires_at as string).getTime() - new Date(b.expires_at as string).getTime();
+  });
+  const chosen = usable[0];
+  await supabase.from("ai_credit_purchases").update({ credits_remaining: (chosen.credits_remaining as number) - 1 }).eq("id", chosen.id);
+}
+
+// COST CONTROL — LOGGING (owner decision 2026-08-24, FIVE ADDITIONS pass,
+// PART 4 item 1) — every ai-import call, success or failure, so cost per
+// user is queryable (docs/ADMIN_RUNBOOK.md's own recipe). Best-effort: a
+// logging failure must never fail the actual import response — it's
+// wrapped in try/catch and only ever logged to the function's own console.
+async function logAiUsage(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  success: boolean,
+  failureReason: string | null,
+): Promise<void> {
+  try {
+    const { error } = await supabase.from("ai_usage_log").insert({
+      user_id: userId,
+      call_type: "ai_import",
+      success,
+      failure_reason: failureReason,
+    });
+    if (error) console.error(`[ai-import] usage log insert failed: ${error.message}`);
+  } catch (err) {
+    console.error(`[ai-import] usage log insert threw: ${(err as Error).message}`);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   // DYNAMIC TIME-BUDGET TRACKING (owner decision 2026-08-03, round 5) —
   // computed HERE, inside the handler, not at module scope: Deno keeps
@@ -882,6 +1028,21 @@ Deno.serve(async (req: Request) => {
       `Daily import limit reached (${DAILY_IMPORT_LIMIT}/day). Try again tomorrow.`,
       429,
     );
+  }
+
+  // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
+  // FIVE ADDITIONS pass, PART 5) — checked ONLY on a fresh top-level
+  // request (never on an in-progress multi-page continuation round, which
+  // must always be allowed to finish once started). A soft limit (80%) is
+  // a CLIENT-side quiet notice only (app/src/usage/aiUsage.ts) — this
+  // server gate is the hard 100% stop.
+  const isFreshRequestForUsageGate = pageRangeStart === 1 && (!priorPageExtractions || priorPageExtractions.length === 0) && (!priorMissingPages || priorMissingPages.length === 0);
+  if (isFreshRequestForUsageGate) {
+    const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
+    if (!usageCheck.allowed) {
+      await logAiUsage(supabase, userId, false, "usage_limit_reached");
+      return errorResponse("usage_limit_reached", usageCheck.message, 429, { used: usageCheck.used, allowance: usageCheck.allowance });
+    }
   }
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -1008,8 +1169,27 @@ Deno.serve(async (req: Request) => {
   }
 
   if ("errorType" in result) {
+    // COST CONTROL — LOGGING (owner decision 2026-08-24, FIVE ADDITIONS
+    // pass, PART 4 item 1): logged, but never counted against the monthly
+    // allowance (shouldCountAiImportUsage()'s own mirrored rule in
+    // app/src/usage/aiUsage.ts — a failed call never counts).
+    await logAiUsage(supabase, userId, false, result.errorType);
     const status = result.errorType === "timeout" ? 504 : result.errorType === "anthropic_error" ? 502 : 422;
     return errorResponse(result.errorType, result.message, status, result.extra);
+  }
+
+  // USAGE LIMITS + LOGGING (owner decision 2026-08-24, FIVE ADDITIONS
+  // pass, PARTS 4+5) — only a genuinely TERMINAL response (no
+  // nextPageStart — the multi-page continuation protocol, if any, is
+  // fully done) counts against the monthly allowance/credits, mirroring
+  // app/src/usage/aiUsage.ts's shouldCountAiImportUsage(hasNextPageStart,
+  // hadError) exactly: a multi-page settlement is billed exactly once, on
+  // its own final round; an in-progress continuation round is logged as a
+  // success but never counted twice for the same document.
+  const isTerminal = !nextPageStart;
+  if (isTerminal) {
+    await logAiUsage(supabase, userId, true, null);
+    await consumeOneCreditIfOverAllowance(supabase, userId);
   }
 
   return new Response(

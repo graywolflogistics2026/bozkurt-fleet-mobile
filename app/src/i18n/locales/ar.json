@@ -325,7 +325,11 @@
     "addTitle": "➕ إضافة خصم",
     "descriptionLabel": "الوصف",
     "descriptionPlaceholder": "ما الغرض منه؟",
-    "dateLabel": "التاريخ"
+    "dateLabel": "التاريخ",
+    "reimbursedInFull": "دُفع شخصيًا · تم رده بالكامل ({{amount}})",
+    "reimbursedPartial": "دُفع شخصيًا · تم رد {{reimbursed}} من {{total}}",
+    "notYetReimbursed": "دُفع شخصيًا · لم يُرد بعد",
+    "reimburseMyself": "رد المبلغ لنفسي ({{amount}})"
   },
   "capitalAccount": {
     "title": "حساب رأس المال",
@@ -367,7 +371,16 @@
     "duplicatesRemoved": "تمت إزالة {{count}} إدخالات مكررة.",
     "saveFailedTitle": "فشل الحفظ",
     "deleteFailedTitle": "فشل الحذف",
-    "genericRetry": "يرجى المحاولة مرة أخرى."
+    "genericRetry": "يرجى المحاولة مرة أخرى.",
+    "flowsTitle": "من أين يأتي رأس مالك",
+    "flowCashContributed": "نقد مساهم به",
+    "flowCashContributedExplainer": "أموال أودعتها في العمل — رأس مال داخل، وليس دخلاً.",
+    "flowOutstanding": "مصروفات مدفوعة شخصيًا، ما زالت مستحقة",
+    "flowOutstandingExplainer": "مصروفات العمل التي دفعتها من جيبك ولم تُرد لك بعد — رأس مال داخل.",
+    "flowReimbursements": "مبالغ مستردة",
+    "flowReimbursementsExplainer": "أموال أعادها العمل لك مقابل مصروف غطيته — رأس مال خارج، وليس مصروفًا جديدًا.",
+    "flowDrawsExplainer": "أموال سحبتها من العمل لنفسك — رأس مال خارج، وليس أجورًا.",
+    "flowNetPosition": "الوضع الصافي"
   },
   "importScreen": {
     "title": "استيراد",
@@ -487,7 +500,19 @@
       "reference": "المرجع",
       "period": "الفترة",
       "suggestedCategory": "الفئة المقترحة"
-    }
+    },
+    "friendlyFailure": {
+      "billingAuth": "القراءة بالذكاء الاصطناعي غير متاحة مؤقتًا. بياناتك آمنة — لا يزال بإمكانك إضافة الإدخالات يدويًا، ونحن نعمل على الأمر.",
+      "rateLimit": "هناك عمليات استيراد كثيرة الآن — حاول مرة أخرى خلال بضع دقائق.",
+      "timeoutOverload": "المستند يستغرق وقتًا طويلاً الآن — حاول مرة أخرى قريبًا.",
+      "offline": "أنت غير متصل بالإنترنت. تم حفظ ملفك وسيتم استيراده عند عودتك للاتصال."
+    },
+    "usageLimitReached": "لقد استخدمت عمليات استيراد الذكاء الاصطناعي لهذا الشهر ({{used}} من {{allowance}}). لا يزال بإمكانك إضافة إدخالات يدويًا، وكل شيء آخر يستمر بالعمل — يُعاد ضبط رصيدك في اليوم الأول من الشهر.",
+    "usageLimitReachedGeneric": "لقد استخدمت عمليات استيراد الذكاء الاصطناعي لهذا الشهر. لا يزال بإمكانك إضافة إدخالات يدويًا، وكل شيء آخر يستمر بالعمل — يُعاد ضبط رصيدك في اليوم الأول من الشهر.",
+    "retryImport": "إعادة المحاولة",
+    "chooseDifferentFile": "اختيار ملف آخر",
+    "backfillOfferTitle": "هل تُدخل سجلات قديمة؟",
+    "backfillOfferBody": "إذا كنت تستورد عدة أشهر من المستندات القديمة، قد تساعدك حزمة سنة اللحاق (1000 عملية استيراد، صالحة 90 يومًا). تواصل مع الدعم إذا أردت إضافتها إلى حسابك."
   },
   "camera": {
     "permissionNote": "يلزم الوصول إلى الكاميرا لتصوير الإيصالات وملفات PDF لـ Settlements.",
@@ -598,7 +623,23 @@
     "deleteConfirm2Body": "لا توجد طريقة لاسترجاع بياناتك بعد هذا. اكتب الكلمة أدناه للتأكيد.",
     "deleteTypeToConfirm": "اكتب {{word}} للتأكيد",
     "deletePermanently": "حذف نهائي",
-    "deleteFailedTitle": "تعذر حذف الحساب"
+    "deleteFailedTitle": "تعذر حذف الحساب",
+    "weeklyGoalLabel": "هدف الربح الأسبوعي",
+    "weeklyGoalSuggestedNote": "مقترح: {{amount}}، بناءً على آخر 4 أسابيع",
+    "aiUsageTitle": "استخدام الذكاء الاصطناعي",
+    "aiUsageSummary": "عمليات الاستيراد بالذكاء الاصطناعي هذا الشهر: {{used}} من {{allowance}} ({{trucks}} شاحنة)",
+    "aiUsageExtraCredits": "أرصدة إضافية: {{credits}}",
+    "aiUsageResetsOn": "يُعاد الضبط في {{date}}",
+    "aiUsageSoftLimitNotice": "أنت تقترب من حد استيراد الذكاء الاصطناعي لهذا الشهر.",
+    "aiUsageHardLimitNotice": "لقد استخدمت عمليات استيراد الذكاء الاصطناعي لهذا الشهر. لا يزال بإمكانك إضافة إدخالات يدويًا، وكل شيء آخر يستمر بالعمل — يُعاد ضبط رصيدك في اليوم الأول من الشهر.",
+    "aiUsageCreditPacksIntro": "تحتاج المزيد هذا الشهر؟ أضف حزمة أرصدة:",
+    "creditPack": {
+      "pack_25": "25 عملية استيراد — ${{price}}",
+      "pack_100": "100 عملية استيراد — ${{price}}",
+      "pack_300": "300 عملية استيراد — ${{price}}",
+      "catchup_year": "سنة اللحاق — 1000 عملية استيراد لتعويض سنة ضريبية سابقة، ${{price}} (صالحة 90 يومًا)"
+    },
+    "aiUsageCreditPacksContact": "تواصل مع الدعم لإضافة حزمة أرصدة إلى حسابك."
   },
   "placeholders": {},
   "truckHealth": {
@@ -1472,7 +1513,7 @@
     "empty": "كل شيء على ما يرام — لا توجد عناصر صيانة أو امتثال تحتاج إلى اهتمام الآن.",
     "maintenanceSection": "صحة الشاحنة",
     "complianceSection": "الامتثال",
-    "nudgesSection": "يستحق نظرة",
+    "nudgesSection": "استفد أكثر من التطبيق",
     "silence": "عدم إظهار هذا مرة أخرى",
     "unsilence": "إظهار مرة أخرى",
     "rolePromptTitle": "ما هو دورك؟",
@@ -1487,7 +1528,22 @@
       "depreciationNotSet_one": "شاحنة واحدة بلا طريقة إهلاك مختارة — اخترها ليشملها تقدير ضرائبك.",
       "depreciationNotSet_other": "{{count}} شاحنات بلا طريقة إهلاك مختارة — اخترها ليشملها تقدير ضرائبك.",
       "needsReviewReceipts_one": "إيصال واحد بانتظار NEEDS REVIEW — صنّفه ليُحتسب ضمن خصوماتك.",
-      "needsReviewReceipts_other": "{{count}} إيصالات بانتظار NEEDS REVIEW — صنّفها لتُحتسب ضمن خصوماتك."
+      "needsReviewReceipts_other": "{{count}} إيصالات بانتظار NEEDS REVIEW — صنّفها لتُحتسب ضمن خصوماتك.",
+      "weeklyGoalNotSet": "حدد هدف ربح أسبوعي → سيتتبع مدرب الذكاء الاصطناعي تقدمك ويخبرك بالضبط بما يلزم لتحقيقه.",
+      "weeklyGoalNotSet_amount": "حدد هدف ربح أسبوعي → جرّب {{suggested}}، بناءً على آخر 4 أسابيع. سيتتبع مدرب الذكاء الاصطناعي تقدمك من هناك.",
+      "complianceItemMissing": "أضف {{typeLabel}} → احصل على تذكير قبل انتهاء صلاحيته، حتى لا تتفاجأ في اللحظة الأخيرة.",
+      "entityTypeNotSet": "أكّد نوع كيان عملك → احصل على تقدير ضريبي دقيق ومقارنة توفير S-Corp.",
+      "homeStateNotSet": "حدد ولايتك → يمكن أن يشمل تقدير الضرائب ضريبة الولاية.",
+      "firstReceiptMissing": "أضف أول إيصال دفعته من جيبك → افتح تقرير مصروفات حزمة المحاسب.",
+      "businessBalanceNotSet": "أدخل رصيد حسابك المصرفي → افتح توقعات تدفق نقدي حقيقية.",
+      "settlementMissingMiles_amount_one": "settlement واحد به إيرادات لكن بدون أميال مسجّلة — أضفها لتصحيح التكلفة/الميل (يظهر حاليًا مبالغًا فيه {{currentCpm}}/ميل).",
+      "settlementMissingMiles_amount_other": "{{count}} settlement بها إيرادات لكن بدون أميال مسجّلة — أضفها لتصحيح التكلفة/الميل (يظهر حاليًا مبالغًا فيه {{currentCpm}}/ميل).",
+      "depreciationNotSet_amount_one": "شاحنة واحدة لم يتم اختيار طريقة إهلاك لها — اختر واحدة لفتح ما يصل إلى {{previewTotal}} من الخصومات هذا العام.",
+      "depreciationNotSet_amount_other": "{{count}} شاحنات لم يتم اختيار طريقة إهلاك لها — اختر واحدة لفتح ما يصل إلى {{previewTotal}} من الخصومات هذا العام.",
+      "perDiemZeroMileWeek_one": "أسبوع واحد في المنزل تم تعيينه بـ 0 أيام per diem — أكّد ذلك، أو عدّله إذا كنت بالفعل بعيدًا عن المنزل.",
+      "perDiemZeroMileWeek_other": "{{count}} أسابيع في المنزل تم تعيينها بـ 0 أيام per diem — أكّد ذلك، أو عدّلها إذا كنت بالفعل بعيدًا عن المنزل.",
+      "perDiemZeroMileWeek_amount_one": "أسبوع واحد في المنزل تم تعيينه بـ 0 أيام per diem — إذا كنت بالفعل بعيدًا عن المنزل، عدّله لفتح ما يصل إلى {{potential}} من خصومات per diem.",
+      "perDiemZeroMileWeek_amount_other": "{{count}} أسابيع في المنزل تم تعيينها بـ 0 أيام per diem — إذا كنت بالفعل بعيدًا عن المنزل، عدّلها لفتح ما يصل إلى {{potential}} من خصومات per diem."
     },
     "fromCoach": "من AI Coach الخاص بك",
     "coachNudges": {
@@ -1498,8 +1554,20 @@
       "quarterlyTaxDueSoon_other": "دفعتك الضريبية الفصلية القادمة مستحقة خلال {{days}} أيام.",
       "fuelPctTrendUp": "الوقود يستهلك أكثر بـ {{points}} نقطة من آخر 4 أسابيع — يستحق نظرة.",
       "deadheadTrendUp": "deadhead الخاص بك في ازدياد — أعلى بـ {{points}} نقطة من آخر 4 أسابيع.",
-      "cpmAboveRpm": "تكلفتك لكل ميل (${{cpm}}) أعلى من معدلك لكل ميل (${{rpm}}) هذا الأسبوع — أنت تعمل بخسارة على الورق."
-    }
+      "cpmAboveRpm": "تكلفتك لكل ميل (${{cpm}}) أعلى من معدلك لكل ميل (${{rpm}}) هذا الأسبوع — أنت تعمل بخسارة على الورق.",
+      "goalStreakOver_one": "تجاوزت هدفك الأسبوعي لمدة أسبوع واحد متتالٍ — عمل رائع. هل تفكر في رفعه؟",
+      "goalStreakOver_other": "تجاوزت هدفك الأسبوعي لمدة {{count}} أسابيع متتالية — عمل رائع. هل تفكر في رفعه؟",
+      "goalStreakUnder_one": "كنت أقل من هدفك الأسبوعي لمدة أسبوع واحد — هل تريد معرفة السبب؟",
+      "goalStreakUnder_other": "كنت أقل من هدفك الأسبوعي لمدة {{count}} أسابيع — هل تريد معرفة السبب؟",
+      "goalRpmGap": "لتحقيق هدفك بنفس أميال هذا الأسبوع، ستحتاج إلى نحو ${{needed}}/ميل — كان متوسطك ${{actual}}/ميل.",
+      "goalCostCategoryShortfall": "كان {{category}} (${{amount}}) أكبر مصروفاتك هذا الأسبوع — سبب محتمل لعدم تحقيق الهدف.",
+      "goalRaiseSuggestion_one": "تجاوزت هدفك لمدة أسبوع واحد متتالٍ — هل تريد رفعه؟",
+      "goalRaiseSuggestion_other": "تجاوزت هدفك لمدة {{count}} أسابيع متتالية — هل تريد رفعه؟",
+      "goalLowerSuggestion_one": "أنت أقل من هدفك منذ أسبوع واحد — هل تريد تحديد هدف أكثر واقعية الآن؟",
+      "goalLowerSuggestion_other": "أنت أقل من هدفك منذ {{count}} أسابيع — هل تريد تحديد هدف أكثر واقعية الآن؟"
+    },
+    "unlockCta": "فتح الآن",
+    "timeEstimate": "~{{minutes}} دقيقة"
   },
   "transactions": {
     "title": "المعاملات",
@@ -1805,5 +1873,9 @@
       "tools": "الأدوات",
       "system": "النظام"
     }
+  },
+  "serviceStatus": {
+    "title": "قد تكون القراءة بالذكاء الاصطناعي متأثرة",
+    "autoFallbackMessage": "نلاحظ فشلًا متكررًا في الاستيراد بالذكاء الاصطناعي على هذا الجهاز. كل شيء آخر يستمر بالعمل، ويمكنك دائمًا إضافة الإدخالات يدويًا. عادةً ما تحل المحاولة مرة أخرى بعد قليل المشكلة."
   }
 }

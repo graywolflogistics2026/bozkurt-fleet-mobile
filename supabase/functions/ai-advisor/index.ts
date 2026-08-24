@@ -48,6 +48,32 @@ function errorResponse(type: ErrorType, message: string, status: number, extra?:
   );
 }
 
+// COST CONTROL — LOGGING (owner decision 2026-08-24, FIVE ADDITIONS pass,
+// PART 4 item 1): every ai-advisor call, success or failure, into the SAME
+// ai_usage_log table ai-import writes to — so cost per user is queryable
+// across BOTH AI features (docs/ADMIN_RUNBOOK.md's own recipe). No usage
+// LIMIT applies to ai-advisor (Part 5's allowance is ai-import-only, per
+// its own explicit spec wording) — this is logging only. Best-effort:
+// never fails the actual advisor response.
+async function logAiUsage(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  success: boolean,
+  failureReason: string | null,
+): Promise<void> {
+  try {
+    const { error } = await supabase.from("ai_usage_log").insert({
+      user_id: userId,
+      call_type: "ai_advisor",
+      success,
+      failure_reason: failureReason,
+    });
+    if (error) console.error(`[ai-advisor] usage log insert failed: ${error.message}`);
+  } catch (err) {
+    console.error(`[ai-advisor] usage log insert threw: ${(err as Error).message}`);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: CORS_HEADERS });
@@ -135,11 +161,13 @@ Deno.serve(async (req: Request) => {
       }),
     });
   } catch (err) {
+    await logAiUsage(supabase, userId, false, "network_error");
     return errorResponse("anthropic_error", `Network error calling Anthropic: ${(err as Error).message}`, 502);
   }
 
   if (!anthropicResp.ok) {
     const bodyText = await anthropicResp.text().catch(() => "");
+    await logAiUsage(supabase, userId, false, `http_${anthropicResp.status}`);
     return errorResponse(
       "anthropic_error",
       `Anthropic API returned HTTP ${anthropicResp.status}.`,
@@ -150,11 +178,13 @@ Deno.serve(async (req: Request) => {
 
   const data = await anthropicResp.json();
   if (data.error) {
+    await logAiUsage(supabase, userId, false, "anthropic_error");
     return errorResponse("anthropic_error", data.error.message ?? "Unknown Anthropic error.", 502);
   }
 
   const answer = (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
 
+  await logAiUsage(supabase, userId, true, null);
   return new Response(JSON.stringify({ answer }), {
     status: 200,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },

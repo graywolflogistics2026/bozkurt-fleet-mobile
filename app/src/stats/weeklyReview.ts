@@ -41,6 +41,20 @@ export type WeeklyReviewInputs = {
   perDiemDays: number; // 0-7
   ytdProfitBefore: number;
   ytdProfitAfter: number;
+  // WEEKLY GOAL DRIVES THE COACH (owner decision 2026-08-24, FIVE
+  // ADDITIONS pass, PART 3 item 1) — optional: omitted entirely when the
+  // user hasn't set a weekly goal yet (Part 3 item 3 — "no goal set -> the
+  // Part 1 unlock nudge explains what it unlocks; the coach starts using
+  // it immediately once entered"), never a placeholder $0 goal.
+  goalProgress?: {
+    weeklyGoal: number;
+    progressDollars: number;
+    progressPct: number;
+    metGoal: boolean;
+    gapDollars: number;
+    milesToCloseGap: number | null;
+    loadsToCloseGap: number | null;
+  } | null;
 };
 
 // Composes ONE 'user' message for callAiAdvisor(), mirroring
@@ -65,6 +79,31 @@ export function buildWeeklyReviewPrompt(inputs: WeeklyReviewInputs): string {
       : 'No large settlement chargebacks this week.',
     `Per diem days this week: ${inputs.perDiemDays}.`,
     `Year-to-date net profit moved from ${money(inputs.ytdProfitBefore)} to ${money(inputs.ytdProfitAfter)} with this week included.`,
+    // PART 3 item 1: "states goal progress in dollars and percent, and when
+    // short, what would close the gap in the user's own terms (miles at
+    // their current RPM, or one load at their average revenue per load).
+    // Real figures only." — every clause below is a real, already-computed
+    // number the caller passed in; nothing here is invented.
+    inputs.goalProgress
+      ? [
+          `Weekly profit goal: ${money(inputs.goalProgress.weeklyGoal)} — this week is at ${money(inputs.goalProgress.progressDollars)} (${inputs.goalProgress.progressPct.toFixed(0)}% of goal).`,
+          inputs.goalProgress.metGoal
+            ? 'The goal was met or beaten this week.'
+            : [
+                `Short of the goal by ${money(inputs.goalProgress.gapDollars)}.`,
+                inputs.goalProgress.milesToCloseGap != null
+                  ? `That gap is about ${Math.round(inputs.goalProgress.milesToCloseGap)} more miles at this week's own rate per mile.`
+                  : '',
+                inputs.goalProgress.loadsToCloseGap != null
+                  ? `Or roughly ${Math.ceil(inputs.goalProgress.loadsToCloseGap)} more load(s) at the average revenue per load.`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' '),
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : '',
     'Cite the numbers above directly. Never invent a figure that was not given here. Keep it upbeat but honest.',
   ].filter(Boolean);
 
