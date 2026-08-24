@@ -213,19 +213,22 @@ export function isTruckWash(text: string | undefined): boolean {
   return TRUCK_WASH_RE.test(text ?? '');
 }
 
-// Warranty & service contracts — matches the settlement code "EXTEND WR
-// PURCH" (extended warranty purchase) as well as spelled-out variants.
-const WARRANTY_SERVICE_RE = /extend\w*\s*wr\w*\s*purch|extended warranty|service contract|warranty (plan|purchase|contract)/i;
+// Warranty & service contracts — generic, spelled-out wording only. Prime's
+// own abbreviated "EXTEND WR PURCH" code text lives in carrier_code_maps
+// (docs/CARRIER_CODES.md), NOT here — see the CARRIER ISOLATION note below
+// classifySettlementLine().
+const WARRANTY_SERVICE_RE = /extended warranty|service contract|warranty (plan|purchase|contract)/i;
 
 export function isWarrantyService(text: string | undefined): boolean {
   return WARRANTY_SERVICE_RE.test(text ?? '');
 }
 
-// Lumper fees — a specific ADVANCE-shaped settlement line ("ADV FOR
-// OUTSIDE LUMPER") stays deductible Lumper Fees rather than falling into
-// the generic Advance Repayment bucket (see classifySettlementLine()'s
-// ORDER MATTERS comment below for why this must be checked first).
-const LUMPER_FEE_RE = /\badv\w*\s*(for\s*)?outside\s*lumper\b|\blumper\b/i;
+// Lumper fees — bare "lumper" is carrier-neutral and, checked first (see
+// classifySettlementLine()'s ORDER MATTERS comment), already catches an
+// ADVANCE-shaped line like "ADV FOR OUTSIDE LUMPER" for any carrier before
+// the generic Advance Repayment rule gets a chance to swallow it — no
+// carrier-specific "ADV...OUTSIDE LUMPER" fragment is needed here.
+const LUMPER_FEE_RE = /\blumper\b/i;
 
 export function isLumperFee(text: string | undefined): boolean {
   return LUMPER_FEE_RE.test(text ?? '');
@@ -277,10 +280,10 @@ export function isLodging(text: string | undefined): boolean {
   return LODGING_RE.test(text ?? '');
 }
 
-// Accounting/CPA/legal — settlement-specific wording ("ACCOUNTING SERV",
-// "trust service") in addition to guessCategory()'s existing professional-
-// services regex.
-const ACCOUNTING_SERVICE_RE = /accounting serv|trust service|\bbookkeep/i;
+// Accounting/CPA/legal — generic wording only. Prime's own abbreviated
+// "ACCOUNTING SERV" code text lives in carrier_code_maps, not here — see
+// the CARRIER ISOLATION note below classifySettlementLine().
+const ACCOUNTING_SERVICE_RE = /trust service|\bbookkeep/i;
 
 // ---------------------------------------------------------------------------
 // SETTLEMENT-LINE CLASSIFIER (docs/INDUSTRY_TAXONOMY.md §A extension, owner
@@ -303,17 +306,33 @@ const ACCOUNTING_SERVICE_RE = /accounting serv|trust service|\bbookkeep/i;
 //      installments is not a new expense.
 // Every other rule after that is a specific settlement chargeback code;
 // isRestaurantPurchase (Meals) stays last since its net is the widest.
+//
+// CARRIER ISOLATION (owner decision, CARRIER-SCOPED PAYROLL/SETTLEMENT
+// CODES hard invariant, CLAUDE.md) — every regex below is checked and kept
+// GENERIC on purpose: it matches wording/concepts any carrier's own
+// statement could plausibly use in its own words (a spelled-out phrase, a
+// widely-known third-party vendor/program brand name — Qualcomm, Geotab,
+// PrePass, Drivewyze, EZPass — or a literal IRS tax name), never one
+// carrier's own internal abbreviated CODE TEXT. A carrier-specific code
+// fragment (Prime Inc's own "EXTEND WR PURCH" / "ACCOUNTING SERV" /
+// "EZ FAST LN" (its own transponder program name) / "WIRE CHARGE" /
+// "FUEL CARD CHARGE" / "TRIP XPRESS" / "STATEMENT PREPARATION" /
+// "PRIME POINT-OF-SALE" / "IMAGE TRIPS") belongs ONLY in that carrier's own
+// `carrier_code_maps` row (docs/CARRIER_CODES.md, docs/PENDING_SQL.md §53),
+// resolved by `applyCarrierCodeCategories()` (app/src/import/carrierCodes.ts)
+// BEFORE this generic classifier ever runs — never applied globally here.
+// `FED_HWY_TAX_RE`/`ELD_COMMS_CHARGE_RE`/`COMPANY_STORE_RE` deliberately keep
+// their abbreviated forms ("FED HWY TAX", "QUAL RENTAL"/"GEO RENTAL",
+// "COMPANY STORE") — these name a real universal IRS tax, real third-party
+// ELD/telematics vendor brands, and a common industry-wide concept
+// respectively, not one carrier's own invented terminology; any carrier's
+// statement could plausibly print exactly this text.
 // ---------------------------------------------------------------------------
 const FED_HWY_TAX_RE = /fed\.?\s*h?wy\.?\s*tax|federal highway (use )?tax|\blicense(s)?\b|\bpermits?\b/i;
-const ELD_COMMS_CHARGE_RE = /qual\w*\s*rental|geo\w*\s*rental|navigation charge|image trips?/i;
-const TOLLS_SCALES_CHARGE_RE = /ez\s*fast\s*ln|prepass|pre-pass|drivewyze|\bscale\b|weigh station|ezpass|e-zpass/i;
+const ELD_COMMS_CHARGE_RE = /qual\w*\s*rental|geo\w*\s*rental|navigation charge/i;
+const TOLLS_SCALES_CHARGE_RE = /prepass|pre-pass|drivewyze|\bscale\b|weigh station|ezpass|e-zpass/i;
 const COMPANY_STORE_RE = /company store/i;
-const BANK_MERCHANT_CHARGE_RE = /wire charge|fuel card charge|trip ?xpress|bank fee|wire fee|merchant fee|processing fee|card fee/i;
-const STATEMENT_PREP_RE = /statement preparation|statement prep\b/i;
-// Carrier point-of-sale meal charge (e.g. "PRIME POINT-OF-SALE") — a
-// settlement-specific meal signal distinct from RESTAURANT_RE's brand/venue
-// name list, since a POS chargeback line rarely names an actual restaurant.
-const CARRIER_POS_MEAL_RE = /point.?of.?sale|\bpos\b purchase/i;
+const BANK_MERCHANT_CHARGE_RE = /bank fee|wire fee|merchant fee|processing fee|card fee/i;
 
 export function classifySettlementLine(desc: string | undefined): string | null {
   const text = desc ?? '';
@@ -328,8 +347,7 @@ export function classifySettlementLine(desc: string | undefined): string | null 
   if (TOLLS_SCALES_CHARGE_RE.test(text)) return 'Tolls & Scales';
   if (COMPANY_STORE_RE.test(text)) return 'Truck Supplies & Equipment';
   if (BANK_MERCHANT_CHARGE_RE.test(text)) return 'Bank & Merchant Fees';
-  if (STATEMENT_PREP_RE.test(text)) return 'Office & Admin';
-  if (CARRIER_POS_MEAL_RE.test(text) || isRestaurantPurchase(text)) return 'Meals (per diem covered)';
+  if (isRestaurantPurchase(text)) return 'Meals (per diem covered)';
   return null;
 }
 

@@ -230,6 +230,26 @@ classifier)` and flagged for verification rather than guessed.
 | YT |  | SAFTY INCV TEAM | Added pay for no preventable accidents during last 13 weeks (team) | _(leave to generic classifier)_ | — | income |  |
 | YW | YARDW | YARD WORK W/C |  | _(leave to generic classifier)_ | — | income |  |
 
+### PRIME INC — real-world text bridges (docs/PENDING_SQL.md §53)
+
+Added 2026-08-24 as part of cleaning up a pre-existing gap: these 8 rows
+aren't from the original reference sheet — they bridge real-world-observed
+text forms (seen verbatim on an actual device import) that don't exactly
+match the spelling of a row above, since `findCarrierCodeMatch()` only
+matches a literal (word-boundary) substring in one direction. See
+docs/PENDING_SQL.md §53 for the full per-row rationale.
+
+| Code | Sub-code | Name | Description | Category | Deductible | Type | Notes |
+|---|---|---|---|---|---|---|---|
+| EXTEND WR PURCH |  | Extended Warranty Purchase | Real-world code text — no reference-sheet row covers an extended-warranty PURCHASE | Warranty & Service Contracts | Yes | chargeback |  |
+| ACCOUNTING SERV |  | Accounting Service (abbreviated) | Bridges AS/MISC 16's fuller "ACCOUNTING SERVICE" spelling | Legal & Professional Services | Yes | chargeback |  |
+| EZ FAST LN |  | EZ Fast Lane Toll | Bridges EZ's label "EZ FAST LN TOLL" (observed without the "TOLL" suffix) | Tolls & Scales | Yes | chargeback |  |
+| WIRE CHARGE |  | Wire Charge | Distinct from WP/ADV 01 "WIRE PAYCHECK" (sending a paycheck via Comcheck) | Bank & Merchant Fees | Yes | chargeback |  |
+| FUEL CARD CHARGE |  | Fuel Card Charge (spelled out) | Bridges FC/MISC 15's abbreviation "FUEL CARD CHG" | Bank & Merchant Fees | Yes | chargeback |  |
+| TRIP XPRESS |  | Trip Xpress Charge | Bridges TX/FDEX 01's "TRIP XPRESS CHG" (observed without the "CHG" suffix) | Bank & Merchant Fees | Yes | chargeback |  |
+| STATEMENT PREPARATION |  | Statement Preparation Fee | Bridges OS's "OPER STMT COST" — same real charge, different wording; category matches OS's own | Legal & Professional Services | Yes | chargeback |  |
+| POINT-OF-SALE |  | Point of Sale Purchase (hyphenated) | Bridges PO/PPOS 01's spaced "POINT OF SALE" to this hyphenated real-world form | Meals (per diem covered) | No | chargeback |  |
+
 ## Adding a new carrier
 
 1. Add a new `## CARRIER NAME` section above, in the same table format.

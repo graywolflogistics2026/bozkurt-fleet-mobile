@@ -27,6 +27,8 @@ import {
   toDbServiceType,
 } from '@/src/import/category';
 import type { UserCategory } from '@/src/types/db';
+import { findCarrierCodeMatch } from '@/src/import/carrierCodes';
+import type { CarrierCode } from '@/src/import/carrierCodes';
 
 function userCategory(overrides: Partial<UserCategory>): UserCategory {
   return {
@@ -343,8 +345,8 @@ describe('FULL PARITY pass discrimination rules (owner decision 2026-08-05)', ()
     expect(isTruckWash('Windshield washer fluid')).toBe(false);
   });
 
-  it('isWarrantyService matches "EXTEND WR PURCH" and spelled-out variants', () => {
-    expect(isWarrantyService('EXTEND WR PURCH')).toBe(true);
+  it('isWarrantyService matches spelled-out generic wording only — a carrier-specific code like "EXTEND WR PURCH" is out of scope (CARRIER ISOLATION, see carrier_code_maps instead)', () => {
+    expect(isWarrantyService('EXTEND WR PURCH')).toBe(false);
     expect(isWarrantyService('Extended warranty')).toBe(true);
     expect(isWarrantyService('Service contract')).toBe(true);
     expect(isWarrantyService('Milwaukee Drill')).toBe(false);
@@ -396,9 +398,7 @@ describe('FULL PARITY pass discrimination rules (owner decision 2026-08-05)', ()
 });
 
 describe('classifySettlementLine (settlement-line classifier, owner decision 2026-08-05, FULL PARITY pass)', () => {
-  it('classifies every new settlement code from the spec', () => {
-    expect(classifySettlementLine('EXTEND WR PURCH')).toBe('Warranty & Service Contracts');
-    expect(classifySettlementLine('ACCOUNTING SERV')).toBe('Legal & Professional Services');
+  it('classifies the generic, carrier-neutral settlement codes from the spec', () => {
     expect(classifySettlementLine('MAYFR BT/DH INS')).toBe('Insurance—Truck');
     expect(classifySettlementLine('PHY DAM')).toBe('Insurance—Truck');
     expect(classifySettlementLine('OCCUP ACC')).toBe('Insurance—Truck');
@@ -407,18 +407,59 @@ describe('classifySettlementLine (settlement-line classifier, owner decision 202
     expect(classifySettlementLine('QUAL RENTAL')).toBe('ELD & Communications');
     expect(classifySettlementLine('GEO RENTAL')).toBe('ELD & Communications');
     expect(classifySettlementLine('NAVIGATION CHARGE')).toBe('ELD & Communications');
-    expect(classifySettlementLine('IMAGE TRIPS')).toBe('ELD & Communications');
-    expect(classifySettlementLine('EZ FAST LN')).toBe('Tolls & Scales');
     expect(classifySettlementLine('PrePass')).toBe('Tolls & Scales');
     expect(classifySettlementLine('Drivewyze')).toBe('Tolls & Scales');
     expect(classifySettlementLine('PERFORMNCE BOND')).toBe('Escrow & Deposits');
-    expect(classifySettlementLine('PRIME POINT-OF-SALE')).toBe('Meals (per diem covered)');
     expect(classifySettlementLine('COMPANY STORE')).toBe('Truck Supplies & Equipment');
-    expect(classifySettlementLine('WIRE CHARGE')).toBe('Bank & Merchant Fees');
-    expect(classifySettlementLine('FUEL CARD CHARGE')).toBe('Bank & Merchant Fees');
-    expect(classifySettlementLine('TRIP XPRESS')).toBe('Bank & Merchant Fees');
-    expect(classifySettlementLine('STATEMENT PREPARATION')).toBe('Office & Admin');
+    expect(classifySettlementLine('WIRE FEE')).toBe('Bank & Merchant Fees');
+    expect(classifySettlementLine('MERCHANT FEE')).toBe('Bank & Merchant Fees');
     expect(classifySettlementLine('ADV FOR OUTSIDE LUMPER')).toBe('Lumper Fees');
+  });
+
+  // CARRIER ISOLATION (CLAUDE.md hard invariant) — every one of these is a
+  // real carrier's own internal abbreviated code TEXT (Prime Inc's, in every
+  // case observed so far), not a generic concept — classifySettlementLine()
+  // must never resolve any of them; that's carrier_code_maps' job
+  // (app/src/import/carrierCodes.ts, docs/PENDING_SQL.md §53), scoped to the
+  // carrier that actually issued the statement.
+  it('CARRIER ISOLATION: no carrier-specific code fragment leaks into the generic classifier', () => {
+    const carrierSpecificFragments = [
+      'EXTEND WR PURCH',
+      'ACCOUNTING SERV',
+      'IMAGE TRIPS',
+      'EZ FAST LN',
+      'WIRE CHARGE',
+      'FUEL CARD CHARGE',
+      'TRIP XPRESS',
+      'STATEMENT PREPARATION',
+      'PRIME POINT-OF-SALE',
+    ];
+    for (const fragment of carrierSpecificFragments) {
+      expect(classifySettlementLine(fragment)).toBeNull();
+    }
+  });
+
+  it('the same carrier-specific fragments DO resolve once scoped to the carrier that owns them', () => {
+    const codes: CarrierCode[] = [
+      { carrier: 'PRIME INC', code: 'EXTEND WR PURCH', subCode: null, label: 'Extended Warranty Purchase', description: null, category: 'Warranty & Service Contracts', isDeductible: true, incomeOrChargeback: 'chargeback', notes: null },
+      { carrier: 'PRIME INC', code: 'ACCOUNTING SERV', subCode: null, label: 'Accounting Service', description: null, category: 'Legal & Professional Services', isDeductible: true, incomeOrChargeback: 'chargeback', notes: null },
+      { carrier: 'PRIME INC', code: 'EZ FAST LN', subCode: null, label: 'EZ Fast Lane Toll', description: null, category: 'Tolls & Scales', isDeductible: true, incomeOrChargeback: 'chargeback', notes: null },
+    ];
+    for (const [text, expected] of [
+      ['EXTEND WR PURCH', 'Warranty & Service Contracts'],
+      ['ACCOUNTING SERV', 'Legal & Professional Services'],
+      ['EZ FAST LN', 'Tolls & Scales'],
+    ] as const) {
+      // classifySettlementLine() itself never resolves these (proven above);
+      // the carrier-scoped lookup (which mapExtraction.ts's mapSettlement()
+      // actually runs FIRST, before ever falling back to
+      // classifySettlementLine()) is what resolves them, and only for the
+      // carrier that owns them.
+      expect(classifySettlementLine(text)).toBeNull();
+      const match = findCarrierCodeMatch('PRIME INC', text, codes);
+      expect(match?.category).toBe(expected);
+      expect(findCarrierCodeMatch('SOME OTHER CARRIER', text, codes)).toBeNull();
+    }
   });
 
   it('ORDER MATTERS: a plain ADVANCE line is non-deductible repayment, beating the warranty rule', () => {
@@ -431,8 +472,8 @@ describe('classifySettlementLine (settlement-line classifier, owner decision 202
     expect(classifySettlementLine('ADV OUTSIDE LUMPER')).toBe('Lumper Fees');
   });
 
-  it('the original warranty PURCHASE line (no "advance" wording) is deductible', () => {
-    expect(classifySettlementLine('EXTEND WR PURCH')).toBe('Warranty & Service Contracts');
+  it('the generic, spelled-out warranty wording (no carrier code abbreviation) is still deductible', () => {
+    expect(classifySettlementLine('Extended warranty purchase')).toBe('Warranty & Service Contracts');
   });
 
   it('returns null for an unrecognized line, falling through to chargebackType/category', () => {

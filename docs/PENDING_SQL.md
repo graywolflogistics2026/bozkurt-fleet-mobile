@@ -2457,6 +2457,61 @@ nullable field on an already user-owned row.
 
 ---
 
+## 53. Carrier-scoped bridge codes for real-world text variants (owner decision 2026-08-24, cleanup of the pre-existing generic-classifier leak flagged in CLAUDE.md's CARRIER-SCOPED PAYROLL/SETTLEMENT CODES entry)
+
+The §52 pass added the carrier-isolation data model and a hard invariant,
+but two PRE-EXISTING code paths that predate that invariant were left
+carrying a handful of Prime Inc-specific chargeback-code fragments applied
+GLOBALLY: `app/src/import/category.ts`'s generic `classifySettlementLine()`
+classifier, and the `ai-import` Edge Function's own older
+"settlement-line classifier" prompt text. Both are now cleaned up (see the
+same-dated CLAUDE.md entry for the full account) — every carrier-specific
+code fragment (Prime's own "EXTEND WR PURCH", "ACCOUNTING SERV",
+"EZ FAST LN", "WIRE CHARGE", "FUEL CARD CHARGE", "TRIP XPRESS",
+"STATEMENT PREPARATION", "PRIME POINT-OF-SALE") was removed from the
+generic path and belongs ONLY in `carrier_code_maps`, scoped to
+`'PRIME INC'`. The genuinely generic, carrier-neutral rules (spelled-out
+"extended warranty"/"service contract" wording, bare "lumper", the literal
+IRS term "Federal Highway Use Tax", third-party ELD/telematics vendor
+brand names — Qualcomm/Geotab — and toll-transponder brands — PrePass/
+Drivewyze/EZPass, and the generic "company store" concept) were
+deliberately left in the generic classifier — see the CLAUDE.md entry for
+why each of those is judged carrier-neutral rather than Prime-specific.
+
+These 8 new rows bridge real-world-observed text forms (seen verbatim on
+an actual device import) that don't exactly match the spelling of the
+already-seeded §52 reference-sheet rows — `findCarrierCodeMatch()` only
+matches a literal (word-boundary) substring in ONE direction (the stored
+code/label must appear inside the description text), so e.g. the already-
+seeded label "EZ FAST LN TOLL" does NOT match observed description text
+"EZ FAST LN" (missing the "TOLL" suffix). No collision with any of the
+205 already-seeded rows — every new `code` value here is a distinct
+string. "IMAGE TRIPS" needed no new row — the existing `IM`/`FDEX 02` row
+already carries that exact string as its own label, which the existing
+label-fallback match already resolves. "ADV FOR OUTSIDE LUMPER" also
+needed no new row — the existing `LM`/`LMPR` row's label "OUTSIDE LUMPER"
+is already a literal substring of that description, and the generic
+classifier's own bare "lumper" rule catches it for any carrier regardless.
+"STATEMENT PREPARATION" is bridged to `'Legal & Professional Services'`
+(not `'Office & Admin'`) to match the already-seeded `OS`/`OPER STMT COST`
+row's own category exactly — the same real-world charge under one label.
+
+```sql
+insert into carrier_code_maps (carrier, code, sub_code, label, description, category, is_deductible, income_or_chargeback, notes) values
+  ('PRIME INC', 'EXTEND WR PURCH', null, 'Extended Warranty Purchase', 'Real-world code text observed verbatim on an actual statement — no existing §52 reference-sheet row covers an extended-warranty PURCHASE (only the unrelated income codes W1/W2/WR, which credit money back for a repair, not a purchase).', 'Warranty & Service Contracts', true, 'chargeback', null),
+  ('PRIME INC', 'ACCOUNTING SERV', null, 'Accounting Service (abbreviated)', 'Bridges the already-seeded AS/MISC 16 "ACCOUNTING SERVICE" row''s fuller spelling to this shorter real-world form.', 'Legal & Professional Services', true, 'chargeback', null),
+  ('PRIME INC', 'EZ FAST LN', null, 'EZ Fast Lane Toll', 'Bridges the already-seeded EZ row''s label "EZ FAST LN TOLL" — observed verbatim without the trailing "TOLL" suffix.', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'WIRE CHARGE', null, 'Wire Charge', 'Distinct from the already-seeded WP/ADV 01 "WIRE PAYCHECK" row (sending a paycheck via Comcheck) — this is a bank wire fee, a different charge.', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'FUEL CARD CHARGE', null, 'Fuel Card Charge (spelled out)', 'Bridges the already-seeded FC/MISC 15 "FUEL CARD CHG" row''s abbreviation to this spelled-out real-world form.', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'TRIP XPRESS', null, 'Trip Xpress Charge', 'Bridges the already-seeded TX/FDEX 01 "TRIP XPRESS CHG" row — observed verbatim without the trailing "CHG" suffix.', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'STATEMENT PREPARATION', null, 'Statement Preparation Fee', 'Bridges the already-seeded OS "OPER STMT COST" row (same real charge, different real-world wording) — category matches OS''s own "Legal & Professional Services", not a new bucket.', 'Legal & Professional Services', true, 'chargeback', null),
+  ('PRIME INC', 'POINT-OF-SALE', null, 'Point of Sale Purchase (hyphenated)', 'Bridges the already-seeded PO/PPOS 01 "POINT OF SALE" row (spaced) to this hyphenated real-world form (e.g. "PRIME POINT-OF-SALE") — the un-hyphenated spaced form already matches via the existing row''s own label.', 'Meals (per diem covered)', false, 'chargeback', null);
+```
+
+- [ ] 53a run (8 new PRIME INC carrier_code_maps bridge rows)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

@@ -200,18 +200,24 @@ export function mapSettlement(
   // scoped to withheld rows only — standalone purchase deductions
   // (mapPurchase, below) aren't part of a settlement and have no driver.
   // docs/INDUSTRY_TAXONOMY.md §A — classifySettlementLine() (category.ts,
-  // owner decision 2026-08-05, FULL PARITY pass) is the text-based
-  // SETTLEMENT-LINE CLASSIFIER covering the full ordered rule set (lumper
-  // advances, generic advance repayments, escrow, warranty purchases,
-  // accounting/legal, insurance, highway tax/permits, ELD rental/nav
-  // charges, tolls/scales, company store, bank/wire charges, statement
-  // prep, meals) — checked FIRST, ahead of the AI's own chargebackType
+  // owner decision 2026-08-05, FULL PARITY pass) is the text-based, CARRIER-
+  // NEUTRAL SETTLEMENT-LINE CLASSIFIER covering the full generic ordered
+  // rule set (lumper advances, generic advance repayments, escrow, warranty
+  // purchases, accounting/legal, insurance, highway tax/permits, ELD
+  // rental/nav charges, tolls/scales, company store, bank/wire/merchant
+  // fees, meals) — checked here, ahead of the AI's own chargebackType
   // classification and the older loose `category` string, both of which
-  // remain as fallbacks for a line this classifier doesn't recognize. All
-  // three are display-only, never re-counted as a tax deduction
-  // (source='settlement'). tax_deductible is set false on every withheld
-  // row here too (defense in depth) even though source='settlement'
-  // already excludes it from every tax total on its own.
+  // remain as fallbacks for a line this classifier doesn't recognize. A
+  // CARRIER-SPECIFIC code fragment (e.g. Prime Inc's own "EXTEND WR PURCH"/
+  // "ACCOUNTING SERV"/"EZ FAST LN") is deliberately NOT handled here —
+  // that's carrier_code_maps' job via applyCarrierCodeCategories()
+  // (app/src/import/carrierCodes.ts), run by aiImportSave.ts BEFORE this
+  // mapper's output is saved, scoped to the settlement's own extracted
+  // carrier (CLAUDE.md's CARRIER ISOLATION hard invariant). All three are
+  // display-only, never re-counted as a tax deduction (source='settlement').
+  // tax_deductible is set false on every withheld row here too (defense in
+  // depth) even though source='settlement' already excludes it from every
+  // tax total on its own.
   const deductions: DeductionInsert[] = (s.deductions ?? []).map((x) => ({
     user_id: userId,
     settlement_id: null,

@@ -4450,3 +4450,70 @@
   i18n changes this pass (no new user-facing strings — the carrier code
   map is prompt-context and internal classification data, never rendered
   directly to a user).
+- CARRIER-SCOPED PAYROLL/SETTLEMENT CODES — KNOWN PRE-EXISTING GAP,
+  RESOLVED (owner decision 2026-08-24, cleanup follow-up to the pass
+  above): the gap flagged immediately above — Prime-derived code
+  fragments baked into the GLOBAL, carrier-agnostic path — is now fixed.
+  `category.ts`'s `classifySettlementLine()` no longer contains any
+  carrier-specific code TEXT; the `ai-import` prompt's own "settlement-
+  line classifier" block had its equivalent carrier-specific sentence
+  removed too (its generic six-new-categories description and its two
+  trailing generic sentences — shop-invoice-with-labor, split parts-vs-
+  tools — both stayed, since neither names any carrier's own code).
+  MOVED into `carrier_code_maps`, scoped to `'PRIME INC'`
+  (docs/PENDING_SQL.md §53, docs/CARRIER_CODES.md's new "real-world text
+  bridges" sub-table): "EXTEND WR PURCH", "ACCOUNTING SERV" (abbreviated),
+  "EZ FAST LN", "WIRE CHARGE", "FUEL CARD CHARGE", "TRIP XPRESS",
+  "STATEMENT PREPARATION", "PRIME POINT-OF-SALE" (hyphenated) — 8 new
+  bridge rows, needed because `findCarrierCodeMatch()` only matches a
+  literal word-boundary substring in one direction, and each of these
+  real-world-observed text forms doesn't exactly match the spelling of
+  its corresponding §52 reference-sheet row (e.g. "EZ FAST LN" vs. the
+  seeded label "EZ FAST LN TOLL"). Two fragments needed NO new row: "IMAGE
+  TRIPS" already exact-matches the seeded `IM`/`FDEX 02` row's own label,
+  and "ADV FOR OUTSIDE LUMPER" already matches the seeded `LM`/`LMPR` row's
+  label "OUTSIDE LUMPER" as a literal substring (and separately, the
+  generic classifier's own bare "lumper" rule — see below — catches it for
+  any carrier regardless).
+  KEPT GENERIC, a judgment call diverging from the prior pass's own
+  informal "flagged" list — stated plainly here rather than silently
+  decided: `FED_HWY_TAX_RE` ("FED HWY TAX" — the abbreviated form of a
+  real, universal IRS tax name, not a Prime-invented term), the
+  `ELD_COMMS_CHARGE_RE` fragments "QUAL RENTAL"/"GEO RENTAL"/"NAVIGATION
+  CHARGE" (Qualcomm and Geotab are real third-party ELD/telematics vendor
+  brand names many carriers could plausibly reference in their own
+  words), and `COMPANY_STORE_RE` ("COMPANY STORE" — a common, industry-
+  wide trucking concept, not unique Prime terminology) — despite the
+  prior pass's own note having named all three among the "flagged"
+  fragments. `WARRANTY_SERVICE_RE`/`isLumperFee()`'s `LUMPER_FEE_RE`/
+  `ACCOUNTING_SERVICE_RE`/`TOLLS_SCALES_CHARGE_RE`/
+  `BANK_MERCHANT_CHARGE_RE` all kept their spelled-out generic wording
+  (extended warranty/service contract, bare lumper, trust service/
+  bookkeeping, PrePass/Drivewyze/scale/weigh station/EZPass, bank fee/
+  wire fee/merchant fee/processing fee/card fee) and lost only their
+  carrier-specific fragment. `STATEMENT_PREP_RE`/`CARRIER_POS_MEAL_RE`
+  were deleted entirely (no safe generic remnant existed in either —
+  "statement preparation" and a bare "point-of-sale" purchase are both
+  Prime-specific enough that nothing generic was left to keep;
+  `isRestaurantPurchase()` alone still covers the Meals fallback).
+  NOTE: `isInsuranceChargeback()`'s own carrier-code-flavored fragments
+  ("BT/DH INS", "PHY DAM", "OCCUP ACC", "CARGO", "WORKERS COMP" — added
+  by the earlier CASH FLOW AUTO-FILL pass, a separate CLAUDE.md entry
+  predating even the carrier-isolation invariant) were deliberately left
+  untouched — out of scope for this specific cleanup, which targeted only
+  what the prior pass's own "KNOWN PRE-EXISTING GAP" note named; flagged
+  here as a separate, later candidate for the same treatment, not
+  silently ignored.
+  DELIVERABLES: 92 suites / 2215 tests pass (`category.test.ts` gained a
+  dedicated CARRIER ISOLATION test proving none of the 9 carrier-specific
+  fragments resolve through `classifySettlementLine()` anymore, plus a
+  paired test proving the identical text DOES resolve once scoped to
+  `'PRIME INC'` via `findCarrierCodeMatch()` and does NOT resolve under a
+  different carrier — proving the behavior moved, not vanished); `tsc
+  --noEmit` clean. `ai-import` was modified (prompt text only, no
+  behavior/schema change) and needs redeploying; `ai-advisor`/
+  `reset-data`/`delete-account` were NOT touched. No native rebuild
+  needed — pure JS/TS/SQL/prompt-text work, no new native dependency,
+  ships via a normal `eas update`. No i18n changes (no new user-facing
+  strings). docs/PENDING_SQL.md §53 (8 new `carrier_code_maps` rows) is
+  NOT YET RUN against the live project as of this writing.
