@@ -150,6 +150,13 @@ export function mapSettlement(
     gross: num(s.grossRevenue),
     net: num(s.netPay),
     miles,
+    // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision,
+    // docs/PENDING_SQL.md §52) — the AI's own extracted carrier text,
+    // persisted verbatim (not normalized) so future screens/corrections
+    // can look it up without re-parsing the document. Normalization
+    // (app/src/import/carrierCodes.ts's normalizeCarrierKey()) happens
+    // only at the point a carrier is being MATCHED against, never here.
+    carrier: s.carrier ?? null,
     // PER DIEM INTELLIGENCE (owner decision 2026-07-30): the import
     // preview computes+lets the user edit s.perDiemDays before save (see
     // withPerDiemDays()/the preview screen) — when it's genuinely absent

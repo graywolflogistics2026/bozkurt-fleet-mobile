@@ -2179,6 +2179,284 @@ other Edge Function in this repo.
 
 ---
 
+## 52. Carrier-scoped payroll/settlement codes (owner decision, CARRIER-SCOPED PAYROLL CODES pass)
+
+CARRIER ISOLATION IS A HARD INVARIANT (see CLAUDE.md's own dated entry) —
+a two-letter settlement code means what it means AT THE CARRIER THAT
+ISSUED THE STATEMENT ONLY. This section adds the data model for it:
+`carrier_code_maps` (global reference data, one row per carrier+code,
+admin-maintained like `tax_year_data` — CLAUDE.md invariant #6's "never
+hardcode, always server-sourced" pattern extended to this new domain),
+`settlements.carrier` (persists the AI's own extracted carrier text so
+future screens/corrections can look it up without re-parsing the
+document), and `category_learning_rules.carrier` (nullable — null means
+"applies to any carrier," the existing behavior for every rule learned
+before this column existed; a real carrier value scopes a rule to that
+carrier only, so a correction learned on a Prime settlement can never
+silently apply to a Landstar/Schneider/Werner document).
+
+Seeded with PRIME INC's full code list this pass (205 rows, reconciled
+by hand from an owner-provided reference sheet — see
+`docs/CARRIER_CODES.md` for the human-readable mirror and the handful of
+rows flagged "verify against Prime documentation" where the source scan
+was unclear). Every OTHER carrier starts with ZERO seeded rows and
+learns only from that carrier's own documents and that user's own
+corrections — never copies another carrier's code meanings.
+
+```sql
+create table carrier_code_maps (
+  id uuid primary key default gen_random_uuid(),
+  carrier text not null,
+  code text not null,
+  sub_code text,
+  label text not null,
+  description text,
+  -- Canonical category (docs/INDUSTRY_TAXONOMY.md §B) or null — null means
+  -- "leave this code to the generic description-based classifier," used
+  -- deliberately for income/bonus/administrative-balance codes that aren't
+  -- an expense line at all, and for a handful of genuinely ambiguous rows
+  -- (see docs/CARRIER_CODES.md's Notes column) rather than guessing.
+  category text,
+  -- null = not an expense line at all (income/administrative); true/false
+  -- only meaningful when category is set.
+  is_deductible boolean,
+  income_or_chargeback text check (income_or_chargeback in ('income', 'chargeback')),
+  notes text,
+  created_at timestamptz not null default now(),
+  unique (carrier, code, sub_code)
+);
+
+create index carrier_code_maps_carrier_idx on carrier_code_maps(carrier);
+
+alter table carrier_code_maps enable row level security;
+create policy "carrier_code_maps_select_all" on carrier_code_maps
+  for select using (true);
+-- No write policy for authenticated users — service_role/admin only,
+-- same pattern as tax_year_data/ai_usage_config/service_status.
+
+alter table settlements
+  add column carrier text;
+
+alter table category_learning_rules
+  add column carrier text;
+
+insert into carrier_code_maps (carrier, code, sub_code, label, description, category, is_deductible, income_or_chargeback, notes) values
+  ('PRIME INC', 'AL', 'MISC 50', '401K LOAN PAYMT', 'Repay a loan against a 401k', 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'AD', 'OIL 03', 'ADDITIVES', 'Engine additives and other fluids', 'Fuel Additives', true, 'chargeback', null),
+  ('PRIME INC', 'AF', null, 'AGENT FEE', 'A broker fee used to procure freight outside of Prime''s sales department', 'Dispatch & Factoring Fees', true, 'chargeback', null),
+  ('PRIME INC', 'AG', null, 'AGT FEE GUR RFD', 'An adjustment made to add agent fee back to an operator on flat method to keep him at 80 cent guarantee', null, null, 'income', null),
+  ('PRIME INC', 'AP', null, 'APU RENTAL PYMT', 'Rental of A/C unit', 'Lease & Rent', true, 'chargeback', null),
+  ('PRIME INC', 'AS', 'MISC 16', 'ACCOUNTING SERVICE', 'Cost of using Perryman & Associates & includes the cost of the operating statement', 'Legal & Professional Services', true, 'chargeback', null),
+  ('PRIME INC', 'BC', 'BASC 01', 'BASS COUNTRY CAFE', 'Purchase of food or other items at the cafe located at the Bass Country Inn', 'Meals (per diem covered)', false, 'chargeback', null),
+  ('PRIME INC', 'BF', 'MISC 07', 'BALFWD TRANSFER', 'Move a negative balance from a lease operator or owner that has become a company driver to his company side of payroll', null, null, null, 'Administrative balance transfer, not a real expense.'),
+  ('PRIME INC', 'BF', 'ADJ 98', 'BALANCE PASSMORE', null, null, null, null, 'Source scan unclear on full description — verify against Prime documentation.'),
+  ('PRIME INC', 'BL', null, 'BONUS LAYOVER', 'Layover after the initial 1 for the wk', null, null, 'income', null),
+  ('PRIME INC', 'BS', null, 'BONUS TX REIMB', 'Reimbursement of the additional cost of taxes paid by an operator if he has a company driver that gets a sign on bonus or longevity pay', 'Wages & Payroll Taxes (W-2)', true, 'chargeback', null),
+  ('PRIME INC', 'BT', null, 'BTDH INSURANCE', 'Bobtail / deadhead insurance as listed in your contract', 'Insurance—Truck', true, 'chargeback', null),
+  ('PRIME INC', 'BW', null, 'BONUS WC REIMB', 'Reimburses the additional cost of work comp paid by an operator if he has a company driver that gets a sign on bonus or longevity pay', 'Wages & Payroll Taxes (W-2)', true, 'chargeback', null),
+  ('PRIME INC', 'CB', 'ADV 05', 'CABCARD', 'Charge to load money to cabcard for e-mail & phone usage', 'ELD & Communications', true, 'chargeback', null),
+  ('PRIME INC', 'CC', 'CRGO 01', 'CARGO CLAIMS', 'Any cost associated with a claim for cargo loss or damage', 'Insurance—Truck', true, 'chargeback', null),
+  ('PRIME INC', 'CD', null, 'CLAIMS DOWNTIME', 'Accident downtime caused by another party', null, null, 'income', null),
+  ('PRIME INC', 'CH', 'LCTR 01', 'CHILD CARE', 'Costs associated with Prime Learning Center', 'Misc', false, 'chargeback', 'Personal expense, not a business deduction.'),
+  ('PRIME INC', 'CM', 'MOTL 03', 'CAMPUS MOTEL', 'Charge for staying at Bass Country Motel', 'Parking & Lodging', true, 'chargeback', null),
+  ('PRIME INC', 'CO', 'MISC 02', 'COMDATA', 'Cover the $2 charge to cash a Comcheck', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'CP', null, 'CLAIMS PAYMENTS', 'Set cargo or liability claim into payments', null, null, null, 'Administrative — sets a claim into a payment plan, not itself a new cost.'),
+  ('PRIME INC', 'CS', 'STOR 01', 'COMPANY STORE', 'Purchases made in the company store', 'Truck Supplies & Equipment', true, 'chargeback', null),
+  ('PRIME INC', 'CT', null, 'CARTAGE', 'Costs paid to an outside contractor for services such as storage or moving of freight or preloading trailers', 'Dispatch & Factoring Fees', true, 'chargeback', null),
+  ('PRIME INC', 'CW', null, 'CARRYOV''R WARNTY', 'Warranty for driveline repairs on previously leased trucks', null, null, null, 'Warranty credit/administrative — verify treatment against actual statement.'),
+  ('PRIME INC', 'CY', null, 'LCI PAYOUT', 'Lease completion payout', null, null, 'income', null),
+  ('PRIME INC', 'D1', null, 'DRVLINE <= $500', 'Driveline repairs <= $500 deducted from lease completion incentive at 100%', 'Maintenance & Repairs', true, 'chargeback', null),
+  ('PRIME INC', 'D2', null, 'DRVLINE > $500', 'Driveline repairs > $500 deducted from lease completion incentive at 50%, charged at 100%', 'Maintenance & Repairs', true, 'chargeback', null),
+  ('PRIME INC', 'D3', null, 'DRVLINE > $500', '50% of driveline repairs over $500 covered by Prime', null, null, 'income', 'A credit from Prime, not a driver cost.'),
+  ('PRIME INC', 'DA', 'AWRD 01', 'DRIVER AWARD', 'Atta boy for a good job', null, null, 'income', null),
+  ('PRIME INC', 'DB', 'MISC 04', 'DRV FINAL B/FWD', 'Wage dump charge for driver''s negative balance; credited next week', null, null, null, null),
+  ('PRIME INC', 'DC', 'LAYOV', 'DRIVER CAB/TAXI', 'Reimburse the cost of taxi use', null, null, 'income', null),
+  ('PRIME INC', 'DD', null, 'DEALER DOWNTIME', 'Downtime because of disrepair of the tractor and is not the fault of the operator', null, null, 'income', null),
+  ('PRIME INC', 'DE', null, 'DRIVER EXPENSE', 'Only used for Wiltrans driver advances & net pay charges to truck', 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'DF', null, 'WG/DF FICA DRV', null, 'Wages & Payroll Taxes (W-2)', true, 'chargeback', null),
+  ('PRIME INC', 'DG', null, 'DRUMMING', 'Empty last gallons of load into barrels', null, null, 'income', null),
+  ('PRIME INC', 'DH', 'SEE DETAIL', 'DEADHEAD', 'Extra ordinary miles to pickup load or other long distance work not related to a load', null, null, 'income', null),
+  ('PRIME INC', 'DI', null, 'DENTAL INSURANCE', 'Dental Insurance', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'DJ', 'STOP', 'JOB SITE DELVRY', 'Job site delivery similar to stop pay', null, null, 'income', null),
+  ('PRIME INC', 'DL', null, 'TRANSIT DELAY', 'Additional time spent on trip when delayed at stops and additional time is expended on load', null, null, 'income', null),
+  ('PRIME INC', 'DM', 'MOTL 02', 'DRIVER MOTEL', 'Springfield motel stays', 'Parking & Lodging', true, 'chargeback', null),
+  ('PRIME INC', 'DP', null, 'DRV PRE B/FWD', 'Wage dump credit for driver''s previous week''s negative balance charge', null, null, null, null),
+  ('PRIME INC', 'DR', 'ADV 04', 'DRV ADJUSTMENTS', 'Charge for negative driver balance to lease truck or other items', 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'DS', 'WASH 01', 'DETAIL SHOP', 'Cost of cleaning the truck after turn-in or any time the truck gets detailed', 'Truck Wash & Detailing', true, 'chargeback', null),
+  ('PRIME INC', 'DT', null, 'DETENTION', 'Detained at shipper or receiver longer than necessary for loading and unloading purposes', null, null, 'income', null),
+  ('PRIME INC', 'DU', null, 'DRV UNEMP TAX', 'Charge for federal unemployment taxes & state unemployment taxes on company driver', 'Wages & Payroll Taxes (W-2)', true, 'chargeback', null),
+  ('PRIME INC', 'DX', 'DRYC 02', 'MAIL ROOM POSTAGE', 'Cost of postage or items mailed from Prime', 'Office & Admin', true, 'chargeback', null),
+  ('PRIME INC', 'DY', 'DRYC 01', 'DRY CLEANING', 'Dry cleaning at Prime', 'Misc', false, 'chargeback', 'Personal expense.'),
+  ('PRIME INC', 'EA', null, 'BAD APPT', 'Truck detained by an appt error', null, null, 'income', null),
+  ('PRIME INC', 'EB', null, 'OTHER LAYOVER', 'Truck detained due to mechanical issues/weather', null, null, 'income', null),
+  ('PRIME INC', 'EF', null, 'EMERGENCY FUND', 'Used to contribute or deduct from emergency fund', 'Escrow & Deposits', false, 'chargeback', null),
+  ('PRIME INC', 'EM', null, 'EMPTY MILES', 'For company drivers in the Walmart Ded division', null, null, 'income', null),
+  ('PRIME INC', 'EP', 'XPAY', 'EXTRA PAY', 'Work not related to load hauled by the mile or percentage of revenue billed', null, null, 'income', null),
+  ('PRIME INC', 'EQ', null, 'EQUILIZATION PAY', 'Short hauls for company drivers, adj done by fleet manager', null, null, 'income', null),
+  ('PRIME INC', 'ER', 'MISC 01', 'EQUIP RENTAL', 'Rental of certain equipment such as forklifts etc.', 'Lease & Rent', true, 'chargeback', null),
+  ('PRIME INC', 'ET', null, 'EZ PASS TOLL', '28% derived from EZPass toll charges (see two-digit code "TO" for out-of-pocket based tolls)', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'EZ', null, 'EZ FAST LN TOLL', 'Charge for EZ Pass tolls, created using transponder in truck to get thru toll booth without stopping', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'FA', null, 'FLATBED ACCESSRYS', 'Charge for flatbed accessories', 'Truck Supplies & Equipment', true, 'chargeback', null),
+  ('PRIME INC', 'FB', 'FUELB', 'FUEL BONUS CODR', 'Bonus''s paid to company drivers for good fuel usage', null, null, 'income', null),
+  ('PRIME INC', 'FC', 'MISC 15', 'FUEL CARD CHG', '$1.00 weekly Comdata charge for use of fuel card', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'FE', null, 'FLATBED EQUIMT', 'Flatbed equipment, tarps, chains, binders, etc', 'Truck Supplies & Equipment', true, 'chargeback', null),
+  ('PRIME INC', 'FG', null, 'FUEL SURCG GUAR', 'Prime guarantee to cover increased cost of fuel if not billed to customer', null, null, 'income', null),
+  ('PRIME INC', 'FL', 'FINE 01', 'FINES', 'Citations and other fines incurred on the road', 'Misc', false, 'chargeback', 'Fines are generally non-deductible.'),
+  ('PRIME INC', 'FJ', null, 'FUEL ADJUSTMENT', 'Additional fuel cost separated from linehaul, billed as a separate item on the invoice', null, null, 'income', null),
+  ('PRIME INC', 'FN', null, 'FORGIVEN PAYMNT', 'Forgiven truck payment earned for years of service', null, null, 'income', null),
+  ('PRIME INC', 'FR', null, 'REEFER FUEL SURCG', 'Additional reefer fuel cost charged to customer', null, null, 'income', null),
+  ('PRIME INC', 'FS', null, 'FUEL REVENUE', 'Added revenue billed to cover cost of fuel', null, null, 'income', null),
+  ('PRIME INC', 'FX', 'PHON 03', 'TANKER FAX REIMB', 'Reimburse faxes for tankers', null, null, 'income', null),
+  ('PRIME INC', 'G1', 'AHC 91', 'GAP INSURANCE', 'Single interim insurance', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'G2', 'AHC 92', 'GAP INSURANCE', 'Associate and spouse interim insurance', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'G3', 'AHC 93', 'GAP INSURANCE', 'Associate and child interim insurance', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'G4', 'AHC 94', 'GAP INSURANCE', 'Associate and family interim insurance', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'GA', 'GARN 31', 'GARNISHMENT', 'Child support and other garnishments', 'Misc', false, 'chargeback', 'Personal legal obligation, not a business expense.'),
+  ('PRIME INC', 'GF', 'GARN 99', 'CH SUPP/GAR FEE', 'Administrative fee for child supports and other garnishments', 'Misc', false, 'chargeback', null),
+  ('PRIME INC', 'GO', 'GUARO', 'WKLY GUAR OP SH', 'Used to pay co-driver weekly guarantee, cost charged to the operator (at operator fault)', null, null, 'chargeback', null),
+  ('PRIME INC', 'GP', 'GUARO', 'WKLY GUAR PR SH', 'Used to pay co-driver weekly guarantee, cost stays as Prime expense', null, null, 'income', null),
+  ('PRIME INC', 'GR', 'REPR 04', 'GLASS RACK REPAIR', 'Used to cover the cost to fix glass racks used by flatbed trucks', 'Maintenance & Repairs', true, 'chargeback', null),
+  ('PRIME INC', 'GU', null, 'GUARANTY ADVANCE', 'Weekly settlement adjustment for guarantee', 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'H1', 'SEE DETAIL', 'HLTH INS SINGLE', 'Single insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'H2', 'SEE DETAIL', 'HLTH INS AS/SPO', 'Associate & spouse insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'H3', 'SEE DETAIL', 'HLTH INS AS + CHILD', 'Associate & child insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'H4', 'SEE DETAIL', 'HLTH INS FAMILY', 'Family insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'H5', 'SEE DETAIL', 'LC HL INS AS/SP', 'Low cost associate & spouse insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'H6', 'SEE DETAIL', 'LC HL INS AS/CH', 'Low cost associate & child insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'H7', 'SEE DETAIL', 'LC HL INS FAMILY', 'Low cost family insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'H8', 'SEE DETAIL', 'LC HL INS SINGLE', 'Low cost single insurance premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'HC', 'WASH 03', 'HEEL CHARGE', 'Clean out product left in tanker trailer', 'Truck Wash & Detailing', true, 'chargeback', null),
+  ('PRIME INC', 'HH', null, 'HOSE HOOK/UNHK', 'Pay to hookup and unhook hoses on tanker loads if billed to customer', null, null, 'income', null),
+  ('PRIME INC', 'HI', null, 'HEALTH INSURANCE', 'Health insurance, wage dump only', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'HL', null, 'HEALTH LIFE', 'Wage dump for life insurance on drivers, leasor''s portion', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'HT', null, 'HIGHWAY TOLLS', 'Tolls billed to customer, balance credited by either PO or electronic toll billing', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'IA', 'AWRD 02', 'INSPECTION AWRD', 'Award for 100% clean DOT inspection', null, null, 'income', null),
+  ('PRIME INC', 'IB', 'AWRD 03', 'TUITION REIMB', 'Tuition reimbursement award', null, null, 'income', 'Source scan for this code letter was unclear — verify against Prime documentation.'),
+  ('PRIME INC', 'ID', null, 'PASSMO DENTAL', 'Passmore Dental Premium', 'Insurance—Health', true, 'chargeback', 'Source scan for this row was unclear/merged with an adjacent cell — verify against Prime documentation.'),
+  ('PRIME INC', 'IE', null, 'PASSMO HLTH INS', 'Passmore Health Ins Premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'IH', null, 'INTEREST EXPENSE', 'Interest on E-Fund, PB & tire fund less any previous week''s negative balance', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'II', null, 'INTEREST INCOME', null, null, null, 'income', null),
+  ('PRIME INC', 'IM', 'FDEX 02', 'IMAGE TRIPS', 'Charge for truck stop scanning', 'ELD & Communications', true, 'chargeback', null),
+  ('PRIME INC', 'IO', null, 'PASSMO AFTX INS', 'Passmore Hlth Ins Premium Aftertax', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'IP', null, 'INT/PRIN-NOTES', 'Charges for note-principle & interest payments', 'Truck/Trailer Payments', true, 'chargeback', null),
+  ('PRIME INC', 'IS', null, 'PASSMO SUPL INS', 'Passmore Supplemental Ins. Premium', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'LA', null, 'LH-FUEL SRCHG ADJ', 'Est fuel srchg between dotted line not paid as fuel surcharge, paid at contract rate as linehaul', null, null, 'income', null),
+  ('PRIME INC', 'LC', 'MISC 21', 'LIABILITY CLAIM', 'Liable damage done to personal property by leasor', 'Insurance—Truck', true, 'chargeback', null),
+  ('PRIME INC', 'LD', 'LOAD', 'DRIVER LOAD', null, null, null, 'income', null),
+  ('PRIME INC', 'LF', null, 'FED HWY TAX', 'Federal Highway Use Tax, $550 annual fee', 'Permits, Licenses & Road Taxes', true, 'chargeback', null),
+  ('PRIME INC', 'LI', 'SEE DETAIL', 'LIFE INSURANCE', null, 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'LL', 'PART 03', 'LOAD LOCKS', null, 'Truck Supplies & Equipment', true, 'chargeback', null),
+  ('PRIME INC', 'LM', 'LMPR', 'OUTSIDE LUMPER', 'Payment to pay operator for cost of lumper used instead of loading or unloading himself', 'Lumper Fees', true, 'chargeback', null),
+  ('PRIME INC', 'LO', 'LAYOV', 'LAYOVER PAY', 'Payment if no load for operators, paid after the first 24 hours', null, null, 'income', null),
+  ('PRIME INC', 'LP', 'PRMT 01', 'LICENSE/PERMITS', 'License & permits', 'Permits, Licenses & Road Taxes', true, 'chargeback', null),
+  ('PRIME INC', 'LR', 'bonus', 'LONGEVITY REV', 'Additional per-mile pay after 6/8 continuous years of association', null, null, 'income', null),
+  ('PRIME INC', 'LS', 'LMPR', 'LUMPER UNLOAD', 'For company drivers, Ls'' pulls to the reimb section of their payroll', 'Lumper Fees', true, 'chargeback', null),
+  ('PRIME INC', 'LT', 'TRANS', 'LOAD TRANSFER', 'Transfer cargo from one trailer to another', null, null, 'income', null),
+  ('PRIME INC', 'LU', 'LOAD', 'LD/UNLD TRLR', 'Paid to operator for loading or unloading at the customer’s dock', null, null, 'income', null),
+  ('PRIME INC', 'LW', null, 'LTD WORK COMP', 'Added coverage in addition to occupational accident insurance', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'MB', 'MISC 17', 'MAIL BOX', 'Prime mail box charge (.75/wk small box, 1.25/wk large box)', 'Office & Admin', true, 'chargeback', null),
+  ('PRIME INC', 'MC', 'MISC 06', 'MERRY CHRISTMAS', 'Merry Christmas bonus', null, null, 'income', null),
+  ('PRIME INC', 'MD', 'MISC 04', 'MAIL BX DEPOSIT', '$10 key deposit for Prime mailbox', 'Escrow & Deposits', false, 'chargeback', null),
+  ('PRIME INC', 'ME', 'MISC 04', 'MISC EXPENSES', 'Charges for misc. expenses such as business cards, truck recovery fees or other items not specifically covered under codes', 'Misc', true, 'chargeback', null),
+  ('PRIME INC', 'MF', 'MISC 18', 'MARKET FEE', 'Fee paid by operator to enter produce markets', 'Permits, Licenses & Road Taxes', true, 'chargeback', null),
+  ('PRIME INC', 'MG', null, 'MILEAGE CHARGE', 'Per mile charge in addition to truck payment, part of lease payment', 'Truck/Trailer Payments', true, 'chargeback', null),
+  ('PRIME INC', 'MI', null, 'MILES INCENTIVE', 'Quarterly bonus paid to the operator for high team miles processed', null, null, 'income', null),
+  ('PRIME INC', 'ML', 'PU/DRP', 'LODED TL', 'Generally 72% of $50 paid for local delivery less than 100 miles', null, null, 'income', null),
+  ('PRIME INC', 'MO', 'MOTL 01', 'MOTEL', 'Over the road motel', 'Parking & Lodging', true, 'chargeback', null),
+  ('PRIME INC', 'MP', 'XPAY', 'LOCAL PU/DROP', 'Extra pay for local pickup or drop', null, null, 'income', null),
+  ('PRIME INC', 'MR', 'REPR 01', 'HUB RECALL', 'Credit for repair of tractor axle hubs', null, null, 'income', null),
+  ('PRIME INC', 'NB', null, 'NEGATIVE BAL PY', 'Negative balance set up in payments', null, null, null, null),
+  ('PRIME INC', 'NC', null, 'NPI CLEARING', 'Prime clearing account', null, null, null, null),
+  ('PRIME INC', 'NP', null, 'TRUCK PAYMENT', 'Lease truck payment', 'Truck/Trailer Payments', true, 'chargeback', null),
+  ('PRIME INC', 'NT', null, 'CUR TIRE FUND', 'Per mile charge for current tire fund', 'Escrow & Deposits', false, 'chargeback', null),
+  ('PRIME INC', 'NU', null, 'PRI TIRE FUND', 'Value based on used tread of previously leased vehicles', 'Escrow & Deposits', false, 'chargeback', null),
+  ('PRIME INC', 'NX', null, 'EXCESS MILES', 'Applies to miles over a weekly average as determined by contract, lease trucks only', 'Truck/Trailer Payments', true, 'chargeback', null),
+  ('PRIME INC', 'OA', null, 'OPER WORK COMP', 'Operator workmen''s comp insurance', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'OC', null, 'O/O CLOSING B/FWD', 'Owner operator balance forward - closing', null, null, null, null),
+  ('PRIME INC', 'OE', 'PART 03', 'OTHER EQUIPMENT', 'Added options allowed (e.g. refrigerators) but paid for by operator', 'Truck Supplies & Equipment', true, 'chargeback', null),
+  ('PRIME INC', 'OF', null, 'O/O FED HWY TAX', 'Hwy tax charges for owners', 'Permits, Licenses & Road Taxes', true, 'chargeback', null),
+  ('PRIME INC', 'OS', null, 'OPER STMT COST', 'Charge to produce operating statement', 'Legal & Professional Services', true, 'chargeback', null),
+  ('PRIME INC', 'OT', 'LMPR 01', 'OVERTIME LD/ULD', 'Money paid to a shipper or receiver to come in early or stay late to load or unload a trailer', null, null, 'income', null),
+  ('PRIME INC', 'OW', null, 'OWNER OCCUP ACC', 'Occupational accident insurance - primary coverage', 'Insurance—Health', true, 'chargeback', null),
+  ('PRIME INC', 'PA', 'PLTS 01', 'PALLETS', 'Pallet purchases or reimbursements', 'Truck Supplies & Equipment', true, 'chargeback', null),
+  ('PRIME INC', 'PB', null, 'P/B ADJUSTMENT', '$1000 (Leasors) or $1500 (Owner Operators) collected for performance guarantee', 'Escrow & Deposits', false, 'chargeback', null),
+  ('PRIME INC', 'PC', 'MISC 01', 'PETTY CASH REIM', 'Fax, holiday meal, misc reimb', null, null, 'income', null),
+  ('PRIME INC', 'PD', null, 'PHY DAM INS PYM', 'Payment for physical damage insurance premium', 'Insurance—Truck', true, 'chargeback', null),
+  ('PRIME INC', 'PF', null, 'PAYROLL FEE', 'Payroll processing fee for company driver when they receive income', 'Wages & Payroll Taxes (W-2)', true, 'chargeback', null),
+  ('PRIME INC', 'PG', null, 'PUMPING', 'Pay for using operator''s pumps to load or unload product, billed accessorially to customer', null, null, 'income', null),
+  ('PRIME INC', 'PH', 'PHON 01', 'PHONE CALLS', 'Telephone calls', 'ELD & Communications', true, 'chargeback', null),
+  ('PRIME INC', 'PI', null, 'PASSENGER INSURANCE', 'Optional insurance for purchase', 'Insurance—Truck', true, 'chargeback', null),
+  ('PRIME INC', 'PM', 'PRMT 01', 'PERMITS', 'Permits purchased to operate the truck', 'Permits, Licenses & Road Taxes', true, 'chargeback', null),
+  ('PRIME INC', 'PN', null, 'TRK PYMNT REIMB', 'Reimbursement for truck payment', null, null, 'income', null),
+  ('PRIME INC', 'PO', 'PPOS 01', 'POINT OF SALE', 'Driver charge at North Star Grill', 'Meals (per diem covered)', false, 'chargeback', null),
+  ('PRIME INC', 'PS', 'STOP', 'PICKUP/STOP PAY', 'Pay for additional picks and stops other than initial pickup and stop', null, null, 'income', null),
+  ('PRIME INC', 'PT', null, 'PHY DAM CHG TRL', 'Deductible charge for damage to trailer', 'Insurance—Truck', true, 'chargeback', null),
+  ('PRIME INC', 'PU', 'MISC 20', 'PHY DAM CL-UNIT', 'Deductible charge for damage to truck', 'Insurance—Truck', true, 'chargeback', null),
+  ('PRIME INC', 'PW', null, 'PASS WEIGHT STN', 'Weigh station transponder green-light charge', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'PY', null, 'PREV/NTBL TRL DM', 'Charge for damage to a trailer', 'Maintenance & Repairs', true, 'chargeback', null),
+  ('PRIME INC', 'QM', 'PHON 02', 'QC EXCESS MSGS', 'Charge for excess Qualcomm messages beyond the covered allotment', 'ELD & Communications', true, 'chargeback', null),
+  ('PRIME INC', 'QR', null, 'QUALCOMM RENTAL', 'Owner operator charge for Qualcomm rental', 'ELD & Communications', true, 'chargeback', null),
+  ('PRIME INC', 'QU', null, 'QUALCOMM UNIT', 'Qualcomm unit charges', 'ELD & Communications', true, 'chargeback', null),
+  ('PRIME INC', 'RB', 'REFRL', 'REFERRAL BONUS', 'Paid first week after driver is dispatched, ongoing per-mile referral pay', null, null, 'income', null),
+  ('PRIME INC', 'RC', null, 'RECONCILE', 'Prime guarantees a minimum revenue per mile per 100,000 miles, rate depends on contract', null, null, 'income', null),
+  ('PRIME INC', 'RD', null, 'REEF FUEL DSCNT', 'Discount on the purchase of reefer fuel', null, null, 'income', null),
+  ('PRIME INC', 'RF', 'FUEL 02', 'REEFER FUEL', 'Fuel for reefer unit only', 'Fuel & DEF', true, 'chargeback', null),
+  ('PRIME INC', 'RH', null, 'PRE H LINEHAUL', 'Adjustment of tarp and unloading pay for pre-"H"-version contracts', null, null, 'income', null),
+  ('PRIME INC', 'RN', 'RETN', 'START RIGHT PAY', 'Beginning 3 weeks guarantee for new driver', null, null, 'income', null),
+  ('PRIME INC', 'RO', 'OIL 02', 'REEFER OIL', 'Oil for reefer unit only', 'Fuel & DEF', true, 'chargeback', null),
+  ('PRIME INC', 'TN', null, 'TRK PYM-CONTEST', 'Reimbursement of truck payment used by recruiting contest', null, null, 'income', null),
+  ('PRIME INC', 'TO', 'TOLL 01', 'TOLLS', 'Applies to highway tolls', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'TO', null, 'TOLLS', 'Payment for Prime''s portion of the toll expense, out-of-pocket costs paid by operator (see code "ET" for electronic tolls)', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'TP', null, 'TARP', 'Tarp and untarp loads', 'Truck Supplies & Equipment', true, 'chargeback', null),
+  ('PRIME INC', 'TR', 'REPR 02', 'TRAILER REPAIR', 'Repairs done to the trailer only, not the reefer unit', 'Maintenance & Repairs', true, 'chargeback', null),
+  ('PRIME INC', 'TS', 'MISC 48', 'TRAINING SCHOOL', 'Balance due of meals & lodging or any school expense when a company driver leases a truck', 'Training & Education', true, 'chargeback', null),
+  ('PRIME INC', 'TT', 'TIRE 02', 'TRAILER TIRE', 'Purchase or repair of trailer tires on the road', 'Tires', true, 'chargeback', null),
+  ('PRIME INC', 'TW', 'WASH 05', 'TRAILER WASH', 'Wash the outside of trailer', 'Truck Wash & Detailing', true, 'chargeback', null),
+  ('PRIME INC', 'TX', 'FDEX 01', 'TRIP XPRESS CHG', 'UPS, FedEx or TripPak charge', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'UD', null, 'TRAC FUEL DSCNT', 'Tractor fuel discount at pump', null, null, 'income', null),
+  ('PRIME INC', 'UE', 'FUEL 03', 'TRACTOR DEF', 'Tractor DEF', 'Fuel & DEF', true, 'chargeback', null),
+  ('PRIME INC', 'UF', 'FUEL 01', 'TRACTOR FUEL', 'Tractor fuel only', 'Fuel & DEF', true, 'chargeback', null),
+  ('PRIME INC', 'UL', null, 'UNIT TIRE LABOR', 'Cost of labor to repair or replace tractor tires', 'Tires', true, 'chargeback', null),
+  ('PRIME INC', 'UM', 'RULE 02', 'UNAUTH MILES', 'Cost charged to a truck for going out of route to drop a load', 'Misc', true, 'chargeback', null),
+  ('PRIME INC', 'UO', 'OIL 01', 'TRACTOR OIL', 'Oil for tractor only', 'Fuel & DEF', true, 'chargeback', null),
+  ('PRIME INC', 'UR', 'REPR 01', 'TRACTOR REPAIR', 'Tractor repairs done over the road or outside of Prime', 'Maintenance & Repairs', true, 'chargeback', null),
+  ('PRIME INC', 'UT', 'TIRE 01', 'TRACTOR TIRE', 'Used for the purchase or repair of tractor tires', 'Tires', true, 'chargeback', null),
+  ('PRIME INC', 'UW', 'WASH 01', 'TRACTOR WASH', 'Tractor wash', 'Truck Wash & Detailing', true, 'chargeback', null),
+  ('PRIME INC', 'VS', null, 'SERV INC V SOLO', 'Added pay for no service failures during last 13 weeks (solo)', null, null, 'income', null),
+  ('PRIME INC', 'VT', null, 'SERV INC V TEAM', 'Added pay for no service failures during last 13 weeks (team)', null, null, 'income', null),
+  ('PRIME INC', 'W1', null, 'WRNTY DL <=$500', 'If warranty $ comes back for a repair originally <=$500 out of drivetrain, this code puts the $ back in the D1 account', null, null, 'income', null),
+  ('PRIME INC', 'W2', null, 'WRNTY DL >$500', 'If warranty $ comes back for a repair originally >$500 out of drivetrain, this code puts the $ back in the D2 account', null, null, 'income', null),
+  ('PRIME INC', 'WA', 'ADV 01', 'ADVANCE', 'Pay given in advance of settlement', 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'WA', 'ADV 97', 'WKLY PYMT OF ADV', null, 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'WA', 'ADV 98', 'WKLY PYMT OF ADV', null, 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'WA', 'ADV 99', 'ADV IN PYMTS', null, 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'WC', null, 'WORK COMP COST', 'Worker''s Compensation charges to cover cost of company driver', 'Wages & Payroll Taxes (W-2)', true, 'chargeback', null),
+  ('PRIME INC', 'WD', null, 'WAGE DUMP ITEMS', 'Items charged through the wage dump section to cover the cost of a lease or owner''s company driver', null, null, null, null),
+  ('PRIME INC', 'WE', 'ADV 06', 'TRIP ESTIMATE', 'An advance for a trip that delivers too late to pay the current week, charged back the following week when the trip pays', 'Advance Repayment', false, 'chargeback', null),
+  ('PRIME INC', 'WI', 'WASH 02', 'WASH INTERIOR', 'Wash the inside of trailer', 'Truck Wash & Detailing', true, 'chargeback', null),
+  ('PRIME INC', 'WO', 'MISC 13', 'WO OPER BAL FWD', 'Used if a lease operator leaves Prime with a negative balance', null, null, null, null),
+  ('PRIME INC', 'WP', 'ADV 01', 'WIRE PAYCHECK', 'To send a paycheck via Comcheck', 'Bank & Merchant Fees', true, 'chargeback', null),
+  ('PRIME INC', 'WR', null, 'WARRANTY', 'Credit to the operator for repairs or parts that get warranty money back on', null, null, 'income', null),
+  ('PRIME INC', 'WS', 'PART 06', 'DR WEIGHRTE DEP', 'Deposit for Weighrite system, an onboard air pressure weighing system', 'Escrow & Deposits', false, 'chargeback', null),
+  ('PRIME INC', 'WT', 'WGT 01', 'WEIGHT TICKETS', 'Cost of weighing the truck', 'Tolls & Scales', true, 'chargeback', null),
+  ('PRIME INC', 'XL', 'RPLAB', 'DRIVER REPAIR LBR', 'Pay operator to make minor trailer repairs (lights)', null, null, 'income', null),
+  ('PRIME INC', 'XP', 'PART 07', 'DRVR REPR PARTS', 'Reimb to a driver who has paid out of pocket for trailer parts', null, null, 'income', null),
+  ('PRIME INC', 'XT', 'REPR 02', 'DROPPED TRL REPAIR', 'Money charged for dropping a trailer in disrepair & another truck has to wait to get it repaired', 'Maintenance & Repairs', true, 'chargeback', null),
+  ('PRIME INC', 'XW', 'XPAY', 'WAIT 4 TRL REPR', '$25 per hour up to 3 hrs to wait for trailer to be repaired, that was another driver’s responsibility', null, null, 'income', null),
+  ('PRIME INC', 'YS', null, 'SAFTY INCV SOLO', 'Added pay for no preventable accidents during last 13 weeks (solo)', null, null, 'income', null),
+  ('PRIME INC', 'YT', null, 'SAFTY INCV TEAM', 'Added pay for no preventable accidents during last 13 weeks (team)', null, null, 'income', null),
+  ('PRIME INC', 'YW', 'YARDW', 'YARD WORK W/C', null, null, null, 'income', null);
+```
+
+No RLS change needed on `category_learning_rules` beyond what already
+exists (owner-scoped) — the new `carrier` column is just another
+nullable field on an already user-owned row.
+
+- [ ] 52a run (carrier_code_maps table + RLS + PRIME INC seed, 205 rows)
+- [ ] 52b run (settlements.carrier, category_learning_rules.carrier)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

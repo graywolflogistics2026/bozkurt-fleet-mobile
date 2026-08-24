@@ -4349,3 +4349,102 @@
   (needed for
   `ServiceStatusBanner`'s orange border) — a small, backward-compatible
   addition, every existing `<Card>` call site unaffected.
+- CARRIER-SCOPED PAYROLL/SETTLEMENT CODES — HARD INVARIANT (owner
+  decision, docs/PENDING_SQL.md §52, NOT YET RUN against the live project
+  as of this writing). A two-letter carrier settlement/payroll chargeback
+  code (e.g. "DH", "BT", "AP") means what it means AT THE CARRIER THAT
+  ISSUED THE STATEMENT ONLY — never applied globally, never guessed from
+  the user's profile, a prior import, or any other carrier's own
+  documents. This binds every current AND future code-classification
+  surface in this app; a code map is applied only when the carrier
+  actually, verifiably matches, and an unmatched/unknown carrier always
+  falls back to the generic, carrier-agnostic description-based
+  classifier — never to another carrier's code meanings.
+  DATA MODEL: `carrier_code_maps` (global reference data, one row per
+  carrier+code, admin-maintained — same "everyone reads, only
+  service_role writes" pattern as `tax_year_data`/`ai_usage_config`) —
+  seeded with PRIME INC's full 205-code list this pass, reconciled by
+  hand from an owner-provided reference sheet (`docs/CARRIER_CODES.md` is
+  the human-readable mirror, including the handful of rows flagged
+  "verify against Prime documentation" where the source scan was
+  genuinely unclear — marked `category: null` rather than guessed, per
+  the spec's own "where ambiguous, leave it to the description classifier
+  rather than guessing"). Every OTHER carrier starts with ZERO seeded
+  rows. `settlements.carrier` persists the AI's own extracted carrier
+  text verbatim (new this pass — previously extracted but never stored).
+  `category_learning_rules.carrier` (nullable — null = universal, the
+  only kind that existed before this column, applies regardless of
+  carrier; a real value scopes a rule to that one carrier only) extends
+  the existing correction-learning layer the same way.
+  CLASSIFICATION PIPELINE, ORDER MATTERS (`app/src/data/aiImportSave.ts`,
+  right before a settlement's deductions are saved): (1)
+  `applyCarrierCodeCategories()` (`app/src/import/carrierCodes.ts`) —
+  carrier-scoped by construction, using the settlement's OWN just-
+  extracted `carrier` field (normalized via `normalizeCarrierKey()`),
+  never a guess; (2) `classifySettlementLine()` (`category.ts`, already
+  applied inside `mapSettlement()`) — the generic, carrier-agnostic
+  fallback; (3) the AI's own `chargebackType`; (4) the raw `category`
+  string; (5) `applyLearnedCategories()` (also carrier-scoped now) — the
+  user's own explicit, repeated correction always wins over every
+  automatic step before it. `findCarrierCodeMatch()` filters to the
+  matching carrier's own rows FIRST, before any text matching — a code
+  fragment that happens to coincide with a DIFFERENT carrier's code can
+  structurally never match (proven directly: `carrierCodes.test.ts`'s own
+  fixture reuses the literal code "DH" under two different carriers with
+  two different meanings, and proves each carrier only ever resolves its
+  own).
+  PROMPT-SIDE HANDLING, AN HONEST TRADEOFF: `ai-import` makes a SINGLE
+  Anthropic call per document (this app's established architecture,
+  reinforced by the recent cost-control/usage-limit work) — the carrier
+  itself isn't known until AFTER extraction, so "pass ONLY the matching
+  carrier's map into the prompt" literally isn't possible before a first
+  call completes. Resolved by passing EVERY seeded carrier's own code map
+  (today: just Prime) into the prompt, each wrapped in its own explicit
+  "ONLY IF you can confirm THIS carrier from the document's own
+  letterhead — otherwise ignore this list entirely" instruction
+  (`buildCarrierCodePromptBlock()`, mirrored inline in
+  `ai-import/index.ts`'s `buildExtractionPrompt()`, forwarded by the
+  client via a new `carrierCodeMaps` request-body field,
+  `app/src/data/carrierCodeMaps.ts`'s `useCarrierCodeMaps()`). This is a
+  soft hint the model may or may not follow correctly — the REAL isolation
+  guarantee is the deterministic step (1) above, which only ever looks at
+  the settlement's own actually-extracted carrier text, never what the
+  model claims to have used.
+  KNOWN PRE-EXISTING GAP, NOT retroactively fixed this pass (flagged, not
+  silently ignored): `category.ts`'s `classifySettlementLine()` — the
+  generic, carrier-agnostic fallback in step (2) above — already embeds
+  several regexes derived FROM Prime's own chargeback code text
+  ("EXTEND WR PURCH", "ACCOUNTING SERV", "QUAL RENTAL"/"GEO RENTAL", "EZ
+  FAST LN", "COMPANY STORE", "WIRE CHARGE", "STATEMENT PREPARATION",
+  "PRIME POINT-OF-SALE", from the FULL PARITY pass's own SETTLEMENT-LINE
+  CLASSIFIER work) and applies them to EVERY carrier's settlement, not
+  just Prime's — the exact class of bug this new invariant exists to
+  prevent going forward, just predating the invariant itself. The
+  `ai-import` extraction prompt's own line ~345 "APPROVED ADDITION
+  (settlement-line classifier + new categories...)" block has the
+  identical issue in prompt form. Both were left AS-IS this pass
+  (rewriting a "battle-tuned" prompt block and a widely-exercised regex
+  classifier carries real regression risk for zero pressing benefit today
+  — nothing currently seeds a second carrier to actually collide with
+  Prime's own codes) — a genuine v1.x follow-up if/when a second carrier
+  is seeded with overlapping code text, not a silent gap.
+  SCOPE DECISION: `app/(tabs)/more/accountant-package.tsx`'s own learn-
+  correction call site stays UNIVERSAL-ONLY (no carrier ever attached) —
+  its `LineItem` type (`src/stats/accountantPackage.ts`) is a flattened,
+  source-agnostic reporting row with no `settlement_id` to trace a
+  carrier from, unlike `deductions.tsx`'s own edit-save handler (which
+  DOES look the carrier up via `fetchCarrierForDeduction()` — a real,
+  wired lookup, not a stub) — extending `LineItem` to carry this would be
+  its own, separate scope, not attempted this pass.
+  DELIVERABLES: 92 suites / 2213 tests pass (carrierCodes.test.ts's own
+  17 tests directly prove the 3 explicitly-required scenarios: the same
+  code "DH" resolves differently under two carriers, an unknown/unmatched
+  carrier falls back to null — never a guess, and a description
+  containing a Prime code/label fragment never matches under a different
+  carrier); `tsc --noEmit` clean. `ai-import` was modified (new
+  `carrierCodeMaps` prompt block) and needs redeploying; `ai-advisor`/
+  `reset-data`/`delete-account` were NOT touched. No native rebuild
+  needed — pure JS/TS plus SQL/Edge Function work, no new native
+  dependency, ships via a normal `eas update`. No i18n changes this pass
+  (no new user-facing strings — the carrier code map is prompt-context
+  and internal classification data, never rendered directly to a user).

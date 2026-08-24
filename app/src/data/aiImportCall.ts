@@ -65,13 +65,14 @@ async function invokeAiImportOnce(
   locale: string | undefined,
   customCategories: string[] | undefined,
   learningRules: { keyword: string; category: string }[] | undefined,
+  carrierCodeMaps: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[] | undefined,
   pageRangeStart: number | undefined,
   priorPageExtractions: { page: number; extraction: unknown }[] | undefined,
   priorMissingPages: number[] | undefined,
 ): Promise<{ response?: AiImportInvokeResponse; error?: AiImportError }> {
   const timeout = mediaType.startsWith('image/') ? IMAGE_CLIENT_TIMEOUT_MS : PDF_CLIENT_TIMEOUT_MS;
   const { data, error } = await supabase.functions.invoke('ai-import', {
-    body: { fileBase64, mediaType, docHint, locale, customCategories, learningRules, pageRangeStart, priorPageExtractions, priorMissingPages },
+    body: { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, pageRangeStart, priorPageExtractions, priorMissingPages },
     timeout,
   });
 
@@ -141,6 +142,7 @@ export async function callAiImport(
   locale?: string,
   customCategories?: string[],
   learningRules?: { keyword: string; category: string }[],
+  carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[],
   onProgress?: (progress: { through: number; total: number }) => void
 ): Promise<AiImportCallResult> {
   let pageRangeStart: number | undefined;
@@ -159,6 +161,7 @@ export async function callAiImport(
       locale,
       customCategories,
       learningRules,
+      carrierCodeMaps,
       pageRangeStart,
       priorPageExtractions,
       priorMissingPages

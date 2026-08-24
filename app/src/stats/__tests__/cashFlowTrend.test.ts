@@ -15,6 +15,7 @@ function sett(overrides: Partial<Settlement>): Settlement {
     per_diem_days: 7,
     business_balance_credit: 0,
     tags: null,
+    carrier: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,

@@ -188,6 +188,10 @@ export type Settlement = {
   // old behavior of crediting nothing at all on a re-import.
   business_balance_credit: number;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision,
+  // docs/PENDING_SQL.md §52) — the AI's own extracted carrier text,
+  // verbatim (never normalized at rest). See app/src/import/carrierCodes.ts.
+  carrier: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -491,6 +495,11 @@ export type CategoryLearningRule = {
   keyword: string;
   category: string;
   hit_count: number;
+  // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision) — null
+  // means a UNIVERSAL rule (applies regardless of carrier, the only kind
+  // that existed before this column); a real value scopes the rule to
+  // that one carrier only. See app/src/import/categoryLearning.ts.
+  carrier: string | null;
   created_at: string;
   updated_at: string;
 };

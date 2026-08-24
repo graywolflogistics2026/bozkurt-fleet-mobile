@@ -8,7 +8,7 @@ import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeducti
 import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { fetchReimbursementStatus, useReimburseMyself } from '@/src/data/capitalTransactions';
 import type { ReimbursementStatus } from '@/src/stats/capitalAccount';
-import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
+import { useLearnCategoryCorrection, fetchCarrierForDeduction } from '@/src/data/categoryLearningRules';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
@@ -298,8 +298,14 @@ export default function Deductions() {
       // picked something DIFFERENT from what was already there, not just
       // re-saving the same value) teaches a keyword->category rule for
       // next time. Best-effort: never blocks the save on failure.
+      // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision) — a
+      // settlement-withheld row's own carrier (via its parent settlement)
+      // scopes the learned rule to that carrier only; a standalone/
+      // out-of-pocket row (no settlement_id) learns a universal rule,
+      // same as before this pass.
       if (editCategory && editCategory !== (editing.category || 'Misc')) {
-        learnCategoryCorrection.mutate({ userId, description: editing.description, category: editCategory });
+        const carrier = await fetchCarrierForDeduction(editing);
+        learnCategoryCorrection.mutate({ userId, description: editing.description, category: editCategory, carrier });
       }
       await invalidateFinancialData(queryClient);
       setEditing(null);

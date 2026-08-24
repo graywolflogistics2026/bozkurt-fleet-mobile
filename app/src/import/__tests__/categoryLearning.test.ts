@@ -75,6 +75,45 @@ describe('applyLearnedCategories', () => {
   });
 });
 
+// CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision) — a rule
+// learned on one carrier's document must never apply to a different
+// carrier's import; a universal (no-carrier) rule keeps applying to
+// everyone, matching every test above (none of which pass a carrier).
+describe('matchLearnedCategory — carrier scoping', () => {
+  const rules: LearningRule[] = [
+    { keyword: 'walmart', category: 'Tools & Equipment' }, // universal
+    { keyword: 'dh association dues', category: 'Association Dues', carrier: 'LANDSTAR' },
+  ];
+
+  it('a universal rule (no carrier) still applies regardless of carrierKey', () => {
+    expect(matchLearnedCategory('Walmart', rules, 'PRIME INC')).toBe('Tools & Equipment');
+    expect(matchLearnedCategory('Walmart', rules)).toBe('Tools & Equipment');
+  });
+
+  it('a carrier-scoped rule applies when the carrier matches', () => {
+    expect(matchLearnedCategory('DH association dues withheld', rules, 'LANDSTAR')).toBe('Association Dues');
+  });
+
+  it('a carrier-scoped rule never applies under a DIFFERENT carrier', () => {
+    expect(matchLearnedCategory('DH association dues withheld', rules, 'PRIME INC')).toBeNull();
+  });
+
+  it('a carrier-scoped rule never applies when no carrier is known at all', () => {
+    expect(matchLearnedCategory('DH association dues withheld', rules)).toBeNull();
+  });
+});
+
+describe('applyLearnedCategories — carrier scoping', () => {
+  const rules: LearningRule[] = [{ keyword: 'dh association dues', category: 'Association Dues', carrier: 'LANDSTAR' }];
+
+  it('applies the carrier-scoped rule only when carrierKey matches', () => {
+    const rows = [{ description: 'DH association dues', category: null }];
+    expect(applyLearnedCategories(rows, rules, 'LANDSTAR')[0].category).toBe('Association Dues');
+    expect(applyLearnedCategories(rows, rules, 'PRIME INC')[0].category).toBeNull();
+    expect(applyLearnedCategories(rows, rules)[0].category).toBeNull();
+  });
+});
+
 describe('buildUserCorrectionsPromptText', () => {
   it('returns an empty string when there are no rules', () => {
     expect(buildUserCorrectionsPromptText([])).toBe('');

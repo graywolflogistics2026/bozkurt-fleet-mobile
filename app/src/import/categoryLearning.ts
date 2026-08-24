@@ -43,7 +43,15 @@ export function normalizeKeyword(text: string | null | undefined, maxTokens = DE
   return tokens.slice(0, maxTokens).join(' ').trim();
 }
 
-export type LearningRule = { keyword: string; category: string };
+// CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision) — `carrier`
+// is OPTIONAL and nullable: a rule learned before this column existed (or
+// learned outside a settlement-import context, where no carrier is known)
+// has `carrier: null`/undefined and applies UNIVERSALLY, exactly like
+// today — only a rule explicitly scoped to a real carrier (learned while
+// correcting a settlement-withheld line from a document whose carrier was
+// known) is restricted to that carrier alone, same isolation rule
+// carrierCodes.ts's findCarrierCodeMatch() already enforces.
+export type LearningRule = { keyword: string; category: string; carrier?: string | null };
 
 // Classic edit-distance — used only as a typo/OCR-tolerance fallback
 // AFTER an exact/substring match has already failed (the common case, a
@@ -66,17 +74,36 @@ function levenshtein(a: string, b: string): number {
   return dp[n];
 }
 
+// CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass — a rule with a real
+// `carrier` value is eligible only when the CALLER'S own `carrierKey`
+// matches it exactly; a universal rule (`carrier` null/undefined) is
+// always eligible regardless of `carrierKey`. Filtering happens ONCE, up
+// front, so neither the exact/substring pass nor the fuzzy pass below can
+// ever consider a rule scoped to a different carrier.
+function eligibleRules(rules: LearningRule[], carrierKey: string | null | undefined): LearningRule[] {
+  return rules.filter((r) => !r.carrier || r.carrier === carrierKey);
+}
+
 // Checks a description against every learned rule, FUZZY (spec item G):
 // (1) exact/substring match first — the fast, common path; (2)
 // word-level Levenshtein distance within 25% of the longer string's
 // length as a typo/OCR-tolerant fallback, picking the closest match.
-// Returns null (never a guess) when nothing is close enough.
-export function matchLearnedCategory(description: string | null | undefined, rules: LearningRule[]): string | null {
+// Returns null (never a guess) when nothing is close enough. `carrierKey`
+// is optional — omitted (or a document with no known carrier) still
+// matches every UNIVERSAL rule, same as before this pass; a carrier-
+// scoped rule only ever applies when it's explicitly supplied and equal.
+export function matchLearnedCategory(
+  description: string | null | undefined,
+  rules: LearningRule[],
+  carrierKey?: string | null
+): string | null {
   if (!description || rules.length === 0) return null;
   const normalized = normalizeKeyword(description);
   if (!normalized) return null;
+  const candidates = eligibleRules(rules, carrierKey);
+  if (candidates.length === 0) return null;
 
-  for (const rule of rules) {
+  for (const rule of candidates) {
     if (!rule.keyword) continue;
     if (normalized === rule.keyword || normalized.includes(rule.keyword) || rule.keyword.includes(normalized)) {
       return rule.category;
@@ -84,7 +111,7 @@ export function matchLearnedCategory(description: string | null | undefined, rul
   }
 
   let best: { category: string; distance: number } | null = null;
-  for (const rule of rules) {
+  for (const rule of candidates) {
     if (!rule.keyword) continue;
     const distance = levenshtein(normalized, rule.keyword);
     const threshold = Math.max(1, Math.floor(Math.max(normalized.length, rule.keyword.length) * 0.25));
@@ -98,14 +125,16 @@ export function matchLearnedCategory(description: string | null | undefined, rul
 // Applied to a batch of mapped deduction inserts right before they're
 // saved (app/src/data/aiImportSave.ts) — a learned rule wins over
 // whatever category the AI/built-in guesser already assigned, since it
-// represents the user's own explicit, repeated correction.
+// represents the user's own explicit, repeated correction. `carrierKey`
+// threads through to matchLearnedCategory() unchanged.
 export function applyLearnedCategories<T extends { description?: string | null; category?: string | null }>(
   rows: T[],
-  rules: LearningRule[]
+  rules: LearningRule[],
+  carrierKey?: string | null
 ): T[] {
   if (rules.length === 0) return rows;
   return rows.map((row) => {
-    const learned = matchLearnedCategory(row.description ?? null, rules);
+    const learned = matchLearnedCategory(row.description ?? null, rules, carrierKey);
     return learned ? { ...row, category: learned } : row;
   });
 }

@@ -118,7 +118,7 @@ describe('callAiImport — continuation loop (PAGES_PER_BATCH=2, round 5)', () =
     for (const r of responses) invokeMock.mockResolvedValueOnce({ data: r, error: null });
 
     const progressCalls: { through: number; total: number }[] = [];
-    await callAiImport('base64file', 'application/pdf', undefined, undefined, undefined, undefined, (p) => progressCalls.push(p));
+    await callAiImport('base64file', 'application/pdf', undefined, undefined, undefined, undefined, undefined, (p) => progressCalls.push(p));
 
     expect(progressCalls).toHaveLength(1);
     expect(progressCalls[0].through).toBe(2);

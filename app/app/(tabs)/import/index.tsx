@@ -15,6 +15,7 @@ import { useInsertTruck } from '@/src/data/trucks';
 import { useDrivers, useInsertDriver } from '@/src/data/drivers';
 import { useUserCategories } from '@/src/data/userCategories';
 import { useCategoryLearningRules } from '@/src/data/categoryLearningRules';
+import { useCarrierCodeMaps } from '@/src/data/carrierCodeMaps';
 import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
@@ -185,6 +186,11 @@ export default function Import() {
   // "USER CORRECTIONS" hints, never used to train/fine-tune any model.
   const { data: learningRulesData } = useCategoryLearningRules();
   const learningRules = (learningRulesData ?? []).map((r) => ({ keyword: r.keyword, category: r.category }));
+  // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision) —
+  // forwarded into ai-import's prompt (each carrier wrapped in its own
+  // "confirm this carrier before applying" instruction, see
+  // buildExtractionPrompt() in supabase/functions/ai-import/index.ts).
+  const { data: carrierCodeMaps } = useCarrierCodeMaps();
   const insertTruck = useInsertTruck();
   const insertDriver = useInsertDriver();
   const queryClient = useQueryClient();
@@ -484,7 +490,8 @@ export default function Import() {
         undefined,
         i18n.language,
         customCategoryNames,
-        learningRules
+        learningRules,
+        carrierCodeMaps
       );
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
@@ -529,6 +536,7 @@ export default function Import() {
         i18n.language,
         customCategoryNames,
         learningRules,
+        carrierCodeMaps,
         // CONTINUATION PROTOCOL (owner decision 2026-08-03): a long
         // settlement is now processed in several sequential round-trips
         // — this fires between them so the user sees real progress
@@ -584,6 +592,7 @@ export default function Import() {
         i18n.language,
         customCategoryNames,
         learningRules,
+        carrierCodeMaps,
         (progress) => {
           clearStillWorkingTimer();
           setWorkingLabel(t('importScreen.processingPageProgress', { through: progress.through, total: progress.total }));

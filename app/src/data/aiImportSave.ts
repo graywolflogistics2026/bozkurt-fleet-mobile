@@ -20,6 +20,7 @@ import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
+import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
 import {
   SaveExtractionError,
   emptyPartialState,
@@ -35,9 +36,38 @@ import {
 // import.
 async function fetchLearningRules(userId: string): Promise<LearningRule[]> {
   try {
-    const { data, error } = await supabase.from('category_learning_rules').select('keyword, category').eq('user_id', userId);
+    const { data, error } = await supabase.from('category_learning_rules').select('keyword, category, carrier').eq('user_id', userId);
     if (error || !data) return [];
     return data as LearningRule[];
+  } catch {
+    return [];
+  }
+}
+
+// CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision) — reads
+// EVERY seeded carrier's own code map (a small, global reference table,
+// docs/PENDING_SQL.md §52); the actual scoping to ONE carrier happens
+// downstream in applyCarrierCodeCategories(), never here. Best-effort,
+// same "must never be able to break an import" contract as
+// fetchLearningRules() above — returns [] (identical to today's behavior)
+// if the table doesn't exist yet or the fetch otherwise fails.
+async function fetchCarrierCodeMaps(): Promise<CarrierCode[]> {
+  try {
+    const { data, error } = await supabase
+      .from('carrier_code_maps')
+      .select('carrier, code, sub_code, label, description, category, is_deductible, income_or_chargeback, notes');
+    if (error || !data) return [];
+    return data.map((r) => ({
+      carrier: r.carrier as string,
+      code: r.code as string,
+      subCode: (r.sub_code as string | null) ?? null,
+      label: r.label as string,
+      description: (r.description as string | null) ?? null,
+      category: (r.category as string | null) ?? null,
+      isDeductible: (r.is_deductible as boolean | null) ?? null,
+      incomeOrChargeback: (r.income_or_chargeback as 'income' | 'chargeback' | null) ?? null,
+      notes: (r.notes as string | null) ?? null,
+    }));
   } catch {
     return [];
   }
@@ -299,10 +329,26 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // wording; a user's own repeated correction wins over whatever the
   // AI/built-in guesser already assigned.
   const learningRules = await fetchLearningRules(userId);
+  // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision) —
+  // fetched unconditionally (cheap, small, global reference data) but
+  // only ever APPLIED when this extraction is actually a settlement with
+  // a real, normalizable carrier — see mapSettlement()'s own
+  // `carrier` field on the returned SettlementInsert for what gets
+  // persisted.
+  const carrierCodeMaps = await fetchCarrierCodeMaps();
 
   if (d.docType === 'settlement' && d.settlement) {
     const mapping = settlementMapping!;
-    mapping.deductions = applyLearnedCategories(mapping.deductions, learningRules);
+    const carrierKey = normalizeCarrierKey(d.settlement.carrier);
+    // Carrier-scoped classification runs FIRST — it's the most specific,
+    // most authoritative signal available (an admin-curated code map for
+    // the EXACT carrier that issued this exact statement) — ahead of both
+    // mapSettlement()'s own classifySettlementLine() (already applied,
+    // carrier-agnostic) and the user's own learned corrections below,
+    // which still get the final say (a user's explicit, repeated
+    // correction always wins over any automatic classification).
+    mapping.deductions = applyCarrierCodeCategories(mapping.deductions, carrierKey, carrierCodeMaps);
+    mapping.deductions = applyLearnedCategories(mapping.deductions, learningRules, carrierKey);
 
     // Web v2026.07.09-A re-import-replace: importing the same
     // (week_ending, truck) again REPLACES that week's batch-tagged rows

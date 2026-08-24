@@ -4,7 +4,7 @@
 // the Anthropic API. ANTHROPIC_API_KEY lives only in this function's
 // environment secrets; the mobile app never holds it (CLAUDE.md).
 //
-// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], learningRules?: { keyword: string, category: string }[], pageRangeStart?: number, priorPageExtractions?: { page: number, extraction: unknown }[], priorMissingPages?: number[] }
+// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], learningRules?: { keyword: string, category: string }[], carrierCodeMaps?: { carrier: string, code: string, subCode: string | null, label: string, description: string | null }[], pageRangeStart?: number, priorPageExtractions?: { page: number, extraction: unknown }[], priorMissingPages?: number[] }
 // learningRules (owner decision 2026-08-05, FULL PARITY follow-up item
 // G, app/src/import/categoryLearning.ts) — the user's own learned
 // keyword->category corrections, appended to the prompt as plain-text
@@ -364,7 +364,8 @@ function buildExtractionPrompt(
   docHint?: string,
   locale?: string,
   customCategories?: string[],
-  learningRules?: { keyword: string; category: string }[]
+  learningRules?: { keyword: string; category: string }[],
+  carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[]
 ): string {
   let prompt = LEGACY_EXTRACTION_PROMPT
     .replace(FUEL_SCHEMA_BEFORE, FUEL_SCHEMA_AFTER)
@@ -434,6 +435,33 @@ function buildExtractionPrompt(
   if (learningRules && learningRules.length > 0) {
     const hints = learningRules.map((r) => `"${r.keyword}" -> ${r.category}`).join("; ");
     prompt += `\nUSER CORRECTIONS (this user has manually corrected these categorizations before — prefer these when a description matches, but this is a hint, not an override of clear evidence on the document itself): ${hints}\n`;
+  }
+  // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES (owner decision, critical
+  // isolation rule — see CLAUDE.md's own dated entry for the full
+  // invariant). The carrier itself isn't known until AFTER extraction (this
+  // function makes a SINGLE Anthropic call per document, never a two-pass
+  // "detect carrier first" flow), so every SEEDED carrier's own code map is
+  // included here, each one wrapped in an explicit "ONLY IF you can confirm
+  // THIS carrier from the document's own letterhead" instruction — the
+  // model is never told to guess or apply a code map speculatively. The
+  // REAL enforcement is a deterministic, carrier-scoped step the client
+  // applies AFTER extraction using the settlement's own actually-extracted
+  // carrier text (app/src/import/carrierCodes.ts's findCarrierCodeMatch()),
+  // which is what actually GUARANTEES isolation regardless of what the
+  // model does with this hint.
+  if (carrierCodeMaps && carrierCodeMaps.length > 0) {
+    const byCarrier = new Map<string, typeof carrierCodeMaps>();
+    for (const c of carrierCodeMaps) {
+      if (!byCarrier.has(c.carrier)) byCarrier.set(c.carrier, []);
+      byCarrier.get(c.carrier)!.push(c);
+    }
+    const blocks = Array.from(byCarrier.entries()).map(([carrier, entries]) => {
+      const lines = entries
+        .map((e) => `${e.code}${e.subCode ? `/${e.subCode}` : ""} = ${e.label}${e.description ? ` (${e.description})` : ""}`)
+        .join("; ");
+      return `If — and ONLY if — this document's own letterhead/header confirms the carrier is "${carrier}", these settlement line codes mean: ${lines}. If the carrier is anything else, ignore this list entirely.`;
+    });
+    prompt += `\nAPPROVED ADDITION (carrier-scoped settlement codes, never applied across carriers): ${blocks.join(" ")}\n`;
   }
   return prompt;
 }
@@ -969,6 +997,12 @@ Deno.serve(async (req: Request) => {
     locale?: string;
     customCategories?: string[];
     learningRules?: { keyword: string; category: string }[];
+    // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES (owner decision) — the
+    // client fetches this small, global reference table itself and
+    // forwards it here, same pattern as learningRules above (never fetched
+    // server-side, keeping every request self-contained and avoiding an
+    // extra round trip inside the tight per-invocation time budget).
+    carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
     // CONTINUATION PROTOCOL (owner decision 2026-08-03): set by the
     // client on every call AFTER the first one for a long PDF — see the
     // PAGE-BUDGET comment block near the top of this file. Absent/1 on
@@ -989,7 +1023,7 @@ Deno.serve(async (req: Request) => {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
   }
 
-  const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, priorPageExtractions, priorMissingPages } = body;
+  const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;
   const pageRangeStart = body.pageRangeStart ?? 1;
   if (!fileBase64 || !mediaType) {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
@@ -1055,7 +1089,7 @@ Deno.serve(async (req: Request) => {
     ? { type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } }
     : { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } };
 
-  const prompt = buildExtractionPrompt(docHint, locale, customCategories, learningRules);
+  const prompt = buildExtractionPrompt(docHint, locale, customCategories, learningRules, carrierCodeMaps);
 
   // SINGLE CALL IS THE DEFAULT (owner decision 2026-08-03 — see the
   // budget comment block near the top of this file). `isFirstCall`
