@@ -5791,3 +5791,171 @@
   changes. No new native dependency — pure JS/TS work reusing
   `expo-print`/`expo-sharing`/`expo-file-system`, already dependencies —
   ships via a normal `eas update`.
+- CASH FLOW 30-DAY FORECAST — BUILT FROM THE USER'S OWN DATA (owner
+  decision, binding, replaces the manual-budget-entry design in full,
+  docs/PENDING_SQL.md §57). The forecast used to require the user to type
+  5 weekly budget figures by hand (Weekly Revenue/Truck Payment/Fuel/
+  Insurance/Other), defaulting to a blank/zero screen until they did, even
+  with months of real settlement history already on file. It now
+  classifies the user's own trailing settlements/deductions/fuel/
+  maintenance/tolls and layers in known dated bills from Documents &
+  Renewals — a real forecast exists the instant settlements exist, with
+  zero manual entry required.
+  1. **CLASSIFICATION, three new pure modules**:
+     `app/src/stats/cashFlowClassification.ts`'s `classifyCashFlowSpending()`
+     splits the trailing 12 weeks of spend into RECURRING FIXED (a charge
+     appearing in ≥60% of observed weeks with ≤25% coefficient of
+     variation in its own amount, minimum 2 occurrences — frequency +
+     variance, never a hardcoded category list: a totally unrecognized
+     custom category like "Dispatch Software" qualifies exactly the same
+     way insurance/permits/ELD do), VARIABLE PER MILE (the spec's own
+     explicit 4 categories — Fuel & DEF, Fuel Additives, Maintenance &
+     Repairs, Tolls & Scales — never run through the frequency test, each
+     gets its own real $/mile rate = trailing total $ ÷ trailing total
+     miles), and ONE-OFFS (everything that fails the fixed test — a
+     $7,200 extended-warranty purchase seen once is excluded from the
+     weekly projection entirely, never smeared into a false weekly
+     average). Grouping uses a shared Monday-anchored ISO week key
+     (`isoWeekKey()`) so a recurring bill paid either via settlement
+     withholding or out-of-pocket still groups consistently week over
+     week. `app/src/stats/cashFlowPeriodic.ts`'s
+     `buildPeriodicForecastItems()` pulls HVUT 2290/IRP/insurance-policy-
+     renewal/annual-inspection due dates from `compliance_items` falling
+     in the next 30 days and drops each into the exact week it's due —
+     the amount comes from the linked document's own real `amount` column
+     when one exists (`buildDocumentAmountLookup()`), or is left `null`
+     (never guessed) with the UI offering to enter it — HONESTY item 5's
+     "never invent a number with no basis" applied literally to the one
+     place in this pass where a real number genuinely isn't always
+     available. `app/src/stats/cashFlowForecast.ts` is the assembly
+     layer: `buildSpendEvents()` merges deductions/fuel/maintenance/tolls
+     into one flat list (excluding Meals/Advance Repayment/Escrow via the
+     existing `reducesTrueProfit()` — never a real cash outflow to
+     project — and excluding settlement-linked `fuel_purchases` rows, the
+     SAME canonical-expense-engine double-count guard `trueProfit.ts`'s
+     `sumCanonicalExpenses()` already established, so this new module
+     never disagrees with the rest of the app about what counts as a real
+     expense); `buildCashFlowForecast()` produces the week-by-week table;
+     `buildCashFlowForecastFromData()` is the one end-to-end entry point
+     the screen calls with raw query data.
+  2. **INCOME, adjusted for how many settlements actually landed**:
+     `trailingWeeklyNetIncomeAverage()`/`trailingWeeklyMilesAverage()`
+     reuse the SAME "divide by however many distinct weeks were actually
+     found, never a fixed denominator" convention this app established
+     back in the original DATA-FLOW AUDIT FIX — a genuine $0-net "home
+     week" settlement that DID land still counts as one of the weeks
+     (correctly pulls the average down); a week with no settlement at all
+     is simply absent from the map and never assumed to be $0, so it can
+     never silently halve the average the way a fixed divide-by-4 would.
+     `upcomingReimbursementsByWeek()` adds any reimbursement already on
+     file dated within the forecast window itself (a one-time, dated
+     event) to that specific week's income rather than smoothing it into
+     the weekly rate.
+  3. **OUTPUT — real week-by-week, not a flat 4× repeat**: the OLD
+     forecast's own "weeks" array just repeated one steady-state week's
+     numbers 4 times with a running balance; the new one still uses one
+     steady-state income/fixed/variable figure per week (same spirit) but
+     now genuinely varies week to week via the PERIODIC layer — a
+     compliance due date landing in week 2 shows up ONLY in week 2's own
+     row, correctly denting that week's ending balance. Each
+     `CashFlowWeekProjection` carries opening/income/fixed/variable/
+     periodic/ending plus that week's own periodic items; the result's
+     `tightestWeekIndex` identifies the lowest ending balance across all
+     4 weeks, and the screen renders a plain "Tightest point: $1,240 on
+     Sep 12 — the 2026 HVUT 2290 lands that week" line
+     (`cashFlowScreen.tightestPointWithReason`, falling back to the
+     reason-free `tightestPointLine` when nothing periodic caused it).
+  4. **TRANSPARENT AND EDITABLE**: every one of the 3 weekly figures
+     (Income/Fixed/Variable) shows its real basis caption — "avg of last
+     N week(s)" for income, "N recurring charge(s) detected" for fixed,
+     "$X/mi × Y mi" for variable — and a tap-to-edit affordance
+     (`OverridableStat`, replacing the old screen's private, per-instance
+     `AutoFillField`) opens an inline Field; saving persists to one of 3
+     new `profiles` columns (`cf_income_override`/`cf_fixed_override`/
+     `cf_variable_override`, docs/PENDING_SQL.md §57) which always wins
+     over the computed figure and is marked with a "your override" basis
+     caption plus a "↺ Reset to average" action that clears it back to
+     null. A periodic item's own amount is independently overridable too
+     — a flexible per-item jsonb map (`cf_periodic_overrides`,
+     `compliance_items.id -> amount`) rather than a normalized column,
+     same "flexible per-key user state" pattern as `profiles.nudge_state`.
+     Overrides are proven by test to survive a subsequent import that
+     changes the underlying computed average (item 6's own explicit ask)
+     — the SAME override object still wins regardless of what the fresh
+     classification/average recomputes to, since it's stored and read
+     completely independently of the live computation.
+  5. **HONESTY**: `CashFlowForecastResult.reliable` is `false` whenever
+     fewer than 3 distinct weeks of history exist (`weeksOfHistory`, the
+     max of the income-average's own weeksFound and the classifier's own
+     weeksObserved) — the screen shows an amber banner ("A couple more
+     settlements and this gets reliable — N week(s) of history so far")
+     but ALWAYS still renders the full forecast underneath it, never
+     hides it — "show what IS known rather than nothing." The screen's
+     own empty state only fires when the account has LITERALLY ZERO
+     settlements ever (`hasSettlements`) — "never show a blank forecast
+     when settlements exist," satisfied structurally: 1+ settlements
+     always produces a real (possibly just-flagged-unreliable) forecast,
+     never a blank budget-entry form.
+  6. **Screen rewrite** (`app/(tabs)/more/cash-flow.tsx`): kept — Bank
+     Balance and Tax Reserve % (the only two genuinely manual, non-
+     derivable inputs), the existing Weekly Trend chart and Best/Worst
+     Lanes sections (out of scope for this pass, untouched). Removed —
+     the 5 old AutoFillField budget inputs and their own trailing-average
+     hooks (`trailingWeeklyRevenueAverage`/`trailingWeeklyFuelAverage`/
+     `trailingWeeklyOtherExpenseAverage`/`trailingWeeklyInsuranceAverage`/
+     `trailingWeeklyTruckPaymentAverage`/`mergeForecastInputsWithAverages`/
+     `calcCashFlowForecast`/`CashFlowBudgetInputs` — all deleted outright,
+     confirmed to have zero other callers app-wide before removal, unlike
+     this codebase's usual "leave harmless dead code" precedent, since an
+     entire parallel forecast ENGINE sitting unused would be a much
+     larger footprint than a few orphaned i18n strings). Added — the
+     Weekly Assumptions card (3 `OverridableStat` rows), a Recurring
+     Fixed Charges breakdown list, a Variable Cost per Mile breakdown
+     list, a one-offs transparency note ("$7,200 excluded — 1 one-time
+     item(s), not expected to repeat"), a Known Upcoming periodic-items
+     list (with an inline amount-entry Field when the linked document has
+     no `amount` on file), the tightest-point line, the reliability
+     banner, and 4 `WeekCard`s (one per forecast week) replacing the old
+     flat forecast table.
+  7. **Deprecated columns, not deleted** (same established precedent as
+     `cf_insurance_monthly`): `cf_weekly_revenue`/`cf_truck_payment`/
+     `cf_fuel_weekly`/`cf_insurance_weekly`/`cf_other_weekly` are left in
+     place, unused, on `profiles` — no migration needed, nothing reads
+     them anymore. `reset-data`'s `PROFILE_DATA_RESET` was updated to
+     clear all 4 NEW columns (CLAUDE.md invariant #24's own rule: an
+     unlisted new `profiles` column is silently KEPT, not the safe
+     default — a reset account must not retain a stale manual override);
+     no query-invalidation change needed since these are new fields on
+     the already-invalidated `'profile'` row, not a new table.
+  Tests: `cashFlowClassification.test.ts` (new, 14 tests — fixed
+  detection by frequency+variance including an unrecognized custom
+  category, a wildly-inconsistent-amount charge correctly rejected as
+  fixed, a once-seen charge never called recurring, variable $/mile rate
+  computation with a divide-by-zero guard, a large one-off excluded from
+  the weekly total, and a full realistic 12-week mixed dataset separating
+  all three buckets correctly in one pass — the exact "classification
+  separates fixed/variable/periodic on a realistic dataset" ask).
+  `cashFlowPeriodic.test.ts` (new, 10 tests — a renewal inside the 30-day
+  window lands with the right date, boundary dates included/excluded
+  correctly, only the 4 real periodic-bill types included even when a
+  personal compliance type shares the same due date, amount sourced from
+  a real linked document or left null, never guessed).
+  `cashFlowForecast.test.ts` (rewritten, 18 tests — spend-event exclusion
+  rules, the 0-mile/0-net "home week" correctly counted not silently
+  halving the average, upcoming-reimbursement week bucketing, the full
+  week-by-week assembly including a periodic item landing in its exact
+  week and tightest-week detection, all 4 override-survives-a-changed-
+  average cases, and one full `buildCashFlowForecastFromData()` end-to-
+  end realistic-dataset test). A pre-existing test in
+  `aiImportSave.settlementChildren.test.ts` was updated (not weakened) to
+  prove the same settlement-linked-fuel double-count guard fires
+  correctly against a real saved settlement, rather than asserting the
+  old engine's own (inconsistent-with-the-rest-of-the-app) double-
+  counting behavior. Full suite: 99 suites / 2436 tests pass; `tsc
+  --noEmit` clean; all 7 locales confirmed key-parity (es/ru/ar/tr fully
+  translated, hi/uk as untranslated English copies per invariant #11;
+  glossary test re-passed clean). No Edge Function redeploy needed (the
+  one Deno-side change, `reset-data`'s `PROFILE_DATA_RESET`, still needs
+  redeploying once docs/PENDING_SQL.md §57 has been run). No new native
+  dependency — pure JS/TS plus one small SQL migration — ships via a
+  normal `eas update`.

@@ -598,9 +598,17 @@ export type Profile = {
   // seen/skipped, same "null = never done, set once" pattern as
   // onboarding_completed_at.
   tutorial_seen_at: string | null;
-  // Cash Flow 30-day forecast budget inputs: docs/PENDING_SQL.md §29
-  // (Session 9b parity-gap decision #3) — all nullable; the app supplies
-  // legacy's own placeholder defaults (1145/1800/0/500/25) when null.
+  // Cash Flow 30-day forecast: cf_bank_balance/cf_tax_reserve_pct are the
+  // only two manual inputs left (docs/PENDING_SQL.md §29) — an opening
+  // balance and an optional tax-reserve overlay, neither derivable from
+  // the user's own data. cf_weekly_revenue/cf_truck_payment/
+  // cf_fuel_weekly/cf_insurance_weekly/cf_other_weekly are DEPRECATED
+  // (owner decision, "build it from the user's own data" pass,
+  // docs/PENDING_SQL.md §57) — the manual weekly-budget-per-line design
+  // they powered was replaced outright by a real classifier
+  // (src/stats/cashFlowClassification.ts) that needs no user entry at
+  // all; kept as harmless unused columns, same precedent as
+  // cf_insurance_monthly below.
   cf_bank_balance: number | null;
   cf_weekly_revenue: number | null;
   cf_truck_payment: number | null;
@@ -613,6 +621,20 @@ export type Profile = {
   cf_insurance_weekly: number | null;
   cf_other_weekly: number | null;
   cf_tax_reserve_pct: number | null;
+  // "BUILT FROM THE USER'S OWN DATA" pass (owner decision,
+  // docs/PENDING_SQL.md §57) — the new classifier computes income/fixed/
+  // variable automatically; these three let the user override any ONE of
+  // those three weekly figures (an override always wins over the
+  // computed value; null = use the computed average). Periodic items
+  // (HVUT/IRP/insurance renewal/inspection) are dated, individual events,
+  // not a weekly rate, so their override is a flexible per-item jsonb map
+  // (compliance_items.id -> overridden dollar amount) rather than a
+  // normalized column — same "flexible per-key user state" pattern as
+  // nudge_state above.
+  cf_income_override: number | null;
+  cf_fixed_override: number | null;
+  cf_variable_override: number | null;
+  cf_periodic_overrides: Record<string, number>;
   // SMART ALERTS (owner decision 2026-08-24, NEXT PASS item D, docs/
   // PENDING_SQL.md §49) — one entry per nudge topic ever shown/silenced,
   // `Partial<Record<NudgeTopic, {lastShownAt, silencedAt}>>` (see

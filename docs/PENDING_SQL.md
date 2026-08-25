@@ -2699,6 +2699,50 @@ alter table import_jobs add constraint import_jobs_status_check
 
 ---
 
+## 57. Cash Flow forecast overrides (owner decision, "build it from the user's own data" pass)
+
+The 30-day Cash Flow forecast no longer requires manual weekly budget
+entry — it classifies the user's own trailing settlements/deductions/
+fuel/maintenance/tolls into recurring fixed charges, a variable $/mile
+rate, and known periodic bills (`app/src/stats/cashFlowClassification.ts`/
+`cashFlowPeriodic.ts`/`cashFlowForecast.ts`). `cf_weekly_revenue`/
+`cf_truck_payment`/`cf_fuel_weekly`/`cf_insurance_weekly`/
+`cf_other_weekly` (§29/§39) are DEPRECATED by this — left in place as
+harmless unused columns, same precedent as `cf_insurance_monthly`
+already sitting there. `cf_bank_balance`/`cf_tax_reserve_pct` are
+unchanged (still the two manual inputs, neither derivable from the
+user's own data).
+
+Three new columns let the user override any ONE of the three computed
+weekly figures (income/fixed/variable) — an override always wins over
+the computed average and persists independently of it, so a later
+import that changes the underlying data can never silently discard a
+manual correction. A dated periodic item (HVUT 2290, IRP, insurance
+renewal, inspection) is an individual event, not a weekly rate, so its
+override is a flexible per-item jsonb map
+(`compliance_items.id -> overridden dollar amount`) rather than a
+normalized column — same "flexible per-key user state" pattern as
+`profiles.nudge_state`.
+
+```sql
+alter table profiles
+  add column cf_income_override numeric(12,2),
+  add column cf_fixed_override numeric(12,2),
+  add column cf_variable_override numeric(12,2),
+  add column cf_periodic_overrides jsonb not null default '{}'::jsonb;
+```
+
+`reset-data`'s `PROFILE_DATA_RESET` was updated to clear all four new
+columns (CLAUDE.md invariant #24's own rule: an unlisted new `profiles`
+column is silently KEPT, not the safe default here — a "reset" account
+must not retain a stale manual override). No new query-invalidation key
+is needed — these are new fields on the already-invalidated `'profile'`
+row, not a new table.
+
+- [ ] 57a run (profiles.cf_income_override/cf_fixed_override/cf_variable_override/cf_periodic_overrides)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

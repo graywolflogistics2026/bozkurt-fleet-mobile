@@ -103,6 +103,16 @@ const PROFILE_DATA_RESET = {
   cf_insurance_weekly: null,
   cf_other_weekly: null,
   cf_tax_reserve_pct: null,
+  // "BUILT FROM THE USER'S OWN DATA" pass (owner decision, docs/
+  // PENDING_SQL.md §57) — the new Cash Flow forecast's own per-figure
+  // overrides are budget inputs, same CLEARED bucket as every other
+  // cf_* field above (CLAUDE.md invariant #24's own explicit rule: an
+  // unlisted new profiles column is silently KEPT, not the safe default
+  // here — a "reset" account must not keep a stale manual override).
+  cf_income_override: null,
+  cf_fixed_override: null,
+  cf_variable_override: null,
+  cf_periodic_overrides: {},
   dashboard_layout: null,
   dashboard_sections_collapsed: null,
   // SMART ALERTS + PROACTIVE AI COACH STATE (NEXT PASS, owner decision

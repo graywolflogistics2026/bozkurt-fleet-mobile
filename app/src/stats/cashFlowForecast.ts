@@ -1,255 +1,327 @@
-// Cash Flow's 30-day manual-budget forecast — math ported from legacy
-// calcCF() (legacy/index.html:1960), MINUS legacy's own hardcoded
-// ||-fallback defaults (truck payment 1145, fuel 1800, other 500, tax
-// reserve 25%). Those were the original owner's actual web-app numbers
-// baked into the calculation itself — a clean-product bug (owner decision
-// 2026-07-30): a brand-new user (or a user who just ran Reset All Data,
-// CLAUDE.md invariant #24) would see a "reset" 30-day forecast that still
-// silently computed against a stranger's truck payment and fuel budget.
-// Every unset input now contributes exactly $0 to the forecast; the tax
-// reserve % may be SUGGESTED as 25% in the UI copy, but it is never
-// applied to the math unless the user has actually entered a value.
+// CASH FLOW 30-DAY FORECAST — BUILT FROM THE USER'S OWN DATA (owner
+// decision, binding — replaces the earlier manual-budget-entry design in
+// full). The forecast used to require the user to type 5 weekly budget
+// figures by hand, defaulting to a blank/zero screen until they did, even
+// with months of real settlement history already sitting in the account.
+// This module now classifies the user's own trailing 8-12 weeks of
+// settlements/deductions/fuel/maintenance/tolls (cashFlowClassification.ts)
+// and layers in known dated periodic bills from Documents & Renewals
+// (cashFlowPeriodic.ts) to produce a real week-by-week projection with NO
+// manual entry required — a forecast exists the instant settlements exist.
+// Every projected figure can still be overridden (see CashFlowOverrides
+// below); an override always wins over the computed figure and persists
+// independently of it, so a later import that changes the underlying
+// averages can never silently discard a manual correction.
 import { reducesTrueProfit } from '@/src/stats/trueProfit';
-import { isInsuranceChargeback } from '@/src/import/category';
+import {
+  classifyCashFlowSpending,
+  trailingWeeklyAverage,
+  type CashFlowClassification,
+  type SpendEvent,
+} from '@/src/stats/cashFlowClassification';
+import { buildPeriodicForecastItems, buildDocumentAmountLookup, type PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
+import type { ComplianceItem, DocumentRow } from '@/src/types/db';
 
-// CASH FLOW AUTO-FILL FIX (owner decision 2026-08-04, device report: a
-// real carrier settlement withholds insurance WEEKLY — bobtail/deadhead,
-// physical damage, occupational accident, cargo/workers comp — not as a
-// monthly bill). `insuranceMonthly` (§29) is replaced by `insuranceWeekly`
-// (docs/PENDING_SQL.md §39) — a new column, not a reinterpretation of the
-// old one, so an already-saved monthly figure is never silently misread
-// as weekly (a 4.33x error). See trailingWeeklyInsuranceAverage() below
-// for how this now auto-fills from the user's own settlement data.
-export type CashFlowBudgetInputs = {
-  bankBalance: number | null;
-  weeklyRevenue: number | null;
-  truckPayment: number | null;
-  fuelWeekly: number | null;
-  insuranceWeekly: number | null;
-  otherWeekly: number | null;
-  taxReservePct: number | null;
+export {
+  classifyCashFlowSpending,
+  VARIABLE_PER_MILE_CATEGORIES,
+  isoWeekKey,
+  trailingWeeklyAverage,
+  type CashFlowClassification,
+  type RecurringFixedCharge,
+  type VariableRate,
+  type ExcludedOneOff,
+  type SpendEvent,
+} from '@/src/stats/cashFlowClassification';
+export { buildPeriodicForecastItems, buildDocumentAmountLookup, type PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
+
+// CLASSIFICATION WINDOW — 12 weeks (spec's own "last 8-12 weeks"). Longer
+// than the old engine's 4-week trailing averages on purpose: detecting
+// "appears in nearly every week" reliably needs more history than 4 data
+// points can honestly support — a charge seen in 3 of 4 weeks LOOKS
+// "recurring" by pure chance far more easily than one seen in 8 of 12.
+const CLASSIFICATION_WINDOW_WEEKS = 12;
+const INCOME_WINDOW_WEEKS = 4;
+// Below this many distinct settlement weeks, the forecast is shown but
+// flagged unreliable (spec item 5, HONESTY) rather than hidden — "show
+// what IS known rather than nothing."
+const RELIABLE_HISTORY_WEEKS = 3;
+const FORECAST_WEEKS = 4;
+
+type DeductionLike = {
+  ded_date: string | null;
+  amount: number | null;
+  category: string | null;
+  description: string | null;
+  source?: string | null;
+  tax_deductible: boolean | null;
 };
+type FuelLike = { purchase_date: string | null; amount: number | null; discount: number | null; location?: string | null; settlement_id?: string | null };
+type MaintenanceLike = { service_date: string | null; cost: number | null; description?: string | null; service_type?: string | null };
+type TollLike = { toll_date: string | null; amount: number | null; plaza?: string | null };
+type SettlementLike = { week_ending: string | null; gross: number | null; net: number | null; miles: number | null };
+type ReimbursementLike = { reimb_date: string | null; amount: number | null };
 
-export type CashFlowWeek = { week: number; revenue: number; expenses: number; net: number; balance: number };
+// Merges deductions/fuel/maintenance/tolls into one flat list of spend
+// events for the classifier — window-filtered here (not by the caller)
+// so every consumer of this module filters the exact same way. Excludes
+// Meals/Advance Repayment/Escrow (reducesTrueProfit — never a real cash
+// outflow to project) and settlement-linked fuel_purchases rows (their
+// cost is already represented by that settlement's own withheld fuel
+// deduction line — same canonical-expense-engine double-count guard
+// trueProfit.ts's sumCanonicalExpenses() already established; maintenance/
+// tolls have no equivalent settlement_id to guard, same precedent).
+export function buildSpendEvents(
+  deductions: DeductionLike[],
+  fuelPurchases: FuelLike[],
+  maintenanceRecords: MaintenanceLike[],
+  tolls: TollLike[],
+  windowStartIso: string
+): SpendEvent[] {
+  const events: SpendEvent[] = [];
 
-export type CashFlowForecast = {
-  bankBalance: number;
-  weeklyExpenses: number;
-  weeklyNet: number;
-  weeklyTaxReserve: number;
-  weeklyNetAfterTax: number;
-  revenue30d: number;
-  netBalance30d: number;
-  weeks: CashFlowWeek[];
-};
-
-// DATA-FLOW AUDIT FIX (owner decision 2026-07-30, mega-pass part A —
-// known symptom: after a settlement import, Cash Flow revenue stayed $0
-// because the forecast's "Weekly Revenue" input has no connection to
-// actual settlement data at all, only a manually-typed budget number).
-// Trailing 4-week average of ACTUAL settlement gross revenue, grouped by
-// week_ending (a multi-truck fleet's same week sums across trucks) —
-// used as the forecast's weekly-revenue figure whenever the user hasn't
-// entered their own budget number, never persisted over the user's saved
-// `null` (see cash-flow.tsx: this is display-only, re-computed live every
-// time, so it always reflects the latest imports).
-export function trailingWeeklyRevenueAverage(
-  settlements: { week_ending: string; gross: number | null }[],
-  weeks = 4
-): number {
-  const byWeek = new Map<string, number>();
-  for (const s of settlements) {
-    byWeek.set(s.week_ending, (byWeek.get(s.week_ending) ?? 0) + Number(s.gross ?? 0));
-  }
-  const recentWeeks = [...byWeek.keys()].sort().reverse().slice(0, weeks);
-  if (recentWeeks.length === 0) return 0;
-  const total = recentWeeks.reduce((sum, w) => sum + (byWeek.get(w) ?? 0), 0);
-  return total / recentWeeks.length;
-}
-
-// CRITICAL BUG FIX (device feedback 2026-07-31, item 3: "Cash Flow shows
-// only revenue... none of the settlement's expenses subtracted" —
-// settlement-derived expenses must feed the forecast/actuals, not just
-// revenue): trailing 28-day average of ACTUAL out-of-pocket fuel cost
-// (net of discount), expressed as a weekly figure — same "from your
-// settlements" trailing-average pattern as trailingWeeklyRevenueAverage
-// above, just for an expense input instead of the revenue one. A 28-day
-// window (not "distinct fuel-purchase weeks") is used because fuel rows
-// don't carry a week_ending of their own the way settlements do; dividing
-// by exactly 4 keeps the result comparable to a weekly budget figure.
-export function trailingWeeklyFuelAverage(
-  fuelPurchases: { purchase_date: string | null; amount: number | null; discount: number | null }[],
-  now: Date = new Date(),
-  windowDays = 28
-): number {
-  const start = new Date(now);
-  start.setUTCDate(start.getUTCDate() - windowDays);
-  const startIso = start.toISOString().slice(0, 10);
-  const total = fuelPurchases
-    .filter((f) => (f.purchase_date ?? '') >= startIso)
-    .reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0);
-  return total / (windowDays / 7);
-}
-
-// Same pattern for the budget's "Other Weekly" expense input: settlement-
-// withheld deductions (fuel advances excepted — those are already counted
-// via trailingWeeklyFuelAverage above when the driver ALSO logs pump
-// receipts; withheld chargebacks like insurance/ELD/tolls/escrow are not
-// otherwise represented anywhere in Cash Flow) plus tolls, using the same
-// reducesTrueProfit() rule (src/stats/trueProfit.ts) so a per-diem-covered
-// meal or an advance repayment — never a real new expense — isn't counted
-// here either. 'Insurance—Truck'/'Insurance—Health'/'Truck/Trailer
-// Payments' are ALSO excluded (owner decision 2026-08-04) now that they
-// have their own dedicated trailingWeeklyInsuranceAverage()/
-// trailingWeeklyTruckPaymentAverage() below — counting them here too
-// would double them into both the dedicated field AND "Other Weekly".
-const OTHER_EXPENSE_EXCLUDED_CATEGORIES = ['Fuel & DEF', 'Insurance—Truck', 'Insurance—Health', 'Truck/Trailer Payments'];
-
-export function trailingWeeklyOtherExpenseAverage(
-  deductions: { ded_date: string | null; amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null }[],
-  tolls: { toll_date: string | null; amount: number | null }[],
-  now: Date = new Date(),
-  windowDays = 28
-): number {
-  const start = new Date(now);
-  start.setUTCDate(start.getUTCDate() - windowDays);
-  const startIso = start.toISOString().slice(0, 10);
-  const dedTotal = deductions
-    .filter((d) => (d.ded_date ?? '') >= startIso && reducesTrueProfit(d) && !OTHER_EXPENSE_EXCLUDED_CATEGORIES.includes(d.category ?? ''))
-    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
-  const tollTotal = tolls
-    .filter((t) => (t.toll_date ?? '') >= startIso)
-    .reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
-  return (dedTotal + tollTotal) / (windowDays / 7);
-}
-
-// Shared by trailingWeeklyInsuranceAverage/trailingWeeklyTruckPaymentAverage
-// below — trailing N-week average of SETTLEMENT-WITHHELD deductions
-// matching a given predicate, grouped by settlement week_ending (a
-// carrier statement arrives once per settlement week, not smoothly every
-// 7 days, so grouping by the week the withholding actually happened on —
-// same pattern as trailingWeeklyRevenueAverage above — is more accurate
-// here than dividing a raw calendar-day window by N/7, which is what
-// trailingWeeklyFuelAverage/trailingWeeklyOtherExpenseAverage do instead
-// for data that ISN'T tied to a settlement week). Restricted to
-// `source === 'settlement'` on purpose: a standalone, out-of-pocket
-// insurance/truck-payment expense logged via the Deductions screen
-// directly (not withheld from a settlement) is a different thing from
-// what this weekly carrier-withholding figure represents.
-function trailingWeeklyWithheldAverage(
-  deductions: { ded_date: string | null; amount: number | null; source?: string | null; category?: string | null; description?: string | null }[],
-  matches: (d: { category?: string | null; description?: string | null }) => boolean,
-  weeks = 4
-): number {
-  const byWeek = new Map<string, number>();
   for (const d of deductions) {
-    if (d.source !== 'settlement' || !d.ded_date || !matches(d)) continue;
-    byWeek.set(d.ded_date, (byWeek.get(d.ded_date) ?? 0) + Number(d.amount ?? 0));
+    if (!d.ded_date || d.ded_date < windowStartIso) continue;
+    const amount = Number(d.amount ?? 0);
+    if (!amount || !reducesTrueProfit(d)) continue;
+    events.push({ category: d.category ?? 'Misc', description: d.description || d.category || 'Deduction', amount, date: d.ded_date });
   }
-  const recentWeeks = [...byWeek.keys()].sort().reverse().slice(0, weeks);
-  if (recentWeeks.length === 0) return 0;
-  const total = recentWeeks.reduce((sum, w) => sum + (byWeek.get(w) ?? 0), 0);
-  return total / recentWeeks.length;
+  for (const f of fuelPurchases) {
+    if (f.settlement_id) continue;
+    if (!f.purchase_date || f.purchase_date < windowStartIso) continue;
+    const amount = Math.max(0, Number(f.amount ?? 0) - Number(f.discount ?? 0));
+    if (!amount) continue;
+    events.push({ category: 'Fuel & DEF', description: f.location || 'Fuel', amount, date: f.purchase_date });
+  }
+  for (const m of maintenanceRecords) {
+    if (!m.service_date || m.service_date < windowStartIso) continue;
+    const amount = Number(m.cost ?? 0);
+    if (!amount) continue;
+    events.push({ category: 'Maintenance & Repairs', description: m.description || m.service_type || 'Maintenance', amount, date: m.service_date });
+  }
+  for (const t of tolls) {
+    if (!t.toll_date || t.toll_date < windowStartIso) continue;
+    const amount = Number(t.amount ?? 0);
+    if (!amount) continue;
+    events.push({ category: 'Tolls & Scales', description: t.plaza || 'Toll', amount, date: t.toll_date });
+  }
+  return events;
 }
 
-// INSURANCE AUTO-FILL FIX (owner decision 2026-08-04, device report: a
-// real carrier settlement withholds FOUR separate insurance charges
-// EVERY WEEK — bobtail/deadhead, physical damage, occupational accident,
-// cargo/workers comp — not a monthly bill). Category match is the
-// primary signal (mapSettlement() already maps all five insurance
-// chargebackTypes to 'Insurance—Truck'); isInsuranceChargeback() is a
-// text-based fallback catching a row whose category is missing or is
-// the settlement schema's own generic "Insurance" string (which does
-// NOT match either canonical category) — same "AI classification is
-// primary, regex is the safety net" pattern as isEscrowDeposit().
-export function trailingWeeklyInsuranceAverage(
-  deductions: { ded_date: string | null; amount: number | null; source?: string | null; category?: string | null; description?: string | null }[],
-  weeks = 4
-): number {
-  return trailingWeeklyWithheldAverage(
-    deductions,
-    (d) => d.category === 'Insurance—Truck' || d.category === 'Insurance—Health' || isInsuranceChargeback(d.description ?? undefined),
-    weeks
-  );
+// INCOME (spec item 2) — trailing 4-week average of ACTUAL net settlement
+// pay, divided by however many distinct settlement weeks were actually
+// found (trailingWeeklyAverage's own convention) — a real $0/low "home
+// week" settlement that DID land still counts as one of the weeks
+// (correctly pulls the average down); a week with no settlement at all
+// is simply absent, never assumed to be $0, so it can never silently
+// halve the average the way a fixed divide-by-4 would.
+export function trailingWeeklyNetIncomeAverage(settlements: SettlementLike[], weeks = INCOME_WINDOW_WEEKS): { average: number; weeksFound: number; total: number } {
+  return trailingWeeklyAverage(settlements, (s) => s.week_ending, (s) => Number(s.net ?? 0), weeks);
 }
 
-// Same pattern for Truck Payment — settlement-withheld deductions
-// categorized 'Truck/Trailer Payments' (chargebackType lease_purchase_
-// payment/loan_payment, CHARGEBACK_CATEGORY_LABEL in category.ts).
-export function trailingWeeklyTruckPaymentAverage(
-  deductions: { ded_date: string | null; amount: number | null; source?: string | null; category?: string | null }[],
-  weeks = 4
-): number {
-  return trailingWeeklyWithheldAverage(deductions, (d) => d.category === 'Truck/Trailer Payments', weeks);
+export function trailingWeeklyMilesAverage(settlements: SettlementLike[], weeks = INCOME_WINDOW_WEEKS): { average: number; weeksFound: number; total: number } {
+  return trailingWeeklyAverage(settlements, (s) => s.week_ending, (s) => Number(s.miles ?? 0), weeks);
 }
 
-// Merges the user's own saved budget inputs with the trailing-average
-// fallbacks (owner decision 2026-08-04) — a manual entry always wins and
-// is remembered until the user clears it; an empty field falls back to
-// the computed average. Extracted as its own pure function (rather than
-// inline in the Cash Flow screen) so "a manual override survives
-// whatever the averages recompute to" is directly unit-testable without
-// mounting the screen.
-export type CashFlowAverages = {
-  weeklyRevenue: number;
-  fuelWeekly: number;
-  insuranceWeekly: number;
-  truckPayment: number;
-  otherWeekly: number;
+// "plus recorded upcoming reimbursements" (spec item 2) — any
+// reimbursement already on file dated within the forecast window itself
+// (today through today+30), summed and added to that specific week's
+// income rather than smoothed into the weekly average (a reimbursement
+// is a one-time, dated event, not a recurring rate).
+export function upcomingReimbursementsByWeek(
+  reimbursements: ReimbursementLike[],
+  today: Date,
+  windowDays = FORECAST_WEEKS * 7
+): Map<number, number> {
+  const todayIso = today.toISOString().slice(0, 10);
+  const endIso = new Date(today.getTime() + windowDays * 86400000).toISOString().slice(0, 10);
+  const byWeekIndex = new Map<number, number>();
+  for (const r of reimbursements) {
+    if (!r.reimb_date || r.reimb_date < todayIso || r.reimb_date > endIso) continue;
+    const amount = Number(r.amount ?? 0);
+    if (!amount) continue;
+    const daysOut = Math.floor((new Date(`${r.reimb_date}T00:00:00Z`).getTime() - new Date(`${todayIso}T00:00:00Z`).getTime()) / 86400000);
+    const weekIndex = Math.min(FORECAST_WEEKS - 1, Math.floor(daysOut / 7));
+    byWeekIndex.set(weekIndex, (byWeekIndex.get(weekIndex) ?? 0) + amount);
+  }
+  return byWeekIndex;
+}
+
+export type CashFlowOverrides = {
+  incomeWeekly: number | null;
+  fixedWeekly: number | null;
+  variableWeekly: number | null;
+  // complianceItemId -> overridden dollar amount for that one periodic item.
+  periodicAmounts: Record<string, number>;
 };
 
-export function mergeForecastInputsWithAverages(base: CashFlowBudgetInputs, averages: CashFlowAverages): CashFlowBudgetInputs {
+export const EMPTY_CASH_FLOW_OVERRIDES: CashFlowOverrides = {
+  incomeWeekly: null,
+  fixedWeekly: null,
+  variableWeekly: null,
+  periodicAmounts: {},
+};
+
+export type CashFlowWeekProjection = {
+  weekIndex: number; // 0-based
+  startDate: string;
+  endDate: string;
+  openingBalance: number;
+  income: number;
+  fixed: number;
+  variable: number;
+  periodic: number;
+  periodicItems: PeriodicForecastItem[];
+  closingBalance: number;
+};
+
+export type CashFlowForecastResult = {
+  weeks: CashFlowWeekProjection[];
+  tightestWeekIndex: number;
+  weeksOfHistory: number;
+  reliable: boolean;
+  classification: CashFlowClassification;
+  // The steady-state weekly figures actually used (post-override) — the
+  // screen builds its "avg of last N weeks" / "$X/mi × Y mi" basis
+  // captions from these plus the raw classification/income data above,
+  // via t() (this module never touches i18n itself).
+  weeklyIncome: number;
+  weeklyFixed: number;
+  weeklyVariable: number;
+  incomeIsOverridden: boolean;
+  fixedIsOverridden: boolean;
+  variableIsOverridden: boolean;
+  incomeWeeksFound: number;
+  variableRatePerMile: number;
+  variableMilesAvg: number;
+};
+
+// THE ASSEMBLY (spec item 3) — one opening/income/fixed/variable/
+// periodic/ending row per week, for FORECAST_WEEKS weeks starting today
+// (not calendar-Monday-aligned — "30 days from now," matching the
+// screen's own existing "30-Day Forecast" framing). A periodic item
+// lands in whichever week's [startDate, endDate] range contains its own
+// due_date; everything else (income/fixed/variable) is the SAME
+// steady-state weekly figure repeated across every week, exactly like
+// the forecast this replaces already did — this pass adds real periodic
+// variation on top of that steady state, it doesn't change the
+// steady-state assumption itself.
+export function buildCashFlowForecast(
+  bankBalance: number,
+  incomeAvg: { average: number; weeksFound: number },
+  classification: CashFlowClassification,
+  milesAvg: { average: number; weeksFound: number },
+  periodicItems: PeriodicForecastItem[],
+  reimbursementsByWeek: Map<number, number>,
+  overrides: CashFlowOverrides,
+  today: Date = new Date()
+): CashFlowForecastResult {
+  const variableRatePerMile = classification.variable.reduce((sum, v) => sum + v.ratePerMile, 0);
+  const computedVariable = variableRatePerMile * milesAvg.average;
+
+  const weeklyIncome = overrides.incomeWeekly ?? incomeAvg.average;
+  const weeklyFixed = overrides.fixedWeekly ?? classification.weeklyFixedTotal;
+  const weeklyVariable = overrides.variableWeekly ?? computedVariable;
+
+  const todayIso = today.toISOString().slice(0, 10);
+  const weeks: CashFlowWeekProjection[] = [];
+  let balance = bankBalance;
+
+  for (let i = 0; i < FORECAST_WEEKS; i++) {
+    const start = new Date(today.getTime() + i * 7 * 86400000);
+    const end = new Date(today.getTime() + (i * 7 + 6) * 86400000);
+    const startIso = start.toISOString().slice(0, 10);
+    const endIso = end.toISOString().slice(0, 10);
+
+    const weekPeriodicItems = periodicItems.filter((p) => p.dueDate >= startIso && p.dueDate <= endIso);
+    const periodicTotal = weekPeriodicItems.reduce((sum, p) => sum + (overrides.periodicAmounts[p.id] ?? p.amount ?? 0), 0);
+    const reimbursementThisWeek = reimbursementsByWeek.get(i) ?? 0;
+
+    const opening = balance;
+    const incomeThisWeek = weeklyIncome + reimbursementThisWeek;
+    const closing = opening + incomeThisWeek - weeklyFixed - weeklyVariable - periodicTotal;
+
+    weeks.push({
+      weekIndex: i,
+      startDate: startIso,
+      endDate: endIso,
+      openingBalance: opening,
+      income: incomeThisWeek,
+      fixed: weeklyFixed,
+      variable: weeklyVariable,
+      periodic: periodicTotal,
+      periodicItems: weekPeriodicItems,
+      closingBalance: closing,
+    });
+    balance = closing;
+  }
+
+  let tightestWeekIndex = 0;
+  for (let i = 1; i < weeks.length; i++) {
+    if (weeks[i].closingBalance < weeks[tightestWeekIndex].closingBalance) tightestWeekIndex = i;
+  }
+
+  const weeksOfHistory = Math.max(incomeAvg.weeksFound, classification.weeksObserved);
+
   return {
-    ...base,
-    weeklyRevenue: base.weeklyRevenue ?? averages.weeklyRevenue,
-    fuelWeekly: base.fuelWeekly ?? averages.fuelWeekly,
-    insuranceWeekly: base.insuranceWeekly ?? averages.insuranceWeekly,
-    truckPayment: base.truckPayment ?? averages.truckPayment,
-    otherWeekly: base.otherWeekly ?? averages.otherWeekly,
+    weeks,
+    tightestWeekIndex,
+    weeksOfHistory,
+    reliable: weeksOfHistory >= RELIABLE_HISTORY_WEEKS,
+    classification,
+    weeklyIncome,
+    weeklyFixed,
+    weeklyVariable,
+    incomeIsOverridden: overrides.incomeWeekly != null,
+    fixedIsOverridden: overrides.fixedWeekly != null,
+    variableIsOverridden: overrides.variableWeekly != null,
+    incomeWeeksFound: incomeAvg.weeksFound,
+    variableRatePerMile,
+    variableMilesAvg: milesAvg.average,
   };
 }
 
-export function calcCashFlowForecast(inputs: CashFlowBudgetInputs): CashFlowForecast {
-  const b = inputs.bankBalance || 0;
-  const wr = inputs.weeklyRevenue || 0;
-  const tp = inputs.truckPayment || 0;
-  const fu = inputs.fuelWeekly || 0;
-  const ins = inputs.insuranceWeekly || 0;
-  const oth = inputs.otherWeekly || 0;
-  const tx = (inputs.taxReservePct || 0) / 100;
+// ONE end-to-end entry point the screen calls with raw query data —
+// bundles buildSpendEvents/classifyCashFlowSpending/trailing averages/
+// buildPeriodicForecastItems/buildCashFlowForecast so the screen itself
+// never has to get the plumbing order right on its own, and so this
+// exact pipeline is what the "realistic dataset" tests exercise end to
+// end (never just one function in isolation).
+export function buildCashFlowForecastFromData(input: {
+  bankBalance: number;
+  settlements: SettlementLike[];
+  deductions: DeductionLike[];
+  fuelPurchases: FuelLike[];
+  maintenanceRecords: MaintenanceLike[];
+  tolls: TollLike[];
+  reimbursements: ReimbursementLike[];
+  complianceItems: Pick<ComplianceItem, 'id' | 'type' | 'label' | 'due_date' | 'source_document_id'>[];
+  documents: Pick<DocumentRow, 'id' | 'amount'>[];
+  overrides: CashFlowOverrides;
+  today?: Date;
+}): CashFlowForecastResult {
+  const today = input.today ?? new Date();
+  const windowStart = new Date(today.getTime() - CLASSIFICATION_WINDOW_WEEKS * 7 * 86400000);
+  const windowStartIso = windowStart.toISOString().slice(0, 10);
 
-  // Insurance is now entered WEEKLY (owner decision 2026-08-04) — no more
-  // monthly->weekly /4.33 conversion; it sums into weekly expenses
-  // directly, same as every other weekly budget input.
-  const wExp = tp + fu + oth + ins;
-  const wNet = wr - wExp;
-  // Tax Reserve must never go negative (2026-07-30 tablet-testing fix):
-  // on a loss week (wNet <= 0) there's no profit to reserve tax against,
-  // so taxR clamps to $0 rather than the raw wNet*tx product, which would
-  // otherwise be negative and perversely ADD money back into
-  // weeklyNetAfterTax below — every downstream figure (the 4-week
-  // timeline's running balance, netBalance30d) derives from wNA, so
-  // clamping here is the one place that needs to change.
-  const taxR = Math.max(0, wNet * tx);
-  const wNA = wNet - taxR;
-  const r30 = wr * 4.33;
-  const n30 = b + wNA * 4.33;
+  const events = buildSpendEvents(input.deductions, input.fuelPurchases, input.maintenanceRecords, input.tolls, windowStartIso);
+  const windowedSettlements = input.settlements.filter((s) => (s.week_ending ?? '') >= windowStartIso);
+  const classificationWindowMiles = trailingWeeklyMilesAverage(windowedSettlements, CLASSIFICATION_WINDOW_WEEKS);
+  const classification = classifyCashFlowSpending(events, classificationWindowMiles.total);
 
-  const weeks: CashFlowWeek[] = [];
-  let bal = b;
-  for (let i = 1; i <= 4; i++) {
-    bal += wNA;
-    weeks.push({ week: i, revenue: wr, expenses: wExp, net: wNet, balance: bal });
-  }
+  const incomeAvg = trailingWeeklyNetIncomeAverage(input.settlements, INCOME_WINDOW_WEEKS);
+  const incomeMilesAvg = trailingWeeklyMilesAverage(input.settlements, INCOME_WINDOW_WEEKS);
+  const periodicItems = buildPeriodicForecastItems(input.complianceItems, buildDocumentAmountLookup(input.documents), today);
+  const reimbursementsByWeek = upcomingReimbursementsByWeek(input.reimbursements, today);
 
-  return {
-    bankBalance: b,
-    weeklyExpenses: wExp,
-    weeklyNet: wNet,
-    weeklyTaxReserve: taxR,
-    weeklyNetAfterTax: wNA,
-    revenue30d: r30,
-    netBalance30d: n30,
-    weeks,
-  };
+  return buildCashFlowForecast(
+    input.bankBalance,
+    incomeAvg,
+    classification,
+    { average: incomeMilesAvg.average, weeksFound: incomeMilesAvg.weeksFound },
+    periodicItems,
+    reimbursementsByWeek,
+    input.overrides,
+    today
+  );
 }

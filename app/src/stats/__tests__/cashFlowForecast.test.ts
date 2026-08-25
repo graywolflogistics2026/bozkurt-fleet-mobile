@@ -1,283 +1,238 @@
 import {
-  calcCashFlowForecast,
-  trailingWeeklyRevenueAverage,
-  trailingWeeklyInsuranceAverage,
-  trailingWeeklyTruckPaymentAverage,
-  trailingWeeklyOtherExpenseAverage,
-  mergeForecastInputsWithAverages,
-  type CashFlowBudgetInputs,
-} from '@/src/stats/cashFlowForecast';
+  buildSpendEvents,
+  trailingWeeklyNetIncomeAverage,
+  trailingWeeklyMilesAverage,
+  upcomingReimbursementsByWeek,
+  buildCashFlowForecast,
+  buildCashFlowForecastFromData,
+  EMPTY_CASH_FLOW_OVERRIDES,
+  type CashFlowOverrides,
+} from '../cashFlowForecast';
+import { classifyCashFlowSpending } from '../cashFlowClassification';
 
-function inputs(overrides: Partial<CashFlowBudgetInputs> = {}): CashFlowBudgetInputs {
-  return {
-    bankBalance: null,
-    weeklyRevenue: null,
-    truckPayment: null,
-    fuelWeekly: null,
-    insuranceWeekly: null,
-    otherWeekly: null,
-    taxReservePct: null,
-    ...overrides,
-  };
-}
+const TODAY = new Date('2026-08-15T12:00:00Z');
 
-describe('calcCashFlowForecast', () => {
-  // Clean-product fix (owner decision 2026-07-30): a fresh or freshly-reset
-  // profile (CLAUDE.md invariant #24) must show an all-zero forecast, not
-  // one silently computed against the original owner's actual budget
-  // numbers (truck payment $1145, fuel $1800, other $500, 25% tax reserve).
-  it('every unset input contributes $0 — no legacy owner-specific defaults applied', () => {
-    const r = calcCashFlowForecast(inputs());
-    expect(r.weeklyExpenses).toBe(0);
-    expect(r.weeklyNet).toBe(0);
-    expect(r.bankBalance).toBe(0);
-    expect(r.weeklyTaxReserve).toBe(0);
-    expect(r.weeklyNetAfterTax).toBe(0);
-    expect(r.revenue30d).toBe(0);
-    expect(r.netBalance30d).toBe(0);
-    expect(r.weeks.every((w) => w.revenue === 0 && w.expenses === 0 && w.net === 0 && w.balance === 0)).toBe(true);
+describe('buildSpendEvents', () => {
+  it('excludes Meals/Advance Repayment/Escrow (never a real cash outflow to project)', () => {
+    const deductions = [
+      { ded_date: '2026-08-01', amount: 50, category: 'Meals (per diem covered)', description: 'Diner', source: 'settlement', tax_deductible: false },
+      { ded_date: '2026-08-01', amount: 200, category: 'Insurance—Truck', description: 'Insurance', source: 'settlement', tax_deductible: true },
+    ];
+    const events = buildSpendEvents(deductions, [], [], [], '2020-01-01');
+    expect(events).toHaveLength(1);
+    expect(events[0].category).toBe('Insurance—Truck');
   });
 
-  it('an explicit 0 for any budget field behaves identically to leaving it unset (no hidden fallback)', () => {
-    const r = calcCashFlowForecast(inputs({ truckPayment: 0, fuelWeekly: 0, otherWeekly: 0, taxReservePct: 0 }));
-    expect(r.weeklyExpenses).toBe(0);
-    expect(r.weeklyTaxReserve).toBe(0);
+  it('excludes a settlement-linked fuel_purchases row (already represented by the settlement\'s own withheld fuel deduction — never double-counted)', () => {
+    const fuel = [
+      { purchase_date: '2026-08-01', amount: 400, discount: 0, location: 'Pilot', settlement_id: 'settlement-1' },
+      { purchase_date: '2026-08-02', amount: 150, discount: 10, location: 'Loves', settlement_id: null },
+    ];
+    const events = buildSpendEvents([], fuel, [], [], '2020-01-01');
+    expect(events).toHaveLength(1);
+    expect(events[0].amount).toBe(140); // net of discount, standalone row only
   });
 
-  it('clamps the tax reserve to $0 on a loss week (net <= 0) instead of going negative', () => {
-    const r = calcCashFlowForecast(
-      inputs({ bankBalance: 500, weeklyRevenue: 0, truckPayment: 1000, fuelWeekly: 500, otherWeekly: 0, taxReservePct: 30 })
-    );
-    expect(r.weeklyNet).toBeLessThan(0);
-    expect(r.weeklyTaxReserve).toBe(0);
-    // Without the clamp this would be wNet - (wNet*0.3), i.e. LESS
-    // negative than wNet itself — the bug being fixed.
-    expect(r.weeklyNetAfterTax).toBeCloseTo(r.weeklyNet, 5);
-    expect(r.weeks.every((w) => w.balance <= 500)).toBe(true);
+  it('skips rows before the window start', () => {
+    const deductions = [{ ded_date: '2020-01-01', amount: 100, category: 'Insurance—Truck', description: 'old', source: 'settlement', tax_deductible: true }];
+    const events = buildSpendEvents(deductions, [], [], [], '2026-01-01');
+    expect(events).toHaveLength(0);
   });
 
-  it('clamps the tax reserve to exactly $0 (not merely non-negative) when net is exactly 0', () => {
-    const r = calcCashFlowForecast(
-      inputs({ weeklyRevenue: 2000, truckPayment: 1000, fuelWeekly: 500, otherWeekly: 500, insuranceWeekly: 0, taxReservePct: 25 })
-    );
-    expect(r.weeklyNet).toBeCloseTo(0, 9);
-    expect(r.weeklyTaxReserve).toBe(0);
+  it('skips $0 rows', () => {
+    const deductions = [{ ded_date: '2026-08-01', amount: 0, category: 'Insurance—Truck', description: 'x', source: 'settlement', tax_deductible: true }];
+    const events = buildSpendEvents(deductions, [], [], [], '2020-01-01');
+    expect(events).toHaveLength(0);
   });
 
-  it('still reserves a normal positive tax amount on a profitable week (clamp is a no-op there)', () => {
-    const r = calcCashFlowForecast(inputs({ weeklyRevenue: 6800, truckPayment: 1145, fuelWeekly: 1800, otherWeekly: 500, taxReservePct: 25 }));
-    expect(r.weeklyNet).toBeGreaterThan(0);
-    expect(r.weeklyTaxReserve).toBeCloseTo(r.weeklyNet * 0.25, 5);
-    expect(r.weeklyTaxReserve).toBeGreaterThan(0);
-  });
-
-  it('matches the expected math exactly for a full, user-entered set of inputs', () => {
-    const r = calcCashFlowForecast(
-      inputs({
-        bankBalance: 10000,
-        weeklyRevenue: 6800,
-        truckPayment: 1145,
-        fuelWeekly: 1800,
-        // Insurance is entered WEEKLY now (owner decision 2026-08-04) — no
-        // more /4.33 monthly->weekly conversion, it sums in directly.
-        insuranceWeekly: 100,
-        otherWeekly: 500,
-        taxReservePct: 25,
-      })
-    );
-    const wExp = 1145 + 1800 + 500 + 100; // 3545
-    const wNet = 6800 - wExp;
-    const taxR = wNet * 0.25;
-    const wNA = wNet - taxR;
-    expect(r.weeklyExpenses).toBeCloseTo(wExp, 5);
-    expect(r.weeklyNet).toBeCloseTo(wNet, 5);
-    expect(r.weeklyTaxReserve).toBeCloseTo(taxR, 5);
-    expect(r.revenue30d).toBeCloseTo(6800 * 4.33, 5);
-    expect(r.netBalance30d).toBeCloseTo(10000 + wNA * 4.33, 5);
-  });
-
-  it('produces a 4-week running balance timeline seeded from bank balance', () => {
-    const r = calcCashFlowForecast(inputs({ bankBalance: 1000, weeklyRevenue: 5000, truckPayment: 500, fuelWeekly: 500, otherWeekly: 0.01, taxReservePct: 0.01 }));
-    const wExp = 500 + 500 + 0.01;
-    const wNet = 5000 - wExp;
-    const wNA = wNet - wNet * 0.0001;
-    expect(r.weeks).toHaveLength(4);
-    expect(r.weeks[0].balance).toBeCloseTo(1000 + wNA, 5);
-    expect(r.weeks[3].balance).toBeCloseTo(1000 + wNA * 4, 5);
-    expect(r.weeks.every((w) => w.revenue === 5000 && Math.abs(w.expenses - wExp) < 1e-9)).toBe(true);
+  it('includes maintenance and tolls unconditionally (no settlement_id column to guard, same established precedent)', () => {
+    const maintenance = [{ service_date: '2026-08-01', cost: 300, description: 'Oil change' }];
+    const tolls = [{ toll_date: '2026-08-01', amount: 25, plaza: 'I-80' }];
+    const events = buildSpendEvents([], [], maintenance, tolls, '2020-01-01');
+    expect(events.map((e) => e.category).sort()).toEqual(['Maintenance & Repairs', 'Tolls & Scales']);
   });
 });
 
-// DATA-FLOW AUDIT FIX (owner decision 2026-07-30 — known symptom: Cash
-// Flow revenue stayed $0 after a settlement import). The forecast's
-// Weekly Revenue default when no manual budget is set.
-describe('trailingWeeklyRevenueAverage', () => {
-  it('is 0 with no settlements', () => {
-    expect(trailingWeeklyRevenueAverage([])).toBe(0);
-  });
-
-  it('averages the trailing 4 most recent distinct weeks', () => {
+describe('trailingWeeklyNetIncomeAverage — INCOME adjusted for how many settlements actually landed', () => {
+  it('divides by distinct settlement weeks found, not a fixed 4 — a missing week is never assumed $0', () => {
+    // Only 2 real settlements in the trailing window, not 4.
     const settlements = [
-      { week_ending: '2026-07-05', gross: 1000 },
-      { week_ending: '2026-07-12', gross: 2000 },
-      { week_ending: '2026-07-19', gross: 3000 },
-      { week_ending: '2026-07-26', gross: 4000 },
+      { week_ending: '2026-08-01', gross: 5000, net: 3000, miles: 2000 },
+      { week_ending: '2026-08-08', gross: 5200, net: 3200, miles: 2100 },
     ];
-    expect(trailingWeeklyRevenueAverage(settlements)).toBe(2500);
+    const result = trailingWeeklyNetIncomeAverage(settlements);
+    expect(result.weeksFound).toBe(2);
+    expect(result.average).toBe((3000 + 3200) / 2); // not /4
   });
 
-  it('ignores weeks older than the trailing window', () => {
+  it('a real $0-net "home week" settlement that DID land still counts as one of the weeks, correctly pulling the average down', () => {
     const settlements = [
-      { week_ending: '2026-06-01', gross: 100000 }, // way outside the trailing 4
-      { week_ending: '2026-07-05', gross: 1000 },
-      { week_ending: '2026-07-12', gross: 2000 },
-      { week_ending: '2026-07-19', gross: 3000 },
-      { week_ending: '2026-07-26', gross: 4000 },
+      { week_ending: '2026-07-18', gross: 5000, net: 3000, miles: 2500 },
+      { week_ending: '2026-07-25', gross: 0, net: 0, miles: 0 }, // real home week
+      { week_ending: '2026-08-01', gross: 5000, net: 3000, miles: 2500 },
+      { week_ending: '2026-08-08', gross: 5000, net: 3000, miles: 2500 },
     ];
-    expect(trailingWeeklyRevenueAverage(settlements)).toBe(2500);
+    const income = trailingWeeklyNetIncomeAverage(settlements);
+    const miles = trailingWeeklyMilesAverage(settlements);
+    expect(income.weeksFound).toBe(4);
+    expect(income.average).toBe((3000 + 0 + 3000 + 3000) / 4); // 2250, not silently halved
+    expect(miles.average).toBe((2500 + 0 + 2500 + 2500) / 4);
+  });
+});
+
+describe('upcomingReimbursementsByWeek', () => {
+  it('places a reimbursement dated within the window into the correct week bucket', () => {
+    const reimbursements = [
+      { reimb_date: '2026-08-16', amount: 100 }, // day 1 -> week 0
+      { reimb_date: '2026-08-30', amount: 200 }, // day 15 -> week 2
+    ];
+    const byWeek = upcomingReimbursementsByWeek(reimbursements, TODAY);
+    expect(byWeek.get(0)).toBe(100);
+    expect(byWeek.get(2)).toBe(200);
   });
 
-  it('sums multiple settlements sharing the same week_ending (multi-truck fleet) before averaging', () => {
+  it('excludes a reimbursement dated in the past or beyond the window', () => {
+    const reimbursements = [
+      { reimb_date: '2026-08-01', amount: 100 }, // past
+      { reimb_date: '2026-12-01', amount: 200 }, // far future
+    ];
+    const byWeek = upcomingReimbursementsByWeek(reimbursements, TODAY);
+    expect(byWeek.size).toBe(0);
+  });
+});
+
+describe('buildCashFlowForecast — week-by-week assembly', () => {
+  it('chains opening/ending balances across 4 weeks and applies income/fixed/variable/periodic correctly', () => {
+    const classification = classifyCashFlowSpending([], 0);
+    const result = buildCashFlowForecast(
+      1000,
+      { average: 2000, weeksFound: 4 },
+      { ...classification, weeklyFixedTotal: 300 },
+      { average: 2500, weeksFound: 4 },
+      [],
+      new Map(),
+      EMPTY_CASH_FLOW_OVERRIDES,
+      TODAY
+    );
+    expect(result.weeks).toHaveLength(4);
+    expect(result.weeks[0].openingBalance).toBe(1000);
+    // net = income(2000) - fixed(300) - variable(computed rate * miles, 0
+    // here since classification has no variable categories) = 1700
+    expect(result.weeks[0].closingBalance).toBe(1000 + 2000 - 300 - 0);
+    expect(result.weeks[1].openingBalance).toBe(result.weeks[0].closingBalance);
+  });
+
+  it('a periodic item lands in the exact week whose date range contains its due date', () => {
+    const classification = classifyCashFlowSpending([], 0);
+    const periodicItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2290', dueDate: '2026-08-25', amount: 550, amountSource: 'document' as const }];
+    const result = buildCashFlowForecast(1000, { average: 1000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    // TODAY=2026-08-15, week 0 = Aug15-21, week 1 = Aug22-28 -> due date Aug 25 lands in week 1.
+    expect(result.weeks[0].periodicItems).toHaveLength(0);
+    expect(result.weeks[1].periodicItems).toHaveLength(1);
+    expect(result.weeks[1].periodic).toBe(550);
+  });
+
+  it('identifies the tightest (lowest ending balance) week', () => {
+    const classification = classifyCashFlowSpending([], 0);
+    const periodicItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2290', dueDate: '2026-08-25', amount: 5000, amountSource: 'document' as const }];
+    const result = buildCashFlowForecast(2000, { average: 1000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    expect(result.tightestWeekIndex).toBe(1);
+  });
+
+  it('reliability flag is false under 3 weeks of history, true at/above it', () => {
+    const classification = classifyCashFlowSpending([], 0);
+    const unreliable = buildCashFlowForecast(0, { average: 0, weeksFound: 2 }, { ...classification, weeksObserved: 2 }, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    expect(unreliable.reliable).toBe(false);
+    expect(unreliable.weeksOfHistory).toBe(2);
+
+    const reliable = buildCashFlowForecast(0, { average: 0, weeksFound: 3 }, { ...classification, weeksObserved: 3 }, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    expect(reliable.reliable).toBe(true);
+  });
+});
+
+describe('buildCashFlowForecast — OVERRIDES survive a changed computed average (item 4 + item 6)', () => {
+  it('an income override always wins over whatever the computed average recomputes to', () => {
+    const classification = classifyCashFlowSpending([], 0);
+    const overrides: CashFlowOverrides = { ...EMPTY_CASH_FLOW_OVERRIDES, incomeWeekly: 4000 };
+
+    const before = buildCashFlowForecast(0, { average: 2000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    expect(before.weeklyIncome).toBe(4000);
+    expect(before.incomeIsOverridden).toBe(true);
+
+    // Simulate a NEW settlement import changing the underlying average —
+    // the SAME override object must still win.
+    const after = buildCashFlowForecast(0, { average: 2600, weeksFound: 5 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    expect(after.weeklyIncome).toBe(4000);
+    expect(after.incomeIsOverridden).toBe(true);
+  });
+
+  it('a fixed/variable override each independently wins over their own computed figure', () => {
+    const classification = { ...classifyCashFlowSpending([], 0), weeklyFixedTotal: 300 };
+    const overrides: CashFlowOverrides = { ...EMPTY_CASH_FLOW_OVERRIDES, fixedWeekly: 500, variableWeekly: 900 };
+    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 1000, weeksFound: 4 }, [], new Map(), overrides, TODAY);
+    expect(result.weeklyFixed).toBe(500);
+    expect(result.fixedIsOverridden).toBe(true);
+    expect(result.weeklyVariable).toBe(900);
+    expect(result.variableIsOverridden).toBe(true);
+  });
+
+  it('a periodic item override wins over the document-sourced amount', () => {
+    const classification = classifyCashFlowSpending([], 0);
+    const periodicItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2290', dueDate: '2026-08-20', amount: 550, amountSource: 'document' as const }];
+    const overrides: CashFlowOverrides = { ...EMPTY_CASH_FLOW_OVERRIDES, periodicAmounts: { c1: 620 } };
+    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), overrides, TODAY);
+    expect(result.weeks[0].periodic).toBe(620);
+  });
+
+  it('no override (null) falls back cleanly to the computed value', () => {
+    const classification = { ...classifyCashFlowSpending([], 0), weeklyFixedTotal: 300 };
+    const result = buildCashFlowForecast(0, { average: 2000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    expect(result.weeklyIncome).toBe(2000);
+    expect(result.incomeIsOverridden).toBe(false);
+    expect(result.weeklyFixed).toBe(300);
+    expect(result.fixedIsOverridden).toBe(false);
+  });
+});
+
+describe('buildCashFlowForecastFromData — end to end on a realistic dataset', () => {
+  it('never shows a blank forecast when settlements exist — produces real weeks from raw query-shaped data', () => {
     const settlements = [
-      { week_ending: '2026-07-26', gross: 1000 },
-      { week_ending: '2026-07-26', gross: 1500 }, // 2nd truck, same week
+      { week_ending: '2026-07-18', gross: 5200, net: 3600, miles: 2500 },
+      { week_ending: '2026-07-25', gross: 5100, net: 3500, miles: 2450 },
+      { week_ending: '2026-08-01', gross: 5300, net: 3700, miles: 2600 },
+      { week_ending: '2026-08-08', gross: 5250, net: 3650, miles: 2550 },
     ];
-    expect(trailingWeeklyRevenueAverage(settlements)).toBe(2500);
-  });
-
-  it('treats a null gross as 0', () => {
-    expect(trailingWeeklyRevenueAverage([{ week_ending: '2026-07-26', gross: null }])).toBe(0);
-  });
-});
-
-// CASH FLOW AUTO-FILL FIX (owner decision 2026-08-04, device report: a
-// real carrier settlement withholds FOUR separate insurance charges
-// EVERY WEEK — bobtail/deadhead, physical damage, occupational accident,
-// cargo/workers comp — while the old "Insurance (mo)" field showed 0 and
-// had no connection to actual settlement data at all).
-describe('trailingWeeklyInsuranceAverage', () => {
-  it('is 0 with no settlements imported yet (clean-product rule — no owner-specific defaults)', () => {
-    expect(trailingWeeklyInsuranceAverage([])).toBe(0);
-  });
-
-  it('sums all four weekly insurance lines per settlement week, then averages the trailing 4 weeks', () => {
-    // Mirrors the device report exactly: 4 separate insurance chargeback
-    // lines withheld from EACH week's settlement.
     const deductions = [
-      { ded_date: '2026-07-05', amount: 45, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-05', amount: 60, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-05', amount: 20, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-05', amount: 15, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-12', amount: 45, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-12', amount: 60, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-12', amount: 20, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-12', amount: 15, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-19', amount: 140, source: 'settlement', category: 'Insurance—Truck' },
-      { ded_date: '2026-07-26', amount: 140, source: 'settlement', category: 'Insurance—Truck' },
+      { ded_date: '2026-07-18', amount: 210, category: 'Insurance—Truck', description: 'Insurance', source: 'settlement', tax_deductible: true },
+      { ded_date: '2026-07-25', amount: 208, category: 'Insurance—Truck', description: 'Insurance', source: 'settlement', tax_deductible: true },
+      { ded_date: '2026-08-01', amount: 212, category: 'Insurance—Truck', description: 'Insurance', source: 'settlement', tax_deductible: true },
+      { ded_date: '2026-08-08', amount: 209, category: 'Insurance—Truck', description: 'Insurance', source: 'settlement', tax_deductible: true },
     ];
-    // Each week totals 140 (45+60+20+15); 4 weeks -> average 140.
-    expect(trailingWeeklyInsuranceAverage(deductions)).toBe(140);
-  });
-
-  it('catches a row whose category is the settlement schema\'s own generic "Insurance" string via description text', () => {
-    const deductions = [
-      { ded_date: '2026-07-26', amount: 45, source: 'settlement', category: 'Insurance', description: 'BT/DH INS' },
-      { ded_date: '2026-07-26', amount: 60, source: 'settlement', category: 'Insurance', description: 'PHY DAM' },
+    const fuelPurchases = [
+      { purchase_date: '2026-07-19', amount: 480, discount: 20, location: 'Pilot', settlement_id: null },
+      { purchase_date: '2026-08-02', amount: 510, discount: 0, location: 'Loves', settlement_id: null },
     ];
-    expect(trailingWeeklyInsuranceAverage(deductions)).toBe(105);
-  });
+    const complianceItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2026 HVUT 2290', due_date: '2026-08-25', source_document_id: null }];
 
-  it('ignores Insurance—Health/Truck rows that are NOT settlement-withheld (a standalone out-of-pocket premium is a different thing)', () => {
-    const deductions = [{ ded_date: '2026-07-26', amount: 500, source: 'import' as const, category: 'Insurance—Health' }];
-    expect(trailingWeeklyInsuranceAverage(deductions)).toBe(0);
-  });
+    const result = buildCashFlowForecastFromData({
+      bankBalance: 5000,
+      settlements,
+      deductions,
+      fuelPurchases,
+      maintenanceRecords: [],
+      tolls: [],
+      reimbursements: [],
+      complianceItems,
+      documents: [],
+      overrides: EMPTY_CASH_FLOW_OVERRIDES,
+      today: TODAY,
+    });
 
-  it('ignores unrelated categories', () => {
-    const deductions = [{ ded_date: '2026-07-26', amount: 500, source: 'settlement', category: 'Fuel & DEF' }];
-    expect(trailingWeeklyInsuranceAverage(deductions)).toBe(0);
-  });
-});
-
-describe('trailingWeeklyTruckPaymentAverage', () => {
-  it('is 0 with no settlements', () => {
-    expect(trailingWeeklyTruckPaymentAverage([])).toBe(0);
-  });
-
-  it('averages the trailing 4 weeks of Truck/Trailer Payments withholdings', () => {
-    const deductions = [
-      { ded_date: '2026-07-05', amount: 300, source: 'settlement', category: 'Truck/Trailer Payments' },
-      { ded_date: '2026-07-12', amount: 300, source: 'settlement', category: 'Truck/Trailer Payments' },
-      { ded_date: '2026-07-19', amount: 300, source: 'settlement', category: 'Truck/Trailer Payments' },
-      { ded_date: '2026-07-26', amount: 300, source: 'settlement', category: 'Truck/Trailer Payments' },
-    ];
-    expect(trailingWeeklyTruckPaymentAverage(deductions)).toBe(300);
-  });
-});
-
-describe('trailingWeeklyOtherExpenseAverage — no double-counting with the new dedicated averages', () => {
-  it('excludes Insurance—Truck/Health and Truck/Trailer Payments now that they have their own dedicated averages', () => {
-    const now = new Date('2026-08-01T00:00:00Z');
-    const deductions = [
-      { ded_date: '2026-07-20', amount: 140, source: 'settlement', category: 'Insurance—Truck', tax_deductible: false },
-      { ded_date: '2026-07-20', amount: 300, source: 'settlement', category: 'Truck/Trailer Payments', tax_deductible: false },
-      { ded_date: '2026-07-20', amount: 45, source: 'settlement', category: 'ELD & Communications', tax_deductible: false },
-    ];
-    // Only the ELD line should count — insurance/truck-payment are
-    // excluded here so they aren't double-counted alongside the new
-    // dedicated Insurance/Truck Payment fields.
-    expect(trailingWeeklyOtherExpenseAverage(deductions, [], now)).toBeCloseTo(45 / 4, 5);
-  });
-});
-
-// A manual override must survive whatever the trailing averages
-// recompute to after a new settlement import (owner decision 2026-08-04,
-// item 2's "stays user-overridable... remembered until cleared").
-describe('mergeForecastInputsWithAverages', () => {
-  const averages = { weeklyRevenue: 5000, fuelWeekly: 1200, insuranceWeekly: 140, truckPayment: 300, otherWeekly: 200 };
-
-  it('an empty field falls back to the computed average', () => {
-    const base: CashFlowBudgetInputs = {
-      bankBalance: null,
-      weeklyRevenue: null,
-      truckPayment: null,
-      fuelWeekly: null,
-      insuranceWeekly: null,
-      otherWeekly: null,
-      taxReservePct: null,
-    };
-    const merged = mergeForecastInputsWithAverages(base, averages);
-    expect(merged.weeklyRevenue).toBe(5000);
-    expect(merged.insuranceWeekly).toBe(140);
-    expect(merged.truckPayment).toBe(300);
-  });
-
-  it('a manual override wins and is unaffected by whatever the averages recompute to (survives a new import)', () => {
-    const base: CashFlowBudgetInputs = {
-      bankBalance: null,
-      weeklyRevenue: null,
-      truckPayment: null,
-      fuelWeekly: null,
-      insuranceWeekly: 999, // user's own manually-entered figure
-      otherWeekly: null,
-      taxReservePct: null,
-    };
-    // Simulate a new settlement import changing the trailing average —
-    // the manual override must still win.
-    const recomputedAverages = { ...averages, insuranceWeekly: 250 };
-    const merged = mergeForecastInputsWithAverages(base, recomputedAverages);
-    expect(merged.insuranceWeekly).toBe(999);
-  });
-
-  it('an explicit 0 counts as a real user-entered value, not "empty" (falls back only on null)', () => {
-    const base: CashFlowBudgetInputs = {
-      bankBalance: null,
-      weeklyRevenue: null,
-      truckPayment: null,
-      fuelWeekly: null,
-      insuranceWeekly: 0,
-      otherWeekly: null,
-      taxReservePct: null,
-    };
-    expect(mergeForecastInputsWithAverages(base, averages).insuranceWeekly).toBe(0);
+    expect(result.weeks).toHaveLength(4);
+    expect(result.weeklyIncome).toBeGreaterThan(0);
+    expect(result.classification.fixed.some((f) => f.category === 'Insurance—Truck')).toBe(true);
+    expect(result.classification.variable.some((v) => v.category === 'Fuel & DEF')).toBe(true);
+    // The 2290 due Aug 25 lands somewhere in the 4-week window.
+    expect(result.weeks.some((w) => w.periodicItems.some((p) => p.id === 'c1'))).toBe(true);
   });
 });

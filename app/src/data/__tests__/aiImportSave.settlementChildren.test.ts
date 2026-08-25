@@ -29,7 +29,7 @@ import { createFakeSupabase } from './fakeSupabase';
 import { saveExtraction } from '@/src/data/aiImportSave';
 import { groupByMonth, UNKNOWN_MONTH_KEY } from '@/src/stats/monthGroups';
 import { calcTrueProfit } from '@/src/stats/trueProfit';
-import { trailingWeeklyFuelAverage, trailingWeeklyOtherExpenseAverage, trailingWeeklyInsuranceAverage } from '@/src/stats/cashFlowForecast';
+import { buildSpendEvents } from '@/src/stats/cashFlowForecast';
 import { rankLoadsByRpm } from '@/src/stats/cashFlowTrend';
 import type { Deduction, FuelPurchase, Load, Reimbursement, Settlement } from '@/src/types/db';
 
@@ -132,27 +132,41 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     expect(calcTrueProfit(settlements, deductions)).toBe(3800);
   });
 
-  test('Cash Flow budget defaults: trailing fuel/insurance averages reflect the imported settlement', async () => {
+  test('Cash Flow forecast: settlement-derived spend events reflect the imported settlement, and never double-count settlement-linked fuel', async () => {
     await saveExtraction(baseParams(settlementExtraction()));
 
     const fuel = mockClient.__store.fuel_purchases as FuelPurchase[];
     const deductions = mockClient.__store.deductions as Deduction[];
     const tolls: { toll_date: string | null; amount: number | null }[] = [];
 
-    const today = new Date(`${WEEK_ENDING}T12:00:00`);
-    const fuelAvg = trailingWeeklyFuelAverage(fuel, today);
-    const insuranceAvg = trailingWeeklyInsuranceAverage(deductions);
-    const otherAvg = trailingWeeklyOtherExpenseAverage(deductions, tolls, today);
-
-    expect(fuelAvg).toBeGreaterThan(0); // (480 + 160) / 4 weeks
+    const events = buildSpendEvents(deductions, fuel, [], tolls, '2020-01-01');
     // "Weekly insurance" (owner decision 2026-08-04, Cash Flow auto-fill
-    // fix) is now correctly classified as Insurance—Truck via
+    // fix) is still correctly classified as Insurance—Truck via
     // isInsuranceChargeback()'s text fallback (this fixture's row has no
-    // chargebackType/category set), so it counts toward the DEDICATED
-    // Insurance average, not the generic "Other" bucket — proving the
-    // fix end to end, not just in isolation.
-    expect(insuranceAvg).toBeGreaterThan(0); // 200 / 4 weeks
-    expect(otherAvg).toBe(0); // no longer double-counted here
+    // chargebackType/category set) — buildSpendEvents() reads the SAME
+    // saved `category` column, proving the fix still flows end to end
+    // through the rebuilt cash-flow pipeline, not just in isolation.
+    const insuranceEvents = events.filter((e) => e.category === 'Insurance—Truck');
+    expect(insuranceEvents.reduce((sum, e) => sum + e.amount, 0)).toBeGreaterThan(0); // 200
+
+    // This fixture's fuel rows (tractorFuel/reeferFuel, $480+$160) are
+    // extracted directly from the settlement document, so both saved
+    // fuel_purchases rows are SETTLEMENT-LINKED (settlement_id set).
+    // buildSpendEvents() deliberately excludes settlement-linked fuel —
+    // the SAME canonical-expense-engine double-count guard
+    // trueProfit.ts's own sumCanonicalExpenses() already established (a
+    // real carrier settlement typically ALSO withholds its own matching
+    // fuel_advance deduction line representing that same cost; trusting
+    // THAT line rather than the itemized fuel_purchases duplicate is what
+    // avoids double-counting it — see trueProfit.ts's own header comment
+    // for the regression test that settled this exact trade-off). This
+    // minimal fixture has no such withheld fuel line, so the correct,
+    // INTENDED result is zero Fuel & DEF spend events here — proving the
+    // guard fires consistently with the rest of the app, not a data-loss
+    // bug in this new module.
+    expect(fuel.every((f) => f.settlement_id)).toBe(true);
+    const fuelEvents = events.filter((e) => e.category === 'Fuel & DEF');
+    expect(fuelEvents).toHaveLength(0);
   });
 
   test('SPREAD-ORDER AUDIT (owner decision 2026-08-05, FULL PARITY pass item D.3): an AI-extraction line item carrying its own source/settlement_id/document_id/id-shaped fields can never overwrite the app-controlled tags on the saved row', async () => {

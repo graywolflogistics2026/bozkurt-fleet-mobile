@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
@@ -6,69 +6,29 @@ import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
 import { useLoads } from '@/src/data/loads';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useDeductions } from '@/src/data/deductions';
 import { useTolls } from '@/src/data/tolls';
+import { useReimbursements } from '@/src/data/reimbursements';
+import { useComplianceItems } from '@/src/data/complianceItems';
+import { useDocuments } from '@/src/data/documents';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { buildWeeklyTrend, rankLoadsByRpm, type RankedLoad } from '@/src/stats/cashFlowTrend';
-import {
-  calcCashFlowForecast,
-  trailingWeeklyRevenueAverage,
-  trailingWeeklyFuelAverage,
-  trailingWeeklyOtherExpenseAverage,
-  trailingWeeklyInsuranceAverage,
-  trailingWeeklyTruckPaymentAverage,
-  mergeForecastInputsWithAverages,
-  type CashFlowBudgetInputs,
-} from '@/src/stats/cashFlowForecast';
+import { buildCashFlowForecastFromData, type CashFlowOverrides, type CashFlowWeekProjection } from '@/src/stats/cashFlowForecast';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { useFormatters } from '@/src/i18n/format';
-import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 
 const CHART_HEIGHT = 120;
 
-// Clean-product fix (owner decision 2026-07-30): every budget input
-// defaults to empty/0 for a fresh or reset profile — no legacy owner-
-// specific dollar amounts pre-filled here or baked into the math
-// (src/stats/cashFlowForecast.ts). The tax reserve % is the ONE field
-// allowed to show 25 as a labeled SUGGESTION (taxReservePctSuggestion
-// i18n copy below the field) — it is never applied unless the user
-// actually enters it.
+// Clean-product fix (owner decision 2026-07-30): the tax reserve % is the
+// ONE field allowed to show 25 as a labeled SUGGESTION — it is never
+// applied unless the user actually enters it.
 const TAX_RESERVE_SUGGESTED_PCT = '25';
 
-type BudgetFormState = {
-  bankBalance: string;
-  weeklyRevenue: string;
-  truckPayment: string;
-  fuelWeekly: string;
-  insuranceWeekly: string;
-  otherWeekly: string;
-  taxReservePct: string;
-};
-
-function toBudgetInputs(form: BudgetFormState): CashFlowBudgetInputs {
-  return {
-    bankBalance: form.bankBalance ? Number(form.bankBalance) : null,
-    weeklyRevenue: form.weeklyRevenue ? Number(form.weeklyRevenue) : null,
-    truckPayment: form.truckPayment ? Number(form.truckPayment) : null,
-    fuelWeekly: form.fuelWeekly ? Number(form.fuelWeekly) : null,
-    insuranceWeekly: form.insuranceWeekly ? Number(form.insuranceWeekly) : null,
-    otherWeekly: form.otherWeekly ? Number(form.otherWeekly) : null,
-    taxReservePct: form.taxReservePct ? Number(form.taxReservePct) : null,
-  };
-}
-
-// Thin-line "Apple Stocks style" trend chart (owner decision 2026-07-30:
-// "consistent chart language app-wide") — replaces the old thick-bar
-// gross/net chart with the same buildPolylinePoints/Svg/Polyline/Polygon
-// primitives the Dashboard hero card uses (app/(tabs)/index.tsx's
-// HeroAreaChart/RevenueTrendChart, extracted to src/stats/chartHelpers.ts
-// so both screens draw from one tested implementation). Gross is a plain
-// thin accent-blue line (no fill, matches RevenueTrendChart); Net gets a
-// thin line WITH a subtle fill underneath (matches HeroAreaChart),
-// colored green/red by its most recent value's sign — both series share
-// one Y domain so they're visually comparable on the same chart.
+// Thin-line "Apple Stocks style" trend chart — unchanged by this pass.
 function WeeklyTrendChart({ points }: { points: ReturnType<typeof buildWeeklyTrend> }) {
   const { money } = useFormatters();
   const [width, setWidth] = useState(0);
@@ -116,47 +76,6 @@ function WeeklyTrendChart({ points }: { points: ReturnType<typeof buildWeeklyTre
   );
 }
 
-// AUTO-FILL FIELD (owner decision 2026-08-04, Cash Flow auto-fill fix):
-// shared by every forecast input that has real settlement data behind
-// it (Weekly Revenue, Fuel, Insurance, Truck Payment, Other) — an empty
-// field shows the trailing-4-week-average as a caption ("avg of last 4
-// weeks: $X"); once the user types a manual value, the caption is
-// replaced by a "↺ Reset to average" action that clears the field
-// (letting the computed average take back over) rather than making the
-// user manually select-all-and-delete. Extracted once so all 5 fields
-// behave identically instead of five hand-rolled copies drifting apart.
-function AutoFillField({
-  label,
-  value,
-  onChangeText,
-  average,
-  onReset,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  average: number;
-  onReset: () => void;
-}) {
-  const { t } = useTranslation();
-  const { money } = useFormatters();
-  return (
-    <View style={{ flex: 1, minWidth: 140 }}>
-      <MutedText>{label}</MutedText>
-      <Field keyboardType="numeric" value={value} onChangeText={onChangeText} placeholder="0" />
-      {value ? (
-        <Pressable onPress={onReset} hitSlop={8}>
-          <Text style={{ color: colors.accent, fontSize: typography.size.xs }}>
-            {t('cashFlowScreen.resetToAverage', { amount: money(average) })}
-          </Text>
-        </Pressable>
-      ) : (
-        <MutedText>{t('cashFlowScreen.weeklyRevenueFromSettlements', { amount: money(average) })}</MutedText>
-      )}
-    </View>
-  );
-}
-
 function LaneRow({ l, good }: { l: RankedLoad; good: boolean }) {
   const { money, number } = useFormatters();
   return (
@@ -176,119 +95,238 @@ function LaneRow({ l, good }: { l: RankedLoad; good: boolean }) {
   );
 }
 
-export default function CashFlow() {
+// BUILT FROM THE USER'S OWN DATA (owner decision) — one shared row for
+// each of the forecast's three weekly figures (Income/Fixed/Variable):
+// shows the CURRENT computed (or overridden) value plus its basis
+// caption, with a tap-to-edit affordance that opens an inline Field
+// rather than a whole modal — matching the same lightweight "edit in
+// place" spirit the old AutoFillField already established for this
+// screen, just now driving a real persisted override instead of a form
+// field with no computed backing.
+function OverridableStat({
+  label,
+  value,
+  basisCaption,
+  isOverridden,
+  editing,
+  draft,
+  onStartEdit,
+  onChangeDraft,
+  onSave,
+  onCancel,
+  onReset,
+  saving,
+}: {
+  label: string;
+  value: number;
+  basisCaption: string;
+  isOverridden: boolean;
+  editing: boolean;
+  draft: string;
+  onStartEdit: () => void;
+  onChangeDraft: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onReset: () => void;
+  saving: boolean;
+}) {
   const { t } = useTranslation();
   const { money } = useFormatters();
+  return (
+    <View style={styles.overridableRow}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <MutedText>{label}</MutedText>
+        {!editing && (
+          <Text style={styles.statValue}>
+            {money(value)}
+            {t('cashFlowScreen.perWeekSuffix')}
+          </Text>
+        )}
+      </View>
+      {editing ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 4 }}>
+          <View style={{ flex: 1 }}>
+            <Field keyboardType="numeric" value={draft} onChangeText={onChangeDraft} placeholder="0" autoFocus />
+          </View>
+          <SecondaryButton title={t('common.cancel')} onPress={onCancel} />
+          <PrimaryButton title={t('common.save')} onPress={onSave} loading={saving} />
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+          <MutedText>{basisCaption}</MutedText>
+          {isOverridden ? (
+            <Pressable onPress={onReset} hitSlop={8}>
+              <Text style={{ color: colors.accent, fontSize: typography.size.xs }}>{t('cashFlowScreen.resetToAverage')}</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={onStartEdit} hitSlop={8}>
+              <Text style={{ color: colors.accent, fontSize: typography.size.xs }}>{t('cashFlowScreen.editValue')}</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function WeekCard({
+  week,
+  isTightest,
+}: {
+  week: CashFlowWeekProjection;
+  isTightest: boolean;
+}) {
+  const { t } = useTranslation();
+  const { money, date } = useFormatters();
+  return (
+    <Card style={isTightest ? { borderColor: colors.orange, borderWidth: 1 } : undefined}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ color: colors.text, fontWeight: '700' }}>
+          {date(week.startDate, { month: 'short', day: 'numeric' })} – {date(week.endDate, { month: 'short', day: 'numeric' })}
+        </Text>
+        {isTightest && <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.tightestBadge')}</Text>}
+      </View>
+      <View style={{ marginTop: spacing.xs, gap: 2 }}>
+        <View style={styles.forecastRow}>
+          <MutedText>{t('cashFlowScreen.openingBalanceLabel')}</MutedText>
+          <Text style={{ color: colors.text }}>{money(week.openingBalance)}</Text>
+        </View>
+        <View style={styles.forecastRow}>
+          <MutedText>{t('cashFlowScreen.incomeLabel')}</MutedText>
+          <Text style={{ color: colors.green }}>+{money(week.income)}</Text>
+        </View>
+        <View style={styles.forecastRow}>
+          <MutedText>{t('cashFlowScreen.fixedLabel')}</MutedText>
+          <Text style={{ color: colors.red }}>-{money(week.fixed)}</Text>
+        </View>
+        <View style={styles.forecastRow}>
+          <MutedText>{t('cashFlowScreen.variableLabel')}</MutedText>
+          <Text style={{ color: colors.red }}>-{money(week.variable)}</Text>
+        </View>
+        {week.periodic > 0 && (
+          <View style={styles.forecastRow}>
+            <MutedText>{t('cashFlowScreen.periodicLabel')}</MutedText>
+            <Text style={{ color: colors.red }}>-{money(week.periodic)}</Text>
+          </View>
+        )}
+        {week.periodicItems.map((p) => (
+          <MutedText key={p.id} style={{ marginStart: spacing.sm }}>
+            • {p.label}
+          </MutedText>
+        ))}
+        <View style={[styles.forecastRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs, marginTop: spacing.xs }]}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cashFlowScreen.endingBalanceLabel')}</Text>
+          <Text style={{ color: week.closingBalance >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(week.closingBalance)}</Text>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+const OVERRIDE_FIELDS = ['income', 'fixed', 'variable'] as const;
+type OverrideField = (typeof OVERRIDE_FIELDS)[number];
+
+export default function CashFlow() {
+  const { t } = useTranslation();
+  const { money, date } = useFormatters();
   const settlementsQuery = useSettlements();
   const loadsQuery = useLoads();
   const fuelQuery = useFuelPurchases();
+  const maintenanceQuery = useMaintenanceRecords();
   const deductionsQuery = useDeductions();
   const tollsQuery = useTolls();
+  const reimbursementsQuery = useReimbursements();
+  const complianceItemsQuery = useComplianceItems();
+  const documentsQuery = useDocuments();
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [budgetHydrated, setBudgetHydrated] = useState(false);
-  const [budget, setBudget] = useState<BudgetFormState>({
-    bankBalance: '',
-    weeklyRevenue: '',
-    truckPayment: '',
-    fuelWeekly: '',
-    insuranceWeekly: '',
-    otherWeekly: '',
-    taxReservePct: '',
-  });
+  const [savingBudget, setSavingBudget] = useState(false);
+  const [bankBalanceDraft, setBankBalanceDraft] = useState<string | null>(null);
+  const [taxReservePctDraft, setTaxReservePctDraft] = useState<string | null>(null);
 
-  // One-time hydration from the stored budget (profiles.cf_* columns,
-  // docs/PENDING_SQL.md §29/§39) once it loads — same pattern as tax-
-  // estimator.tsx's draft-state hydration.
-  useEffect(() => {
-    if (budgetHydrated || !profileQuery.data) return;
-    const p = profileQuery.data;
-    setBudget({
-      bankBalance: p.cf_bank_balance != null ? String(p.cf_bank_balance) : '',
-      weeklyRevenue: p.cf_weekly_revenue != null ? String(p.cf_weekly_revenue) : '',
-      truckPayment: p.cf_truck_payment != null ? String(p.cf_truck_payment) : '',
-      fuelWeekly: p.cf_fuel_weekly != null ? String(p.cf_fuel_weekly) : '',
-      // docs/PENDING_SQL.md §39 (owner decision 2026-08-04): reads the new
-      // WEEKLY column — cf_insurance_monthly (§29) is deprecated, left
-      // unread here on purpose so an already-saved monthly figure is
-      // never silently misread as weekly.
-      insuranceWeekly: p.cf_insurance_weekly != null ? String(p.cf_insurance_weekly) : '',
-      otherWeekly: p.cf_other_weekly != null ? String(p.cf_other_weekly) : '',
-      taxReservePct: p.cf_tax_reserve_pct != null ? String(p.cf_tax_reserve_pct) : '',
-    });
-    setBudgetHydrated(true);
-  }, [budgetHydrated, profileQuery.data]);
+  const [editingOverride, setEditingOverride] = useState<OverrideField | null>(null);
+  const [overrideDraft, setOverrideDraft] = useState('');
+  const [savingOverride, setSavingOverride] = useState(false);
+  const [periodicDrafts, setPeriodicDrafts] = useState<Record<string, string>>({});
+  const [savingPeriodicId, setSavingPeriodicId] = useState<string | null>(null);
 
-  // DATA-FLOW AUDIT FIX (owner decision 2026-07-30 — known symptom: Cash
-  // Flow revenue stayed $0 after a settlement import): when the user
-  // hasn't entered their own Weekly Revenue budget number, the forecast
-  // uses the trailing 4-week average of their ACTUAL settlement gross
-  // revenue instead of silently treating it as $0 — labeled "from your
-  // settlements" so it's never mistaken for a manually-entered figure.
-  // This is display-only: the SAVED budget value (handleSaveBudget below)
-  // still persists `null` when the field is empty, so this recomputes
-  // live from the latest imports every time rather than freezing a stale
-  // number the moment it's first shown.
-  const trailingAvgRevenue = useMemo(
-    () => trailingWeeklyRevenueAverage(settlementsQuery.data ?? []),
-    [settlementsQuery.data]
+  const bankBalance = bankBalanceDraft ?? (profileQuery.data?.cf_bank_balance != null ? String(profileQuery.data.cf_bank_balance) : '');
+  const taxReservePct = taxReservePctDraft ?? (profileQuery.data?.cf_tax_reserve_pct != null ? String(profileQuery.data.cf_tax_reserve_pct) : '');
+
+  const overrides: CashFlowOverrides = useMemo(
+    () => ({
+      incomeWeekly: profileQuery.data?.cf_income_override ?? null,
+      fixedWeekly: profileQuery.data?.cf_fixed_override ?? null,
+      variableWeekly: profileQuery.data?.cf_variable_override ?? null,
+      periodicAmounts: profileQuery.data?.cf_periodic_overrides ?? {},
+    }),
+    [profileQuery.data]
   );
-  // CRITICAL BUG FIX (device feedback 2026-07-31, item 3: "settlement-
-  // derived expenses must feed the forecast/actuals, not just revenue"):
-  // same trailing-average fallback pattern as Weekly Revenue above, now
-  // also for Fuel Weekly and Other Weekly — a manual entry still always
-  // wins, this only fills the gap while the field is empty.
-  const trailingAvgFuel = useMemo(
-    () => trailingWeeklyFuelAverage(fuelQuery.data ?? []),
-    [fuelQuery.data]
-  );
-  const trailingAvgOther = useMemo(
-    () => trailingWeeklyOtherExpenseAverage(deductionsQuery.data ?? [], tollsQuery.data ?? []),
-    [deductionsQuery.data, tollsQuery.data]
-  );
-  // CASH FLOW AUTO-FILL FIX (owner decision 2026-08-04, device report: a
-  // real carrier settlement withholds FOUR separate insurance charges
-  // EVERY WEEK, plus a truck/trailer payment chargeback) — same trailing-
-  // average fallback pattern, now for Insurance and Truck Payment too.
-  const trailingAvgInsurance = useMemo(
-    () => trailingWeeklyInsuranceAverage(deductionsQuery.data ?? []),
-    [deductionsQuery.data]
-  );
-  const trailingAvgTruckPayment = useMemo(
-    () => trailingWeeklyTruckPaymentAverage(deductionsQuery.data ?? []),
-    [deductionsQuery.data]
-  );
-  const forecastInputs = useMemo(
+
+  const forecast = useMemo(
     () =>
-      mergeForecastInputsWithAverages(toBudgetInputs(budget), {
-        weeklyRevenue: trailingAvgRevenue,
-        fuelWeekly: trailingAvgFuel,
-        insuranceWeekly: trailingAvgInsurance,
-        truckPayment: trailingAvgTruckPayment,
-        otherWeekly: trailingAvgOther,
+      buildCashFlowForecastFromData({
+        bankBalance: bankBalance ? Number(bankBalance) : 0,
+        settlements: settlementsQuery.data ?? [],
+        deductions: deductionsQuery.data ?? [],
+        fuelPurchases: fuelQuery.data ?? [],
+        maintenanceRecords: maintenanceQuery.data ?? [],
+        tolls: tollsQuery.data ?? [],
+        reimbursements: reimbursementsQuery.data ?? [],
+        complianceItems: complianceItemsQuery.data ?? [],
+        documents: documentsQuery.data ?? [],
+        overrides,
       }),
-    [budget, trailingAvgRevenue, trailingAvgFuel, trailingAvgInsurance, trailingAvgTruckPayment, trailingAvgOther]
+    [bankBalance, settlementsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data, complianceItemsQuery.data, documentsQuery.data, overrides]
   );
-  const forecast = useMemo(() => calcCashFlowForecast(forecastInputs), [forecastInputs]);
 
   async function handleSaveBudget() {
-    setSaving(true);
+    setSavingBudget(true);
     try {
-      const values = toBudgetInputs(budget);
       await updateProfile.mutateAsync({
-        cf_bank_balance: values.bankBalance,
-        cf_weekly_revenue: values.weeklyRevenue,
-        cf_truck_payment: values.truckPayment,
-        cf_fuel_weekly: values.fuelWeekly,
-        cf_insurance_weekly: values.insuranceWeekly,
-        cf_other_weekly: values.otherWeekly,
-        cf_tax_reserve_pct: values.taxReservePct,
+        cf_bank_balance: bankBalance ? Number(bankBalance) : null,
+        cf_tax_reserve_pct: taxReservePct ? Number(taxReservePct) : null,
       });
     } finally {
-      setSaving(false);
+      setSavingBudget(false);
+    }
+  }
+
+  function startEditOverride(field: OverrideField, current: number) {
+    setEditingOverride(field);
+    setOverrideDraft(current ? String(Math.round(current * 100) / 100) : '');
+  }
+
+  async function saveOverride(field: OverrideField) {
+    setSavingOverride(true);
+    try {
+      const val = overrideDraft ? Number(overrideDraft) : null;
+      const column = field === 'income' ? 'cf_income_override' : field === 'fixed' ? 'cf_fixed_override' : 'cf_variable_override';
+      await updateProfile.mutateAsync({ [column]: val } as Record<string, number | null>);
+      setEditingOverride(null);
+    } finally {
+      setSavingOverride(false);
+    }
+  }
+
+  async function resetOverride(field: OverrideField) {
+    const column = field === 'income' ? 'cf_income_override' : field === 'fixed' ? 'cf_fixed_override' : 'cf_variable_override';
+    await updateProfile.mutateAsync({ [column]: null } as Record<string, number | null>);
+  }
+
+  async function savePeriodicAmount(itemId: string) {
+    setSavingPeriodicId(itemId);
+    try {
+      const draft = periodicDrafts[itemId];
+      const val = draft ? Number(draft) : null;
+      const nextMap = { ...(profileQuery.data?.cf_periodic_overrides ?? {}) };
+      if (val == null) delete nextMap[itemId];
+      else nextMap[itemId] = val;
+      await updateProfile.mutateAsync({ cf_periodic_overrides: nextMap });
+    } finally {
+      setSavingPeriodicId(null);
     }
   }
 
@@ -304,6 +342,12 @@ export default function CashFlow() {
   const loading = settlementsQuery.isLoading || loadsQuery.isLoading;
   const trend = useMemo(() => buildWeeklyTrend(settlementsQuery.data ?? []), [settlementsQuery.data]);
   const lanes = useMemo(() => rankLoadsByRpm(loadsQuery.data ?? []), [loadsQuery.data]);
+  const hasSettlements = (settlementsQuery.data ?? []).length > 0;
+
+  const tightestWeek = forecast.weeks[forecast.tightestWeekIndex];
+  const tightestWeekLabel = tightestWeek ? date(tightestWeek.endDate, { month: 'short', day: 'numeric' }) : '';
+  const tightestReasonItem = tightestWeek?.periodicItems[0];
+  const oneOffTotal = forecast.classification.oneOffs.reduce((sum, o) => sum + o.amount, 0);
 
   return (
     <Screen>
@@ -313,132 +357,197 @@ export default function CashFlow() {
       >
         <ScreenTitle>{t('cashFlowScreen.title')}</ScreenTitle>
 
-        {/* 30-day manual-budget forecast — legacy calcCF(), FEATURE_INVENTORY.md
-            §1 row 13. Independent of imported settlement/load data (a brand
-            new account can still plan a forecast from manual numbers). */}
-        <Text style={styles.sectionTitle}>{t('cashFlowScreen.forecastTitle')}</Text>
-        <Card>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            <View style={{ flex: 1, minWidth: 140 }}>
-              <MutedText>{t('cashFlowScreen.bankBalanceLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.bankBalance} onChangeText={(v) => setBudget((f) => ({ ...f, bankBalance: v }))} placeholder="0" />
-            </View>
-            <AutoFillField
-              label={t('cashFlowScreen.weeklyRevenueLabel')}
-              value={budget.weeklyRevenue}
-              onChangeText={(v) => setBudget((f) => ({ ...f, weeklyRevenue: v }))}
-              average={trailingAvgRevenue}
-              onReset={() => setBudget((f) => ({ ...f, weeklyRevenue: '' }))}
-            />
-            <AutoFillField
-              label={t('cashFlowScreen.truckPaymentLabel')}
-              value={budget.truckPayment}
-              onChangeText={(v) => setBudget((f) => ({ ...f, truckPayment: v }))}
-              average={trailingAvgTruckPayment}
-              onReset={() => setBudget((f) => ({ ...f, truckPayment: '' }))}
-            />
-            <AutoFillField
-              label={t('cashFlowScreen.fuelWeeklyLabel')}
-              value={budget.fuelWeekly}
-              onChangeText={(v) => setBudget((f) => ({ ...f, fuelWeekly: v }))}
-              average={trailingAvgFuel}
-              onReset={() => setBudget((f) => ({ ...f, fuelWeekly: '' }))}
-            />
-            <AutoFillField
-              label={t('cashFlowScreen.insuranceWeeklyLabel')}
-              value={budget.insuranceWeekly}
-              onChangeText={(v) => setBudget((f) => ({ ...f, insuranceWeekly: v }))}
-              average={trailingAvgInsurance}
-              onReset={() => setBudget((f) => ({ ...f, insuranceWeekly: '' }))}
-            />
-            <AutoFillField
-              label={t('cashFlowScreen.otherWeeklyLabel')}
-              value={budget.otherWeekly}
-              onChangeText={(v) => setBudget((f) => ({ ...f, otherWeekly: v }))}
-              average={trailingAvgOther}
-              onReset={() => setBudget((f) => ({ ...f, otherWeekly: '' }))}
-            />
-            <View style={{ flex: 1, minWidth: 140 }}>
-              <MutedText>{t('cashFlowScreen.taxReservePctLabel')}</MutedText>
-              <Field keyboardType="numeric" value={budget.taxReservePct} onChangeText={(v) => setBudget((f) => ({ ...f, taxReservePct: v }))} placeholder="0" />
-              <MutedText>{t('cashFlowScreen.taxReservePctSuggestion', { pct: TAX_RESERVE_SUGGESTED_PCT })}</MutedText>
-            </View>
-          </View>
-          <PrimaryButton title={`💾 ${t('cashFlowScreen.saveBudget')}`} onPress={handleSaveBudget} loading={saving} />
-        </Card>
-
-        <Card>
-          <View style={styles.statRow}>
-            <View style={styles.statCell}>
-              <MutedText>{t('cashFlowScreen.bankLabel')}</MutedText>
-              <Text style={styles.statValue}>{money(forecast.bankBalance)}</Text>
-            </View>
-            <View style={styles.statCell}>
-              <MutedText>{t('cashFlowScreen.revenue30dLabel')}</MutedText>
-              <Text style={styles.statValue}>{money(forecast.revenue30d)}</Text>
-            </View>
-            <View style={styles.statCell}>
-              <MutedText>{t('cashFlowScreen.netBalance30dLabel')}</MutedText>
-              <Text style={[styles.statValue, { color: forecast.netBalance30d >= 0 ? colors.green : colors.red }]}>
-                {money(forecast.netBalance30d)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={{ marginTop: spacing.md, gap: 4 }}>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.bankLabel')}</MutedText>
-              <Text style={{ color: colors.text }}>{money(forecast.bankBalance)}</Text>
-            </View>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.revenue30dLabel')}</MutedText>
-              <Text style={{ color: colors.green }}>+{money(forecast.revenue30d)}</Text>
-            </View>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.truckPaymentLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((forecastInputs.truckPayment || 0) * 4.33)}</Text>
-            </View>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.fuelWeeklyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((forecastInputs.fuelWeekly || 0) * 4.33)}</Text>
-            </View>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.insuranceWeeklyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((forecastInputs.insuranceWeekly || 0) * 4.33)}</Text>
-            </View>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.otherWeeklyLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money((forecastInputs.otherWeekly || 0) * 4.33)}</Text>
-            </View>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.taxReserveLabel')}</MutedText>
-              <Text style={{ color: colors.red }}>-{money(forecast.weeklyTaxReserve * 4.33)}</Text>
-            </View>
-            <View style={[styles.forecastRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs, marginTop: spacing.xs }]}>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cashFlowScreen.net30dLabel')}</Text>
-              <Text style={{ color: forecast.netBalance30d >= 0 ? colors.green : colors.red, fontWeight: '700' }}>
-                {money(forecast.netBalance30d)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.taxReserveBox}>
-            <MutedText>{t('cashFlowScreen.weeklyTaxReserveLabel')}</MutedText>
-            <Text style={{ color: colors.orange, fontSize: typography.size.lg, fontWeight: '700' }}>
-              {t('cashFlowScreen.perWeek', { amount: money(forecast.weeklyTaxReserve) })}
-            </Text>
-          </View>
-        </Card>
-
         {loading ? (
           <Card>
             <MutedText>{t('common.loading')}</MutedText>
           </Card>
-        ) : trend.length === 0 ? (
+        ) : !hasSettlements ? (
           <Card>
             <MutedText>{t('cashFlowScreen.empty')}</MutedText>
           </Card>
         ) : (
+          <>
+            <Text style={styles.sectionTitle}>{t('cashFlowScreen.forecastTitle')}</Text>
+            <MutedText>{t('cashFlowScreen.forecastSubtitle')}</MutedText>
+
+            {!forecast.reliable && (
+              <Card style={{ borderColor: colors.orange, borderWidth: 1 }}>
+                <MutedText style={{ color: colors.orange }}>
+                  ⏳ {t('cashFlowScreen.reliabilityBanner', { count: forecast.weeksOfHistory })}
+                </MutedText>
+              </Card>
+            )}
+
+            <Card>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <MutedText>{t('cashFlowScreen.bankBalanceLabel')}</MutedText>
+                  <Field keyboardType="numeric" value={bankBalance} onChangeText={setBankBalanceDraft} placeholder="0" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <MutedText>{t('cashFlowScreen.taxReservePctLabel')}</MutedText>
+                  <Field keyboardType="numeric" value={taxReservePct} onChangeText={setTaxReservePctDraft} placeholder="0" />
+                  <MutedText>{t('cashFlowScreen.taxReservePctSuggestion', { pct: TAX_RESERVE_SUGGESTED_PCT })}</MutedText>
+                </View>
+              </View>
+              <PrimaryButton title={`💾 ${t('cashFlowScreen.saveBudget')}`} onPress={handleSaveBudget} loading={savingBudget} />
+            </Card>
+
+            <Text style={styles.sectionTitle}>{t('cashFlowScreen.weeklyAssumptionsTitle')}</Text>
+            <Card>
+              <OverridableStat
+                label={t('cashFlowScreen.incomeLabel')}
+                value={forecast.weeklyIncome}
+                basisCaption={
+                  forecast.incomeIsOverridden
+                    ? t('cashFlowScreen.basisManual')
+                    : t('cashFlowScreen.basisAvgWeeks', { count: forecast.incomeWeeksFound })
+                }
+                isOverridden={forecast.incomeIsOverridden}
+                editing={editingOverride === 'income'}
+                draft={overrideDraft}
+                onStartEdit={() => startEditOverride('income', forecast.weeklyIncome)}
+                onChangeDraft={setOverrideDraft}
+                onSave={() => saveOverride('income')}
+                onCancel={() => setEditingOverride(null)}
+                onReset={() => resetOverride('income')}
+                saving={savingOverride}
+              />
+              <View style={styles.rowBorder}>
+                <OverridableStat
+                  label={t('cashFlowScreen.fixedLabel')}
+                  value={forecast.weeklyFixed}
+                  basisCaption={
+                    forecast.fixedIsOverridden
+                      ? t('cashFlowScreen.basisManual')
+                      : t('cashFlowScreen.basisFixedCount', { count: forecast.classification.fixed.length })
+                  }
+                  isOverridden={forecast.fixedIsOverridden}
+                  editing={editingOverride === 'fixed'}
+                  draft={overrideDraft}
+                  onStartEdit={() => startEditOverride('fixed', forecast.weeklyFixed)}
+                  onChangeDraft={setOverrideDraft}
+                  onSave={() => saveOverride('fixed')}
+                  onCancel={() => setEditingOverride(null)}
+                  onReset={() => resetOverride('fixed')}
+                  saving={savingOverride}
+                />
+              </View>
+              <View style={styles.rowBorder}>
+                <OverridableStat
+                  label={t('cashFlowScreen.variableLabel')}
+                  value={forecast.weeklyVariable}
+                  basisCaption={
+                    forecast.variableIsOverridden
+                      ? t('cashFlowScreen.basisManual')
+                      : t('cashFlowScreen.basisPerMile', {
+                          rate: money(forecast.variableRatePerMile, { maximumFractionDigits: 2 }),
+                          miles: Math.round(forecast.variableMilesAvg),
+                        })
+                  }
+                  isOverridden={forecast.variableIsOverridden}
+                  editing={editingOverride === 'variable'}
+                  draft={overrideDraft}
+                  onStartEdit={() => startEditOverride('variable', forecast.weeklyVariable)}
+                  onChangeDraft={setOverrideDraft}
+                  onSave={() => saveOverride('variable')}
+                  onCancel={() => setEditingOverride(null)}
+                  onReset={() => resetOverride('variable')}
+                  saving={savingOverride}
+                />
+              </View>
+            </Card>
+
+            {forecast.classification.fixed.length > 0 && (
+              <>
+                <Text style={styles.laneSectionTitle}>{t('cashFlowScreen.fixedChargesTitle')}</Text>
+                <Card>
+                  {forecast.classification.fixed.map((f, i) => (
+                    <View key={f.category} style={[styles.forecastRow, i > 0 ? styles.rowBorder : undefined]}>
+                      <MutedText>
+                        {f.category} · {t('cashFlowScreen.fixedChargeOccurrence', { occurrences: f.occurrences, weeks: forecast.classification.weeksObserved })}
+                      </MutedText>
+                      <Text style={{ color: colors.text }}>{money(f.weeklyAmount)}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </>
+            )}
+
+            {forecast.classification.variable.length > 0 && (
+              <>
+                <Text style={styles.laneSectionTitle}>{t('cashFlowScreen.variableRatesTitle')}</Text>
+                <Card>
+                  {forecast.classification.variable.map((v, i) => (
+                    <View key={v.category} style={[styles.forecastRow, i > 0 ? styles.rowBorder : undefined]}>
+                      <MutedText>{v.category}</MutedText>
+                      <Text style={{ color: colors.text }}>{money(v.ratePerMile, { maximumFractionDigits: 2 })}/mi</Text>
+                    </View>
+                  ))}
+                </Card>
+              </>
+            )}
+
+            {forecast.classification.oneOffs.length > 0 && (
+              <MutedText style={{ marginTop: spacing.xs }}>
+                {t('cashFlowScreen.oneOffsNote', { amount: money(oneOffTotal), count: forecast.classification.oneOffs.length })}
+              </MutedText>
+            )}
+
+            {forecast.weeks.some((w) => w.periodicItems.length > 0) && (
+              <>
+                <Text style={styles.laneSectionTitle}>{t('cashFlowScreen.periodicTitle')}</Text>
+                <Card>
+                  {forecast.weeks
+                    .flatMap((w) => w.periodicItems)
+                    .map((p, i) => (
+                      <View key={p.id} style={i > 0 ? styles.rowBorder : undefined}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: colors.text }}>{p.label}</Text>
+                            <MutedText>{t('cashFlowScreen.periodicDue', { date: date(p.dueDate) })}</MutedText>
+                          </View>
+                          {p.amount != null ? (
+                            <Text style={{ color: colors.text, fontWeight: '600' }}>{money(overrides.periodicAmounts[p.id] ?? p.amount)}</Text>
+                          ) : overrides.periodicAmounts[p.id] != null ? (
+                            <Text style={{ color: colors.text, fontWeight: '600' }}>{money(overrides.periodicAmounts[p.id])}</Text>
+                          ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                              <View style={{ width: 80 }}>
+                                <Field
+                                  keyboardType="numeric"
+                                  value={periodicDrafts[p.id] ?? ''}
+                                  onChangeText={(v) => setPeriodicDrafts((d) => ({ ...d, [p.id]: v }))}
+                                  placeholder={t('cashFlowScreen.periodicAmountUnknown')}
+                                />
+                              </View>
+                              <PrimaryButton title={t('common.save')} onPress={() => savePeriodicAmount(p.id)} loading={savingPeriodicId === p.id} />
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                </Card>
+              </>
+            )}
+
+            {tightestWeek && (
+              <MutedText style={{ marginTop: spacing.sm }}>
+                🎯{' '}
+                {tightestReasonItem
+                  ? t('cashFlowScreen.tightestPointWithReason', { amount: money(tightestWeek.closingBalance), date: tightestWeekLabel, label: tightestReasonItem.label })
+                  : t('cashFlowScreen.tightestPointLine', { amount: money(tightestWeek.closingBalance), date: tightestWeekLabel })}
+              </MutedText>
+            )}
+
+            <Text style={styles.sectionTitle}>{t('cashFlowScreen.weekByWeekTitle')}</Text>
+            {forecast.weeks.map((w) => (
+              <WeekCard key={w.weekIndex} week={w} isTightest={w.weekIndex === forecast.tightestWeekIndex} />
+            ))}
+          </>
+        )}
+
+        {loading ? null : trend.length === 0 ? null : (
           <>
             <Text style={styles.sectionTitle}>{t('cashFlowScreen.weeklyTrendTitle')}</Text>
             <Card>
@@ -487,33 +596,18 @@ export default function CashFlow() {
 }
 
 const styles = {
-  statRow: {
-    flexDirection: 'row' as const,
-    gap: spacing.sm,
-  },
-  statCell: {
-    flex: 1,
-  },
   statValue: {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: '700' as const,
-    marginTop: 2,
+  },
+  overridableRow: {
+    paddingVertical: spacing.xs,
   },
   forecastRow: {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
-    paddingVertical: 2,
-  },
-  taxReserveBox: {
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: 7,
-    backgroundColor: colors.card2,
-  },
-  timelineRow: {
-    flexDirection: 'row' as const,
-    paddingVertical: spacing.sm,
+    paddingVertical: 4,
   },
   sectionTitle: {
     color: colors.text,
