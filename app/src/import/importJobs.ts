@@ -13,7 +13,13 @@
 // without a live Supabase project — this module is what carries the real
 // test coverage for job lifecycle/queueing/retry logic.
 
-export type ImportJobStatus = 'queued' | 'processing' | 'ready' | 'failed';
+// 'waiting_to_retry' (owner decision 2026-08-24, BATCH BACK-PRESSURE pass)
+// — a job that hit a real Anthropic rate limit and is automatically
+// backing off before its next attempt (server-side, ai-import's
+// withRateLimitBackoff()) rather than being immediately marked failed. It
+// is an ACTIVE status, not a terminal one — the job is still moving
+// toward completion, just paused.
+export type ImportJobStatus = 'queued' | 'processing' | 'waiting_to_retry' | 'ready' | 'failed';
 
 export type ImportJob = {
   id: string;
@@ -30,7 +36,7 @@ export type ImportJob = {
 };
 
 export function isActiveJob(job: Pick<ImportJob, 'status'>): boolean {
-  return job.status === 'queued' || job.status === 'processing';
+  return job.status === 'queued' || job.status === 'processing' || job.status === 'waiting_to_retry';
 }
 
 export function isRetryableJob(job: Pick<ImportJob, 'status'>): boolean {
@@ -67,7 +73,11 @@ export type ChipSummary =
   | { kind: 'failed'; job: ImportJob; failedCount: number };
 
 export function deriveChipSummary(jobs: ImportJob[]): ChipSummary {
-  const processing = jobs.filter((j) => j.status === 'processing');
+  // 'waiting_to_retry' (BATCH BACK-PRESSURE) folds into the same
+  // 'processing' chip kind as 'processing' itself — from the user's own
+  // perspective both mean "still working on it," just with a different
+  // status label/note shown once they open the jobs list.
+  const processing = jobs.filter((j) => j.status === 'processing' || j.status === 'waiting_to_retry');
   const queued = jobs.filter((j) => j.status === 'queued');
   const ready = jobs.filter((j) => j.status === 'ready');
   const failed = jobs.filter((j) => j.status === 'failed');

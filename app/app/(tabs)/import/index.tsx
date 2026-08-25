@@ -499,7 +499,14 @@ export default function Import() {
       );
     } else {
       const category = classifyAiImportFailureCategory(err.type);
-      setErrorMessage(category ? t(`importScreen.friendlyFailure.${category}`) : friendlyAiImportError(err));
+      // 'oversized' reuses the EXISTING fileTooLargeMessage copy (already
+      // translated in all 7 locales, already the exact "size guidance"
+      // wording) instead of a second, duplicate translated string.
+      if (category === 'oversized') {
+        setErrorMessage(t('importScreen.fileTooLargeMessage'));
+      } else {
+        setErrorMessage(category ? t(`importScreen.friendlyFailure.${category}`) : friendlyAiImportError(err));
+      }
     }
     setErrorStepGroup(null);
     setErrorHasPartialSave(false);

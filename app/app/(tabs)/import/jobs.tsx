@@ -17,6 +17,10 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 function statusColor(status: ImportJob['status']): string {
   if (status === 'ready') return colors.green;
   if (status === 'failed') return colors.red;
+  // BATCH BACK-PRESSURE (owner decision 2026-08-24) — amber, same as the
+  // needs-review badge, reads as "please note this, not an error" rather
+  // than red's existing "expense/cost/negative" meaning app-wide.
+  if (status === 'waiting_to_retry') return colors.orange;
   return colors.accent;
 }
 
@@ -62,6 +66,15 @@ function JobRow({
               <MutedText>{t('importJobs.starting')}</MutedText>
             </View>
           )}
+        </View>
+      )}
+
+      {job.status === 'waiting_to_retry' && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+          <ActivityIndicator size="small" color={colors.orange} style={{ marginEnd: spacing.xs }} />
+          <MutedText style={{ color: colors.orange, flex: 1 }} numberOfLines={2}>
+            {t('importJobs.waitingToRetryNote')}
+          </MutedText>
         </View>
       )}
 

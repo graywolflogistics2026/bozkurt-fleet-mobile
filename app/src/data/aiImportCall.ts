@@ -7,8 +7,13 @@ import type { Extraction } from '@/src/import/types';
 // FIVE ADDITIONS pass, PART 5) — `used`/`allowance` are only ever present
 // when `type === 'usage_limit_reached'` (ai-import/index.ts's own
 // errorResponse `extra` object spreads them onto the error directly, not
-// nested under `detail`).
-export type AiImportError = { type: string; message: string; detail?: string; used?: number; allowance?: number };
+// nested under `detail`). `retryAfterSeconds` (owner decision 2026-08-24,
+// BATCH BACK-PRESSURE pass) is only ever present when `type ===
+// 'rate_limited'` — sourced from Anthropic's own Retry-After header when
+// available, else a default cooldown; informational only today (no
+// screen currently renders a countdown from it), kept here so a future
+// screen can without another server round-trip.
+export type AiImportError = { type: string; message: string; detail?: string; used?: number; allowance?: number; retryAfterSeconds?: number };
 // pagesProcessed (owner decision 2026-08-03, round 5): present only when
 // ai-import didn't cover every page of the original document — one or
 // more pages failed even after the server's own one non-fatal retry
@@ -103,15 +108,44 @@ async function invokeAiImportOnce(
         },
       };
     }
+    // NEVER LEAK THE RAW SDK STRING (owner decision 2026-08-24, "Edge
+    // Function returned a non-2xx status code" bug fix pass, item 2) —
+    // `error.message` here is the @supabase/functions-js SDK's own
+    // HARDCODED default ("Edge Function returned a non-2xx status code"),
+    // never anything the server actually wrote — it only ever surfaces
+    // when the server's response either wasn't JSON at all, or was JSON
+    // with no `.error` field. ai-import's own top-level try/catch (see
+    // supabase/functions/ai-import/index.ts) is the real, primary fix —
+    // every path there now always returns real structured JSON — but this
+    // client-side fallback is deliberate defense in depth: an in-flight
+    // deploy where an OLDER function version is still serving some
+    // requests, a proxy/edge layer returning its own error page, or any
+    // other genuinely unexpected shape must still never show this raw
+    // string to a user.
     if (ctx instanceof Response) {
       try {
         const body = await ctx.json();
         if (body?.error) return { error: body.error as AiImportError };
       } catch {
-        // fall through to the generic message below
+        // Body wasn't JSON at all — fall through to the safe 'internal'
+        // message below, never `error.message`.
       }
+      return {
+        error: {
+          type: 'internal',
+          message: 'Something went wrong on our end — your data is safe. Please try again.',
+        },
+      };
     }
-    return { error: { type: 'network_error', message: error.message || 'Could not reach the import service.' } };
+    // `ctx` isn't a Response and isn't an AbortError either — a genuine
+    // connectivity failure (offline, DNS, etc). `error.message` is NOT
+    // used here either, for the same reason as above.
+    return {
+      error: {
+        type: 'network_error',
+        message: 'Could not reach the import service — check your connection and try again.',
+      },
+    };
   }
 
   if (data?.error) return { error: data.error as AiImportError };
@@ -224,7 +258,7 @@ export async function callAiImport(
   }
 
   return {
-    error: { type: 'anthropic_error', message: 'This document has too many pages to process — try splitting it into smaller files.' },
+    error: { type: 'internal', message: 'This document has too many pages to process — try splitting it into smaller files.' },
   };
 }
 
@@ -253,6 +287,17 @@ export function friendlyAiImportError(err: AiImportError): string {
       // a specific, user-friendly message for an oversized file — prefer
       // it over the generic fallback whenever the server provided one.
       return err.message || 'This file could not be sent for processing.';
+    case 'oversized':
+      return err.message || 'This file is too large — try splitting it or exporting a smaller version.';
+    case 'billing_exhausted':
+      return 'AI reading is temporarily unavailable — your data is safe, and you can still add entries manually.';
+    case 'internal':
+      return 'Something went wrong on our end — your data is safe. Please try again.';
+    // Legacy fallback (owner decision 2026-08-24) — kept in case an
+    // in-flight deploy still has an OLDER ai-import version returning this
+    // retired code for a moment; new deploys never return it (see
+    // ai-import/index.ts's own ErrorType comment for the full 6-code list
+    // that replaced it).
     case 'anthropic_error':
       return 'The import service had a problem. Try again in a moment.';
     case 'network_error':

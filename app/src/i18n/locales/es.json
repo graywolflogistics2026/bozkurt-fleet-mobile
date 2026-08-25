@@ -516,6 +516,8 @@
       "billingAuth": "La lectura con IA no está disponible temporalmente. Tus datos están seguros — puedes seguir agregando registros manualmente, y ya lo estamos resolviendo.",
       "rateLimit": "Hay muchas importaciones en este momento — intenta de nuevo en unos minutos.",
       "timeoutOverload": "El documento está tardando demasiado en este momento — intenta de nuevo en un momento.",
+      "invalidDocument": "No pudimos leer este documento — intenta con una foto más clara o un archivo diferente.",
+      "internal": "Algo salió mal de nuestro lado — tus datos están seguros. Intenta de nuevo.",
       "offline": "Estás sin conexión. Tu archivo está guardado y se importará cuando vuelvas a conectarte."
     },
     "usageLimitReached": "Ya usaste tus importaciones con IA de este mes ({{used}} de {{allowance}}). Aún puedes agregar registros manualmente, y todo lo demás sigue funcionando — tu límite se reinicia el día 1.",
@@ -1948,9 +1950,11 @@
     "status": {
       "queued": "En cola",
       "processing": "Procesando",
+      "waitingToRetry": "Esperando para reintentar",
       "ready": "Listo",
       "failed": "Fallido"
     },
+    "waitingToRetryNote": "El servicio de importación con IA está ocupado — se reintentará automáticamente en breve.",
     "pageProgress": "Página {{through}} de {{total}}",
     "starting": "Iniciando…",
     "genericFailure": "Algo salió mal.",

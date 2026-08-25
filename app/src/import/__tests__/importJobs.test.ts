@@ -32,6 +32,13 @@ describe('job lifecycle status checks', () => {
     expect(isActiveJob(job({ id: '1', status: 'failed' }))).toBe(false);
   });
 
+  // BATCH BACK-PRESSURE (owner decision 2026-08-24) — a job automatically
+  // backing off from a rate limit is still actively moving toward
+  // completion, not stuck or done.
+  it('waiting_to_retry is active too', () => {
+    expect(isActiveJob(job({ id: '1', status: 'waiting_to_retry' }))).toBe(true);
+  });
+
   it('only a failed job is retryable', () => {
     expect(isRetryableJob(job({ id: '1', status: 'failed' }))).toBe(true);
     expect(isRetryableJob(job({ id: '1', status: 'queued' }))).toBe(false);
@@ -70,6 +77,12 @@ describe('QUEUEING: sortImportJobsForDisplay', () => {
     expect(result.map((j) => j.id)).toEqual(['q2', 'q1', 'p', 'f']);
   });
 
+  it('a waiting_to_retry job floats to the top like any other active job', () => {
+    const oldReady = job({ id: 'old-ready', status: 'ready', createdAt: '2026-08-20T00:00:00.000Z' });
+    const waiting = job({ id: 'waiting', status: 'waiting_to_retry', createdAt: '2026-08-24T00:00:00.000Z' });
+    expect(sortImportJobsForDisplay([oldReady, waiting]).map((j) => j.id)).toEqual(['waiting', 'old-ready']);
+  });
+
   it('does not mutate the input array', () => {
     const input = [job({ id: '1', status: 'ready' }), job({ id: '2', status: 'processing' })];
     const copy = [...input];
@@ -103,6 +116,17 @@ describe('deriveChipSummary — priority: processing/queued > ready > failed > h
     const processing = job({ id: 'p', status: 'processing' });
     const summary = deriveChipSummary([queued, processing]);
     expect(summary).toMatchObject({ kind: 'processing', job: { id: 'p' } });
+  });
+
+  // BATCH BACK-PRESSURE (owner decision 2026-08-24) — a job automatically
+  // backing off from a rate limit still folds into the same 'processing'
+  // chip kind (from the user's own perspective it's still "working on
+  // it") even though nothing is else queued/processing.
+  it('a waiting_to_retry job surfaces as "processing" for chip purposes', () => {
+    const waiting = job({ id: 'w', status: 'waiting_to_retry' });
+    const ready = job({ id: 'r', status: 'ready' });
+    const summary = deriveChipSummary([ready, waiting]);
+    expect(summary).toMatchObject({ kind: 'processing', job: { id: 'w' } });
   });
 
   it('surfaces "ready" once nothing is still processing/queued', () => {

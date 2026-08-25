@@ -332,6 +332,99 @@ where ru.email = 'referrer@example.com'
 order by r.created_at desc;
 ```
 
+## AI Import Reliability — "non-2xx never leaks raw" pass (owner decision 2026-08-24)
+
+Fixes the raw "Edge Function returned a non-2xx status code" SDK string
+reaching users (root cause: `ai-import`'s Deno.serve handler had no
+top-level try/catch, so an uncaught exception bypassed every one of its
+own structured JSON error responses and let Deno's own non-JSON default
+error page through instead — see the function's own TOP-LEVEL TRY/CATCH
+comment). Every failure now returns real JSON with one of 6 machine codes
+(`billing_exhausted`, `rate_limited`, `timeout`, `oversized`,
+`invalid_document`, `internal`) plus a safe message — the client never
+shows a raw string regardless.
+
+**1. Owner diagnostic — see every non-2xx with its real cause:**
+
+```sql
+select l.created_at, l.call_type, l.success, l.failure_reason, u.email
+from ai_usage_log l
+join auth.users u on u.id = l.user_id
+where l.success = false and l.created_at >= now() - interval '1 hour'
+order by l.created_at desc;
+```
+
+`failure_reason` is now `"{errorType}: {the real server-side message}"`
+(e.g. `"internal: Anthropic API returned HTTP 500."`) — the machine code
+alone used to be all that was stored; the actual cause is queryable here
+now too, not just in `supabase functions logs ai-import` (which still has
+the FULL, untruncated detail — raw Anthropic HTTP status + response body
+— for every failure, via `console.error`, searchable there when this
+column's 400-char truncation isn't enough).
+
+**2. Breakdown of failure causes over a period** (which of the 6 codes is
+actually happening most, e.g. to decide whether a rate-limit issue is
+real or rare):
+
+```sql
+select
+  split_part(failure_reason, ':', 1) as error_type,
+  count(*) as occurrences
+from ai_usage_log
+where call_type = 'ai_import' and success = false
+  and created_at >= now() - interval '7 days'
+group by 1
+order by 2 desc;
+```
+
+**3. Check/clear the shared rate-limit cooldown** (`ai_rate_limit_state`,
+docs/PENDING_SQL.md §56 — one GLOBAL row, since every user shares ONE
+Anthropic API key; BATCH BACK-PRESSURE pass, item 3):
+
+```sql
+-- Is the cooldown currently active, and why was it set?
+select limited_until, last_reason, updated_at,
+       greatest(0, extract(epoch from (limited_until - now())))::int as seconds_remaining
+from ai_rate_limit_state where id = true;
+
+-- Manually clear it (e.g. you know the underlying Anthropic issue is
+-- already resolved and don't want to wait out the automatic cooldown)
+update ai_rate_limit_state set limited_until = null, updated_at = now() where id = true;
+```
+
+**4. Concurrency (`AI_IMPORT_BATCH_CONCURRENCY`) and Anthropic rate
+limits — answered plainly (item 4):** this environment has no credentials
+to query the Anthropic Console for this account's actual usage tier, so
+the real per-minute/per-token ceiling for THIS account is genuinely
+unknown from here — check
+[console.anthropic.com](https://console.anthropic.com)'s own Limits page
+for the authoritative numbers (Anthropic's published tiers scale
+requests-per-minute, input-tokens-per-minute, and output-tokens-per-minute
+together with account spend history; a brand-new/low-spend account sits
+on the lowest tier, which can be a genuinely small number of concurrent
+requests). Given that uncertainty, `AI_IMPORT_BATCH_CONCURRENCY` is left
+at its existing default of **2** by this pass, not raised — the same
+"prefer a small, evidence-based increase over a speculative jump" caution
+the SPEED UP SETTLEMENT IMPORT pass already established (CLAUDE.md), now
+reinforced by two NEW safety nets this pass adds regardless of whatever
+the number turns out to be: the GLOBAL rate-limit cooldown (§3 above,
+recipe 3) means one 429 anywhere pauses every other in-flight/about-to-
+start call across every user's job, and background jobs now back off and
+retry automatically instead of failing outright. **Recommended next
+step**: after this deploys, watch recipe #2 above for a week of real
+multi-document usage. If `rate_limited` never (or rarely) appears, raise
+`AI_IMPORT_BATCH_CONCURRENCY` to 3 in the Edge Function's environment
+variables (Supabase Dashboard → Edge Functions → ai-import → Settings —
+no redeploy needed, it's read fresh via `Deno.env.get()` on every
+invocation) and watch again before going any higher. For a 10-document
+batch specifically: each document is its own independent background job
+(docs/PENDING_SQL.md §54) — `AI_IMPORT_BATCH_CONCURRENCY` only bounds how
+many PAGES of ONE document run at once, not how many of the 10 documents
+run at once (all 10 jobs start and run concurrently, each internally
+respecting the page-level concurrency limit) — the global cooldown gate
+is what actually keeps 10 simultaneous jobs from independently hammering
+Anthropic if any one of them gets rate-limited.
+
 ## AI Cost Control (owner decision 2026-08-24, FIVE ADDITIONS pass, PART 4)
 
 **1. See ai-import/ai-advisor failures in the last hour:**

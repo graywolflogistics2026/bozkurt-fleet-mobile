@@ -516,6 +516,8 @@
       "billingAuth": "AI ile okuma geçici olarak kullanılamıyor. Verilerin güvende — manuel olarak kayıt eklemeye devam edebilirsin, biz de sorunu çözüyoruz.",
       "rateLimit": "Şu anda çok fazla içe aktarma var — birkaç dakika içinde tekrar dene.",
       "timeoutOverload": "Belge şu anda işlenmesi çok uzun sürüyor — kısa süre sonra tekrar dene.",
+      "invalidDocument": "Bu belgeyi okuyamadık — daha net bir fotoğraf veya farklı bir dosya dene.",
+      "internal": "Bizim tarafımızda bir sorun oluştu — verilerin güvende. Lütfen tekrar dene.",
       "offline": "Çevrimdışısın. Dosyan kaydedildi ve tekrar bağlandığında içe aktarılacak."
     },
     "usageLimitReached": "Bu ayki AI içe aktarmalarını kullandın ({{allowance}} üzerinden {{used}}). Yine de manuel olarak kayıt eklemeye devam edebilirsin, diğer her şey çalışmaya devam ediyor — sınırın ayın 1'inde sıfırlanır.",
@@ -1948,9 +1950,11 @@
     "status": {
       "queued": "Sırada",
       "processing": "İşleniyor",
+      "waitingToRetry": "Yeniden denenmeyi bekliyor",
       "ready": "Hazır",
       "failed": "Başarısız"
     },
+    "waitingToRetryNote": "AI içe aktarma hizmeti şu anda meşgul — kısa süre içinde otomatik olarak yeniden denenecek.",
     "pageProgress": "{{total}} sayfadan {{through}}.",
     "starting": "Başlatılıyor…",
     "genericFailure": "Bir şeyler ters gitti.",

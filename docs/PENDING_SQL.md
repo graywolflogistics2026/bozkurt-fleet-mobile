@@ -2643,6 +2643,62 @@ tables.
 
 ---
 
+## 56. ai_rate_limit_state table + import_jobs 'waiting_to_retry' status (owner decision 2026-08-24, "Edge Function returned a non-2xx status code" bug fix pass, items 1+3)
+
+Two changes, both about making a real Anthropic rate limit a coordinated,
+visible, recoverable event instead of every queued item independently
+failing:
+
+**`ai_rate_limit_state`** — a single GLOBAL row (every user of this app
+shares ONE Anthropic API key, server-side only, CLAUDE.md's own standing
+rule — a 429 from Anthropic is an account-wide signal, not a per-user
+one). Written ONLY by `ai-import` itself via a NEW service-role client in
+that function (matching delete-account/reset-data/referral-sync's own
+established `SUPABASE_SERVICE_ROLE_KEY` precedent) the instant a real
+Anthropic 429 comes back; read by EVERY call this function makes (image,
+single-call PDF, every individual page, in every job, for every user)
+before it ever calls Anthropic — this is the actual cross-job "pause the
+queue" mechanism: once any one call gets rate-limited, every other
+in-flight or about-to-start call anywhere immediately short-circuits to a
+safe `rate_limited` result instead of also hammering Anthropic and also
+failing independently.
+
+```sql
+create table ai_rate_limit_state (
+  id boolean primary key default true check (id),
+  limited_until timestamptz,
+  last_reason text,
+  updated_at timestamptz not null default now()
+);
+
+alter table ai_rate_limit_state enable row level security;
+create policy "ai_rate_limit_state_select_all" on ai_rate_limit_state
+  for select using (true);
+-- No write policy for authenticated users — written only by ai-import's
+-- own service-role client, same "everyone reads, only the server writes"
+-- pattern as tax_year_data/ai_usage_config/service_status.
+
+insert into ai_rate_limit_state (id) values (true) on conflict (id) do nothing;
+```
+
+**`import_jobs.status` gains `'waiting_to_retry'`** — a background job
+that hits a rate limit now PAUSES (this status) and automatically retries
+with exponential backoff (server-side, `runJobInBackground`'s
+`withRateLimitBackoff()`) instead of immediately failing; the client's
+jobs list/chip (`app/src/import/importJobs.ts`) renders this distinctly
+from both "processing" and "failed" so it never looks stuck.
+
+```sql
+alter table import_jobs drop constraint import_jobs_status_check;
+alter table import_jobs add constraint import_jobs_status_check
+  check (status in ('queued', 'processing', 'waiting_to_retry', 'ready', 'failed'));
+```
+
+- [ ] 56a run (ai_rate_limit_state table + RLS + seed row)
+- [ ] 56b run (import_jobs.status constraint — adds 'waiting_to_retry')
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

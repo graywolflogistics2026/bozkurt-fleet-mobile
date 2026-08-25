@@ -505,11 +505,38 @@ function buildExtractionPrompt(
 // Structured error helper — every failure path returns { error: { type, message } }
 // so the app can render something specific instead of a generic failure toast.
 // ============================================================================
+// STRUCTURED ERROR CODES, THE FULL LIST (owner decision 2026-08-24, "Edge
+// Function returned a non-2xx status code" bug fix pass — that raw SDK
+// string was reaching users whenever an uncaught exception bypassed every
+// one of this file's own errorResponse() calls, since Deno's own default
+// error page for an uncaught throw is not JSON. Fixed two ways: (1) the
+// WHOLE Deno.serve handler body below is now wrapped in one top-level
+// try/catch that always returns a real errorResponse("internal", ...)
+// instead of letting Deno's bare error page through; (2) six specific,
+// actionable codes so the client never has to guess WHY a call failed —
+// billing_exhausted (our own Anthropic account is out of credit/disabled),
+// rate_limited (too many requests right now — see the rate-limit-cooldown
+// mechanism below), timeout (took too long), oversized (the file itself
+// is too big), invalid_document (the document couldn't be read/parsed —
+// covers model_refusal/parse_failed below), internal (anything else,
+// including a genuinely unexpected bug — always logged in full server-side
+// via console.error, never leaked verbatim to the client). `bad_request`/
+// `unauthenticated`/`usage_limit_reached` are NOT part of that 6-code set —
+// they're pre-existing, already-distinct, already-correctly-surfaced cases
+// (a malformed request, a missing session, the app's own usage gate) with
+// their own dedicated client-side UI, left untouched by this pass.
 type ErrorType =
   | "unauthenticated"
   | "bad_request"
   | "rate_limited"
-  | "anthropic_error"
+  | "billing_exhausted"
+  | "oversized"
+  | "invalid_document"
+  | "internal"
+  // Kept as their own distinct server-side codes (richer, more specific
+  // messages than the generic "invalid_document") — the CLIENT'S friendly-
+  // failure classifier (app/src/import/friendlyAiFailure.ts) buckets both
+  // of these under the same "invalid_document" user-facing copy.
   | "model_refusal"
   | "parse_failed"
   // Owner decision 2026-08-02 ("settlement imports failing frequently"
@@ -517,7 +544,7 @@ type ErrorType =
   // mid-JSON — a genuinely different, actionable failure from a malformed
   // response (parse_failed), which the client should message distinctly
   // ("try splitting this into fewer pages" rather than "try a clearer
-  // photo").
+  // photo"). Bucketed under the same "timeout" friendly copy client-side.
   | "truncated"
   // Same audit: the Anthropic call itself timed out (ANTHROPIC_TIMEOUT_MS)
   // even after the one retry — distinct from a plain network error so the
@@ -530,6 +557,93 @@ type ErrorType =
   // call is made (checked only on isFirstCall — an in-progress multi-page
   // continuation is never cut off mid-document).
   | "usage_limit_reached";
+
+// RATE-LIMIT COOLDOWN — GLOBAL BACK-PRESSURE (owner decision 2026-08-24,
+// same pass). Every user of this app shares ONE Anthropic API key
+// (CLAUDE.md: "the mobile app never holds it" — it lives only in this
+// function's own secrets) — an Anthropic 429 is therefore an ACCOUNT-WIDE
+// signal, not a per-user one. `ai_rate_limit_state` (docs/PENDING_SQL.md
+// §56) is a single global row this function writes to via a SERVICE-ROLE
+// client (new precedent for this function, matching delete-account/
+// reset-data/referral-sync's own established SUPABASE_SERVICE_ROLE_KEY
+// usage) whenever a real 429 comes back from Anthropic — every other call,
+// in ANY job, for ANY user, checks this row FIRST and short-circuits to a
+// safe "rate_limited" result with NO Anthropic call at all while the
+// cooldown is active. This is what "pause the queue" actually means here:
+// a batch of several queued documents (or several DIFFERENT users' jobs
+// running at the same time) all stop hammering Anthropic the instant ANY
+// one of them gets rate-limited, instead of every remaining item failing
+// independently. Best-effort throughout (every read/write is wrapped in
+// try/catch) — a failure of THIS table must never be the reason an import
+// fails; worst case, the cooldown gate silently does nothing and Anthropic's
+// own per-call 429 handling (still present) is the only backstop.
+const DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS = 30;
+
+let cachedRateLimitAdminClient: ReturnType<typeof createClient> | null | undefined;
+function getRateLimitAdminClient(): ReturnType<typeof createClient> | null {
+  if (cachedRateLimitAdminClient !== undefined) return cachedRateLimitAdminClient;
+  const url = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  cachedRateLimitAdminClient = url && serviceRoleKey ? createClient(url, serviceRoleKey) : null;
+  if (!cachedRateLimitAdminClient) {
+    console.error("[ai-import] SUPABASE_SERVICE_ROLE_KEY not set — rate-limit cross-job cooldown is disabled (per-call handling still applies).");
+  }
+  return cachedRateLimitAdminClient;
+}
+
+// Anthropic's Retry-After header is documented as seconds for a 429 — this
+// also tolerates an HTTP-date form defensively, and any missing/unparsable
+// value falls back to the caller's own default rather than throwing.
+function parseRetryAfterSeconds(headerValue: string | null): number | null {
+  if (!headerValue) return null;
+  const asSeconds = Number(headerValue);
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) return Math.ceil(asSeconds);
+  const asDate = Date.parse(headerValue);
+  if (Number.isFinite(asDate)) {
+    const diffSeconds = Math.ceil((asDate - Date.now()) / 1000);
+    return diffSeconds > 0 ? diffSeconds : 0;
+  }
+  return null;
+}
+
+// Returns 0 (no cooldown, or the mechanism is unavailable) or the real
+// remaining milliseconds until `ai_rate_limit_state.limited_until`.
+async function getRateLimitCooldownMs(): Promise<number> {
+  const admin = getRateLimitAdminClient();
+  if (!admin) return 0;
+  try {
+    const { data } = await admin.from("ai_rate_limit_state").select("limited_until").eq("id", true).maybeSingle();
+    const limitedUntil = data?.limited_until as string | null | undefined;
+    if (!limitedUntil) return 0;
+    const remaining = new Date(limitedUntil).getTime() - Date.now();
+    return remaining > 0 ? remaining : 0;
+  } catch (err) {
+    console.error(`[ai-import] rate-limit cooldown read failed (treating as no cooldown): ${(err as Error).message}`);
+    return 0;
+  }
+}
+
+// Extends (never shrinks) the shared cooldown — a best-effort read-then-max
+// rather than a transaction; an occasional race just means a slightly
+// shorter cooldown wins, never a correctness problem for this feature.
+async function setRateLimitCooldown(seconds: number, reason: string): Promise<void> {
+  const admin = getRateLimitAdminClient();
+  if (!admin) return;
+  try {
+    const untilMs = Date.now() + seconds * 1000;
+    const { data } = await admin.from("ai_rate_limit_state").select("limited_until").eq("id", true).maybeSingle();
+    const existingMs = data?.limited_until ? new Date(data.limited_until as string).getTime() : 0;
+    const finalMs = Math.max(existingMs, untilMs);
+    await admin.from("ai_rate_limit_state").update({
+      limited_until: new Date(finalMs).toISOString(),
+      last_reason: reason.slice(0, 500),
+      updated_at: new Date().toISOString(),
+    }).eq("id", true);
+    console.log(`[ai-import] rate-limit cooldown set until ${new Date(finalMs).toISOString()} (${seconds}s requested) — ${reason.slice(0, 200)}`);
+  } catch (err) {
+    console.error(`[ai-import] rate-limit cooldown write failed: ${(err as Error).message}`);
+  }
+}
 
 // Owner decision 2026-08-02 ("settlement imports failing frequently"
 // audit): the Anthropic call now runs through this helper instead of a
@@ -551,7 +665,7 @@ async function callAnthropicMessages(
   prompt: string,
   timeoutMs: number,
   maxAttempts: number,
-): Promise<{ resp: Response } | { errorType: "timeout" | "anthropic_error"; message: string }> {
+): Promise<{ resp: Response } | { errorType: "timeout" | "internal"; message: string }> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -607,11 +721,12 @@ async function callAnthropicMessages(
         await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
         continue;
       }
-      return { errorType: "anthropic_error", message: `Network error calling Anthropic: ${(err as Error).message}` };
+      console.error(`[ai-import] Anthropic call failed after ${maxAttempts} attempt(s): ${(err as Error).message}`);
+      return { errorType: "internal", message: `Network error calling Anthropic: ${(err as Error).message}` };
     }
   }
   // Unreachable given maxAttempts >= 1, but keeps TS satisfied.
-  return { errorType: "anthropic_error", message: "Unknown error calling Anthropic." };
+  return { errorType: "internal", message: "Unknown error calling Anthropic." };
 }
 
 // JSON EXTRACTION, ONE PASS (owner decision 2026-08-02, chunking pass):
@@ -633,22 +748,68 @@ async function extractOnePass(
   timeoutMs: number,
   maxAttempts: number,
 ): Promise<ExtractOneResult> {
+  // GLOBAL RATE-LIMIT GATE (owner decision 2026-08-24) — checked BEFORE
+  // ever calling Anthropic, on every single call this function makes
+  // (image, single-call PDF, and every individual page). Whenever ANY
+  // other call — in any job, for any user — has recently hit a real
+  // Anthropic 429, this short-circuits to the same "rate_limited" result
+  // with zero further load on Anthropic, instead of every queued item
+  // independently discovering the same 429 on its own.
+  const cooldownMs = await getRateLimitCooldownMs();
+  if (cooldownMs > 0) {
+    const retryAfterSeconds = Math.ceil(cooldownMs / 1000);
+    return {
+      errorType: "rate_limited",
+      message: "The AI import service is temporarily busy — please try again in a few minutes.",
+      extra: { retryAfterSeconds },
+    };
+  }
+
   const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt, timeoutMs, maxAttempts);
   if ("errorType" in callResult) return callResult;
   const anthropicResp = callResult.resp;
 
   if (!anthropicResp.ok) {
     const bodyText = await anthropicResp.text().catch(() => "");
+    // Always logged server-side in full, regardless of what (if anything)
+    // is forwarded to the client — this is item 1/5's "log the underlying
+    // Anthropic status and message server-side" requirement.
+    console.error(`[ai-import] Anthropic HTTP ${anthropicResp.status}: ${bodyText.slice(0, 1000)}`);
+    // 401/403 = bad/revoked API key; 402 = Anthropic doesn't actually use
+    // 402, but is included defensively in case that ever changes — all
+    // three mean "this app's own Anthropic account can't be billed/
+    // authenticated right now," never something a retry or a smaller file
+    // can fix.
+    if (anthropicResp.status === 401 || anthropicResp.status === 403 || anthropicResp.status === 402) {
+      return {
+        errorType: "billing_exhausted",
+        message: "AI reading is temporarily unavailable — your data is safe, and you can still add entries manually.",
+      };
+    }
+    if (anthropicResp.status === 429) {
+      const retryAfterSeconds =
+        parseRetryAfterSeconds(anthropicResp.headers.get("retry-after")) ?? DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS;
+      await setRateLimitCooldown(retryAfterSeconds, `Anthropic HTTP 429: ${bodyText.slice(0, 200)}`);
+      return {
+        errorType: "rate_limited",
+        message: "The AI import service is temporarily busy — please try again in a few minutes.",
+        extra: { retryAfterSeconds },
+      };
+    }
+    // Any other status (a persistent 5xx after callAnthropicMessages's own
+    // one retry, or anything unexpected) — genuinely our/Anthropic's fault,
+    // never the user's document.
     return {
-      errorType: "anthropic_error",
-      message: `Anthropic API returned HTTP ${anthropicResp.status}.`,
+      errorType: "internal",
+      message: "Something went wrong on our end while reading this document — your data is safe. Please try again.",
       extra: { detail: bodyText.slice(0, 500) },
     };
   }
 
   const data = await anthropicResp.json();
   if (data.error) {
-    return { errorType: "anthropic_error", message: data.error.message ?? "Unknown Anthropic error." };
+    console.error(`[ai-import] Anthropic returned a 200 with an embedded error: ${JSON.stringify(data.error).slice(0, 500)}`);
+    return { errorType: "internal", message: "Something went wrong on our end while reading this document — your data is safe. Please try again." };
   }
   if (data.stop_reason === "refusal") {
     return { errorType: "model_refusal", message: "The model declined to process this document." };
@@ -808,18 +969,31 @@ async function runPageWithRetry(
     console.log(`[ai-import] page ${page}: succeeded on attempt 1`);
     return { page, extraction: first.extraction as ChunkExtraction };
   }
-  if (first.errorType !== "timeout") {
+  // A rate limit is retryable too (owner decision 2026-08-24, BATCH
+  // BACK-PRESSURE) — unlike a timeout, it needs an actual wait (the
+  // GLOBAL cooldown gate at the top of extractOnePass would otherwise
+  // just immediately re-reject an instant retry) before trying again,
+  // sourced from Anthropic's own Retry-After when present.
+  const isRateLimited = first.errorType === "rate_limited";
+  if (first.errorType !== "timeout" && !isRateLimited) {
     console.log(`[ai-import] page ${page}: failed with "${first.errorType}" (not retryable) — marking missing`);
     return { page, missing: true };
   }
 
   const retryBudget = remainingBudgetMs();
-  if (retryBudget < MIN_USEFUL_BUDGET_MS) {
-    console.log(`[ai-import] page ${page}: timed out, no budget left for the retry (${Math.round(retryBudget)}ms) — marking missing`);
+  const rateLimitWaitMs = isRateLimited
+    ? Math.max(1000, ((first.extra?.retryAfterSeconds as number | undefined) ?? DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS) * 1000)
+    : 0;
+  if (retryBudget < MIN_USEFUL_BUDGET_MS + rateLimitWaitMs) {
+    console.log(`[ai-import] page ${page}: ${isRateLimited ? "rate-limited" : "timed out"}, no budget left for the retry (${Math.round(retryBudget)}ms) — marking missing`);
     return { page, missing: true };
   }
-  const retryTimeout = Math.min(PAGE_RETRY_TIMEOUT_MS, retryBudget - 5_000);
-  console.log(`[ai-import] page ${page}: attempt 1 timed out — retrying once, timeout=${retryTimeout}ms`);
+  if (isRateLimited) {
+    console.log(`[ai-import] page ${page}: rate-limited — waiting ${rateLimitWaitMs}ms before retrying`);
+    await new Promise((r) => setTimeout(r, rateLimitWaitMs));
+  }
+  const retryTimeout = Math.min(PAGE_RETRY_TIMEOUT_MS, remainingBudgetMs() - 5_000);
+  console.log(`[ai-import] page ${page}: attempt 1 ${isRateLimited ? "was rate-limited" : "timed out"} — retrying once, timeout=${retryTimeout}ms`);
   const retry = await attempt(retryTimeout);
   if (!("errorType" in retry)) {
     console.log(`[ai-import] page ${page}: succeeded on retry`);
@@ -1006,22 +1180,31 @@ async function consumeOneCreditIfOverAllowance(
 }
 
 // COST CONTROL — LOGGING (owner decision 2026-08-24, FIVE ADDITIONS pass,
-// PART 4 item 1) — every ai-import call, success or failure, so cost per
-// user is queryable (docs/ADMIN_RUNBOOK.md's own recipe). Best-effort: a
-// logging failure must never fail the actual import response — it's
-// wrapped in try/catch and only ever logged to the function's own console.
+// PART 4 item 1; extended 2026-08-24 "non-2xx never leaks raw" pass, item
+// 5 — OWNER DIAGNOSTIC) — every ai-import call, success or failure, so
+// cost per user AND the real cause of every failure is queryable
+// (docs/ADMIN_RUNBOOK.md's own recipe). `detail` (optional) is the
+// server's own full message for that failure — the raw Anthropic status/
+// body already went to console.error at the point of failure (searchable
+// via `supabase functions logs ai-import`); this puts a short version of
+// the SAME cause into `ai_usage_log.failure_reason` too so it's queryable
+// with plain SQL instead of grepping logs. Best-effort: a logging failure
+// must never fail the actual import response — wrapped in try/catch and
+// only ever logged to the function's own console.
 async function logAiUsage(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   success: boolean,
   failureReason: string | null,
+  detail?: string | null,
 ): Promise<void> {
   try {
+    const reason = failureReason && detail ? `${failureReason}: ${detail.slice(0, 400)}` : failureReason;
     const { error } = await supabase.from("ai_usage_log").insert({
       user_id: userId,
       call_type: "ai_import",
       success,
-      failure_reason: failureReason,
+      failure_reason: reason,
     });
     if (error) console.error(`[ai-import] usage log insert failed: ${error.message}`);
   } catch (err) {
@@ -1137,7 +1320,38 @@ async function runJobInBackground(
       error_step: step,
       updated_at: new Date().toISOString(),
     }).eq("id", jobId);
-    await logAiUsage(supabase, userId, false, step);
+    await logAiUsage(supabase, userId, false, step, message);
+  }
+
+  // BATCH BACK-PRESSURE (owner decision 2026-08-24) — a background job has
+  // real wall-clock room (JOB_HARD_BUDGET_MS) to actually PAUSE and wait
+  // out a rate limit instead of just failing, unlike the synchronous path
+  // (which has to respond within one HTTP request and simply surfaces
+  // rate_limited for the client's own Retry button). While waiting, the
+  // job's own status flips to 'waiting_to_retry' so the client's jobs
+  // list/chip can show it distinctly rather than looking stuck or failed.
+  const RATE_LIMIT_BACKOFF_SCHEDULE_MS = [15_000, 45_000, 90_000];
+  async function withRateLimitBackoff(attemptOnce: () => Promise<ExtractOneResult>): Promise<ExtractOneResult> {
+    let result = await attemptOnce();
+    for (let retryIndex = 0; "errorType" in result && result.errorType === "rate_limited" && retryIndex < RATE_LIMIT_BACKOFF_SCHEDULE_MS.length; retryIndex++) {
+      const retryAfterMs = ((result.extra?.retryAfterSeconds as number | undefined) ?? 0) * 1000;
+      const waitMs = Math.max(RATE_LIMIT_BACKOFF_SCHEDULE_MS[retryIndex], retryAfterMs);
+      if (remainingJobBudgetMs() < waitMs + MIN_USEFUL_BUDGET_MS) {
+        console.log(`[ai-import] job ${jobId}: rate-limited, not enough job budget left to wait ${waitMs}ms — giving up for now`);
+        break;
+      }
+      console.log(`[ai-import] job ${jobId}: rate-limited — waiting ${waitMs}ms before retry ${retryIndex + 1}/${RATE_LIMIT_BACKOFF_SCHEDULE_MS.length}`);
+      await supabase.from("import_jobs").update({
+        status: "waiting_to_retry",
+        error_message: "The AI import service is busy — automatically retrying shortly.",
+        error_step: "rate_limited",
+        updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      await new Promise((r) => setTimeout(r, waitMs));
+      await supabase.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId);
+      result = await attemptOnce();
+    }
+    return result;
   }
 
   try {
@@ -1148,9 +1362,11 @@ async function runJobInBackground(
       ? { type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } }
       : { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } };
 
-    let result: ExtractOneResult = isImage
-      ? await extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS)
-      : await extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+    let result: ExtractOneResult = await withRateLimitBackoff(() =>
+      isImage
+        ? extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS)
+        : extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS)
+    );
     console.log(`[ai-import] job ${jobId} single-call result: ${"errorType" in result ? result.errorType : "success"}`);
 
     // FALLBACK: only a genuine "too much content for one call" signal
@@ -1178,7 +1394,7 @@ async function runJobInBackground(
           }
         } else {
           result = {
-            errorType: "anthropic_error",
+            errorType: "internal",
             message: "Could not process this document — the AI service was unavailable or timed out even after a retry.",
           };
         }
@@ -1281,7 +1497,8 @@ async function handleJobStart(
       .select("id")
       .single();
     if (insertError || !inserted) {
-      return errorResponse("anthropic_error", "Could not start the import job.", 500);
+      console.error(`[ai-import] import_jobs insert failed: ${insertError?.message ?? "no row returned"}`);
+      return errorResponse("internal", "Could not start the import job — your data is safe. Please try again.", 500);
     }
     jobId = inserted.id as string;
   }
@@ -1304,7 +1521,10 @@ async function handleJobStart(
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .gte("imported_at", startOfDayUtc.toISOString());
-  if (countError) return failJob("Could not check today's import count.", "anthropic_error", 500);
+  if (countError) {
+    console.error(`[ai-import] job ${jobId}: daily-count check failed: ${countError.message}`);
+    return failJob("Could not check today's import count — your data is safe. Please try again.", "internal", 500);
+  }
   if ((count ?? 0) >= DAILY_IMPORT_LIMIT) {
     return failJob(`Daily import limit reached (${DAILY_IMPORT_LIMIT}/day). Try again tomorrow.`, "rate_limited", 429);
   }
@@ -1316,18 +1536,21 @@ async function handleJobStart(
   }
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!anthropicKey) return failJob("Server misconfigured: ANTHROPIC_API_KEY not set.", "anthropic_error", 500);
+  if (!anthropicKey) {
+    console.error("[ai-import] ANTHROPIC_API_KEY not set");
+    return failJob("AI reading is temporarily unavailable — your data is safe, and you can still add entries manually.", "internal", 500);
+  }
 
   // PDF/FILE SIZE GUARD — re-checked here (belt and suspenders, same
   // spirit as the synchronous path's own guard) even though the client
   // already checked before uploading; a client bug/bypass must never be
   // the only thing standing between an oversized file and this function.
   const { data: fileData, error: downloadError } = await supabase.storage.from("documents").download(storagePath);
-  if (downloadError || !fileData) return failJob("Could not read the uploaded file.", "bad_request", 400);
+  if (downloadError || !fileData) return failJob("Could not read the uploaded file — your data is safe. Please try again.", "internal", 500);
   const fileBytes = new Uint8Array(await fileData.arrayBuffer());
   const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
   if (fileBytes.byteLength > MAX_FILE_SIZE_BYTES) {
-    return failJob("This file is too large — try splitting it or exporting a smaller version.", "bad_request", 413);
+    return failJob("This file is too large — try splitting it or exporting a smaller version.", "oversized", 413);
   }
   const fileBase64 = bytesToBase64(fileBytes);
 
@@ -1354,6 +1577,21 @@ Deno.serve(async (req: Request) => {
     return HARD_INVOCATION_BUDGET_MS - (performance.now() - invocationStartedAt);
   }
 
+  // TOP-LEVEL TRY/CATCH (owner decision 2026-08-24, "Edge Function
+  // returned a non-2xx status code" bug fix pass) — THE actual fix for
+  // that raw SDK string reaching users. Before this, ANY uncaught
+  // exception anywhere below (a Postgres error not wrapped in its own
+  // try/catch, a bug in the page-merge logic, an unexpected null
+  // reference) bypassed every one of this file's own errorResponse()
+  // calls entirely — Deno's own default response for an uncaught throw is
+  // NOT JSON, so the client's `ctx.json()` parse failed too, and it fell
+  // back to the Supabase SDK's own hardcoded, unhelpful default message.
+  // Now every single code path below always returns real, structured
+  // JSON — the full real error is still logged via console.error (this
+  // function's own logs, `supabase functions logs ai-import`, item 5's
+  // "owner diagnostic") but the client only ever sees the safe "internal"
+  // message.
+  try {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: CORS_HEADERS });
   }
@@ -1453,7 +1691,7 @@ Deno.serve(async (req: Request) => {
   const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
   const approxDecodedBytes = Math.floor((fileBase64.length * 3) / 4);
   if (approxDecodedBytes > MAX_FILE_SIZE_BYTES) {
-    return errorResponse("bad_request", "This file is too large — try splitting it or exporting a smaller version.", 413);
+    return errorResponse("oversized", "This file is too large — try splitting it or exporting a smaller version.", 413);
   }
 
   // Per-user rate limit: 30 imports/day, counted from documents rows already
@@ -1467,7 +1705,8 @@ Deno.serve(async (req: Request) => {
     .eq("user_id", userId)
     .gte("imported_at", startOfDayUtc.toISOString());
   if (countError) {
-    return errorResponse("anthropic_error", "Could not check today's import count.", 500);
+    console.error(`[ai-import] daily-count check failed: ${countError.message}`);
+    return errorResponse("internal", "Could not check today's import count — your data is safe. Please try again.", 500);
   }
   if ((count ?? 0) >= DAILY_IMPORT_LIMIT) {
     return errorResponse(
@@ -1494,7 +1733,8 @@ Deno.serve(async (req: Request) => {
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!anthropicKey) {
-    return errorResponse("anthropic_error", "Server misconfigured: ANTHROPIC_API_KEY not set.", 500);
+    console.error("[ai-import] ANTHROPIC_API_KEY not set");
+    return errorResponse("internal", "AI reading is temporarily unavailable — your data is safe, and you can still add entries manually.", 500);
   }
 
   const isImage = mediaType.startsWith("image/");
@@ -1596,7 +1836,7 @@ Deno.serve(async (req: Request) => {
 
     const merged = mergeAllPages(allOutcomes);
     if (!merged) {
-      result = { errorType: "anthropic_error", message: `Could not process this document — the AI service was unavailable or timed out even after a retry.` };
+      result = { errorType: "internal", message: `Could not process this document — the AI service was unavailable or timed out even after a retry.` };
       console.log(`[ai-import] continuation: nothing succeeded at all — total failure`);
       return;
     }
@@ -1633,7 +1873,7 @@ Deno.serve(async (req: Request) => {
     if (rawPageCount === null) {
       // Shouldn't happen in practice (pdf-lib already parsed this same
       // file once, to have gotten here) but fail clearly rather than throw.
-      result = { errorType: "anthropic_error", message: "Could not continue processing this document." };
+      result = { errorType: "internal", message: "Could not continue processing this document." };
     } else {
       await runContinuation(rawPageCount);
     }
@@ -1663,11 +1903,19 @@ Deno.serve(async (req: Request) => {
 
   if ("errorType" in result) {
     // COST CONTROL — LOGGING (owner decision 2026-08-24, FIVE ADDITIONS
-    // pass, PART 4 item 1): logged, but never counted against the monthly
+    // pass, PART 4 item 1; extended same-day "non-2xx never leaks raw"
+    // pass, item 5 — OWNER DIAGNOSTIC): logged with the real message
+    // alongside the machine code, but never counted against the monthly
     // allowance (shouldCountAiImportUsage()'s own mirrored rule in
     // app/src/usage/aiUsage.ts — a failed call never counts).
-    await logAiUsage(supabase, userId, false, result.errorType);
-    const status = result.errorType === "timeout" ? 504 : result.errorType === "anthropic_error" ? 502 : 422;
+    await logAiUsage(supabase, userId, false, result.errorType, result.message);
+    const status =
+      result.errorType === "timeout" ? 504 :
+      result.errorType === "billing_exhausted" ? 503 :
+      result.errorType === "rate_limited" ? 429 :
+      result.errorType === "oversized" ? 413 :
+      result.errorType === "internal" ? 500 :
+      422;
     return errorResponse(result.errorType, result.message, status, result.extra);
   }
 
@@ -1704,4 +1952,17 @@ Deno.serve(async (req: Request) => {
     }),
     { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
   );
+  } catch (err) {
+    // See the TOP-LEVEL TRY/CATCH comment above — this is what guarantees
+    // a real JSON body reaches the client no matter what went wrong,
+    // instead of Deno's own non-JSON default error page (the confirmed
+    // root cause of the raw "Edge Function returned a non-2xx status
+    // code" SDK string leaking through). The full error + stack is always
+    // logged here for the owner to review (item 5 — OWNER DIAGNOSTIC,
+    // docs/ADMIN_RUNBOOK.md's own recipe for querying it alongside
+    // ai_usage_log); the client only ever sees the safe, generic message.
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error(`[ai-import] UNCAUGHT: ${err instanceof Error ? err.message : String(err)}${stack ? `\n${stack}` : ""}`);
+    return errorResponse("internal", "Something went wrong on our end — your data is safe. Please try again.", 500);
+  }
 });

@@ -5465,3 +5465,169 @@
   case; the client-side guard is what closes the gap for every path),
   so no Edge Function redeploy is needed. Ships via a normal
   `eas update`.
+- "EDGE FUNCTION RETURNED A NON-2XX STATUS CODE" NEVER LEAKS RAW (owner
+  decision 2026-08-24, 5-item bug report). Root cause, confirmed by
+  reading both sides of the wire: `ai-import`'s `Deno.serve` handler had
+  NO top-level try/catch — any uncaught exception anywhere in its ~350
+  lines (a Postgres error not wrapped in its own try/catch, a bug in the
+  page-merge logic, an unexpected null reference) bypassed every one of
+  its own `errorResponse()` calls entirely; Deno's own default response
+  for an uncaught throw is not JSON, so the client's `ctx.json()` parse
+  failed too and fell through to the `@supabase/functions-js` SDK's own
+  HARDCODED default string ("Edge Function returned a non-2xx status
+  code") — never anything the server actually wrote. Five fixes, one per
+  item:
+  1. **Server ALWAYS returns structured JSON**: the whole `Deno.serve`
+     handler body is now wrapped in one top-level try/catch —
+     `errorResponse("internal", "Something went wrong on our end — your
+     data is safe. Please try again.", 500)` on any uncaught exception,
+     full error+stack always `console.error`'d first. `ErrorType` gained
+     4 new codes — `billing_exhausted` (Anthropic 401/403/402 — our own
+     account can't be billed/authenticated), `rate_limited` (Anthropic
+     429 — pre-existed but was previously indistinguishable from every
+     OTHER non-2xx status), `oversized` (the file-size guard, renamed
+     from a generic `bad_request`), `internal` (everything else,
+     including the daily-count-check Postgres failure, a missing
+     `ANTHROPIC_API_KEY`, and the old catch-all `anthropic_error`, which
+     this pass retires — every one of its usages was reclassified into
+     one of the new, more specific codes). `model_refusal`/`parse_failed`
+     keep their own richer server-side codes/messages but bucket under
+     the SAME client-side "invalid_document" friendly copy. Every Anthropic
+     HTTP status is now logged in full via `console.error`
+     (`supabase functions logs ai-import`) regardless of what's forwarded
+     to the client — item 1's "log the underlying Anthropic status and
+     message server-side."
+  2. **Client never shows the raw string, ever**:
+     `app/src/data/aiImportCall.ts`'s `invokeAiImportOnce()` used to fall
+     back to the bare SDK `error.message` whenever `ctx.json()` parsing
+     failed or the parsed body had no `.error` field — that fallback IS
+     the leak point, fixed by never reading `error.message` at all
+     anymore (a `Response` context with an unparseable/`.error`-less body
+     maps to the same safe `'internal'` message the server itself uses; a
+     non-Response context maps to a safe, fixed `'network_error'`
+     message) — this is deliberate defense in depth on TOP of fix #1, not
+     a duplicate of it: an in-flight deploy where an older function
+     version is still serving some requests, or a proxy/edge layer
+     returning its own error page, must still never show this string.
+     `app/src/import/friendlyAiFailure.ts`'s `FriendlyFailureCategory`
+     grew from 4 buckets to 7 (`billingAuth`/`rateLimit`/`timeoutOverload`/
+     `oversized`/`invalidDocument`/`internal`/`offline`), each with its
+     own `importScreen.friendlyFailure.*` i18n copy (all 7 locales) —
+     `oversized` deliberately reuses the EXISTING `fileTooLargeMessage`
+     string (same "size guidance" wording already used for the pre-upload
+     client-side size guard) via a special case in the import screen's
+     `handleAiError()`, rather than a duplicate translated string. The
+     picked file (`fileMeta`) and the Retry button were already
+     unconditional on error type (confirmed, not changed) — every one of
+     these 7 categories already gets "keeps the picked file, offers
+     Retry" for free.
+  3. **BATCH BACK-PRESSURE — a real Anthropic 429 pauses the queue,
+     globally, not just for the one caller that hit it**: every user of
+     this app shares ONE Anthropic API key (CLAUDE.md's own standing
+     rule) — a 429 is an account-wide signal, not a per-user one.
+     `ai_rate_limit_state` (docs/PENDING_SQL.md §56, NOT YET RUN) is a
+     single GLOBAL row, written by `ai-import` itself via a NEW
+     service-role client in that function (new precedent for this
+     function, matching delete-account/reset-data/referral-sync's own
+     established `SUPABASE_SERVICE_ROLE_KEY` usage) the instant a real
+     429 comes back (extracting Anthropic's own `Retry-After` header when
+     present, defaulting to 30s otherwise) — and READ by `extractOnePass()`
+     (the ONE choke point every Anthropic call in this file goes through:
+     image, single-call PDF, and every individual page) BEFORE it ever
+     calls Anthropic. Whenever the cooldown is active, that call
+     short-circuits to a safe `rate_limited` result with ZERO further
+     Anthropic load — this is what "pause the queue" means concretely: one
+     rate-limited call anywhere stops every OTHER in-flight/about-to-start
+     call, in any job, for any user, from also independently hammering
+     Anthropic and also independently failing. Best-effort throughout
+     (every read/write wrapped in try/catch, degrades to "no cooldown"
+     if the table doesn't exist yet or the service-role key isn't set) —
+     this table's own failure can never be the reason an import fails.
+     `import_jobs.status` gains `'waiting_to_retry'` (§56's CHECK
+     constraint update) — a BACKGROUND job (real wall-clock room via
+     `JOB_HARD_BUDGET_MS`, unlike the synchronous path's tight per-HTTP-
+     request budget) that hits `rate_limited` now genuinely PAUSES and
+     retries with exponential backoff (`runJobInBackground()`'s new
+     `withRateLimitBackoff()` — 15s/45s/90s schedule, or Anthropic's own
+     `Retry-After` if longer, bounded by remaining job budget) instead of
+     immediately failing, flipping the job's own status to
+     `'waiting_to_retry'` while it waits so the client's jobs list/chip
+     shows it distinctly (amber, matching the needs-review badge's "please
+     note this, not an error" convention) rather than looking stuck or
+     failed. The per-page fallback path (`runPageWithRetry`, used by the
+     chunked continuation) also treats `rate_limited` as retryable now
+     (reusing its existing one-retry slot, with a real backoff sleep
+     sourced from `retryAfterSeconds` first) — honestly scoped: this layer
+     doesn't get its own job-status visibility (no job context available
+     that deep), the OUTER single-call/whole-job level is where
+     `'waiting_to_retry'` is actually shown. The SYNCHRONOUS (non-job)
+     path deliberately does NOT sleep-and-retry (it can't block a live
+     HTTP request for minutes) — it fails fast with `rate_limited` +
+     `retryAfterSeconds`, letting the client's existing Retry button
+     (fix #2) handle it. `app/src/import/importJobs.ts`'s
+     `ImportJobStatus`/`isActiveJob()`/`deriveChipSummary()` all updated
+     (`waiting_to_retry` is active, and folds into the chip's existing
+     `'processing'` kind — same "still working on it" meaning from the
+     user's own perspective).
+  4. **Concurrency/tier guidance, answered plainly, not guessed**: this
+     environment has no credentials to query the Anthropic Console for
+     this account's actual rate-limit tier — docs/ADMIN_RUNBOOK.md's new
+     "AI Import Reliability" section says so explicitly and points at
+     console.anthropic.com's own Limits page as the authoritative source,
+     rather than asserting a number that can't be verified.
+     `AI_IMPORT_BATCH_CONCURRENCY` is LEFT AT its existing default of 2,
+     not raised — same "prefer a small, evidence-based increase over a
+     speculative jump" caution the earlier SPEED UP SETTLEMENT IMPORT
+     pass already established, now backed by two NEW safety nets
+     regardless of the real number (the global cooldown gate, and
+     automatic job-level backoff) — recommendation: watch
+     `ai_usage_log.failure_reason` for `rate_limited` occurrences over a
+     week of real multi-document use (ADMIN_RUNBOOK.md recipe #2), and
+     only then try 3 next, one step at a time, same precedent as before.
+     For a 10-document batch specifically: each is its own independent
+     background job (§54) — `AI_IMPORT_BATCH_CONCURRENCY` only bounds
+     PAGES within ONE document, not how many of the 10 documents' jobs
+     run concurrently (nothing throttles that) — the global cooldown gate
+     is what actually protects against 10 simultaneous jobs each
+     independently hammering Anthropic.
+  5. **Owner diagnostic — every non-2xx, with its real cause, queryable**:
+     `logAiUsage()` now accepts an optional `detail` param and stores
+     `"{errorType}: {the real message}"` (truncated to 400 chars) in
+     `ai_usage_log.failure_reason` instead of the bare type alone — every
+     failure path in the file was updated to pass its own real message
+     through. `docs/ADMIN_RUNBOOK.md`'s new "AI Import Reliability"
+     section has 4 ready-to-run recipes: recent failures with real cause
+     (extends the pre-existing PART 4 recipe), a failure-type breakdown
+     over a period (which of the 6 codes is actually happening), checking/
+     clearing the shared rate-limit cooldown, and the concurrency/tier
+     guidance from item 4. The full untruncated detail (raw Anthropic
+     HTTP status + response body) is always in `console.error` too
+     (`supabase functions logs ai-import`) for anything the 400-char
+     column truncates.
+  Tests: `app/src/import/__tests__/friendlyAiFailure.test.ts` extended for
+  all 7 categories (billing_exhausted/anthropic_error legacy fallback/
+  rate_limited/timeout+truncated/oversized/model_refusal+parse_failed+
+  invalid_document/internal/network_error). `app/src/data/__tests__/
+  aiImportCall.test.ts` gained a dedicated "never leaks the raw SDK error
+  string" describe block (non-JSON body, JSON-with-no-`.error` body, a
+  real structured error still passes through untouched, no-Response-context
+  connectivity failure, AbortError-context timeout unaffected) — every
+  case asserts the raw SDK string literally never appears in the result.
+  `app/src/import/__tests__/importJobs.test.ts` gained `waiting_to_retry`
+  coverage (active status, chip-summary folding, sort-order floating).
+  Full suite: 95 suites / 2362 tests pass; `tsc --noEmit` clean; all 7
+  locales confirmed key-parity (`importScreen.friendlyFailure.
+  invalidDocument`/`internal`, `importJobs.status.waitingToRetry`/
+  `importJobs.waitingToRetryNote` — es/ru/ar/tr fully translated, hi/uk as
+  untranslated English copies per invariant #11). `ai-import` was modified
+  (top-level try/catch, 6-code taxonomy, rate-limit cooldown gate,
+  job-level backoff) and NEEDS REDEPLOYING; `ai-advisor`/`reset-data`/
+  `delete-account`/`referral-sync` were NOT touched. docs/PENDING_SQL.md
+  §56 (`ai_rate_limit_state` table + `import_jobs.status` CHECK constraint
+  update) is NOT YET RUN — every new mechanism degrades gracefully until
+  it is (the cooldown gate silently no-ops with no table/service-role key,
+  and a `'waiting_to_retry'` status write silently no-ops against the old
+  CHECK constraint, falling back to plain automatic retry with no visible
+  status change until §56b runs). No native rebuild needed — pure JS/TS
+  plus SQL/Edge Function work, no new native dependency, client ships via
+  a normal `eas update`.

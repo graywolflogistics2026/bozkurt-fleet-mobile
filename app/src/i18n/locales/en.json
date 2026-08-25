@@ -516,6 +516,8 @@
       "billingAuth": "AI reading is temporarily unavailable. Your data is safe — you can still add entries manually, and we're on it.",
       "rateLimit": "Lots of imports right now — try again in a few minutes.",
       "timeoutOverload": "The document is taking too long right now — try again shortly.",
+      "invalidDocument": "We couldn't read this document — try a clearer photo, or a different file.",
+      "internal": "Something went wrong on our end — your data is safe. Please try again.",
       "offline": "You're offline. Your file is saved and will import when you're back."
     },
     "usageLimitReached": "You've used this month's AI imports ({{used}} of {{allowance}}). You can still add entries manually, and everything else keeps working — your allowance resets on the 1st.",
@@ -1948,9 +1950,11 @@
     "status": {
       "queued": "Queued",
       "processing": "Processing",
+      "waitingToRetry": "Waiting to retry",
       "ready": "Ready",
       "failed": "Failed"
     },
+    "waitingToRetryNote": "The AI import service is busy — automatically retrying shortly.",
     "pageProgress": "Page {{through}} of {{total}}",
     "starting": "Starting…",
     "genericFailure": "Something went wrong.",

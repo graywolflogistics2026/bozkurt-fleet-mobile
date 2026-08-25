@@ -190,3 +190,83 @@ describe('callAiImport — continuation loop (PAGES_PER_BATCH=2, orderIndex/page
     expect(bodies[1].orderIndex).toBe(0);
   });
 });
+
+// NEVER LEAK THE RAW SDK STRING (owner decision 2026-08-24, "Edge Function
+// returned a non-2xx status code" bug fix pass, item 2) — the Supabase SDK
+// itself sets `error.message` to the exact hardcoded string
+// "Edge Function returned a non-2xx status code" whenever the response
+// wasn't JSON, or was JSON with no `.error` field. These tests prove
+// invokeAiImportOnce() (exercised through callAiImport()'s single-call
+// path) never surfaces that string to the caller, regardless of which of
+// the three ways it can show up.
+describe('invokeAiImportOnce — never leaks the raw SDK error string', () => {
+  const RAW_SDK_MESSAGE = 'Edge Function returned a non-2xx status code';
+
+  it('a non-JSON response body (server crashed before returning JSON) maps to a safe "internal" error', async () => {
+    const badResponse = new Response('<html>not json</html>', { status: 500 });
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: RAW_SDK_MESSAGE, context: badResponse },
+    });
+
+    const result = await callAiImport('base64file', 'image/jpeg');
+
+    expect(result.error?.type).toBe('internal');
+    expect(result.error?.message).not.toContain(RAW_SDK_MESSAGE);
+    expect(result.error?.message).toMatch(/went wrong on our end/i);
+  });
+
+  it('a JSON response body with no `.error` field also maps to a safe "internal" error, never the raw string', async () => {
+    const emptyBodyResponse = new Response(JSON.stringify({}), { status: 500 });
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: RAW_SDK_MESSAGE, context: emptyBodyResponse },
+    });
+
+    const result = await callAiImport('base64file', 'image/jpeg');
+
+    expect(result.error?.type).toBe('internal');
+    expect(result.error?.message).not.toContain(RAW_SDK_MESSAGE);
+  });
+
+  it('a Response context WITH a real structured error body still passes that real error through untouched', async () => {
+    const realErrorResponse = new Response(
+      JSON.stringify({ error: { type: 'rate_limited', message: 'Too busy right now.', retryAfterSeconds: 30 } }),
+      { status: 429 }
+    );
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: RAW_SDK_MESSAGE, context: realErrorResponse },
+    });
+
+    const result = await callAiImport('base64file', 'image/jpeg');
+
+    expect(result.error?.type).toBe('rate_limited');
+    expect(result.error?.message).toBe('Too busy right now.');
+    expect(result.error?.retryAfterSeconds).toBe(30);
+  });
+
+  it('a genuine connectivity failure (no Response context at all) maps to network_error with a safe message, never error.message', async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: RAW_SDK_MESSAGE }, // no `context` at all
+    });
+
+    const result = await callAiImport('base64file', 'image/jpeg');
+
+    expect(result.error?.type).toBe('network_error');
+    expect(result.error?.message).not.toContain(RAW_SDK_MESSAGE);
+  });
+
+  it('a client-side timeout (AbortError context) is still reported as "timeout", unaffected by this fix', async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: RAW_SDK_MESSAGE, context: { name: 'AbortError' } },
+    });
+
+    const result = await callAiImport('base64file', 'image/jpeg');
+
+    expect(result.error?.type).toBe('timeout');
+    expect(result.error?.message).not.toContain(RAW_SDK_MESSAGE);
+  });
+});
