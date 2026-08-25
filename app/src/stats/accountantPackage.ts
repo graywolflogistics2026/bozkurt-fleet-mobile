@@ -1,7 +1,7 @@
 import { DEFAULT_SCHEDULE_C_BUCKET, scheduleCLineFor } from '@/src/import/category';
 import { isPersonalPayment } from '@/src/import/paymentMethods';
 import { resolveScheduleCBucket } from '@/src/stats/profitLoss';
-import { summarizeContributions, type CapitalTransactionLike } from '@/src/stats/capitalAccount';
+import { summarizeContributions, summarizeCapitalFlows, type CapitalTransactionLike, type CapitalFlowsSummary } from '@/src/stats/capitalAccount';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { buildAssetRegister, buildAssetCategoryBreakdown, type AssetCategoryBreakdown } from '@/src/stats/assetRegister';
 import type { Deduction, Equipment, FuelPurchase, MaintenanceRecord, LoanRow, CreditCardRow, Toll, Truck, UserCategory } from '@/src/types/db';
@@ -202,6 +202,13 @@ export type LineItem = {
   amount: number;
   origin: LineItemOrigin;
   isOwnerPaid: boolean;
+  // FULL VISUAL PARITY pass (owner decision, v2026.08.05-W chase, item 1
+  // "Paid with" column) — only a `deduction`-kind row can carry a payment
+  // method at all (fuel/maintenance/toll rows have no such concept and
+  // are never flagged isOwnerPaid, so this is always null for them);
+  // never translated (CLAUDE.md invariant #2/#11 — the 9 generic payment
+  // method values are domain values, English in every locale).
+  paymentMethod: string | null;
 };
 
 // The ONE line-item builder every report section (category table, lumper
@@ -235,6 +242,7 @@ export function buildLineItems(
       amount,
       origin,
       isOwnerPaid: isPersonalPayment(d.payment_method),
+      paymentMethod: d.payment_method ?? null,
     });
   }
 
@@ -253,6 +261,7 @@ export function buildLineItems(
       amount,
       origin,
       isOwnerPaid: false,
+      paymentMethod: null,
     });
   }
 
@@ -271,6 +280,7 @@ export function buildLineItems(
       amount,
       origin,
       isOwnerPaid: false,
+      paymentMethod: null,
     });
   }
 
@@ -289,6 +299,7 @@ export function buildLineItems(
       amount,
       origin,
       isOwnerPaid: false,
+      paymentMethod: null,
     });
   }
 
@@ -310,6 +321,29 @@ export function buildScheduleCTotals(lineItems: LineItem[], userCategories: User
   return [...buckets.entries()]
     .map(([category, amount]) => ({ category, amount, scheduleCLine: scheduleCLineFor(category) }))
     .sort((a, b) => b.amount - a.amount);
+}
+
+// SHARED CATEGORY GROUPING (owner decision, v2026.08.05-W chase, FULL
+// VISUAL PARITY pass) — extracted so the on-screen category table and the
+// exported PDF/Excel category table group rows IDENTICALLY and can never
+// silently disagree. Groups by the SAME resolved Schedule C bucket
+// `buildScheduleCTotals()` itself used — a custom category whose bucket
+// differs from its own name (e.g. "Detention Software" -> "ELD &
+// Communications") would otherwise silently vanish from its bucket's row
+// list while still counting toward the bucket's total if grouped by the
+// raw `category` string instead (a real bug caught during the original
+// Accountant Package rework, see this file's own history).
+export type GroupedScheduleCCategory = ScheduleCLineTotal & { items: LineItem[] };
+
+export function groupLineItemsByScheduleCBucket(
+  lineItems: LineItem[],
+  totals: ScheduleCLineTotal[],
+  userCategories: UserCategory[]
+): GroupedScheduleCCategory[] {
+  return totals.map((total) => ({
+    ...total,
+    items: lineItems.filter((li) => resolveScheduleCBucket(li.category, userCategories) === total.category),
+  }));
 }
 
 // MISC CONCENTRATION WARNING (owner decision 2026-08-05, FULL PARITY
@@ -422,11 +456,19 @@ export type OwnersEquitySummary = {
   linkedCount: number;
   total: number;
   unmatchedOwnerPaidCount: number;
+  // FULL VISUAL PARITY pass (owner decision, v2026.08.05-W chase, item 2
+  // "owner-equity four-flow summary") — the SAME four-flow breakdown the
+  // Capital Account screen's own "Where your equity comes from" card
+  // already shows (summarizeCapitalFlows(), src/stats/capitalAccount.ts),
+  // reused here rather than a second computation, so the two screens can
+  // never disagree about the owner's equity position.
+  flows: CapitalFlowsSummary;
 };
 
 export function buildOwnersEquity(contributions: CapitalTransactionLike[], lineItems: LineItem[]): OwnersEquitySummary {
   const breakdown = summarizeContributions(contributions.filter((c) => c.tx_type === 'contribution'));
   const ownerPaidCount = lineItems.filter((li) => li.isOwnerPaid).length;
   const unmatchedOwnerPaidCount = Math.max(0, ownerPaidCount - breakdown.linkedCount);
-  return { ...breakdown, total: breakdown.cashAmount + breakdown.linkedAmount, unmatchedOwnerPaidCount };
+  const flows = summarizeCapitalFlows(contributions);
+  return { ...breakdown, total: breakdown.cashAmount + breakdown.linkedAmount, unmatchedOwnerPaidCount, flows };
 }

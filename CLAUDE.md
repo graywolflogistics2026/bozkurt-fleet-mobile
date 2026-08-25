@@ -5631,3 +5631,163 @@
   status change until §56b runs). No native rebuild needed — pure JS/TS
   plus SQL/Edge Function work, no new native dependency, client ships via
   a normal `eas update`.
+- ACCOUNTANT PACKAGE — FULL VISUAL PARITY WITH WEB (owner decision,
+  v2026.08.05-W chase, no SQL). The screen was functionally complete
+  (FULL PARITY pass PART B, above) but visually plain — no colour coding,
+  no Schedule C chips, a 2-flow Owner's Equity instead of the real 4-flow
+  breakdown, no "Paid with" column, a short 2-segment header. This pass
+  brings the colour language and richness to exact parity across all
+  three surfaces (on-screen, PDF, Excel) without changing any of the
+  underlying numbers.
+  1. **ONE shared colour source, `app/src/stats/accountantPackageColors.ts`
+     (new)** — `ACCOUNTANT_EXPORT_COLORS` (the exact spec hex values:
+     owner-paid amber `#fef3c7`, total-expenses red `#fee2e2`, gross
+     income green `#dcfce7`, capital-contributions-in green `#f0fdf4`,
+     owner-draws-out light red `#fef2f2`, capital assets blue `#eff6ff`/
+     header `#dbeafe`, lumper-fees header amber `#fef3c7`, subtotal grey
+     `#f1f5f9`) and `ACCOUNTANT_SCREEN_COLORS` (dark-theme-aware
+     translucent overlays of the SAME hue family — `rgba(245,158,11,…)`
+     for amber, `rgba(239,68,68,…)` for red, `rgba(34,197,94,…)` for
+     green, `rgba(37,99,235,…)` for the capital-assets blue, and
+     `colors.card2` for the grey subtotal rows — this app's own existing
+     secondary-surface tone, reused rather than inventing a new grey).
+     Same meaning always gets the same colour family on every surface —
+     a screenshot and an exported file can never visually disagree.
+  2. **PDF and Excel export extracted into a new, pure, fully-testable
+     module, `app/src/stats/accountantPackageReport.ts`** —
+     `buildAccountantReportHtml()` used to live inline in the screen
+     component (untestable without a React/Expo runtime, which this
+     repo's jest setup deliberately doesn't have — CLAUDE.md's own
+     standing "pure ts-jest, no jest-expo" convention). Same "pure
+     function, caller owns i18n via t()" pattern as
+     unlockNudgePresentation.ts/coachNudgeText.ts: the screen resolves
+     every string via `t()` into a flat `AccountantReportStrings` object
+     and passes `money`/`date` as plain formatter functions — this module
+     itself has zero i18next/React/Expo dependency. Both the PDF export
+     (`expo-print`) and the Excel export (same HTML, `.xls`-extension
+     trick) call the exact same function, so proving the HTML has the
+     amber owner-paid treatment covers BOTH export surfaces in one test,
+     by construction — there is no separate PDF-only or Excel-only code
+     path that could diverge.
+  3. **Line items now carry `paymentMethod`** (`accountantPackage.ts`'s
+     `LineItem` type) — only ever populated for a `deduction`-kind row
+     (`d.payment_method`, one of the 9 generic values, CLAUDE.md
+     invariant #2 — never translated, a domain value like every other
+     enumerated field per invariant #11); always `null` for fuel/
+     maintenance/toll rows, which have no such concept and are never
+     flagged owner-paid. Rendered as an actual "Paid with" GRID COLUMN in
+     both exports (spec's literal ask); on a narrow phone screen the same
+     information is shown inline under the row instead ("Paid with:
+     Cash") to avoid a 3rd-column overflow on mobile — same information,
+     an honest adaptation to the surface, not a gap.
+  4. **Owner's Equity is now the real FOUR-FLOW breakdown**, not the old
+     2-row cash/linked summary — `buildOwnersEquity()` gained a `flows:
+     CapitalFlowsSummary` field by calling the EXISTING
+     `summarizeCapitalFlows()` (Capital Account screen's own "Where your
+     equity comes from" card, PART E/F passes above) rather than a second,
+     potentially-disagreeing computation: cash contributed (green-in),
+     expenses paid personally outstanding (green-in, netted against
+     whatever's already been reimbursed for that specific expense — a
+     real device-verified case: a $200 linked contribution with a $50
+     reimbursement-taken-back nets to $150 outstanding, not $200),
+     reimbursements taken back (light-red-out), owner draws (light-red-
+     out), and Net Position — each flow rendered with its own accountant-
+     facing one-liner note (`cashContributedNote`/
+     `expensesPaidPersonallyNote`/`reimbursementsTakenBackNote`/
+     `ownerDrawsNote`). `netPosition` is proven by test to equal the exact
+     same figure `calcCapitalAccount()`'s own effectiveContribution-
+     totalDraws formula would produce for identical data — the two
+     screens can never disagree.
+  5. **Schedule C reference chips** — the "(Line 21)" text that used to
+     trail a category name inline is now a small blue pill (`ScheduleCChip`
+     on-screen, `.chip` CSS class in the export), matching the "BLUE...
+     Schedule C reference chips" spec line.
+  6. **Shared category grouping**, `groupLineItemsByScheduleCBucket()`
+     (new, `accountantPackage.ts`) — extracted so the on-screen category
+     table and the exported category table group individual line items
+     under each category header IDENTICALLY (previously the export only
+     showed category SUBTOTALS, no line-item detail at all — the owner-
+     paid amber treatment + Paid With column could only ever appear in
+     the Lumper Fees export section, never in the main category table).
+     Groups by the SAME resolved Schedule C bucket `buildScheduleCTotals()`
+     itself used (not the raw `category` string) — the exact "a custom
+     category whose bucket differs from its own name silently vanishes
+     from its group's row list while still counting toward the total" bug
+     this pattern already fixed once, regression-guarded again here.
+  7. **Header identity, all three surfaces**: `buildHeaderLine(scopeYear,
+     scopeMonth)` composes ONE string — `company name — truck unit —
+     period — scope` (spec item 3's exact 4-segment order) — reused for
+     the on-screen `ScreenTitle` AND passed as-is into every export's
+     `AccountantReportInput.headerLine`, so the identity line can never
+     read differently between what's on screen and what's in a shared
+     file. Period is `date(..., {year:'numeric', month:'long'})` (e.g.
+     "August 2026") or the bare year for "All Year"; scope resolves the
+     existing `accountantPackage.scope*` label. This header is now always
+     populated (period+scope are never both empty) — the old
+     `|| t('accountantPackage.title')` fallback for a brand-new account
+     with no company/truck set is no longer reachable, since period+scope
+     always contribute at least one segment; the subtitle line still
+     carries the "Accountant Package" concept for discoverability.
+  8. **Reconciling caption** — a new muted line
+     (`accountantPackage.reconcilingCaption`, "This total reconciles with
+     the category breakdown below.") under the summary tile's Deductible
+     Expenses row, on-screen and in both exports.
+  9. **Footer notes** (spec item 2) — three new always-shown lines: meals
+     excluded under per diem, advance repayments/escrow non-deductible,
+     OWNER PAID rows = Owner Contributions
+     (`footerMealsNote`/`footerNonDeductibleNote`/`footerOwnerPaidNote`).
+  10. **Small pre-existing i18n gap fixed in passing**: the export's own
+      disclaimer text was a hardcoded, never-translated English constant
+      (`const DISCLAIMER = 'Estimates only...'`) sitting right next to the
+      already-translated `common.legalFootnote` key the on-screen
+      `<LegalFootnote/>` component already used for the IDENTICAL text —
+      the export now reuses `t('common.legalFootnote')` instead, so the
+      exported file's disclaimer is translated in every locale too, not
+      just the on-screen one.
+  11. **i18n cleanup**: `cashTransfers`/`paidPersonally` (the old 2-flow
+      Owner's Equity labels) became orphaned by item 4 above and were
+      removed from all 7 locales, confirmed unused repo-wide first — the
+      OTHER already-pre-existing dead legacy keys in this same i18n block
+      (`scheduleCTitle`, `assetsByCategoryTitle`, `totalExpenses`, etc.,
+      orphaned by an EARLIER pass, not this one) were deliberately left
+      alone, same "only clean up what THIS pass newly orphaned" scope
+      discipline as the FULL PARITY FOLLOW-UP PART A entry above.
+  **Honest scope note on test coverage**: this repo's jest setup is
+  deliberately pure-ts-jest with no React Native rendering harness (no
+  `.test.tsx` files exist anywhere in this codebase, confirmed by search)
+  — so "an OWNER PAID row renders with the amber treatment" is proven at
+  the level this app CAN test: the exact colour tokens
+  (`accountantPackageColors.test.ts`, pinned to the literal spec hex
+  values) and the exported HTML's actual amber background + badge + paid-
+  with column for an owner-paid row, in a fixture covering BOTH the
+  Lumper Fees table and the main category table
+  (`accountantPackageReport.test.ts`) — which is genuine, real coverage
+  of the PDF/Excel surfaces (identical HTML, one test proves both). The
+  ON-SCREEN component's own use of these same tokens
+  (`ACCOUNTANT_SCREEN_COLORS.ownerPaidBg` on `LineItemRow`) is not
+  independently re-verified by a render test, since no such harness
+  exists in this repo — same limitation this codebase has flagged
+  honestly at every prior "no RN component test infra" juncture rather
+  than fabricating false coverage.
+  Tests: `accountantPackageColors.test.ts` (new, 14 tests — every export
+  hex pinned to the spec, screen tokens confirmed same hue family +
+  relative emphasis, key-set parity between the two maps).
+  `accountantPackageReport.test.ts` (new, 13 tests — header identity
+  string rendered verbatim, owner-paid amber+badge+paid-with in BOTH the
+  lumper table and the category table, a non-owner-paid row gets neither,
+  the "Paid with" column header appears above both tables, full section
+  order per spec item 4 proven via string-index comparisons, empty-state
+  sections omitted entirely, every colour-coded section present, the
+  4-flow owner's-equity rows + their one-liner notes, the 3 footer notes +
+  disclaimer, and an HTML-escaping test for untrusted description text).
+  `accountantPackage.test.ts` gained `paymentMethod`/`flows`/
+  `groupLineItemsByScheduleCBucket` coverage (8 new tests, including the
+  real netted-outstanding-amount case and the custom-category grouping
+  regression). Full suite: 97 suites / 2411 tests pass; `tsc --noEmit`
+  clean; all 7 locales confirmed key-parity (14 new
+  `accountantPackage.*` keys — es/ru/ar/tr fully translated, hi/uk as
+  untranslated English copies per invariant #11; glossary test re-passed
+  clean, no glossary terms in any new string). No SQL/Edge Function
+  changes. No new native dependency — pure JS/TS work reusing
+  `expo-print`/`expo-sharing`/`expo-file-system`, already dependencies —
+  ships via a normal `eas update`.

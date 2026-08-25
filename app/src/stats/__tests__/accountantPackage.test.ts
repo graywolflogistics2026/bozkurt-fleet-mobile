@@ -10,6 +10,7 @@ import {
   buildCapitalAssets,
   buildOwnersEquity,
   checkMiscConcentration,
+  groupLineItemsByScheduleCBucket,
 } from '@/src/stats/accountantPackage';
 import type { Deduction, Equipment, MaintenanceRecord, FuelPurchase, LoanRow, CreditCardRow, Toll, Truck, UserCategory } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
@@ -715,5 +716,129 @@ describe('buildOwnersEquity (owner decision 2026-08-05, FULL PARITY pass item B.
     );
     const result = buildOwnersEquity(contributions, lineItems);
     expect(result.unmatchedOwnerPaidCount).toBe(0);
+  });
+});
+
+// FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase, item 1
+// "Paid with" column) — only a deduction-kind row can carry a payment
+// method; fuel/maintenance/toll rows never do (and are never owner-paid).
+describe('buildLineItems — paymentMethod (FULL VISUAL PARITY pass)', () => {
+  it('carries the deduction\'s own payment_method through as paymentMethod', () => {
+    const items = buildLineItems(
+      [deduction({ amount: 100, ded_date: '2026-06-05', payment_method: 'Personal Credit Card' })],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    expect(items[0].paymentMethod).toBe('Personal Credit Card');
+  });
+
+  it('is null for a deduction with no payment method on file', () => {
+    const items = buildLineItems([deduction({ amount: 100, ded_date: '2026-06-05', payment_method: null })], [], [], [], 2026, 6, 'combined');
+    expect(items[0].paymentMethod).toBeNull();
+  });
+
+  it('is always null for fuel/maintenance/toll rows — they have no payment-method concept', () => {
+    const items = buildLineItems(
+      [],
+      [fuel({ amount: 50, purchase_date: '2026-06-05' })],
+      [maintenance({ cost: 200, service_date: '2026-06-05' })],
+      [toll({ amount: 10, toll_date: '2026-06-05' })],
+      2026,
+      6,
+      'combined'
+    );
+    expect(items.every((i) => i.paymentMethod === null)).toBe(true);
+  });
+});
+
+// FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase, item 2
+// "owner-equity four-flow summary") — buildOwnersEquity's flows field
+// reuses summarizeCapitalFlows() (Capital Account's own "Where your
+// equity comes from" computation) rather than a second, divergent one.
+describe('buildOwnersEquity — flows (FULL VISUAL PARITY pass)', () => {
+  it('exposes the same four-flow breakdown Capital Account\'s own screen shows', () => {
+    const contributions = [
+      { id: 'c1', tx_type: 'contribution' as const, amount: 1000, tx_date: '2026-01-01' },
+      { id: 'c2', tx_type: 'contribution' as const, amount: 200, tx_date: '2026-01-02', linked_deduction_id: 'ded-1' },
+      { id: 'd1', tx_type: 'draw' as const, amount: 300, tx_date: '2026-01-03' },
+      { id: 'r1', tx_type: 'draw' as const, amount: 50, tx_date: '2026-01-04', linked_deduction_id: 'ded-1' },
+    ];
+    const result = buildOwnersEquity(contributions, []);
+    expect(result.flows.cashContributed).toBe(1000);
+    // Netted against the $50 already reimbursed for ded-1's own $200
+    // contribution (calcReimbursementStatus) — 150 still outstanding, not
+    // the raw $200 contribution amount.
+    expect(result.flows.expensesPaidPersonallyOutstanding).toBe(150);
+    expect(result.flows.reimbursementsTakenBack).toBe(50);
+    expect(result.flows.ownerDraws).toBe(300);
+    expect(result.flows.netPosition).toBe(1000 + 200 - 50 - 300);
+  });
+
+  it('flows.netPosition matches the same total calcCapitalAccount() would compute for identical data (never a second, disagreeing number)', () => {
+    const contributions = [
+      { id: 'c1', tx_type: 'contribution' as const, amount: 60000, tx_date: '2026-01-01' },
+      { id: 'd1', tx_type: 'draw' as const, amount: 15000, tx_date: '2026-01-02' },
+    ];
+    const result = buildOwnersEquity(contributions, []);
+    // effectiveContribution (60000) - totalDraws (15000) = 45000
+    expect(result.flows.netPosition).toBe(45000);
+  });
+});
+
+// FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase) —
+// shared category grouping used by BOTH the on-screen category table and
+// the exported HTML, so the two can never disagree about which line
+// items sit under which category header.
+describe('groupLineItemsByScheduleCBucket', () => {
+  it('groups line items under the SAME resolved bucket their own total used, even when a custom category resolves elsewhere', () => {
+    const userCategories: UserCategory[] = [
+      { id: 'uc1', user_id: 'u1', name: 'Detention Software', kind: 'expense', schedule_c_bucket: 'ELD & Communications', active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    ];
+    const items = buildLineItems(
+      [deduction({ id: 'd1', category: 'Detention Software', amount: 40, ded_date: '2026-06-01' })],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    const totals = buildScheduleCTotals(items, userCategories);
+    const grouped = groupLineItemsByScheduleCBucket(items, totals, userCategories);
+
+    const eldGroup = grouped.find((g) => g.category === 'ELD & Communications');
+    expect(eldGroup).toBeDefined();
+    expect(eldGroup!.items).toHaveLength(1);
+    expect(eldGroup!.items[0].id).toBe('d1');
+    // Never silently vanishes from the group's OWN item list while still
+    // counting toward the bucket's total — the exact bug this pattern
+    // fixed the first time around.
+    expect(eldGroup!.amount).toBe(40);
+  });
+
+  it('every group\'s own items sum to its own amount', () => {
+    const items = buildLineItems(
+      [
+        deduction({ id: 'd1', category: 'Fuel & DEF', amount: 40, ded_date: '2026-06-01' }),
+        deduction({ id: 'd2', category: 'Fuel & DEF', amount: 60, ded_date: '2026-06-02' }),
+        deduction({ id: 'd3', category: 'Tolls & Scales', amount: 10, ded_date: '2026-06-03' }),
+      ],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    const totals = buildScheduleCTotals(items, []);
+    const grouped = groupLineItemsByScheduleCBucket(items, totals, []);
+    for (const g of grouped) {
+      const sum = g.items.reduce((s, i) => s + i.amount, 0);
+      expect(sum).toBeCloseTo(g.amount, 5);
+    }
   });
 });

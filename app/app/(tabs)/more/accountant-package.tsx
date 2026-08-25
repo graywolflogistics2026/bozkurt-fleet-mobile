@@ -27,9 +27,12 @@ import {
   buildPerDiemBlock,
   buildCapitalAssets,
   buildOwnersEquity,
+  groupLineItemsByScheduleCBucket,
   type AccountantScope,
   type LineItem,
 } from '@/src/stats/accountantPackage';
+import { buildAccountantReportHtml, type AccountantReportStrings, type AccountantReportInput } from '@/src/stats/accountantPackageReport';
+import { ACCOUNTANT_SCREEN_COLORS } from '@/src/stats/accountantPackageColors';
 import { resolveScheduleCBucket } from '@/src/stats/profitLoss';
 import { findImplausibleDates } from '@/src/import/dateGuard';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
@@ -47,8 +50,6 @@ import {
 } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { DeductionInsert } from '@/src/types/db';
-
-const DISCLAIMER = 'Estimates only — not tax advice. Verify with your CPA.';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -81,6 +82,25 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
   );
 }
 
+// FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase, item 1
+// "BLUE — Capital Assets section... and the Schedule C reference chips") —
+// the small blue pill shown beside a category's own Schedule C line
+// reference, on-screen equivalent of the exported HTML's own `.chip` CSS
+// class (accountantPackageReport.ts) — same colour token
+// (ACCOUNTANT_SCREEN_COLORS.capitalAssetsHeaderBg), so the chip reads as
+// the same visual language wherever a Schedule C line is referenced.
+function ScheduleCChip({ line }: { line: string | null }) {
+  const { t } = useTranslation();
+  if (!line) return null;
+  return (
+    <View style={styles.chip}>
+      <Text style={styles.chipText}>
+        {t('accountantPackage.line')} {line}
+      </Text>
+    </View>
+  );
+}
+
 function convertLineItemToDeductionInsert(item: LineItem, userId: string, newCategory: string): DeductionInsert {
   return {
     user_id: userId,
@@ -94,16 +114,22 @@ function convertLineItemToDeductionInsert(item: LineItem, userId: string, newCat
 }
 
 // ACCOUNTANT PACKAGE REWORK (owner decision 2026-08-05, FULL PARITY pass
-// PART B) — Year/Month/Scope selectors, origin-tagged out-of-pocket-only
-// default scope (src/stats/accountantPackage.ts's ORIGIN RULE), the full
-// section order the spec calls for, editable/deletable rows, owner-paid
-// highlighting, Capital Assets, and Owner's Equity. The per-category
-// Schedule C rollup / income-offset math from the ORIGINAL
-// buildAccountantPackage() (still exported, untouched) is superseded here
-// by the new line-item-first pipeline (buildLineItems ->
+// PART B; visual rework owner decision, v2026.08.05-W chase — FULL
+// VISUAL PARITY WITH WEB) — Year/Month/Scope selectors, origin-tagged
+// out-of-pocket-only default scope (src/stats/accountantPackage.ts's
+// ORIGIN RULE), the full section order the spec calls for, editable/
+// deletable rows, owner-paid highlighting, Capital Assets, and Owner's
+// Equity. The per-category Schedule C rollup / income-offset math from
+// the ORIGINAL buildAccountantPackage() (still exported, untouched) is
+// superseded here by the line-item-first pipeline (buildLineItems ->
 // buildScheduleCTotals/buildLumperFees/buildPerDiemBlock/
 // buildCapitalAssets/buildOwnersEquity) so every number on this screen
-// traces back to a real, individually editable row.
+// traces back to a real, individually editable row. The VISUAL layer
+// (colour coding, Schedule C chips, the owner-equity four-flow summary,
+// the reconciling caption, the full header identity string) now matches
+// the web report exactly — accountantPackageColors.ts/
+// accountantPackageReport.ts are the shared, tested source of truth every
+// one of the three surfaces (screen/PDF/Excel) reads from.
 export default function AccountantPackage() {
   const { t } = useTranslation();
   const { money, date } = useFormatters();
@@ -194,6 +220,14 @@ export default function AccountantPackage() {
   const miscWarning = useMemo(() => checkMiscConcentration(scheduleCTotals), [scheduleCTotals]);
   const lumperFees = useMemo(() => buildLumperFees(lineItems), [lineItems]);
   const lumperTotal = lumperFees.reduce((sum, i) => sum + i.amount, 0);
+  // Shared by BOTH the on-screen category table and the exported HTML —
+  // the two can never disagree about how rows are grouped (see this
+  // helper's own header comment in accountantPackage.ts for the exact
+  // bug this fixed originally).
+  const groupedCategories = useMemo(
+    () => groupLineItemsByScheduleCBucket(lineItems, scheduleCTotals, userCategoriesQuery.data ?? []),
+    [lineItems, scheduleCTotals, userCategoriesQuery.data]
+  );
 
   const perDiemBlock = useMemo(() => {
     if (!taxYearDataQuery.data) return null;
@@ -254,7 +288,22 @@ export default function AccountantPackage() {
         .filter(Boolean)
         .join(' · ')
     : null;
-  const headerLine = [companyName, truckLabel].filter(Boolean).join(' — ') || t('accountantPackage.title');
+
+  // HEADER IDENTITY (spec item 3: "company name — truck unit — period —
+  // scope, exactly as the web header renders it") — ONE shared builder so
+  // the on-screen title and every export's own header line are always
+  // built the exact same way, from the exact same four segments, in the
+  // exact same order.
+  function periodLabelFor(scopeYear: number, scopeMonth: number | null): string {
+    return scopeMonth == null ? String(scopeYear) : date(`${scopeYear}-${String(scopeMonth).padStart(2, '0')}-01`, { year: 'numeric', month: 'long' });
+  }
+  function scopeLabelFor(s: AccountantScope): string {
+    return t(`accountantPackage.scope${s.charAt(0).toUpperCase()}${s.slice(1)}`);
+  }
+  function buildHeaderLine(scopeYear: number, scopeMonth: number | null): string {
+    return [companyName, truckLabel, periodLabelFor(scopeYear, scopeMonth), scopeLabelFor(scope)].filter(Boolean).join(' — ');
+  }
+  const headerLine = buildHeaderLine(year, month);
 
   function openEdit(item: LineItem) {
     setEditingItem(item);
@@ -312,7 +361,51 @@ export default function AccountantPackage() {
     ]);
   }
 
-  function buildReportHtml(scopeYear: number, scopeMonth: number | null) {
+  // FULL VISUAL PARITY WITH WEB — every string the shared, pure
+  // accountantPackageReport.ts needs, resolved via t() here (this
+  // component is the one place that's allowed to call t() — the report
+  // builder itself is a plain, framework-free function, same "pure
+  // function, caller owns i18n via t()" convention as every other
+  // presentation module in this app).
+  function buildBaseReportStrings(): Omit<AccountantReportStrings, 'reimbursementsSubline' | 'implausibleDateWarning' | 'miscConcentrationWarning'> {
+    return {
+      grossIncome: t('accountantPackage.grossIncome'),
+      deductibleExpenses: t('accountantPackage.deductibleExpenses'),
+      reconcilingCaption: t('accountantPackage.reconcilingCaption'),
+      perDiemTitle: t('accountantPackage.perDiemTitle'),
+      perDiemMonthLabel: t('accountantPackage.perDiemMonthLabel'),
+      perDiemYtdLabel: t('accountantPackage.perDiemYtdLabel'),
+      perDiemDaysUnit: t('accountantPackage.perDiemDaysUnit'),
+      perDiemNote: t('accountantPackage.perDiemNote'),
+      lumperFeesTitle: t('accountantPackage.lumperFeesTitle'),
+      paidWithLabel: t('accountantPackage.paidWithLabel'),
+      categoryTableTitle: t('accountantPackage.categoryTableTitle'),
+      lineLabel: t('accountantPackage.line'),
+      grandTotal: t('accountantPackage.grandTotal'),
+      ownerPaidBadge: t('accountantPackage.ownerPaidBadge'),
+      capitalAssetsTitle: t('accountantPackage.capitalAssetsTitle'),
+      capitalAssetsNote: t('accountantPackage.capitalAssetsNote'),
+      noCapitalAssets: t('accountantPackage.noCapitalAssets'),
+      financingCash: t('accountantPackage.financingCash'),
+      financingLoan: t('accountantPackage.financingLoan'),
+      ownersEquityTitle: t('accountantPackage.ownersEquityTitle'),
+      cashContributedLabel: t('accountantPackage.cashContributedLabel'),
+      cashContributedNote: t('accountantPackage.cashContributedNote'),
+      expensesPaidPersonallyLabel: t('accountantPackage.expensesPaidPersonallyLabel'),
+      expensesPaidPersonallyNote: t('accountantPackage.expensesPaidPersonallyNote'),
+      reimbursementsTakenBackLabel: t('accountantPackage.reimbursementsTakenBackLabel'),
+      reimbursementsTakenBackNote: t('accountantPackage.reimbursementsTakenBackNote'),
+      ownerDrawsLabel: t('accountantPackage.ownerDrawsLabel'),
+      ownerDrawsNote: t('accountantPackage.ownerDrawsNote'),
+      netPositionLabel: t('accountantPackage.netPositionLabel'),
+      footerMealsNote: t('accountantPackage.footerMealsNote'),
+      footerNonDeductibleNote: t('accountantPackage.footerNonDeductibleNote'),
+      footerOwnerPaidNote: t('accountantPackage.footerOwnerPaidNote'),
+      disclaimer: t('common.legalFootnote'),
+    };
+  }
+
+  function buildReportInput(scopeYear: number, scopeMonth: number | null): { input: AccountantReportInput; strings: AccountantReportStrings } {
     const items =
       scopeMonth === month && scopeYear === year
         ? lineItems
@@ -321,7 +414,8 @@ export default function AccountantPackage() {
     const total = totals.reduce((sum, c) => sum + c.amount, 0);
     const miscWarningForExport = checkMiscConcentration(totals);
     const lumpers = buildLumperFees(items);
-    const periodLabel = scopeMonth == null ? String(scopeYear) : `${scopeYear}-${String(scopeMonth).padStart(2, '0')}`;
+    const lumperTotalForExport = lumpers.reduce((sum, i) => sum + i.amount, 0);
+    const grouped = groupLineItemsByScheduleCBucket(items, totals, userCategoriesQuery.data ?? []);
     const perDiemForExport =
       taxYearDataQuery.data && (scopeYear !== year || scopeMonth !== month)
         ? buildPerDiemBlock(settlementsQuery.data ?? [], scopeYear, scopeMonth, taxYearDataQuery.data.data.per_diem)
@@ -337,95 +431,53 @@ export default function AccountantPackage() {
               return Number((s.week_ending ?? '').slice(5, 7)) === scopeMonth;
             })
             .reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
+    const reimbursementsForExport =
+      scopeYear === year && scopeMonth === month
+        ? reimbursementsTotal
+        : (reimbursementsQuery.data ?? [])
+            .filter((r) => {
+              const y = Number((r.reimb_date ?? '').slice(0, 4));
+              if (y !== scopeYear) return false;
+              if (scopeMonth == null) return true;
+              return Number((r.reimb_date ?? '').slice(5, 7)) === scopeMonth;
+            })
+            .reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
 
-    const categoryRows = totals
-      .map(
-        (c) =>
-          `<tr><td style="font-weight:700">${c.category}${c.scheduleCLine ? ` (Line ${c.scheduleCLine})` : ''}</td><td style="text-align:right">${money(c.amount)}</td></tr>`
-      )
-      .join('');
-    const lumperRows = lumpers
-      .map(
-        (l) =>
-          `<tr${l.isOwnerPaid ? ' style="background:#fef3c7"' : ''}><td>${l.date ?? ''} — ${l.description}${l.isOwnerPaid ? ' 💰 OWNER PAID' : ''}</td><td style="text-align:right">${money(l.amount)}</td></tr>`
-      )
-      .join('');
-    const assetRows = capitalAssets
-      .map((a) => `<tr><td>${a.type} — ${a.name}${a.date ? ` (${date(a.date)})` : ''}</td><td style="text-align:right">${money(a.price)}</td></tr>`)
-      .join('');
-    const warningRows = implausibleDates
-      .map((w) => `<tr><td>${w.label}</td><td>${w.date}</td></tr>`)
-      .join('');
+    const strings: AccountantReportStrings = {
+      ...buildBaseReportStrings(),
+      reimbursementsSubline:
+        reimbursementsForExport > 0 ? t('accountantPackage.reimbursementsSubline', { amount: money(reimbursementsForExport) }) : undefined,
+      implausibleDateWarning:
+        implausibleDates.length > 0 ? t('accountantPackage.implausibleDateWarning', { count: implausibleDates.length }) : undefined,
+      miscConcentrationWarning: miscWarningForExport
+        ? t('accountantPackage.miscConcentrationWarning', { pct: (miscWarningForExport.miscPct * 100).toFixed(0) })
+        : undefined,
+    };
 
-    return `
-      <html>
-        <head><meta charset="utf-8" />
-          <style>
-            body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #111; padding: 24px; }
-            h1 { font-size: 20px; margin-bottom: 4px; }
-            h2 { font-size: 15px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-            table { width: 100%; border-collapse: collapse; font-size: 13px; }
-            td { padding: 6px 0; border-bottom: 1px solid #eee; }
-            .total { font-weight: 700; border-top: 2px solid #333; }
-            .muted { color: #666; font-size: 11px; margin-top: 24px; }
-            .warn { color: #b45309; }
-          </style>
-        </head>
-        <body>
-          <h1>${headerLine}</h1>
-          <div class="muted">${periodLabel} — ${t(`accountantPackage.scope${scope.charAt(0).toUpperCase()}${scope.slice(1)}`)}</div>
+    const input: AccountantReportInput = {
+      headerLine: buildHeaderLine(scopeYear, scopeMonth),
+      grossIncome: grossForExport,
+      reimbursementsTotal: reimbursementsForExport,
+      totalExpenses: total,
+      perDiem: perDiemForExport,
+      implausibleDates,
+      miscWarning: miscWarningForExport,
+      lumperFees: lumpers,
+      lumperTotal: lumperTotalForExport,
+      groupedCategories: grouped,
+      capitalAssets,
+      ownersEquity,
+    };
 
-          <table>
-            <tr><td style="font-weight:700">${t('accountantPackage.grossIncome')}</td><td style="text-align:right">${money(grossForExport)}</td></tr>
-            <tr class="total"><td>${t('accountantPackage.deductibleExpenses')}</td><td style="text-align:right">${money(total)}</td></tr>
-          </table>
-
-          ${
-            perDiemForExport
-              ? `<h2>${t('accountantPackage.perDiemTitle')}</h2><table>
-                  <tr><td>${t('accountantPackage.perDiemMonthLabel')}</td><td style="text-align:right">${perDiemForExport.monthDays} ${t('accountantPackage.perDiemDaysUnit')} — ${money(perDiemForExport.monthDeduction)}</td></tr>
-                  <tr><td>${t('accountantPackage.perDiemYtdLabel')}</td><td style="text-align:right">${perDiemForExport.ytdDays} ${t('accountantPackage.perDiemDaysUnit')} — ${money(perDiemForExport.ytdDeduction)}</td></tr>
-                </table>`
-              : ''
-          }
-
-          ${
-            implausibleDates.length > 0
-              ? `<h2 class="warn">${t('accountantPackage.implausibleDateWarning', { count: implausibleDates.length })}</h2><table>${warningRows}</table>`
-              : ''
-          }
-
-          ${
-            miscWarningForExport
-              ? `<h2 class="warn">${t('accountantPackage.miscConcentrationWarning', { pct: (miscWarningForExport.miscPct * 100).toFixed(0) })}</h2>`
-              : ''
-          }
-
-          ${lumpers.length > 0 ? `<h2>${t('accountantPackage.lumperFeesTitle')}</h2><table>${lumperRows}</table>` : ''}
-
-          <h2>${t('accountantPackage.categoryTableTitle')}</h2>
-          <table>${categoryRows}<tr class="total"><td>${t('accountantPackage.grandTotal')}</td><td style="text-align:right">${money(total)}</td></tr></table>
-
-          <h2>${t('accountantPackage.capitalAssetsTitle')}</h2>
-          <table>${assetRows || `<tr><td>${t('accountantPackage.noCapitalAssets')}</td><td></td></tr>`}</table>
-
-          <h2>${t('accountantPackage.ownersEquityTitle')}</h2>
-          <table>
-            <tr><td>${t('accountantPackage.cashTransfers')}</td><td style="text-align:right">${money(ownersEquity.cashAmount)}</td></tr>
-            <tr><td>${t('accountantPackage.paidPersonally')}</td><td style="text-align:right">${money(ownersEquity.linkedAmount)}</td></tr>
-          </table>
-
-          <p class="muted">${t('accountantPackage.perDiemNote')}<br/>${t('accountantPackage.capitalAssetsNote')}<br/>${DISCLAIMER}</p>
-        </body>
-      </html>
-    `;
+    return { input, strings };
   }
 
   async function handleExportPdf(scopeMonth: number | null) {
     const key = scopeMonth == null ? 'pdfYear' : 'pdfMonth';
     setExporting(key);
     try {
-      const html = buildReportHtml(year, scopeMonth);
+      const { input, strings } = buildReportInput(year, scopeMonth);
+      const html = buildAccountantReportHtml(input, strings, { money, date });
       const { uri } = await Print.printToFileAsync({ html });
       const available = await Sharing.isAvailableAsync();
       if (!available) {
@@ -444,7 +496,8 @@ export default function AccountantPackage() {
     const key = scopeMonth == null ? 'excelYear' : 'excelMonth';
     setExporting(key);
     try {
-      const html = buildReportHtml(year, scopeMonth);
+      const { input, strings } = buildReportInput(year, scopeMonth);
+      const html = buildAccountantReportHtml(input, strings, { money, date });
       const filename = scopeMonth == null ? `accountant-package-${year}.xls` : `accountant-package-${year}-${String(scopeMonth).padStart(2, '0')}.xls`;
       const file = new File(Paths.cache, filename);
       if (file.exists) file.delete();
@@ -464,6 +517,7 @@ export default function AccountantPackage() {
   }
 
   const monthNames = Array.from({ length: 12 }, (_, i) => date(`${year}-${String(i + 1).padStart(2, '0')}-01`, { month: 'short' }));
+  const flows = ownersEquity.flows;
 
   return (
     <Screen>
@@ -501,13 +555,16 @@ export default function AccountantPackage() {
         ) : (
           <>
             <Card>
-              <Row label={t('accountantPackage.grossIncome')} value={money(grossIncome)} bold />
+              <View style={[styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.grossIncomeBg }]}>
+                <Row label={t('accountantPackage.grossIncome')} value={money(grossIncome)} bold />
+              </View>
               {reimbursementsTotal > 0 && (
                 <MutedText>{t('accountantPackage.reimbursementsSubline', { amount: money(reimbursementsTotal) })}</MutedText>
               )}
-              <View style={styles.rowBorder}>
+              <View style={[styles.rowBorder, styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.totalRowBg }]}>
                 <Row label={t('accountantPackage.deductibleExpenses')} value={money(totalExpenses)} bold />
               </View>
+              <MutedText>{t('accountantPackage.reconcilingCaption')}</MutedText>
               {perDiemBlock && (
                 <View style={styles.rowBorder}>
                   <Row label={t('accountantPackage.perDiemMonthLabel')} value={money(perDiemBlock.monthDeduction)} />
@@ -546,13 +603,15 @@ export default function AccountantPackage() {
 
             {lumperFees.length > 0 && (
               <>
-                <Text style={styles.sectionTitle}>{t('accountantPackage.lumperFeesTitle')}</Text>
+                <View style={[styles.sectionHeaderTint, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.lumperHeaderBg }]}>
+                  <Text style={styles.sectionTitleOnTint}>{t('accountantPackage.lumperFeesTitle')}</Text>
+                </View>
                 <Card>
                   {lumperFees.map((item, i) => (
                     <LineItemRow key={item.id} item={item} isFirst={i === 0} onEdit={() => openEdit(item)} onDelete={() => handleDeleteItem(item)} money={money} />
                   ))}
                   <View style={styles.rowBorder}>
-                    <Row label={t('accountantPackage.totalExpenses')} value={money(lumperTotal)} bold />
+                    <Row label={t('accountantPackage.grandTotal')} value={money(lumperTotal)} bold />
                   </View>
                 </Card>
               </>
@@ -564,44 +623,34 @@ export default function AccountantPackage() {
                 <MutedText>{t('accountantPackage.noExpenses')}</MutedText>
               ) : (
                 <>
-                  {[...scheduleCTotals]
-                    .sort((a, b) => b.amount - a.amount)
-                    .map((cat) => {
-                      // Group by the SAME resolved Schedule C bucket
-                      // buildScheduleCTotals() itself used — a custom
-                      // category's raw name (e.g. "Detention Software")
-                      // can resolve to a DIFFERENT bucket ("ELD &
-                      // Communications"), so comparing against the raw
-                      // `li.category` here would silently drop those rows
-                      // from the list while still counting them in the total.
-                      const rowsForCategory = lineItems.filter(
-                        (li) => resolveScheduleCBucket(li.category, userCategoriesQuery.data ?? []) === cat.category
-                      );
-                      return (
-                        <View key={cat.category} style={{ marginBottom: spacing.sm }}>
-                          <View style={styles.categoryHeaderRow}>
-                            <Text style={styles.categoryHeaderText} numberOfLines={1}>
-                              {cat.category}
-                              {cat.scheduleCLine ? ` (${t('accountantPackage.line')} ${cat.scheduleCLine})` : ''}
-                            </Text>
-                            <Text style={styles.categoryHeaderAmount}>{money(cat.amount)}</Text>
-                          </View>
-                          {rowsForCategory.map((item, i) => (
-                            <LineItemRow key={item.id} item={item} isFirst={i === 0} onEdit={() => openEdit(item)} onDelete={() => handleDeleteItem(item)} money={money} />
-                          ))}
+                  {groupedCategories.map((cat) => (
+                    <View key={cat.category} style={{ marginBottom: spacing.sm }}>
+                      <View style={[styles.categoryHeaderRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.subtotalRowBg }]}>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Text style={styles.categoryHeaderText} numberOfLines={1}>
+                            {cat.category}
+                          </Text>
+                          <ScheduleCChip line={cat.scheduleCLine} />
                         </View>
-                      );
-                    })}
-                  <View style={styles.rowBorder}>
+                        <Text style={styles.categoryHeaderAmount}>{money(cat.amount)}</Text>
+                      </View>
+                      {cat.items.map((item, i) => (
+                        <LineItemRow key={item.id} item={item} isFirst={i === 0} onEdit={() => openEdit(item)} onDelete={() => handleDeleteItem(item)} money={money} />
+                      ))}
+                    </View>
+                  ))}
+                  <View style={[styles.rowBorder, styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.totalRowBg }]}>
                     <Row label={t('accountantPackage.grandTotal')} value={money(totalExpenses)} bold />
                   </View>
                 </>
               )}
             </Card>
 
-            <Text style={styles.sectionTitle}>{t('accountantPackage.capitalAssetsTitle')}</Text>
+            <View style={[styles.sectionHeaderTint, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.capitalAssetsHeaderBg }]}>
+              <Text style={styles.sectionTitleOnTint}>{t('accountantPackage.capitalAssetsTitle')}</Text>
+            </View>
             <MutedText>{t('accountantPackage.capitalAssetsNote')}</MutedText>
-            <Card>
+            <Card style={{ backgroundColor: ACCOUNTANT_SCREEN_COLORS.capitalAssetsBg }}>
               {capitalAssets.length === 0 ? (
                 <MutedText>{t('accountantPackage.noCapitalAssets')}</MutedText>
               ) : (
@@ -618,12 +667,31 @@ export default function AccountantPackage() {
 
             <Text style={styles.sectionTitle}>{t('accountantPackage.ownersEquityTitle')}</Text>
             <Card>
-              <Row label={t('accountantPackage.cashTransfers')} value={`${money(ownersEquity.cashAmount)} (${ownersEquity.cashCount})`} />
-              <View style={styles.rowBorder}>
-                <Row label={t('accountantPackage.paidPersonally')} value={`${money(ownersEquity.linkedAmount)} (${ownersEquity.linkedCount})`} />
+              <View style={[styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.contributionsInBg }]}>
+                <Row label={`${t('accountantPackage.cashContributedLabel')} (${flows.cashContributedCount})`} value={money(flows.cashContributed)} />
               </View>
+              <MutedText>{t('accountantPackage.cashContributedNote')}</MutedText>
+
+              <View style={[styles.rowBorder, styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.contributionsInBg }]}>
+                <Row
+                  label={`${t('accountantPackage.expensesPaidPersonallyLabel')} (${flows.expensesPaidPersonallyOutstandingCount})`}
+                  value={money(flows.expensesPaidPersonallyOutstanding)}
+                />
+              </View>
+              <MutedText>{t('accountantPackage.expensesPaidPersonallyNote')}</MutedText>
+
+              <View style={[styles.rowBorder, styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.drawsOutBg }]}>
+                <Row label={`${t('accountantPackage.reimbursementsTakenBackLabel')} (${flows.reimbursementsTakenBackCount})`} value={`-${money(flows.reimbursementsTakenBack)}`} />
+              </View>
+              <MutedText>{t('accountantPackage.reimbursementsTakenBackNote')}</MutedText>
+
+              <View style={[styles.rowBorder, styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.drawsOutBg }]}>
+                <Row label={`${t('accountantPackage.ownerDrawsLabel')} (${flows.ownerDrawsCount})`} value={`-${money(flows.ownerDraws)}`} />
+              </View>
+              <MutedText>{t('accountantPackage.ownerDrawsNote')}</MutedText>
+
               <View style={styles.rowBorder}>
-                <Row label={t('accountantPackage.totalExpenses')} value={money(ownersEquity.total)} bold />
+                <Row label={t('accountantPackage.netPositionLabel')} value={money(flows.netPosition)} bold />
               </View>
               {ownersEquity.unmatchedOwnerPaidCount > 0 && (
                 <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
@@ -632,6 +700,9 @@ export default function AccountantPackage() {
               )}
             </Card>
             <MutedText>{t('accountantPackage.ownersEquityNote')}</MutedText>
+            <MutedText>{t('accountantPackage.footerMealsNote')}</MutedText>
+            <MutedText>{t('accountantPackage.footerNonDeductibleNote')}</MutedText>
+            <MutedText>{t('accountantPackage.footerOwnerPaidNote')}</MutedText>
 
             <Text style={styles.sectionTitle}>{t('accountantPackage.exportTitle')}</Text>
             <Card>
@@ -677,6 +748,13 @@ function LineItemRow({
           {item.date ?? ''} — {item.description}
           {item.isOwnerPaid ? ` 💰 ${t('accountantPackage.ownerPaidBadge')}` : ''}
         </Text>
+        {/* "Paid with" column (spec item 1) — an actual grid column in the
+            PDF/Excel export (accountantPackageReport.ts); on a narrow
+            phone screen the same information is shown inline under the
+            row instead of as a separate column, to avoid overflow. */}
+        {item.isOwnerPaid && item.paymentMethod && (
+          <MutedText>{t('accountantPackage.paidWithLabel')}: {item.paymentMethod}</MutedText>
+        )}
       </Pressable>
       <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600', marginStart: spacing.sm }}>{money(item.amount)}</Text>
       <Pressable onPress={onDelete} hitSlop={8} style={{ marginStart: spacing.sm }}>
@@ -694,11 +772,34 @@ const styles = {
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
+  // FULL VISUAL PARITY WITH WEB — a colour-tinted section header (Lumper
+  // Fees amber, Capital Assets blue) replacing a plain sectionTitle Text
+  // wherever the spec calls for a coloured header band.
+  sectionHeaderTint: {
+    borderRadius: radii.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  sectionTitleOnTint: {
+    color: '#111',
+    fontSize: typography.size.md,
+    fontWeight: '700' as const,
+  },
   row: {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     paddingVertical: spacing.sm,
+  },
+  // A tinted row's own horizontal padding — a plain `row` has none since
+  // it normally sits flush inside its Card, but a coloured background
+  // needs breathing room on both sides to read as a deliberate highlight
+  // rather than a clipped edge-to-edge smear.
+  tintedRow: {
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.sm,
   },
   lineItemRow: {
     flexDirection: 'row' as const,
@@ -707,7 +808,9 @@ const styles = {
     paddingVertical: spacing.sm,
   },
   ownerPaidRow: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    backgroundColor: ACCOUNTANT_SCREEN_COLORS.ownerPaidBg,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.sm,
   },
   rowBorder: {
     borderTopWidth: 1,
@@ -731,16 +834,29 @@ const styles = {
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.sm,
   },
   categoryHeaderText: {
-    flex: 1,
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: '800' as const,
+    marginEnd: spacing.xs,
   },
   categoryHeaderAmount: {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: '800' as const,
+  },
+  chip: {
+    backgroundColor: ACCOUNTANT_SCREEN_COLORS.capitalAssetsHeaderBg,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+  },
+  chipText: {
+    color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: '700' as const,
   },
 };
