@@ -2581,7 +2581,7 @@ a "export all my data" dump is for (same reasoning `ai_usage_log`/
 
 ---
 
-## 55. reviewed_at columns + compliance_items expansion (owner decision 2026-08-24, device testing round)
+## 55. reviewed_at columns + compliance_items expansion (owner decision 2026-08-24, device testing round) — ✅ APPLIED
 
 Three device-testing items, one schema pass:
 
@@ -2638,8 +2638,8 @@ No RLS changes needed on any of the three tables — all new columns are
 just additional fields on already row-level-secured, already user-scoped
 tables.
 
-- [ ] 55a run (deductions.reviewed_at, documents.reviewed_at)
-- [ ] 55b run (compliance_items: issue_date, reminder_lead_days, note, truck_id, driver_id, applies_to)
+- [x] 55a run (deductions.reviewed_at, documents.reviewed_at)
+- [x] 55b run (compliance_items: issue_date, reminder_lead_days, note, truck_id, driver_id, applies_to)
 
 ---
 

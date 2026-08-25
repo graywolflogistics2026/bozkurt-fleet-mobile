@@ -4953,10 +4953,8 @@
   normal `eas update`, no native rebuild needed.
 - DEVICE TESTING ROUND — NEEDS REVIEW, PAYMENT+DESTINATION SUMMARY,
   DOCUMENTS & RENEWALS (owner decision 2026-08-24, docs/PENDING_SQL.md
-  §55, NOT YET RUN against the live project as of this writing — both
-  `deductions.reviewed_at`/`documents.reviewed_at` and the 6
-  `compliance_items` columns are needed before this pass's code is fully
-  live). Four items:
+  §55, ✅ APPLIED — `deductions.reviewed_at`/`documents.reviewed_at` and
+  the 6 `compliance_items` columns are live). Four items:
   1. **NEEDS REVIEW WON'T CLEAR — root cause and fix**: there was no
      explicit "mark reviewed" action ANYWHERE in the app — the two
      existing signals (a deduction's "NEEDS REVIEW: " description prefix;
@@ -5158,5 +5156,6 @@
   were NOT touched this pass — no redeploy needed for any Edge Function.
   No native rebuild needed — `expo-image-picker`/`expo-document-picker`
   were already dependencies (already used by the Import screen), no new
-  native module added — ships via a normal `eas update` once §55 has been
-  run against the live project.
+  native module added. docs/PENDING_SQL.md §55 has been run against the
+  live project and this pass's client update has been published to
+  preview via `eas update`.
