@@ -1,7 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createEntityHooks } from '@/src/data/entityHooks';
 import { supabase } from '@/src/lib/supabase';
-import { manualTransactionBalanceDelta, calcReimbursementStatus, type ReimbursementStatus } from '@/src/stats/capitalAccount';
+import {
+  manualTransactionBalanceDelta,
+  computeManualTransactionBalanceAdjustment,
+  calcReimbursementStatus,
+  type ReimbursementStatus,
+} from '@/src/stats/capitalAccount';
 import type { CapitalTransaction, CapitalTransactionInsert, CapitalTransactionUpdate } from '@/src/types/db';
 
 const hooks = createEntityHooks<CapitalTransaction, CapitalTransactionInsert, CapitalTransactionUpdate>(
@@ -105,6 +110,63 @@ export function useReimburseMyself() {
         p_delta: delta,
       });
       if (balErr) throw balErr;
+      return data as CapitalTransaction;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['capital_transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['capital-account-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+  });
+}
+
+// CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3
+// "every row editable"). Edits a MANUAL (non-linked) draw/contribution's
+// date/amount/note; the balance is adjusted by the DIFFERENCE only
+// (computeManualTransactionBalanceAdjustment — same delta-only rule the
+// insert/delete hooks above already follow), never by re-crediting the
+// full new amount, which would double-count whatever was already applied
+// by the original insert. `previousBalanceApplied` MUST come from the
+// row's own stored `business_balance_applied` column, never re-derived
+// from the row's pre-edit amount — this is what keeps a chain of repeated
+// edits from ever drifting. Never used for a LINKED contribution (those
+// have no business_balance_applied delta to adjust at all — see
+// manualTransactionBalanceDelta's own header comment); a linked row's
+// date/note edit goes through the plain useUpdateCapitalTransaction hook
+// instead, since it never touches business_balance.
+export function useUpdateManualCapitalTransaction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      id: string;
+      userId: string;
+      txType: 'contribution' | 'draw';
+      amount: number;
+      txDate: string;
+      note: string | null;
+      previousBalanceApplied: number;
+    }) => {
+      const newBalanceApplied = manualTransactionBalanceDelta(params.txType, params.amount);
+      const adjustment = computeManualTransactionBalanceAdjustment(params.txType, params.amount, params.previousBalanceApplied);
+      const { data, error } = await supabase
+        .from('capital_transactions')
+        .update({
+          amount: params.amount,
+          tx_date: params.txDate,
+          note: params.note,
+          business_balance_applied: newBalanceApplied,
+        })
+        .eq('id', params.id)
+        .select()
+        .single();
+      if (error) throw error;
+      if (adjustment !== 0) {
+        const { error: balErr } = await supabase.rpc('apply_business_balance_delta', {
+          p_user_id: params.userId,
+          p_delta: adjustment,
+        });
+        if (balErr) throw balErr;
+      }
       return data as CapitalTransaction;
     },
     onSuccess: () => {

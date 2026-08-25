@@ -5266,3 +5266,93 @@
   `delete-account`. No new native dependency — pure JS/TS work reusing an
   already-proven expo-file-system pattern — ships via a normal
   `eas update`.
+- CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, no SQL
+  needed — every field this pass touches already existed on
+  `capital_transactions`; `tx_date`/`amount`/`note` were always
+  writable columns, just never exposed as editable on this screen).
+  1. **DATE FIELD**: both "Add Contribution" and "Add Draw" (see item 2)
+     gained a Date field, defaulting to today (`todayIso()`, re-applied
+     every time the sheet is freshly opened via new `openDraw()`/
+     `openContribution()` functions — previously the two ModalSheets were
+     opened by a bare inline `onPress`, with no reset step at all) but
+     freely editable for a back-dated entry. New pure
+     `validateCapitalTransactionDate()` (`src/stats/capitalAccount.ts`) —
+     reuses `dateGuard.ts`'s `toDateOrNull()` for the base "is this a real
+     calendar date" check (so the two modules can never disagree about
+     what counts as a valid date string), then rejects anything after
+     today (ISO-string lexicographic comparison, immune to timezone
+     Date-object pitfalls) or before `MIN_CAPITAL_TX_YEAR = 2020` (matches
+     `dateGuard.ts`'s own `isImplausibleDate()` floor — deliberately
+     STRICTER than that function's "up to next year" allowance, since a
+     capital transaction always records something that already happened
+     and can never be legitimately future-dated). Save is disabled and an
+     inline red message shown whenever the current date fails validation,
+     on Add Contribution, Add Draw, AND the new edit sheet (item 3) alike.
+  2. **WORDING**: "Record Draw"/"Record Distribution"/"Record
+     Contribution" → "Add Draw"/"Add Distribution"/"Add Contribution"
+     (button labels + both add-sheet AND new edit-sheet titles — "Edit
+     Draw"/"Edit Distribution"/"Edit Contribution") — VALUES only, key
+     names unchanged, across all 7 locales (es/ru/ar/tr translated,
+     hi/uk untranslated English copies per invariant #11) — same "rename
+     values not keys" convention as the DOCUMENTS & RENEWALS rename.
+  3. **EVERY ROW EDITABLE**: `HistoryRow` used to only make a LINKED
+     contribution tappable (straight to Deductions) and only gave a
+     MANUAL row an inline ✕ delete icon — now EVERY row (draw or
+     contribution, linked or manual) is tappable and opens one shared
+     edit sheet (date/amount/note + Delete), replacing the old inline ✕
+     icon and the old direct-navigate-on-tap behavior entirely. New
+     `isLinkedContribution()` (`src/stats/capitalAccount.ts`) is the ONE
+     shared predicate both the row's own 🔗 indicator and the edit
+     sheet's amount-lock decision read from — previously computed inline,
+     independently, in two places. For a linked row, amount renders as
+     locked/muted text with an explanatory note
+     (`capitalAccount.linkedAmountLocked`) and a "View Linked Expense"
+     button routing to Deductions; date/note stay freely editable via the
+     SAME plain `useUpdateCapitalTransaction()` entity-hook update (no
+     balance side effect at all, since a linked row never applies one —
+     `manualTransactionBalanceDelta`'s own header comment). Delete is
+     deliberately NOT offered for a linked row from this screen — deleting
+     it independently would desync it from its deduction (the deduction
+     would silently re-create a fresh linked contribution on its own next
+     save via `deductionMutations.ts`'s `applyContributionSync()`), so
+     that still routes through Deductions, unchanged from before. New
+     `useUpdateManualCapitalTransaction()` (`src/data/capitalTransactions.ts`)
+     handles a MANUAL row's edit — adjusts `business_balance` by the
+     DIFFERENCE only via new pure
+     `computeManualTransactionBalanceAdjustment()`
+     (`newDelta - previousBalanceApplied`, where `previousBalanceApplied`
+     is ALWAYS read from the row's own stored `business_balance_applied`
+     column, never re-derived from its pre-edit amount — same "no drift
+     across a chain of repeated edits" rule `useDeleteManualCapitalTransaction`'s
+     own reversal already followed), applied via the SAME atomic
+     `apply_business_balance_delta` RPC every other real cash movement on
+     this screen uses. **"Tap to edit" applied everywhere else a
+     financial row was read-only on this screen**: audited the rest of
+     the screen (the Contributed/Draws/Tax-Free-Left summary card, the
+     Business Balance card, the 4 flow-total rows) and found nothing else
+     qualifying — those are all COMPUTED AGGREGATES (sums across many
+     transactions), not individual editable rows, so there's nothing a
+     "tap to edit" pattern could apply to; Business Balance already had
+     its own dedicated "Update Business Balance" edit action (unchanged).
+  Tests (`src/stats/__tests__/capitalAccount.test.ts`, extended):
+  `validateCapitalTransactionDate` (past/today/future/too-old/malformed,
+  plus the exact "back-dated entry lands in the right month's report"
+  proof — a back-dated tx_date fed through the SAME `groupByMonth()`
+  every other list screen in this app uses buckets into its own
+  historical month, never the current one);
+  `computeManualTransactionBalanceAdjustment` (fresh insert, edit up,
+  edit down, a draw's negative direction, a same-amount no-op, and a
+  5-edit chain proving the SUM of every incremental adjustment equals
+  exactly the start-to-end delta — the literal "no drift" guarantee);
+  `isLinkedContribution` (a linked contribution, a plain cash one, and —
+  the one genuine edge case — a DRAW that happens to carry a
+  `linked_deduction_id`, which must never count as "locked" since that's
+  a reimbursement, not a contribution); and a new "full lifecycle" block
+  proving insert→edit→delete always nets to exactly $0 business_balance
+  effect regardless of whether the edit went up or down, plus a
+  regression case for the pre-existing no-edit insert→delete path. Full
+  suite: 94 suites / 2331 tests pass (+18 new); `tsc --noEmit` clean; all
+  7 locales confirmed key-parity. No SQL/Edge Function changes — every
+  column this pass writes to already existed; no redeploy needed for any
+  Edge Function. No new native dependency — ships via a normal
+  `eas update`.

@@ -5,7 +5,11 @@ import {
   summarizeContributions,
   calcReimbursementStatus,
   summarizeCapitalFlows,
+  validateCapitalTransactionDate,
+  computeManualTransactionBalanceAdjustment,
+  isLinkedContribution,
 } from '@/src/stats/capitalAccount';
+import { groupByMonth } from '@/src/stats/monthGroups';
 
 describe('calcCapitalAccount', () => {
   it('effective contribution is initial capital plus extra contributions', () => {
@@ -188,5 +192,171 @@ describe('summarizeCapitalFlows', () => {
     const flows = summarizeCapitalFlows(rows);
     const account = calcCapitalAccount(0, 60000 + 200, 5000);
     expect(flows.netPosition).toBe(account.taxFreeRemaining);
+  });
+});
+
+// CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24). Item 1:
+// "no future dates beyond today, no obviously wrong years."
+describe('validateCapitalTransactionDate', () => {
+  const now = new Date('2026-08-24T12:00:00Z');
+
+  it('accepts a plain past date', () => {
+    expect(validateCapitalTransactionDate('2026-03-15', now)).toEqual({ valid: true });
+  });
+
+  it('accepts today itself', () => {
+    expect(validateCapitalTransactionDate('2026-08-24', now)).toEqual({ valid: true });
+  });
+
+  it('rejects a date in the future', () => {
+    expect(validateCapitalTransactionDate('2026-08-25', now)).toEqual({ valid: false, reason: 'future' });
+  });
+
+  it('rejects a year before the plausible floor (a likely typo, e.g. 2016 instead of 2026)', () => {
+    expect(validateCapitalTransactionDate('2016-03-15', now)).toEqual({ valid: false, reason: 'tooOld' });
+  });
+
+  it('rejects a malformed date string', () => {
+    expect(validateCapitalTransactionDate('not-a-date', now)).toEqual({ valid: false, reason: 'invalid' });
+    expect(validateCapitalTransactionDate('2026-13-45', now)).toEqual({ valid: false, reason: 'invalid' });
+    expect(validateCapitalTransactionDate('', now)).toEqual({ valid: false, reason: 'invalid' });
+  });
+
+  // "back-dated entry lands in the right month's report" — proves a
+  // back-dated tx_date isn't just ACCEPTED, it round-trips through the
+  // exact same month-bucketing every other list screen in this app uses
+  // (groupByMonth, src/stats/monthGroups.ts) and lands in ITS OWN
+  // historical month, never silently drifting into today's month due to
+  // a timezone/parsing bug.
+  it('a validated back-dated entry buckets into its own historical month via groupByMonth, not the current month', () => {
+    const backDated = { id: 'a', tx_date: '2026-03-15', amount: 500 };
+    const today = { id: 'b', tx_date: '2026-08-24', amount: 300 };
+    expect(validateCapitalTransactionDate(backDated.tx_date, now)).toEqual({ valid: true });
+
+    const groups = groupByMonth([backDated, today], (tx) => tx.tx_date, (tx) => tx.amount);
+    const marchGroup = groups.find((g) => g.monthKey === '2026-03');
+    const augustGroup = groups.find((g) => g.monthKey === '2026-08');
+    expect(marchGroup?.rows.map((r) => r.id)).toEqual(['a']);
+    expect(augustGroup?.rows.map((r) => r.id)).toEqual(['b']);
+    // Never lumped into the same bucket as today's entry.
+    expect(marchGroup).not.toBe(augustGroup);
+  });
+});
+
+// CAPITAL ACCOUNT — THREE UI FIXES, item 3 "every row editable... edits
+// adjust the balance by the DIFFERENCE only (no drift on repeated
+// edits)".
+describe('computeManualTransactionBalanceAdjustment', () => {
+  it('a fresh $500 contribution (previousBalanceApplied 0) adjusts by the full +$500', () => {
+    expect(computeManualTransactionBalanceAdjustment('contribution', 500, 0)).toBe(500);
+  });
+
+  it('editing a $500 contribution UP to $800 adjusts by only +$300, not the full new amount', () => {
+    expect(computeManualTransactionBalanceAdjustment('contribution', 800, 500)).toBe(300);
+  });
+
+  it('editing a $500 contribution DOWN to $200 adjusts by -$300', () => {
+    expect(computeManualTransactionBalanceAdjustment('contribution', 200, 500)).toBe(-300);
+  });
+
+  it('editing a draw follows the same delta-only rule in the negative direction', () => {
+    // A $200 draw applied -$200; editing it up to $350 should apply an
+    // additional -$150, landing on a total of -$350 applied.
+    expect(computeManualTransactionBalanceAdjustment('draw', 350, -200)).toBe(-150);
+  });
+
+  it('re-saving the exact same amount is a true no-op adjustment', () => {
+    expect(computeManualTransactionBalanceAdjustment('contribution', 500, 500)).toBe(0);
+  });
+
+  // "No drift on repeated edits" — a chain of edits, each computing its
+  // own adjustment from the PREVIOUS row's own stored
+  // business_balance_applied (never re-derived from the row's amount),
+  // must sum to exactly the delta between the very first and very last
+  // amount — proving no drift accumulates no matter how many edits occur
+  // in between.
+  it('a chain of repeated edits never drifts — the sum of every adjustment equals start-to-end delta', () => {
+    let applied = 0; // previousBalanceApplied, starts at 0 (brand new row)
+    const amounts = [500, 800, 650, 1000, 900];
+    let totalAdjustment = 0;
+    for (const amount of amounts) {
+      const adjustment = computeManualTransactionBalanceAdjustment('contribution', amount, applied);
+      totalAdjustment += adjustment;
+      applied = manualTransactionBalanceDelta('contribution', amount); // what the mutation hook stores as the new business_balance_applied
+    }
+    // Started at $0 applied, ended at $900 applied — the sum of every
+    // incremental adjustment along the way must equal exactly $900, not
+    // more and not less, regardless of how many edits happened.
+    expect(totalAdjustment).toBe(900);
+    expect(applied).toBe(900);
+  });
+});
+
+// CAPITAL ACCOUNT — THREE UI FIXES, item 3 "linked rows keep their amount
+// locked" — the one shared predicate the edit sheet's amount-lock
+// decision and the history row's 🔗 indicator both read from.
+describe('isLinkedContribution', () => {
+  it('a contribution with a linked_deduction_id is linked', () => {
+    expect(isLinkedContribution({ id: 'a', tx_type: 'contribution', amount: 200, tx_date: '2026-07-01', linked_deduction_id: 'ded-1' })).toBe(true);
+  });
+
+  it('a plain cash contribution (no linked_deduction_id) is not linked', () => {
+    expect(isLinkedContribution({ id: 'a', tx_type: 'contribution', amount: 60000, tx_date: '2026-01-01' })).toBe(false);
+  });
+
+  it('a DRAW is never "linked" for amount-locking purposes even when it carries a linked_deduction_id (a reimbursement draw, not a contribution)', () => {
+    expect(isLinkedContribution({ id: 'a', tx_type: 'draw', amount: 100, tx_date: '2026-07-15', linked_deduction_id: 'ded-1' })).toBe(false);
+  });
+});
+
+// CAPITAL ACCOUNT — THREE UI FIXES, item 3 "delete reverses cleanly" — a
+// full insert -> edit -> delete lifecycle must leave business_balance
+// EXACTLY where it started (net $0 effect), proving deleteManualCapitalTransaction's
+// own reversal (`-business_balance_applied`, unchanged by this pass) still
+// reverses the CURRENT stored applied amount correctly even after one or
+// more edits changed it.
+describe('full lifecycle: insert, edit, delete never leaves a balance residue', () => {
+  it('insert $500, edit to $800, then delete — net business_balance effect is exactly $0', () => {
+    // 1. Insert: business_balance_applied starts at manualTransactionBalanceDelta.
+    let businessBalanceApplied = manualTransactionBalanceDelta('contribution', 500);
+    let netBusinessBalanceChange = businessBalanceApplied; // +500 credited on insert
+    expect(businessBalanceApplied).toBe(500);
+
+    // 2. Edit to $800 — adjust by the DIFFERENCE only.
+    const adjustment = computeManualTransactionBalanceAdjustment('contribution', 800, businessBalanceApplied);
+    netBusinessBalanceChange += adjustment;
+    businessBalanceApplied = manualTransactionBalanceDelta('contribution', 800); // what the row now stores
+    expect(adjustment).toBe(300);
+    expect(businessBalanceApplied).toBe(800);
+    expect(netBusinessBalanceChange).toBe(800); // matches the CURRENT amount, not 500+800
+
+    // 3. Delete — reverses the CURRENT stored business_balance_applied
+    // (useDeleteManualCapitalTransaction's own `-Number(tx.business_balance_applied ?? 0)`).
+    const reversal = -businessBalanceApplied;
+    netBusinessBalanceChange += reversal;
+    expect(reversal).toBe(-800);
+
+    // End to end: +500 (insert) +300 (edit adjustment) -800 (delete reversal) = 0.
+    expect(netBusinessBalanceChange).toBe(0);
+  });
+
+  it('insert, edit DOWN, then delete — still nets to exactly $0', () => {
+    let businessBalanceApplied = manualTransactionBalanceDelta('draw', 400);
+    let netBusinessBalanceChange = businessBalanceApplied; // -400 on insert
+
+    const adjustment = computeManualTransactionBalanceAdjustment('draw', 150, businessBalanceApplied);
+    netBusinessBalanceChange += adjustment;
+    businessBalanceApplied = manualTransactionBalanceDelta('draw', 150);
+
+    const reversal = -businessBalanceApplied;
+    netBusinessBalanceChange += reversal;
+
+    expect(netBusinessBalanceChange).toBe(0);
+  });
+
+  it('insert, delete with NO edit in between — the original, pre-existing reversal behavior is unchanged', () => {
+    const businessBalanceApplied = manualTransactionBalanceDelta('contribution', 250);
+    const netBusinessBalanceChange = businessBalanceApplied + -businessBalanceApplied;
+    expect(netBusinessBalanceChange).toBe(0);
   });
 });

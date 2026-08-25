@@ -1,3 +1,5 @@
+import { toDateOrNull } from '@/src/import/dateGuard';
+
 export type CapitalAccountSummary = {
   effectiveContribution: number;
   totalDraws: number;
@@ -73,6 +75,21 @@ export function findDuplicateTransactionIds(transactions: CapitalTransactionLike
 // there would fabricate a deposit that never happened.
 export function manualTransactionBalanceDelta(txType: 'contribution' | 'draw', amount: number): number {
   return txType === 'contribution' ? amount : -amount;
+}
+
+// CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3):
+// the ONE shared predicate for "is this row a linked contribution" — the
+// UI (capital-account.tsx) previously computed this same check inline in
+// two separate places (the history row's 🔗 indicator, and — new this
+// pass — the edit sheet's amount-lock decision); extracted here so the
+// two can never drift apart, and so it's directly unit-testable. A draw
+// is NEVER "linked" for this purpose even when it carries a
+// linked_deduction_id (that field is dual-purpose — see
+// calcReimbursementStatus's own header comment — a linked DRAW is a
+// reimbursement, not a contribution whose amount is locked to a source
+// expense).
+export function isLinkedContribution(tx: CapitalTransactionLike): boolean {
+  return tx.tx_type === 'contribution' && !!tx.linked_deduction_id;
 }
 
 export type ContributionBreakdown = {
@@ -217,4 +234,49 @@ export function summarizeCapitalFlows(transactions: CapitalTransactionLike[]): C
     ownerDrawsCount,
     netPosition,
   };
+}
+
+// CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 1).
+// A contribution/draw always records something that already happened (a
+// transfer already made, cash already withdrawn) — it can never be dated
+// in the future, and a year outside a sane trucking-app range is almost
+// always a typo (e.g. "2016" typed instead of "2026"). Reuses
+// dateGuard.ts's toDateOrNull() for the base "is this even a real
+// calendar date" check (rejects malformed input, rolled-over months/days
+// like "2026-13-45", etc.) so the two modules can never disagree about
+// what counts as a valid date string. `now` is injectable for tests.
+export const MIN_CAPITAL_TX_YEAR = 2020; // matches dateGuard.ts's isImplausibleDate() floor
+
+export type CapitalTransactionDateValidation =
+  | { valid: true }
+  | { valid: false; reason: 'invalid' | 'future' | 'tooOld' };
+
+export function validateCapitalTransactionDate(
+  dateStr: string,
+  now: Date = new Date()
+): CapitalTransactionDateValidation {
+  const parsed = toDateOrNull(dateStr);
+  if (!parsed) return { valid: false, reason: 'invalid' };
+  const todayIso = now.toISOString().slice(0, 10);
+  if (parsed > todayIso) return { valid: false, reason: 'future' };
+  if (Number(parsed.slice(0, 4)) < MIN_CAPITAL_TX_YEAR) return { valid: false, reason: 'tooOld' };
+  return { valid: true };
+}
+
+// CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3):
+// "edits adjust the balance by the DIFFERENCE only (no drift on repeated
+// edits, same rule we already use)" — same delta-only pattern
+// useDeleteManualCapitalTransaction() already uses for a reversal
+// (`-Number(tx.business_balance_applied ?? 0)`) and settlements'
+// business_balance_credit re-import fix. `previousBalanceApplied` is
+// ALWAYS read from the row's own stored business_balance_applied — never
+// re-derived from whatever the row's amount happened to be before this
+// edit — so a chain of edits can never accumulate drift.
+export function computeManualTransactionBalanceAdjustment(
+  txType: 'contribution' | 'draw',
+  newAmount: number,
+  previousBalanceApplied: number
+): number {
+  const newDelta = manualTransactionBalanceDelta(txType, newAmount);
+  return newDelta - previousBalanceApplied;
 }

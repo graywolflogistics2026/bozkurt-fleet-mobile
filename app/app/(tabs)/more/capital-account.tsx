@@ -7,12 +7,21 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useCapitalAccountSummary, useUpdateBusinessBalance } from '@/src/data/capitalAccount';
 import {
   useCapitalTransactions,
+  useUpdateCapitalTransaction,
   useDeleteManualCapitalTransaction,
   useRecordManualCapitalTransaction,
+  useUpdateManualCapitalTransaction,
 } from '@/src/data/capitalTransactions';
 import { useTaxConfig } from '@/src/data/taxConfig';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
-import { findDuplicateTransactionIds, summarizeContributions, summarizeCapitalFlows } from '@/src/stats/capitalAccount';
+import {
+  findDuplicateTransactionIds,
+  summarizeContributions,
+  summarizeCapitalFlows,
+  validateCapitalTransactionDate,
+  isLinkedContribution,
+  type CapitalTransactionDateValidation,
+} from '@/src/stats/capitalAccount';
 import {
   Screen,
   ScreenTitle,
@@ -29,27 +38,23 @@ import { useFormatters } from '@/src/i18n/format';
 import { colors, spacing, typography } from '@/src/theme';
 import type { CapitalTransaction } from '@/src/types/db';
 
-function HistoryRow({
-  tx,
-  onDeleteDraw,
-  onDeleteContribution,
-  onTapContribution,
-}: {
-  tx: CapitalTransaction;
-  onDeleteDraw: () => void;
-  onDeleteContribution: () => void;
-  onTapContribution: () => void;
-}) {
+// CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3
+// "every row editable"): EVERY row (draw or contribution, linked or
+// manual) is now tappable and opens the same edit sheet — the previous
+// version only made a LINKED contribution tappable (navigating straight
+// to Deductions) and only gave a MANUAL row an inline delete icon. The
+// edit sheet itself is what now differentiates a linked row (amount
+// locked, "view expense" link) from a manual one (everything editable,
+// Delete offered) — see the ModalSheet below.
+function HistoryRow({ tx, onTap }: { tx: CapitalTransaction; onTap: () => void }) {
   const { money } = useFormatters();
   const isDraw = tx.tx_type === 'draw';
-  // FULL PARITY pass (owner decision 2026-08-05, spec item E.1) — a
-  // LINKED contribution (auto-created from a personally-paid deduction)
-  // stays read-only here (🔗, tap through to the deduction, "edit the
-  // deduction instead"); a MANUAL cash contribution is a real row this
-  // screen owns and must be deletable, same as a draw.
-  const isLinkedContribution = !isDraw && !!tx.linked_deduction_id;
-  const content = (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm }}>
+  const linked = isLinkedContribution(tx);
+  return (
+    <Pressable
+      onPress={onTap}
+      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm }}
+    >
       <View style={{ flex: 1 }}>
         <MutedText>
           {tx.tx_date}
@@ -61,21 +66,11 @@ function HistoryRow({
           {isDraw ? '-' : '+'}
           {money(tx.amount)}
         </Text>
-        {isLinkedContribution ? (
-          <Text style={{ color: colors.muted, fontSize: typography.size.md }}>🔗</Text>
-        ) : (
-          <Pressable onPress={isDraw ? onDeleteDraw : onDeleteContribution} hitSlop={8}>
-            <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700', paddingHorizontal: 4 }}>
-              ✕
-            </Text>
-          </Pressable>
-        )}
+        {linked && <Text style={{ color: colors.muted, fontSize: typography.size.md }}>🔗</Text>}
+        <Text style={{ color: colors.muted, fontWeight: '700' }}>›</Text>
       </View>
-    </View>
+    </Pressable>
   );
-
-  if (!isLinkedContribution) return content;
-  return <Pressable onPress={onTapContribution}>{content}</Pressable>;
 }
 
 // One flow row: label + amount + a one-line explainer the owner can repeat
@@ -124,13 +119,24 @@ export default function CapitalAccount() {
   const insertTx = useRecordManualCapitalTransaction();
   const deleteTx = useDeleteManualCapitalTransaction();
   const updateBalance = useUpdateBusinessBalance();
+  // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3) —
+  // updateManualTx adjusts business_balance by the delta (a manual, non-
+  // linked row); updateTx is the plain entity-hook update (no balance
+  // side effect at all) used for a LINKED contribution's date/note edit,
+  // since a linked row never applies a balance delta in the first place.
+  const updateManualTx = useUpdateManualCapitalTransaction();
+  const updateTx = useUpdateCapitalTransaction();
+
+  const todayIso = () => new Date().toISOString().slice(0, 10);
 
   const [drawModalOpen, setDrawModalOpen] = useState(false);
+  const [drawDate, setDrawDate] = useState(todayIso());
   const [drawAmount, setDrawAmount] = useState('');
   const [drawNote, setDrawNote] = useState('');
   const [savingDraw, setSavingDraw] = useState(false);
 
   const [contributionModalOpen, setContributionModalOpen] = useState(false);
+  const [contributionDate, setContributionDate] = useState(todayIso());
   const [contributionAmount, setContributionAmount] = useState('');
   const [contributionNote, setContributionNote] = useState('');
   const [savingContribution, setSavingContribution] = useState(false);
@@ -138,6 +144,14 @@ export default function CapitalAccount() {
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [balanceInput, setBalanceInput] = useState('');
   const [savingBalance, setSavingBalance] = useState(false);
+
+  // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3) —
+  // one shared edit sheet for every history row, linked or manual.
+  const [editingTx, setEditingTx] = useState<CapitalTransaction | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const summary = summaryQuery.data;
   const isScorp = taxConfigQuery.data?.entity_type === 'scorp';
@@ -159,16 +173,44 @@ export default function CapitalAccount() {
   const duplicateIds = useMemo(() => findDuplicateTransactionIds(rows), [rows]);
   const isPastCapital = !!summary && summary.effectiveContribution - summary.totalDraws < 0;
 
+  // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 1) —
+  // "no future dates beyond today, no obviously wrong years." Shared by
+  // Add Draw, Add Contribution, AND the edit sheet so all three can never
+  // disagree about what counts as a valid date.
+  function dateValidationMessage(result: CapitalTransactionDateValidation): string | null {
+    if (result.valid) return null;
+    if (result.reason === 'future') return t('capitalAccount.dateFuture');
+    if (result.reason === 'tooOld') return t('capitalAccount.dateTooOld');
+    return t('capitalAccount.dateInvalid');
+  }
+
+  function openDraw() {
+    setDrawDate(todayIso());
+    setDrawAmount('');
+    setDrawNote('');
+    setDrawModalOpen(true);
+  }
+
+  function openContribution() {
+    setContributionDate(todayIso());
+    setContributionAmount('');
+    setContributionNote('');
+    setContributionModalOpen(true);
+  }
+
+  const drawDateError = dateValidationMessage(validateCapitalTransactionDate(drawDate));
+  const contributionDateError = dateValidationMessage(validateCapitalTransactionDate(contributionDate));
+
   async function handleRecordDraw() {
     const amount = Number(drawAmount) || 0;
-    if (amount <= 0 || !userId) return;
+    if (amount <= 0 || !userId || drawDateError) return;
     setSavingDraw(true);
     try {
       await insertTx.mutateAsync({
         user_id: userId,
         tx_type: 'draw',
         amount,
-        tx_date: new Date().toISOString().slice(0, 10),
+        tx_date: drawDate,
         note: drawNote || null,
       });
       await invalidateFinancialData(queryClient);
@@ -196,6 +238,7 @@ export default function CapitalAccount() {
             try {
               await deleteTx.mutateAsync(tx);
               await invalidateFinancialData(queryClient);
+              setEditingTx(null);
             } catch (err) {
               Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
             }
@@ -207,14 +250,14 @@ export default function CapitalAccount() {
 
   async function handleRecordContribution() {
     const amount = Number(contributionAmount) || 0;
-    if (amount <= 0 || !userId) return;
+    if (amount <= 0 || !userId || contributionDateError) return;
     setSavingContribution(true);
     try {
       await insertTx.mutateAsync({
         user_id: userId,
         tx_type: 'contribution',
         amount,
-        tx_date: new Date().toISOString().slice(0, 10),
+        tx_date: contributionDate,
         note: contributionNote || null,
       });
       await invalidateFinancialData(queryClient);
@@ -241,6 +284,7 @@ export default function CapitalAccount() {
             try {
               await deleteTx.mutateAsync(tx);
               await invalidateFinancialData(queryClient);
+              setEditingTx(null);
             } catch (err) {
               Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
             }
@@ -248,6 +292,60 @@ export default function CapitalAccount() {
         },
       ]
     );
+  }
+
+  // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3
+  // "every row editable"). One shared edit sheet for every history row.
+  function openEdit(tx: CapitalTransaction) {
+    setEditingTx(tx);
+    setEditDate(tx.tx_date);
+    setEditAmount(String(tx.amount));
+    setEditNote(tx.note ?? '');
+  }
+
+  function closeEdit() {
+    setEditingTx(null);
+  }
+
+  const isEditingLinked = !!editingTx && isLinkedContribution(editingTx);
+  const editDateError = editingTx ? dateValidationMessage(validateCapitalTransactionDate(editDate)) : null;
+
+  async function handleSaveEdit() {
+    if (!editingTx || !userId || editDateError) return;
+    const amount = Number(editAmount) || 0;
+    if (!isEditingLinked && amount <= 0) return;
+    setSavingEdit(true);
+    try {
+      if (isEditingLinked) {
+        // A linked contribution's AMOUNT stays whatever the source
+        // deduction says — this never touches business_balance (the
+        // plain entity-hook update, no delta math), same as
+        // deductionMutations.ts's own applyContributionSync() 'update'
+        // action, which is the actual owner of this row's amount.
+        await updateTx.mutateAsync({ id: editingTx.id, values: { tx_date: editDate, note: editNote || null } });
+      } else {
+        // CAPITAL ACCOUNT — THREE UI FIXES (item 3): adjust the balance
+        // by the DIFFERENCE only — previousBalanceApplied always comes
+        // from the row's own stored business_balance_applied, never
+        // re-derived from its pre-edit amount, so repeated edits can
+        // never drift.
+        await updateManualTx.mutateAsync({
+          id: editingTx.id,
+          userId,
+          txType: editingTx.tx_type,
+          amount,
+          txDate: editDate,
+          note: editNote || null,
+          previousBalanceApplied: editingTx.business_balance_applied,
+        });
+      }
+      await invalidateFinancialData(queryClient);
+      setEditingTx(null);
+    } catch (err) {
+      Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
   function handleRemoveDuplicates() {
@@ -338,10 +436,10 @@ export default function CapitalAccount() {
 
         <MutedText style={{ marginTop: spacing.xs }}>{t('capitalAccount.cashMovesNotTaxNote')}</MutedText>
 
-        <SecondaryButton title={t('capitalAccount.recordContribution')} onPress={() => setContributionModalOpen(true)} />
+        <SecondaryButton title={t('capitalAccount.recordContribution')} onPress={openContribution} />
         <SecondaryButton
           title={isScorp ? t('capitalAccount.recordDistribution') : t('capitalAccount.recordDraw')}
-          onPress={() => setDrawModalOpen(true)}
+          onPress={openDraw}
         />
         <SecondaryButton title={t('capitalAccount.updateBusinessBalance')} onPress={() => setBalanceModalOpen(true)} />
         {duplicateIds.length > 0 && (
@@ -418,12 +516,7 @@ export default function CapitalAccount() {
           ) : (
             history.map((tx, i) => (
               <View key={tx.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <HistoryRow
-                  tx={tx}
-                  onDeleteDraw={() => handleDeleteDraw(tx)}
-                  onDeleteContribution={() => handleDeleteContribution(tx)}
-                  onTapContribution={() => router.push('/(tabs)/deductions')}
-                />
+                <HistoryRow tx={tx} onTap={() => openEdit(tx)} />
               </View>
             ))
           )}
@@ -435,16 +528,27 @@ export default function CapitalAccount() {
 
       <ModalSheet visible={drawModalOpen} onClose={() => setDrawModalOpen(false)}>
         <SheetTitle>{isScorp ? t('capitalAccount.recordDistributionSheetTitle') : t('capitalAccount.recordDrawSheetTitle')}</SheetTitle>
+        <MutedText>{t('capitalAccount.dateLabel')}</MutedText>
+        <Field value={drawDate} onChangeText={setDrawDate} placeholder="YYYY-MM-DD" />
+        {drawDateError && <Text style={styles.errorText}>{drawDateError}</Text>}
         <MutedText>{t('capitalAccount.amountLabel')}</MutedText>
         <Field keyboardType="numeric" value={drawAmount} onChangeText={setDrawAmount} placeholder="0.00" />
         <MutedText>{t('capitalAccount.noteLabel')}</MutedText>
         <Field value={drawNote} onChangeText={setDrawNote} placeholder={t('capitalAccount.notePlaceholder')} />
-        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleRecordDraw} loading={savingDraw} disabled={!drawAmount} />
+        <PrimaryButton
+          title={`💾 ${t('common.save')}`}
+          onPress={handleRecordDraw}
+          loading={savingDraw}
+          disabled={!drawAmount || !!drawDateError}
+        />
         <SecondaryButton title={t('common.cancel')} onPress={() => setDrawModalOpen(false)} />
       </ModalSheet>
 
       <ModalSheet visible={contributionModalOpen} onClose={() => setContributionModalOpen(false)}>
         <SheetTitle>{t('capitalAccount.recordContributionSheetTitle')}</SheetTitle>
+        <MutedText>{t('capitalAccount.dateLabel')}</MutedText>
+        <Field value={contributionDate} onChangeText={setContributionDate} placeholder="YYYY-MM-DD" />
+        {contributionDateError && <Text style={styles.errorText}>{contributionDateError}</Text>}
         <MutedText>{t('capitalAccount.amountLabel')}</MutedText>
         <Field keyboardType="numeric" value={contributionAmount} onChangeText={setContributionAmount} placeholder="0.00" />
         <MutedText>{t('capitalAccount.noteLabel')}</MutedText>
@@ -453,7 +557,7 @@ export default function CapitalAccount() {
           title={`💾 ${t('common.save')}`}
           onPress={handleRecordContribution}
           loading={savingContribution}
-          disabled={!contributionAmount}
+          disabled={!contributionAmount || !!contributionDateError}
         />
         <SecondaryButton title={t('common.cancel')} onPress={() => setContributionModalOpen(false)} />
       </ModalSheet>
@@ -464,6 +568,61 @@ export default function CapitalAccount() {
         <Field keyboardType="numeric" value={balanceInput} onChangeText={setBalanceInput} placeholder="0.00" />
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleUpdateBalance} loading={savingBalance} disabled={!balanceInput} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setBalanceModalOpen(false)} />
+      </ModalSheet>
+
+      {/* CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item
+          3 "every row editable") — one shared edit sheet for every
+          history row, linked or manual. A linked contribution's amount is
+          locked (its source deduction is the real owner of that value —
+          deductionMutations.ts's applyContributionSync()) with a note +
+          a link straight to the source expense; date/note stay editable
+          either way. Delete is offered only for a manual row — deleting a
+          linked contribution independently would desync it from its
+          deduction (the deduction would silently re-create it on its own
+          next save), so that still routes through Deductions, same as
+          before. */}
+      <ModalSheet visible={!!editingTx} onClose={closeEdit}>
+        <SheetTitle>
+          {editingTx?.tx_type === 'draw'
+            ? isScorp
+              ? t('capitalAccount.editDistributionSheetTitle')
+              : t('capitalAccount.editDrawSheetTitle')
+            : t('capitalAccount.editContributionSheetTitle')}
+        </SheetTitle>
+        <MutedText>{t('capitalAccount.dateLabel')}</MutedText>
+        <Field value={editDate} onChangeText={setEditDate} placeholder="YYYY-MM-DD" />
+        {editDateError && <Text style={styles.errorText}>{editDateError}</Text>}
+        <MutedText>{t('capitalAccount.amountLabel')}</MutedText>
+        {isEditingLinked ? (
+          <>
+            <Text style={styles.lockedAmount}>{money(editingTx?.amount ?? 0)}</Text>
+            <MutedText style={{ marginBottom: spacing.xs }}>{t('capitalAccount.linkedAmountLocked')}</MutedText>
+            <SecondaryButton
+              title={t('capitalAccount.viewLinkedExpense')}
+              onPress={() => {
+                closeEdit();
+                router.push('/(tabs)/deductions');
+              }}
+            />
+          </>
+        ) : (
+          <Field keyboardType="numeric" value={editAmount} onChangeText={setEditAmount} placeholder="0.00" />
+        )}
+        <MutedText>{t('capitalAccount.noteLabel')}</MutedText>
+        <Field value={editNote} onChangeText={setEditNote} placeholder={t('capitalAccount.notePlaceholder')} />
+        <PrimaryButton
+          title={`💾 ${t('common.save')}`}
+          onPress={handleSaveEdit}
+          loading={savingEdit}
+          disabled={!!editDateError || (!isEditingLinked && !editAmount)}
+        />
+        {editingTx && !isEditingLinked && (
+          <SecondaryButton
+            title={`🗑 ${t('common.delete')}`}
+            onPress={() => (editingTx.tx_type === 'draw' ? handleDeleteDraw(editingTx) : handleDeleteContribution(editingTx))}
+          />
+        )}
+        <SecondaryButton title={t('common.cancel')} onPress={closeEdit} />
       </ModalSheet>
     </Screen>
   );
@@ -484,5 +643,16 @@ const styles = {
   rowBorder: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
+  },
+  errorText: {
+    color: colors.red,
+    fontSize: typography.size.xs,
+    marginTop: 2,
+    marginBottom: spacing.xs,
+  },
+  lockedAmount: {
+    color: colors.muted,
+    fontSize: typography.size.md,
+    fontWeight: '700' as const,
   },
 };
