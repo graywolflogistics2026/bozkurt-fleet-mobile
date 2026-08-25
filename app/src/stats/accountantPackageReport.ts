@@ -181,7 +181,16 @@ export function buildAccountantReportHtml(
         ${
           perDiem
             ? `<h2>${esc(strings.perDiemTitle)}</h2><table>
-                <tr><td>${esc(strings.perDiemMonthLabel)}</td><td class="amt">${perDiem.monthDays} ${esc(strings.perDiemDaysUnit)} — ${fmt.money(perDiem.monthDeduction)}</td></tr>
+                ${
+                  // PER DIEM YTD BUG FIX — a "This Month" row is only ever
+                  // shown when the report is genuinely scoped to one
+                  // month; when it's null (All Year), only the YTD row
+                  // renders, so this section can never show two rows with
+                  // the same number under different labels.
+                  perDiem.monthDays != null
+                    ? `<tr><td>${esc(strings.perDiemMonthLabel)}</td><td class="amt">${perDiem.monthDays} ${esc(strings.perDiemDaysUnit)} — ${fmt.money(perDiem.monthDeduction ?? 0)}</td></tr>`
+                    : ''
+                }
                 <tr><td>${esc(strings.perDiemYtdLabel)}</td><td class="amt">${perDiem.ytdDays} ${esc(strings.perDiemDaysUnit)} — ${fmt.money(perDiem.ytdDeduction)}</td></tr>
               </table>`
             : ''

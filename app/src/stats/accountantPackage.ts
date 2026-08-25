@@ -383,7 +383,27 @@ export function buildLumperFees(lineItems: LineItem[]): LineItem[] {
 // (CLAUDE.md invariant #9's deterministic day-counting) — this function
 // never re-derives days itself, only re-scopes which settlements are
 // summed.
-export type PerDiemBlock = { monthDays: number; monthDeduction: number; ytdDays: number; ytdDeduction: number; dailyRate: number };
+//
+// PER DIEM YTD BUG FIX (owner decision, device report: "this month" and
+// "year-to-date" showed the SAME number). Root cause: when the report's
+// own Month pill is set to "All Year" (`month === null`), the OLD code's
+// `month == null ? ytdSettlements : ...` fed the exact same settlement
+// array into BOTH the "month" and "YTD" calculations — genuinely the same
+// bucket, not a coincidence. `monthDays`/`monthDeduction` are now `null`
+// (never a number equal to ytdDays) whenever there is no genuinely
+// narrower month selected — the caller (screen + PDF/Excel report) omits
+// the "This Month" row entirely in that case rather than ever showing a
+// month figure that isn't actually scoped to one month. `ytdDays`/
+// `ytdDeduction` always sum every settlement in the selected YEAR, full
+// stop, regardless of the month scope — this half of the function was
+// already correct and is unchanged.
+export type PerDiemBlock = {
+  monthDays: number | null;
+  monthDeduction: number | null;
+  ytdDays: number;
+  ytdDeduction: number;
+  dailyRate: number;
+};
 
 export function buildPerDiemBlock(
   settlements: Array<{ week_ending: string; per_diem_days?: number | null }>,
@@ -392,12 +412,18 @@ export function buildPerDiemBlock(
   perDiem: TaxYearData['per_diem']
 ): PerDiemBlock {
   const ytdSettlements = settlements.filter((s) => Number((s.week_ending ?? '').slice(0, 4)) === year);
-  const monthSettlements =
-    month == null ? ytdSettlements : ytdSettlements.filter((s) => Number((s.week_ending ?? '').slice(5, 7)) === month);
-  const monthDays = calcPerDiemDays(monthSettlements);
   const ytdDays = calcPerDiemDays(ytdSettlements);
   const rate = perDiem.daily_rate * (perDiem.deductible_pct / 100);
-  return { monthDays, monthDeduction: monthDays * rate, ytdDays, ytdDeduction: ytdDays * rate, dailyRate: rate };
+
+  const monthDays = month == null ? null : calcPerDiemDays(ytdSettlements.filter((s) => Number((s.week_ending ?? '').slice(5, 7)) === month));
+
+  return {
+    monthDays,
+    monthDeduction: monthDays == null ? null : monthDays * rate,
+    ytdDays,
+    ytdDeduction: ytdDays * rate,
+    dailyRate: rate,
+  };
 }
 
 // CAPITAL ASSETS section (spec item B.6) — truck/trailer/equipment

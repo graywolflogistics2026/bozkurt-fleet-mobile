@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -11,9 +12,13 @@ import { useLoads } from '@/src/data/loads';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useDocuments } from '@/src/data/documents';
-import { useFleetStats } from '@/src/data/dashboardStats';
 import { useTrucksList } from '@/src/data/trucks';
 import { calcEscrowBalance } from '@/src/stats/escrowBalance';
+import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
+import { buildSettlementsTotalsBar } from '@/src/stats/settlementsSummary';
+import { PERIOD_OPTIONS, filterByPeriod, type PeriodOption } from '@/src/stats/periodFilter';
+import { buildPolylinePoints } from '@/src/stats/chartHelpers';
+import { useSessionState } from '@/src/lib/useSessionState';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useMarkDocumentReviewed } from '@/src/data/needsReviewMutations';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
@@ -39,6 +44,8 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Settlement } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
 
+const CHART_HEIGHT = 100;
+
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
     <Pressable
@@ -56,6 +63,34 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
     >
       <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{label}</Text>
     </Pressable>
+  );
+}
+
+// Thin-line "Apple Stocks style" chart of gross revenue and net pay per
+// settlement week — the SAME buildWeeklyTrend()/buildPolylinePoints()
+// primitives Cash Flow's own weekly trend already uses (CLAUDE.md's CHART
+// LANGUAGE CONSISTENCY invariant), never a second gross/net formula or a
+// thick bar.
+function SettlementsChart({ points }: { points: ReturnType<typeof buildWeeklyTrend> }) {
+  const [width, setWidth] = useState(0);
+  const height = CHART_HEIGHT;
+  const grossValues = points.map((p) => p.gross);
+  const netValues = points.map((p) => p.net);
+  const domain: [number, number] = [Math.min(0, ...grossValues, ...netValues), Math.max(0, ...grossValues, ...netValues)];
+  const grossLine = buildPolylinePoints(grossValues, width, height, domain);
+  const netLine = buildPolylinePoints(netValues, width, height, domain);
+  const netIsPositive = (netValues[netValues.length - 1] ?? 0) >= 0;
+  const netColor = netIsPositive ? colors.green : colors.red;
+
+  return (
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
+      {width > 0 && (
+        <Svg width={width} height={height}>
+          <Polyline points={grossLine} fill="none" stroke={colors.accent} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+          <Polyline points={netLine} fill="none" stroke={netColor} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+        </Svg>
+      )}
+    </View>
   );
 }
 
@@ -82,7 +117,6 @@ export default function Settlements() {
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const documentsQuery = useDocuments();
-  const fleetStats = useFleetStats(null);
   // MILES READ BUT NOT USED (owner decision 2026-08-24, item 5 —
   // diagnostic): shows which truck (if any) this settlement is assigned
   // to, right next to the miles field. A null/mismatched truck_id is
@@ -101,6 +135,10 @@ export default function Settlements() {
   // BETA FEEDBACK ROUND 2: "Needs review only" filter, same treatment as
   // Deductions/Documents/Transactions.
   const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
+  // TOTALS + CHARTS (owner decision, "period tabs" pass) — remembered for
+  // the session, same module-level-Map pattern as Deductions' own period
+  // tabs / useMonthCollapse.ts's month-group collapse state.
+  const [period, setPeriod] = useSessionState<PeriodOption>('settlements-period', 'all');
   // PER DIEM INTELLIGENCE (owner decision 2026-07-30): per_diem_days is
   // editable right here on the detail sheet, not just at import time — a
   // user correcting an old "home week" that got the wrong smart default.
@@ -165,10 +203,18 @@ export default function Settlements() {
     const list = settlementsQuery.data ?? [];
     return [...list].sort((a, b) => b.week_ending.localeCompare(a.week_ending));
   }, [settlementsQuery.data]);
+  // PERIOD TABS (spec) drive the totals bar, chart, and list together —
+  // period-filtered first, then needs-review, matching the pre-existing
+  // filter order on the Deductions screen.
+  const periodRows = useMemo(() => filterByPeriod(allRows, (s) => s.week_ending, period), [allRows, period]);
   const rows = useMemo(
-    () => (needsReviewOnly ? allRows.filter((s) => isSettlementNeedsReview(s, documentsById)) : allRows),
-    [allRows, needsReviewOnly, documentsById]
+    () => (needsReviewOnly ? periodRows.filter((s) => isSettlementNeedsReview(s, documentsById)) : periodRows),
+    [periodRows, needsReviewOnly, documentsById]
   );
+  const totalsBar = useMemo(() => buildSettlementsTotalsBar(rows), [rows]);
+  // buildWeeklyTrend() sorts its own copy ascending internally, so `rows`'
+  // own descending list order (for display) doesn't matter here.
+  const chartPoints = useMemo(() => buildWeeklyTrend(rows), [rows]);
 
   // "View linked records" from the Documents Archive viewer (owner decision
   // 2026-07-30) jumps here with ?openId=<settlementId> — auto-selects it
@@ -208,27 +254,13 @@ export default function Settlements() {
     [settlementReimbursements]
   );
 
-  // Fleet-wide top stat row (FEATURE_INVENTORY.md §1 row 3: legacy's rSett()
-  // shows Gross/Reimbursed/Deductions/Net) — scoped to settlement-linked rows
-  // only (settlement_id set), same scoping as the per-settlement detail sheet
-  // above, not the whole out-of-pocket ledger.
-  const allSettlementReimbTotal = useMemo(
-    () => (reimbQuery.data ?? []).filter((r) => r.settlement_id != null).reduce((sum, x) => sum + Number(x.amount ?? 0), 0),
-    [reimbQuery.data]
-  );
-  const allSettlementDedTotal = useMemo(
-    () =>
-      (dedQuery.data ?? [])
-        .filter((d) => d.settlement_id != null && d.source === 'settlement')
-        .reduce((sum, x) => sum + Number(x.amount ?? 0), 0),
-    [dedQuery.data]
-  );
   // ESCROW & DEPOSITS running balance (owner decision 2026-08-02): what
   // the carrier currently HOLDS — a performance bond/escrow reserve/tire
   // fund/emergency fund/maintenance reserve is a refundable deposit, not
-  // an expense, so it's tracked separately from allSettlementDedTotal
-  // above (which still includes it, since it genuinely was withheld from
-  // pay — just never counted against true profit/tax deductions).
+  // an expense, so it's tracked separately from the totals bar's own
+  // withheld-deduction handling (which still includes it, since it
+  // genuinely was withheld from pay — just never counted against true
+  // profit/tax deductions).
   const escrowBalance = useMemo(() => calcEscrowBalance(dedQuery.data ?? []), [dedQuery.data]);
 
   // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
@@ -347,27 +379,47 @@ export default function Settlements() {
       >
         <ScreenTitle>{t('settlementsScreen.title')}</ScreenTitle>
 
+        {/* PERIOD TABS (spec) — drives the totals bar, chart, and list
+            together; remembered for the session. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
+          {PERIOD_OPTIONS.map((p) => (
+            <Pill key={p} label={t(`settlementsScreen.period.${p}`)} selected={period === p} onPress={() => setPeriod(p)} />
+          ))}
+        </View>
+
+        {/* TOTALS BAR (spec) — Gross · Net Pay · Miles, with average RPM
+            as a caption. */}
         <Card>
           <View style={styles.statRow}>
             <View style={styles.statCell}>
               <MutedText>{t('settlementsScreen.grossTotal')}</MutedText>
-              <Text style={styles.statValue}>{money(fleetStats.data?.grossRevenue ?? 0)}</Text>
+              <Text style={styles.statValue}>{money(totalsBar.gross)}</Text>
             </View>
             <View style={styles.statCell}>
-              <MutedText>{t('settlementsScreen.reimbTotal')}</MutedText>
-              <Text style={styles.statValue}>{money(allSettlementReimbTotal)}</Text>
+              <MutedText style={totalsBar.net < 0 ? { color: colors.red } : undefined}>{t('settlementsScreen.netTotal')}</MutedText>
+              <Text style={[styles.statValue, totalsBar.net < 0 && { color: colors.red }]}>{money(totalsBar.net)}</Text>
+            </View>
+            <View style={styles.statCell}>
+              <MutedText>{t('settlementsScreen.milesLabelShort')}</MutedText>
+              <Text style={styles.statValue}>{number(totalsBar.miles)}</Text>
             </View>
           </View>
-          <View style={[styles.statRow, { marginTop: spacing.sm }]}>
-            <View style={styles.statCell}>
-              <MutedText>{t('settlementsScreen.dedTotal')}</MutedText>
-              <Text style={styles.statValue}>{money(allSettlementDedTotal)}</Text>
-            </View>
-            <View style={styles.statCell}>
-              <MutedText>{t('settlementsScreen.netTotal')}</MutedText>
-              <Text style={styles.statValue}>{money(fleetStats.data?.netRevenue ?? 0)}</Text>
-            </View>
-          </View>
+          {totalsBar.avgRpm != null && (
+            <MutedText style={{ marginTop: spacing.sm }}>
+              {t('settlementsScreen.avgRpmCaption', { rate: money(totalsBar.avgRpm, { maximumFractionDigits: 2 }) })}
+            </MutedText>
+          )}
+        </Card>
+
+        {/* CHART (spec) — thin-line gross/net per settlement week; fewer
+            than 2 buckets shows the totals above without a misleading
+            chart (same "not enough data" convention as Deductions). */}
+        <Card>
+          {chartPoints.length >= 2 ? (
+            <SettlementsChart points={chartPoints} />
+          ) : (
+            <MutedText>{t('settlementsScreen.chartNotEnoughData')}</MutedText>
+          )}
         </Card>
 
         {escrowBalance > 0 && (

@@ -567,7 +567,17 @@ export default function AccountantPackage() {
               <MutedText>{t('accountantPackage.reconcilingCaption')}</MutedText>
               {perDiemBlock && (
                 <View style={styles.rowBorder}>
-                  <Row label={t('accountantPackage.perDiemMonthLabel')} value={money(perDiemBlock.monthDeduction)} />
+                  {/* PER DIEM YTD BUG FIX — this compact summary row must
+                      always read correctly regardless of scope, so it uses
+                      a scope-neutral label ("Per Diem Deduction") and
+                      whichever figure actually applies: the selected
+                      month's own deduction when one is selected, else the
+                      full year's (never a number silently mislabeled
+                      "This Month" while actually showing the whole year). */}
+                  <Row
+                    label={t('accountantPackage.perDiemDeductionLabel')}
+                    value={money(perDiemBlock.monthDeduction ?? perDiemBlock.ytdDeduction)}
+                  />
                 </View>
               )}
             </Card>
@@ -576,8 +586,18 @@ export default function AccountantPackage() {
               <>
                 <Text style={styles.sectionTitle}>{t('accountantPackage.perDiemTitle')}</Text>
                 <Card>
-                  <Row label={t('accountantPackage.perDiemMonthLabel')} value={`${perDiemBlock.monthDays} ${t('accountantPackage.perDiemDaysUnit')} — ${money(perDiemBlock.monthDeduction)}`} />
-                  <View style={styles.rowBorder}>
+                  {/* PER DIEM YTD BUG FIX — "This Month" only ever renders
+                      when the report is genuinely scoped to one month;
+                      when "All Year" is selected there is no narrower
+                      "month" distinct from YTD, so only the YTD row shows
+                      — never the same number twice under two labels. */}
+                  {perDiemBlock.monthDays != null && (
+                    <Row
+                      label={t('accountantPackage.perDiemMonthLabel')}
+                      value={`${perDiemBlock.monthDays} ${t('accountantPackage.perDiemDaysUnit')} — ${money(perDiemBlock.monthDeduction ?? 0)}`}
+                    />
+                  )}
+                  <View style={perDiemBlock.monthDays != null ? styles.rowBorder : undefined}>
                     <Row label={t('accountantPackage.perDiemYtdLabel')} value={`${perDiemBlock.ytdDays} ${t('accountantPackage.perDiemDaysUnit')} — ${money(perDiemBlock.ytdDeduction)}`} />
                   </View>
                 </Card>

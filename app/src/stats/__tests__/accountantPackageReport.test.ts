@@ -269,3 +269,33 @@ describe('buildAccountantReportHtml — escapes untrusted text', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 });
+
+// PER DIEM YTD BUG FIX (owner decision, device report: "this month" and
+// "year-to-date" showed the SAME number in the PDF/Excel report") — both
+// exports share this exact HTML, so proving it here covers both surfaces.
+describe('buildAccountantReportHtml — per diem month vs YTD never show the same figure', () => {
+  it('shows two distinct rows with distinct numbers when a real month is selected', () => {
+    const html = buildAccountantReportHtml(
+      baseInput({ perDiem: { monthDays: 35, monthDeduction: 1960, ytdDays: 42, ytdDeduction: 2352, dailyRate: 56 } }),
+      baseStrings,
+      fmt
+    );
+    expect(html).toContain('35 days');
+    expect(html).toContain('42 days');
+    expect(html).toContain('$1960.00');
+    expect(html).toContain('$2352.00');
+  });
+
+  it('omits the "This Month" row entirely when no month is selected — never repeats the YTD figure under a second label', () => {
+    const html = buildAccountantReportHtml(
+      baseInput({ perDiem: { monthDays: null, monthDeduction: null, ytdDays: 42, ytdDeduction: 2352, dailyRate: 56 } }),
+      baseStrings,
+      fmt
+    );
+    // The YTD row is still present...
+    expect(html).toContain('42 days');
+    expect(html).toContain('$2352.00');
+    // ...but the "This Month" label/row never appears at all.
+    expect(html).not.toContain(baseStrings.perDiemMonthLabel);
+  });
+});

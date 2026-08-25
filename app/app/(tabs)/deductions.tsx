@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,16 @@ import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList'
 import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
 import { isDeductionNeedsReview } from '@/src/import/needsReview';
 import { groupDeductions } from '@/src/stats/deductionGroups';
+import {
+  buildDeductionsTotalsBar,
+  buildDeductionsChartSeries,
+  buildTopCategories,
+  toggleDeductionSeries,
+  type OriginFilter,
+} from '@/src/stats/deductionsSummary';
+import { PERIOD_OPTIONS, filterByPeriod, type PeriodOption } from '@/src/stats/periodFilter';
+import { buildPolylinePoints } from '@/src/stats/chartHelpers';
+import { useSessionState } from '@/src/lib/useSessionState';
 import { planContributionSync } from '@/src/stats/contributionSync';
 import { defaultTaxDeductible } from '@/src/import/category';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
@@ -25,6 +36,8 @@ import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Deduction } from '@/src/types/db';
+
+const CHART_HEIGHT = 100;
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -42,6 +55,57 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
       }}
     >
       <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// TWO TOGGLEABLE SERIES (spec item 2c) — thin-line "Apple Stocks style"
+// chart, same buildPolylinePoints() primitive every other chart in this
+// app already uses (CLAUDE.md's CHART LANGUAGE CONSISTENCY invariant) —
+// never a thick bar. Both series share one Y domain so their relative
+// size is honestly comparable at a glance. `showOutOfPocket`/
+// `showWithheld` only control which line(s) are DRAWN — the underlying
+// bucket data always has both, so toggling never re-fetches or re-buckets
+// anything.
+function DeductionsChart({
+  buckets,
+  showOutOfPocket,
+  showWithheld,
+}: {
+  buckets: { key: string; outOfPocket: number; withheld: number }[];
+  showOutOfPocket: boolean;
+  showWithheld: boolean;
+}) {
+  const [width, setWidth] = useState(0);
+  const height = CHART_HEIGHT;
+  const oopValues = buckets.map((b) => b.outOfPocket);
+  const whValues = buckets.map((b) => b.withheld);
+  const domain: [number, number] = [0, Math.max(0, ...oopValues, ...whValues)];
+  const oopLine = buildPolylinePoints(oopValues, width, height, domain);
+  const whLine = buildPolylinePoints(whValues, width, height, domain);
+
+  return (
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
+      {width > 0 && (
+        <Svg width={width} height={height}>
+          {showOutOfPocket && <Polyline points={oopLine} fill="none" stroke={colors.accent} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />}
+          {showWithheld && <Polyline points={whLine} fill="none" stroke={colors.purple} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />}
+        </Svg>
+      )}
+    </View>
+  );
+}
+
+function TotalsTile({ label, amount, count, selected, onPress }: { label: string; amount: number; count?: number; selected: boolean; onPress: () => void }) {
+  const { t } = useTranslation();
+  const { money } = useFormatters();
+  return (
+    <Pressable onPress={onPress} style={[styles.totalsTile, selected && styles.totalsTileSelected]}>
+      <MutedText numberOfLines={1}>{label}</MutedText>
+      <Text style={styles.totalsTileAmount} numberOfLines={1}>
+        {money(amount)}
+      </Text>
+      {count != null && <MutedText>{t('deductions.totalsTileItemCount', { count })}</MutedText>}
     </Pressable>
   );
 }
@@ -178,7 +242,14 @@ export default function Deductions() {
   // two options show ONLY that section, letting a user quickly answer
   // "what did I pay out of pocket this month" without scrolling past the
   // withheld section (or vice versa).
-  const [originFilter, setOriginFilter] = useState<'all' | 'outOfPocket' | 'withheld'>('all');
+  const [originFilter, setOriginFilter] = useState<OriginFilter>('all');
+  // TOTALS + CHARTS (owner decision, "period tabs" pass) — period is
+  // "remembered for the session" (spec item 2b), same module-level-Map
+  // pattern useMonthCollapse.ts already established for month-group
+  // collapse state; a category tap (top-3 list, spec item 2d) drills the
+  // list/chart down further without disturbing the origin/period state.
+  const [period, setPeriod] = useSessionState<PeriodOption>('deductions-period', 'all');
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const autoOpenedRef = useRef(false);
   const dedQuery = useDeductions();
   const insertDeduction = useInsertDeduction();
@@ -234,11 +305,36 @@ export default function Deductions() {
   }, [queryClient]);
 
   const allRows = dedQuery.data ?? [];
+  // PERIOD TABS (spec item 2b) drive the totals bar, chart, and list
+  // together — period-filtered first, then needs-review, matching the
+  // pre-existing filter order. `totalsBarRows` (origin-inclusive) is what
+  // the totals bar / top-3-categories / chart read from, so tapping a
+  // totals-bar tile (which only sets `originFilter`, isolating which
+  // SECTION renders below) never changes the totals bar's own numbers — a
+  // tile always reflects the whole selected period. A category tap
+  // narrows `rows` (and therefore the visible sections + chart) one step
+  // further without touching the totals bar.
+  const periodRows = useMemo(() => filterByPeriod(allRows, (x) => x.ded_date, period), [allRows, period]);
+  const totalsBarRows = useMemo(
+    () => (needsReviewOnly ? periodRows.filter(isDeductionNeedsReview) : periodRows),
+    [periodRows, needsReviewOnly]
+  );
   const rows = useMemo(
-    () => (needsReviewOnly ? allRows.filter(isDeductionNeedsReview) : allRows),
-    [allRows, needsReviewOnly]
+    () => (categoryFilter ? totalsBarRows.filter((x) => (x.category || 'Misc') === categoryFilter) : totalsBarRows),
+    [totalsBarRows, categoryFilter]
   );
   const { outOfPocket, withheld, outOfPocketTotal, withheldTotal } = useMemo(() => groupDeductions(rows), [rows]);
+  const totalsBar = useMemo(() => buildDeductionsTotalsBar(totalsBarRows), [totalsBarRows]);
+  const topCategories = useMemo(() => buildTopCategories(totalsBarRows), [totalsBarRows]);
+  const chartBuckets = useMemo(() => buildDeductionsChartSeries(rows, period), [rows, period]);
+  const showOutOfPocketLine = originFilter !== 'withheld';
+  const showWithheldLine = originFilter !== 'outOfPocket';
+  // "Label them explicitly for YTD/All" (spec item 2a) — This Month/3M
+  // need no extra suffix (the period Pill selection above already makes
+  // the window obvious); YTD/All are the two periods where "which years's
+  // worth of data am I looking at" genuinely needs spelling out.
+  const now = useMemo(() => new Date(), []);
+  const periodSuffix = period === 'ytd' ? ` ${now.getFullYear()}` : period === 'all' ? ` ${t('deductions.allTimeSuffix')}` : '';
 
   function openEdit(x: Deduction) {
     setEditing(x);
@@ -475,6 +571,102 @@ export default function Deductions() {
           </Pressable>
         </View>
 
+        {/* TOTALS BAR (spec item 2a) — three tappable tiles reflecting the
+            selected period; tapping one is exactly equivalent to tapping
+            the matching origin-filter Pill below (shared state). */}
+        <View style={styles.totalsBarRow}>
+          <TotalsTile
+            label={`${t('deductions.totalsTileOutOfPocket')}${periodSuffix}`}
+            amount={totalsBar.outOfPocket.amount}
+            count={totalsBar.outOfPocket.count}
+            selected={originFilter === 'outOfPocket'}
+            onPress={() => setOriginFilter(originFilter === 'outOfPocket' ? 'all' : 'outOfPocket')}
+          />
+          <TotalsTile
+            label={`${t('deductions.totalsTileWithheld')}${periodSuffix}`}
+            amount={totalsBar.withheld.amount}
+            count={totalsBar.withheld.count}
+            selected={originFilter === 'withheld'}
+            onPress={() => setOriginFilter(originFilter === 'withheld' ? 'all' : 'withheld')}
+          />
+          <TotalsTile
+            label={`${t('deductions.totalsTileTotal')}${periodSuffix}`}
+            amount={totalsBar.total.amount}
+            selected={originFilter === 'all'}
+            onPress={() => setOriginFilter('all')}
+          />
+        </View>
+        {totalsBar.nonDeductibleAmount > 0 && (
+          <MutedText style={{ marginBottom: spacing.sm }}>
+            {t('deductions.totalsBarNonDeductibleCaption', { amount: money(totalsBar.nonDeductibleAmount) })}
+          </MutedText>
+        )}
+
+        {/* PERIOD TABS (spec item 2b) — drives the totals bar, chart, and
+            list together; remembered for the session. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
+          {PERIOD_OPTIONS.map((p) => (
+            <Pill key={p} label={t(`deductions.period.${p}`)} selected={period === p} onPress={() => setPeriod(p)} />
+          ))}
+        </View>
+
+        {/* CHART (spec item 2c) — two toggleable series sharing state with
+            the origin filter; item 2f: fewer than 2 buckets shows the
+            summary numbers above without a misleading chart. */}
+        <Card>
+          {chartBuckets.length >= 2 ? (
+            <>
+              <DeductionsChart buckets={chartBuckets} showOutOfPocket={showOutOfPocketLine} showWithheld={showWithheldLine} />
+              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
+                <Pressable
+                  onPress={() => setOriginFilter(toggleDeductionSeries(originFilter, 'outOfPocket'))}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                >
+                  <View style={{ width: 10, height: 2, backgroundColor: colors.accent, opacity: showOutOfPocketLine ? 1 : 0.3 }} />
+                  <MutedText style={!showOutOfPocketLine ? { opacity: 0.5 } : undefined}>{t('deductions.originFilterOutOfPocket')}</MutedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setOriginFilter(toggleDeductionSeries(originFilter, 'withheld'))}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                >
+                  <View style={{ width: 10, height: 2, backgroundColor: colors.purple, opacity: showWithheldLine ? 1 : 0.3 }} />
+                  <MutedText style={!showWithheldLine ? { opacity: 0.5 } : undefined}>{t('deductions.originFilterWithheld')}</MutedText>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <MutedText>{t('deductions.chartNotEnoughData')}</MutedText>
+          )}
+        </Card>
+
+        {/* TOP CATEGORIES (spec item 2d) — tapping one filters the list. */}
+        {topCategories.length > 0 && (
+          <Card>
+            <Text style={styles.sectionTitle}>{t('deductions.topCategoriesTitle')}</Text>
+            {topCategories.map((c, i) => (
+              <Pressable
+                key={c.category}
+                onPress={() => setCategoryFilter((cur) => (cur === c.category ? null : c.category))}
+                style={[styles.topCategoryRow, i > 0 ? styles.rowBorder : undefined]}
+              >
+                <Text style={[styles.topCategoryLabel, categoryFilter === c.category && { color: colors.accent }]} numberOfLines={1}>
+                  {c.category}
+                </Text>
+                <Text style={{ color: colors.text }}>
+                  {money(c.amount)} · {Math.round(c.share * 100)}%
+                </Text>
+              </Pressable>
+            ))}
+            {categoryFilter && (
+              <Pressable onPress={() => setCategoryFilter(null)} hitSlop={8} style={{ marginTop: spacing.xs }}>
+                <Text style={{ color: colors.accent, fontWeight: '700', fontSize: typography.size.sm }}>
+                  ✕ {t('deductions.clearCategoryFilter')}
+                </Text>
+              </Pressable>
+            )}
+          </Card>
+        )}
+
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
           <Pill
             label={t('needsReview.filterOnly')}
@@ -707,6 +899,41 @@ export default function Deductions() {
 }
 
 const styles = {
+  totalsBarRow: {
+    flexDirection: 'row' as const,
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  totalsTile: {
+    flex: 1,
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card2,
+  },
+  totalsTileSelected: {
+    borderColor: colors.accent,
+  },
+  totalsTileAmount: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: '700' as const,
+    marginTop: 2,
+  },
+  topCategoryRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingVertical: spacing.sm,
+  },
+  topCategoryLabel: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: '600' as const,
+    flex: 1,
+    marginEnd: spacing.sm,
+  },
   sectionTitle: {
     color: colors.text,
     fontSize: typography.size.md,

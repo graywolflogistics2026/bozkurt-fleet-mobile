@@ -631,6 +631,42 @@ describe('buildPerDiemBlock (owner decision 2026-08-05, FULL PARITY pass item B.
     const result = buildPerDiemBlock(settlements, 2026, null, perDiem);
     expect(result.ytdDays).toBe(0);
   });
+
+  // PER DIEM YTD BUG FIX (owner decision, device report: "this month" and
+  // "year-to-date" showed the SAME number, both 35 days"). Root cause: the
+  // old code fed the exact same settlement array into both the "month"
+  // and "YTD" calculations whenever the report's Month pill was set to
+  // "All Year" (month === null) — not a coincidence, the same bucket.
+  it('a two-month dataset always has month strictly less than YTD when a real month is selected', () => {
+    const settlements = [
+      { week_ending: '2026-06-06', per_diem_days: 7 },
+      { week_ending: '2026-06-13', per_diem_days: 7 },
+      { week_ending: '2026-06-20', per_diem_days: 7 },
+      { week_ending: '2026-06-27', per_diem_days: 7 },
+      { week_ending: '2026-06-30', per_diem_days: 7 }, // 5 weeks in June = 35 days, matching the reported "35 days" bug
+      { week_ending: '2026-07-04', per_diem_days: 7 }, // a second month, so YTD must exceed June alone
+    ];
+    const result = buildPerDiemBlock(settlements, 2026, 6, perDiem);
+    expect(result.monthDays).toBe(35);
+    expect(result.ytdDays).toBe(42);
+    expect(result.monthDays).toBeLessThan(result.ytdDays);
+    expect(result.monthDeduction).toBeLessThan(result.ytdDeduction);
+  });
+
+  it('"All Year" (month=null) never reports a month figure equal to YTD — it reports no month figure at all', () => {
+    const settlements = [
+      { week_ending: '2026-06-06', per_diem_days: 7 },
+      { week_ending: '2026-06-13', per_diem_days: 7 },
+      { week_ending: '2026-06-20', per_diem_days: 7 },
+      { week_ending: '2026-06-27', per_diem_days: 7 },
+      { week_ending: '2026-06-30', per_diem_days: 7 },
+      { week_ending: '2026-07-04', per_diem_days: 7 },
+    ];
+    const result = buildPerDiemBlock(settlements, 2026, null, perDiem);
+    expect(result.monthDays).toBeNull();
+    expect(result.monthDeduction).toBeNull();
+    expect(result.ytdDays).toBe(42);
+  });
 });
 
 describe('buildCapitalAssets (owner decision 2026-08-05, FULL PARITY pass item B.6)', () => {

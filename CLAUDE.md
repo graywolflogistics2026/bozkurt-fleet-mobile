@@ -6214,3 +6214,139 @@
   new native dependency (`expo-document-picker`'s `multiple` option was
   already available in the existing dependency) — ships via a normal
   `eas update`.
+- PER DIEM YTD BUG FIX + DEDUCTIONS/SETTLEMENTS TOTALS & CHARTS (owner
+  decision, two-part pass, no SQL — every table/column both parts read
+  already existed).
+  PART 1 — PER DIEM YTD BUG: device report — the accountant report showed
+  the SAME number for "this month" and "year-to-date" (both 35 days).
+  Root cause, found by reading `buildPerDiemBlock()`
+  (`src/stats/accountantPackage.ts`), not guessed: whenever the report's
+  own Month pill was set to "All Year" (`month === null`), the old code's
+  `month == null ? ytdSettlements : ytdSettlements.filter(...)` fed the
+  EXACT SAME settlement array into both the "month" and "YTD"
+  calculations — genuinely the same bucket, not a coincidence, and
+  reproducible on any account with 2+ months of settlement history.
+  Fixed: `monthDays`/`monthDeduction` are now `number | null` — `null`
+  whenever there is no genuinely narrower month selected, NEVER a number
+  silently equal to `ytdDays`/`ytdDeduction`. `ytdDays`/`ytdDeduction`
+  were already correct (always every settlement in the selected YEAR,
+  regardless of month scope) and are unchanged. The screen
+  (`app/(tabs)/more/accountant-package.tsx`) and the shared PDF/Excel
+  report template (`src/stats/accountantPackageReport.ts` — both exports
+  render this exact same HTML, so fixing it once covers both) now render
+  the "This Month" row ONLY when `monthDays != null`; "All Year" shows
+  just the YTD row, never a duplicate. The Deductible-Expenses summary
+  card's own compact per-diem sub-line — previously always labeled "This
+  Month" even in All-Year scope — is now a scope-neutral "Per Diem
+  Deduction" label (`accountantPackage.perDiemDeductionLabel`, new key)
+  showing `monthDeduction ?? ytdDeduction`, so it's never mislabeled
+  either. AUDITED for the same bug class elsewhere in the report (spec's
+  own "check the same class of bug on the per-diem dollars and any other
+  YTD figure"): grepped the whole `accountantPackage.ts`/
+  `accountantPackageReport.ts`/screen for every "ytd"/"YTD" occurrence —
+  per diem is the ONLY YTD concept in this report; no second instance of
+  this bug class exists to fix. Tests: `accountantPackage.test.ts` gained
+  a two-month-dataset case reproducing the EXACT reported symptom (35
+  days in June, 42 YTD across June+July) proving `monthDays <
+  result.ytdDays` strictly, plus a dedicated "All Year never equals YTD"
+  case proving `monthDays`/`monthDeduction` are `null`, never a repeated
+  number. `accountantPackageReport.test.ts` gained matching HTML-output
+  cases (both rows render distinctly when a month is selected; the "This
+  Month" label/row is entirely absent from the HTML when it isn't) —
+  since the PDF and Excel exports share this exact HTML, one test proves
+  both surfaces. "On screen" correctness is structural, not separately
+  tested — this repo has no RN rendering harness (same limitation this
+  file has flagged at every prior UI-testing juncture); the screen reads
+  the SAME `buildPerDiemBlock()` result the tests directly exercise.
+  PART 2 — DEDUCTIONS & SETTLEMENTS TOTALS + CHARTS: three new shared,
+  pure modules — `src/stats/periodFilter.ts` (`PERIOD_OPTIONS =
+  ['thisMonth', '3M', 'ytd', 'all']`, `filterByPeriod()`,
+  `bucketGranularityFor()` — 'ytd' is a real CALENDAR-YEAR window, Jan 1
+  through today, per CLAUDE.md's own established "not a rolling 365
+  days" rule, deliberately distinct from '3M''s rolling-90-day window
+  the same way `heroPeriod.ts`'s own '3M' tab already works — precisely
+  the class of month-vs-YTD confusion PART 1 exists to prevent, applied
+  here from the start rather than fixed after the fact), used by BOTH
+  screens so they can never disagree about what a period tab means;
+  `src/stats/deductionsSummary.ts` (`buildDeductionsTotalsBar()` — reuses
+  the EXISTING canonical `groupDeductions()`/`isSettlementDed()` origin
+  split, Total = literally Out-of-Pocket + Withheld so it always visibly
+  reconciles, `nonDeductibleAmount` computed from the SAME canonical
+  `NON_DEDUCTIBLE_CATEGORIES` set `trueProfit.ts`'s own exclusion list
+  mirrors — informational only, never changes what Total displays;
+  `buildDeductionsChartSeries()` — weekly buckets (`isoWeekKey()`) for
+  "This Month," monthly (`YYYY-MM`) for longer periods, two independent
+  running sums per bucket; `buildTopCategories()` — top N by amount,
+  share relative to the shown total; `toggleDeductionSeries()` — the
+  chart's own two legend chips share ONE state with the pre-existing All/
+  Out-of-pocket/Settlement segmented Pill row, deliberately made to
+  behave IDENTICALLY to tapping the matching Pill — tapping "Out-of-
+  Pocket" isolates to out-of-pocket either way, so the same-labeled
+  control never means opposite things in two places); and
+  `src/stats/settlementsSummary.ts` (`buildSettlementsTotalsBar()` — a
+  plain sum of gross/net/miles over whatever settlements the caller has
+  already period-filtered, the EXACT SAME summation
+  `dashboardStats.ts`'s fleet-wide `FleetStats` already uses
+  (`grossRevenue = sum(gross)`, `netRevenue = sum(net)`), just applied to
+  a filtered subset — never a second gross/net formula; `avgRpm =
+  gross/miles`, `null` rather than a divide-by-zero when there are no
+  miles). The Settlements chart reuses the EXISTING
+  `buildWeeklyTrend(settlements)` unchanged (already exactly "gross
+  revenue and net pay per settlement week") — period filtering only
+  narrows which settlements are fed into it.
+  `app/(tabs)/deductions.tsx`: a new totals bar (💳 Out-of-Pocket / 🏦
+  Settlement-Withheld / 📋 Total, each tile tappable — isolates that
+  origin, mirroring the Pill row) sits above period tabs (This Month/3M/
+  YTD/All, "remembered for the session" via a new
+  `src/lib/useSessionState.ts` — the SAME module-level-Map pattern
+  `useMonthCollapse.ts` already established for exactly this class of
+  requirement, generalized so both this screen and Settlements can each
+  use it under their own key), a thin-line 2-series chart (`buildPolylinePoints()`,
+  CLAUDE.md's CHART LANGUAGE CONSISTENCY invariant — never a thick bar)
+  with tappable legend chips, and a Top Categories card (tapping a
+  category narrows the list/chart further via a new local
+  `categoryFilter` state, independent of period/origin). A caption under
+  Total names the excluded non-deductible amount ("excludes $1,180
+  meals, advances and escrow") whenever it's nonzero. Fewer than 2 chart
+  buckets shows a "not enough data yet" message instead of a misleading
+  chart (spec item 2f). `app/(tabs)/more/settlements.tsx`: the OLD
+  always-all-time 4-tile totals card (Gross/Reimbursed/Deductions/Net,
+  read from `useFleetStats(null)`) is REPLACED by the new period-tab-
+  driven 3-tile bar (Gross/Net Pay/Miles + average-RPM caption) — the
+  Reimbursed/Deductions figures aren't lost, they're still one tap away
+  on their own dedicated screens; `useFleetStats`/`allSettlementReimbTotal`/
+  `allSettlementDedTotal` were deleted outright as genuinely dead code
+  once nothing referenced them (confirmed via grep before removing,
+  matching this codebase's own "if unused, delete it" convention) rather
+  than left as unused variables. Both screens' filter order is
+  period-first, then needs-review, matching the pre-existing filter
+  chain on each screen (Deductions additionally layers a category filter
+  on top; Settlements has no equivalent).
+  Tests: `periodFilter.test.ts` (new) — `thisMonth`/`ytd`/`3M`/`all`
+  window boundaries (including the explicit "YTD always includes more
+  than This Month" proof this pass' own PART 1 bug is about),
+  `bucketGranularityFor()`. `deductionsSummary.test.ts` (new) — the
+  canonical origin split reused verbatim (Total = Out-of-Pocket +
+  Withheld), the non-deductible caption summing EXACTLY the 3 canonical
+  categories and nothing else, weekly-vs-monthly chart bucketing, top-
+  category ranking/share/empty-list handling, and the full
+  `toggleDeductionSeries()` state machine (isolate from 'all', toggle
+  back to 'all', switch between the two isolated states) proving the
+  chart chips and the Pill row can never disagree. `settlementsSummary.test.ts`
+  (new) — the totals bar's plain-sum math, the null-not-NaN avgRpm
+  guard, and an end-to-end period-filter-into-`buildWeeklyTrend()` case
+  proving the chart reuses the real canonical function rather than a
+  second one. Full suite: 103 suites / 2533 tests pass; `tsc --noEmit`
+  clean; all 7 locales confirmed key-parity (`accountantPackage.
+  perDiemDeductionLabel`, `deductions.totalsTile*`/`period.*`/
+  `chartNotEnoughData`/`topCategoriesTitle`/`clearCategoryFilter`/
+  `totalsBarNonDeductibleCaption`/`allTimeSuffix`,
+  `settlementsScreen.avgRpmCaption`/`period.*`/`chartNotEnoughData` — es/
+  ru/ar/tr fully translated (keeping "Settlement"/"escrow" in Latin
+  script per the glossary — "RPM" itself is spelled out per-language
+  rather than left as a literal abbreviation, matching Cash Flow's own
+  pre-existing `avgRpm` translation precedent), hi/uk as untranslated
+  English copies per invariant #11; glossary test re-passed clean). No
+  SQL changes. No Edge Function redeploy needed — every change in this
+  pass is pure client-side JS/TS. No new native dependency — ships via a
+  normal `eas update`.
