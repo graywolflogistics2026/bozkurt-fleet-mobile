@@ -5159,3 +5159,110 @@
   native module added. docs/PENDING_SQL.md §55 has been run against the
   live project and this pass's client update has been published to
   preview via `eas update`.
+- BACKGROUND IMPORT CRASH — "undefined is not a function" ON COMPLETION,
+  ROOT CAUSE AND FIX (owner decision 2026-08-24, device report). Diagnosis
+  method: grepped for every function reference the BACKGROUND IMPORT pass
+  itself introduced (the job poller, the completion/notification effect,
+  the chip's tap handler, the retry path, "Review now") rather than
+  guessing — found ONE genuine dead reference, confirmed by reading the
+  actual installed React Native source, not assumed.
+  1. **THE ACTUAL BUG**: `src/data/importJobs.ts`'s
+     `downloadImportJobFileToLocal()` (called the moment "Review now" is
+     opened for a background-completed job — i.e. exactly "at completion")
+     called `supabase.storage.from('documents').download(storagePath)`
+     then `data.arrayBuffer()` on the resulting Blob. React Native's own
+     built-in `Blob` (`node_modules/react-native/Libraries/Blob/Blob.js`,
+     read directly to confirm, not assumed) implements only `slice()`/
+     `size`/`type` — `arrayBuffer()` genuinely does not exist on it. This
+     is why it crashed EVERY time, deterministically, not intermittently:
+     a real missing method on this platform, not a permission/availability
+     edge case. Confirmed via a repo-wide grep that this was the ONLY
+     `.arrayBuffer()` call anywhere in the codebase — a brand-new function
+     this pass introduced, exercising a pattern nowhere else in the app
+     had ever run against the real RN runtime. Fixed by replacing it with
+     the SAME signed-URL + `File.downloadFileAsync()` pattern
+     `documentViewer.ts`'s `shareDocumentFile()` already uses successfully
+     in production (Documents Archive's own Share/Download feature) — a
+     native download straight to a local file, no Blob/ArrayBuffer
+     conversion at all. Every other function reference audited (job
+     poller's `refetchInterval`, `useStartImportJob`/`useRetryImportJob`/
+     `useDismissImportJob`, the chip's `router.push`, `fetchImportJobResult`/
+     `fetchImportJobForReview`) was confirmed clean — properly-defined,
+     called from inside a React component body, nothing referencing an
+     unmounted screen's closure.
+  2. **HARD RULE — completion never depends on an optional capability**:
+     `src/import/importJobs.ts` (the pure, zero-Expo/RN-dependency module)
+     gained `runOptionalSideEffect()` — wraps ANY async side effect (a
+     notification call, or any future optional capability) so a missing
+     function, a throw, or a rejected promise can never propagate to the
+     caller; `ImportJobsChip.tsx`'s completion effect now routes every
+     `notifyImportJobDone()` call through it. Belt-and-suspenders on top:
+     `src/notifications/importJobNotifications.ts`'s own exported
+     functions (`getNotificationPermissionStatus`/
+     `requestNotificationPermission`/`notifyImportJobDone`/
+     `hasNotifiedJob`) each gained an explicit capability check
+     (`typeof Notifications.getPermissionsAsync === 'function'`, etc.)
+     plus their own internal try/catch, so they're safe even for a future
+     caller that doesn't go through the wrapper; the module-level
+     `Notifications.setNotificationHandler(...)` call (which runs the
+     instant this always-mounted-in-the-tab-layout module is first
+     imported) is now itself wrapped in a try/catch — the exact "drag-
+     module crash-on-mount" class of bug CLAUDE.md's own CUSTOMIZE
+     DASHBOARD entry already documents for a different screen, applied
+     here defensively even though it wasn't the actual reported crash.
+     `ImportJobsChip`'s whole `checkAndNotify()` async function is also
+     now explicitly `.catch()`-guarded so even an unexpected failure in
+     the loop itself (not just the notification calls) can never surface
+     as an unhandled rejection.
+  3. **Safe when the originating screen is gone**: audited and confirmed
+     already correct by construction — `src/import/importJobs.ts`'s own
+     header comment already documented this design intent ("there is no
+     client-side state a screen unmount/app background could lose — every
+     derived value is recomputed FROM SCRATCH from whatever the server's
+     current row values are on the next poll"). The "Review now" effect
+     (`app/(tabs)/import/index.tsx`) reads `job` fresh via
+     `fetchImportJobForReview()`/`downloadImportJobFileToLocal()` every
+     time it runs — never a closure captured from whatever screen
+     originally called `startBackgroundJob()` — and its existing
+     `cancelled` flag already guarded every `setState` call after an
+     await, so THIS screen unmounting mid-load was already safe too. No
+     structural change was needed here; both effects now have comments
+     spelling this out explicitly since it's exactly the property the bug
+     report asked to verify.
+  4. **Regression tests** (`src/import/__tests__/importJobs.test.ts`,
+     extended): `runOptionalSideEffect()` resolves cleanly for an
+     undefined/null function, a function that throws synchronously, and a
+     function that returns a rejected promise — while still genuinely
+     calling and awaiting a working one (not a blanket no-op). A new
+     "completion is visible with zero dependency on the originating
+     screen" block simulates a job started by one (now-unmounted) "screen
+     A" and completion detected by a totally independent "screen B"
+     computation sharing no variable/ref/closure with A — proving
+     `deriveChipSummary` surfaces both a ready and a failed job correctly
+     from nothing but a freshly-polled jobs array. The actual fixed
+     `downloadImportJobFileToLocal()` implementation itself is NOT
+     unit-tested here — it needs a real Expo/RN runtime (no jest-expo/RN
+     mocking exists in this test setup, same limitation every other
+     `src/data/*` network/file-system function in this codebase has;
+     `documentViewer.ts`'s equivalent, already-proven-in-production
+     pattern is the actual confidence this fix is correct).
+  5. **Error surface fix**: the reviewJobId catch block
+     (`app/(tabs)/import/index.tsx`) used to set `errorMessage` directly
+     from `err.message` — which is exactly how a raw runtime error like
+     "undefined is not a function" ended up as the ONLY visible text on
+     screen, with no explanation of what failed. It now always shows a
+     friendly, translated headline (`importJobs.reviewLoadFailed`, all 7
+     locales) pointing at Copy Details; `errorReport`
+     (`buildLocalErrorReport('Loading the completed import job', err)`,
+     unchanged) still carries the exact message and stack trace for real
+     debugging — the fix is scoped to this specific catch block (the
+     actual site of the reported crash), not a rewrite of every catch
+     block's existing "show the real error text" convention elsewhere in
+     this screen, which remains appropriate for the more ordinary
+     network-style errors those paths normally see.
+  Full suite: 94 suites / 2313 tests pass (+7 new); `tsc --noEmit` clean;
+  all 7 locales confirmed key-parity. No SQL/Edge Function changes; no
+  redeploy needed for `ai-import`/`ai-advisor`/`reset-data`/
+  `delete-account`. No new native dependency — pure JS/TS work reusing an
+  already-proven expo-file-system pattern — ships via a normal
+  `eas update`.

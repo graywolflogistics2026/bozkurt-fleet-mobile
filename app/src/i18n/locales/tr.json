@@ -1952,6 +1952,7 @@
     "startedTitle": "İçe aktarma başlatıldı",
     "startedBody": "İncelemeye hazır olduğunda size bildireceğiz. Bu arada uygulamayı kullanmaya devam edebilirsiniz.",
     "reviewNotReady": "Bu içe aktarma henüz incelemeye hazır değil.",
+    "reviewLoadFailed": "Tamamlanan bu içe aktarma yüklenemedi. Aşağıdaki \"Ayrıntıları Kopyala\"ya bakın veya tekrar deneyin.",
     "chip": {
       "processing": "Settlement’ınız okunuyor… görüntülemek için dokunun",
       "processingWithProgress": "Settlement’ınız okunuyor — {{total}} sayfadan {{through}}.",

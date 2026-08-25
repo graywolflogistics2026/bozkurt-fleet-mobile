@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useImportJobs, fetchImportJobResult } from '@/src/data/importJobs';
-import { deriveChipSummary, jobProgressFraction } from '@/src/import/importJobs';
+import { deriveChipSummary, jobProgressFraction, runOptionalSideEffect } from '@/src/import/importJobs';
 import { notifyImportJobDone, hasNotifiedJob } from '@/src/notifications/importJobNotifications';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -25,12 +25,30 @@ export function ImportJobsChip() {
   const { data: jobs } = useImportJobs();
   const summary = deriveChipSummary(jobs ?? []);
 
+  // BACKGROUND IMPORT CRASH FIX (owner decision 2026-08-24, hard rule): a
+  // job's completion (the chip/list reflecting 'ready'/'failed') is driven
+  // entirely by useImportJobs()'s own polling of the `import_jobs` row —
+  // this effect's ONLY job is the OPTIONAL local-notification convenience
+  // on top of that, so every notification call is routed through
+  // runOptionalSideEffect() (src/import/importJobs.ts), which can never
+  // throw regardless of whether the notification API is available in this
+  // build. This effect itself also never crashes the caller — its own
+  // try/catch is a second layer on top of runOptionalSideEffect's, since
+  // `hasNotifiedJob`/`fetchImportJobResult` are called directly, not
+  // through the wrapper. `cancelled` guards every async gap (same pattern
+  // as every other cleanup-aware effect in this app) so a fast series of
+  // poll ticks — or this component unmounting mid-loop — never acts on a
+  // stale iteration; note this effect reads only `jobs` (this render's own
+  // fresh query data) and module-level functions, never anything captured
+  // from whatever screen originally started the job, so "the screen that
+  // started the job is gone" has no effect on this logic at all.
   useEffect(() => {
     let cancelled = false;
     async function checkAndNotify() {
       for (const job of jobs ?? []) {
         if (job.status !== 'ready' && job.status !== 'failed') continue;
-        if (await hasNotifiedJob(job.id)) continue;
+        const alreadyNotified = await hasNotifiedJob(job.id).catch(() => false);
+        if (alreadyNotified) continue;
         if (cancelled) return;
         if (job.status === 'ready') {
           const result = await fetchImportJobResult(job.id).catch(() => null);
@@ -40,16 +58,23 @@ export function ImportJobsChip() {
               ? t('importJobs.notification.readyBodyWithDetail', { weekEnding: s.weekEnding, amount: money(s.grossRevenue) })
               : t('importJobs.notification.readyBody');
           if (cancelled) return;
-          await notifyImportJobDone(job.id, { title: t('importJobs.notification.readyTitle'), body });
+          await runOptionalSideEffect(() => notifyImportJobDone(job.id, { title: t('importJobs.notification.readyTitle'), body }));
         } else {
-          await notifyImportJobDone(job.id, {
-            title: t('importJobs.notification.failedTitle'),
-            body: job.fileName ?? t('importJobs.notification.failedBody'),
-          });
+          await runOptionalSideEffect(() =>
+            notifyImportJobDone(job.id, {
+              title: t('importJobs.notification.failedTitle'),
+              body: job.fileName ?? t('importJobs.notification.failedBody'),
+            })
+          );
         }
       }
     }
-    checkAndNotify();
+    checkAndNotify().catch(() => {
+      // Belt-and-suspenders: even an unexpected failure in the loop itself
+      // (not just the notification calls) must never surface as an
+      // unhandled rejection — the chip's own render below already reflects
+      // job status correctly regardless of whether this effect ever runs.
+    });
     return () => {
       cancelled = true;
     };

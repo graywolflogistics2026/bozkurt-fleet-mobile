@@ -25,14 +25,33 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // fully closed" would need real push notifications (APNs/FCM device
 // token registration + a server-side sender), a materially larger,
 // separate feature this pass deliberately does not attempt.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+//
+// BACKGROUND IMPORT CRASH FIX (owner decision 2026-08-24, hard rule): a
+// job's own completion (the chip/list updating) must NEVER depend on this
+// module actually working — every exported function here is defensive
+// about the native module potentially being unavailable (not linked in
+// this build, a permission call throwing instead of returning 'denied',
+// etc.), on top of the caller (ImportJobsChip.tsx) ALSO wrapping every
+// call through src/import/importJobs.ts's runOptionalSideEffect() —
+// belt-and-suspenders, since this module may have other, future callers.
+// setNotificationHandler() itself runs at module-load time (same as
+// truckHealthNotifications.ts/complianceNotifications.ts) — wrapped in a
+// try/catch so importing this module can never throw synchronously and
+// take down whatever imported it (the exact "drag-module crash-on-mount"
+// class of bug CLAUDE.md already documents for a different screen).
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    }),
+  });
+} catch {
+  // The native module isn't available in this build/runtime — every
+  // exported function below already no-ops safely when that's the case.
+}
 
 const NOTIFIED_JOB_IDS_KEY = 'import-job-notified-ids';
 // A job's terminal state never changes back (ready/failed is final,
@@ -55,38 +74,71 @@ async function markNotified(jobId: string): Promise<void> {
 // Lets a caller (ImportJobsChip) skip a potentially-expensive lookup
 // (fetching result_json just to build a notification body) for a job
 // that's already been notified about, without duplicating the dedupe
-// list's own storage key/shape here.
+// list's own storage key/shape here. Defensive: AsyncStorage is a very
+// standard dependency (low real risk), but a job's completion must never
+// hinge on it either — an unreadable dedupe list means "not notified yet,"
+// never a crash.
 export async function hasNotifiedJob(jobId: string): Promise<boolean> {
-  const ids = await getNotifiedIds();
-  return ids.includes(jobId);
+  try {
+    const ids = await getNotifiedIds();
+    return ids.includes(jobId);
+  } catch {
+    return false;
+  }
 }
 
 export type NotificationPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
+// Capability check (hard rule, owner decision 2026-08-24): if the native
+// module isn't linked in this build, `Notifications.getPermissionsAsync`
+// itself may not even be a function — calling it directly is exactly what
+// crashed the background-import completion path. Every exported function
+// below goes through this guard first.
+function notificationsAvailable(): boolean {
+  return typeof Notifications.getPermissionsAsync === 'function' && typeof Notifications.scheduleNotificationAsync === 'function';
+}
+
 export async function getNotificationPermissionStatus(): Promise<NotificationPermissionStatus> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return status;
+  if (!notificationsAvailable()) return 'denied';
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status;
+  } catch {
+    return 'denied';
+  }
 }
 
 export async function requestNotificationPermission(): Promise<NotificationPermissionStatus> {
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status;
+  if (!notificationsAvailable() || typeof Notifications.requestPermissionsAsync !== 'function') return 'denied';
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    return status;
+  } catch {
+    return 'denied';
+  }
 }
 
 // Fires once per job id, ever (whether the job ended ready or failed) —
 // the caller decides title/body per outcome. A denied/undetermined
-// permission is a silent no-op (the chip/list still show the same
-// information visually; the notification is a convenience, not the only
-// way to find out).
+// permission, an unavailable native module, or ANY other failure here is a
+// silent no-op (the chip/list still show the same information visually;
+// the notification is a convenience, never the only way to find out — see
+// the HARD RULE note above this file's setNotificationHandler() call).
 export async function notifyImportJobDone(jobId: string, params: { title: string; body: string }): Promise<void> {
-  const permission = await getNotificationPermissionStatus();
-  if (permission !== 'granted') return;
-  const ids = await getNotifiedIds();
-  if (ids.includes(jobId)) return;
-  await Notifications.scheduleNotificationAsync({
-    identifier: `import-job:${jobId}`,
-    content: { title: params.title, body: params.body },
-    trigger: null,
-  });
-  await markNotified(jobId);
+  try {
+    if (!notificationsAvailable()) return;
+    const permission = await getNotificationPermissionStatus();
+    if (permission !== 'granted') return;
+    const ids = await getNotifiedIds();
+    if (ids.includes(jobId)) return;
+    await Notifications.scheduleNotificationAsync({
+      identifier: `import-job:${jobId}`,
+      content: { title: params.title, body: params.body },
+      trigger: null,
+    });
+    await markNotified(jobId);
+  } catch {
+    // Never propagate — see the HARD RULE note above this file's
+    // setNotificationHandler() call.
+  }
 }

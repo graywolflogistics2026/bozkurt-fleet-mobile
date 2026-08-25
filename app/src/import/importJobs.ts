@@ -87,6 +87,27 @@ export function deriveChipSummary(jobs: ImportJob[]): ChipSummary {
   return { kind: 'hidden' };
 }
 
+// COMPLETION MUST NEVER DEPEND ON AN OPTIONAL CAPABILITY (owner decision
+// 2026-08-24, BACKGROUND IMPORT CRASH fix, hard rule) — a job's own
+// completion is already fully derivable from its `import_jobs` row alone
+// (deriveChipSummary above); a LOCAL NOTIFICATION is a convenience on top
+// of that, never something the job's visibility can depend on. If the
+// notification API isn't available in this build (native module not
+// linked, Expo Go dropped support, permission machinery throws instead of
+// just returning 'denied', ...) or any other optional side effect throws,
+// that failure must never propagate to — let alone crash — the caller.
+// Pure and injectable (the real async call is passed in, not imported
+// here) so it's fully unit-testable without a real Expo/RN runtime: a
+// throwing/rejecting/missing function all resolve cleanly.
+export async function runOptionalSideEffect(fn: (() => Promise<void>) | null | undefined): Promise<void> {
+  if (typeof fn !== 'function') return;
+  try {
+    await fn();
+  } catch {
+    // Swallowed on purpose — see header comment above.
+  }
+}
+
 // null = no total known yet (job just queued, page count not determined)
 // — the caller shows an indeterminate spinner rather than a fraction.
 // Clamped to [0, 1] defensively — pagesDone should never exceed

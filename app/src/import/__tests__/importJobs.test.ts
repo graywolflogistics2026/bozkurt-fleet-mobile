@@ -4,6 +4,7 @@ import {
   isReviewableJob,
   isRetryableJob,
   jobProgressFraction,
+  runOptionalSideEffect,
   sortImportJobsForDisplay,
   type ImportJob,
 } from '../importJobs';
@@ -144,6 +145,81 @@ describe('deriveChipSummary — priority: processing/queued > ready > failed > h
     // The first call's result is untouched by the second — genuinely two
     // independent, side-effect-free computations.
     expect(firstSummary).toMatchObject({ kind: 'processing', job: { pagesDone: 2 } });
+  });
+});
+
+// BACKGROUND IMPORT CRASH FIX (owner decision 2026-08-24, device report:
+// "undefined is not a function" on completion) — the actual root cause was
+// downloadImportJobFileToLocal() calling Blob.arrayBuffer(), which React
+// Native's built-in Blob never implements (fixed in src/data/importJobs.ts
+// by switching to the same signed-URL + File.downloadFileAsync() pattern
+// documentViewer.ts's shareDocumentFile() already uses in production — not
+// unit-testable here since it needs a real Expo/RN runtime, same
+// "network/file-system layer lives in src/data/, tested via its own
+// pure-logic coverage here" split this file's own header comment
+// describes). What IS fully unit-testable here, and is the actual HARD
+// RULE this fix introduced: a job's completion must never depend on an
+// OPTIONAL capability (a local notification, or any other convenience
+// side effect) being available.
+describe('runOptionalSideEffect', () => {
+  it('resolves cleanly when the function is undefined (capability not available)', async () => {
+    await expect(runOptionalSideEffect(undefined)).resolves.toBeUndefined();
+  });
+
+  it('resolves cleanly when the function is null', async () => {
+    await expect(runOptionalSideEffect(null)).resolves.toBeUndefined();
+  });
+
+  it('resolves cleanly when the function throws synchronously', async () => {
+    const throwing = () => {
+      throw new TypeError('undefined is not a function');
+    };
+    await expect(runOptionalSideEffect(throwing as unknown as () => Promise<void>)).resolves.toBeUndefined();
+  });
+
+  it('resolves cleanly when the function returns a rejected promise', async () => {
+    const rejecting = () => Promise.reject(new Error('native module not linked'));
+    await expect(runOptionalSideEffect(rejecting)).resolves.toBeUndefined();
+  });
+
+  it('still actually calls and awaits a working function — this is not a no-op for the success path', async () => {
+    let called = false;
+    await runOptionalSideEffect(async () => {
+      called = true;
+    });
+    expect(called).toBe(true);
+  });
+});
+
+// "THE ORIGINATING SCREEN IS GONE" (owner decision 2026-08-24, requirement
+// #3/#4) — a job is started by whatever screen called startBackgroundJob(),
+// but its COMPLETION must be visible from a totally independent render:
+// this simulates exactly that by never sharing any variable, ref, or
+// closure between "screen A" (which only ever knew the job id at start
+// time) and "screen B" (a fresh computation using nothing but a freshly
+// polled jobs array) — proving deriveChipSummary has no hidden dependency
+// on anything the originating screen held onto.
+describe('completion is visible with zero dependency on the originating screen', () => {
+  it('a job started by one (now-unmounted) screen surfaces correctly to a completely independent later computation', () => {
+    // "Screen A" starts a job — all it ever has is the id; nothing else is
+    // captured or passed forward.
+    const startedJobId = 'job-from-screen-a';
+    // Screen A unmounts here — nothing further ever runs on its behalf.
+
+    // "Screen B" (could be the same screen remounted, a different screen,
+    // or even a different app session after a restart) later polls
+    // import_jobs and gets back a FRESH array it built with no knowledge
+    // of screen A's own state — the only shared "state" is the server's.
+    const polledJobs: ImportJob[] = [job({ id: startedJobId, status: 'ready', pagesDone: 11, pagesTotal: 11 })];
+    const summary = deriveChipSummary(polledJobs);
+    expect(summary).toMatchObject({ kind: 'ready', job: { id: startedJobId }, readyCount: 1 });
+  });
+
+  it('a failed job is equally visible with no dependency on the originating screen', () => {
+    const startedJobId = 'job-from-screen-a';
+    const polledJobs: ImportJob[] = [job({ id: startedJobId, status: 'failed', errorMessage: 'timeout' })];
+    const summary = deriveChipSummary(polledJobs);
+    expect(summary).toMatchObject({ kind: 'failed', job: { id: startedJobId }, failedCount: 1 });
   });
 });
 

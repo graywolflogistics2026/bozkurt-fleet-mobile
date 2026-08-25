@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { File, Paths } from 'expo-file-system';
 import { supabase } from '@/src/lib/supabase';
+import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
 import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
@@ -145,15 +146,28 @@ export async function fetchImportJobForReview(
 // so this downloads the job's own already-uploaded copy from Storage back
 // into a fresh local temp file, giving saveExtraction() a real local URI
 // to work with, completely unchanged.
+//
+// BACKGROUND IMPORT CRASH FIX (owner decision 2026-08-24, device report:
+// "undefined is not a function" on completion): the ORIGINAL implementation
+// called `supabase.storage.from('documents').download(storagePath)` and
+// then `data.arrayBuffer()` on the resulting Blob — but React Native's
+// built-in `Blob` (node_modules/react-native/Libraries/Blob/Blob.js) never
+// implements `arrayBuffer()` (only `slice()`/`size`/`type`), so that call
+// threw every single time "Review now" was opened for a background-
+// imported job — a genuinely nonexistent method on this platform, not a
+// permissions/availability issue. This is the ONLY place in the entire
+// codebase that ever called `.arrayBuffer()` on a Storage download (grepped
+// before writing this fix), which is exactly why it went untested against
+// the real RN runtime. Fixed by reusing the SAME signed-URL +
+// `File.downloadFileAsync()` pattern documentViewer.ts's own
+// `shareDocumentFile()` already uses successfully in production — a native
+// download straight to a local file, no Blob/ArrayBuffer conversion at all.
 export async function downloadImportJobFileToLocal(storagePath: string, fileName: string | undefined): Promise<string> {
-  const { data, error } = await supabase.storage.from('documents').download(storagePath);
-  if (error || !data) throw error ?? new Error('Could not download the original file.');
-  const bytes = new Uint8Array(await data.arrayBuffer());
+  const signedUrl = await getSignedDocumentUrl(storagePath);
   const safeName = (fileName ?? storagePath.split('/').pop() ?? 'import-file').replace(/[^a-zA-Z0-9._-]/g, '_');
-  const file = new File(Paths.cache, `review-${Date.now()}-${safeName}`);
-  if (file.exists) file.delete();
-  file.create();
-  file.write(bytes);
+  const destination = new File(Paths.cache, `review-${Date.now()}-${safeName}`);
+  if (destination.exists) destination.delete();
+  const file = await File.downloadFileAsync(signedUrl, destination);
   return file.uri;
 }
 

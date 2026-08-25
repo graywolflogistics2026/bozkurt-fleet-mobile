@@ -1952,6 +1952,7 @@
     "startedTitle": "Import started",
     "startedBody": "We'll notify you when it's ready to review. You can keep using the app in the meantime.",
     "reviewNotReady": "This import isn't ready to review yet.",
+    "reviewLoadFailed": "Could not load this completed import. Check Copy Details below, or try again.",
     "chip": {
       "processing": "Reading your settlement… tap to view",
       "processingWithProgress": "Reading your settlement — page {{through}} of {{total}}",

@@ -303,6 +303,19 @@ export default function Import() {
   // reconciliation guard, all identical regardless of which path produced
   // the data. Nothing is auto-saved here; the user still confirms on the
   // normal preview screen.
+  //
+  // SAFE WHEN THE ORIGINATING SCREEN IS GONE (owner decision 2026-08-24,
+  // BACKGROUND IMPORT CRASH fix, requirement #3): every value this effect
+  // acts on — `job` — is read FRESH from the `import_jobs` row via
+  // fetchImportJobForReview()/downloadImportJobFileToLocal(), never from a
+  // closure captured back when some OTHER screen originally called
+  // startBackgroundJob(). This effect can run correctly in a completely
+  // fresh mount of this screen (a different app session, after a restart)
+  // with zero dependency on whatever happened when the job was started.
+  // `cancelled` still guards every setState call after an await, so if
+  // THIS screen itself unmounts mid-load (the user navigates away while
+  // the file is still downloading), nothing tries to update state on an
+  // unmounted component.
   useEffect(() => {
     if (!reviewJobId || !userId) return;
     let cancelled = false;
@@ -335,7 +348,12 @@ export default function Import() {
         await afterExtraction(job.extraction, job.fileName, undefined);
       } catch (err) {
         if (cancelled) return;
-        setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
+        // ERROR SURFACE FIX (owner decision 2026-08-24, requirement #5):
+        // this is the exact path that used to show a raw, cryptic runtime
+        // error ("undefined is not a function") as the ONLY visible text —
+        // now always a friendly, step-tagged headline; the real message
+        // and stack still go into errorReport for Copy Details, unchanged.
+        setErrorMessage(t('importJobs.reviewLoadFailed'));
         setErrorStepGroup(null);
         setErrorHasPartialSave(false);
         setErrorIsDuplicateRace(false);

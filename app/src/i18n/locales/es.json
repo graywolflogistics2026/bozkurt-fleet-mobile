@@ -1952,6 +1952,7 @@
     "startedTitle": "Importación iniciada",
     "startedBody": "Te avisaremos cuando esté lista para revisar. Puedes seguir usando la app mientras tanto.",
     "reviewNotReady": "Esta importación aún no está lista para revisar.",
+    "reviewLoadFailed": "No se pudo cargar esta importación completada. Consulta \"Copiar detalles\" abajo, o inténtalo de nuevo.",
     "chip": {
       "processing": "Leyendo tu settlement… toca para ver",
       "processingWithProgress": "Leyendo tu settlement — página {{through}} de {{total}}",
