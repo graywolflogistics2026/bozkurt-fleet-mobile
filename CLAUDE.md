@@ -6039,3 +6039,178 @@
   redeploying; `ai-advisor`/`reset-data`/`delete-account`/`referral-sync`
   were NOT touched. No new native dependency — pure JS/TS plus one small
   SQL migration — ships via a normal `eas update`.
+- CASH FLOW MONTHLY VIEW + MULTI-FILE BACKGROUND IMPORT (owner decision,
+  two-part pass, no SQL — every table/column both parts read already
+  existed).
+  PART 1 — CASH FLOW MONTHLY VIEW: `app/src/stats/cashFlowMonthly.ts` is a
+  new, pure module — `buildMonthlyCashFlowOverview()` walks BIDIRECTIONALLY
+  outward from the CURRENT month, anchored at the ONE real known figure
+  (today's `cf_bank_balance`): backward reconstructs each past month's
+  ACTUAL income/fixed/variable/periodic from real settlements/spend
+  events/compliance items (never a guess), forward projects each future
+  month from the same steady-state weekly figures (`weeklyIncome`/
+  `weeklyFixed`/`weeklyVariable`, post-override) the existing 30-day
+  forecast already computes — this is what makes a requested year that
+  differs from the current year (a past year, all `'actual'`; a future
+  year, all `'projected'`) chain correctly: the walk always resolves the
+  same real anchor regardless of which 12-month window the caller actually
+  asked for, proven directly by a test that calls the function twice (once
+  per adjacent year) and checks December's closing balance against the
+  following January's opening balance. The month `today` falls in is
+  `'current'` — a blended actual-to-date (month start through today) +
+  projected-remainder (tomorrow through month end) figure, "never a guess
+  about days that haven't happened, never a stale figure for days that
+  have." An ACTUAL month's spend events are bucketed fixed/variable using
+  the SAME category sets `cashFlowClassification.ts` already determined
+  account-wide (`classification.variable`'s own category list) — a
+  category the classifier excluded as a one-off for the steady-state
+  PROJECTION (so it doesn't inflate every future week) still folds into
+  "fixed" for an ACTUAL month's own total, since a real dollar that was
+  actually spent must show up somewhere, never vanish.
+  `app/src/stats/cashFlowPeriodic.ts` gained `buildPeriodicItemsInRange()`
+  (a `[startIso, endIso]`-bounded sibling of the existing
+  `buildPeriodicForecastItems()`, which stays exactly as it was — always
+  forward-only from "today," correct for the 30-day forecast) since the
+  Monthly view needs a PAST month's own periodic items too (an HVUT 2290
+  paid back in March is still part of March's real actuals). The Cash Flow
+  screen (`cash-flow.tsx`) gained 3 period tabs — 30 Days (unchanged,
+  exactly the pre-existing week-by-week view) / This Month (a single
+  always-expanded `MonthCard` for the current calendar month, independent
+  of the Monthly tab's own year selector) / Monthly (a Pill-based year
+  selector mirroring the Accountant Package's own established pattern,
+  a thin single-line "Apple Stocks style" trend of closing balance across
+  the 12 months via the SAME `buildPolylinePoints`/`buildAreaPoints`
+  primitive every other chart in this app already uses, a tightest-month +
+  best-month highlight line via new `findTightestMonthIndex()`/
+  `findBestMonthIndex()`, and a tap-to-expand `MonthCard` per month —
+  collapsed by default showing just the month name/status badge/closing
+  balance, expanding on tap to the identical opening/income/fixed/
+  variable/periodic/closing breakdown `WeekCard` already shows for the
+  30-day view, spec item 4's "same breakdown... keeping the 'where it came
+  from' basis and manual overrides" — the figures already reflect
+  whatever income/fixed/variable/periodic overrides are set, since every
+  period reads from the exact same `forecast.weeklyIncome`/`weeklyFixed`/
+  `weeklyVariable`/`overrides` the 30-day view uses, computed once and
+  shared). A projected month renders at 65% opacity with a "PROJECTED"
+  badge (spec item 2, "clearly distinguished"); the current month gets a
+  "THIS MONTH" badge instead (a blend, not a pure projection, so it isn't
+  dimmed).
+  PART 2 — MULTI-FILE BACKGROUND IMPORT: builds directly on the pre-
+  existing `import_jobs` background-job system (server-tracked rows,
+  `EdgeRuntime.waitUntil()`-driven processing in `ai-import`, per-document
+  monthly usage allowance) — no Edge Function changes were needed, since a
+  batch is purely a CLIENT-side orchestration of N calls to the exact same
+  already-existing `mode: 'job'` endpoint.
+  1. **Multi-file picker + batch enqueue** (spec item 1): `pickPdf()`
+     (`app/(tabs)/import/index.tsx`) now calls `DocumentPicker.
+     getDocumentAsync({..., multiple: true})` — a single pick (still the
+     common case) is completely unchanged, routing through the exact
+     pre-existing one-job `startBackgroundJob()` path; 2+ files branch into
+     `startBatchImport()`. Capped at `MAX_BATCH_IMPORT_FILES = 10`
+     (`app/src/import/importJobs.ts`, "configurable" per spec item 1 — one
+     constant to change) with a friendly "only the first 10 were selected"
+     notice rather than a silent truncation; oversized files (the existing
+     10 MB per-file guard) are filtered out with their own notice before
+     anything else happens. Each file becomes its own `import_jobs` row via
+     the NEW `useStartImportJobsBatch()` (`app/src/data/importJobs.ts`),
+     which reuses the exact same per-file upload+invoke logic the single-
+     file `useStartImportJob()` already had (extracted into a shared
+     `startOneImportJob()`) run through a new, pure, fully-injectable
+     `runBatchWithConcurrency()` (`app/src/import/importJobs.ts`) — the
+     CLIENT-side counterpart to `ai-import/chunking.ts`'s own server-side
+     `runWithConcurrencyLimit()` (CLAUDE.md's SPEED UP SETTLEMENT IMPORT
+     entry), at a modest `BATCH_START_CONCURRENCY = 3` rather than firing
+     all N uploads at once (the exact contention risk that pass's own
+     history already worked through) or fully serial (slow for a real
+     10-file batch). "A failed item never blocks the others" (spec item 5)
+     is what this function's own per-item try/catch guarantees — one
+     file's upload/invoke failure is captured as `{item, error}` without
+     stopping or skipping any other file's own attempt, and every result
+     stays correctly paired with its own input item regardless of actual
+     completion order.
+  2. **Allowance pre-check, client-side by design** (spec item 4, task
+     "batch usage-allowance check"): `app/src/usage/aiUsage.ts`'s new
+     `planBatchImportCapacity(batchSize, usage, availableCredits,
+     bypassesLimit)` — remaining monthly allowance first, then spills into
+     available credits, `willProcess`/`willBeBlocked`/`usesCredits`
+     computed without starting a single job. Deliberately built on the
+     SAME client-RLS-readable read `useAiUsageDisplay()`
+     (`app/src/data/aiUsageDisplay.ts`) already performs for Settings'
+     usage display (a direct read of `ai_usage_log`'s monthly count +
+     `ai_credit_purchases`) rather than a new Edge Function endpoint — this
+     is explicitly an ESTIMATE for the up-front message only ("say up
+     front how many will process... rather than silently truncating"); the
+     real, authoritative gate remains exactly what it already was, the
+     server's own per-document check inside `ai-import` at the moment each
+     job actually runs, unweakened and unbypassed by this pre-check. When
+     `willBeBlocked > 0`, `confirmBatchWillBeBlocked()` shows the exact
+     up-front figures via `Alert` with three choices — Cancel, Get Credits
+     (routes to Settings, where the credit-pack offers already live, PART 5
+     of the FIVE ADDITIONS pass), or Continue with N (only offered when
+     `willProcess > 0`) — proceeding always uses only the FIRST `willProcess`
+     files from the batch, in picked order, never a silent drop. An owner
+     account (`bypassesUsageLimit`) always gets `willProcess === batchSize`,
+     matching the existing owner-bypass precedent.
+  3. **Import Queue view** (spec item 2): mostly ALREADY BUILT by the prior
+     BACKGROUND IMPORT pass — `app/(tabs)/import/jobs.tsx`'s `JobRow`
+     already showed filename, a per-status label (including
+     `waiting_to_retry`), the "page N of M" progress granularity
+     (`importJobs.pageProgress`), and per-item Review/Retry/Dismiss
+     actions; confirmed unchanged. The one addition this pass made:
+     a "Review All (N)" button (shown whenever 2+ jobs are `'ready'` at
+     once) that launches the batch review flow below.
+  4. **Batch review flow, Next/Skip without returning to the queue**
+     (spec item 3): `app/(tabs)/import/index.tsx` gained a new
+     `?reviewJobIds=a,b,c` route param (alongside the pre-existing single
+     `?reviewJobId=X`, unchanged) — a small state layer (`currentReviewId`/
+     `batchQueue`/`batchTotal`/`batchPosition`) resolves EITHER param down
+     to one `currentReviewId` the EXISTING review-loading effect
+     (`fetchImportJobForReview`/`downloadImportJobFileToLocal`/
+     `afterExtraction`) already acts on — single-job and batch reviews
+     share 100% of the same load/save/dismiss code path per document, so
+     "the reconciliation guard and needs-review rules still apply per
+     document" is structural, not a separate re-implementation. A new pure
+     `nextBatchReviewStep(queue)` (`app/src/import/importJobs.ts`, "pop the
+     next id off the queue") drives `advanceBatchReview()` — called by
+     Skip (the preview phase's Discard button doubles as Skip while
+     `batchTotal > 0`, and the error phase gains its own dedicated Skip
+     button so one failed document can't stall the walkthrough) and by
+     "Next Document" (the done phase's primary action once `batchTotal >
+     0`, replacing the ordinary Import-Another/Done pair — becomes
+     "Finish" and returns Home on the last document). "Nothing saves
+     without confirmation" (spec item 3) is unchanged from the single-file
+     flow — Save is still one explicit tap per document, Skip/Next never
+     calls `saveExtraction()`. A "Reviewing N of M" progress line is shown
+     above every phase while `batchTotal > 0`.
+  Tests: `src/stats/__tests__/cashFlowMonthly.test.ts` (new, 20 tests) —
+  actual/current/projected status classification, actual months computing
+  from real settlement/event data (including the unclassified-category-
+  folds-into-fixed rule), projected months scaling the weekly steady-state
+  figures by each month's own day count, the current month's actual-to-
+  date/projected-remainder blend, balance chaining within a year AND
+  across a year boundary (both a past-year and a future-year case),
+  overrides applying identically to actual/projected months, and
+  `findTightestMonthIndex`/`findBestMonthIndex`. `src/import/__tests__/
+  importJobs.test.ts` gained `runBatchWithConcurrency` (the concurrency
+  cap is honestly respected; the spec's own required "10 files enqueue and
+  complete out of order without mixing results" proof via inverted
+  per-item delays; one failure never stops or skips any other task; empty
+  input; a limit larger than the item count) and `nextBatchReviewStep`
+  coverage. `src/usage/__tests__/aiUsage.test.ts` gained
+  `planBatchImportCapacity` coverage (fits entirely within the allowance;
+  exceeds it and reports the real blocked count rather than silently
+  truncating; spills into credits once the allowance is exhausted; blends
+  both; the owner bypass; a zero-capacity batch reports 0 processing, never
+  a negative number). Full suite: 100 suites / 2478 tests pass; `tsc
+  --noEmit` clean; all 7 locales confirmed key-parity (`cashFlowScreen.*`
+  period/month-view keys + `importJobs.batch*`/`skipDocument`/
+  `nextDocument`/`finishReview`/`reviewAll` — es/ru/ar/tr fully translated,
+  hi/uk as untranslated English copies per invariant #11; glossary test
+  re-passed clean). No SQL changes — every table/column both parts read
+  (`profiles.cf_*`, `settlements`, `deductions`, `compliance_items`,
+  `import_jobs`, `ai_usage_log`, `ai_credit_purchases`) already existed.
+  `ai-import`/`ai-advisor`/`reset-data`/`delete-account`/`referral-sync`
+  were NOT touched — no Edge Function redeploy needed for either part. No
+  new native dependency (`expo-document-picker`'s `multiple` option was
+  already available in the existing dependency) — ships via a normal
+  `eas update`.

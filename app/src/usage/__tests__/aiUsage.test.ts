@@ -6,6 +6,7 @@ import {
   canUseAi,
   sumAvailableCredits,
   planCreditConsumption,
+  planBatchImportCapacity,
   isCreditPackExpired,
   calcCatchUpPackExpiry,
   detectBackfillSession,
@@ -155,6 +156,44 @@ describe('calcCatchUpPackExpiry / isCreditPackExpired', () => {
 
   test('a null expiry (the 3 fixed packs) never expires', () => {
     expect(isCreditPackExpired(null, new Date('2099-01-01T00:00:00Z'))).toBe(false);
+  });
+});
+
+// MULTI-FILE BACKGROUND IMPORT (owner decision, "batch enqueue" pass) —
+// spec item 4's own required proof: "allowance checked before enqueueing...
+// say up front how many will process... rather than silently truncating."
+describe('planBatchImportCapacity', () => {
+  it('a batch that fits entirely within the remaining allowance processes all of it, using no credits', () => {
+    const usage = calcUsageStatus(10, 60); // 50 remaining
+    expect(planBatchImportCapacity(5, usage, 0)).toEqual({ batchSize: 5, willProcess: 5, willBeBlocked: 0, usesCredits: 0 });
+  });
+
+  it('a batch that exceeds the remaining allowance is only partially processed — the rest reported blocked, never silently truncated without saying so', () => {
+    const usage = calcUsageStatus(58, 60); // 2 remaining
+    const plan = planBatchImportCapacity(10, usage, 0);
+    expect(plan).toEqual({ batchSize: 10, willProcess: 2, willBeBlocked: 8, usesCredits: 0 });
+  });
+
+  it('spills over into available credits once the allowance is exhausted', () => {
+    const usage = calcUsageStatus(60, 60); // 0 remaining
+    const plan = planBatchImportCapacity(5, usage, 3);
+    expect(plan).toEqual({ batchSize: 5, willProcess: 3, willBeBlocked: 2, usesCredits: 3 });
+  });
+
+  it('blends remaining allowance + credits when both are partially used', () => {
+    const usage = calcUsageStatus(58, 60); // 2 remaining
+    const plan = planBatchImportCapacity(5, usage, 10); // 2 allowance + up to 10 credits = capacity 12
+    expect(plan).toEqual({ batchSize: 5, willProcess: 5, willBeBlocked: 0, usesCredits: 3 });
+  });
+
+  it('an owner account bypasses the check entirely — the whole batch always processes', () => {
+    const usage = calcUsageStatus(999, 60);
+    expect(planBatchImportCapacity(10, usage, 0, true)).toEqual({ batchSize: 10, willProcess: 10, willBeBlocked: 0, usesCredits: 0 });
+  });
+
+  it('zero capacity blocks the entire batch, not a negative willProcess', () => {
+    const usage = calcUsageStatus(60, 60);
+    expect(planBatchImportCapacity(4, usage, 0)).toEqual({ batchSize: 4, willProcess: 0, willBeBlocked: 4, usesCredits: 0 });
   });
 });
 

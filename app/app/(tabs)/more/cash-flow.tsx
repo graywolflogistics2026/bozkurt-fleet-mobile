@@ -15,11 +15,29 @@ import { useDocuments } from '@/src/data/documents';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { buildWeeklyTrend, rankLoadsByRpm, type RankedLoad } from '@/src/stats/cashFlowTrend';
-import { buildCashFlowForecastFromData, type CashFlowOverrides, type CashFlowWeekProjection } from '@/src/stats/cashFlowForecast';
+import {
+  buildCashFlowForecastFromData,
+  buildSpendEvents,
+  buildPeriodicItemsInRange,
+  buildDocumentAmountLookup,
+  type CashFlowOverrides,
+  type CashFlowWeekProjection,
+} from '@/src/stats/cashFlowForecast';
+import { buildMonthlyCashFlowOverview, findTightestMonthIndex, findBestMonthIndex, type CashFlowMonthProjection } from '@/src/stats/cashFlowMonthly';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
-import { colors, spacing, typography } from '@/src/theme';
+import { colors, radii, spacing, typography } from '@/src/theme';
+
+// CASH FLOW MONTHLY VIEW (owner decision, "period tabs" pass) — a wide,
+// fixed lookback/lookahead window for the full-history inputs the Monthly
+// engine needs (buildSpendEvents/buildPeriodicItemsInRange normally take an
+// explicit range; the 30-day forecast above windows them to ~12 weeks,
+// which is correct for THAT engine but would silently blank out any month
+// more than 12 weeks in the past). Not a real date bound — just wide enough
+// that no real account data ever falls outside it.
+const MONTHLY_ALL_TIME_START_ISO = '2000-01-01';
+const MONTHLY_ALL_TIME_END_ISO = '2100-12-31';
 
 const CHART_HEIGHT = 120;
 
@@ -73,6 +91,161 @@ function WeeklyTrendChart({ points }: { points: ReturnType<typeof buildWeeklyTre
         </View>
       </View>
     </View>
+  );
+}
+
+// Same visual pill accountant-package.tsx already established for its own
+// Year/Month/Scope selectors — reused here (screen-local, not promoted to
+// ui.tsx, matching that screen's own precedent) for period tabs + the year
+// selector.
+function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: radii.sm,
+        borderWidth: 1,
+        borderColor: selected ? colors.accent : colors.border,
+        backgroundColor: selected ? colors.accent : colors.card2,
+        marginEnd: spacing.xs,
+        marginBottom: spacing.xs,
+      }}
+    >
+      <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// A thin single-line "Apple Stocks style" trend of closing balance across
+// however many months are passed in — same buildPolylinePoints/
+// buildAreaPoints primitive as WeeklyTrendChart (CLAUDE.md's CHART
+// LANGUAGE CONSISTENCY invariant), colored by the LAST month's sign.
+function MonthlyTrendChart({ months }: { months: CashFlowMonthProjection[] }) {
+  const { date } = useFormatters();
+  const [width, setWidth] = useState(0);
+  const height = CHART_HEIGHT;
+
+  const values = months.map((m) => m.closingBalance);
+  const domain: [number, number] = [Math.min(0, ...values), Math.max(0, ...values)];
+  const line = buildPolylinePoints(values, width, height, domain);
+  const area = width > 0 && values.length >= 2 ? buildAreaPoints(line, width, height) : '';
+  const isPositive = (values[values.length - 1] ?? 0) >= 0;
+  const color = isPositive ? colors.green : colors.red;
+  const fill = isPositive ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)';
+  const monthLabel = (m: CashFlowMonthProjection) => date(new Date(Date.UTC(m.year, m.month - 1, 1)).toISOString().slice(0, 10), { month: 'short' });
+
+  return (
+    <View>
+      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
+        {months.length >= 2 && width > 0 && (
+          <Svg width={width} height={height}>
+            <Polygon points={area} fill={fill} stroke="none" />
+            <Polyline points={line} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+          </Svg>
+        )}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
+        <MutedText>{months[0] ? monthLabel(months[0]) : ''}</MutedText>
+        <MutedText>{months[months.length - 1] ? monthLabel(months[months.length - 1]) : ''}</MutedText>
+      </View>
+    </View>
+  );
+}
+
+// One row per month — actuals for a fully-past month, a blended figure for
+// the month "today" falls in, a steady-state projection for a future
+// month, dimmed with a "Projected" label per the spec ("clearly
+// distinguished"). Collapsed by default; tapping opens the same
+// opening/income/fixed/variable/periodic/closing breakdown WeekCard
+// already shows for the 30-day view (spec item 4, "same breakdown...
+// keeping the 'where it came from' basis and manual overrides" — the
+// figures here already reflect whatever income/fixed/variable/periodic
+// overrides are set, since they're computed from the exact same
+// forecast.weeklyIncome/weeklyFixed/weeklyVariable/overrides the 30-day
+// view uses).
+function MonthCard({
+  m,
+  expanded,
+  onToggle,
+  isTightest,
+  isBest,
+}: {
+  m: CashFlowMonthProjection;
+  expanded: boolean;
+  onToggle: () => void;
+  isTightest: boolean;
+  isBest: boolean;
+}) {
+  const { t } = useTranslation();
+  const { money, date } = useFormatters();
+  const monthLabel = date(new Date(Date.UTC(m.year, m.month - 1, 1)).toISOString().slice(0, 10), { year: 'numeric', month: 'long' });
+  const dimmed = m.status === 'projected';
+
+  return (
+    <Pressable onPress={onToggle}>
+      <Card
+        style={{
+          ...(isTightest ? { borderColor: colors.orange, borderWidth: 1 } : isBest ? { borderColor: colors.green, borderWidth: 1 } : {}),
+          ...(dimmed ? { opacity: 0.65 } : {}),
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{monthLabel}</Text>
+          <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+            {m.status === 'projected' && (
+              <Text style={{ color: colors.muted, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthProjectedBadge')}</Text>
+            )}
+            {m.status === 'current' && (
+              <Text style={{ color: colors.accent, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthCurrentBadge')}</Text>
+            )}
+            {isTightest && <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthTightestBadge')}</Text>}
+            {isBest && <Text style={{ color: colors.green, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthBestBadge')}</Text>}
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+          <MutedText>{t('cashFlowScreen.endingBalanceLabel')}</MutedText>
+          <Text style={{ color: m.closingBalance >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(m.closingBalance)}</Text>
+        </View>
+
+        {expanded && (
+          <View style={{ marginTop: spacing.xs, gap: 2 }}>
+            <View style={styles.forecastRow}>
+              <MutedText>{t('cashFlowScreen.openingBalanceLabel')}</MutedText>
+              <Text style={{ color: colors.text }}>{money(m.openingBalance)}</Text>
+            </View>
+            <View style={styles.forecastRow}>
+              <MutedText>{t('cashFlowScreen.incomeLabel')}</MutedText>
+              <Text style={{ color: colors.green }}>+{money(m.income)}</Text>
+            </View>
+            <View style={styles.forecastRow}>
+              <MutedText>{t('cashFlowScreen.fixedLabel')}</MutedText>
+              <Text style={{ color: colors.red }}>-{money(m.fixed)}</Text>
+            </View>
+            <View style={styles.forecastRow}>
+              <MutedText>{t('cashFlowScreen.variableLabel')}</MutedText>
+              <Text style={{ color: colors.red }}>-{money(m.variable)}</Text>
+            </View>
+            {m.periodic > 0 && (
+              <View style={styles.forecastRow}>
+                <MutedText>{t('cashFlowScreen.periodicLabel')}</MutedText>
+                <Text style={{ color: colors.red }}>-{money(m.periodic)}</Text>
+              </View>
+            )}
+            {m.periodicItems.map((p) => (
+              <MutedText key={p.id} style={{ marginStart: spacing.sm }}>
+                • {p.label}
+              </MutedText>
+            ))}
+            <View style={[styles.forecastRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs, marginTop: spacing.xs }]}>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cashFlowScreen.endingBalanceLabel')}</Text>
+              <Text style={{ color: m.closingBalance >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(m.closingBalance)}</Text>
+            </View>
+          </View>
+        )}
+      </Card>
+    </Pressable>
   );
 }
 
@@ -226,6 +399,9 @@ function WeekCard({
 const OVERRIDE_FIELDS = ['income', 'fixed', 'variable'] as const;
 type OverrideField = (typeof OVERRIDE_FIELDS)[number];
 
+const CASH_FLOW_PERIODS = ['30days', 'thisMonth', 'monthly'] as const;
+type CashFlowPeriod = (typeof CASH_FLOW_PERIODS)[number];
+
 export default function CashFlow() {
   const { t } = useTranslation();
   const { money, date } = useFormatters();
@@ -251,6 +427,11 @@ export default function CashFlow() {
   const [savingOverride, setSavingOverride] = useState(false);
   const [periodicDrafts, setPeriodicDrafts] = useState<Record<string, string>>({});
   const [savingPeriodicId, setSavingPeriodicId] = useState<string | null>(null);
+
+  const now = useMemo(() => new Date(), []);
+  const [period, setPeriod] = useState<CashFlowPeriod>('30days');
+  const [monthlyYear, setMonthlyYear] = useState(now.getFullYear());
+  const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
 
   const bankBalance = bankBalanceDraft ?? (profileQuery.data?.cf_bank_balance != null ? String(profileQuery.data.cf_bank_balance) : '');
   const taxReservePct = taxReservePctDraft ?? (profileQuery.data?.cf_tax_reserve_pct != null ? String(profileQuery.data.cf_tax_reserve_pct) : '');
@@ -281,6 +462,63 @@ export default function CashFlow() {
       }),
     [bankBalance, settlementsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data, complianceItemsQuery.data, documentsQuery.data, overrides]
   );
+
+  // Same income/fixed/variable weekly figures + classification + overrides
+  // the 30-day forecast above already computed — the Monthly engine only
+  // needs full-history (not 12-week-windowed) events/settlements/periodic
+  // items on top of that, since an "actual" month can be far older than
+  // the 30-day forecast's own lookback.
+  const monthlySharedInput = useMemo(
+    () => ({
+      todayBalance: bankBalance ? Number(bankBalance) : 0,
+      weeklyIncome: forecast.weeklyIncome,
+      weeklyFixed: forecast.weeklyFixed,
+      weeklyVariable: forecast.weeklyVariable,
+      classification: forecast.classification,
+      allEvents: buildSpendEvents(
+        deductionsQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        tollsQuery.data ?? [],
+        MONTHLY_ALL_TIME_START_ISO
+      ),
+      allSettlements: settlementsQuery.data ?? [],
+      periodicItems: buildPeriodicItemsInRange(
+        complianceItemsQuery.data ?? [],
+        buildDocumentAmountLookup(documentsQuery.data ?? []),
+        MONTHLY_ALL_TIME_START_ISO,
+        MONTHLY_ALL_TIME_END_ISO
+      ),
+      overrides,
+      today: now,
+    }),
+    [bankBalance, forecast, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, settlementsQuery.data, complianceItemsQuery.data, documentsQuery.data, overrides, now]
+  );
+
+  const availableYears = useMemo(() => {
+    const years = new Set<number>([now.getFullYear()]);
+    for (const s of settlementsQuery.data ?? []) {
+      const y = Number((s.week_ending ?? '').slice(0, 4));
+      if (Number.isFinite(y) && y > 0) years.add(y);
+    }
+    return [...years].sort((a, b) => b - a);
+  }, [settlementsQuery.data, now]);
+
+  const monthlyOverview = useMemo(
+    () => buildMonthlyCashFlowOverview({ year: monthlyYear, ...monthlySharedInput }),
+    [monthlyYear, monthlySharedInput]
+  );
+
+  const currentYearNow = now.getFullYear();
+  const currentMonthNow = now.getMonth() + 1;
+  const thisMonthMonths = useMemo(
+    () => (monthlyYear === currentYearNow ? monthlyOverview : buildMonthlyCashFlowOverview({ year: currentYearNow, ...monthlySharedInput })),
+    [monthlyYear, currentYearNow, monthlyOverview, monthlySharedInput]
+  );
+  const thisMonthEntry = thisMonthMonths.find((m) => m.month === currentMonthNow);
+
+  const tightestMonthIdx = findTightestMonthIndex(monthlyOverview);
+  const bestMonthIdx = findBestMonthIndex(monthlyOverview);
 
   async function handleSaveBudget() {
     setSavingBudget(true);
@@ -540,10 +778,87 @@ export default function CashFlow() {
               </MutedText>
             )}
 
-            <Text style={styles.sectionTitle}>{t('cashFlowScreen.weekByWeekTitle')}</Text>
-            {forecast.weeks.map((w) => (
-              <WeekCard key={w.weekIndex} week={w} isTightest={w.weekIndex === forecast.tightestWeekIndex} />
-            ))}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm }}>
+              <Pill label={t('cashFlowScreen.period30Days')} selected={period === '30days'} onPress={() => setPeriod('30days')} />
+              <Pill label={t('cashFlowScreen.periodThisMonth')} selected={period === 'thisMonth'} onPress={() => setPeriod('thisMonth')} />
+              <Pill label={t('cashFlowScreen.periodMonthly')} selected={period === 'monthly'} onPress={() => setPeriod('monthly')} />
+            </View>
+
+            {period === '30days' && (
+              <>
+                <Text style={styles.sectionTitle}>{t('cashFlowScreen.weekByWeekTitle')}</Text>
+                {forecast.weeks.map((w) => (
+                  <WeekCard key={w.weekIndex} week={w} isTightest={w.weekIndex === forecast.tightestWeekIndex} />
+                ))}
+              </>
+            )}
+
+            {period === 'thisMonth' &&
+              (thisMonthEntry ? (
+                <>
+                  <Text style={styles.sectionTitle}>{t('cashFlowScreen.periodThisMonth')}</Text>
+                  <MonthCard m={thisMonthEntry} expanded onToggle={() => {}} isTightest={false} isBest={false} />
+                </>
+              ) : null)}
+
+            {period === 'monthly' && (
+              <>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm }}>
+                  {availableYears.map((y) => (
+                    <Pill key={y} label={String(y)} selected={monthlyYear === y} onPress={() => setMonthlyYear(y)} />
+                  ))}
+                </View>
+
+                {monthlyOverview.length > 1 && (
+                  <>
+                    <Text style={styles.sectionTitle}>{t('cashFlowScreen.monthlyTrendTitle')}</Text>
+                    <Card>
+                      <MonthlyTrendChart months={monthlyOverview} />
+                    </Card>
+                  </>
+                )}
+
+                {tightestMonthIdx >= 0 && bestMonthIdx >= 0 && (
+                  <View style={{ marginTop: spacing.sm, gap: 2 }}>
+                    <MutedText>
+                      🎯{' '}
+                      {t('cashFlowScreen.tightestMonthLine', {
+                        month: date(new Date(Date.UTC(monthlyOverview[tightestMonthIdx].year, monthlyOverview[tightestMonthIdx].month - 1, 1)).toISOString().slice(0, 10), {
+                          year: 'numeric',
+                          month: 'long',
+                        }),
+                        amount: money(monthlyOverview[tightestMonthIdx].closingBalance),
+                      })}
+                    </MutedText>
+                    <MutedText>
+                      🏆{' '}
+                      {t('cashFlowScreen.bestMonthLine', {
+                        month: date(new Date(Date.UTC(monthlyOverview[bestMonthIdx].year, monthlyOverview[bestMonthIdx].month - 1, 1)).toISOString().slice(0, 10), {
+                          year: 'numeric',
+                          month: 'long',
+                        }),
+                        amount: money(monthlyOverview[bestMonthIdx].closingBalance),
+                      })}
+                    </MutedText>
+                  </View>
+                )}
+
+                <Text style={styles.sectionTitle}>{t('cashFlowScreen.monthByMonthTitle')}</Text>
+                {monthlyOverview.map((m, i) => {
+                  const key = `${m.year}-${m.month}`;
+                  return (
+                    <MonthCard
+                      key={key}
+                      m={m}
+                      expanded={expandedMonthKey === key}
+                      onToggle={() => setExpandedMonthKey((cur) => (cur === key ? null : key))}
+                      isTightest={i === tightestMonthIdx}
+                      isBest={i === bestMonthIdx}
+                    />
+                  );
+                })}
+              </>
+            )}
           </>
         )}
 

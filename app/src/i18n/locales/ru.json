@@ -1283,7 +1283,18 @@
     "reliabilityBanner": "Ещё пара settlement — и прогноз станет надёжнее — пока {{count}} нед. истории.",
     "weekByWeekTitle": "Неделя за неделей",
     "openingBalanceLabel": "Начало",
-    "endingBalanceLabel": "Конец"
+    "endingBalanceLabel": "Конец",
+    "period30Days": "30 дней",
+    "periodThisMonth": "Этот месяц",
+    "periodMonthly": "По месяцам",
+    "monthProjectedBadge": "ПРОГНОЗ",
+    "monthCurrentBadge": "ЭТОТ МЕСЯЦ",
+    "monthTightestBadge": "САМЫЙ СЛОЖНЫЙ",
+    "monthBestBadge": "ЛУЧШИЙ",
+    "monthlyTrendTitle": "Динамика Баланса",
+    "monthByMonthTitle": "По Месяцам",
+    "tightestMonthLine": "Самый сложный месяц: {{month}} — {{amount}}",
+    "bestMonthLine": "Лучший месяц: {{month}} — {{amount}}"
   },
   "profitAnalysis": {
     "title": "Анализ прибыли",
@@ -2006,6 +2017,22 @@
       "readyBodyWithDetail": "Неделя {{weekEnding}} — {{amount}}. Нажмите, чтобы проверить и сохранить.",
       "failedTitle": "Импорт не удался",
       "failedBody": "Нажмите, чтобы узнать, что случилось, и повторить."
-    }
+    },
+    "batchTooManyTitle": "Слишком много файлов",
+    "batchTooManyMessage": "Можно импортировать до {{max}} файлов за раз — выбраны только первые {{max}}.",
+    "batchSomeFilesTooLarge": "Эти файлы слишком большие и были пропущены: {{names}}",
+    "uploadingBatch": "Загрузка {{count}} файлов…",
+    "batchLimitTitle": "Достигнут месячный лимит",
+    "batchLimitBody": "{{willProcess}} из {{batchSize}} документов будут обработаны сейчас. Остальным нужен пакет кредитов.",
+    "batchGetCredits": "Получить кредиты",
+    "batchContinueWithN": "Продолжить с {{count}}",
+    "batchStartedTitle": "Импорт запущен",
+    "batchStartedBody": "Запущено импортов: {{count}}. Мы сообщим, когда они будут готовы к проверке.",
+    "batchStartedPartialBody": "Запущено импортов: {{succeeded}}, не удалось запустить: {{failed}}. Мы сообщим, когда они будут готовы к проверке.",
+    "batchReviewProgress": "Проверка {{position}} из {{total}}",
+    "skipDocument": "Пропустить",
+    "nextDocument": "Следующий документ",
+    "finishReview": "Завершить",
+    "reviewAll": "Проверить все ({{count}})"
   }
 }

@@ -118,6 +118,67 @@ export async function runOptionalSideEffect(fn: (() => Promise<void>) | null | u
   }
 }
 
+// MULTI-FILE BACKGROUND IMPORT (owner decision, "batch enqueue" pass) —
+// how many files a single picker selection may enqueue at once. A single
+// pick (the common case) always keeps using the pre-existing one-job flow
+// unchanged; this only bounds a genuine multi-select.
+export const MAX_BATCH_IMPORT_FILES = 10;
+
+// The generic, order-preserving bounded-concurrency worker pool this app's
+// server side already established for exactly this class of problem
+// (supabase/functions/ai-import/chunking.ts's runWithConcurrencyLimit(),
+// "controlled concurrency" — see CLAUDE.md's SPEED UP SETTLEMENT IMPORT
+// entry) — this is the CLIENT-side counterpart, for starting several
+// import_jobs at once without either (a) firing all N uploads/invocations
+// simultaneously (real contention/rate-limit risk, the exact failure mode
+// that pass's own history already worked through) or (b) waiting for each
+// file fully sequentially (slow for a real 10-file batch). Pure and fully
+// injectable — the actual async work (upload + invoke) is passed in, not
+// imported here, so this is unit-testable without a live Supabase project.
+// "A failed item never blocks the others" (spec item 5): each task's own
+// outcome is captured independently via Promise.allSettled-style handling
+// — one rejection never stops or skips any other task, and results always
+// stay correctly paired with their own input item regardless of which
+// order the concurrent tasks actually finish in.
+export type BatchTaskOutcome<T, R> = { item: T; result?: R; error?: unknown };
+
+export async function runBatchWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>
+): Promise<BatchTaskOutcome<T, R>[]> {
+  const results: BatchTaskOutcome<T, R>[] = new Array(items.length);
+  let cursor = 0;
+  const effectiveLimit = Math.max(1, Math.min(limit, items.length || 1));
+
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      const item = items[index];
+      try {
+        const result = await task(item);
+        results[index] = { item, result };
+      } catch (error) {
+        results[index] = { item, error };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: effectiveLimit }, () => worker()));
+  return results;
+}
+
+// BATCH REVIEW FLOW (owner decision, "Next/Skip without returning to the
+// queue between each" pass) — pure "pop the next id off the queue" step so
+// the screen's own advance-to-next-document logic is directly testable
+// without mounting a real screen (this repo has no RN rendering harness).
+export function nextBatchReviewStep(queue: string[]): { next: string | null; remaining: string[] } {
+  if (queue.length === 0) return { next: null, remaining: [] };
+  const [next, ...remaining] = queue;
+  return { next, remaining };
+}
+
 // null = no total known yet (job just queued, page count not determined)
 // — the caller shows an indeterminate spinner rather than a fraction.
 // Clamped to [0, 1] defensively — pagesDone should never exceed

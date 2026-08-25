@@ -1182,7 +1182,18 @@
     "reliabilityBanner": "A couple more settlements and this gets reliable — {{count}} week(s) of history so far.",
     "weekByWeekTitle": "Week by Week",
     "openingBalanceLabel": "Opening",
-    "endingBalanceLabel": "Ending"
+    "endingBalanceLabel": "Ending",
+    "period30Days": "30 Days",
+    "periodThisMonth": "This Month",
+    "periodMonthly": "Monthly",
+    "monthProjectedBadge": "PROJECTED",
+    "monthCurrentBadge": "THIS MONTH",
+    "monthTightestBadge": "TIGHTEST",
+    "monthBestBadge": "BEST",
+    "monthlyTrendTitle": "Balance Trend",
+    "monthByMonthTitle": "Month by Month",
+    "tightestMonthLine": "Tightest month: {{month}} at {{amount}}",
+    "bestMonthLine": "Best month: {{month}} at {{amount}}"
   },
   "profitAnalysis": {
     "title": "Profit Analysis",
@@ -2006,6 +2017,22 @@
       "readyBodyWithDetail": "W/E {{weekEnding}} — {{amount}}. Tap to review and save.",
       "failedTitle": "Import failed",
       "failedBody": "Tap to see what happened and retry."
-    }
+    },
+    "batchTooManyTitle": "Too many files",
+    "batchTooManyMessage": "You can import up to {{max}} files at once — only the first {{max}} were selected.",
+    "batchSomeFilesTooLarge": "These files are too large and were skipped: {{names}}",
+    "uploadingBatch": "Uploading {{count}} files…",
+    "batchLimitTitle": "Monthly limit reached",
+    "batchLimitBody": "{{willProcess}} of {{batchSize}} documents will process now. The rest need a credit pack.",
+    "batchGetCredits": "Get Credits",
+    "batchContinueWithN": "Continue with {{count}}",
+    "batchStartedTitle": "Imports started",
+    "batchStartedBody": "{{count}} imports started. We'll notify you as they're ready to review.",
+    "batchStartedPartialBody": "{{succeeded}} imports started, {{failed}} could not be started. We'll notify you as they're ready to review.",
+    "batchReviewProgress": "Reviewing {{position}} of {{total}}",
+    "skipDocument": "Skip",
+    "nextDocument": "Next Document",
+    "finishReview": "Finish",
+    "reviewAll": "Review All ({{count}})"
   }
 }

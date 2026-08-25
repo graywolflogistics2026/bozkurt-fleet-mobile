@@ -5,7 +5,7 @@ import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
 import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
-import { isActiveJob, type ImportJob, type ImportJobStatus } from '@/src/import/importJobs';
+import { isActiveJob, runBatchWithConcurrency, type ImportJob, type ImportJobStatus } from '@/src/import/importJobs';
 import type { Extraction } from '@/src/import/types';
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
@@ -202,6 +202,40 @@ export type StartImportJobParams = {
   carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
 };
 
+// Shared by both useStartImportJob() (one file, the common case) and
+// useStartImportJobsBatch() (multi-select) — a plain async function rather
+// than a hook's own mutationFn so the batch hook can run several of these
+// concurrently via runBatchWithConcurrency() without nesting hooks.
+async function startOneImportJob(userId: string, params: StartImportJobParams): Promise<{ jobId: string }> {
+  const storagePath = await uploadFileForJob(userId, params.fileUri, params.mediaType, params.fileName);
+  const { data, error } = await supabase.functions.invoke('ai-import', {
+    body: {
+      mode: 'job',
+      storagePath,
+      mediaType: params.mediaType,
+      fileName: params.fileName,
+      docHint: params.docHint,
+      locale: params.locale,
+      customCategories: params.customCategories,
+      learningRules: params.learningRules,
+      carrierCodeMaps: params.carrierCodeMaps,
+    },
+  });
+  if (error) {
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx instanceof Response) {
+      try {
+        const body = await ctx.json();
+        if (body?.error?.message) throw new Error(body.error.message as string);
+      } catch {
+        // fall through to the generic message below
+      }
+    }
+    throw new Error(error.message || 'Could not start the import job.');
+  }
+  return data as { jobId: string };
+}
+
 export function useStartImportJob() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
@@ -209,33 +243,43 @@ export function useStartImportJob() {
     mutationFn: async (params: StartImportJobParams) => {
       const userId = session?.user.id;
       if (!userId) throw new Error('Not signed in.');
-      const storagePath = await uploadFileForJob(userId, params.fileUri, params.mediaType, params.fileName);
-      const { data, error } = await supabase.functions.invoke('ai-import', {
-        body: {
-          mode: 'job',
-          storagePath,
-          mediaType: params.mediaType,
-          fileName: params.fileName,
-          docHint: params.docHint,
-          locale: params.locale,
-          customCategories: params.customCategories,
-          learningRules: params.learningRules,
-          carrierCodeMaps: params.carrierCodeMaps,
-        },
-      });
-      if (error) {
-        const ctx = (error as { context?: unknown }).context;
-        if (ctx instanceof Response) {
-          try {
-            const body = await ctx.json();
-            if (body?.error?.message) throw new Error(body.error.message as string);
-          } catch {
-            // fall through to the generic message below
-          }
-        }
-        throw new Error(error.message || 'Could not start the import job.');
-      }
-      return data as { jobId: string };
+      return startOneImportJob(userId, params);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+    },
+  });
+}
+
+// MULTI-FILE BACKGROUND IMPORT (owner decision, "batch enqueue" pass,
+// spec item 1) — "the picker allows selecting MULTIPLE documents at once
+// ... each becomes its own import_job, processed with the existing
+// controlled concurrency; the user returns to the app immediately." Starts
+// every file's own job with a modest client-side concurrency cap (mirrors
+// the server's own PAGES_PER_BATCH-style caution, CLAUDE.md's SPEED UP
+// SETTLEMENT IMPORT entry — a small, bounded number of concurrent
+// uploads/invocations rather than firing all N (or the risk end of that
+// history) or fully serial (slow)). "A failed item never blocks the
+// others" (spec item 5) is what runBatchWithConcurrency's own
+// per-item try/catch guarantees — one file's upload/invoke failure never
+// stops or skips any other file's own attempt.
+const BATCH_START_CONCURRENCY = 3;
+
+export type BatchStartResult = { fileName: string; jobId?: string; error?: string };
+
+export function useStartImportJobsBatch() {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (paramsList: StartImportJobParams[]): Promise<BatchStartResult[]> => {
+      const userId = session?.user.id;
+      if (!userId) throw new Error('Not signed in.');
+      const outcomes = await runBatchWithConcurrency(paramsList, BATCH_START_CONCURRENCY, (params) => startOneImportJob(userId, params));
+      return outcomes.map((o) => ({
+        fileName: o.item.fileName,
+        jobId: o.result?.jobId,
+        error: o.error ? (o.error instanceof Error ? o.error.message : String(o.error)) : undefined,
+      }));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });

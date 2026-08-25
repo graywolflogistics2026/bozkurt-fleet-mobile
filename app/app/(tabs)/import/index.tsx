@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'rea
 import { useRouter, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import type { DocumentPickerAsset } from 'expo-document-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { File } from 'expo-file-system';
 import * as Clipboard from 'expo-clipboard';
@@ -17,11 +18,22 @@ import { useUserCategories } from '@/src/data/userCategories';
 import { useCategoryLearningRules } from '@/src/data/categoryLearningRules';
 import { useCarrierCodeMaps } from '@/src/data/carrierCodeMaps';
 import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
-import { useStartImportJob, useDismissImportJob, fetchImportJobForReview, downloadImportJobFileToLocal } from '@/src/data/importJobs';
+import {
+  useStartImportJob,
+  useStartImportJobsBatch,
+  useDismissImportJob,
+  fetchImportJobForReview,
+  downloadImportJobFileToLocal,
+  type BatchStartResult,
+} from '@/src/data/importJobs';
+import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES } from '@/src/import/importJobs';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
-import { detectBackfillSession } from '@/src/usage/aiUsage';
+import { detectBackfillSession, planBatchImportCapacity } from '@/src/usage/aiUsage';
+import { useAiUsageDisplay } from '@/src/data/aiUsageDisplay';
+import { useProfile } from '@/src/data/profile';
+import { isOwnerAccount } from '@/src/entitlement/hasFullAccess';
 import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { isSaveExtractionError, buildErrorReport } from '@/src/data/saveExtractionError';
 import { groupStepForDisplay, type DisplayStepGroup } from '@/src/import/errorStepGroups';
@@ -204,8 +216,16 @@ export default function Import() {
   // below (pickPdf's own path) and the reviewJobId effect further down
   // ("Review now", opened from the jobs list / persistent chip).
   const startImportJob = useStartImportJob();
+  // MULTI-FILE BACKGROUND IMPORT (owner decision, "batch enqueue" pass) —
+  // starts several jobs at once (one per picked file), and lets the jobs
+  // list (or a "Review All" tap) route a whole batch of ready jobs through
+  // this SAME screen's review flow via ?reviewJobIds=a,b,c.
+  const startImportJobsBatch = useStartImportJobsBatch();
   const dismissImportJob = useDismissImportJob();
-  const { reviewJobId } = useLocalSearchParams<{ reviewJobId?: string }>();
+  const { reviewJobId, reviewJobIds } = useLocalSearchParams<{ reviewJobId?: string; reviewJobIds?: string }>();
+  const profileQuery = useProfile();
+  const isOwner = isOwnerAccount(profileQuery.data);
+  const aiUsage = useAiUsageDisplay(isOwner);
 
   const [phase, setPhase] = useState<Phase>('pick');
   const [workingLabel, setWorkingLabel] = useState('');
@@ -258,6 +278,19 @@ export default function Import() {
   // insert-vs-update decision and hitting the settlements unique index.
   const savingRef = useRef(false);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
+  // BATCH REVIEW FLOW (owner decision, "3 documents ready to review ->
+  // Next/Skip without returning to the queue between each" pass) —
+  // `currentReviewId` is the one id the existing review-loading effect
+  // below acts on (single-job reviews and batch reviews both funnel
+  // through it); `batchQueue` holds whatever ids are still left AFTER the
+  // current one; `batchTotal`/`batchPosition` (0/0 outside batch mode)
+  // drive the "Reviewing N of M" progress line and the Next/Skip button
+  // wiring. batchTotal > 0 is the one flag every batch-aware bit of UI
+  // below checks.
+  const [currentReviewId, setCurrentReviewId] = useState<string | null>(null);
+  const [batchQueue, setBatchQueue] = useState<string[]>([]);
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [batchPosition, setBatchPosition] = useState(0);
   // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
   // FIVE ADDITIONS pass, PART 5 item 5) — "contextually when someone is
   // clearly back-filling" — a plain in-session list of this session's own
@@ -295,6 +328,59 @@ export default function Import() {
     if (uri) processImage(uri);
   });
 
+  // BATCH REVIEW FLOW (owner decision) — (re)derives currentReviewId
+  // (plus the batch queue/progress) from whichever route param is present,
+  // every time either one changes: `reviewJobIds` (a "Review All" tap —
+  // comma-separated ready-job ids, batch mode) takes priority over a plain
+  // `reviewJobId` (the pre-existing single-job "Review Now" path,
+  // unchanged, batchTotal stays 0). This is the ONE place either param is
+  // read — the loading effect right below acts only on currentReviewId,
+  // so single-job and batch reviews share the exact same load/save/dismiss
+  // code path per document.
+  useEffect(() => {
+    if (reviewJobIds) {
+      const ids = reviewJobIds.split(',').filter(Boolean);
+      if (ids.length > 0) {
+        const { next, remaining } = nextBatchReviewStep(ids);
+        setBatchTotal(ids.length);
+        setBatchPosition(1);
+        setBatchQueue(remaining);
+        setCurrentReviewId(next);
+        return;
+      }
+    }
+    if (reviewJobId) {
+      setBatchTotal(0);
+      setBatchPosition(0);
+      setBatchQueue([]);
+      setCurrentReviewId(reviewJobId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewJobId, reviewJobIds]);
+
+  // BATCH REVIEW FLOW — advances to the next queued document (Skip, or
+  // after a successful Save) without ever returning to the jobs list in
+  // between (spec item 3). reset() clears every per-document field
+  // (extraction, fileMeta, phase -> 'pick', ...) but deliberately never
+  // touches batch state itself — this function is what moves batch state
+  // forward; reset() alone is still used for the ordinary single-document
+  // Discard/Import Another actions, which are never shown while
+  // batchTotal > 0 (see the render below).
+  function advanceBatchReview() {
+    const { next, remaining } = nextBatchReviewStep(batchQueue);
+    reset();
+    if (next) {
+      setBatchQueue(remaining);
+      setBatchPosition((p) => p + 1);
+      setCurrentReviewId(next);
+    } else {
+      setBatchTotal(0);
+      setBatchPosition(0);
+      setCurrentReviewId(null);
+      router.push('/(tabs)');
+    }
+  }
+
   // "REVIEW NOW" (owner decision 2026-08-24, item 3) — opened from the
   // jobs list/persistent chip via ?reviewJobId=X. Loads the completed
   // background job's already-sanitized result_json and feeds it through
@@ -317,13 +403,13 @@ export default function Import() {
   // the file is still downloading), nothing tries to update state on an
   // unmounted component.
   useEffect(() => {
-    if (!reviewJobId || !userId) return;
+    if (!currentReviewId || !userId) return;
     let cancelled = false;
     (async () => {
       setPhase('working');
       setWorkingLabel(t('common.loading'));
       try {
-        const job = await fetchImportJobForReview(reviewJobId);
+        const job = await fetchImportJobForReview(currentReviewId);
         if (cancelled) return;
         if (!job) {
           setErrorMessage(t('importJobs.reviewNotReady'));
@@ -365,7 +451,7 @@ export default function Import() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewJobId, userId]);
+  }, [currentReviewId, userId]);
 
   function reset() {
     setPhase('pick');
@@ -636,24 +722,120 @@ export default function Import() {
     }
   }
 
+  // MULTI-FILE BACKGROUND IMPORT (owner decision, "batch enqueue" pass,
+  // spec item 1) — "the picker allows selecting MULTIPLE documents at once
+  // (up to 10 per batch, configurable)." A single pick (still the common
+  // case) keeps using the exact pre-existing one-job flow below,
+  // unchanged — multi-select only branches once 2+ files come back.
   async function pickPdf() {
-    const picked = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
-    if (picked.canceled || !picked.assets?.[0]) return;
-    const asset = picked.assets[0];
-    const size = asset.size ?? new File(asset.uri).size;
-    if (size > MAX_FILE_SIZE_BYTES) {
-      Alert.alert(t('importScreen.fileTooLargeTitle'), t('importScreen.fileTooLargeMessage'));
+    const picked = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true, multiple: true });
+    if (picked.canceled || !picked.assets?.length) return;
+
+    let assets = picked.assets;
+    if (assets.length > MAX_BATCH_IMPORT_FILES) {
+      Alert.alert(t('importJobs.batchTooManyTitle'), t('importJobs.batchTooManyMessage', { max: MAX_BATCH_IMPORT_FILES }));
+      assets = assets.slice(0, MAX_BATCH_IMPORT_FILES);
+    }
+
+    const validAssets: DocumentPickerAsset[] = [];
+    const oversizedNames: string[] = [];
+    for (const asset of assets) {
+      const size = asset.size ?? new File(asset.uri).size;
+      if (size > MAX_FILE_SIZE_BYTES) oversizedNames.push(asset.name);
+      else validAssets.push(asset);
+    }
+    if (oversizedNames.length > 0) {
+      Alert.alert(
+        t('importScreen.fileTooLargeTitle'),
+        oversizedNames.length === assets.length
+          ? t('importScreen.fileTooLargeMessage')
+          : t('importJobs.batchSomeFilesTooLarge', { names: oversizedNames.join(', ') })
+      );
+    }
+    if (validAssets.length === 0) return;
+
+    if (validAssets.length === 1) {
+      const asset = validAssets[0];
+      // COST CONTROL & GRACEFUL DEGRADATION precedent (owner decision
+      // 2026-08-24, FIVE ADDITIONS pass) — fileMeta is set BEFORE the
+      // upload/job-start call and, unlike every other error-phase field,
+      // is deliberately NOT cleared until the user explicitly resets, so
+      // a failed UPLOAD (as opposed to a job that started fine and later
+      // failed server-side — that retries from the jobs list instead) can
+      // still be retried with one tap, no re-picking required.
+      setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
+      await startBackgroundJob(asset.uri, 'application/pdf', asset.name);
       return;
     }
-    // COST CONTROL & GRACEFUL DEGRADATION precedent (owner decision
-    // 2026-08-24, FIVE ADDITIONS pass) — fileMeta is set BEFORE the
-    // upload/job-start call and, unlike every other error-phase field, is
-    // deliberately NOT cleared until the user explicitly resets, so a
-    // failed UPLOAD (as opposed to a job that started fine and later
-    // failed server-side — that retries from the jobs list instead) can
-    // still be retried with one tap, no re-picking required.
-    setFileMeta({ uri: asset.uri, ext: 'pdf', mediaType: 'application/pdf', name: asset.name });
-    await startBackgroundJob(asset.uri, 'application/pdf', asset.name);
+
+    await startBatchImport(validAssets);
+  }
+
+  // "If a batch would exceed the allowance, say up front how many will
+  // process and offer the credit pack rather than silently truncating"
+  // (spec item 4) — resolves to whether the user chose to continue with
+  // whatever WILL fit; Cancel or "Get Credits" both resolve false (Get
+  // Credits also routes to Settings, where the credit-pack offers already
+  // live, PART 5 of the FIVE ADDITIONS pass).
+  function confirmBatchWillBeBlocked(plan: ReturnType<typeof planBatchImportCapacity>): Promise<boolean> {
+    return new Promise((resolve) => {
+      const body = t('importJobs.batchLimitBody', { willProcess: plan.willProcess, batchSize: plan.batchSize });
+      const buttons: { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress: () => void }[] = [
+        { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+        {
+          text: t('importJobs.batchGetCredits'),
+          onPress: () => {
+            resolve(false);
+            router.push('/(tabs)/more/settings' as Href);
+          },
+        },
+      ];
+      if (plan.willProcess > 0) {
+        buttons.push({ text: t('importJobs.batchContinueWithN', { count: plan.willProcess }), onPress: () => resolve(true) });
+      }
+      Alert.alert(t('importJobs.batchLimitTitle'), body, buttons);
+    });
+  }
+
+  async function startBatchImport(assets: DocumentPickerAsset[]) {
+    const plan = planBatchImportCapacity(assets.length, aiUsage.usageStatus, aiUsage.availableCredits, isOwner);
+    let toProcess = assets;
+    if (plan.willBeBlocked > 0) {
+      const proceed = await confirmBatchWillBeBlocked(plan);
+      if (!proceed || plan.willProcess === 0) return;
+      toProcess = assets.slice(0, plan.willProcess);
+    }
+
+    setPhase('working');
+    setWorkingLabel(t('importJobs.uploadingBatch', { count: toProcess.length }));
+    try {
+      const results: BatchStartResult[] = await startImportJobsBatch.mutateAsync(
+        toProcess.map((a) => ({
+          fileUri: a.uri,
+          mediaType: 'application/pdf',
+          fileName: a.name,
+          locale: i18n.language,
+          customCategories: customCategoryNames,
+          learningRules,
+          carrierCodeMaps,
+        }))
+      );
+      reset();
+      const succeeded = results.filter((r) => r.jobId).length;
+      const failed = results.length - succeeded;
+      if (failed === 0) {
+        Alert.alert(t('importJobs.batchStartedTitle'), t('importJobs.batchStartedBody', { count: succeeded }));
+      } else {
+        Alert.alert(t('importJobs.batchStartedTitle'), t('importJobs.batchStartedPartialBody', { succeeded, failed }));
+      }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
+      setErrorStepGroup(null);
+      setErrorHasPartialSave(false);
+      setErrorIsDuplicateRace(false);
+      setErrorReport(buildLocalErrorReport('Starting the background import batch', err));
+      setPhase('error');
+    }
   }
 
   async function handleRetryImport() {
@@ -722,7 +904,7 @@ export default function Import() {
       // pointing at data that's already saved. Best-effort/fire-and-forget
       // — a failure here must never block or fail the save the user just
       // successfully completed.
-      if (reviewJobId) dismissImportJob.mutate(reviewJobId);
+      if (currentReviewId) dismissImportJob.mutate(currentReviewId);
 
       const savedDate = getPrimaryExtractionDate(extraction);
       if (savedDate) sessionImportedDatesRef.current.push(savedDate);
@@ -783,6 +965,15 @@ export default function Import() {
         <ScreenTitle>{t('importScreen.title')}</ScreenTitle>
 
         <ServiceStatusBanner />
+
+        {/* BATCH REVIEW FLOW (owner decision) — visible across every phase
+            while walking through a multi-document batch, so the user
+            always knows where they are without returning to the queue. */}
+        {batchTotal > 0 && (
+          <MutedText style={{ marginBottom: spacing.xs }}>
+            {t('importJobs.batchReviewProgress', { position: batchPosition, total: batchTotal })}
+          </MutedText>
+        )}
 
         {phase === 'pick' && (
           <Card>
@@ -1116,7 +1307,14 @@ export default function Import() {
                 !reconciliation.ok
               }
             />
-            <SecondaryButton title={t('importScreen.discard')} onPress={reset} />
+            {/* BATCH REVIEW FLOW — "Discard" doubles as "Skip" while
+                walking a batch: nothing here saves without an explicit tap
+                on Save above, per spec item 3; skipping just moves to the
+                next queued document instead of resetting to 'pick'. */}
+            <SecondaryButton
+              title={batchTotal > 0 ? t('importJobs.skipDocument') : t('importScreen.discard')}
+              onPress={batchTotal > 0 ? advanceBatchReview : reset}
+            />
           </Card>
         )}
 
@@ -1172,15 +1370,38 @@ export default function Import() {
             {/* UX MEGA-PASS item D: three explicit choices instead of one
                 "import another" — View Record reopens the just-saved
                 document (with its own "linked records" jump to the
-                actual settlement/deduction/etc. row), Done returns Home. */}
-            <PrimaryButton
-              title={t('importScreen.viewRecord')}
-              onPress={() =>
-                router.push({ pathname: '/(tabs)/more/documents', params: { openId: result.documentId } } as unknown as Href)
-              }
-            />
-            <SecondaryButton title={t('importScreen.importAnother')} onPress={reset} />
-            <SecondaryButton title={t('importScreen.done')} onPress={() => router.push('/(tabs)')} />
+                actual settlement/deduction/etc. row), Done returns Home.
+                BATCH REVIEW FLOW — in batch mode, Next/Finish takes over
+                as the primary action (advances to the next queued
+                document, or wraps up the batch and returns Home once
+                every document has been confirmed — spec item 3, "Next...
+                without returning to the queue between each"); View Record
+                stays available as a secondary action either way. */}
+            {batchTotal > 0 ? (
+              <>
+                <PrimaryButton
+                  title={batchQueue.length > 0 ? t('importJobs.nextDocument') : t('importJobs.finishReview')}
+                  onPress={advanceBatchReview}
+                />
+                <SecondaryButton
+                  title={t('importScreen.viewRecord')}
+                  onPress={() =>
+                    router.push({ pathname: '/(tabs)/more/documents', params: { openId: result.documentId } } as unknown as Href)
+                  }
+                />
+              </>
+            ) : (
+              <>
+                <PrimaryButton
+                  title={t('importScreen.viewRecord')}
+                  onPress={() =>
+                    router.push({ pathname: '/(tabs)/more/documents', params: { openId: result.documentId } } as unknown as Href)
+                  }
+                />
+                <SecondaryButton title={t('importScreen.importAnother')} onPress={reset} />
+                <SecondaryButton title={t('importScreen.done')} onPress={() => router.push('/(tabs)')} />
+              </>
+            )}
           </Card>
         )}
 
@@ -1217,6 +1438,12 @@ export default function Import() {
                 already-picked file is still right here; one tap retries
                 it directly, no re-picking required. A genuinely different
                 file still needs the full reset. */}
+            {/* BATCH REVIEW FLOW — "a failed item never blocks the
+                others" (spec item 5): Skip is always offered in batch
+                mode so one bad document can't stall the rest of the
+                walkthrough, on top of whatever recovery options this
+                specific failure already offers. */}
+            {batchTotal > 0 && <PrimaryButton title={t('importJobs.skipDocument')} onPress={advanceBatchReview} />}
             {fileMeta ? (
               <>
                 <PrimaryButton title={`🔁 ${t('importScreen.retryImport')}`} onPress={handleRetryImport} />

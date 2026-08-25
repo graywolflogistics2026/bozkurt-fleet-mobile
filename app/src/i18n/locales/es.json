@@ -1283,7 +1283,18 @@
     "reliabilityBanner": "Con un par de settlements más esto será confiable — {{count}} semana(s) de historial hasta ahora.",
     "weekByWeekTitle": "Semana a Semana",
     "openingBalanceLabel": "Apertura",
-    "endingBalanceLabel": "Cierre"
+    "endingBalanceLabel": "Cierre",
+    "period30Days": "30 Días",
+    "periodThisMonth": "Este Mes",
+    "periodMonthly": "Mensual",
+    "monthProjectedBadge": "PROYECTADO",
+    "monthCurrentBadge": "ESTE MES",
+    "monthTightestBadge": "MÁS AJUSTADO",
+    "monthBestBadge": "MEJOR",
+    "monthlyTrendTitle": "Tendencia del Saldo",
+    "monthByMonthTitle": "Mes a Mes",
+    "tightestMonthLine": "Mes más ajustado: {{month}} con {{amount}}",
+    "bestMonthLine": "Mejor mes: {{month}} con {{amount}}"
   },
   "profitAnalysis": {
     "title": "Análisis de Ganancias",
@@ -2006,6 +2017,22 @@
       "readyBodyWithDetail": "Semana {{weekEnding}} — {{amount}}. Toca para revisar y guardar.",
       "failedTitle": "Importación fallida",
       "failedBody": "Toca para ver qué pasó y reintentar."
-    }
+    },
+    "batchTooManyTitle": "Demasiados archivos",
+    "batchTooManyMessage": "Puedes importar hasta {{max}} archivos a la vez — solo se seleccionaron los primeros {{max}}.",
+    "batchSomeFilesTooLarge": "Estos archivos son demasiado grandes y se omitieron: {{names}}",
+    "uploadingBatch": "Subiendo {{count}} archivos…",
+    "batchLimitTitle": "Límite mensual alcanzado",
+    "batchLimitBody": "{{willProcess}} de {{batchSize}} documentos se procesarán ahora. El resto necesita un paquete de créditos.",
+    "batchGetCredits": "Obtener Créditos",
+    "batchContinueWithN": "Continuar con {{count}}",
+    "batchStartedTitle": "Importaciones iniciadas",
+    "batchStartedBody": "{{count}} importaciones iniciadas. Te avisaremos cuando estén listas para revisar.",
+    "batchStartedPartialBody": "{{succeeded}} importaciones iniciadas, {{failed}} no se pudieron iniciar. Te avisaremos cuando estén listas para revisar.",
+    "batchReviewProgress": "Revisando {{position}} de {{total}}",
+    "skipDocument": "Omitir",
+    "nextDocument": "Siguiente Documento",
+    "finishReview": "Finalizar",
+    "reviewAll": "Revisar Todo ({{count}})"
   }
 }

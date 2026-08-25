@@ -32,6 +32,21 @@ export type PeriodicForecastItem = {
   amountSource: 'document' | null;
 };
 
+function mapComplianceItem(
+  c: Pick<ComplianceItem, 'id' | 'type' | 'label' | 'due_date' | 'source_document_id'>,
+  documentAmounts: Map<string, number>
+): PeriodicForecastItem {
+  const amount = c.source_document_id ? documentAmounts.get(c.source_document_id) ?? null : null;
+  return {
+    id: c.id,
+    type: c.type,
+    label: c.label,
+    dueDate: c.due_date,
+    amount,
+    amountSource: amount != null ? ('document' as const) : null,
+  };
+}
+
 // `documentAmounts`: a lookup the caller builds once from whatever
 // documents are already loaded (documents.id -> documents.amount) — this
 // module has no data-fetching of its own, same "pure function over
@@ -48,17 +63,27 @@ export function buildPeriodicForecastItems(
 
   return complianceItems
     .filter((c) => PERIODIC_TYPES.includes(c.type) && c.due_date >= todayIso && c.due_date <= endIso)
-    .map((c) => {
-      const amount = c.source_document_id ? documentAmounts.get(c.source_document_id) ?? null : null;
-      return {
-        id: c.id,
-        type: c.type,
-        label: c.label,
-        dueDate: c.due_date,
-        amount,
-        amountSource: amount != null ? ('document' as const) : null,
-      };
-    })
+    .map((c) => mapComplianceItem(c, documentAmounts))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+// CASH FLOW MONTHLY VIEW (owner decision, "period tabs" pass) — the same
+// mapping, but filtered by an explicit [startIso, endIso] range instead
+// of always flooring at "today or later." buildPeriodicForecastItems()
+// above is deliberately UNCHANGED (still only ever looks forward from
+// today, correct for the 30-day forecast) — the Monthly view needs past
+// months' periodic items too (an HVUT 2290 paid back in March is still
+// part of March's own real actual breakdown), which this general-purpose
+// variant supports.
+export function buildPeriodicItemsInRange(
+  complianceItems: Pick<ComplianceItem, 'id' | 'type' | 'label' | 'due_date' | 'source_document_id'>[],
+  documentAmounts: Map<string, number>,
+  startIso: string,
+  endIso: string
+): PeriodicForecastItem[] {
+  return complianceItems
+    .filter((c) => PERIODIC_TYPES.includes(c.type) && c.due_date >= startIso && c.due_date <= endIso)
+    .map((c) => mapComplianceItem(c, documentAmounts))
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 

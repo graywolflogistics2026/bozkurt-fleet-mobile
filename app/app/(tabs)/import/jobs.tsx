@@ -147,6 +147,17 @@ export default function ImportJobsScreen() {
   }
 
   const jobs = sortImportJobsForDisplay(jobsQuery.data ?? []);
+  // BATCH REVIEW FLOW (owner decision, spec item 3: "'3 documents ready to
+  // review' -> confirm them one after another with Next/Skip without
+  // returning to the queue between each") — 2+ ready jobs at once is what
+  // makes a walkthrough worth offering over reviewing each one
+  // individually; the single-job "Review Now" button on each row (unchanged)
+  // still covers the one-ready-job case.
+  const readyJobs = jobs.filter((j) => j.status === 'ready');
+
+  function handleReviewAll() {
+    router.push({ pathname: '/(tabs)/import', params: { reviewJobIds: readyJobs.map((j) => j.id).join(',') } } as unknown as Href);
+  }
 
   return (
     <Screen>
@@ -163,7 +174,11 @@ export default function ImportJobsScreen() {
             <MutedText>{t('importJobs.empty')}</MutedText>
           </Card>
         ) : (
-          jobs.map((job) => (
+          <>
+            {readyJobs.length >= 2 && (
+              <PrimaryButton title={t('importJobs.reviewAll', { count: readyJobs.length })} onPress={handleReviewAll} />
+            )}
+            {jobs.map((job) => (
             <JobRow
               key={job.id}
               job={job}
@@ -172,7 +187,8 @@ export default function ImportJobsScreen() {
               onDismiss={handleDismiss}
               retrying={retryingId === job.id}
             />
-          ))
+            ))}
+          </>
         )}
       </ScrollView>
     </Screen>

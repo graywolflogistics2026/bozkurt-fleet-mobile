@@ -1283,7 +1283,18 @@
     "reliabilityBanner": "مع settlements قليلة إضافية سيصبح هذا موثوقًا — {{count}} أسبوع من السجل حتى الآن.",
     "weekByWeekTitle": "أسبوعًا بأسبوع",
     "openingBalanceLabel": "الافتتاح",
-    "endingBalanceLabel": "الختام"
+    "endingBalanceLabel": "الختام",
+    "period30Days": "30 يومًا",
+    "periodThisMonth": "هذا الشهر",
+    "periodMonthly": "شهريًا",
+    "monthProjectedBadge": "متوقّع",
+    "monthCurrentBadge": "هذا الشهر",
+    "monthTightestBadge": "الأضيق",
+    "monthBestBadge": "الأفضل",
+    "monthlyTrendTitle": "اتجاه الرصيد",
+    "monthByMonthTitle": "شهرًا بشهر",
+    "tightestMonthLine": "أضيق شهر: {{month}} بمقدار {{amount}}",
+    "bestMonthLine": "أفضل شهر: {{month}} بمقدار {{amount}}"
   },
   "profitAnalysis": {
     "title": "تحليل الأرباح",
@@ -2006,6 +2017,22 @@
       "readyBodyWithDetail": "الأسبوع المنتهي {{weekEnding}} — {{amount}}. اضغط للمراجعة والحفظ.",
       "failedTitle": "فشل الاستيراد",
       "failedBody": "اضغط لمعرفة ما حدث وإعادة المحاولة."
-    }
+    },
+    "batchTooManyTitle": "عدد كبير جدًا من الملفات",
+    "batchTooManyMessage": "يمكنك استيراد حتى {{max}} ملفات دفعة واحدة — تم اختيار أول {{max}} فقط.",
+    "batchSomeFilesTooLarge": "هذه الملفات كبيرة جدًا وتم تخطّيها: {{names}}",
+    "uploadingBatch": "جارٍ رفع {{count}} ملفات…",
+    "batchLimitTitle": "تم بلوغ الحد الشهري",
+    "batchLimitBody": "سيتم الآن معالجة {{willProcess}} من أصل {{batchSize}} مستندات. الباقي يحتاج إلى حزمة رصيد.",
+    "batchGetCredits": "الحصول على رصيد",
+    "batchContinueWithN": "المتابعة مع {{count}}",
+    "batchStartedTitle": "بدأت عمليات الاستيراد",
+    "batchStartedBody": "بدأت {{count}} عمليات استيراد. سنُعلمك عند جاهزيتها للمراجعة.",
+    "batchStartedPartialBody": "بدأت {{succeeded}} عمليات استيراد، وتعذّر بدء {{failed}}. سنُعلمك عند جاهزيتها للمراجعة.",
+    "batchReviewProgress": "مراجعة {{position}} من {{total}}",
+    "skipDocument": "تخطّي",
+    "nextDocument": "المستند التالي",
+    "finishReview": "إنهاء",
+    "reviewAll": "مراجعة الكل ({{count}})"
   }
 }

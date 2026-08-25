@@ -1283,7 +1283,18 @@
     "reliabilityBanner": "Birkaç settlement daha ile bu güvenilir hale gelecek — şu ana kadar {{count}} haftalık geçmiş var.",
     "weekByWeekTitle": "Haftadan Haftaya",
     "openingBalanceLabel": "Açılış",
-    "endingBalanceLabel": "Kapanış"
+    "endingBalanceLabel": "Kapanış",
+    "period30Days": "30 Gün",
+    "periodThisMonth": "Bu Ay",
+    "periodMonthly": "Aylık",
+    "monthProjectedBadge": "TAHMİNİ",
+    "monthCurrentBadge": "BU AY",
+    "monthTightestBadge": "EN DAR",
+    "monthBestBadge": "EN İYİ",
+    "monthlyTrendTitle": "Bakiye Trendi",
+    "monthByMonthTitle": "Aydan Aya",
+    "tightestMonthLine": "En dar ay: {{month}} — {{amount}}",
+    "bestMonthLine": "En iyi ay: {{month}} — {{amount}}"
   },
   "profitAnalysis": {
     "title": "Kâr Analizi",
@@ -2006,6 +2017,22 @@
       "readyBodyWithDetail": "Hafta sonu {{weekEnding}} — {{amount}}. İncelemek ve kaydetmek için dokunun.",
       "failedTitle": "İçe aktarma başarısız",
       "failedBody": "Ne olduğunu görmek ve yeniden denemek için dokunun."
-    }
+    },
+    "batchTooManyTitle": "Çok fazla dosya",
+    "batchTooManyMessage": "Bir seferde en fazla {{max}} dosya içe aktarabilirsiniz — yalnızca ilk {{max}} dosya seçildi.",
+    "batchSomeFilesTooLarge": "Bu dosyalar çok büyük ve atlandı: {{names}}",
+    "uploadingBatch": "{{count}} dosya yükleniyor…",
+    "batchLimitTitle": "Aylık limite ulaşıldı",
+    "batchLimitBody": "{{batchSize}} belgeden {{willProcess}} tanesi şimdi işlenecek. Kalanlar için kredi paketi gerekiyor.",
+    "batchGetCredits": "Kredi Al",
+    "batchContinueWithN": "{{count}} ile devam et",
+    "batchStartedTitle": "İçe aktarmalar başlatıldı",
+    "batchStartedBody": "{{count}} içe aktarma başlatıldı. İnceleme için hazır olduklarında sizi bilgilendireceğiz.",
+    "batchStartedPartialBody": "{{succeeded}} içe aktarma başlatıldı, {{failed}} başlatılamadı. İnceleme için hazır olduklarında sizi bilgilendireceğiz.",
+    "batchReviewProgress": "{{total}} üzerinden {{position}} inceleniyor",
+    "skipDocument": "Atla",
+    "nextDocument": "Sonraki Belge",
+    "finishReview": "Bitir",
+    "reviewAll": "Tümünü İncele ({{count}})"
   }
 }

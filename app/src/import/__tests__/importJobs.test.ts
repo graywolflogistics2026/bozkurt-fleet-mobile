@@ -5,6 +5,9 @@ import {
   isRetryableJob,
   jobProgressFraction,
   runOptionalSideEffect,
+  runBatchWithConcurrency,
+  nextBatchReviewStep,
+  MAX_BATCH_IMPORT_FILES,
   sortImportJobsForDisplay,
   type ImportJob,
 } from '../importJobs';
@@ -266,5 +269,91 @@ describe('jobProgressFraction', () => {
 
   it('clamps to 0 for a negative pagesDone (defensive)', () => {
     expect(jobProgressFraction({ pagesDone: -1, pagesTotal: 11 })).toBe(0);
+  });
+});
+
+// MULTI-FILE BACKGROUND IMPORT (owner decision, "batch enqueue" pass) —
+// item 6's own required test: "10 files enqueue and complete out of order
+// without mixing results."
+describe('runBatchWithConcurrency', () => {
+  it('never runs more than `limit` tasks at once', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const items = Array.from({ length: 10 }, (_, i) => i);
+    await runBatchWithConcurrency(items, 3, async (n) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight -= 1;
+      return n * 2;
+    });
+    expect(maxInFlight).toBeLessThanOrEqual(3);
+  });
+
+  it('10 files enqueue and complete out of order without mixing results', async () => {
+    const items = Array.from({ length: 10 }, (_, i) => `file-${i}.pdf`);
+    // Deliberately inverted delays — the LAST item resolves FIRST — to
+    // prove the returned array stays keyed by each item's own original
+    // position, never by completion order.
+    const outcomes = await runBatchWithConcurrency(items, 4, async (name) => {
+      const index = items.indexOf(name);
+      await new Promise((r) => setTimeout(r, (items.length - index) * 2));
+      return `job-id-for-${name}`;
+    });
+    expect(outcomes).toHaveLength(10);
+    outcomes.forEach((o, i) => {
+      expect(o.item).toBe(items[i]);
+      expect(o.result).toBe(`job-id-for-${items[i]}`);
+      expect(o.error).toBeUndefined();
+    });
+  });
+
+  it('one failure never stops or skips any other task', async () => {
+    const items = ['a', 'b', 'c', 'd', 'e'];
+    const outcomes = await runBatchWithConcurrency(items, 2, async (name) => {
+      if (name === 'c') throw new Error('upload failed for c');
+      return `ok-${name}`;
+    });
+    expect(outcomes.map((o) => o.result)).toEqual(['ok-a', 'ok-b', undefined, 'ok-d', 'ok-e']);
+    expect(outcomes[2].error).toBeInstanceOf(Error);
+    expect((outcomes[2].error as Error).message).toBe('upload failed for c');
+    expect(outcomes.filter((o) => o.result != null)).toHaveLength(4);
+  });
+
+  it('handles an empty item list', async () => {
+    await expect(runBatchWithConcurrency([], 3, async () => 'x')).resolves.toEqual([]);
+  });
+
+  it('a limit larger than the item count still runs every item exactly once', async () => {
+    const items = [1, 2, 3];
+    const outcomes = await runBatchWithConcurrency(items, 100, async (n) => n * 10);
+    expect(outcomes.map((o) => o.result)).toEqual([10, 20, 30]);
+  });
+});
+
+describe('nextBatchReviewStep (BATCH REVIEW FLOW pass)', () => {
+  it('pops the next id off the front of the queue and returns the rest', () => {
+    expect(nextBatchReviewStep(['a', 'b', 'c'])).toEqual({ next: 'a', remaining: ['b', 'c'] });
+  });
+
+  it('the last item leaves an empty remaining queue', () => {
+    expect(nextBatchReviewStep(['only'])).toEqual({ next: 'only', remaining: [] });
+  });
+
+  it('an empty queue has nothing left to review', () => {
+    expect(nextBatchReviewStep([])).toEqual({ next: null, remaining: [] });
+  });
+
+  it('does not mutate the input array', () => {
+    const queue = ['a', 'b', 'c'];
+    const copy = [...queue];
+    nextBatchReviewStep(queue);
+    expect(queue).toEqual(copy);
+  });
+});
+
+describe('MAX_BATCH_IMPORT_FILES', () => {
+  it('caps a single picker selection at 10', () => {
+    expect(MAX_BATCH_IMPORT_FILES).toBe(10);
   });
 });

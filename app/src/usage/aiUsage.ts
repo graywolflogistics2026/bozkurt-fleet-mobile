@@ -141,6 +141,39 @@ export const FLEET_TIERS: FleetTier[] = [
   { id: 'fleet_plus', label: 'Fleet+', truckRange: '9+', basePriceUsd: 79, perExtraTruckUsd: 8 },
 ];
 
+// MULTI-FILE BACKGROUND IMPORT (owner decision, "batch enqueue" pass) —
+// how many of a picked batch of N documents will actually be allowed to
+// process right now, given the account's current usage/credits, computed
+// WITHOUT starting a single job — "say up front how many will process...
+// rather than silently truncating" (spec item 4). A batch of N documents
+// always counts N against capacity here even though a single multi-page
+// settlement only ever counts ONCE server-side (shouldCountAiImportUsage
+// above) — that rule is about one document's own page count, not about how
+// many separate documents a batch contains. This is a client-side ESTIMATE
+// for the up-front message only; the real, authoritative gate is still the
+// server's own per-document check inside ai-import at the moment each job
+// actually runs (never weakened or bypassed by this pre-check).
+export type BatchImportCapacity = {
+  batchSize: number;
+  willProcess: number;
+  willBeBlocked: number;
+  usesCredits: number; // how many of willProcess draw from credits rather than the monthly allowance
+};
+
+export function planBatchImportCapacity(
+  batchSize: number,
+  usage: UsageStatus,
+  availableCredits: number,
+  bypassesLimit = false
+): BatchImportCapacity {
+  if (bypassesLimit) return { batchSize, willProcess: batchSize, willBeBlocked: 0, usesCredits: 0 };
+  const remainingAllowance = Math.max(0, usage.allowance - usage.used);
+  const capacity = remainingAllowance + Math.max(0, availableCredits);
+  const willProcess = Math.max(0, Math.min(batchSize, capacity));
+  const usesCredits = Math.max(0, willProcess - remainingAllowance);
+  return { batchSize, willProcess, willBeBlocked: batchSize - willProcess, usesCredits };
+}
+
 // "Contextually when someone is clearly back-filling (several imports
 // dated in a past month in one session)" — spec item 5.5. Pure detector:
 // counts how many of the given import dates fall in a month before the

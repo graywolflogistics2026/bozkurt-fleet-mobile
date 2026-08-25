@@ -33,7 +33,7 @@ export {
   type ExcludedOneOff,
   type SpendEvent,
 } from '@/src/stats/cashFlowClassification';
-export { buildPeriodicForecastItems, buildDocumentAmountLookup, type PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
+export { buildPeriodicForecastItems, buildPeriodicItemsInRange, buildDocumentAmountLookup, type PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
 
 // CLASSIFICATION WINDOW — 12 weeks (spec's own "last 8-12 weeks"). Longer
 // than the old engine's 4-week trailing averages on purpose: detecting
