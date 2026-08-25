@@ -2512,7 +2512,7 @@ insert into carrier_code_maps (carrier, code, sub_code, label, description, cate
 
 ---
 
-## 54. import_jobs table (BACKGROUND IMPORT, owner decision 2026-08-24)
+## 54. import_jobs table (BACKGROUND IMPORT, owner decision 2026-08-24) — ✅ APPLIED
 
 The real fix for "an import feels slow" isn't more speed, it's not
 making the user watch it happen. `import_jobs` is the one server-tracked
@@ -2577,7 +2577,7 @@ this is transient job/processing state, not a permanent financial record
 a "export all my data" dump is for (same reasoning `ai_usage_log`/
 `service_status` are excluded from that list).
 
-- [ ] 54a run (import_jobs table + RLS + index)
+- [x] 54a run (import_jobs table + RLS + index)
 
 ---
 

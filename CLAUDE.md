@@ -4934,19 +4934,19 @@
   `tsc --noEmit` clean (covers everything under `app/` — the Deno
   function itself is outside this tsconfig's scope, same as every prior
   ai-import pass).
-  docs/PENDING_SQL.md §54 (`import_jobs` table + RLS + index) is NOT YET
-  RUN against the live project as of this writing. `import_jobs` was
-  added to `reset-data`'s `TABLES_IN_DELETION_ORDER` (delete-account
-  needs no explicit entry — `user_id ... on delete cascade` handles it
-  automatically, same precedent as `drivers`) and to
-  `queryInvalidation.ts`'s `AFFECTED_TABLES`; deliberately NOT added to
-  `exportAllData.ts`'s `EXPORT_TABLES` (transient job/processing state,
-  not a permanent financial record, same reasoning `ai_usage_log`/
-  `service_status` are excluded for). `ai-import` was modified (new job
-  mode, `EdgeRuntime.waitUntil` background engine) and needs
-  redeploying; `ai-advisor`/`delete-account` were NOT touched;
-  `reset-data` WAS modified (new table-list entry) and needs
-  redeploying too. No new native dependency — `expo-notifications` was
+  docs/PENDING_SQL.md §54 (`import_jobs` table + RLS + index) is ✅
+  APPLIED. `import_jobs` was added to `reset-data`'s
+  `TABLES_IN_DELETION_ORDER` (delete-account needs no explicit entry —
+  `user_id ... on delete cascade` handles it automatically, same
+  precedent as `drivers`) and to `queryInvalidation.ts`'s
+  `AFFECTED_TABLES`; deliberately NOT added to `exportAllData.ts`'s
+  `EXPORT_TABLES` (transient job/processing state, not a permanent
+  financial record, same reasoning `ai_usage_log`/`service_status` are
+  excluded for). `ai-import` was modified (new job mode,
+  `EdgeRuntime.waitUntil` background engine) and has been redeployed;
+  `ai-advisor`/`delete-account` were NOT touched; `reset-data` WAS
+  modified (new table-list entry) and has been redeployed too. No new
+  native dependency — `expo-notifications` was
   ALREADY a dependency and already configured
   (`app.config.js`'s existing plugin entry, already used by
   truckHealthNotifications.ts/complianceNotifications.ts) — ships via a
