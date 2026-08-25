@@ -2643,7 +2643,7 @@ tables.
 
 ---
 
-## 56. ai_rate_limit_state table + import_jobs 'waiting_to_retry' status (owner decision 2026-08-24, "Edge Function returned a non-2xx status code" bug fix pass, items 1+3)
+## 56. ai_rate_limit_state table + import_jobs 'waiting_to_retry' status (owner decision 2026-08-24, "Edge Function returned a non-2xx status code" bug fix pass, items 1+3) — ✅ APPLIED
 
 Two changes, both about making a real Anthropic rate limit a coordinated,
 visible, recoverable event instead of every queued item independently
@@ -2694,8 +2694,8 @@ alter table import_jobs add constraint import_jobs_status_check
   check (status in ('queued', 'processing', 'waiting_to_retry', 'ready', 'failed'));
 ```
 
-- [ ] 56a run (ai_rate_limit_state table + RLS + seed row)
-- [ ] 56b run (import_jobs.status constraint — adds 'waiting_to_retry')
+- [x] 56a run (ai_rate_limit_state table + RLS + seed row)
+- [x] 56b run (import_jobs.status constraint — adds 'waiting_to_retry')
 
 ---
 
