@@ -1015,6 +1015,8 @@
     "milesEditLabel": "Mil",
     "milesEditLabelMissing": "Mil eksik — bu haftanın toplamını girin",
     "milesSaveFailedTitle": "Mil kaydedilemedi",
+    "assignedTruck": "Kamyon: {{unit}}",
+    "noTruckAssigned": "Atanmış kamyon yok — bu settlement, kamyona özel bir gösterge paneli görünümünde görünmeyecek",
     "perDiemDaysLabel": "Per Diem Günleri (0-7)",
     "perDiemDaysCount": "{{count}}/7 per diem günü",
     "perDiemSaveFailedTitle": "Per diem günleri kaydedilemedi",

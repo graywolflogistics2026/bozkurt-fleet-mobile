@@ -29,6 +29,21 @@ import type { Extraction, ExtractedLoad } from '@/src/import/types';
 //      surfaces it for the user to confirm — unlike rule 1, this
 //      correction is a judgment call (how large a mismatch is "implausible"
 //      is a threshold, not a certainty), so it's flagged rather than silent.
+//   3. NULL MUST NEVER BEAT A NUMBER (owner decision 2026-08-24, MILES
+//      READ BUT NOT USED fix) — the mirror-image gap of rule 2: loads
+//      exist with a real, nonzero summed mileage, but the settlement's
+//      own totalMiles came back IMPLAUSIBLY SMALLER than that (most
+//      commonly exactly 0 or missing — a header/summary scalar the model
+//      didn't see on whatever page/chunk it read, e.g. a multi-page
+//      settlement's own recap section landing on a later page while a
+//      server-side merge's "chunk[0] priority" rule for this exact field
+//      — supabase/functions/ai-import/chunking.ts's
+//      mergeChunkedExtractions() — only ever trusts the FIRST page's own
+//      reading). loadMilesSum is real, per-load extracted data that can
+//      never legitimately exceed the week's own total, so it's always
+//      safe to prefer over a raw total that can't even account for the
+//      loads actually on the statement. Flagged (a judgment call, same as
+//      rule 2, not a certainty like rule 1) so the user confirms it.
 const MILES_TRAP_RATIO = 1.5;
 
 function sumLoadMiles(loads: Pick<ExtractedLoad, 'loadedMiles' | 'emptyMiles'>[]): number {
@@ -54,6 +69,14 @@ export function resolveWeeklyMiles(
   // nothing safe to fall back to, so the extracted totalMiles is left
   // as-is rather than guessed away.
   if (loadMilesSum > 0 && raw > loadMilesSum * MILES_TRAP_RATIO) {
+    return { miles: loadMilesSum, flagged: true };
+  }
+
+  // Rule 3 — see this file's own header comment. loadMilesSum can never
+  // legitimately exceed the week's own real total, so `raw < loadMilesSum`
+  // is an unambiguous sign totalMiles itself was lost/undercounted
+  // somewhere upstream, most commonly landing exactly at raw === 0.
+  if (loadMilesSum > 0 && raw < loadMilesSum) {
     return { miles: loadMilesSum, flagged: true };
   }
 

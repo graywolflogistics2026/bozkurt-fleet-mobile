@@ -12,6 +12,7 @@ import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useDocuments } from '@/src/data/documents';
 import { useFleetStats } from '@/src/data/dashboardStats';
+import { useTrucksList } from '@/src/data/trucks';
 import { calcEscrowBalance } from '@/src/stats/escrowBalance';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useMarkDocumentReviewed } from '@/src/data/needsReviewMutations';
@@ -82,6 +83,14 @@ export default function Settlements() {
   const maintenanceQuery = useMaintenanceRecords();
   const documentsQuery = useDocuments();
   const fleetStats = useFleetStats(null);
+  // MILES READ BUT NOT USED (owner decision 2026-08-24, item 5 —
+  // diagnostic): shows which truck (if any) this settlement is assigned
+  // to, right next to the miles field. A null/mismatched truck_id is
+  // exactly what caused Home's truck-scoped dashboard trio to silently
+  // exclude a settlement that a fleet-wide read (Scorecard, this screen's
+  // own top stat row) still correctly included — this makes that
+  // otherwise-invisible column visible at a glance.
+  const trucksQuery = useTrucksList();
   const markDocumentReviewed = useMarkDocumentReviewed();
   const [markingAllReviewed, setMarkingAllReviewed] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -476,6 +485,20 @@ export default function Settlements() {
                     disabled={milesDraft === String(selected.miles ?? 0)}
                   />
                 </View>
+                {/* MILES READ BUT NOT USED (owner decision 2026-08-24, item
+                    5 — diagnostic): a null/mismatched truck_id is exactly
+                    what caused a truck-scoped dashboard read to silently
+                    exclude this settlement while a fleet-wide read still
+                    correctly included it — this makes that otherwise-
+                    invisible column visible at a glance, right next to the
+                    miles it affects. */}
+                <MutedText style={!selected.truck_id ? { color: colors.orange, fontWeight: '700', marginTop: 2 } : { marginTop: 2 }}>
+                  {selected.truck_id
+                    ? t('settlementsScreen.assignedTruck', {
+                        unit: trucksQuery.data?.find((tr) => tr.id === selected.truck_id)?.unit_number || selected.truck_id,
+                      })
+                    : `⚠️ ${t('settlementsScreen.noTruckAssigned')}`}
+                </MutedText>
               </View>
 
               <View style={{ marginBottom: spacing.sm }}>

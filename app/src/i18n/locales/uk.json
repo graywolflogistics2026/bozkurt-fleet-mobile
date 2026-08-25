@@ -1015,6 +1015,8 @@
     "milesEditLabel": "Miles",
     "milesEditLabelMissing": "Miles missing — enter this week's total",
     "milesSaveFailedTitle": "Could not save miles",
+    "assignedTruck": "Truck: {{unit}}",
+    "noTruckAssigned": "No truck assigned — this settlement won't show up in a truck-specific dashboard view",
     "perDiemDaysLabel": "Per Diem Days (0-7)",
     "perDiemDaysCount": "{{count}}/7 per diem days",
     "perDiemSaveFailedTitle": "Could not save per diem days",

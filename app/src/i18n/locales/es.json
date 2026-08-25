@@ -1015,6 +1015,8 @@
     "milesEditLabel": "Millas",
     "milesEditLabelMissing": "Faltan millas — ingrese el total de esta semana",
     "milesSaveFailedTitle": "No se pudieron guardar las millas",
+    "assignedTruck": "Camión: {{unit}}",
+    "noTruckAssigned": "Sin camión asignado — este settlement no aparecerá en una vista del panel específica de un camión",
     "perDiemDaysLabel": "Días de Per Diem (0-7)",
     "perDiemDaysCount": "{{count}}/7 días de per diem",
     "perDiemSaveFailedTitle": "No se pudieron guardar los días de per diem",

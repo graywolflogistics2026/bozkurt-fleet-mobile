@@ -9,6 +9,8 @@ import {
   type PageByteSize,
   type PageOutcome,
 } from '../../../../supabase/functions/ai-import/chunking';
+import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
+import type { Extraction } from '@/src/import/types';
 
 // PDF CHUNKING FOR MULTI-PAGE SETTLEMENTS (owner decision 2026-08-02,
 // device evidence: real 8-page Prime settlements consistently timed out).
@@ -163,6 +165,62 @@ describe('mergeChunkedExtractions', () => {
     expect(merged.settlement?.totalMiles).toBe(0);
     const total = (merged.settlement?.deductions as { amount: number }[]).reduce((sum, d) => sum + d.amount, 0);
     expect(total).toBeCloseTo(1160.51, 2);
+  });
+
+  // MILES READ BUT NOT USED (owner decision 2026-08-24) — a real, nonzero
+  // totalMiles on the header page survives the merge completely unchanged
+  // (the ordinary, expected case — the "0 is legitimate" chunk[0] rule
+  // only matters when chunk[0] genuinely lacks the field).
+  it('a real nonzero totalMiles on the header chunk survives the merge unchanged', () => {
+    const headerChunk = settlementChunk({ weekEnding: '2026-07-24', grossRevenue: 8500, totalMiles: 10146 });
+    const deductionsChunk = settlementChunk({ deductions: [{ code: 'INS', amount: 100 }] });
+    const merged = mergeChunkedExtractions([headerChunk, deductionsChunk]);
+    expect(merged.settlement?.totalMiles).toBe(10146);
+  });
+
+  // END TO END: merge + the milesGuard client-side safety net together.
+  // mergeChunkedExtractions() itself still takes chunk[0]'s totalMiles
+  // unconditionally (by design — see this suite's own "even when the
+  // value is a legitimate 0" test above) — so if the page that actually
+  // prints the mileage recap isn't chunk[0] (e.g. it's a later page), the
+  // merge alone would lose it. sanitizeExtractionMiles() (src/import/
+  // milesGuard.ts), applied to whatever the merge produces, is the second
+  // line of defense: loads ARE concatenated across every chunk correctly
+  // regardless of which chunk had the header, so the real total is
+  // recoverable from them even when the merge's own scalar-priority rule
+  // can't find it.
+  it('survives the guard AND the multi-page merge together, even when the header chunk itself lacks totalMiles', () => {
+    // Chunk 0 = pages 1-2 (header + loads, but the AI genuinely didn't
+    // see a printed mileage summary on THESE pages — left at the schema
+    // default per the chunk prompt's own instruction).
+    const headerChunk = settlementChunk({
+      weekEnding: '2026-07-24',
+      grossRevenue: 8500,
+      totalMiles: 0,
+      loads: [
+        { order: 'L1', loadedMiles: 6200, emptyMiles: 800 },
+        { order: 'L2', loadedMiles: 2600, emptyMiles: 546 },
+      ],
+    });
+    // Chunk 1 = pages 3-6 (deductions section — no header data of its own).
+    const deductionsChunk = settlementChunk({ deductions: [{ code: 'INS', amount: 100 }] });
+
+    const merged = mergeChunkedExtractions([headerChunk, deductionsChunk]);
+    // The merge alone still reflects chunk[0]'s (wrong) 0 — expected,
+    // documented behavior, not itself the fix.
+    expect(merged.settlement?.totalMiles).toBe(0);
+    expect(merged.settlement?.loads).toHaveLength(2);
+
+    // The guard, applied to the merge's own output, recovers the real
+    // total from the loads it correctly preserved. Cast: in production
+    // this exact boundary crossing happens over the wire (the server's
+    // own local ChunkExtraction type becomes whatever JSON the client
+    // receives and treats as Extraction) — there's no runtime validation
+    // step between them, so a cast here mirrors reality rather than
+    // papering over a real type mismatch.
+    const sanitized = sanitizeExtractionMiles(merged as unknown as Extraction);
+    expect(sanitized.settlement?.totalMiles).toBe(10146);
+    expect(sanitized.confidence).toBe('low');
   });
 });
 

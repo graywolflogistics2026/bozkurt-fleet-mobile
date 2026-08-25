@@ -1015,6 +1015,8 @@
     "milesEditLabel": "الأميال",
     "milesEditLabelMissing": "الأميال مفقودة — أدخل إجمالي هذا الأسبوع",
     "milesSaveFailedTitle": "تعذّر حفظ الأميال",
+    "assignedTruck": "الشاحنة: {{unit}}",
+    "noTruckAssigned": "لا توجد شاحنة معيّنة — لن يظهر هذا الـsettlement في عرض لوحة معلومات خاص بشاحنة معينة",
     "perDiemDaysLabel": "أيام الـ per diem (0-7)",
     "perDiemDaysCount": "{{count}}/7 أيام per diem",
     "perDiemSaveFailedTitle": "تعذّر حفظ أيام الـ per diem",

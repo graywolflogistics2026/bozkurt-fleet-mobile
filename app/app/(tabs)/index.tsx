@@ -608,7 +608,27 @@ export default function Dashboard() {
     }
   }, [queryClient]);
 
-  const statsQuery = useFleetStats(activeTruck?.id ?? null);
+  // MILES READ BUT NOT USED (owner decision 2026-08-24, device report) —
+  // this used to be useFleetStats(activeTruck?.id ?? null), a TRUCK-
+  // SCOPED query, while EVERY other canonical CPM/RPM/PPM consumer in the
+  // app (Scorecard, Settlements' own fleet-wide stat row) calls
+  // useFleetStats(null) — fleet-wide, exactly matching this screen's own
+  // code comment below ("mirrors scorecard.tsx's own truck-cost-basis/
+  // manual-override block exactly"), which the truck-scoped call never
+  // actually did. A settlement whose own truck_id doesn't match
+  // activeTruck.id — most commonly a settlement imported before any truck
+  // existed in the account yet (resolveTruckMatch() saves truck_id: null
+  // when trucks.length === 0, silently, no picker forced — see
+  // truckMatch.ts) — was silently EXCLUDED from this truck-scoped query
+  // while still correctly included in Scorecard's fleet-wide one, which is
+  // exactly why the per-mile trio showed "no miles recorded" while
+  // Scorecard, reading the SAME settlement row through the SAME canonical
+  // calcMiles(), correctly showed the real total. `null` here makes Home
+  // a true mirror of Scorecard/Settlements — one canonical, fleet-wide
+  // total, never a screen-specific scope. `activeTruck` itself stays used
+  // below for genuinely truck-SPECIFIC settings (cost basis, the manual
+  // miles override) — only the STATS QUERY's scope changes.
+  const statsQuery = useFleetStats(null);
   const capitalQuery = useCapitalAccountSummary();
   const aiCoach = useAiCoachSummary();
   const proactiveCoach = useProactiveCoach();

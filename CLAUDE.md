@@ -5356,3 +5356,112 @@
   column this pass writes to already existed; no redeploy needed for any
   Edge Function. No new native dependency — ships via a normal
   `eas update`.
+- MILES READ BUT NOT USED (owner decision 2026-08-24, device report:
+  "import screen says 'using settlement total 10,146' — the value IS
+  extracted — yet Home still shows 'no miles recorded' and CPM/RPM/PPM
+  stay uncomputed"). Traced end to end, per the report's own numbered
+  hypotheses, before writing anything:
+  1. **THE VALUE WAS NEVER LOST** — `mapExtraction.ts`'s `mapSettlement()`
+     computes `miles = num(s.totalMiles)` and writes it into the SAME
+     `settlements.miles` NOT NULL column every screen reads
+     (`num()` never silently drops to a string or a different field
+     name — verified by reading the actual mapper, not assumed).
+     `aiImportSave.ts`'s INSERT/UPDATE spreads `{ ...mapping.settlement,
+     ... }` verbatim — no renaming, no field dropped. `calcMiles()`
+     (`src/stats/miles.ts`) correctly reads `s.miles` per settlement row.
+     Proven end to end with a new dedicated test
+     (`src/data/__tests__/aiImportSave.milesEndToEnd.test.ts`) that runs
+     the REAL `saveExtraction()` with a payload carrying
+     `totalMiles: 10146`, confirms the saved row has `miles: 10146` (a
+     real number, not a string), and feeds it through the actual
+     `calcMiles()`/`calcCanonicalCpm()` to confirm CPM/RPM/PPM all
+     compute as real numbers.
+  2. **THE ACTUAL BUG — Home read via a DIFFERENT query scope than every
+     other screen**: `app/(tabs)/index.tsx`'s dashboard trio queried
+     `useFleetStats(activeTruck?.id ?? null)` — TRUCK-SCOPED — while
+     Scorecard (`app/(tabs)/more/scorecard.tsx`) and the Settlements
+     screen's own top stat row both call `useFleetStats(null)` —
+     FLEET-WIDE (confirmed via a repo-wide grep: Home was the ONLY
+     truck-scoped call site in the app). A settlement whose own
+     `truck_id` doesn't match `activeTruck.id` — most commonly one
+     imported before any truck existed in the account yet
+     (`truckMatch.ts`'s `resolveTruckMatch()` silently saves
+     `truck_id: null` when `trucks.length === 0`, no picker ever forced,
+     by design) — was silently EXCLUDED from Home's truck-scoped query
+     while remaining correctly included in Scorecard's fleet-wide one:
+     the exact "read on a different path than the one the dashboard
+     uses" the report described. Home's own code comment already said
+     this block "mirrors scorecard.tsx's own truck-cost-basis/manual-
+     override block exactly" — the truck-scoped `useFleetStats` call was
+     the one place that mirror broke. Fixed by changing it to
+     `useFleetStats(null)`, a true match to Scorecard/Settlements —
+     `activeTruck` stays used for genuinely truck-SPECIFIC settings
+     (cost basis, the manual miles override), only the stats query's
+     scope changed. This is now the ONE canonical, fleet-wide miles
+     read every consumer shares: dashboard trio, CPM "Why?" (Scorecard),
+     lane analysis (`rankLoadsByRpm`, already fleet-wide via `useLoads()`
+     — verified, unchanged), and per-diem context (`calcPerDiemDays`,
+     unrelated to miles scoping — verified, unchanged). The Accountant
+     Package doesn't read miles/CPM at all (verified via grep) — nothing
+     to fix there.
+  3. **ORDERING BUG CLASS — "null must never beat a number"**: audited
+     `src/import/milesGuard.ts`'s `resolveWeeklyMiles()` (the guard
+     applied once, right after extraction, before `mapSettlement()` ever
+     sees the value) and found a real, latent asymmetry — it protected
+     against `totalMiles` being IMPLAUSIBLY LARGE relative to a real
+     loads breakdown (the original "LTD miles" trap), but had NO
+     symmetric protection against `totalMiles` coming back implausibly
+     SMALL (most commonly exactly 0/missing) while real loads data
+     clearly indicated otherwise — exactly the shape a multi-page
+     merge's own chunk[0]-priority rule for this field
+     (`supabase/functions/ai-import/chunking.ts`'s
+     `mergeChunkedExtractions()`, which deliberately trusts chunk[0]'s
+     totalMiles unconditionally, including when it's a legitimate 0 for
+     a real home week — verified, left unchanged, still correct for that
+     case) could produce if the mileage recap happens to print on a
+     LATER page than chunk[0]. Added a new rule 3 to
+     `resolveWeeklyMiles()`: when real loads exist with a nonzero summed
+     mileage but `totalMiles` came back smaller than that sum, use the
+     loads-derived total instead (flagged for review, a judgment call —
+     not silent like the unambiguous "no loads = 0" rule 1). This is a
+     CLIENT-SIDE safety net that runs on whatever extraction the server
+     ultimately returns — single-call or merged — so it protects the
+     miles value end to end regardless of which path produced it,
+     without needing to reverse the deliberate, already-verified
+     chunk[0]-priority design for this field server-side (loads are
+     already correctly concatenated across every chunk by the existing
+     merge, which is what makes this recovery possible).
+  4. **Tests**: `src/import/__tests__/milesGuard.test.ts` gained a
+     dedicated "rule 3" block using the exact reported 10,146-mile
+     figure (0/undefined/partial totalMiles recovered from a real loads
+     sum; confirms rule 3 does NOT fire when totalMiles already matches
+     or plausibly exceeds the loads sum). `src/import/__tests__/
+     chunking.test.ts` gained two new cases: a real nonzero totalMiles
+     on the header chunk surviving the merge completely unchanged (the
+     ordinary case), and an end-to-end "merge + guard together" test
+     proving that even when the header chunk itself lacks totalMiles,
+     the guard recovers the real 10,146 from the loads the merge
+     correctly preserved. `aiImportSave.milesEndToEnd.test.ts` (new,
+     described in point 1) is the full save→read→CPM proof the report
+     explicitly asked for, plus a "guard-recovery" case showing a
+     lost-upstream totalMiles still lands correctly once actually saved.
+  5. **Diagnostic** (settlement detail screen,
+     `app/(tabs)/more/settlements.tsx`): the miles field was ALREADY
+     shown plainly and editable there (a stat-row figure plus an
+     editable `Field` + Save, both reading the literal DB-stored
+     `selected.miles` — confirmed unchanged, pre-existing). Added the
+     ONE thing that was actually missing and would have made TODAY's
+     specific bug visible immediately: a "Truck: {{unit}}" /
+     "⚠️ No truck assigned" line right next to it, looked up from
+     `selected.truck_id` against the fleet's own truck list — the
+     exact hidden column whose null/mismatch caused the divergence.
+  Full suite: 95 suites / 2350 tests pass (+19 new); `tsc --noEmit`
+  clean; all 7 locales confirmed key-parity (`settlementsScreen.
+  assignedTruck`/`noTruckAssigned`, es/ru/ar/tr translated with
+  "settlement" kept in Latin script per the glossary, hi/uk as
+  untranslated English copies). No SQL changes. `ai-import` was NOT
+  modified — the merge's own chunk[0]-priority behavior for totalMiles
+  was deliberately left as-is (already correct for the genuine-0-miles
+  case; the client-side guard is what closes the gap for every path),
+  so no Edge Function redeploy is needed. Ships via a normal
+  `eas update`.

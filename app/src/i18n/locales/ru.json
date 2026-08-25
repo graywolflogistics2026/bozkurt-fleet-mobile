@@ -1015,6 +1015,8 @@
     "milesEditLabel": "Мили",
     "milesEditLabelMissing": "Мили не указаны — введите итог за эту неделю",
     "milesSaveFailedTitle": "Не удалось сохранить мили",
+    "assignedTruck": "Грузовик: {{unit}}",
+    "noTruckAssigned": "Грузовик не назначен — этот settlement не отобразится в представлении панели для конкретного грузовика",
     "perDiemDaysLabel": "Дни per diem (0-7)",
     "perDiemDaysCount": "{{count}}/7 дней per diem",
     "perDiemSaveFailedTitle": "Не удалось сохранить дни per diem",
