@@ -2699,7 +2699,7 @@ alter table import_jobs add constraint import_jobs_status_check
 
 ---
 
-## 57. Cash Flow forecast overrides (owner decision, "build it from the user's own data" pass)
+## 57. Cash Flow forecast overrides (owner decision, "build it from the user's own data" pass) — ✅ APPLIED
 
 The 30-day Cash Flow forecast no longer requires manual weekly budget
 entry — it classifies the user's own trailing settlements/deductions/
@@ -2739,7 +2739,7 @@ must not retain a stale manual override). No new query-invalidation key
 is needed — these are new fields on the already-invalidated `'profile'`
 row, not a new table.
 
-- [ ] 57a run (profiles.cf_income_override/cf_fixed_override/cf_variable_override/cf_periodic_overrides)
+- [x] 57a run (profiles.cf_income_override/cf_fixed_override/cf_variable_override/cf_periodic_overrides)
 
 ---
 
