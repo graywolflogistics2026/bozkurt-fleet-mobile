@@ -3,8 +3,11 @@ import type {
   ComplianceItem,
   Deduction,
   DocumentRow,
+  FuelPurchase,
   HouseholdIncome,
+  Load,
   MaintenanceRecord,
+  Reimbursement,
   Settlement,
 } from '@/src/types/db';
 import { isDocumentNeedsReview } from '@/src/import/needsReview';
@@ -74,7 +77,10 @@ export type LinkedRecordKind =
   | 'maintenance'
   | 'bank_statement'
   | 'compliance_item'
-  | 'household_income';
+  | 'household_income'
+  | 'fuel'
+  | 'load'
+  | 'reimbursement';
 
 export type LinkedRecordRef = {
   kind: LinkedRecordKind;
@@ -89,19 +95,43 @@ export type LinkedRecordSources = {
   bankStatements?: BankStatement[];
   complianceItems?: ComplianceItem[];
   householdIncome?: HouseholdIncome[];
+  // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
+  // testing round, item 2) — the 3 tables the prior version of this
+  // function's own comment explicitly excluded, since none of them carries
+  // a document_id of its own. Now traced via a two-hop lookup: find the
+  // linked SETTLEMENT first (document_id, same as every other kind below),
+  // then match these three by settlement_id — the only way to reach them
+  // from a document at all (see aiImportSave.ts's own FK assignment
+  // pattern). Optional/additive so every existing call site that doesn't
+  // pass them keeps behaving exactly as before.
+  fuelPurchases?: FuelPurchase[];
+  loads?: Load[];
+  reimbursements?: Reimbursement[];
 };
 
-// "View linked records" (item 2 of the Documents Archive spec) — every
-// table a document can route to via document_id/source_document_id
-// (CLAUDE.md's D3 audit trail note lists exactly these). Deliberately does
-// NOT include fuel_purchases/loads/reimbursements/driver_payments/tolls/
-// loans, none of which carry a document_id column of their own (a
-// settlement's fuel/loads are reached by first jumping to ITS settlement).
+// "View linked records" / destination summary (item 2 of the Documents
+// Archive spec, extended 2026-08-24 for the PAYMENT + DESTINATION SUMMARY
+// device-testing item) — every row a document's own import produced,
+// across every table CLAUDE.md's D3 audit trail note covers. Tolls are
+// the one remaining, honestly-flagged gap: the `tolls` table has neither
+// a `document_id` NOR a `settlement_id` column in the current schema, so a
+// settlement's own toll charges cannot be traced back to their source
+// document at all yet — a future schema addition, not silently faked here.
+//
+// DOUBLE-COUNT GUARD: a settlement-withheld deduction already gets BOTH
+// document_id AND settlement_id set at save time (aiImportSave.ts), so it
+// is already fully captured by the plain document_id loop below — deductions
+// are deliberately NOT re-matched by settlement_id a second time (unlike
+// fuel/loads/reimbursements, which have no document_id of their own at all).
 export function findLinkedRecords(documentId: string, sources: LinkedRecordSources): LinkedRecordRef[] {
   const refs: LinkedRecordRef[] = [];
 
+  const linkedSettlementIds = new Set<string>();
   for (const s of sources.settlements ?? []) {
-    if (s.document_id === documentId) refs.push({ kind: 'settlement', id: s.id, label: `Settlement — W/E ${s.week_ending}` });
+    if (s.document_id === documentId) {
+      refs.push({ kind: 'settlement', id: s.id, label: `Settlement — W/E ${s.week_ending}` });
+      linkedSettlementIds.add(s.id);
+    }
   }
   for (const d of sources.deductions ?? []) {
     if (d.document_id === documentId) refs.push({ kind: 'deduction', id: d.id, label: d.description || d.category || 'Deduction' });
@@ -119,5 +149,36 @@ export function findLinkedRecords(documentId: string, sources: LinkedRecordSourc
     if (h.document_id === documentId) refs.push({ kind: 'household_income', id: h.id, label: `Household income — ${h.income_type.replace(/_/g, ' ')}` });
   }
 
+  if (linkedSettlementIds.size > 0) {
+    for (const f of sources.fuelPurchases ?? []) {
+      if (f.settlement_id && linkedSettlementIds.has(f.settlement_id)) {
+        refs.push({ kind: 'fuel', id: f.id, label: `Fuel — ${f.location || f.fuel_type}${f.amount != null ? ` — $${f.amount}` : ''}` });
+      }
+    }
+    for (const l of sources.loads ?? []) {
+      if (l.settlement_id && linkedSettlementIds.has(l.settlement_id)) {
+        refs.push({ kind: 'load', id: l.id, label: `Load — ${l.origin ?? '?'} → ${l.destination ?? '?'}` });
+      }
+    }
+    for (const r of sources.reimbursements ?? []) {
+      if (r.settlement_id && linkedSettlementIds.has(r.settlement_id)) {
+        refs.push({ kind: 'reimbursement', id: r.id, label: r.description || 'Reimbursement' });
+      }
+    }
+  }
+
   return refs;
+}
+
+// PAYMENT + DESTINATION SUMMARY (item 2) — collapses findLinkedRecords()'s
+// individual refs into the "3 fuel entries, 12 deductions, 2 loads, 1
+// maintenance record" count summary shown at the bottom of a settlement/
+// document detail view. Pure so it's directly testable against a fixed
+// list of refs without needing the sources map again.
+export function summarizeLinkedRecordCounts(refs: LinkedRecordRef[]): Partial<Record<LinkedRecordKind, number>> {
+  const counts: Partial<Record<LinkedRecordKind, number>> = {};
+  for (const ref of refs) {
+    counts[ref.kind] = (counts[ref.kind] ?? 0) + 1;
+  }
+  return counts;
 }

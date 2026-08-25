@@ -93,13 +93,28 @@ describe('detectDepreciationNotSet', () => {
 
 describe('detectNeedsReviewReceipts', () => {
   test('none flagged — null', () => {
-    expect(detectNeedsReviewReceipts([{ description: 'Fuel purchase' }])).toBeNull();
+    expect(detectNeedsReviewReceipts([{ description: 'Fuel purchase', reviewed_at: null }])).toBeNull();
   });
 
   test('some flagged — fires with count', () => {
     expect(
-      detectNeedsReviewReceipts([{ description: 'NEEDS REVIEW: Amazon' }, { description: 'Fuel' }, { description: 'NEEDS REVIEW: Walmart' }])
+      detectNeedsReviewReceipts([
+        { description: 'NEEDS REVIEW: Amazon', reviewed_at: null },
+        { description: 'Fuel', reviewed_at: null },
+        { description: 'NEEDS REVIEW: Walmart', reviewed_at: null },
+      ])
     ).toEqual({ topic: 'needsReviewReceipts', detail: { count: 2 } });
+  });
+
+  // NEEDS REVIEW WON'T CLEAR — THE FIX (owner decision 2026-08-24): a
+  // row marked reviewed must never keep nudging here.
+  test('a reviewed row is excluded even though its description still has the prefix', () => {
+    expect(
+      detectNeedsReviewReceipts([
+        { description: 'NEEDS REVIEW: Amazon', reviewed_at: '2026-08-24T00:00:00Z' },
+        { description: 'NEEDS REVIEW: Walmart', reviewed_at: null },
+      ])
+    ).toEqual({ topic: 'needsReviewReceipts', detail: { count: 1 } });
   });
 });
 
@@ -108,7 +123,7 @@ describe('buildMissingDataNudgeCandidates', () => {
     const result = buildMissingDataNudgeCandidates({
       settlements: [{ week_ending: '2026-08-01', gross: 1000, miles: 0 }],
       trucks: [{ cost_basis_ownership_mode: null, depreciation_method: null }],
-      deductions: [{ description: 'NEEDS REVIEW: something' }],
+      deductions: [{ description: 'NEEDS REVIEW: something', reviewed_at: null }],
       role: 'owner_operator',
       now: NOW,
     });
@@ -137,7 +152,7 @@ describe('buildMissingDataNudgeCandidates', () => {
     const result = buildMissingDataNudgeCandidates({
       settlements: [{ week_ending: '2026-08-01', gross: 1000, miles: 0 }],
       trucks: [{ cost_basis_ownership_mode: null, depreciation_method: null }],
-      deductions: [{ description: 'NEEDS REVIEW: something' }],
+      deductions: [{ description: 'NEEDS REVIEW: something', reviewed_at: null }],
       role: 'owner_operator',
       now: NOW,
     });

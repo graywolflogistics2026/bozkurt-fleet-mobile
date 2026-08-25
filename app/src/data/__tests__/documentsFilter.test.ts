@@ -1,5 +1,23 @@
-import { filterDocuments, distinctDocTypes, findLinkedRecords, primaryDocumentDate, isImageFilename } from '@/src/data/documentsFilter';
-import type { DocumentRow, Settlement, Deduction, MaintenanceRecord, BankStatement, ComplianceItem, HouseholdIncome } from '@/src/types/db';
+import {
+  filterDocuments,
+  distinctDocTypes,
+  findLinkedRecords,
+  summarizeLinkedRecordCounts,
+  primaryDocumentDate,
+  isImageFilename,
+} from '@/src/data/documentsFilter';
+import type {
+  DocumentRow,
+  Settlement,
+  Deduction,
+  MaintenanceRecord,
+  BankStatement,
+  ComplianceItem,
+  HouseholdIncome,
+  FuelPurchase,
+  Load,
+  Reimbursement,
+} from '@/src/types/db';
 
 function doc(overrides: Partial<DocumentRow>): DocumentRow {
   return {
@@ -11,6 +29,7 @@ function doc(overrides: Partial<DocumentRow>): DocumentRow {
     amount: 100,
     storage_path: 'u1/2026-07/fuel/file.pdf',
     parsed_json: null,
+    reviewed_at: null,
     imported_at: '2026-07-10T00:00:00Z',
     updated_at: '2026-07-10T00:00:00Z',
     ...overrides,
@@ -175,5 +194,88 @@ describe('findLinkedRecords', () => {
     const refs = findLinkedRecords(documentId, { settlements, deductions });
     expect(refs).toHaveLength(2);
     expect(refs.map((r) => r.kind).sort()).toEqual(['deduction', 'settlement']);
+  });
+
+  // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
+  // testing round, item 2) — fuel/loads/reimbursements have no document_id
+  // of their own, only settlement_id, so they're only reachable via a
+  // two-hop lookup: find the linked SETTLEMENT first, then match these
+  // three by settlement_id.
+  describe('settlement-derived fuel/loads/reimbursements (two-hop via settlement_id)', () => {
+    const settlements: Settlement[] = [
+      { id: 's1', document_id: documentId, week_ending: '2026-07-05' } as Settlement,
+    ];
+
+    it('finds fuel purchases linked via the settlement (no document_id of their own)', () => {
+      const fuelPurchases: FuelPurchase[] = [
+        { id: 'f1', settlement_id: 's1', location: 'Pilot', fuel_type: 'tractor', amount: 400 } as FuelPurchase,
+      ];
+      const refs = findLinkedRecords(documentId, { settlements, fuelPurchases });
+      expect(refs).toEqual([
+        { kind: 'settlement', id: 's1', label: 'Settlement — W/E 2026-07-05' },
+        { kind: 'fuel', id: 'f1', label: 'Fuel — Pilot — $400' },
+      ]);
+    });
+
+    it('finds loads linked via the settlement', () => {
+      const loads: Load[] = [{ id: 'l1', settlement_id: 's1', origin: 'Dallas', destination: 'Houston' } as Load];
+      const refs = findLinkedRecords(documentId, { settlements, loads });
+      expect(refs).toEqual([
+        { kind: 'settlement', id: 's1', label: 'Settlement — W/E 2026-07-05' },
+        { kind: 'load', id: 'l1', label: 'Load — Dallas → Houston' },
+      ]);
+    });
+
+    it('finds reimbursements linked via the settlement', () => {
+      const reimbursements: Reimbursement[] = [
+        { id: 'r1', settlement_id: 's1', description: 'Warranty credit' } as Reimbursement,
+      ];
+      const refs = findLinkedRecords(documentId, { settlements, reimbursements });
+      expect(refs).toEqual([
+        { kind: 'settlement', id: 's1', label: 'Settlement — W/E 2026-07-05' },
+        { kind: 'reimbursement', id: 'r1', label: 'Warranty credit' },
+      ]);
+    });
+
+    it('never matches fuel/loads/reimbursements belonging to a DIFFERENT settlement', () => {
+      const fuelPurchases: FuelPurchase[] = [{ id: 'f1', settlement_id: 'other-settlement', fuel_type: 'tractor' } as FuelPurchase];
+      const refs = findLinkedRecords(documentId, { settlements, fuelPurchases });
+      expect(refs).toEqual([{ kind: 'settlement', id: 's1', label: 'Settlement — W/E 2026-07-05' }]);
+    });
+
+    it('never traces fuel/loads/reimbursements when there is no linked settlement at all', () => {
+      const fuelPurchases: FuelPurchase[] = [{ id: 'f1', settlement_id: 's1', fuel_type: 'tractor' } as FuelPurchase];
+      // No `settlements` source passed at all — nothing to hop through.
+      expect(findLinkedRecords(documentId, { fuelPurchases })).toEqual([]);
+    });
+
+    it('does NOT double-count a settlement-withheld deduction via settlement_id — it is already captured by document_id', () => {
+      // aiImportSave.ts stamps a withheld deduction with BOTH document_id
+      // AND settlement_id — this proves it appears exactly once, not twice.
+      const deductions: Deduction[] = [
+        { id: 'd1', document_id: documentId, settlement_id: 's1', description: 'Fuel advance' } as Deduction,
+      ];
+      const refs = findLinkedRecords(documentId, { settlements, deductions });
+      expect(refs.filter((r) => r.kind === 'deduction')).toHaveLength(1);
+    });
+  });
+});
+
+describe('summarizeLinkedRecordCounts', () => {
+  it('collapses refs into per-kind counts', () => {
+    const counts = summarizeLinkedRecordCounts([
+      { kind: 'fuel', id: 'f1', label: 'a' },
+      { kind: 'fuel', id: 'f2', label: 'b' },
+      { kind: 'fuel', id: 'f3', label: 'c' },
+      { kind: 'deduction', id: 'd1', label: 'd' },
+      { kind: 'load', id: 'l1', label: 'e' },
+      { kind: 'load', id: 'l2', label: 'f' },
+      { kind: 'maintenance', id: 'm1', label: 'g' },
+    ]);
+    expect(counts).toEqual({ fuel: 3, deduction: 1, load: 2, maintenance: 1 });
+  });
+
+  it('returns an empty object for no refs', () => {
+    expect(summarizeLinkedRecordCounts([])).toEqual({});
   });
 });

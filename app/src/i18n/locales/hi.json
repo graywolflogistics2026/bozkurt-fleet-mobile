@@ -55,7 +55,7 @@
     "ceoMode": "AI Coach",
     "aiAdvisor": "AI Advisor",
     "shareProfit": "Share Weekly Profit",
-    "compliance": "Compliance Tracker",
+    "compliance": "Documents & Renewals",
     "documents": "Documents",
     "categoryLearning": "Category Learning",
     "referral": "Invite & Earn",
@@ -464,7 +464,7 @@
       "savingRecords": "Failed while saving loads/fuel/deductions",
       "cleaningUpPreviousWeek": "Failed while replacing last week's records",
       "updatingBalance": "Saved, but failed while updating your business balance",
-      "savingCompliance": "Failed while saving the compliance record",
+      "savingCompliance": "Failed while saving the renewal record",
       "savingContribution": "Failed while saving the owner contribution",
       "savingLoan": "Failed while saving the loan/financing record"
     },
@@ -935,23 +935,23 @@
     },
     "medical_card": {
       "label": "DOT Medical Card",
-      "route": "Compliance Tracker (not yet wired to a screen)"
+      "route": "Documents & Renewals"
     },
     "inspection_report": {
       "label": "DOT Inspection Report",
-      "route": "Compliance Tracker (not yet wired to a screen)"
+      "route": "Documents & Renewals"
     },
     "registration_cab_card": {
       "label": "IRP Registration/Cab Card",
-      "route": "Compliance Tracker (not yet wired to a screen)"
+      "route": "Documents & Renewals"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (Form 2290) Schedule 1",
-      "route": "Compliance Tracker (not yet wired to a screen)"
+      "route": "Documents & Renewals"
     },
     "insurance_policy": {
       "label": "Insurance Policy",
-      "route": "Compliance Tracker (not yet wired to a screen)"
+      "route": "Documents & Renewals"
     },
     "loan_agreement": {
       "label": "Loan/Financing Agreement",
@@ -1319,7 +1319,11 @@
   "needsReview": {
     "badge": "Needs review",
     "filterOnly": "Needs review only",
-    "homeCounter": "{{count}} item(s) need your review"
+    "homeCounter": "{{count}} item(s) need your review",
+    "markReviewedButton": "Mark reviewed",
+    "reviewedConfirm": "Reviewed ✓",
+    "markAllReviewed": "Mark all reviewed",
+    "markingAll": "Marking all…"
   },
   "categoryPicker": {
     "newCategory": "New Category",
@@ -1513,9 +1517,9 @@
   },
   "alerts": {
     "title": "Alerts",
-    "empty": "You're all caught up — no maintenance or compliance items need attention right now.",
+    "empty": "You're all caught up — no maintenance or renewal items need attention right now.",
     "maintenanceSection": "Truck Health",
-    "complianceSection": "Compliance",
+    "complianceSection": "Documents & Renewals",
     "nudgesSection": "Get more out of the app",
     "silence": "Don't show this again",
     "unsilence": "Show again",
@@ -1595,11 +1599,11 @@
     "slide3Body": "AI sorts settlements, receipts, and invoices into the right place automatically."
   },
   "compliance": {
-    "title": "Compliance Tracker",
-    "subtitle": "DOT, IRP, HVUT 2290, IFTA, insurance, CDL, and drug consortium deadlines in one place.",
-    "add": "Add",
-    "addTitle": "Add Compliance Item",
-    "editTitle": "Edit Compliance Item",
+    "title": "Documents & Renewals",
+    "subtitle": "DOT, IRP, HVUT 2290, IFTA, insurance, CDL, drug consortium — plus anything else you want to track. Renewals and deadlines in one place.",
+    "add": "Add Item",
+    "addTitle": "Add Item",
+    "editTitle": "Edit Item",
     "typeLabel": "Type",
     "types": {
       "medical_card": "DOT Medical Card",
@@ -1613,7 +1617,8 @@
       "other": "Other"
     },
     "labelLabel": "Label",
-    "dueDateLabel": "Due Date",
+    "issueDateLabel": "Issue Date (optional)",
+    "dueDateLabel": "Due / Expiry Date",
     "recurrenceLabel": "Recurrence",
     "recurrence": {
       "none": "One-time",
@@ -1621,7 +1626,29 @@
       "biennial": "Every 2 Years",
       "quarterly": "Quarterly"
     },
-    "empty": "No compliance items yet. AI-imported medical cards, inspections, IRP registrations, HVUT 2290, and insurance policies will appear here automatically.",
+    "reminderLeadDaysLabel": "Remind me this many days before (optional)",
+    "reminderLeadDaysPlaceholder": "Default: 30 days",
+    "noteLabel": "Note (optional)",
+    "notePlaceholder": "Any extra detail...",
+    "appliesToLabel": "Belongs To",
+    "appliesTo": {
+      "truck": "Truck",
+      "trailer": "Trailer",
+      "driver": "Driver",
+      "business": "Business"
+    },
+    "appliesToNone": "Not specified",
+    "truckLabel": "Which Truck",
+    "driverLabel": "Which Driver",
+    "pickerNone": "None",
+    "attachmentLabel": "Attachment (optional)",
+    "attachPhoto": "📷 Attach Photo",
+    "attachPdf": "📄 Attach PDF",
+    "attachmentAttached": "Attached: {{filename}}",
+    "removeAttachment": "Remove attachment",
+    "attachFailedTitle": "Could not attach this file",
+    "attachmentOnFile": "A file is attached to this item",
+    "empty": "No items yet. AI-imported medical cards, inspections, IRP registrations, HVUT 2290, and insurance policies will appear here automatically — or add your own with \"+ Add Item\".",
     "overdueBy": "{{count}} day overdue",
     "overdueBy_other": "{{count}} days overdue",
     "dueInDays": "Due in {{count}} day",
@@ -1629,10 +1656,10 @@
     "enterDueDateTitle": "Enter a due date",
     "saveFailedTitle": "Could not save",
     "deleteFailedTitle": "Could not delete",
-    "deleteConfirmTitle": "Delete this compliance item?",
+    "deleteConfirmTitle": "Delete this item?",
     "delete": "Delete Item",
     "notifBannerTitle": "Get reminders",
-    "notifBannerBody": "Enable notifications to get alerted as a compliance deadline approaches.",
+    "notifBannerBody": "Enable notifications to get alerted as a renewal deadline approaches.",
     "notifEnableButton": "Enable Notifications",
     "notifOverdueTitle": "{{label}} is overdue",
     "notifDueSoonTitle": "{{label}} due soon",
@@ -1656,6 +1683,29 @@
     "preparingShare": "Preparing file to share…",
     "linkedRecords": "Linked Records"
   },
+  "destinationSummary": {
+    "title": "Payment & Destination",
+    "paidVia": "Paid via",
+    "landedAs": "Landed as:",
+    "kindSettlement_one": "{{count}} settlement",
+    "kindSettlement_other": "{{count}} settlements",
+    "kindDeduction_one": "{{count}} deduction",
+    "kindDeduction_other": "{{count}} deductions",
+    "kindFuel_one": "{{count}} fuel entry",
+    "kindFuel_other": "{{count}} fuel entries",
+    "kindLoad_one": "{{count}} load",
+    "kindLoad_other": "{{count}} loads",
+    "kindReimbursement_one": "{{count}} reimbursement",
+    "kindReimbursement_other": "{{count}} reimbursements",
+    "kindMaintenance_one": "{{count}} maintenance record",
+    "kindMaintenance_other": "{{count}} maintenance records",
+    "kindBankStatement_one": "{{count}} bank statement",
+    "kindBankStatement_other": "{{count}} bank statements",
+    "kindComplianceItem_one": "{{count}} renewal item",
+    "kindComplianceItem_other": "{{count}} renewal items",
+    "kindHouseholdIncome_one": "{{count}} household income entry",
+    "kindHouseholdIncome_other": "{{count}} household income entries"
+  },
   "ceoMode": {
     "title": "AI Coach",
     "subtitle": "Your weekly business briefing, composed from your own data.",
@@ -1672,7 +1722,7 @@
     "statusTitle": "Status",
     "needsReview": "Receipts needing review",
     "maintenanceDue": "Maintenance due soon/overdue",
-    "complianceDue": "Compliance items due soon/overdue",
+    "complianceDue": "Renewal items due soon/overdue",
     "briefingTitle": "Your Briefing",
     "getBriefing": "Get My Briefing",
     "briefingFailed": "Could not get your briefing right now",
@@ -1688,7 +1738,7 @@
       "needsReview": "Sort {{count}} NEEDS REVIEW receipt(s) — {{amount}} in deductions waiting",
       "taxReserveShortfall": "Reserve {{amount}} more before your next tax payment",
       "maintenanceCatchUp": "{{count}} maintenance item(s) due soon or overdue",
-      "complianceCatchUp": "{{count}} compliance item(s) due soon or overdue"
+      "complianceCatchUp": "{{count}} renewal item(s) due soon or overdue"
     }
   },
   "aiAdvisor": {

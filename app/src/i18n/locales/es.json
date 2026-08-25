@@ -55,7 +55,7 @@
     "ceoMode": "Coach de IA",
     "aiAdvisor": "Asesor de IA",
     "shareProfit": "Compartir Ganancias Semanales",
-    "compliance": "Seguimiento de Cumplimiento",
+    "compliance": "Documentos y Renovaciones",
     "documents": "Documentos",
     "categoryLearning": "Aprendizaje de Categorías",
     "referral": "Invitar y Ganar",
@@ -464,7 +464,7 @@
       "savingRecords": "Falló al guardar cargas/combustible/deducciones",
       "cleaningUpPreviousWeek": "Falló al reemplazar los registros de la semana anterior",
       "updatingBalance": "Guardado, pero falló al actualizar su saldo comercial",
-      "savingCompliance": "Falló al guardar el registro de cumplimiento",
+      "savingCompliance": "Falló al guardar el registro de renovación",
       "savingContribution": "Falló al guardar la contribución del propietario",
       "savingLoan": "Falló al guardar el registro de préstamo/financiamiento"
     },
@@ -935,23 +935,23 @@
     },
     "medical_card": {
       "label": "Tarjeta Médica DOT",
-      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+      "route": "Documentos y Renovaciones"
     },
     "inspection_report": {
       "label": "Informe de Inspección DOT",
-      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+      "route": "Documentos y Renovaciones"
     },
     "registration_cab_card": {
       "label": "Registro IRP/Tarjeta de Cabina",
-      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+      "route": "Documentos y Renovaciones"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (Formulario 2290) Anexo 1",
-      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+      "route": "Documentos y Renovaciones"
     },
     "insurance_policy": {
       "label": "Póliza de Seguro",
-      "route": "Rastreador de Cumplimiento (aún no conectado a una pantalla)"
+      "route": "Documentos y Renovaciones"
     },
     "loan_agreement": {
       "label": "Contrato de Financiamiento/Préstamo",
@@ -1319,7 +1319,11 @@
   "needsReview": {
     "badge": "Necesita revisión",
     "filterOnly": "Solo necesita revisión",
-    "homeCounter": "{{count}} elemento(s) necesitan tu revisión"
+    "homeCounter": "{{count}} elemento(s) necesitan tu revisión",
+    "markReviewedButton": "Marcar como revisado",
+    "reviewedConfirm": "Revisado ✓",
+    "markAllReviewed": "Marcar todo como revisado",
+    "markingAll": "Marcando todo…"
   },
   "categoryPicker": {
     "newCategory": "Nueva Categoría",
@@ -1513,9 +1517,9 @@
   },
   "alerts": {
     "title": "Alertas",
-    "empty": "Ya estás al día — no hay elementos de mantenimiento o cumplimiento que requieran atención en este momento.",
+    "empty": "Ya estás al día — no hay elementos de mantenimiento o renovación que requieran atención en este momento.",
     "maintenanceSection": "Salud del Camión",
-    "complianceSection": "Cumplimiento",
+    "complianceSection": "Documentos y Renovaciones",
     "nudgesSection": "Aprovecha más la app",
     "silence": "No mostrar esto de nuevo",
     "unsilence": "Mostrar de nuevo",
@@ -1595,11 +1599,11 @@
     "slide3Body": "La IA clasifica settlements, recibos y facturas automáticamente en el lugar correcto."
   },
   "compliance": {
-    "title": "Seguimiento de Cumplimiento",
-    "subtitle": "Fechas límite de DOT, IRP, HVUT 2290, IFTA, seguro, CDL y consorcio antidrogas en un solo lugar.",
-    "add": "Agregar",
-    "addTitle": "Agregar Elemento de Cumplimiento",
-    "editTitle": "Editar Elemento de Cumplimiento",
+    "title": "Documentos y Renovaciones",
+    "subtitle": "DOT, IRP, HVUT 2290, IFTA, seguro, CDL, consorcio antidrogas — y cualquier otra cosa que quieras rastrear. Renovaciones y fechas límite en un solo lugar.",
+    "add": "Agregar Elemento",
+    "addTitle": "Agregar Elemento",
+    "editTitle": "Editar Elemento",
     "typeLabel": "Tipo",
     "types": {
       "medical_card": "Tarjeta Médica DOT",
@@ -1613,6 +1617,7 @@
       "other": "Otro"
     },
     "labelLabel": "Etiqueta",
+    "issueDateLabel": "Fecha de Emisión (opcional)",
     "dueDateLabel": "Fecha de Vencimiento",
     "recurrenceLabel": "Recurrencia",
     "recurrence": {
@@ -1621,7 +1626,29 @@
       "biennial": "Cada 2 Años",
       "quarterly": "Trimestral"
     },
-    "empty": "Aún no hay elementos de cumplimiento. Las tarjetas médicas, inspecciones, registros IRP, HVUT 2290 y pólizas de seguro importadas por IA aparecerán aquí automáticamente.",
+    "reminderLeadDaysLabel": "Avisarme con cuántos días de anticipación (opcional)",
+    "reminderLeadDaysPlaceholder": "Predeterminado: 30 días",
+    "noteLabel": "Nota (opcional)",
+    "notePlaceholder": "Cualquier detalle adicional...",
+    "appliesToLabel": "Pertenece A",
+    "appliesTo": {
+      "truck": "Camión",
+      "trailer": "Remolque",
+      "driver": "Conductor",
+      "business": "Negocio"
+    },
+    "appliesToNone": "No especificado",
+    "truckLabel": "Qué Camión",
+    "driverLabel": "Qué Conductor",
+    "pickerNone": "Ninguno",
+    "attachmentLabel": "Archivo Adjunto (opcional)",
+    "attachPhoto": "📷 Adjuntar Foto",
+    "attachPdf": "📄 Adjuntar PDF",
+    "attachmentAttached": "Adjunto: {{filename}}",
+    "removeAttachment": "Quitar archivo adjunto",
+    "attachFailedTitle": "No se pudo adjuntar este archivo",
+    "attachmentOnFile": "Este elemento tiene un archivo adjunto",
+    "empty": "Aún no hay elementos. Las tarjetas médicas, inspecciones, registros IRP, HVUT 2290 y pólizas de seguro importadas por IA aparecerán aquí automáticamente — o agrega los tuyos con \"+ Agregar Elemento\".",
     "overdueBy": "Vencido hace {{count}} día",
     "overdueBy_other": "Vencido hace {{count}} días",
     "dueInDays": "Vence en {{count}} día",
@@ -1629,10 +1656,10 @@
     "enterDueDateTitle": "Ingresa una fecha de vencimiento",
     "saveFailedTitle": "No se pudo guardar",
     "deleteFailedTitle": "No se pudo eliminar",
-    "deleteConfirmTitle": "¿Eliminar este elemento de cumplimiento?",
+    "deleteConfirmTitle": "¿Eliminar este elemento?",
     "delete": "Eliminar Elemento",
     "notifBannerTitle": "Recibe recordatorios",
-    "notifBannerBody": "Activa las notificaciones para recibir alertas cuando se acerque una fecha límite de cumplimiento.",
+    "notifBannerBody": "Activa las notificaciones para recibir alertas cuando se acerque una fecha límite de renovación.",
     "notifEnableButton": "Activar Notificaciones",
     "notifOverdueTitle": "{{label}} está vencido",
     "notifDueSoonTitle": "{{label}} vence pronto",
@@ -1656,6 +1683,29 @@
     "preparingShare": "Preparando archivo para compartir…",
     "linkedRecords": "Registros Vinculados"
   },
+  "destinationSummary": {
+    "title": "Pago y destino",
+    "paidVia": "Pagado con",
+    "landedAs": "Se registró como:",
+    "kindSettlement_one": "{{count}} settlement",
+    "kindSettlement_other": "{{count}} settlement",
+    "kindDeduction_one": "{{count}} deducción",
+    "kindDeduction_other": "{{count}} deducciones",
+    "kindFuel_one": "{{count}} carga de combustible",
+    "kindFuel_other": "{{count}} cargas de combustible",
+    "kindLoad_one": "{{count}} carga",
+    "kindLoad_other": "{{count}} cargas",
+    "kindReimbursement_one": "{{count}} reembolso",
+    "kindReimbursement_other": "{{count}} reembolsos",
+    "kindMaintenance_one": "{{count}} registro de mantenimiento",
+    "kindMaintenance_other": "{{count}} registros de mantenimiento",
+    "kindBankStatement_one": "{{count}} estado de cuenta bancario",
+    "kindBankStatement_other": "{{count}} estados de cuenta bancarios",
+    "kindComplianceItem_one": "{{count}} elemento de renovación",
+    "kindComplianceItem_other": "{{count}} elementos de renovación",
+    "kindHouseholdIncome_one": "{{count}} entrada de ingreso familiar",
+    "kindHouseholdIncome_other": "{{count}} entradas de ingreso familiar"
+  },
   "ceoMode": {
     "title": "Coach de IA",
     "subtitle": "Tu informe semanal del negocio, compuesto a partir de tus propios datos.",
@@ -1672,7 +1722,7 @@
     "statusTitle": "Estado",
     "needsReview": "Recibos que necesitan revisión",
     "maintenanceDue": "Mantenimiento próximo/vencido",
-    "complianceDue": "Elementos de cumplimiento próximos/vencidos",
+    "complianceDue": "Elementos de renovación próximos/vencidos",
     "briefingTitle": "Tu Informe",
     "getBriefing": "Obtener Mi Informe",
     "briefingFailed": "No se pudo obtener tu informe en este momento",
@@ -1688,7 +1738,7 @@
       "needsReview": "Ordena {{count}} recibo(s) NEEDS REVIEW — {{amount}} en deducciones esperando",
       "taxReserveShortfall": "Reserva {{amount}} más antes de tu próximo pago de impuestos",
       "maintenanceCatchUp": "{{count}} elemento(s) de mantenimiento próximo(s) o vencido(s)",
-      "complianceCatchUp": "{{count}} elemento(s) de cumplimiento próximo(s) o vencido(s)"
+      "complianceCatchUp": "{{count}} elemento(s) de renovación próximo(s) o vencido(s)"
     }
   },
   "aiAdvisor": {

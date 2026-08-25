@@ -55,7 +55,7 @@
     "ceoMode": "مدرب الذكاء الاصطناعي",
     "aiAdvisor": "المستشار الذكي",
     "shareProfit": "مشاركة الأرباح الأسبوعية",
-    "compliance": "متتبع الامتثال",
+    "compliance": "المستندات والتجديدات",
     "documents": "المستندات",
     "categoryLearning": "تعلّم الفئات",
     "referral": "دعوة واكسب",
@@ -464,7 +464,7 @@
       "savingRecords": "فشل أثناء حفظ الحمولات/الوقود/الخصومات",
       "cleaningUpPreviousWeek": "فشل أثناء استبدال سجلات الأسبوع الماضي",
       "updatingBalance": "تم الحفظ، لكن فشل تحديث رصيد عملك",
-      "savingCompliance": "فشل أثناء حفظ سجل الامتثال",
+      "savingCompliance": "فشل أثناء حفظ سجل التجديد",
       "savingContribution": "فشل أثناء حفظ مساهمة المالك",
       "savingLoan": "فشل أثناء حفظ سجل القرض/التمويل"
     },
@@ -935,23 +935,23 @@
     },
     "medical_card": {
       "label": "البطاقة الطبية DOT",
-      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+      "route": "المستندات والتجديدات"
     },
     "inspection_report": {
       "label": "تقرير فحص DOT",
-      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+      "route": "المستندات والتجديدات"
     },
     "registration_cab_card": {
       "label": "تسجيل IRP/بطاقة المقصورة",
-      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+      "route": "المستندات والتجديدات"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (نموذج 2290) الجدول 1",
-      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+      "route": "المستندات والتجديدات"
     },
     "insurance_policy": {
       "label": "بوليصة تأمين",
-      "route": "متتبع الامتثال (غير مربوط بشاشة بعد)"
+      "route": "المستندات والتجديدات"
     },
     "loan_agreement": {
       "label": "اتفاقية قرض/تمويل",
@@ -1319,7 +1319,11 @@
   "needsReview": {
     "badge": "يحتاج إلى مراجعة",
     "filterOnly": "يحتاج إلى مراجعة فقط",
-    "homeCounter": "{{count}} عنصر يحتاج إلى مراجعتك"
+    "homeCounter": "{{count}} عنصر يحتاج إلى مراجعتك",
+    "markReviewedButton": "وضع علامة تمت المراجعة",
+    "reviewedConfirm": "تمت المراجعة ✓",
+    "markAllReviewed": "وضع علامة على الكل بأنه تمت مراجعته",
+    "markingAll": "جارٍ وضع العلامة على الكل…"
   },
   "categoryPicker": {
     "newCategory": "فئة جديدة",
@@ -1513,9 +1517,9 @@
   },
   "alerts": {
     "title": "التنبيهات",
-    "empty": "كل شيء على ما يرام — لا توجد عناصر صيانة أو امتثال تحتاج إلى اهتمام الآن.",
+    "empty": "كل شيء على ما يرام — لا توجد عناصر صيانة أو تجديد تحتاج إلى اهتمام الآن.",
     "maintenanceSection": "صحة الشاحنة",
-    "complianceSection": "الامتثال",
+    "complianceSection": "المستندات والتجديدات",
     "nudgesSection": "استفد أكثر من التطبيق",
     "silence": "عدم إظهار هذا مرة أخرى",
     "unsilence": "إظهار مرة أخرى",
@@ -1595,11 +1599,11 @@
     "slide3Body": "يقوم الذكاء الاصطناعي بفرز settlements والإيصالات والفواتير تلقائيًا في المكان الصحيح."
   },
   "compliance": {
-    "title": "متتبع الامتثال",
-    "subtitle": "مواعيد DOT وIRP وHVUT 2290 وIFTA والتأمين وCDL وقنسورتيوم فحص المخدرات في مكان واحد.",
-    "add": "إضافة",
-    "addTitle": "إضافة عنصر امتثال",
-    "editTitle": "تعديل عنصر امتثال",
+    "title": "المستندات والتجديدات",
+    "subtitle": "DOT وIRP وHVUT 2290 وIFTA والتأمين وCDL وقنسورتيوم فحص المخدرات — وأي شيء آخر تريد تتبعه. التجديدات والمواعيد النهائية في مكان واحد.",
+    "add": "إضافة عنصر",
+    "addTitle": "إضافة عنصر",
+    "editTitle": "تعديل عنصر",
     "typeLabel": "النوع",
     "types": {
       "medical_card": "البطاقة الطبية DOT",
@@ -1613,6 +1617,7 @@
       "other": "أخرى"
     },
     "labelLabel": "التسمية",
+    "issueDateLabel": "تاريخ الإصدار (اختياري)",
     "dueDateLabel": "تاريخ الاستحقاق",
     "recurrenceLabel": "التكرار",
     "recurrence": {
@@ -1621,7 +1626,29 @@
       "biennial": "كل سنتين",
       "quarterly": "ربع سنوي"
     },
-    "empty": "لا توجد عناصر امتثال بعد. ستظهر هنا تلقائيًا البطاقات الطبية والفحوصات وتسجيلات IRP وHVUT 2290 وبوالص التأمين المستوردة بواسطة الذكاء الاصطناعي.",
+    "reminderLeadDaysLabel": "ذكّرني قبل كم يومًا (اختياري)",
+    "reminderLeadDaysPlaceholder": "الافتراضي: 30 يومًا",
+    "noteLabel": "ملاحظة (اختياري)",
+    "notePlaceholder": "أي تفاصيل إضافية...",
+    "appliesToLabel": "يخص",
+    "appliesTo": {
+      "truck": "الشاحنة",
+      "trailer": "المقطورة",
+      "driver": "السائق",
+      "business": "العمل"
+    },
+    "appliesToNone": "غير محدد",
+    "truckLabel": "أي شاحنة",
+    "driverLabel": "أي سائق",
+    "pickerNone": "لا شيء",
+    "attachmentLabel": "مرفق (اختياري)",
+    "attachPhoto": "📷 إرفاق صورة",
+    "attachPdf": "📄 إرفاق PDF",
+    "attachmentAttached": "تم إرفاق: {{filename}}",
+    "removeAttachment": "إزالة المرفق",
+    "attachFailedTitle": "تعذر إرفاق هذا الملف",
+    "attachmentOnFile": "يوجد ملف مرفق بهذا العنصر",
+    "empty": "لا توجد عناصر بعد. ستظهر هنا تلقائيًا البطاقات الطبية والفحوصات وتسجيلات IRP وHVUT 2290 وبوالص التأمين المستوردة بواسطة الذكاء الاصطناعي — أو أضف عناصرك الخاصة عبر \"+ إضافة عنصر\".",
     "overdueBy": "متأخر بـ {{count}} يوم",
     "overdueBy_other": "متأخر بـ {{count}} أيام",
     "dueInDays": "يستحق خلال {{count}} يوم",
@@ -1629,10 +1656,10 @@
     "enterDueDateTitle": "أدخل تاريخ الاستحقاق",
     "saveFailedTitle": "تعذر الحفظ",
     "deleteFailedTitle": "تعذر الحذف",
-    "deleteConfirmTitle": "حذف عنصر الامتثال هذا؟",
+    "deleteConfirmTitle": "حذف هذا العنصر؟",
     "delete": "حذف العنصر",
     "notifBannerTitle": "احصل على تذكيرات",
-    "notifBannerBody": "فعّل الإشعارات لتنبيهك عند اقتراب موعد استحقاق الامتثال.",
+    "notifBannerBody": "فعّل الإشعارات لتنبيهك عند اقتراب موعد استحقاق التجديد.",
     "notifEnableButton": "تفعيل الإشعارات",
     "notifOverdueTitle": "{{label}} متأخر",
     "notifDueSoonTitle": "{{label}} يستحق قريبًا",
@@ -1656,6 +1683,29 @@
     "preparingShare": "جارٍ تجهيز الملف للمشاركة…",
     "linkedRecords": "السجلات المرتبطة"
   },
+  "destinationSummary": {
+    "title": "الدفع والوجهة",
+    "paidVia": "تم الدفع عبر",
+    "landedAs": "تم تسجيله كـ:",
+    "kindSettlement_one": "{{count}} settlement",
+    "kindSettlement_other": "{{count}} settlement",
+    "kindDeduction_one": "{{count}} خصم",
+    "kindDeduction_other": "{{count}} خصومات",
+    "kindFuel_one": "{{count}} عملية تعبئة وقود",
+    "kindFuel_other": "{{count}} عمليات تعبئة وقود",
+    "kindLoad_one": "{{count}} حمولة",
+    "kindLoad_other": "{{count}} حمولات",
+    "kindReimbursement_one": "{{count}} تعويض",
+    "kindReimbursement_other": "{{count}} تعويضات",
+    "kindMaintenance_one": "{{count}} سجل صيانة",
+    "kindMaintenance_other": "{{count}} سجلات صيانة",
+    "kindBankStatement_one": "{{count}} كشف حساب بنكي",
+    "kindBankStatement_other": "{{count}} كشوف حساب بنكية",
+    "kindComplianceItem_one": "{{count}} عنصر تجديد",
+    "kindComplianceItem_other": "{{count}} عناصر تجديد",
+    "kindHouseholdIncome_one": "{{count}} سجل دخل أسري",
+    "kindHouseholdIncome_other": "{{count}} سجلات دخل أسري"
+  },
   "ceoMode": {
     "title": "مدرب الذكاء الاصطناعي",
     "subtitle": "تقريرك الأسبوعي عن العمل، مُعد من بياناتك الخاصة.",
@@ -1672,7 +1722,7 @@
     "statusTitle": "الحالة",
     "needsReview": "إيصالات بحاجة إلى مراجعة",
     "maintenanceDue": "صيانة مستحقة قريبًا/متأخرة",
-    "complianceDue": "عناصر امتثال مستحقة قريبًا/متأخرة",
+    "complianceDue": "عناصر تجديد مستحقة قريبًا/متأخرة",
     "briefingTitle": "تقريرك",
     "getBriefing": "احصل على تقريري",
     "briefingFailed": "تعذر الحصول على تقريرك الآن",
@@ -1688,7 +1738,7 @@
       "needsReview": "رتّب {{count}} إيصال(ات) NEEDS REVIEW — {{amount}} من الخصومات بانتظار القرار",
       "taxReserveShortfall": "احتفظ بمبلغ إضافي قدره {{amount}} قبل دفعتك الضريبية القادمة",
       "maintenanceCatchUp": "{{count}} بند(ود) صيانة مستحقة قريبًا أو متأخرة",
-      "complianceCatchUp": "{{count}} بند(ود) امتثال مستحقة قريبًا أو متأخرة"
+      "complianceCatchUp": "{{count}} بند(ود) تجديد مستحقة قريبًا أو متأخرة"
     }
   },
   "aiAdvisor": {

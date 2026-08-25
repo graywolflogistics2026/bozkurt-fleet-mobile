@@ -62,12 +62,25 @@ export type ComplianceStatusResult = {
   urgency: ComplianceUrgency;
 };
 
-export function calcComplianceStatus(dueDate: string, now: Date = new Date()): ComplianceStatusResult {
+// DOCUMENTS & RENEWALS EXPANSION (owner decision 2026-08-24, device
+// testing round, item 3) — `reminderLeadDays` is the per-item override
+// (`compliance_items.reminder_lead_days`, docs/PENDING_SQL.md §55b): a
+// manual item's own "remind me N days before" setting. `null`/`undefined`
+// (every row seeded before this column existed, or a built-in item nobody
+// customized) falls back to the app-wide 30-day default unchanged — this
+// is purely additive, no existing caller's behavior changes unless it
+// starts passing a real value.
+export function calcComplianceStatus(
+  dueDate: string,
+  now: Date = new Date(),
+  reminderLeadDays?: number | null
+): ComplianceStatusResult {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   const due = new Date(`${dueDate}T00:00:00`);
   const daysUntil = Math.round((due.getTime() - today.getTime()) / 86400000);
-  const urgency: ComplianceUrgency = daysUntil < 0 ? 'overdue' : daysUntil <= DUE_SOON_THRESHOLD_DAYS ? 'due_soon' : 'ok';
+  const threshold = reminderLeadDays ?? DUE_SOON_THRESHOLD_DAYS;
+  const urgency: ComplianceUrgency = daysUntil < 0 ? 'overdue' : daysUntil <= threshold ? 'due_soon' : 'ok';
   return { daysUntil, urgency };
 }
 

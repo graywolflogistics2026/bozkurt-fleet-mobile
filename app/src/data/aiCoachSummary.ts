@@ -16,6 +16,7 @@ import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
 import { buildWeeklyTrueProfitTrend, type TrueProfitWeeklyPoint } from '@/src/stats/trueProfit';
 import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { calcComplianceStatus } from '@/src/compliance/status';
+import { isDeductionNeedsReview } from '@/src/import/needsReview';
 import { buildRecommendationCandidates, selectTopRecommendations, sumRecommendationImpact, type Recommendation } from '@/src/stats/aiRecommendations';
 
 export type AiCoachSummary = {
@@ -81,24 +82,29 @@ export function useAiCoachSummary(): AiCoachSummary {
   );
   const latestWeek = weeklyTrend[weeklyTrend.length - 1] ?? null;
 
-  // NEEDS-REVIEW count (CLAUDE.md invariant #14): deduction descriptions
-  // get prefixed "NEEDS REVIEW: " for low-confidence/docType:'other'
-  // extractions — counting that prefix directly is simpler and just as
-  // accurate as re-deriving confidence, since the prefix IS the flag.
+  // NEEDS-REVIEW count (CLAUDE.md invariant #14) — reads the ONE shared
+  // isDeductionNeedsReview() (src/import/needsReview.ts) rather than
+  // re-deriving its own copy of the "NEEDS REVIEW: " prefix check, which
+  // is exactly what let a reviewed row keep showing up here even after
+  // being marked reviewed elsewhere (owner decision 2026-08-24, device
+  // testing round — the fix).
   const needsReviewCount = useMemo(
-    () => (deductionsQuery.data ?? []).filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:')).length,
+    () => (deductionsQuery.data ?? []).filter(isDeductionNeedsReview).length,
     [deductionsQuery.data]
   );
   const needsReviewEstValue = useMemo(
     () =>
       (deductionsQuery.data ?? [])
-        .filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:'))
+        .filter(isDeductionNeedsReview)
         .reduce((sum, d) => sum + Number(d.amount ?? 0), 0),
     [deductionsQuery.data]
   );
 
   const complianceDueSoonCount = useMemo(
-    () => (complianceQuery.data ?? []).filter((item) => calcComplianceStatus(item.due_date).urgency !== 'ok').length,
+    () =>
+      (complianceQuery.data ?? []).filter(
+        (item) => calcComplianceStatus(item.due_date, new Date(), item.reminder_lead_days).urgency !== 'ok'
+      ).length,
     [complianceQuery.data]
   );
 

@@ -35,7 +35,7 @@ function nudgeRoute(topic: NudgeTopic): Href {
 
 // Session 9e-B1: the screen the Dashboard top-bar bell opens — a simple,
 // read-only rollup of everything already overdue/due-soon (Truck Health +
-// Compliance Tracker), each row tapping through to the screen that owns it.
+// Documents & Renewals), each row tapping through to the screen that owns it.
 // SMART ALERTS + PROACTIVE NUDGES (owner decision 2026-08-24, NEXT PASS
 // item D) extends this same screen with a role-aware "what's your role?"
 // one-time prompt and a frequency-disciplined "Worth a look" section — all

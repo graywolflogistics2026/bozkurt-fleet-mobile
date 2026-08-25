@@ -10,7 +10,7 @@
 // Overview/Revenue/Expenses/Tools/Business/Intelligence/System — Tools
 // now sits directly under Expenses, ahead of Business, since it's reached
 // far more often. This app's own beyond-legacy additions (Other Income,
-// Profit Analysis, CEO Mode, Share Weekly Profit, Compliance Tracker,
+// Profit Analysis, CEO Mode, Share Weekly Profit, Documents & Renewals,
 // Drivers) are appended into whichever group they fit best. See
 // navRegistry.ts's own header comment for the actual group order — this
 // file just renders it.

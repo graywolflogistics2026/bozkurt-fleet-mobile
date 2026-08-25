@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // alerts"), mirrored rather than shared since that module is keyed on
 // truckId+category and this one is keyed on a single compliance_items id.
 // Deliberately string-free (CLAUDE.md invariant #11) — the caller (the
-// Compliance Tracker screen, which has `t()`) builds the localized
+// Documents & Renewals screen, which has `t()`) builds the localized
 // title/body and passes them in.
 
 Notifications.setNotificationHandler({

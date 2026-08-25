@@ -2581,6 +2581,68 @@ a "export all my data" dump is for (same reasoning `ai_usage_log`/
 
 ---
 
+## 55. reviewed_at columns + compliance_items expansion (owner decision 2026-08-24, device testing round)
+
+Three device-testing items, one schema pass:
+
+**55a — NEEDS REVIEW WON'T CLEAR**: there was no "mark reviewed" action
+anywhere in the app — a flagged deduction (description prefixed "NEEDS
+REVIEW: ") or a flagged document/settlement (linked document's
+`parsed_json.confidence === 'low'`) had no way to be dismissed, so it
+stayed flagged forever regardless of the user reviewing it. `reviewed_at`
+on both tables is the explicit override `src/import/needsReview.ts`'s
+`isDeductionNeedsReview()`/`isDocumentNeedsReview()` now check — set once
+by a new "Mark reviewed" action, never touched by AI import (which only
+ever sets the ORIGINAL two signals, never this column). A deduction's own
+"NEEDS REVIEW: " prefix is ALSO stripped from its description as a
+cosmetic cleanup when marked reviewed (see aiImportSave.ts is untouched —
+this happens client-side, in the mark-reviewed mutation, not at import
+time), but `reviewed_at` is the CANONICAL signal every check actually
+reads, so the flag clears reliably even if the description text doesn't
+exactly match the expected prefix pattern for some edge-case reason.
+
+**55b — compliance_items expansion**: manual entries need a much richer
+field set than the 4 the add form currently has (type/label/due_date/
+recurrence) — `issue_date`, `reminder_lead_days` (per-item override of
+the previously-fixed 30-day due-soon threshold — null keeps the existing
+30-day default, so every already-seeded row is unaffected), `note`,
+`truck_id`/`driver_id` (optional, only meaningful when `applies_to` is
+`'truck'`/`'driver'`), and `applies_to` (`'truck'|'trailer'|'driver'|
+'business'` — nullable, existing AI-populated rows never set it, meaning
+"unspecified" — 'trailer' has no FK of its own since this schema folds
+trailer fields into `trucks` rather than a separate table, so it's a
+label-only category). Attachments reuse the EXISTING `source_document_id`
+column (already meant for "the document this compliance item is backed
+by," previously only ever set by AI auto-population — a manually
+uploaded photo/PDF now populates the exact same column via the same
+Storage-upload-then-documents-row-insert pattern the rest of this app
+already uses, not a new column).
+
+```sql
+alter table deductions
+  add column reviewed_at timestamptz;
+
+alter table documents
+  add column reviewed_at timestamptz;
+
+alter table compliance_items
+  add column issue_date date,
+  add column reminder_lead_days integer,
+  add column note text,
+  add column truck_id uuid references trucks(id) on delete set null,
+  add column driver_id uuid references drivers(id) on delete set null,
+  add column applies_to text check (applies_to in ('truck', 'trailer', 'driver', 'business'));
+```
+
+No RLS changes needed on any of the three tables — all new columns are
+just additional fields on already row-level-secured, already user-scoped
+tables.
+
+- [ ] 55a run (deductions.reviewed_at, documents.reviewed_at)
+- [ ] 55b run (compliance_items: issue_date, reminder_lead_days, note, truck_id, driver_id, applies_to)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

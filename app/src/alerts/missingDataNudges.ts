@@ -1,5 +1,6 @@
 import { isOwnerRole, type ProfileRole } from '@/src/alerts/roleFilter';
 import type { ComplianceType } from '@/src/compliance/status';
+import { isDeductionNeedsReview } from '@/src/import/needsReview';
 
 // MISSING-DATA NUDGES (owner decision 2026-08-24, NEXT PASS item D2;
 // extended 2026-08-24 FIVE ADDITIONS pass item 1 — "UNLOCK" NUDGES) — pure
@@ -96,11 +97,14 @@ export function detectDepreciationNotSet(
   return { topic: 'depreciationNotSet', detail };
 }
 
-// Same "NEEDS REVIEW: " prefix convention CLAUDE.md invariants #3/#14
-// already establish — counting the prefix directly is simpler and just as
-// accurate as re-deriving confidence.
-export function detectNeedsReviewReceipts(deductions: { description: string | null }[]): NudgeCandidate | null {
-  const count = deductions.filter((d) => (d.description ?? '').startsWith('NEEDS REVIEW:')).length;
+// Reads the ONE shared isDeductionNeedsReview() (src/import/
+// needsReview.ts) rather than re-deriving its own copy of the "NEEDS
+// REVIEW: " prefix check — a second, independent copy of this check is
+// exactly what let a row the user had already marked reviewed keep
+// nudging here even after clearing everywhere else (owner decision
+// 2026-08-24, device testing round — the fix).
+export function detectNeedsReviewReceipts(deductions: { description: string | null; reviewed_at: string | null }[]): NudgeCandidate | null {
+  const count = deductions.filter(isDeductionNeedsReview).length;
   return count > 0 ? { topic: 'needsReviewReceipts', detail: { count } } : null;
 }
 
@@ -191,7 +195,7 @@ export function detectPerDiemZeroMileWeek(
 export function buildMissingDataNudgeCandidates(input: {
   settlements: { week_ending: string; gross: number; miles: number | null; per_diem_days?: number | null }[];
   trucks: { cost_basis_ownership_mode: string | null; depreciation_method: string | null }[];
-  deductions: { description: string | null }[];
+  deductions: { description: string | null; reviewed_at: string | null }[];
   role: ProfileRole;
   now?: Date;
   // "UNLOCK" NUDGES (2026-08-24 FIVE ADDITIONS pass item 1) — every field

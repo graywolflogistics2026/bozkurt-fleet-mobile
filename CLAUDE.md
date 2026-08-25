@@ -4951,3 +4951,212 @@
   (`app.config.js`'s existing plugin entry, already used by
   truckHealthNotifications.ts/complianceNotifications.ts) — ships via a
   normal `eas update`, no native rebuild needed.
+- DEVICE TESTING ROUND — NEEDS REVIEW, PAYMENT+DESTINATION SUMMARY,
+  DOCUMENTS & RENEWALS (owner decision 2026-08-24, docs/PENDING_SQL.md
+  §55, NOT YET RUN against the live project as of this writing — both
+  `deductions.reviewed_at`/`documents.reviewed_at` and the 6
+  `compliance_items` columns are needed before this pass's code is fully
+  live). Four items:
+  1. **NEEDS REVIEW WON'T CLEAR — root cause and fix**: there was no
+     explicit "mark reviewed" action ANYWHERE in the app — the two
+     existing signals (a deduction's "NEEDS REVIEW: " description prefix;
+     a document's `parsed_json.confidence === 'low'`, CLAUDE.md invariant
+     #14) could each only ever be set by AI import, never cleared by a
+     user action. Worse, `aiCoachSummary.ts` (AI Coach's needs-review
+     count/$-value) and `missingDataNudges.ts`'s
+     `detectNeedsReviewReceipts()` each independently re-implemented the
+     raw `.startsWith('NEEDS REVIEW:')` check instead of reading the one
+     shared `src/import/needsReview.ts` module Deductions/Documents/
+     Settlements/Transactions already used — so even a hypothetical
+     per-screen fix wouldn't have propagated everywhere the count is
+     shown. Fixed with a new CANONICAL override column on both tables,
+     `reviewed_at timestamptz` (§55a): `isDeductionNeedsReview()`/
+     `isDocumentNeedsReview()` (`needsReview.ts`) now check it FIRST and
+     short-circuit to `false` regardless of what the description/
+     confidence still say — this is what "clears EVERY signal at once"
+     actually means, rather than trying to keep two independent flags in
+     sync. `isSettlementNeedsReview()` derives from its linked document as
+     before, so marking a settlement reviewed (which marks its document)
+     automatically flows through with zero settlement-specific state.
+     `aiCoachSummary.ts`/`missingDataNudges.ts` were both switched to call
+     the shared `isDeductionNeedsReview()` instead of their own inline
+     check — the actual fix for "still shows as needing review in the AI
+     Coach," not a separate patch. `stripNeedsReviewPrefix()` (new,
+     `needsReview.ts`) is a cosmetic cleanup applied alongside setting
+     `reviewed_at` — strips the literal prefix so a reviewed row's
+     description doesn't keep visually shouting "NEEDS REVIEW: " next to
+     its own "Reviewed ✓" state, but `reviewed_at` (never description
+     text) is the one thing every check actually reads. Two pure builders,
+     `buildMarkDeductionReviewedUpdate()`/`buildMarkDocumentReviewedUpdate()`
+     (`needsReview.ts`), define the exact update payload; `src/data/
+     needsReviewMutations.ts`'s `useMarkDeductionReviewed()`/
+     `useMarkDocumentReviewed()`/`useMarkAllDeductionsReviewed()` are the
+     ONLY mutations anywhere that ever write `reviewed_at`, each calling
+     the caller's own `invalidateFinancialData(queryClient)` afterward
+     (the established per-screen convention, not baked into the hook
+     itself, so a screen-specific mutation can't silently skip it).
+     `src/components/NeedsReviewBadge.tsx` gained `MarkReviewedButton` —
+     shows "Mark reviewed" while a row is flagged, briefly "Reviewed ✓"
+     while the mutation is in flight, then disappears entirely once the
+     row's own `needsReview` flag flips false (there is no separate
+     persistent "already reviewed" chip — a reviewed row just stops
+     looking flagged). Wired into: Deductions (row + edit sheet + a bulk
+     "Mark all reviewed" link next to the "Needs review only" filter pill,
+     shown only when that filter is on and something's still flagged),
+     Documents viewer (marks the document), Settlements (row + detail
+     sheet, marks the settlement's LINKED document — same two-hop
+     relationship `isSettlementNeedsReview()` already used). Transactions
+     needed NO changes at all — it already read the shared
+     `isDeductionNeedsReview()`/`isSettlementNeedsReview()` functions, so
+     it reflects the fix automatically; tapping a flagged row there
+     navigates to Settlements/Deductions, where the new control lives.
+     Tests: `needsReview.test.ts` gained coverage for both new signals
+     always losing to `reviewed_at`, both pure builders' exact payload
+     shape, and a dedicated end-to-end block proving a marked-reviewed row
+     never survives a `.filter(isDeductionNeedsReview)` pass alongside a
+     still-flagged one — the literal "never reappears in any needs-review
+     count" guarantee the device report asked for.
+  2. **PAYMENT + DESTINATION SUMMARY**: `src/data/documentsFilter.ts`'s
+     `findLinkedRecords()` — previously explicitly documented as excluding
+     fuel/loads/reimbursements ("none of which carry a document_id of
+     their own") — now traces them via a two-hop lookup: find the linked
+     SETTLEMENT first (by `document_id`, same as every other kind), then
+     match fuel/loads/reimbursements by `settlement_id` against that
+     settlement's own id (`aiImportSave.ts` stamps these three with
+     `settlement_id` but never `document_id` — the only way to reach them
+     from a document at all). Deliberately does NOT re-match deductions by
+     `settlement_id` too — a settlement-withheld deduction already carries
+     BOTH `document_id` AND `settlement_id`, so it's already captured by
+     the plain `document_id` loop; adding a second match would double-
+     count it (regression-tested explicitly). New `LinkedRecordKind`
+     values `'fuel'`/`'load'`/`'reimbursement'`; a new pure
+     `summarizeLinkedRecordCounts()` collapses a ref list into the
+     "3 fuel entries, 12 deductions, 2 loads, 1 maintenance record"-style
+     count summary. Tolls remain a confirmed, honestly-flagged gap — the
+     `tolls` table has neither `document_id` nor `settlement_id` in the
+     current schema, so a settlement's own toll charges cannot be traced
+     back to their source document at all yet; a future schema addition,
+     not silently faked. `src/navigation/linkedRecordRoute.ts` is a new
+     shared module (`LINKED_RECORD_ROUTE`/`buildLinkedRecordHref()`)
+     extracted from what used to be a Documents-viewer-local map/function,
+     now used by BOTH the Documents viewer and Settlements' detail sheet
+     so the two screens can never disagree about where a given ref kind
+     routes to — fuel/load/reimbursement land on their own list screens
+     (no `?openId=` auto-open wired up for those 3 screens yet, same as
+     bank_statement/compliance_item/household_income already were).
+     `src/components/DestinationSummary.tsx` is the ONE shared block
+     rendered at the BOTTOM of both the Settlement detail sheet and the
+     Document viewer: a "Landed as: ..." count line, every individual ref
+     tappable (navigates to its own row), and — for a deduction-kind ref —
+     an inline "✏️" category quick-edit (opens `CategoryPicker` in place,
+     saves via the SAME `useUpdateDeduction()` + `invalidateFinancialData()`
+     path Deductions' own screen uses, never a second write path). A
+     "Paid via" payment-method picker (the same 9-pill list Deductions
+     uses) is shown ONLY when the settlement/document maps to EXACTLY ONE
+     linked deduction — a settlement has no `payment_method` column at all
+     (it's a carrier deposit, not a payment choice), and a document linked
+     to several deductions has no single coherent value to show/edit, so
+     the row is simply omitted rather than guessing or averaging one.
+     Tests: `documentsFilter.test.ts` gained a full "two-hop via
+     settlement_id" describe block (fuel/loads/reimbursements found via
+     their settlement, never matched to the WRONG settlement, never
+     traced with no settlement source at all, the deduction double-count
+     guard) plus `summarizeLinkedRecordCounts` coverage — proving the
+     summary reflects exactly what was actually saved, the device
+     report's own "reflects real saved rows" ask.
+  3. **DOCUMENTS & RENEWALS (Compliance rename + manual entry)**: renamed
+     "Compliance"/"Compliance Tracker" to "Documents & Renewals" —
+     user-facing TEXT VALUES only (nav registry's `nav.compliance` i18n
+     VALUE, the screen's own title/subtitle/empty-state/delete-confirm/
+     notification copy, `alerts.complianceSection`/`complianceDue`,
+     `ceoMode.recommendations.complianceCatchUp`, the 5
+     `docTypes.*.route` strings that used to read "Compliance Tracker
+     (not yet wired to a screen)" — also dropping that stale parenthetical
+     since the screen has always been wired — plus 4 stale code comments
+     in `alerts.tsx`/`WideSidebar.tsx`/`queryInvalidation.ts`/
+     `complianceNotifications.ts`), across all 7 locales. Deliberately did
+     NOT rename: the `compliance_items` table/`compliance.*` i18n KEY
+     namespace/`ComplianceType`/`isComplianceTypeVisibleForRole` etc.
+     (internal identifiers, zero user-visible cost to leave alone, real
+     risk to touch) or any historical dated log entry in this file/
+     PROMPTS.md/docs/PENDING_SQL.md/docs/DATA_FLOW.md that used the old
+     name to describe what was true AT THE TIME — same "never rewrite
+     history" convention as every other renamed feature in this file
+     (e.g. DASHBOARD SIMPLIFICATION's own struck-through invariant #17).
+     Manual entry (the "+ Add Item" flow already existed — 'other' type +
+     free-text label — this pass only expands its FIELD SET, per the
+     device report's own framing): `compliance_items` gained 6 new,
+     nullable/additive columns (§55b) — `issue_date`, `reminder_lead_days`
+     (a per-item override of `calcComplianceStatus()`'s app-wide 30-day
+     due-soon threshold — the function gained an optional 3rd param that
+     falls back to the old default when null/omitted, so every
+     already-seeded row behaves identically to before), `note`,
+     `truck_id`/`driver_id` (FKs, `on delete set null`), and
+     `applies_to` (`'truck'|'trailer'|'driver'|'business'`, new exported
+     `ComplianceAppliesTo` type — informational only, role-based
+     filtering in `src/alerts/roleFilter.ts` still keys off `type`,
+     unchanged, invariant #4's own explicit ask). The add/edit form
+     (`compliance.tsx`) gained matching fields: issue date, a numeric
+     reminder-lead-days field (placeholder shows "Default: 30 days"),
+     a note field, an appliesTo pill row (clearing truck_id/driver_id
+     whenever appliesTo changes away from a value that needs them), and —
+     only once a truck/trailer or driver is the selected appliesTo AND
+     the user actually has any — a truck/driver picker sourced from the
+     EXISTING `useTrucksList()`/`useDrivers()` hooks (no new query
+     needed). Attachment (item 3's "optional photo/PDF attachment"):
+     `src/compliance/attachment.ts`'s pure `buildComplianceAttachmentPath()`
+     (`{user_id}/Compliance/{slug(label)}/{filename}`, CLAUDE.md's
+     standard storage-path convention) + `src/data/complianceAttachment.ts`'s
+     `uploadComplianceAttachment()` — uploads immediately on pick (not
+     deferred to Save, same "upload first, reference its id" order as
+     aiImportSave.ts's own step 1/2) via the same `File(...).bytes()` +
+     `supabase.storage.from('documents').upload()` pattern the AI-import
+     save path already uses, then inserts a plain `documents` row
+     (`doc_type: 'other'` — a manual attachment has no AI extraction
+     behind it, so there's no more specific DocType) and stores the new
+     id as the form's `sourceDocumentId`, saved into
+     `compliance_items.source_document_id` (the SAME column AI-extracted
+     compliance items already populate — `mapCompliance()`,
+     invariant #21 — a manual and an AI-matched item share one field, one
+     meaning). "📷 Attach Photo" (`expo-image-picker`) / "📄 Attach PDF"
+     (`expo-document-picker`) — both already-installed dependencies, no
+     new native module. Manual items get the SAME expiry alerts as
+     built-in ones by construction, not by a separate code path — every
+     consumer of `calcComplianceStatus()` (`aiCoachSummary.ts`'s
+     compliance-due count, `alerts.ts`'s `dueCompliance` list, this
+     screen's own notification-scheduling effect and list-row urgency
+     chip) now passes `item.reminder_lead_days` through, so a manual
+     item's own custom lead time (or the 30-day default, if unset) drives
+     its urgency/notification exactly like a built-in item's does.
+     Tests: `status.test.ts` gained a `reminderLeadDays` describe block
+     (null/undefined behaves identically to the old default; a shorter
+     custom lead time keeps a row "ok" past the point the default would
+     have flagged it; a shorter lead time correctly flips to "due_soon"
+     once inside its own window; a longer custom lead time flags EARLIER
+     than the default would; overdue always stays overdue regardless of
+     any custom lead time) — proving a manual item's custom reminder
+     genuinely changes its urgency, not just that the field round-trips.
+     `attachment.test.ts` (new) covers `buildComplianceAttachmentPath()`.
+  4. **Kept intact, verified not touched**: `src/alerts/roleFilter.ts`'s
+     `isComplianceTypeVisibleForRole()`/`TRUCK_COMPLIANCE_TYPES`/
+     `PERSONAL_COMPLIANCE_TYPES`/`TRUCK_OWNING_ROLES` (item 4's own
+     explicit ask) — untouched; the new `applies_to`/`truck_id`/
+     `driver_id` fields are informational display-only, role filtering
+     still keys off `type` alone. `src/alerts/nudgeFrequency.ts`'s
+     frequency-cap engine — untouched, still governs how often a
+     due-soon/overdue compliance nudge can surface. Every built-in
+     AI-populated item (`mapCompliance()`'s 5 auto-populating docTypes,
+     invariant #21) — untouched, still find-or-updates the one matching
+     `(user_id, type)` row exactly as before; the 6 new columns are
+     additive/nullable so an AI-populated row simply leaves them null
+     unless a user edits it afterward.
+  Full suite: 94 suites / 2306 tests pass (`documentsFilter.test.ts`,
+  `needsReview.test.ts`, `status.test.ts`, `attachment.test.ts` (new),
+  `missingDataNudges.test.ts` all directly extended/added this pass);
+  `tsc --noEmit` clean; all 7 locales confirmed key-parity (glossary test
+  re-passed clean). `ai-import`/`ai-advisor`/`reset-data`/`delete-account`
+  were NOT touched this pass — no redeploy needed for any Edge Function.
+  No native rebuild needed — `expo-image-picker`/`expo-document-picker`
+  were already dependencies (already used by the Import screen), no new
+  native module added — ships via a normal `eas update` once §55 has been
+  run against the live project.

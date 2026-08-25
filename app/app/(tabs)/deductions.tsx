@@ -10,8 +10,9 @@ import { fetchReimbursementStatus, useReimburseMyself } from '@/src/data/capital
 import type { ReimbursementStatus } from '@/src/stats/capitalAccount';
 import { useLearnCategoryCorrection, fetchCarrierForDeduction } from '@/src/data/categoryLearningRules';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { useMarkDeductionReviewed, useMarkAllDeductionsReviewed } from '@/src/data/needsReviewMutations';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
-import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
+import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
 import { isDeductionNeedsReview } from '@/src/import/needsReview';
 import { groupDeductions } from '@/src/stats/deductionGroups';
 import { planContributionSync } from '@/src/stats/contributionSync';
@@ -45,7 +46,19 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
   );
 }
 
-function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; onDelete: () => void }) {
+function DedRow({
+  x,
+  onPress,
+  onDelete,
+  onMarkReviewed,
+  markReviewedPending,
+}: {
+  x: Deduction;
+  onPress: () => void;
+  onDelete: () => void;
+  onMarkReviewed: () => void;
+  markReviewedPending: boolean;
+}) {
   const { t } = useTranslation();
   const { money } = useFormatters();
   const personal = isPersonalPayment(x.payment_method);
@@ -70,6 +83,7 @@ function DedRow({ x, onPress, onDelete }: { x: Deduction; onPress: () => void; o
           </Text>
         )}
         {needsReview && <NeedsReviewChip />}
+        {needsReview && <MarkReviewedButton onPress={onMarkReviewed} isPending={markReviewedPending} />}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.amount)}</Text>
@@ -90,6 +104,9 @@ function DedSection({
   emptyLabel,
   onEdit,
   onDelete,
+  onMarkReviewed,
+  reviewingId,
+  markReviewedPending,
 }: {
   screenKey: string;
   title: string;
@@ -99,6 +116,9 @@ function DedSection({
   emptyLabel: string;
   onEdit: (x: Deduction) => void;
   onDelete: (x: Deduction) => void;
+  onMarkReviewed: (x: Deduction) => void;
+  reviewingId: string | null;
+  markReviewedPending: boolean;
 }) {
   const { t } = useTranslation();
   const { money } = useFormatters();
@@ -125,7 +145,13 @@ function DedSection({
           <Card>
             {monthRows.map((x, i) => (
               <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                <DedRow x={x} onPress={() => onEdit(x)} onDelete={() => onDelete(x)} />
+                <DedRow
+                  x={x}
+                  onPress={() => onEdit(x)}
+                  onDelete={() => onDelete(x)}
+                  onMarkReviewed={() => onMarkReviewed(x)}
+                  markReviewedPending={markReviewedPending && reviewingId === x.id}
+                />
               </View>
             ))}
           </Card>
@@ -160,6 +186,9 @@ export default function Deductions() {
   const learnCategoryCorrection = useLearnCategoryCorrection();
   const deleteDeduction = useDeleteDeduction();
   const reimburseMyself = useReimburseMyself();
+  const markReviewed = useMarkDeductionReviewed();
+  const markAllReviewed = useMarkAllDeductionsReviewed();
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -249,6 +278,38 @@ export default function Deductions() {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
       setReimbursing(false);
+    }
+  }
+
+  // NEEDS REVIEW WON'T CLEAR — THE FIX (owner decision 2026-08-24, device
+  // testing round): the ONE mutation that ever writes reviewed_at for a
+  // deduction. Closes the edit sheet too when called from there, since a
+  // reviewed row's needsReview flag flips false and the sheet's own
+  // "Mark reviewed" control disappears out from under the user otherwise.
+  async function handleMarkReviewed(x: Deduction, closeAfter?: boolean) {
+    setReviewingId(x.id);
+    try {
+      await markReviewed.mutateAsync({ id: x.id, description: x.description });
+      await invalidateFinancialData(queryClient);
+      if (closeAfter) closeEdit();
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  // Bulk "Mark all reviewed" (item 1) — operates on whatever's currently
+  // visible in `rows` while the needsReviewOnly filter is on, so it can
+  // never mark a row the user hasn't actually filtered down to.
+  async function handleMarkAllReviewed() {
+    const target = rows.filter(isDeductionNeedsReview);
+    if (target.length === 0) return;
+    try {
+      await markAllReviewed.mutateAsync(target.map((d) => ({ id: d.id, description: d.description })));
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     }
   }
 
@@ -414,12 +475,19 @@ export default function Deductions() {
           </Pressable>
         </View>
 
-        <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
           <Pill
             label={t('needsReview.filterOnly')}
             selected={needsReviewOnly}
             onPress={() => setNeedsReviewOnly((v) => !v)}
           />
+          {needsReviewOnly && rows.length > 0 && (
+            <Pressable onPress={handleMarkAllReviewed} disabled={markAllReviewed.isPending} hitSlop={8} style={{ marginStart: spacing.sm }}>
+              <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
+                {markAllReviewed.isPending ? t('needsReview.markingAll') : t('needsReview.markAllReviewed')}
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
@@ -452,6 +520,9 @@ export default function Deductions() {
                 emptyLabel={t('deductions.outOfPocketEmpty')}
                 onEdit={openEdit}
                 onDelete={handleDelete}
+                onMarkReviewed={handleMarkReviewed}
+                reviewingId={reviewingId}
+                markReviewedPending={markReviewed.isPending}
               />
             )}
             {originFilter !== 'outOfPocket' && (
@@ -464,6 +535,9 @@ export default function Deductions() {
                 emptyLabel={t('deductions.withheldEmpty')}
                 onEdit={openEdit}
                 onDelete={handleDelete}
+                onMarkReviewed={handleMarkReviewed}
+                reviewingId={reviewingId}
+                markReviewedPending={markReviewed.isPending}
               />
             )}
           </>
@@ -476,6 +550,15 @@ export default function Deductions() {
           <MutedText>
             {(editing.description ?? 'Deduction').split(' — ')[0]} — {money(editing.amount)}
           </MutedText>
+        )}
+        {editing && isDeductionNeedsReview(editing) && (
+          <View style={{ marginTop: spacing.sm }}>
+            <NeedsReviewChip />
+            <MarkReviewedButton
+              onPress={() => handleMarkReviewed(editing, true)}
+              isPending={markReviewed.isPending && reviewingId === editing.id}
+            />
+          </View>
         )}
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>

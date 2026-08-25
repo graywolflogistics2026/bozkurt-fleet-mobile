@@ -16,7 +16,7 @@ import type { QueryClient } from '@tanstack/react-query';
 // maintenance_intervals, truck_health_config) — none of them are wired to
 // any OTHER invalidation path, so a user resetting their account kept
 // seeing their old truck, driver, and compliance data on Truck Health, the
-// Drivers screen, and Compliance Tracker until they force-quit the app.
+// Drivers screen, and Documents & Renewals until they force-quit the app.
 // These two files can't share a literal (Deno Edge Function vs React
 // Native) — src/data/__tests__/queryInvalidation.test.ts asserts this list
 // against a mirrored copy of TABLES_IN_DELETION_ORDER as a regression

@@ -55,7 +55,7 @@
     "ceoMode": "AI-коуч",
     "aiAdvisor": "ИИ-советник",
     "shareProfit": "Поделиться недельной прибылью",
-    "compliance": "Отслеживание соответствия",
+    "compliance": "Документы и продления",
     "documents": "Документы",
     "categoryLearning": "Обучение категорий",
     "referral": "Пригласить и заработать",
@@ -464,7 +464,7 @@
       "savingRecords": "Ошибка при сохранении рейсов/топлива/вычетов",
       "cleaningUpPreviousWeek": "Ошибка при замене записей прошлой недели",
       "updatingBalance": "Сохранено, но не удалось обновить баланс бизнеса",
-      "savingCompliance": "Ошибка при сохранении записи соответствия требованиям",
+      "savingCompliance": "Ошибка при сохранении записи о продлении",
       "savingContribution": "Ошибка при сохранении взноса владельца",
       "savingLoan": "Ошибка при сохранении записи о кредите/финансировании"
     },
@@ -935,23 +935,23 @@
     },
     "medical_card": {
       "label": "Медицинская Карта DOT",
-      "route": "Трекер Соответствия (пока не привязано к экрану)"
+      "route": "Документы и продления"
     },
     "inspection_report": {
       "label": "Отчёт об Инспекции DOT",
-      "route": "Трекер Соответствия (пока не привязано к экрану)"
+      "route": "Документы и продления"
     },
     "registration_cab_card": {
       "label": "Регистрация IRP/Карта Кабины",
-      "route": "Трекер Соответствия (пока не привязано к экрану)"
+      "route": "Документы и продления"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (Форма 2290) Приложение 1",
-      "route": "Трекер Соответствия (пока не привязано к экрану)"
+      "route": "Документы и продления"
     },
     "insurance_policy": {
       "label": "Страховой Полис",
-      "route": "Трекер Соответствия (пока не привязано к экрану)"
+      "route": "Документы и продления"
     },
     "loan_agreement": {
       "label": "Кредитный/финансовый договор",
@@ -1319,7 +1319,11 @@
   "needsReview": {
     "badge": "Требует проверки",
     "filterOnly": "Только требующие проверки",
-    "homeCounter": "{{count}} элемент(ов) требуют вашей проверки"
+    "homeCounter": "{{count}} элемент(ов) требуют вашей проверки",
+    "markReviewedButton": "Отметить проверенным",
+    "reviewedConfirm": "Проверено ✓",
+    "markAllReviewed": "Отметить всё проверенным",
+    "markingAll": "Отмечаем всё…"
   },
   "categoryPicker": {
     "newCategory": "Новая категория",
@@ -1513,9 +1517,9 @@
   },
   "alerts": {
     "title": "Уведомления",
-    "empty": "Всё в порядке — нет объектов техобслуживания или соответствия требованиям, требующих внимания прямо сейчас.",
+    "empty": "Всё в порядке — нет объектов техобслуживания или продления, требующих внимания прямо сейчас.",
     "maintenanceSection": "Состояние грузовика",
-    "complianceSection": "Соответствие требованиям",
+    "complianceSection": "Документы и продления",
     "nudgesSection": "Больше возможностей приложения",
     "silence": "Больше не показывать",
     "unsilence": "Показывать снова",
@@ -1595,11 +1599,11 @@
     "slide3Body": "ИИ автоматически распределяет settlements, чеки и счета по нужным разделам."
   },
   "compliance": {
-    "title": "Отслеживание соответствия",
-    "subtitle": "Сроки DOT, IRP, HVUT 2290, IFTA, страховки, CDL и нарко-консорциума — в одном месте.",
-    "add": "Добавить",
-    "addTitle": "Добавить элемент соответствия",
-    "editTitle": "Изменить элемент соответствия",
+    "title": "Документы и продления",
+    "subtitle": "DOT, IRP, HVUT 2290, IFTA, страховка, CDL, нарко-консорциум — и всё остальное, что вы хотите отслеживать. Продления и сроки в одном месте.",
+    "add": "Добавить элемент",
+    "addTitle": "Добавить элемент",
+    "editTitle": "Изменить элемент",
     "typeLabel": "Тип",
     "types": {
       "medical_card": "Медицинская карта DOT",
@@ -1613,6 +1617,7 @@
       "other": "Другое"
     },
     "labelLabel": "Метка",
+    "issueDateLabel": "Дата выдачи (необязательно)",
     "dueDateLabel": "Срок",
     "recurrenceLabel": "Периодичность",
     "recurrence": {
@@ -1621,7 +1626,29 @@
       "biennial": "Раз в 2 года",
       "quarterly": "Ежеквартально"
     },
-    "empty": "Пока нет элементов соответствия. Медицинские карты, инспекции, регистрации IRP, HVUT 2290 и страховые полисы, импортированные ИИ, появятся здесь автоматически.",
+    "reminderLeadDaysLabel": "Напомнить за сколько дней (необязательно)",
+    "reminderLeadDaysPlaceholder": "По умолчанию: 30 дней",
+    "noteLabel": "Заметка (необязательно)",
+    "notePlaceholder": "Любые дополнительные детали...",
+    "appliesToLabel": "Относится К",
+    "appliesTo": {
+      "truck": "Грузовик",
+      "trailer": "Прицеп",
+      "driver": "Водитель",
+      "business": "Бизнес"
+    },
+    "appliesToNone": "Не указано",
+    "truckLabel": "Какой грузовик",
+    "driverLabel": "Какой водитель",
+    "pickerNone": "Нет",
+    "attachmentLabel": "Вложение (необязательно)",
+    "attachPhoto": "📷 Прикрепить фото",
+    "attachPdf": "📄 Прикрепить PDF",
+    "attachmentAttached": "Прикреплено: {{filename}}",
+    "removeAttachment": "Удалить вложение",
+    "attachFailedTitle": "Не удалось прикрепить файл",
+    "attachmentOnFile": "К этому элементу прикреплён файл",
+    "empty": "Пока нет элементов. Медицинские карты, инспекции, регистрации IRP, HVUT 2290 и страховые полисы, импортированные ИИ, появятся здесь автоматически — или добавьте свои через «+ Добавить элемент».",
     "overdueBy": "Просрочено на {{count}} день",
     "overdueBy_other": "Просрочено на {{count}} дней",
     "dueInDays": "Срок через {{count}} день",
@@ -1629,10 +1656,10 @@
     "enterDueDateTitle": "Введите срок",
     "saveFailedTitle": "Не удалось сохранить",
     "deleteFailedTitle": "Не удалось удалить",
-    "deleteConfirmTitle": "Удалить этот элемент соответствия?",
+    "deleteConfirmTitle": "Удалить этот элемент?",
     "delete": "Удалить элемент",
     "notifBannerTitle": "Получайте напоминания",
-    "notifBannerBody": "Включите уведомления, чтобы получать оповещения о приближении срока соответствия.",
+    "notifBannerBody": "Включите уведомления, чтобы получать оповещения о приближении срока продления.",
     "notifEnableButton": "Включить уведомления",
     "notifOverdueTitle": "{{label}} просрочен",
     "notifDueSoonTitle": "{{label}} скоро истекает",
@@ -1656,6 +1683,29 @@
     "preparingShare": "Подготовка файла для отправки…",
     "linkedRecords": "Связанные записи"
   },
+  "destinationSummary": {
+    "title": "Оплата и назначение",
+    "paidVia": "Оплачено через",
+    "landedAs": "Записано как:",
+    "kindSettlement_one": "{{count}} settlement",
+    "kindSettlement_other": "{{count}} settlement",
+    "kindDeduction_one": "{{count}} вычет",
+    "kindDeduction_other": "{{count}} вычетов",
+    "kindFuel_one": "{{count}} заправка",
+    "kindFuel_other": "{{count}} заправок",
+    "kindLoad_one": "{{count}} рейс",
+    "kindLoad_other": "{{count}} рейсов",
+    "kindReimbursement_one": "{{count}} возмещение",
+    "kindReimbursement_other": "{{count}} возмещений",
+    "kindMaintenance_one": "{{count}} запись об обслуживании",
+    "kindMaintenance_other": "{{count}} записей об обслуживании",
+    "kindBankStatement_one": "{{count}} банковская выписка",
+    "kindBankStatement_other": "{{count}} банковских выписок",
+    "kindComplianceItem_one": "{{count}} элемент продления",
+    "kindComplianceItem_other": "{{count}} элементов продления",
+    "kindHouseholdIncome_one": "{{count}} запись о доходе семьи",
+    "kindHouseholdIncome_other": "{{count}} записей о доходе семьи"
+  },
   "ceoMode": {
     "title": "AI-коуч",
     "subtitle": "Ваш еженедельный бизнес-отчёт, составленный на основе ваших собственных данных.",
@@ -1672,7 +1722,7 @@
     "statusTitle": "Статус",
     "needsReview": "Чеки, требующие проверки",
     "maintenanceDue": "Обслуживание скоро/просрочено",
-    "complianceDue": "Элементы соответствия скоро/просрочены",
+    "complianceDue": "Элементы продления скоро/просрочены",
     "briefingTitle": "Ваш отчёт",
     "getBriefing": "Получить мой отчёт",
     "briefingFailed": "Не удалось получить отчёт сейчас",
@@ -1688,7 +1738,7 @@
       "needsReview": "Разберите {{count}} чек(ов) NEEDS REVIEW — {{amount}} в вычетах ожидают решения",
       "taxReserveShortfall": "Зарезервируйте ещё {{amount}} до следующего налогового платежа",
       "maintenanceCatchUp": "{{count}} пункт(ов) обслуживания скоро истекает или просрочено",
-      "complianceCatchUp": "{{count}} пункт(ов) соответствия скоро истекает или просрочено"
+      "complianceCatchUp": "{{count}} пункт(ов) продления скоро истекает или просрочено"
     }
   },
   "aiAdvisor": {

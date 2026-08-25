@@ -157,6 +157,7 @@ export type DocumentRow = {
   amount: number | null;
   storage_path: string | null;
   parsed_json: Record<string, unknown> | null;
+  reviewed_at: string | null; // docs/PENDING_SQL.md §55a (NEEDS REVIEW WON'T CLEAR fix, owner decision 2026-08-24)
   imported_at: string;
   updated_at: string;
 };
@@ -268,6 +269,7 @@ export type Deduction = {
   warranty_years: number | null; // docs/PENDING_SQL.md §7 — halves ok (e.g. 2.5)
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   tax_deductible: boolean; // docs/PENDING_SQL.md §33 (meals & advance repayments, owner decision 2026-07-17)
+  reviewed_at: string | null; // docs/PENDING_SQL.md §55a (NEEDS REVIEW WON'T CLEAR fix, owner decision 2026-08-24)
   created_at: string;
   updated_at: string;
 };
@@ -527,6 +529,15 @@ export type ComplianceType =
   | 'cdl'
   | 'drug_consortium'
   | 'other';
+// "DOCUMENTS & RENEWALS" EXPANSION (docs/PENDING_SQL.md §55b, owner
+// decision 2026-08-24, device testing round) — a manual entry needs a
+// much richer field set than the original 4; all six new fields are
+// nullable/additive so every already-seeded (AI-populated or pre-existing
+// manual) row is completely unaffected. `applies_to`/`truck_id`/
+// `driver_id` are informational only — role-based filtering
+// (src/alerts/roleFilter.ts's isComplianceTypeVisibleForRole()) still
+// keys off `type`, unchanged.
+export type ComplianceAppliesTo = 'truck' | 'trailer' | 'driver' | 'business';
 export type ComplianceItem = {
   id: string;
   user_id: string;
@@ -535,6 +546,15 @@ export type ComplianceItem = {
   due_date: string;
   recurrence: 'none' | 'annual' | 'biennial' | 'quarterly' | null;
   source_document_id: string | null;
+  issue_date: string | null;
+  // null = use the app-wide 30-day default (src/compliance/status.ts's
+  // calcComplianceStatus()) — every row seeded before this column existed
+  // behaves identically to before.
+  reminder_lead_days: number | null;
+  note: string | null;
+  truck_id: string | null;
+  driver_id: string | null;
+  applies_to: ComplianceAppliesTo | null;
   created_at: string;
   updated_at: string;
 };

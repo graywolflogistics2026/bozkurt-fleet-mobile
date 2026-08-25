@@ -5,16 +5,22 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSettlements, useDeleteSettlement, useUpdateSettlement } from '@/src/data/settlements';
 import { clampPerDiemDays } from '@/src/tax/perDiem';
-import { useDeductions } from '@/src/data/deductions';
+import { useDeductions, useUpdateDeduction } from '@/src/data/deductions';
 import { useReimbursements } from '@/src/data/reimbursements';
 import { useLoads } from '@/src/data/loads';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useDocuments } from '@/src/data/documents';
 import { useFleetStats } from '@/src/data/dashboardStats';
 import { calcEscrowBalance } from '@/src/stats/escrowBalance';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { useMarkDocumentReviewed } from '@/src/data/needsReviewMutations';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
+import { buildLinkedRecordHref } from '@/src/navigation/linkedRecordRoute';
+import { findLinkedRecords, type LinkedRecordRef } from '@/src/data/documentsFilter';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
-import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
+import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
+import { DestinationSummary } from '@/src/components/DestinationSummary';
 import { isSettlementNeedsReview } from '@/src/import/needsReview';
 import { useFormatters } from '@/src/i18n/format';
 import {
@@ -69,10 +75,17 @@ export default function Settlements() {
   const deleteSettlement = useDeleteSettlement();
   const updateSettlement = useUpdateSettlement();
   const dedQuery = useDeductions();
+  const updateDeduction = useUpdateDeduction();
   const reimbQuery = useReimbursements();
   const loadsQuery = useLoads();
+  const fuelQuery = useFuelPurchases();
+  const maintenanceQuery = useMaintenanceRecords();
   const documentsQuery = useDocuments();
   const fleetStats = useFleetStats(null);
+  const markDocumentReviewed = useMarkDocumentReviewed();
+  const [markingAllReviewed, setMarkingAllReviewed] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [savingPayment, setSavingPayment] = useState(false);
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<Settlement | null>(null);
@@ -209,6 +222,93 @@ export default function Settlements() {
   // pay — just never counted against true profit/tax deductions).
   const escrowBalance = useMemo(() => calcEscrowBalance(dedQuery.data ?? []), [dedQuery.data]);
 
+  // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
+  // testing round, item 2) — the SAME shared findLinkedRecords()/
+  // DestinationSummary the Documents viewer uses, so a settlement's own
+  // "where it landed" summary can never disagree with what the Documents
+  // Archive shows for that same document.
+  const linkedRecords = useMemo(() => {
+    if (!selected?.document_id) return [];
+    return findLinkedRecords(selected.document_id, {
+      settlements: settlementsQuery.data,
+      deductions: dedQuery.data,
+      maintenanceRecords: maintenanceQuery.data,
+      fuelPurchases: fuelQuery.data,
+      loads: loadsQuery.data,
+      reimbursements: reimbQuery.data,
+    });
+  }, [selected, settlementsQuery.data, dedQuery.data, maintenanceQuery.data, fuelQuery.data, loadsQuery.data, reimbQuery.data]);
+
+  // A settlement itself has no payment_method column (it's a carrier
+  // deposit, not a payment the user chose) — the payment row is only shown
+  // when the settlement maps to EXACTLY ONE withheld deduction, same rule
+  // Documents Archive uses for a purchase receipt.
+  const singleLinkedDeduction = useMemo(() => {
+    const deductionRefs = linkedRecords.filter((r) => r.kind === 'deduction');
+    if (deductionRefs.length !== 1) return null;
+    return (dedQuery.data ?? []).find((d) => d.id === deductionRefs[0].id) ?? null;
+  }, [linkedRecords, dedQuery.data]);
+
+  function handleOpenLinkedRecord(ref: LinkedRecordRef) {
+    setSelected(null);
+    router.push(buildLinkedRecordHref(ref));
+  }
+
+  async function handleChangeDeductionCategory(deductionId: string, category: string) {
+    try {
+      await updateDeduction.mutateAsync({ id: deductionId, values: { category } });
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    }
+  }
+
+  async function handleChangePaymentMethod(method: string) {
+    if (!singleLinkedDeduction) return;
+    setSavingPayment(true);
+    try {
+      await updateDeduction.mutateAsync({ id: singleLinkedDeduction.id, values: { payment_method: method } });
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setSavingPayment(false);
+    }
+  }
+
+  // NEEDS REVIEW WON'T CLEAR — THE FIX (owner decision 2026-08-24, device
+  // testing round): a settlement's own "needs review" status comes from
+  // its LINKED DOCUMENT (needsReview.ts's isSettlementNeedsReview) — so
+  // marking it reviewed marks that document reviewed.
+  async function handleMarkReviewed(x: Settlement) {
+    if (!x.document_id) return;
+    setReviewingId(x.id);
+    try {
+      await markDocumentReviewed.mutateAsync(x.document_id);
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('settlementsScreen.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  // Bulk "Mark all reviewed" (item 1) — operates on whatever's currently
+  // filtered into `rows`, deduping by document_id in case two settlements
+  // somehow shared one (they never do in practice, but this stays correct
+  // either way instead of double-marking the same document).
+  async function handleMarkAllReviewed() {
+    const documentIds = [...new Set(rows.filter((s) => isSettlementNeedsReview(s, documentsById)).map((s) => s.document_id).filter((id): id is string => !!id))];
+    if (documentIds.length === 0) return;
+    setMarkingAllReviewed(true);
+    try {
+      await Promise.allSettled(documentIds.map((id) => markDocumentReviewed.mutateAsync(id)));
+      await invalidateFinancialData(queryClient);
+    } finally {
+      setMarkingAllReviewed(false);
+    }
+  }
+
   function handleDelete(x: Settlement) {
     Alert.alert(t('settlementsScreen.deleteConfirmTitle'), t('settlementsScreen.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -269,12 +369,19 @@ export default function Settlements() {
           </Card>
         )}
 
-        <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
           <Pill
             label={t('needsReview.filterOnly')}
             selected={needsReviewOnly}
             onPress={() => setNeedsReviewOnly((v) => !v)}
           />
+          {needsReviewOnly && rows.length > 0 && (
+            <Pressable onPress={handleMarkAllReviewed} disabled={markingAllReviewed} hitSlop={8} style={{ marginStart: spacing.sm }}>
+              <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
+                {markingAllReviewed ? t('needsReview.markingAll') : t('needsReview.markAllReviewed')}
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         <MonthGroupedList
@@ -301,6 +408,9 @@ export default function Settlements() {
                           after tapping into the detail sheet. */}
                       <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
                       {needsReview && <NeedsReviewChip />}
+                      {needsReview && (
+                        <MarkReviewedButton onPress={() => handleMarkReviewed(x)} isPending={reviewingId === x.id} />
+                      )}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02):
@@ -328,6 +438,12 @@ export default function Settlements() {
         {selected && (
             <>
               <SheetTitle>{t('settlementsScreen.weekOf', { date: date(selected.week_ending) })}</SheetTitle>
+              {isSettlementNeedsReview(selected, documentsById) && (
+                <View style={{ marginBottom: spacing.xs }}>
+                  <NeedsReviewChip />
+                  <MarkReviewedButton onPress={() => handleMarkReviewed(selected)} isPending={reviewingId === selected.id} />
+                </View>
+              )}
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
                 <View>
@@ -456,6 +572,21 @@ export default function Settlements() {
                   }}
                 />
               )}
+
+              <DestinationSummary
+                refs={linkedRecords}
+                onOpenRef={handleOpenLinkedRecord}
+                payment={
+                  singleLinkedDeduction
+                    ? {
+                        method: singleLinkedDeduction.payment_method,
+                        onChangeMethod: handleChangePaymentMethod,
+                        saving: savingPayment,
+                      }
+                    : null
+                }
+                onChangeDeductionCategory={handleChangeDeductionCategory}
+              />
 
             <SecondaryButton title={`🗑 ${t('common.delete')}`} onPress={() => handleDelete(selected)} />
             <SecondaryButton title={t('common.cancel')} onPress={() => setSelected(null)} />

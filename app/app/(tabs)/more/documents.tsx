@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDocuments } from '@/src/data/documents';
 import { useSettlements } from '@/src/data/settlements';
-import { useDeductions } from '@/src/data/deductions';
+import { useDeductions, useUpdateDeduction } from '@/src/data/deductions';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useBankStatements } from '@/src/data/bankStatements';
 import { useComplianceItems } from '@/src/data/complianceItems';
 import { useHouseholdIncome } from '@/src/data/householdIncome';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useLoads } from '@/src/data/loads';
+import { useReimbursements } from '@/src/data/reimbursements';
+import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { useMarkDocumentReviewed } from '@/src/data/needsReviewMutations';
 import {
   filterDocuments,
   distinctDocTypes,
@@ -20,29 +26,18 @@ import {
 import { getSignedDocumentUrl, shareDocumentFile } from '@/src/data/documentViewer';
 import { deriveDocumentTitle } from '@/src/data/documentTitle';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
-import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
+import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
+import { DestinationSummary } from '@/src/components/DestinationSummary';
 import { isDocumentNeedsReview } from '@/src/import/needsReview';
+import { normalizePaymentMethod, type PaymentMethod } from '@/src/import/paymentMethods';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
+import { buildLinkedRecordHref } from '@/src/navigation/linkedRecordRoute';
 import { DOC_TYPE_ICON, useDocTypeMeta } from '@/src/import/docTypes';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, TappableCard, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { DocType } from '@/src/import/types';
 import type { DocumentRow } from '@/src/types/db';
-
-// Where "View linked records" (item 2) jumps to — mirrors the routes in
-// app/(tabs)/more/index.tsx. Only settlement/deduction/maintenance support
-// jumping straight to the matching row (openId param, wired into those 3
-// screens); the rest land on the right list screen, same "at least get you
-// to where it lives" bar as the others.
-const LINKED_RECORD_ROUTE: Record<LinkedRecordRef['kind'], string> = {
-  settlement: '/(tabs)/more/settlements',
-  deduction: '/(tabs)/deductions',
-  maintenance: '/(tabs)/more/maintenance',
-  bank_statement: '/(tabs)/more/bank-statements',
-  compliance_item: '/(tabs)/more/compliance',
-  household_income: '/(tabs)/more/tax-estimator',
-};
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -72,6 +67,7 @@ export default function DocumentsArchive() {
   const autoOpenedRef = useRef(false);
   const docTypeMeta = useDocTypeMeta();
 
+  const queryClient = useQueryClient();
   const documentsQuery = useDocuments();
   const settlementsQuery = useSettlements();
   const deductionsQuery = useDeductions();
@@ -79,6 +75,13 @@ export default function DocumentsArchive() {
   const bankStatementsQuery = useBankStatements();
   const complianceItemsQuery = useComplianceItems();
   const householdIncomeQuery = useHouseholdIncome();
+  const fuelQuery = useFuelPurchases();
+  const loadsQuery = useLoads();
+  const reimbursementsQuery = useReimbursements();
+  const markDocumentReviewed = useMarkDocumentReviewed();
+  const updateDeduction = useUpdateDeduction();
+  const [markingReviewed, setMarkingReviewed] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const [search, setSearch] = useState('');
   const [docTypeFilter, setDocTypeFilter] = useState<string | null>(null);
@@ -126,6 +129,9 @@ export default function DocumentsArchive() {
       bankStatements: bankStatementsQuery.data,
       complianceItems: complianceItemsQuery.data,
       householdIncome: householdIncomeQuery.data,
+      fuelPurchases: fuelQuery.data,
+      loads: loadsQuery.data,
+      reimbursements: reimbursementsQuery.data,
     });
   }, [
     selected,
@@ -135,7 +141,22 @@ export default function DocumentsArchive() {
     bankStatementsQuery.data,
     complianceItemsQuery.data,
     householdIncomeQuery.data,
+    fuelQuery.data,
+    loadsQuery.data,
+    reimbursementsQuery.data,
   ]);
+
+  // PAYMENT + DESTINATION SUMMARY (item 2) — a payment method is only shown
+  // as editable when the document maps to EXACTLY ONE deduction (the common
+  // receipt case); a settlement (no payment_method column exists on that
+  // table at all) or a document linked to several deductions has no single
+  // coherent value to show/edit, so the row is simply omitted rather than
+  // guessing one.
+  const singleLinkedDeduction = useMemo(() => {
+    const deductionRefs = linkedRecords.filter((r) => r.kind === 'deduction');
+    if (deductionRefs.length !== 1) return null;
+    return (deductionsQuery.data ?? []).find((d) => d.id === deductionRefs[0].id) ?? null;
+  }, [linkedRecords, deductionsQuery.data]);
 
   useEffect(() => {
     if (!selected?.storage_path) {
@@ -188,12 +209,50 @@ export default function DocumentsArchive() {
   }
 
   function handleOpenLinkedRecord(ref: LinkedRecordRef) {
-    const pathname = LINKED_RECORD_ROUTE[ref.kind];
     closeViewer();
-    if (ref.kind === 'settlement' || ref.kind === 'deduction' || ref.kind === 'maintenance') {
-      router.push({ pathname, params: { openId: ref.id } } as unknown as Href);
-    } else {
-      router.push(pathname as Href);
+    router.push(buildLinkedRecordHref(ref));
+  }
+
+  // NEEDS REVIEW WON'T CLEAR — THE FIX (owner decision 2026-08-24, device
+  // testing round): the one control that marks a document (and, by
+  // extension per needsReview.ts, any settlement linked to it) reviewed.
+  async function handleMarkReviewed() {
+    if (!selected) return;
+    setMarkingReviewed(true);
+    try {
+      await markDocumentReviewed.mutateAsync(selected.id);
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('documentsArchive.viewFailed'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setMarkingReviewed(false);
+    }
+  }
+
+  // PAYMENT + DESTINATION SUMMARY (item 2) — editing the payment method
+  // here flows through the SAME useUpdateDeduction() mutation the
+  // Deductions screen itself uses, so every dependent screen (Capital
+  // Account's owner-paid detection, category learning's carrier scoping,
+  // etc.) refreshes identically regardless of which screen made the edit.
+  async function handleChangePaymentMethod(method: PaymentMethod) {
+    if (!singleLinkedDeduction) return;
+    setSavingPayment(true);
+    try {
+      await updateDeduction.mutateAsync({ id: singleLinkedDeduction.id, values: { payment_method: method } });
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setSavingPayment(false);
+    }
+  }
+
+  async function handleChangeDeductionCategory(deductionId: string, category: string) {
+    try {
+      await updateDeduction.mutateAsync({ id: deductionId, values: { category } });
+      await invalidateFinancialData(queryClient);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     }
   }
 
@@ -285,7 +344,12 @@ export default function DocumentsArchive() {
             <>
               <SheetTitle>{selectedTitle}</SheetTitle>
               {selectedTitle !== selectedMeta.label && <MutedText>{selectedMeta.label}</MutedText>}
-              {isDocumentNeedsReview(selected) && <NeedsReviewChip />}
+              {isDocumentNeedsReview(selected) && (
+                <>
+                  <NeedsReviewChip />
+                  <MarkReviewedButton onPress={handleMarkReviewed} isPending={markingReviewed} />
+                </>
+              )}
               <MutedText>{selected.doc_date ? date(selected.doc_date) : date(selected.imported_at)}</MutedText>
               {selected.filename && <MutedText>{selected.filename}</MutedText>}
               {selected.amount != null && (
@@ -317,31 +381,22 @@ export default function DocumentsArchive() {
                 )
               )}
 
-              {linkedRecords.length > 0 && (
-                <View style={{ marginTop: spacing.md }}>
-                  <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
-                    {t('documentsArchive.linkedRecords')}
-                  </Text>
-                  {linkedRecords.map((ref) => (
-                    <Pressable
-                      key={`${ref.kind}-${ref.id}`}
-                      onPress={() => handleOpenLinkedRecord(ref)}
-                      style={{
-                        paddingVertical: spacing.xs,
-                        borderTopWidth: 1,
-                        borderTopColor: colors.border,
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <Text style={{ color: colors.text }}>{ref.label}</Text>
-                      <Text style={{ color: colors.accent, fontWeight: '700' }}>›</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-
               {sharing && <MutedText style={{ marginTop: spacing.sm }}>{t('documentsArchive.preparingShare')}</MutedText>}
+
+              <DestinationSummary
+                refs={linkedRecords}
+                onOpenRef={handleOpenLinkedRecord}
+                payment={
+                  singleLinkedDeduction
+                    ? {
+                        method: normalizePaymentMethod(singleLinkedDeduction.payment_method),
+                        onChangeMethod: handleChangePaymentMethod,
+                        saving: savingPayment,
+                      }
+                    : null
+                }
+                onChangeDeductionCategory={handleChangeDeductionCategory}
+              />
 
               <SecondaryButton title={t('common.cancel')} onPress={closeViewer} />
             </>

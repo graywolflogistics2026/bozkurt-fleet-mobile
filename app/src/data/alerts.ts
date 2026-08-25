@@ -106,7 +106,7 @@ export function useAlertsData() {
     () =>
       (complianceQuery.data ?? [])
         .filter((item) => isComplianceTypeVisibleForRole(role, item.type))
-        .map((item) => ({ item, status: calcComplianceStatus(item.due_date) }))
+        .map((item) => ({ item, status: calcComplianceStatus(item.due_date, new Date(), item.reminder_lead_days) }))
         .filter((row) => row.status.urgency === 'overdue' || row.status.urgency === 'due_soon'),
     [complianceQuery.data, role]
   );

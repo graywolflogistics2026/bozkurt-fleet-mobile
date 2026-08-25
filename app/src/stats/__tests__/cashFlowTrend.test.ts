@@ -54,6 +54,7 @@ function ded(overrides: Partial<Deduction>): Deduction {
     ded_date: '2026-01-01',
     code: null,
     description: null,
+    reviewed_at: null,
     amount: 100,
     category: null,
     store: null,

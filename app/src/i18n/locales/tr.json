@@ -55,7 +55,7 @@
     "ceoMode": "Yapay Zeka Koçu",
     "aiAdvisor": "Yapay Zeka Danışmanı",
     "shareProfit": "Haftalık Kârı Paylaş",
-    "compliance": "Uyumluluk Takibi",
+    "compliance": "Belgeler ve Yenilemeler",
     "documents": "Belgeler",
     "categoryLearning": "Kategori Öğrenimi",
     "referral": "Davet Et ve Kazan",
@@ -464,7 +464,7 @@
       "savingRecords": "Yükler/yakıt/kesintiler kaydedilirken başarısız oldu",
       "cleaningUpPreviousWeek": "Geçen haftanın kayıtları değiştirilirken başarısız oldu",
       "updatingBalance": "Kaydedildi, ancak işletme bakiyeniz güncellenirken başarısız oldu",
-      "savingCompliance": "Uyumluluk kaydı kaydedilirken başarısız oldu",
+      "savingCompliance": "Yenileme kaydı kaydedilirken başarısız oldu",
       "savingContribution": "Sahip katkısı kaydedilirken başarısız oldu",
       "savingLoan": "Kredi/finansman kaydı kaydedilirken başarısız oldu"
     },
@@ -935,23 +935,23 @@
     },
     "medical_card": {
       "label": "DOT Sağlık Kartı",
-      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+      "route": "Belgeler ve Yenilemeler"
     },
     "inspection_report": {
       "label": "DOT Muayene Raporu",
-      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+      "route": "Belgeler ve Yenilemeler"
     },
     "registration_cab_card": {
       "label": "IRP Tescili/Kabin Kartı",
-      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+      "route": "Belgeler ve Yenilemeler"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (Form 2290) Ek 1",
-      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+      "route": "Belgeler ve Yenilemeler"
     },
     "insurance_policy": {
       "label": "Sigorta Poliçesi",
-      "route": "Uyumluluk Takipçisi (henüz bir ekrana bağlanmadı)"
+      "route": "Belgeler ve Yenilemeler"
     },
     "loan_agreement": {
       "label": "Kredi/Finansman Sözleşmesi",
@@ -1319,7 +1319,11 @@
   "needsReview": {
     "badge": "İnceleme gerekiyor",
     "filterOnly": "Yalnızca inceleme gerekenler",
-    "homeCounter": "{{count}} öğe incelemenizi bekliyor"
+    "homeCounter": "{{count}} öğe incelemenizi bekliyor",
+    "markReviewedButton": "İncelendi olarak işaretle",
+    "reviewedConfirm": "İncelendi ✓",
+    "markAllReviewed": "Tümünü incelendi olarak işaretle",
+    "markingAll": "Tümü işaretleniyor…"
   },
   "categoryPicker": {
     "newCategory": "Yeni Kategori",
@@ -1513,9 +1517,9 @@
   },
   "alerts": {
     "title": "Uyarılar",
-    "empty": "Her şey yolunda — şu anda dikkat gerektiren bakım veya uyumluluk öğesi yok.",
+    "empty": "Her şey yolunda — şu anda dikkat gerektiren bakım veya yenileme öğesi yok.",
     "maintenanceSection": "Kamyon Sağlığı",
-    "complianceSection": "Uyumluluk",
+    "complianceSection": "Belgeler ve Yenilemeler",
     "nudgesSection": "Uygulamadan daha fazlasını al",
     "silence": "Bunu bir daha gösterme",
     "unsilence": "Tekrar göster",
@@ -1595,11 +1599,11 @@
     "slide3Body": "Yapay zeka, settlement, fiş ve faturaları otomatik olarak doğru yere sıralar."
   },
   "compliance": {
-    "title": "Uyumluluk Takibi",
-    "subtitle": "DOT, IRP, HVUT 2290, IFTA, sigorta, CDL ve uyuşturucu konsorsiyumu son tarihleri tek yerde.",
-    "add": "Ekle",
-    "addTitle": "Uyumluluk Öğesi Ekle",
-    "editTitle": "Uyumluluk Öğesini Düzenle",
+    "title": "Belgeler ve Yenilemeler",
+    "subtitle": "DOT, IRP, HVUT 2290, IFTA, sigorta, CDL, uyuşturucu konsorsiyumu — ve takip etmek istediğiniz başka her şey. Yenilemeler ve son tarihler tek yerde.",
+    "add": "Öğe Ekle",
+    "addTitle": "Öğe Ekle",
+    "editTitle": "Öğeyi Düzenle",
     "typeLabel": "Tür",
     "types": {
       "medical_card": "DOT Sağlık Kartı",
@@ -1613,6 +1617,7 @@
       "other": "Diğer"
     },
     "labelLabel": "Etiket",
+    "issueDateLabel": "Düzenleme Tarihi (opsiyonel)",
     "dueDateLabel": "Son Tarih",
     "recurrenceLabel": "Tekrarlama",
     "recurrence": {
@@ -1621,7 +1626,29 @@
       "biennial": "2 Yılda Bir",
       "quarterly": "Üç Aylık"
     },
-    "empty": "Henüz uyumluluk öğesi yok. Yapay zeka ile içe aktarılan sağlık kartları, muayeneler, IRP kayıtları, HVUT 2290 ve sigorta poliçeleri burada otomatik olarak görünecek.",
+    "reminderLeadDaysLabel": "Kaç gün önceden hatırlat (opsiyonel)",
+    "reminderLeadDaysPlaceholder": "Varsayılan: 30 gün",
+    "noteLabel": "Not (opsiyonel)",
+    "notePlaceholder": "Herhangi bir ek detay...",
+    "appliesToLabel": "Kime Ait",
+    "appliesTo": {
+      "truck": "Kamyon",
+      "trailer": "Römork",
+      "driver": "Sürücü",
+      "business": "İşletme"
+    },
+    "appliesToNone": "Belirtilmedi",
+    "truckLabel": "Hangi Kamyon",
+    "driverLabel": "Hangi Sürücü",
+    "pickerNone": "Yok",
+    "attachmentLabel": "Ek (opsiyonel)",
+    "attachPhoto": "📷 Fotoğraf Ekle",
+    "attachPdf": "📄 PDF Ekle",
+    "attachmentAttached": "Eklendi: {{filename}}",
+    "removeAttachment": "Eki kaldır",
+    "attachFailedTitle": "Bu dosya eklenemedi",
+    "attachmentOnFile": "Bu öğeye bir dosya eklendi",
+    "empty": "Henüz öğe yok. Yapay zeka ile içe aktarılan sağlık kartları, muayeneler, IRP kayıtları, HVUT 2290 ve sigorta poliçeleri burada otomatik olarak görünecek — veya \"+ Öğe Ekle\" ile kendinizinkini ekleyin.",
     "overdueBy": "{{count}} gün gecikti",
     "overdueBy_other": "{{count}} gün gecikti",
     "dueInDays": "{{count}} gün içinde son gün",
@@ -1629,10 +1656,10 @@
     "enterDueDateTitle": "Bir son tarih girin",
     "saveFailedTitle": "Kaydedilemedi",
     "deleteFailedTitle": "Silinemedi",
-    "deleteConfirmTitle": "Bu uyumluluk öğesi silinsin mi?",
+    "deleteConfirmTitle": "Bu öğe silinsin mi?",
     "delete": "Öğeyi Sil",
     "notifBannerTitle": "Hatırlatıcı alın",
-    "notifBannerBody": "Bir uyumluluk son tarihi yaklaştığında uyarı almak için bildirimleri etkinleştirin.",
+    "notifBannerBody": "Bir yenileme son tarihi yaklaştığında uyarı almak için bildirimleri etkinleştirin.",
     "notifEnableButton": "Bildirimleri Etkinleştir",
     "notifOverdueTitle": "{{label}} gecikti",
     "notifDueSoonTitle": "{{label}} yakında sona eriyor",
@@ -1656,6 +1683,29 @@
     "preparingShare": "Paylaşım için dosya hazırlanıyor…",
     "linkedRecords": "Bağlantılı Kayıtlar"
   },
+  "destinationSummary": {
+    "title": "Ödeme ve Hedef",
+    "paidVia": "Ödeme yöntemi",
+    "landedAs": "Şu şekilde kaydedildi:",
+    "kindSettlement_one": "{{count}} settlement",
+    "kindSettlement_other": "{{count}} settlement",
+    "kindDeduction_one": "{{count}} kesinti",
+    "kindDeduction_other": "{{count}} kesinti",
+    "kindFuel_one": "{{count}} yakıt alımı",
+    "kindFuel_other": "{{count}} yakıt alımı",
+    "kindLoad_one": "{{count}} yük",
+    "kindLoad_other": "{{count}} yük",
+    "kindReimbursement_one": "{{count}} geri ödeme",
+    "kindReimbursement_other": "{{count}} geri ödeme",
+    "kindMaintenance_one": "{{count}} bakım kaydı",
+    "kindMaintenance_other": "{{count}} bakım kaydı",
+    "kindBankStatement_one": "{{count}} banka ekstresi",
+    "kindBankStatement_other": "{{count}} banka ekstresi",
+    "kindComplianceItem_one": "{{count}} yenileme öğesi",
+    "kindComplianceItem_other": "{{count}} yenileme öğesi",
+    "kindHouseholdIncome_one": "{{count}} hane geliri kaydı",
+    "kindHouseholdIncome_other": "{{count}} hane geliri kaydı"
+  },
   "ceoMode": {
     "title": "Yapay Zeka Koçu",
     "subtitle": "Kendi verilerinizden oluşturulan haftalık iş özetiniz.",
@@ -1672,7 +1722,7 @@
     "statusTitle": "Durum",
     "needsReview": "İncelenmesi gereken makbuzlar",
     "maintenanceDue": "Yakında/gecikmiş bakım",
-    "complianceDue": "Yakında/gecikmiş uyumluluk öğeleri",
+    "complianceDue": "Yakında/gecikmiş yenileme öğeleri",
     "briefingTitle": "Özetiniz",
     "getBriefing": "Özetimi Al",
     "briefingFailed": "Şu anda özetiniz alınamadı",
@@ -1688,7 +1738,7 @@
       "needsReview": "{{count}} NEEDS REVIEW fişini sıraya koyun — {{amount}} tutarında gider bekliyor",
       "taxReserveShortfall": "Bir sonraki vergi ödemenizden önce {{amount}} daha ayırın",
       "maintenanceCatchUp": "{{count}} bakım kalemi yakında gerekiyor veya gecikmiş",
-      "complianceCatchUp": "{{count}} uyumluluk kalemi yakında gerekiyor veya gecikmiş"
+      "complianceCatchUp": "{{count}} yenileme kalemi yakında gerekiyor veya gecikmiş"
     }
   },
   "aiAdvisor": {

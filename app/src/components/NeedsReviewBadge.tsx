@@ -1,5 +1,5 @@
 import type { ViewStyle } from 'react-native';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -41,5 +41,39 @@ export function NeedsReviewChip() {
         {t('needsReview.badge')}
       </Text>
     </View>
+  );
+}
+
+// NEEDS REVIEW WON'T CLEAR — THE FIX (owner decision 2026-08-24, device
+// testing round): the one explicit "Mark reviewed" control every screen's
+// row/detail-view uses — src/data/needsReviewMutations.ts is the only
+// thing that ever writes `reviewed_at`. `isPending` shows a brief
+// "Reviewed ✓" confirmation state while the mutation is in flight; once it
+// resolves and the row's own needsReview flag flips false, the caller
+// stops rendering this control (and the chip/border above it) entirely —
+// there is no separate persistent "already reviewed" visual, since a
+// reviewed row simply stops looking flagged at all.
+export function MarkReviewedButton({ onPress, isPending }: { onPress: () => void; isPending?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={isPending}
+      hitSlop={8}
+      style={{
+        alignSelf: 'flex-start',
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: radii.sm,
+        backgroundColor: isPending ? 'rgba(34,197,94,0.15)' : 'rgba(37,99,235,0.15)',
+        borderWidth: 1,
+        borderColor: isPending ? colors.green : colors.accent,
+        marginTop: 4,
+      }}
+    >
+      <Text style={{ color: isPending ? colors.green : colors.accent, fontSize: typography.size.xs, fontWeight: '700' }}>
+        {isPending ? t('needsReview.reviewedConfirm') : t('needsReview.markReviewedButton')}
+      </Text>
+    </Pressable>
   );
 }
