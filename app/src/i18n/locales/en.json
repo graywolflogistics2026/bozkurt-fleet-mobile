@@ -581,6 +581,7 @@
     "title": "Settings",
     "lifetimeAccessBadge": "Lifetime access",
     "complimentaryAccessBadge": "Complimentary access",
+    "ownerAccountBadge": "Owner account",
     "tosAccepted": "Terms of Use accepted {{date}} (v{{version}})",
     "dataTitle": "Data",
     "exportAllDataNote": "Every record you've entered — settlements, deductions, loads, fuel, and more — as JSON. Does not include the original photos/PDFs you uploaded.",

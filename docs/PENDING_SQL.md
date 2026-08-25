@@ -2743,6 +2743,31 @@ row, not a new table.
 
 ---
 
+## 58. profiles.plan gains 'owner' (owner/dev account flag, owner decision)
+
+`profiles.plan` (docs/PENDING_SQL.md §50) gains a 5th value, `'owner'` —
+the app owner's/developer's own account, for heavy testing without
+hitting the AI-import allowance (docs/PENDING_SQL.md §51) and without
+skewing usage/cost analytics (docs/ADMIN_RUNBOOK.md's own reporting
+queries, updated to exclude it by default). Same column-level protection
+as `'lifetime'`/`'complimentary'` already had — `protect_profile_plan_fields()`
+(§50) protects the whole `plan` column regardless of value (service_role
+or the `postgres` role only), so a client can never set this value
+either; no trigger change needed, only the CHECK constraint widens.
+
+```sql
+alter table profiles drop constraint profiles_plan_check;
+alter table profiles add constraint profiles_plan_check
+  check (plan in ('free_trial', 'paid', 'lifetime', 'complimentary', 'owner'));
+```
+
+See docs/ADMIN_RUNBOOK.md's "Owner/Dev Account" section for the grant/
+revoke recipe (same style as the existing lifetime-plan recipe).
+
+- [ ] 58a run (profiles_plan_check widened to include 'owner')
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

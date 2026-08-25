@@ -1093,6 +1093,20 @@ async function checkAiImportUsageAllowed(
   | { allowed: true; consumesCredit: boolean }
   | { allowed: false; message: string; used: number; allowance: number }
 > {
+  // OWNER/DEV ACCOUNT FLAG (owner decision) — an 'owner' plan
+  // (docs/PENDING_SQL.md §58) bypasses the monthly allowance entirely:
+  // no counter, no soft-limit notice, no hard limit, no credit-pack
+  // prompt. Checked FIRST, before any of the counting queries below, so
+  // an owner's own heavy testing never even touches ai_usage_config/
+  // trucks/ai_usage_log/ai_credit_purchases for this purpose. Deliberately
+  // does NOT touch the separate, GLOBAL rate-limit cooldown gate
+  // (getRateLimitCooldownMs(), inside extractOnePass) — that's the same
+  // shared Anthropic API key every user draws from, and an owner account
+  // bypassing IT would risk real users, not just this account's own
+  // allowance (owner decision, item 3).
+  const { data: ownerCheck } = await supabase.from("profiles").select("plan").eq("user_id", userId).maybeSingle();
+  if (ownerCheck?.plan === "owner") return { allowed: true, consumesCredit: false };
+
   const [{ data: config }, { count: activeTruckCount }, { count: usedThisMonth }, { data: creditRows }] = await Promise.all([
     supabase.from("ai_usage_config").select("imports_per_truck_per_month, account_ceiling").maybeSingle(),
     supabase.from("trucks").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_active", true),
@@ -1138,6 +1152,14 @@ async function consumeOneCreditIfOverAllowance(
   supabase: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<void> {
+  // OWNER/DEV ACCOUNT FLAG — an owner account is never "over allowance"
+  // (checkAiImportUsageAllowed() above already short-circuits before this
+  // is ever reached in practice), but guard here too in case this
+  // function is ever called independently — it must never consume a
+  // credit pack that doesn't apply to this account anyway.
+  const { data: ownerCheck } = await supabase.from("profiles").select("plan").eq("user_id", userId).maybeSingle();
+  if (ownerCheck?.plan === "owner") return;
+
   const [{ data: config }, { count: activeTruckCount }, { count: usedThisMonth }] = await Promise.all([
     supabase.from("ai_usage_config").select("imports_per_truck_per_month, account_ceiling").maybeSingle(),
     supabase.from("trucks").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_active", true),

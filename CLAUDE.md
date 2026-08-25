@@ -5959,3 +5959,83 @@
   redeploying once docs/PENDING_SQL.md §57 has been run). No new native
   dependency — pure JS/TS plus one small SQL migration — ships via a
   normal `eas update`.
+- OWNER/DEV ACCOUNT FLAG (owner decision, docs/PENDING_SQL.md §58).
+  `profiles.plan` (docs/PENDING_SQL.md §50) gains a 5th value, `'owner'`
+  — the app owner's/developer's own account, for heavy testing without
+  hitting the AI-import allowance and without skewing usage/cost
+  analytics used for pricing decisions. Same column-level protection as
+  `'lifetime'`/`'complimentary'` already had — `protect_profile_plan_fields()`
+  (§50) protects the whole `plan` column regardless of value (service_role
+  or the `postgres` role only), so the CHECK constraint just widens, no
+  trigger change needed — a client can never set this value either, same
+  as every other plan value.
+  1. **BYPASSES the monthly AI-import allowance entirely** (item 1) —
+     `supabase/functions/ai-import/index.ts`'s `checkAiImportUsageAllowed()`/
+     `consumeOneCreditIfOverAllowance()` both query `profiles.plan` FIRST,
+     before any of the counting queries (`ai_usage_config`/`trucks`/
+     `ai_usage_log`/`ai_credit_purchases`), and short-circuit immediately
+     for `'owner'` — no counter, no 80% soft-limit notice, no hard limit,
+     no credit-pack prompt, anywhere. `ai-advisor` was checked and
+     confirmed to have no equivalent allowance gate at all (only
+     `ai-import` does, per the original FIVE ADDITIONS pass's own scope),
+     so no change was needed there.
+  2. **EXCLUDED from usage analytics and per-user cost reporting by
+     default** (item 2) — `docs/ADMIN_RUNBOOK.md`'s two real cross-user
+     AGGREGATE queries (the failure-cause breakdown in "AI Import
+     Reliability" recipe #2, and "Review AI usage/cost per user" in "AI
+     Cost Control" recipe #3) both gained a `join profiles p on p.user_id
+     = l.user_id` + `and p.plan is distinct from 'owner'` filter, each
+     with an inline comment showing exactly how to remove that one line
+     when the TRUE infrastructure cost (including the owner's own usage)
+     is actually wanted. Deliberately NOT applied to single-row/per-email
+     lookups or raw event listings (recipe #1 in either section, the
+     "list every non-paying account" plan-status listing) — those aren't
+     aggregates a skewed sample could distort, and seeing your own test
+     failures in a raw event list is exactly what you'd want when
+     debugging.
+  3. **STILL fully respects the shared rate-limit cooldown** (item 3) —
+     deliberately untouched: `getRateLimitCooldownMs()`/
+     `ai_rate_limit_state` inside `extractOnePass()` (the actual
+     Anthropic-call chokepoint) has no plan check at all, so an owner
+     account backs off exactly like every other account when the shared
+     Anthropic API key gets rate-limited — bypassing that would risk real
+     users, not just this one account's own allowance.
+  4. **Settings badge + never sees upgrade/paywall UI** (item 4) —
+     `app/src/entitlement/hasFullAccess.ts` gained `isOwnerAccount()`,
+     deliberately a SEPARATE helper from the existing `isOwnerGrantedPlan()`
+     (whose similar name means something different: "a plan the business
+     owner granted to a CUSTOMER for free" — an owner account gets its own
+     "🛠️ Owner account" Settings badge, never the lifetime/complimentary
+     wording). `hasFullAccess()` itself now returns `true` for `'owner'`
+     too, so the app's one existing usage-limit-adjacent UI (Settings'
+     whole "AI Usage" card — the counter, soft/hard-limit notices, credit-
+     pack prompts) is hidden entirely for an owner account
+     (`app/src/data/aiUsageDisplay.ts`'s `useAiUsageDisplay(isOwner)` also
+     skips its own two queries in that case, not just hiding already-
+     fetched data) — confirmed via the same repo-wide audit the original
+     LIFETIME / COMPLIMENTARY ACCOUNTS pass already did that no OTHER
+     paywall/upgrade-prompt surface exists yet to gate.
+  5. **No hidden dev-only behavior elsewhere** (item 5) — verified by
+     construction: every other access-gating check in the app reads
+     `hasFullAccess()`, which treats `'owner'` identically to `'paid'`/
+     `'lifetime'`/`'complimentary'` — there is no second, owner-specific
+     code path anywhere else that could mask a bug a real user would hit.
+  Tests: `hasFullAccess.test.ts` gained `'owner'` coverage (passes
+  `hasFullAccess()`, does NOT count as `isOwnerGrantedPlan()`, and a new
+  `isOwnerAccount()` describe block proving true only for `'owner'` and
+  false for every other plan including the other full-access ones — "a
+  normal account is unaffected"). `aiUsage.test.ts` gained
+  `bypassesUsageLimit()` coverage (the client-side display-layer mirror).
+  Honestly scoped, same limitation as every prior ai-import pass: the
+  ACTUAL server-side allowance bypass and the `protect_profile_plan_fields()`
+  trigger's column-level protection are both Deno/Postgres-only with no
+  live runtime available in this environment — hand-reviewed rather than
+  unit-tested, not fabricated coverage. Full suite: 99 suites / 2442
+  tests pass; `tsc --noEmit` clean; all 7 locales confirmed key-parity
+  (`settings.ownerAccountBadge`, es/ru/ar/tr translated, hi/uk as
+  untranslated English copies per invariant #11; glossary test re-passed
+  clean — "owner" is a plain English UI word here, not a glossary term).
+  `ai-import` was modified (the two usage-gate functions) and needs
+  redeploying; `ai-advisor`/`reset-data`/`delete-account`/`referral-sync`
+  were NOT touched. No new native dependency — pure JS/TS plus one small
+  SQL migration — ships via a normal `eas update`.

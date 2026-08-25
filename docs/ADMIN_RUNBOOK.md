@@ -303,6 +303,70 @@ Session 10 backlog); `'paid'` exists in the schema now specifically so
 that integration can plug into this same column/helper without a second
 migration.
 
+## Owner/Dev Account (owner decision, docs/PENDING_SQL.md §58)
+
+`plan = 'owner'` is a 5th value on the SAME `profiles.plan` column as
+Lifetime/Complimentary above, protected by the exact same
+`protect_profile_plan_fields()` trigger (a client can never set it
+either) — but it means something different: it's YOUR OWN account, for
+heavy testing, and it behaves differently in three specific ways the
+others don't:
+
+1. **Bypasses the monthly AI-import allowance entirely**
+   (`checkAiImportUsageAllowed()`/`consumeOneCreditIfOverAllowance()` in
+   `supabase/functions/ai-import/index.ts` both check this FIRST, before
+   any counting query) — no counter, no 80% soft-limit notice, no hard
+   limit, no credit-pack prompt, anywhere.
+2. **Excluded from usage analytics and per-user cost reporting by
+   default** — every aggregate query below that reports usage/cost across
+   multiple users filters `p.plan is distinct from 'owner'` so your own
+   testing never skews the numbers used for pricing decisions. Every one
+   of those recipes has a commented-out line showing exactly how to
+   REMOVE that filter when you specifically want the TRUE infrastructure
+   cost including your own usage.
+3. **Still fully subject to the shared rate-limit cooldown** — deliberately
+   NOT bypassed; that's the same Anthropic API key every real user draws
+   from (`getRateLimitCooldownMs()`/`ai_rate_limit_state`), and letting an
+   owner account skip it could genuinely hurt real users mid-cooldown.
+
+Everywhere else, an owner account is a completely ordinary full-access
+account — `hasFullAccess()` returns `true` for it exactly like `'paid'`/
+`'lifetime'`/`'complimentary'`, so there is no separate dev-only code path
+anywhere else in the app that could hide a bug a real user would hit
+(Settings shows a small "🛠️ Owner account" badge instead of the lifetime/
+complimentary one, purely cosmetic).
+
+**1. Grant the owner plan by email:**
+
+```sql
+update profiles
+set plan = 'owner',
+    plan_note = 'dev/testing account',
+    plan_granted_at = now()
+where user_id = (select id from auth.users where email = 'you@example.com');
+```
+
+**2. Revoke back to `free_trial`** (same recipe as Lifetime/Complimentary
+above):
+
+```sql
+update profiles
+set plan = 'free_trial',
+    plan_note = null,
+    plan_granted_at = null
+where user_id = (select id from auth.users where email = 'you@example.com');
+```
+
+**3. Check which accounts currently have the owner flag** (should
+normally be a very short list — your own account(s) only):
+
+```sql
+select u.email, p.plan_note, p.plan_granted_at
+from profiles p
+join auth.users u on u.id = p.user_id
+where p.plan = 'owner';
+```
+
 ## Referral Program — Known Limitation: No Real Cron Yet (owner decision 2026-08-24, PART 1)
 
 `supabase/functions/referral-sync/index.ts` evaluates whether a referral
@@ -364,15 +428,20 @@ column's 400-char truncation isn't enough).
 
 **2. Breakdown of failure causes over a period** (which of the 6 codes is
 actually happening most, e.g. to decide whether a rate-limit issue is
-real or rare):
+real or rare) — excludes the owner/dev account by default (owner decision,
+docs/PENDING_SQL.md §58, item 2) so your own testing never makes a rare
+failure type look more common than it really is for real users; comment
+out the `and p.plan is distinct from 'owner'` line to include it:
 
 ```sql
 select
-  split_part(failure_reason, ':', 1) as error_type,
+  split_part(l.failure_reason, ':', 1) as error_type,
   count(*) as occurrences
-from ai_usage_log
-where call_type = 'ai_import' and success = false
-  and created_at >= now() - interval '7 days'
+from ai_usage_log l
+join profiles p on p.user_id = l.user_id
+where l.call_type = 'ai_import' and l.success = false
+  and l.created_at >= now() - interval '7 days'
+  and p.plan is distinct from 'owner' -- remove this line to include your own testing
 group by 1
 order by 2 desc;
 ```
@@ -455,7 +524,12 @@ where service = 'ai_import';
 `status` also accepts `'degraded'` for a lighter-weight "may be slow"
 notice with your own custom `message` text.
 
-**3. Review AI usage/cost per user** (last 30 days, both call types):
+**3. Review AI usage/cost per user** (last 30 days, both call types) —
+excludes the owner/dev account by default (owner decision, docs/
+PENDING_SQL.md §58, item 2) so heavy personal testing never skews the
+per-user numbers you'd use for pricing decisions; comment out the
+`and p.plan is distinct from 'owner'` line (or remove it) to see the TRUE
+infrastructure cost including your own usage:
 
 ```sql
 select u.email,
@@ -465,7 +539,9 @@ select u.email,
        count(*) filter (where l.call_type = 'ai_advisor' and l.success) as ai_advisor_successes
 from ai_usage_log l
 join auth.users u on u.id = l.user_id
+join profiles p on p.user_id = l.user_id
 where l.created_at >= now() - interval '30 days'
+  and p.plan is distinct from 'owner' -- remove this line to include your own testing
 group by u.email
 order by ai_import_calls desc;
 ```

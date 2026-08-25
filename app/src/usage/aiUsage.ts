@@ -29,6 +29,19 @@ export function calcMonthlyAllowance(
   return accountCeiling != null ? Math.min(raw, accountCeiling) : raw;
 }
 
+// OWNER/DEV ACCOUNT FLAG (owner decision) — an 'owner' plan
+// (src/entitlement/hasFullAccess.ts) bypasses the monthly allowance
+// entirely: no counter, no soft-limit notice, no hard limit, no credit-
+// pack prompt. Mirrored in ai-import/index.ts's own inline check (same
+// "self-contained Edge Function, pure TS mirror kept here for
+// testability" convention as calcMonthlyAllowance/calcUsageStatus above)
+// — that server-side check remains the actual enforcement point; this
+// copy is what the CLIENT reads to decide whether to even show the usage
+// UI in Settings at all.
+export function bypassesUsageLimit(plan: string | null | undefined): boolean {
+  return plan === 'owner';
+}
+
 export const SOFT_LIMIT_PCT = 0.8;
 
 export type UsageStatus = {

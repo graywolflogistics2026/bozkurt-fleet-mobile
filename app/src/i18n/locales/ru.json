@@ -581,6 +581,7 @@
     "title": "Настройки",
     "lifetimeAccessBadge": "Пожизненный доступ",
     "complimentaryAccessBadge": "Бесплатный доступ",
+    "ownerAccountBadge": "Аккаунт владельца",
     "tosAccepted": "Условия использования приняты {{date}} (в{{version}})",
     "dataTitle": "Данные",
     "exportAllDataNote": "Все ваши записи — settlements, вычеты, рейсы, топливо и многое другое — в формате JSON. Не включает исходные фото/PDF, которые вы загрузили.",

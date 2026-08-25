@@ -581,6 +581,7 @@
     "title": "Configuración",
     "lifetimeAccessBadge": "Acceso de por vida",
     "complimentaryAccessBadge": "Acceso de cortesía",
+    "ownerAccountBadge": "Cuenta del propietario",
     "tosAccepted": "Términos de Uso aceptados {{date}} (v{{version}})",
     "dataTitle": "Datos",
     "exportAllDataNote": "Todos los registros que has ingresado — settlements, deducciones, cargas, combustible y más — en formato JSON. No incluye las fotos/PDF originales que subiste.",

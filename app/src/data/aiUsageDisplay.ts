@@ -11,7 +11,13 @@ import { calcMonthlyAllowance, calcUsageStatus, sumAvailableCredits, monthStartU
 // reads (ai_usage_log, ai_credit_purchases) via the user's own RLS-scoped
 // client — this is a DISPLAY-ONLY read, the server remains the sole
 // enforcement point (CLAUDE.md's own "counters live server-side" rule).
-export function useAiUsageDisplay() {
+// `isOwner` (owner decision, OWNER/DEV ACCOUNT FLAG pass) — an owner
+// account never has a real allowance to report, so both queries are
+// skipped entirely (`enabled: false`) rather than fetched and then hidden
+// — settings.tsx doesn't render this section at all for that account, but
+// this hook staying query-free for it too avoids two pointless DB round
+// trips on every Settings visit.
+export function useAiUsageDisplay(isOwner = false) {
   const { session } = useAuth();
   const userId = session?.user.id;
   const { trucks } = useActiveTruck();
@@ -30,7 +36,7 @@ export function useAiUsageDisplay() {
       if (error) throw error;
       return count ?? 0;
     },
-    enabled: !!userId,
+    enabled: !!userId && !isOwner,
   });
 
   const creditsQuery = useQuery<CreditPack[]>({
@@ -44,7 +50,7 @@ export function useAiUsageDisplay() {
       if (error) throw error;
       return (data ?? []).map((r) => ({ id: r.id as string, creditsRemaining: r.credits_remaining as number, expiresAt: r.expires_at as string | null }));
     },
-    enabled: !!userId,
+    enabled: !!userId && !isOwner,
   });
 
   const allowance = calcMonthlyAllowance(activeTruckCount);

@@ -24,7 +24,7 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { SUPPORTED_LOCALES, LOCALE_LABELS, LANGUAGE_PICKER_ENABLED, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
-import { isOwnerGrantedPlan } from '@/src/entitlement/hasFullAccess';
+import { isOwnerGrantedPlan, isOwnerAccount } from '@/src/entitlement/hasFullAccess';
 import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
 import { SUPPORT_EMAIL } from '@/src/brand';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
@@ -87,7 +87,8 @@ export default function Settings() {
   // different starting number.
   const coach = useAiCoachSummary();
   const suggestedWeeklyGoal = useMemo(() => trailingAverageNet(coach.weeklyTrend), [coach.weeklyTrend]);
-  const aiUsage = useAiUsageDisplay();
+  const isOwner = isOwnerAccount(profileQuery.data);
+  const aiUsage = useAiUsageDisplay(isOwner);
 
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -333,53 +334,77 @@ export default function Settings() {
           </Card>
         )}
 
+        {/* OWNER/DEV ACCOUNT FLAG (owner decision, docs/PENDING_SQL.md
+            §58) — item 4: "a small 'Owner account' badge... so I always
+            know which account I'm signed into." Deliberately a SEPARATE
+            card from the lifetime/complimentary one above (different
+            wording, different meaning — isOwnerAccount() vs.
+            isOwnerGrantedPlan(), see hasFullAccess.ts's own header
+            comment for why these are two distinct checks). */}
+        {isOwner && (
+          <Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Text style={{ fontSize: 18 }}>🛠️</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('settings.ownerAccountBadge')}</Text>
+            </View>
+          </Card>
+        )}
+
         {/* USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision
             2026-08-24, FIVE ADDITIONS pass, PART 5 items 4-5) — "Show both
             plainly in Settings: AI imports this month: 34 of 180 (3
             trucks) · Extra credits: 275, with the reset date." Display
             only — the server (ai-import/index.ts) is the sole enforcement
-            point. */}
-        <Text style={styles.sectionTitle}>{t('settings.aiUsageTitle')}</Text>
-        <Card>
-          {aiUsage.isLoading ? (
-            <MutedText>{t('common.loading')}</MutedText>
-          ) : (
-            <>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>
-                {t('settings.aiUsageSummary', {
-                  used: aiUsage.usageStatus.used,
-                  allowance: aiUsage.usageStatus.allowance,
-                  trucks: aiUsage.activeTruckCount,
-                })}
-              </Text>
-              {aiUsage.availableCredits > 0 && (
-                <MutedText style={{ marginTop: 2 }}>
-                  {t('settings.aiUsageExtraCredits', { credits: aiUsage.availableCredits })}
-                </MutedText>
+            point. OWNER/DEV ACCOUNT FLAG (owner decision, item 1): an
+            owner account bypasses the allowance entirely server-side, so
+            this whole section — the counter, the soft/hard-limit notices,
+            the credit-pack prompts — is never shown for it, not just
+            silently zeroed out. */}
+        {!isOwner && (
+          <>
+            <Text style={styles.sectionTitle}>{t('settings.aiUsageTitle')}</Text>
+            <Card>
+              {aiUsage.isLoading ? (
+                <MutedText>{t('common.loading')}</MutedText>
+              ) : (
+                <>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>
+                    {t('settings.aiUsageSummary', {
+                      used: aiUsage.usageStatus.used,
+                      allowance: aiUsage.usageStatus.allowance,
+                      trucks: aiUsage.activeTruckCount,
+                    })}
+                  </Text>
+                  {aiUsage.availableCredits > 0 && (
+                    <MutedText style={{ marginTop: 2 }}>
+                      {t('settings.aiUsageExtraCredits', { credits: aiUsage.availableCredits })}
+                    </MutedText>
+                  )}
+                  <MutedText style={{ marginTop: 2 }}>
+                    {t('settings.aiUsageResetsOn', { date: aiUsage.resetDate.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' }) })}
+                  </MutedText>
+                  {aiUsage.usageStatus.softLimitReached && !aiUsage.usageStatus.hardLimitReached && (
+                    <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>{t('settings.aiUsageSoftLimitNotice')}</MutedText>
+                  )}
+                  {aiUsage.usageStatus.hardLimitReached && aiUsage.availableCredits <= 0 && (
+                    <MutedText style={{ color: colors.red, marginTop: spacing.xs }}>{t('settings.aiUsageHardLimitNotice')}</MutedText>
+                  )}
+                  {(aiUsage.usageStatus.softLimitReached || aiUsage.usageStatus.hardLimitReached) && (
+                    <View style={{ marginTop: spacing.sm }}>
+                      <MutedText>{t('settings.aiUsageCreditPacksIntro')}</MutedText>
+                      {CREDIT_PACK_OFFERS.map((pack) => (
+                        <Text key={pack.id} style={{ color: colors.text, marginTop: spacing.xs }}>
+                          • {t(`settings.creditPack.${pack.id}`, { credits: pack.credits, price: pack.priceUsd })}
+                        </Text>
+                      ))}
+                      <MutedText style={{ marginTop: spacing.xs }}>{t('settings.aiUsageCreditPacksContact')}</MutedText>
+                    </View>
+                  )}
+                </>
               )}
-              <MutedText style={{ marginTop: 2 }}>
-                {t('settings.aiUsageResetsOn', { date: aiUsage.resetDate.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' }) })}
-              </MutedText>
-              {aiUsage.usageStatus.softLimitReached && !aiUsage.usageStatus.hardLimitReached && (
-                <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>{t('settings.aiUsageSoftLimitNotice')}</MutedText>
-              )}
-              {aiUsage.usageStatus.hardLimitReached && aiUsage.availableCredits <= 0 && (
-                <MutedText style={{ color: colors.red, marginTop: spacing.xs }}>{t('settings.aiUsageHardLimitNotice')}</MutedText>
-              )}
-              {(aiUsage.usageStatus.softLimitReached || aiUsage.usageStatus.hardLimitReached) && (
-                <View style={{ marginTop: spacing.sm }}>
-                  <MutedText>{t('settings.aiUsageCreditPacksIntro')}</MutedText>
-                  {CREDIT_PACK_OFFERS.map((pack) => (
-                    <Text key={pack.id} style={{ color: colors.text, marginTop: spacing.xs }}>
-                      • {t(`settings.creditPack.${pack.id}`, { credits: pack.credits, price: pack.priceUsd })}
-                    </Text>
-                  ))}
-                  <MutedText style={{ marginTop: spacing.xs }}>{t('settings.aiUsageCreditPacksContact')}</MutedText>
-                </View>
-              )}
-            </>
-          )}
-        </Card>
+            </Card>
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>{t('settings.businessProfileTitle')}</Text>
         <MutedText>{t('settings.businessProfileSubtitle')}</MutedText>

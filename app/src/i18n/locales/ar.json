@@ -581,6 +581,7 @@
     "title": "الإعدادات",
     "lifetimeAccessBadge": "وصول مدى الحياة",
     "complimentaryAccessBadge": "وصول مجاني",
+    "ownerAccountBadge": "حساب المالك",
     "tosAccepted": "تم قبول شروط الاستخدام في {{date}} (الإصدار {{version}})",
     "dataTitle": "البيانات",
     "exportAllDataNote": "كل سجل أدخلته — Settlements والخصومات والحمولات والوقود والمزيد — بصيغة JSON. لا يشمل الصور/ملفات PDF الأصلية التي رفعتها.",

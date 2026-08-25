@@ -9,9 +9,32 @@ import {
   isCreditPackExpired,
   calcCatchUpPackExpiry,
   detectBackfillSession,
+  bypassesUsageLimit,
   CATCH_UP_PACK_VALID_DAYS,
   DEFAULT_IMPORTS_PER_TRUCK_PER_MONTH,
 } from '@/src/usage/aiUsage';
+
+// OWNER/DEV ACCOUNT FLAG (owner decision) — the client-side mirror of
+// ai-import/index.ts's own inline owner-plan bypass. This is a display-
+// layer helper only (Settings hides the usage UI entirely for an owner
+// account) — the actual monthly-allowance ENFORCEMENT is server-side and
+// Deno-only, hand-reviewed rather than unit-tested here, same limitation
+// every prior ai-import pass in this codebase has had (no Deno runtime
+// available in this environment).
+describe('bypassesUsageLimit (owner decision, OWNER/DEV ACCOUNT FLAG pass)', () => {
+  test('true only for the owner plan', () => {
+    expect(bypassesUsageLimit('owner')).toBe(true);
+  });
+
+  test('false for every other plan value — a normal account is unaffected', () => {
+    expect(bypassesUsageLimit('free_trial')).toBe(false);
+    expect(bypassesUsageLimit('paid')).toBe(false);
+    expect(bypassesUsageLimit('lifetime')).toBe(false);
+    expect(bypassesUsageLimit('complimentary')).toBe(false);
+    expect(bypassesUsageLimit(null)).toBe(false);
+    expect(bypassesUsageLimit(undefined)).toBe(false);
+  });
+});
 
 // "allowance recomputes when a truck is added/retired" (spec item 8)
 describe('calcMonthlyAllowance', () => {

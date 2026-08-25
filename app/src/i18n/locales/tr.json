@@ -581,6 +581,7 @@
     "title": "Ayarlar",
     "lifetimeAccessBadge": "Ömür boyu erişim",
     "complimentaryAccessBadge": "Ücretsiz erişim",
+    "ownerAccountBadge": "Sahip hesabı",
     "tosAccepted": "Kullanım Şartları {{date}} tarihinde kabul edildi (v{{version}})",
     "dataTitle": "Veri",
     "exportAllDataNote": "Girdiğiniz her kayıt — settlement'lar, kesintiler, yükler, yakıt ve daha fazlası — JSON olarak. Yüklediğiniz orijinal fotoğraf/PDF dosyalarını içermez.",
