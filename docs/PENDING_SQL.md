@@ -1721,7 +1721,7 @@ No RLS change needed — `profiles` is already owner-scoped.
 
 ---
 
-## 49. Smart alerts + proactive AI Coach state (NEXT PASS, owner decision 2026-08-24, items D + E)
+## 49. Smart alerts + proactive AI Coach state (NEXT PASS, owner decision 2026-08-24, items D + E) — ✅ APPLIED (confirmed live 2026-08-26 during the P0 audit-fix pass — see §59's own note; this file's own `[ ]` marker had simply never been updated after the migration was actually run)
 
 Five new nullable/defaulted columns on `profiles`, all additive:
 
@@ -1760,8 +1760,16 @@ dismissal/cached AI text behind for a "fresh" account. `supabase/
 functions/reset-data/index.ts`'s `PROFILE_DATA_RESET` needs these five
 field names added in the same pass that runs this migration.
 
-- [ ] 49a run (add profiles nudge_state/role_prompt_dismissed_at/
-      ai_weekly_review*)
+- [x] 49a run (add profiles nudge_state/role_prompt_dismissed_at/
+      ai_weekly_review*) — CONFIRMED via a live read-only
+      `information_schema.columns` query against the linked project
+      (`supabase db query --linked`) during the P0 audit-fix pass: all
+      five columns exist on the live `profiles` table. The audit that
+      flagged this as an open risk was correct to flag it (the doc's own
+      marker really did say "not yet run," and Reset All Data's own
+      column-dependent final step really would have failed had that been
+      true) — it just turned out to already be applied; the marker had
+      only never been updated.
 
 ---
 
@@ -2743,7 +2751,7 @@ row, not a new table.
 
 ---
 
-## 58. profiles.plan gains 'owner' (owner/dev account flag, owner decision)
+## 58. profiles.plan gains 'owner' (owner/dev account flag, owner decision) — ✅ APPLIED (confirmed live 2026-08-26 — see §59's note)
 
 `profiles.plan` (docs/PENDING_SQL.md §50) gains a 5th value, `'owner'` —
 the app owner's/developer's own account, for heavy testing without
@@ -2764,7 +2772,450 @@ alter table profiles add constraint profiles_plan_check
 See docs/ADMIN_RUNBOOK.md's "Owner/Dev Account" section for the grant/
 revoke recipe (same style as the existing lifetime-plan recipe).
 
-- [ ] 58a run (profiles_plan_check widened to include 'owner')
+- [x] 58a run (profiles_plan_check widened to include 'owner') —
+      CONFIRMED via a live `pg_constraint` query during the P0
+      audit-fix pass: `profiles_plan_check` already includes `'owner'`
+      on the live database.
+
+---
+
+## 59. AI credit self-grant RLS hole (P0 SECURITY FIX, FULL SYSTEM AUDIT, owner decision 2026-08-26) — NOT YET RUN
+
+**The finding**: `ai_credit_purchases_update_own` (§51) grants every
+authenticated user an unrestricted self-service UPDATE on their own
+`ai_credit_purchases` row — `for update using (user_id = auth.uid())
+with check (user_id = auth.uid())`, no column restriction at all. This
+policy was written so the server-side consumption logic inside
+`ai-import/index.ts` (running as the caller's own JWT-scoped client,
+never service_role) could decrement `credits_remaining` — but RLS
+cannot distinguish "the app's own trusted code path" from the same
+user hitting the REST API directly with their own valid JWT. **Any
+authenticated user could `PATCH` their own row to
+`credits_remaining: 999999` and permanently bypass the entire
+monthly-allowance/credit-pack cost-control system** — confirmed live
+via `pg_policies` during the audit, not just read from this file.
+
+Cross-checked every OTHER business-critical table for the same shape
+("any value the business depends on — usage counters, plan, allowances,
+referral status, account_credits, ai_usage_log — must be
+server-controlled") by dumping every `INSERT`/`UPDATE`/`ALL` RLS policy
+in the `public` schema against the live database. Result: **this table
+was the only one with the hole.** `ai_usage_log` is insert-own-only, no
+update/delete (a forged row can only ever push the forger's OWN usage
+count UP, never down — self-limiting, not exploitable for gain).
+`ai_usage_config`/`service_status`/`tax_year_data`/`carrier_code_maps`/
+`benchmarks` have zero write policies for `authenticated` at all
+(service-role-only by omission, correct). `referrals`/`account_credits`
+are SELECT-only already — confirmed live, matching what this doc's own
+§50 prose already claimed. `profiles.plan`/`plan_note`/`plan_granted_at`
+are genuinely protected by the `protect_profile_plan_fields()` trigger
+(§50) — traced for a bypass path, found none. The one other table with
+any self-service UPDATE at all, `import_jobs` (`auth.uid() = user_id`,
+§54), was reviewed and is NOT a fix target: a user tampering with their
+own job's `status`/`result_json` can only ever inject fabricated
+extraction data into THEIR OWN review-and-Save flow — the exact same
+thing the app's own manual-entry forms already let them do freely — it
+does not touch `ai_usage_log`/billing/allowance accounting at all
+(logged separately, server-side, keyed off the real Anthropic call, not
+off `import_jobs.status`), so there is no unearned value or
+cost-control bypass available through it.
+
+**The fix, two parts, closing the P1 TOCTOU race from the same audit at
+the same time** (the old `consumeOneCreditIfOverAllowance()` did a
+plain client-side `select` → sort → `update({credits_remaining: n -
+1})` — a classic read-then-write race: two concurrent calls that both
+read the same starting `credits_remaining` could both write back `n -
+1`, losing a decrement and handing out a free credit, independent of
+the RLS hole above):
+
+1. Drop the vulnerable policy — users get SELECT-only on
+   `ai_credit_purchases` from here on, matching the already-correct
+   `referrals`/`account_credits` pattern.
+2. A new `consume_ai_import_credit()` RPC does the ENTIRE "pick the
+   best pack, lock it, decrement it" operation as one atomic
+   transaction: `security definer` (so it can write despite the now-
+   absent UPDATE policy — Supabase's migration-runner role owns it,
+   which bypasses RLS the same way `protect_profile_plan_fields()`'s
+   own header comment documents for the `postgres` role) but derives
+   the user EXCLUSIVELY from `auth.uid()` internally — never a
+   parameter, so it can't be tricked into consuming a different user's
+   credit even in principle (same "derive identity from the JWT, never
+   trust a caller-supplied id" precedent as `reset-data`/
+   `delete-account`/`referral-sync`). `select ... for update` (no
+   `skip locked` — a single user's own few rows are never a
+   high-contention path, and BLOCKING is exactly what fixes the race:
+   a second concurrent call waits for the first's transaction to
+   commit, then sees the ALREADY-decremented value before applying its
+   own decrement, instead of both starting from the same stale read).
+   Returns the consumed pack's id, or `null` when no credit is
+   available (a normal, non-error outcome the caller already handled).
+3. `credits_remaining <= credits_granted` is now a real CHECK
+   constraint — defense in depth against any future write path
+   (including a human admin typo via the `docs/ADMIN_RUNBOOK.md` grant
+   recipe) ever setting a pack above what it was actually granted.
+
+```sql
+-- 1. Close the hole.
+drop policy if exists "ai_credit_purchases_update_own" on ai_credit_purchases;
+
+-- 2. credits_remaining can never exceed what was actually granted.
+alter table ai_credit_purchases
+  add constraint ai_credit_purchases_remaining_le_granted
+  check (credits_remaining <= credits_granted);
+
+-- 3. Atomic, row-locked, auth.uid()-scoped credit consumption.
+create or replace function consume_ai_import_credit()
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_pack_id uuid;
+begin
+  if v_user_id is null then
+    raise exception 'consume_ai_import_credit: no authenticated user' using errcode = '28000';
+  end if;
+
+  -- Soonest-expiring usable pack first, never-expiring packs last
+  -- ("use it or lose it") — same order app/src/usage/aiUsage.ts's
+  -- planCreditConsumption() already established client-side for display.
+  select id into v_pack_id
+  from ai_credit_purchases
+  where user_id = v_user_id
+    and credits_remaining > 0
+    and (expires_at is null or expires_at > now())
+  order by (expires_at is null) asc, expires_at asc
+  for update
+  limit 1;
+
+  if v_pack_id is null then
+    return null;
+  end if;
+
+  update ai_credit_purchases
+  set credits_remaining = credits_remaining - 1
+  where id = v_pack_id;
+
+  return v_pack_id;
+end;
+$$;
+
+grant execute on function consume_ai_import_credit() to authenticated;
+```
+
+`supabase/functions/ai-import/index.ts`'s `consumeOneCreditIfOverAllowance()`
+now calls this RPC instead of doing its own select+sort+update — see
+that file for the updated call site.
+
+- [ ] 59a run (drop the vulnerable ai_credit_purchases UPDATE policy,
+      add the credits_remaining<=credits_granted constraint, create
+      consume_ai_import_credit())
+
+---
+
+## 60. Balance-ledger atomicity — 4 sites (P0 MONEY-CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision 2026-08-26) — NOT YET RUN
+
+**The finding**: four separate call sites wrote a "this delta has been
+applied" tracking column to a row (`capital_transactions.
+business_balance_applied` in three places, `settlements.
+business_balance_credit` in the fourth) in a SEPARATE client-side step
+BEFORE calling `apply_business_balance_delta` (§37/§38) to actually
+apply that delta to `profiles.business_balance`. If the RPC step ever
+failed (network drop, transient DB error) after the row write had
+already succeeded — genuinely possible, not hypothetical, since none of
+these are wrapped in a database transaction — the row was left
+PERMANENTLY claiming a delta that was never actually applied, with no
+rollback and no reconciliation path:
+
+- **Insert** (`useRecordManualCapitalTransaction`,
+  `useReimburseMyself`): the row is created with the delta already
+  recorded; if the RPC then fails, the delta is stuck-recorded-but-
+  unapplied.
+- **Update** (`useUpdateManualCapitalTransaction`): same shape.
+- **Delete** (`useDeleteManualCapitalTransaction`) — the worst case: the
+  row was deleted BEFORE the reversal RPC ran. If the RPC failed, the
+  only record of what needed reversing was already gone — permanent,
+  undiagnosable drift, unlike the other three which at least leave
+  evidence behind.
+- **Settlement import** (`aiImportSave.ts`) — worse still in a
+  different way: `business_balance_credit` was written into the
+  settlement row at INSERT/UPDATE time, before 6 batched child-table
+  inserts, a loans-upsert loop, and (on re-import) 5 delete calls — ANY
+  of which can throw. A retry after such a failure would then read its
+  OWN stale `business_balance_credit` back as `previousCredit`, compute
+  a delta of ZERO against itself, and skip the RPC entirely — the
+  settlement's real net pay silently NEVER applied to the balance, even
+  on a clean, fully-successful retry, with no error anywhere.
+
+**The fix**: fold the row write and the balance-delta application into
+ONE atomic RPC transaction per site — either both happen or neither
+does, so a partial failure can never again leave a row and the balance
+disagreeing. Every RPC computes its own delta INTERNALLY from a fresh,
+row-locked read of the row's current state — never from a value the
+client captured earlier and might be trusting stale (a second,
+independent correctness improvement beyond pure atomicity: the OLD
+`useUpdateManualCapitalTransaction` trusted a client-passed
+`previousBalanceApplied` parameter that could theoretically be stale if
+the client's local state hadn't refetched between two edits — the new
+RPC reads it fresh, under a row lock, every time).
+
+- **Insert**: `record_manual_capital_transaction()` — inserts the
+  `capital_transactions` row (computing
+  `business_balance_applied = case when tx_type='contribution' then
+  amount else -amount end` itself, the exact same formula
+  `app/src/stats/capitalAccount.ts`'s `manualTransactionBalanceDelta()`
+  already documents — that JS function and its sibling
+  `computeManualTransactionBalanceAdjustment()` are now DEAD CODE, no
+  longer called from anywhere; deliberately NOT deleted in this pass to
+  keep this fix's blast radius to exactly the atomicity bug — flagged as
+  a P2 cleanup follow-up, not silently left unmentioned) and applies the
+  delta to `profiles.business_balance`, atomically. `p_linked_deduction_id`
+  (nullable) lets ONE function serve both `useRecordManualCapitalTransaction`
+  (null) and `useReimburseMyself` (set) — a reimbursement is just a draw
+  linked to the deduction its contribution came from, same dual-purpose
+  `linked_deduction_id` column this codebase already established.
+- **Update**: `update_manual_capital_transaction()` — row-locks the
+  EXISTING row, reads its CURRENT `business_balance_applied` fresh
+  (never trusts a client-passed value), computes the adjustment, updates
+  both the row and the balance together.
+- **Delete**: `delete_manual_capital_transaction()` — row-locks and
+  reads the row FIRST, reverses the balance, and ONLY THEN deletes the
+  row — inside one transaction, so if the reversal fails for any reason
+  the whole transaction rolls back and the row is NEVER deleted. This is
+  the literal fix for "delete is worst — the row must survive until the
+  reversal succeeds."
+- **Settlement import**: `apply_settlement_business_balance_credit()` —
+  row-locks the settlement, reads its CURRENT `business_balance_credit`
+  fresh, computes the delta against the NEW net pay, updates both the
+  settlement row and the balance together. `app/src/data/aiImportSave.ts`
+  no longer writes `business_balance_credit` at settlement insert/update
+  time AT ALL — this RPC, called only after every child row and the
+  re-import cleanup have already succeeded, is now the ONLY place that
+  column ever changes, always in lockstep with the actual balance
+  application.
+
+All four are `security invoker` (run as the calling user, same pattern
+as `apply_business_balance_delta` — RLS on both `capital_transactions`/
+`settlements` (owner-scoped `ALL`) and `profiles` (owner-scoped `ALL`)
+already permits everything each function does for its own row; no
+elevated privilege needed), and every one derives the acting user from
+an explicit `p_user_id` parameter cross-checked against `auth.uid()`
+(never trusts the parameter alone), same defense-in-depth style as
+`apply_business_balance_delta` itself.
+
+```sql
+create or replace function record_manual_capital_transaction(
+  p_user_id uuid,
+  p_tx_type text,
+  p_amount numeric,
+  p_tx_date date,
+  p_note text,
+  p_linked_deduction_id uuid default null
+)
+returns capital_transactions
+language plpgsql
+security invoker
+as $$
+declare
+  v_row capital_transactions;
+  v_delta numeric;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'record_manual_capital_transaction: user mismatch' using errcode = '28000';
+  end if;
+  if p_tx_type not in ('contribution', 'draw') then
+    raise exception 'record_manual_capital_transaction: invalid tx_type %', p_tx_type;
+  end if;
+
+  v_delta := case when p_tx_type = 'contribution' then p_amount else -p_amount end;
+
+  insert into capital_transactions (user_id, tx_type, amount, tx_date, note, linked_deduction_id, business_balance_applied)
+  values (p_user_id, p_tx_type, p_amount, p_tx_date, p_note, p_linked_deduction_id, v_delta)
+  returning * into v_row;
+
+  if v_delta <> 0 then
+    update profiles
+    set business_balance = coalesce(business_balance, 0) + v_delta
+    where user_id = p_user_id and user_id = auth.uid();
+    if not found then
+      raise exception 'record_manual_capital_transaction: no profiles row updated for user %', p_user_id
+        using errcode = 'P0002';
+    end if;
+  end if;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function record_manual_capital_transaction(uuid, text, numeric, date, text, uuid) to authenticated;
+
+create or replace function update_manual_capital_transaction(
+  p_id uuid,
+  p_user_id uuid,
+  p_tx_type text,
+  p_amount numeric,
+  p_tx_date date,
+  p_note text
+)
+returns capital_transactions
+language plpgsql
+security invoker
+as $$
+declare
+  v_row capital_transactions;
+  v_previous_delta numeric;
+  v_new_delta numeric;
+  v_adjustment numeric;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'update_manual_capital_transaction: user mismatch' using errcode = '28000';
+  end if;
+  if p_tx_type not in ('contribution', 'draw') then
+    raise exception 'update_manual_capital_transaction: invalid tx_type %', p_tx_type;
+  end if;
+
+  select business_balance_applied into v_previous_delta
+  from capital_transactions
+  where id = p_id and user_id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'update_manual_capital_transaction: no capital_transactions row % for user %', p_id, p_user_id
+      using errcode = 'P0002';
+  end if;
+
+  v_new_delta := case when p_tx_type = 'contribution' then p_amount else -p_amount end;
+  v_adjustment := v_new_delta - coalesce(v_previous_delta, 0);
+
+  update capital_transactions
+  set amount = p_amount, tx_date = p_tx_date, note = p_note, business_balance_applied = v_new_delta
+  where id = p_id
+  returning * into v_row;
+
+  if v_adjustment <> 0 then
+    update profiles
+    set business_balance = coalesce(business_balance, 0) + v_adjustment
+    where user_id = p_user_id and user_id = auth.uid();
+    if not found then
+      raise exception 'update_manual_capital_transaction: no profiles row updated for user %', p_user_id
+        using errcode = 'P0002';
+    end if;
+  end if;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function update_manual_capital_transaction(uuid, uuid, text, numeric, date, text) to authenticated;
+
+create or replace function delete_manual_capital_transaction(
+  p_id uuid,
+  p_user_id uuid
+)
+returns void
+language plpgsql
+security invoker
+as $$
+declare
+  v_delta numeric;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'delete_manual_capital_transaction: user mismatch' using errcode = '28000';
+  end if;
+
+  select business_balance_applied into v_delta
+  from capital_transactions
+  where id = p_id and user_id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'delete_manual_capital_transaction: no capital_transactions row % for user %', p_id, p_user_id
+      using errcode = 'P0002';
+  end if;
+
+  if v_delta <> 0 then
+    update profiles
+    set business_balance = coalesce(business_balance, 0) - v_delta
+    where user_id = p_user_id and user_id = auth.uid();
+    if not found then
+      raise exception 'delete_manual_capital_transaction: no profiles row updated for user %', p_user_id
+        using errcode = 'P0002';
+    end if;
+  end if;
+
+  -- Only now — the reversal has already committed within this SAME
+  -- transaction — does the row itself get removed. If anything above
+  -- raised, this line never runs and the whole transaction rolls back,
+  -- so the row is NEVER deleted without its reversal having succeeded.
+  delete from capital_transactions where id = p_id;
+end;
+$$;
+
+grant execute on function delete_manual_capital_transaction(uuid, uuid) to authenticated;
+
+create or replace function apply_settlement_business_balance_credit(
+  p_settlement_id uuid,
+  p_user_id uuid,
+  p_new_credit numeric
+)
+returns numeric
+language plpgsql
+security invoker
+as $$
+declare
+  v_previous_credit numeric;
+  v_delta numeric;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'apply_settlement_business_balance_credit: user mismatch' using errcode = '28000';
+  end if;
+
+  select business_balance_credit into v_previous_credit
+  from settlements
+  where id = p_settlement_id and user_id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'apply_settlement_business_balance_credit: no settlement % for user %', p_settlement_id, p_user_id
+      using errcode = 'P0002';
+  end if;
+
+  v_delta := p_new_credit - coalesce(v_previous_credit, 0);
+
+  update settlements
+  set business_balance_credit = p_new_credit
+  where id = p_settlement_id;
+
+  if v_delta <> 0 then
+    update profiles
+    set business_balance = coalesce(business_balance, 0) + v_delta
+    where user_id = p_user_id and user_id = auth.uid();
+    if not found then
+      raise exception 'apply_settlement_business_balance_credit: no profiles row updated for user %', p_user_id
+        using errcode = 'P0002';
+    end if;
+  end if;
+
+  return v_delta;
+end;
+$$;
+
+grant execute on function apply_settlement_business_balance_credit(uuid, uuid, numeric) to authenticated;
+```
+
+`app/src/data/capitalTransactions.ts`'s four mutation hooks and
+`app/src/data/aiImportSave.ts`'s settlement save path now call these
+RPCs instead of doing their own two-step row-write-then-`apply_business_balance_delta`
+— see those files for the updated call sites. `apply_business_balance_delta`
+itself is UNCHANGED and stays in use elsewhere (it's a generic "just
+apply this delta" primitive; these four new functions are specifically
+about coupling a ROW write to a delta atomically, which
+`apply_business_balance_delta` alone was never designed to do).
+
+- [ ] 60a run (record_manual_capital_transaction, update_manual_capital_transaction,
+      delete_manual_capital_transaction, apply_settlement_business_balance_credit)
 
 ---
 

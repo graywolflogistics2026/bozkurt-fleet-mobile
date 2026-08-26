@@ -162,7 +162,7 @@ export default function Settlements() {
     try {
       const updated = await updateSettlement.mutateAsync({ id: selected.id, values: { per_diem_days: days } });
       setSelected(updated);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['settlements'] });
     } catch (err) {
       Alert.alert(t('settlementsScreen.perDiemSaveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -177,7 +177,7 @@ export default function Settlements() {
     try {
       const updated = await updateSettlement.mutateAsync({ id: selected.id, values: { miles } });
       setSelected(updated);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['settlements'] });
     } catch (err) {
       Alert.alert(t('settlementsScreen.milesSaveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -298,7 +298,7 @@ export default function Settlements() {
   async function handleChangeDeductionCategory(deductionId: string, category: string) {
     try {
       await updateDeduction.mutateAsync({ id: deductionId, values: { category } });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     }
@@ -309,7 +309,7 @@ export default function Settlements() {
     setSavingPayment(true);
     try {
       await updateDeduction.mutateAsync({ id: singleLinkedDeduction.id, values: { payment_method: method } });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
@@ -326,7 +326,7 @@ export default function Settlements() {
     setReviewingId(x.id);
     try {
       await markDocumentReviewed.mutateAsync(x.document_id);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['documents'] });
     } catch (err) {
       Alert.alert(t('settlementsScreen.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -344,7 +344,7 @@ export default function Settlements() {
     setMarkingAllReviewed(true);
     try {
       await Promise.allSettled(documentIds.map((id) => markDocumentReviewed.mutateAsync(id)));
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['documents'] });
     } finally {
       setMarkingAllReviewed(false);
     }
@@ -361,7 +361,13 @@ export default function Settlements() {
             // loads/fuel_purchases/reimbursements/deductions with this
             // settlement_id cascade-delete server-side (CLAUDE.md invariant #5).
             await deleteSettlement.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            // Cascade delete (CLAUDE.md invariant #5): loads/fuel_purchases/
+            // reimbursements/withheld-deductions with this settlement_id
+            // are removed server-side — include all 4 so every screen that
+            // reads them refreshes too, not just the settlements list.
+            await invalidateFinancialData(queryClient, {
+              entities: ['settlements', 'loads', 'fuel_purchases', 'reimbursements', 'deductions'],
+            });
             setSelected(null);
           } catch (err) {
             Alert.alert(t('settlementsScreen.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

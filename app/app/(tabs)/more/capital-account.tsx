@@ -213,7 +213,7 @@ export default function CapitalAccount() {
         tx_date: drawDate,
         note: drawNote || null,
       });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
       setDrawModalOpen(false);
       setDrawAmount('');
       setDrawNote('');
@@ -237,7 +237,7 @@ export default function CapitalAccount() {
           onPress: async () => {
             try {
               await deleteTx.mutateAsync(tx);
-              await invalidateFinancialData(queryClient);
+              await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
               setEditingTx(null);
             } catch (err) {
               Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
@@ -260,7 +260,7 @@ export default function CapitalAccount() {
         tx_date: contributionDate,
         note: contributionNote || null,
       });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
       setContributionModalOpen(false);
       setContributionAmount('');
       setContributionNote('');
@@ -283,7 +283,7 @@ export default function CapitalAccount() {
           onPress: async () => {
             try {
               await deleteTx.mutateAsync(tx);
-              await invalidateFinancialData(queryClient);
+              await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
               setEditingTx(null);
             } catch (err) {
               Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
@@ -324,11 +324,13 @@ export default function CapitalAccount() {
         // action, which is the actual owner of this row's amount.
         await updateTx.mutateAsync({ id: editingTx.id, values: { tx_date: editDate, note: editNote || null } });
       } else {
-        // CAPITAL ACCOUNT — THREE UI FIXES (item 3): adjust the balance
-        // by the DIFFERENCE only — previousBalanceApplied always comes
-        // from the row's own stored business_balance_applied, never
-        // re-derived from its pre-edit amount, so repeated edits can
-        // never drift.
+        // BALANCE LEDGER ATOMICITY FIX (docs/PENDING_SQL.md §60): the
+        // adjustment is now computed server-side, inside
+        // update_manual_capital_transaction() itself, from a FRESH
+        // row-locked read of the row's own current business_balance_applied
+        // — never from a value passed in here, which could theoretically
+        // be stale if this screen's own local state hadn't refetched
+        // between two edits.
         await updateManualTx.mutateAsync({
           id: editingTx.id,
           userId,
@@ -336,10 +338,9 @@ export default function CapitalAccount() {
           amount,
           txDate: editDate,
           note: editNote || null,
-          previousBalanceApplied: editingTx.business_balance_applied,
         });
       }
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
       setEditingTx(null);
     } catch (err) {
       Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
@@ -365,7 +366,7 @@ export default function CapitalAccount() {
           onPress: async () => {
             try {
               await Promise.all(duplicates.map((tx) => deleteTx.mutateAsync(tx)));
-              await invalidateFinancialData(queryClient);
+              await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
               Alert.alert(t('capitalAccount.removeDuplicates'), t('capitalAccount.duplicatesRemoved', { count: duplicates.length }));
             } catch (err) {
               Alert.alert(t('capitalAccount.deleteFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
@@ -382,7 +383,7 @@ export default function CapitalAccount() {
     setSavingBalance(true);
     try {
       await updateBalance.mutateAsync(bal);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
       setBalanceModalOpen(false);
       setBalanceInput('');
     } catch (err) {

@@ -53,7 +53,7 @@ export default function Loads() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['loads'] });
     } finally {
       setRefreshing(false);
     }
@@ -84,7 +84,7 @@ export default function Loads() {
         onPress: async () => {
           try {
             await deleteLoad.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['loads'] });
           } catch (err) {
             Alert.alert(t('loads.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
           }

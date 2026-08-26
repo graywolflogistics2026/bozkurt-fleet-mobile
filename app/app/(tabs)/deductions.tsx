@@ -298,6 +298,8 @@ export default function Deductions() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      // Pull-to-refresh is an explicit "make sure everything here is
+      // current" gesture, not a mutation — keep the full unscoped sweep.
       await invalidateFinancialData(queryClient);
     } finally {
       setRefreshing(false);
@@ -369,7 +371,12 @@ export default function Deductions() {
       });
       const refreshed = await fetchReimbursementStatus(userId, editing.id);
       setReimbursementStatus(refreshed);
-      await invalidateFinancialData(queryClient);
+      // reimburseMyself.mutateAsync() already invalidates capital_transactions/
+      // capital-account-summary/profile internally (capitalTransactions.ts) —
+      // this call only needs to additionally cover 'capital_transactions' in
+      // case a screen reads it through a differently-shaped query; scoped
+      // rather than the full ~28-table sweep.
+      await invalidateFinancialData(queryClient, { entities: ['capital_transactions'] });
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
@@ -386,7 +393,7 @@ export default function Deductions() {
     setReviewingId(x.id);
     try {
       await markReviewed.mutateAsync({ id: x.id, description: x.description });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
       if (closeAfter) closeEdit();
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -403,7 +410,7 @@ export default function Deductions() {
     if (target.length === 0) return;
     try {
       await markAllReviewed.mutateAsync(target.map((d) => ({ id: d.id, description: d.description })));
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     }
@@ -464,7 +471,16 @@ export default function Deductions() {
         const carrier = await fetchCarrierForDeduction(editing);
         learnCategoryCorrection.mutate({ userId, description: editing.description, category: editCategory, carrier });
       }
-      await invalidateFinancialData(queryClient);
+      // UNBOUNDED QUERIES / SCOPED INVALIDATION FIX (P0, FULL SYSTEM AUDIT
+      // owner decision 2026-08-26) — the measured scenario: this save
+      // always touches 'deductions'; applyContributionSync() above may
+      // create/update/remove a linked capital_transactions row (always
+      // run, even when plan.action is 'noop') — including it
+      // unconditionally is cheap and correct either way. Down from
+      // invalidating all ~28 tables + 4 aggregates (32 calls) to 5 —
+      // see src/data/__tests__/queryInvalidation.test.ts's "EXACT
+      // reported scenario" test for the measured before/after count.
+      await invalidateFinancialData(queryClient, { entities: ['deductions', 'capital_transactions'] });
       setEditing(null);
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -525,7 +541,9 @@ export default function Deductions() {
         await applyContributionSync(userId, newDed.id, plan);
       }
 
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, {
+        entities: personal && amount > 0 ? ['deductions', 'capital_transactions'] : ['deductions'],
+      });
       setAdding(false);
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -547,7 +565,9 @@ export default function Deductions() {
             // CLAUDE.md invariant #5).
             await deleteDeduction.mutateAsync(x.id);
             if (x.document_id) await cleanupOrphanedDocument(x.document_id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, {
+              entities: x.document_id ? ['deductions', 'capital_transactions', 'documents'] : ['deductions', 'capital_transactions'],
+            });
           } catch (err) {
             Alert.alert(t('deductions.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
           }

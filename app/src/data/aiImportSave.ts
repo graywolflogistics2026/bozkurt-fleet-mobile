@@ -369,33 +369,37 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     settlementWeekEnding = mapping.settlement.week_ending;
     isSettlementReimport = isReimport;
 
-    // BUSINESS BALANCE ON RE-IMPORT (pre-launch hardening, owner decision
-    // 2026-08-02): a re-import used to credit nothing at all, leaving the
-    // balance wrong after a corrected net pay. Every save now applies the
-    // DELTA between what this settlement SHOULD have credited
-    // (newCredit) and what it actually credited last time (previousCredit,
-    // read from the row's own business_balance_credit — 0 for a brand-new
-    // settlement, so this is one formula for both new and re-imports).
-    //
     // NEGATIVE SETTLEMENTS (owner decision 2026-08-02, verified against a
     // real statement: W/E 2026-07-24, 0 miles, $5.16 revenue, $1,160.51
     // deductions, net -$1,155.35 — the owner OWES the carrier that week):
-    // newCredit used to clamp a negative netPay to 0, so a losing week
-    // silently left business_balance untouched instead of decreasing it
-    // by what's actually owed. A losing week is real money leaving the
-    // business the same as a positive week is real money entering it —
-    // newCredit is now the SIGNED net pay, uncapped in either direction,
-    // and business_balance is allowed to go negative (no DB check
-    // constraint enforces >= 0 — see docs/SCHEMA.sql).
-    const previousCredit = isReimport ? Number(existingSett!.business_balance_credit ?? 0) : 0;
+    // newCredit is the SIGNED net pay, uncapped in either direction, and
+    // business_balance is allowed to go negative (no DB check constraint
+    // enforces >= 0 — see docs/SCHEMA.sql). A losing week is real money
+    // leaving the business the same as a positive week is real money
+    // entering it.
+    //
+    // BALANCE LEDGER ATOMICITY FIX (docs/PENDING_SQL.md §60, FULL SYSTEM
+    // AUDIT owner decision 2026-08-26): the settlement insert/update below
+    // deliberately does NOT set `business_balance_credit` anymore — it
+    // used to, right here, which meant a settlement row could end up
+    // claiming a credit that was never actually applied if ANY later step
+    // (a child-row insert, the re-import cleanup) threw. A RETRY would
+    // then read that already-stale `business_balance_credit` back as
+    // `previousCredit` and compute a delta of 0 against itself — the
+    // money silently never applied, even on a clean retry, with no error
+    // anywhere. `business_balance_credit` is now written ONLY by the new
+    // `apply_settlement_business_balance_credit` RPC, far below, AFTER
+    // every child row and the re-import cleanup have already succeeded —
+    // and that RPC re-reads the column's CURRENT value (row-locked)
+    // itself rather than trusting anything computed here, so it's correct
+    // even if this whole function is retried after a partial failure.
     const newCredit = mapping.netPay;
-    const balanceDelta = newCredit - previousCredit;
 
     let settlementId: string;
     if (isReimport) {
       const { data: settRow, error: settError } = await supabase
         .from('settlements')
-        .update({ ...mapping.settlement, document_id: documentId, business_balance_credit: newCredit })
+        .update({ ...mapping.settlement, document_id: documentId })
         .eq('id', existingSett!.id)
         .select('id')
         .single();
@@ -403,7 +407,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     } else {
       const { data: settRow, error: settError } = await supabase
         .from('settlements')
-        .insert({ ...mapping.settlement, document_id: documentId, business_balance_credit: newCredit })
+        .insert({ ...mapping.settlement, document_id: documentId })
         .select('id')
         .single();
       settlementId = must('settlements-save', settRow, settError, partial).id as string;
@@ -565,23 +569,27 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     }
     partial.oldRowsCleanedUp = true;
 
-    // Business balance: one atomic SQL increment (apply_business_balance_delta,
-    // docs/SCHEMA.sql / PENDING_SQL.md §37/§38) instead of a client-side
-    // select-then-update — never a race, and correct on both a brand-new
-    // settlement (previousCredit 0) and a re-import (delta only). §38
-    // (owner decision 2026-08-02) made the RPC itself raise a genuine
-    // Postgres error if it ever updates ZERO rows (a mismatched
-    // p_user_id/auth.uid(), or a missing profiles row) instead of silently
-    // returning NULL — the old version would report "success" here while
-    // never actually touching the balance.
-    if (balanceDelta !== 0) {
-      const { error: balErr } = await supabase.rpc('apply_business_balance_delta', {
-        p_user_id: userId,
-        p_delta: balanceDelta,
-      });
-      if (balErr) throw new SaveExtractionError('balance-update', balErr, partial);
-      netPayAdded = balanceDelta;
-    }
+    // Business balance: ONE atomic RPC (docs/PENDING_SQL.md §60) that
+    // re-reads the settlement's own CURRENT business_balance_credit
+    // (row-locked) and applies BOTH that column AND profiles.business_balance
+    // together, in a single transaction — replacing the old two-step
+    // "write business_balance_credit early, apply the delta at the very
+    // end" ordering (see the comment above the settlement insert/update
+    // for why that was unsafe). Always called (never gated on a
+    // client-computed "did anything change" guard) — the RPC itself is
+    // the one source of truth for what the real delta is, computed fresh
+    // from the database, never from a value this function captured
+    // before all the async work in between. `netPayAdded` (shown to the
+    // user as "+/-$X added to your balance") is the RPC's own returned
+    // delta, not a client-side guess, so it can never disagree with what
+    // was actually applied.
+    const { data: creditResult, error: balErr } = await supabase.rpc('apply_settlement_business_balance_credit', {
+      p_settlement_id: settlementId,
+      p_user_id: userId,
+      p_new_credit: newCredit,
+    });
+    if (balErr) throw new SaveExtractionError('balance-update', balErr, partial);
+    netPayAdded = Number(creditResult ?? 0);
     partial.balanceUpdated = true;
   } else if (d.docType === 'fuel' && d.fuel) {
     const row = mapFuel(d, userId, truckId);

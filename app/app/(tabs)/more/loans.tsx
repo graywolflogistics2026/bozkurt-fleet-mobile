@@ -103,7 +103,7 @@ export default function LoanCenter() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['loans'] });
     } finally {
       setRefreshing(false);
     }
@@ -168,7 +168,7 @@ export default function LoanCenter() {
     setSaving(true);
     try {
       await insertLoan.mutateAsync(toValues(userId));
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['loans'] });
       closeSheets();
     } catch (err) {
       Alert.alert(t('loans.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -183,7 +183,7 @@ export default function LoanCenter() {
     try {
       const { user_id: _uid, ...values } = toValues(userId);
       await updateLoan.mutateAsync({ id: editing.id, values });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['loans'] });
       closeSheets();
     } catch (err) {
       Alert.alert(t('loans.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -201,7 +201,7 @@ export default function LoanCenter() {
         onPress: async () => {
           try {
             await deleteLoan.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['loans'] });
             closeSheets();
           } catch (err) {
             Alert.alert(t('loans.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

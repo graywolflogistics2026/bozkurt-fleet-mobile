@@ -187,7 +187,7 @@ export default function Trucks() {
       // inline-create.
       await insertTruck.mutateAsync({ user_id: userId, ...formToValues(addForm) });
       await refreshTrucks();
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['trucks'] });
       setAddForm(emptyForm());
       setShowAddForm(false);
     } catch (err) {
@@ -214,7 +214,7 @@ export default function Trucks() {
       // above only refetches ActiveTruckContext's own narrower state, it
       // never touches react-query's cache for Scorecard/CEO Mode/Profit
       // Analysis's own already-fetched 'trucks'/'loans' queries.
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['trucks'] });
       setEditing(null);
     } catch (err) {
       Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -235,7 +235,7 @@ export default function Trucks() {
             // maintenance record it ever had (CLAUDE.md invariant #7).
             await updateTruck.mutateAsync({ id: tr.id, values: { is_active: false } });
             await refreshTrucks();
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['trucks'] });
           } catch (err) {
             Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
           }
@@ -247,7 +247,7 @@ export default function Trucks() {
   async function handleReactivate(tr: Truck) {
     await updateTruck.mutateAsync({ id: tr.id, values: { is_active: true } });
     await refreshTrucks();
-    await invalidateFinancialData(queryClient);
+    await invalidateFinancialData(queryClient, { entities: ['trucks'] });
   }
 
   function renderForm(form: FormState, setForm: (f: FormState) => void) {

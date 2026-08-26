@@ -109,7 +109,7 @@ export default function Scorecard() {
         values: { manual_total_miles_override: Number.isFinite(value) && value > 0 ? value : null },
       });
       await refreshTrucks();
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['trucks'] });
       setEditingOverride(false);
     } finally {
       setSavingOverride(false);
@@ -122,7 +122,7 @@ export default function Scorecard() {
     try {
       await updateTruck.mutateAsync({ id: activeTruck.id, values: { manual_total_miles_override: null } });
       await refreshTrucks();
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['trucks'] });
     } finally {
       setSavingOverride(false);
     }
@@ -134,7 +134,7 @@ export default function Scorecard() {
     setSavingMissingMilesId(settlementId);
     try {
       await updateSettlement.mutateAsync({ id: settlementId, values: { miles } });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['settlements'] });
     } finally {
       setSavingMissingMilesId(null);
     }

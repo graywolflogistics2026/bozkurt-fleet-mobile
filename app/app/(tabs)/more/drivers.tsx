@@ -103,7 +103,7 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
       // ONE REFRESH PATH (owner decision 2026-08-05, FULL PARITY follow-up
       // item A) — driver_payments feeds sumDeductibleDriverPayroll() in the
       // tax engine (CLAUDE.md invariant #7), which Tax Estimator reads.
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['driver_payments'] });
       setGrossPay('');
       setNotes('');
     } catch (err) {
@@ -196,7 +196,7 @@ export default function Drivers() {
     setSaving(true);
     try {
       await insertDriver.mutateAsync({ user_id: userId, ...formToValues(addForm) });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['drivers'] });
       setAddForm(emptyForm());
       setShowAddForm(false);
     } catch (err) {
@@ -216,7 +216,7 @@ export default function Drivers() {
     setSaving(true);
     try {
       await updateDriver.mutateAsync({ id: editing.id, values: formToValues(editForm) });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['drivers'] });
       setEditing(null);
     } catch (err) {
       Alert.alert(t('drivers.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -229,7 +229,7 @@ export default function Drivers() {
   // drivers can have settlement/payment history (PROMPTS.md Session 8).
   async function handleToggleActive(d: Driver) {
     await updateDriver.mutateAsync({ id: d.id, values: { active: !d.active } });
-    await invalidateFinancialData(queryClient);
+    await invalidateFinancialData(queryClient, { entities: ['drivers'] });
   }
 
   function renderForm(form: FormState, setForm: (f: FormState) => void) {

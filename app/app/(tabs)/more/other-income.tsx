@@ -54,7 +54,7 @@ export default function OtherIncome() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['misc_income'] });
     } finally {
       setRefreshing(false);
     }
@@ -87,7 +87,7 @@ export default function OtherIncome() {
         amount: amt,
         income_date: incomeDate || null,
       });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['misc_income'] });
       setAdding(false);
     } catch (err) {
       Alert.alert(t('otherIncome.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -105,7 +105,7 @@ export default function OtherIncome() {
         onPress: async () => {
           try {
             await deleteIncome.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['misc_income'] });
           } catch (err) {
             Alert.alert(t('otherIncome.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
           }

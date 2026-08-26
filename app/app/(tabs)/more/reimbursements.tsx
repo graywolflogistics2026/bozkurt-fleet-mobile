@@ -67,7 +67,7 @@ export default function Reimbursements() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['reimbursements'] });
     } finally {
       setRefreshing(false);
     }
@@ -100,7 +100,7 @@ export default function Reimbursements() {
         amount: amt,
         reimb_date: reimbDate || null,
       });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['reimbursements'] });
       setAdding(false);
     } catch (err) {
       Alert.alert(t('reimbursements.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -118,7 +118,7 @@ export default function Reimbursements() {
         onPress: async () => {
           try {
             await deleteReimbursement.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['reimbursements'] });
           } catch (err) {
             Alert.alert(t('reimbursements.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
           }

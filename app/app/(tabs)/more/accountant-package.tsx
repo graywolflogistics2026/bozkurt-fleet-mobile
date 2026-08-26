@@ -355,7 +355,19 @@ export default function AccountantPackage() {
       if (editCategory && editCategory !== editingItem.category) {
         learnCategoryCorrection.mutate({ userId, description: editingItem.description, category: editCategory });
       }
-      await invalidateFinancialData(queryClient);
+      // A fuel/maintenance/toll row converts into a deduction (spec item
+      // B.4) — the ORIGINAL table (now missing a row) and 'deductions'
+      // (the new row) both need refreshing; a plain deduction category
+      // edit only touches 'deductions'.
+      const originTable: Record<LineItem['kind'], string> = {
+        deduction: 'deductions',
+        fuel: 'fuel_purchases',
+        maintenance: 'maintenance_records',
+        toll: 'tolls',
+      };
+      await invalidateFinancialData(queryClient, {
+        entities: editingItem.kind === 'deduction' ? ['deductions'] : ['deductions', originTable[editingItem.kind]],
+      });
       setEditingItem(null);
     } catch (err) {
       Alert.alert(t('accountantPackage.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -376,7 +388,13 @@ export default function AccountantPackage() {
             else if (item.kind === 'fuel') await deleteFuel.mutateAsync(item.id);
             else if (item.kind === 'maintenance') await deleteMaintenance.mutateAsync(item.id);
             else if (item.kind === 'toll') await deleteToll.mutateAsync(item.id);
-            await invalidateFinancialData(queryClient);
+            const table: Record<LineItem['kind'], string> = {
+              deduction: 'deductions',
+              fuel: 'fuel_purchases',
+              maintenance: 'maintenance_records',
+              toll: 'tolls',
+            };
+            await invalidateFinancialData(queryClient, { entities: [table[item.kind]] });
           } catch (err) {
             Alert.alert(t('accountantPackage.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
           }

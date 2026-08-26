@@ -91,7 +91,7 @@ export default function EquipmentScreen() {
     setSaving(true);
     try {
       await insertEquipment.mutateAsync({ user_id: userId, ...formToValues(addForm) });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['equipment', 'loans'] });
       setAddForm(emptyForm());
       setShowAddForm(false);
     } catch (err) {
@@ -114,7 +114,7 @@ export default function EquipmentScreen() {
       // item A) — equipment's cost basis feeds the CPM breakdown and
       // depreciation election in other screens.
       await updateEquipment.mutateAsync({ id: editing.id, values: formToValues(editForm) });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['equipment', 'loans'] });
       setEditing(null);
     } catch (err) {
       Alert.alert(t('equipmentScreen.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -132,7 +132,7 @@ export default function EquipmentScreen() {
         onPress: async () => {
           try {
             await deleteEquipment.mutateAsync(e.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['equipment', 'loans'] });
             setEditing(null);
           } catch (err) {
             Alert.alert(t('equipmentScreen.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));

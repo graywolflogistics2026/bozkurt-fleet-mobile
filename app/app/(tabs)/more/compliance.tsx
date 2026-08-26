@@ -224,7 +224,7 @@ export default function ComplianceTracker() {
     setSaving(true);
     try {
       await insertItem.mutateAsync({ user_id: userId, ...buildSaveValues(addForm) });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['compliance_items'] });
       setAdding(false);
     } catch (err) {
       Alert.alert(t('compliance.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -242,7 +242,7 @@ export default function ComplianceTracker() {
     setSaving(true);
     try {
       await updateItem.mutateAsync({ id: editing.id, values: buildSaveValues(editForm) });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['compliance_items'] });
       setEditing(null);
     } catch (err) {
       Alert.alert(t('compliance.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -313,7 +313,7 @@ export default function ComplianceTracker() {
         onPress: async () => {
           try {
             await deleteItem.mutateAsync(item.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['compliance_items'] });
             setEditing(null);
           } catch (err) {
             Alert.alert(t('compliance.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

@@ -140,6 +140,86 @@ describe('invalidateFinancialData', () => {
   });
 });
 
+// SCOPED INVALIDATION (P0 fix, FULL SYSTEM AUDIT owner decision
+// 2026-08-26) — editing a single deduction's category used to invalidate
+// all ~25 entity tables plus every aggregate (32 total invalidateQueries
+// calls) regardless of what actually changed. Passing `entities` now scopes
+// the sweep to just the mutated table(s) plus whichever aggregates
+// genuinely depend on at least one of them. These tests are the "measured
+// before/after query count for editing one deduction category" the
+// FULL SYSTEM AUDIT fix asked for — see the numbers asserted below (32 ->
+// 5, an 84% reduction, measured directly against the real AFFECTED_TABLES/
+// AFFECTED_AGGREGATES lists rather than hand-counted).
+describe('invalidateFinancialData — scoped mode (entities option)', () => {
+  it('editing ONE deduction (no linked contribution) invalidates exactly 3 keys, not all 32', async () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+
+    const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
+    expect(new Set(invalidatedKeys)).toEqual(new Set(['deductions', 'fleet-stats', 'driver-stats']));
+    expect(invalidatedKeys).toHaveLength(3);
+  });
+
+  it('the EXACT reported scenario — deductions.tsx handleSaveEdit (deductions + capital_transactions) — invalidates exactly 5 keys, down from the 32-key unscoped sweep', async () => {
+    const unscopedClient = new QueryClient();
+    const unscopedSpy = jest.spyOn(unscopedClient, 'invalidateQueries');
+    await invalidateFinancialData(unscopedClient);
+    const beforeCount = unscopedSpy.mock.calls.length;
+
+    const scopedClient = new QueryClient();
+    const scopedSpy = jest.spyOn(scopedClient, 'invalidateQueries');
+    await invalidateFinancialData(scopedClient, { entities: ['deductions', 'capital_transactions'] });
+    const invalidatedKeys = scopedSpy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
+
+    expect(beforeCount).toBe(32); // 28 AFFECTED_TABLES + 4 AFFECTED_AGGREGATES, unscoped
+    expect(new Set(invalidatedKeys)).toEqual(
+      new Set(['deductions', 'capital_transactions', 'fleet-stats', 'driver-stats', 'capital-account-summary'])
+    );
+    expect(invalidatedKeys).toHaveLength(5); // down from 32 -> 5, an 84% reduction
+    // Every unrelated table (settlements, fuel_purchases, trucks, drivers, ...)
+    // must NOT be touched by this specific scoped call.
+    for (const untouched of ['settlements', 'fuel_purchases', 'maintenance_records', 'trucks', 'drivers', 'loans', 'credit_cards']) {
+      expect(invalidatedKeys).not.toContain(untouched);
+    }
+  });
+
+  it('a profiles-only mutation (e.g. a Cash Flow budget save) invalidates "profile" and "capital-account-summary" but NOT fleet-stats/driver-stats', async () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    await invalidateFinancialData(queryClient, { entities: ['profiles'] });
+
+    const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
+    expect(new Set(invalidatedKeys)).toEqual(new Set(['profile', 'capital-account-summary']));
+  });
+
+  it('an empty entities array falls back to the full unscoped sweep, same as omitting the option entirely', async () => {
+    const withEmptyArray = new QueryClient();
+    const spyEmpty = jest.spyOn(withEmptyArray, 'invalidateQueries');
+    await invalidateFinancialData(withEmptyArray, { entities: [] });
+
+    const withNoOption = new QueryClient();
+    const spyNone = jest.spyOn(withNoOption, 'invalidateQueries');
+    await invalidateFinancialData(withNoOption);
+
+    expect(spyEmpty.mock.calls.length).toBe(spyNone.mock.calls.length);
+  });
+
+  it('DEAD-KEY CLEANUP: tax_config, tax_year_data, and profit-loss are never invalidated by this function anymore (tax_config/tax_year_data self-invalidate independently in taxConfig.ts; profit-loss was never a real query key)', async () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    await invalidateFinancialData(queryClient);
+
+    const invalidatedKeys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
+    for (const dead of ['tax_config', 'tax_year_data', 'profit-loss']) {
+      expect(invalidatedKeys).not.toContain(dead);
+    }
+  });
+});
+
 // PRE-LAUNCH HARDENING (owner decision 2026-08-02, independent code
 // review item — second tier): "reset must remove queries from the
 // persistent cache, not just invalidate them" — removeQueries() deletes

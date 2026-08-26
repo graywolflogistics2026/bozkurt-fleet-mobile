@@ -32,7 +32,7 @@ export default function CategoryLearning() {
   async function onRefresh() {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['category_learning_rules'] });
       await queryClient.invalidateQueries({ queryKey: ['category_learning_rules'], refetchType: 'all' });
     } finally {
       setRefreshing(false);

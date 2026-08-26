@@ -179,7 +179,7 @@ export default function AssetRegister() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
     } finally {
       setRefreshing(false);
     }
@@ -268,7 +268,7 @@ export default function AssetRegister() {
         await applyContributionSync(userId, newDed.id, plan);
       }
 
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
       setAdding(false);
     } catch (err) {
       Alert.alert(t('assetRegister.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -336,7 +336,7 @@ export default function AssetRegister() {
         },
       });
       await applyContributionSync(userId, editing.deduction.id, plan);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
       setEditing(null);
     } catch (err) {
       Alert.alert(t('assetRegister.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

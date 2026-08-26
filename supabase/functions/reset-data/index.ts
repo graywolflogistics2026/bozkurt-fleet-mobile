@@ -217,6 +217,46 @@ async function deleteStorageFolder(
   return result;
 }
 
+// RESET-ALL-DATA PREFLIGHT (P0 FIX, FULL SYSTEM AUDIT owner decision
+// 2026-08-26). Before this fix, a schema drift bug (a `profiles` column
+// this function expects to write — e.g. a not-yet-run PENDING_SQL section
+// — missing on the live database) meant: every business table gets wiped,
+// every Storage file gets deleted, and ONLY THEN, on the very last step
+// (the profiles.update()), Postgres returns a generic "column does not
+// exist" error — after everything irreversible has already happened, with
+// no indication of which step actually failed. This preflight is a
+// READ-ONLY dry run of every write this function is about to make (a
+// `select` with the identical `.eq()` predicate and, for `profiles`, the
+// identical column list the real `.update()` will use) — if a table or
+// column doesn't exist, PostgREST returns the same "does not exist" error
+// here, harmlessly, before a single row has been touched. Cheap (one
+// `limit(1)` select per table) relative to the cost of getting this wrong.
+type PreflightIssue = { check: string; message: string };
+
+async function preflightCheck(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<PreflightIssue[]> {
+  const issues: PreflightIssue[] = [];
+
+  for (const table of TABLES_IN_DELETION_ORDER) {
+    const { error } = await admin.from(table).select("user_id").eq("user_id", userId).limit(1);
+    if (error) issues.push({ check: `table "${table}"`, message: error.message });
+  }
+
+  const { error: referralsError } = await admin.from("referrals").select("referrer_id").eq("referrer_id", userId).limit(1);
+  if (referralsError) issues.push({ check: 'table "referrals"', message: referralsError.message });
+
+  // Every column PROFILE_DATA_RESET is about to write, in one select — a
+  // single missing column here is exactly the bug this preflight exists
+  // to catch before it can cause any damage.
+  const profileColumns = Object.keys(PROFILE_DATA_RESET).join(",");
+  const { error: profileError } = await admin.from("profiles").select(profileColumns).eq("user_id", userId).limit(1);
+  if (profileError) issues.push({ check: "profiles (PROFILE_DATA_RESET columns)", message: profileError.message });
+
+  return issues;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: CORS_HEADERS });
@@ -248,9 +288,46 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
 
   try {
+    // STEP 0 — PREFLIGHT: refuse to start at all if the live schema
+    // doesn't match what this function is about to write/delete. Nothing
+    // below this point runs unless every check passes.
+    const preflightIssues = await preflightCheck(admin, userId);
+    if (preflightIssues.length > 0) {
+      return errorResponse(
+        "Reset All Data refused to start — the database schema doesn't match what this function expects. Nothing was touched; this is safe to leave and report.",
+        409,
+        { preflightIssues },
+      );
+    }
+
+    // STEP 1 — the COLUMN-DEPENDENT update runs FIRST, before any
+    // destructive delete (device-report/audit fix, owner decision
+    // 2026-08-26): this is the step most likely to fail on a schema
+    // mismatch the preflight above somehow missed (e.g. a column dropped
+    // in the narrow window between the preflight read and this write) —
+    // running it before anything irreversible means that residual failure
+    // mode still leaves every business table and every Storage file
+    // completely untouched, not "already destroyed with a generic error."
+    // Both this update and every delete below are independently
+    // idempotent (a no-op if already reset/already empty), so re-running
+    // the whole function after ANY failure — here or later — is always
+    // safe.
+    const { error: profileError } = await admin.from("profiles").update(PROFILE_DATA_RESET).eq("user_id", userId);
+    if (profileError) {
+      return errorResponse(
+        `Failed resetting profile data fields — this runs FIRST, so nothing else was touched. Safe to retry once fixed: ${profileError.message}`,
+        500,
+      );
+    }
+
+    // STEP 2 — table deletes. Every table is attempted (not aborted on the
+    // first failure) so a partial failure reports EXACTLY which tables
+    // succeeded and which didn't, instead of a generic error that leaves
+    // the caller unable to tell how far the reset actually got.
+    const tableResults: { table: string; success: boolean; error?: string }[] = [];
     for (const table of TABLES_IN_DELETION_ORDER) {
       const { error } = await admin.from(table).delete().eq("user_id", userId);
-      if (error) throw new Error(`Failed deleting from ${table}: ${error.message}`);
+      tableResults.push({ table, success: !error, error: error?.message });
     }
 
     // REFERRAL PROGRAM (owner decision 2026-08-24, docs/PENDING_SQL.md
@@ -262,13 +339,13 @@ Deno.serve(async (req: Request) => {
     // it already earned the referrer) is never wiped by anything this
     // user does to their own account, reset or otherwise.
     const { error: referralsError } = await admin.from("referrals").delete().eq("referrer_id", userId);
-    if (referralsError) throw new Error(`Failed deleting from referrals: ${referralsError.message}`);
+    tableResults.push({ table: "referrals", success: !referralsError, error: referralsError?.message });
 
-    // STORAGE DELETION INTEGRITY: never proceed to reset the profile's
-    // data fields on a partial storage failure — a failed/incomplete
-    // cleanup must stay retryable (re-running this function safely skips
-    // everything that already succeeded) rather than silently reporting
-    // success while orphaned files remain.
+    const failedTables = tableResults.filter((r) => !r.success);
+
+    // STEP 3 — Storage. Same "attempt everything, report exactly what
+    // failed" spirit as the table loop above (STORAGE DELETION INTEGRITY,
+    // pre-launch hardening, unchanged from before this pass).
     const allFailedPaths: string[] = [];
     const allErrors: string[] = [];
     for (const bucket of STORAGE_BUCKETS) {
@@ -276,19 +353,20 @@ Deno.serve(async (req: Request) => {
       allFailedPaths.push(...result.failedPaths);
       allErrors.push(...result.errors);
     }
-    if (allErrors.length > 0 || allFailedPaths.length > 0) {
+
+    if (failedTables.length > 0 || allErrors.length > 0 || allFailedPaths.length > 0) {
       return errorResponse(
-        "Some files could not be removed — please try again.",
+        "Reset All Data partially completed — your profile fields were reset, but some data could not be cleared. Safe to retry: every step here is idempotent and will skip whatever already succeeded.",
         502,
-        { failedFileCount: allFailedPaths.length, storageErrors: allErrors.slice(0, 10) }
+        {
+          profileReset: true,
+          tablesSucceeded: tableResults.filter((r) => r.success).map((r) => r.table),
+          tablesFailed: failedTables,
+          storageFailedFileCount: allFailedPaths.length,
+          storageErrors: allErrors.slice(0, 10),
+        },
       );
     }
-
-    // Last step — reset the profile's data fields only after every row
-    // and file is gone, so a failure earlier leaves data half-cleared but
-    // never a profile silently reset ahead of its underlying rows.
-    const { error: profileError } = await admin.from("profiles").update(PROFILE_DATA_RESET).eq("user_id", userId);
-    if (profileError) throw new Error(`Failed resetting profile data fields: ${profileError.message}`);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

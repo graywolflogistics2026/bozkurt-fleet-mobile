@@ -69,9 +69,9 @@ const AFFECTED_TABLES = [
 ];
 
 // Derived/aggregate query keys that read from the tables above but aren't
-// plain entity-hook lists (dashboardStats.ts, capitalAccount.ts,
-// taxConfig.ts) — an import can move profiles.business_balance and add
-// capital_transactions rows, both of which feed these.
+// plain entity-hook lists (dashboardStats.ts, capitalAccount.ts) — an
+// import can move profiles.business_balance and add capital_transactions
+// rows, both of which feed these.
 //
 // 'profile' (useProfile(), src/data/profile.ts — the FULL profiles row,
 // distinct from AuthContext's own narrower fetch) was missing here until
@@ -86,15 +86,40 @@ const AFFECTED_TABLES = [
 // decision 2026-08-02) — the Customize Dashboard feature that owned that
 // query key (useDashboardLayout(), src/data/dashboardLayout.ts) was
 // deleted entirely along with its screen; nothing reads that key anymore.
-const AFFECTED_AGGREGATES = [
-  'fleet-stats',
-  'driver-stats',
-  'capital-account-summary',
-  'tax_config',
-  'tax_year_data',
-  'profit-loss',
-  'profile',
-];
+//
+// UNBOUNDED QUERIES / SCOPED INVALIDATION FIX (P0, FULL SYSTEM AUDIT owner
+// decision 2026-08-26) removed two more DEAD entries, confirmed by reading
+// every actual fetch site (not guessed): 'profit-loss' was never a real
+// query key anywhere in the app — operating-pnl.tsx computes buildProfitLoss()
+// via a plain useMemo over useSettlements()/useDeductions(), which
+// self-invalidate on their own — invalidating this key was always a no-op.
+// 'tax_config'/'tax_year_data' are genuinely independent: they hold the
+// user's own tax profile settings and the server-published bracket tables
+// (CLAUDE.md invariant #6), NEVER derived from settlements/deductions/fuel/
+// etc. — taxConfig.ts's own useUpdateTaxConfig() already invalidates both
+// keys directly in its own onSuccess, and nothing else in this app writes
+// to either table as a side effect of anything else, so including them in
+// every other mutation's sweep was pure waste.
+const AFFECTED_AGGREGATES = ['fleet-stats', 'driver-stats', 'capital-account-summary', 'profile'] as const;
+
+// Which AGGREGATE keys must be invalidated when a given ENTITY TABLE
+// changes — built by directly reading each aggregate's own fetch function
+// (src/data/dashboardStats.ts's fetchFleetStats()/fetchDriverStats() only
+// ever query settlements/deductions/loads; src/data/capitalAccount.ts's
+// summary only ever queries capital_transactions/profiles), cross-checked
+// against docs/DATA_FLOW.md's mutation matrix — not guessed. 'profiles' is
+// not itself a table in AFFECTED_TABLES (there's no useEntityList-style
+// list query for a single profiles row) but is a valid trigger key here —
+// any caller that mutates profiles.* directly (a settlement's balance
+// credit, a manual capital-transaction's balance delta, a Cash Flow budget
+// save) passes 'profiles' as one of its `entities` to pick up 'profile'/
+// 'capital-account-summary' correctly.
+const AGGREGATE_DEPENDENCIES: Record<(typeof AFFECTED_AGGREGATES)[number], readonly string[]> = {
+  'fleet-stats': ['settlements', 'deductions', 'loads'],
+  'driver-stats': ['settlements', 'deductions', 'loads'],
+  'capital-account-summary': ['capital_transactions', 'profiles'],
+  profile: ['profiles'],
+};
 
 // A bare queryClient.invalidateQueries() call only eagerly refetches
 // queries with an ACTIVE observer (refetchType defaults to 'active') — a
@@ -104,12 +129,42 @@ const AFFECTED_AGGREGATES = [
 // happens to remount/refocus it. refetchType 'all' forces every matching
 // query to refetch right now regardless of observer state, which is what
 // "the Dashboard must reflect new data immediately" actually requires.
-export async function invalidateFinancialData(queryClient: QueryClient): Promise<void> {
-  await Promise.all(
-    [...AFFECTED_TABLES, ...AFFECTED_AGGREGATES].map((key) =>
-      queryClient.invalidateQueries({ queryKey: [key], refetchType: 'all' })
-    )
-  );
+//
+// SCOPED INVALIDATION (P0 fix, FULL SYSTEM AUDIT owner decision
+// 2026-08-26): editing a single deduction's category used to invalidate
+// all ~25 entity tables plus every aggregate — 32 separate
+// invalidateQueries calls for a mutation that touched exactly ONE table.
+// Passing `entities` (the specific table(s) this mutation actually wrote
+// to) now scopes the sweep to just those tables plus whichever aggregates
+// docs/DATA_FLOW.md documents as depending on at least one of them —
+// AGGREGATE_DEPENDENCIES above is the one place that mapping lives, kept
+// in sync with each aggregate's own real fetch function rather than
+// re-implemented ad hoc per call site. Omitting `entities` (or passing an
+// empty array) keeps the ORIGINAL full, unconditional sweep — the correct,
+// deliberate choice for a genuinely multi-entity mutation (settlement
+// import, legacy-backup import, Reset All Data, a manual "refresh
+// everything" pull-to-refresh) where enumerating every touched table is
+// either impossible to know in advance or not worth the complexity, since
+// nearly everything changed anyway.
+export async function invalidateFinancialData(queryClient: QueryClient, options?: { entities?: readonly string[] }): Promise<void> {
+  const entities = options?.entities;
+  if (!entities || entities.length === 0) {
+    await Promise.all(
+      [...AFFECTED_TABLES, ...AFFECTED_AGGREGATES].map((key) =>
+        queryClient.invalidateQueries({ queryKey: [key], refetchType: 'all' })
+      )
+    );
+    return;
+  }
+
+  const keys = new Set<string>();
+  for (const entity of entities) {
+    if ((AFFECTED_TABLES as readonly string[]).includes(entity)) keys.add(entity);
+  }
+  for (const aggregate of AFFECTED_AGGREGATES) {
+    if (AGGREGATE_DEPENDENCIES[aggregate].some((dep) => entities.includes(dep))) keys.add(aggregate);
+  }
+  await Promise.all(Array.from(keys).map((key) => queryClient.invalidateQueries({ queryKey: [key], refetchType: 'all' })));
 }
 
 // PRE-LAUNCH HARDENING (owner decision 2026-08-02, independent code

@@ -6463,3 +6463,244 @@
   limitation this file has flagged at every prior native-API-touching
   pass) — worth a real-device smoke test on the next PDF export before
   fully trusting it in the field.
+- FULL SYSTEM AUDIT — FOUR P0 FIXES (owner decision 2026-08-25/26, adversarial
+  pre-launch security/correctness review, findings prioritized and fixed in
+  the owner's own explicit order — "credit hole first, it's an open door").
+  1. **CREDIT SELF-GRANT RLS HOLE + TOCTOU RACE (docs/PENDING_SQL.md §59,
+     NOT YET RUN)**: `ai_credit_purchases` had a self-service UPDATE RLS
+     policy (`user_id = auth.uid()`) with NO check constraint on
+     `credits_remaining` — any authenticated user could `UPDATE
+     ai_credit_purchases SET credits_remaining = 999999 WHERE user_id =
+     auth.uid()` directly via the Supabase client, silently granting
+     themselves unlimited AI-import usage. Compounded by a genuine TOCTOU
+     race in `consumeOneCreditIfOverAllowance()`
+     (`supabase/functions/ai-import/index.ts`): select-the-cheapest-pack,
+     THEN update by id, with no row lock — two concurrent imports could both
+     read the same `credits_remaining: 1` and both decrement to 0, net
+     effect -1 instead of the real available balance. Fixed together, one
+     migration: (a) `drop policy ai_credit_purchases_update_own` — users get
+     SELECT only now, no client-side write path at all; (b) `alter table
+     ai_credit_purchases add constraint ai_credit_purchases_remaining_le_granted
+     check (credits_remaining <= credits_granted)` — defense in depth, even
+     a future service_role bug can't grant more than what was actually
+     purchased; (c) `consume_ai_import_credit()`, a new `security definer`
+     RPC — `select ... for update ... limit 1` (the row lock that closes the
+     race) then `update ... set credits_remaining = credits_remaining - 1`,
+     scoped to `auth.uid()` internally (never a client-passed user id), one
+     atomic transaction. `ai-import/index.ts`'s
+     `consumeOneCreditIfOverAllowance()` now just calls `supabase.rpc('consume_ai_import_credit')`
+     — no client-side read-then-write at all.
+     **SERVER-CONTROLLED AUDIT — every other table checked**: reviewed every
+     RLS write policy in the live public schema for the same shape (a
+     client-writable column the business logic depends on for a
+     usage/allowance/entitlement decision). Found clean: `ai_usage_log`
+     (insert-own-only, append-only, never updated), `ai_usage_config`
+     (service_role-write-only), `account_credits` (no client write policy at
+     all — only `reset-data`/referral-sync's service-role client writes it),
+     `referrals` (status/qualification fields are service_role-written by
+     `referral-sync` only), `profiles.plan` (protected by the pre-existing
+     `protect_profile_plan_fields()` trigger, §50). `import_jobs`'s
+     self-scoped UPDATE (a user can update their own job's `status`) was
+     reviewed and judged NOT a financial-value hole — it drives UI-visible
+     background-import progress, not a balance/credit/allowance a user could
+     profit from forging.
+     **§49/§58 LIVE-DB VERIFICATION**: confirmed via a direct read-only
+     `information_schema.columns`/`pg_constraint` query against the linked
+     project that both were, in fact, already applied (matching the owner's
+     own belief) — PENDING_SQL.md's stale `[ ]` markers were simply never
+     updated after the migrations actually ran. Corrected to `[x]` with a
+     dated confirmation note on each.
+  2. **BALANCE LEDGER ATOMICITY — 4 sites (docs/PENDING_SQL.md §60, NOT YET
+     RUN)**: every one of these used to write its row (with a
+     `business_balance_applied`/`business_balance_credit` tracking value
+     already filled in) and THEN call `apply_business_balance_delta` as a
+     SEPARATE step — if the RPC failed after the row write had already
+     succeeded (nothing here was ever wrapped in a transaction), the row was
+     left permanently claiming a delta that was never actually applied, with
+     no rollback. Delete was worst: the row (the only record of what needed
+     reversing) was removed BEFORE the reversal ran. Fixed with 4 new
+     `security invoker` RPCs, each folding the row write and the balance
+     delta into ONE atomic Postgres transaction, each computing its own
+     delta from a FRESH, row-locked (`for update`) read of the row's CURRENT
+     state — never from a value the client might have captured earlier and
+     trusted stale: `record_manual_capital_transaction()` (insert + apply),
+     `update_manual_capital_transaction()` (reads the row's current
+     `business_balance_applied` under lock, adjusts by the DIFFERENCE only —
+     never re-applies the full new amount, which would double-count),
+     `delete_manual_capital_transaction()` (reverses the balance FIRST,
+     deletes the row only once that's committed — a failed reversal now
+     means the row is NEVER deleted, closing the "delete is worst" gap
+     directly), `apply_settlement_business_balance_credit()` (the
+     settlement-import path: re-reads `settlements.business_balance_credit`
+     under lock rather than trusting a value computed earlier in
+     `saveExtraction()`'s execution — this is also what fixes the specific
+     "retry computes a 0 delta against its own stale value" bug, since
+     `aiImportSave.ts` no longer writes `business_balance_credit` at INSERT/
+     UPDATE time at all; it's now written ONLY by this RPC, after every
+     child-row insert and the re-import cleanup have already succeeded).
+     `app/src/data/capitalTransactions.ts` was rewritten around these 4 RPCs
+     — `useRecordManualCapitalTransaction`/`useReimburseMyself`/
+     `useUpdateManualCapitalTransaction`/`useDeleteManualCapitalTransaction`
+     each now make exactly one RPC call apiece, no client-side two-step.
+     **Real tests, not a fake reimplementing the RPC in JS**:
+     `capitalTransactions.test.ts` (new, 14 tests — previously ZERO coverage
+     for this file) exercises the REAL hooks against `fakeSupabase.ts`'s
+     `.rpc()` mock, extended to model each of the 4 new RPCs' documented
+     CONTRACT (insert-and-credit, update-and-adjust-by-difference,
+     lock-then-reverse-then-delete) as a single JS function call — HONEST
+     BOUNDARY, stated in both files' own header comments: this proves the
+     CLIENT correctly calls the right RPC with the right params and handles
+     the result/error correctly (a real, if narrower, bug category — wrong
+     RPC name, wrong param shape, a swallowed error), not that the real SQL
+     body is correct (no Deno/Postgres runtime exists in this repo's Jest
+     environment, the same limitation this file has flagged at every prior
+     SQL-touching pass). Tests include: a contribution/draw correctly
+     crediting/debiting `business_balance`; editing UP or DOWN adjusts by
+     the difference only, never double-counting; a 3-edit chain nets to
+     exactly the same result as the final single state (no drift); **a
+     failed delete RPC leaves BOTH the row and the balance completely
+     untouched** (the literal "delete is worst, must survive until the
+     reversal succeeds" proof); a full insert→edit→delete lifecycle nets to
+     exactly $0 balance effect. `aiImportSave.settlement.test.ts` and
+     `aiImportSave.negativeSettlement.test.ts` (pre-existing, unmodified)
+     both still pass unchanged against the new RPC-based flow — traced by
+     hand to confirm the new `apply_settlement_business_balance_credit` mock
+     reproduces the exact same delta math the old inline `newCredit -
+     previousCredit` computation did.
+     `aiImportSave.errorReporting.test.ts`'s balance-update-failure test was
+     updated to key its injected failure on the new RPC name
+     (`rpc:apply_settlement_business_balance_credit`, not the old
+     `rpc:apply_business_balance_delta`) — the old key would have silently
+     stopped injecting anything, making that test falsely pass.
+  3. **RESET-ALL-DATA — preflight + reordering (`supabase/functions/
+     reset-data/index.ts`)**: before this fix, a schema-drift bug (a
+     `profiles` column this function writes — e.g. a not-yet-run
+     PENDING_SQL section — missing on the live database) meant every
+     business table gets wiped, every Storage file gets deleted, and ONLY
+     THEN, on the very last step, Postgres returns a generic "column does
+     not exist" error — after everything irreversible has already happened.
+     Fixed three ways: (a) a new `preflightCheck()` runs FIRST, before any
+     write — a READ-ONLY dry run (`select` with the identical `.eq()`
+     predicate and, for `profiles`, the identical column list the real
+     writes use) of every table/column this function is about to touch; any
+     missing table or column returns a 409 with the exact list of what
+     failed, and NOTHING has been touched. (b) The profiles data-field
+     update — the "column-dependent" step most likely to fail on a schema
+     mismatch — now runs FIRST, before any destructive delete, so even a
+     residual failure the preflight somehow missed (e.g. a column dropped
+     in the narrow window between the preflight read and this write) still
+     leaves every table/file untouched rather than "already destroyed with
+     a generic error." (c) The table-delete loop no longer aborts on the
+     first failure — every table is attempted, and a partial failure
+     returns a structured report (`tablesSucceeded`/`tablesFailed`/
+     `storageErrors`) instead of a single generic message, so the caller can
+     tell exactly how far the reset got. Every step remains independently
+     idempotent (a no-op if already reset/already empty), so re-running the
+     whole function after ANY failure — preflight, profile update, table
+     delete, or storage — is always safe. **Honestly flagged**: this fix has
+     no Jest test — the entire change lives in Deno Edge Function code with
+     no client-side TypeScript counterpart to exercise, same "no Deno test
+     runtime available" limitation this file has documented at every prior
+     Edge Function pass; hand-reviewed line by line instead of fabricating
+     false coverage.
+  4. **UNBOUNDED QUERIES — ordering, pagination, and scoped invalidation**:
+     two fixes, `app/src/data/entityHooks.ts` and
+     `app/src/data/queryInvalidation.ts`.
+     - **`useEntityList()` ordering (universal, safe — same row set, just a
+       defined order)**: every list query used to fetch a table's entire
+       row set with NO `order by` at all — whatever order Postgres happened
+       to return, forever, for every table. `ORDER_COLUMN` (exported,
+       tested) maps each table to its real natural date column — verified
+       against `docs/SCHEMA.sql`/`app/src/types/db.ts`'s own type
+       definitions, not guessed (`settlements` → `week_ending`, `deductions`
+       → `ded_date`, `loads` → `load_date`, `misc_income` → `income_date`,
+       `compliance_items` → `due_date`, ... — a table with no natural
+       event date, e.g. `trucks`/`drivers`/`loans`/`user_categories`, falls
+       back to `created_at`). `.order(orderColumn, {ascending: false,
+       nullsFirst: false})` is now applied to every `useEntityList()` call,
+       every table, unconditionally.
+     - **`useEntityListPaged()` — a new, OPT-IN, real infinite-scroll
+       mechanism**, built on `useInfiniteQuery`, real page-size/range
+       math, tested. Deliberately does NOT replace `useEntityList()` or get
+       force-retrofitted into today's list screens: Deductions/Settlements/
+       every other list screen's own totals-bar/chart computes over the
+       FULL period's client-side data (This Month/3M/YTD/All), and every
+       aggregate consumer (`dashboardStats.ts`'s fleet/driver stats,
+       `capitalAccount.ts`'s summary, true-profit/CPM/tax-estimate
+       calculations) needs the complete row set to sum correctly — silently
+       windowing `useEntityList()`'s DEFAULT behavior to "current year" or
+       "most recent N" would have been a real correctness regression (wrong
+       totals shown to a user), not just a performance fix. The MECHANISM
+       is real and ready (most-recent-N chosen over a calendar-year cutoff,
+       the spec's own explicit "or", since a Jan 1 calendar-year window
+       would show an empty/near-empty screen right when a new year starts —
+       reads as broken, not paginated); adopting it in a specific
+       browse-only screen is flagged as a follow-up, screen-by-screen
+       decision requiring its own aggregate-math rework, not silently
+       done here.
+     - **Scoped invalidation — `invalidateFinancialData(queryClient,
+       {entities})`**: editing one deduction's category used to invalidate
+       all ~28 entity tables plus every aggregate (32 total
+       `invalidateQueries` calls) regardless of what actually changed —
+       `invalidateFinancialData()` was called this way from ~90 call sites
+       across ~34 screens (the "ONE REFRESH PATH" pass's own deliberate
+       design, so this fix narrows scope without reverting that pass's
+       actual goal: every mutation still refreshes every screen that
+       genuinely depends on it). `AGGREGATE_DEPENDENCIES` (new, tested) maps
+       each derived aggregate query key to the real table(s) it reads from
+       — verified by directly reading each aggregate's own fetch function
+       (`dashboardStats.ts`'s `fetchFleetStats()`/`fetchDriverStats()` only
+       ever query `settlements`/`deductions`/`loads`; `capitalAccount.ts`'s
+       summary only ever queries `capital_transactions`/`profiles`), not
+       guessed from screen names. Passing `{entities: [...]}` — the specific
+       table(s) a mutation actually wrote to — now invalidates only those
+       tables plus whichever aggregates depend on at least one of them;
+       omitting `entities` (pull-to-refresh, Reset All Data, a settlement/
+       legacy-backup import that touches nearly everything anyway) keeps
+       the full, unconditional sweep, unchanged. Also removed two genuinely
+       DEAD entries from the aggregate list, confirmed by reading every
+       actual fetch site: `'profit-loss'` was never a real query key
+       anywhere in the app (`operating-pnl.tsx` computes `buildProfitLoss()`
+       via a plain `useMemo`, no cached query of its own); `'tax_config'`/
+       `'tax_year_data'` self-invalidate independently in `taxConfig.ts`'s
+       own `onSuccess` and are never derived from any OTHER table's
+       mutation, so including them in every other mutation's sweep was pure
+       waste. Rolled out across every real call site (`deductions.tsx`'s 7,
+       `settlements.tsx`'s 8, `capital-account.tsx`'s 7,
+       `accountant-package.tsx`'s 3, `scorecard.tsx`'s 4, `documents.tsx`'s
+       3, `maintenance.tsx`'s 4, `drivers.tsx`'s 4, plus every
+       single-entity screen — credit cards, compliance, category learning,
+       tolls, asset register, loans, reimbursements, loads, other income,
+       equipment, fuel, trucks, bank statements, truck health's Mark-as-Done,
+       Home's expense-row delete); pull-to-refresh handlers, Reset All Data,
+       settlement import, and legacy-backup import were all deliberately
+       LEFT as the full unscoped sweep, each with an inline comment
+       explaining why enumerating specific entities wasn't safe/possible
+       there.
+     - **Measured before/after, the requested scenario**: editing one
+       deduction's category (`deductions.tsx`'s `handleSaveEdit`, which
+       always touches `deductions` and may touch `capital_transactions` via
+       `applyContributionSync()`) — **32 `invalidateQueries` calls before
+       this fix, 5 after** (`deductions`, `capital_transactions`,
+       `fleet-stats`, `driver-stats`, `capital-account-summary`), an 84%
+       reduction — measured directly in
+       `queryInvalidation.test.ts`'s "the EXACT reported scenario" test
+       (calls the real unscoped sweep once to get the real 32-count, not a
+       hand-counted guess, then asserts the scoped call's exact 5-key set)
+       rather than hand-counted.
+  **Deliverables**: 105 suites / 2578 tests pass (`capitalTransactions.test.ts`
+  and `entityHooks.test.ts` new, `queryInvalidation.test.ts` and
+  `aiImportSave.errorReporting.test.ts` extended/updated); `tsc --noEmit`
+  clean. `docs/PENDING_SQL.md` §59 and §60 are **NOT YET RUN** — both must
+  be applied via the Supabase SQL Editor before this pass's client/Edge
+  Function code will work correctly (the RPC calls will 404/error against a
+  database that doesn't have them yet). `supabase/functions/ai-import/
+  index.ts` (§59's RPC-based credit consumption) and `supabase/functions/
+  reset-data/index.ts` (preflight + reordering) were both modified and
+  **need redeploying**. `app/src/data/aiImportSave.ts`/
+  `app/src/data/capitalTransactions.ts`/`app/src/data/entityHooks.ts`/
+  `app/src/data/queryInvalidation.ts` and every screen listed above are
+  pure client-side changes — no native dependency added, ships via a normal
+  `eas update` once §59/§60 have been run (the client code calls RPCs that
+  don't exist yet otherwise). No i18n changes this pass (no new user-facing
+  strings — every fix is internal data-layer/security/performance work).

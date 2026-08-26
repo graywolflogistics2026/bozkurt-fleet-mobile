@@ -896,6 +896,15 @@ export default function Import() {
       });
       setResult(saved);
       setPhase('done');
+      // UNBOUNDED QUERIES / SCOPED INVALIDATION FIX (P0, FULL SYSTEM AUDIT
+      // owner decision 2026-08-26) — deliberately kept as the full,
+      // unscoped sweep: saveExtraction() can write to any of ~10 tables
+      // depending on docType (settlements + every child table, or fuel,
+      // maintenance, a financial doc, compliance, driver payments, loans,
+      // ...) and doesn't return which ones it actually touched — enumerating
+      // that here would either be wrong for some docType or require
+      // threading a new return field through aiImportSave.ts for a save
+      // path that already touches most of the app's data anyway.
       await invalidateFinancialData(queryClient);
       buildAndUploadBackupSnapshot(userId); // fire-and-forget
       // BACKGROUND IMPORT (owner decision 2026-08-24) — a job-sourced save

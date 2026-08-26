@@ -1182,23 +1182,22 @@ async function consumeOneCreditIfOverAllowance(
   const wasOverAllowance = (usedThisMonth ?? 0) > allowance;
   if (!wasOverAllowance) return;
 
-  const { data: rows } = await supabase
-    .from("ai_credit_purchases")
-    .select("id, credits_remaining, expires_at")
-    .eq("user_id", userId)
-    .gt("credits_remaining", 0);
-  if (!rows || rows.length === 0) return;
-  const now = new Date();
-  const usable = rows.filter((r) => !r.expires_at || new Date(r.expires_at as string) > now);
-  if (usable.length === 0) return;
-  usable.sort((a, b) => {
-    if (!a.expires_at && !b.expires_at) return 0;
-    if (!a.expires_at) return 1;
-    if (!b.expires_at) return -1;
-    return new Date(a.expires_at as string).getTime() - new Date(b.expires_at as string).getTime();
-  });
-  const chosen = usable[0];
-  await supabase.from("ai_credit_purchases").update({ credits_remaining: (chosen.credits_remaining as number) - 1 }).eq("id", chosen.id);
+  // P0 SECURITY + TOCTOU FIX (docs/PENDING_SQL.md §59, FULL SYSTEM
+  // AUDIT owner decision 2026-08-26): this used to be a plain client-
+  // side select -> sort -> `update({credits_remaining: n - 1})` —  (a)
+  // it relied on a blanket self-service UPDATE policy that ALSO let any
+  // authenticated user grant themselves unlimited credits directly via
+  // the REST API, and (b) the read-then-write was a genuine lost-update
+  // race under concurrent calls. The RPC does the pack selection, row
+  // lock, and decrement as ONE atomic transaction, scoped internally to
+  // auth.uid() (never a parameter), and needs no client-writable UPDATE
+  // policy on the table at all — see that section for the full RPC body
+  // and reasoning. Returns null (never an error) when no credit is
+  // available, same as the old code's silent no-op in that case.
+  const { error } = await supabase.rpc("consume_ai_import_credit");
+  if (error) {
+    console.error(`[ai-import] consume_ai_import_credit RPC failed for user ${userId}: ${error.message}`);
+  }
 }
 
 // COST CONTROL — LOGGING (owner decision 2026-08-24, FIVE ADDITIONS pass,

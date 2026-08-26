@@ -75,7 +75,7 @@ export default function CreditCards() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['credit_cards'] });
     } finally {
       setRefreshing(false);
     }
@@ -132,7 +132,7 @@ export default function CreditCards() {
     setSaving(true);
     try {
       await insertCard.mutateAsync(toValues(userId));
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['credit_cards'] });
       closeSheets();
     } catch (err) {
       Alert.alert(t('creditCards.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -147,7 +147,7 @@ export default function CreditCards() {
     try {
       const { user_id: _uid, ...values } = toValues(userId);
       await updateCard.mutateAsync({ id: editing.id, values });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['credit_cards'] });
       closeSheets();
     } catch (err) {
       Alert.alert(t('creditCards.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -165,7 +165,7 @@ export default function CreditCards() {
         onPress: async () => {
           try {
             await deleteCard.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['credit_cards'] });
             closeSheets();
           } catch (err) {
             Alert.alert(t('creditCards.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

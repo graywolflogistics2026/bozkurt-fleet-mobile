@@ -109,7 +109,7 @@ export default function BankStatements() {
         onPress: async () => {
           try {
             await deleteStatement.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['bank_statements'] });
             setViewing(null);
           } catch (err) {
             Alert.alert(t('bankStatements.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

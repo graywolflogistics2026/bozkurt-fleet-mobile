@@ -78,7 +78,7 @@ export default function Tolls() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['tolls'] });
     } finally {
       setRefreshing(false);
     }
@@ -117,7 +117,7 @@ export default function Tolls() {
         toll_date: tollDate || null,
         source: 'manual',
       });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['tolls'] });
       setAdding(false);
     } catch (err) {
       Alert.alert(t('tolls.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -135,7 +135,7 @@ export default function Tolls() {
         onPress: async () => {
           try {
             await deleteToll.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['tolls'] });
           } catch (err) {
             Alert.alert(t('tolls.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
           }

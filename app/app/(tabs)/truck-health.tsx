@@ -311,8 +311,7 @@ export default function TruckHealth() {
       if (Object.keys(truckUpdates).length > 0) await updateTruck.mutateAsync({ id: truck.id, values: truckUpdates });
 
       await Promise.all([
-        invalidateFinancialData(queryClient),
-        queryClient.invalidateQueries({ queryKey: ['trucks'], refetchType: 'all' }),
+        invalidateFinancialData(queryClient, { entities: ['maintenance_records', 'trucks'] }),
         queryClient.invalidateQueries({ queryKey: ['maintenance_intervals'], refetchType: 'all' }),
       ]);
       setMarkingDone(null);

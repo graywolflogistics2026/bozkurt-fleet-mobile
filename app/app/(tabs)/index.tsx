@@ -713,7 +713,9 @@ export default function Dashboard() {
             const row = thisWeekExpenseRows.find((d) => d.id === id);
             await deleteDeduction.mutateAsync(id);
             if (row?.document_id) await cleanupOrphanedDocument(row.document_id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, {
+              entities: row?.document_id ? ['deductions', 'capital_transactions', 'documents'] : ['deductions', 'capital_transactions'],
+            });
           } catch (err) {
             Alert.alert(t('deductions.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
           } finally {

@@ -221,7 +221,7 @@ export default function DocumentsArchive() {
     setMarkingReviewed(true);
     try {
       await markDocumentReviewed.mutateAsync(selected.id);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['documents'] });
     } catch (err) {
       Alert.alert(t('documentsArchive.viewFailed'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -239,7 +239,7 @@ export default function DocumentsArchive() {
     setSavingPayment(true);
     try {
       await updateDeduction.mutateAsync({ id: singleLinkedDeduction.id, values: { payment_method: method } });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
@@ -250,7 +250,7 @@ export default function DocumentsArchive() {
   async function handleChangeDeductionCategory(deductionId: string, category: string) {
     try {
       await updateDeduction.mutateAsync({ id: deductionId, values: { category } });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     }

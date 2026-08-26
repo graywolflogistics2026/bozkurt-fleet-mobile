@@ -228,7 +228,7 @@ export default function Maintenance() {
       });
       await bumpTruckReading(odometer, hours, addForm.type);
       await createWarrantyReimbursement(addForm.description || t(`maintenance.types.${addForm.type}`), addForm.invoice, covered, addForm.date);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['maintenance_records', 'trucks', 'reimbursements'] });
       setAddForm(emptyForm());
       setShowAddForm(false);
     } catch (err) {
@@ -276,7 +276,7 @@ export default function Maintenance() {
       });
       await bumpTruckReading(odometer, hours, editForm.type);
       await createWarrantyReimbursement(editForm.description || t(`maintenance.types.${editForm.type}`), editForm.invoice, covered, editForm.date);
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['maintenance_records', 'trucks', 'reimbursements'] });
       setEditing(null);
     } catch (err) {
       Alert.alert(t('maintenance.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -304,7 +304,9 @@ export default function Maintenance() {
             // item F.1) — the linked document record + its Storage file,
             // same cleanup deductions.tsx's own delete handler already does.
             if (rec.document_id) await cleanupOrphanedDocument(rec.document_id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, {
+              entities: rec.document_id ? ['maintenance_records', 'documents'] : ['maintenance_records'],
+            });
           } catch (err) {
             Alert.alert(t('maintenance.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
           }

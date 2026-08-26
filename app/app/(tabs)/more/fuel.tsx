@@ -82,7 +82,7 @@ export default function Fuel() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['fuel_purchases'] });
     } finally {
       setRefreshing(false);
     }
@@ -133,7 +133,7 @@ export default function Fuel() {
         discount: Number(discount) || 0,
         purchase_date: purchaseDate || null,
       });
-      await invalidateFinancialData(queryClient);
+      await invalidateFinancialData(queryClient, { entities: ['fuel_purchases'] });
       setAdding(false);
     } catch (err) {
       Alert.alert(t('fuel.saveFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
@@ -151,7 +151,7 @@ export default function Fuel() {
         onPress: async () => {
           try {
             await deleteFuel.mutateAsync(x.id);
-            await invalidateFinancialData(queryClient);
+            await invalidateFinancialData(queryClient, { entities: ['fuel_purchases'] });
           } catch (err) {
             Alert.alert(t('fuel.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
           }

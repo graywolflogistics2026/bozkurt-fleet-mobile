@@ -151,7 +151,12 @@ describe('step-tagged errors', () => {
   });
 
   test('a balance-update (RPC) failure is tagged and shows every child row already saved', async () => {
-    withFailure({ table: 'rpc:apply_business_balance_delta', error: { message: 'No profile row matched — update affected 0 rows.', code: 'P0002' } });
+    // BALANCE LEDGER ATOMICITY FIX (docs/PENDING_SQL.md §60): the
+    // settlement save path now calls apply_settlement_business_balance_credit,
+    // not the plain apply_business_balance_delta (that RPC is still used
+    // elsewhere, e.g. capitalTransactions.ts's own callers pre-§60 — but no
+    // longer here).
+    withFailure({ table: 'rpc:apply_settlement_business_balance_credit', error: { message: 'No settlement row matched.', code: 'P0002' } });
     try {
       await saveExtraction(baseParams(settlementExtraction()));
       throw new Error('expected saveExtraction to throw');
