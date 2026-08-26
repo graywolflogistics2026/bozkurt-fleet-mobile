@@ -50,6 +50,7 @@ function ded(overrides: Partial<Deduction>): Deduction {
     user_id: 'u1',
     settlement_id: null,
     driver_id: null,
+    truck_id: null,
     document_id: null,
     ded_date: '2026-01-01',
     code: null,

@@ -69,6 +69,18 @@ type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
 // request and the Edge Function).
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
+// TRUCK ASSIGNMENT AT IMPORT (MULTI-TRUCK MODEL, owner decision) —
+// requirement 3: when resolveTruckMatch() can't auto-match a statement's
+// unit number, the preview must ask, and "not truck-specific" (a
+// business-level cost with no single owning truck) must be an explicit,
+// first-class answer — never just a fallback for giving up. `truckId`
+// state stays `string | null` (null = "hasn't answered yet," which keeps
+// Save disabled); this sentinel is a valid non-null string so choosing it
+// satisfies the same `!truckId` gate a real truck id would, and is
+// converted back to a real `null` right before saveExtraction() is called
+// (see handleSave()).
+const NOT_TRUCK_SPECIFIC = '__not_truck_specific__';
+
 function money(n: number | undefined | null, locale: string) {
   if (n == null) return '—';
   return formatMoney(n, locale);
@@ -885,7 +897,7 @@ export default function Import() {
       const saved = await saveExtraction({
         extraction,
         userId,
-        truckId,
+        truckId: truckId === NOT_TRUCK_SPECIFIC ? null : truckId,
         driverId,
         driverShareAmount: showsDriverSplitInput ? Number(driverShareAmount) || null : null,
         fileUri: fileMeta.uri,
@@ -1215,6 +1227,25 @@ export default function Import() {
                     }}
                   >
                     <Text style={{ color: colors.text, fontWeight: '600' }}>{t('importScreen.createNewTruck')}</Text>
+                  </Pressable>
+                  {/* TRUCK ASSIGNMENT AT IMPORT (MULTI-TRUCK MODEL, owner
+                      decision) — requirement 3: "not truck-specific" is an
+                      explicit first-class choice, not just giving up. */}
+                  <Pressable
+                    onPress={() => {
+                      setTruckId(NOT_TRUCK_SPECIFIC);
+                      setShowNewTruckForm(false);
+                    }}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: radii.sm,
+                      borderWidth: 1,
+                      borderColor: truckId === NOT_TRUCK_SPECIFIC ? colors.accent : colors.border,
+                      backgroundColor: truckId === NOT_TRUCK_SPECIFIC ? colors.accent : colors.card2,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{t('importScreen.notTruckSpecific')}</Text>
                   </Pressable>
                 </View>
                 {showNewTruckForm && (

@@ -5,7 +5,11 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
-import { useDeductions, useDeleteDeduction } from '@/src/data/deductions';
+import { useDeductions, useDeleteDeduction, useUpdateDeduction } from '@/src/data/deductions';
+import { useTrucksList } from '@/src/data/trucks';
+import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { truckIdFilterFor } from '@/src/stats/fleetScope';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import {
   fetchLinkedContributionId,
   cleanupOrphanedDocument,
@@ -256,7 +260,13 @@ export default function Deductions() {
   const [period, setPeriod] = useSessionState<PeriodOption>('deductions-period', 'all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const autoOpenedRef = useRef(false);
-  const dedQuery = useDeductions();
+  // MULTI-TRUCK MODEL (owner decision) — requirement 2's "Lists follow
+  // the selector."
+  const { activeTruckId } = useActiveTruck();
+  const dedQuery = useDeductions({ truck_id: truckIdFilterFor(activeTruckId) });
+  const trucksQuery = useTrucksList();
+  const updateDeduction = useUpdateDeduction();
+  const [assigningTruck, setAssigningTruck] = useState(false);
   const learnCategoryCorrection = useLearnCategoryCorrection();
   const deleteDeduction = useDeleteDeduction();
   const reimburseMyself = useReimburseMyself();
@@ -354,6 +364,26 @@ export default function Deductions() {
       fetchReimbursementStatus(userId, x.id)
         .then(setReimbursementStatus)
         .catch(() => setReimbursementStatus(null));
+    }
+  }
+
+  // MULTI-TRUCK MODEL (owner decision) — a truck assignment is completely
+  // independent of the atomic update_deduction_with_contribution_sync RPC
+  // (docs/PENDING_SQL.md §62, category/payment-method/amount/tax-deductible
+  // + contribution sync only) — a plain, separate mutation, fired
+  // immediately on tap rather than folded into the main Save button, since
+  // it has no interaction with that RPC's own money-correctness guarantees.
+  async function handleAssignTruck(truckId: string | null) {
+    if (!editing) return;
+    setAssigningTruck(true);
+    try {
+      await updateDeduction.mutateAsync({ id: editing.id, values: { truck_id: truckId } });
+      setEditing({ ...editing, truck_id: truckId });
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+    } catch (err) {
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setAssigningTruck(false);
     }
   }
 
@@ -633,6 +663,7 @@ export default function Deductions() {
             </Text>
           </Pressable>
         </View>
+        <FleetScopeLabel />
 
         {/* TOTALS BAR (spec item 2a) — three tappable tiles reflecting the
             selected period; tapping one is exactly equivalent to tapping
@@ -813,6 +844,28 @@ export default function Deductions() {
               onPress={() => handleMarkReviewed(editing, true)}
               isPending={markReviewed.isPending && reviewingId === editing.id}
             />
+          </View>
+        )}
+
+        {/* MULTI-TRUCK MODEL (owner decision) — optional; most deductions
+            are legitimately fleet-level, so this is presented as a plain
+            choice, never framed as something "missing." Only shown for a
+            multi-truck account. */}
+        {editing && (trucksQuery.data?.length ?? 0) > 1 && (
+          <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+            <MutedText>{t('deductions.truckLabel')}</MutedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              <Pill label={t('fleetScope.fleetWideOption')} selected={!editing.truck_id} onPress={() => handleAssignTruck(null)} />
+              {(trucksQuery.data ?? []).map((tr) => (
+                <Pill
+                  key={tr.id}
+                  label={t('common.unit', { unit: tr.unit_number ?? tr.id })}
+                  selected={editing.truck_id === tr.id}
+                  onPress={() => handleAssignTruck(tr.id)}
+                />
+              ))}
+            </View>
+            {assigningTruck && <MutedText>{t('common.loading')}</MutedText>}
           </View>
         )}
 

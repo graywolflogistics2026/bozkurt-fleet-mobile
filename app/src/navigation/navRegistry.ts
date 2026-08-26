@@ -79,6 +79,10 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
     titleKey: 'sidebar.sections.business',
     items: [
       { href: '/(tabs)/more/trucks', labelKey: 'nav.trucks', emoji: '🚚' },
+      // MULTI-TRUCK MODEL (owner decision) — requirements 3 (repair flow)
+      // and 4 (per-truck profitability comparison).
+      { href: '/(tabs)/more/truck-comparison' as Href, labelKey: 'nav.truckComparison', emoji: '📊' },
+      { href: '/(tabs)/more/truck-assignments' as Href, labelKey: 'nav.truckAssignments', emoji: '🔗' },
       { href: '/(tabs)/more/equipment' as Href, labelKey: 'nav.equipment', emoji: '🛠️' },
       { href: '/(tabs)/more/drivers', labelKey: 'nav.drivers', emoji: '🧑‍✈️' },
       { href: '/(tabs)/more/capital-account', labelKey: 'nav.capitalAccount', emoji: '💰' },

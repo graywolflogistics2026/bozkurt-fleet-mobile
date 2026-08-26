@@ -15,6 +15,7 @@ import { MAINTENANCE_TYPES, MAINTENANCE_TYPE_ICON, type MaintenanceType } from '
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -90,6 +91,15 @@ export default function Maintenance() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<FormState>(emptyForm());
+  // MULTI-TRUCK MODEL (owner decision) — when the global scope is "All
+  // Trucks" (activeTruckId null with 2+ trucks), a new record has no
+  // implicit truck to attach to anymore — must ask explicitly rather than
+  // silently defaulting to any one truck (requirement 1's own "no screen
+  // may silently apply its own filter," extended here to "silently
+  // choose a truck to WRITE to" too). null while scope IS a specific
+  // truck (or the account has <=1 truck) means "use that scope truck
+  // directly," matching this form's pre-existing behavior exactly.
+  const [addFormTruckId, setAddFormTruckId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<MaintenanceRecord | null>(null);
   const [editForm, setEditForm] = useState<FormState>(emptyForm());
@@ -179,12 +189,12 @@ export default function Maintenance() {
   // entered record reports a HIGHER reading — CLAUDE.md/owner ask:
   // "latest odometer from any source drives all next-due math", same as
   // ai-import's mapExtraction.ts and legacy applyMaintToHealth().
-  async function bumpTruckReading(odometer: number, hours: number, type: MaintenanceType) {
-    if (!truck) return;
+  async function bumpTruckReading(forTruck: typeof truck, odometer: number, hours: number, type: MaintenanceType) {
+    if (!forTruck) return;
     const values: { current_odometer?: number; apu_hours?: number } = {};
-    if (odometer > (truck.current_odometer ?? 0)) values.current_odometer = odometer;
-    if (type === 'apu' && hours > (truck.apu_hours ?? 0)) values.apu_hours = hours;
-    if (Object.keys(values).length > 0) await updateTruck.mutateAsync({ id: truck.id, values });
+    if (odometer > (forTruck.current_odometer ?? 0)) values.current_odometer = odometer;
+    if (type === 'apu' && hours > (forTruck.apu_hours ?? 0)) values.apu_hours = hours;
+    if (Object.keys(values).length > 0) await updateTruck.mutateAsync({ id: forTruck.id, values });
   }
 
   // Mirrors app/src/import/mapExtraction.ts mapMaintenance() — a non-zero
@@ -201,8 +211,10 @@ export default function Maintenance() {
     });
   }
 
+  const recordTruckId = activeTruckId ?? addFormTruckId;
+
   async function handleAdd() {
-    if (!userId || !activeTruckId) return;
+    if (!userId || !recordTruckId) return;
     const odometer = Number(addForm.odometer) || 0;
     const hours = Number(addForm.hours) || 0;
     const total = Number(addForm.total) || 0;
@@ -215,7 +227,7 @@ export default function Maintenance() {
     try {
       await insertRecord.mutateAsync({
         user_id: userId,
-        truck_id: activeTruckId,
+        truck_id: recordTruckId,
         service_date: addForm.date || new Date().toISOString().slice(0, 10),
         service_type: addForm.type,
         description: addForm.description || null,
@@ -226,7 +238,12 @@ export default function Maintenance() {
         invoice_number: addForm.invoice || null,
         source: 'manual',
       });
-      await bumpTruckReading(odometer, hours, addForm.type);
+      await bumpTruckReading(
+        trucksQuery.data?.find((tr) => tr.id === recordTruckId) ?? null,
+        odometer,
+        hours,
+        addForm.type
+      );
       await createWarrantyReimbursement(addForm.description || t(`maintenance.types.${addForm.type}`), addForm.invoice, covered, addForm.date);
       await invalidateFinancialData(queryClient, { entities: ['maintenance_records', 'trucks', 'reimbursements'] });
       setAddForm(emptyForm());
@@ -274,7 +291,12 @@ export default function Maintenance() {
           invoice_number: editForm.invoice || null,
         },
       });
-      await bumpTruckReading(odometer, hours, editForm.type);
+      await bumpTruckReading(
+        trucksQuery.data?.find((tr) => tr.id === editing.truck_id) ?? null,
+        odometer,
+        hours,
+        editForm.type
+      );
       await createWarrantyReimbursement(editForm.description || t(`maintenance.types.${editForm.type}`), editForm.invoice, covered, editForm.date);
       await invalidateFinancialData(queryClient, { entities: ['maintenance_records', 'trucks', 'reimbursements'] });
       setEditing(null);
@@ -365,6 +387,7 @@ export default function Maintenance() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         <ScreenTitle>{t('maintenance.title')}</ScreenTitle>
+        <FleetScopeLabel />
 
         <Card>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -423,7 +446,13 @@ export default function Maintenance() {
           )}
         />
 
-        <PrimaryButton title={t('maintenance.addRecord')} onPress={() => setShowAddForm(true)} />
+        <PrimaryButton
+          title={t('maintenance.addRecord')}
+          onPress={() => {
+            setAddFormTruckId(null);
+            setShowAddForm(true);
+          }}
+        />
 
         {rows.length > 0 && (
           <>
@@ -447,8 +476,26 @@ export default function Maintenance() {
 
       <ModalSheet visible={showAddForm} onClose={() => setShowAddForm(false)}>
         <SheetTitle>{t('maintenance.addRecord')}</SheetTitle>
+        {/* MULTI-TRUCK MODEL (owner decision) — only shown when the global
+            scope is "All Trucks" (activeTruckId null, 2+ trucks); a
+            specific-truck scope (or an n<=1 account) has nothing to ask. */}
+        {!activeTruckId && (trucksQuery.data?.length ?? 0) > 1 && (
+          <View style={{ marginBottom: spacing.sm }}>
+            <MutedText>{t('maintenance.whichTruck')}</MutedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {(trucksQuery.data ?? []).map((tr) => (
+                <Pill
+                  key={tr.id}
+                  label={t('common.unit', { unit: tr.unit_number ?? tr.id })}
+                  selected={addFormTruckId === tr.id}
+                  onPress={() => setAddFormTruckId(tr.id)}
+                />
+              ))}
+            </View>
+          </View>
+        )}
         {renderForm(addForm, setAddForm)}
-        <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} />
+        <PrimaryButton title={t('common.save')} onPress={handleAdd} loading={saving} disabled={!recordTruckId} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setShowAddForm(false)} />
       </ModalSheet>
 

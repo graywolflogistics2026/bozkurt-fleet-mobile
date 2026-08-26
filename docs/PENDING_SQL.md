@@ -3412,6 +3412,70 @@ than expanding this fix's blast radius further.
 
 - [x] 62a run (update_deduction_with_contribution_sync, insert_deduction_with_contribution_sync)
 
+## 63. deductions.truck_id + tolls.truck_id (MULTI-TRUCK MODEL, owner decision) — NOT YET RUN
+
+Fleet-vs-per-truck scoping pass. Every table that can be operationally
+tied to one truck already carries `truck_id` — `settlements`,
+`fuel_purchases` (§6), `maintenance_records` — EXCEPT `deductions` and
+`tolls`, which had none at all. This is what makes the new "Lists follow
+the global scope selector, with the truck's unit number visible on every
+row" requirement (settlements/loads/fuel/maintenance/tolls/deductions)
+impossible for these two tables today, and it's also what the new
+per-truck CPM's cost-allocation rule needs: a deduction/toll with
+`truck_id` set is a DIRECT cost for that truck; one left `null` is a
+FLEET-LEVEL cost (insurance, accounting fees, permits, ...) allocated
+across trucks by miles for per-truck CPM purposes only (never for P&L/
+tax, which stay unsplit) — see `app/src/stats/costAllocation.ts`/
+`app/src/stats/truckComparison.ts`. Nullable on both — most deductions
+stay fleet-level (`null`) by design, same "n=1/no-value is a legitimate
+answer, not a broken one" spirit as every other optional column in this
+schema; the import preview's new truck picker (see
+`app/app/(tabs)/import/index.tsx`) offers "Not truck-specific" as an
+explicit first-class choice, not just a fallback.
+
+```sql
+-- 63a. deductions.truck_id
+alter table deductions add column truck_id uuid references trucks;
+create index on deductions (truck_id);
+
+-- 63b. Backfill: a settlement-withheld deduction inherits its own
+-- settlement's truck_id (an out-of-pocket/manual deduction has no
+-- settlement to inherit from and stays null, i.e. fleet-level, until a
+-- user explicitly assigns one via the Deductions edit sheet or the new
+-- Fix Truck Assignments screen).
+update deductions d
+set truck_id = s.truck_id
+from settlements s
+where d.settlement_id = s.id
+  and d.truck_id is null
+  and s.truck_id is not null;
+
+-- 63c. tolls.truck_id (tolls had no truck attribution column at all —
+-- not even a settlement-side one to filter through generically, since a
+-- manually-entered toll has no settlement_id either)
+alter table tolls add column truck_id uuid references trucks;
+create index on tolls (truck_id);
+
+-- 63d. Backfill: same rule as 63b, via each toll's own settlement_id
+-- (docs/PENDING_SQL.md §61).
+update tolls t
+set truck_id = s.truck_id
+from settlements s
+where t.settlement_id = s.id
+  and t.truck_id is null
+  and s.truck_id is not null;
+```
+
+Both columns are plain `references trucks` with no explicit `on delete`
+clause — matching `fuel_purchases.truck_id`'s own §6 precedent exactly
+(not `on delete set null`), so this introduces no new deletion-safety
+shape beyond what already exists for fuel/maintenance/settlements.
+
+- [ ] 63a run (add truck_id + index to deductions)
+- [ ] 63b run (backfill deductions.truck_id from settlement)
+- [ ] 63c run (add truck_id + index to tolls)
+- [ ] 63d run (backfill tolls.truck_id from settlement)
+
 ---
 
 ## Also still open (not part of any pass above)

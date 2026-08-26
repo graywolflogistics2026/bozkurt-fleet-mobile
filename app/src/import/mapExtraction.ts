@@ -101,9 +101,20 @@ function toReimbInsert(r: ExtractedReimbursementItem, userId: string, fallbackDa
   };
 }
 
-function toTollInsert(t: ExtractedToll, network: 'ezpass' | 'drivewyze', userId: string, fallbackDate?: string): TollInsert {
+function toTollInsert(
+  t: ExtractedToll,
+  network: 'ezpass' | 'drivewyze',
+  userId: string,
+  fallbackDate?: string,
+  truckId: string | null = null
+): TollInsert {
   return {
     user_id: userId,
+    // docs/PENDING_SQL.md §63 (MULTI-TRUCK MODEL, owner decision) — a toll
+    // extracted from a settlement's own tolls section inherits that
+    // settlement's truck_id, same rule the §63 backfill migration applies
+    // to pre-existing rows.
+    truck_id: truckId,
     network,
     toll_date: toDateOrNull(t.date) ?? fallbackDate ?? null,
     amount: num(t.amount),
@@ -220,6 +231,12 @@ export function mapSettlement(
   // tax total on its own.
   const deductions: DeductionInsert[] = (s.deductions ?? []).map((x) => ({
     user_id: userId,
+    // docs/PENDING_SQL.md §63 (MULTI-TRUCK MODEL, owner decision) — a
+    // withheld deduction inherits its settlement's own truck_id (null
+    // when the import was explicitly marked "not truck-specific," never
+    // silently guessed) — same rule the §63 backfill migration applies to
+    // pre-existing rows.
+    truck_id: truckId,
     settlement_id: null,
     driver_id: driverId,
     ded_date: settlementFallbackDate ?? null,
@@ -254,8 +271,8 @@ export function mapSettlement(
   );
 
   const tolls: TollInsert[] = [
-    ...(s.tolls?.ezpass?.items ?? []).map((t) => toTollInsert(t, 'ezpass', userId, settlementFallbackDate)),
-    ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, 'drivewyze', userId, settlementFallbackDate)),
+    ...(s.tolls?.ezpass?.items ?? []).map((t) => toTollInsert(t, 'ezpass', userId, settlementFallbackDate, truckId)),
+    ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, 'drivewyze', userId, settlementFallbackDate, truckId)),
   ];
 
   const loans: LoanInsert[] = (s.loans ?? []).map((l) => ({

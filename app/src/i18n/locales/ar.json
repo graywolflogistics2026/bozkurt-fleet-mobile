@@ -15,7 +15,8 @@
     "copied": "تم النسخ!",
     "close": "إغلاق",
     "viewOriginalDocument": "عرض المستند الأصلي",
-    "dismiss": "تجاهل"
+    "dismiss": "تجاهل",
+    "error": "خطأ"
   },
   "nav": {
     "dashboard": "الرئيسية",
@@ -59,7 +60,9 @@
     "documents": "المستندات",
     "categoryLearning": "تعلّم الفئات",
     "referral": "دعوة واكسب",
-    "accountantPackage": "حزمة المحاسب"
+    "accountantPackage": "حزمة المحاسب",
+    "truckComparison": "مقارنة الشاحنات",
+    "truckAssignments": "إصلاح تخصيصات الشاحنات"
   },
   "auth": {
     "signUpTagline": "{{brand}} — لأصحاب الشاحنات المستقلين",
@@ -293,6 +296,9 @@
       "weeklyReserve": "الاحتياطي الضريبي الأسبوعي",
       "nextQuarterly": "الدفعة الفصلية القادمة",
       "yearlyEstimate": "الضريبة السنوية المقدرة"
+    },
+    "perTruckThisWeek": {
+      "title": "لكل شاحنة هذا الأسبوع"
     }
   },
   "deductions": {
@@ -346,7 +352,8 @@
     "reimbursedInFull": "دُفع شخصيًا · تم رده بالكامل ({{amount}})",
     "reimbursedPartial": "دُفع شخصيًا · تم رد {{reimbursed}} من {{total}}",
     "notYetReimbursed": "دُفع شخصيًا · لم يُرد بعد",
-    "reimburseMyself": "رد المبلغ لنفسي ({{amount}})"
+    "reimburseMyself": "رد المبلغ لنفسي ({{amount}})",
+    "truckLabel": "الشاحنة"
   },
   "capitalAccount": {
     "title": "حساب رأس المال",
@@ -543,7 +550,8 @@
     "chooseDifferentFile": "اختيار ملف آخر",
     "backfillOfferTitle": "هل تُدخل سجلات قديمة؟",
     "backfillOfferBody": "إذا كنت تستورد عدة أشهر من المستندات القديمة، قد تساعدك حزمة سنة اللحاق (1000 عملية استيراد، صالحة 90 يومًا). تواصل مع الدعم إذا أردت إضافتها إلى حسابك.",
-    "processingPageProgressWithData": "الصفحة {{through}} من {{total}} · تم استلام الإيرادات والخصومات"
+    "processingPageProgressWithData": "الصفحة {{through}} من {{total}} · تم استلام الإيرادات والخصومات",
+    "notTruckSpecific": "غير مرتبط بشاحنة محددة"
   },
   "camera": {
     "permissionNote": "يلزم الوصول إلى الكاميرا لتصوير الإيصالات وملفات PDF لـ Settlements.",
@@ -730,7 +738,9 @@
     "markDoneNoteLabel": "ملاحظة (اختياري)",
     "markDoneNotePlaceholder": "مثال: تم تنفيذه ذاتيًا على الطريق",
     "markDoneConfirm": "تأكيد",
-    "markDoneFailedTitle": "تعذر الحفظ"
+    "markDoneFailedTitle": "تعذر الحفظ",
+    "whichTruckTitle": "ما الشاحنة التي تريد عرضها؟",
+    "changeTruck": "تغيير الشاحنة (عرض الوحدة {{unit}})"
   },
   "maintenance": {
     "title": "الصيانة",
@@ -776,7 +786,8 @@
       "brakes": "الفرامل",
       "general": "عام",
       "other": "أخرى"
-    }
+    },
+    "whichTruck": "لأي شاحنة هذا؟"
   },
   "trucks": {
     "title": "الشاحنات",
@@ -1004,7 +1015,8 @@
   "truckSwitcher": {
     "switchTruck": "تبديل الشاحنة",
     "selectTruck": "اختر شاحنة",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "allTrucks": "جميع الشاحنات"
   },
   "loads": {
     "title": "الحمولات",
@@ -1994,7 +2006,9 @@
     "whyExcludedOneOffsTitle": "المصاريف لمرة واحدة المستبعدة",
     "whyExcludedOneOffsNote": "هذه مصاريف حقيقية (تبقى في تقرير الأرباح والخسائر وتقدير الضرائب) لكنها مستبعدة من التكلفة/الميل — إصلاح أو شراء لمرة واحدة مقسوم على أميال أسبوع واحد سيؤدي إلى رقم غير منطقي.",
     "whyMissingMilesTitle": "settlements بإيراد لكن بدون أميال",
-    "trendTitle": "اتجاه صافي الربح الأسبوعي"
+    "trendTitle": "اتجاه صافي الربح الأسبوعي",
+    "perTruckBreakdownTitle": "التفصيل حسب الشاحنة",
+    "seeFullComparison": "عرض المقارنة الكاملة ←"
   },
   "sidebar": {
     "sections": {
@@ -2068,5 +2082,47 @@
     "nextDocument": "المستند التالي",
     "finishReview": "إنهاء",
     "reviewAll": "مراجعة الكل ({{count}})"
+  },
+  "fleetScope": {
+    "showingAllTrucks": "عرض: جميع الشاحنات",
+    "showingUnit": "عرض: الوحدة {{unit}}",
+    "fleetWideAlways": "على مستوى الأسطول (جميع الشاحنات) — لا يتأثر بمحدد الشاحنة",
+    "fleetWideOption": "على مستوى الأسطول (بدون شاحنة محددة)",
+    "unassigned": "غير مخصص"
+  },
+  "truckComparison": {
+    "title": "ربحية كل شاحنة",
+    "subtitle": "الإيرادات والمصروفات والربح لكل ميل — جنبًا إلى جنب، لترى أي شاحنة تحقق أرباحًا فعليًا.",
+    "best": "الأفضل",
+    "worst": "الأسوأ",
+    "revenue": "الإيرادات",
+    "expenses": "المصروفات",
+    "netProfit": "صافي الربح",
+    "miles": "الأميال",
+    "deadheadPct": "نسبة Deadhead",
+    "allocatedCaption": "مباشر: {{direct}} · حصة مخصصة من تكاليف الأسطول: {{allocated}}",
+    "driverPay": "أجر السائق: {{amount}}",
+    "netAfterDriverPay": "الصافي بعد أجر السائق: {{amount}}",
+    "empty": "لا توجد Settlement بعد لأي شاحنة في هذه الفترة.",
+    "unassignedTitle": "بعض الإيرادات غير مخصصة لشاحنة",
+    "unassignedBody": "{{count}} Settlement بإجمالي {{amount}} ليس لها شاحنة محددة، لذا لا تُدرج ضمن أرقام أي شاحنة أعلاه.",
+    "unassignedFixLink": "إصلاح تخصيصات الشاحنات ←",
+    "fleetTotalsTitle": "إجماليات الأسطول",
+    "allocationNote": "تُخصَّص التكاليف على مستوى الأسطول (التأمين، أتعاب المحاسبة، التصاريح، ورسوم أخرى بلا شاحنة محددة) لكل شاحنة حسب حصتها من إجمالي أميال الأسطول — هذا تخصيص، وليس تكلفة مباشرة."
+  },
+  "truckAssignments": {
+    "title": "إصلاح تخصيصات الشاحنات",
+    "subtitle": "خصص شاحنة للصفوف التي لا تملك واحدة بعد. هذا ليس بالضرورة خطأ — الصف الذي أُنشئ قبل شاحنتك الثانية ببساطة لا يملك تخصيصًا.",
+    "needsMultipleTrucks": "لديك شاحنة واحدة فقط — لا شيء لتخصيصه.",
+    "empty": "كل Settlement وعملية شراء وقود وسجل صيانة ورسوم طريق لديها بالفعل شاحنة مخصصة.",
+    "bulkTitle": "تخصيص المحدد ({{count}}) إلى:",
+    "assignSelected": "تخصيص {{count}} محدد",
+    "assignThisRow": "تخصيص هذا الصف إلى",
+    "kind": {
+      "settlement": "Settlement",
+      "fuel": "وقود",
+      "maintenance": "صيانة",
+      "toll": "رسوم طريق"
+    }
   }
 }

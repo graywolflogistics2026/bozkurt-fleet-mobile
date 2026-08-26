@@ -4,8 +4,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useFuelPurchases, useInsertFuelPurchase, useDeleteFuelPurchase } from '@/src/data/fuelPurchases';
+import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -64,7 +67,10 @@ export default function Fuel() {
   const { money, number } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
-  const fuelQuery = useFuelPurchases();
+  // MULTI-TRUCK MODEL (owner decision) — requirement 2's "Lists follow
+  // the selector."
+  const { activeTruckId } = useActiveTruck();
+  const fuelQuery = useFuelPurchases({ truck_id: truckIdFilterFor(activeTruckId) });
   const insertFuel = useInsertFuelPurchase();
   const deleteFuel = useDeleteFuelPurchase();
   const queryClient = useQueryClient();
@@ -125,6 +131,11 @@ export default function Fuel() {
     try {
       await insertFuel.mutateAsync({
         user_id: userId,
+        // Silently attaches to whichever truck is currently in scope (a
+        // reasonable default — "I'm looking at Unit X, so a fuel purchase
+        // I add now is Unit X's"), left fleet-level/unassigned only when
+        // viewing "All Trucks," same as most manually-added deductions.
+        truck_id: activeTruckId,
         fuel_type: fuelType,
         location: location || null,
         state: state ? state.toUpperCase() : null,
@@ -225,6 +236,7 @@ export default function Fuel() {
             </Text>
           </Pressable>
         </View>
+        <FleetScopeLabel />
 
         <Card>
           <MutedText>{t('fuel.totalNetCost')}</MutedText>

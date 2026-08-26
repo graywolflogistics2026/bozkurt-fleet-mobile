@@ -7,6 +7,7 @@ import { useUpdateTaxConfig } from '@/src/data/taxConfig';
 import { useHouseholdMembers, useInsertHouseholdMember, useDeleteHouseholdMember } from '@/src/data/householdMembers';
 import { useHouseholdIncome, useInsertHouseholdIncome, useDeleteHouseholdIncome } from '@/src/data/householdIncome';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { allQuarterlyDeadlines, type QuarterlyDeadlineStatus } from '@/src/tax/quarterly';
 import { calcScorpSavingsPreview } from '@/src/tax/scorpSavings';
 import type { EntityType, FilingStatus } from '@/src/tax/types';
@@ -250,6 +251,7 @@ export default function TaxEstimator() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('taxEstimator.title')}</ScreenTitle>
+        <FleetScopeLabel variant="fleetOnly" />
         <LegalFootnote />
 
         {loading ? (

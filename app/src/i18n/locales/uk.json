@@ -15,7 +15,8 @@
     "copied": "Copied!",
     "close": "Close",
     "viewOriginalDocument": "View Original Document",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "error": "Error"
   },
   "nav": {
     "dashboard": "Home",
@@ -59,7 +60,9 @@
     "documents": "Documents",
     "categoryLearning": "Category Learning",
     "referral": "Invite & Earn",
-    "accountantPackage": "Accountant Package"
+    "accountantPackage": "Accountant Package",
+    "truckComparison": "Truck Comparison",
+    "truckAssignments": "Fix Truck Assignments"
   },
   "auth": {
     "signUpTagline": "{{brand}} — for owner-operators",
@@ -293,6 +296,9 @@
       "weeklyReserve": "Weekly Tax Reserve",
       "nextQuarterly": "Next Quarterly Payment",
       "yearlyEstimate": "Estimated Yearly Tax"
+    },
+    "perTruckThisWeek": {
+      "title": "Per Truck This Week"
     }
   },
   "deductions": {
@@ -346,7 +352,8 @@
     "reimbursedInFull": "Paid personally · reimbursed in full ({{amount}})",
     "reimbursedPartial": "Paid personally · reimbursed {{reimbursed}} of {{total}}",
     "notYetReimbursed": "Paid personally · not yet reimbursed",
-    "reimburseMyself": "Reimburse Myself ({{amount}})"
+    "reimburseMyself": "Reimburse Myself ({{amount}})",
+    "truckLabel": "Truck"
   },
   "capitalAccount": {
     "title": "Capital Account",
@@ -543,7 +550,8 @@
     "chooseDifferentFile": "Choose a Different File",
     "backfillOfferTitle": "Catching up on old records?",
     "backfillOfferBody": "If you're importing several months of past documents, the Catch-Up Year pack (1,000 imports, valid 90 days) may help. Contact support if you'd like one added to your account.",
-    "processingPageProgressWithData": "Page {{through}} of {{total}} · revenue and deductions captured"
+    "processingPageProgressWithData": "Page {{through}} of {{total}} · revenue and deductions captured",
+    "notTruckSpecific": "Not truck-specific"
   },
   "camera": {
     "permissionNote": "Camera access is needed to photograph receipts and settlement PDFs.",
@@ -730,7 +738,9 @@
     "markDoneNoteLabel": "Note (optional)",
     "markDoneNotePlaceholder": "e.g. Self-performed on the road",
     "markDoneConfirm": "Confirm",
-    "markDoneFailedTitle": "Could not save"
+    "markDoneFailedTitle": "Could not save",
+    "whichTruckTitle": "Which truck do you want to view?",
+    "changeTruck": "Change truck (viewing Unit {{unit}})"
   },
   "maintenance": {
     "title": "Maintenance",
@@ -776,7 +786,8 @@
       "brakes": "Brakes",
       "general": "General",
       "other": "Other"
-    }
+    },
+    "whichTruck": "Which truck is this for?"
   },
   "trucks": {
     "title": "Trucks",
@@ -1004,7 +1015,8 @@
   "truckSwitcher": {
     "switchTruck": "Switch Truck",
     "selectTruck": "Select truck",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "allTrucks": "All Trucks"
   },
   "loads": {
     "title": "Loads",
@@ -1994,7 +2006,9 @@
     "whyExcludedOneOffsTitle": "Excluded one-time expenses",
     "whyExcludedOneOffsNote": "These are real expenses (kept in your P&L and tax estimate) but excluded from Cost/Mile — a one-time repair or purchase divided across one week's miles would spike the figure to something meaningless.",
     "whyMissingMilesTitle": "Settlements with revenue but no miles",
-    "trendTitle": "Weekly Net Trend"
+    "trendTitle": "Weekly Net Trend",
+    "perTruckBreakdownTitle": "Per-Truck Breakdown",
+    "seeFullComparison": "See full comparison →"
   },
   "sidebar": {
     "sections": {
@@ -2068,5 +2082,47 @@
     "nextDocument": "Next Document",
     "finishReview": "Finish",
     "reviewAll": "Review All ({{count}})"
+  },
+  "fleetScope": {
+    "showingAllTrucks": "Showing: All Trucks",
+    "showingUnit": "Showing: Unit {{unit}}",
+    "fleetWideAlways": "Fleet-wide (all trucks) — not affected by the truck selector",
+    "fleetWideOption": "Fleet-wide (no specific truck)",
+    "unassigned": "Unassigned"
+  },
+  "truckComparison": {
+    "title": "Per-Truck Profitability",
+    "subtitle": "Revenue, expenses, and profit per mile — side by side, so you can see which truck is actually earning.",
+    "best": "Best",
+    "worst": "Worst",
+    "revenue": "Revenue",
+    "expenses": "Expenses",
+    "netProfit": "Net Profit",
+    "miles": "Miles",
+    "deadheadPct": "Deadhead %",
+    "allocatedCaption": "Direct: {{direct}} · Allocated share of fleet-level costs: {{allocated}}",
+    "driverPay": "Driver pay: {{amount}}",
+    "netAfterDriverPay": "Net after driver pay: {{amount}}",
+    "empty": "No settlements yet for any truck in this period.",
+    "unassignedTitle": "Some revenue isn't assigned to a truck",
+    "unassignedBody": "{{count}} settlement(s) totaling {{amount}} have no truck set, so they aren't included in any truck's numbers above.",
+    "unassignedFixLink": "Fix truck assignments →",
+    "fleetTotalsTitle": "Fleet Totals",
+    "allocationNote": "Fleet-level costs (insurance, accounting fees, permits, and other charges with no specific truck) are allocated to each truck by its share of total fleet miles — an allocation, not a direct cost."
+  },
+  "truckAssignments": {
+    "title": "Fix Truck Assignments",
+    "subtitle": "Assign a truck to rows that don't have one yet. This isn't necessarily broken — a row created before your 2nd truck simply has none.",
+    "needsMultipleTrucks": "You only have one truck — nothing to assign.",
+    "empty": "Every settlement, fuel purchase, maintenance record, and toll already has a truck assigned.",
+    "bulkTitle": "Assign selected ({{count}}) to:",
+    "assignSelected": "Assign {{count}} Selected",
+    "assignThisRow": "Assign this row to",
+    "kind": {
+      "settlement": "Settlement",
+      "fuel": "Fuel",
+      "maintenance": "Maintenance",
+      "toll": "Toll"
+    }
   }
 }

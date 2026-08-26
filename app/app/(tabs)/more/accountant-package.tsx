@@ -13,6 +13,7 @@ import { useTolls, useDeleteToll } from '@/src/data/tolls';
 import { useReimbursements } from '@/src/data/reimbursements';
 import { useTrucksList } from '@/src/data/trucks';
 import { useEquipment } from '@/src/data/equipment';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useCapitalTransactions } from '@/src/data/capitalTransactions';
 import { useUserCategories } from '@/src/data/userCategories';
 import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
@@ -588,6 +589,7 @@ export default function AccountantPackage() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         <ScreenTitle>{headerLine}</ScreenTitle>
+        <FleetScopeLabel variant="fleetOnly" />
         <MutedText>{t('accountantPackage.subtitle')}</MutedText>
 
         <Text style={styles.sectionTitle}>{t('accountantPackage.yearLabel')}</Text>

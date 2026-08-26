@@ -5,6 +5,9 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSettlements, useDeleteSettlement, useUpdateSettlement } from '@/src/data/settlements';
+import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { truckIdFilterFor } from '@/src/stats/fleetScope';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { clampPerDiemDays } from '@/src/tax/perDiem';
 import { useDeductions, useUpdateDeduction } from '@/src/data/deductions';
 import { useReimbursements } from '@/src/data/reimbursements';
@@ -107,7 +110,12 @@ export default function Settlements() {
   const router = useRouter();
   const { openId } = useLocalSearchParams<{ openId?: string }>();
   const autoOpenedRef = useRef(false);
-  const settlementsQuery = useSettlements();
+  // MULTI-TRUCK MODEL (owner decision) — requirement 2's "Lists follow
+  // the selector, with the truck's unit number visible on every row"
+  // (the unit number is already shown per-row via the existing
+  // "assigned truck" diagnostic this screen added earlier, see below).
+  const { activeTruckId, isAllTrucks } = useActiveTruck();
+  const settlementsQuery = useSettlements({ truck_id: truckIdFilterFor(activeTruckId) });
   const deleteSettlement = useDeleteSettlement();
   const updateSettlement = useUpdateSettlement();
   const dedQuery = useDeductions();
@@ -125,6 +133,7 @@ export default function Settlements() {
   // own top stat row) still correctly included — this makes that
   // otherwise-invisible column visible at a glance.
   const trucksQuery = useTrucksList();
+  const trucksById = useMemo(() => new Map((trucksQuery.data ?? []).map((tr) => [tr.id, tr])), [trucksQuery.data]);
   const markDocumentReviewed = useMarkDocumentReviewed();
   const [markingAllReviewed, setMarkingAllReviewed] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -384,6 +393,7 @@ export default function Settlements() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('settlementsScreen.title')}</ScreenTitle>
+        <FleetScopeLabel />
 
         {/* PERIOD TABS (spec) — drives the totals bar, chart, and list
             together; remembered for the session. */}
@@ -470,6 +480,16 @@ export default function Settlements() {
                       <MutedText style={!x.miles ? { color: colors.orange, fontWeight: '700' } : undefined}>
                         {!x.miles ? `⚠️ ${t('settlementsScreen.milesMissing')}` : `${number(x.miles)} mi`}
                       </MutedText>
+                      {/* MULTI-TRUCK MODEL (owner decision) — unit number
+                          visible on every row, only shown when it's
+                          actually informative (viewing "All Trucks" with
+                          2+ trucks — a specific-truck scope makes every
+                          row obviously that truck already). */}
+                      {isAllTrucks && (
+                        <MutedText>
+                          🚚 {x.truck_id ? (trucksById.get(x.truck_id)?.unit_number ?? x.truck_id) : t('fleetScope.unassigned')}
+                        </MutedText>
+                      )}
                       {/* UX MEGA-PASS item H: the per-settlement day count
                           breakdown visible at a glance in the list, not just
                           after tapping into the detail sheet. */}

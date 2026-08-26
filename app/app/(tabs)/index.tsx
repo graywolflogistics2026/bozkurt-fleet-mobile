@@ -28,6 +28,8 @@ import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import { resolveMilesTotal } from '@/src/stats/miles';
+import { buildTruckComparison } from '@/src/stats/truckComparison';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
@@ -321,6 +323,62 @@ function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: (
   );
 }
 
+// DASHBOARD LAYOUT PER SCOPE (owner decision, MULTI-TRUCK MODEL) — "All
+// Trucks" mode only: each truck's net profit + profit/mile for the
+// current settlement week, ranked, the weakest truck highlighted in red
+// (never green — a below-average truck isn't "bad," but it shouldn't
+// read as equally healthy either). Tapping a row switches the global
+// scope to that truck, same affordance as Scorecard's own breakdown.
+function PerTruckThisWeekCard({
+  result,
+  onSelectTruck,
+}: {
+  result: ReturnType<typeof buildTruckComparison>;
+  onSelectTruck: (truckId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const { money } = useFormatters();
+  if (result.rows.length === 0) return null;
+  const worstId = result.rows.length > 1 ? result.worstTruckId : null;
+
+  return (
+    <>
+      <ScreenTitle>{t('dashboard.perTruckThisWeek.title')}</ScreenTitle>
+      <Card>
+        {result.rows.map((row, i) => (
+          <Pressable
+            key={row.truckId}
+            onPress={() => row.truckId && onSelectTruck(row.truckId)}
+            style={[
+              { paddingVertical: spacing.sm },
+              i > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+              row.truckId === worstId && { backgroundColor: 'rgba(239,68,68,0.08)' },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {t('common.unit', { unit: row.unitNumber })}
+                {row.truckId === worstId ? ` ⚠️` : ''}
+              </Text>
+              <Text style={{ color: row.netProfit >= 0 ? colors.green : colors.red, fontWeight: '700' }}>
+                {money(row.netProfit, { maximumFractionDigits: 0 })}
+              </Text>
+            </View>
+            <MutedText>
+              {row.profitPerMile != null ? `${money(row.profitPerMile, { maximumFractionDigits: 2 })}/mi` : '—'}
+            </MutedText>
+          </Pressable>
+        ))}
+        {result.unassignedRow && (
+          <MutedText style={{ marginTop: spacing.xs }}>
+            ⚠️ {t('truckComparison.unassignedBody', { count: result.unassignedRow.settlementCount, amount: money(result.unassignedRow.grossRevenue, { maximumFractionDigits: 0 }) })}
+          </MutedText>
+        )}
+      </Card>
+    </>
+  );
+}
+
 // AI COACH FULLY VISIBLE ON HOME (owner decision 2026-08-24, device
 // testing item 2) — replaces the old shallow "AI Coach" teaser card
 // (which just linked to ceo-mode.tsx with a one-sentence subtitle). Now
@@ -533,6 +591,11 @@ function HomeTaxStrip({ taxQuery }: { taxQuery: ReturnType<typeof useTaxEstimate
   const { t } = useTranslation();
   const router = useRouter();
   const { money } = useFormatters();
+  // MULTI-TRUCK MODEL (owner decision) — same "fleet-wide" label rule as
+  // the Business Balance card above: shown only when a single truck is
+  // currently selected, so this fleet-level figure is never mistaken for
+  // that one truck's own tax picture.
+  const { isAllTrucks, trucks } = useActiveTruck();
   const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
   const goToTax = () => router.push('/(tabs)/more/tax-estimator');
 
@@ -565,6 +628,7 @@ function HomeTaxStrip({ taxQuery }: { taxQuery: ReturnType<typeof useTaxEstimate
   return (
     <>
       <ScreenTitle>{t('dashboard.taxStrip.title')}</ScreenTitle>
+      {!isAllTrucks && trucks.length > 1 && <MutedText style={{ marginBottom: spacing.xs }}>{t('fleetScope.fleetWideAlways')}</MutedText>}
       <View style={styles.compactRow}>
         <CompactStatTile label={t('dashboard.taxStrip.weeklyReserve')} value={moneyRounded(estimate.weeklyTaxReserve)} onPress={goToTax} />
         <CompactStatTile
@@ -587,7 +651,7 @@ export default function Dashboard() {
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const money2 = (n: number) => moneyFmt(n, { maximumFractionDigits: 2 });
   const { session, profile, signOut } = useAuth();
-  const { activeTruck } = useActiveTruck();
+  const { activeTruck, isAllTrucks, trucks, setActiveTruckId } = useActiveTruck();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -698,6 +762,28 @@ export default function Dashboard() {
   }, [dedQuery.data, thisWeekPoint]);
   const expenseExplainer = useMemo(() => buildExpenseTotalExplainer(thisWeekExpenseRows), [thisWeekExpenseRows]);
 
+  // DASHBOARD LAYOUT PER SCOPE (owner decision, MULTI-TRUCK MODEL) — "All
+  // Trucks" mode: a PER TRUCK THIS WEEK card, ranked, tapping a row
+  // switches the global scope to that truck. Reuses buildTruckComparison()
+  // (the same function the full comparison + Scorecard breakdown use),
+  // fed only THIS WEEK's own rows via the identical week-window filter
+  // the Expense Total Explainer above already uses, so the two can never
+  // disagree about what "this week" means.
+  const perTruckThisWeek = useMemo(() => {
+    if (!isAllTrucks || !thisWeekPoint) return null;
+    const start = weekStartFromEnding(thisWeekPoint.weekEnding);
+    const inWeek = (d: string | null) => !!d && d >= start && d <= thisWeekPoint.weekEnding;
+    return buildTruckComparison(
+      trucks,
+      (settlementsQuery.data ?? []).filter((s) => s.week_ending === thisWeekPoint.weekEnding),
+      loadsQuery.data ?? [],
+      thisWeekExpenseRows,
+      (fuelQuery.data ?? []).filter((f) => inWeek(f.purchase_date)),
+      (maintenanceQuery.data ?? []).filter((m) => inWeek(m.service_date)),
+      (tollsQuery.data ?? []).filter((tl) => inWeek(tl.toll_date))
+    );
+  }, [isAllTrucks, thisWeekPoint, trucks, settlementsQuery.data, loadsQuery.data, thisWeekExpenseRows, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]);
+
   function handleDeleteExpenseRow(id: string) {
     Alert.alert(t('deductions.deleteConfirmTitle'), t('deductions.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -766,10 +852,20 @@ export default function Dashboard() {
     if (!activeTruck) return null;
     return calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan);
   }, [activeTruck, carrierWithholdsLoan]);
+  // MULTI-TRUCK MODEL (owner decision) — the per-mile trio's own fleet-
+  // wide fixed-cost figure. A specific-truck scope uses just that truck's
+  // own cost basis (unchanged). "All Trucks" scope sums EVERY truck's own
+  // cost basis, each weighted by its own settlement count — never $0,
+  // which would silently under-count real fixed truck-ownership costs
+  // out of the fleet average CPM.
   const truckFixedCostTotal = useMemo(() => {
-    if (!truckCostBasis) return 0;
-    return truckCostBasis.weeklyFixedTotal * (stats?.settlementCount ?? 0);
-  }, [truckCostBasis, stats]);
+    if (truckCostBasis) return truckCostBasis.weeklyFixedTotal * (stats?.settlementCount ?? 0);
+    if (!isAllTrucks) return 0;
+    return trucks.reduce((sum, tr) => {
+      const count = (settlementsQuery.data ?? []).filter((s) => s.truck_id === tr.id).length;
+      return sum + calcTruckCostBasisWeekly(tr, carrierWithholdsLoan).weeklyFixedTotal * count;
+    }, 0);
+  }, [truckCostBasis, stats, isAllTrucks, trucks, settlementsQuery.data, carrierWithholdsLoan]);
   const milesSource = stats ? resolveMilesTotal({ totalMiles: stats.totalMiles }, activeTruck?.manual_total_miles_override) : null;
   const canonicalCpm = useMemo(() => {
     if (!stats || !milesSource) return null;
@@ -801,6 +897,11 @@ export default function Dashboard() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <DashboardGreeting name={heroFirstName} />
+        {/* MULTI-TRUCK MODEL (owner decision) — persistent scope indicator:
+            "Showing Unit X" for a single-truck scope, "All Trucks" when
+            fleet-wide, silent for an account with 0 or 1 truck total
+            (nothing ambiguous to state). */}
+        <FleetScopeLabel />
 
         <ServiceStatusBanner />
 
@@ -872,7 +973,21 @@ export default function Dashboard() {
           </MutedText>
         )}
 
+        {/* DASHBOARD LAYOUT PER SCOPE (owner decision, MULTI-TRUCK MODEL) —
+            "All Trucks" mode only. */}
+        {perTruckThisWeek && (
+          <PerTruckThisWeekCard result={perTruckThisWeek} onSelectTruck={setActiveTruckId} />
+        )}
+
         <CashBalanceSlimCard balance={capital?.businessBalance ?? 0} onPress={() => router.push('/(tabs)/more/cash-flow')} />
+        {/* Fleet-level card (requirement 2's 1st category) — carries a
+            small "fleet-wide" label ONLY when a single truck is currently
+            selected, so it's never mistaken for that one truck's own
+            balance (a multi-truck account viewing "All Trucks" already
+            has no such ambiguity to clear up). */}
+        {!isAllTrucks && trucks.length > 1 && (
+          <MutedText style={{ marginTop: -spacing.sm, marginBottom: spacing.md }}>{t('fleetScope.fleetWideAlways')}</MutedText>
+        )}
 
         {aiCoach.isLoading ? (
           <>

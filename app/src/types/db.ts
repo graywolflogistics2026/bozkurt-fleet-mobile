@@ -257,6 +257,13 @@ export type Deduction = {
   user_id: string;
   settlement_id: string | null;
   driver_id: string | null; // docs/PENDING_SQL.md §14 — settlement-withheld rows only (payroll auto-routing)
+  // docs/PENDING_SQL.md §63 (MULTI-TRUCK MODEL, owner decision) — null means
+  // fleet-level (insurance, accounting fees, permits, ...), allocated across
+  // trucks by miles for per-truck CPM purposes only (app/src/stats/
+  // costAllocation.ts) — never for P&L/tax, which stay unsplit. A
+  // settlement-withheld row inherits its settlement's own truck_id at save
+  // time; an out-of-pocket/manual row stays null unless the user assigns one.
+  truck_id: string | null;
   document_id: string | null;
   ded_date: string | null;
   code: string | null;
@@ -358,6 +365,9 @@ export type Toll = {
   id: string;
   user_id: string;
   network: 'ezpass' | 'drivewyze' | 'other' | null;
+  // docs/PENDING_SQL.md §63 (MULTI-TRUCK MODEL, owner decision) — same rule
+  // as Deduction.truck_id above.
+  truck_id: string | null;
   settlement_id: string | null; // docs/PENDING_SQL.md §61 — batch tag for settlement re-import-replace
   toll_date: string | null;
   amount: number | null;

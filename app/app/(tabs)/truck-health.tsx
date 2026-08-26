@@ -117,11 +117,25 @@ export default function TruckHealth() {
   const { activeTruckId, loading: activeTruckLoading } = useActiveTruck();
 
   const trucksQuery = useTrucksList();
-  const truck = useMemo(() => trucksQuery.data?.find((tr) => tr.id === activeTruckId) ?? null, [trucksQuery.data, activeTruckId]);
+  // MULTI-TRUCK MODEL (owner decision) — requirement 2: truck health "MUST
+  // be per truck... when All Trucks is selected, show... a per-truck
+  // breakdown, never a single blended number." There's no meaningful
+  // "average" health status across trucks (health is categorical per
+  // component, not a number to blend) — so instead of silently showing
+  // whichever truck happened to come first, this screen asks explicitly
+  // via a picker whenever the GLOBAL scope is "All Trucks." A specific-
+  // truck scope (or an account with <=1 truck) is unaffected — this local
+  // state just mirrors the global scope in that case.
+  const [scopedTruckId, setScopedTruckId] = useState<string | null>(activeTruckId);
+  useEffect(() => {
+    setScopedTruckId(activeTruckId);
+  }, [activeTruckId]);
+  const truck = useMemo(() => trucksQuery.data?.find((tr) => tr.id === scopedTruckId) ?? null, [trucksQuery.data, scopedTruckId]);
+  const needsTruckPicker = !activeTruckId && (trucksQuery.data?.length ?? 0) > 1 && !scopedTruckId;
 
-  const recordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
-  const intervalsQuery = useMaintenanceIntervals(activeTruckId);
-  const healthConfigQuery = useTruckHealthConfig(activeTruckId);
+  const recordsQuery = useMaintenanceRecords(scopedTruckId ? { truck_id: scopedTruckId } : undefined);
+  const intervalsQuery = useMaintenanceIntervals(scopedTruckId);
+  const healthConfigQuery = useTruckHealthConfig(scopedTruckId);
   const updateTruck = useUpdateTruck();
   const updateInterval = useUpdateMaintenanceInterval();
   const insertMaintenanceRecord = useInsertMaintenanceRecord();
@@ -340,6 +354,30 @@ export default function TruckHealth() {
           <Card>
             <MutedText>{t('common.loading')}</MutedText>
           </Card>
+        ) : needsTruckPicker ? (
+          <Card>
+            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.sm }}>{t('truckHealth.whichTruckTitle')}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {(trucksQuery.data ?? []).map((tr) => (
+                <Pressable
+                  key={tr.id}
+                  onPress={() => setScopedTruckId(tr.id)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: radii.sm,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card2,
+                    marginEnd: spacing.sm,
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>{t('common.unit', { unit: tr.unit_number ?? tr.id })}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Card>
         ) : !truck ? (
           <Card>
             <MutedText>{t('truckHealth.noTrucks')}</MutedText>
@@ -347,6 +385,11 @@ export default function TruckHealth() {
           </Card>
         ) : (
           <>
+            {!activeTruckId && (trucksQuery.data?.length ?? 0) > 1 && (
+              <Pressable onPress={() => setScopedTruckId(null)} hitSlop={8} style={{ marginBottom: spacing.sm, alignSelf: 'flex-start' }}>
+                <MutedText>🔄 {t('truckHealth.changeTruck', { unit: truck.unit_number ?? truck.id })}</MutedText>
+              </Pressable>
+            )}
             <Card>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View>

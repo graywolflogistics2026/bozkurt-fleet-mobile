@@ -15,7 +15,8 @@
     "copied": "Kopyalandı!",
     "close": "Kapat",
     "viewOriginalDocument": "Orijinal Belgeyi Görüntüle",
-    "dismiss": "Yoksay"
+    "dismiss": "Yoksay",
+    "error": "Hata"
   },
   "nav": {
     "dashboard": "Ana Sayfa",
@@ -59,7 +60,9 @@
     "documents": "Belgeler",
     "categoryLearning": "Kategori Öğrenimi",
     "referral": "Davet Et ve Kazan",
-    "accountantPackage": "Muhasebeci Paketi"
+    "accountantPackage": "Muhasebeci Paketi",
+    "truckComparison": "Kamyon Karşılaştırması",
+    "truckAssignments": "Kamyon Atamalarını Düzelt"
   },
   "auth": {
     "signUpTagline": "{{brand}} — sahibi-operatörler için",
@@ -293,6 +296,9 @@
       "weeklyReserve": "Haftalık Vergi Rezervi",
       "nextQuarterly": "Sonraki Üç Aylık Ödeme",
       "yearlyEstimate": "Tahmini Yıllık Vergi"
+    },
+    "perTruckThisWeek": {
+      "title": "Bu Hafta Kamyon Başına"
     }
   },
   "deductions": {
@@ -346,7 +352,8 @@
     "reimbursedInFull": "Şahsen ödendi · tamamen geri ödendi ({{amount}})",
     "reimbursedPartial": "Şahsen ödendi · {{total}} üzerinden {{reimbursed}} geri ödendi",
     "notYetReimbursed": "Şahsen ödendi · henüz geri ödenmedi",
-    "reimburseMyself": "Kendime Geri Öde ({{amount}})"
+    "reimburseMyself": "Kendime Geri Öde ({{amount}})",
+    "truckLabel": "Kamyon"
   },
   "capitalAccount": {
     "title": "Sermaye Hesabı",
@@ -543,7 +550,8 @@
     "chooseDifferentFile": "Başka Dosya Seç",
     "backfillOfferTitle": "Eski kayıtları mı tamamlıyorsun?",
     "backfillOfferBody": "Birkaç aylık geçmiş belgeyi içe aktarıyorsan, Yakalama Yılı paketi (1.000 içe aktarma, 90 gün geçerli) işine yarayabilir. Hesabına eklenmesini istersen destekle iletişime geç.",
-    "processingPageProgressWithData": "{{total}} sayfadan {{through}}. sayfa · gelir ve kesintiler alındı"
+    "processingPageProgressWithData": "{{total}} sayfadan {{through}}. sayfa · gelir ve kesintiler alındı",
+    "notTruckSpecific": "Belirli bir kamyona özgü değil"
   },
   "camera": {
     "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
@@ -730,7 +738,9 @@
     "markDoneNoteLabel": "Not (opsiyonel)",
     "markDoneNotePlaceholder": "örn. Yolda kendim yaptım",
     "markDoneConfirm": "Onayla",
-    "markDoneFailedTitle": "Kaydedilemedi"
+    "markDoneFailedTitle": "Kaydedilemedi",
+    "whichTruckTitle": "Hangi kamyonu görüntülemek istiyorsunuz?",
+    "changeTruck": "Kamyonu değiştir (Ünite {{unit}} görüntüleniyor)"
   },
   "maintenance": {
     "title": "Bakım",
@@ -776,7 +786,8 @@
       "brakes": "Frenler",
       "general": "Genel",
       "other": "Diğer"
-    }
+    },
+    "whichTruck": "Bu hangi kamyon için?"
   },
   "trucks": {
     "title": "Kamyonlar",
@@ -1004,7 +1015,8 @@
   "truckSwitcher": {
     "switchTruck": "Kamyon Değiştir",
     "selectTruck": "Kamyon seç",
-    "cancel": "İptal"
+    "cancel": "İptal",
+    "allTrucks": "Tüm Kamyonlar"
   },
   "loads": {
     "title": "Yükler",
@@ -1994,7 +2006,9 @@
     "whyExcludedOneOffsTitle": "Hariç tutulan tek seferlik giderler",
     "whyExcludedOneOffsNote": "Bunlar gerçek giderlerdir (P&L ve vergi tahmininizde tutulur) ancak Maliyet/Mil'den hariç tutulur — bir haftanın miline bölünen tek seferlik bir onarım veya satın alma, rakamı anlamsız bir şeye sıçratır.",
     "whyMissingMilesTitle": "Geliri olan ama mili olmayan settlement'ler",
-    "trendTitle": "Haftalık Net Trend"
+    "trendTitle": "Haftalık Net Trend",
+    "perTruckBreakdownTitle": "Kamyon Başına Dağılım",
+    "seeFullComparison": "Tam karşılaştırmayı gör →"
   },
   "sidebar": {
     "sections": {
@@ -2068,5 +2082,47 @@
     "nextDocument": "Sonraki Belge",
     "finishReview": "Bitir",
     "reviewAll": "Tümünü İncele ({{count}})"
+  },
+  "fleetScope": {
+    "showingAllTrucks": "Gösterilen: Tüm Kamyonlar",
+    "showingUnit": "Gösterilen: Ünite {{unit}}",
+    "fleetWideAlways": "Filo geneli (tüm kamyonlar) — kamyon seçiciden etkilenmez",
+    "fleetWideOption": "Filo geneli (belirli bir kamyon yok)",
+    "unassigned": "Atanmamış"
+  },
+  "truckComparison": {
+    "title": "Kamyon Başına Kârlılık",
+    "subtitle": "Gelir, gider ve mil başına kâr — yan yana, böylece hangi kamyonun gerçekten kazandığını görebilirsiniz.",
+    "best": "En İyi",
+    "worst": "En Kötü",
+    "revenue": "Gelir",
+    "expenses": "Giderler",
+    "netProfit": "Net Kâr",
+    "miles": "Mil",
+    "deadheadPct": "Deadhead %",
+    "allocatedCaption": "Doğrudan: {{direct}} · Filo geneli maliyetlerden pay: {{allocated}}",
+    "driverPay": "Şoför ücreti: {{amount}}",
+    "netAfterDriverPay": "Şoför ücretinden sonra net: {{amount}}",
+    "empty": "Bu dönemde henüz hiçbir kamyon için Settlement yok.",
+    "unassignedTitle": "Bazı gelirler bir kamyona atanmamış",
+    "unassignedBody": "{{amount}} toplamındaki {{count}} Settlement'ın kamyonu ayarlanmamış, bu yüzden yukarıdaki hiçbir kamyonun rakamlarına dahil değiller.",
+    "unassignedFixLink": "Kamyon atamalarını düzelt →",
+    "fleetTotalsTitle": "Filo Toplamları",
+    "allocationNote": "Filo geneli maliyetler (sigorta, muhasebe ücretleri, izinler ve belirli bir kamyonu olmayan diğer masraflar), her kamyona toplam filo mil payına göre dağıtılır — bu bir tahsis işlemidir, doğrudan bir maliyet değildir."
+  },
+  "truckAssignments": {
+    "title": "Kamyon Atamalarını Düzelt",
+    "subtitle": "Henüz kamyonu olmayan satırlara bir kamyon atayın. Bu mutlaka bozuk anlamına gelmez — 2. kamyonunuzdan önce oluşturulan bir satırın basitçe ataması yoktur.",
+    "needsMultipleTrucks": "Sadece bir kamyonunuz var — atanacak bir şey yok.",
+    "empty": "Her Settlement, yakıt alımı, bakım kaydı ve geçiş ücreti zaten bir kamyona atanmış.",
+    "bulkTitle": "Seçilenleri ({{count}}) şuna ata:",
+    "assignSelected": "{{count}} Seçileni Ata",
+    "assignThisRow": "Bu satırı şuna ata",
+    "kind": {
+      "settlement": "Settlement",
+      "fuel": "Yakıt",
+      "maintenance": "Bakım",
+      "toll": "Geçiş Ücreti"
+    }
   }
 }

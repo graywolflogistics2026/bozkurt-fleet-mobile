@@ -15,7 +15,8 @@
     "legalFootnote": "Estimates only — not tax advice. Verify with your CPA.",
     "copyDetails": "Copy Details",
     "copied": "Copied!",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "error": "Error"
   },
   "nav": {
     "dashboard": "Home",
@@ -30,6 +31,8 @@
     "cashFlow": "Cash Flow",
     "maintenance": "Maintenance",
     "trucks": "Trucks",
+    "truckComparison": "Truck Comparison",
+    "truckAssignments": "Fix Truck Assignments",
     "equipment": "Equipment",
     "drivers": "Drivers",
     "loans": "Loans",
@@ -115,6 +118,9 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "perTruckThisWeek": {
+      "title": "Per Truck This Week"
+    },
     "greeting": {
       "morning": "Good Morning, {{name}} 👋",
       "afternoon": "Good Afternoon, {{name}} 👋",
@@ -297,6 +303,7 @@
   },
   "deductions": {
     "title": "Deductions",
+    "truckLabel": "Truck",
     "originFilterAll": "All",
     "originFilterOutOfPocket": "Out-of-pocket",
     "originFilterWithheld": "Settlement",
@@ -443,6 +450,7 @@
     "deductibleYes": "✅ Yes",
     "deductibleNo": "❌ No",
     "whichTruck": "Which truck is this for?",
+    "notTruckSpecific": "Not truck-specific",
     "createNewTruck": "+ New Truck",
     "newTruckUnitPlaceholder": "Unit number",
     "createTruckFailedTitle": "Could not create truck",
@@ -676,6 +684,8 @@
   "placeholders": {},
   "truckHealth": {
     "title": "Truck Health",
+    "whichTruckTitle": "Which truck do you want to view?",
+    "changeTruck": "Change truck (viewing Unit {{unit}})",
     "noTrucks": "No trucks yet. Add one to start tracking maintenance.",
     "addTruck": "Add Truck",
     "noIntervals": "No maintenance categories configured for this truck yet.",
@@ -734,6 +744,7 @@
   },
   "maintenance": {
     "title": "Maintenance",
+    "whichTruck": "Which truck is this for?",
     "totalSpent": "Total Spent",
     "warrantyCovered": "Warranty-Covered",
     "outOfPocket": "Out-of-Pocket",
@@ -1393,7 +1404,50 @@
   "truckSwitcher": {
     "switchTruck": "Switch Truck",
     "selectTruck": "Select truck",
+    "allTrucks": "All Trucks",
     "cancel": "Cancel"
+  },
+  "fleetScope": {
+    "showingAllTrucks": "Showing: All Trucks",
+    "showingUnit": "Showing: Unit {{unit}}",
+    "fleetWideAlways": "Fleet-wide (all trucks) — not affected by the truck selector",
+    "fleetWideOption": "Fleet-wide (no specific truck)",
+    "unassigned": "Unassigned"
+  },
+  "truckComparison": {
+    "title": "Per-Truck Profitability",
+    "subtitle": "Revenue, expenses, and profit per mile — side by side, so you can see which truck is actually earning.",
+    "best": "Best",
+    "worst": "Worst",
+    "revenue": "Revenue",
+    "expenses": "Expenses",
+    "netProfit": "Net Profit",
+    "miles": "Miles",
+    "deadheadPct": "Deadhead %",
+    "allocatedCaption": "Direct: {{direct}} · Allocated share of fleet-level costs: {{allocated}}",
+    "driverPay": "Driver pay: {{amount}}",
+    "netAfterDriverPay": "Net after driver pay: {{amount}}",
+    "empty": "No settlements yet for any truck in this period.",
+    "unassignedTitle": "Some revenue isn't assigned to a truck",
+    "unassignedBody": "{{count}} settlement(s) totaling {{amount}} have no truck set, so they aren't included in any truck's numbers above.",
+    "unassignedFixLink": "Fix truck assignments →",
+    "fleetTotalsTitle": "Fleet Totals",
+    "allocationNote": "Fleet-level costs (insurance, accounting fees, permits, and other charges with no specific truck) are allocated to each truck by its share of total fleet miles — an allocation, not a direct cost."
+  },
+  "truckAssignments": {
+    "title": "Fix Truck Assignments",
+    "subtitle": "Assign a truck to rows that don't have one yet. This isn't necessarily broken — a row created before your 2nd truck simply has none.",
+    "needsMultipleTrucks": "You only have one truck — nothing to assign.",
+    "empty": "Every settlement, fuel purchase, maintenance record, and toll already has a truck assigned.",
+    "bulkTitle": "Assign selected ({{count}}) to:",
+    "assignSelected": "Assign {{count}} Selected",
+    "assignThisRow": "Assign this row to",
+    "kind": {
+      "settlement": "Settlement",
+      "fuel": "Fuel",
+      "maintenance": "Maintenance",
+      "toll": "Toll"
+    }
   },
   "tutorial": {
     "skip": "Skip",
@@ -1937,6 +1991,8 @@
   "scorecard": {
     "title": "Scorecard",
     "subtitle": "Your business-health score at a glance.",
+    "perTruckBreakdownTitle": "Per-Truck Breakdown",
+    "seeFullComparison": "See full comparison →",
     "empty": "Import a settlement to calculate your score.",
     "outOf100": "out of 100",
     "grades": {

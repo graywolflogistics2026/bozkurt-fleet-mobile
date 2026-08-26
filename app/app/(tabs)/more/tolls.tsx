@@ -4,8 +4,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTolls, useInsertToll, useDeleteToll } from '@/src/data/tolls';
+import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -61,7 +64,10 @@ export default function Tolls() {
   const { money } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
-  const tollsQuery = useTolls();
+  // MULTI-TRUCK MODEL (owner decision) — requirement 2's "Lists follow
+  // the selector."
+  const { activeTruckId } = useActiveTruck();
+  const tollsQuery = useTolls({ truck_id: truckIdFilterFor(activeTruckId) });
   const insertToll = useInsertToll();
   const deleteToll = useDeleteToll();
   const queryClient = useQueryClient();
@@ -111,6 +117,9 @@ export default function Tolls() {
     try {
       await insertToll.mutateAsync({
         user_id: userId,
+        // See fuel.tsx's own identical comment — silently attaches to the
+        // currently-scoped truck, left fleet-level only in All-Trucks mode.
+        truck_id: activeTruckId,
         network,
         plaza: plaza || null,
         amount: amt,
@@ -158,6 +167,7 @@ export default function Tolls() {
             </Text>
           </Pressable>
         </View>
+        <FleetScopeLabel />
 
         <Card>
           <View style={styles.statRow}>

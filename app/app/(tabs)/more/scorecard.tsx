@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
@@ -11,14 +11,17 @@ import { useTolls } from '@/src/data/tolls';
 import { useSettlements, useUpdateSettlement } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { useUpdateTruck } from '@/src/data/trucks';
+import { useUpdateTruck, useTrucksList } from '@/src/data/trucks';
+import { useLoads } from '@/src/data/loads';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import { resolveMilesTotal } from '@/src/stats/miles';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
+import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { useFormatters } from '@/src/i18n/format';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { BRAND_NAME } from '@/src/brand';
@@ -48,9 +51,32 @@ export default function Scorecard() {
   const tollsQuery = useTolls();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
-  const { activeTruck, refreshTrucks } = useActiveTruck();
+  const { activeTruck, isAllTrucks, setActiveTruckId, refreshTrucks } = useActiveTruck();
+  const router = useRouter();
   const updateTruck = useUpdateTruck();
   const updateSettlement = useUpdateSettlement();
+  // MULTI-TRUCK MODEL (owner decision) — requirement 2: "when All Trucks
+  // is selected show the fleet average AND a per-truck breakdown, never a
+  // single blended number." This screen's own KPI card already IS the
+  // fleet average (useFleetStats(null), unconditional) — the only thing
+  // missing was the breakdown alongside it. Reuses the same
+  // buildTruckComparison() the full comparison screen uses, fed the exact
+  // same full/unfiltered settlements/deductions/fuel/maintenance/tolls
+  // this screen already fetches for its own fleet-wide CPM.
+  const trucksQuery = useTrucksList();
+  const loadsQuery = useLoads();
+  const truckBreakdown = useMemo(() => {
+    if (!isAllTrucks) return null;
+    return buildTruckComparison(
+      trucksQuery.data ?? [],
+      settlementsQuery.data ?? [],
+      loadsQuery.data ?? [],
+      dedQuery.data ?? [],
+      fuelQuery.data ?? [],
+      maintenanceQuery.data ?? [],
+      tollsQuery.data ?? []
+    );
+  }, [isAllTrucks, trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -224,6 +250,7 @@ export default function Scorecard() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1 }}>
             <ScreenTitle>{t('scorecard.title')}</ScreenTitle>
+            <FleetScopeLabel />
             <MutedText>{t('scorecard.subtitle')}</MutedText>
           </View>
           {scorecard && (
@@ -254,6 +281,38 @@ export default function Scorecard() {
                 </Text>
               </View>
             </Card>
+
+            {/* MULTI-TRUCK MODEL (owner decision) — requirement 2's "fleet
+                average AND a per-truck breakdown" — the KPI card above is
+                the fleet average; this is the breakdown, ranked, tapping a
+                row switches the global scope to that truck. */}
+            {truckBreakdown && truckBreakdown.rows.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>{t('scorecard.perTruckBreakdownTitle')}</Text>
+                <Card>
+                  {truckBreakdown.rows.map((row, i) => (
+                    <Pressable
+                      key={row.truckId}
+                      onPress={() => row.truckId && setActiveTruckId(row.truckId)}
+                      style={[{ paddingVertical: spacing.sm }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: colors.text, fontWeight: '700' }}>{t('common.unit', { unit: row.unitNumber })}</Text>
+                        <Text style={{ color: row.netProfit >= 0 ? colors.green : colors.red, fontWeight: '700' }}>
+                          {money(row.netProfit, { maximumFractionDigits: 0 })}
+                        </Text>
+                      </View>
+                      <MutedText>
+                        {row.profitPerMile != null ? `${money(row.profitPerMile, { maximumFractionDigits: 2 })}/mi` : '—'}
+                      </MutedText>
+                    </Pressable>
+                  ))}
+                  <Pressable onPress={() => router.push('/(tabs)/more/truck-comparison' as any)} hitSlop={8} style={{ marginTop: spacing.sm }}>
+                    <Text style={{ color: colors.accent, fontWeight: '600' }}>{t('scorecard.seeFullComparison')}</Text>
+                  </Pressable>
+                </Card>
+              </>
+            )}
 
             <Text style={styles.sectionTitle}>{t('scorecard.kpiTitle')}</Text>
             <Card>

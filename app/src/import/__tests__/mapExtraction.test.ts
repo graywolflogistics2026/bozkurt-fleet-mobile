@@ -96,8 +96,13 @@ describe('mapSettlement', () => {
   it('tags withheld deductions source=settlement, payment_method=Settlement Withheld (CLAUDE.md invariant #1)', () => {
     const r = mapSettlement(extraction, 'user-1', 'truck-1');
     expect(r.deductions).toEqual([
-      expect.objectContaining({ source: 'settlement', payment_method: 'Settlement Withheld', amount: 45, code: 'ELD' }),
+      expect.objectContaining({ source: 'settlement', payment_method: 'Settlement Withheld', amount: 45, code: 'ELD', truck_id: 'truck-1' }),
     ]);
+  });
+
+  it('leaves withheld deductions truck_id null when the import was marked not-truck-specific (MULTI-TRUCK MODEL, docs/PENDING_SQL.md §63)', () => {
+    const r = mapSettlement(extraction, 'user-1', null);
+    expect(r.deductions[0].truck_id).toBeNull();
   });
 
   it('maps maintenance with the truck tagged and normalizes service_type', () => {
@@ -114,9 +119,9 @@ describe('mapSettlement', () => {
     ]);
   });
 
-  it('maps ezpass tolls', () => {
+  it('maps ezpass tolls with the truck tagged (MULTI-TRUCK MODEL, docs/PENDING_SQL.md §63)', () => {
     const r = mapSettlement(extraction, 'user-1', 'truck-1');
-    expect(r.tolls).toEqual([expect.objectContaining({ network: 'ezpass', amount: 12.5 })]);
+    expect(r.tolls).toEqual([expect.objectContaining({ network: 'ezpass', amount: 12.5, truck_id: 'truck-1' })]);
   });
 
   it('falls back to the document date as week_ending when weekEnding is missing', () => {

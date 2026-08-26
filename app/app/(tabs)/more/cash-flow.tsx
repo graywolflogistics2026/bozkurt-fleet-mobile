@@ -26,6 +26,7 @@ import {
 import { buildMonthlyCashFlowOverview, findTightestMonthIndex, findBestMonthIndex, type CashFlowMonthProjection } from '@/src/stats/cashFlowMonthly';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { useFormatters } from '@/src/i18n/format';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -594,6 +595,7 @@ export default function CashFlow() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('cashFlowScreen.title')}</ScreenTitle>
+        <FleetScopeLabel variant="fleetOnly" />
 
         {loading ? (
           <Card>

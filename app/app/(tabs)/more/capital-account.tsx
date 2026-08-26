@@ -13,6 +13,7 @@ import {
   useUpdateManualCapitalTransaction,
 } from '@/src/data/capitalTransactions';
 import { useTaxConfig } from '@/src/data/taxConfig';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import {
   findDuplicateTransactionIds,
@@ -397,6 +398,7 @@ export default function CapitalAccount() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScreenTitle>{t('capitalAccount.title')}</ScreenTitle>
+        <FleetScopeLabel variant="fleetOnly" />
 
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

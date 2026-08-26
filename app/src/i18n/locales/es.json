@@ -15,7 +15,8 @@
     "copied": "¡Copiado!",
     "close": "Cerrar",
     "viewOriginalDocument": "Ver documento original",
-    "dismiss": "Descartar"
+    "dismiss": "Descartar",
+    "error": "Error"
   },
   "nav": {
     "dashboard": "Inicio",
@@ -59,7 +60,9 @@
     "documents": "Documentos",
     "categoryLearning": "Aprendizaje de Categorías",
     "referral": "Invitar y Ganar",
-    "accountantPackage": "Paquete para el Contador"
+    "accountantPackage": "Paquete para el Contador",
+    "truckComparison": "Comparación de Camiones",
+    "truckAssignments": "Corregir Asignaciones de Camión"
   },
   "auth": {
     "signUpTagline": "{{brand}} — para operadores propietarios",
@@ -293,6 +296,9 @@
       "weeklyReserve": "Reserva Fiscal Semanal",
       "nextQuarterly": "Próximo Pago Trimestral",
       "yearlyEstimate": "Impuesto Anual Estimado"
+    },
+    "perTruckThisWeek": {
+      "title": "Por Camión Esta Semana"
     }
   },
   "deductions": {
@@ -346,7 +352,8 @@
     "reimbursedInFull": "Pagado personalmente · reembolsado por completo ({{amount}})",
     "reimbursedPartial": "Pagado personalmente · reembolsado {{reimbursed}} de {{total}}",
     "notYetReimbursed": "Pagado personalmente · aún no reembolsado",
-    "reimburseMyself": "Reembolsarme ({{amount}})"
+    "reimburseMyself": "Reembolsarme ({{amount}})",
+    "truckLabel": "Camión"
   },
   "capitalAccount": {
     "title": "Cuenta de Capital",
@@ -543,7 +550,8 @@
     "chooseDifferentFile": "Elegir Otro Archivo",
     "backfillOfferTitle": "¿Poniéndote al día con registros antiguos?",
     "backfillOfferBody": "Si estás importando varios meses de documentos anteriores, el paquete Año de Recuperación (1,000 importaciones, válido 90 días) puede ayudarte. Contacta a soporte si quieres que se agregue a tu cuenta.",
-    "processingPageProgressWithData": "Página {{through}} de {{total}} · ingresos y deducciones capturados"
+    "processingPageProgressWithData": "Página {{through}} de {{total}} · ingresos y deducciones capturados",
+    "notTruckSpecific": "No específico de un camión"
   },
   "camera": {
     "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de settlements.",
@@ -730,7 +738,9 @@
     "markDoneNoteLabel": "Nota (opcional)",
     "markDoneNotePlaceholder": "ej. Realizado uno mismo en la carretera",
     "markDoneConfirm": "Confirmar",
-    "markDoneFailedTitle": "No se pudo guardar"
+    "markDoneFailedTitle": "No se pudo guardar",
+    "whichTruckTitle": "¿Qué camión quieres ver?",
+    "changeTruck": "Cambiar camión (viendo Unidad {{unit}})"
   },
   "maintenance": {
     "title": "Mantenimiento",
@@ -776,7 +786,8 @@
       "brakes": "Frenos",
       "general": "General",
       "other": "Otro"
-    }
+    },
+    "whichTruck": "¿Para qué camión es esto?"
   },
   "trucks": {
     "title": "Camiones",
@@ -1004,7 +1015,8 @@
   "truckSwitcher": {
     "switchTruck": "Cambiar Camión",
     "selectTruck": "Seleccionar camión",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "allTrucks": "Todos los Camiones"
   },
   "loads": {
     "title": "Cargas",
@@ -1994,7 +2006,9 @@
     "whyExcludedOneOffsTitle": "Gastos únicos excluidos",
     "whyExcludedOneOffsNote": "Estos son gastos reales (se mantienen en su P&L y estimación de impuestos) pero excluidos de Costo/Milla — una reparación o compra única dividida entre las millas de una semana distorsionaría la cifra a algo sin sentido.",
     "whyMissingMilesTitle": "Settlements con ingresos pero sin millas",
-    "trendTitle": "Tendencia Neta Semanal"
+    "trendTitle": "Tendencia Neta Semanal",
+    "perTruckBreakdownTitle": "Desglose por Camión",
+    "seeFullComparison": "Ver comparación completa →"
   },
   "sidebar": {
     "sections": {
@@ -2068,5 +2082,47 @@
     "nextDocument": "Siguiente Documento",
     "finishReview": "Finalizar",
     "reviewAll": "Revisar Todo ({{count}})"
+  },
+  "fleetScope": {
+    "showingAllTrucks": "Mostrando: Todos los Camiones",
+    "showingUnit": "Mostrando: Unidad {{unit}}",
+    "fleetWideAlways": "A nivel de flota (todos los camiones) — no afectado por el selector de camión",
+    "fleetWideOption": "A nivel de flota (sin camión específico)",
+    "unassigned": "Sin asignar"
+  },
+  "truckComparison": {
+    "title": "Rentabilidad por Camión",
+    "subtitle": "Ingresos, gastos y ganancia por milla — lado a lado, para que veas qué camión realmente está generando ganancias.",
+    "best": "Mejor",
+    "worst": "Peor",
+    "revenue": "Ingresos",
+    "expenses": "Gastos",
+    "netProfit": "Ganancia Neta",
+    "miles": "Millas",
+    "deadheadPct": "% Deadhead",
+    "allocatedCaption": "Directo: {{direct}} · Parte asignada de costos a nivel de flota: {{allocated}}",
+    "driverPay": "Pago al conductor: {{amount}}",
+    "netAfterDriverPay": "Neto después del pago al conductor: {{amount}}",
+    "empty": "Aún no hay Settlement para ningún camión en este período.",
+    "unassignedTitle": "Parte de los ingresos no está asignada a un camión",
+    "unassignedBody": "{{count}} Settlement por un total de {{amount}} no tienen camión asignado, por lo que no se incluyen en los números de ningún camión arriba.",
+    "unassignedFixLink": "Corregir asignaciones de camión →",
+    "fleetTotalsTitle": "Totales de la Flota",
+    "allocationNote": "Los costos a nivel de flota (seguro, honorarios contables, permisos y otros cargos sin camión específico) se asignan a cada camión según su parte del total de millas de la flota — una asignación, no un costo directo."
+  },
+  "truckAssignments": {
+    "title": "Corregir Asignaciones de Camión",
+    "subtitle": "Asigna un camión a las filas que aún no tienen uno. Esto no necesariamente está roto — una fila creada antes de tu 2do camión simplemente no tiene ninguno.",
+    "needsMultipleTrucks": "Solo tienes un camión — no hay nada que asignar.",
+    "empty": "Cada Settlement, compra de combustible, registro de mantenimiento y peaje ya tiene un camión asignado.",
+    "bulkTitle": "Asignar seleccionados ({{count}}) a:",
+    "assignSelected": "Asignar {{count}} Seleccionados",
+    "assignThisRow": "Asignar esta fila a",
+    "kind": {
+      "settlement": "Settlement",
+      "fuel": "Combustible",
+      "maintenance": "Mantenimiento",
+      "toll": "Peaje"
+    }
   }
 }

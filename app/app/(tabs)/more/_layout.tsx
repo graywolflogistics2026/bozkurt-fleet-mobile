@@ -18,6 +18,8 @@ export default function MoreLayout() {
       <Stack.Screen name="cash-flow" options={{ title: t('nav.cashFlow') }} />
       <Stack.Screen name="maintenance" options={{ title: t('nav.maintenance') }} />
       <Stack.Screen name="trucks" options={{ title: t('nav.trucks') }} />
+      <Stack.Screen name="truck-comparison" options={{ title: t('nav.truckComparison') }} />
+      <Stack.Screen name="truck-assignments" options={{ title: t('nav.truckAssignments') }} />
       <Stack.Screen name="equipment" options={{ title: t('nav.equipment') }} />
       <Stack.Screen name="drivers" options={{ title: t('nav.drivers') }} />
       <Stack.Screen name="loans" options={{ title: t('nav.loans') }} />

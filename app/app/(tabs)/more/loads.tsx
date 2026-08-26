@@ -3,8 +3,12 @@ import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useLoads, useDeleteLoad } from '@/src/data/loads';
+import { useSettlements } from '@/src/data/settlements';
+import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -46,6 +50,11 @@ export default function Loads() {
   const { t } = useTranslation();
   const { money, number } = useFormatters();
   const loadsQuery = useLoads();
+  // MULTI-TRUCK MODEL (owner decision) — requirement 2's "Lists follow
+  // the selector" for a table with no truck_id of its own (see
+  // src/stats/loadsScope.ts's own header comment).
+  const settlementsQuery = useSettlements();
+  const { activeTruckId } = useActiveTruck();
   const deleteLoad = useDeleteLoad();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -60,9 +69,9 @@ export default function Loads() {
   }, [queryClient]);
 
   const rows = useMemo(() => {
-    const list = loadsQuery.data ?? [];
-    return [...list].sort((a, b) => (b.load_date ?? '').localeCompare(a.load_date ?? ''));
-  }, [loadsQuery.data]);
+    const scoped = filterLoadsByTruckScope(loadsQuery.data ?? [], settlementsQuery.data ?? [], activeTruckId);
+    return [...scoped].sort((a, b) => (b.load_date ?? '').localeCompare(a.load_date ?? ''));
+  }, [loadsQuery.data, settlementsQuery.data, activeTruckId]);
 
   const stats = useMemo(() => {
     const totalLoads = rows.length;
@@ -100,6 +109,7 @@ export default function Loads() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('loads.title')}</ScreenTitle>
+        <FleetScopeLabel />
 
         <Card>
           <View style={styles.statRow}>

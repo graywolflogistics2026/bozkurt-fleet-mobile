@@ -7026,3 +7026,256 @@
   --noEmit` clean. No SQL/Edge Function changes; no redeploy needed for
   anything. No i18n changes (an icon has no text, per the user's own
   explicit design brief).
+- MULTI-TRUCK MODEL — GLOBAL SCOPE SELECTOR + PER-TRUCK PROFITABILITY
+  (owner decision, docs/PENDING_SQL.md §63, NOT YET RUN). Fleet-vs-per-
+  truck scoping used to be inconsistent across the app — Home's own
+  dashboard trio was truck-scoped while Scorecard's canonical CPM was
+  fleet-wide (a settlement with no `truck_id` silently vanished from
+  Home's numbers while still showing correctly on Scorecard, an EARLIER,
+  already-fixed instance of this exact class of bug — see the MILES READ
+  BUT NOT USED entry above). This pass makes scope explicit, centralized,
+  and consistent everywhere, per an explicit three-category rule set.
+  1. **GLOBAL SCOPE SELECTOR — `ActiveTruckContext` extended, not
+     replaced**: `activeTruckId: string | null` now carries a real "All
+     Trucks" meaning — `null` means either "no trucks yet" (unchanged,
+     trucks.length===0) OR the user has explicitly chosen "All Trucks"
+     (trucks.length>1), disambiguated by the new `isAllTrucks` field.
+     **Default changed**: a multi-truck account with no stored preference
+     used to silently land on `trucks[0]`; it now defaults to "All
+     Trucks" (requirement 1's own "All Trucks (default)"). Persisted via
+     the SAME `active-truck:${userId}` AsyncStorage key as before, with a
+     `'all'` string sentinel representing the null/All-Trucks state (a
+     literal `null` can't round-trip through AsyncStorage).
+     `setActiveTruckId('all' | truckId)` is the one entry point every
+     screen and the top-bar selector call. Every ONE of the 17
+     pre-existing `useActiveTruck()` call sites was individually audited
+     against the new "activeTruck can now be null even with 2+ trucks on
+     the account" possibility (see items 2-4 below for the ones that
+     needed real changes) — most already tolerated `activeTruck === null`
+     gracefully, since that was already the pre-existing zero-trucks
+     case; this pass reuses those exact same code paths rather than
+     adding a second "no truck" branch. `TruckSwitcher.tsx` (already
+     rendered in the top bar via `_layout.tsx`'s `headerRight`, unchanged
+     wiring) IS the global scope selector the requirement asks for — "All
+     Trucks" is now its first Alert-picker option; the pill shows 🚛 "All
+     Trucks" or 🚚 "Unit X" depending on scope. `src/stats/fleetScope.ts`'s
+     `truckIdFilterFor(activeTruckId)` is the ONE shared translation from
+     scope to a `useEntityList({truck_id: ...})` filter (`null` → `undefined`
+     = no filter = "All Trucks," matching `createEntityHooks`'s own
+     `if (value === undefined) continue` — every list screen calls this
+     one function, never a screen-local `scope === 'all' ? undefined :
+     scope` inline, which is exactly the divergence requirement 1
+     forbids). `src/components/FleetScopeLabel.tsx` is the ONE shared "state
+     which scope you're showing" component (`variant="list"` — silent
+     for 0/1 trucks, "Showing: All Trucks"/"Showing: Unit X" for 2+;
+     `variant="fleetOnly"` — always shows "Fleet-wide (all trucks)")
+     every screen below renders from, so the wording (and the underlying
+     scope value) can never disagree screen to screen.
+  2. **SCOPE RULES, category 1 — fleet-level, NEVER splittable**: Tax
+     Estimator, Capital Account, Cash Flow, Accountant Package all
+     already compute fleet-wide (none of them ever filtered by truck) —
+     this pass adds `<FleetScopeLabel variant="fleetOnly" />` to each so
+     the screen says so explicitly, satisfying "the screen must state
+     this" without changing a single number.
+  3. **SCOPE RULES, category 2 — truck-level, MUST be per truck**:
+     - **`deductions.truck_id` + `tolls.truck_id`** (docs/PENDING_SQL.md
+       §63, nullable, `references trucks`, same no-`on delete`-clause
+       shape as `fuel_purchases.truck_id`'s own §6 precedent) — these
+       were the two tables with NO truck attribution at all
+       (`settlements`/`fuel_purchases`/`maintenance_records` already had
+       it). `mapExtraction.ts`'s withheld-deduction map and
+       `toTollInsert()` now inherit the settlement's own `truck_id` at
+       import time (§63's own backfill migration applies the identical
+       rule retroactively to existing rows). Most deductions stay
+       fleet-level (`null`) by design — insurance, accounting fees,
+       permits are genuinely nobody's-truck costs; the Deductions edit
+       sheet gained an OPTIONAL truck picker (shown only for a 2+-truck
+       account) that writes `truck_id` via a plain, separate
+       `useUpdateDeduction()` call — deliberately NOT folded into the
+       §62 atomic `update_deduction_with_contribution_sync` RPC, since
+       truck assignment has zero interaction with that RPC's
+       category/payment-method/contribution-sync guarantees and
+       extending an already-atomic money-correctness RPC's SQL signature
+       for a rarely-needed capability wasn't worth the risk.
+     - **`src/stats/costAllocation.ts`'s `allocateByMiles()`** —
+       requirement 6's allocation rule: a fleet-level cost (`truck_id`
+       null) is split across REAL trucks by each truck's share of the
+       REAL TRUCKS' combined total miles (deliberately not the whole
+       fleet's miles, which would also include any unassigned
+       settlement's own miles with nothing to allocate against) — an
+       ALLOCATION for per-truck CPM only, never touching P&L/tax/true-
+       profit, which stay unsplit.
+     - **`src/stats/truckComparison.ts`'s `buildTruckComparison()`** —
+       the per-truck engine every truck-level screen below reads from.
+       For each truck: direct costs via the SAME `calcCanonicalCpm()`
+       every other CPM consumer uses (fed only that truck's own
+       `truck_id`-tagged deductions/fuel/maintenance/tolls, plus that
+       truck's own `calcTruckCostBasisWeekly()` weighted by its own
+       settlement count) PLUS its allocated share of the fleet-level
+       pool (computed once via `calcCanonicalCpm(0, 1, fleetLevelRows,
+       ...)`, reusing that function's own exclusion/double-count logic
+       rather than re-deriving it). A synthetic **Unassigned** row
+       (requirement 7: "a null-truck row never disappears from a fleet
+       view") surfaces any settlement with no `truck_id` as pure revenue
+       visibility (its expenses are always $0 — the fleet-level cost pool
+       it might seem to "own" is already fully allocated to real trucks,
+       so double-showing it there would double-count it), excluded from
+       best/worst ranking, with a "Fix truck assignments →" link.
+       Reconciliation is exact by construction: `fleetTotals.totalExpenses`
+       always equals what a SINGLE whole-fleet `calcCanonicalCpm()` call
+       over every row (truck-tagged + fleet-level pool) would produce —
+       proven directly in `truckComparison.test.ts`.
+     - **New screen: Per-Truck Profitability** (`app/(tabs)/more/truck-
+       comparison.tsx`, requirement 4 — "the screen that answers 'which
+       truck should I keep?'") — revenue/expenses/net/RPM/CPM/PPM/miles/
+       deadhead% side by side, ranked, best (green border/🏆) and worst
+       (red border/⚠️) highlighted, period tabs (`src/stats/
+       periodFilter.ts`, the same shared period definition Deductions/
+       Settlements already use), an explicit "$X direct + $Y allocated"
+       caption per truck (requirement 6's own labeling ask), driver pay +
+       net-after-driver-pay per truck (requirement 5) when any driver
+       payment data exists, and the Unassigned nudge card. Wired into
+       `navRegistry.ts`'s `business` group and `more/_layout.tsx`.
+     - **Scorecard** — its own KPI card was already fleet-wide
+       (`useFleetStats(null)`, unconditional) — that already WAS "the
+       fleet average"; the only missing piece was requirement 2's
+       "AND a per-truck breakdown, never a single blended number." Now,
+       when `isAllTrucks`, a new "Per-Truck Breakdown" card (reusing
+       `buildTruckComparison()` against the exact same full/unfiltered
+       settlement/deduction/fuel/maintenance/toll data the screen already
+       fetches for its own CPM) sits above the KPI card, ranked, tapping
+       a row switches the global scope to that truck; a "See full
+       comparison →" link opens the dedicated screen.
+     - **Home (`app/(tabs)/index.tsx`)** — the per-mile trio's own fleet-
+       wide fixed-cost figure had a real gap: in "All Trucks" mode,
+       `truckFixedCostTotal` silently stayed $0 (it only ever read the
+       single `activeTruck`'s own cost basis) — under-counting real fixed
+       truck-ownership costs out of the fleet-average CPM. Fixed: when
+       `isAllTrucks`, it now sums EVERY truck's own cost basis weighted by
+       its own settlement count, never $0.
+     - **Truck Health** — no meaningful numeric "average" exists for a
+       categorical health status, so "must be per truck" is satisfied by
+       an explicit picker (never a silent default) whenever the global
+       scope is "All Trucks" on a 2+-truck account — a screen-LOCAL
+       `scopedTruckId` mirrors the global scope but lets the user pick
+       one truck to actually view, with a "🔄 change truck" link back to
+       the picker. **Honestly flagged, not silently claimed complete**: a
+       full stacked-per-truck-status-at-a-glance summary (colored chips
+       per truck before picking) would need N additional per-truck health
+       queries and was judged out of scope for this pass given its size —
+       the picker satisfies "ask explicitly, never blend," not "show
+       every truck's status simultaneously."
+  4. **SCOPE RULES, category 3 — lists follow the selector**:
+     `settlements`/`fuel_purchases`/`maintenance_records`/`tolls`/
+     `deductions` all now pass `{truck_id: truckIdFilterFor(activeTruckId)}`
+     into their existing `useEntityList()` call (Settlements additionally
+     shows a 🚚 unit-number badge per row in "All Trucks" mode — silent in
+     a specific-truck scope, where every row is obviously that truck
+     already). **`loads` has no `truck_id` column of its own** (attributed
+     via `settlement_id` → `settlements.truck_id`) — the entity-hooks
+     filter mechanism can't join, so `src/stats/loadsScope.ts`'s
+     `filterLoadsByTruckScope()` is a small, tested, client-side filter
+     the Loads screen applies instead; a load with no `settlement_id` (or
+     whose settlement has no truck) is excluded from a specific-truck
+     scope, included under "All Trucks" — same "never guess, exclude
+     rather than misattribute" spirit as every other scope rule here.
+     **Create flows, audited individually for the new "activeTruckId can
+     now be null with 2+ trucks" case**: Maintenance's own "Add Record"
+     form used to hard-require `activeTruckId` (`if (!userId ||
+     !activeTruckId) return`) — harmless when this could only happen with
+     ZERO trucks, but a real regression once "All Trucks" became the
+     default for every multi-truck account (it would have silently
+     blocked adding any maintenance record). Fixed with an explicit,
+     required truck picker inside the Add form, shown only when the
+     global scope is "All Trucks" on a 2+-truck account (`addFormTruckId`,
+     converted to a real `recordTruckId` before Save is enabled) —
+     `bumpTruckReading()` was also re-pointed at the record's own resolved
+     truck rather than the (now possibly-null) scope truck. Fuel and
+     Tolls' own manual-add flows were audited too and left NON-blocking on
+     purpose: they silently attach to the current scope truck when one is
+     selected (a reasonable default — "I'm looking at Unit X, so a fuel
+     purchase I add now is Unit X's") and stay fleet-level/unassigned in
+     "All Trucks" mode, matching how most deductions have always worked,
+     rather than adding yet another required picker to every add-flow.
+  5. **TRUCK ASSIGNMENT AT IMPORT — requirement 3, mostly ALREADY BUILT**:
+     `app/src/import/truckMatch.ts`'s `resolveTruckMatch()` already
+     returned `needsPicker: true` (never silently `truck_id: null`)
+     whenever a 2+-truck account's extracted unit number didn't match
+     exactly one truck, and the import preview screen already rendered a
+     required truck-picker gating Save on it — this was true before this
+     pass. The one genuine gap: there was no explicit "not truck-specific"
+     answer, only "pick one of my trucks." Fixed with a
+     `NOT_TRUCK_SPECIFIC` sentinel state value (`app/(tabs)/import/
+     index.tsx`) — a real, non-null string so it satisfies the existing
+     `!truckId` gate, rendered as its own pill alongside the per-truck
+     ones, converted back to a real `null` right before `saveExtraction()`
+     is called. `mapSettlement()`'s withheld-deduction and toll mappers
+     now also stamp `truck_id` from the settlement's own resolved value
+     (previously only settlement/fuel/maintenance did).
+  6. **REPAIR FLOW for existing null-truck rows** — new screen
+     (`app/(tabs)/more/truck-assignments.tsx`, requirement 3's second
+     half): `app/src/import/truckAssignmentRepair.ts`'s pure, tested
+     `findUnassignedRows()` scans `settlements`/`fuel_purchases`/
+     `maintenance_records`/`tolls` (deliberately NOT `deductions` — most
+     deductions are legitimately, permanently fleet-level by design, so a
+     bare "truck_id is null" scan would flag hundreds of correctly-
+     fleet-level rows as if they were broken; a deduction that genuinely
+     needs a truck is assigned from its own edit sheet, item 3 above, on
+     the user's own initiative) for rows with no `truck_id`, sorted
+     newest-first, with per-row quick-assign (🚚, an Alert picker) and a
+     multi-select bulk-assign bar. Framed neutrally throughout ("assign a
+     truck," never "your data is broken") — a null-truck row can be
+     entirely legitimate if it predates the account's 2nd truck. Wired
+     into `navRegistry.ts`, `more/_layout.tsx`, and linked from the
+     Per-Truck Profitability screen's own Unassigned nudge card.
+  7. **DRIVER DIMENSION — requirement 5**: `buildTruckComparison()`
+     resolves each `driver_payments` row to a truck (via its own
+     `settlement_id` → that settlement's `truck_id` when present, else
+     the driver's own `default_truck_id`) and sums `gross_pay +
+     employer_taxes` per truck, exposed as `driverPay`/`netAfterDriverPay`
+     on each row — surfaced on the Per-Truck Profitability screen
+     whenever any driver-payment data exists. Deliberately a margin-AFTER
+     view (net profit itself is NOT reduced by driver pay) rather than
+     folded into the expense total, matching the requirement's own "see
+     the true margin after paying the driver" framing as an additional
+     lens, not a redefinition of `netProfit`.
+  8. **TESTS** (all 4 explicitly required, plus the supporting pure
+     modules): `truckComparison.test.ts` — a null-truck settlement
+     surfaces as its own Unassigned row rather than disappearing; a
+     truck's `directExpenses`/`allocatedExpenses` come ONLY from its own
+     tagged rows plus its mile-weighted share of the fleet-level pool
+     (proven by asserting truck A's totals are unaffected by truck B's
+     own direct deduction); the comparison's `fleetTotals` reconcile
+     exactly against a single whole-fleet `calcCanonicalCpm()` call over
+     every row (both truck-tagged and fleet-level) — the literal
+     "totals reconcile with the fleet totals" requirement; best/worst
+     ranking; per-truck cost basis never blending across trucks; driver-
+     pay resolution via both `settlement_id` and `default_truck_id`
+     fallback paths. `costAllocation.test.ts` — proportional split, two
+     trucks' shares summing back to exactly the pool amount, divide-by-
+     zero guards. `fleetScope.test.ts` — the ONE selector→filter
+     translation ("the selector state is respected by every list," proven
+     at the level every list screen actually calls). `loadsScope.test.ts`
+     — the settlement-join filter for the one table with no `truck_id` of
+     its own. `truckAssignmentRepair.test.ts` — the repair-flow scan.
+     `mapExtraction.test.ts` gained coverage for the new withheld-
+     deduction/toll `truck_id` propagation (both the assigned and
+     explicitly-not-truck-specific cases). Full suite: 110 suites / 2654
+     tests pass; `tsc --noEmit` clean.
+  9. **i18n**: all-new namespaces (`fleetScope.*`, `truckComparison.*`,
+     `truckAssignments.*`) plus scattered additions to `truckSwitcher`/
+     `importScreen`/`maintenance`/`truckHealth`/`deductions`/`scorecard`/
+     `dashboard`/`nav`/`common` — es/ru/ar/tr fully translated, hi/uk as
+     untranslated English copies per invariant #11. "Settlement" kept in
+     Latin script in every locale per the glossary (`truckAssignments.
+     kind.settlement` and every sentence that names one); the glossary
+     test caught a real slip mid-pass — "deadhead" got translated instead
+     of kept in Latin script in all four of es/ru/ar/tr's
+     `truckComparison.deadheadPct`, fixed before commit.
+  **Deliverables**: docs/PENDING_SQL.md §63 (`deductions.truck_id` +
+  `tolls.truck_id` + backfill) is **NOT YET RUN** — apply it via the
+  Supabase SQL Editor (or `pending_63.sql` at the repo root) before this
+  pass's client code depends on those columns existing; every other
+  change in this pass is pure client-side JS/TS, so no Edge Function
+  redeploy is needed for anything here. No new native dependency — ships
+  via a normal `eas update` once §63 has been run.
