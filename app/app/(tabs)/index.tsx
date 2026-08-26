@@ -27,10 +27,10 @@ import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
-import { resolveHeroPeriodDateWindow, filterRowsByDateWindow } from '@/src/stats/heroPeriodWindow';
+import { resolveHeroPeriodDateWindow, filterRowsByDateWindow, calcHeroRevenueExpenseTrio } from '@/src/stats/heroPeriodWindow';
 import { FleetScopeSelectorStrip } from '@/src/components/FleetScopeSelectorStrip';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
-import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
+import { type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
@@ -764,50 +764,112 @@ export default function Dashboard() {
   const stats = statsQuery.data;
   const capital = capitalQuery.data;
 
-  // Zone 1 hero chart data — last 8 completed weeks (matching Scorecard/
-  // Cash Flow's established "last 8 weeks" trend convention elsewhere in
-  // the app) so the Revenue/Expenses trio stays legible regardless of how
-  // much settlement history exists.
+  // Zone 1 hero chart data — the FULL (unsliced) weekly trend, so 1M/3M/
+  // 6M/yearly can window arbitrarily far back, not just a fixed recent
+  // slice. TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): every
+  // "profit" figure on this screen (the Hero Card, the Net Profit tile)
+  // sources from the single canonical src/stats/trueProfit.ts, which
+  // excludes a Meal already covered by per diem or an Advance Repayment —
+  // neither of which is a real expense reduction. Expenses/Revenue stay on
+  // the SEPARATE, deliberately broader `buildWeeklyRevenueExpenseTrend()`
+  // (ALL deductions unconditionally, matching the "Total Deductions" card
+  // elsewhere — CLAUDE.md's own TRUE-PROFIT CONSISTENCY entry: "only Net
+  // Profit needed the exclusion").
   const fullWeeklyRevenueExpenseTrend = useMemo(
     () => buildWeeklyRevenueExpenseTrend(scopedSettlements, scopedDeductions),
     [scopedSettlements, scopedDeductions]
   );
   const revenueExpenseTrend = useMemo(() => fullWeeklyRevenueExpenseTrend.slice(-8), [fullWeeklyRevenueExpenseTrend]);
-
-  // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): every "profit"
-  // figure on this screen (the Hero Card, the Net Profit tile) sources
-  // from the single canonical src/stats/trueProfit.ts, which excludes a
-  // Meal already covered by per diem or an Advance Repayment — neither
-  // of which is a real expense reduction.
   const fullWeeklyTrueProfitTrend = useMemo(
     () => buildWeeklyTrueProfitTrend(scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls),
     [scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls]
   );
+  const fullWeeklyTrueProfitAsRevenueExpense = useMemo(
+    () => fullWeeklyTrueProfitTrend.map((p) => ({ weekEnding: p.weekEnding, revenue: p.gross, expenses: p.gross - p.net })),
+    [fullWeeklyTrueProfitTrend]
+  );
+
+  // CPM/PPM BROKEN AGAIN pass (owner decision) — `heroPeriod`/`now`/
+  // `heroWindow` are declared ONCE, here, right after the weekly trends
+  // they window — every period-scoped figure on this screen (the Hero
+  // Card, the Revenue/Expenses/Net Profit trio below it, the per-mile
+  // trio, the profit-score bar) reads from this SAME state, so none of
+  // them can ever land on a different window from each other.
+  const [heroPeriod, setHeroPeriod] = useState<HeroPeriod>('thisWeek');
+  const now = useMemo(() => new Date(), [heroPeriod]);
+  const heroWindow = useMemo(
+    () => resolveHeroPeriodDateWindow(heroPeriod, fullWeeklyTrueProfitTrend.map((p) => p.weekEnding), now),
+    [heroPeriod, fullWeeklyTrueProfitTrend, now]
+  );
+  const heroPeriodResult = useMemo(
+    () => calcHeroPeriod(fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now),
+    [fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now]
+  );
+  // ITEM 0 (owner decision, CPM/PPM BROKEN AGAIN follow-up) — the
+  // Revenue/Expenses/Net Profit trio used to be a FIXED "this week vs
+  // last week" comparison regardless of `heroPeriod`, while the Hero Card
+  // right above it and the per-mile trio right below it both already
+  // followed the selected tab — exactly the "rows on the same screen
+  // describe different windows" bug class this whole pass exists to
+  // catch. `calcHeroRevenueExpenseTrio()` sums RAW settlement/deduction
+  // rows directly by `heroWindow` (and its own equivalent previous
+  // window for the delta) — never re-derived from the settlement-week-
+  // bucketed trend — which is what guarantees this Expenses figure always
+  // equals the Expense Total Explainer modal's own row sum below (both
+  // filter the identical `scopedDeductions` by the identical `heroWindow`).
+  // Net Profit itself reuses `heroPeriodResult.netProfit`/`.change`
+  // directly (not a second, independently-computed figure) — it's the
+  // SAME true-profit number the Hero Card's own headline already shows,
+  // so the two can never disagree.
+  const heroPeriodTrio = useMemo(
+    () => calcHeroRevenueExpenseTrio(scopedSettlements, scopedDeductions, heroPeriod, fullWeeklyTrueProfitTrend.map((p) => p.weekEnding), now),
+    [scopedSettlements, scopedDeductions, heroPeriod, fullWeeklyTrueProfitTrend, now]
+  );
+  // Both truck-scoped (scopedFuel/scopedDeductions, from the earlier
+  // MULTI-TRUCK MODEL pass) AND period-scoped (via heroWindow) — the SAME
+  // two-axis filtering the per-mile trio's own buildPeriodScopedCpm()
+  // applies, so the profit-score bar's inputs (and, below, the Expense
+  // Total Explainer's own rows) can never drift onto a different window
+  // than the big numbers sitting right above them.
+  const periodFuel = useMemo(() => filterRowsByDateWindow(scopedFuel, (f) => f.purchase_date, heroWindow), [scopedFuel, heroWindow]);
+  const periodDeductionsAll = useMemo(
+    () => filterRowsByDateWindow(scopedDeductions, (d) => d.ded_date, heroWindow),
+    [scopedDeductions, heroWindow]
+  );
+  const fuelCost = useMemo(
+    () => periodFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
+    [periodFuel]
+  );
 
   const heroFirstName =
     profile?.owner_name?.trim().split(/\s+/)[0] || session?.user?.email?.split('@')[0] || t('dashboard.hero.fallbackName');
+  // `thisWeekPoint`/`thisWeekExpenseRows` stay pinned to the LATEST
+  // settlement week specifically (never `heroWindow`) — they only feed the
+  // "All Trucks" PER TRUCK THIS WEEK card below, a deliberately separate,
+  // always-this-week feature (its own header comment), not the trio.
   const thisWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 1];
-  const lastWeekPoint = revenueExpenseTrend[revenueExpenseTrend.length - 2];
-  const heroWeekRevenue = thisWeekPoint?.revenue ?? 0;
-  const heroWeekExpenses = thisWeekPoint?.expenses ?? 0;
 
-  // EXPENSE TOTAL EXPLAINER — same week window buildWeeklyRevenueExpenseTrend
-  // itself uses (ded_date within the 7 days ending at week_ending) so the
-  // breakdown's total always matches the tile's own number exactly.
+  // EXPENSE TOTAL EXPLAINER — now reads `periodDeductionsAll` (the SAME
+  // period+truck-scoped rows the profit-score bar above uses) instead of
+  // a hardcoded "this week" window, so tapping the Expenses tile always
+  // opens a breakdown for the exact period that tile's own number just
+  // showed — the same "two figures, same card, must never disagree"
+  // property this whole pass exists to enforce, now extended to the
+  // tile-to-modal relationship too.
+  const expenseExplainer = useMemo(() => buildExpenseTotalExplainer(periodDeductionsAll), [periodDeductionsAll]);
+
   const thisWeekExpenseRows = useMemo(() => {
     if (!thisWeekPoint) return [];
     const start = weekStartFromEnding(thisWeekPoint.weekEnding);
     return scopedDeductions.filter((d) => d.ded_date && d.ded_date >= start && d.ded_date <= thisWeekPoint.weekEnding);
   }, [scopedDeductions, thisWeekPoint]);
-  const expenseExplainer = useMemo(() => buildExpenseTotalExplainer(thisWeekExpenseRows), [thisWeekExpenseRows]);
 
   // DASHBOARD LAYOUT PER SCOPE (owner decision, MULTI-TRUCK MODEL) — "All
   // Trucks" mode: a PER TRUCK THIS WEEK card, ranked, tapping a row
   // switches the global scope to that truck. Reuses buildTruckComparison()
   // (the same function the full comparison + Scorecard breakdown use),
-  // fed only THIS WEEK's own rows via the identical week-window filter
-  // the Expense Total Explainer above already uses, so the two can never
-  // disagree about what "this week" means.
+  // deliberately fed THIS WEEK's own rows always (not `heroWindow`) — a
+  // separate, always-this-week feature, unrelated to the period tabs.
   const perTruckThisWeek = useMemo(() => {
     if (!isAllTrucks || !thisWeekPoint) return null;
     const start = weekStartFromEnding(thisWeekPoint.weekEnding);
@@ -834,8 +896,10 @@ export default function Dashboard() {
           try {
             // Linked capital_transactions row cascades automatically
             // (docs/SCHEMA.sql: linked_deduction_id ... on delete cascade —
-            // CLAUDE.md invariant #5), same as Deductions' own delete.
-            const row = thisWeekExpenseRows.find((d) => d.id === id);
+            // CLAUDE.md invariant #5), same as Deductions' own delete. Row
+            // is looked up from `periodDeductionsAll` now, matching the
+            // rows the Expense Total Explainer modal actually renders.
+            const row = periodDeductionsAll.find((d) => d.id === id);
             await deleteDeduction.mutateAsync(id);
             if (row?.document_id) await cleanupOrphanedDocument(row.document_id);
             await invalidateFinancialData(queryClient, {
@@ -850,57 +914,6 @@ export default function Dashboard() {
       },
     ]);
   }
-  const trueProfitTrend8 = fullWeeklyTrueProfitTrend.slice(-8);
-  const thisWeekTrueProfitPoint = trueProfitTrend8[trueProfitTrend8.length - 1];
-  const lastWeekTrueProfitPoint = trueProfitTrend8[trueProfitTrend8.length - 2];
-  const heroWeekNetProfit = thisWeekTrueProfitPoint?.net ?? 0;
-  const lastWeekNetProfit = lastWeekTrueProfitPoint ? lastWeekTrueProfitPoint.net : null;
-  const heroRevenueChange = calcWeekOverWeekChange(heroWeekRevenue, lastWeekPoint?.revenue);
-  const heroExpensesChange = calcWeekOverWeekChange(heroWeekExpenses, lastWeekPoint?.expenses);
-  const heroNetProfitChange = calcWeekOverWeekChange(heroWeekNetProfit, lastWeekNetProfit);
-  // UX MEGA-PASS item G(1): period tabs drive the Hero Card's number/
-  // delta/chart together via calcHeroPeriod() — reads the FULL (unsliced)
-  // weekly trend so 1M/3M/6M/yearly can window arbitrarily far back, not
-  // just the last 8 weeks revenueExpenseTrend is capped to.
-  const fullWeeklyTrueProfitAsRevenueExpense = useMemo(
-    () => fullWeeklyTrueProfitTrend.map((p) => ({ weekEnding: p.weekEnding, revenue: p.gross, expenses: p.gross - p.net })),
-    [fullWeeklyTrueProfitTrend]
-  );
-  const [heroPeriod, setHeroPeriod] = useState<HeroPeriod>('thisWeek');
-  // SELF-TEST AUDIT (owner decision, CPM/PPM BROKEN AGAIN pass, item 4) —
-  // "two figures on the same card cover different windows": the Hero
-  // Card's own progress bar (0-100 profitScore, calcScorecard()) used to
-  // ALWAYS read all-time `stats`/`fuelCost` regardless of `heroPeriod` —
-  // right under a big number that (after this pass's own root-cause fix)
-  // now genuinely reflects the selected period. `heroWindow` is computed
-  // ONCE, here, from the identical inputs buildPeriodScopedCpm() below
-  // resolves its own (unavoidably separate, since that call is a plain
-  // pure function) window from — same period, same weekEnding list, same
-  // `now` reference — so the two can never land on a different window
-  // from each other despite being two separate calls.
-  const now = useMemo(() => new Date(), [heroPeriod]);
-  const heroWindow = useMemo(
-    () => resolveHeroPeriodDateWindow(heroPeriod, fullWeeklyTrueProfitTrend.map((p) => p.weekEnding), now),
-    [heroPeriod, fullWeeklyTrueProfitTrend, now]
-  );
-  const heroPeriodResult = useMemo(
-    () => calcHeroPeriod(fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now),
-    [fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now]
-  );
-  // Both truck-scoped (scopedFuel/scopedDeductions, from the earlier
-  // MULTI-TRUCK MODEL pass) AND now period-scoped (via heroWindow) — the
-  // SAME two-axis filtering the per-mile trio's own buildPeriodScopedCpm()
-  // applies, so the profit-score bar's inputs can never drift onto a
-  // different window than the big number sitting right above it.
-  const periodFuel = useMemo(() => filterRowsByDateWindow(scopedFuel, (f) => f.purchase_date, heroWindow), [scopedFuel, heroWindow]);
-  const periodDeductionsAll = useMemo(
-    () => filterRowsByDateWindow(scopedDeductions, (d) => d.ded_date, heroWindow),
-    [scopedDeductions, heroWindow]
-  );
-  const fuelCost = useMemo(
-    () => periodFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
-    [periodFuel]
-  );
 
   // PER-MILE TRIO — CPM/PPM BROKEN AGAIN, ROOT CAUSE FIX (owner decision,
   // device report: "implausible values, doesn't change when I switch the
@@ -1019,28 +1032,36 @@ export default function Dashboard() {
           onPress={() => router.push('/(tabs)/more/cash-flow')}
         />
 
+        {/* ITEM 0 (owner decision, CPM/PPM BROKEN AGAIN follow-up): this
+            trio now describes the SAME `heroPeriod` window as the Hero
+            Card above it and the per-mile trio below it — Revenue/
+            Expenses via `heroPeriodTrio` (its own delta vs. the equivalent
+            PRECEDING window, same convention as calcHeroPeriod()'s own
+            delta), Net Profit reusing `heroPeriodResult` directly so it
+            can never show a different figure than the Hero Card's own
+            headline number for the same period. */}
         <View style={styles.compactRow}>
           <OverviewTile
             label={t('dashboard.hero.revenue')}
-            value={money(heroWeekRevenue)}
+            value={money(heroPeriodTrio.revenue)}
             valueColor={colors.green}
-            change={heroRevenueChange}
+            change={heroPeriodTrio.revenueChange}
             goodDirection="up"
             onPress={() => router.push('/(tabs)/more/cash-flow')}
           />
           <OverviewTile
             label={t('dashboard.overview.expenses')}
-            value={money(heroWeekExpenses)}
+            value={money(heroPeriodTrio.expenses)}
             valueColor={colors.red}
-            change={heroExpensesChange}
+            change={heroPeriodTrio.expensesChange}
             goodDirection="down"
             onPress={() => setExpenseExplainerOpen(true)}
           />
           <OverviewTile
             label={t('dashboard.hero.netProfit')}
-            value={money(heroWeekNetProfit)}
-            valueColor={heroWeekNetProfit < 0 ? colors.red : colors.green}
-            change={heroNetProfitChange}
+            value={money(heroPeriodResult.netProfit)}
+            valueColor={heroPeriodResult.netProfit < 0 ? colors.red : colors.green}
+            change={heroPeriodResult.change}
             goodDirection="up"
             onPress={() => router.push('/(tabs)/more/cash-flow')}
           />
@@ -1151,7 +1172,7 @@ export default function Dashboard() {
       {/* EXPENSE TOTAL EXPLAINER (owner decision 2026-08-05, FULL PARITY
           follow-up item D). */}
       <ModalSheet visible={expenseExplainerOpen} onClose={() => setExpenseExplainerOpen(false)}>
-        <SheetTitle>{t('dashboard.expenseExplainer.title')}</SheetTitle>
+        <SheetTitle>{t(`dashboard.expenseExplainer.titleByPeriod.${heroPeriod}`)}</SheetTitle>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm }}>
           <MutedText>{t('dashboard.expenseExplainer.total')}</MutedText>
           <Text style={{ color: colors.text, fontWeight: '700' }}>{money(expenseExplainer.total)}</Text>

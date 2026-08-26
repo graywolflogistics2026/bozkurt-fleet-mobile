@@ -15,6 +15,7 @@
 // notion of "this week."
 import { HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
+import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 
 export type DateWindow = { startIso: string; endIso: string };
 
@@ -54,6 +55,99 @@ export function filterRowsByDateWindow<T>(rows: T[], getDate: (row: T) => string
     const d = getDate(row);
     return !!d && d >= window.startIso && d <= window.endIso;
   });
+}
+
+// CPM/PPM BROKEN AGAIN follow-up, item 0 (owner decision) — "the delta
+// comparing to the equivalent previous window (previous week for This
+// Week, previous month for 1M, and so on)": the companion to
+// resolveHeroPeriodDateWindow() above, returning the immediately
+// PRECEDING, same-length, non-overlapping window — the settlement week
+// right before "this week"/"last week," or the equal-length rolling
+// window immediately before the current one for 1M/3M/6M/yearly. `null`
+// when it can't be resolved (no settlement that far back yet) — callers
+// must treat that as "no comparison available," never a fabricated 0.
+export function resolvePreviousHeroPeriodDateWindow(period: HeroPeriod, sortedWeekEndings: string[], now: Date = new Date()): DateWindow | null {
+  if (period === 'thisWeek' || period === 'lastWeek') {
+    const offset = period === 'thisWeek' ? 1 : 2;
+    const index = sortedWeekEndings.length - 1 - offset;
+    const weekEnding = sortedWeekEndings[index];
+    if (!weekEnding) return null;
+    return { startIso: weekStartFromEnding(weekEnding), endIso: weekEnding };
+  }
+  const days = PERIOD_DAYS[period];
+  if (days == null) return null;
+  const currentStart = new Date(now);
+  currentStart.setDate(currentStart.getDate() - days);
+  // Ends the day BEFORE the current window's own start, so the two
+  // windows never overlap on a shared boundary day (filterRowsByDateWindow
+  // is inclusive on both ends).
+  const prevEnd = new Date(currentStart);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+  const prevStart = new Date(currentStart);
+  prevStart.setDate(prevStart.getDate() - days);
+  return { startIso: prevStart.toISOString().slice(0, 10), endIso: prevEnd.toISOString().slice(0, 10) };
+}
+
+type TrioSettlementRow = { week_ending: string | null; gross: number | null };
+type TrioDeductionRow = { ded_date: string | null; amount: number | null };
+
+export type HeroRevenueExpenseTrio = {
+  window: DateWindow | null;
+  revenue: number;
+  expenses: number;
+  revenueChange: WeekOverWeekChange;
+  expensesChange: WeekOverWeekChange;
+};
+
+function sumInWindow<T>(
+  rows: T[],
+  getDate: (row: T) => string | null | undefined,
+  getAmount: (row: T) => number | null | undefined,
+  window: DateWindow | null
+): { total: number; count: number } {
+  const filtered = filterRowsByDateWindow(rows, getDate, window);
+  return { total: filtered.reduce((sum, row) => sum + Number(getAmount(row) ?? 0), 0), count: filtered.length };
+}
+
+// CPM/PPM BROKEN AGAIN follow-up, item 0 (owner decision): the Revenue/
+// Expenses/Net Profit trio directly under the Hero Card used to be a
+// FIXED "this week vs last week" comparison no matter which period tab
+// was selected above it, while everything else on Home (the Hero Card
+// itself, the per-mile trio) already followed `heroPeriod` — exactly the
+// "two rows on the same screen describe different windows" bug class
+// this whole pass exists to catch. Revenue and Expenses are summed
+// DIRECTLY from raw settlement/deduction rows (never re-derived from a
+// settlement-week-bucketed trend) filtered through the exact same
+// `filterRowsByDateWindow()` every other period-scoped figure on this
+// screen uses — this is what guarantees the trio's own Expenses number
+// always equals the Expense Total Explainer modal's own line-item sum
+// for the SAME rows (both read `filterRowsByDateWindow(deductions, ...,
+// heroWindow)`), rather than the modal silently covering a different set
+// of rows than the tile it opens from. Net Profit is deliberately NOT
+// computed here — Home reuses calcHeroPeriod()'s own canonical
+// true-profit figure directly, so the trio's Net Profit tile and the
+// Hero Card's own headline number are provably the same value, never two
+// independently-computed ones that could disagree.
+export function calcHeroRevenueExpenseTrio<S extends TrioSettlementRow, D extends TrioDeductionRow>(
+  settlements: S[],
+  deductions: D[],
+  period: HeroPeriod,
+  sortedWeekEndings: string[],
+  now: Date = new Date()
+): HeroRevenueExpenseTrio {
+  const window = resolveHeroPeriodDateWindow(period, sortedWeekEndings, now);
+  const previousWindow = resolvePreviousHeroPeriodDateWindow(period, sortedWeekEndings, now);
+  const currentRevenue = sumInWindow(settlements, (s) => s.week_ending, (s) => s.gross, window);
+  const currentExpenses = sumInWindow(deductions, (d) => d.ded_date, (d) => d.amount, window);
+  const previousRevenue = sumInWindow(settlements, (s) => s.week_ending, (s) => s.gross, previousWindow);
+  const previousExpenses = sumInWindow(deductions, (d) => d.ded_date, (d) => d.amount, previousWindow);
+  return {
+    window,
+    revenue: currentRevenue.total,
+    expenses: currentExpenses.total,
+    revenueChange: calcWeekOverWeekChange(currentRevenue.total, previousRevenue.count > 0 ? previousRevenue.total : null),
+    expensesChange: calcWeekOverWeekChange(currentExpenses.total, previousExpenses.count > 0 ? previousExpenses.total : null),
+  };
 }
 
 // Re-exported so callers don't need a second import just to iterate the

@@ -30,12 +30,22 @@ function netOf(p: WeeklyRevenueExpensePoint | undefined): number {
   return p ? p.revenue - p.expenses : 0;
 }
 
-function sumWindow(points: WeeklyRevenueExpensePoint[], start: Date, end: Date): { net: number; points: WeeklyRevenueExpensePoint[] } {
+function sumWindow(
+  points: WeeklyRevenueExpensePoint[],
+  start: Date,
+  end: Date
+): { revenue: number; expenses: number; net: number; points: WeeklyRevenueExpensePoint[] } {
   const inWindow = points.filter((p) => {
     const d = new Date(`${p.weekEnding}T12:00:00`);
     return d >= start && d < end;
   });
-  return { net: inWindow.reduce((sum, p) => sum + netOf(p), 0), points: inWindow };
+  const revenue = inWindow.reduce((sum, p) => sum + p.revenue, 0);
+  const expenses = inWindow.reduce((sum, p) => sum + p.expenses, 0);
+  // Identical to the old `inWindow.reduce((sum, p) => sum + netOf(p), 0)` —
+  // sum(revenue - expenses) === sum(revenue) - sum(expenses) — so
+  // calcHeroPeriod()'s own pre-existing behavior is unchanged by this
+  // refactor; only the newly-exposed revenue/expenses fields are new.
+  return { revenue, expenses, net: revenue - expenses, points: inWindow };
 }
 
 // `points` must be sorted ascending by weekEnding (buildWeeklyRevenueExpenseTrend's

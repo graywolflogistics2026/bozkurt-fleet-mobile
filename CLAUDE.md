@@ -7678,3 +7678,71 @@
   #11; glossary test re-passed clean. No SQL/Edge Function changes —
   every change in this pass is pure client-side JS/TS. Ships via a normal
   `eas update`.
+- MULTI-TRUCK MODEL — CPM/PPM BROKEN AGAIN, ITEM 0 (owner decision, direct
+  follow-up to the pass above: "also fix the asymmetry you flagged"). The
+  Revenue/Expenses/Net Profit trio directly under the Hero Card was still
+  a FIXED "this week vs last week" comparison no matter which period tab
+  was active, even after the per-mile trio and the profit-score bar were
+  both fixed to follow `heroPeriod` — the same "rows on the same screen
+  describe different windows" bug class, just not yet closed for this
+  one remaining element.
+  **FIX**: `src/stats/heroPeriodWindow.ts` gained
+  `resolvePreviousHeroPeriodDateWindow()` (the companion to
+  `resolveHeroPeriodDateWindow()` — the immediately PRECEDING, same-
+  length, non-overlapping window: the settlement week right before
+  "this week"/"last week," or the equal-length rolling window
+  immediately before the current one for 1M/3M/6M/yearly) and
+  `calcHeroRevenueExpenseTrio()`, which sums RAW settlement/deduction
+  rows DIRECTLY through the SAME `filterRowsByDateWindow()` every other
+  period-scoped figure on Home already uses — deliberately NOT re-
+  derived from the settlement-week-bucketed weekly trend the way an
+  earlier draft of this fix did. That mattered: a settlement-week-
+  bucketed sum can silently miss a deduction dated in a "gap" week with
+  no settlement covering it (a real out-of-pocket expense — insurance,
+  a repair — logged while the truck sat idle between settlements), which
+  would have made the Expenses tile's own number disagree with the
+  Expense Total Explainer modal it opens into. Summing raw rows directly
+  by the identical window both consumers already use is what guarantees
+  they can never drift apart — proven directly by a dedicated test
+  reconciling `calcHeroRevenueExpenseTrio()`'s own `expenses` figure
+  against a raw `filterRowsByDateWindow()` sum over the same rows.
+  Net Profit is NOT computed by this new function — Home reuses
+  `heroPeriodResult.netProfit`/`.change` (the Hero Card's own canonical
+  true-profit figure) directly, so the trio's Net Profit tile and the
+  Hero Card's own headline number are provably the same value rather
+  than two independently-computed ones.
+  **A second, related fix found while wiring this in**: the Expense
+  Total Explainer modal (opened by tapping the Expenses tile) used to
+  ALWAYS read `thisWeekExpenseRows` — a hardcoded "this week" window —
+  regardless of `heroPeriod`, so selecting "1M" would show a period-
+  correct Expenses number on the tile but open a modal still titled
+  "This Week's Expenses" and showing only the latest settlement week's
+  rows: the exact tile-to-modal disagreement this whole pass exists to
+  prevent, just one level deeper than the number itself. Fixed by
+  switching the modal to `periodDeductionsAll` (the same period+truck-
+  scoped rows the profit-score bar already reads) and adding
+  `dashboard.expenseExplainer.titleByPeriod.{thisWeek,lastWeek,1M,3M,
+  6M,yearly}` (replacing the old static `title` key) plus a period-
+  neutral `empty` string ("No expenses recorded for this period yet.",
+  was "...this week yet.") across all 7 locales.
+  `handleDeleteExpenseRow()`'s own row lookup was switched from
+  `thisWeekExpenseRows.find()` to `periodDeductionsAll.find()` to match
+  — otherwise deleting a row from a non-"this week" breakdown would have
+  silently failed to find it and skipped its linked-document cleanup.
+  `thisWeekPoint`/`thisWeekExpenseRows` themselves are UNCHANGED and stay
+  pinned to the literal latest settlement week — they still (and only)
+  feed the "All Trucks" PER TRUCK THIS WEEK card, a deliberately
+  separate, always-this-week feature unrelated to the period tabs.
+  Tests: `heroPeriodWindow.test.ts` gained `resolvePreviousHeroPeriodDateWindow`
+  (thisWeek's previous window is exactly lastWeek's own window; a
+  rolling period's previous window is same-length and non-overlapping;
+  null when there's no data that far back) and `calcHeroRevenueExpenseTrio`
+  (thisWeek's revenue/expenses match the exact settlement-week window
+  with a delta against lastWeek; the reconciliation proof against a raw
+  `filterRowsByDateWindow` sum; no fabricated delta when the previous
+  window is empty; zero/null-window on a fresh account; a 1M rolling
+  case aggregating 3 settlement weeks with a real previous-window
+  comparison) — 9 new tests. Full suite: 112 suites / 2692 tests pass;
+  `tsc --noEmit` clean; all 7 locales confirmed key-parity (glossary
+  test re-passed clean). No SQL/Edge Function changes — pure client-side
+  JS/TS. Ships via a normal `eas update`.

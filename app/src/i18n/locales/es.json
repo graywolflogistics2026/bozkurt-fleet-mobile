@@ -159,14 +159,21 @@
       "expenses": "Gastos"
     },
     "expenseExplainer": {
-      "title": "Gastos de Esta Semana",
+      "titleByPeriod": {
+        "thisWeek": "Gastos de Esta Semana",
+        "lastWeek": "Gastos de la Semana Pasada",
+        "1M": "Gastos de los Últimos 30 Días",
+        "3M": "Gastos de los Últimos 90 Días",
+        "6M": "Gastos de los Últimos 6 Meses",
+        "yearly": "Gastos de Este Año"
+      },
       "total": "Total",
       "fixed": "Fijo",
       "variable": "Variable",
       "excludedVehiclePurchase": "{{amount}} en compras de vehículos excluidos — se mantienen en sus registros pero no se cuentan aquí como gasto rutinario.",
       "largestRowsTitle": "Gastos más grandes",
       "possibleDepreciableAsset": "Gasto grande — posible activo depreciable, consulte a su contador",
-      "empty": "Aún no hay gastos registrados para esta semana."
+      "empty": "Aún no hay gastos registrados para este período."
     },
     "fleetHealth": {
       "title": "Puntaje de Salud de la Flota",

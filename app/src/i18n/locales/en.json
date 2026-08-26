@@ -165,14 +165,21 @@
       "expenses": "Expenses"
     },
     "expenseExplainer": {
-      "title": "This Week's Expenses",
+      "titleByPeriod": {
+        "thisWeek": "This Week's Expenses",
+        "lastWeek": "Last Week's Expenses",
+        "1M": "Last 30 Days' Expenses",
+        "3M": "Last 90 Days' Expenses",
+        "6M": "Last 6 Months' Expenses",
+        "yearly": "This Year's Expenses"
+      },
       "total": "Total",
       "fixed": "Fixed",
       "variable": "Variable",
       "excludedVehiclePurchase": "{{amount}} in vehicle purchases excluded — kept in your records but not counted as a routine expense here.",
       "largestRowsTitle": "Largest expenses",
       "possibleDepreciableAsset": "Large expense — possible depreciable asset, check with your CPA",
-      "empty": "No expenses recorded for this week yet."
+      "empty": "No expenses recorded for this period yet."
     },
     "fleetHealth": {
       "title": "Fleet Health Score",

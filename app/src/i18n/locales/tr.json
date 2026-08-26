@@ -159,14 +159,21 @@
       "expenses": "Giderler"
     },
     "expenseExplainer": {
-      "title": "Bu Haftanın Giderleri",
+      "titleByPeriod": {
+        "thisWeek": "Bu Haftanın Giderleri",
+        "lastWeek": "Geçen Haftanın Giderleri",
+        "1M": "Son 30 Günün Giderleri",
+        "3M": "Son 90 Günün Giderleri",
+        "6M": "Son 6 Ayın Giderleri",
+        "yearly": "Bu Yılın Giderleri"
+      },
       "total": "Toplam",
       "fixed": "Sabit",
       "variable": "Değişken",
       "excludedVehiclePurchase": "{{amount}} tutarındaki araç satın alımları hariç tutuldu — kayıtlarınızda tutulur ancak burada rutin gider olarak sayılmaz.",
       "largestRowsTitle": "En büyük giderler",
       "possibleDepreciableAsset": "Büyük gider — olası amortismana tabi varlık, muhasebecinize danışın",
-      "empty": "Bu hafta için henüz gider kaydedilmedi."
+      "empty": "Bu dönem için henüz gider kaydedilmedi."
     },
     "fleetHealth": {
       "title": "Filo Sağlığı Puanı",
