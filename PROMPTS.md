@@ -5,10 +5,14 @@ After each session: review the diff, run the app/tests, commit, THEN move to the
 Claude Code understands Turkish too — feel free to ask follow-ups in Turkish mid-session.
 
 **ACTIVE SESSION: Session 10 — Store readiness** (owner decision 2026-07-26).
-Session 9c (Hindi/Ukrainian real translation) is POSTPONED to the
-post-launch v1.1 track — see its section below for the launch-scope
-decision. Session 9e (BOZKA AI design language, items 9e-A/B1–B10) is
-DONE as of 2026-07-27 — see its section below.
+Session 9c is now PARTIALLY DONE (owner decision, LANGUAGE PICKER — FIVE
+LANGUAGES AT LAUNCH pass, supersedes the 2026-07-26 English-only launch
+scope below): the app now launches with 5 selectable languages — English,
+Spanish, Russian, Turkish, and Hindi (real translation, done this pass) —
+with Arabic and Ukrainian DISABLED (not deleted) for v1, see the updated
+Session 9c section below for what's actually done vs. still postponed.
+Session 9e (BOZKA AI design language, items 9e-A/B1–B10) is DONE as of
+2026-07-27 — see its section below.
 
 ---
 
@@ -498,19 +502,31 @@ ON, NO new screen/component may ship with a hardcoded user-facing string
 script pattern used this session) in the same PR that introduces the
 string.
 
-hi.json and uk.json currently ship as UNTRANSLATED COPIES of en.json
-(placeholder — English text under the hi/uk locale codes) so the
-languages are selectable and structurally complete without blocking on
-translation work. Real translation is a dedicated future pass —
-**Session 9c — Hindi/Ukrainian localization** (below), not to be done
-piecemeal. es/ru/ar/tr were fully translated this session and are NOT
-placeholders.
+hi.json shipped as an UNTRANSLATED COPY of en.json originally (placeholder
+— English text under the hi locale code) but now carries a real, complete
+Hindi translation as of the LANGUAGE PICKER — FIVE LANGUAGES AT LAUNCH
+pass (Session 9c, below) — machine-translated, not yet reviewed by a
+native speaker. uk.json STILL ships as an untranslated copy — Ukrainian
+real translation remains a dedicated future pass, not to be done
+piecemeal. es/ru/ar/tr were fully translated in the original
+multi-language session and are NOT placeholders.
 
-First-launch rule: device OS language wins when it's one of the 7
-supported (Arabic → RTL layout, the other 6 LTR), else English. A manual
-override in Settings > Language is cached locally AND written to
-profiles.locale (docs/PENDING_SQL.md §12), and always wins afterwards, on
-every device.
+LAUNCH SCOPE (owner decision, supersedes "device OS language wins when
+it's one of the 7 supported" below): only 5 of the 7 supported locales are
+actually selectable/auto-detectable at launch —
+`app/src/i18n/config.ts`'s `ENABLED_LOCALES` (en/es/ru/tr/hi). Arabic and
+Ukrainian stay fully wired (locale files, glossary test, RTL groundwork)
+but disabled — see Session 9c below for the full reasoning, including
+"no RTL surface ships in v1" since Arabic is the only RTL locale.
+
+First-launch rule (as originally designed, now scoped to the 5 enabled
+locales): device OS language wins when it's one of the ENABLED ones
+(Arabic → RTL layout, currently unreachable since ar is disabled; the
+other 4 LTR), else English. A first-run language screen (`app/language.tsx`)
+shows before anything else so this choice is always explicit, not just
+inferred. A manual override (from that screen, or later in Settings >
+Language) is cached locally AND written to profiles.locale
+(docs/PENDING_SQL.md §12), and always wins afterwards, on every device.
 
 RTL: use marginStart/marginEnd/start/end, never marginLeft/marginRight or
 absolute left/right (I18nManager doesn't auto-flip those logical-unaware
@@ -530,34 +546,82 @@ their exact text), and legal documents (ToS stays English-only until
 attorney review).
 ```
 
-## Session 9c — Hindi/Ukrainian localization (POSTPONED to post-launch v1.1)
+## Session 9c — Hindi/Ukrainian localization (Hindi DONE, Ukrainian still postponed)
+
+```
+LANGUAGE PICKER — FIVE LANGUAGES AT LAUNCH (owner decision, supersedes the
+2026-07-26 English-only LAUNCH SCOPE decision below in full): the app now
+launches with 5 selectable languages — English, Spanish, Russian, Turkish,
+Hindi — via `app/src/i18n/config.ts`'s `ENABLED_LOCALES` array (replaces
+the old single `LANGUAGE_PICKER_ENABLED` boolean this section originally
+described). Arabic and Ukrainian are DISABLED for v1, NOT deleted — same
+"nothing is deleted, all 7 locale files/i18n infra/glossary test/RTL
+groundwork stay intact, re-enabling later is a one-line array edit" spirit
+this section always had, just now expressed per-locale instead of as one
+global on/off flag. Arabic disabled also means: **NO RTL SURFACE SHIPS IN
+v1** — nobody should assume RTL layout has been exercised on a real device
+just because `rtl.ts`/`isRTLLocale()` groundwork exists; it has zero
+reachable code path until 'ar' is re-added to `ENABLED_LOCALES`.
+
+A first-run language screen (`app/language.tsx`, gated in
+`src/navigation/rootRedirect.ts` — runs before EVERYTHING else, including
+the intro slides and sign-in) now shows the 5 enabled languages in their
+own script/name, device-detected preselected if it's among the 5, one tap
+continues; changeable any time from Settings > Language, which also now
+lists only the 5 enabled locales.
+
+**Hindi: DONE this pass** — hi.json was previously an untranslated
+English-copy placeholder (below); it now carries a real, complete Hindi
+translation, produced as a single large machine-translation pass (see
+CLAUDE.md's own dated entry for this pass for the full honest breakdown
+of what's machine-translated vs. reviewed) — NOT YET reviewed by a native
+Hindi speaker. Flag this for native proofreading before a real store
+launch, same as the "spot-check Hindi/Devanagari... font fallback,
+line-wrapping" checklist item below, which is now specifically about
+Hindi (Ukrainian/Cyrillic remains out of scope until Ukrainian itself
+ships).
+
+**Ukrainian: STILL POSTPONED**, unchanged from the original decision below
+— uk.json remains an untranslated English-copy placeholder, and Ukrainian
+stays out of `ENABLED_LOCALES` until a future session does the same real-
+translation work for it that Hindi just got. The rest of this section's
+own launch-scope reasoning (below) still applies to Ukrainian specifically
+— read it as "uk.json" wherever it previously said "hi.json and uk.json".
+
+Original launch-scope decision text, kept for history / still governing
+Ukrainian specifically:
+```
 
 ```
 LAUNCH SCOPE DECISION (owner decision 2026-07-26, PRODUCT DECISION,
-binding): the app launches ENGLISH-ONLY to accelerate store readiness.
-This session is postponed to the post-launch v1.1 track — do not start it
-during Session 10 store prep. In the meantime:
+binding, PARTIALLY SUPERSEDED — see above): the app launches ENGLISH-ONLY
+to accelerate store readiness. This session is postponed to the
+post-launch v1.1 track — do not start it during Session 10 store prep. In
+the meantime:
   - Settings > Language picker is hidden behind
     `LANGUAGE_PICKER_ENABLED` (app/src/i18n/config.ts, default false) —
-    flip it to true once this session actually ships.
+    flip it to true once this session actually ships. **SUPERSEDED**:
+    this boolean no longer exists — `ENABLED_LOCALES` (above) replaced it.
   - Device-language auto-detect is disabled while the flag is off
     (`detectDeviceLocale()`/`resolveInitialLocale()` always resolve to
     'en'; `AuthContext.fetchProfile()`'s cross-device `profiles.locale`
-    sync is also gated on the flag).
+    sync is also gated on the flag). **SUPERSEDED** for the 5 enabled
+    locales — auto-detect now works normally for en/es/ru/tr/hi, still
+    effectively off for ar/uk since neither can ever be detected/selected.
   - NOTHING is deleted: all 7 locale files, the i18n infra
     (`app/src/i18n/*`), the glossary test, and RTL groundwork
     (`app/src/i18n/rtl.ts`) stay exactly as they are — re-enabling
     multi-language later is a one-line flip plus this session's real
-    hi/uk translation work, not a rebuild.
+    hi/uk translation work, not a rebuild. **Still true, unchanged.**
   - The 7-locale key-parity test and the glossary test keep running in CI
     regardless of the flag — they test the JSON files, not the picker UI,
-    so they must stay green every session even while the picker is hidden.
+    so they must stay green every session even while the picker is
+    hidden. **Still true, unchanged.**
 
-Once resumed post-launch, translate hi.json and uk.json from their
-current English-copy placeholder state into real Hindi and Ukrainian,
-key-for-key against en.json (use the parity-check script pattern from the
-multi-language session above to verify no key is missing/extra
-afterward).
+Once resumed, translate uk.json from its current English-copy placeholder
+state into real Ukrainian, key-for-key against en.json (use the
+parity-check script pattern from the multi-language session above to
+verify no key is missing/extra afterward).
 
 CRITICAL: Ukrainian and Russian are distinct languages — translate uk.json
 independently from scratch (or from en.json), never by copying/adapting
@@ -565,19 +629,19 @@ ru.json. Machine-transliterating Russian into Ukrainian produces text a
 Ukrainian speaker would immediately recognize as wrong (surzhyk), not a
 shortcut worth taking.
 
-Also: spot-check Hindi/Devanagari and Ukrainian/Cyrillic text rendering on
-both iOS and Android (font fallback, line-wrapping on the longest strings)
-since neither script has been exercised in the app before this pass.
+Also: spot-check Ukrainian/Cyrillic text rendering on both iOS and Android
+(font fallback, line-wrapping on the longest strings) once it ships —
+Hindi/Devanagari was already exercised in the LANGUAGE PICKER pass above.
 
 BINDING REVIEW ITEM (owner decision, i18n terminology rule):
 docs/I18N_GLOSSARY.md's DO-NOT-TRANSLATE glossary (per diem, coolant,
 DPF, DEF, ELD, IFTA, IRP, HVUT/2290, settlement(s), linehaul, fuel
 surcharge, detention, layover, lumper, bobtail, deadhead, reefer, APU,
 CDL, DOT, MC number, escrow, factoring, Schedule C, 1099, W-2, K-1,
-S-Corp, LLC) applies to hi.json/uk.json exactly like it already does to
-es/ru/ar/tr — every glossary term that appears in a string being
-translated stays in English (Latin script embedded in the Hindi/
-Ukrainian sentence), never rendered in Devanagari/Cyrillic. Run
+S-Corp, LLC, MACRS, Section 179, CPM, RPM) applies to uk.json exactly
+like it already does to es/ru/ar/tr/hi — every glossary term that appears
+in a string being translated stays in English (Latin script embedded in
+the Ukrainian sentence), never rendered in Cyrillic. Run
 `npx jest app/src/i18n/__tests__/glossary.test.ts` after translating and
 confirm it passes before considering this session done — it asserts
 glossary terms are byte-identical across all 7 locales, so a slip here
@@ -592,9 +656,10 @@ treat it as unverified rather than fixed. Test explicitly: fresh install
 → device language set to Russian (OS-detection path) AND manually
 picking Russian in Settings > Language (manual-override path) → confirm
 the app actually renders in Russian both ways, on a real device, not
-just the simulator. hi.json/uk.json remain untranslated English-mirror
-copies until this session actually runs — selectable, structurally
-complete, just not real Hindi/Ukrainian text yet.
+just the simulator. uk.json remains an untranslated English-mirror copy
+until this session actually runs for Ukrainian — selectable in principle
+once re-added to ENABLED_LOCALES, structurally complete, just not real
+Ukrainian text yet.
 ```
 
 ## AI feature package (owner decision 2026-07-10, PRODUCT DECISION — binding)
@@ -1399,10 +1464,13 @@ Dashboard/nav restyle pass toward the "BOZKA AI" mockup (owner decision
    color-source invariant updated), generous radii/spacing bump.
 
 Not done this pass (flagged for later, not blockers): a full on-device RTL
-walkthrough (deferred — Settings > Language is hidden behind
-LANGUAGE_PICKER_ENABLED for the English-only beta launch, so there's no
-RTL surface to exercise yet) and swapping BrandWordmark's emoji for a real
-logo asset (still a placeholder, per 9e-A's own scope note).
+walkthrough (deferred — even after the LANGUAGE PICKER — FIVE LANGUAGES AT
+LAUNCH pass re-enabled Settings > Language for en/es/ru/tr/hi, Arabic
+itself stays out of `ENABLED_LOCALES` for v1, so there is STILL no RTL
+surface to exercise on-device — see Session 9c's updated section) and
+swapping BrandWordmark's emoji for a real logo asset (superseded — the
+APP ICON + SPLASH ASSETS pass, see CLAUDE.md, replaced the placeholder
+with a real generated brand mark).
 ```
 
 ## Session 10 — Store readiness (when you're ready to ship)
@@ -1482,17 +1550,24 @@ triggers automatically on version bump, per Session 3).
       set, business balance $0, no truck until onboarding creates one, no
       pre-filled AI Advisor context beyond neutral "the owner-operator"/
       "this fleet" labels.
-- [x] **Full RTL pass — DEFERRED, not a beta blocker (owner decision
-      2026-07-26):** superseded by the English-only launch-scope decision
-      above — with `LANGUAGE_PICKER_ENABLED` off, the app only ever runs
-      in English/LTR for beta/store release, so there is no RTL surface to
-      break today. Re-instate this as a binding pre-launch gate once the
-      language picker flag flips back on (Session 9c done, real hi/uk
-      translations in place) — at that point, switch to Arabic in
-      Settings, restart, and walk every screen checking for clipped/
-      overlapping/mis-mirrored layout, and spot-check Spanish, Russian,
-      Turkish, Hindi, and Ukrainian for text overflow/truncation on the
-      longest translated strings.
+- [x] **Full RTL pass — STILL DEFERRED, not a beta blocker (owner
+      decision, LANGUAGE PICKER — FIVE LANGUAGES AT LAUNCH pass updates
+      this item; originally deferred 2026-07-26):** the app now ships
+      selectable in 5 languages (English/Spanish/Russian/Turkish/Hindi —
+      `app/src/i18n/config.ts`'s `ENABLED_LOCALES`), but Arabic — the
+      ONLY RTL locale — is deliberately excluded from that set for v1, so
+      there is STILL no RTL surface to break/exercise today; nobody should
+      assume RTL has been tested on a real device. Re-instate this as a
+      binding pre-launch gate once 'ar' is re-added to `ENABLED_LOCALES`
+      (real Arabic translation already exists, just needs re-enabling +
+      an actual RTL device walkthrough) — at that point, switch to Arabic
+      in Settings, restart, and walk every screen checking for clipped/
+      overlapping/mis-mirrored layout. In the meantime, DO spot-check the 4
+      newly-enabled non-English LTR languages — Spanish, Russian, Turkish,
+      and Hindi (the last one real-translated for the first time this
+      pass, unreviewed by a native speaker — see CLAUDE.md's dated entry)
+      — for text overflow/truncation on the longest translated strings;
+      Ukrainian stays out of scope until it too gets real translation.
 - [ ] **Privacy checklist (owner, 2026-07-10 — binding, blocks store
       submission):** confirm the built app requests zero location
       permissions on both iOS and Android (no `NSLocationWhenInUseUsageDescription`

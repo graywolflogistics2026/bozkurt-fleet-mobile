@@ -1076,7 +1076,7 @@
     "reimbTotal": "Reembolsado",
     "dedTotal": "Deducciones",
     "netTotal": "Neto Total",
-    "avgRpmCaption": "Tarifa promedio por milla: {{rate}}/mi",
+    "avgRpmCaption": "Tarifa promedio por milla (RPM): {{rate}}/mi",
     "chartNotEnoughData": "Aún no hay suficientes datos para una gráfica de tendencia — vuelva a revisar después de algunos settlements más.",
     "period": {
       "thisMonth": "Este Mes",
@@ -1703,6 +1703,11 @@
   },
   "reports": {
     "subtitle": "Informes, herramientas y Salud del Camión — todo lo que ya cubren los grupos Inteligencia y Herramientas, en un solo lugar."
+  },
+  "languageScreen": {
+    "title": "Elige tu idioma",
+    "subtitle": "Puedes cambiarlo en cualquier momento en Configuración.",
+    "changeLaterNote": "Configuración > Idioma te permite cambiar de nuevo cuando quieras."
   },
   "introSlides": {
     "skip": "Omitir",

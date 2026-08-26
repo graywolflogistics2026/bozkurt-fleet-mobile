@@ -1704,6 +1704,11 @@
   "reports": {
     "subtitle": "Reports, tools, and Truck Health — everything the Intelligence and Tools groups already cover, in one place."
   },
+  "languageScreen": {
+    "title": "Choose your language",
+    "subtitle": "You can change this any time in Settings.",
+    "changeLaterNote": "Settings > Language lets you switch again whenever you like."
+  },
   "introSlides": {
     "skip": "Skip",
     "getStarted": "Get Started",

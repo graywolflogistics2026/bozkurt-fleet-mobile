@@ -41,6 +41,8 @@ const GLOSSARY_TERMS = [
   'LLC',
   'MACRS',
   'Section 179',
+  'CPM',
+  'RPM',
 ];
 
 const LOCALES: Record<string, unknown> = { es, ru, ar, tr, hi, uk };

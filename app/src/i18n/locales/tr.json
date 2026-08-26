@@ -1076,7 +1076,7 @@
     "reimbTotal": "Geri Ödenen",
     "dedTotal": "Kesintiler",
     "netTotal": "Toplam Net",
-    "avgRpmCaption": "Mil Başına Ortalama Ücret: {{rate}}/mil",
+    "avgRpmCaption": "Mil Başına Ortalama Ücret (RPM): {{rate}}/mil",
     "chartNotEnoughData": "Trend grafiği için henüz yeterli veri yok — birkaç settlement daha eklendikten sonra tekrar kontrol edin.",
     "period": {
       "thisMonth": "Bu Ay",
@@ -1703,6 +1703,11 @@
   },
   "reports": {
     "subtitle": "Raporlar, araçlar ve Kamyon Sağlığı — Zeka ve Araçlar gruplarının kapsadığı her şey tek yerde."
+  },
+  "languageScreen": {
+    "title": "Dilinizi seçin",
+    "subtitle": "Bunu istediğiniz zaman Ayarlar'dan değiştirebilirsiniz.",
+    "changeLaterNote": "Ayarlar > Dil, istediğiniz zaman tekrar değiştirmenizi sağlar."
   },
   "introSlides": {
     "skip": "Atla",

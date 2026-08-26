@@ -21,7 +21,7 @@ import { invalidateFinancialData, removeFinancialDataFromCache } from '@/src/dat
 import type { EntityType } from '@/src/tax/types';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
-import { SUPPORTED_LOCALES, LOCALE_LABELS, LANGUAGE_PICKER_ENABLED, type SupportedLocale } from '@/src/i18n/config';
+import { ENABLED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { isOwnerGrantedPlan, isOwnerAccount } from '@/src/entitlement/hasFullAccess';
@@ -442,25 +442,23 @@ export default function Settings() {
           <PrimaryButton title={t('common.save')} onPress={handleSaveBusinessProfile} loading={savingBusiness} />
         </Card>
 
-        {LANGUAGE_PICKER_ENABLED && (
-          <Card>
-            <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600', marginBottom: spacing.xs }}>
-              {t('settings.languageTitle')}
-            </Text>
-            <MutedText>{t('settings.languageNote')}</MutedText>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm }}>
-              <Pill label={t('settings.languageAutoLabel')} selected={!hasManualLocale} onPress={pickAutoLocale} />
-              {SUPPORTED_LOCALES.map((locale) => (
-                <Pill
-                  key={locale}
-                  label={LOCALE_LABELS[locale]}
-                  selected={hasManualLocale && currentLocale === locale}
-                  onPress={() => pickLocale(locale)}
-                />
-              ))}
-            </View>
-          </Card>
-        )}
+        <Card>
+          <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600', marginBottom: spacing.xs }}>
+            {t('settings.languageTitle')}
+          </Text>
+          <MutedText>{t('settings.languageNote')}</MutedText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm }}>
+            <Pill label={t('settings.languageAutoLabel')} selected={!hasManualLocale} onPress={pickAutoLocale} />
+            {ENABLED_LOCALES.map((locale) => (
+              <Pill
+                key={locale}
+                label={LOCALE_LABELS[locale]}
+                selected={hasManualLocale && currentLocale === locale}
+                onPress={() => pickLocale(locale)}
+              />
+            ))}
+          </View>
+        </Card>
 
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>{t('settings.dataTitle')}</Text>

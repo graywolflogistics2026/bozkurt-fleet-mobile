@@ -6,6 +6,13 @@
 // this) so this function itself never has to special-case "not yet known".
 export type RootRedirectInputs = {
   hasSession: boolean;
+  // FIRST-RUN LANGUAGE SCREEN (owner decision, LANGUAGE PICKER — FIVE
+  // LANGUAGES AT LAUNCH) — runs before EVERY other gate, including
+  // `hasSession`'s own intro/sign-in branches: it's a device-local
+  // preference (not account-scoped like the gates below it), and the
+  // whole point is that intro/auth/ToS/tutorial text itself should already
+  // render in the chosen language, so it must be resolved first.
+  languageScreenSeen: boolean;
   // AUTH COMPLETENESS (owner decision 2026-08-24) — runs FIRST among the
   // authenticated gates: a session whose email isn't confirmed yet can't
   // meaningfully accept ToS/see the tutorial/onboard, so this blocks ahead
@@ -24,6 +31,7 @@ export type RootRedirectInputs = {
 
 export function resolveRootRedirect({
   hasSession,
+  languageScreenSeen,
   needsEmailConfirmation,
   needsTos,
   needsTutorial,
@@ -38,6 +46,18 @@ export function resolveRootRedirect({
   const onIntroScreen = segment === 'intro';
   const onConfirmEmailScreen = segment === 'confirm-email';
   const onResetPasswordScreen = segment === 'reset-password';
+  const onLanguageScreen = segment === 'language';
+
+  // BLOCKS every other gate below while unseen — same "own screen guards
+  // itself, short-circuits everything else" shape as every other gate in
+  // this chain (intro/ToS/tutorial/onboarding each have their own
+  // `!onXScreen` guard on their own trigger condition), except this one
+  // runs FIRST and must therefore prevent EVERY later check from firing on
+  // its behalf too — none of those later checks know anything about the
+  // language gate, so without this explicit short-circuit a fresh,
+  // language-unseen device sitting on /language with no session yet would
+  // immediately get yanked to /intro by the very next check.
+  if (!languageScreenSeen) return onLanguageScreen ? null : '/language';
 
   if (!hasSession && !introSeen && !onIntroScreen) return '/intro';
   // AUTH COMPLETENESS (owner decision 2026-08-24): a password-reset or
@@ -56,7 +76,7 @@ export function resolveRootRedirect({
     !needsTos &&
     !needsTutorial &&
     !needsOnboarding &&
-    (inAuthGroup || onTosScreen || onTutorialScreen || onOnboardingScreen || onIntroScreen || onConfirmEmailScreen)
+    (inAuthGroup || onTosScreen || onTutorialScreen || onOnboardingScreen || onIntroScreen || onConfirmEmailScreen || onLanguageScreen)
   ) {
     return '/(tabs)';
   }

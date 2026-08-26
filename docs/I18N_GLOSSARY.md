@@ -15,7 +15,25 @@ per diem · coolant · DPF · DEF · ELD · IFTA · IRP · HVUT/2290 · settleme
 (and its plural, "settlements") · linehaul · fuel surcharge · detention ·
 layover · lumper · bobtail · deadhead · reefer · APU · CDL · DOT ·
 MC number · escrow · factoring · Schedule C · 1099 · W-2 · K-1 · S-Corp ·
-LLC · MACRS · Section 179
+LLC · MACRS · Section 179 · CPM · RPM
+
+(CPM/RPM added — LANGUAGE PICKER, FIVE LANGUAGES AT LAUNCH pass — after
+confirming both were already kept in English, unenforced, everywhere they
+appeared in the shipped es/ru/ar/tr translations except two strings, which
+were fixed to match rather than the rule being relaxed to fit them:
+`dashboard.acceptLoadsAboveCpm` (ar.json had translated "CPM" itself away)
+and `settlementsScreen.avgRpmCaption` (es/ru/ar/tr had all fully
+paraphrased the string, dropping the literal "RPM" token). "Owner's
+draw"/"owner draw" was deliberately NOT added here despite being named
+alongside CPM/RPM in that pass's own request — unlike every other term on
+this list, "owner draw" is ordinary English with a natural translation in
+every language (already translated correctly in es/ru/ar/tr, e.g. es
+"Retiros del dueño"), not a fixed acronym or industry loanword; forcing it
+into English here would make already-good translations worse. It's still
+listed as a do-not-translate EXAMPLE inside the ai-advisor/ai-import
+system prompts' own free-text glossary instruction (prose guidance to the
+model, not this mechanically-enforced UI-string list) — see those files'
+own `GLOSSARY_TERMS_FOR_PROMPT`-equivalent constant.)
 
 ## How to apply it in a translated string
 
@@ -37,7 +55,7 @@ Canonical casing to use when embedding: `Per Diem`, `Coolant`, `DPF`,
 `Linehaul`, `Fuel Surcharge`, `Detention`, `Layover`, `Lumper`,
 `Bobtail`, `Deadhead`, `Reefer`, `APU`, `CDL`, `DOT`, `MC Number`,
 `Escrow`, `Factoring`, `Schedule C`, `1099`, `W-2`, `K-1`, `S-Corp`,
-`LLC`, `MACRS`, `Section 179`.
+`LLC`, `MACRS`, `Section 179`, `CPM`, `RPM`.
 
 ## Verification
 

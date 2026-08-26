@@ -3,6 +3,11 @@ import { resolveRootRedirect, type RootRedirectInputs } from '@/src/navigation/r
 function inputs(overrides: Partial<RootRedirectInputs> = {}): RootRedirectInputs {
   return {
     hasSession: false,
+    // Defaults to "already seen" so every pre-existing test below (written
+    // before the language gate existed) keeps exercising exactly the gate
+    // chain it always did — the language gate's own describe block below
+    // overrides this explicitly to test the unseen case.
+    languageScreenSeen: true,
     needsEmailConfirmation: false,
     needsTos: false,
     needsTutorial: false,
@@ -134,5 +139,61 @@ describe('resolveRootRedirect — AUTH COMPLETENESS (owner decision 2026-08-24)'
     for (const segment of [undefined, 'tos', 'tutorial', 'onboarding', '(tabs)']) {
       expect(resolveRootRedirect(inputs({ hasSession: false, introSeen: true, segment }))).toBe('/(auth)/sign-in');
     }
+  });
+});
+
+describe('resolveRootRedirect — FIRST-RUN LANGUAGE SCREEN (owner decision, LANGUAGE PICKER — FIVE LANGUAGES AT LAUNCH)', () => {
+  it('runs before EVERY other gate — a fresh device with no session at all is sent to /language, not /intro', () => {
+    expect(resolveRootRedirect(inputs({ languageScreenSeen: false, hasSession: false, introSeen: false, segment: undefined }))).toBe(
+      '/language'
+    );
+  });
+
+  it('runs before EVERY other gate even for a fully signed-in, fully-onboarded user (a new device/build reaching this gate for the first time)', () => {
+    expect(
+      resolveRootRedirect(
+        inputs({
+          languageScreenSeen: false,
+          hasSession: true,
+          introSeen: true,
+          needsEmailConfirmation: false,
+          needsTos: false,
+          needsTutorial: false,
+          needsOnboarding: false,
+          segment: undefined,
+        })
+      )
+    ).toBe('/language');
+  });
+
+  it('unseen and already on /language triggers no redirect (shows the screen)', () => {
+    expect(resolveRootRedirect(inputs({ languageScreenSeen: false, segment: 'language' }))).toBeNull();
+  });
+
+  it('the instant languageScreenSeen flips true while still on the language segment, the NEXT gate in the chain fires immediately — no dedicated "just seen" branch needed', () => {
+    // no session yet, hasn't seen intro either -> falls through to /intro
+    expect(resolveRootRedirect(inputs({ languageScreenSeen: true, hasSession: false, introSeen: false, segment: 'language' }))).toBe(
+      '/intro'
+    );
+    // a signed-in, fully-cleared user -> straight to (tabs)
+    expect(
+      resolveRootRedirect(
+        inputs({
+          languageScreenSeen: true,
+          hasSession: true,
+          introSeen: true,
+          needsTos: false,
+          needsTutorial: false,
+          needsOnboarding: false,
+          segment: 'language',
+        })
+      )
+    ).toBe('/(tabs)');
+  });
+
+  it('once seen, a returning user with no session goes straight to sign-in, never sees /language again', () => {
+    expect(resolveRootRedirect(inputs({ languageScreenSeen: true, hasSession: false, introSeen: true, segment: undefined }))).toBe(
+      '/(auth)/sign-in'
+    );
   });
 });

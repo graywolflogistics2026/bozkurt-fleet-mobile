@@ -4,7 +4,7 @@ import { supabase } from '@/src/lib/supabase';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { TOS_VERSION } from '@/src/config/termsOfUse';
 import { withTimeout } from '@/src/lib/withTimeout';
-import { isSupportedLocale, LANGUAGE_PICKER_ENABLED } from '@/src/i18n/config';
+import { isEnabledLocale } from '@/src/i18n/config';
 import { setAppLocale } from '@/src/i18n';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { resolveSignUpOutcome, type SignUpOutcome } from '@/src/auth/signUpFlow';
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // in Settings is written to profiles.locale, and always wins over this
     // device's own cache/OS language on every subsequent sign-in.
     const remoteLocale = profileData?.locale;
-    if (LANGUAGE_PICKER_ENABLED && isSupportedLocale(remoteLocale)) {
+    if (isEnabledLocale(remoteLocale)) {
       await setAppLocale(remoteLocale);
       applyLocaleDirection(remoteLocale);
     }

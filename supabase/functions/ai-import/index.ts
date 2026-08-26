@@ -395,6 +395,21 @@ const LOCALE_LANGUAGE_NAME: Record<string, string> = {
   uk: "Ukrainian",
 };
 
+// GLOSSARY APPLIES TO AI OUTPUT TOO (owner decision, LANGUAGE PICKER —
+// FIVE LANGUAGES AT LAUNCH pass) — docs/I18N_GLOSSARY.md's DO-NOT-
+// TRANSLATE list, spelled out explicitly rather than the previous
+// 3-example shorthand ("per diem", "ELD", "IFTA"). Kept in sync with that
+// doc, app/src/i18n/__tests__/glossary.test.ts's GLOSSARY_TERMS array,
+// AND supabase/functions/ai-advisor/index.ts's identical constant by
+// hand — this Deno function can't import a TS module from app/src or
+// from its sibling function, same standing constraint as
+// LOCALE_LANGUAGE_NAME above.
+const GLOSSARY_TERMS_FOR_PROMPT =
+  'per diem, coolant, DPF, DEF, ELD, IFTA, IRP, HVUT/2290, settlement(s), ' +
+  'linehaul, fuel surcharge, detention, layover, lumper, bobtail, deadhead, ' +
+  'reefer, APU, CDL, DOT, MC number, escrow, factoring, Schedule C, 1099, ' +
+  "W-2, K-1, S-Corp, LLC, MACRS, Section 179, owner's draw, CPM, RPM";
+
 function buildExtractionPrompt(
   docHint?: string,
   locale?: string,
@@ -457,7 +472,7 @@ function buildExtractionPrompt(
   }
   const languageName = locale ? LOCALE_LANGUAGE_NAME[locale] : undefined;
   if (languageName) {
-    prompt += `\nAPPROVED ADDITION (AI in user's language, owner decision 2026-07-10): write every free-text field (summary, and any description you compose yourself) in ${languageName} — the user's chosen app language. Standard financial/trucking terms may stay in English when there's no natural equivalent (e.g. "per diem", "ELD", "IFTA"). This does NOT apply to enum-like fields (docType, category, chargebackType, incomeType, serviceType, paymentMethod) or to text you copy verbatim from the document itself (vendor names, item names, addresses) — only to text you are generating/summarizing in your own words.\n`;
+    prompt += `\nAPPROVED ADDITION (AI in user's language, owner decision 2026-07-10; glossary explicit list added in the LANGUAGE PICKER — FIVE LANGUAGES AT LAUNCH pass): write every free-text field (summary, and any description you compose yourself) in ${languageName} — the user's chosen app language, never the document's own language. Keep these trucking/tax industry terms in ENGLISH exactly as written, embedded in your ${languageName} sentence — never translate or transliterate them: ${GLOSSARY_TERMS_FOR_PROMPT}. This does NOT apply to enum-like fields (docType, category, chargebackType, incomeType, serviceType, paymentMethod) or to text you copy verbatim from the document itself (vendor names, item names, addresses) — only to text you are generating/summarizing in your own words.\n`;
   }
   if (customCategories && customCategories.length > 0) {
     prompt += `\nAPPROVED ADDITION (custom categories, owner decision 2026-07-10): this user has also defined their own categories beyond the standard list above: ${customCategories.join(", ")}. When categorizing a purchase item (guessCategory-equivalent) or an unrecognized document's suggestedCategory (docType "other"), suggest one of THESE if it fits better than a standard category — never invent a new custom category name yourself, only pick from this exact list or fall back to a standard category.\n`;

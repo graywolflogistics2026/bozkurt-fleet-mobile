@@ -9,6 +9,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { ActiveTruckProvider } from '@/src/context/ActiveTruckContext';
 import { IntroProvider, useIntro } from '@/src/context/IntroContext';
+import { LanguageGateProvider, useLanguageGate } from '@/src/context/LanguageGateContext';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { colors } from '@/src/theme';
 import { initI18n } from '@/src/i18n';
@@ -45,10 +46,12 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <AuthProvider>
             <ActiveTruckProvider>
-              <IntroProvider>
-                <StatusBar style="light" />
-                <RootLayoutNav />
-              </IntroProvider>
+              <LanguageGateProvider>
+                <IntroProvider>
+                  <StatusBar style="light" />
+                  <RootLayoutNav />
+                </IntroProvider>
+              </LanguageGateProvider>
             </ActiveTruckProvider>
           </AuthProvider>
         </SafeAreaProvider>
@@ -68,6 +71,7 @@ function LoadingScreen() {
 function RootLayoutNav() {
   const { session, loading, needsEmailConfirmation, needsTos, needsTutorial, needsOnboarding } = useAuth();
   const { introSeen } = useIntro();
+  const { languageScreenSeen } = useLanguageGate();
   const segments = useSegments();
   const router = useRouter();
 
@@ -80,9 +84,10 @@ function RootLayoutNav() {
   }, [loading]);
 
   useEffect(() => {
-    if (loading || introSeen === null) return;
+    if (loading || introSeen === null || languageScreenSeen === null) return;
     const target = resolveRootRedirect({
       hasSession: !!session,
+      languageScreenSeen,
       needsEmailConfirmation,
       needsTos,
       needsTutorial,
@@ -90,17 +95,18 @@ function RootLayoutNav() {
       introSeen,
       segment: segments[0] as string | undefined,
     });
-    // "intro"/"tutorial"/"confirm-email"/"reset-password" aren't in the
-    // last generated .expo/types/router.d.ts yet — same typed-routes
+    // "intro"/"tutorial"/"confirm-email"/"reset-password"/"language" aren't
+    // in the last generated .expo/types/router.d.ts yet — same typed-routes
     // regen lag as _layout.tsx (tabs)'s ALERTS_ROUTE, hence the Href cast
     // rather than a general-purpose `any`.
     if (target) router.replace(target as Href);
-  }, [session, loading, needsEmailConfirmation, needsTos, needsTutorial, needsOnboarding, introSeen, segments, router]);
+  }, [session, loading, languageScreenSeen, needsEmailConfirmation, needsTos, needsTutorial, needsOnboarding, introSeen, segments, router]);
 
-  if (loading || introSeen === null) return <LoadingScreen />;
+  if (loading || introSeen === null || languageScreenSeen === null) return <LoadingScreen />;
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack.Screen name="language" />
       <Stack.Screen name="intro" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="confirm-email" />

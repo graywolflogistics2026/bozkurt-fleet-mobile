@@ -258,7 +258,7 @@
     "costPerMile": "التكلفة/الميل (CPM)",
     "allCostsDividedByMiles": "كل التكاليف ÷ إجمالي الأميال",
     "profitPerMile": "الربح/الميل",
-    "acceptLoadsAboveCpm": "اقبل الحمولات فوق تكلفة الميل!",
+    "acceptLoadsAboveCpm": "اقبل الحمولات فوق CPM!",
     "revenueExpenseTrendTitle": "الإيرادات مقابل المصروفات",
     "chartRevenueLegend": "الإيرادات · الحد الأقصى {{amount}}",
     "chartExpensesLegend": "المصروفات",
@@ -1076,7 +1076,7 @@
     "reimbTotal": "المبالغ المستردة",
     "dedTotal": "الخصومات",
     "netTotal": "إجمالي الصافي",
-    "avgRpmCaption": "متوسط السعر لكل ميل: {{rate}}/ميل",
+    "avgRpmCaption": "متوسط السعر لكل ميل (RPM): {{rate}}/ميل",
     "chartNotEnoughData": "لا توجد بيانات كافية بعد لرسم بياني للاتجاه — تحقق لاحقًا بعد إضافة المزيد من الـ settlements.",
     "period": {
       "thisMonth": "هذا الشهر",
@@ -1703,6 +1703,11 @@
   },
   "reports": {
     "subtitle": "التقارير والأدوات وصحة الشاحنة — كل ما تغطيه مجموعتا الذكاء والأدوات، في مكان واحد."
+  },
+  "languageScreen": {
+    "title": "اختر لغتك",
+    "subtitle": "يمكنك تغيير هذا في أي وقت من الإعدادات.",
+    "changeLaterNote": "الإعدادات > اللغة تتيح لك التبديل مرة أخرى وقتما تشاء."
   },
   "introSlides": {
     "skip": "تخطي",

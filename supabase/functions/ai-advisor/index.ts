@@ -32,6 +32,12 @@ type ErrorType = "unauthenticated" | "bad_request" | "anthropic_error";
 
 // Matches app/src/i18n's SUPPORTED_LOCALES (see ai-import's identical map
 // and comment for why a language NAME, not a bare locale code, is used).
+// Deliberately still includes ar/uk even though app/src/i18n/config.ts's
+// ENABLED_LOCALES currently excludes them from selection — a locale can
+// only ever reach this function via an app instance that actually sent
+// that code, and disabling a locale in the picker doesn't retroactively
+// make this server-side map wrong or unused; keeping both in sync here is
+// what makes re-enabling ar/uk later a zero-server-change flip.
 const LOCALE_LANGUAGE_NAME: Record<string, string> = {
   es: "Spanish",
   ru: "Russian",
@@ -40,6 +46,25 @@ const LOCALE_LANGUAGE_NAME: Record<string, string> = {
   hi: "Hindi",
   uk: "Ukrainian",
 };
+
+// GLOSSARY APPLIES TO AI OUTPUT TOO (owner decision, LANGUAGE PICKER —
+// FIVE LANGUAGES AT LAUNCH pass) — docs/I18N_GLOSSARY.md's DO-NOT-
+// TRANSLATE list, spelled out explicitly in the prompt rather than the
+// previous 3-example shorthand ("per diem", "ELD", "IFTA") — kept in sync
+// with that doc AND app/src/i18n/__tests__/glossary.test.ts's
+// GLOSSARY_TERMS array by hand (this Deno function can't import a TS
+// module from app/src, same standing constraint as every other
+// "kept in sync by hand" comment in this codebase). "Owner's draw"/
+// "CPM"/"RPM" are included here as free-text glossary examples even
+// though "owner's draw" specifically is NOT part of the mechanically-
+// enforced UI-string glossary test (see I18N_GLOSSARY.md's own note on
+// why) — this is prose guidance for the model's own generated text, a
+// different, looser mechanism than that test.
+const GLOSSARY_TERMS_FOR_PROMPT =
+  'per diem, coolant, DPF, DEF, ELD, IFTA, IRP, HVUT/2290, settlement(s), ' +
+  'linehaul, fuel surcharge, detention, layover, lumper, bobtail, deadhead, ' +
+  'reefer, APU, CDL, DOT, MC number, escrow, factoring, Schedule C, 1099, ' +
+  "W-2, K-1, S-Corp, LLC, MACRS, Section 179, owner's draw, CPM, RPM";
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
   return new Response(
@@ -130,7 +155,9 @@ Deno.serve(async (req: Request) => {
 
   const languageName = locale ? LOCALE_LANGUAGE_NAME[locale] : undefined;
   const languageInstruction = languageName
-    ? ` Respond in ${languageName} — the user's chosen app language. Standard financial/trucking terms may stay in English when there's no natural equivalent (e.g. "per diem", "ELD", "IFTA").`
+    ? ` Respond in ${languageName} — the user's chosen app language, never the device's own language and never the language of any document/data mentioned. ` +
+      `Keep these trucking/tax industry terms in ENGLISH exactly as written, embedded in your ${languageName} sentence, even though everything ` +
+      `around them is in ${languageName} — never translate or transliterate them: ${GLOSSARY_TERMS_FOR_PROMPT}.`
     : "";
 
   const systemPrompt =
