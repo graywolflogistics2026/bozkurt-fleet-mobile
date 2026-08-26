@@ -1,5 +1,6 @@
 import { ACCOUNTANT_EXPORT_COLORS } from '@/src/stats/accountantPackageColors';
 import type { LineItem, PerDiemBlock, MiscConcentrationWarning, CapitalAssetRow, OwnersEquitySummary, GroupedScheduleCCategory, AccountantScope } from '@/src/stats/accountantPackage';
+import type { CapitalFlowRow, CapitalFlowType } from '@/src/stats/capitalAccount';
 
 // FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase) — the
 // ONE shared HTML template both the PDF export (expo-print) and the Excel
@@ -71,6 +72,10 @@ export type AccountantReportStrings = {
   ownerDrawsLabel: string;
   ownerDrawsNote: string;
   netPositionLabel: string;
+  // OWNER'S EQUITY ROW DETAIL (owner decision, device report) — the
+  // itemized table's own section label, under the existing summary.
+  ownersEquityDetailTitle: string;
+  ownersEquityNoRows: string;
   footerMealsNote: string;
   footerNonDeductibleNote: string;
   footerOwnerPaidNote: string;
@@ -156,6 +161,39 @@ function lineItemRow(item: LineItem, strings: AccountantReportStrings, fmt: Acco
   return `<tr${bg}><td>${item.date ? esc(fmt.date(item.date)) : ''} — ${esc(item.description)}${vendorSuffix}${referenceSuffix}${badge}</td><td>${paidWith}</td><td class="amt">${fmt.money(item.amount)}</td></tr>`;
 }
 
+// OWNER'S EQUITY ROW DETAIL (owner decision, device report: "contributions
+// and draws currently show too little"). Reuses the SAME 4 labels the
+// summary rows right above already show (cashContributedLabel/
+// expensesPaidPersonallyLabel/reimbursementsTakenBackLabel/ownerDrawsLabel)
+// as each row's own "type" text — no new type-name strings to keep in
+// sync with those.
+function capitalFlowTypeLabel(type: CapitalFlowType, strings: AccountantReportStrings): string {
+  switch (type) {
+    case 'cashContribution':
+      return strings.cashContributedLabel;
+    case 'expensePaidPersonally':
+      return strings.expensesPaidPersonallyLabel;
+    case 'reimbursementTakenBack':
+      return strings.reimbursementsTakenBackLabel;
+    case 'ownerDraw':
+      return strings.ownerDrawsLabel;
+  }
+}
+
+const CAPITAL_FLOW_IS_OUT: Record<CapitalFlowType, boolean> = {
+  cashContribution: false,
+  expensePaidPersonally: false,
+  reimbursementTakenBack: true,
+  ownerDraw: true,
+};
+
+function capitalFlowRowHtml(row: CapitalFlowRow, strings: AccountantReportStrings, fmt: AccountantReportFormatters): string {
+  const isOut = CAPITAL_FLOW_IS_OUT[row.type];
+  const rowClass = isOut ? 'flow-out' : 'flow-in';
+  const sign = isOut ? '-' : '';
+  return `<tr class="${rowClass}"><td>${esc(fmt.date(row.date))} — ${esc(row.description)}</td><td>${esc(capitalFlowTypeLabel(row.type, strings))}</td><td class="amt">${sign}${fmt.money(row.amount)}</td></tr>`;
+}
+
 function scheduleCChip(line: string | null, strings: AccountantReportStrings): string {
   if (!line) return '';
   return ` <span class="chip">${esc(strings.lineLabel)} ${esc(line)}</span>`;
@@ -172,6 +210,11 @@ export function buildAccountantReportHtml(
 
   const warningRows = implausibleDates.map((w) => `<tr><td>${esc(w.label)}</td><td>${esc(w.date)}</td></tr>`).join('');
   const lumperRows = detailed ? lumperFees.map((l) => lineItemRow(l, strings, fmt)).join('') : '';
+  // OWNER'S EQUITY ROW DETAIL — same SUMMARY-vs-DETAILED convention as
+  // Lumper Fees/category items above: totals only in summary mode, every
+  // itemized row (already sorted chronologically by buildCapitalFlowRows())
+  // in detailed mode.
+  const ownersEquityRows = detailed ? ownersEquity.rows.map((r) => capitalFlowRowHtml(r, strings, fmt)).join('') : '';
 
   const categorySections = groupedCategories
     .map(
@@ -292,6 +335,15 @@ export function buildAccountantReportHtml(
           <tr><td colspan="2" class="caption">${esc(strings.ownerDrawsNote)}</td></tr>
           <tr class="total"><td>${esc(strings.netPositionLabel)}</td><td class="amt">${fmt.money(flows.netPosition)}</td></tr>
         </table>
+
+        ${
+          detailed
+            ? `<h2>${esc(strings.ownersEquityDetailTitle)}</h2>
+               <table>
+                 ${ownersEquityRows || `<tr><td colspan="3">${esc(strings.ownersEquityNoRows)}</td></tr>`}
+               </table>`
+            : ''
+        }
 
         <p class="muted">${esc(strings.footerMealsNote)}<br/>${esc(strings.footerNonDeductibleNote)}<br/>${esc(strings.footerOwnerPaidNote)}<br/>${esc(strings.disclaimer)}</p>
       </body>

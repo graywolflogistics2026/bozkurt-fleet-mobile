@@ -5,6 +5,7 @@ import {
   summarizeContributions,
   calcReimbursementStatus,
   summarizeCapitalFlows,
+  buildCapitalFlowRows,
   validateCapitalTransactionDate,
   computeManualTransactionBalanceAdjustment,
   isLinkedContribution,
@@ -192,6 +193,74 @@ describe('summarizeCapitalFlows', () => {
     const flows = summarizeCapitalFlows(rows);
     const account = calcCapitalAccount(0, 60000 + 200, 5000);
     expect(flows.netPosition).toBe(account.taxFreeRemaining);
+  });
+});
+
+// OWNER'S EQUITY ROW DETAIL (owner decision, device report: "contributions
+// and draws currently show too little — every row must carry its exact
+// date, its full description/note as the user entered it, its type, and
+// its amount"). Same 4-way classification summarizeCapitalFlows() already
+// uses, but ITEMIZED — one row per real transaction, never netted.
+describe('buildCapitalFlowRows', () => {
+  it('classifies all 4 types correctly: cash contribution in / expense paid personally / reimbursement taken back / owner draw out', () => {
+    const rows = [
+      { id: 'a', tx_type: 'contribution' as const, amount: 60000, tx_date: '2026-01-01', note: 'Initial deposit' },
+      { id: 'b', tx_type: 'contribution' as const, amount: 200, tx_date: '2026-07-01', linked_deduction_id: 'ded-1', note: 'Parts — paid personally (Cash)' },
+      { id: 'c', tx_type: 'draw' as const, amount: 100, tx_date: '2026-07-15', linked_deduction_id: 'ded-1', note: 'Parts — reimbursed to owner' },
+      { id: 'd', tx_type: 'draw' as const, amount: 5000, tx_date: '2026-08-01', note: 'Personal withdrawal' },
+    ];
+    const built = buildCapitalFlowRows(rows);
+    expect(built.map((r) => r.type)).toEqual(['cashContribution', 'expensePaidPersonally', 'reimbursementTakenBack', 'ownerDraw']);
+  });
+
+  it('carries the real date, full note, and exact amount through untouched, for every row', () => {
+    const rows = [{ id: 'a', tx_type: 'contribution' as const, amount: 1234.56, tx_date: '2026-05-15', note: 'A very specific note the user typed' }];
+    const built = buildCapitalFlowRows(rows);
+    expect(built[0]).toEqual({
+      id: 'a',
+      date: '2026-05-15',
+      description: 'A very specific note the user typed',
+      type: 'cashContribution',
+      amount: 1234.56,
+    });
+  });
+
+  it('falls back to a plain, type-specific description when a row has no note at all (an old row entered before notes were required)', () => {
+    const rows = [
+      { id: 'a', tx_type: 'contribution' as const, amount: 100, tx_date: '2026-01-01' },
+      { id: 'b', tx_type: 'draw' as const, amount: 50, tx_date: '2026-01-02' },
+    ];
+    const built = buildCapitalFlowRows(rows);
+    expect(built[0].description).toBe('Cash contribution');
+    expect(built[1].description).toBe('Owner draw');
+  });
+
+  it('sorts chronologically (oldest first), regardless of input order', () => {
+    const rows = [
+      { id: 'newest', tx_type: 'draw' as const, amount: 10, tx_date: '2026-08-01' },
+      { id: 'oldest', tx_type: 'contribution' as const, amount: 10, tx_date: '2026-01-01' },
+      { id: 'middle', tx_type: 'contribution' as const, amount: 10, tx_date: '2026-05-01' },
+    ];
+    const built = buildCapitalFlowRows(rows);
+    expect(built.map((r) => r.id)).toEqual(['oldest', 'middle', 'newest']);
+  });
+
+  it('never nets/aggregates — a partially-reimbursed contribution and its own reimbursement both appear as their OWN separate rows with their own real amounts', () => {
+    // summarizeCapitalFlows() would net these to $200 "still outstanding" —
+    // buildCapitalFlowRows() must show the real $300 contribution AND the
+    // real $100 reimbursement as two distinct, un-netted rows.
+    const rows = [
+      { id: 'contrib', tx_type: 'contribution' as const, amount: 300, tx_date: '2026-07-08', linked_deduction_id: 'ded-2', note: 'Repair — paid personally (Cash)' },
+      { id: 'reimb', tx_type: 'draw' as const, amount: 100, tx_date: '2026-07-15', linked_deduction_id: 'ded-2', note: 'Repair — reimbursed to owner' },
+    ];
+    const built = buildCapitalFlowRows(rows);
+    expect(built).toHaveLength(2);
+    expect(built.find((r) => r.id === 'contrib')?.amount).toBe(300);
+    expect(built.find((r) => r.id === 'reimb')?.amount).toBe(100);
+  });
+
+  it('an empty history produces an empty list, never throws', () => {
+    expect(buildCapitalFlowRows([])).toEqual([]);
   });
 });
 

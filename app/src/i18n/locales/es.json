@@ -1980,6 +1980,8 @@
     "ownerDrawsLabel": "Retiros del dueño",
     "ownerDrawsNote": "Dinero retirado del negocio para uso personal — capital que sale, no es salario ni un gasto deducible.",
     "netPositionLabel": "Posición Neta",
+    "ownersEquityDetailTitle": "Patrimonio del Propietario — Detalle",
+    "ownersEquityNoRows": "No hay contribuciones ni retiros registrados para este período.",
     "footerMealsNote": "Las comidas están excluidas aquí — están cubiertas por el per diem, que se reclama por separado.",
     "footerNonDeductibleNote": "Los reembolsos de anticipos y las retenciones de depósito/escrow no son deducibles — son principal de préstamo o depósitos reembolsables, no gastos.",
     "footerOwnerPaidNote": "Las filas PAGADO POR EL DUEÑO son Aportes del Dueño — dinero que usted puso en el negocio, no un retiro de la cuenta bancaria del negocio.",

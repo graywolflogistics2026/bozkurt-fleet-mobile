@@ -39,6 +39,13 @@ export type CapitalTransactionLike = {
   amount: number | null;
   tx_date: string;
   linked_deduction_id?: string | null;
+  // ACCOUNTANT PACKAGE — OWNER'S EQUITY ROW DETAIL (owner decision,
+  // device report: "contributions and draws currently show too little"):
+  // optional so every EXISTING caller of this type (summarizeContributions/
+  // summarizeCapitalFlows/findDuplicateTransactionIds, none of which ever
+  // needed the note) keeps compiling unchanged — only buildCapitalFlowRows()
+  // below actually reads it.
+  note?: string | null;
 };
 
 // FULL PARITY pass (owner decision 2026-08-05, spec item E.4) — "remove
@@ -234,6 +241,62 @@ export function summarizeCapitalFlows(transactions: CapitalTransactionLike[]): C
     ownerDrawsCount,
     netPosition,
   };
+}
+
+// ACCOUNTANT PACKAGE — OWNER'S EQUITY ROW DETAIL (owner decision, device
+// report: "contributions and draws currently show too little — every row
+// must carry its exact date, its full description/note as the user
+// entered it, its type, and its amount"). Same 4-way classification
+// summarizeCapitalFlows() already uses (contribution-vs-draw ×
+// linked-vs-unlinked = cash contribution in / expense paid personally /
+// reimbursement taken back / owner draw out — reused here, never a second
+// classification that could disagree with the flow totals already shown)
+// but ITEMIZED — one row per real capital_transactions record, never
+// netted/aggregated the way expensesPaidPersonallyOutstanding above nets
+// multiple contributions against reimbursements for the SAME deduction.
+// The full original note (planContributionSync()'s own auto-composed
+// "{description} — paid personally (...)"/"{description} — reimbursed to
+// owner" for linked rows, or whatever the user typed for a manual one) is
+// used verbatim; a genuinely blank note (an old row entered before notes
+// were captured) falls back to a plain, type-specific label rather than
+// an empty cell.
+export type CapitalFlowType = 'cashContribution' | 'expensePaidPersonally' | 'reimbursementTakenBack' | 'ownerDraw';
+
+export type CapitalFlowRow = {
+  id: string;
+  date: string;
+  description: string;
+  type: CapitalFlowType;
+  amount: number;
+};
+
+function classifyCapitalFlowType(tx: CapitalTransactionLike): CapitalFlowType {
+  if (tx.tx_type === 'contribution') return tx.linked_deduction_id ? 'expensePaidPersonally' : 'cashContribution';
+  return tx.linked_deduction_id ? 'reimbursementTakenBack' : 'ownerDraw';
+}
+
+const DEFAULT_FLOW_DESCRIPTION: Record<CapitalFlowType, string> = {
+  cashContribution: 'Cash contribution',
+  expensePaidPersonally: 'Expense paid personally',
+  reimbursementTakenBack: 'Reimbursement taken back',
+  ownerDraw: 'Owner draw',
+};
+
+// Sorted chronologically (oldest first) — a plain ledger, read top to
+// bottom in the order things actually happened.
+export function buildCapitalFlowRows(transactions: CapitalTransactionLike[]): CapitalFlowRow[] {
+  return transactions
+    .map((tx) => {
+      const type = classifyCapitalFlowType(tx);
+      return {
+        id: tx.id,
+        date: tx.tx_date,
+        description: tx.note?.trim() || DEFAULT_FLOW_DESCRIPTION[type],
+        type,
+        amount: Number(tx.amount ?? 0),
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 1).

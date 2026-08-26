@@ -7980,3 +7980,165 @@
   JS/TS/SQL, ships via a normal `eas update`; item 1 needs a fresh EAS
   BUILD (native asset, not OTA-updatable) before the new splash wordmark
   reaches a device.
+- TWO ACCOUNTANT PACKAGE BUGS — MONTH FILTER OFF-BY-ONE + OWNER'S EQUITY
+  ROW DETAIL (owner decision, no SQL). No native rebuild — pure
+  client-side JS/TS, ships via a normal `eas update`.
+  1. **MONTH FILTER OFF-BY-ONE, ROOT CAUSE**: `app/(tabs)/more/
+     accountant-package.tsx`'s own Month pill row (`monthNames`, line 593
+     at the time of the fix) built each button's LABEL via
+     `date(\`${year}-${pad(i+1)}-01\`, {month:'short'})` — and
+     `formatDate()` (`app/src/i18n/format.ts`) is `new Date(d).
+     toLocaleDateString(locale, options)`. A date-ONLY ISO string
+     ("YYYY-MM-DD", no time component) is parsed by `new Date(string)` as
+     UTC MIDNIGHT per the ECMAScript spec (a date-TIME string with no
+     offset parses as LOCAL time instead — this distinction is the whole
+     bug) — but `.toLocaleDateString()` always renders in the device's
+     LOCAL timezone. For any timezone BEHIND UTC (the entire Western
+     Hemisphere, where this app's own users are), that mismatch rolls the
+     displayed month back by one: UTC midnight May 1st reads as "Apr 30"
+     in US time zones. Every Pill's own label was therefore the PREVIOUS
+     month's name, while its `onPress` still correctly set the NEXT
+     month's numeric value — the Pill visually labeled "May" was really
+     sitting on the button that sets `month=6` (June), one position later
+     than its own label claimed. `periodLabelFor()` (the report header's
+     "May 2026" text) had the identical bug, one level up. `buildLineItems()`/
+     `inAccountantPeriod()` themselves were ALWAYS correct (plain
+     `dateStr.slice(5,7) === month` string comparison, no `Date()`
+     involved) — this was purely a LABEL bug, not a filter bug, but the
+     practical effect ("selecting May shows June's documents") was
+     identical to a real filter bug from the user's own perspective.
+     **Fix**: `app/src/i18n/format.ts` gained `formatMonthLabel(year,
+     month1Based, locale, options)` — constructs the `Date` via the
+     LOCAL-time constructor (`new Date(year, month1Based - 1, 1)`,
+     unambiguous by spec — its arguments are always local calendar
+     components, never UTC) instead of round-tripping through an ISO
+     STRING, so construction and `.toLocaleDateString()`'s own formatting
+     happen in the exact same timezone — no UTC-vs-local seam left for a
+     rollback to hide in. Exposed as `useFormatters().monthLabel()`. Every
+     month-LABEL construction in the app was audited and fixed: both
+     `accountant-package.tsx` occurrences (`periodLabelFor`/`monthNames`)
+     and 4 in `cash-flow.tsx`'s own Monthly View (`MonthlyTrendChart`'s
+     axis endpoints, `MonthCard`'s own title — both used
+     `date(new Date(Date.UTC(...)).toISOString().slice(0,10), ...)`, the
+     identical bug via a different-looking construction — plus the
+     tightest-month/best-month callout lines) — the Cash Flow ones were
+     informational-only labels (never a selector), so they never caused
+     the WRONG data to load, only ever showed the wrong month NAME; still
+     a real, confirmed instance of "the same class of error," now fixed
+     identically. **Audited, confirmed correct, no change**: Deductions'/
+     Settlements' own period tabs (`src/stats/periodFilter.ts`) use a
+     STATIC translated "This Month" string, never a dynamically-computed
+     month name — no label-vs-value mismatch is possible. Per-diem month
+     vs. YTD (`buildPerDiemBlock()`) is entirely string-slice based
+     (`.slice(0,4)`/`.slice(5,7)`), no `Date()` round-trip at all. The
+     "expense breakdown This Month/Last Month" toggle named in the audit
+     request no longer exists in the codebase — it was removed in the
+     DASHBOARD SIMPLIFICATION pass (confirmed via a repo-wide grep, not
+     assumed) — nothing to check there. **Flagged, deliberately out of
+     scope**: `formatDate()`/`date()` itself carries this SAME general
+     UTC-vs-local pitfall for ANY date-only string passed to it, not just
+     constructed month-boundaries — `format.test.ts`'s own PRE-EXISTING
+     test (`formatDate('2026-03-05T00:00:00Z', 'en')`, matched against a
+     regex accepting EITHER "3/4" or "3/5") already tacitly tolerated this
+     ambiguity rather than fixing it. This is a real, broader, already-
+     latent issue (evidenced by that test's own tolerant regex) that could
+     affect other date-only-string displays elsewhere in the app — fixing
+     `formatDate()` itself was judged out of scope for THIS bug report
+     (which was specifically about month WINDOWS) given how many call
+     sites across the app would need re-verifying; flagged here as a real
+     follow-up rather than silently expanded into or silently ignored.
+     **Tests**: `format.test.ts` gained `formatMonthLabel` coverage
+     (every one of the 12 months produces its own correct name; swept
+     across `Pacific/Honolulu`/`America/Chicago`/`UTC`/`Pacific/Kiritimati`
+     — timezones on both sides of UTC — via runtime `process.env.TZ`
+     manipulation, PROVING immunity rather than asserting it; a direct
+     side-by-side reproduction of the OLD buggy pattern under a behind-UTC
+     timezone, confirmed to actually produce "Apr" for May, so this test
+     would have caught the original bug). `accountantPackage.test.ts`
+     gained the exact requested scenario — one row in each of 3
+     consecutive months, selecting each month's own numeric value via
+     `buildLineItems()` returns exactly that month's row. A NEW,
+     dedicated end-to-end block in `accountantPackageReport.test.ts`
+     chains `buildLineItems()` → `buildScheduleCTotals()` →
+     `groupLineItemsByScheduleCBucket()` → `buildAccountantReportHtml()`
+     → `formatMonthLabel()` for all 3 months, proving the label, the
+     on-screen filter, AND the exported HTML (which PDF and Excel share
+     verbatim, per this file's own established precedent — one proof
+     covers both surfaces) all agree for every month selection, with zero
+     leakage from a neighboring month.
+  2. **OWNER'S EQUITY ROW DETAIL**: `OwnersEquitySummary` (`src/stats/
+     accountantPackage.ts`) used to expose only 4 AGGREGATE totals (cash
+     contributed / expenses paid personally outstanding / reimbursements
+     taken back / owner draws), never the individual `capital_transactions`
+     rows behind them. `src/stats/capitalAccount.ts` gained
+     `buildCapitalFlowRows()` — reuses the SAME 4-way classification
+     `summarizeCapitalFlows()` already established (contribution-vs-draw ×
+     linked-vs-unlinked = cash contribution in / expense paid personally /
+     reimbursement taken back / owner draw out — never a second
+     classification that could disagree with the flow totals already
+     shown) but ITEMIZED, one row per real transaction, never netted the
+     way `expensesPaidPersonallyOutstanding` nets multiple contributions
+     against reimbursements for the same deduction — each row keeps its
+     own real `tx_date`, `note` (the user's own text, or — for a linked
+     row — `planContributionSync()`'s/the "Reimburse Myself" flow's own
+     auto-composed "{description} — paid personally (...)"/"{description}
+     — reimbursed to owner", both already real, meaningful strings, not
+     invented for this pass), and `amount`, sorted chronologically (oldest
+     first). A genuinely blank note (an old manual row entered before
+     notes were captured) falls back to a plain, type-specific label
+     ("Cash contribution", "Owner draw", ...) rather than an empty cell.
+     `CapitalTransactionLike` gained an optional `note?: string | null`
+     field (backward compatible — every existing caller that never
+     touched `note` keeps compiling unchanged). `buildOwnersEquity()`
+     computes `rows` from the exact SAME `contributions` input its own
+     `flows` total already reads — same all-time scope as the existing
+     aggregate (the Accountant Package's own Owner's Equity section has
+     always been all-time regardless of the report's Year/Month
+     selection, confirmed by reading `useCapitalTransactions()` — a plain
+     unfiltered `useEntityList()` — before changing anything; preserved
+     exactly as-is, not silently re-scoped by this fix) — so the itemized
+     rows can never sum to a different total than what the summary above
+     them already shows. **Screen** (`accountant-package.tsx`): a new
+     "Owner's Equity — Detail" `Card` under the existing summary Card,
+     one read-only row per transaction (date — description — type label,
+     tinted green/red for in/out matching the summary rows' own existing
+     tinting) — reuses the SAME 4 type-label i18n keys the summary already
+     shows (`cashContributedLabel`/`expensesPaidPersonallyLabel`/
+     `reimbursementsTakenBackLabel`/`ownerDrawsLabel`), never a second,
+     separately-translated set of type names. Deliberately READ-ONLY on
+     this screen (no edit/delete) — matching the Capital Assets section's
+     own existing read-only `Row`-based precedent immediately above it,
+     not the editable `LineItemRow` pattern the category tables use;
+     editing a contribution/draw stays a Capital Account/Deductions-screen
+     action, out of scope for a report screen. **PDF/Excel**
+     (`accountantPackageReport.ts`, one shared HTML template for both,
+     per this file's own established precedent): a new itemized table
+     right under the existing 4-row summary, gated behind DETAILED format
+     only — same SUMMARY-vs-DETAILED convention every other section
+     (Lumper Fees, category line items) already follows (summary = totals
+     only, detailed = every itemized row) — a deliberate, stated design
+     choice, not a silent omission from summary mode. **Tests**:
+     `capitalAccount.test.ts` gained `buildCapitalFlowRows` coverage (all
+     4 types classified correctly; date/note/amount carried through
+     untouched; the type-specific fallback description when note is
+     blank; chronological sort regardless of input order; the "never
+     nets" proof — a $300 contribution and its own $100 reimbursement
+     both appear as their own separate, un-netted rows, unlike
+     `summarizeCapitalFlows()`'s own $200-outstanding netted figure for
+     the identical data). `accountantPackage.test.ts` gained
+     `buildOwnersEquity — rows` coverage (itemized + chronological +
+     never disagreeing with `flows`). `accountantPackageReport.test.ts`
+     gained a dedicated block proving every row's date/description/type
+     label/amount renders in DETAILED mode, in the correct chronological
+     order, with correct in/out tinting, entirely ABSENT in SUMMARY mode,
+     and a "no rows" message when there are none — covering the PDF/Excel
+     surfaces (shared HTML) directly; the on-screen surface is proven via
+     the same `buildOwnersEquity` test plus direct code review of the
+     screen's own render (this repo has no React rendering harness, the
+     same standing limitation this codebase has flagged at every prior
+     UI-testing juncture).
+  Full suite: 114 suites / 2751 tests pass; `tsc --noEmit` clean. i18n: 2
+  new keys (`accountantPackage.ownersEquityDetailTitle`/
+  `ownersEquityNoRows`) — es/ru/ar/tr fully translated, hi/uk as
+  untranslated English copies per invariant #11; glossary test re-passed
+  clean (1176 tests). No SQL/Edge Function changes.

@@ -1,6 +1,8 @@
 import { buildAccountantReportHtml, buildAccountantReportFilename, type AccountantReportInput, type AccountantReportStrings, type AccountantReportFormatters } from '../accountantPackageReport';
 import { ACCOUNTANT_EXPORT_COLORS } from '../accountantPackageColors';
+import { buildLineItems, buildScheduleCTotals, groupLineItemsByScheduleCBucket } from '../accountantPackage';
 import type { LineItem, GroupedScheduleCCategory, OwnersEquitySummary } from '../accountantPackage';
+import { formatMonthLabel } from '@/src/i18n/format';
 
 // FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase) — the
 // PDF and Excel exports share this EXACT same generated HTML (the screen
@@ -53,6 +55,7 @@ function ownersEquity(overrides: Partial<OwnersEquitySummary> = {}): OwnersEquit
       ownerDrawsCount: 3,
       netPosition: 850,
     },
+    rows: [],
     ...overrides,
   };
 }
@@ -88,6 +91,8 @@ const baseStrings: AccountantReportStrings = {
   ownerDrawsLabel: 'Owner draws',
   ownerDrawsNote: 'Draws note.',
   netPositionLabel: 'Net Position',
+  ownersEquityDetailTitle: "Owner's Equity — Detail",
+  ownersEquityNoRows: 'No contributions or draws recorded for this period.',
   footerMealsNote: 'Meals excluded.',
   footerNonDeductibleNote: 'Advances/escrow non-deductible.',
   footerOwnerPaidNote: 'Owner paid = contributions.',
@@ -250,6 +255,67 @@ describe('buildAccountantReportHtml — colour coding for totals/income/capital 
     expect(html).toContain('Taken back note.');
     expect(html).toContain('Draws note.');
     expect(html).toContain('Net Position');
+  });
+});
+
+// OWNER'S EQUITY ROW DETAIL (owner decision, device report: "contributions
+// and draws currently show too little — every row must carry its exact
+// date, its full description/note, its type, and its amount — in the
+// on-screen report, the Excel export and the PDF"). PDF and Excel share
+// this exact HTML (this file's own header comment), so one test covers
+// both surfaces; the on-screen render reads from the identical
+// ownersEquity.rows array (accountant-package.tsx), proven separately in
+// accountantPackage.test.ts's own buildOwnersEquity — rows tests.
+describe('buildAccountantReportHtml — Owner\'s Equity row detail (date/description/type/amount, chronological)', () => {
+  const rows = [
+    { id: 'c1', date: '2026-01-01', description: 'Initial deposit', type: 'cashContribution' as const, amount: 1000 },
+    { id: 'c2', date: '2026-07-01', description: 'Parts — paid personally (Cash)', type: 'expensePaidPersonally' as const, amount: 200 },
+    { id: 'r1', date: '2026-07-15', description: 'Parts — reimbursed to owner', type: 'reimbursementTakenBack' as const, amount: 100 },
+    { id: 'd1', date: '2026-08-01', description: 'Personal withdrawal', type: 'ownerDraw' as const, amount: 300 },
+  ];
+
+  it('DETAILED mode renders every row with its own real date, description, type label, and amount', () => {
+    const html = buildAccountantReportHtml(baseInput({ ownersEquity: ownersEquity({ rows }) }), baseStrings, fmt, 'detailed');
+    expect(html).toContain('Owner\'s Equity — Detail');
+    for (const row of rows) {
+      expect(html).toContain(row.date);
+      expect(html).toContain(row.description);
+    }
+    // Type labels reuse the SAME 4 strings the summary section already
+    // uses — never a second, separately-translated set.
+    expect(html).toContain(baseStrings.cashContributedLabel);
+    expect(html).toContain(baseStrings.expensesPaidPersonallyLabel);
+    expect(html).toContain(baseStrings.reimbursementsTakenBackLabel);
+    expect(html).toContain(baseStrings.ownerDrawsLabel);
+    expect(html).toContain('$1000.00'); // cash contribution, no sign
+    expect(html).toContain('-$100.00'); // reimbursement, out
+    expect(html).toContain('-$300.00'); // owner draw, out
+  });
+
+  it('rows appear in the SAME chronological order buildCapitalFlowRows() already sorted them in — the report never re-sorts', () => {
+    const html = buildAccountantReportHtml(baseInput({ ownersEquity: ownersEquity({ rows }) }), baseStrings, fmt, 'detailed');
+    const positions = rows.map((r) => html.indexOf(r.description));
+    for (let i = 1; i < positions.length; i++) expect(positions[i]).toBeGreaterThan(positions[i - 1]);
+  });
+
+  it('IN flows (contribution/expense paid personally) get the flow-in tint; OUT flows (reimbursement/draw) get flow-out', () => {
+    const html = buildAccountantReportHtml(baseInput({ ownersEquity: ownersEquity({ rows: [rows[0]] }) }), baseStrings, fmt, 'detailed');
+    expect(html).toContain(`<tr class="flow-in"><td>2026-01-01 — Initial deposit</td>`);
+    const outHtml = buildAccountantReportHtml(baseInput({ ownersEquity: ownersEquity({ rows: [rows[3]] }) }), baseStrings, fmt, 'detailed');
+    expect(outHtml).toContain(`<tr class="flow-out"><td>2026-08-01 — Personal withdrawal</td>`);
+  });
+
+  it('SUMMARY mode shows NONE of the itemized rows — totals only, matching every other section\'s own summary/detailed convention', () => {
+    const html = buildAccountantReportHtml(baseInput({ ownersEquity: ownersEquity({ rows }) }), baseStrings, fmt, 'summary');
+    for (const row of rows) expect(html).not.toContain(row.description);
+    expect(html).not.toContain('Owner\'s Equity — Detail');
+    // The existing flow TOTALS still show, unaffected by this change.
+    expect(html).toContain('Net Position');
+  });
+
+  it('shows a "no rows" message when there are no contributions/draws at all, instead of an empty table', () => {
+    const html = buildAccountantReportHtml(baseInput({ ownersEquity: ownersEquity({ rows: [] }) }), baseStrings, fmt, 'detailed');
+    expect(html).toContain(baseStrings.ownersEquityNoRows);
   });
 });
 
@@ -464,4 +530,93 @@ describe('buildAccountantReportFilename (spec item 4)', () => {
     expect(buildAccountantReportFilename(2026, 1, 'combined', 'summary', 'pdf')).toContain('january-2026');
     expect(buildAccountantReportFilename(2026, 12, 'combined', 'summary', 'pdf')).toContain('december-2026');
   });
+});
+
+// MONTH FILTER OFF-BY-ONE — FULL CHAIN, END TO END (owner decision, device
+// report: "selecting May shows June's documents, selecting June shows
+// July's"). Root cause was in the SCREEN's own month-Pill labels
+// (app/(tabs)/more/accountant-package.tsx), not in buildLineItems() or
+// this HTML builder — both were already correct. This test proves the
+// WHOLE chain a real user experiences agrees for a given month selection:
+// the real filtering (buildLineItems, exercised with RAW deduction rows,
+// not pre-built LineItems like every other test in this file) AND the
+// exported HTML (which the PDF and Excel exports share verbatim, per this
+// file's own header comment — one proof covers both surfaces) AND the
+// month LABEL itself (formatMonthLabel(), src/i18n/format.ts — the actual
+// fix for the reported bug).
+describe('MONTH FILTER OFF-BY-ONE — full chain: label, filter, and exported HTML all agree for one row per month across 3 consecutive months', () => {
+  function rawDeduction(overrides: { id: string; ded_date: string; description: string; amount: number }) {
+    return {
+      id: overrides.id,
+      user_id: 'u1',
+      settlement_id: null,
+      driver_id: null,
+      truck_id: null,
+      document_id: null,
+      ded_date: overrides.ded_date,
+      code: null,
+      description: overrides.description,
+      amount: overrides.amount,
+      category: 'Misc',
+      store: null,
+      payment_method: null,
+      source: 'manual' as const,
+      warranty_years: null,
+      tags: null,
+      tax_deductible: true,
+      reviewed_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+  }
+
+  const rows = [
+    rawDeduction({ id: 'march-row', ded_date: '2026-03-10', description: 'March Item', amount: 111 }),
+    rawDeduction({ id: 'april-row', ded_date: '2026-04-10', description: 'April Item', amount: 222 }),
+    rawDeduction({ id: 'may-row', ded_date: '2026-05-10', description: 'May Item', amount: 333 }),
+  ];
+
+  const months = [
+    { month: 3, expectedLabel: 'March', expectedDescription: 'March Item' },
+    { month: 4, expectedLabel: 'April', expectedDescription: 'April Item' },
+    { month: 5, expectedLabel: 'May', expectedDescription: 'May Item' },
+  ];
+
+  for (const { month, expectedLabel, expectedDescription } of months) {
+    it(`selecting month ${month} (${expectedLabel}) shows exactly "${expectedDescription}" on screen, in Excel, and in PDF — never a neighboring month's row`, () => {
+      // "On screen" — the real buildLineItems() pipeline, same function
+      // the screen's own groupedCategories useMemo calls.
+      const lineItems = buildLineItems(rows, [], [], [], 2026, month, 'combined');
+      expect(lineItems.map((i) => i.description)).toEqual([expectedDescription]);
+
+      // The month LABEL itself — the actual fix. Proves the label the
+      // user taps and the numeric value that drove the filter above
+      // genuinely agree (this is what was broken: the Pill LABELED "May"
+      // used to set month=6).
+      const label = formatMonthLabel(2026, month, 'en', { month: 'long' });
+      expect(label).toBe(expectedLabel);
+
+      // "In Excel and in PDF" — buildAccountantReportHtml() is the ONE
+      // shared HTML both exports render (this file's own header comment);
+      // proving the exported HTML contains this month's row and no other
+      // month's covers both surfaces at once.
+      const totals = buildScheduleCTotals(lineItems, []);
+      const grouped = groupLineItemsByScheduleCBucket(lineItems, totals, []);
+      const html = buildAccountantReportHtml(
+        baseInput({
+          headerLine: `Test Co — Unit 1 — ${label} 2026 — Combined`,
+          groupedCategories: grouped,
+          totalExpenses: lineItems.reduce((sum, i) => sum + i.amount, 0),
+        }),
+        baseStrings,
+        fmt
+      );
+
+      expect(html).toContain(`${label} 2026`);
+      expect(html).toContain(expectedDescription);
+      for (const other of months) {
+        if (other.month !== month) expect(html).not.toContain(other.expectedDescription);
+      }
+    });
+  }
 });

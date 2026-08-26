@@ -147,7 +147,7 @@ function convertLineItemToDeductionInsert(item: LineItem, userId: string, newCat
 // one of the three surfaces (screen/PDF/Excel) reads from.
 export default function AccountantPackage() {
   const { t } = useTranslation();
-  const { money, date } = useFormatters();
+  const { money, date, monthLabel } = useFormatters();
   const queryClient = useQueryClient();
   const { session, profile } = useAuth();
   const userId = session?.user.id;
@@ -327,7 +327,15 @@ export default function AccountantPackage() {
   // built the exact same way, from the exact same four segments, in the
   // exact same order.
   function periodLabelFor(scopeYear: number, scopeMonth: number | null): string {
-    return scopeMonth == null ? String(scopeYear) : date(`${scopeYear}-${String(scopeMonth).padStart(2, '0')}-01`, { year: 'numeric', month: 'long' });
+    // MONTH FILTER OFF-BY-ONE fix (owner decision, device report) — was
+    // `date(\`${scopeYear}-${pad(scopeMonth)}-01\`, ...)`, which round-tripped
+    // through new Date(dateOnlyString) (parsed as UTC midnight) then
+    // .toLocaleDateString() (rendered in LOCAL time) — a mismatch that
+    // rolled the displayed month back by one for any device timezone
+    // behind UTC. formatMonthLabel() (src/i18n/format.ts) constructs the
+    // Date via the LOCAL-time constructor instead, so there's no UTC-vs-
+    // local seam left for a rollback to hide in.
+    return scopeMonth == null ? String(scopeYear) : monthLabel(scopeYear, scopeMonth, { year: 'numeric', month: 'long' });
   }
   function scopeLabelFor(s: AccountantScope): string {
     return t(`accountantPackage.scope${s.charAt(0).toUpperCase()}${s.slice(1)}`);
@@ -455,6 +463,8 @@ export default function AccountantPackage() {
       ownerDrawsLabel: t('accountantPackage.ownerDrawsLabel'),
       ownerDrawsNote: t('accountantPackage.ownerDrawsNote'),
       netPositionLabel: t('accountantPackage.netPositionLabel'),
+      ownersEquityDetailTitle: t('accountantPackage.ownersEquityDetailTitle'),
+      ownersEquityNoRows: t('accountantPackage.ownersEquityNoRows'),
       footerMealsNote: t('accountantPackage.footerMealsNote'),
       footerNonDeductibleNote: t('accountantPackage.footerNonDeductibleNote'),
       footerOwnerPaidNote: t('accountantPackage.footerOwnerPaidNote'),
@@ -582,7 +592,18 @@ export default function AccountantPackage() {
     }
   }
 
-  const monthNames = Array.from({ length: 12 }, (_, i) => date(`${year}-${String(i + 1).padStart(2, '0')}-01`, { month: 'short' }));
+  // MONTH FILTER OFF-BY-ONE — THE actual reported bug (owner decision,
+  // device report: "selecting May shows June's documents"). Root cause:
+  // this array used to build each Pill's LABEL via
+  // `date(\`${year}-${pad(i+1)}-01\`, {month:'short'})` — the same UTC-
+  // midnight-parsed-then-local-rendered round trip periodLabelFor() above
+  // had — so under any device timezone behind UTC, monthNames[i] rendered
+  // the PREVIOUS month's name while its own Pill's onPress still correctly
+  // set `month = i + 1`. The Pill visually labeled "May" was really sitting
+  // on the button that sets month=6 (June), one position later than its
+  // own label claimed — exactly "selecting May shows June's documents."
+  // formatMonthLabel() has no such seam (see its own header comment).
+  const monthNames = Array.from({ length: 12 }, (_, i) => monthLabel(year, i + 1, { month: 'short' }));
   const flows = ownersEquity.flows;
 
   return (
@@ -795,6 +816,45 @@ export default function AccountantPackage() {
                 <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
                   ⚠️ {t('accountantPackage.unmatchedOwnerPaidWarning', { count: ownersEquity.unmatchedOwnerPaidCount })}
                 </MutedText>
+              )}
+            </Card>
+
+            {/* OWNER'S EQUITY ROW DETAIL (owner decision, device report:
+                "contributions and draws currently show too little") — every
+                individual capital_transactions row behind the totals above,
+                with its own exact date, full note, type, and amount — sorted
+                chronologically (buildCapitalFlowRows(), oldest first). */}
+            <Text style={styles.sectionTitle}>{t('accountantPackage.ownersEquityDetailTitle')}</Text>
+            <Card>
+              {ownersEquity.rows.length === 0 ? (
+                <MutedText>{t('accountantPackage.ownersEquityNoRows')}</MutedText>
+              ) : (
+                ownersEquity.rows.map((row, i) => {
+                  const isOut = row.type === 'reimbursementTakenBack' || row.type === 'ownerDraw';
+                  // Reuses the SAME 4 labels the summary Card right above
+                  // already shows — never a second set of type-name strings
+                  // that could drift out of sync with those.
+                  const typeLabel =
+                    row.type === 'cashContribution'
+                      ? t('accountantPackage.cashContributedLabel')
+                      : row.type === 'expensePaidPersonally'
+                        ? t('accountantPackage.expensesPaidPersonallyLabel')
+                        : row.type === 'reimbursementTakenBack'
+                          ? t('accountantPackage.reimbursementsTakenBackLabel')
+                          : t('accountantPackage.ownerDrawsLabel');
+                  return (
+                    <View
+                      key={row.id}
+                      style={[
+                        i > 0 && styles.rowBorder,
+                        styles.tintedRow,
+                        { backgroundColor: isOut ? ACCOUNTANT_SCREEN_COLORS.drawsOutBg : ACCOUNTANT_SCREEN_COLORS.contributionsInBg },
+                      ]}
+                    >
+                      <Row label={`${date(row.date)} — ${row.description} — ${typeLabel}`} value={`${isOut ? '-' : ''}${money(row.amount)}`} />
+                    </View>
+                  );
+                })
               )}
             </Card>
             <MutedText>{t('accountantPackage.ownersEquityNote')}</MutedText>

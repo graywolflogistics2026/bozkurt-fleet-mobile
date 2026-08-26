@@ -2022,6 +2022,8 @@
     "ownerDrawsLabel": "Owner draws",
     "ownerDrawsNote": "Money drawn out of the business for personal use — capital out, not wages or a deductible expense.",
     "netPositionLabel": "Net Position",
+    "ownersEquityDetailTitle": "Owner's Equity — Detail",
+    "ownersEquityNoRows": "No contributions or draws recorded for this period.",
     "footerMealsNote": "Meals are excluded here — they're covered by per diem, claimed separately.",
     "footerNonDeductibleNote": "Advance repayments and escrow/deposit holdbacks are not deductible — they're loan principal or refundable deposits, not expenses.",
     "footerOwnerPaidNote": "OWNER PAID rows are Owner Contributions — money you put into the business, not a business bank withdrawal.",

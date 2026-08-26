@@ -519,6 +519,26 @@ describe('buildLineItems (owner decision 2026-08-05, FULL PARITY pass item B.1/C
     expect(items.map((i) => i.id)).toEqual(['in-month']);
   });
 
+  it('MONTH FILTER OFF-BY-ONE — one row per month across 3 consecutive months: selecting each month\'s NUMERIC value returns exactly that month\'s row, never the next one (owner decision, device report)', () => {
+    const rows = [
+      deduction({ id: 'march-row', amount: 111, ded_date: '2026-03-10', description: 'March Item' }),
+      deduction({ id: 'april-row', amount: 222, ded_date: '2026-04-10', description: 'April Item' }),
+      deduction({ id: 'may-row', amount: 333, ded_date: '2026-05-10', description: 'May Item' }),
+    ];
+    const marchItems = buildLineItems(rows, [], [], [], 2026, 3, 'combined');
+    const aprilItems = buildLineItems(rows, [], [], [], 2026, 4, 'combined');
+    const mayItems = buildLineItems(rows, [], [], [], 2026, 5, 'combined');
+
+    expect(marchItems.map((i) => i.id)).toEqual(['march-row']);
+    expect(aprilItems.map((i) => i.id)).toEqual(['april-row']);
+    expect(mayItems.map((i) => i.id)).toEqual(['may-row']);
+    // The bug's own reported symptom, reproduced directly: selecting the
+    // NUMERIC value for May (5) must never return June's row (there is no
+    // June row here to accidentally match, and April's/March's rows must
+    // never leak into May's own result either).
+    expect(mayItems.map((i) => i.description)).toEqual(['May Item']);
+  });
+
   it('month=null rolls up the whole year', () => {
     const items = buildLineItems(
       [deduction({ id: 'jan', amount: 50, ded_date: '2026-01-15' }), deduction({ id: 'dec', amount: 50, ded_date: '2026-12-15' })],
@@ -875,6 +895,29 @@ describe('buildOwnersEquity — flows (FULL VISUAL PARITY pass)', () => {
     const result = buildOwnersEquity(contributions, []);
     // effectiveContribution (60000) - totalDraws (15000) = 45000
     expect(result.flows.netPosition).toBe(45000);
+  });
+});
+
+describe('buildOwnersEquity — rows (owner decision, OWNER\'S EQUITY ROW DETAIL, device report)', () => {
+  it('exposes an itemized, chronologically-sorted row for every real capital_transactions record — never netted, never disagreeing with flows', () => {
+    const contributions = [
+      { id: 'c2', tx_type: 'contribution' as const, amount: 200, tx_date: '2026-07-01', linked_deduction_id: 'ded-1', note: 'Parts — paid personally (Cash)' },
+      { id: 'c1', tx_type: 'contribution' as const, amount: 1000, tx_date: '2026-01-01', note: 'Initial deposit' },
+      { id: 'd1', tx_type: 'draw' as const, amount: 300, tx_date: '2026-08-01', note: 'Personal withdrawal' },
+    ];
+    const result = buildOwnersEquity(contributions, []);
+    expect(result.rows.map((r) => r.id)).toEqual(['c1', 'c2', 'd1']); // chronological
+    expect(result.rows.map((r) => r.type)).toEqual(['cashContribution', 'expensePaidPersonally', 'ownerDraw']);
+    expect(result.rows.map((r) => r.description)).toEqual(['Initial deposit', 'Parts — paid personally (Cash)', 'Personal withdrawal']);
+    // Never netted: the itemized $200 contribution row shows its own real
+    // amount, even though flows.expensesPaidPersonallyOutstanding above
+    // might report a different (netted-against-reimbursements) figure.
+    expect(result.rows.find((r) => r.id === 'c2')?.amount).toBe(200);
+  });
+
+  it('an account with no contributions/draws at all produces an empty rows array, never throws', () => {
+    const result = buildOwnersEquity([], []);
+    expect(result.rows).toEqual([]);
   });
 });
 

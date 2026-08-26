@@ -124,7 +124,7 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 // buildAreaPoints primitive as WeeklyTrendChart (CLAUDE.md's CHART
 // LANGUAGE CONSISTENCY invariant), colored by the LAST month's sign.
 function MonthlyTrendChart({ months }: { months: CashFlowMonthProjection[] }) {
-  const { date } = useFormatters();
+  const { monthLabel: monthLabelFmt } = useFormatters();
   const [width, setWidth] = useState(0);
   const height = CHART_HEIGHT;
 
@@ -135,7 +135,14 @@ function MonthlyTrendChart({ months }: { months: CashFlowMonthProjection[] }) {
   const isPositive = (values[values.length - 1] ?? 0) >= 0;
   const color = isPositive ? colors.green : colors.red;
   const fill = isPositive ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)';
-  const monthLabel = (m: CashFlowMonthProjection) => date(new Date(Date.UTC(m.year, m.month - 1, 1)).toISOString().slice(0, 10), { month: 'short' });
+  // MONTH FILTER OFF-BY-ONE fix (owner decision) — was
+  // `date(new Date(Date.UTC(...)).toISOString()..., ...)`, the same UTC-
+  // midnight-parsed-then-local-rendered mismatch as the Accountant
+  // Package's own bug (src/i18n/format.ts's formatMonthLabel() header
+  // comment has the full root-cause writeup). This label was informational
+  // only (chart axis endpoints, never a selector), so it never caused the
+  // WRONG data to load — only ever showed the wrong month NAME.
+  const monthLabel = (m: CashFlowMonthProjection) => monthLabelFmt(m.year, m.month, { month: 'short' });
 
   return (
     <View>
@@ -180,8 +187,12 @@ function MonthCard({
   isBest: boolean;
 }) {
   const { t } = useTranslation();
-  const { money, date } = useFormatters();
-  const monthLabel = date(new Date(Date.UTC(m.year, m.month - 1, 1)).toISOString().slice(0, 10), { year: 'numeric', month: 'long' });
+  const { money, monthLabel: monthLabelFmt } = useFormatters();
+  // MONTH FILTER OFF-BY-ONE fix (owner decision) — see
+  // src/i18n/format.ts's formatMonthLabel() for the full root-cause
+  // writeup (the same UTC-midnight-vs-local-render mismatch as the
+  // Accountant Package's own bug).
+  const monthLabel = monthLabelFmt(m.year, m.month, { year: 'numeric', month: 'long' });
   const dimmed = m.status === 'projected';
 
   return (
@@ -405,7 +416,7 @@ type CashFlowPeriod = (typeof CASH_FLOW_PERIODS)[number];
 
 export default function CashFlow() {
   const { t } = useTranslation();
-  const { money, date } = useFormatters();
+  const { money, date, monthLabel } = useFormatters();
   const settlementsQuery = useSettlements();
   const loadsQuery = useLoads();
   const fuelQuery = useFuelPurchases();
@@ -822,10 +833,13 @@ export default function CashFlow() {
 
                 {tightestMonthIdx >= 0 && bestMonthIdx >= 0 && (
                   <View style={{ marginTop: spacing.sm, gap: 2 }}>
+                    {/* MONTH FILTER OFF-BY-ONE fix (owner decision) — see
+                        src/i18n/format.ts's formatMonthLabel() for the
+                        full root-cause writeup. */}
                     <MutedText>
                       🎯{' '}
                       {t('cashFlowScreen.tightestMonthLine', {
-                        month: date(new Date(Date.UTC(monthlyOverview[tightestMonthIdx].year, monthlyOverview[tightestMonthIdx].month - 1, 1)).toISOString().slice(0, 10), {
+                        month: monthLabel(monthlyOverview[tightestMonthIdx].year, monthlyOverview[tightestMonthIdx].month, {
                           year: 'numeric',
                           month: 'long',
                         }),
@@ -835,7 +849,7 @@ export default function CashFlow() {
                     <MutedText>
                       🏆{' '}
                       {t('cashFlowScreen.bestMonthLine', {
-                        month: date(new Date(Date.UTC(monthlyOverview[bestMonthIdx].year, monthlyOverview[bestMonthIdx].month - 1, 1)).toISOString().slice(0, 10), {
+                        month: monthLabel(monthlyOverview[bestMonthIdx].year, monthlyOverview[bestMonthIdx].month, {
                           year: 'numeric',
                           month: 'long',
                         }),

@@ -1,7 +1,14 @@
 import { DEFAULT_SCHEDULE_C_BUCKET, scheduleCLineFor } from '@/src/import/category';
 import { isPersonalPayment } from '@/src/import/paymentMethods';
 import { resolveScheduleCBucket } from '@/src/stats/profitLoss';
-import { summarizeContributions, summarizeCapitalFlows, type CapitalTransactionLike, type CapitalFlowsSummary } from '@/src/stats/capitalAccount';
+import {
+  summarizeContributions,
+  summarizeCapitalFlows,
+  buildCapitalFlowRows,
+  type CapitalTransactionLike,
+  type CapitalFlowsSummary,
+  type CapitalFlowRow,
+} from '@/src/stats/capitalAccount';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { buildAssetRegister, buildAssetCategoryBreakdown, type AssetCategoryBreakdown } from '@/src/stats/assetRegister';
 import type { Deduction, Equipment, FuelPurchase, MaintenanceRecord, LoanRow, CreditCardRow, Toll, Truck, UserCategory } from '@/src/types/db';
@@ -509,6 +516,14 @@ export type OwnersEquitySummary = {
   // reused here rather than a second computation, so the two screens can
   // never disagree about the owner's equity position.
   flows: CapitalFlowsSummary;
+  // OWNER'S EQUITY ROW DETAIL (owner decision, device report) — every
+  // individual capital_transactions row behind the flow totals above,
+  // itemized (date/description/type/amount) and sorted chronologically —
+  // see buildCapitalFlowRows()'s own header comment (src/stats/
+  // capitalAccount.ts) for the full reasoning. Computed from the exact
+  // SAME `contributions` input the flow totals above already are, so the
+  // rows can never sum to a different total than what's already shown.
+  rows: CapitalFlowRow[];
 };
 
 export function buildOwnersEquity(contributions: CapitalTransactionLike[], lineItems: LineItem[]): OwnersEquitySummary {
@@ -516,5 +531,6 @@ export function buildOwnersEquity(contributions: CapitalTransactionLike[], lineI
   const ownerPaidCount = lineItems.filter((li) => li.isOwnerPaid).length;
   const unmatchedOwnerPaidCount = Math.max(0, ownerPaidCount - breakdown.linkedCount);
   const flows = summarizeCapitalFlows(contributions);
-  return { ...breakdown, total: breakdown.cashAmount + breakdown.linkedAmount, unmatchedOwnerPaidCount, flows };
+  const rows = buildCapitalFlowRows(contributions);
+  return { ...breakdown, total: breakdown.cashAmount + breakdown.linkedAmount, unmatchedOwnerPaidCount, flows, rows };
 }

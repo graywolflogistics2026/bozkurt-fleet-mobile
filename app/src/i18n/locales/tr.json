@@ -1980,6 +1980,8 @@
     "ownerDrawsLabel": "Sahip çekimleri",
     "ownerDrawsNote": "Kişisel kullanım için işletmeden çekilen para — dışarı çıkan sermaye, ücret veya indirilebilir gider değil.",
     "netPositionLabel": "Net Pozisyon",
+    "ownersEquityDetailTitle": "Sahip Sermayesi — Detay",
+    "ownersEquityNoRows": "Bu dönem için kaydedilmiş katkı veya çekim yok.",
     "footerMealsNote": "Yemekler burada hariç tutulur — ayrı olarak talep edilen per diem ile karşılanır.",
     "footerNonDeductibleNote": "Avans geri ödemeleri ve escrow/depozito kesintileri indirilebilir değildir — bunlar gider değil, kredi anaparası veya iade edilebilir depozitolardır.",
     "footerOwnerPaidNote": "\"SAHİP TARAFINDAN ÖDENDİ\" satırları Sahip Katkılarıdır — işletmeye koyduğunuz para, işletme banka hesabından çekim değildir.",
