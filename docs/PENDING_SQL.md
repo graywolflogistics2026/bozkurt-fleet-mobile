@@ -2779,7 +2779,7 @@ revoke recipe (same style as the existing lifetime-plan recipe).
 
 ---
 
-## 59. AI credit self-grant RLS hole (P0 SECURITY FIX, FULL SYSTEM AUDIT, owner decision 2026-08-26) — NOT YET RUN
+## 59. AI credit self-grant RLS hole (P0 SECURITY FIX, FULL SYSTEM AUDIT, owner decision 2026-08-26) — ✅ APPLIED (run via pending_59_60.sql, ai-import redeployed, client update published to preview)
 
 **The finding**: `ai_credit_purchases_update_own` (§51) grants every
 authenticated user an unrestricted self-service UPDATE on their own
@@ -2909,13 +2909,13 @@ grant execute on function consume_ai_import_credit() to authenticated;
 now calls this RPC instead of doing its own select+sort+update — see
 that file for the updated call site.
 
-- [ ] 59a run (drop the vulnerable ai_credit_purchases UPDATE policy,
+- [x] 59a run (drop the vulnerable ai_credit_purchases UPDATE policy,
       add the credits_remaining<=credits_granted constraint, create
       consume_ai_import_credit())
 
 ---
 
-## 60. Balance-ledger atomicity — 4 sites (P0 MONEY-CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision 2026-08-26) — NOT YET RUN
+## 60. Balance-ledger atomicity — 4 sites (P0 MONEY-CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision 2026-08-26) — ✅ APPLIED (run via pending_59_60.sql; app/src/data/capitalTransactions.ts and aiImportSave.ts are pure client-side, no Edge Function redeploy needed for this section specifically — reset-data was separately redeployed the same pass for its own preflight fix; client update published to preview)
 
 **The finding**: four separate call sites wrote a "this delta has been
 applied" tracking column to a row (`capital_transactions.
@@ -3214,7 +3214,7 @@ apply this delta" primitive; these four new functions are specifically
 about coupling a ROW write to a delta atomically, which
 `apply_business_balance_delta` alone was never designed to do).
 
-- [ ] 60a run (record_manual_capital_transaction, update_manual_capital_transaction,
+- [x] 60a run (record_manual_capital_transaction, update_manual_capital_transaction,
       delete_manual_capital_transaction, apply_settlement_business_balance_credit)
 
 ---
