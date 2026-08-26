@@ -299,6 +299,9 @@
     },
     "perTruckThisWeek": {
       "title": "По грузовикам на этой неделе"
+    },
+    "perMileTrio": {
+      "noDataForPeriod": "В этом периоде пока нет Settlement — выберите другой период или импортируйте его."
     }
   },
   "deductions": {

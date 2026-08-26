@@ -7521,3 +7521,160 @@
   reuses `fleetScope.fleetWideAlways`, already shipped in the first
   MULTI-TRUCK MODEL pass. No SQL/Edge Function changes. Ships via a
   normal `eas update`.
+- MULTI-TRUCK MODEL — CPM/PPM BROKEN AGAIN, ROOT CAUSE + FULL
+  RE-VERIFICATION (owner decision, device report: "the per-mile trio
+  shows implausible values and doesn't change when I switch the hero
+  card's period tabs," no new SQL). ROOT CAUSE (traced before any fix,
+  per the owner's own explicit request): Home's per-mile trio
+  (`app/(tabs)/index.tsx`) was wired to `canonicalCpm`, computed from
+  `truckComparisonResult`/`scopedTruckRow` — which were themselves built
+  from `settlementsQuery.data ?? []` etc., the FULL, UNFILTERED query
+  results, completely independent of `heroPeriod`. The Hero Card's own
+  number/chart (via `calcHeroPeriod()`) DID read `heroPeriod` correctly —
+  so the trio wasn't reading a *different* period from the Hero Card, it
+  was reading NO period at all, an always-all-time blended average sitting
+  directly under a number that visibly changed on every tab tap — exactly
+  "implausible and unchanging" once a real trucking business has more than
+  a few months of history (an all-time average buries any recent trend).
+  This was a genuine regression from the immediately-preceding SELECTOR
+  PLACEMENT pass, not a pre-existing bug — that pass fixed the trio's
+  TRUCK scope but never gave it a PERIOD scope to begin with.
+  **FIX — one shared resolver, two new pure modules**:
+  `src/stats/heroPeriodWindow.ts`'s `resolveHeroPeriodDateWindow(period,
+  sortedWeekEndings, now)` turns a `HeroPeriod` selection into a concrete
+  `{startIso, endIso} | null` window — `thisWeek`/`lastWeek` resolve to the
+  exact same two settlement weeks `calcHeroPeriod()` itself already uses
+  (both read from the identical ascending `week_ending` list, so the two
+  can never land on a different window from each other despite being
+  separate function calls), `1M`/`3M`/`6M`/`yearly` are the same rolling-
+  N-day-ending-now windows `calcHeroPeriod()` already defines for those
+  tabs; `filterRowsByDateWindow()` is the one shared row filter every
+  period-scoped input (settlements/deductions/fuel) now goes through.
+  `src/stats/periodScopedCpm.ts`'s `buildPeriodScopedCpm()` is the new
+  single entry point: resolves the window, filters settlements/loads/
+  deductions/fuel/maintenance/tolls through it, calls the EXISTING
+  `buildTruckComparison()` on the filtered set, and returns either the
+  active truck's own row (via the pre-existing `withAllocatedBucket()`
+  from the SELECTOR PLACEMENT pass, so direct + labeled-allocated costs
+  stay separated exactly as before) or — in "All Trucks" scope — a
+  fleet-wide `calcCanonicalCpm()` call over the same filtered rows plus
+  every truck's own `calcTruckCostBasisWeekly()` weighted by how many of
+  ITS OWN settlements actually fall inside the window. This is what makes
+  fixed-cost pro-ration automatic rather than a special case: a truck
+  payment is charged once per settlement week that's actually IN the
+  window, so "This Week" (1 settlement) is naturally ~4x cheaper in fixed
+  cost than "1M" (~4 settlements) with no separate scaling logic —
+  verified directly by a dedicated test (below). Home now computes
+  `heroWindow` ONCE (`resolveHeroPeriodDateWindow`, same period/
+  weekEndings/`now` reference `buildPeriodScopedCpm()` resolves its own
+  copy from) and feeds it through to the trio, the sanity guards, AND
+  (see below) the Hero Card's own progress bar — numerator (revenue/
+  costs) and denominator (miles) are now guaranteed to come from the
+  identical window on every consumer, by construction, not by convention.
+  **SANITY GUARDS**: `perMileNoWindow` (the window itself is null — no
+  settlement falls in this period at all) shows
+  `dashboard.perMileTrio.noDataForPeriod` instead of a number, distinct
+  from `perMileMilesMissing` (settlements exist in the window but have no
+  recorded miles) which reuses Scorecard's own `milesMissingWarning` —
+  two genuinely different situations, named differently rather than
+  collapsed into one generic "no data" message. The pre-existing
+  CPM-too-high (`>$4/mi`) warning is unchanged in trigger, but now tappable
+  straight into a NEW, Home-local, period-aware "Why?" `ModalSheet`
+  (reusing Scorecard's own real i18n keys — `scorecard.whyTitle`/
+  `whyFixedTotal`/`whyVariableTotal`/`whyExcludedOneOffsTitle`/
+  `whyExcludedOneOffsNote`/`cpmExcludedTotal` — rather than duplicating
+  new strings) showing the bucket breakdown for THIS SAME window, since
+  Scorecard's own "Why?" breakdown is deliberately all-time/unwindowed and
+  would otherwise silently show a different period than the trio a user
+  just tapped from.
+  **PHASE 4 — ADVERSARIAL RE-VERIFICATION (report before fix, per the
+  owner's own explicit checklist)**:
+  1. **FOUND AND FIXED — a second instance of the exact "two figures on
+     the same card, different windows" bug class** (the owner's own
+     example: the Share card bug from the prior audit pass): the Hero
+     Card's 0-100 profit-score progress bar (`calcScorecard()`, rendered
+     directly under the Hero Card's own now-period-accurate headline
+     number) still read all-time `stats`/`fuelCost` — untouched by this
+     pass's own root-cause fix, since it was never wired to `canonicalCpm`
+     in the first place, a separate code path with the identical
+     underlying mistake. Fixed by period-scoping its own inputs
+     (`periodDeductionsAll`/`fuelCost`, both filtered through the SAME
+     `heroWindow`) and sourcing `grossRevenue`/`totalMiles` from
+     `periodScopedCpm`'s own scoped-truck-row-or-fleet-aggregate — the
+     bar's inputs can now never drift onto a different window than the
+     number sitting directly above it. `calcScorecard()`'s own formula and
+     its "count every deduction unconditionally" legacy convention (CLAUDE.md's
+     established exemption, distinct from the canonical CPM engine's own
+     Meals/Advance-Repayment/Escrow exclusions) were deliberately left
+     untouched — only its inputs are now period-scoped, never its math.
+  2. **CONFIRMED CORRECT, no change needed — the other screens named**:
+     Scorecard's own CPM (fixed in the immediately-preceding SELECTOR
+     PLACEMENT pass) is deliberately all-time/unwindowed — it has no
+     period tabs of its own, so "the same metric agrees across every
+     screen that shows it" doesn't apply to it the way it does to Home's
+     trio; Home's own new period-scoped figure and Scorecard's all-time
+     figure are two DIFFERENT, individually-labeled numbers by design, not
+     a disagreement. Cash Flow, Profit Analysis, Operating P&L, Accountant
+     Package, and CEO Mode all already carry `<FleetScopeLabel
+     variant="fleetOnly" />` (from the two prior MULTI-TRUCK MODEL passes)
+     and were re-verified this pass to have zero stray `truck_id`/
+     `activeTruck` filtering anywhere in their own data-fetch code —
+     genuinely fleet-wide, consistent with their own labels. Deductions/
+     Settlements/Loads correctly chain truck-scope-then-their-own-screen-
+     local period filter with no numerator/denominator mismatch found.
+  3. **RECONCILIATION, verified by construction and by test**: the "All
+     Trucks" branch of `buildPeriodScopedCpm()` computes its own
+     `grossRevenue`/`totalMiles` from the SAME window-filtered settlement/
+     load rows `buildTruckComparison()`'s own `fleetTotals` is built from
+     (both ultimately route through the identical `calcMiles()`/plain-sum
+     logic) — the two can't drift apart because neither is a second,
+     independently-derived total. `truckComparison.test.ts`'s own
+     pre-existing test (from the SELECTOR PLACEMENT pass) already proves
+     `fleetTotals` equals a single whole-fleet `calcCanonicalCpm()` call
+     over every row (truck-tagged + fleet-level pool); this pass's own
+     `periodScopedCpm.test.ts` adds the period-filtered analog — a
+     dedicated "All Trucks scope still reconciles to the same
+     window-filtered totals" case (below).
+  4. **CANONICAL-HELPERS-ONLY, re-audited**: grepped every screen for a
+     hand-rolled `revenue/miles`-shaped expression; the only true positive
+     was `Loads` screen's own `rpm()` — a PER-LOAD rate for a single row
+     in a list (the same kind of per-row rate `rankLoadsByRpm()`
+     elsewhere in this app already computes), never a fleet/period
+     aggregate competing with `calcCanonicalCpm()`. No other screen
+     computes its own version of CPM, RPM, profit, miles, or deductible
+     totals — every aggregate consumer routes through the same shared
+     modules (`trueProfit.ts`, `cpm.ts`, `miles.ts`, `truckComparison.ts`,
+     now also `periodScopedCpm.ts`/`heroPeriodWindow.ts`).
+  5. **NOTED, not changed (explicitly out of scope)**: the Revenue/
+     Expenses/Net Profit trio directly above the per-mile trio on Home
+     (DASHBOARD SIMPLIFICATION's own original design) has always been a
+     fixed "this week vs. last week" comparison, independent of
+     `heroPeriod` — a real, pre-existing asymmetry now sandwiched between
+     two period-aware elements (the Hero Card above it, the per-mile trio
+     below it), but out of this pass's stated scope (the owner's own
+     report named the per-mile trio and the Hero Card specifically) and
+     flagged here rather than silently touched. `proactiveCoach.ts`'s own
+     internal `latestCpm` (an all-time figure used only as a nudge
+     THRESHOLD input, never itself displayed anywhere) was reviewed and
+     left unchanged for the same reason — it's not a displayed figure that
+     could visibly disagree with anything.
+  Tests: `heroPeriodWindow.test.ts` (new, 8 tests) — thisWeek/lastWeek
+  resolution and null-when-unresolvable, the four rolling-day windows
+  against a fixed `now`, inclusive-bounds/no-date-field row filtering.
+  `periodScopedCpm.test.ts` (new, 11 tests) — a realistic multi-month,
+  8-settlement dataset (deliberately varying gross/miles/deductions every
+  week, so a bug that silently reused the wrong window couldn't hide
+  behind a flat per-week ratio) proving every one of `thisWeek`/
+  `lastWeek`/`1M`/`3M`/`6M`/`yearly` produces a genuinely distinct,
+  independently-verified RPM/CPM; a direct "numerator and denominator
+  always drawn from the identical window" proof; the null-window/
+  zero-settlements case returning `cpm: null` rather than a silent
+  all-time fallback; the "All Trucks" reconciliation case; and a dedicated
+  fixed-cost pro-ration block (1 vs. 4 settlement weeks of a $1,000/month
+  truck payment, proving the charge scales with the window rather than a
+  flat lump sum). Full suite: 112 suites / 2683 tests pass; `tsc --noEmit`
+  clean. i18n: 1 new key, `dashboard.perMileTrio.noDataForPeriod` — es/ru/
+  ar/tr translated, hi/uk as untranslated English copies per invariant
+  #11; glossary test re-passed clean. No SQL/Edge Function changes —
+  every change in this pass is pure client-side JS/TS. Ships via a normal
+  `eas update`.

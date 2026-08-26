@@ -299,6 +299,9 @@
     },
     "perTruckThisWeek": {
       "title": "لكل شاحنة هذا الأسبوع"
+    },
+    "perMileTrio": {
+      "noDataForPeriod": "لا توجد Settlement في هذه الفترة بعد — اختر فترة أخرى أو استورد واحدة."
     }
   },
   "deductions": {

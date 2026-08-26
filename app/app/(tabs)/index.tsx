@@ -25,10 +25,9 @@ import {
 } from '@/src/stats/cashFlowTrend';
 import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
-import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
-import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
-import { resolveMilesTotal } from '@/src/stats/miles';
-import { buildTruckComparison, withAllocatedBucket } from '@/src/stats/truckComparison';
+import { buildTruckComparison } from '@/src/stats/truckComparison';
+import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
+import { resolveHeroPeriodDateWindow, filterRowsByDateWindow } from '@/src/stats/heroPeriodWindow';
 import { FleetScopeSelectorStrip } from '@/src/components/FleetScopeSelectorStrip';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
@@ -868,81 +867,120 @@ export default function Dashboard() {
     [fullWeeklyTrueProfitTrend]
   );
   const [heroPeriod, setHeroPeriod] = useState<HeroPeriod>('thisWeek');
+  // SELF-TEST AUDIT (owner decision, CPM/PPM BROKEN AGAIN pass, item 4) —
+  // "two figures on the same card cover different windows": the Hero
+  // Card's own progress bar (0-100 profitScore, calcScorecard()) used to
+  // ALWAYS read all-time `stats`/`fuelCost` regardless of `heroPeriod` —
+  // right under a big number that (after this pass's own root-cause fix)
+  // now genuinely reflects the selected period. `heroWindow` is computed
+  // ONCE, here, from the identical inputs buildPeriodScopedCpm() below
+  // resolves its own (unavoidably separate, since that call is a plain
+  // pure function) window from — same period, same weekEnding list, same
+  // `now` reference — so the two can never land on a different window
+  // from each other despite being two separate calls.
+  const now = useMemo(() => new Date(), [heroPeriod]);
+  const heroWindow = useMemo(
+    () => resolveHeroPeriodDateWindow(heroPeriod, fullWeeklyTrueProfitTrend.map((p) => p.weekEnding), now),
+    [heroPeriod, fullWeeklyTrueProfitTrend, now]
+  );
   const heroPeriodResult = useMemo(
-    () => calcHeroPeriod(fullWeeklyTrueProfitAsRevenueExpense, heroPeriod),
-    [fullWeeklyTrueProfitAsRevenueExpense, heroPeriod]
+    () => calcHeroPeriod(fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now),
+    [fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now]
+  );
+  // Both truck-scoped (scopedFuel/scopedDeductions, from the earlier
+  // MULTI-TRUCK MODEL pass) AND now period-scoped (via heroWindow) — the
+  // SAME two-axis filtering the per-mile trio's own buildPeriodScopedCpm()
+  // applies, so the profit-score bar's inputs can never drift onto a
+  // different window than the big number sitting right above it.
+  const periodFuel = useMemo(() => filterRowsByDateWindow(scopedFuel, (f) => f.purchase_date, heroWindow), [scopedFuel, heroWindow]);
+  const periodDeductionsAll = useMemo(
+    () => filterRowsByDateWindow(scopedDeductions, (d) => d.ded_date, heroWindow),
+    [scopedDeductions, heroWindow]
   );
   const fuelCost = useMemo(
-    () => scopedFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
-    [scopedFuel]
+    () => periodFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
+    [periodFuel]
   );
-  const profitScore = useMemo(() => {
-    if (!stats) return null;
-    return calcScorecard(stats.grossRevenue, stats.totalDeductions, stats.totalMiles, fuelCost)?.score ?? null;
-  }, [stats, fuelCost]);
 
-  // PER-MILE TRIO (owner decision 2026-08-24, device report; corrected by
-  // the SELF-TEST FIX, owner decision, MULTI-TRUCK MODEL re-audit) — the
-  // SAME canonical calcCanonicalCpm() figures Scorecard's own KPI card
-  // and "Why?" breakdown use (src/stats/cpm.ts), never a second CPM
-  // formula. The earlier version of this block already summed every
-  // truck's fixed cost for "All Trucks" scope, but still fed FLEET-WIDE
-  // unfiltered deductions/fuel/maintenance/tolls into calcCanonicalCpm
-  // even when a SPECIFIC truck was active — a broken hybrid (full-fleet
-  // revenue/variable-costs + one truck's fixed cost) that got WORSE, not
-  // more accurate, once a truck was selected. Now routes through
-  // buildTruckComparison() + withAllocatedBucket() exactly like
-  // scorecard.tsx's own identical fix — one canonical per-truck CPM
-  // engine, not a screen-specific reimplementation.
-  const carrierWithholdsLoan = useMemo(() => carrierWithholdsLoanPayment(dedQuery.data ?? []), [dedQuery.data]);
-  const truckComparisonResult = useMemo(
+  // PER-MILE TRIO — CPM/PPM BROKEN AGAIN, ROOT CAUSE FIX (owner decision,
+  // device report: "implausible values, doesn't change when I switch the
+  // hero card's period tabs"). ROOT CAUSE (confirmed by trace, reported
+  // before this fix): this trio used to be computed from
+  // truckComparisonResult/stats — BOTH always ALL-TIME, completely
+  // independent of `heroPeriod` — so it never moved when the Hero Card's
+  // own period tabs changed, and an all-time blended average could look
+  // wildly implausible next to whatever single-period number the Hero
+  // Card above it was showing. `buildPeriodScopedCpm()` (src/stats/
+  // periodScopedCpm.ts) is the ONE shared resolver every period-aware CPM
+  // consumer now uses — it resolves `heroPeriod` to a concrete date
+  // window (the SAME window src/stats/heroPeriod.ts's own
+  // calcHeroPeriod() uses for "this week"/"last week", since both read
+  // from the identical ascending week_ending list) and filters EVERY
+  // input row (settlements/loads/deductions/fuel/maintenance/tolls)
+  // through that SAME window before computing anything — so numerator
+  // (costs/revenue) and denominator (miles) can never drift onto
+  // different date ranges from each other, and a truck's fixed cost is
+  // naturally pro-rated to however many settlement weeks actually fall
+  // in the window (1 for "This Week," ~4 for "1M," ...) rather than a
+  // flat all-time lump sum. Scorecard's own CPM stays deliberately
+  // all-time/unwindowed (it has no period tabs) — this is Home-specific.
+  const periodScopedCpm = useMemo(
     () =>
-      buildTruckComparison(
+      buildPeriodScopedCpm(
+        heroPeriod,
+        fullWeeklyTrueProfitTrend.map((p) => p.weekEnding),
         trucks,
         settlementsQuery.data ?? [],
         loadsQuery.data ?? [],
         dedQuery.data ?? [],
         fuelQuery.data ?? [],
         maintenanceQuery.data ?? [],
-        tollsQuery.data ?? []
+        tollsQuery.data ?? [],
+        activeTruck?.id ?? null,
+        activeTruck?.manual_total_miles_override,
+        now
       ),
-    [trucks, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
+    [
+      heroPeriod,
+      fullWeeklyTrueProfitTrend,
+      trucks,
+      settlementsQuery.data,
+      loadsQuery.data,
+      dedQuery.data,
+      fuelQuery.data,
+      maintenanceQuery.data,
+      tollsQuery.data,
+      activeTruck,
+      now,
+    ]
   );
-  const scopedTruckRow = activeTruck ? (truckComparisonResult.rows.find((r) => r.truckId === activeTruck.id) ?? null) : null;
-  // "All Trucks" scope's own fixed-cost total — every truck's own cost
-  // basis, weighted by its own settlement count, never $0 (see the prior
-  // pass's own note this comment used to carry).
-  const fleetFixedCostTotal = useMemo(() => {
-    return trucks.reduce((sum, tr) => {
-      const count = (settlementsQuery.data ?? []).filter((s) => s.truck_id === tr.id).length;
-      return sum + calcTruckCostBasisWeekly(tr, carrierWithholdsLoan).weeklyFixedTotal * count;
-    }, 0);
-  }, [trucks, settlementsQuery.data, carrierWithholdsLoan]);
-  const milesSource = scopedTruckRow
-    ? resolveMilesTotal({ totalMiles: scopedTruckRow.totalMiles }, activeTruck?.manual_total_miles_override)
-    : stats
-      ? resolveMilesTotal({ totalMiles: stats.totalMiles }, undefined)
-      : null;
-  const canonicalCpm = useMemo(() => {
-    if (!milesSource) return null;
-    if (scopedTruckRow) {
-      if (!scopedTruckRow.cpmBreakdown) return null;
-      const withAlloc = withAllocatedBucket(scopedTruckRow.cpmBreakdown, scopedTruckRow.allocatedExpenses, milesSource.totalMiles);
-      const revenuePerMile = milesSource.totalMiles > 0 ? scopedTruckRow.grossRevenue / milesSource.totalMiles : null;
-      const profitPerMile = revenuePerMile != null && withAlloc.costPerMile != null ? revenuePerMile - withAlloc.costPerMile : null;
-      return { ...withAlloc, revenuePerMile, profitPerMile };
-    }
-    if (!stats) return null;
-    return calcCanonicalCpm(
-      stats.grossRevenue,
-      milesSource.totalMiles,
-      dedQuery.data ?? [],
-      fuelQuery.data ?? [],
-      maintenanceQuery.data ?? [],
-      tollsQuery.data ?? [],
-      fleetFixedCostTotal
-    );
-  }, [milesSource, scopedTruckRow, stats, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, fleetFixedCostTotal]);
+  const canonicalCpm = periodScopedCpm.cpm;
+  // SELF-TEST AUDIT (owner decision, CPM/PPM BROKEN AGAIN pass, item 4) —
+  // see heroWindow's own comment above for the "two figures, different
+  // windows" bug this closes: the profit-score bar's grossRevenue/
+  // totalMiles now come from this SAME periodScopedCpm computation (its
+  // scoped-truck row, or the fleet aggregate in "All Trucks" scope) —
+  // never a second, independently-resolved figure.
+  const profitScore = useMemo(() => {
+    if (!heroWindow) return null;
+    const grossRevenue = periodScopedCpm.scopedRow ? periodScopedCpm.scopedRow.grossRevenue : periodScopedCpm.comparison.fleetTotals.grossRevenue;
+    const totalMiles = periodScopedCpm.scopedRow ? periodScopedCpm.scopedRow.totalMiles : periodScopedCpm.comparison.fleetTotals.totalMiles;
+    // Legacy calcScorecard() convention (CLAUDE.md's own established
+    // exemption): ALL deductions unconditionally, never the canonical
+    // CPM engine's own Meals/Advance Repayment/Escrow exclusions — kept
+    // deliberately verbatim, only its INPUTS are now period-scoped.
+    const totalDeductions = periodDeductionsAll.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+    return calcScorecard(grossRevenue, totalDeductions, totalMiles, fuelCost)?.score ?? null;
+  }, [heroWindow, periodScopedCpm, periodDeductionsAll, fuelCost]);
+  // SANITY GUARD (requirement 3): distinguishes "no settlements at all in
+  // this window" (window itself is null — e.g. "This Week" before any
+  // settlement has ever been imported) from "settlements exist in this
+  // window but have no recorded miles" (window resolved, but totalMiles
+  // is 0) — both must say so plainly instead of showing a number, but are
+  // genuinely different situations worth naming differently.
+  const perMileNoWindow = !periodScopedCpm.window;
+  const perMileMilesMissing = !perMileNoWindow && canonicalCpm != null && canonicalCpm.revenuePerMile == null;
+  const [cpmWhyOpen, setCpmWhyOpen] = useState(false);
 
   const recentLoads = useMemo(() => {
     return [...scopedLoads].sort((a, b) => new Date(b.load_date ?? 0).getTime() - new Date(a.load_date ?? 0).getTime()).slice(0, 4);
@@ -1008,41 +1046,56 @@ export default function Dashboard() {
           />
         </View>
 
-        {/* PER-MILE TRIO (owner decision 2026-08-24, device report) —
-            Revenue/Mile, Cost/Mile (CPM), Profit/Mile, directly under the
-            Revenue/Expenses/Net Profit trio above. RPM/PPM route to
-            Scorecard's own KPI detail; CPM routes straight into Scorecard's
-            "Why?" breakdown via the same ?openWhy param pattern Alerts'
-            needs-review deep link already uses. */}
+        {/* PER-MILE TRIO — CPM/PPM BROKEN AGAIN fix (owner decision):
+            Revenue/Mile, Cost/Mile (CPM), Profit/Mile, always for the SAME
+            period the Hero Card's own tabs above have selected (see
+            periodScopedCpm's own header comment). All three now open a
+            HOME-LOCAL "Why?" breakdown reflecting that identical period —
+            Scorecard's own breakdown is deliberately all-time/unwindowed
+            (it has no period tabs), so routing there would silently show
+            a different window than the one just tapped. */}
         <View style={styles.compactRow}>
           <CompactStatTile
             label={t('scorecard.revenuePerMile')}
             value={canonicalCpm?.revenuePerMile != null ? money2(canonicalCpm.revenuePerMile) : '—'}
-            onPress={() => router.push('/(tabs)/more/scorecard')}
+            onPress={() => setCpmWhyOpen(true)}
           />
           <CompactStatTile
             label={t('scorecard.costPerMile')}
             value={canonicalCpm?.costPerMile != null ? money2(canonicalCpm.costPerMile) : '—'}
-            onPress={() => router.push({ pathname: '/(tabs)/more/scorecard', params: { openWhy: 'true' } } as unknown as Href)}
+            onPress={() => setCpmWhyOpen(true)}
           />
           <CompactStatTile
             label={t('scorecard.whyPpm')}
             value={canonicalCpm?.profitPerMile != null ? money2(canonicalCpm.profitPerMile) : '—'}
             valueColor={canonicalCpm?.profitPerMile != null ? (canonicalCpm.profitPerMile >= 0 ? colors.green : colors.red) : undefined}
-            onPress={() => router.push('/(tabs)/more/scorecard')}
+            onPress={() => setCpmWhyOpen(true)}
           />
         </View>
-        {/* SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) —
-            reads milesSource (override-aware) rather than raw
-            stats.totalMiles, so this can never contradict the per-mile
-            trio it sits directly under (a manual mileage override could
-            otherwise leave this warning showing "miles missing" even
-            while canonicalCpm was already happily computing from the
-            override value). */}
-        {milesSource && milesSource.totalMiles <= 0 && (
+        {/* SANITY GUARDS (requirement 3) — "no data at all in this window"
+            (e.g. "This Week" before any settlement has ever been
+            imported) and "settlements exist but have no recorded miles"
+            are genuinely different situations, named differently rather
+            than folded into one ambiguous message. */}
+        {perMileNoWindow && (
+          <MutedText style={{ color: colors.orange, fontWeight: '700', marginTop: -spacing.xs, marginBottom: spacing.sm }} numberOfLines={2}>
+            ⚠️ {t('dashboard.perMileTrio.noDataForPeriod')}
+          </MutedText>
+        )}
+        {perMileMilesMissing && (
           <MutedText style={{ color: colors.orange, fontWeight: '700', marginTop: -spacing.xs, marginBottom: spacing.sm }} numberOfLines={2}>
             ⚠️ {t('scorecard.milesMissingWarning')}
           </MutedText>
+        )}
+        {/* CPM/MILES WARNING (spec: "warn when CPM > $4"), same threshold
+            Scorecard's own breakdown uses, now correctly evaluated
+            against the CURRENT period's own cost/mile figure. */}
+        {canonicalCpm?.costPerMile != null && canonicalCpm.costPerMile > 4 && (
+          <Pressable onPress={() => setCpmWhyOpen(true)}>
+            <MutedText style={{ color: colors.red, fontWeight: '700', marginTop: -spacing.xs, marginBottom: spacing.sm }} numberOfLines={2}>
+              ⚠️ {t('scorecard.cpmTooHighWarning', { cpm: money2(canonicalCpm.costPerMile) })}
+            </MutedText>
+          </Pressable>
         )}
 
         {/* DASHBOARD LAYOUT PER SCOPE (owner decision, MULTI-TRUCK MODEL) —
@@ -1154,6 +1207,66 @@ export default function Dashboard() {
 
         <SecondaryButton title={t('common.close')} onPress={() => setExpenseExplainerOpen(false)} />
       </ModalSheet>
+
+      {/* CPM/PPM BROKEN AGAIN fix (owner decision) — a HOME-LOCAL "Why?"
+          breakdown for the per-mile trio, reflecting the exact same
+          heroPeriod window the trio itself is currently showing (never
+          Scorecard's own deliberately all-time breakdown, which would
+          silently disagree once a period other than "This Week" is
+          active). */}
+      <ModalSheet visible={cpmWhyOpen} onClose={() => setCpmWhyOpen(false)}>
+        <SheetTitle>{t('scorecard.whyTitle')}</SheetTitle>
+        <MutedText style={{ marginBottom: spacing.sm }}>
+          {t(`dashboard.hero.periodTabs.${heroPeriod}`)}
+          {periodScopedCpm.window ? ` · ${periodScopedCpm.window.startIso} – ${periodScopedCpm.window.endIso}` : ''}
+        </MutedText>
+        {perMileNoWindow ? (
+          <MutedText>{t('dashboard.perMileTrio.noDataForPeriod')}</MutedText>
+        ) : !canonicalCpm ? (
+          <MutedText>{t('common.loading')}</MutedText>
+        ) : (
+          <>
+            {perMileMilesMissing && (
+              <MutedText style={{ color: colors.orange, fontWeight: '700', marginBottom: spacing.sm }}>
+                ⚠️ {t('scorecard.milesMissingWarning')}
+              </MutedText>
+            )}
+            {canonicalCpm.buckets.map((b, i) => (
+              <View key={b.category} style={[styles.whyRow, i > 0 && styles.whyRowBorder]}>
+                <MutedText>{b.category}</MutedText>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(b.amount)}</Text>
+              </View>
+            ))}
+            <View style={[styles.whyRow, styles.whyRowBorder]}>
+              <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyFixedTotal')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{money(canonicalCpm.fixedTotal)}</Text>
+            </View>
+            <View style={[styles.whyRow, styles.whyRowBorder]}>
+              <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyVariableTotal')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{money(canonicalCpm.variableTotal)}</Text>
+            </View>
+            {canonicalCpm.excludedOneOffs.length > 0 && (
+              <>
+                <Text style={[styles.whySectionTitle, { marginTop: spacing.sm }]}>{t('scorecard.whyExcludedOneOffsTitle')}</Text>
+                <MutedText>{t('scorecard.whyExcludedOneOffsNote')}</MutedText>
+                {canonicalCpm.excludedOneOffs.map((item, i) => (
+                  <View key={`${item.description}-${i}`} style={[styles.whyRow, i > 0 && styles.whyRowBorder]}>
+                    <MutedText style={{ flex: 1 }}>{item.description}</MutedText>
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{money(item.amount)}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+            {canonicalCpm.excludedTotal > 0 && (
+              <View style={[styles.whyRow, styles.whyRowBorder]}>
+                <MutedText>{t('scorecard.cpmExcludedTotal')}</MutedText>
+                <MutedText>{money(canonicalCpm.excludedTotal)}</MutedText>
+              </View>
+            )}
+          </>
+        )}
+        <SecondaryButton title={t('common.close')} onPress={() => setCpmWhyOpen(false)} />
+      </ModalSheet>
     </Screen>
   );
 }
@@ -1162,6 +1275,23 @@ const styles = {
   compactRow: {
     flexDirection: 'row' as const,
     gap: spacing.sm,
+  },
+  whyRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingVertical: spacing.sm,
+  },
+  whyRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  whySectionTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: '700' as const,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
   },
   expenseExplainerSectionTitle: {
     color: colors.text,

@@ -299,6 +299,9 @@
     },
     "perTruckThisWeek": {
       "title": "Bu Hafta Kamyon Başına"
+    },
+    "perMileTrio": {
+      "noDataForPeriod": "Bu dönemde henüz Settlement yok — başka bir dönem seçin veya bir tane içe aktarın."
     }
   },
   "deductions": {

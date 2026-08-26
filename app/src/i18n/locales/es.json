@@ -299,6 +299,9 @@
     },
     "perTruckThisWeek": {
       "title": "Por Camión Esta Semana"
+    },
+    "perMileTrio": {
+      "noDataForPeriod": "No hay Settlements en este período todavía — elige otro período o importa uno."
     }
   },
   "deductions": {
