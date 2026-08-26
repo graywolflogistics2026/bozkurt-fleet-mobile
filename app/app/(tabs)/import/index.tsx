@@ -48,6 +48,7 @@ import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod, withPaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useDocTypeMeta } from '@/src/import/docTypes';
+import { SIMPLE_DOC_TYPES, docTypeToSimpleDocType, remapExtractionToSimpleType, type SimpleDocType } from '@/src/import/typeOverride';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
@@ -980,6 +981,21 @@ export default function Import() {
     !!selectedDriver &&
     (selectedDriver.compensation_type === 'team_split' || selectedDriver.compensation_type === 'trainee');
 
+  // DOCUMENT TYPE CONFIRMATION AT REVIEW (owner decision) — the selector's
+  // current value is DERIVED from extraction.docType every render (never a
+  // separate piece of state that could drift out of sync with what Save
+  // will actually do) via docTypeToSimpleDocType(); changing it re-maps
+  // the WHOLE extraction live, through the same setExtraction() every
+  // other preview-editable field already uses (withPrimaryExtractionDate/
+  // withPerDiemDays/withPaymentMethod), so the rest of the preview below
+  // (icon/label, duplicate check, reconciliation guard, date field,
+  // category picker, ...) all reflow from the new type automatically.
+  const selectedSimpleType = extraction ? docTypeToSimpleDocType(extraction.docType) : null;
+  function handleTypeChange(target: SimpleDocType) {
+    if (!extraction || target === selectedSimpleType) return;
+    setExtraction(remapExtractionToSimpleType(extraction, target));
+  }
+
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -1027,6 +1043,40 @@ export default function Import() {
                 <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.lg }}>{meta.label}</Text>
                 <MutedText>{t('importScreen.goesTo', { route: meta.route })}</MutedText>
               </View>
+            </View>
+
+            {/* DOCUMENT TYPE CONFIRMATION AT REVIEW (owner decision) —
+                prefilled with the AI's own classification (collapsed into
+                one of these 7 buckets), always overridable before Save.
+                Everything below this block (duplicate check, settlement-
+                replace banner, reconciliation guard, date/category
+                fields) already reads from `extraction`, so it reflows
+                live the instant a different type is picked. */}
+            <View style={{ marginBottom: spacing.sm }}>
+              <MutedText>
+                {t('importScreen.typeSelectorLabel')}
+                {extraction.confidence != null && (
+                  <Text style={{ color: extraction.confidence === 'low' ? colors.orange : colors.muted }}>
+                    {'  '}
+                    {t(extraction.confidence === 'low' ? 'importScreen.aiConfidenceLow' : 'importScreen.aiConfidenceHigh')}
+                  </Text>
+                )}
+              </MutedText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs }}>
+                {SIMPLE_DOC_TYPES.map((simple) => (
+                  <Pill
+                    key={simple}
+                    label={t(`importScreen.simpleDocType.${simple}`)}
+                    selected={selectedSimpleType === simple}
+                    onPress={() => handleTypeChange(simple)}
+                  />
+                ))}
+              </View>
+              {(selectedSimpleType === 'toll' || selectedSimpleType === 'bank_statement') && (
+                <MutedText style={{ marginTop: spacing.xs, fontSize: typography.size.xs }}>
+                  {t('importScreen.simpleDocTypeArchiveNote')}
+                </MutedText>
+              )}
             </View>
 
             {hasDuplicate && (

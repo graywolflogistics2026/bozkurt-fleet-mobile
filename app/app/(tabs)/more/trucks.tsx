@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import { File, Paths } from 'expo-file-system';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
@@ -7,6 +9,8 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList, useInsertTruck, useUpdateTruck } from '@/src/data/trucks';
 import { useLoanRows, useInsertLoanRow } from '@/src/data/loans';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { fetchTruckDeletionImpact, deleteTruckCompletely, type TruckDeletionImpact } from '@/src/data/truckDeletion';
+import { fetchTruckExportData } from '@/src/data/truckExport';
 import { AssetFinancingFields, emptyAssetFinancing, type AssetFinancingValue } from '@/src/components/AssetFinancingFields';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
@@ -112,7 +116,7 @@ function truckToForm(t: Truck): FormState {
 
 export default function Trucks() {
   const { t } = useTranslation();
-  const { number } = useFormatters();
+  const { number, money } = useFormatters();
   const { session } = useAuth();
   const userId = session?.user.id;
   const queryClient = useQueryClient();
@@ -130,6 +134,17 @@ export default function Trucks() {
   const [editing, setEditing] = useState<Truck | null>(null);
   const [editForm, setEditForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
+
+  // DELETE A TRUCK (owner decision, docs/PENDING_SQL.md §64) — a real,
+  // permanent delete, clearly separated from Retire (see the "Danger
+  // Zone" section inside the edit sheet below).
+  const [deletingTruck, setDeletingTruck] = useState<Truck | null>(null);
+  const [deleteImpact, setDeleteImpact] = useState<TruckDeletionImpact | null>(null);
+  const [loadingImpact, setLoadingImpact] = useState(false);
+  const [impactError, setImpactError] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingInProgress, setDeletingInProgress] = useState(false);
+  const [exportingTruckData, setExportingTruckData] = useState(false);
 
   const trucks = trucksQuery.data ?? [];
   const visible = useMemo(() => trucks.filter((tr) => (showRetired ? true : tr.is_active)), [trucks, showRetired]);
@@ -248,6 +263,82 @@ export default function Trucks() {
     await updateTruck.mutateAsync({ id: tr.id, values: { is_active: true } });
     await refreshTrucks();
     await invalidateFinancialData(queryClient, { entities: ['trucks'] });
+  }
+
+  // DELETE A TRUCK — a real, permanent delete (docs/PENDING_SQL.md §64),
+  // distinct from Retire above. Opens a dedicated confirmation sheet
+  // (loads real counts/$ totals first) rather than a plain Alert — a
+  // typed unit-number match is the only thing that enables the final
+  // button, same "type to confirm" friction Settings' own Delete Account
+  // flow already established.
+  async function handleOpenDeleteConfirm(tr: Truck) {
+    setEditing(null);
+    setDeletingTruck(tr);
+    setDeleteImpact(null);
+    setImpactError(null);
+    setDeleteConfirmText('');
+    setLoadingImpact(true);
+    try {
+      const impact = await fetchTruckDeletionImpact(tr.id);
+      setDeleteImpact(impact);
+    } catch (err) {
+      setImpactError(err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setLoadingImpact(false);
+    }
+  }
+
+  function deleteConfirmTarget(): string {
+    return deletingTruck?.unit_number?.trim() || 'DELETE';
+  }
+
+  async function handleExportTruckDataFirst() {
+    if (!deletingTruck) return;
+    setExportingTruckData(true);
+    try {
+      const data = await fetchTruckExportData(deletingTruck.id);
+      const payload = { exportedAt: new Date().toISOString(), truckId: deletingTruck.id, unitNumber: deletingTruck.unit_number, data };
+      const filename = `truck-${deletingTruck.unit_number ?? deletingTruck.id}-export.json`.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const file = new File(Paths.cache, filename);
+      if (file.exists) file.delete();
+      file.create();
+      file.write(JSON.stringify(payload, null, 2));
+
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert(t('settings.shareNotAvailable'));
+        return;
+      }
+      await Sharing.shareAsync(file.uri);
+    } catch (err) {
+      Alert.alert(t('settings.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+    } finally {
+      setExportingTruckData(false);
+    }
+  }
+
+  async function handleConfirmDeleteTruck() {
+    if (!deletingTruck) return;
+    if (deleteConfirmText.trim() !== deleteConfirmTarget()) return;
+    setDeletingInProgress(true);
+    try {
+      const result = await deleteTruckCompletely(deletingTruck.id);
+      await refreshTrucks();
+      // Unscoped sweep, deliberately — a truck deletion cascades across
+      // nearly every financial table (settlements/loads/fuel/maintenance/
+      // deductions/tolls/documents/capital_transactions), the same
+      // "don't try to enumerate every touched entity" reasoning Reset All
+      // Data's own invalidation call already uses.
+      await invalidateFinancialData(queryClient);
+      setDeletingTruck(null);
+      if (result.documentCleanupFailures.length > 0) {
+        Alert.alert(t('trucks.deleteDoneTitle'), t('trucks.deleteDonePartialCleanupBody', { count: result.documentCleanupFailures.length }));
+      }
+    } catch (err) {
+      Alert.alert(t('trucks.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setDeletingInProgress(false);
+    }
   }
 
   function renderForm(form: FormState, setForm: (f: FormState) => void) {
@@ -515,6 +606,105 @@ export default function Trucks() {
         {renderForm(editForm, setEditForm)}
         <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
+
+        {/* DELETE A TRUCK (owner decision, docs/PENDING_SQL.md §64) — a
+            clearly separated "Danger Zone": Retire (soft, keeps every
+            record, the default/recommended choice) above a visually
+            distinct red divider from Delete (hard, permanent). */}
+        {editing && (
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerZoneTitle}>{t('trucks.dangerZoneTitle')}</Text>
+            {editing.is_active ? (
+              <>
+                <MutedText style={{ marginBottom: spacing.xs }}>{t('trucks.retireExplain')}</MutedText>
+                <SecondaryButton title={t('trucks.retire')} onPress={() => handleRetire(editing)} />
+              </>
+            ) : (
+              <>
+                <MutedText style={{ marginBottom: spacing.xs }}>{t('trucks.reactivateExplain')}</MutedText>
+                <SecondaryButton title={t('trucks.reactivate')} onPress={() => handleReactivate(editing)} />
+              </>
+            )}
+            <View style={styles.deleteDivider} />
+            <MutedText style={{ marginBottom: spacing.xs, color: colors.red }}>{t('trucks.deleteExplain')}</MutedText>
+            <SecondaryButton title={`🗑️ ${t('trucks.deletePermanentlyButton')}`} onPress={() => handleOpenDeleteConfirm(editing)} />
+          </View>
+        )}
+      </ModalSheet>
+
+      <ModalSheet
+        visible={!!deletingTruck}
+        onClose={() => {
+          if (!deletingInProgress) setDeletingTruck(null);
+        }}
+      >
+        <SheetTitle>
+          {t('trucks.deleteConfirmTitle', { unit: deletingTruck?.unit_number ?? deletingTruck?.id ?? '' })}
+        </SheetTitle>
+
+        {loadingImpact ? (
+          <MutedText>{t('common.loading')}</MutedText>
+        ) : impactError ? (
+          <MutedText style={{ color: colors.red }}>{impactError}</MutedText>
+        ) : deleteImpact ? (
+          <>
+            <Text style={styles.deleteHeadline}>
+              {t('trucks.deleteHeadline', { amount: money(deleteImpact.totalDollarValue) })}
+            </Text>
+            <View style={styles.deleteImpactRow}>
+              <MutedText>{t('trucks.deleteImpactSettlements')}</MutedText>
+              <Text style={styles.deleteImpactValue}>{number(deleteImpact.settlementsCount)}</Text>
+            </View>
+            <View style={styles.deleteImpactRow}>
+              <MutedText>{t('trucks.deleteImpactLoads')}</MutedText>
+              <Text style={styles.deleteImpactValue}>{number(deleteImpact.loadsCount)}</Text>
+            </View>
+            <View style={styles.deleteImpactRow}>
+              <MutedText>{t('trucks.deleteImpactFuel')}</MutedText>
+              <Text style={styles.deleteImpactValue}>{number(deleteImpact.fuelPurchasesCount)}</Text>
+            </View>
+            <View style={styles.deleteImpactRow}>
+              <MutedText>{t('trucks.deleteImpactMaintenance')}</MutedText>
+              <Text style={styles.deleteImpactValue}>{number(deleteImpact.maintenanceRecordsCount)}</Text>
+            </View>
+            <View style={styles.deleteImpactRow}>
+              <MutedText>{t('trucks.deleteImpactTolls')}</MutedText>
+              <Text style={styles.deleteImpactValue}>{number(deleteImpact.tollsCount)}</Text>
+            </View>
+            <View style={styles.deleteImpactRow}>
+              <MutedText>{t('trucks.deleteImpactDeductions')}</MutedText>
+              <Text style={styles.deleteImpactValue}>{number(deleteImpact.deductionsCount)}</Text>
+            </View>
+            <View style={[styles.deleteImpactRow, { marginBottom: spacing.sm }]}>
+              <MutedText>{t('trucks.deleteImpactDocuments')}</MutedText>
+              <Text style={styles.deleteImpactValue}>{number(deleteImpact.documentsCount)}</Text>
+            </View>
+
+            <MutedText style={{ marginBottom: spacing.sm }}>{t('trucks.deleteBalanceNote')}</MutedText>
+
+            <SecondaryButton
+              title={`⬇️ ${t('trucks.exportFirstButton')}`}
+              onPress={handleExportTruckDataFirst}
+              loading={exportingTruckData}
+            />
+
+            <MutedText style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+              {t('trucks.deleteTypeToConfirm', { unit: deleteConfirmTarget() })}
+            </MutedText>
+            <Field
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder={deleteConfirmTarget()}
+            />
+            <PrimaryButton
+              title={t('trucks.deletePermanentlyButton')}
+              onPress={handleConfirmDeleteTruck}
+              loading={deletingInProgress}
+              disabled={deleteConfirmText.trim() !== deleteConfirmTarget()}
+            />
+            <SecondaryButton title={t('common.cancel')} onPress={() => setDeletingTruck(null)} disabled={deletingInProgress} />
+          </>
+        ) : null}
       </ModalSheet>
     </Screen>
   );
@@ -527,5 +717,41 @@ const styles = {
     fontWeight: '700' as const,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
+  },
+  dangerZone: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  dangerZoneTitle: {
+    color: colors.muted,
+    fontSize: typography.size.xs,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  deleteDivider: {
+    height: 1,
+    backgroundColor: colors.red,
+    opacity: 0.35,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  deleteHeadline: {
+    color: colors.red,
+    fontWeight: '700' as const,
+    fontSize: typography.size.md,
+    marginBottom: spacing.sm,
+  },
+  deleteImpactRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 2,
+  },
+  deleteImpactValue: {
+    color: colors.text,
+    fontWeight: '600' as const,
   },
 };

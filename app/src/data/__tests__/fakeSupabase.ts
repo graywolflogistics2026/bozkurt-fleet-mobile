@@ -26,11 +26,55 @@ export type FakeSupabaseFailure = {
   count?: number;
 };
 
+// DELETE A TRUCK (owner decision, docs/PENDING_SQL.md §64) — a MINIMAL,
+// explicit mirror of every `on delete cascade` foreign key this app's own
+// schema documents (docs/SCHEMA.sql + PENDING_SQL.md's own §-by-§ history),
+// so a test can prove "deleting the PARENT row also removes every CHILD
+// row the real FK graph is documented to cascade" using real code paths —
+// same honest-boundary spirit as every other fake in this file: this
+// proves the CLIENT-VISIBLE deletion shape matches what the schema is
+// documented to do, not that the real Postgres FK constraints are wired
+// exactly this way (no live Postgres in this environment to verify that
+// against). Deliberately NOT a general FK-introspection engine — just the
+// specific, finite list of cascades this app's own delete flows rely on.
+const CASCADE_RULES: Array<{ table: string; column: string; parent: string }> = [
+  // docs/PENDING_SQL.md §64 (DELETE A TRUCK) — previously RESTRICT.
+  { table: 'settlements', column: 'truck_id', parent: 'trucks' },
+  { table: 'fuel_purchases', column: 'truck_id', parent: 'trucks' },
+  { table: 'maintenance_records', column: 'truck_id', parent: 'trucks' },
+  { table: 'deductions', column: 'truck_id', parent: 'trucks' },
+  { table: 'tolls', column: 'truck_id', parent: 'trucks' },
+  { table: 'maintenance_intervals', column: 'truck_id', parent: 'trucks' },
+  { table: 'truck_health_config', column: 'truck_id', parent: 'trucks' },
+  // docs/SCHEMA.sql — already-existing cascades, second-hop from the above.
+  { table: 'loads', column: 'settlement_id', parent: 'settlements' },
+  { table: 'capital_transactions', column: 'linked_deduction_id', parent: 'deductions' },
+];
+
 export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { failures?: FakeSupabaseFailure[] } = {}) {
   const store: FakeSupabaseStore = {};
   for (const [table, rows] of Object.entries(seed)) store[table] = rows.map((r) => ({ ...r }));
   let idCounter = 1;
   const failures = (options.failures ?? []).map((f) => ({ ...f, remaining: f.count ?? Infinity }));
+
+  // Recursively removes every row in a CASCADE_RULES child table whose FK
+  // column matches one of the just-deleted parent rows' own ids — then
+  // cascades AGAIN from whatever it just deleted (so trucks -> settlements
+  // -> loads, and trucks -> deductions -> capital_transactions, both
+  // multi-hop chains, resolve correctly in one call).
+  function cascadeDelete(parentTable: string, deletedParentRows: Row[]) {
+    if (deletedParentRows.length === 0) return;
+    const parentIds = new Set(deletedParentRows.map((r) => r.id));
+    for (const rule of CASCADE_RULES) {
+      if (rule.parent !== parentTable) continue;
+      const childRows = store[rule.table] ?? [];
+      const toDelete = childRows.filter((row) => parentIds.has(row[rule.column]));
+      if (toDelete.length === 0) continue;
+      const toDeleteIds = new Set(toDelete.map((r) => r.id));
+      store[rule.table] = childRows.filter((row) => !toDeleteIds.has(row.id));
+      cascadeDelete(rule.table, toDelete);
+    }
+  }
 
   function takeFailure(table: string, mode: string): FakeSupabaseError | null {
     const match = failures.find((f) => f.table === table && (f.mode == null || f.mode === mode) && f.remaining > 0);
@@ -67,6 +111,7 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
           else remaining.push(row);
         }
         store[table] = remaining;
+        cascadeDelete(table, deleted);
         return deleted;
       }
       return tableRows.filter((row) => filters.every((f) => f(row)));

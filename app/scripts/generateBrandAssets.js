@@ -41,6 +41,11 @@ const sharp = require('sharp');
 // app/src either.
 const BG_COLOR = '#08080c'; // theme.ts colors.bg
 const MARK_COLOR_LIGHT = '#ffffff'; // BrandLogo.tsx BRAND_LOGO_LIGHT
+// SPLASH SCREEN WORDMARK (owner decision) — app/src/brand.ts's BRAND_NAME,
+// copied as a plain string literal for the same "each standalone tool
+// keeps its own copy in sync by hand" reason as BG_COLOR/MARK_COLOR_LIGHT
+// above (this script can't import a TS module).
+const WORDMARK_TEXT = 'BOZKA TRUCKING AI';
 
 // BrandLogo.tsx's own viewBox and 5 shapes, verbatim (stroke-based line
 // art, strokeWidth 2, matching every stroke/fill/linejoin/linecap
@@ -83,6 +88,55 @@ function composeSquareSvg({ size, backgroundColor, markColor, widthFraction, cor
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     ${bg}
     ${mark}
+  </svg>`;
+}
+
+// Composes the launch-screen SVG: the truck mark, plus WORDMARK_TEXT
+// centered directly beneath it — SPLASH SCREEN WORDMARK (owner decision).
+// Transparent background, same as the plain splash mark this replaces —
+// expo-splash-screen's own `backgroundColor: '#08080c'` in app.config.js
+// already fills the rest of the screen (resizeMode "contain" means this
+// whole composition scales down as one unit to fit, so making it taller
+// than the bare mark alone needs no other config change). The mark keeps
+// the EXACT SAME width/scale ICON_WIDTH_FRACTION already gives it (so the
+// glyph itself looks identical to every other surface using that same
+// fraction) — only its vertical position shifts up to make room for the
+// wordmark sitting below it; the pair is then centered as ONE block
+// within the square canvas, with generous padding on every side.
+function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textColor, widthFraction, text }) {
+  const markWidth = size * widthFraction;
+  const markHeight = markWidth * (VIEWBOX_HEIGHT / VIEWBOX_WIDTH);
+  const scale = markWidth / VIEWBOX_WIDTH;
+  const markTx = (size - markWidth) / 2;
+
+  // "small" text (per the design brief) — well under the mark's own
+  // visual weight — with real letter-spacing for a wordmark feel.
+  const fontSize = size * 0.032;
+  const letterSpacing = fontSize * 0.22;
+  const gap = size * 0.045; // breathing room between mark and text
+
+  const blockHeight = markHeight + gap + fontSize;
+  const blockTop = (size - blockHeight) / 2;
+  const markTy = blockTop;
+  const textBaselineY = blockTop + markHeight + gap + fontSize * 0.78; // ~cap-height baseline offset
+
+  const bg = backgroundColor ? `<rect x="0" y="0" width="${size}" height="${size}" fill="${backgroundColor}" />` : '';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    ${bg}
+    <g transform="translate(${markTx.toFixed(3)}, ${markTy.toFixed(3)}) scale(${scale.toFixed(6)})">
+      ${truckMarkInnerSvg(markColor)}
+    </g>
+    <text
+      x="${(size / 2).toFixed(3)}"
+      y="${textBaselineY.toFixed(3)}"
+      text-anchor="middle"
+      font-family="Arial, Helvetica, sans-serif"
+      font-weight="700"
+      font-size="${fontSize.toFixed(3)}"
+      letter-spacing="${letterSpacing.toFixed(3)}"
+      fill="${textColor}"
+    >${text}</text>
   </svg>`;
 }
 
@@ -166,12 +220,26 @@ async function main() {
 
   // splash-icon.png (expo-splash-screen plugin, resizeMode "contain") —
   // the plugin's own `backgroundColor: '#08080c'` in app.config.js already
-  // fills the rest of the screen, so this file is the mark ONLY on a
-  // transparent background — compositing it over that already-correct
-  // background is what makes the launch screen match the app's first
-  // screen seamlessly (no separate background-color fix needed here).
+  // fills the rest of the screen, so this file is the mark + wordmark
+  // ONLY on a transparent background — compositing it over that already-
+  // correct background is what makes the launch screen match the app's
+  // first screen seamlessly (no separate background-color fix needed
+  // here). SPLASH SCREEN WORDMARK (owner decision): the app name now
+  // renders beneath the truck mark, white, letter-spaced, small — see
+  // composeSplashWithWordmarkSvg()'s own header comment for the layout
+  // math. Every OTHER surface (icon.png, favicon, store assets, Android
+  // adaptive layers) deliberately keeps the plain mark-only design — a
+  // wordmark makes sense on a launch screen with room to breathe, not on
+  // a tiny app-icon glyph.
   await renderSvgToPng(
-    composeSquareSvg({ size: 1024, backgroundColor: null, markColor: MARK_COLOR_LIGHT, widthFraction: ICON_WIDTH_FRACTION }),
+    composeSplashWithWordmarkSvg({
+      size: 1024,
+      backgroundColor: null,
+      markColor: MARK_COLOR_LIGHT,
+      textColor: MARK_COLOR_LIGHT,
+      widthFraction: ICON_WIDTH_FRACTION,
+      text: WORDMARK_TEXT,
+    }),
     path.join(ASSETS_DIR, 'splash-icon.png')
   );
 

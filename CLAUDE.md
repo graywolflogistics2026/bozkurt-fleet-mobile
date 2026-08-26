@@ -7746,3 +7746,237 @@
   `tsc --noEmit` clean; all 7 locales confirmed key-parity (glossary
   test re-passed clean). No SQL/Edge Function changes — pure client-side
   JS/TS. Ships via a normal `eas update`.
+- THREE ITEMS — SPLASH WORDMARK, DELETE A TRUCK, DOCUMENT TYPE
+  CONFIRMATION AT REVIEW (owner decision, docs/PENDING_SQL.md §64, NOT
+  YET RUN).
+  1. **SPLASH WORDMARK**: `app/scripts/generateBrandAssets.js` gained
+     `composeSplashWithWordmarkSvg()` — the truck mark plus `BRAND_NAME`
+     ("BOZKA TRUCKING AI"), white, letter-spaced, small font, centered as
+     ONE block beneath the mark, generous padding on every side — used
+     ONLY for `splash-icon.png`'s own generation call; every OTHER
+     surface (icon.png, favicon, Android adaptive layers, store assets)
+     keeps the plain mark-only design unchanged (confirmed via a
+     regenerate-and-diff: only `splash-icon.png` actually changed).
+     Regenerated and visually verified (composited over the app's own
+     `#08080c` background and inspected) — wordmark renders correctly,
+     no font-rendering gap in this environment's `sharp`/librsvg build.
+     **Needs a new EAS BUILD, not an OTA update** — `splash-icon.png` is a
+     native-level asset baked in at build time (same class of constraint
+     as every other `app.config.js` image asset, per the APP ICON +
+     SPLASH entry above).
+  2. **DELETE A TRUCK** — a real, permanent delete, distinct from Retire
+     (`trucks.is_active = false`, unchanged, still the default/
+     recommended option, CLAUDE.md invariant #7's "every record stays").
+     **Schema fix (docs/PENDING_SQL.md §64)**: adversarial-audit finding,
+     confirmed by reading `docs/SCHEMA.sql` line by line — 5 `truck_id`
+     foreign keys (`settlements`, `fuel_purchases` (§6),
+     `maintenance_records`, `deductions` (§63a), `tolls` (§63c)) were
+     plain `references trucks` with NO `on delete` clause, which defaults
+     to `NO ACTION` (behaves exactly like `RESTRICT`) — `delete from
+     trucks` failed with a foreign-key violation the instant any row
+     anywhere still pointed at that truck, making a real delete
+     structurally impossible before this fix. §64 drops each constraint
+     by its ACTUAL name (looked up dynamically via `pg_constraint`,
+     never guessed — `settlements_user_id_week_ending_key`'s own
+     precedent elsewhere in this file already confirms this app relies
+     on Postgres's default auto-naming) and re-adds all 5 as `on delete
+     cascade`. Two OTHER `truck_id` FKs were ALREADY correct and left
+     untouched: `maintenance_intervals.truck_id`/`truck_health_config.
+     truck_id` were already `on delete cascade` (per-truck SETTINGS
+     rows); `drivers.default_truck_id`/`compliance_items.truck_id` are
+     both deliberately kept `on delete set null` — a driver or compliance
+     item is not "that truck's data," it should survive the truck's own
+     deletion, just lose the now-meaningless association.
+     **Atomicity, no new Edge Function/RPC needed**: with §64 applied, a
+     single `delete from trucks where id = $1` — a plain client-side
+     Supabase call, RLS-scoped to the caller's own row (`trucks_owner_all`
+     `for all` policy already covers DELETE) — is a genuinely atomic
+     Postgres transaction: it cascades every settlement/load (a second
+     hop, via the ALREADY-existing `loads.settlement_id on delete
+     cascade`)/fuel_purchase/maintenance_record/deduction/toll/
+     maintenance_interval/truck_health_config row, and any
+     `capital_transactions` row LINKED to one of those cascaded
+     deductions (a second hop, via the ALREADY-existing
+     `capital_transactions.linked_deduction_id on delete cascade`) — all
+     inside the one transaction that statement runs in. No RPC was
+     needed the way §60's balance-ledger fixes needed one, because there
+     is no non-cascadable side effect to make atomic alongside the row
+     deletes (see the business-balance decision below).
+     `app/src/data/truckDeletion.ts`: `fetchTruckDeletionImpact(truckId)`
+     (read-only counts + a `totalDollarValue` — sum of every settlement's
+     own gross plus every fuel/maintenance/toll/deduction amount,
+     deliberately NOT summing `loads.revenue` too, since that's already
+     counted once inside its own settlement's gross) drives the
+     confirmation screen's real numbers; `deleteTruckCompletely(truckId)`
+     collects every `document_id` referenced by the truck's settlements/
+     maintenance_records/deductions BEFORE the delete (the only join path
+     that still exists at that point), issues the ONE atomic delete, then
+     — AFTER it has already succeeded — runs a best-effort cleanup pass
+     reusing the EXISTING `cleanupOrphanedDocument()`
+     (`deductionMutations.ts`, the same function every other per-record
+     delete flow already calls) once per collected id, which re-checks
+     genuine orphan status itself so a document still referenced
+     elsewhere (a different truck, a fleet-level row) is never touched.
+     Storage cleanup is deliberately a SEPARATE, non-transactional pass —
+     the same honest limitation `delete-account`/`reset-data` already
+     document (Storage deletion can't be rolled back together with a SQL
+     statement) — a failure there is reported (`documentCleanupFailures`)
+     but never means the truck or its financial records survived.
+     **Business balance, stated plainly (the request's own "make it
+     consistent" instruction)**: deleting a truck's settlements does
+     **NOT** reverse any of their `business_balance_credit` from
+     `profiles.business_balance` — matching the app's own PRE-EXISTING,
+     single precedent exactly (`useDeleteSettlement`, Settlements' own
+     individual delete action, is a plain `useEntityDelete` with no
+     balance-reversal step at all — confirmed by reading it before
+     deciding this, not assumed). The real cash the carrier already paid
+     isn't un-deposited just because the record of it is gone; truck
+     deletion is a bulk application of the identical, already-shipped
+     rule, not a new one invented for this feature. Tax estimates and the
+     Capital Account summary need zero special handling — both are
+     computed LIVE from whatever rows currently exist (CLAUDE.md
+     invariant #6's "no cached/stored total" convention), so the very
+     next read after a deletion is automatically correct. `delete-account`/
+     `reset-data`'s own explicit per-table deletion loops were
+     deliberately NOT touched — they already delete children before
+     parents (working correctly regardless of RESTRICT vs. CASCADE), and
+     rewriting their order to lean on the new cascade would be an
+     unrequested, unnecessary risk to two already-hardened Edge Functions.
+     **UI** (`app/(tabs)/more/trucks.tsx`, the edit sheet — this app's
+     "truck detail screen"): a "Danger Zone" section, visually separated
+     by a red divider, under Save/Cancel — Retire (soft, unchanged
+     behavior, now with explanatory copy) above the divider, "🗑️ Delete
+     Truck Permanently" below it in red. Tapping it opens a dedicated
+     confirmation `ModalSheet`: real itemized counts (Settlements/Loads/
+     Fuel/Maintenance/Tolls/Deductions/Documents) + the headline dollar
+     total, the business-balance statement above, an "⬇️ Export This
+     Truck's Data First" button (`app/src/data/truckExport.ts`'s
+     `fetchTruckExportData()` — a truck-scoped counterpart to Settings'
+     own `fetchAllUserData()`, same `File`/`Paths`/`Sharing` JSON-export
+     pattern), and a required typed-unit-number field (falls back to the
+     literal word "DELETE" when a truck has no `unit_number` set) gating
+     the final button — same "type to confirm" friction Settings' own
+     Delete Account flow already established. `refreshTrucks()`
+     (`ActiveTruckContext`) self-heals correctly with no code change
+     needed: it re-derives `activeTruck` from a fresh `trucks` fetch, so
+     deleting the currently-active truck naturally falls back to the
+     remaining truck (n=1) or "All Trucks" (n>1), the exact same logic
+     path an already-invalid stored preference already went through.
+     **Tests, real cascade + atomicity proof, not hand-waved**:
+     `fakeSupabase.ts` gained `CASCADE_RULES` + a recursive
+     `cascadeDelete()` — a minimal, explicit mirror of every `on delete
+     cascade` FK this app's schema documents (both §64's 5 new ones and
+     the 2 pre-existing second-hop ones), wired into the fake's own
+     `.delete()` path, so a test can prove "deleting the PARENT row
+     removes every CHILD row the real FK graph is documented to cascade"
+     against real code — same honest-boundary spirit as every other fake
+     in this file (proves the CLIENT-VISIBLE deletion shape is correct,
+     not that live Postgres is actually configured this way — §64 must
+     really be run). Full jest suite re-run against this change
+     (16 suites / 196 tests) confirmed zero regressions in any
+     pre-existing test that already relied on `.delete()`.
+     `truckDeletion.test.ts` (new, 8 tests): real counts/dollar total
+     scoped to exactly one truck of a two-truck fleet; a zero-record
+     truck returns all zeros; cascade removes every settlement/load/fuel/
+     maintenance/toll/deduction/linked-contribution/setting row tied to
+     the truck; a DIFFERENT truck's own data is completely untouched; a
+     fleet-level deduction (no `truck_id`) and a manual (non-linked)
+     capital contribution both survive untouched; orphaned documents get
+     cleaned up (Storage + row) while a document still referenced by
+     another truck is left alone; **atomicity**: an injected failure on
+     the truck delete itself throws and performs ZERO document cleanup,
+     nothing partially removed; a failed document cleanup is reported,
+     never thrown, and never undoes the already-succeeded truck deletion.
+  3. **DOCUMENT TYPE CONFIRMATION AT REVIEW**: `app/src/import/
+     typeOverride.ts` (new, pure) — the AI's own 17-value internal
+     `DocType` classification is collapsed to the 7 buckets a user can
+     actually choose between: Settlement / Expense receipt / Fuel /
+     Maintenance / Toll / Bank statement / Other. `docTypeToSimpleDocType()`
+     is the selector's PREFILLED starting value (settlement/fuel/
+     maintenance/amazon|store map to their own bucket; every other raw
+     docType — w2/insurance/loan_agreement/toll/... — folds into "Other,"
+     since a full 17-way picker would defeat the point of "a clear
+     selector"). `remapExtractionToSimpleType(extraction, target)` is
+     called LIVE on every tap (`app/(tabs)/import/index.tsx`, via the
+     SAME `setExtraction()` pattern `withPrimaryExtractionDate()`/
+     `withPerDiemDays()`/`withPaymentMethod()` already use — never a
+     second, parallel piece of state that could drift from what Save
+     actually does), so the whole preview below it (icon/label, duplicate
+     check, settlement-replace banner, reconciliation guard, date field,
+     category picker) reflows from the new type automatically. "Keeping
+     what applies, dropping what doesn't" is implemented as: derive the
+     BEST-available vendor/date/totalAmount/summary by checking every
+     sub-object a prior classification might have populated (a
+     settlement's own `carrier`/`weekEnding`/`netPay`, a maintenance
+     record's own `shop`/`total`, ...) — never inventing a value, only
+     relocating one to where the mapper for the NEW type actually reads
+     from (confirmed by reading `mapExtraction.ts`'s own mapper bodies:
+     `mapPurchase()`/`mapFuel()`/`mapMaintenance()`/`mapGenericDeduction()`
+     all read primarily from these TOP-LEVEL `Extraction` fields, not
+     their own docType-specific sub-object, which is what makes this
+     remap tractable at all) — then ensure the target's own sub-object
+     exists as at least `{}` ONLY when `aiImportSave.ts`'s own dispatch
+     chain requires it truthy (`docType === 'fuel' && d.fuel`, etc. — a
+     real, confirmed-by-reading-the-dispatch-chain requirement, not
+     guessed). The ORIGINAL sub-object is deliberately NEVER deleted —
+     switching the selector back and forth is lossless, nothing is
+     destroyed by trying a type and changing your mind. **Settlement is
+     never synthesized from scratch** — remapping INTO "Settlement" only
+     ever preserves already-present `d.settlement` data (there's no sane
+     way to invent `week_ending`/gross/net from an unrelated receipt);
+     the existing "Week Ending required" gate (invariant #10) already
+     blocks Save with a clear message if that's genuinely missing, same
+     as it always has for any settlement extraction. **Toll and Bank
+     statement, an honest, stated gap, not a silent one**: neither has a
+     dedicated extraction shape or DB save destination anywhere in the
+     ai-import pipeline today — confirmed by reading `aiImportSave.ts`'s
+     own dispatch chain, `'toll'` was ALREADY silently falling through to
+     the generic-deduction save path before this feature existed (no
+     standalone `tolls`-table write path has ever existed for an
+     ai-import doc, only for a settlement's own itemized toll section);
+     bank/credit-card statements have NO ai-import docType at all
+     (CLAUDE.md's own NAV SIMPLIFICATION / FEATURE FLAGS entry: the ONLY
+     import path for those two entities is the separate legacy-backup
+     JSON importer). Both route through `docType: 'other'` (archived,
+     saved as a NEEDS-REVIEW deduction, invariant #14) — exactly what
+     already happened for "toll" silently before, now visible, user-
+     controlled, and labeled with an explicit "a dedicated ledger for
+     this type isn't built yet" note in the preview rather than a smooth,
+     misleading confirmation. Building either a real toll ledger or a
+     real bank-statement extraction shape is a materially larger,
+     unrequested feature, out of scope here.
+     **The required test, proven end to end, not just at the remap
+     function's own boundary**: an AI-classified settlement (`carrier:
+     'Prime Inc'`, `weekEnding: '2026-06-06'`, `netPay: 850`) changed to
+     "Expense receipt" produces `docType: 'store'` with `vendor`/`date`/
+     `totalAmount` correctly pulled from the settlement's own fields —
+     verified by feeding the remapped extraction through the REAL
+     `mapPurchase()` (not a re-implementation) and asserting the
+     resulting deduction has `amount: 850`, `ded_date: '2026-06-06'`,
+     `store: 'Prime Inc'`, exactly the literal wording of the requested
+     test case.
+     Tests (`typeOverride.test.ts`, new, 12 tests): every raw-docType-to-
+     bucket mapping; toll/bank_statement both confirmed to route to the
+     same "other" fallback as a documented, tested fact rather than an
+     assumption; the required settlement→expense-receipt case end to end
+     through the real `mapPurchase()`; the target sub-object correctly
+     synthesized as truthy when absent (fuel/maintenance) and NEVER
+     overwritten when already present; the original sub-object surviving
+     a remap untouched (lossless switch-back); an already-correct top-
+     level field never overwritten by a worse nested fallback value.
+  Tests: 114 suites / 2730 tests pass (20 new: 8 truckDeletion + 12
+  typeOverride); `tsc --noEmit` clean. i18n: 28 new keys across
+  `trucks.*` (20) and `importScreen.*` (8, including the 7-way
+  `simpleDocType.*` block) — es/ru/ar/tr fully translated ("Settlement"
+  kept in Latin script per the glossary in every locale), hi/uk as
+  untranslated English copies per invariant #11; glossary test re-passed
+  clean (1176 tests). `docs/PENDING_SQL.md` §64 (also mirrored as
+  `pending_64.sql` at the repo root) is **NOT YET RUN** — item 2's client
+  code depends on it (a plain truck delete will still fail with a
+  foreign-key violation exactly as before until it's applied); items 1
+  and 3 work standalone. No Edge Function was touched — no redeploy
+  needed for `ai-import`/`ai-advisor`/`reset-data`/`delete-account`.
+  Every change except item 1's asset regeneration is pure client-side
+  JS/TS/SQL, ships via a normal `eas update`; item 1 needs a fresh EAS
+  BUILD (native asset, not OTA-updatable) before the new splash wordmark
+  reaches a device.

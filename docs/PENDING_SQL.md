@@ -3478,6 +3478,163 @@ shape beyond what already exists for fuel/maintenance/settlements.
 
 ---
 
+## 64. DELETE A TRUCK — truck_id FK cascade fix (owner decision) — NOT YET RUN
+
+Adversarial audit finding, cited directly in the owner's own request: five
+`truck_id` foreign keys are plain `references trucks` with NO `on delete`
+clause — Postgres's default action for that is `NO ACTION`, which behaves
+exactly like `RESTRICT` (a `delete from trucks where id = X` fails with a
+foreign-key-violation error the instant ANY row anywhere still points at
+that truck). Two OTHER `truck_id` FKs already exist and are already
+correct — `maintenance_intervals.truck_id`/`truck_health_config.truck_id`
+are both already `on delete cascade` (per-truck SETTINGS rows, correctly
+disappear with their truck) — and two more are deliberately NOT changed
+by this section: `drivers.default_truck_id` and
+`compliance_items.truck_id` are both `on delete set null` (a driver or a
+compliance item is NOT "that truck's data" the way a settlement/fuel/
+maintenance/deduction/toll row is — it should SURVIVE the truck's own
+deletion, just lose the now-meaningless truck association, exactly the
+behavior `set null` already gives it; out of scope for this section).
+
+The 5 that must change, all currently RESTRICT: `settlements.truck_id`,
+`fuel_purchases.truck_id` (§6), `maintenance_records.truck_id`,
+`deductions.truck_id` (§63a), `tolls.truck_id` (§63c). None of these were
+given an explicit constraint name at creation time, so Postgres
+auto-generated one (`<table>_truck_id_fkey`, its own default naming
+convention — `settlements_user_id_week_ending_key`'s own precedent
+elsewhere in this file confirms this app already relies on that default
+naming) — rather than hardcode a name that could theoretically have drifted,
+the migration below looks the ACTUAL constraint up dynamically via
+`pg_constraint` (matched by "a foreign key on this table whose target is
+`trucks`" — each of these 5 tables has exactly one such FK, confirmed by
+re-reading every column definition in `docs/SCHEMA.sql`/this file's own
+§6/§63 text) and drops it by its real name, whatever that turns out to be,
+before adding the new `on delete cascade` version under a fixed, explicit
+name every future migration can rely on.
+
+```sql
+-- 64a. Drop whichever constraint currently enforces settlements/
+-- fuel_purchases/maintenance_records/deductions/tolls.truck_id -> trucks,
+-- by its ACTUAL name (never guessed) — a table with more than one FK to
+-- `trucks` would make this loop ambiguous, so it also asserts there's
+-- exactly one before dropping, rather than silently dropping the wrong one.
+do $$
+declare
+  con record;
+  match_count int;
+begin
+  for con in
+    select c.conname, c.conrelid::regclass::text as tbl
+    from pg_constraint c
+    where c.contype = 'f'
+      and c.confrelid = 'trucks'::regclass
+      and c.conrelid in (
+        'settlements'::regclass, 'fuel_purchases'::regclass,
+        'maintenance_records'::regclass, 'deductions'::regclass,
+        'tolls'::regclass
+      )
+  loop
+    select count(*) into match_count
+    from pg_constraint
+    where contype = 'f' and confrelid = 'trucks'::regclass and conrelid = con.conrelid::regclass;
+    if match_count <> 1 then
+      raise exception 'expected exactly one FK from % to trucks, found %', con.tbl, match_count;
+    end if;
+    execute format('alter table %s drop constraint %I', con.tbl, con.conname);
+  end loop;
+end $$;
+
+-- 64b. Re-add all 5 as ON DELETE CASCADE, under a fixed name — idempotent
+-- (safe to re-run: 64a's own dynamic lookup finds nothing left to drop on
+-- a second run, since these fixed names now exist; guard the ADD too in
+-- case 64a already ran but 64b was interrupted before finishing).
+do $$ begin
+  alter table settlements add constraint settlements_truck_id_fkey
+    foreign key (truck_id) references trucks(id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table fuel_purchases add constraint fuel_purchases_truck_id_fkey
+    foreign key (truck_id) references trucks(id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table maintenance_records add constraint maintenance_records_truck_id_fkey
+    foreign key (truck_id) references trucks(id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table deductions add constraint deductions_truck_id_fkey
+    foreign key (truck_id) references trucks(id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table tolls add constraint tolls_truck_id_fkey
+    foreign key (truck_id) references trucks(id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+```
+
+DOWNSTREAM CASCADE, already correct, no change needed: `loads.settlement_id
+on delete cascade` (already existed — deleting a settlement already took
+its loads with it, D6/legacy `deleteSett()` parity) and
+`capital_transactions.linked_deduction_id on delete cascade` (already
+existed, PENDING_SQL.md's own D5/invariant #5 precedent) — so once
+`settlements`/`deductions` cascade away from a deleted truck, their own
+loads and any LINKED capital contributions cascade away automatically, a
+second hop, with no further schema change required. `driver_payments.
+settlement_id on delete set null` also needs no change — a driver's
+payment record is compensation data, not truck data, and correctly
+SURVIVES (losing only its now-meaningless settlement link) exactly as it
+already does for a plain settlement delete today.
+
+`documents` rows are NOT touched by this cascade at all (nothing in the
+FK graph points FROM `trucks` TO `documents` — the direction is
+`settlements.document_id -> documents`, the opposite way) — the app-level
+delete flow (`app/src/data/truckDeletion.ts`) collects every
+`document_id` referenced by the truck's settlements/maintenance_records/
+deductions BEFORE deleting the truck, then calls the EXISTING
+`cleanupOrphanedDocument()` (`app/src/data/deductionMutations.ts`, already
+used by every other per-record delete flow in this app) once per
+collected id AFTER the truck delete succeeds — it re-checks genuine
+orphan status itself (a document shared with a still-live row elsewhere
+is left alone) and removes both the Storage object and the `documents`
+row. This is intentionally a SEPARATE, best-effort pass, not folded into
+the same SQL transaction as the truck delete — Storage deletion is a
+non-transactional API call that cannot be rolled back together with a SQL
+statement anyway (same honest limitation `delete-account`/`reset-data`
+already document for the identical reason); the DB-ROW deletion itself
+(the truck plus every cascaded settlement/load/fuel/maintenance/toll/
+deduction/linked-contribution row) IS a single atomic `delete from trucks
+where id = $1` statement — Postgres guarantees that whole cascade commits
+or none of it does, which is what "atomic: everything goes or nothing
+does" means for the financial records themselves.
+
+BUSINESS BALANCE, STATED PLAINLY (owner decision, per the request's own
+"make it consistent" instruction): deleting a truck's settlements does
+**NOT** reverse any of their `business_balance_credit` from
+`profiles.business_balance` — the balance keeps reflecting the real cash
+the carrier already paid into the business account; deleting the RECORD
+of a settlement doesn't un-deposit that money. This matches the app's
+own PRE-EXISTING, single precedent exactly: Settlements' own individual
+delete action (`useDeleteSettlement`, a plain `useEntityDelete` with no
+balance-reversal step at all) has never reversed `business_balance`
+either — truck deletion is a bulk application of the identical, already-
+shipped behavior, not a new rule invented for this feature. The Delete
+Truck confirmation screen states this explicitly ("Your Business Balance
+will not change — it reflects money already received"). Tax estimates and
+the Capital Account summary need NO special handling at all: both are
+computed LIVE from whatever `settlements`/`deductions`/`capital_transactions`
+rows currently exist (CLAUDE.md invariant #6's own "no cached/stored
+total" convention) — once the truck's rows are gone, the very next read
+of either screen is automatically correct with zero extra code.
+
+- [ ] 64a run (drop the 5 existing RESTRICT-equivalent truck_id FKs, by
+      their real names)
+- [ ] 64b run (re-add all 5 as ON DELETE CASCADE)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —
