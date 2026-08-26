@@ -25,8 +25,11 @@ function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
 // Session 9e-B1: Dashboard-only top bar — hamburger (opens MenuSheet,
 // state lifted to TabsLayout below) / brand wordmark / notification bell
 // (badge = compliance + Truck Health items due, opens the new Alerts
-// screen). Every other tab keeps the default TruckSwitcher header
-// unchanged.
+// screen). Every other tab keeps the default header's TruckSwitcher
+// badge — read-only as of the MULTI-TRUCK MODEL SELECTOR PLACEMENT pass
+// (owner decision): the ONE interactive scope control now lives solely
+// on Home (FleetScopeSelectorStrip), so this never risks becoming a
+// second, divergent picker.
 function DashboardHamburger({ onPress }: { onPress: () => void }) {
   return (
     <Pressable onPress={onPress} hitSlop={12} style={{ paddingHorizontal: spacing.md }}>

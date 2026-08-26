@@ -1,4 +1,4 @@
-import { buildTruckComparison, type ComparisonDeduction, type ComparisonSettlement, type ComparisonTruck } from '@/src/stats/truckComparison';
+import { buildTruckComparison, withAllocatedBucket, type ComparisonDeduction, type ComparisonSettlement, type ComparisonTruck } from '@/src/stats/truckComparison';
 import { calcCanonicalCpm } from '@/src/stats/cpm';
 
 const truckA: ComparisonTruck = {
@@ -170,5 +170,40 @@ describe('buildTruckComparison', () => {
     expect(result.rows.every((r) => r.grossRevenue === 0)).toBe(true);
     expect(result.unassignedRow).toBeNull();
     expect(result.fleetTotals.grossRevenue).toBe(0);
+  });
+
+  it("a row's own cpmBreakdown + withAllocatedBucket reproduces that SAME row's headline costPerMile/profitPerMile exactly (Home/Scorecard's single-truck CPM fix)", () => {
+    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], []);
+    const a = result.rows.find((r) => r.truckId === 'ta')!;
+    expect(a.cpmBreakdown).not.toBeNull();
+    const withAllocation = withAllocatedBucket(a.cpmBreakdown!, a.allocatedExpenses, a.totalMiles);
+    expect(withAllocation.costPerMile).toBeCloseTo(a.costPerMile!, 5);
+    expect(withAllocation.profitPerMile).toBeCloseTo(a.profitPerMile!, 5);
+    // The allocation is a visible, separately-labeled bucket, not blended
+    // silently into an existing category (requirement 6's labeling ask).
+    const allocatedBucket = withAllocation.buckets.find((b) => b.category === 'Allocated Fleet Costs');
+    expect(allocatedBucket?.amount).toBeCloseTo(a.allocatedExpenses, 5);
+  });
+});
+
+describe('withAllocatedBucket', () => {
+  const baseCpm = calcCanonicalCpm(1000, 500, [{ amount: 100, category: 'Maintenance & Repairs', tax_deductible: true, source: 'manual' }], [], [], [], 0);
+
+  it('appends a distinct, labeled bucket and recomputes costPerMile/profitPerMile to include it', () => {
+    const result = withAllocatedBucket(baseCpm, 50, 500);
+    const bucket = result.buckets.find((b) => b.category === 'Allocated Fleet Costs');
+    expect(bucket?.amount).toBe(50);
+    expect(result.costPerMile).toBeCloseTo((100 + 50) / 500, 5);
+    expect(result.profitPerMile).toBeCloseTo(result.revenuePerMile! - result.costPerMile!, 5);
+  });
+
+  it('returns the input unchanged when the allocated amount is 0', () => {
+    expect(withAllocatedBucket(baseCpm, 0, 500)).toBe(baseCpm);
+  });
+
+  it('returns null per-mile figures rather than dividing by zero when totalMiles is 0', () => {
+    const result = withAllocatedBucket(baseCpm, 50, 0);
+    expect(result.costPerMile).toBeNull();
+    expect(result.profitPerMile).toBeNull();
   });
 });

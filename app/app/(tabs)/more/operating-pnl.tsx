@@ -10,6 +10,7 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { buildProfitLoss } from '@/src/stats/profitLoss';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { colors, spacing, typography } from '@/src/theme';
 
 type CarrierYtd = { carrier?: string; ytdRevenue?: number; ytdExpenses?: number; ytdNet?: number; weeksInService?: number };
@@ -71,6 +72,7 @@ export default function OperatingPnl() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('operatingPnl.title')}</ScreenTitle>
+        <FleetScopeLabel variant="fleetOnly" />
 
         {loading ? (
           <Card>

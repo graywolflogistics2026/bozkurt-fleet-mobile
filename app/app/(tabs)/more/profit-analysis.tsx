@@ -14,6 +14,7 @@ import { buildProfitAnalysis, compareToBenchmark, type RangeStatus } from '@/src
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, PrimaryButton } from '@/src/components/ui';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { colors, spacing, typography } from '@/src/theme';
 import i18n from '@/src/i18n';
 
@@ -122,6 +123,7 @@ export default function ProfitAnalysis() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('profitAnalysis.title')}</ScreenTitle>
+        <FleetScopeLabel variant="fleetOnly" />
 
         {loading ? (
           <Card>

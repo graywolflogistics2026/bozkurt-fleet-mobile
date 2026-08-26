@@ -7279,3 +7279,174 @@
   change in this pass is pure client-side JS/TS, so no Edge Function
   redeploy is needed for anything here. No new native dependency — ships
   via a normal `eas update` once §63 has been run.
+- MULTI-TRUCK MODEL — SELECTOR PLACEMENT + SELF-TEST FIXES (owner
+  decision, no new SQL). Two parts: moving the interactive scope control
+  to a dedicated Home strip, and a real self-audit of the pass above that
+  found — and fixed — a genuine correctness bug in both Home's and
+  Scorecard's per-truck CPM.
+  1. **SELECTOR PLACEMENT**: `app/src/components/FleetScopeSelectorStrip.tsx`
+     (new) is now the ONE interactive scope control in the whole app — a
+     full-width horizontal chip row ("🚛 All Trucks" + "🚚 Unit N" per
+     truck, selected chip highlighted) placed on Home directly under the
+     greeting, above everything else — replacing the plain-text
+     `FleetScopeLabel` that used to sit there. Hidden entirely via the
+     same `showPicker` (`trucks.length > 1`) gate every other scope UI in
+     this app already uses — no clutter for a solo operator, appears the
+     moment a 2nd truck exists. `TruckSwitcher.tsx` (the top-bar badge
+     shown on every OTHER tab via `app/(tabs)/_layout.tsx`'s
+     `screenOptions.headerRight`) is now READ-ONLY by default
+     (`interactive = false`) — a plain badge naming the current scope,
+     never its own separate Alert-picker — so there is structurally only
+     one place to change the scope, never two controls that could feel
+     inconsistent even though they already shared the same
+     `ActiveTruckContext` value. `interactive` stays available as an
+     explicit opt-in prop for any future caller (none exist today).
+  2. **SELF-TEST, method**: re-read every screen this pass touched against
+     the request's own checklist, rather than trusting the prior pass's
+     passing tests — the tests were correct for the PURE functions they
+     covered, they just didn't catch that two SCREENS were computing
+     their per-mile figures from the wrong inputs.
+  3. **FINDING (confirmed, fixed) — Home's and Scorecard's per-truck CPM
+     was a broken hybrid, not a real per-truck figure**: both screens'
+     `canonicalCpm` used to call `calcCanonicalCpm()` on the FULL,
+     UNFILTERED account (every truck's deductions/fuel/maintenance/tolls)
+     regardless of the active scope, only swapping in the scoped truck's
+     own FIXED cost basis on top. Selecting a specific truck therefore
+     didn't show that truck's own CPM — it showed the WHOLE FLEET's
+     revenue and variable costs with one truck's fixed cost added in,
+     which is worse and more wrong than the fleet average, never that
+     truck's real number. This directly violated the explicit "per-truck
+     CPM uses only that truck's costs plus its allocated share" and
+     "never a single blended number as if it were one truck's"
+     requirements. Root cause: `truckFixedCostTotal` was the only
+     scope-aware input; nothing scoped the deductions/fuel/maintenance/
+     tolls arrays themselves.
+     **Fix, one canonical mechanism reused by both screens**:
+     `src/stats/truckComparison.ts` gained `cpmBreakdown: CanonicalCpmResult
+     | null` on every `TruckComparisonRow` (the DIRECT-only
+     `calcCanonicalCpm()` result `buildTruckRow()` was already computing
+     internally, now exposed instead of discarded) and a new
+     `withAllocatedBucket(cpm, allocatedAmount, totalMiles)` — appends a
+     distinct, clearly-labeled `"Allocated Fleet Costs"` bucket (never
+     blended silently into an existing category, satisfying requirement
+     6's own labeling ask) and recomputes `costPerMile`/`profitPerMile`/
+     `variableTotal` to include it. Both Home and Scorecard now compute
+     `truckComparisonResult = buildTruckComparison(...)` UNCONDITIONALLY
+     (not just for the "All Trucks" breakdown list), derive
+     `scopedTruckRow = trucks.find(r => r.truckId === activeTruck.id)`,
+     and branch: a scoped truck reads `withAllocatedBucket(scopedTruckRow.
+     cpmBreakdown, scopedTruckRow.allocatedExpenses, milesSource.totalMiles)`
+     for its headline CPM (guaranteed to equal the SAME number the
+     Per-Truck Profitability screen shows for that truck, by construction
+     — proven directly in `truckComparison.test.ts`'s new "a row's own
+     cpmBreakdown + withAllocatedBucket reproduces that SAME row's
+     headline costPerMile/profitPerMile exactly" test); "All Trucks"
+     scope keeps the original fleet-wide `calcCanonicalCpm()` call,
+     unchanged in shape, now correctly fed `fleetFixedCostTotal` (every
+     truck's own cost basis summed, not $0 — the prior pass's own partial
+     fix for the ALL-TRUCKS case, confirmed still correct and now
+     consistently paired with the scoped-truck case above).
+  4. **FINDING (confirmed, fixed) — Home's Hero Card/Revenue-Expense-Net
+     trio/Recent Loads/Best-Worst Lanes ignored the scope selector
+     entirely**: the DASHBOARD LAYOUT PER SCOPE spec's own "Single truck:
+     every money card and per-mile figure is that truck only" was never
+     actually wired — `fullWeeklyRevenueExpenseTrend`/
+     `fullWeeklyTrueProfitTrend`/`thisWeekExpenseRows`/`recentLoads`/
+     `lanes` all read the FULL, unfiltered account regardless of scope.
+     Fixed with one shared filtering layer — `scopedSettlements`/
+     `scopedDeductions`/`scopedFuel`/`scopedMaintenance`/`scopedTolls`
+     (direct `truck_id === activeTruck.id` filter, pass-through
+     unchanged in "All Trucks" scope) and `scopedLoads` (via the existing
+     `filterLoadsByTruckScope()`, since `loads` has no `truck_id` of its
+     own) — every one of the above now derives from these instead of the
+     raw query data. Deliberately DIRECT-only, no fleet-level cost
+     allocation folded in: a weekly revenue/expense TREND is a
+     directional chart, not a per-mile cost figure, so it doesn't need
+     the same allocation treatment the CPM figure explicitly does per
+     requirement 6 — a documented, deliberate scope decision, not an
+     oversight. `statsQuery` itself changed from a hardcoded
+     `useFleetStats(null)` to `useFleetStats(activeTruck?.id ?? null)` —
+     safe now that Scorecard's own (deliberately fleet-wide-always)
+     `useFleetStats(null)` call is the only OTHER consumer, so there's no
+     more risk of two screens reading this hook with silently different
+     scope assumptions the way the ORIGINAL bug (documented above this
+     entry, "MILES READ BUT NOT USED") was caused by.
+  5. **FINDING (confirmed, fixed) — Scorecard's own "Why?" breakdown
+     modal mixed scoped and fleet-wide figures within the SAME screen**:
+     even after the canonicalCpm fix above, several DISPLAY-ONLY figures
+     still read straight from `statsQuery.data` (Scorecard's own
+     `useFleetStats(null)`, deliberately ALWAYS fleet-wide for the
+     legacy-parity 0-100 score) — Revenue/Loaded Mile, the miles-missing
+     warning, the Why? modal's Total/Loaded/Empty Miles + Deadhead % rows,
+     and each CPM bucket's own $/mi line all divided by or displayed the
+     WHOLE FLEET's numbers right next to a now-correctly-scoped headline
+     CPM figure. Fixed with `scopedGrossRevenue`/`scopedLoadedMiles`/
+     `scopedDeadheadPct`/`scopedEmptyMiles` (the last derived from
+     `deadheadPct × totalMiles` — the same ratio `calcMiles()` itself
+     used to produce deadheadPct — rather than `totalMiles − loadedMiles`,
+     which would overstate empty miles whenever a settlement's own
+     printed total exceeds its loads' summed miles or a manual override
+     is active) — each reads from `scopedTruckRow` when one is active,
+     falling back to `statsQuery.data` only in "All Trucks" scope. Home
+     got the analogous fix for its own miles-missing warning (now reads
+     `milesSource.totalMiles`, override-aware, instead of raw
+     `stats.totalMiles`, so it can never contradict the per-mile trio it
+     sits directly under).
+  6. **FINDING (deliberate, not a bug) — the manual mile-override's
+     comment in Scorecard was stale**: it used to say "this screen's
+     stats are fleet-wide... a deliberate simplification" — no longer
+     true after the fixes above, corrected in place.
+  7. **Screens audited and left unchanged, findings noted rather than
+     silently assumed correct**:
+     - `operating-pnl.tsx`/`profit-analysis.tsx` — both genuinely
+       fleet-wide-only screens (verbatim-legacy P&L port; Profit
+       Analysis's own aggregate rollup) that were simply missing the
+       `<FleetScopeLabel variant="fleetOnly" />` every other category-1
+       screen already had — added.
+     - `truck-comparison.tsx`/`truck-assignments.tsx` — deliberately do
+       NOT follow the global scope selector at all (their whole purpose
+       is comparing/fixing assignments ACROSS every truck) — confirmed
+       correct as built, not a gap.
+     - `alerts.ts`/`aiCoachSummary.ts`/`proactiveCoach.ts` (maintenance-
+       health nudges, the AI Coach's cost-basis nudge) — still default to
+       the first truck when scope is "All Trucks" (the FIVE ADDITIONS
+       pass's own established simplification, unchanged this round) —
+       flagged as an existing, documented limitation, not silently
+       redone.
+     - Scorecard's `duplicateWeeksIgnored` warning and the legacy 0-100
+       `scorecard` score itself (score/grade/`revenuePerMile`/
+       `netPerMile`/`fuelPerMile`) — confirmed, NOT fixed, deliberately:
+       CLAUDE.md's own TRUE-PROFIT CONSISTENCY entry already establishes
+       the legacy score as a verbatim-legacy, always-fleet-wide figure by
+       design; extending that exemption to `duplicateWeeksIgnored`
+       (a data-quality housekeeping count, not a money figure) was
+       judged the same class of acceptable, minor, flagged simplification
+       given the size of this pass — not silently redefined as "fixed."
+     - `share-profit.tsx`/`ceo-mode.tsx`/`documents.tsx` — not reviewed
+       this pass at all; flagged honestly as unaudited rather than
+       claimed correct.
+  8. **Reconciliation, staleness, import matcher, repair flow** — all
+     re-verified by code review (no device/simulator available in this
+     environment, the same standing limitation this codebase has flagged
+     at every prior UI-testing juncture): a null-truck settlement still
+     surfaces via the Unassigned row/fleet-wide queries (no filter change
+     touched this); `buildTruckComparison()`'s own reconciliation
+     invariant is unchanged and still tested; every scope-dependent
+     `useMemo` keys off `activeTruck`/`activeTruckId`, so switching scope
+     recomputes synchronously with zero staleness (Home's own scoping is
+     entirely client-side filtering of already-fetched data, so there's
+     no network round-trip in the critical path either); the import
+     truck-matcher's "not truck-specific" sentinel and the Fix Truck
+     Assignments screen's bulk-assign were both re-read end to end with
+     no defects found.
+  Tests: `truckComparison.test.ts` gained the reproduces-the-row's-own-
+  headline-figures proof (item 3 above) plus a dedicated
+  `withAllocatedBucket` describe block (labeled-bucket append, the
+  zero-allocation passthrough, the divide-by-zero-miles null guard).
+  110 suites / 2658 tests pass (unchanged count — no new pure module,
+  only 4 new test cases inside the existing file); `tsc --noEmit` clean.
+  No new i18n strings this pass — every new/changed UI reuses keys
+  already shipped in the prior MULTI-TRUCK MODEL entry. No SQL/Edge
+  Function changes — this is a pure client-side correctness + placement
+  fix on top of the same §63 schema. Ships via a normal `eas update`
+  (§63 must still be run first, unchanged from the prior entry).

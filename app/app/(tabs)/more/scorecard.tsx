@@ -19,7 +19,7 @@ import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import { resolveMilesTotal } from '@/src/stats/miles';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
-import { buildTruckComparison } from '@/src/stats/truckComparison';
+import { buildTruckComparison, withAllocatedBucket } from '@/src/stats/truckComparison';
 import { useFormatters } from '@/src/i18n/format';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
@@ -55,28 +55,36 @@ export default function Scorecard() {
   const router = useRouter();
   const updateTruck = useUpdateTruck();
   const updateSettlement = useUpdateSettlement();
-  // MULTI-TRUCK MODEL (owner decision) — requirement 2: "when All Trucks
-  // is selected show the fleet average AND a per-truck breakdown, never a
-  // single blended number." This screen's own KPI card already IS the
-  // fleet average (useFleetStats(null), unconditional) — the only thing
-  // missing was the breakdown alongside it. Reuses the same
-  // buildTruckComparison() the full comparison screen uses, fed the exact
-  // same full/unfiltered settlements/deductions/fuel/maintenance/tolls
-  // this screen already fetches for its own fleet-wide CPM.
+  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — this
+  // screen's canonicalCpm computation used to ALWAYS read fleet-wide
+  // unfiltered deductions/fuel/maintenance/tolls regardless of the active
+  // scope, only bolting the scoped truck's own fixed cost basis on top —
+  // a broken hybrid (full-fleet revenue/variable-costs + one truck's
+  // fixed cost) that got WORSE, not more accurate, when a specific truck
+  // was selected. `truckComparisonResult` is now computed UNCONDITIONALLY
+  // (not just for the "All Trucks" breakdown list) so `scopedTruckRow`
+  // below can supply the real, correct per-truck CPM (direct costs +
+  // labeled allocated share, exactly matching the Per-Truck Profitability
+  // screen) whenever a specific truck is scoped — see canonicalCpm's own
+  // comment further down for how the two cases (scoped vs. "All Trucks")
+  // are combined into one final figure.
   const trucksQuery = useTrucksList();
   const loadsQuery = useLoads();
-  const truckBreakdown = useMemo(() => {
-    if (!isAllTrucks) return null;
-    return buildTruckComparison(
-      trucksQuery.data ?? [],
-      settlementsQuery.data ?? [],
-      loadsQuery.data ?? [],
-      dedQuery.data ?? [],
-      fuelQuery.data ?? [],
-      maintenanceQuery.data ?? [],
-      tollsQuery.data ?? []
-    );
-  }, [isAllTrucks, trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]);
+  const truckComparisonResult = useMemo(
+    () =>
+      buildTruckComparison(
+        trucksQuery.data ?? [],
+        settlementsQuery.data ?? [],
+        loadsQuery.data ?? [],
+        dedQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        tollsQuery.data ?? []
+      ),
+    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
+  );
+  const truckBreakdown = isAllTrucks ? truckComparisonResult : null;
+  const scopedTruckRow = activeTruck ? (truckComparisonResult.rows.find((r) => r.truckId === activeTruck.id) ?? null) : null;
 
   const [refreshing, setRefreshing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -98,18 +106,49 @@ export default function Scorecard() {
   // MANUAL TOTAL OVERRIDE (owner decision 2026-08-05, FULL PARITY
   // follow-up item B.3) — a user-entered odometer/ELD total supersedes
   // the settlement/loads-derived total entirely for CPM/RPM. Lives on
-  // the ACTIVE truck; for a multi-truck fleet this is a deliberate
-  // simplification (an odometer reading is inherently per-truck, but
-  // this screen's stats are fleet-wide) — acceptable for the common
-  // single-truck (n=1) case CLAUDE.md invariant #7 treats as the default
-  // presentation, flagged here rather than silently assumed correct for
-  // every fleet size.
+  // the ACTIVE truck, and (as of the MULTI-TRUCK MODEL re-audit fix
+  // below) is now correctly applied against just that truck's own
+  // scoped total, never the whole fleet's — the earlier "fleet-wide
+  // stats, deliberate simplification" limitation this comment used to
+  // describe no longer applies.
   const [overrideDraft, setOverrideDraft] = useState('');
   const [savingOverride, setSavingOverride] = useState(false);
   const [editingOverride, setEditingOverride] = useState(false);
-  const milesSource = statsQuery.data
-    ? resolveMilesTotal({ totalMiles: statsQuery.data.totalMiles }, activeTruck?.manual_total_miles_override)
-    : null;
+  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — this used
+  // to always read statsQuery.data.totalMiles, which is FLEET-WIDE
+  // (useFleetStats(null), unconditional) — a manual override + a specific
+  // truck's own real mileage were both silently ignored whenever a
+  // specific truck was scoped. Now sourced from scopedTruckRow's own
+  // truck-scoped total (via buildTruckComparison, below) when one truck
+  // is active, falling back to the fleet-wide total only in "All Trucks"
+  // scope.
+  const milesSource = scopedTruckRow
+    ? resolveMilesTotal({ totalMiles: scopedTruckRow.totalMiles }, activeTruck?.manual_total_miles_override)
+    : statsQuery.data
+      ? resolveMilesTotal({ totalMiles: statsQuery.data.totalMiles }, undefined)
+      : null;
+  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — every
+  // OTHER mile/revenue-derived figure on this screen (Revenue/Loaded
+  // Mile, the miles-missing warning, the Why? breakdown's Total/Loaded
+  // Miles + Deadhead % rows, each bucket's own $/mi line) used to read
+  // straight from statsQuery.data, which is FLEET-WIDE BY DESIGN on this
+  // screen (the legacy `scorecard` score's own established exemption,
+  // useFleetStats(null) unconditional) — showing the whole fleet's miles
+  // next to what's now a correctly SCOPED CPM figure whenever a specific
+  // truck was active. These three read from scopedTruckRow instead
+  // whenever one is active, falling back to statsQuery.data only in "All
+  // Trucks" scope.
+  const scopedGrossRevenue = scopedTruckRow ? scopedTruckRow.grossRevenue : (statsQuery.data?.grossRevenue ?? 0);
+  const scopedLoadedMiles = scopedTruckRow ? scopedTruckRow.loadedMiles : (statsQuery.data?.loadedMiles ?? 0);
+  const scopedDeadheadPct = scopedTruckRow ? scopedTruckRow.deadheadPct : (statsQuery.data?.deadheadPct ?? null);
+  // Derived from deadheadPct × totalMiles (the SAME ratio calcMiles()
+  // itself used to produce deadheadPct in the first place) rather than
+  // totalMiles − loadedMiles, which would overstate empty miles whenever
+  // a settlement's own printed total exceeds its loads' summed miles
+  // (calcMiles()'s own MAX-reconciliation rule) or a manual override is
+  // active.
+  const scopedEmptyMiles =
+    milesSource && scopedDeadheadPct != null ? Math.round(scopedDeadheadPct * milesSource.totalMiles) : 0;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -171,8 +210,11 @@ export default function Scorecard() {
   // Settlements' own inline editing (item B.3) but reachable right from
   // the CPM breakdown that's actually affected by the gap.
   const settlementsMissingMiles = useMemo(
-    () => (settlementsQuery.data ?? []).filter((s) => !s.miles && Number(s.gross ?? 0) > 0),
-    [settlementsQuery.data]
+    () =>
+      (settlementsQuery.data ?? []).filter(
+        (s) => !s.miles && Number(s.gross ?? 0) > 0 && (!activeTruck || s.truck_id === activeTruck.id)
+      ),
+    [settlementsQuery.data, activeTruck]
   );
 
   const fuelCost = useMemo(
@@ -198,22 +240,47 @@ export default function Scorecard() {
     return calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan);
   }, [activeTruck, carrierWithholdsLoan]);
 
-  const truckFixedCostTotal = useMemo(() => {
-    if (!truckCostBasis) return 0;
-    return truckCostBasis.weeklyFixedTotal * (statsQuery.data?.settlementCount ?? 0);
-  }, [truckCostBasis, statsQuery.data]);
+  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — the fleet-
+  // wide ("All Trucks") CPM branch below used to add $0 fixed cost
+  // (truckFixedCostTotal was always derived from the single `activeTruck`,
+  // which is null in All-Trucks scope) — under-counting every truck's own
+  // real fixed ownership cost out of the fleet-average CPM. Sums EVERY
+  // truck's own cost basis, weighted by its own settlement count, same fix
+  // pattern as Home's own per-mile trio.
+  const fleetFixedCostTotal = useMemo(() => {
+    return (trucksQuery.data ?? []).reduce((sum, tr) => {
+      const count = (settlementsQuery.data ?? []).filter((s) => s.truck_id === tr.id).length;
+      return sum + calcTruckCostBasisWeekly(tr, carrierWithholdsLoan).weeklyFixedTotal * count;
+    }, 0);
+  }, [trucksQuery.data, settlementsQuery.data, carrierWithholdsLoan]);
 
   // FULL PARITY pass (owner decision 2026-08-05, spec item C.4) —
-  // Cost/Mile now reads the canonical, per-bucket CPM engine
-  // (src/stats/cpm.ts calcCanonicalCpm(), sharing calcTrueProfit()'s own
-  // Meals/Advance Repayment/Escrow exclusions and fuel/maintenance/tolls
+  // Cost/Mile reads the canonical, per-bucket CPM engine (src/stats/
+  // cpm.ts calcCanonicalCpm(), sharing calcTrueProfit()'s own Meals/
+  // Advance Repayment/Escrow exclusions and fuel/maintenance/tolls
   // inclusion) instead of the legacy calcCpm()'s raw "ALL deductions"
   // total, which counted non-expenses as if they were real operating
-  // costs. The truck cost basis is only added when NO settlement-withheld
-  // 'Truck/Trailer Payments' row already exists — see
-  // calcCanonicalCpm()'s own header comment for why.
+  // costs. SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) —
+  // this used to run this SAME calcCanonicalCpm() call over fleet-wide
+  // unfiltered data regardless of scope, only the fixed-cost term
+  // changing with the active truck — a broken hybrid showing a WORSE
+  // number than the true fleet average once a specific truck was
+  // selected, never that truck's own real CPM. Now branches cleanly:
+  // a scoped truck reads its own row (direct costs + a clearly labeled
+  // allocated share of fleet-level costs, exactly matching the Per-Truck
+  // Profitability screen via withAllocatedBucket()); "All Trucks" scope
+  // keeps this same fleet-wide calcCanonicalCpm() call, now with the
+  // corrected fleetFixedCostTotal above instead of always $0.
   const canonicalCpm = useMemo(() => {
-    if (!statsQuery.data || !milesSource) return null;
+    if (!milesSource) return null;
+    if (scopedTruckRow) {
+      if (!scopedTruckRow.cpmBreakdown) return null;
+      const withAlloc = withAllocatedBucket(scopedTruckRow.cpmBreakdown, scopedTruckRow.allocatedExpenses, milesSource.totalMiles);
+      const revenuePerMile = milesSource.totalMiles > 0 ? scopedTruckRow.grossRevenue / milesSource.totalMiles : null;
+      const profitPerMile = revenuePerMile != null && withAlloc.costPerMile != null ? revenuePerMile - withAlloc.costPerMile : null;
+      return { ...withAlloc, revenuePerMile, profitPerMile };
+    }
+    if (!statsQuery.data) return null;
     return calcCanonicalCpm(
       statsQuery.data.grossRevenue,
       milesSource.totalMiles,
@@ -221,9 +288,9 @@ export default function Scorecard() {
       fuelQuery.data ?? [],
       maintenanceQuery.data ?? [],
       tollsQuery.data ?? [],
-      truckFixedCostTotal
+      fleetFixedCostTotal
     );
-  }, [statsQuery.data, milesSource, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, truckFixedCostTotal]);
+  }, [milesSource, scopedTruckRow, statsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, fleetFixedCostTotal]);
 
   // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
   // buildWeeklyTrend()'s bare settlement `.net` (net PAY only, ignoring
@@ -322,11 +389,11 @@ export default function Scorecard() {
                   {money(scorecard.revenuePerMile, { maximumFractionDigits: 2 })}
                 </Text>
               </View>
-              {statsQuery.data && statsQuery.data.loadedMiles > 0 && (
+              {scopedLoadedMiles > 0 && (
                 <View style={[styles.row, styles.rowBorder]}>
                   <MutedText>{t('scorecard.revenuePerLoadedMile')}</MutedText>
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
-                    {money(statsQuery.data.grossRevenue / statsQuery.data.loadedMiles, { maximumFractionDigits: 2 })}
+                    {money(scopedGrossRevenue / scopedLoadedMiles, { maximumFractionDigits: 2 })}
                   </Text>
                 </View>
               )}
@@ -383,7 +450,7 @@ export default function Scorecard() {
                 ⚠️ {t('scorecard.cpmTooHighWarning', { cpm: money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }) })}
               </MutedText>
             )}
-            {statsQuery.data && statsQuery.data.totalMiles <= 0 && (
+            {milesSource && milesSource.totalMiles <= 0 && (
               <MutedText style={{ color: colors.orange, marginTop: spacing.xs, fontWeight: '700' }}>
                 ⚠️ {t('scorecard.milesMissingWarning')}
               </MutedText>
@@ -491,26 +558,26 @@ export default function Scorecard() {
           KPI card intentionally leaves out. */}
       <ModalSheet visible={whyOpen} onClose={() => setWhyOpen(false)}>
         <SheetTitle>{t('scorecard.whyTitle')}</SheetTitle>
-        {statsQuery.data && (
+        {milesSource && (
           <>
             <Text style={styles.whySectionTitle}>{t('scorecard.whyMilesTitle')}</Text>
             <View style={styles.row}>
               <MutedText>{t('scorecard.whyTotalMiles')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(statsQuery.data.totalMiles)}</Text>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(milesSource.totalMiles)}</Text>
             </View>
             <View style={[styles.row, styles.rowBorder]}>
               <MutedText>{t('scorecard.whyLoadedMiles')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(statsQuery.data.loadedMiles)}</Text>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(scopedLoadedMiles)}</Text>
             </View>
             <View style={[styles.row, styles.rowBorder]}>
               <MutedText>{t('scorecard.whyEmptyMiles')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(statsQuery.data.emptyMiles)}</Text>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(scopedEmptyMiles)}</Text>
             </View>
-            {statsQuery.data.deadheadPct != null && (
+            {scopedDeadheadPct != null && (
               <View style={[styles.row, styles.rowBorder]}>
                 <MutedText>{t('scorecard.whyDeadheadPct')}</MutedText>
                 <Text style={{ color: colors.text, fontWeight: '600' }}>
-                  {number(statsQuery.data.deadheadPct * 100, { maximumFractionDigits: 1 })}%
+                  {number(scopedDeadheadPct * 100, { maximumFractionDigits: 1 })}%
                 </Text>
               </View>
             )}
@@ -545,9 +612,19 @@ export default function Scorecard() {
                 </MutedText>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ color: colors.text, fontWeight: '600' }}>{money(b.amount)}</Text>
-                  {statsQuery.data && statsQuery.data.totalMiles > 0 && (
+                  {/* SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL
+                      re-audit) — this used to always divide by
+                      statsQuery.data.totalMiles, which is FLEET-WIDE by
+                      design (the legacy score's own exemption) — the
+                      wrong denominator for a bucket that's this truck's
+                      own amount whenever a specific truck is scoped.
+                      milesSource.totalMiles is already correctly scoped
+                      (this truck's own miles, or fleet-wide only in "All
+                      Trucks" scope) — the same total canonicalCpm.
+                      costPerMile itself was divided by. */}
+                  {milesSource && milesSource.totalMiles > 0 && (
                     <MutedText style={{ fontSize: typography.size.xs }}>
-                      {money(b.amount / statsQuery.data.totalMiles, { maximumFractionDigits: 2 })}/mi
+                      {money(b.amount / milesSource.totalMiles, { maximumFractionDigits: 2 })}/mi
                     </MutedText>
                   )}
                 </View>
