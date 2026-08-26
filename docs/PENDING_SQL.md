@@ -3500,79 +3500,113 @@ The 5 that must change, all currently RESTRICT: `settlements.truck_id`,
 `fuel_purchases.truck_id` (§6), `maintenance_records.truck_id`,
 `deductions.truck_id` (§63a), `tolls.truck_id` (§63c). None of these were
 given an explicit constraint name at creation time, so Postgres
-auto-generated one (`<table>_truck_id_fkey`, its own default naming
-convention — `settlements_user_id_week_ending_key`'s own precedent
-elsewhere in this file confirms this app already relies on that default
-naming) — rather than hardcode a name that could theoretically have drifted,
-the migration below looks the ACTUAL constraint up dynamically via
-`pg_constraint` (matched by "a foreign key on this table whose target is
-`trucks`" — each of these 5 tables has exactly one such FK, confirmed by
-re-reading every column definition in `docs/SCHEMA.sql`/this file's own
-§6/§63 text) and drops it by its real name, whatever that turns out to be,
-before adding the new `on delete cascade` version under a fixed, explicit
-name every future migration can rely on.
+auto-generated one — rather than hardcode a name that could theoretically
+have drifted, the migration below looks the ACTUAL constraint up
+dynamically via `pg_constraint` (matched by "a foreign key on this table
+whose target is `trucks`" — each of these 5 tables has exactly one such
+FK, confirmed by re-reading every column definition in `docs/SCHEMA.sql`/
+this file's own §6/§63 text, and asserted again at runtime below rather
+than just assumed) and drops+recreates it under that SAME real name.
+
+REWRITTEN after a real Supabase SQL Editor failure on the first version
+(`ERROR: 42703: record "con" has no field "conrelid"`) — the original
+loop's own `SELECT` only ever projected `conname` and `conrelid::regclass::
+text as tbl` into the loop variable, then a LATER line referenced
+`con.conrelid`, a field that plain SELECT never put on that record at all.
+Root cause: aliasing `conrelid` away as `tbl` and then trying to read the
+original name back off the same record. Fixed by selecting every field a
+later line actually reads, under its own real name, and nothing else —
+plus, per the follow-up request, restructured around a single
+`foreach ... in array` loop over the 5 table names (simpler to read than
+looping over constraint rows and cross-checking against a second query),
+one shared original constraint name reused for the recreated constraint
+(no separately-invented "fixed" name to keep track of), an explicit skip
+when a table is already `ON DELETE CASCADE` (idempotent — safe to paste
+and run again), and the whole block wrapped in one transaction so a
+failure partway through — the exactly-one-FK assertion failing for some
+table, say — rolls back every earlier change in that same run too: either
+all 5 tables end up fixed, or none of them do.
+
+NOT EXECUTED AGAINST A LIVE DATABASE — this environment has no psql/
+postgres/docker available (`which psql`/`which postgres`/`which docker`
+all report not found, checked directly, not assumed) — this was hand-
+traced against Postgres's own documented `pg_constraint` columns
+(`contype`, `conrelid`, `confrelid`, `conname`, `confdeltype`) and
+`PL/pgSQL` syntax (`FOREACH ... IN ARRAY`, `SELECT ... INTO`, `EXECUTE
+format(...)`), not literally run. The verification query at the end of
+the block (run it immediately after, separately) is what actually
+confirms success on the real database — every one of its 5 rows should
+read `delete_rule = 'CASCADE'`.
 
 ```sql
--- 64a. Drop whichever constraint currently enforces settlements/
--- fuel_purchases/maintenance_records/deductions/tolls.truck_id -> trucks,
--- by its ACTUAL name (never guessed) — a table with more than one FK to
--- `trucks` would make this loop ambiguous, so it also asserts there's
--- exactly one before dropping, rather than silently dropping the wrong one.
+begin;
+
 do $$
 declare
-  con record;
+  target text;
   match_count int;
+  fk_name text;
+  fk_delete_type text;
 begin
-  for con in
-    select c.conname, c.conrelid::regclass::text as tbl
-    from pg_constraint c
-    where c.contype = 'f'
-      and c.confrelid = 'trucks'::regclass
-      and c.conrelid in (
-        'settlements'::regclass, 'fuel_purchases'::regclass,
-        'maintenance_records'::regclass, 'deductions'::regclass,
-        'tolls'::regclass
-      )
+  foreach target in array array['settlements', 'fuel_purchases', 'maintenance_records', 'deductions', 'tolls']
   loop
+    -- Exactly one FK from this table to trucks is expected — abort the
+    -- whole transaction rather than silently touching the wrong
+    -- constraint if that assumption doesn't hold on this database.
     select count(*) into match_count
     from pg_constraint
-    where contype = 'f' and confrelid = 'trucks'::regclass and conrelid = con.conrelid::regclass;
+    where contype = 'f'
+      and conrelid = target::regclass
+      and confrelid = 'trucks'::regclass;
+
     if match_count <> 1 then
-      raise exception 'expected exactly one FK from % to trucks, found %', con.tbl, match_count;
+      raise exception 'Expected exactly one foreign key from % to trucks, found % — aborting, nothing changed', target, match_count;
     end if;
-    execute format('alter table %s drop constraint %I', con.tbl, con.conname);
+
+    select conname, confdeltype::text
+    into fk_name, fk_delete_type
+    from pg_constraint
+    where contype = 'f'
+      and conrelid = target::regclass
+      and confrelid = 'trucks'::regclass;
+
+    if fk_delete_type = 'c' then
+      raise notice '%.% is already ON DELETE CASCADE — skipping', target, fk_name;
+    else
+      execute format('alter table %I drop constraint %I', target, fk_name);
+      execute format(
+        'alter table %I add constraint %I foreign key (truck_id) references trucks(id) on delete cascade',
+        target, fk_name
+      );
+      raise notice 'Updated %.% (truck_id) to ON DELETE CASCADE', target, fk_name;
+    end if;
   end loop;
 end $$;
 
--- 64b. Re-add all 5 as ON DELETE CASCADE, under a fixed name — idempotent
--- (safe to re-run: 64a's own dynamic lookup finds nothing left to drop on
--- a second run, since these fixed names now exist; guard the ADD too in
--- case 64a already ran but 64b was interrupted before finishing).
-do $$ begin
-  alter table settlements add constraint settlements_truck_id_fkey
-    foreign key (truck_id) references trucks(id) on delete cascade;
-exception when duplicate_object then null;
-end $$;
-do $$ begin
-  alter table fuel_purchases add constraint fuel_purchases_truck_id_fkey
-    foreign key (truck_id) references trucks(id) on delete cascade;
-exception when duplicate_object then null;
-end $$;
-do $$ begin
-  alter table maintenance_records add constraint maintenance_records_truck_id_fkey
-    foreign key (truck_id) references trucks(id) on delete cascade;
-exception when duplicate_object then null;
-end $$;
-do $$ begin
-  alter table deductions add constraint deductions_truck_id_fkey
-    foreign key (truck_id) references trucks(id) on delete cascade;
-exception when duplicate_object then null;
-end $$;
-do $$ begin
-  alter table tolls add constraint tolls_truck_id_fkey
-    foreign key (truck_id) references trucks(id) on delete cascade;
-exception when duplicate_object then null;
-end $$;
+commit;
+
+-- VERIFICATION — run separately, right after; every row should read
+-- delete_rule = 'CASCADE'.
+select
+  conrelid::regclass::text as table_name,
+  conname as constraint_name,
+  case confdeltype
+    when 'c' then 'CASCADE'
+    when 'a' then 'NO ACTION'
+    when 'r' then 'RESTRICT'
+    when 'n' then 'SET NULL'
+    when 'd' then 'SET DEFAULT'
+    else confdeltype::text
+  end as delete_rule
+from pg_constraint
+where contype = 'f'
+  and confrelid = 'trucks'::regclass
+  and conrelid in (
+    'settlements'::regclass, 'fuel_purchases'::regclass,
+    'maintenance_records'::regclass, 'deductions'::regclass,
+    'tolls'::regclass
+  )
+order by table_name;
 ```
 
 DOWNSTREAM CASCADE, already correct, no change needed: `loads.settlement_id
@@ -3629,9 +3663,10 @@ rows currently exist (CLAUDE.md invariant #6's own "no cached/stored
 total" convention) — once the truck's rows are gone, the very next read
 of either screen is automatically correct with zero extra code.
 
-- [ ] 64a run (drop the 5 existing RESTRICT-equivalent truck_id FKs, by
-      their real names)
-- [ ] 64b run (re-add all 5 as ON DELETE CASCADE)
+- [ ] 64 run (drop + re-add all 5 existing RESTRICT-equivalent truck_id
+      FKs, by their real names, as ON DELETE CASCADE — single
+      transaction, idempotent) — verification query's 5 rows all read
+      CASCADE
 
 ---
 
