@@ -430,21 +430,36 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     let oldReimbIds: string[] = [];
     let oldDedIds: string[] = [];
     let oldPayIds: string[] = [];
+    // SETTLEMENT RE-IMPORT DUPLICATES maintenance/toll rows (P1 fix,
+    // docs/PENDING_SQL.md §61) — maintenance_records/tolls never had this
+    // capture-old-ids step at all, because neither table had a
+    // settlement_id column to scope "old rows for THIS settlement" by
+    // (maintenance_records only had document_id, which is a FRESH id on
+    // every re-import attempt, no help for finding the PREVIOUS attempt's
+    // rows; tolls had no linking column at all). Now that both have
+    // settlement_id, they follow the exact same pattern as loads/fuel/
+    // reimbursements/deductions above.
+    let oldMaintenanceIds: string[] = [];
+    let oldTollIds: string[] = [];
     if (isReimport) {
-      const [loadsOld, fuelOld, reimbOld, dedOld, payOld] = await Promise.all([
+      const [loadsOld, fuelOld, reimbOld, dedOld, payOld, maintOld, tollOld] = await Promise.all([
         supabase.from('loads').select('id').eq('settlement_id', settlementId),
         supabase.from('fuel_purchases').select('id').eq('settlement_id', settlementId),
         supabase.from('reimbursements').select('id').eq('settlement_id', settlementId),
         supabase.from('deductions').select('id').eq('settlement_id', settlementId).eq('source', 'settlement'),
         supabase.from('driver_payments').select('id').eq('settlement_id', settlementId),
+        supabase.from('maintenance_records').select('id').eq('settlement_id', settlementId),
+        supabase.from('tolls').select('id').eq('settlement_id', settlementId),
       ]);
-      const firstError = [loadsOld, fuelOld, reimbOld, dedOld, payOld].find((r) => r.error)?.error;
+      const firstError = [loadsOld, fuelOld, reimbOld, dedOld, payOld, maintOld, tollOld].find((r) => r.error)?.error;
       if (firstError) throw new SaveExtractionError('reimport-lookup', firstError, partial);
       oldLoadIds = (loadsOld.data ?? []).map((r) => r.id as string);
       oldFuelIds = (fuelOld.data ?? []).map((r) => r.id as string);
       oldReimbIds = (reimbOld.data ?? []).map((r) => r.id as string);
       oldDedIds = (dedOld.data ?? []).map((r) => r.id as string);
       oldPayIds = (payOld.data ?? []).map((r) => r.id as string);
+      oldMaintenanceIds = (maintOld.data ?? []).map((r) => r.id as string);
+      oldTollIds = (tollOld.data ?? []).map((r) => r.id as string);
     }
 
     // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — each batch tries
@@ -492,7 +507,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     );
     await insertBatchResilient(
       'maintenance_records',
-      mapping.maintenance.map((m) => ({ ...m, document_id: documentId })),
+      mapping.maintenance.map((m) => ({ ...m, document_id: documentId, settlement_id: settlementId })),
       (m) => m.description ?? m.service_type ?? 'Maintenance',
       'maintenance-insert',
       isReimport,
@@ -501,7 +516,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     );
     await insertBatchResilient(
       'tolls',
-      mapping.tolls,
+      mapping.tolls.map((t) => ({ ...t, settlement_id: settlementId })),
       (t) => `Toll ${t.toll_date ?? ''} ${t.plaza ?? ''}`.trim(),
       'tolls-insert',
       isReimport,
@@ -565,6 +580,14 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     }
     if (oldPayIds.length > 0) {
       const { error } = await supabase.from('driver_payments').delete().in('id', oldPayIds);
+      if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
+    }
+    if (oldMaintenanceIds.length > 0) {
+      const { error } = await supabase.from('maintenance_records').delete().in('id', oldMaintenanceIds);
+      if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
+    }
+    if (oldTollIds.length > 0) {
+      const { error } = await supabase.from('tolls').delete().in('id', oldTollIds);
       if (error) throw new SaveExtractionError('reimport-cleanup', error, partial);
     }
     partial.oldRowsCleanedUp = true;

@@ -3219,6 +3219,201 @@ about coupling a ROW write to a delta atomically, which
 
 ---
 
+## 61. maintenance_records/tolls gain settlement_id (P1 CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision) — NOT YET RUN
+
+**The finding**: re-importing the same settlement PDF twice (CLAUDE.md
+invariant #10's "re-import replaces, never duplicates" rule) correctly
+replaced `loads`/`fuel_purchases`/`reimbursements`/withheld `deductions`
+via a capture-old-ids-then-delete-after-insert step
+(`aiImportSave.ts`'s `oldLoadIds`/`oldFuelIds`/`oldReimbIds`/`oldDedIds`)
+— but `maintenance_records` and `tolls` had NO equivalent step at all,
+because neither table had a `settlement_id` column to scope "which old
+rows belong to THIS settlement" by. `maintenance_records` had
+`document_id` (no help here — each import/re-import attempt uploads a
+fresh document row, so a re-import's `documentId` never matches the
+PREVIOUS attempt's), and `tolls` had neither `settlement_id` nor
+`document_id` at all — confirmed by reading both tables' actual column
+list, not assumed. Every re-import of the same PDF therefore doubled
+that week's maintenance and toll rows, silently inflating true profit's
+expense total, CPM, and the Accountant Package's category totals by
+however many times the same statement was ever re-imported.
+
+**The fix**: add `settlement_id` to both tables (nullable, `on delete
+cascade`, same convention as `loads`/`fuel_purchases`/`reimbursements`/
+withheld `deductions`' own `settlement_id` columns) so
+`aiImportSave.ts` can apply the IDENTICAL capture-old-ids/insert-new/
+delete-old pattern those four tables already use — see that file's own
+updated settlement branch. A maintenance/toll row inserted from
+anywhere OTHER than a settlement import (a standalone `docType:
+'maintenance'` import, the manual-entry screens) simply leaves this
+column `null`, exactly like `fuel_purchases.settlement_id` already
+does for a standalone fuel receipt.
+
+```sql
+alter table maintenance_records
+  add column if not exists settlement_id uuid references settlements on delete cascade;
+
+alter table tolls
+  add column if not exists settlement_id uuid references settlements on delete cascade;
+
+create index if not exists maintenance_records_settlement_id_idx on maintenance_records(settlement_id);
+create index if not exists tolls_settlement_id_idx on tolls(settlement_id);
+```
+
+- [ ] 61a run (maintenance_records.settlement_id, tolls.settlement_id + indexes)
+
+---
+
+## 62. Deduction edit/add + contribution sync made atomic (P1 CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision) — NOT YET RUN
+
+**The finding**: `deductions.tsx`'s `handleSaveEdit()`/`handleSaveAdd()`
+each did `updateDeduction.mutateAsync(...)` (or `insertDeduction.mutateAsync(...)`)
+THEN, as a SEPARATE `await`, `applyContributionSync(...)` — two independent
+network round trips with no atomicity between them. A network drop
+between the two awaits leaves the deduction saved with a stale/missing/
+orphaned linked contribution: the amount changed but the linked
+contribution's amount didn't (edit-update case), a personal-payment
+purchase saved with no linked contribution at all (create case, silently
+losing equity the owner actually put in), or a payment method switched to
+business but the old personal-payment contribution row survives (remove
+case, a phantom contribution never backed by an actual personal-payment
+deduction anymore) — each one corrupts `taxFreeRemaining` on the Capital
+Account screen.
+
+**The fix**: fold the deduction write and its contribution sync into ONE
+atomic RPC transaction, same pattern as §60 — either both happen or
+neither does.
+
+- `update_deduction_with_contribution_sync()` — updates the deduction row
+  and, per `p_sync_action` (`'noop'|'create'|'update'|'remove'`, computed
+  client-side by the EXISTING pure `planContributionSync()`, unchanged),
+  creates/updates/removes the linked `capital_transactions` row, all
+  inside one transaction.
+- `insert_deduction_with_contribution_sync()` — inserts the new deduction
+  row and, when `p_create_contribution` is true (the ADD flow's only
+  possible sync outcome — a brand-new row can never have an EXISTING
+  linked contribution to update/remove), creates the linked contribution
+  in the same transaction.
+
+Neither RPC touches `profiles.business_balance` — a LINKED contribution
+never has (see `src/stats/capitalAccount.ts`'s own header comment: no
+real cash moved into checking for that event, only equity was built by
+paying a business expense out of pocket), unchanged from the previous
+two-step `applyContributionSync()` behavior. Both are `security invoker`
+(RLS on `deductions`/`capital_transactions`, owner-scoped `ALL`, already
+permits everything each function does for its own rows).
+
+```sql
+create or replace function update_deduction_with_contribution_sync(
+  p_deduction_id uuid,
+  p_user_id uuid,
+  p_category text,
+  p_payment_method text,
+  p_amount numeric,
+  p_tax_deductible boolean,
+  p_sync_action text,
+  p_contribution_id uuid default null,
+  p_contribution_amount numeric default null,
+  p_contribution_note text default null,
+  p_contribution_date date default null
+)
+returns deductions
+language plpgsql
+security invoker
+as $$
+declare
+  v_row deductions;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'update_deduction_with_contribution_sync: user mismatch' using errcode = '28000';
+  end if;
+  if p_sync_action not in ('noop', 'create', 'update', 'remove') then
+    raise exception 'update_deduction_with_contribution_sync: invalid sync_action %', p_sync_action;
+  end if;
+
+  update deductions
+  set category = p_category, payment_method = p_payment_method, amount = p_amount, tax_deductible = p_tax_deductible
+  where id = p_deduction_id and user_id = p_user_id
+  returning * into v_row;
+
+  if not found then
+    raise exception 'update_deduction_with_contribution_sync: no deduction % for user %', p_deduction_id, p_user_id
+      using errcode = 'P0002';
+  end if;
+
+  if p_sync_action = 'create' then
+    insert into capital_transactions (user_id, tx_type, amount, tx_date, note, linked_deduction_id)
+    values (p_user_id, 'contribution', p_contribution_amount, p_contribution_date, p_contribution_note, p_deduction_id);
+  elsif p_sync_action = 'update' then
+    update capital_transactions
+    set amount = p_contribution_amount, note = p_contribution_note, tx_date = p_contribution_date
+    where id = p_contribution_id and user_id = p_user_id;
+  elsif p_sync_action = 'remove' then
+    delete from capital_transactions where id = p_contribution_id and user_id = p_user_id;
+  end if;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function update_deduction_with_contribution_sync(uuid, uuid, text, text, numeric, boolean, text, uuid, numeric, text, date) to authenticated;
+
+create or replace function insert_deduction_with_contribution_sync(
+  p_user_id uuid,
+  p_description text,
+  p_category text,
+  p_payment_method text,
+  p_amount numeric,
+  p_ded_date date,
+  p_source text,
+  p_tax_deductible boolean,
+  p_create_contribution boolean default false,
+  p_contribution_note text default null
+)
+returns deductions
+language plpgsql
+security invoker
+as $$
+declare
+  v_row deductions;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'insert_deduction_with_contribution_sync: user mismatch' using errcode = '28000';
+  end if;
+
+  insert into deductions (user_id, description, category, payment_method, amount, ded_date, source, tax_deductible)
+  values (p_user_id, p_description, p_category, p_payment_method, p_amount, p_ded_date, p_source, p_tax_deductible)
+  returning * into v_row;
+
+  if p_create_contribution then
+    insert into capital_transactions (user_id, tx_type, amount, tx_date, note, linked_deduction_id)
+    values (p_user_id, 'contribution', p_amount, coalesce(p_ded_date, current_date), p_contribution_note, v_row.id);
+  end if;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function insert_deduction_with_contribution_sync(uuid, text, text, text, numeric, date, text, boolean, boolean, text) to authenticated;
+```
+
+`app/app/(tabs)/deductions.tsx`'s `handleSaveEdit()`/`handleSaveAdd()` now
+call these RPCs instead of `updateDeduction.mutateAsync()`/
+`insertDeduction.mutateAsync()` followed by a separate
+`applyContributionSync()` call — see that file's own updated handlers.
+`applyContributionSync()`/`fetchLinkedContributionId()`
+(`app/src/data/deductionMutations.ts`) are UNCHANGED and stay in use by
+`accountant-package.tsx`'s own category-edit flow, which does not touch
+payment method/personal-payment sync at all (out of scope for this fix —
+flagged, not silently left inconsistent) and by `documents.tsx`'s payment-
+method quick-edit, which is a narrower single-field edit with the same
+theoretical (much rarer) race — left as a documented follow-up rather
+than expanding this fix's blast radius further.
+
+- [ ] 62a run (update_deduction_with_contribution_sync, insert_deduction_with_contribution_sync)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

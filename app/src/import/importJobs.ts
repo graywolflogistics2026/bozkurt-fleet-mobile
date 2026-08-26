@@ -47,6 +47,28 @@ export function isReviewableJob(job: Pick<ImportJob, 'status'>): boolean {
   return job.status === 'ready';
 }
 
+// UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A CAPABILITY
+// CHECK (P1 fix, FULL SYSTEM AUDIT) — "surface stranded jobs to the user
+// with a Retry." The server-side fix (a service-role client for
+// runJobInBackground()'s own writes, supabase/functions/ai-import/index.ts)
+// closes the MAIN way a job used to get stuck — but this is a client-side
+// safety net for the remaining cases (the function's own hard wall-clock
+// budget being exceeded before it can write anything, the whole isolate
+// getting killed mid-job, a genuinely unreachable server for a while) —
+// an ACTIVE job (queued/processing/waiting_to_retry) whose `updatedAt`
+// hasn't moved in a long time is presumed abandoned. THRESHOLD_MS is set
+// comfortably above the server's own JOB_HARD_BUDGET_MS (240s) with real
+// margin for slow polling/clock skew, never so tight that a merely-slow
+// (but still actually progressing) job gets flagged.
+export const STRANDED_JOB_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+export function isStrandedJob(job: Pick<ImportJob, 'status' | 'updatedAt'>, nowIso: string, thresholdMs: number = STRANDED_JOB_THRESHOLD_MS): boolean {
+  if (!isActiveJob(job)) return false;
+  const updatedAtMs = new Date(job.updatedAt).getTime();
+  if (!Number.isFinite(updatedAtMs)) return false;
+  return new Date(nowIso).getTime() - updatedAtMs > thresholdMs;
+}
+
 // QUEUEING (owner decision 2026-08-24, item 4) — active jobs always float
 // to the top regardless of age (the user cares most about "what's still
 // running / needs my attention"); within each bucket, newest first.

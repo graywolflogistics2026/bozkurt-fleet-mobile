@@ -43,9 +43,15 @@ export const EXPORT_TABLES = [
   'category_learning_rules',
   'compliance_items',
   'misc_income',
+  // EXPORT ALL MY DATA omits account_credits/ai_credit_purchases/referrals
+  // (P1 fix, FULL SYSTEM AUDIT) — both of these fit the standard user_id
+  // loop below (§50/§51's own schema), same class of gap invariant #24's
+  // own audit already found and fixed for `equipment` above.
+  'account_credits',
+  'ai_credit_purchases',
 ] as const;
 
-export type AllUserData = Record<(typeof EXPORT_TABLES)[number], unknown[]>;
+export type AllUserData = Record<(typeof EXPORT_TABLES)[number], unknown[]> & { referrals: unknown[] };
 
 export async function fetchAllUserData(userId: string): Promise<AllUserData> {
   const results = await Promise.all(
@@ -55,5 +61,18 @@ export async function fetchAllUserData(userId: string): Promise<AllUserData> {
       return [table, data ?? []] as const;
     })
   );
-  return Object.fromEntries(results) as AllUserData;
+  // `referrals` has no single user_id column (docs/PENDING_SQL.md §50) —
+  // referrer_id and referred_user_id instead — so it can't ride the
+  // generic loop above; a bespoke query, same reasoning reset-data/
+  // delete-account's own referrals deletes already document. Includes
+  // BOTH directions: referrals this user MADE (referrer_id) and the one
+  // row recording who referred THEM (referred_user_id) — both are
+  // genuinely this user's own data.
+  const { data: referralsData, error: referralsError } = await supabase
+    .from('referrals')
+    .select('*')
+    .or(`referrer_id.eq.${userId},referred_user_id.eq.${userId}`);
+  if (referralsError) throw new Error(`Failed exporting referrals: ${referralsError.message}`);
+
+  return { ...Object.fromEntries(results), referrals: referralsData ?? [] } as AllUserData;
 }

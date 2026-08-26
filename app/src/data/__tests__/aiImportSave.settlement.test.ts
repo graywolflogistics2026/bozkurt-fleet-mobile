@@ -179,6 +179,68 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     await expect(saveExtraction(baseParams(extraction))).rejects.toThrow();
   });
 
+  // SETTLEMENT RE-IMPORT DUPLICATES maintenance/toll rows (P1 fix,
+  // docs/PENDING_SQL.md §61) — unlike loads/fuel/reimbursements/withheld
+  // deductions, maintenance_records/tolls had no capture-old-ids-then-
+  // replace step at all (neither table had a settlement_id column to scope
+  // "old rows for this settlement" by), so importing the same PDF twice
+  // doubled these expenses. Proven end to end: import the identical
+  // settlement twice and confirm every child table — including maintenance
+  // and tolls — has exactly the same row count as after just one import.
+  test('re-importing an IDENTICAL settlement twice never duplicates maintenance or toll rows', async () => {
+    const withMaintAndTolls: Extraction = {
+      docType: 'settlement',
+      settlement: {
+        weekEnding: '2026-07-05',
+        grossRevenue: 2000,
+        netPay: 1000,
+        totalMiles: 1500,
+        loads: [{ order: 'L1', from: 'A', to: 'B', revenue: 1000 }],
+        tractorFuel: [{ amount: 300, gallons: 100 }],
+        deductions: [{ code: 'INS', desc: 'Insurance', amount: 150 }],
+        maintenance: [{ desc: 'Oil change', serviceType: 'oil', total: 200 }],
+        tolls: { ezpass: { items: [{ date: '2026-07-01', amount: 25, plaza: 'GA Toll' }] } },
+      },
+    };
+
+    await saveExtraction(baseParams(withMaintAndTolls));
+    await saveExtraction(baseParams(withMaintAndTolls));
+
+    const settlements = mockClient.__store.settlements;
+    expect(settlements).toHaveLength(1);
+
+    const maintenance = mockClient.__store.maintenance_records ?? [];
+    const tolls = mockClient.__store.tolls ?? [];
+    expect(maintenance).toHaveLength(1);
+    expect(tolls).toHaveLength(1);
+    // Also confirm they're correctly tagged to the (single, replaced)
+    // settlement — not orphaned rows left dangling with no settlement_id.
+    expect(maintenance[0].settlement_id).toBe(settlements[0].id);
+    expect(tolls[0].settlement_id).toBe(settlements[0].id);
+  });
+
+  test('a THIRD re-import still leaves exactly one maintenance/toll row each (not accumulating one more per import)', async () => {
+    const extraction: Extraction = {
+      docType: 'settlement',
+      settlement: {
+        weekEnding: '2026-07-05',
+        grossRevenue: 2000,
+        netPay: 1000,
+        totalMiles: 1500,
+        loads: [{ order: 'L1', from: 'A', to: 'B', revenue: 1000 }],
+        maintenance: [{ desc: 'Oil change', serviceType: 'oil', total: 200 }],
+        tolls: { ezpass: { items: [{ date: '2026-07-01', amount: 25, plaza: 'GA Toll' }] } },
+      },
+    };
+
+    await saveExtraction(baseParams(extraction));
+    await saveExtraction(baseParams(extraction));
+    await saveExtraction(baseParams(extraction));
+
+    expect(mockClient.__store.maintenance_records ?? []).toHaveLength(1);
+    expect(mockClient.__store.tolls ?? []).toHaveLength(1);
+  });
+
   // VALIDATE BEFORE WRITING (pre-launch hardening, owner decision
   // 2026-08-02): the week_ending check must run BEFORE the documents
   // insert (and the Storage upload, not exercised here since baseParams()

@@ -534,7 +534,8 @@
       "timeoutOverload": "Belge şu anda işlenmesi çok uzun sürüyor — kısa süre sonra tekrar dene.",
       "invalidDocument": "Bu belgeyi okuyamadık — daha net bir fotoğraf veya farklı bir dosya dene.",
       "internal": "Bizim tarafımızda bir sorun oluştu — verilerin güvende. Lütfen tekrar dene.",
-      "offline": "Çevrimdışısın. Dosyan kaydedildi ve tekrar bağlandığında içe aktarılacak."
+      "offline": "Çevrimdışısın. Dosyan kaydedildi ve tekrar bağlandığında içe aktarılacak.",
+      "sessionExpired": "Oturumunun süresi doldu — çıkış yapıp tekrar giriş yap, sonra yeniden dene."
     },
     "usageLimitReached": "Bu ayki AI içe aktarmalarını kullandın ({{allowance}} üzerinden {{used}}). Yine de manuel olarak kayıt eklemeye devam edebilirsin, diğer her şey çalışmaya devam ediyor — sınırın ayın 1'inde sıfırlanır.",
     "usageLimitReachedGeneric": "Bu ayki AI içe aktarmalarını kullandın. Yine de manuel olarak kayıt eklemeye devam edebilirsin, diğer her şey çalışmaya devam ediyor — sınırın ayın 1'inde sıfırlanır.",
@@ -1621,7 +1622,7 @@
       "quarterlyTaxDueSoon_other": "Bir sonraki üç aylık vergi ödemeniz {{days}} gün içinde.",
       "fuelPctTrendUp": "Yakıt, son 4 haftanıza göre {{points}} puan daha yüksek — göz atmaya değer.",
       "deadheadTrendUp": "Deadhead miliniz yükseliyor — son 4 haftanıza göre {{points}} puan daha yüksek.",
-      "cpmAboveRpm": "Bu hafta mil başına maliyetiniz (${{cpm}}) mil başına ücretinizin (${{rpm}}) üzerinde — kağıt üzerinde zararına çalışıyorsunuz.",
+      "cpmAboveRpm": "Genel mil başına maliyetiniz (${{cpm}}), tipik mil başına ücretinizin (${{rpm}}) üzerinde — kağıt üzerinde zararına çalışıyor olabilirsiniz.",
       "goalStreakOver_one": "Haftalık hedefini {{count}} hafta üst üste geçtin — harika iş. Yükseltmeyi düşünür müsün?",
       "goalStreakOver_other": "Haftalık hedefini {{count}} hafta üst üste geçtin — harika iş. Yükseltmeyi düşünür müsün?",
       "goalStreakUnder_one": "{{count}} haftadır haftalık hedefinin altındasın — neyin buna sebep olduğuna bakmak ister misin?",
@@ -2018,9 +2019,11 @@
       "processing": "İşleniyor",
       "waitingToRetry": "Yeniden denenmeyi bekliyor",
       "ready": "Hazır",
-      "failed": "Başarısız"
+      "failed": "Başarısız",
+      "stranded": "Takıldı"
     },
     "waitingToRetryNote": "AI içe aktarma hizmeti şu anda meşgul — kısa süre içinde otomatik olarak yeniden denenecek.",
+    "strandedNote": "Bu içe aktarma takılmış görünüyor ve bir süredir ilerleme kaydetmedi. Dosyanız güvende — tekrar deneyin.",
     "pageProgress": "{{total}} sayfadan {{through}}.",
     "starting": "Başlatılıyor…",
     "genericFailure": "Bir şeyler ters gitti.",

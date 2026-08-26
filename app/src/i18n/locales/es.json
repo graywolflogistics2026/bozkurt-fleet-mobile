@@ -534,7 +534,8 @@
       "timeoutOverload": "El documento está tardando demasiado en este momento — intenta de nuevo en un momento.",
       "invalidDocument": "No pudimos leer este documento — intenta con una foto más clara o un archivo diferente.",
       "internal": "Algo salió mal de nuestro lado — tus datos están seguros. Intenta de nuevo.",
-      "offline": "Estás sin conexión. Tu archivo está guardado y se importará cuando vuelvas a conectarte."
+      "offline": "Estás sin conexión. Tu archivo está guardado y se importará cuando vuelvas a conectarte.",
+      "sessionExpired": "Tu sesión ha expirado — cierra sesión y vuelve a iniciarla, luego intenta de nuevo."
     },
     "usageLimitReached": "Ya usaste tus importaciones con IA de este mes ({{used}} de {{allowance}}). Aún puedes agregar registros manualmente, y todo lo demás sigue funcionando — tu límite se reinicia el día 1.",
     "usageLimitReachedGeneric": "Ya usaste tus importaciones con IA de este mes. Aún puedes agregar registros manualmente, y todo lo demás sigue funcionando — tu límite se reinicia el día 1.",
@@ -1621,7 +1622,7 @@
       "quarterlyTaxDueSoon_other": "Tu próximo pago trimestral de impuestos vence en {{days}} días.",
       "fuelPctTrendUp": "El combustible está corriendo {{points}} puntos más alto que tus últimas 4 semanas — vale la pena revisarlo.",
       "deadheadTrendUp": "Tus millas deadhead están en aumento — {{points}} puntos más que tus últimas 4 semanas.",
-      "cpmAboveRpm": "Tu costo por milla (${{cpm}}) está por encima de tu tarifa por milla (${{rpm}}) esta semana — operando con pérdida en el papel.",
+      "cpmAboveRpm": "Tu costo total por milla (${{cpm}}) está por encima de tu tarifa típica por milla (${{rpm}}) — es posible que estés operando con pérdida en el papel.",
       "goalStreakOver_one": "Superaste tu meta semanal {{count}} semana seguida — buen trabajo. ¿Consideras subirla?",
       "goalStreakOver_other": "Superaste tu meta semanal {{count}} semanas seguidas — buen trabajo. ¿Consideras subirla?",
       "goalStreakUnder_one": "Estuviste por debajo de tu meta semanal durante {{count}} semana — ¿quieres ver qué lo está causando?",
@@ -2018,9 +2019,11 @@
       "processing": "Procesando",
       "waitingToRetry": "Esperando para reintentar",
       "ready": "Listo",
-      "failed": "Fallido"
+      "failed": "Fallido",
+      "stranded": "Atascado"
     },
     "waitingToRetryNote": "El servicio de importación con IA está ocupado — se reintentará automáticamente en breve.",
+    "strandedNote": "Esta importación parece estar atascada y no ha avanzado en un buen rato. Tu archivo está a salvo — inténtalo de nuevo.",
     "pageProgress": "Página {{through}} de {{total}}",
     "starting": "Iniciando…",
     "genericFailure": "Algo salió mal.",

@@ -308,6 +308,7 @@ export type MaintenanceRecord = {
   user_id: string;
   truck_id: string | null;
   document_id: string | null;
+  settlement_id: string | null; // docs/PENDING_SQL.md §61 — batch tag for settlement re-import-replace
   service_date: string | null;
   service_type: string | null;
   description: string | null;
@@ -357,6 +358,7 @@ export type Toll = {
   id: string;
   user_id: string;
   network: 'ezpass' | 'drivewyze' | 'other' | null;
+  settlement_id: string | null; // docs/PENDING_SQL.md §61 — batch tag for settlement re-import-replace
   toll_date: string | null;
   amount: number | null;
   plaza: string | null;

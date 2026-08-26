@@ -4,7 +4,7 @@ import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useImportJobs, useRetryImportJob, useDismissImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
-import { sortImportJobsForDisplay, jobProgressFraction, type ImportJob } from '@/src/import/importJobs';
+import { sortImportJobsForDisplay, jobProgressFraction, isStrandedJob, type ImportJob } from '@/src/import/importJobs';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, Card, MutedText, SecondaryButton, PrimaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -39,6 +39,14 @@ function JobRow({
 }) {
   const { t } = useTranslation();
   const fraction = jobProgressFraction(job);
+  // UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A CAPABILITY
+  // CHECK (P1 fix, FULL SYSTEM AUDIT) — "surface stranded jobs to the user
+  // with a Retry." A stranded job's own `status` is still technically
+  // active (queued/processing/waiting_to_retry — nothing ever wrote
+  // 'failed' to it), so it needs its OWN visual treatment distinct from
+  // the ordinary in-progress spinner below, not just a reuse of the
+  // `failed` branch's copy.
+  const stranded = isStrandedJob(job, new Date().toISOString());
 
   return (
     <Card style={{ marginBottom: spacing.sm }}>
@@ -46,12 +54,18 @@ function JobRow({
         <Text style={{ color: colors.text, fontWeight: '700', flex: 1 }} numberOfLines={1}>
           {job.fileName ?? t('importJobs.untitledFile')}
         </Text>
-        <Text style={{ color: statusColor(job.status), fontWeight: '700', fontSize: typography.size.xs }}>
-          {t(`importJobs.status.${job.status}`)}
+        <Text style={{ color: stranded ? colors.red : statusColor(job.status), fontWeight: '700', fontSize: typography.size.xs }}>
+          {stranded ? t('importJobs.status.stranded') : t(`importJobs.status.${job.status}`)}
         </Text>
       </View>
 
-      {(job.status === 'queued' || job.status === 'processing') && (
+      {stranded && (
+        <MutedText style={{ color: colors.red, marginBottom: spacing.xs }} numberOfLines={2}>
+          {t('importJobs.strandedNote')}
+        </MutedText>
+      )}
+
+      {!stranded && (job.status === 'queued' || job.status === 'processing') && (
         <View style={{ marginBottom: spacing.xs }}>
           {fraction != null ? (
             <>
@@ -69,7 +83,7 @@ function JobRow({
         </View>
       )}
 
-      {job.status === 'waiting_to_retry' && (
+      {!stranded && job.status === 'waiting_to_retry' && (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
           <ActivityIndicator size="small" color={colors.orange} style={{ marginEnd: spacing.xs }} />
           <MutedText style={{ color: colors.orange, flex: 1 }} numberOfLines={2}>
@@ -86,10 +100,10 @@ function JobRow({
 
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         {job.status === 'ready' && <PrimaryButton title={t('importJobs.reviewNow')} onPress={() => onReview(job)} />}
-        {job.status === 'failed' && (
+        {(job.status === 'failed' || stranded) && (
           <PrimaryButton title={t('importScreen.retryImport')} onPress={() => onRetry(job)} loading={retrying} />
         )}
-        {(job.status === 'ready' || job.status === 'failed') && (
+        {(job.status === 'ready' || job.status === 'failed' || stranded) && (
           <SecondaryButton title={t('common.dismiss')} onPress={() => onDismiss(job)} />
         )}
       </View>

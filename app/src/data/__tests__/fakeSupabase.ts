@@ -80,6 +80,12 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
       eq: (col: string, val: unknown) => typeof builder;
       is: (col: string, val: null) => typeof builder;
       in: (col: string, vals: unknown[]) => typeof builder;
+      // EXPORT ALL MY DATA (P1 fix, FULL SYSTEM AUDIT) — referrals has no
+      // single user_id column, so fetchAllUserData() queries it via
+      // .or('referrer_id.eq.X,referred_user_id.eq.X'). Minimal parser:
+      // comma-separated `column.eq.value` clauses, ORed together — the
+      // only shape this codebase's real Supabase calls actually use.
+      or: (clause: string) => typeof builder;
       maybeSingle: () => Promise<{ data: Row | null; error: FakeSupabaseError | null }>;
       single: () => Promise<{ data: Row | null; error: FakeSupabaseError | null }>;
     } = {
@@ -113,6 +119,15 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
       in(col: string, vals: unknown[]) {
         const set = new Set(vals);
         filters.push((row) => set.has(row[col]));
+        return builder;
+      },
+      or(clause: string) {
+        const clauses = clause.split(',').map((c) => {
+          const [col, op, val] = c.split('.');
+          if (op !== 'eq') throw new Error(`fakeSupabase: .or() only supports "eq" clauses, got "${op}" in "${c}"`);
+          return { col, val };
+        });
+        filters.push((row) => clauses.some(({ col, val }) => String(row[col] ?? '') === val));
         return builder;
       },
       async maybeSingle() {
@@ -265,6 +280,102 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
         profile.business_balance = Number(profile.business_balance ?? 0) + delta;
       }
       return { data: delta, error: null };
+    }
+
+    // §62 — deduction edit + contribution sync, atomically. Mirrors the
+    // real function's contract: the deduction row write and the linked
+    // capital_transactions create/update/remove happen as one call — this
+    // fake, like every other one in this file, cannot prove the real SQL
+    // transaction rolls back correctly on a mid-function error (no
+    // Postgres runtime here), but DOES prove the client never sees a
+    // partial result: on an injected failure (via the generic prefix
+    // check at the top of this function), NEITHER write below ever runs.
+    if (fnName === 'update_deduction_with_contribution_sync') {
+      const p = params as {
+        p_deduction_id: string;
+        p_user_id: string;
+        p_category: string;
+        p_payment_method: string;
+        p_amount: number;
+        p_tax_deductible: boolean;
+        p_sync_action: 'noop' | 'create' | 'update' | 'remove';
+        p_contribution_id: string | null;
+        p_contribution_amount: number | null;
+        p_contribution_note: string | null;
+        p_contribution_date: string | null;
+      };
+      const row = (store.deductions ?? []).find((r) => r.id === p.p_deduction_id && r.user_id === p.p_user_id);
+      if (!row) return { data: null, error: { message: 'No deduction row matched.', code: 'P0002' } };
+      row.category = p.p_category;
+      row.payment_method = p.p_payment_method;
+      row.amount = p.p_amount;
+      row.tax_deductible = p.p_tax_deductible;
+
+      if (p.p_sync_action === 'create') {
+        const newRow: Row = {
+          id: `capital_transactions-${idCounter++}`,
+          user_id: p.p_user_id,
+          tx_type: 'contribution',
+          amount: p.p_contribution_amount,
+          tx_date: p.p_contribution_date,
+          note: p.p_contribution_note,
+          linked_deduction_id: p.p_deduction_id,
+        };
+        store.capital_transactions = [...(store.capital_transactions ?? []), newRow];
+      } else if (p.p_sync_action === 'update') {
+        const tx = (store.capital_transactions ?? []).find((r) => r.id === p.p_contribution_id && r.user_id === p.p_user_id);
+        if (tx) {
+          tx.amount = p.p_contribution_amount;
+          tx.note = p.p_contribution_note;
+          tx.tx_date = p.p_contribution_date;
+        }
+      } else if (p.p_sync_action === 'remove') {
+        store.capital_transactions = (store.capital_transactions ?? []).filter((r) => r.id !== p.p_contribution_id);
+      }
+
+      return { data: row, error: null };
+    }
+
+    if (fnName === 'insert_deduction_with_contribution_sync') {
+      const p = params as {
+        p_user_id: string;
+        p_description: string | null;
+        p_category: string;
+        p_payment_method: string;
+        p_amount: number;
+        p_ded_date: string | null;
+        p_source: string;
+        p_tax_deductible: boolean;
+        p_create_contribution: boolean;
+        p_contribution_note: string | null;
+      };
+      const row: Row = {
+        id: `deductions-${idCounter++}`,
+        user_id: p.p_user_id,
+        description: p.p_description,
+        category: p.p_category,
+        payment_method: p.p_payment_method,
+        amount: p.p_amount,
+        ded_date: p.p_ded_date,
+        source: p.p_source,
+        tax_deductible: p.p_tax_deductible,
+      };
+      store.deductions = [...(store.deductions ?? []), row];
+
+      if (p.p_create_contribution) {
+        const contribution: Row = {
+          id: `capital_transactions-${idCounter++}`,
+          user_id: p.p_user_id,
+          tx_type: 'contribution',
+          amount: p.p_amount,
+          tx_date: p.p_ded_date,
+          note: p.p_contribution_note,
+          linked_deduction_id: row.id,
+        };
+        store.capital_transactions = [...(store.capital_transactions ?? []), contribution];
+      }
+
+      return { data: row, error: null };
     }
 
     return { data: null, error: { message: `fakeSupabase: unknown RPC "${fnName}"` } };

@@ -4,6 +4,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { calcCpm, type CpmResult } from '@/src/stats/cpm';
 import { calcMiles, type LoadMilesInput } from '@/src/stats/miles';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
+import { reducesTrueProfit } from '@/src/stats/trueProfit';
 
 export type FleetStats = {
   grossRevenue: number;
@@ -34,7 +35,7 @@ type SettlementStatsRow = {
   miles: number | null;
   per_diem_days: number | null;
 };
-type DeductionStatsRow = { amount: number | null; source: string | null; tax_deductible: boolean | null };
+type DeductionStatsRow = { amount: number | null; source: string | null; tax_deductible: boolean | null; category: string | null };
 
 // Pure aggregation, no I/O — extracted (pre-launch hardening, owner
 // decision 2026-08-02, independent code review item — second tier) so
@@ -67,8 +68,20 @@ function computeFleetStats(
   const milesResult = calcMiles(settlements, loads);
 
   const totalDeductions = deductions.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  // TWO DISAGREEING "does this reduce income" RULES (P1 fix, FULL SYSTEM
+  // AUDIT) — this used to check only `source`/`tax_deductible`, silently
+  // disagreeing with the canonical reducesTrueProfit() (src/stats/
+  // trueProfit.ts), which ALSO excludes Meals/Advance Repayment/Escrow &
+  // Deposits by category. A row re-categorized to one of those three
+  // without its tax_deductible flag being touched was excluded from true
+  // profit but still subtracted here, in the tax estimate's own net-profit
+  // input (taxEstimate.ts's netProfitBeforeDepreciation) — understating
+  // tax owed. reducesTrueProfit(d) for a non-settlement row reduces to
+  // exactly "not an excluded category AND tax_deductible !== false", a
+  // strict superset of the old check, so this can only ever EXCLUDE more,
+  // never include a row the old check didn't already include.
   const outOfPocketDeductions = deductions
-    .filter((d) => d.source !== 'settlement' && d.tax_deductible !== false)
+    .filter((d) => d.source !== 'settlement' && reducesTrueProfit(d))
     .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
 
   return {
@@ -93,7 +106,7 @@ function computeFleetStats(
 }
 
 async function fetchUserDeductions(userId: string): Promise<DeductionStatsRow[]> {
-  const { data, error } = await supabase.from('deductions').select('amount, source, tax_deductible').eq('user_id', userId);
+  const { data, error } = await supabase.from('deductions').select('amount, source, tax_deductible, category').eq('user_id', userId);
   if (error) throw error;
   return data ?? [];
 }

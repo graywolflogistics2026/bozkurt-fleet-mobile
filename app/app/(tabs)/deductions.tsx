@@ -5,8 +5,13 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
-import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
-import { fetchLinkedContributionId, applyContributionSync, cleanupOrphanedDocument } from '@/src/data/deductionMutations';
+import { useDeductions, useDeleteDeduction } from '@/src/data/deductions';
+import {
+  fetchLinkedContributionId,
+  cleanupOrphanedDocument,
+  updateDeductionWithContributionSync,
+  insertDeductionWithContributionSync,
+} from '@/src/data/deductionMutations';
 import { fetchReimbursementStatus, useReimburseMyself } from '@/src/data/capitalTransactions';
 import type { ReimbursementStatus } from '@/src/stats/capitalAccount';
 import { useLearnCategoryCorrection, fetchCarrierForDeduction } from '@/src/data/categoryLearningRules';
@@ -252,8 +257,6 @@ export default function Deductions() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const autoOpenedRef = useRef(false);
   const dedQuery = useDeductions();
-  const insertDeduction = useInsertDeduction();
-  const updateDeduction = useUpdateDeduction();
   const learnCategoryCorrection = useLearnCategoryCorrection();
   const deleteDeduction = useDeleteDeduction();
   const reimburseMyself = useReimburseMyself();
@@ -359,6 +362,24 @@ export default function Deductions() {
     setReimbursementStatus(null);
   }
 
+  // TWO DISAGREEING "does this reduce income" RULES (P1 fix, FULL SYSTEM
+  // AUDIT) — mirrors handleAddCategoryChange()'s own existing pattern
+  // (recompute the smart default while the row is still being composed)
+  // extended to editing: previously only the ADD flow recomputed
+  // tax_deductible from the newly-picked category; re-categorizing an
+  // EXISTING row left tax_deductible exactly whatever it was before,
+  // silently disagreeing with reducesTrueProfit()'s own category-based
+  // exclusion (a row moved to "Meals (per diem covered)"/"Advance
+  // Repayment"/"Escrow & Deposits" was excluded from true profit but
+  // still counted as a real deductible expense in the tax estimate,
+  // understating tax owed). This is still a SMART DEFAULT, not a lock —
+  // the checkbox right below the category picker stays independently
+  // togglable after this recompute, exactly like the add flow.
+  function handleEditCategoryChange(category: string) {
+    setEditCategory(category);
+    setEditTaxDeductible(defaultTaxDeductible(category));
+  }
+
   async function handleReimburseMyself() {
     if (!editing || !userId || !reimbursementStatus || reimbursementStatus.outstandingAmount <= 0) return;
     setReimbursing(true);
@@ -452,11 +473,22 @@ export default function Deductions() {
         if (!confirmed) plan = { action: 'noop' };
       }
 
-      await updateDeduction.mutateAsync({
-        id: editing.id,
-        values: { category: editCategory, payment_method: editPayment, amount, tax_deductible: editTaxDeductible },
+      // DEDUCTION EDIT + CONTRIBUTION SYNC NOT ATOMIC (P1 fix, FULL SYSTEM
+      // AUDIT, docs/PENDING_SQL.md §62) — this used to be two separate
+      // awaits (updateDeduction.mutateAsync() then applyContributionSync()),
+      // so a network drop between them could leave the deduction saved
+      // with a stale/missing/orphaned linked contribution. Now one atomic
+      // RPC call — either both the deduction update and the contribution
+      // sync happen, or neither does.
+      await updateDeductionWithContributionSync({
+        deductionId: editing.id,
+        userId,
+        category: editCategory,
+        paymentMethod: editPayment,
+        amount,
+        taxDeductible: editTaxDeductible,
+        plan,
       });
-      await applyContributionSync(userId, editing.id, plan);
       // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
       // follow-up item G) — a genuine manual re-categorization (the user
       // picked something DIFFERENT from what was already there, not just
@@ -473,13 +505,13 @@ export default function Deductions() {
       }
       // UNBOUNDED QUERIES / SCOPED INVALIDATION FIX (P0, FULL SYSTEM AUDIT
       // owner decision 2026-08-26) — the measured scenario: this save
-      // always touches 'deductions'; applyContributionSync() above may
-      // create/update/remove a linked capital_transactions row (always
-      // run, even when plan.action is 'noop') — including it
-      // unconditionally is cheap and correct either way. Down from
-      // invalidating all ~28 tables + 4 aggregates (32 calls) to 5 —
-      // see src/data/__tests__/queryInvalidation.test.ts's "EXACT
-      // reported scenario" test for the measured before/after count.
+      // always touches 'deductions'; the atomic RPC above may create/
+      // update/remove a linked capital_transactions row (always run, even
+      // when plan.action is 'noop') — including it unconditionally is
+      // cheap and correct either way. Down from invalidating all ~28
+      // tables + 4 aggregates (32 calls) to 5 — see
+      // src/data/__tests__/queryInvalidation.test.ts's "EXACT reported
+      // scenario" test for the measured before/after count.
       await invalidateFinancialData(queryClient, { entities: ['deductions', 'capital_transactions'] });
       setEditing(null);
     } catch (err) {
@@ -518,31 +550,42 @@ export default function Deductions() {
 
     setAddSaving(true);
     try {
-      const newDed = await insertDeduction.mutateAsync({
-        user_id: userId,
+      // DEDUCTION EDIT + CONTRIBUTION SYNC NOT ATOMIC (P1 fix, FULL SYSTEM
+      // AUDIT, docs/PENDING_SQL.md §62) — one atomic RPC insert instead of
+      // insertDeduction.mutateAsync() followed by a separate
+      // applyContributionSync() call, so a network drop between them can
+      // no longer leave a personal-payment purchase saved with no linked
+      // contribution. A brand-new row can never have an EXISTING linked
+      // contribution to update/remove (existingContributionId is always
+      // null here), so planContributionSync() can only ever return
+      // 'create' or 'noop' for the add flow — reused here only to get the
+      // exact same note-text formatting as before, not for its I/O.
+      const createContribution = personal && amount > 0;
+      const plan = createContribution
+        ? planContributionSync({
+            isPersonal: true,
+            amount,
+            date: addDate || null,
+            description: addDescription || null,
+            paymentMethod: addPayment,
+            existingContributionId: null,
+          })
+        : null;
+
+      await insertDeductionWithContributionSync({
+        userId,
         description: addDescription || null,
         category: addCategory,
-        payment_method: addPayment,
+        paymentMethod: addPayment,
         amount,
-        ded_date: addDate || null,
-        source: 'manual',
-        tax_deductible: addTaxDeductible,
+        dedDate: addDate || null,
+        taxDeductible: addTaxDeductible,
+        createContribution,
+        contributionNote: plan?.action === 'create' ? plan.note : undefined,
       });
 
-      if (personal && amount > 0) {
-        const plan = planContributionSync({
-          isPersonal: true,
-          amount,
-          date: addDate || null,
-          description: addDescription || null,
-          paymentMethod: addPayment,
-          existingContributionId: null,
-        });
-        await applyContributionSync(userId, newDed.id, plan);
-      }
-
       await invalidateFinancialData(queryClient, {
-        entities: personal && amount > 0 ? ['deductions', 'capital_transactions'] : ['deductions'],
+        entities: createContribution ? ['deductions', 'capital_transactions'] : ['deductions'],
       });
       setAdding(false);
     } catch (err) {
@@ -776,7 +819,7 @@ export default function Deductions() {
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.categoryLabel')}</MutedText>
         </View>
-        <CategoryPicker kind="expense" value={editCategory} onChange={setEditCategory} />
+        <CategoryPicker kind="expense" value={editCategory} onChange={handleEditCategoryChange} />
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.taxDeductibleLabel')}</MutedText>

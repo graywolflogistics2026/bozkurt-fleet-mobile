@@ -201,26 +201,55 @@ export function useAlertsData() {
     if (recordedKeyRef.current === key) return;
     recordedKeyRef.current = key;
     const nextState = recordNudgesShown(nudgeState, visibleNudges.map((n) => n.topic), new Date());
-    updateProfile.mutate({ nudge_state: nextState });
+    // NUDGE/WEEKLY-REVIEW WRITES ARE FIRE-AND-FORGET (P1 fix, FULL SYSTEM
+    // AUDIT) — this write used to have no onError at all: a failed write
+    // silently disabled frequency capping, because `recordedKeyRef` was
+    // ALREADY set (above, synchronously) before the mutation even started,
+    // so this session would never retry it — and since profiles.nudge_state
+    // in the DB never actually changed, selectNudgesToShow() keeps computing
+    // against the STALE state on every future load, meaning these same
+    // nudges can resurface as if they'd never been shown, defeating "at
+    // most once per topic per week." console.error makes the failure
+    // diagnosable (`supabase functions logs`-adjacent device/crash
+    // reporting); resetting the ref lets a LATER render with the same
+    // topic set retry instead of giving up for the rest of the session.
+    updateProfile.mutate(
+      { nudge_state: nextState },
+      {
+        onError: (err) => {
+          console.error('[useAlertsData] failed to record nudges shown — frequency capping may be affected:', err);
+          recordedKeyRef.current = null;
+        },
+      }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleNudges, profileQuery.data]);
 
   function silenceNudge(topic: NudgeCandidate['topic']) {
-    updateProfile.mutate({ nudge_state: silenceNudgeTopic(nudgeState, topic, new Date()) });
+    updateProfile.mutate(
+      { nudge_state: silenceNudgeTopic(nudgeState, topic, new Date()) },
+      { onError: (err) => console.error(`[useAlertsData] failed to silence nudge "${topic}":`, err) }
+    );
   }
 
   function unsilenceNudge(topic: NudgeCandidate['topic']) {
-    updateProfile.mutate({ nudge_state: unsilenceNudgeTopic(nudgeState, topic) });
+    updateProfile.mutate(
+      { nudge_state: unsilenceNudgeTopic(nudgeState, topic) },
+      { onError: (err) => console.error(`[useAlertsData] failed to unsilence nudge "${topic}":`, err) }
+    );
   }
 
   const rolePromptNeeded = resolveRolePromptNeeded(role, profileQuery.data?.role_prompt_dismissed_at);
 
   function setRole(newRole: Exclude<ProfileRole, null>) {
-    updateProfile.mutate({ role: newRole });
+    updateProfile.mutate({ role: newRole }, { onError: (err) => console.error('[useAlertsData] failed to save role:', err) });
   }
 
   function dismissRolePrompt() {
-    updateProfile.mutate({ role_prompt_dismissed_at: new Date().toISOString() });
+    updateProfile.mutate(
+      { role_prompt_dismissed_at: new Date().toISOString() },
+      { onError: (err) => console.error('[useAlertsData] failed to dismiss role prompt:', err) }
+    );
   }
 
   return {

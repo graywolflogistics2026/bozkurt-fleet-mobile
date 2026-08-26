@@ -1,5 +1,6 @@
 import { supabase } from '@/src/lib/supabase';
 import type { ContributionSyncPlan } from '@/src/stats/contributionSync';
+import type { Deduction } from '@/src/types/db';
 
 // Looks up the single capital_transactions contribution row id-linked to
 // this deduction, if any (CLAUDE.md invariant #2 — id-linked, never
@@ -48,6 +49,75 @@ export async function applyContributionSync(
     linked_deduction_id: deductionId,
   });
   if (error) throw error;
+}
+
+// DEDUCTION EDIT + CONTRIBUTION SYNC NOT ATOMIC (P1 fix, FULL SYSTEM
+// AUDIT, docs/PENDING_SQL.md §62) — updateDeduction.mutateAsync() followed
+// by a SEPARATE applyContributionSync() call was two independent network
+// round trips with no atomicity between them; a network drop in between
+// left the deduction saved with a stale/missing/orphaned linked
+// contribution, corrupting taxFreeRemaining. These two functions fold the
+// deduction write and its contribution sync into ONE atomic RPC — either
+// both happen or neither does. `applyContributionSync()`/
+// `fetchLinkedContributionId()` above are UNCHANGED and still used by
+// call sites that don't go through this atomic path (accountant-package.tsx's
+// category-only edit, documents.tsx's payment-method quick-edit — neither
+// currently re-syncs the contribution at all, a separate, narrower,
+// pre-existing gap flagged in §62's own writeup rather than folded into
+// this fix).
+export async function updateDeductionWithContributionSync(params: {
+  deductionId: string;
+  userId: string;
+  category: string;
+  paymentMethod: string;
+  amount: number;
+  taxDeductible: boolean;
+  plan: ContributionSyncPlan;
+}): Promise<Deduction> {
+  const { deductionId, userId, category, paymentMethod, amount, taxDeductible, plan } = params;
+  const { data, error } = await supabase.rpc('update_deduction_with_contribution_sync', {
+    p_deduction_id: deductionId,
+    p_user_id: userId,
+    p_category: category,
+    p_payment_method: paymentMethod,
+    p_amount: amount,
+    p_tax_deductible: taxDeductible,
+    p_sync_action: plan.action,
+    p_contribution_id: plan.action === 'update' || plan.action === 'remove' ? plan.id : null,
+    p_contribution_amount: plan.action === 'create' || plan.action === 'update' ? plan.amount : null,
+    p_contribution_note: plan.action === 'create' || plan.action === 'update' ? plan.note : null,
+    p_contribution_date: plan.action === 'create' || plan.action === 'update' ? plan.date : null,
+  });
+  if (error) throw error;
+  return data as Deduction;
+}
+
+export async function insertDeductionWithContributionSync(params: {
+  userId: string;
+  description: string | null;
+  category: string;
+  paymentMethod: string;
+  amount: number;
+  dedDate: string | null;
+  taxDeductible: boolean;
+  createContribution: boolean;
+  contributionNote?: string;
+}): Promise<Deduction> {
+  const { userId, description, category, paymentMethod, amount, dedDate, taxDeductible, createContribution, contributionNote } = params;
+  const { data, error } = await supabase.rpc('insert_deduction_with_contribution_sync', {
+    p_user_id: userId,
+    p_description: description,
+    p_category: category,
+    p_payment_method: paymentMethod,
+    p_amount: amount,
+    p_ded_date: dedDate,
+    p_source: 'manual',
+    p_tax_deductible: taxDeductible,
+    p_create_contribution: createContribution,
+    p_contribution_note: contributionNote ?? null,
+  });
+  if (error) throw error;
+  return data as Deduction;
 }
 
 // Legacy cleanupStaleDocs() (legacy/index.html:1076-1090) removes document

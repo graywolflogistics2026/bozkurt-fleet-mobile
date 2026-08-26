@@ -579,16 +579,27 @@ type ErrorType =
 // own per-call 429 handling (still present) is the only backstop.
 const DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS = 30;
 
-let cachedRateLimitAdminClient: ReturnType<typeof createClient> | null | undefined;
-function getRateLimitAdminClient(): ReturnType<typeof createClient> | null {
-  if (cachedRateLimitAdminClient !== undefined) return cachedRateLimitAdminClient;
+// UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A SERVICE-ROLE
+// CLIENT (P1 fix, FULL SYSTEM AUDIT) — renamed from getRateLimitAdminClient()
+// to reflect a second use: runJobInBackground()'s own import_jobs writes
+// now go through this SAME cached service-role client instead of the
+// caller's own JWT-scoped one, so an expiring caller session (a real risk
+// for a background job that can run up to JOB_HARD_BUDGET_MS) can no
+// longer strand a job in "processing" forever by making its own status-
+// update writes start failing mid-flight. Every write via this client
+// MUST explicitly scope by user_id (RLS is bypassed for a service-role
+// client, unlike the per-request JWT-scoped one) — see runJobInBackground()'s
+// own calls below for the added `.eq("user_id", userId)` on each one.
+let cachedServiceRoleAdminClient: ReturnType<typeof createClient> | null | undefined;
+function getServiceRoleAdminClient(): ReturnType<typeof createClient> | null {
+  if (cachedServiceRoleAdminClient !== undefined) return cachedServiceRoleAdminClient;
   const url = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  cachedRateLimitAdminClient = url && serviceRoleKey ? createClient(url, serviceRoleKey) : null;
-  if (!cachedRateLimitAdminClient) {
-    console.error("[ai-import] SUPABASE_SERVICE_ROLE_KEY not set — rate-limit cross-job cooldown is disabled (per-call handling still applies).");
+  cachedServiceRoleAdminClient = url && serviceRoleKey ? createClient(url, serviceRoleKey) : null;
+  if (!cachedServiceRoleAdminClient) {
+    console.error("[ai-import] SUPABASE_SERVICE_ROLE_KEY not set — rate-limit cross-job cooldown and background-job service-role writes are both disabled (per-call/per-request handling still applies).");
   }
-  return cachedRateLimitAdminClient;
+  return cachedServiceRoleAdminClient;
 }
 
 // Anthropic's Retry-After header is documented as seconds for a 429 — this
@@ -609,7 +620,7 @@ function parseRetryAfterSeconds(headerValue: string | null): number | null {
 // Returns 0 (no cooldown, or the mechanism is unavailable) or the real
 // remaining milliseconds until `ai_rate_limit_state.limited_until`.
 async function getRateLimitCooldownMs(): Promise<number> {
-  const admin = getRateLimitAdminClient();
+  const admin = getServiceRoleAdminClient();
   if (!admin) return 0;
   try {
     const { data } = await admin.from("ai_rate_limit_state").select("limited_until").eq("id", true).maybeSingle();
@@ -627,7 +638,7 @@ async function getRateLimitCooldownMs(): Promise<number> {
 // rather than a transaction; an occasional race just means a slightly
 // shorter cooldown wins, never a correctness problem for this feature.
 async function setRateLimitCooldown(seconds: number, reason: string): Promise<void> {
-  const admin = getRateLimitAdminClient();
+  const admin = getServiceRoleAdminClient();
   if (!admin) return;
   try {
     const untilMs = Date.now() + seconds * 1000;
@@ -1315,12 +1326,30 @@ async function runJobPages(
 // synchronous path), falling back to runJobPages() only on a genuine
 // "too much content for one call" signal (timeout/truncated). Every state
 // transition is written to `import_jobs` as it happens (queued ->
-// processing -> ready|failed) — this function's own `supabase` client
-// still carries the ORIGINAL caller's JWT (captured before the response
-// was sent), so these writes are genuinely on behalf of that user and
-// pass RLS exactly like any other authenticated request would.
+// processing -> ready|failed).
+//
+// SERVICE-ROLE CLIENT FOR BACKGROUND WORK (P1 fix, FULL SYSTEM AUDIT) —
+// this function used to do EVERY write through `supabase`, the ORIGINAL
+// caller's JWT-scoped client. A background job can run up to
+// JOB_HARD_BUDGET_MS (4 minutes) — long enough for a short-lived session
+// token to expire mid-job — which meant every subsequent status-update
+// write, including the one that marks a job 'failed', could silently start
+// failing, stranding the job in "processing" forever with no error ever
+// recorded. Every `import_jobs` write below now goes through `admin`
+// (service-role, immune to the caller's session expiring) instead —
+// scoped by BOTH `.eq("id", jobId)` AND `.eq("user_id", userId)`, since a
+// service-role client bypasses RLS entirely and this explicit scoping is
+// what preserves the same "only this user's own job" boundary RLS used to
+// enforce automatically. `supabase` (the caller-JWT client) is still used
+// for `logAiUsage()`/`consumeOneCreditIfOverAllowance()` specifically —
+// the latter calls a `security definer` RPC that derives the user
+// EXCLUSIVELY from `auth.uid()`, which has no meaning at all for a
+// service-role connection — both are already best-effort/failure-tolerant
+// (see their own comments), so a stale JWT failing THERE is a much smaller
+// degradation than the whole job silently never completing.
 async function runJobInBackground(
   supabase: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient>,
   jobId: string,
   userId: string,
   anthropicKey: string,
@@ -1335,12 +1364,12 @@ async function runJobInBackground(
 
   async function markFailed(message: string, step: string): Promise<void> {
     console.log(`[ai-import] job ${jobId} failed: ${step} — ${message}`);
-    await supabase.from("import_jobs").update({
+    await admin.from("import_jobs").update({
       status: "failed",
       error_message: message,
       error_step: step,
       updated_at: new Date().toISOString(),
-    }).eq("id", jobId);
+    }).eq("id", jobId).eq("user_id", userId);
     await logAiUsage(supabase, userId, false, step, message);
   }
 
@@ -1362,21 +1391,21 @@ async function runJobInBackground(
         break;
       }
       console.log(`[ai-import] job ${jobId}: rate-limited — waiting ${waitMs}ms before retry ${retryIndex + 1}/${RATE_LIMIT_BACKOFF_SCHEDULE_MS.length}`);
-      await supabase.from("import_jobs").update({
+      await admin.from("import_jobs").update({
         status: "waiting_to_retry",
         error_message: "The AI import service is busy — automatically retrying shortly.",
         error_step: "rate_limited",
         updated_at: new Date().toISOString(),
-      }).eq("id", jobId);
+      }).eq("id", jobId).eq("user_id", userId);
       await new Promise((r) => setTimeout(r, waitMs));
-      await supabase.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId);
+      await admin.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
       result = await attemptOnce();
     }
     return result;
   }
 
   try {
-    await supabase.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId);
+    await admin.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
 
     const isImage = mediaType.startsWith("image/");
     const contentBlock = isImage
@@ -1399,12 +1428,12 @@ async function runJobInBackground(
       if (rawPageCount !== null && rawPageCount > 1) {
         const clampedTotal = Math.min(rawPageCount, MAX_TOTAL_PAGES);
         console.log(`[ai-import] job ${jobId}: single-call failed (${result.errorType}) — falling back to page-by-page, totalPages=${rawPageCount}`);
-        await supabase.from("import_jobs").update({ pages_total: clampedTotal, updated_at: new Date().toISOString() }).eq("id", jobId);
+        await admin.from("import_jobs").update({ pages_total: clampedTotal, updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
 
         let doneCount = 0;
         const outcomes = await runJobPages(anthropicKey, fileBase64, clampedTotal, prompt, remainingJobBudgetMs, async () => {
           doneCount++;
-          await supabase.from("import_jobs").update({ pages_done: doneCount, updated_at: new Date().toISOString() }).eq("id", jobId);
+          await admin.from("import_jobs").update({ pages_done: doneCount, updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
         });
 
         const merged = mergeAllPages(outcomes);
@@ -1430,12 +1459,12 @@ async function runJobInBackground(
       return;
     }
 
-    await supabase.from("import_jobs").update({
+    await admin.from("import_jobs").update({
       status: "ready",
       result_json: result.extraction,
       updated_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
-    }).eq("id", jobId);
+    }).eq("id", jobId).eq("user_id", userId);
     await logAiUsage(supabase, userId, true, null);
     await consumeOneCreditIfOverAllowance(supabase, userId);
     console.log(`[ai-import] job ${jobId} ready`);
@@ -1478,6 +1507,23 @@ async function handleJobStart(
     carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
   },
 ): Promise<Response> {
+  // UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A CAPABILITY
+  // CHECK (P1 fix, FULL SYSTEM AUDIT) — checked FIRST, before creating or
+  // resetting any import_jobs row: EdgeRuntime is a Supabase Edge Runtime
+  // global, not a standard Deno/TS lib type — if it's ever missing
+  // (a different deployment target, a runtime version without it), the OLD
+  // code called `.waitUntil` on `undefined` and threw synchronously deep
+  // inside this function, which (compounded by the caller's own missing
+  // `await`, fixed separately below) could escape the top-level try/catch
+  // as a raw, unstructured error. Failing fast HERE — before any job row
+  // exists — means there is never a job silently stuck at "queued" with
+  // nothing ever going to process it.
+  // deno-lint-ignore no-explicit-any
+  if (typeof (globalThis as any).EdgeRuntime?.waitUntil !== "function") {
+    console.error("[ai-import] EdgeRuntime.waitUntil is not available in this runtime — background import cannot start.");
+    return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
+  }
+
   const isRetry = body.mode === "retry_job";
   let jobId: string;
   let storagePath: string;
@@ -1578,11 +1624,32 @@ async function handleJobStart(
   const prompt = buildExtractionPrompt(body.docHint, body.locale, body.customCategories, body.learningRules, body.carrierCodeMaps);
 
   console.log(`[ai-import] job ${jobId} accepted (${isRetry ? "retry" : "new"}), mediaType=${mediaType}, kicking off background processing`);
+  // SERVICE-ROLE CLIENT FOR BACKGROUND WORK (P1 fix, FULL SYSTEM AUDIT) —
+  // runJobInBackground()'s own import_jobs status writes now go through
+  // `admin` (service-role, immune to the CALLER's JWT expiring mid-job)
+  // instead of `supabase` (the caller-JWT-scoped client this function was
+  // called with) — a background job can run up to JOB_HARD_BUDGET_MS
+  // (4 minutes), long enough for a short-lived session token to expire,
+  // which used to mean every subsequent status-update write (including the
+  // one that marks a job 'failed') could start failing silently, stranding
+  // the job in "processing" forever with no way to ever surface an error.
+  // `consume_ai_import_credit()` still needs the ORIGINAL caller-JWT
+  // client specifically (it's `security definer` and derives the user
+  // EXCLUSIVELY from auth.uid() — a service-role call has no JWT/auth.uid()
+  // context at all) — `supabase` is still passed through for that one call
+  // and for the existing best-effort `logAiUsage()`, both already tolerant
+  // of failure (see runJobInBackground()'s own comments) and far less
+  // severe than the job-status-write case if a stale JWT does fail there.
+  // Falls back to the caller's own client (the OLD, pre-fix behavior) only
+  // if SUPABASE_SERVICE_ROLE_KEY isn't configured — degraded reliability,
+  // never a newly-introduced hard failure for an existing deployment.
+  const admin = getServiceRoleAdminClient() ?? supabase;
   // EdgeRuntime is a Supabase Edge Runtime global (not a standard Deno/TS
   // lib type, hence the loose reference) — this is what lets processing
-  // continue after the response below is already sent.
+  // continue after the response below is already sent. Capability already
+  // confirmed present at the top of this function.
   // deno-lint-ignore no-explicit-any
-  (globalThis as any).EdgeRuntime.waitUntil(runJobInBackground(supabase, jobId, userId, anthropicKey, fileBase64, mediaType, prompt));
+  (globalThis as any).EdgeRuntime.waitUntil(runJobInBackground(supabase, admin, jobId, userId, anthropicKey, fileBase64, mediaType, prompt));
 
   return new Response(JSON.stringify({ jobId }), { status: 202, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 }
@@ -1691,7 +1758,18 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.mode === "job" || body.mode === "retry_job") {
-    return handleJobStart(supabase, userId, body);
+    // UNAWAITED handleJobStart (P1 fix, FULL SYSTEM AUDIT) — `return
+    // handleJobStart(...)` (no `await`) let a REJECTION of that promise
+    // escape this try block's own `catch` entirely: a bare `return
+    // somePromise` inside an async function hands the promise straight to
+    // the caller without re-entering this function's synchronous frame,
+    // so a later rejection never has a chance to be caught HERE — it
+    // would surface as a raw, unstructured error, exactly the class of
+    // bug the top-level try/catch above exists to prevent. `await` makes
+    // any rejection resolve INSIDE this try block, where the catch below
+    // can turn it into the same safe, structured "internal" response
+    // every other failure path in this function already returns.
+    return await handleJobStart(supabase, userId, body);
   }
 
   const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;

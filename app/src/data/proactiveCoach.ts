@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/src/context/AuthContext';
+import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useSettlements } from '@/src/data/settlements';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
 import { useDeductions } from '@/src/data/deductions';
 import { useLoads } from '@/src/data/loads';
+import { useFleetStats } from '@/src/data/dashboardStats';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import i18n from '@/src/i18n';
-import { calcMiles } from '@/src/stats/miles';
+import { calcMiles, resolveMilesTotal } from '@/src/stats/miles';
+import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
+import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { shouldGenerateWeeklyReview, buildWeeklyReviewPrompt } from '@/src/stats/weeklyReview';
@@ -36,6 +40,7 @@ import { selectNudgesToShow, recordNudgesShown, ONE_MONTH_MS, type NudgeState } 
 // rather than doubling it.
 export function useProactiveCoach() {
   const { session } = useAuth();
+  const { activeTruck } = useActiveTruck();
   const settlementsQuery = useSettlements();
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
@@ -45,6 +50,10 @@ export function useProactiveCoach() {
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
   const taxQuery = useTaxEstimate();
+  // CPM FORMULA DIVERGENCE (P1 fix, FULL SYSTEM AUDIT) — fleet-wide stats,
+  // needed to compute the SAME canonical CPM figure Scorecard shows (see
+  // the latestCpm computation below for the full reasoning).
+  const fleetStatsQuery = useFleetStats(null);
 
   const isLoading =
     settlementsQuery.isLoading || fuelQuery.isLoading || deductionsQuery.isLoading || profileQuery.isLoading || taxQuery.isLoading;
@@ -99,15 +108,61 @@ export function useProactiveCoach() {
   const trailingFuelPcts = trailingSettlements.map(fuelPctFor).filter((n): n is number => n != null);
   const trailingAvgFuelPct = trailingFuelPcts.length > 0 ? trailingFuelPcts.reduce((a, b) => a + b, 0) / trailingFuelPcts.length : null;
 
-  // Approximates this week's cost/mile as (gross - true-profit net) / miles
-  // — reuses the SAME canonical true-profit weekly figure already computed
-  // above rather than re-deriving a second cost total, so this can never
-  // disagree with what Home/Scorecard call "profit" for the same week.
   const latestWeekTrend = weeklyTrend.find((w) => w.weekEnding === latestSettlement?.week_ending) ?? null;
-  const latestCpm =
-    latestWeekTrend && latestSettlement && latestSettlement.miles > 0
-      ? (latestWeekTrend.gross - latestWeekTrend.net) / latestSettlement.miles
-      : null;
+
+  // CPM FORMULA DIVERGENCE (P1 fix, FULL SYSTEM AUDIT) — this used to be a
+  // THIRD, ad-hoc approximation, (thisWeek.gross - thisWeek.trueProfitNet) /
+  // thisWeek.miles — neither the legacy calcCpm() nor Scorecard's own
+  // calcCanonicalCpm(). Compared directly against calcCanonicalCpm() and
+  // found two real, opposite-direction divergences: (1) a week containing
+  // a major one-off repair/vehicle purchase spiked the ad-hoc figure
+  // artificially high (true-profit's own weekly net DOES subtract that
+  // one-off dollar-for-dollar in the week it happened), which
+  // calcCanonicalCpm() deliberately excludes from the per-mile figure for
+  // exactly this reason — a real false-positive "CPM above RPM" nudge
+  // risk; (2) the ad-hoc formula never added the truck's own fixed cost
+  // basis (loan/lease payment, warranty) unless it happened to already be
+  // a settlement-withheld deduction row, so it could UNDER-count CPM for
+  // an owner with a real, non-withheld loan payment — a false-negative
+  // risk in the other direction. Fixed by computing the SAME
+  // calcCanonicalCpm() figure Scorecard shows, over the SAME account-wide
+  // scope (not a single week — Scorecard's own CPM is already an
+  // all-account aggregate, so a per-week canonical figure would be a NEW,
+  // unproven calculation this codebase has never needed before; reusing
+  // the identical inputs/scope Scorecard already validates is the lower-
+  // risk "unify on the canonical one" reading) — this is now the literal
+  // SAME number a user would see by tapping through to Scorecard, never a
+  // second figure that could disagree with it. Compared against
+  // trailingAvgRpm (falling back to latestRpm only when there isn't yet
+  // enough history for a trailing average) rather than latestRpm alone,
+  // since pairing an account-wide cost figure against a single week's
+  // revenue rate would just trade one apples-to-oranges comparison for
+  // another — a trailing average is the more honest "typical" pairing.
+  const carrierWithholdsLoan = useMemo(() => carrierWithholdsLoanPayment(deductionsQuery.data ?? []), [deductionsQuery.data]);
+  const truckCostBasis = useMemo(
+    () => (activeTruck ? calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan) : null),
+    [activeTruck, carrierWithholdsLoan]
+  );
+  const truckFixedCostTotal = useMemo(
+    () => (truckCostBasis ? truckCostBasis.weeklyFixedTotal * (fleetStatsQuery.data?.settlementCount ?? 0) : 0),
+    [truckCostBasis, fleetStatsQuery.data]
+  );
+  const canonicalMilesTotal = fleetStatsQuery.data
+    ? resolveMilesTotal({ totalMiles: fleetStatsQuery.data.totalMiles }, activeTruck?.manual_total_miles_override).totalMiles
+    : null;
+  const latestCpm = useMemo(() => {
+    if (!fleetStatsQuery.data || !canonicalMilesTotal) return null;
+    return calcCanonicalCpm(
+      fleetStatsQuery.data.grossRevenue,
+      canonicalMilesTotal,
+      deductionsQuery.data ?? [],
+      fuelQuery.data ?? [],
+      maintenanceQuery.data ?? [],
+      tollsQuery.data ?? [],
+      truckFixedCostTotal
+    ).costPerMile;
+  }, [fleetStatsQuery.data, canonicalMilesTotal, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, truckFixedCostTotal]);
+  const cpmComparisonRpm = trailingAvgRpm ?? latestRpm;
 
   const quarterlyDeadline = taxQuery.data ? nextQuarterlyDeadline(taxQuery.data.taxYearData.quarterly_deadlines) : null;
 
@@ -165,7 +220,7 @@ export function useProactiveCoach() {
         thisWeekDeadheadPct: latestDeadheadPct,
         trailingAvgDeadheadPct,
         cpm: latestCpm,
-        rpm: latestRpm,
+        rpm: cpmComparisonRpm,
         now,
         goalStreak: weeklyGoal != null ? goalStreak : undefined,
         goalNeededRpm: weeklyGoal != null ? goalNeededRpm : undefined,
@@ -185,7 +240,7 @@ export function useProactiveCoach() {
       latestDeadheadPct,
       trailingAvgDeadheadPct,
       latestCpm,
-      latestRpm,
+      cpmComparisonRpm,
       weeklyGoal,
       goalStreak,
       goalNeededRpm,
@@ -218,7 +273,20 @@ export function useProactiveCoach() {
     if (recordedCoachKeyRef.current === key) return;
     recordedCoachKeyRef.current = key;
     const nextState = recordNudgesShown(coachNudgeState, visibleCoachNudges.map((n) => n.topic), now);
-    updateProfile.mutate({ nudge_state: nextState });
+    // NUDGE/WEEKLY-REVIEW WRITES ARE FIRE-AND-FORGET (P1 fix, FULL SYSTEM
+    // AUDIT) — same bug/fix as useAlertsData()'s own recordNudgesShown
+    // effect: without onError, a failed write silently disabled the
+    // monthly frequency cap (the ref was already set, so this session
+    // never retries, and the DB never actually reflects "shown").
+    updateProfile.mutate(
+      { nudge_state: nextState },
+      {
+        onError: (err) => {
+          console.error('[useProactiveCoach] failed to record coach nudge shown — frequency capping may be affected:', err);
+          recordedCoachKeyRef.current = null;
+        },
+      }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCoachNudges, profileQuery.data]);
 
@@ -264,12 +332,36 @@ export function useProactiveCoach() {
     setGenerating(true);
     callAiAdvisor([{ role: 'user', content: prompt }], i18n.language)
       .then((result) => {
-        if (result.error || !result.data) return;
-        updateProfile.mutate({
-          ai_weekly_review: result.data,
-          ai_weekly_review_generated_at: new Date().toISOString(),
-          ai_weekly_review_week_ending: latestSettlement.week_ending,
-        });
+        // NUDGE/WEEKLY-REVIEW WRITES ARE FIRE-AND-FORGET (P1 fix, FULL
+        // SYSTEM AUDIT) — `generatingKeyRef` was set BEFORE this call even
+        // started, so a failed AI call or a failed cache write used to
+        // silently mean this settlement week's review was NEVER retried
+        // for the rest of this session (a fresh app launch was the only
+        // way to try again) — with no error visible anywhere. Both
+        // failure paths now log and reset the ref so a later render can
+        // retry.
+        if (result.error || !result.data) {
+          console.error('[useProactiveCoach] weekly review generation failed:', result.error);
+          generatingKeyRef.current = null;
+          return;
+        }
+        updateProfile.mutate(
+          {
+            ai_weekly_review: result.data,
+            ai_weekly_review_generated_at: new Date().toISOString(),
+            ai_weekly_review_week_ending: latestSettlement.week_ending,
+          },
+          {
+            onError: (err) => {
+              console.error('[useProactiveCoach] failed to cache the generated weekly review:', err);
+              generatingKeyRef.current = null;
+            },
+          }
+        );
+      })
+      .catch((err) => {
+        console.error('[useProactiveCoach] weekly review generation threw:', err);
+        generatingKeyRef.current = null;
       })
       .finally(() => setGenerating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,6 +3,8 @@ import {
   isActiveJob,
   isReviewableJob,
   isRetryableJob,
+  isStrandedJob,
+  STRANDED_JOB_THRESHOLD_MS,
   jobProgressFraction,
   runOptionalSideEffect,
   runBatchWithConcurrency,
@@ -53,6 +55,45 @@ describe('job lifecycle status checks', () => {
     expect(isReviewableJob(job({ id: '1', status: 'ready' }))).toBe(true);
     expect(isReviewableJob(job({ id: '1', status: 'failed' }))).toBe(false);
     expect(isReviewableJob(job({ id: '1', status: 'processing' }))).toBe(false);
+  });
+});
+
+// UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A CAPABILITY
+// CHECK (P1 fix, FULL SYSTEM AUDIT) — "surface stranded jobs to the user
+// with a Retry." isStrandedJob() is the client-side safety net: an active
+// job whose updatedAt hasn't moved in a long time is presumed abandoned.
+describe('isStrandedJob (P1 fix, "surface stranded jobs with a Retry")', () => {
+  it('a job updated moments ago is never stranded, regardless of active status', () => {
+    const now = '2026-08-24T10:05:00.000Z';
+    expect(isStrandedJob(job({ id: '1', status: 'processing', updatedAt: '2026-08-24T10:04:50.000Z' }), now)).toBe(false);
+    expect(isStrandedJob(job({ id: '1', status: 'queued', updatedAt: '2026-08-24T10:04:50.000Z' }), now)).toBe(false);
+    expect(isStrandedJob(job({ id: '1', status: 'waiting_to_retry', updatedAt: '2026-08-24T10:04:50.000Z' }), now)).toBe(false);
+  });
+
+  it('an active job with no progress well past the threshold IS stranded', () => {
+    const staleUpdatedAt = '2026-08-24T10:00:00.000Z';
+    const now = new Date(new Date(staleUpdatedAt).getTime() + STRANDED_JOB_THRESHOLD_MS + 60_000).toISOString();
+    expect(isStrandedJob(job({ id: '1', status: 'processing', updatedAt: staleUpdatedAt }), now)).toBe(true);
+    expect(isStrandedJob(job({ id: '1', status: 'queued', updatedAt: staleUpdatedAt }), now)).toBe(true);
+    expect(isStrandedJob(job({ id: '1', status: 'waiting_to_retry', updatedAt: staleUpdatedAt }), now)).toBe(true);
+  });
+
+  it('a TERMINAL job (ready/failed) is never stranded, no matter how old', () => {
+    const veryOld = '2020-01-01T00:00:00.000Z';
+    const now = '2026-08-24T10:05:00.000Z';
+    expect(isStrandedJob(job({ id: '1', status: 'ready', updatedAt: veryOld }), now)).toBe(false);
+    expect(isStrandedJob(job({ id: '1', status: 'failed', updatedAt: veryOld }), now)).toBe(false);
+  });
+
+  it('respects a custom threshold', () => {
+    const updatedAt = '2026-08-24T10:00:00.000Z';
+    const now = '2026-08-24T10:02:00.000Z'; // 2 minutes later
+    expect(isStrandedJob(job({ id: '1', status: 'processing', updatedAt }), now, 60_000)).toBe(true); // past a 1-min threshold
+    expect(isStrandedJob(job({ id: '1', status: 'processing', updatedAt }), now, 5 * 60_000)).toBe(false); // within a 5-min threshold
+  });
+
+  it('an unparseable updatedAt never crashes and is treated as not-stranded', () => {
+    expect(isStrandedJob(job({ id: '1', status: 'processing', updatedAt: 'not-a-date' }), '2026-08-24T10:05:00.000Z')).toBe(false);
   });
 });
 

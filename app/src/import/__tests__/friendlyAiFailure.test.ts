@@ -36,9 +36,24 @@ describe('classifyAiImportFailureCategory', () => {
     expect(classifyAiImportFailureCategory('network_error')).toBe('offline');
   });
 
-  test('every other type falls through to null (keeps its own existing message)', () => {
-    for (const type of ['bad_request', 'unauthenticated', 'usage_limit_reached']) {
-      expect(classifyAiImportFailureCategory(type)).toBeNull();
-    }
+  // P1 fix (FULL SYSTEM AUDIT): bad_request and unauthenticated used to
+  // fall through to null here, which meant they fell all the way through
+  // to friendlyAiImportError()'s plain, NEVER-TRANSLATED English strings —
+  // the exact "still shows raw English" bug reported. Both are now real
+  // entries in this map.
+  test('unauthenticated -> sessionExpired (a distinct fix — sign in again — from every other bucket)', () => {
+    expect(classifyAiImportFailureCategory('unauthenticated')).toBe('sessionExpired');
+  });
+
+  test('bad_request -> internal (every real bad_request message is an app-side bug, not something the user caused)', () => {
+    expect(classifyAiImportFailureCategory('bad_request')).toBe('internal');
+  });
+
+  // usage_limit_reached is the one type deliberately left OUT of this map
+  // — it keeps its own genuinely dedicated UI (real used/allowance
+  // figures from the server), never a generic bucket message.
+  test('usage_limit_reached (and any truly unrecognized type) falls through to null', () => {
+    expect(classifyAiImportFailureCategory('usage_limit_reached')).toBeNull();
+    expect(classifyAiImportFailureCategory('some_future_unmapped_type')).toBeNull();
   });
 });

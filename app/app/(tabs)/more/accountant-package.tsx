@@ -16,6 +16,7 @@ import { useEquipment } from '@/src/data/equipment';
 import { useCapitalTransactions } from '@/src/data/capitalTransactions';
 import { useUserCategories } from '@/src/data/userCategories';
 import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
+import { defaultTaxDeductible } from '@/src/import/category';
 import { useTaxYearData } from '@/src/data/taxYearData';
 import { useAuth } from '@/src/context/AuthContext';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -116,7 +117,13 @@ function convertLineItemToDeductionInsert(item: LineItem, userId: string, newCat
     amount: item.amount,
     category: newCategory,
     source: 'manual',
-    tax_deductible: true,
+    // TWO DISAGREEING "does this reduce income" RULES (P1 fix, FULL SYSTEM
+    // AUDIT) — this used to hardcode tax_deductible:true regardless of
+    // newCategory, so converting a fuel/maintenance/toll row into a
+    // Meals/Advance Repayment/Escrow deduction disagreed with
+    // reducesTrueProfit()'s own category-based exclusion from the moment
+    // the row was created.
+    tax_deductible: defaultTaxDeductible(newCategory),
   };
 }
 
@@ -339,7 +346,13 @@ export default function AccountantPackage() {
     setSavingEdit(true);
     try {
       if (editingItem.kind === 'deduction') {
-        await updateDeduction.mutateAsync({ id: editingItem.id, values: { category: editCategory } });
+        // Same fix as above — a real re-categorization (not just re-saving
+        // the same value) re-applies the smart default for tax_deductible,
+        // same "still a smart default, not a lock" spirit as
+        // deductions.tsx's own handleEditCategoryChange().
+        const values: { category: string; tax_deductible?: boolean } = { category: editCategory };
+        if (editCategory !== editingItem.category) values.tax_deductible = defaultTaxDeductible(editCategory);
+        await updateDeduction.mutateAsync({ id: editingItem.id, values });
       } else {
         // Spec item B.4: changing a fuel/maintenance/toll row's category
         // converts it into a deduction row so the new category sticks —

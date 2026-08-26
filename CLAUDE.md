@@ -6704,3 +6704,247 @@
   `eas update` once §59/§60 have been run (the client code calls RPCs that
   don't exist yet otherwise). No i18n changes this pass (no new user-facing
   strings — every fix is internal data-layer/security/performance work).
+- FULL SYSTEM AUDIT — P1 BATCH, NINE FIXES (owner decision 2026-08-26/27,
+  same adversarial audit as the P0 pass above, next-priority findings).
+  1. **SETTLEMENT RE-IMPORT DUPLICATES maintenance/toll rows
+     (docs/PENDING_SQL.md §61, NOT YET RUN)**: unlike loads/fuel_purchases/
+     reimbursements/withheld deductions, `maintenance_records`/`tolls` had
+     no `settlement_id` column at all to scope "old rows for THIS
+     settlement" by (`maintenance_records` only had `document_id`, which
+     is a FRESH id on every re-import attempt — no help finding the
+     PREVIOUS attempt's rows; `tolls` had no linking column whatsoever) —
+     re-importing the same PDF twice silently doubled these expenses,
+     double-counting in true profit, CPM, and the Accountant Package.
+     Fixed by adding `settlement_id` to both tables (nullable, `on delete
+     cascade`, same convention as the other settlement-child tables) and
+     applying the IDENTICAL capture-old-ids/insert-new/delete-old pattern
+     `aiImportSave.ts` already used for loads/fuel/reimbursements/
+     deductions. Tests: `aiImportSave.settlement.test.ts` gained two new
+     end-to-end cases proving a settlement with maintenance+toll line
+     items imported twice (and a third time) leaves exactly one
+     maintenance row and one toll row, correctly tagged to the single
+     (replaced) settlement.
+  2. **TWO DISAGREEING "does this reduce income" RULES**:
+     `dashboardStats.ts`'s `outOfPocketDeductions` (feeds the tax
+     estimate's net-profit input, `taxEstimate.ts`) checked only
+     `source`/`tax_deductible`, silently disagreeing with the canonical
+     `reducesTrueProfit()` (`src/stats/trueProfit.ts`), which ALSO
+     excludes Meals/Advance Repayment/Escrow & Deposits by category. A row
+     re-categorized to Meals without its `tax_deductible` flag being
+     updated was excluded from true profit but STILL subtracted in the
+     tax estimate — understating tax owed. Fixed two ways: (a)
+     `outOfPocketDeductions` now filters via `d.source !== 'settlement' &&
+     reducesTrueProfit(d)` — a strict superset of the old check, so it can
+     only ever exclude MORE, never include a row the old check didn't
+     already include; (b) re-categorization now re-applies the smart
+     default for `tax_deductible` in BOTH places a deduction's category
+     can be edited — `deductions.tsx`'s new `handleEditCategoryChange()`
+     (mirrors the pre-existing add-flow pattern, `handleAddCategoryChange()`)
+     and `accountant-package.tsx`'s `handleSaveCategory()`/
+     `convertLineItemToDeductionInsert()` (which used to hardcode
+     `tax_deductible: true` unconditionally, regardless of the new
+     category). Still a SMART DEFAULT, not a lock — a checkbox/later edit
+     can always override it. Tests: `dashboardStats.test.ts` gained the
+     exact reported scenario (a Meals row with `tax_deductible` still
+     `true`, proving it's excluded from `outOfPocketDeductions` while
+     `totalDeductions` stays unchanged) plus Advance-Repayment/Escrow and
+     withheld-row cases.
+  3. **DEDUCTION EDIT + CONTRIBUTION SYNC NOT ATOMIC
+     (docs/PENDING_SQL.md §62, NOT YET RUN)**: `deductions.tsx`'s
+     `handleSaveEdit()`/`handleSaveAdd()` each did a deduction write THEN,
+     as a SEPARATE `await`, a linked-contribution sync — a network drop
+     between the two could leave the deduction saved with a stale/
+     missing/orphaned linked contribution, corrupting `taxFreeRemaining`.
+     Fixed with two new atomic RPCs, same §60 pattern: `update_deduction_
+     with_contribution_sync()`/`insert_deduction_with_contribution_sync()`
+     — either the deduction write AND the contribution create/update/
+     remove both happen, or neither does, in one transaction.
+     `applyContributionSync()`/`fetchLinkedContributionId()`
+     (`deductionMutations.ts`) are unchanged and still used by
+     `accountant-package.tsx`'s category-only edit and `documents.tsx`'s
+     payment-method quick-edit — neither touches personal-payment sync at
+     all, a narrower, separate, explicitly-flagged gap left out of this
+     fix's scope. Tests: `deductionMutations.test.ts` gained 13 new tests
+     against the real exported functions (not a reimplementation) proving
+     create/update/remove/noop sync all work atomically, AND — the actual
+     atomicity proof — that a failed RPC call leaves BOTH the deduction
+     row and any contribution completely untouched (never partially
+     applied), for both the edit and add flows.
+  4. **UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A
+     CAPABILITY CHECK OR SERVICE-ROLE CLIENT**: three real bugs in
+     `ai-import/index.ts`. (a) `return handleJobStart(...)` (no `await`)
+     inside the top-level try/catch let a REJECTION of that promise escape
+     the catch entirely — a bare `return somePromise` in an async function
+     hands the promise straight to the caller without re-entering the
+     function's own synchronous frame, so a later rejection never gets a
+     chance to be caught there; fixed to `return await handleJobStart(...)`.
+     (b) `(globalThis as any).EdgeRuntime.waitUntil(...)` had no capability
+     check — if that global were ever missing, it threw synchronously
+     (compounded by (a), this could escape as a raw error); now checked
+     FIRST, before any `import_jobs` row is created, failing cleanly with
+     no job ever left stuck at "queued." (c) `runJobInBackground()` used
+     the ORIGINAL caller's JWT-scoped client for every write — a
+     background job can run up to `JOB_HARD_BUDGET_MS` (4 minutes), long
+     enough for a short-lived session token to expire mid-job, silently
+     failing every subsequent status-update write (including the one that
+     marks a job 'failed') and stranding it in "processing" forever with
+     no error ever recorded. Fixed by routing every `import_jobs` write
+     through a service-role client (`getServiceRoleAdminClient()`, renamed
+     from the rate-limit pass's own `getRateLimitAdminClient()` — same
+     cached client, now serving two purposes), each explicitly scoped by
+     BOTH `.eq("id", jobId)` AND `.eq("user_id", userId)` since a
+     service-role client bypasses RLS entirely. `consume_ai_import_credit()`
+     still uses the ORIGINAL caller client specifically — it's `security
+     definer` and derives the user exclusively from `auth.uid()`, which
+     has no meaning for a service-role connection; already best-effort/
+     failure-tolerant, so a stale JWT failing there is a far smaller
+     degradation than the whole job never completing. Client-side safety
+     net added too: `isStrandedJob()` (`src/import/importJobs.ts`) flags
+     an active job whose `updatedAt` hasn't moved in 10+ minutes (well
+     past the server's own 4-minute budget) as stuck, surfacing a Retry
+     button on the Import Jobs screen even though its `status` never made
+     it to `'failed'`. Tests: 5 new `isStrandedJob()` cases. The Deno-side
+     fix itself has no Jest test (no Deno runtime in this environment,
+     same standing limitation as every prior ai-import pass) — hand-
+     reviewed line by line instead of fabricating coverage.
+  5. **bad_request/unauthenticated STILL SHOWED RAW ENGLISH**:
+     `friendlyAiFailure.ts`'s own header comment used to claim these two
+     "keep their own existing, already-specific/dedicated UI" — false;
+     neither was ever in `classifyAiImportFailureCategory()`'s map, so
+     both fell through to `friendlyAiImportError()`'s plain, NEVER-
+     TRANSLATED hardcoded English strings, regardless of the user's
+     locale (violating CLAUDE.md invariant #11). Fixed: `unauthenticated`
+     now maps to a new `sessionExpired` category (a distinct fix — sign in
+     again — from every other bucket's generic "try again"); `bad_request`
+     maps to the existing `internal` bucket (every real `bad_request`
+     message ai-import actually returns — "retryJobId is required," "Only
+     POST is supported," "Request body must be valid JSON" — is an
+     app-side bug, never something a real user action causes). New
+     `importScreen.friendlyFailure.sessionExpired` key across all 7
+     locales (es/ru/ar/tr translated, hi/uk untranslated English copies).
+     Test updated: the old "falls through to null" assertion for these
+     two types was itself testing the bug — replaced with explicit
+     category assertions for both, plus a `usage_limit_reached`/unknown-
+     type case confirming the one type still deliberately left out of the
+     map (it keeps its own genuinely dedicated real-figures UI).
+  6. **NUDGE/WEEKLY-REVIEW WRITES ARE FIRE-AND-FORGET**: every
+     `updateProfile.mutate(...)` call in `alerts.ts`/`proactiveCoach.ts`
+     (recording nudges shown, silencing/unsilencing a nudge, setting
+     role, dismissing the role prompt, caching a generated weekly review)
+     had no `onError` at all — for the "record shown" writes specifically,
+     the local ref tracking "already recorded this topic set" was set
+     BEFORE the mutation even started, so a failed write meant this
+     session would never retry it, and since `profiles.nudge_state` in
+     the DB never actually changed, the frequency-cap engine kept
+     computing against STALE state on every future load — silently
+     defeating "at most once per topic per week/month." Fixed: every
+     `.mutate()` call now has an `onError` that `console.error`s (making
+     the failure diagnosable) and, for the ref-guarded effects, resets the
+     ref so a LATER render can retry instead of giving up for the rest of
+     the session. `proactiveCoach.ts`'s weekly-review generation got the
+     same treatment for BOTH failure paths (a failed AI call, a failed
+     cache write) plus a `.catch()` for a thrown error, all resetting
+     `generatingKeyRef` so a genuinely failed week's review isn't silently
+     skipped forever. HONESTLY FLAGGED: no new test file — both hooks are
+     large orchestration hooks (11+ and 9+ data-hook dependencies,
+     AuthContext-transitive JSX imports) with no existing dedicated test
+     file, same established precedent as this codebase's other thick
+     data-layer hooks; hand-verified via `tsc` + careful code review
+     rather than forcing a large, fragile mock-everything test into
+     existence under time pressure.
+  7. **CONSOLIDATED MIGRATION WAS HALF A SCHEMA BEHIND**: `0002_
+     consolidated_pending_sql.sql` covered only §1-36, with its own header
+     comment flagging that §37/§38 were applied afterward and never folded
+     in — the disaster-recovery "provision a fresh Supabase project" path
+     was broken for anything shipped in the ~5 months since. Fixed with a
+     new `supabase/migrations/0003_consolidated_pending_sql_37_62.sql`
+     (1,390 lines) covering §37 through §62 (§37-60 confirmed "✅ APPLIED"
+     live; §61/§62 — this pass's own new sections — included too since a
+     fresh-provisioning snapshot needs the CURRENT schema the app code
+     depends on, each clearly marked "NOT YET RUN" in its own section
+     header so nobody mistakes the file's existence as proof they're
+     live), following 0002's exact idempotency conventions throughout.
+     Five real discrepancies were found and fixed while assembling it
+     (not present if the raw docs/PENDING_SQL.md fenced blocks were
+     copied naively): §52's 205-row and §53's 8-row carrier-code seed
+     INSERTs had no `on conflict` clause at all (would throw a duplicate-
+     key error on a second run); §56's and §58's constraint-drop
+     statements had no `if exists` guard; §58's and §59's constraint-add
+     statements had no duplicate-object guard; §37's function body is
+     immediately superseded by §38's, so the file goes straight to §38's
+     final version rather than transcribing a throwaway intermediate one.
+     VERIFIED against the live database via read-only `information_schema`/
+     `pg_constraint`/`pg_policies` queries (not just assumed correct):
+     every §37-60 table/column/constraint/function/RLS-policy state
+     checked matched what PENDING_SQL.md's prose described, with ZERO
+     discrepancies found — including an exact-count match on the seeded
+     `carrier_code_maps` data (213 live rows = 205 + 8, confirming the
+     transcription is complete, not truncated), and confirming §61/§62's
+     columns/functions are genuinely absent from the live schema (matching
+     their own "NOT YET RUN" status, not fabricated). NOT independently
+     re-verified: every single column across all 26 sections, or the full
+     RLS-policy list on tables other than `ai_credit_purchases` — stated
+     plainly as the honest scope of what was actually checked.
+  8. **EXPORT ALL MY DATA omitted account_credits/ai_credit_purchases/
+     referrals**: the first two fit the standard `user_id` loop
+     (`EXPORT_TABLES`) and were simply missing; `referrals` genuinely
+     can't — it has `referrer_id`/`referred_user_id`, no single `user_id`
+     column, same reason `delete-account`/`reset-data` already handle it
+     as a bespoke delete rather than the standard loop. Fixed:
+     `account_credits`/`ai_credit_purchases` added to `EXPORT_TABLES`;
+     `fetchAllUserData()` gained a bespoke `referrals` query
+     (`.or('referrer_id.eq.X,referred_user_id.eq.X')`, matching BOTH
+     directions — referrals this user made AND the one row recording who
+     referred them, both genuinely their own data). `fakeSupabase.ts`
+     gained `.or()` support (a minimal `column.eq.value`-clause parser,
+     the only shape this codebase's real Supabase calls use) to make this
+     testable at all. In the same pass, found and fixed a second, unrelated
+     staleness bug this test file's own regression guard exists to catch:
+     its hand-maintained `TABLES_IN_DELETION_ORDER` mirror had silently
+     drifted from delete-account's real array, missing
+     `category_learning_rules` and `account_credits` — corrected alongside
+     the main fix rather than left quietly wrong.
+  9. **CPM FORMULA DIVERGENCE, VERIFIED**: the actual code, read directly
+     rather than assumed from the flagged report's own framing, showed
+     `proactiveCoach.ts`'s CPM-vs-RPM coach nudge used neither the legacy
+     `calcCpm()` NOR Scorecard's `calcCanonicalCpm()` — a THIRD, ad-hoc
+     single-week approximation, `(thisWeek.gross - thisWeek.trueProfitNet)
+     / thisWeek.miles`. Compared directly against `calcCanonicalCpm()` and
+     found two real, opposite-direction divergences: (a) a week containing
+     a major one-off repair or vehicle purchase spiked the ad-hoc figure
+     artificially high (true-profit's own weekly net subtracts that
+     dollar-for-dollar in the week it happened; `calcCanonicalCpm()`
+     deliberately excludes one-offs from the per-mile figure for exactly
+     this reason) — a real false-positive "you're running at a loss" nudge
+     risk; (b) the ad-hoc formula never added the truck's own fixed cost
+     basis (loan/lease payment, warranty) unless it happened to already be
+     a settlement-withheld deduction row — a false-negative risk in the
+     other direction. Fixed by computing the SAME `calcCanonicalCpm()`
+     figure Scorecard shows, over the SAME account-wide scope (not a new,
+     unproven per-week variant — Scorecard's own CPM is already an
+     all-account aggregate, so reusing that exact scope is the literal
+     SAME number a user would see by tapping through to Scorecard, never a
+     second figure that could disagree with it), compared against
+     `trailingAvgRpm` (falling back to `latestRpm` only when there isn't
+     yet enough history) rather than a single week's RPM — pairing an
+     account-wide cost figure against one week's revenue rate would just
+     trade one apples-to-oranges comparison for another. The `cpmAboveRpm`
+     nudge copy's own "this week" wording was ALSO wrong under the new
+     scope — fixed across all 7 locales to "your overall cost per mile...
+     your typical rate per mile," a direct, necessary consequence of the
+     scope change that would otherwise have shipped a now-inaccurate
+     string. HONESTLY FLAGGED: no new test file, same "large orchestration
+     hook, no existing dedicated test file" reasoning as item 6 — the
+     underlying `calcCanonicalCpm()`/`calcTruckCostBasisWeekly()`/
+     `carrierWithholdsLoanPayment()`/`resolveMilesTotal()` functions this
+     fix wires together are each already separately unit-tested; hand-
+     verified via `tsc` + code review that the wiring itself is correct.
+  **Deliverables**: 105 suites / 2601 tests pass; `tsc --noEmit` clean.
+  `docs/PENDING_SQL.md` §61 and §62 are **NOT YET RUN**. `supabase/
+  functions/ai-import/index.ts` was modified (item 4) and **needs
+  redeploying**. No other Edge Function changed this pass. All client-side
+  changes ship via a normal `eas update` — items 1 and 3 depend on §61/§62
+  being applied first (the client calls RPCs/reads a column that don't
+  exist yet otherwise); every other item works standalone. New file:
+  `supabase/migrations/0003_consolidated_pending_sql_37_62.sql` (a
+  disaster-recovery snapshot artifact, not itself run against anything).

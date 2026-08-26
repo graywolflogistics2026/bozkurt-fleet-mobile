@@ -12,15 +12,32 @@
 // internal) — every one of those 6 has its own bucket/copy here now,
 // covering every failure surface the server can return, not just the
 // original 4.
-export type FriendlyFailureCategory = 'billingAuth' | 'rateLimit' | 'timeoutOverload' | 'oversized' | 'invalidDocument' | 'internal' | 'offline';
+//
+// STILL SHOWS RAW ENGLISH (P1 fix, FULL SYSTEM AUDIT): this file's own
+// header comment used to claim bad_request/unauthenticated "keep their
+// own existing, already-specific/dedicated UI" — that claim was simply
+// wrong. Neither was ever in this map, so classifyAiImportFailureCategory()
+// returned null for both, which falls through to
+// friendlyAiImportError()'s (src/data/aiImportCall.ts) plain, HARDCODED
+// English strings ('Your session expired — sign out and back in, then
+// try again.' / 'This file could not be sent for processing.') — never
+// routed through i18next's t(), unlike literally everything else in this
+// app (CLAUDE.md invariant #11). Fixed by actually mapping both below.
+export type FriendlyFailureCategory =
+  | 'billingAuth'
+  | 'rateLimit'
+  | 'timeoutOverload'
+  | 'oversized'
+  | 'invalidDocument'
+  | 'internal'
+  | 'offline'
+  | 'sessionExpired';
 
-// Maps AiImportError.type values (src/data/aiImportCall.ts) onto the 7
-// buckets above. Types NOT in this map (bad_request, unauthenticated,
-// usage_limit_reached) keep their own existing, already-specific/
-// dedicated UI (usage_limit_reached shows real used/allowance figures;
-// bad_request/unauthenticated are the app's own request-shape/session
-// errors, not AI-service failures) — this classifier only covers
-// AI-service-failure-shaped codes.
+// Maps AiImportError.type values (src/data/aiImportCall.ts) onto the 8
+// buckets above. usage_limit_reached is the one type deliberately NOT in
+// this map — it keeps its own existing, genuinely dedicated UI (it shows
+// real used/allowance figures from the server, which a generic bucket
+// message can't).
 export function classifyAiImportFailureCategory(errorType: string): FriendlyFailureCategory | null {
   switch (errorType) {
     case 'billing_exhausted':
@@ -58,6 +75,19 @@ export function classifyAiImportFailureCategory(errorType: string): FriendlyFail
     // expo-device/expo-application for the same reason).
     case 'network_error':
       return 'offline';
+    // "Your session isn't valid" — a distinct fix (sign in again) from
+    // every other bucket's "try again," so it gets its own message rather
+    // than folding into 'internal'.
+    case 'unauthenticated':
+      return 'sessionExpired';
+    // Every bad_request message ai-import actually returns is an
+    // app-side request-shape bug ("retryJobId is required," "Only POST is
+    // supported," "Request body must be valid JSON") — never something a
+    // real user action causes or can fix themselves, so the generic
+    // "something went wrong, try again" bucket is the right fit, not a
+    // dedicated message explaining an internal validation detail.
+    case 'bad_request':
+      return 'internal';
     default:
       return null;
   }

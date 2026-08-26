@@ -534,7 +534,8 @@
       "timeoutOverload": "The document is taking too long right now — try again shortly.",
       "invalidDocument": "We couldn't read this document — try a clearer photo, or a different file.",
       "internal": "Something went wrong on our end — your data is safe. Please try again.",
-      "offline": "You're offline. Your file is saved and will import when you're back."
+      "offline": "You're offline. Your file is saved and will import when you're back.",
+      "sessionExpired": "Your session expired — sign out and back in, then try again."
     },
     "usageLimitReached": "You've used this month's AI imports ({{used}} of {{allowance}}). You can still add entries manually, and everything else keeps working — your allowance resets on the 1st.",
     "usageLimitReachedGeneric": "You've used this month's AI imports. You can still add entries manually, and everything else keeps working — your allowance resets on the 1st.",
@@ -1621,7 +1622,7 @@
       "quarterlyTaxDueSoon_other": "Your next quarterly tax payment is due in {{days}} days.",
       "fuelPctTrendUp": "Fuel is running {{points}} points higher than your last 4 weeks — worth a look.",
       "deadheadTrendUp": "Deadhead miles are trending up — {{points}} points higher than your last 4 weeks.",
-      "cpmAboveRpm": "Your cost per mile (${{cpm}}) is above your rate per mile (${{rpm}}) this week — running at a loss on paper.",
+      "cpmAboveRpm": "Your overall cost per mile (${{cpm}}) is above your typical rate per mile (${{rpm}}) — you may be running at a loss on paper.",
       "goalStreakOver_one": "You've beaten your weekly goal {{count}} week in a row — nice work. Consider raising it?",
       "goalStreakOver_other": "You've beaten your weekly goal {{count}} weeks in a row — nice work. Consider raising it?",
       "goalStreakUnder_one": "You've come in under your weekly goal for {{count}} week — want to look at what's driving it?",
@@ -2018,9 +2019,11 @@
       "processing": "Processing",
       "waitingToRetry": "Waiting to retry",
       "ready": "Ready",
-      "failed": "Failed"
+      "failed": "Failed",
+      "stranded": "Stuck"
     },
     "waitingToRetryNote": "The AI import service is busy — automatically retrying shortly.",
+    "strandedNote": "This import seems stuck and hasn't made progress in a while. Your file is safe — try again.",
     "pageProgress": "Page {{through}} of {{total}}",
     "starting": "Starting…",
     "genericFailure": "Something went wrong.",
