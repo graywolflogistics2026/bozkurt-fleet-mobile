@@ -410,6 +410,23 @@ function AiCoachSection({
   const { money } = useFormatters();
   const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
   const hour = new Date().getHours();
+  // SELF-TEST AUDIT (owner decision, MULTI-TRUCK MODEL) — useAiCoachSummary()/
+  // useProactiveCoach() are deliberately fleet-wide always (see those
+  // files' own header comments — the weekly review/recommendations/
+  // nudges are composed from account-wide settlement data, not re-derived
+  // per truck, to avoid multiplying the AI-advisor call budget this app's
+  // own cost-control invariant caps at one call per week). Found by this
+  // audit: that was previously undocumented ON SCREEN — a user viewing a
+  // specific truck's now-correctly-scoped Hero Card/per-mile trio right
+  // above this card could see a dollar figure here (e.g. "this week's
+  // revenue was $X" in the weekly review text) that silently disagreed,
+  // with nothing explaining why. Same "fleet-wide, and the screen must
+  // say so" treatment as Tax Estimator/Capital Account/Cash Flow —
+  // shown only when a SPECIFIC truck is actually selected on a
+  // multi-truck account (matching the Business Balance/Tax Strip cards
+  // right above it), since "All Trucks" scope has no such ambiguity to
+  // clear up.
+  const { isAllTrucks, trucks } = useActiveTruck();
 
   return (
     <>
@@ -418,6 +435,7 @@ function AiCoachSection({
         <Text style={{ color: colors.muted, fontSize: typography.size.sm, marginBottom: spacing.sm }}>
           🧑‍✈️ {t(greetingKey(hour), { name })}
         </Text>
+        {!isAllTrucks && trucks.length > 1 && <MutedText style={{ marginBottom: spacing.sm }}>{t('fleetScope.fleetWideAlways')}</MutedText>}
 
         {/* AI COACH — PROACTIVE WEEKLY REVIEW (owner decision 2026-08-24,
             NEXT PASS item E1) — composed from real settlement numbers,

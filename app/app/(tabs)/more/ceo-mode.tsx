@@ -10,6 +10,7 @@ import { RECOMMENDATION_ICON, recommendationText, recommendationRoute } from '@/
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Field, PrimaryButton } from '@/src/components/ui';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -137,6 +138,12 @@ export default function CeoMode() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1 }}>
             <ScreenTitle>{t('ceoMode.title')}</ScreenTitle>
+            {/* SELF-TEST AUDIT (owner decision, MULTI-TRUCK MODEL) — see
+                AiCoachSection's own identical comment on Home: this
+                screen's whole briefing (weekly review, recommendations,
+                goal tracking) is composed from account-wide data by
+                design, never re-derived per truck. */}
+            <FleetScopeLabel variant="fleetOnly" />
             <MutedText>{t('ceoMode.subtitle')}</MutedText>
           </View>
           {!loadingData && (

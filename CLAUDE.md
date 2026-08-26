@@ -7450,3 +7450,74 @@
   Function changes — this is a pure client-side correctness + placement
   fix on top of the same §63 schema. Ships via a normal `eas update`
   (§63 must still be run first, unchanged from the prior entry).
+- MULTI-TRUCK MODEL — AUDIT OF THE 3 PREVIOUSLY-UNREVIEWED SCREENS (owner
+  decision, no new SQL). The prior self-test pass explicitly flagged
+  Share Weekly Profit, AI Coach, and Documents as unaudited rather than
+  claiming them correct. This pass reads all three end to end.
+  1. **FINDING (confirmed, fixed) — Share Weekly Profit didn't honor the
+     scope selector at all, AND had a pre-existing internal
+     inconsistency**: `useSettlements()` was completely unfiltered, so
+     the week picker and "selected" settlement always spanned every
+     truck regardless of the active scope. Independently of scope, the
+     Revenue metric (`selected.gross`) read exactly ONE settlement row's
+     own value while the Profit metric already AGGREGATED every
+     settlement sharing that `week_ending` (the routine multi-truck case
+     where every truck settles the same week) — the two metrics on the
+     SAME share card could silently disagree about which trucks'
+     numbers they even covered. Fixed together: `scopedSettlements`/
+     `scopedDeductions`/`scopedFuel`/`scopedMaintenance`/`scopedTolls`
+     (same direct `truck_id === activeTruck.id` filter pattern as Home's
+     own fix) feed BOTH metrics now; the week picker changed from a list
+     of raw settlement rows to a deduped list of `week_ending` strings
+     (since 2+ settlements can legitimately share one week), and Revenue
+     is now the SUM of every scoped settlement's gross for the selected
+     week — always the same underlying row set Profit's own
+     `buildWeeklyTrueProfitTrend()` call aggregates over, so the two can
+     never disagree again. `<FleetScopeLabel />` added.
+  2. **FINDING (confirmed, labeled rather than re-scoped) — AI Coach's
+     dollar figures are fleet-wide by design, but this was previously
+     undocumented ON SCREEN**: `useAiCoachSummary()`/`useProactiveCoach()`
+     both intentionally read fleet-wide, unfiltered settlement data (see
+     each file's own pre-existing header comment) — the weekly review
+     text, recommendations, and periodic nudges are composed from
+     account-wide data specifically so this stays within the app's own
+     "one ai-advisor call per week" cost-control ceiling; re-deriving a
+     separate AI-composed briefing PER TRUCK would multiply that budget
+     and was judged out of proportion for this pass. The real, confirmed
+     bug: after the prior pass correctly scoped Home's Hero Card and
+     per-mile trio to the active truck, a user could see a truck-scoped
+     profit figure at the top of Home and an unlabeled FLEET-WIDE dollar
+     figure (e.g. "this week's revenue was $X" in the AI weekly review
+     text) directly below it in the AI Coach card, with nothing
+     explaining the discrepancy — exactly the "silently disagreeing
+     numbers" risk this whole audit exists to catch. Fixed by treating
+     AI Coach as a category-1 fleet-only surface (same treatment as Tax
+     Estimator/Capital Account/Cash Flow): Home's `AiCoachSection` shows
+     the existing `fleetScope.fleetWideAlways` note whenever a specific
+     truck is actively selected (matching the Business Balance/Tax
+     Strip cards right above it); the dedicated `ceo-mode.tsx` screen
+     gained `<FleetScopeLabel variant="fleetOnly" />` under its title.
+  3. **FINDING (confirmed, labeled — cannot be cheaply re-scoped) —
+     Documents has no way to follow the selector**: the `documents`
+     table has no `truck_id` column at all (confirmed via `db.ts`'s own
+     `DocumentRow` type) — it's a raw upload/audit-trail archive, and
+     some documents never even produce a truck-attributable record (an
+     archived `'other'`-docType file with no resolved category, for
+     instance). Tracing a document to a truck would require joining
+     through its linked settlement/deduction/maintenance/toll row for
+     EVERY row in the list (the same mechanism `findLinkedRecords()`
+     already uses for a SINGLE document's own detail view, not built for
+     list-wide filtering) — a real, nontrivial feature, not a quick fix,
+     and out of scope for this audit pass. Documents is instead
+     explicitly labeled fleet-wide (`<FleetScopeLabel variant="fleetOnly"
+     />`) so the screen is honest about not following the selector
+     rather than silently ambiguous about it — a genuine per-document
+     truck join is flagged here as a real follow-up, not silently
+     dropped.
+  Tests: no new pure-logic module this pass (the share-profit fix is
+  screen-local filtering, reusing already-tested `buildWeeklyTrueProfitTrend()`
+  unchanged) — 110 suites / 2658 tests pass (count unchanged), `tsc
+  --noEmit` clean. No new i18n strings — every label added this pass
+  reuses `fleetScope.fleetWideAlways`, already shipped in the first
+  MULTI-TRUCK MODEL pass. No SQL/Edge Function changes. Ships via a
+  normal `eas update`.

@@ -35,6 +35,7 @@ import { buildLinkedRecordHref } from '@/src/navigation/linkedRecordRoute';
 import { DOC_TYPE_ICON, useDocTypeMeta } from '@/src/import/docTypes';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, TappableCard, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { DocType } from '@/src/import/types';
 import type { DocumentRow } from '@/src/types/db';
@@ -262,6 +263,14 @@ export default function DocumentsArchive() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScreenTitle>{t('documentsArchive.title')}</ScreenTitle>
+        {/* SELF-TEST AUDIT (owner decision, MULTI-TRUCK MODEL) — the
+            `documents` table has no truck_id column at all (it's a raw
+            upload/audit-trail archive — some documents never even
+            produce a truck-attributable record). Rather than leave this
+            silently unscoped and unexplained, it's treated as the same
+            fleet-wide category every other whole-account archive/report
+            screen already is. */}
+        <FleetScopeLabel variant="fleetOnly" />
         <MutedText style={{ marginBottom: spacing.sm }}>{t('documentsArchive.subtitle')}</MutedText>
 
         <Field

@@ -14,6 +14,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { useShareCapture } from '@/src/components/shareCard/useShareCapture';
 import { useShareMessages } from '@/src/components/shareCard/useShareMessages';
 import { ShareDestinationsRow } from '@/src/components/shareCard/ShareDestinationsRow';
+import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -55,33 +56,65 @@ export default function ShareProfit() {
   const [included, setIncluded] = useState<Record<MetricKey, boolean>>({ revenue: true, profit: true, mpg: false });
   const [selectedWeekEnding, setSelectedWeekEnding] = useState<string | null>(null);
 
-  const weeks = useMemo(
-    () => [...(settlementsQuery.data ?? [])].sort((a, b) => (b.week_ending ?? '').localeCompare(a.week_ending ?? '')),
-    [settlementsQuery.data]
+  // SELF-TEST AUDIT (owner decision, MULTI-TRUCK MODEL) — this screen
+  // used to read settlementsQuery.data completely unfiltered, so its own
+  // week picker and "selected" settlement never honored the global scope
+  // selector at all — a real gap directly contradicting "every screen
+  // states/follows its scope," found by re-auditing the 3 screens flagged
+  // as unreviewed in the prior pass. Also a genuine PRE-EXISTING
+  // correctness bug this fix resolves as a side effect: the Revenue
+  // metric (`selected.gross`) read exactly ONE settlement row's own
+  // gross, while the Profit metric already AGGREGATED every settlement
+  // sharing that week_ending (a routine case for a 2+-truck fleet, where
+  // every truck settles the same week) — the two metrics could disagree
+  // about which trucks' numbers they even included. Both now aggregate
+  // consistently over the SAME scoped settlement set: every one of this
+  // truck's own settlements for the selected week (specific-truck scope),
+  // or every settlement across the whole fleet for that week ("All
+  // Trucks" scope) — never a single arbitrary row.
+  const scopedSettlements = useMemo(
+    () => (activeTruck ? (settlementsQuery.data ?? []).filter((s) => s.truck_id === activeTruck.id) : (settlementsQuery.data ?? [])),
+    [settlementsQuery.data, activeTruck]
   );
-  const selected = selectedWeekEnding ? weeks.find((w) => w.week_ending === selectedWeekEnding) ?? weeks[0] : weeks[0];
+  const scopedDeductions = useMemo(
+    () => (activeTruck ? (dedQuery.data ?? []).filter((d) => d.truck_id === activeTruck.id) : (dedQuery.data ?? [])),
+    [dedQuery.data, activeTruck]
+  );
+  const scopedFuel = useMemo(
+    () => (activeTruck ? (fuelQuery.data ?? []).filter((f) => f.truck_id === activeTruck.id) : (fuelQuery.data ?? [])),
+    [fuelQuery.data, activeTruck]
+  );
+  const scopedMaintenance = useMemo(
+    () => (activeTruck ? (maintenanceQuery.data ?? []).filter((m) => m.truck_id === activeTruck.id) : (maintenanceQuery.data ?? [])),
+    [maintenanceQuery.data, activeTruck]
+  );
+  const scopedTolls = useMemo(
+    () => (activeTruck ? (tollsQuery.data ?? []).filter((tl) => tl.truck_id === activeTruck.id) : (tollsQuery.data ?? [])),
+    [tollsQuery.data, activeTruck]
+  );
+
+  const weekEndings = useMemo(() => {
+    const set = new Set(scopedSettlements.map((s) => s.week_ending).filter((w): w is string => !!w));
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [scopedSettlements]);
+  const selectedWeek = selectedWeekEnding && weekEndings.includes(selectedWeekEnding) ? selectedWeekEnding : (weekEndings[0] ?? null);
+  const weekSettlements = useMemo(
+    () => (selectedWeek ? scopedSettlements.filter((s) => s.week_ending === selectedWeek) : []),
+    [scopedSettlements, selectedWeek]
+  );
+  const selected = selectedWeek ? { week_ending: selectedWeek, gross: weekSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0) } : null;
 
   // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): the "Profit"
-  // metric used to be selected.net (settlement net PAY only, ignoring
-  // out-of-pocket expenses). Now the same canonical src/stats/
-  // trueProfit.ts weekly figure Home/Scorecard/CEO Mode/Profit Analysis
-  // all use, looked up for the selected week (aggregates every
-  // settlement sharing that week_ending, same "one calendar week" scoping
-  // per diem dedup already uses for a multi-truck fleet).
+  // metric is the same canonical src/stats/trueProfit.ts weekly figure
+  // Home/Scorecard/CEO Mode/Profit Analysis all use, now fed the SAME
+  // scoped settlement/deduction/fuel/maintenance/tolls set as the
+  // Revenue metric above (so the two can never again disagree about
+  // which trucks' data they cover).
   const trueProfitByWeek = useMemo(
-    () =>
-      buildWeeklyTrueProfitTrend(
-        settlementsQuery.data ?? [],
-        dedQuery.data ?? [],
-        fuelQuery.data ?? [],
-        maintenanceQuery.data ?? [],
-        tollsQuery.data ?? []
-      ),
-    [settlementsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
+    () => buildWeeklyTrueProfitTrend(scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls),
+    [scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls]
   );
-  const selectedTrueProfit = selected
-    ? trueProfitByWeek.find((p) => p.weekEnding === selected.week_ending)?.net ?? selected.net
-    : 0;
+  const selectedTrueProfit = selected ? (trueProfitByWeek.find((p) => p.weekEnding === selected.week_ending)?.net ?? 0) : 0;
 
   // BRAND VISIBILITY guarantee (owner decision 2026-07-30): the app
   // wordmark is rendered unconditionally at the bottom of the share card
@@ -100,12 +133,13 @@ export default function ShareProfit() {
   }
 
   const noneSelected = !included.revenue && !included.profit && !included.mpg;
-  const cardKey = `${selected?.id ?? 'none'}-${included.revenue}-${included.profit}-${included.mpg}`;
+  const cardKey = `${selected?.week_ending ?? 'none'}-${included.revenue}-${included.profit}-${included.mpg}`;
 
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScreenTitle>{t('shareProfit.title')}</ScreenTitle>
+        <FleetScopeLabel />
         <MutedText>{t('shareProfit.subtitle')}</MutedText>
 
         {!selected ? (
@@ -114,16 +148,16 @@ export default function ShareProfit() {
           </Card>
         ) : (
           <>
-            {weeks.length > 1 && (
+            {weekEndings.length > 1 && (
               <View style={{ marginTop: spacing.sm }}>
                 <MutedText>{t('shareProfit.weekPickerLabel')}</MutedText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.xs }}>
-                  {weeks.map((w) => {
-                    const isSelected = w.week_ending === selected.week_ending;
+                  {weekEndings.map((weekEnding) => {
+                    const isSelected = weekEnding === selected.week_ending;
                     return (
                       <Pressable
-                        key={w.id}
-                        onPress={() => setSelectedWeekEnding(w.week_ending)}
+                        key={weekEnding}
+                        onPress={() => setSelectedWeekEnding(weekEnding)}
                         style={{
                           paddingVertical: 8,
                           paddingHorizontal: 12,
@@ -134,7 +168,7 @@ export default function ShareProfit() {
                           marginEnd: spacing.xs,
                         }}
                       >
-                        <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{w.week_ending}</Text>
+                        <Text style={{ color: colors.text, fontSize: typography.size.sm, fontWeight: '600' }}>{weekEnding}</Text>
                       </Pressable>
                     );
                   })}
