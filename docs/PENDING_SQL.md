@@ -3219,7 +3219,7 @@ about coupling a ROW write to a delta atomically, which
 
 ---
 
-## 61. maintenance_records/tolls gain settlement_id (P1 CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision) — NOT YET RUN
+## 61. maintenance_records/tolls gain settlement_id (P1 CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision) — ✅ APPLIED (run via pending_61_62.sql, client update published to preview)
 
 **The finding**: re-importing the same settlement PDF twice (CLAUDE.md
 invariant #10's "re-import replaces, never duplicates" rule) correctly
@@ -3260,11 +3260,11 @@ create index if not exists maintenance_records_settlement_id_idx on maintenance_
 create index if not exists tolls_settlement_id_idx on tolls(settlement_id);
 ```
 
-- [ ] 61a run (maintenance_records.settlement_id, tolls.settlement_id + indexes)
+- [x] 61a run (maintenance_records.settlement_id, tolls.settlement_id + indexes)
 
 ---
 
-## 62. Deduction edit/add + contribution sync made atomic (P1 CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision) — NOT YET RUN
+## 62. Deduction edit/add + contribution sync made atomic (P1 CORRECTNESS FIX, FULL SYSTEM AUDIT, owner decision) — ✅ APPLIED (run via pending_61_62.sql; app/app/(tabs)/deductions.tsx and app/src/data/deductionMutations.ts are pure client-side, no Edge Function redeploy needed for this section specifically — ai-import was separately redeployed the same pass for its own unawaited-handleJobStart/service-role-client fix; client update published to preview)
 
 **The finding**: `deductions.tsx`'s `handleSaveEdit()`/`handleSaveAdd()`
 each did `updateDeduction.mutateAsync(...)` (or `insertDeduction.mutateAsync(...)`)
@@ -3410,7 +3410,7 @@ method quick-edit, which is a narrower single-field edit with the same
 theoretical (much rarer) race — left as a documented follow-up rather
 than expanding this fix's blast radius further.
 
-- [ ] 62a run (update_deduction_with_contribution_sync, insert_deduction_with_contribution_sync)
+- [x] 62a run (update_deduction_with_contribution_sync, insert_deduction_with_contribution_sync)
 
 ---
 
