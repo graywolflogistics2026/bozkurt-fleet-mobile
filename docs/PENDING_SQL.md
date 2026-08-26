@@ -3412,7 +3412,7 @@ than expanding this fix's blast radius further.
 
 - [x] 62a run (update_deduction_with_contribution_sync, insert_deduction_with_contribution_sync)
 
-## 63. deductions.truck_id + tolls.truck_id (MULTI-TRUCK MODEL, owner decision) — NOT YET RUN
+## 63. deductions.truck_id + tolls.truck_id (MULTI-TRUCK MODEL, owner decision) — ✅ APPLIED (run via pending_63.sql, client update published to preview)
 
 Fleet-vs-per-truck scoping pass. Every table that can be operationally
 tied to one truck already carries `truck_id` — `settlements`,
@@ -3471,10 +3471,10 @@ clause — matching `fuel_purchases.truck_id`'s own §6 precedent exactly
 (not `on delete set null`), so this introduces no new deletion-safety
 shape beyond what already exists for fuel/maintenance/settlements.
 
-- [ ] 63a run (add truck_id + index to deductions)
-- [ ] 63b run (backfill deductions.truck_id from settlement)
-- [ ] 63c run (add truck_id + index to tolls)
-- [ ] 63d run (backfill tolls.truck_id from settlement)
+- [x] 63a run (add truck_id + index to deductions)
+- [x] 63b run (backfill deductions.truck_id from settlement)
+- [x] 63c run (add truck_id + index to tolls)
+- [x] 63d run (backfill tolls.truck_id from settlement)
 
 ---
 
