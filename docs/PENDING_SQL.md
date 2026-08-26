@@ -3478,7 +3478,7 @@ shape beyond what already exists for fuel/maintenance/settlements.
 
 ---
 
-## 64. DELETE A TRUCK — truck_id FK cascade fix (owner decision) — NOT YET RUN
+## 64. DELETE A TRUCK — truck_id FK cascade fix (owner decision) — ✅ APPLIED (verification query confirmed all 5 constraints read CASCADE)
 
 Adversarial audit finding, cited directly in the owner's own request: five
 `truck_id` foreign keys are plain `references trucks` with NO `on delete`
@@ -3527,16 +3527,13 @@ failure partway through — the exactly-one-FK assertion failing for some
 table, say — rolls back every earlier change in that same run too: either
 all 5 tables end up fixed, or none of them do.
 
-NOT EXECUTED AGAINST A LIVE DATABASE — this environment has no psql/
-postgres/docker available (`which psql`/`which postgres`/`which docker`
-all report not found, checked directly, not assumed) — this was hand-
-traced against Postgres's own documented `pg_constraint` columns
-(`contype`, `conrelid`, `confrelid`, `conname`, `confdeltype`) and
-`PL/pgSQL` syntax (`FOREACH ... IN ARRAY`, `SELECT ... INTO`, `EXECUTE
-format(...)`), not literally run. The verification query at the end of
-the block (run it immediately after, separately) is what actually
-confirms success on the real database — every one of its 5 rows should
-read `delete_rule = 'CASCADE'`.
+Could not be executed against a live database from THIS environment (no
+psql/postgres/docker available, checked directly) — only hand-traced
+against Postgres's own documented `pg_constraint` columns/`PL/pgSQL`
+syntax before being handed off. RUN AND VERIFIED (owner confirmation) —
+the owner ran this against the live project and the verification
+query's own 5 rows all read `delete_rule = 'CASCADE'`. A real truck
+delete (`app/src/data/truckDeletion.ts`) is now unblocked.
 
 ```sql
 begin;
@@ -3663,10 +3660,10 @@ rows currently exist (CLAUDE.md invariant #6's own "no cached/stored
 total" convention) — once the truck's rows are gone, the very next read
 of either screen is automatically correct with zero extra code.
 
-- [ ] 64 run (drop + re-add all 5 existing RESTRICT-equivalent truck_id
+- [x] 64 run (drop + re-add all 5 existing RESTRICT-equivalent truck_id
       FKs, by their real names, as ON DELETE CASCADE — single
-      transaction, idempotent) — verification query's 5 rows all read
-      CASCADE
+      transaction, idempotent) — verification query's 5 rows confirmed
+      all read CASCADE
 
 ---
 
