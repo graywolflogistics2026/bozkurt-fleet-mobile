@@ -1,4 +1,4 @@
-import { buildAccountantReportHtml, type AccountantReportInput, type AccountantReportStrings, type AccountantReportFormatters } from '../accountantPackageReport';
+import { buildAccountantReportHtml, buildAccountantReportFilename, type AccountantReportInput, type AccountantReportStrings, type AccountantReportFormatters } from '../accountantPackageReport';
 import { ACCOUNTANT_EXPORT_COLORS } from '../accountantPackageColors';
 import type { LineItem, GroupedScheduleCCategory, OwnersEquitySummary } from '../accountantPackage';
 
@@ -28,6 +28,8 @@ function lineItem(overrides: Partial<LineItem>): LineItem {
     origin: 'import',
     isOwnerPaid: false,
     paymentMethod: null,
+    vendor: null,
+    reference: null,
     ...overrides,
   };
 }
@@ -66,6 +68,7 @@ const baseStrings: AccountantReportStrings = {
   perDiemNote: 'Per diem note.',
   lumperFeesTitle: 'Lumper Fees',
   paidWithLabel: 'Paid with',
+  referenceLabel: 'Inv#',
   categoryTableTitle: 'Expenses by Category',
   lineLabel: 'Line',
   grandTotal: 'Grand Total',
@@ -297,5 +300,168 @@ describe('buildAccountantReportHtml — per diem month vs YTD never show the sam
     expect(html).toContain('$2352.00');
     // ...but the "This Month" label/row never appears at all.
     expect(html).not.toContain(baseStrings.perDiemMonthLabel);
+  });
+});
+
+// SHORT VS DETAILED EXPORT (owner decision, web-parity pass) — a realistic
+// multi-category, multi-item fixture shared by every test in this block,
+// so "detailed contains every line item" and "summary's subtotals equal
+// the sum of the detailed lines beneath them" are proven against the
+// EXACT SAME data, never two slightly-different fixtures that could
+// coincidentally agree.
+function multiCategoryFixture() {
+  const fuel1 = lineItem({ id: 'fuel-1', category: 'Fuel & DEF', description: 'Pilot #123', amount: 400, date: '2026-08-02' });
+  const fuel2 = lineItem({ id: 'fuel-2', category: 'Fuel & DEF', description: 'TA #456', amount: 200, date: '2026-08-10' });
+  const parts1 = lineItem({
+    id: 'parts-1',
+    category: 'Truck Parts',
+    description: 'Brake pads',
+    amount: 150,
+    date: '2026-08-05',
+    vendor: 'NAPA Auto Parts',
+  });
+  const maint1 = lineItem({
+    id: 'maint-1',
+    category: 'Maintenance & Repairs',
+    description: 'Oil change',
+    amount: 300,
+    date: '2026-08-12',
+    vendor: "Joe's Truck Repair",
+    reference: 'INV-4471',
+  });
+  const lumper1 = lineItem({ id: 'lumper-1', category: 'Lumper Fees', description: 'Unload at DC #9', amount: 75, date: '2026-08-03' });
+  const lumper2 = lineItem({ id: 'lumper-2', category: 'Lumper Fees', description: 'Load at DC #2', amount: 60, date: '2026-08-20' });
+
+  const groupedCategories: GroupedScheduleCCategory[] = [
+    { category: 'Fuel & DEF', amount: 600, scheduleCLine: '9', items: [fuel1, fuel2] },
+    { category: 'Truck Parts', amount: 150, scheduleCLine: '21', items: [parts1] },
+    { category: 'Maintenance & Repairs', amount: 300, scheduleCLine: '21', items: [maint1] },
+  ];
+  const lumperFees = [lumper1, lumper2];
+  const lumperTotal = 135;
+  const totalExpenses = 600 + 150 + 300; // Lumper Fees is its own section, not folded into the category grand total
+
+  return { groupedCategories, lumperFees, lumperTotal, totalExpenses, allItems: [fuel1, fuel2, parts1, maint1, lumper1, lumper2] };
+}
+
+describe('buildAccountantReportHtml — SUMMARY vs DETAILED format', () => {
+  it('DETAILED contains every line item in the data, across every category and Lumper Fees', () => {
+    const { groupedCategories, lumperFees, lumperTotal, totalExpenses, allItems } = multiCategoryFixture();
+    const html = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt, 'detailed');
+    for (const item of allItems) {
+      expect(html).toContain(item.description);
+    }
+  });
+
+  it('SUMMARY contains NO individual line items — only category/lumper subtotals', () => {
+    const { groupedCategories, lumperFees, lumperTotal, totalExpenses, allItems } = multiCategoryFixture();
+    const html = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt, 'summary');
+    for (const item of allItems) {
+      expect(html).not.toContain(item.description);
+    }
+    // The subtotals themselves are still fully present.
+    expect(html).toContain('$600.00');
+    expect(html).toContain('$150.00');
+    expect(html).toContain('$300.00');
+    expect(html).toContain('$135.00');
+  });
+
+  it("SUMMARY's category subtotals equal the sum of the detailed lines beneath them — they reconcile exactly", () => {
+    const { groupedCategories, lumperFees, lumperTotal, totalExpenses } = multiCategoryFixture();
+    const summaryHtml = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt, 'summary');
+    const detailedHtml = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt, 'detailed');
+
+    for (const cat of groupedCategories) {
+      const summedFromItems = cat.items.reduce((sum, i) => sum + i.amount, 0);
+      expect(cat.amount).toBe(summedFromItems); // the fixture's own invariant
+      const rendered = `$${cat.amount.toFixed(2)}`;
+      expect(summaryHtml).toContain(rendered);
+      expect(detailedHtml).toContain(rendered);
+    }
+    // Same for Lumper Fees' own total vs. its own two items.
+    const lumperSummed = lumperFees.reduce((sum, i) => sum + i.amount, 0);
+    expect(lumperTotal).toBe(lumperSummed);
+    expect(summaryHtml).toContain(`$${lumperTotal.toFixed(2)}`);
+    expect(detailedHtml).toContain(`$${lumperTotal.toFixed(2)}`);
+    // And the grand total is identical in both formats.
+    expect(summaryHtml).toContain(`$${totalExpenses.toFixed(2)}`);
+    expect(detailedHtml).toContain(`$${totalExpenses.toFixed(2)}`);
+  });
+
+  it('DETAILED enriches a row with vendor and/or invoice reference when captured; SUMMARY never shows them at all', () => {
+    const { groupedCategories, lumperFees, lumperTotal, totalExpenses } = multiCategoryFixture();
+    const detailedHtml = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt, 'detailed');
+    const summaryHtml = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt, 'summary');
+
+    expect(detailedHtml).toContain('Brake pads (NAPA Auto Parts)');
+    expect(detailedHtml).toContain("Oil change (Joe's Truck Repair) — Inv# INV-4471");
+    expect(summaryHtml).not.toContain('NAPA Auto Parts');
+    expect(summaryHtml).not.toContain('INV-4471');
+  });
+
+  it('a row with no vendor/reference renders with no enrichment suffix at all', () => {
+    const html = buildAccountantReportHtml(
+      baseInput({ groupedCategories: [{ category: 'Fuel & DEF', amount: 100, scheduleCLine: '9', items: [lineItem({ description: 'Pilot #1', amount: 100 })] }] }),
+      baseStrings,
+      fmt,
+      'detailed'
+    );
+    expect(html).toContain('Pilot #1');
+    expect(html).not.toContain('Pilot #1 (');
+  });
+
+  it('defaults to DETAILED when no format is passed — every pre-existing caller keeps its current behavior', () => {
+    const { groupedCategories, lumperFees, lumperTotal, totalExpenses } = multiCategoryFixture();
+    const defaultHtml = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt);
+    const explicitDetailedHtml = buildAccountantReportHtml(baseInput({ groupedCategories, lumperFees, lumperTotal, totalExpenses }), baseStrings, fmt, 'detailed');
+    expect(defaultHtml).toBe(explicitDetailedHtml);
+  });
+
+  it('respects whatever scope/period filtering already narrowed the input, IDENTICALLY in both formats — format never re-filters data', () => {
+    // buildLineItems()/buildScheduleCTotals() (accountantPackage.ts) are
+    // what apply scope/period filtering, upstream of this module entirely
+    // — buildAccountantReportHtml() has no year/month/scope parameter at
+    // all, so a caller's own filtered `groupedCategories`/`lumperFees`
+    // input is rendered as-is, item-for-item, regardless of format.
+    const narrowed: GroupedScheduleCCategory[] = [{ category: 'Fuel & DEF', amount: 400, scheduleCLine: '9', items: [lineItem({ id: 'only-this-one', description: 'Pilot #123', amount: 400 })] }];
+    const summaryHtml = buildAccountantReportHtml(baseInput({ groupedCategories: narrowed, totalExpenses: 400 }), baseStrings, fmt, 'summary');
+    const detailedHtml = buildAccountantReportHtml(baseInput({ groupedCategories: narrowed, totalExpenses: 400 }), baseStrings, fmt, 'detailed');
+    expect(summaryHtml).toContain('$400.00');
+    expect(detailedHtml).toContain('$400.00');
+    expect(detailedHtml).toContain('Pilot #123');
+    expect(summaryHtml).not.toContain('Pilot #123');
+  });
+
+  it('an empty Lumper Fees list omits the whole Lumper Fees section in both formats (never an empty header)', () => {
+    const summaryHtml = buildAccountantReportHtml(baseInput({ lumperFees: [], lumperTotal: 0 }), baseStrings, fmt, 'summary');
+    const detailedHtml = buildAccountantReportHtml(baseInput({ lumperFees: [], lumperTotal: 0 }), baseStrings, fmt, 'detailed');
+    expect(summaryHtml).not.toContain(baseStrings.lumperFeesTitle);
+    expect(detailedHtml).not.toContain(baseStrings.lumperFeesTitle);
+  });
+});
+
+describe('buildAccountantReportFilename (spec item 4)', () => {
+  it('builds "…-july-2026-out-of-pocket-detailed.pdf" for a specific month', () => {
+    expect(buildAccountantReportFilename(2026, 7, 'outOfPocket', 'detailed', 'pdf')).toBe('accountant-package-july-2026-out-of-pocket-detailed.pdf');
+  });
+
+  it('builds a year-only slug for "All Year" (month=null)', () => {
+    expect(buildAccountantReportFilename(2026, null, 'outOfPocket', 'summary', 'xls')).toBe('accountant-package-2026-out-of-pocket-summary.xls');
+  });
+
+  it('reflects every scope value with its own distinct slug', () => {
+    expect(buildAccountantReportFilename(2026, 1, 'outOfPocket', 'summary', 'pdf')).toContain('out-of-pocket');
+    expect(buildAccountantReportFilename(2026, 1, 'withheld', 'summary', 'pdf')).toContain('settlement-withheld');
+    expect(buildAccountantReportFilename(2026, 1, 'combined', 'summary', 'pdf')).toContain('combined');
+  });
+
+  it('reflects both format values with their own distinct slug', () => {
+    expect(buildAccountantReportFilename(2026, 1, 'outOfPocket', 'summary', 'pdf')).toContain('-summary.pdf');
+    expect(buildAccountantReportFilename(2026, 1, 'outOfPocket', 'detailed', 'pdf')).toContain('-detailed.pdf');
+  });
+
+  it('uses the real English month name for every month, not a zero-padded number', () => {
+    expect(buildAccountantReportFilename(2026, 1, 'combined', 'summary', 'pdf')).toContain('january-2026');
+    expect(buildAccountantReportFilename(2026, 12, 'combined', 'summary', 'pdf')).toContain('december-2026');
   });
 });

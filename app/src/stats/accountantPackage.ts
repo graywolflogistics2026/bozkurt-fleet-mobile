@@ -209,6 +209,18 @@ export type LineItem = {
   // never translated (CLAUDE.md invariant #2/#11 — the 9 generic payment
   // method values are domain values, English in every locale).
   paymentMethod: string | null;
+  // SHORT VS DETAILED EXPORT pass (owner decision) — real vendor/invoice
+  // data the AI-import/manual-entry flow already captures but never
+  // surfaced on a line item before: `deductions.store` (a purchase's
+  // vendor/shop) and `maintenance_records.vendor`/`invoice_number` (a
+  // shop's name and its own invoice number). Fuel (`location` is already
+  // the description itself) and tolls (no vendor/invoice concept) always
+  // leave both null. Deliberately kept SEPARATE from `description` rather
+  // than folded in — `description` still drives category grouping/
+  // summary-mode display unchanged; these two are only ever shown in the
+  // DETAILED export's own line-item rows.
+  vendor: string | null;
+  reference: string | null;
 };
 
 // The ONE line-item builder every report section (category table, lumper
@@ -243,6 +255,8 @@ export function buildLineItems(
       origin,
       isOwnerPaid: isPersonalPayment(d.payment_method),
       paymentMethod: d.payment_method ?? null,
+      vendor: d.store ?? null,
+      reference: null,
     });
   }
 
@@ -262,6 +276,8 @@ export function buildLineItems(
       origin,
       isOwnerPaid: false,
       paymentMethod: null,
+      vendor: null,
+      reference: null,
     });
   }
 
@@ -281,6 +297,8 @@ export function buildLineItems(
       origin,
       isOwnerPaid: false,
       paymentMethod: null,
+      vendor: m.vendor ?? null,
+      reference: m.invoice_number ?? null,
     });
   }
 
@@ -300,6 +318,8 @@ export function buildLineItems(
       origin,
       isOwnerPaid: false,
       paymentMethod: null,
+      vendor: null,
+      reference: null,
     });
   }
 

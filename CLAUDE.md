@@ -6350,3 +6350,116 @@
   SQL changes. No Edge Function redeploy needed — every change in this
   pass is pure client-side JS/TS. No new native dependency — ships via a
   normal `eas update`.
+- ACCOUNTANT REPORT — SUMMARY VS DETAILED EXPORT (owner decision,
+  web-parity pass, no SQL). The web PDF always lists every line item;
+  mobile's PDF/Excel export already did too (confirmed by reading
+  `accountantPackageReport.ts` before writing anything — `categorySections`
+  already rendered every `cat.items` row unconditionally) — what was
+  actually missing was a FASTER summary-only option and real vendor/
+  invoice enrichment on the detailed rows, both now added.
+  1. **Format selector, remembered across sessions** (spec item 1):
+     `app/(tabs)/more/accountant-package.tsx` gained a Format Pill row
+     (Summary/Detailed) next to the existing Year/Month/Scope pills, with
+     a one-line note under it explaining the current choice. The choice
+     is cached in `AsyncStorage` via a new `src/data/accountantReportFormat.ts`
+     (`getCachedReportFormat()`/`setCachedReportFormat()`) — the SAME
+     lightweight, per-device-preference pattern `src/i18n/localeStorage.ts`
+     already established for the user's language choice (a genuine UI
+     tool default, not account data worth a `profiles` column or syncing
+     across devices). Applies identically to both PDF and Excel, since
+     both already render from the ONE shared `buildAccountantReportHtml()`
+     template.
+  2. **The actual SUMMARY/DETAILED branch**: `accountantPackageReport.ts`'s
+     `buildAccountantReportHtml()` gained a 4th parameter,
+     `format: ReportFormat = 'detailed'` — defaulting to 'detailed'
+     specifically so every EXISTING caller (and every pre-existing test)
+     keeps producing exactly what it always has, with zero call-site
+     changes required elsewhere. `'summary'` renders category subtotals
+     (with their Schedule C chip), Lumper Fees' own total-only line, the
+     per-diem block, capital assets, and owner's-equity totals — but skips
+     every individual `cat.items`/`lumperFees` row AND the "Paid with"
+     column header (nothing to head, since no item rows render under it).
+     `'detailed'` is the pre-existing always-itemized behavior, now
+     explicitly named as its own mode rather than the only mode.
+  3. **Vendor/invoice enrichment, genuinely new data on the line item**
+     (spec item 2, "include vendor and any invoice/order number
+     captured"): `LineItem` (`accountantPackage.ts`) gained `vendor:
+     string | null` and `reference: string | null` — a deduction's own
+     already-captured `store` becomes its vendor (no invoice concept for
+     a deduction, always null); a maintenance record's own already-
+     captured `vendor`/`invoice_number` map straight across; fuel
+     (`location` is already the description itself) and tolls (no
+     vendor/invoice concept at all) always leave both null — real data
+     this app already stores on import/manual entry but had never
+     surfaced on a line item before this pass. `lineItemRow()` appends
+     `(vendor)` and ` — Inv# {reference}` to a DETAILED row's own
+     description ONLY when present — `description` itself is untouched
+     (still drives category grouping/summary display unchanged), and
+     these suffixes are only ever rendered in DETAILED mode. "Don't
+     truncate item names, wrap them": the description table cell already
+     had no `white-space:nowrap`/`overflow:hidden` (only the `.amt`
+     column does) — wrapping was already the HTML default, confirmed by
+     reading the CSS before claiming this was fixed, not assumed.
+  4. **Same footer/header, both formats** (spec item 3): `headerLine`
+     (company — truck unit — period — scope) and every footer note are
+     built and passed through completely unchanged regardless of
+     `format` — the format parameter only ever gates which BODY rows
+     render, never the identity/footer strings.
+  5. **File naming** (spec item 4, "…-july-2026-out-of-pocket-detailed.pdf"):
+     a new pure `buildAccountantReportFilename(year, month, scope, format,
+     extension)` (`accountantPackageReport.ts`) builds this exact slug
+     from FIXED, non-localized English month names + scope/format words
+     (`out-of-pocket`/`settlement-withheld`/`combined`,
+     `summary`/`detailed`) — deliberately NOT the screen's own translated
+     Pill labels, since a shared/downloaded file's NAME should stay
+     portable across every locale/OS/share target even though its
+     CONTENT is fully localized (matches the pre-existing Excel export's
+     own already-unlocalized filename precedent). Excel already wrote its
+     own named file (`new File(Paths.cache, filename)`) — now uses this
+     shared builder instead of its own inline one. PDF is the genuinely
+     new half: `expo-print`'s `printToFileAsync()` always returns an
+     auto-named temp file with no filename option of its own, so the
+     handler now copies it (`new File(uri).copy(renamed)`, `expo-file-
+     system`'s documented `File.copy()`) to a File built from this same
+     slug before calling `Sharing.shareAsync()` — whatever the user
+     saves/forwards is properly named, not a random `expo-print-XXXX.pdf`.
+  Tests: `accountantPackage.test.ts` gained `buildLineItems()` coverage
+  for the vendor/reference mapping (deduction→store, maintenance→vendor+
+  invoice_number, fuel/toll always null, a genuinely-uncaptured vendor
+  stays null rather than a guess). `accountantPackageReport.test.ts`
+  gained a full "SUMMARY vs DETAILED format" block against ONE shared
+  multi-category/multi-item fixture (spec item 5's own explicit asks):
+  DETAILED contains every line item's description; SUMMARY contains NONE
+  of them while still showing every subtotal; category AND Lumper Fees
+  subtotals are proven to literally equal the sum of their own detailed
+  line items in BOTH rendered outputs ("they reconcile exactly," the
+  fixture's own `cat.amount === sum(cat.items)` invariant asserted
+  directly, not just assumed from `groupLineItemsByScheduleCBucket`'s own
+  separately-existing "every group's own items sum to its own amount"
+  test); vendor/reference enrichment appears in DETAILED and is fully
+  absent from SUMMARY; an unset format defaults to byte-identical
+  DETAILED output; scope/period filtering (upstream in `buildLineItems()`,
+  which this module has no parameter for at all) is proven to apply
+  identically regardless of format; an empty Lumper Fees list omits the
+  section header in both formats. Plus a dedicated
+  `buildAccountantReportFilename()` block (the exact spec example
+  reproduced verbatim, the "All Year" year-only slug, every scope/format
+  value producing its own distinct slug, real English month names not
+  zero-padded numbers). Full suite: 103 suites / 2550 tests pass; `tsc
+  --noEmit` clean; all 7 locales confirmed key-parity
+  (`accountantPackage.formatLabel`/`formatSummary`/`formatDetailed`/
+  `formatSummaryNote`/`formatDetailedNote`/`referenceLabel` — es/ru/ar/tr
+  fully translated, hi/uk as untranslated English copies per invariant
+  #11; glossary test re-passed clean). No SQL changes — every field this
+  pass reads (`deductions.store`, `maintenance_records.vendor`/
+  `invoice_number`) already existed. No Edge Function redeploy needed —
+  every change in this pass is pure client-side JS/TS. No new native
+  dependency (`expo-file-system`'s `File.copy()` was already available in
+  the existing dependency) — ships via a normal `eas update`. HONESTLY
+  FLAGGED, not device-verified: `File.copy()`'s behavior copying FROM an
+  `expo-print`-generated temp URI specifically was reviewed against the
+  documented API surface, not exercised on a real device from this
+  environment (no Deno/Expo runtime available here, same standing
+  limitation this file has flagged at every prior native-API-touching
+  pass) — worth a real-device smoke test on the next PDF export before
+  fully trusting it in the field.

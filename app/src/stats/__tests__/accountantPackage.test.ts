@@ -540,6 +540,55 @@ describe('buildLineItems (owner decision 2026-08-05, FULL PARITY pass item B.1/C
     );
     expect(items[0].isOwnerPaid).toBe(true);
   });
+
+  // SHORT VS DETAILED EXPORT pass (owner decision) — "include vendor and
+  // any invoice/order number captured." A deduction's own `store` becomes
+  // its `vendor`; a maintenance record's `vendor`/`invoice_number` map
+  // straight across. Fuel/tolls have no such concept and always leave
+  // both null.
+  it('carries a deduction\'s store as vendor (no reference concept for a deduction)', () => {
+    const items = buildLineItems(
+      [deduction({ id: 'd', amount: 50, ded_date: '2026-06-05', store: 'NAPA Auto Parts' })],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    expect(items[0]).toMatchObject({ vendor: 'NAPA Auto Parts', reference: null });
+  });
+
+  it('carries a maintenance record\'s vendor AND invoice_number', () => {
+    const items = buildLineItems(
+      [],
+      [],
+      [maintenance({ id: 'm', cost: 500, service_date: '2026-06-05', vendor: 'Joe\'s Truck Repair', invoice_number: 'INV-4471' })],
+      [],
+      2026,
+      6,
+      'combined'
+    );
+    expect(items[0]).toMatchObject({ vendor: 'Joe\'s Truck Repair', reference: 'INV-4471' });
+  });
+
+  it('fuel and toll rows never carry a vendor/reference', () => {
+    const items = buildLineItems(
+      [],
+      [fuel({ id: 'f', amount: 100, purchase_date: '2026-06-05', location: 'Pilot #123' })],
+      [],
+      [toll({ id: 't', amount: 10, toll_date: '2026-06-05', plaza: 'EZPass' })],
+      2026,
+      6,
+      'combined'
+    );
+    for (const item of items) expect(item).toMatchObject({ vendor: null, reference: null });
+  });
+
+  it('a row with no store/vendor captured leaves vendor null, never a guess', () => {
+    const items = buildLineItems([deduction({ amount: 50, ded_date: '2026-06-05', store: null })], [], [], [], 2026, 6, 'combined');
+    expect(items[0].vendor).toBeNull();
+  });
 });
 
 describe('buildScheduleCTotals (owner decision 2026-08-05, FULL PARITY pass item A.5/B.2)', () => {

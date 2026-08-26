@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +31,14 @@ import {
   type AccountantScope,
   type LineItem,
 } from '@/src/stats/accountantPackage';
-import { buildAccountantReportHtml, type AccountantReportStrings, type AccountantReportInput } from '@/src/stats/accountantPackageReport';
+import {
+  buildAccountantReportHtml,
+  buildAccountantReportFilename,
+  type AccountantReportStrings,
+  type AccountantReportInput,
+  type ReportFormat,
+} from '@/src/stats/accountantPackageReport';
+import { getCachedReportFormat, setCachedReportFormat } from '@/src/data/accountantReportFormat';
 import { ACCOUNTANT_SCREEN_COLORS } from '@/src/stats/accountantPackageColors';
 import { resolveScheduleCBucket } from '@/src/stats/profitLoss';
 import { findImplausibleDates } from '@/src/import/dateGuard';
@@ -164,6 +171,23 @@ export default function AccountantPackage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState<number | null>(now.getMonth() + 1);
   const [scope, setScope] = useState<AccountantScope>('outOfPocket');
+  // SHORT VS DETAILED EXPORT (owner decision, web-parity pass, spec item
+  // 1) — "remember the last choice," applied to both PDF and Excel.
+  // Defaults to 'summary' (the new, faster option) until a real cached
+  // choice loads; loading is async (AsyncStorage), so this can genuinely
+  // flip once shortly after mount — a one-time, harmless flash, same
+  // "cache read is async" tradeoff src/i18n/localeStorage.ts's own
+  // consumers already accept.
+  const [reportFormat, setReportFormat] = useState<ReportFormat>('summary');
+  useEffect(() => {
+    getCachedReportFormat().then((cached) => {
+      if (cached) setReportFormat(cached);
+    });
+  }, []);
+  function chooseReportFormat(next: ReportFormat) {
+    setReportFormat(next);
+    setCachedReportFormat(next);
+  }
 
   const [editingItem, setEditingItem] = useState<LineItem | null>(null);
   const [editCategory, setEditCategory] = useState('');
@@ -379,6 +403,7 @@ export default function AccountantPackage() {
       perDiemNote: t('accountantPackage.perDiemNote'),
       lumperFeesTitle: t('accountantPackage.lumperFeesTitle'),
       paidWithLabel: t('accountantPackage.paidWithLabel'),
+      referenceLabel: t('accountantPackage.referenceLabel'),
       categoryTableTitle: t('accountantPackage.categoryTableTitle'),
       lineLabel: t('accountantPackage.line'),
       grandTotal: t('accountantPackage.grandTotal'),
@@ -477,14 +502,23 @@ export default function AccountantPackage() {
     setExporting(key);
     try {
       const { input, strings } = buildReportInput(year, scopeMonth);
-      const html = buildAccountantReportHtml(input, strings, { money, date });
+      const html = buildAccountantReportHtml(input, strings, { money, date }, reportFormat);
       const { uri } = await Print.printToFileAsync({ html });
       const available = await Sharing.isAvailableAsync();
       if (!available) {
         Alert.alert(t('accountantPackage.shareNotAvailable'));
         return;
       }
-      await Sharing.shareAsync(uri);
+      // FILE NAMING (spec item 4) — expo-print always generates its own
+      // auto-named temp file; copy it to a properly-named one before
+      // sharing so whatever the user saves/forwards is named
+      // "…-july-2026-out-of-pocket-detailed.pdf," not a random
+      // expo-print-XXXX.pdf.
+      const filename = buildAccountantReportFilename(year, scopeMonth, scope, reportFormat, 'pdf');
+      const renamed = new File(Paths.cache, filename);
+      if (renamed.exists) renamed.delete();
+      new File(uri).copy(renamed);
+      await Sharing.shareAsync(renamed.uri);
     } catch (err) {
       Alert.alert(t('accountantPackage.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -497,8 +531,8 @@ export default function AccountantPackage() {
     setExporting(key);
     try {
       const { input, strings } = buildReportInput(year, scopeMonth);
-      const html = buildAccountantReportHtml(input, strings, { money, date });
-      const filename = scopeMonth == null ? `accountant-package-${year}.xls` : `accountant-package-${year}-${String(scopeMonth).padStart(2, '0')}.xls`;
+      const html = buildAccountantReportHtml(input, strings, { money, date }, reportFormat);
+      const filename = buildAccountantReportFilename(year, scopeMonth, scope, reportFormat, 'xls');
       const file = new File(Paths.cache, filename);
       if (file.exists) file.delete();
       file.create();
@@ -547,6 +581,17 @@ export default function AccountantPackage() {
           <Pill label={t('accountantPackage.scopeCombined')} selected={scope === 'combined'} onPress={() => setScope('combined')} />
         </View>
         {scope === 'outOfPocket' && <MutedText>{t('accountantPackage.scopeOutOfPocketNote')}</MutedText>}
+
+        {/* SHORT VS DETAILED EXPORT (owner decision, web-parity pass,
+            spec item 1) — applies to both PDF and Excel; the last choice
+            is remembered across sessions (AsyncStorage, not a per-report
+            setting). */}
+        <Text style={styles.sectionTitle}>{t('accountantPackage.formatLabel')}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <Pill label={t('accountantPackage.formatSummary')} selected={reportFormat === 'summary'} onPress={() => chooseReportFormat('summary')} />
+          <Pill label={t('accountantPackage.formatDetailed')} selected={reportFormat === 'detailed'} onPress={() => chooseReportFormat('detailed')} />
+        </View>
+        <MutedText>{reportFormat === 'summary' ? t('accountantPackage.formatSummaryNote') : t('accountantPackage.formatDetailedNote')}</MutedText>
 
         {loading ? (
           <Card>

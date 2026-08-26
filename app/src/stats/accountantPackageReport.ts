@@ -1,5 +1,5 @@
 import { ACCOUNTANT_EXPORT_COLORS } from '@/src/stats/accountantPackageColors';
-import type { LineItem, PerDiemBlock, MiscConcentrationWarning, CapitalAssetRow, OwnersEquitySummary, GroupedScheduleCCategory } from '@/src/stats/accountantPackage';
+import type { LineItem, PerDiemBlock, MiscConcentrationWarning, CapitalAssetRow, OwnersEquitySummary, GroupedScheduleCCategory, AccountantScope } from '@/src/stats/accountantPackage';
 
 // FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase) — the
 // ONE shared HTML template both the PDF export (expo-print) and the Excel
@@ -16,6 +16,18 @@ import type { LineItem, PerDiemBlock, MiscConcentrationWarning, CapitalAssetRow,
 // touches i18next. `money`/`date` are likewise passed in as plain
 // functions (useFormatters()'s own pure closures) rather than imported,
 // keeping this module fully framework-free.
+
+// SHORT VS DETAILED EXPORT (owner decision, web-parity pass) — 'summary'
+// is category subtotals + Schedule C lines + per-diem + lumper TOTAL
+// (no itemization) + capital assets + owner's equity, 1-2 pages, for a
+// quick send; 'detailed' is everything in summary PLUS every line item
+// (date · full description · vendor/invoice when captured · payment
+// method · amount) under its category AND under Lumper Fees — the
+// audit-ready version, matching the web PDF's own always-itemized
+// behavior. Defaults to 'detailed' so every EXISTING caller (and every
+// pre-existing test) keeps producing exactly what it always has without
+// needing to pass a 4th argument.
+export type ReportFormat = 'summary' | 'detailed';
 
 export type AccountantReportStrings = {
   grossIncome: string;
@@ -36,6 +48,10 @@ export type AccountantReportStrings = {
   miscConcentrationWarning?: string;
   lumperFeesTitle: string;
   paidWithLabel: string;
+  // SHORT VS DETAILED EXPORT pass — prefixes a detailed row's own
+  // invoice/order number when one was captured (maintenance records
+  // only, for now — see LineItem.reference's own header comment).
+  referenceLabel: string;
   categoryTableTitle: string;
   lineLabel: string;
   grandTotal: string;
@@ -85,6 +101,35 @@ export type AccountantReportInput = {
   ownersEquity: OwnersEquitySummary;
 };
 
+// FILE NAMING (spec item 4, "…-july-2026-out-of-pocket-detailed.pdf")
+// — deliberately built from FIXED, non-localized slugs (English month
+// names, English scope/format words) rather than the screen's own
+// translated pill labels: a shared/downloaded file's NAME should stay
+// portable across every locale/OS/share target even though the file's
+// own CONTENT is fully localized — matches the pre-existing Excel export
+// filename's own unlocalized precedent.
+const ENGLISH_MONTH_SLUGS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
+
+const SCOPE_SLUGS: Record<AccountantScope, string> = {
+  outOfPocket: 'out-of-pocket',
+  withheld: 'settlement-withheld',
+  combined: 'combined',
+};
+
+export function buildAccountantReportFilename(
+  year: number,
+  month: number | null, // 1-12, or null for "All Year"
+  scope: AccountantScope,
+  format: ReportFormat,
+  extension: string
+): string {
+  const periodSlug = month == null || month < 1 || month > 12 ? String(year) : `${ENGLISH_MONTH_SLUGS[month - 1]}-${year}`;
+  return `accountant-package-${periodSlug}-${SCOPE_SLUGS[scope]}-${format}.${extension}`;
+}
+
 const C = ACCOUNTANT_EXPORT_COLORS;
 
 function esc(s: string): string {
@@ -94,12 +139,21 @@ function esc(s: string): string {
 // The one shared "line item row" renderer — used both inside the Lumper
 // Fees table and inside each category's own line-item list, so an
 // owner-paid row gets the IDENTICAL amber treatment + "Paid with" column
-// value regardless of which section it appears in (spec item 1).
+// value regardless of which section it appears in (spec item 1). Only
+// ever called in DETAILED mode (see buildAccountantReportHtml below) —
+// this is where "keep descriptions RICH... don't truncate item names,
+// wrap them; include vendor and any invoice/order number captured" is
+// satisfied: the vendor/reference suffixes are appended to the SAME
+// unconstrained table cell `description` already renders in (no
+// `white-space:nowrap`/`overflow:hidden` on this column, so a long
+// combined string wraps naturally, same as before this pass).
 function lineItemRow(item: LineItem, strings: AccountantReportStrings, fmt: AccountantReportFormatters): string {
   const bg = item.isOwnerPaid ? ` style="background:${C.ownerPaidBg}"` : '';
   const badge = item.isOwnerPaid ? ` <span class="badge">💰 ${esc(strings.ownerPaidBadge)}</span>` : '';
   const paidWith = item.isOwnerPaid && item.paymentMethod ? esc(item.paymentMethod) : '';
-  return `<tr${bg}><td>${item.date ? esc(fmt.date(item.date)) : ''} — ${esc(item.description)}${badge}</td><td>${paidWith}</td><td class="amt">${fmt.money(item.amount)}</td></tr>`;
+  const vendorSuffix = item.vendor ? ` (${esc(item.vendor)})` : '';
+  const referenceSuffix = item.reference ? ` — ${esc(strings.referenceLabel)} ${esc(item.reference)}` : '';
+  return `<tr${bg}><td>${item.date ? esc(fmt.date(item.date)) : ''} — ${esc(item.description)}${vendorSuffix}${referenceSuffix}${badge}</td><td>${paidWith}</td><td class="amt">${fmt.money(item.amount)}</td></tr>`;
 }
 
 function scheduleCChip(line: string | null, strings: AccountantReportStrings): string {
@@ -110,12 +164,14 @@ function scheduleCChip(line: string | null, strings: AccountantReportStrings): s
 export function buildAccountantReportHtml(
   input: AccountantReportInput,
   strings: AccountantReportStrings,
-  fmt: AccountantReportFormatters
+  fmt: AccountantReportFormatters,
+  format: ReportFormat = 'detailed'
 ): string {
   const { headerLine, grossIncome, reimbursementsTotal, totalExpenses, perDiem, implausibleDates, miscWarning, lumperFees, lumperTotal, groupedCategories, capitalAssets, ownersEquity } = input;
+  const detailed = format === 'detailed';
 
   const warningRows = implausibleDates.map((w) => `<tr><td>${esc(w.label)}</td><td>${esc(w.date)}</td></tr>`).join('');
-  const lumperRows = lumperFees.map((l) => lineItemRow(l, strings, fmt)).join('');
+  const lumperRows = detailed ? lumperFees.map((l) => lineItemRow(l, strings, fmt)).join('') : '';
 
   const categorySections = groupedCategories
     .map(
@@ -124,7 +180,7 @@ export function buildAccountantReportHtml(
           <td colspan="2" class="cat-name">${esc(cat.category)}${scheduleCChip(cat.scheduleCLine, strings)}</td>
           <td class="amt cat-amt">${fmt.money(cat.amount)}</td>
         </tr>
-        ${cat.items.map((item) => lineItemRow(item, strings, fmt)).join('')}
+        ${detailed ? cat.items.map((item) => lineItemRow(item, strings, fmt)).join('') : ''}
       `
     )
     .join('');
@@ -207,13 +263,13 @@ export function buildAccountantReportHtml(
         ${
           lumperFees.length > 0
             ? `<h2 class="lumper-header">${esc(strings.lumperFeesTitle)}</h2>
-               <table><tr><td></td><td>${esc(strings.paidWithLabel)}</td><td class="amt"></td></tr>${lumperRows}<tr class="total"><td colspan="2">${esc(strings.grandTotal)}</td><td class="amt">${fmt.money(lumperTotal)}</td></tr></table>`
+               <table>${detailed ? `<tr><td></td><td>${esc(strings.paidWithLabel)}</td><td class="amt"></td></tr>` : ''}${lumperRows}<tr class="total"><td colspan="2">${esc(strings.grandTotal)}</td><td class="amt">${fmt.money(lumperTotal)}</td></tr></table>`
             : ''
         }
 
         <h2>${esc(strings.categoryTableTitle)}</h2>
         <table>
-          <tr><td></td><td>${esc(strings.paidWithLabel)}</td><td class="amt"></td></tr>
+          ${detailed ? `<tr><td></td><td>${esc(strings.paidWithLabel)}</td><td class="amt"></td></tr>` : ''}
           ${categorySections}
           <tr class="total expenses-row"><td colspan="2">${esc(strings.grandTotal)}</td><td class="amt">${fmt.money(totalExpenses)}</td></tr>
         </table>
