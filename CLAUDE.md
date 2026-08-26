@@ -6948,3 +6948,81 @@
   exist yet otherwise); every other item works standalone. New file:
   `supabase/migrations/0003_consolidated_pending_sql_37_62.sql` (a
   disaster-recovery snapshot artifact, not itself run against anything).
+- APP ICON + SPLASH — REAL BRAND ASSETS (owner decision 2026-08-27): the
+  app shipped with the default Expo template placeholder PNGs
+  (`app/assets/images/icon.png` and friends — a generic blue/white
+  boomerang-style template mark, confirmed by viewing the file, never
+  replaced) for the entire project's history — `BrandAppIcon.tsx`, the
+  source COMPONENT for this exact composition, existed since the branding
+  pass but was never actually rendered to real PNG files (its own header
+  comment said as much: "turning it into the actual store icon files...
+  still needs a render-to-PNG step this code-only pass can't perform").
+  This pass does that render.
+  **How the PNGs were generated**: there is no way to rasterize a live
+  React Native `<Svg>` component to a file outside of a running app
+  instance (no headless RN renderer in this toolchain), so
+  `app/scripts/generateBrandAssets.js` (new, committed, re-runnable at
+  any time — `node scripts/generateBrandAssets.js` from `app/`) instead
+  re-expresses `BrandLogo.tsx`'s exact SVG shape data (viewBox "0 0 48
+  26" — the trailer rect, sleeper-cab path, chassis line, two wheel
+  circles, every stroke/linejoin/linecap attribute copied verbatim) as
+  plain SVG strings, composed the same way `BrandAppIcon.tsx` composes
+  them (near-black `#08080c` — `theme.ts`'s own `colors.bg` — background,
+  centered white truck mark), and rasterizes each composition with
+  `sharp` (new devDependency, added specifically for this script — never
+  imported by the app's own runtime code, so it adds nothing to the
+  shipped bundle). Both design tokens (`colors.bg`, `BRAND_LOGO_LIGHT`)
+  are copied into the script as plain string literals rather than
+  imported (a plain Node script has no way to import a React
+  Native/TypeScript module directly) — the SAME "each tool is self-
+  contained, kept in sync by hand" convention this repo already uses for
+  Deno Edge Functions that can't import from `app/src` either; if
+  `BrandLogo.tsx`'s path data or `theme.ts`'s `colors.bg` ever changes,
+  `generateBrandAssets.js`'s own `TRUCK_MARK_INNER_SVG`/`BG_COLOR`
+  constants need a matching manual update, flagged in the script's own
+  header comment.
+  **Files generated** (all committed): `app/assets/images/icon.png`
+  (1024×1024, full-bleed — deliberately NO pre-rounded corners baked in,
+  since iOS/the OS apply their own corner mask at display time, and
+  double-rounding would show background-colored slivers at the corners),
+  `android-icon-foreground.png`/`android-icon-monochrome.png` (1024×1024,
+  transparent background, truck mark scaled to 50% width — a
+  DELIBERATELY more conservative safe-zone ratio than the plain icon's
+  62%, since Android crops adaptive icons to a variety of OEM-chosen mask
+  shapes and only guarantees the inner ~66% of the canvas survives every
+  one of them; monochrome is always plain white regardless of brand
+  color, since Android applies its own tint to that layer), `android-
+  icon-background.png` (1024×1024, flat `#08080c` fill, no mark),
+  `splash-icon.png` (1024×1024, transparent background, truck mark only —
+  the `expo-splash-screen` plugin's own already-correct `backgroundColor:
+  '#08080c'` in `app.config.js`, unchanged this pass, fills the rest of
+  the screen so this composites seamlessly), `favicon.png` (512×512,
+  full-bleed, same design as the app icon). `app.config.js`'s ONE
+  substantive change: `android.adaptiveIcon.backgroundColor` was still
+  the Expo template's own light-blue placeholder (`#E6F4FE`) despite
+  every image file it sits alongside already being wired to the real
+  brand paths — corrected to `#08080c` to match the newly-generated
+  `android-icon-background.png` and the app's own theme; every other
+  `icon`/`web.favicon`/splash-plugin field already pointed at the correct
+  paths, just at placeholder content.
+  **`store-assets/` (new folder, repo root)** — what the actual store
+  LISTINGS need, never read by the app itself, upload by hand: `play-
+  store-icon-512.png` (512×512), `play-store-feature-graphic-
+  1024x500.png` (1024×500, same design centered on the wider rectangular
+  canvas, text-free — the store already shows the app name separately
+  next to it), `app-store-icon-1024.png` (1024×1024, identical design to
+  `icon.png` — Apple, like Google, wants a flat square with no pre-
+  applied corner rounding).
+  **This needs a new EAS BUILD, not just an `eas update`**: `icon`/
+  `splash`/`android.adaptiveIcon`/`web.favicon` are all NATIVE-level
+  assets baked into the compiled binary at build time (same class of
+  constraint CLAUDE.md's own BRANDING CLEANUP entry already documented
+  for `app.config.js`'s `name`/permission strings) — an OTA `eas update`
+  cannot touch them; only a fresh build re-bundles the new PNGs.
+  `docs/ADMIN_RUNBOOK.md`/PROMPTS.md's own "next native build" checklist
+  should carry this forward until it actually ships.
+  Full suite: 105 suites / 2601 tests pass (unchanged — no test/source
+  logic touched, only assets/config/a new build-time-only script); `tsc
+  --noEmit` clean. No SQL/Edge Function changes; no redeploy needed for
+  anything. No i18n changes (an icon has no text, per the user's own
+  explicit design brief).
