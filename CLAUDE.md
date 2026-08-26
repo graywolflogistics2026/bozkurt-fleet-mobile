@@ -8142,3 +8142,152 @@
   `ownersEquityNoRows`) — es/ru/ar/tr fully translated, hi/uk as
   untranslated English copies per invariant #11; glossary test re-passed
   clean (1176 tests). No SQL/Edge Function changes.
+- MULTI-TRUCK MODEL — NULL-TRUCK EXCLUSION ACROSS EVERY SCOPED SCREEN + TWO
+  UNRELATED DEVICE BUGS (owner decision, device report: "Deductions screen
+  is empty," "Documents screen is empty," splash wordmark barely visible;
+  no new SQL). Three findings, reported before fixing, then fixed:
+  1. **ROOT CAUSE, confirmed exactly as the report's own hypothesis**:
+     `src/data/entityHooks.ts`'s `useEntityList()`/`useEntityListPaged()`
+     applied every filter (including `truck_id`) as a plain `.eq(key,
+     value)` — SQL equality never matches a NULL row, regardless of the
+     comparison value. That's correct for "All Trucks" scope (the filter
+     value is `undefined` there, skipped entirely, so the unfiltered query
+     already includes every fleet-level row) but WRONG the instant a
+     SPECIFIC truck is scoped — and `ActiveTruckContext`'s own long-
+     standing "n=1 shortcut" (CLAUDE.md invariant #7) means a
+     SINGLE-TRUCK account's `activeTruckId` is ALWAYS a real truck id,
+     NEVER "All Trucks" (`showPicker: trucks.length > 1` hides the picker
+     entirely for one truck — there is no way to ever reach the null
+     state). Every fleet-level deduction/fuel/maintenance/toll row
+     (insurance, permits, accounting fees — "most deductions stay
+     fleet-level (null) by design," §63's own entry) was therefore
+     PERMANENTLY invisible for the majority of real accounts, with
+     literally no picker to work around it — this is the actual "the
+     screen is empty" bug, not a display glitch.
+     **Fix, one shared choke point**: `entityHooks.ts` gained
+     `applyFilters()`, special-casing `truck_id` specifically —
+     `query.or('truck_id.eq.<value>,truck_id.is.null')` instead of a plain
+     `.eq()` — a real value now matches THAT truck's own rows **OR** any
+     fleet-level (null) row; `truck_id IS NULL` is never "genuinely
+     truck-specific" to some OTHER truck, so including it in every
+     specific-truck's own view can never leak another truck's data, only
+     ever restore a fleet-level row's visibility. Every OTHER filter key
+     keeps its original plain `.eq()` behavior — deliberately narrow, not
+     a general "any filter can mean OR NULL" mechanism. `loads` has no
+     `truck_id` column of its own (attributed via `settlement_id` ->
+     `settlements.truck_id`, per the ORIGINAL MULTI-TRUCK MODEL entry's
+     own design) so it can't use this same server-side mechanism —
+     `src/stats/loadsScope.ts`'s `filterLoadsByTruckScope()` had the
+     IDENTICAL bug client-side (excluded a load with no `settlement_id`,
+     or whose settlement has no `truck_id`, from every specific-truck
+     scope) and got the identical fix: such a load is now included in
+     EVERY specific-truck scope, never just "All Trucks."
+     `app/(tabs)/more/maintenance.tsx` had its own screen-local inline
+     ternary (`activeTruckId ? {truck_id: activeTruckId} : undefined`)
+     doing the same job as `src/stats/fleetScope.ts`'s shared
+     `truckIdFilterFor()` — harmless on its own, but a divergence risk
+     that fix's own header comment explicitly warns against; switched to
+     the shared helper for consistency, not a second bug fix.
+     **AUDIT — every list that gained scope filtering** (the report's own
+     explicit checklist), verified by reading each screen's actual query
+     call, not assumed: `deductions.tsx`/`settlements.tsx`/`fuel.tsx`/
+     `tolls.tsx`/`maintenance.tsx` all route through `useEntityList({
+     truck_id: truckIdFilterFor(activeTruckId) })` — fixed centrally by
+     the one `entityHooks.ts` change, no screen-by-screen edit needed
+     beyond maintenance's own convention alignment. `loads.tsx` routes
+     through `filterLoadsByTruckScope()` — fixed there directly.
+     `documents.tsx`/`reimbursements.tsx` were confirmed to apply NO
+     truck filter at all (neither table has a `truck_id` column) — never
+     part of this bug class, correct as-is.
+  2. **A SECOND, UNRELATED root cause for "Documents screen is empty" —
+     found by reading the code, not assumed to be the same bug as
+     item 1**: `documents` was simply missing from `entityHooks.ts`'s
+     `ORDER_COLUMN` map, so every query fell back to
+     `DEFAULT_ORDER_COLUMN` ('created_at') — a column `documents` has
+     never had (it uses `imported_at` instead, `docs/SCHEMA.sql`).
+     `.order('created_at', ...)` against a nonexistent column is a real
+     Postgres error on EVERY query, silently swallowed by the screen
+     (which only ever checked `.data`, never `.isError`) and rendered as
+     an empty list with no visible error anywhere — a completely
+     different failure mode from item 1's NULL-exclusion, despite
+     producing the same visible symptom. Fixed by adding `documents:
+     'imported_at'` to `ORDER_COLUMN`. Auditing this SAME defect class
+     (a table missing from the map that doesn't actually have
+     `created_at`) found it independently, proactively affects two MORE
+     live tables neither named in the report: `loans` (Loan Center —
+     reachable, in active use, equally broken) and `credit_cards`
+     (currently behind `FEATURE_FLAGS.bankCreditCards`, lower real-world
+     impact today, fixed anyway since it's the identical bug) — both
+     added as `loans: 'id'`/`credit_cards: 'id'` (neither table has a
+     natural transaction-date column of its own to prefer over a stable
+     ordering; a real `created_at` column would be the better long-term
+     fix, flagged as a follow-up schema migration, not attempted this
+     pass since a pure client-side ordering fallback already resolves
+     the actual crash).
+  3. **Tests, matching the report's own explicit ask** — "a NULL-truck
+     row is visible in the fleet view on every one of those screens, and
+     the total row count with 'All Trucks' selected equals the unfiltered
+     count": `src/data/__tests__/entityHooks.test.ts` (extended) proves
+     the REAL `queryFn` a `truck_id` filter now issues
+     `.or('truck_id.eq.<X>,truck_id.is.null')` (never a plain `.eq()`
+     that would silently exclude a fleet-level row) and that omitting the
+     filter (the "All Trucks" case) issues no `truck_id` constraint at
+     all — the full unfiltered row set, which already includes every
+     fleet-level AND every truck-specific row, satisfying "total row
+     count with All Trucks equals the unfiltered count" by construction
+     (there is no separate "All Trucks" query to disagree with the
+     unfiltered one — they're the same query). This one fix covers
+     deductions/settlements/fuel/tolls/maintenance identically, since
+     they all share this exact `queryFn` code path — a single test
+     against the shared mechanism is real coverage for all five, not a
+     stand-in. `src/stats/__tests__/loadsScope.test.ts` (rewritten) — the
+     two pre-existing tests that asserted the OLD (buggy) exclusion
+     behavior were replaced with tests asserting the NEW, correct
+     behavior (a fleet-level/no-settlement load is visible in EVERY
+     specific-truck scope, a genuinely different-truck's load is still
+     excluded) plus a dedicated single-truck-account case proving a
+     specific-truck scope returns the FULL unfiltered set when every
+     settlement already belongs to that one truck (the literal "total row
+     count... equals the unfiltered count" case for the one table that
+     needed a client-side fix). Full suite: 114 suites / 2755 tests pass;
+     `tsc --noEmit` clean.
+  4. **SPLASH WORDMARK TOO SMALL, unrelated third device report, fixed in
+     the same pass**: `app/scripts/generateBrandAssets.js`'s
+     `composeSplashWithWordmarkSvg()` previously sized "BOZKA TRUCKING AI"
+     at a fixed, tiny fraction of the CANVAS (`size * 0.032`) with no
+     relationship to the truck mark's own on-canvas width at all — at the
+     mark's real size the wordmark rendered at roughly 1/20th its width,
+     unreadable at real launch-screen scale. Fixed by solving for the
+     fontSize algebraically instead: the rendered string's estimated
+     width (glyphs + letter-spacing gaps, using a measured-in-practice
+     average glyph-width-to-fontSize ratio for bold Arial/Helvetica
+     uppercase — ordinary letters ~0.66x their own fontSize, the two
+     spaces in this specific string narrower at ~0.32x) is set to land at
+     96% of the truck mark's own width ("roughly the width of the truck
+     mark," the report's own exact framing) — robust to a future
+     wordmark-text change too, rather than a magic number tuned only for
+     this one string. `font-weight` raised 700 -> 800 ("heavier weight");
+     the gap between the mark and the text block raised from `size *
+     0.045` to `size * 0.09` ("generous spacing between icon and text").
+     Verified visually before committing (per the report's own explicit
+     ask) by regenerating `splash-icon.png`, compositing it over the
+     app's real `#08080c` background (the same color
+     `expo-splash-screen`'s own plugin config already fills the screen
+     with), and inspecting it at both a large (400px) and a real-device-
+     scale-like (180px) preview — the wordmark reads clearly, bold, and
+     visually proportionate to the truck mark at both sizes, with none of
+     the previous cramped/illegible feel. Only `splash-icon.png` changed
+     on disk — `icon.png`/`favicon.png`/the Android adaptive layers/every
+     store-assets file are built from the untouched `composeSquareSvg()`/
+     `composeRectSvg()` functions and were confirmed unaffected via `git
+     status` after regenerating everything.
+     **NATIVE BUILD REQUIRED, same standing limitation as every prior
+     brand-asset pass**: `splash-icon.png` is a NATIVE-level asset
+     (`expo-splash-screen`'s own plugin config in `app.config.js`,
+     unchanged this pass) baked into the compiled binary at build time —
+     an OTA `eas update` CANNOT ship this change; only a fresh EAS Build
+     re-bundles the new PNG. Every other change in this pass (items 1-3,
+     the NULL-truck exclusion fixes) is pure client-side JS/TS and ships
+     via a normal `eas update` immediately.
+  No SQL/Edge Function changes this pass — every fix is pure client-side
+  JS/TS plus one build-time-only asset regeneration script edit.

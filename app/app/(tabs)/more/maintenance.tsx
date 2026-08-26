@@ -16,6 +16,7 @@ import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
+import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -81,7 +82,15 @@ export default function Maintenance() {
   const trucksQuery = useTrucksList();
   const truck = useMemo(() => trucksQuery.data?.find((tr) => tr.id === activeTruckId) ?? null, [trucksQuery.data, activeTruckId]);
 
-  const recordsQuery = useMaintenanceRecords(activeTruckId ? { truck_id: activeTruckId } : undefined);
+  // NULL-TRUCK EXCLUSION FIX (owner decision, device report) — was a
+  // screen-local inline ternary, exactly the kind of divergence
+  // src/stats/fleetScope.ts's own header comment warns against; switched
+  // to the shared truckIdFilterFor() for consistency. The underlying
+  // fleet-level-row visibility bug itself was already fixed centrally in
+  // entityHooks.ts's applyFilters() — this change is about NOT
+  // reintroducing the same divergence risk in the future, not a second
+  // fix for the same bug.
+  const recordsQuery = useMaintenanceRecords({ truck_id: truckIdFilterFor(activeTruckId) });
   const reimbQuery = useReimbursements();
   const insertRecord = useInsertMaintenanceRecord();
   const updateRecord = useUpdateMaintenanceRecord();

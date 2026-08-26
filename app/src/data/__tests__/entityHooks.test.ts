@@ -32,7 +32,7 @@ type QuerySpyCall = { method: string; args: unknown[] };
 
 function makeQuerySpy(rows: unknown[] = []) {
   const calls: QuerySpyCall[] = [];
-  const methods = ['select', 'eq', 'order', 'range'] as const;
+  const methods = ['select', 'eq', 'or', 'order', 'range'] as const;
   const builder: Record<string, unknown> = {};
   for (const method of methods) {
     builder[method] = (...args: unknown[]) => {
@@ -120,14 +120,50 @@ describe('useEntityList — real ordering', () => {
     expect(orderCall?.args[0]).toBe('created_at');
   });
 
-  it('still applies eq() filters alongside the new ordering', async () => {
+  it('still applies plain eq() filters for a non-truck_id key alongside the new ordering', async () => {
     setSpyRows([]);
     const hooks = createEntityHooks<{ id: string }, object, object>('maintenance_records');
-    const result = hooks.useEntityList({ truck_id: 'truck-1' }) as unknown as FakeUseQueryResult<{ id: string }[]>;
+    const result = hooks.useEntityList({ document_id: 'doc-1' }) as unknown as FakeUseQueryResult<{ id: string }[]>;
     await result.__config.queryFn();
 
     const eqCalls = currentCalls.filter((c) => c.method === 'eq');
-    expect(eqCalls.some((c) => c.args[0] === 'truck_id' && c.args[1] === 'truck-1')).toBe(true);
+    expect(eqCalls.some((c) => c.args[0] === 'document_id' && c.args[1] === 'doc-1')).toBe(true);
+    expect(currentCalls.some((c) => c.method === 'or')).toBe(false);
+  });
+
+  // NULL-TRUCK EXCLUSION FIX (owner decision, device report: "Deductions
+  // screen is empty" / "Maintenance screen is empty" for a single-truck
+  // account) — a plain .eq('truck_id', X) never matches a fleet-level
+  // (NULL-truck) row, which is the actual root cause: a single-truck
+  // account's activeTruckId is ALWAYS a real truck id, so every
+  // fleet-level deduction/fuel/maintenance/toll row was permanently
+  // invisible. Proves the real queryFn now issues an OR clause covering
+  // both "this truck" and "no truck at all" instead of a bare eq(), and
+  // that omitting the filter (the "All Trucks" case) still returns the
+  // full unfiltered query.
+  it('a truck_id filter is applied as "this truck OR no truck" — never a plain eq() that would exclude fleet-level rows', async () => {
+    setSpyRows([]);
+    const hooks = createEntityHooks<{ id: string }, object, object>('deductions');
+    const result = hooks.useEntityList({ truck_id: 'truck-1' }) as unknown as FakeUseQueryResult<{ id: string }[]>;
+    await result.__config.queryFn();
+
+    const orCall = currentCalls.find((c) => c.method === 'or');
+    expect(orCall?.args).toEqual(['truck_id.eq.truck-1,truck_id.is.null']);
+    // never a plain eq('truck_id', ...) too, which would be redundant/
+    // contradictory alongside the OR clause
+    expect(currentCalls.some((c) => c.method === 'eq' && c.args[0] === 'truck_id')).toBe(false);
+  });
+
+  it('omitting the truck_id filter entirely ("All Trucks" scope) issues no truck_id constraint at all — the full unfiltered row set, which already includes every fleet-level AND every truck-specific row', async () => {
+    setSpyRows([{ id: 'd1' }, { id: 'd2' }]);
+    const hooks = createEntityHooks<{ id: string }, object, object>('deductions');
+    // truckIdFilterFor(null) resolves to undefined — the "All Trucks" case
+    const result = hooks.useEntityList({ truck_id: undefined }) as unknown as FakeUseQueryResult<{ id: string }[]>;
+    const rows = await result.__config.queryFn();
+
+    expect(currentCalls.some((c) => c.method === 'or')).toBe(false);
+    expect(currentCalls.some((c) => c.method === 'eq' && c.args[0] === 'truck_id')).toBe(false);
+    expect(rows).toHaveLength(2);
   });
 });
 

@@ -31,9 +31,66 @@ export const ORDER_COLUMN: Record<string, string> = {
   bank_statements: 'statement_month',
   bank_transactions: 'tx_date',
   equipment: 'purchase_date',
+  // DEVICE REPORT FIX (owner decision) — "Documents screen is empty" was
+  // NOT a truck-scope bug (documents.tsx applies no truck filter at all,
+  // confirmed by reading it) — this table was simply missing from this
+  // map, so every query fell back to DEFAULT_ORDER_COLUMN ('created_at'),
+  // a column `documents` has never had (it uses `imported_at` instead —
+  // docs/SCHEMA.sql). `.order('created_at', ...)` against a nonexistent
+  // column is a real Postgres error on EVERY query, silently swallowed by
+  // the screen (which only checks `.data`, never `.isError`) and rendered
+  // as an empty list with no visible error. Auditing this same defect
+  // class (a table missing from this map that doesn't actually have
+  // `created_at`) found it independently affects TWO more live tables:
+  // `loans` (Loan Center — reachable, in active use, equally broken) and
+  // `credit_cards` (currently behind FEATURE_FLAGS.bankCreditCards, lower
+  // real-world impact today, fixed anyway since it's the same bug).
+  documents: 'imported_at',
+  loans: 'id',
+  credit_cards: 'id',
 };
 export const DEFAULT_ORDER_COLUMN = 'created_at';
 const PAGE_SIZE = 50;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type QueryBuilder = any;
+
+// MULTI-TRUCK MODEL — NULL-TRUCK EXCLUSION FIX (owner decision, device
+// report: "Deductions screen is empty," "rows exist in the database but
+// the list shows nothing"). A plain `.eq('truck_id', X)` — the ORIGINAL
+// behavior for every filter key here — matches NOTHING for a row whose
+// `truck_id` is NULL (SQL equality never matches NULL, regardless of the
+// comparison value). That's correct for "All Trucks" scope (`value ===
+// undefined`, skipped entirely below, so a null-truck row is already
+// included via the unfiltered query) but WRONG the instant a SPECIFIC
+// truck is scoped: `ActiveTruckContext`'s own n=1 shortcut means a
+// SINGLE-TRUCK account's `activeTruckId` is ALWAYS a real truck id, NEVER
+// "All Trucks" — there is no picker to ever reach that state (`showPicker:
+// trucks.length > 1`). Every fleet-level row (insurance, permits,
+// accounting fees — "most deductions stay fleet-level (null) by design,"
+// CLAUDE.md's own §63 entry) was therefore PERMANENTLY invisible for the
+// majority of real accounts (any single-truck one), with literally no way
+// to ever see it — this is the actual root cause of "the screen is
+// empty." Fixed by special-casing `truck_id` specifically: a real value
+// filters to THAT truck's own rows **OR** any fleet-level (null) row —
+// `truck_id IS NULL` is never "genuinely truck-specific" to some OTHER
+// truck, so including it in every specific-truck's own view can never
+// leak another truck's data, only ever restore a fleet-level row's
+// visibility. Every OTHER filter key keeps its original plain `.eq()`
+// behavior — this is deliberately narrow, not a general "any filter can
+// mean OR NULL" mechanism.
+function applyFilters(query: QueryBuilder, filters: Filters | undefined): QueryBuilder {
+  if (!filters) return query;
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined) continue;
+    if (key === 'truck_id') {
+      query = query.or(`truck_id.eq.${value},truck_id.is.null`);
+      continue;
+    }
+    query = query.eq(key, value as string | number | boolean);
+  }
+  return query;
+}
 
 // Shared shape for every user-scoped table's list/insert/update/delete hooks
 // (PROMPTS.md Session 4: "typed query/mutation hooks per entity"). All 7
@@ -58,12 +115,7 @@ export function createEntityHooks<Row extends { id: string }, Insert extends obj
           .select('*')
           .eq('user_id', userId as string)
           .order(orderColumn, { ascending: false, nullsFirst: false });
-        if (filters) {
-          for (const [key, value] of Object.entries(filters)) {
-            if (value === undefined) continue;
-            query = query.eq(key, value as string | number | boolean);
-          }
-        }
+        query = applyFilters(query, filters);
         const { data, error } = await query;
         if (error) throw error;
         return (data ?? []) as Row[];
@@ -105,12 +157,7 @@ export function createEntityHooks<Row extends { id: string }, Insert extends obj
           .eq('user_id', userId as string)
           .order(orderColumn, { ascending: false, nullsFirst: false })
           .range(from, to);
-        if (filters) {
-          for (const [key, value] of Object.entries(filters)) {
-            if (value === undefined) continue;
-            query = query.eq(key, value as string | number | boolean);
-          }
-        }
+        query = applyFilters(query, filters);
         const { data, error } = await query;
         if (error) throw error;
         return (data ?? []) as Row[];

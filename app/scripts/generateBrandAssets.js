@@ -109,11 +109,37 @@ function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textCo
   const scale = markWidth / VIEWBOX_WIDTH;
   const markTx = (size - markWidth) / 2;
 
-  // "small" text (per the design brief) — well under the mark's own
-  // visual weight — with real letter-spacing for a wordmark feel.
-  const fontSize = size * 0.032;
-  const letterSpacing = fontSize * 0.22;
-  const gap = size * 0.045; // breathing room between mark and text
+  // WORDMARK SIZE FIX (owner decision, device report: "'BOZKA TRUCKING AI'
+  // under the truck is barely visible") — the previous fontSize was a
+  // fixed, tiny fraction of the CANVAS (size * 0.032) with no relationship
+  // to the mark's own width at all, so at the mark's real on-canvas size
+  // the wordmark rendered roughly 1/20th its width — unreadable at launch-
+  // screen scale on a real device. Sized algebraically instead: solve for
+  // the fontSize whose rendered string width (glyphs + letter-spacing
+  // gaps) lands at TARGET_TEXT_WIDTH_FRACTION of the MARK's own width
+  // ("roughly the width of the truck mark," the exact device-report ask)
+  // using a measured-in-practice average glyph-width-to-fontSize ratio for
+  // BOLD Arial/Helvetica uppercase (ordinary letters ~0.66x their own
+  // fontSize; the two spaces in "BOZKA TRUCKING AI" narrower, ~0.32x) —
+  // this makes the sizing robust to a future wordmark-text change too,
+  // rather than a magic number tuned for this one exact string.
+  const TARGET_TEXT_WIDTH_FRACTION = 0.96;
+  const LETTER_SPACING_FACTOR = 0.1; // tighter than the old 0.22 -> reads
+  // denser/heavier at this larger size instead of airy and thin.
+  const AVG_LETTER_WIDTH_FACTOR = 0.66;
+  const AVG_SPACE_WIDTH_FACTOR = 0.32;
+  const letterCount = [...text].filter((c) => c !== ' ').length;
+  const spaceCount = text.length - letterCount;
+  const gapCount = Math.max(text.length - 1, 0);
+  const targetTextWidth = markWidth * TARGET_TEXT_WIDTH_FRACTION;
+  const widthPerFontSizeUnit =
+    letterCount * AVG_LETTER_WIDTH_FACTOR + spaceCount * AVG_SPACE_WIDTH_FACTOR + gapCount * LETTER_SPACING_FACTOR;
+  const fontSize = targetTextWidth / widthPerFontSizeUnit;
+  const letterSpacing = fontSize * LETTER_SPACING_FACTOR;
+  // Generous breathing room between the mark and the wordmark, per the
+  // device report's own explicit ask (was size * 0.045 — visually cramped
+  // right under the truck's own wheels).
+  const gap = size * 0.09;
 
   const blockHeight = markHeight + gap + fontSize;
   const blockTop = (size - blockHeight) / 2;
@@ -132,7 +158,7 @@ function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textCo
       y="${textBaselineY.toFixed(3)}"
       text-anchor="middle"
       font-family="Arial, Helvetica, sans-serif"
-      font-weight="700"
+      font-weight="800"
       font-size="${fontSize.toFixed(3)}"
       letter-spacing="${letterSpacing.toFixed(3)}"
       fill="${textColor}"
