@@ -36,7 +36,20 @@ aggregate, anonymized product metrics for operating the service — user
 counts, feature-usage counts, import volumes, error rates — never a query
 scoped to your own data for product-analytics purposes.
 
-## 4. Third-party processing
+## 4. Usage analytics
+
+To understand which parts of the app are actually used (so we know what to
+build and simplify), we record which screens you open and which actions you
+take — the screen or action name and a timestamp, tied to your account.
+This NEVER includes any financial value, description, document content, or
+anything else about what you entered — only the bare fact that a screen was
+opened or an action was started/completed. This data is not readable by any
+user, including you, through the app itself; only backend administrative
+access can read it, for product-decision purposes only. You can turn this
+off entirely at any time in Settings > Data > Usage Analytics — no
+explanation needed, and nothing else about the app changes when you do.
+
+## 5. Third-party processing
 
 Documents you photograph or upload are sent to Anthropic's API for
 AI-assisted data extraction (reading amounts, dates, categories, etc. off
@@ -45,26 +58,26 @@ data to the app; it is not used to train Anthropic's models per Anthropic's
 own API data-use terms at the time of writing. We do not sell your data to
 anyone.
 
-## 5. Data retention & deletion
+## 6. Data retention & deletion
 
 You may delete your account and all associated data at any time from
 Settings > Delete Account & Data. This permanently removes your database
 records, uploaded documents/files, and your login — this action cannot be
 undone.
 
-## 6. Security
+## 7. Security
 
 Every database table is protected by row-level security scoped to your own
 account; only you (and, in the narrow support/legal circumstances above,
 the operator) can access your data.
 
-## 7. Changes to this policy
+## 8. Changes to this policy
 
 We may update this policy as the app evolves. Material changes will be
 reflected here with an updated date. [Placeholder — formal versioning/
 re-notice process pending attorney review, same as Terms of Use.]
 
-## 8. Contact
+## 9. Contact
 
 Questions about this policy or your data: bozkatruckingai@gmail.com
 (owner decision 2026-08-05, `app/src/brand.ts`'s `SUPPORT_EMAIL` —
@@ -72,5 +85,5 @@ Questions about this policy or your data: bozkatruckingai@gmail.com
 
 ---
 
-*Draft version: `draft-2026-07-12`. Full text also shown in-app at
+*Draft version: `draft-2026-08-27`. Full text also shown in-app at
 Settings > Legal > Privacy Policy.*

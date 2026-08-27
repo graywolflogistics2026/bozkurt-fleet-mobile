@@ -740,6 +740,16 @@ export type Profile = {
   plan: 'free_trial' | 'paid' | 'lifetime' | 'complimentary';
   plan_note: string | null;
   plan_granted_at: string | null;
+  // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — a plain,
+  // user-facing setting (Settings > Data) that turns off ALL app_usage_events
+  // writes for this account. Default `false` (tracking on) — never events
+  // with financial content, only which screen/action, when, by whom.
+  // Enforced twice: client-side (src/data/usageTracking.ts short-circuits
+  // before ever attempting the network call) AND server-side (the
+  // app_usage_events INSERT policy itself re-checks this column from the
+  // live row on every write — the real, authoritative guarantee, not just
+  // client politeness).
+  usage_analytics_opt_out: boolean;
   created_at: string;
   updated_at: string;
 };

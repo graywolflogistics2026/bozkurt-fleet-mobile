@@ -20,6 +20,7 @@ import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
 import { defaultTaxDeductible } from '@/src/import/category';
 import { useTaxYearData } from '@/src/data/taxYearData';
 import { useUpdateProfile } from '@/src/data/profile';
+import { useUsageTracking } from '@/src/data/usageTracking';
 import { useAuth } from '@/src/context/AuthContext';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import {
@@ -153,6 +154,7 @@ export default function AccountantPackage() {
   const { session, profile } = useAuth();
   const userId = session?.user.id;
   const updateProfile = useUpdateProfile();
+  const { trackAction } = useUsageTracking();
 
   const settlementsQuery = useSettlements();
   const deductionsQuery = useDeductions();
@@ -558,6 +560,7 @@ export default function AccountantPackage() {
   async function handleExportPdf(scopeMonth: number | null) {
     const key = scopeMonth == null ? 'pdfYear' : 'pdfMonth';
     setExporting(key);
+    trackAction('accountant_package_export_pdf', 'started'); // usage analytics, §71
     try {
       const { input, strings } = buildReportInput(year, scopeMonth);
       const html = buildAccountantReportHtml(input, strings, { money, date }, reportFormat);
@@ -578,6 +581,7 @@ export default function AccountantPackage() {
       new File(uri).copy(renamed);
       await Sharing.shareAsync(renamed.uri);
       recordExportedForReferralNudge();
+      trackAction('accountant_package_export_pdf', 'completed'); // usage analytics, §71
     } catch (err) {
       Alert.alert(t('accountantPackage.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -588,6 +592,7 @@ export default function AccountantPackage() {
   async function handleExportExcel(scopeMonth: number | null) {
     const key = scopeMonth == null ? 'excelYear' : 'excelMonth';
     setExporting(key);
+    trackAction('accountant_package_export_excel', 'started'); // usage analytics, §71
     try {
       const { input, strings } = buildReportInput(year, scopeMonth);
       const html = buildAccountantReportHtml(input, strings, { money, date }, reportFormat);
@@ -603,6 +608,7 @@ export default function AccountantPackage() {
       }
       await Sharing.shareAsync(file.uri, { mimeType: 'application/vnd.ms-excel' });
       recordExportedForReferralNudge();
+      trackAction('accountant_package_export_excel', 'completed'); // usage analytics, §71
     } catch (err) {
       Alert.alert(t('accountantPackage.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {

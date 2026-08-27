@@ -3958,6 +3958,54 @@ create index if not exists loans_settlement_id_idx on loans(settlement_id);
 
 ---
 
+## 71. Usage analytics — app_usage_events + opt-out (owner decision, privacy-safe, owner-only) — NOT YET APPLIED
+
+**The ask**: "so I can learn which screens are actually used before
+deciding what to simplify" — record which screens users open and which
+actions they take (screen/action name, timestamp, user id), NO financial
+values, no descriptions, no document contents, nothing beyond the event
+itself. RLS so users can't read it, only the service role can. A plain
+opt-out setting, disclosed in the privacy policy.
+
+**Table shape**: `app_usage_events` — `kind` ('screen'|'action'), `name`
+(the route or action name, e.g. `/(tabs)/more/loans` or
+`document_import`), `status` (only for `kind='action'` — 'started'|
+'completed', a CHECK constraint enforces this pairing so a screen-open row
+can never accidentally carry a stray status). `user_id` is `on delete
+cascade` from `auth.users` — same established precedent as `ai_usage_log`/
+`ai_credit_purchases` (FIVE ADDITIONS pass): already cleaned up
+automatically by `delete-account`'s existing `auth.admin.deleteUser()`
+call, no explicit Edge Function table-list entry needed. Deliberately NOT
+added to `reset-data`'s `TABLES_IN_DELETION_ORDER` either — this is
+operational/telemetry data for product decisions, not user business data,
+same reasoning `ai_usage_log`/`service_status` are excluded for.
+
+**RLS, "only the service role can read"**: one INSERT policy
+(`user_id = auth.uid()` AND a live re-check of
+`profiles.usage_analytics_opt_out`), no SELECT/UPDATE/DELETE policy at all
+— RLS defaults to deny once enabled, so a regular user can never read this
+table back through the app, only insert their own rows. The Supabase SQL
+Editor's own `postgres` role bypasses RLS as the table owner (no `FORCE
+ROW LEVEL SECURITY` needed), and the `service_role` Postgres role has
+`BYPASSRLS` by default — both can read every row for the admin recipes
+below.
+
+**Opt-out enforced twice**: client-side (`src/data/usageTracking.ts`
+short-circuits before ever attempting the insert) AND server-side (the
+INSERT policy's own `with check` re-reads the live `profiles` row on every
+write) — the server-side check is the real guarantee, the client-side one
+just avoids a wasted network call.
+
+```sql
+-- See pending_71.sql at the repo root for the full table + RLS policy +
+-- profiles column (kept there, not duplicated here, until it's been run —
+-- same convention as §70's own note).
+```
+
+- [ ] 71 run (app_usage_events table + RLS; profiles.usage_analytics_opt_out)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

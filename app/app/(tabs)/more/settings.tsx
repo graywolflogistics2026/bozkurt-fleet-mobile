@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -94,6 +94,7 @@ export default function Settings() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [exportingData, setExportingData] = useState(false);
+  const [savingUsageAnalytics, setSavingUsageAnalytics] = useState(false);
   const [resetConfirming, setResetConfirming] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
@@ -205,6 +206,24 @@ export default function Settings() {
       Alert.alert(t('settings.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
       setExportingData(false);
+    }
+  }
+
+  // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — "a plain
+  // setting the user can turn off." Toggling this OFF is what
+  // profiles.usage_analytics_opt_out actually gates, both client-side
+  // (src/data/usageTracking.ts short-circuits before the network call)
+  // and server-side (the app_usage_events RLS insert policy itself
+  // re-checks this exact column) — see that migration's own comment.
+  async function handleToggleUsageAnalytics(nextEnabled: boolean) {
+    if (savingUsageAnalytics) return;
+    setSavingUsageAnalytics(true);
+    try {
+      await updateProfile.mutateAsync({ usage_analytics_opt_out: !nextEnabled });
+    } catch (err) {
+      Alert.alert(t('settings.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setSavingUsageAnalytics(false);
     }
   }
 
@@ -471,6 +490,24 @@ export default function Settings() {
           <PrimaryButton title={`⬇️ ${t('settings.exportAllDataButton')}`} onPress={handleExportAllData} loading={exportingData} />
           <MutedText style={{ marginTop: spacing.sm }}>{t('settings.dataNote')}</MutedText>
           <SecondaryButton title={t('settings.importLegacyButton')} onPress={() => router.push('/(tabs)/more/import-legacy')} />
+        </Card>
+
+        {/* USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) —
+            "a plain setting the user can turn off." */}
+        <Card>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600', flex: 1, marginEnd: spacing.sm }}>
+              {t('settings.usageAnalyticsTitle')}
+            </Text>
+            <Switch
+              value={profileQuery.data?.usage_analytics_opt_out !== true}
+              onValueChange={handleToggleUsageAnalytics}
+              disabled={savingUsageAnalytics}
+              trackColor={{ true: colors.accent, false: colors.border }}
+              thumbColor={colors.text}
+            />
+          </View>
+          <MutedText style={{ marginTop: spacing.xs }}>{t('settings.usageAnalyticsNote')}</MutedText>
         </Card>
 
         <Text style={styles.sectionTitle}>{t('settings.legalTitle')}</Text>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Stack, useRouter, useSegments, type Href } from 'expo-router';
+import { Stack, useRouter, useSegments, usePathname, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -11,6 +11,7 @@ import { ActiveTruckProvider } from '@/src/context/ActiveTruckContext';
 import { IntroProvider, useIntro } from '@/src/context/IntroContext';
 import { LanguageGateProvider, useLanguageGate } from '@/src/context/LanguageGateContext';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
+import { useUsageTracking } from '@/src/data/usageTracking';
 import { colors } from '@/src/theme';
 import { initI18n } from '@/src/i18n';
 import { resolveRootRedirect } from '@/src/navigation/rootRedirect';
@@ -73,7 +74,24 @@ function RootLayoutNav() {
   const { introSeen } = useIntro();
   const { languageScreenSeen } = useLanguageGate();
   const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
+  const { trackScreenOpen } = useUsageTracking();
+
+  // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — ONE
+  // navigation observer here covers every current and future screen
+  // automatically ("which screens are actually used"), instead of
+  // instrumenting each of the ~35 screen files by hand. Gated on
+  // `!loading && session` so a signed-out visitor's pre-auth screens
+  // (sign-in, sign-up, ...) are never attributed to a user id that
+  // doesn't exist yet; `pathname` only changes on a REAL route change
+  // (re-tapping the tab you're already on is a no-op), so this can never
+  // double-fire for the same screen visit.
+  useEffect(() => {
+    if (loading || !session) return;
+    trackScreenOpen(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, loading, session]);
 
   useEffect(() => {
     if (loading) return;

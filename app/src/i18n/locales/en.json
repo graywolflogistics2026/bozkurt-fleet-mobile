@@ -644,6 +644,8 @@
     "shareNotAvailable": "Sharing isn't available on this device.",
     "exportFailedTitle": "Export failed",
     "importLegacyButton": "Import legacy backup (JSON)",
+    "usageAnalyticsTitle": "Usage Analytics",
+    "usageAnalyticsNote": "Helps us learn which screens and features actually get used, so we know what to improve. Only the screen/action name and when — never your financial data, descriptions, or documents. Turn off any time.",
     "languageTitle": "Language",
     "languageNote": "Choose the language for the app's own text. Your data (descriptions, store names) is never translated.",
     "languageAutoLabel": "Match device language",

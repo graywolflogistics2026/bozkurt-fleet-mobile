@@ -644,6 +644,8 @@
     "shareNotAvailable": "Paylaşım bu cihazda kullanılamıyor.",
     "exportFailedTitle": "Dışa aktarma başarısız",
     "importLegacyButton": "Eski yedeği içe aktar (JSON)",
+    "usageAnalyticsTitle": "Kullanım Analitiği",
+    "usageAnalyticsNote": "Hangi ekranların ve özelliklerin gerçekten kullanıldığını öğrenmemize yardımcı olur, böylece neyi geliştireceğimizi biliriz. Yalnızca ekran/işlem adı ve zamanı — asla finansal verileriniz, açıklamalarınız veya belgeleriniz değil. İstediğiniz zaman kapatabilirsiniz.",
     "languageTitle": "Dil",
     "languageNote": "Uygulamanın kendi metninin dilini seçin. Verileriniz (açıklamalar, mağaza adları) asla çevrilmez.",
     "languageAutoLabel": "Cihaz diliyle eşleştir",

@@ -33,6 +33,7 @@ import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
 import { detectBackfillSession, planBatchImportCapacity } from '@/src/usage/aiUsage';
 import { useAiUsageDisplay } from '@/src/data/aiUsageDisplay';
 import { useProfile } from '@/src/data/profile';
+import { useUsageTracking } from '@/src/data/usageTracking';
 import { isOwnerAccount } from '@/src/entitlement/hasFullAccess';
 import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { isSaveExtractionError, buildErrorReport } from '@/src/data/saveExtractionError';
@@ -239,6 +240,7 @@ export default function Import() {
   const profileQuery = useProfile();
   const isOwner = isOwnerAccount(profileQuery.data);
   const aiUsage = useAiUsageDisplay(isOwner);
+  const { trackAction } = useUsageTracking();
 
   const [phase, setPhase] = useState<Phase>('pick');
   const [workingLabel, setWorkingLabel] = useState('');
@@ -883,6 +885,13 @@ export default function Import() {
     // state update), same spirit as the double-tap guard above.
     if (!checkSettlementReconciliation(extraction).ok) return;
     savingRef.current = true;
+    // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — the
+    // single most decision-relevant started/completed pair in the app:
+    // this is the flow with the longest, most-fought history of silent
+    // failures/abandonment (see this file's own MULTI-PAGE SETTLEMENT
+    // CHUNKING/BACKGROUND IMPORT entries in CLAUDE.md). Event NAME only —
+    // never the extraction's own contents.
+    trackAction('document_import', 'started');
 
     try {
       const isPurchase = extraction.docType === 'amazon' || extraction.docType === 'store';
@@ -909,6 +918,7 @@ export default function Import() {
       });
       setResult(saved);
       setPhase('done');
+      trackAction('document_import', 'completed');
       // UNBOUNDED QUERIES / SCOPED INVALIDATION FIX (P0, FULL SYSTEM AUDIT
       // owner decision 2026-08-26) — deliberately kept as the full,
       // unscoped sweep: saveExtraction() can write to any of ~10 tables

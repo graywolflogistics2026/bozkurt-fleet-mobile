@@ -644,6 +644,8 @@
     "shareNotAvailable": "Compartir no está disponible en este dispositivo.",
     "exportFailedTitle": "Error en la exportación",
     "importLegacyButton": "Importar respaldo anterior (JSON)",
+    "usageAnalyticsTitle": "Análisis de Uso",
+    "usageAnalyticsNote": "Nos ayuda a saber qué pantallas y funciones se usan realmente, para saber qué mejorar. Solo el nombre de la pantalla/acción y cuándo — nunca tus datos financieros, descripciones o documentos. Puedes desactivarlo cuando quieras.",
     "languageTitle": "Idioma",
     "languageNote": "Elija el idioma del texto propio de la app. Sus datos (descripciones, nombres de tiendas) nunca se traducen.",
     "languageAutoLabel": "Coincidir con el idioma del dispositivo",

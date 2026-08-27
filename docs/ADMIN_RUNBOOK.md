@@ -597,3 +597,110 @@ select
 from auth.users u
 where u.email = 'someone@example.com';
 ```
+
+## Usage Analytics (owner decision, docs/PENDING_SQL.md §71) — privacy-safe, owner-only
+
+`app_usage_events` records ONLY the bare event — which screen was opened
+or which action was started/completed, a timestamp, and the user id.
+Never a financial value, description, or document content. Nobody can
+read this table through the app itself (no SELECT policy at all) — only
+these recipes, run here as the `postgres`/service_role, can. Every
+recipe below excludes the owner/dev account by default (same `p.plan is
+distinct from 'owner'` pattern as AI Cost Control above) so your own
+testing never skews the numbers you'd use to decide what to simplify —
+remove that line to include your own activity.
+
+**1. Screens ranked by unique users and by total opens** (last 30 days):
+
+```sql
+select e.name as screen,
+       count(distinct e.user_id) as unique_users,
+       count(*) as total_opens
+from app_usage_events e
+join profiles p on p.user_id = e.user_id
+where e.kind = 'screen'
+  and e.created_at >= now() - interval '30 days'
+  and p.plan is distinct from 'owner' -- remove this line to include your own testing
+group by e.name
+order by unique_users desc, total_opens desc;
+```
+
+**2. Screens never opened by anyone** — SQL has no way to know the app's
+own route table dynamically, so this diffs against a pasted-in list of
+every screen as of this writing (`app/src/navigation/navRegistry.ts`'s
+`RAW_NAV_GROUPS` — update this list whenever a screen is added/removed
+there, same "no automatic way to stay in sync" caveat every other
+hand-maintained list in this file already carries):
+
+```sql
+with known_screens(name) as (
+  values
+    ('/(tabs)'), ('/(tabs)/transactions'),
+    ('/(tabs)/import'), ('/(tabs)/more/loads'), ('/(tabs)/more/settlements'),
+    ('/(tabs)/more/reimbursements'), ('/(tabs)/more/other-income'),
+    ('/(tabs)/more/fuel'), ('/(tabs)/more/maintenance'), ('/(tabs)/more/tolls'), ('/(tabs)/deductions'),
+    ('/(tabs)/more/asset-register'), ('/(tabs)/more/accountant-package'), ('/(tabs)/more/ai-advisor'),
+    ('/(tabs)/more/tax-estimator'), ('/(tabs)/more/share-profit'), ('/(tabs)/more/compliance'),
+    ('/(tabs)/more/documents'), ('/(tabs)/more/category-learning'), ('/(tabs)/more/referral'),
+    ('/(tabs)/more/data-cleanup'),
+    ('/(tabs)/more/trucks'), ('/(tabs)/more/truck-comparison'), ('/(tabs)/more/truck-assignments'),
+    ('/(tabs)/more/equipment'), ('/(tabs)/more/drivers'), ('/(tabs)/more/capital-account'),
+    ('/(tabs)/more/operating-pnl'),
+    ('/(tabs)/truck-health'), ('/(tabs)/more/cash-flow'), ('/(tabs)/more/scorecard'), ('/(tabs)/more/loans'),
+    ('/(tabs)/more/credit-cards'), ('/(tabs)/more/bank-statements'), ('/(tabs)/more/profit-analysis'),
+    ('/(tabs)/more/ceo-mode'),
+    ('/(tabs)/more/settings')
+)
+select k.name as never_opened_screen
+from known_screens k
+left join app_usage_events e on e.name = k.name and e.kind = 'screen'
+where e.name is null
+order by k.name;
+```
+
+**3. Actions started vs. completed** (drop-off rate, all time):
+
+```sql
+select e.name as action,
+       count(*) filter (where e.status = 'started') as started,
+       count(*) filter (where e.status = 'completed') as completed,
+       count(*) filter (where e.status = 'started') - count(*) filter (where e.status = 'completed') as abandoned
+from app_usage_events e
+join profiles p on p.user_id = e.user_id
+where e.kind = 'action'
+  and p.plan is distinct from 'owner' -- remove this line to include your own testing
+group by e.name
+order by started desc;
+```
+
+**4. The same two breakdowns, split by account age** (new accounts —
+under 30 days old — vs. established ones, to see if a screen/action is a
+new-user onboarding thing or an everyone-uses-it thing):
+
+```sql
+-- Screens, by account age bucket
+select e.name as screen,
+       case when u.created_at >= now() - interval '30 days' then 'new (<30d)' else 'established' end as account_age,
+       count(distinct e.user_id) as unique_users,
+       count(*) as total_opens
+from app_usage_events e
+join auth.users u on u.id = e.user_id
+join profiles p on p.user_id = e.user_id
+where e.kind = 'screen'
+  and p.plan is distinct from 'owner' -- remove this line to include your own testing
+group by e.name, account_age
+order by e.name, account_age;
+
+-- Actions started vs completed, by account age bucket
+select e.name as action,
+       case when u.created_at >= now() - interval '30 days' then 'new (<30d)' else 'established' end as account_age,
+       count(*) filter (where e.status = 'started') as started,
+       count(*) filter (where e.status = 'completed') as completed
+from app_usage_events e
+join auth.users u on u.id = e.user_id
+join profiles p on p.user_id = e.user_id
+where e.kind = 'action'
+  and p.plan is distinct from 'owner' -- remove this line to include your own testing
+group by e.name, account_age
+order by e.name, account_age;
+```
