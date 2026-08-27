@@ -172,6 +172,44 @@ describe('deleteTruckCompletely — cascade completeness', () => {
   });
 });
 
+// SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md §70) —
+// the item 8 truck-cascade requirement: "delete a truck with 3
+// settlements -> all three reverse and cascade cleanly." Postgres
+// deletes a truck's settlements directly via the trucks.id ->
+// settlements.truck_id FK cascade, entirely inside the database, never
+// through deleteTruckCompletely()'s own code (which only ever issues
+// `delete from trucks`) — this is exactly why §70 chose an AFTER DELETE
+// trigger on settlements over a client-side two-step: this test proves
+// the SAME reversal fires for every one of the 3 cascaded rows, with no
+// special-case code in truckDeletion.ts at all.
+describe('deleteTruckCompletely — business_balance reversal across a truck-cascade delete (§70)', () => {
+  const TRUCK_C = 'truck-c';
+
+  function seedTruckWithThreeSettlements() {
+    return {
+      profiles: [{ user_id: USER_ID, business_balance: 61897 }],
+      trucks: [{ id: TRUCK_C, user_id: USER_ID, unit_number: '300' }],
+      settlements: [
+        { id: 'sc1', user_id: USER_ID, truck_id: TRUCK_C, week_ending: '2026-05-02', gross: 4000, business_balance_credit: 3200 },
+        { id: 'sc2', user_id: USER_ID, truck_id: TRUCK_C, week_ending: '2026-05-09', gross: 4200, business_balance_credit: 3500 },
+        { id: 'sc3', user_id: USER_ID, truck_id: TRUCK_C, week_ending: '2026-05-16', gross: 3900, business_balance_credit: 3197 },
+      ],
+    };
+  }
+
+  it('reverses all 3 settlements\' own business_balance_credit, summed exactly, via the truck cascade alone', async () => {
+    mockClient = createFakeSupabase(seedTruckWithThreeSettlements());
+    const totalCredit = 3200 + 3500 + 3197;
+    const priorValue = 61897 - totalCredit;
+
+    await deleteTruckCompletely(TRUCK_C);
+
+    expect(mockClient.__store.settlements.filter((s) => s.truck_id === TRUCK_C)).toHaveLength(0);
+    const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
+    expect(profile!.business_balance).toBe(priorValue);
+  });
+});
+
 describe('deleteTruckCompletely — atomicity', () => {
   it('when the truck delete itself fails, throws and performs ZERO document cleanup — nothing partially removed', async () => {
     const seed = seedTwoTruckFleet();

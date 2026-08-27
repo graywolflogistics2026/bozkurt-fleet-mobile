@@ -73,6 +73,11 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
       { href: '/(tabs)/more/documents' as Href, labelKey: 'nav.documents', emoji: '🗃️' },
       { href: '/(tabs)/more/category-learning' as Href, labelKey: 'nav.categoryLearning', emoji: '🧠' },
       { href: '/(tabs)/more/referral' as Href, labelKey: 'nav.referral', emoji: '🎁' },
+      // ORPHAN CLEANUP TOOL (owner decision, docs/PENDING_SQL.md §70, item
+      // 7) — a one-time, user-reviewable sweep for historical orphans
+      // (pre-fix leftovers), same "repair-flow screen" precedent as Fix
+      // Truck Assignments below.
+      { href: '/(tabs)/more/data-cleanup' as Href, labelKey: 'nav.dataCleanup', emoji: '🧹' },
     ],
   },
   {

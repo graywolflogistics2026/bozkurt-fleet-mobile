@@ -275,6 +275,11 @@ export function mapSettlement(
     ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, 'drivewyze', userId, settlementFallbackDate, truckId)),
   ];
 
+  // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md §70) —
+  // `source: 'settlement'` marks this loan as settlement-derived
+  // permanently, even after its `settlement_id` (injected by the caller
+  // once the real row id exists — same pattern as loads/fuel/etc. below)
+  // eventually clears to null on a future delete.
   const loans: LoanInsert[] = (s.loans ?? []).map((l) => ({
     user_id: userId,
     name: l.name,
@@ -282,6 +287,7 @@ export function mapSettlement(
     payment: numOrNull(l.payment),
     frequency: l.frequency ?? null,
     next_due: toDateOrNull(l.nextDue),
+    source: 'settlement',
   }));
 
   return { settlement, loads, fuel, deductions, maintenance, reimbursements, tolls, loans, netPay: num(s.netPay) };
@@ -638,6 +644,10 @@ export function mapLoanAgreement(d: Extraction, userId: string): LoanInsert {
     apr: numOrNull(l.apr),
     frequency: l.frequency ?? null,
     next_due: toDateOrNull(l.nextDue),
+    // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md §70)
+    // — a real standalone loan-agreement document, not extracted from a
+    // settlement's own recap section.
+    source: 'import',
   };
 }
 

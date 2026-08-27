@@ -24,6 +24,7 @@ import { buildPolylinePoints } from '@/src/stats/chartHelpers';
 import { useSessionState } from '@/src/lib/useSessionState';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useMarkDocumentReviewed } from '@/src/data/needsReviewMutations';
+import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { buildLinkedRecordHref } from '@/src/navigation/linkedRecordRoute';
 import { findLinkedRecords, type LinkedRecordRef } from '@/src/data/documentsFilter';
@@ -367,16 +368,44 @@ export default function Settlements() {
         style: 'destructive',
         onPress: async () => {
           try {
-            // loads/fuel_purchases/reimbursements/deductions with this
-            // settlement_id cascade-delete server-side (CLAUDE.md invariant #5).
+            // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md
+            // §70) — captured BEFORE the delete, since the settlement row
+            // (and its own document_id) won't exist to read afterward.
+            const documentId = x.document_id;
+            // loads/fuel_purchases/reimbursements/deductions/maintenance_records/
+            // tolls with this settlement_id cascade-delete server-side
+            // (CLAUDE.md invariant #5); profiles.business_balance is
+            // reversed by the settlements AFTER DELETE trigger (§70) —
+            // covers this direct-delete path AND the truck-cascade path
+            // with the same mechanism, so nothing extra is needed here.
             await deleteSettlement.mutateAsync(x.id);
-            // Cascade delete (CLAUDE.md invariant #5): loads/fuel_purchases/
-            // reimbursements/withheld-deductions with this settlement_id
-            // are removed server-side — include all 4 so every screen that
-            // reads them refreshes too, not just the settlements list.
-            await invalidateFinancialData(queryClient, {
-              entities: ['settlements', 'loads', 'fuel_purchases', 'reimbursements', 'deductions'],
-            });
+            // Cleans up the now-orphaned document row + its Storage file
+            // (reuses the SAME already-tested function every other
+            // delete-a-record-with-a-linked-document flow already uses —
+            // it re-checks whether the document is still referenced by
+            // anything else first, so this is safe even if the document
+            // was somehow shared). This is also the actual fix for "a
+            // deleted settlement still blocks re-import as a duplicate" —
+            // checkDuplicateImport() matches against the documents table,
+            // not settlements, so removing this leftover row is what
+            // makes the duplicate check correctly forget it.
+            if (documentId) {
+              try {
+                await cleanupOrphanedDocument(documentId);
+              } catch (cleanupErr) {
+                console.error('[settlements] failed to clean up orphaned document after delete:', cleanupErr);
+              }
+            }
+            // Unscoped sweep, deliberately — a settlement delete now
+            // reaches nearly every financial table (settlements/loads/
+            // fuel/reimbursements/deductions/maintenance/tolls/documents)
+            // PLUS profiles.business_balance via the delete trigger, the
+            // same "don't try to enumerate every touched entity" reasoning
+            // Reset All Data's/settlement import's own invalidation calls
+            // already use — enumerating a precise entity list here once
+            // already missed 'profiles' during this very pass, which is
+            // exactly the class of bug this convention exists to avoid.
+            await invalidateFinancialData(queryClient);
             setSelected(null);
           } catch (err) {
             Alert.alert(t('settlementsScreen.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));

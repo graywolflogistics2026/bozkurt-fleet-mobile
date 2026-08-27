@@ -530,6 +530,14 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // success while a loan row silently failed to save/update.
     for (const loan of mapping.loans) {
       if (!loan.name) continue;
+      // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md
+      // §70) — every upsert (new or existing loan) is stamped with the
+      // REAL settlement id now that one exists, so this loan is always
+      // linked to the MOST RECENT settlement that touched it (an
+      // `on delete set null` FK, never cascade — see the migration's own
+      // header comment for why a standing loan must never be deleted
+      // just because one settlement mentioning it was).
+      const loanWithSettlement = { ...loan, settlement_id: settlementId };
       const { data: existingLoan, error: lookupError } = await supabase
         .from('loans')
         .select('id')
@@ -538,10 +546,10 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         .maybeSingle();
       if (lookupError) throw new SaveExtractionError('loans-upsert', lookupError, partial);
       if (existingLoan) {
-        const { error } = await supabase.from('loans').update(loan).eq('id', existingLoan.id);
+        const { error } = await supabase.from('loans').update(loanWithSettlement).eq('id', existingLoan.id);
         if (error) throw new SaveExtractionError('loans-upsert', error, partial);
       } else {
-        const { error } = await supabase.from('loans').insert(loan);
+        const { error } = await supabase.from('loans').insert(loanWithSettlement);
         if (error) throw new SaveExtractionError('loans-upsert', error, partial);
       }
     }

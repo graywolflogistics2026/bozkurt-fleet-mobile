@@ -745,6 +745,7 @@ describe('mapLoanAgreement', () => {
       apr: 7.5,
       frequency: 'monthly',
       next_due: '2026-08-01',
+      source: 'import',
     });
   });
 

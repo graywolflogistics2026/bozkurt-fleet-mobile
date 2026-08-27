@@ -98,6 +98,8 @@ function loan(overrides: Partial<LoanRow>): LoanRow {
     apr: 0,
     next_due: null,
     tags: null,
+    settlement_id: null,
+    source: 'manual',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,

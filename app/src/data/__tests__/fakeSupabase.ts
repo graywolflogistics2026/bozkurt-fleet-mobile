@@ -46,9 +46,36 @@ const CASCADE_RULES: Array<{ table: string; column: string; parent: string }> = 
   { table: 'tolls', column: 'truck_id', parent: 'trucks' },
   { table: 'maintenance_intervals', column: 'truck_id', parent: 'trucks' },
   { table: 'truck_health_config', column: 'truck_id', parent: 'trucks' },
-  // docs/SCHEMA.sql — already-existing cascades, second-hop from the above.
+  // docs/SCHEMA.sql — a settlement's own direct children (on delete
+  // cascade). SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md
+  // §70) added maintenance_records/tolls to this list — previously only
+  // `loads` was modeled here (this fake was originally built for the
+  // truck-cascade test alone), which meant a DIRECT settlement delete
+  // test could never have caught the real bug this pass fixes: these two
+  // tables' own cascades genuinely were never exercised by any existing
+  // test before now.
   { table: 'loads', column: 'settlement_id', parent: 'settlements' },
+  { table: 'fuel_purchases', column: 'settlement_id', parent: 'settlements' },
+  { table: 'reimbursements', column: 'settlement_id', parent: 'settlements' },
+  { table: 'deductions', column: 'settlement_id', parent: 'settlements' },
+  { table: 'maintenance_records', column: 'settlement_id', parent: 'settlements' },
+  { table: 'tolls', column: 'settlement_id', parent: 'settlements' },
   { table: 'capital_transactions', column: 'linked_deduction_id', parent: 'deductions' },
+];
+
+// SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md §70) —
+// `on delete set null` foreign keys: the CHILD ROW SURVIVES, only its own
+// FK column clears. Deliberately a SEPARATE list/mechanism from
+// CASCADE_RULES above (a truck's own `driver_payments`/`loans` are real,
+// standing financial records that must never be deleted just because one
+// settlement or truck that happened to touch them was) — `loans.
+// settlement_id` is the one this pass actually exercises in tests;
+// `driver_payments.settlement_id` (already `on delete set null` in the
+// real schema, docs/SCHEMA.sql) is included too for completeness even
+// though no test in this pass specifically needs it yet.
+const SET_NULL_RULES: Array<{ table: string; column: string; parent: string }> = [
+  { table: 'loans', column: 'settlement_id', parent: 'settlements' },
+  { table: 'driver_payments', column: 'settlement_id', parent: 'settlements' },
 ];
 
 export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { failures?: FakeSupabaseFailure[] } = {}) {
@@ -72,7 +99,38 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
       if (toDelete.length === 0) continue;
       const toDeleteIds = new Set(toDelete.map((r) => r.id));
       store[rule.table] = childRows.filter((row) => !toDeleteIds.has(row.id));
+      // The AFTER DELETE trigger fires for EVERY settlements row removed,
+      // including one cascaded here from a truck delete — never only a
+      // direct client-issued delete (this is the entire reason §70 chose
+      // a trigger over a client-side two-step in the first place).
+      if (rule.table === 'settlements') reverseSettlementBalanceCredits(toDelete);
       cascadeDelete(rule.table, toDelete);
+    }
+    // `on delete set null` — the row survives, only its own FK clears.
+    for (const rule of SET_NULL_RULES) {
+      if (rule.parent !== parentTable) continue;
+      for (const row of store[rule.table] ?? []) {
+        if (parentIds.has(row[rule.column])) row[rule.column] = null;
+      }
+    }
+  }
+
+  // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md §70) —
+  // mirrors the real `reverse_settlement_business_balance_credit()`
+  // AFTER DELETE trigger: for every settlement row actually removed
+  // (whether by a direct client delete OR cascaded from a truck delete
+  // via CASCADE_RULES above), subtract its own business_balance_credit
+  // from the matching profiles row. Same honest-boundary spirit as every
+  // other fake in this file — proves the CLIENT-VISIBLE end state matches
+  // what the trigger is documented to do, not that live Postgres actually
+  // has it wired this way (no Postgres runtime in this environment to
+  // verify that against).
+  function reverseSettlementBalanceCredits(deletedSettlements: Row[]) {
+    for (const sett of deletedSettlements) {
+      const credit = Number(sett.business_balance_credit ?? 0);
+      if (credit === 0) continue;
+      const profile = (store.profiles ?? []).find((pr) => pr.user_id === sett.user_id);
+      if (profile) profile.business_balance = Number(profile.business_balance ?? 0) - credit;
     }
   }
 
@@ -111,6 +169,10 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
           else remaining.push(row);
         }
         store[table] = remaining;
+        // A DIRECT delete on settlements (not one reached via cascade,
+        // which is handled inside cascadeDelete() itself) — same trigger,
+        // same effect, regardless of which path removed the row.
+        if (table === 'settlements') reverseSettlementBalanceCredits(deleted);
         cascadeDelete(table, deleted);
         return deleted;
       }

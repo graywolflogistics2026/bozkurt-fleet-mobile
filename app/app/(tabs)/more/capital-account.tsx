@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
-import { useCapitalAccountSummary, useUpdateBusinessBalance } from '@/src/data/capitalAccount';
+import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import {
   useCapitalTransactions,
   useUpdateCapitalTransaction,
@@ -119,7 +119,6 @@ export default function CapitalAccount() {
   // path (it's read-only here, auto-synced from deductionMutations.ts).
   const insertTx = useRecordManualCapitalTransaction();
   const deleteTx = useDeleteManualCapitalTransaction();
-  const updateBalance = useUpdateBusinessBalance();
   // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3) —
   // updateManualTx adjusts business_balance by the delta (a manual, non-
   // linked row); updateTx is the plain entity-hook update (no balance
@@ -378,12 +377,39 @@ export default function CapitalAccount() {
     );
   }
 
-  async function handleUpdateBalance() {
-    const bal = Number(balanceInput);
-    if (!Number.isFinite(bal) || bal < 0 || !userId) return;
+  // RECONCILE (owner decision, docs/PENDING_SQL.md §70, item 6 — "I enter
+  // the true figure and the app records the difference as a labeled
+  // adjustment row, visible in the equity list, never a silent
+  // overwrite"). Replaces the old handleUpdateBalance()'s plain
+  // `profiles.business_balance = X` write (useUpdateBusinessBalance() —
+  // still exported from capitalAccount.ts, now unused, a genuine silent-
+  // overwrite this pass deliberately retires from the UI) with a real,
+  // atomic manual capital transaction: the SAME mechanism/RPC every other
+  // contribution/draw on this screen already uses, so the adjustment
+  // shows up in the history list like any other real entry, is reversible
+  // by deleting it like any other manual row, and moves business_balance
+  // correctly via record_manual_capital_transaction()'s own atomic delta.
+  // A delta of exactly $0 records nothing — "reconciling" to the figure
+  // already on file isn't a real adjustment.
+  async function handleReconcileBalance() {
+    const target = Number(balanceInput);
+    if (!Number.isFinite(target) || !userId) return;
+    const current = summary?.businessBalance ?? 0;
+    const delta = Math.round((target - current) * 100) / 100;
+    if (delta === 0) {
+      setBalanceModalOpen(false);
+      setBalanceInput('');
+      return;
+    }
     setSavingBalance(true);
     try {
-      await updateBalance.mutateAsync(bal);
+      await insertTx.mutateAsync({
+        user_id: userId,
+        tx_type: delta > 0 ? 'contribution' : 'draw',
+        amount: Math.abs(delta),
+        tx_date: todayIso(),
+        note: t('capitalAccount.reconcileNote', { from: money(current), to: money(target) }),
+      });
       await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
       setBalanceModalOpen(false);
       setBalanceInput('');
@@ -444,7 +470,7 @@ export default function CapitalAccount() {
           title={isScorp ? t('capitalAccount.recordDistribution') : t('capitalAccount.recordDraw')}
           onPress={openDraw}
         />
-        <SecondaryButton title={t('capitalAccount.updateBusinessBalance')} onPress={() => setBalanceModalOpen(true)} />
+        <SecondaryButton title={t('capitalAccount.reconcileBalance')} onPress={() => setBalanceModalOpen(true)} />
         {duplicateIds.length > 0 && (
           <SecondaryButton title={t('capitalAccount.removeDuplicates')} onPress={handleRemoveDuplicates} />
         )}
@@ -566,10 +592,29 @@ export default function CapitalAccount() {
       </ModalSheet>
 
       <ModalSheet visible={balanceModalOpen} onClose={() => setBalanceModalOpen(false)}>
-        <SheetTitle>{t('capitalAccount.updateBalanceSheetTitle')}</SheetTitle>
-        <MutedText>{t('capitalAccount.updateBalanceLabel')}</MutedText>
+        <SheetTitle>{t('capitalAccount.reconcileSheetTitle')}</SheetTitle>
+        <MutedText>{t('capitalAccount.reconcileLabel')}</MutedText>
+        <MutedText style={{ marginBottom: spacing.sm }}>
+          {t('capitalAccount.reconcileCurrentBalance', { amount: money(summary?.businessBalance ?? 0) })}
+        </MutedText>
         <Field keyboardType="numeric" value={balanceInput} onChangeText={setBalanceInput} placeholder="0.00" />
-        <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleUpdateBalance} loading={savingBalance} disabled={!balanceInput} />
+        {!!balanceInput && Number.isFinite(Number(balanceInput)) && (
+          <MutedText style={{ marginTop: spacing.xs }}>
+            {(() => {
+              const delta = Math.round((Number(balanceInput) - (summary?.businessBalance ?? 0)) * 100) / 100;
+              if (delta === 0) return t('capitalAccount.reconcileNoChange');
+              return delta > 0
+                ? t('capitalAccount.reconcileWillAddContribution', { amount: money(delta) })
+                : t('capitalAccount.reconcileWillAddDraw', { amount: money(Math.abs(delta)) });
+            })()}
+          </MutedText>
+        )}
+        <PrimaryButton
+          title={`💾 ${t('common.save')}`}
+          onPress={handleReconcileBalance}
+          loading={savingBalance}
+          disabled={!balanceInput || !Number.isFinite(Number(balanceInput))}
+        />
         <SecondaryButton title={t('common.cancel')} onPress={() => setBalanceModalOpen(false)} />
       </ModalSheet>
 

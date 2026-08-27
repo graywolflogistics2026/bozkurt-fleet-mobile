@@ -61,6 +61,16 @@ export function useCapitalAccountSummary() {
 // correction to the checking-account figure shown on the Dashboard/Capital
 // Account screens (business_balance is otherwise only ever incremented by
 // settlement net-pay on import, aiImportSave.ts).
+// DEPRECATED (owner decision, docs/PENDING_SQL.md §70, item 6) — this is
+// a plain, silent overwrite of profiles.business_balance with no record
+// of why it changed, exactly what the RECONCILE action
+// (app/(tabs)/more/capital-account.tsx's handleReconcileBalance())
+// replaced it with: a labeled manual capital transaction via
+// useRecordManualCapitalTransaction(), visible in the equity list,
+// reversible like any other row. Left in place, unused, same "harmless
+// deprecated function" precedent as cf_insurance_monthly/calcCpm()
+// elsewhere in this app — not deleted in case anything else ever needs a
+// raw balance write, but no screen should call this again.
 export function useUpdateBusinessBalance() {
   const { session } = useAuth();
   const userId = session?.user.id;

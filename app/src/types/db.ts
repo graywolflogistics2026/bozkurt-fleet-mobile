@@ -409,6 +409,17 @@ export type LoanRow = {
   apr: number | null;
   next_due: string | null;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md §70) —
+  // `settlement_id` is the MOST RECENT settlement whose own extraction
+  // upserted this loan (a real, standing obligation touched by MANY
+  // settlements over months, never cascade-deleted with any one of
+  // them — `on delete set null`, so this simply clears once that
+  // settlement is gone). `source` is the permanent provenance marker
+  // that survives even after `settlement_id` clears to null — a loan
+  // extracted from a settlement's own recap section is never
+  // indistinguishable from a manually-entered one again.
+  settlement_id: string | null;
+  source: 'settlement' | 'import' | 'manual';
   created_at: string;
   updated_at: string;
 };

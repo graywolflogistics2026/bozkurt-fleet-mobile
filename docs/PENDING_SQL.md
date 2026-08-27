@@ -3888,6 +3888,56 @@ anything yet).
 
 ---
 
+## 70. Settlement delete orphans — balance-reversal trigger + loan provenance (owner decision) — NOT YET APPLIED
+
+**The finding**: device report — deleting every settlement left
+`profiles.business_balance` overstated by exactly the sum of the deleted
+settlements' own `business_balance_credit` (never reversed anywhere),
+and Loan Center kept showing loans extracted from those settlements with
+no way to tell they were settlement-derived. Full audit in CLAUDE.md's
+own dated entry for this pass.
+
+**Part A — an `AFTER DELETE` trigger on `settlements`**, not a client-side
+fix: a trigger is the only mechanism that covers BOTH a direct client
+delete AND the truck-deletion cascade path (Postgres deletes a truck's
+settlements directly via the `trucks.id -> settlements.truck_id` FK
+cascade, entirely inside Postgres, never through app code). `SECURITY
+DEFINER` — the trigger takes no caller-supplied parameters to validate
+(`OLD.user_id`/`OLD.business_balance_credit` come from the real row
+already being deleted), so there's no impersonation risk, and this is
+what lets the reversal succeed uniformly whether the delete was issued
+by a normal authenticated user or a service-role Edge Function (which
+has no `auth.uid()` at all).
+
+**Part B — loan provenance**: `loans.settlement_id` is `on delete set
+null`, deliberately NOT cascade — a single loan is upserted-by-name
+across many settlements over months (a real, standing obligation), so
+cascading its delete from one settlement would destroy real financial
+data. `loans.source` (`'settlement'|'import'|'manual'`) is the permanent
+marker so a loan can always be identified as settlement-derived even
+after its `settlement_id` clears to null.
+
+```sql
+-- See pending_70.sql at the repo root for the full trigger function +
+-- trigger + loans columns (too long to duplicate here without drifting
+-- out of sync — keep pending_70.sql as the single source of truth for
+-- this section until it's run, deleted, and this note is replaced with
+-- the final SQL, matching this file's own established convention).
+```
+
+**REVIEW BEFORE RUNNING**: the trigger reversal logic was NOT executed
+against a live database in this environment (no service_role/db
+credentials here) — hand-reviewed against the exact same
+`business_balance_credit`/`apply_settlement_business_balance_credit`
+columns and RPC already live and confirmed via a read-only PostgREST
+probe. Run it, then verify with a real settlement import + delete that
+`business_balance` returns to its exact prior value.
+
+- [ ] 70 run (reverse_settlement_business_balance_credit() trigger on
+      settlements; loans.settlement_id + loans.source)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

@@ -50,6 +50,14 @@ function LoanCard({ x, onEdit, onDelete }: { x: LoanRow; onEdit: () => void; onD
         </MutedText>
         {x.next_due && <MutedText>{t('loans.nextDue', { date: date(x.next_due) })}</MutedText>}
         {paidPct != null && <MutedText>{t('loans.paidOffPct', { pct: Math.round(paidPct * 100) })}</MutedText>}
+        {/* SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md
+            §70) — "unlinked and marked, never a silent leftover": a loan
+            extracted from a settlement's own recap section stays
+            visually identifiable as such even once the settlement that
+            last touched it (settlement_id) is gone. */}
+        {x.source === 'settlement' && (
+          <MutedText>{x.settlement_id ? t('loans.sourceSettlementLinked') : t('loans.sourceSettlementUnlinked')}</MutedText>
+        )}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.balance ?? 0)}</Text>

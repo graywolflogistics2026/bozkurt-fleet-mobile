@@ -9486,3 +9486,196 @@
   `ai-advisor`/`ai-import`/`delete-account`/`referral-sync` were NOT
   touched. No new native dependency — pure client-side JS/TS plus one
   small SQL migration — ships via a normal `eas update`.
+- SETTLEMENT DELETE LEAVES ORPHANS — BALANCE, DERIVED ROWS, DUPLICATE
+  DETECTION (owner decision, device-confirmed report — deleting every
+  settlement left `business_balance` inflated by $6,897, Loan Center and
+  Tolls still showed settlement-sourced rows, and re-importing the same
+  file was still flagged a duplicate with Settlements empty).
+  docs/PENDING_SQL.md §70 (mirrored as `pending_70.sql` at the repo
+  root), **NOT YET APPLIED**.
+  AUDIT (item 1) — every record a settlement import creates, and what
+  happens today on delete vs. what should:
+  1. `profiles.business_balance_credit`(→`profiles.business_balance`) —
+     written on save/re-import via the §37/§38
+     `apply_settlement_business_balance_credit()` RPC, **never reversed
+     anywhere** on delete. SHOULD: reversed atomically. Root cause of bug A.
+  2. `loads`/`fuel_purchases`/`reimbursements`/`deductions` (withheld) —
+     already `on delete cascade` from `settlements` (confirmed live via a
+     read-only PostgREST schema probe). Correct as-is, no bug.
+  3. `maintenance_records.settlement_id`/`tolls.settlement_id` — added
+     `on delete cascade` by §61, confirmed LIVE. The orphaned rows in the
+     device report are near-certainly pre-§61 legacy rows
+     (`settlement_id` permanently null, unbackfillable — no record of
+     which settlement they came from before the column existed). SHOULD:
+     cascade going forward (already true); historical orphans need a
+     one-time cleanup tool, not a backfill. Root cause of bug C.
+  4. `loans` — **no FK to `settlements` at all, by design**: a loan is
+     upserted by name across many settlements over the loan's whole
+     life, so it must never cascade-delete with any one of them.
+     Genuinely independent once created. SHOULD: never deleted, but
+     mark its provenance so a settlement-derived loan is never mistaken
+     for a stale manual leftover. Root cause of bug B.
+  5. `documents` (the uploaded settlement file + its `parsed_json`) — no
+     FK from `settlements.document_id` back to `documents` that cascades
+     on settlement delete; `duplicateCheck.ts`'s import-time duplicate
+     match reads the `documents` table directly, which a settlement
+     delete never touched. SHOULD: cleaned up via the existing
+     `cleanupOrphanedDocument()` (re-checks genuine orphan status
+     itself) the instant its settlement is gone — Storage file included.
+     Root cause of bug D.
+  6. `capital_transactions` linked to a withheld deduction — already
+     `on delete cascade` via `linked_deduction_id`, which cascades a
+     second hop once the deduction itself is cascade-deleted by #2.
+     Correct as-is.
+  FIX 1 — BALANCE REVERSAL, AN AFTER DELETE TRIGGER (item 2, owner's own
+  suggested mechanism, adopted): `reverse_settlement_business_balance_credit()`
+  is a `SECURITY DEFINER` trigger function on `settlements`, fired
+  `AFTER DELETE FOR EACH ROW` — subtracts `OLD.business_balance_credit`
+  from `profiles.business_balance` for `OLD.user_id`. `SECURITY DEFINER`
+  over `SECURITY INVOKER` deliberately: the trigger takes no
+  caller-supplied parameters to validate (no impersonation risk, unlike
+  the existing RPCs' `p_user_id`/`auth.uid()` checks), and it must work
+  identically whether the delete came from an authenticated user's own
+  session (has `auth.uid()`) or a service-role Edge Function (has none —
+  would silently no-op under `SECURITY INVOKER` + an `auth.uid()` guard).
+  This is what covers the truck-CASCADE path "at once," per the request's
+  own framing: `deleteTruckCompletely()` (`truckDeletion.ts`) issues one
+  `delete from trucks`, Postgres cascades every one of that truck's
+  settlements internally, entirely inside the database, never through
+  app code — a client-side reversal call could never reach that path, but
+  the trigger fires for every deleted `settlements` row regardless of
+  what triggered the delete.
+  FIX 2 — DUPLICATE DETECTION + DOCUMENT/STORAGE CLEANUP (item 3):
+  `settlements.tsx`'s delete handler now captures the settlement's own
+  `document_id` before deleting it, then calls the existing
+  `cleanupOrphanedDocument()` (`deductionMutations.ts` — already used by
+  every other per-record delete flow) afterward — it re-checks whether
+  anything ELSE still references that document (another settlement,
+  deduction, or maintenance record) before removing the row and its
+  Storage file, so it's safe even for a shared/duplicate-detected
+  document. Once the `documents` row is gone, `duplicateCheck.ts`'s
+  match against it correctly finds nothing, and re-importing the same
+  file is no longer flagged. A cleanup failure is logged, never blocks
+  the settlement delete itself (the balance reversal and cascade have
+  already committed by then). Invalidation uses the established
+  UNSCOPED sweep (`invalidateFinancialData(queryClient)`, no `entities`
+  list) — an earlier draft of this fix enumerated specific entities and
+  silently omitted `'profiles'` (needed for the Capital Account/Home
+  balance display to reflect the trigger's reversal), caught during this
+  same pass; enumerating a precise list here once already missed one
+  entity, which is exactly the class of bug the unscoped-sweep
+  convention exists to avoid for a wide-reaching action like this.
+  FIX 3 — LOAN PROVENANCE (item 4): `loans` gains `settlement_id uuid
+  references settlements on delete set null` and `source text not null
+  default 'manual' check (source in ('settlement','import','manual'))`.
+  `set null`, not cascade — a loan is a real, standing obligation that
+  legitimately outlives any one settlement, per the audit above; deleting
+  the settlement that first surfaced it must never delete the debt
+  itself, only drop the now-stale pointer. `mapSettlement()`'s own loan
+  mapping stamps `source: 'settlement'`; `mapLoanAgreement()` (the
+  standalone `loan_agreement` docType) stamps `source: 'import'`; every
+  other loan (added by hand on the Loan Center screen) defaults to
+  `'manual'`. `aiImportSave.ts`'s loan upsert loop now writes
+  `settlement_id: settlementId` on both the insert and update branch, so
+  a loan's provenance link always points at whichever settlement most
+  recently touched it. Loan Center's own `LoanCard` shows a small "📥
+  From a settlement" badge (or "📥 From a settlement (since deleted)"
+  once its `settlement_id` has gone null via the FK) — never a silent
+  leftover, per the request's own framing.
+  VERIFICATION (item 5): a personally-paid deduction's
+  `capital_transactions` insert (`deductionMutations.ts`'s
+  `applyContributionSync()`) has never touched `profiles.business_balance`
+  at all — confirmed by re-reading the function (it only ever writes
+  `capital_transactions`) and proven directly by a new dedicated test
+  (`settlementDeletion.test.ts`'s "personally-paid expenses never touch
+  the bank balance" block): inserting a linked contribution for a
+  personally-paid deduction leaves `business_balance` byte-identical
+  before and after, while the SAME account's settlement-driven balance
+  (from a separate, unrelated settlement) is completely unaffected by it
+  either direction — the two mechanisms (settlement net-pay crediting
+  `business_balance`; personal-payment-paid deductions crediting the
+  CONTRIBUTION/tax-free base only) are proven structurally independent,
+  not just individually correct.
+  RECONCILE ACTION (item 6): Capital Account's old "🏦 Update Business
+  Balance" button (a bare, unlabeled overwrite —
+  `useUpdateBusinessBalance()`, now explicitly marked DEPRECATED in its
+  own header comment and left in place unused, same "harmless deprecated
+  function" precedent as `cf_insurance_monthly`) is replaced with "🏦
+  Reconcile Balance." `handleReconcileBalance()` computes
+  `delta = target − currentlyTracked`, then records it as a normal,
+  labeled `capital_transactions` row (`tx_type: delta > 0 ? 'contribution'
+  : 'draw'`, `note: "Balance reconciliation — adjusted from $X to $Y"`)
+  via the EXISTING atomic `useRecordManualCapitalTransaction()` hook
+  (§60's `record_manual_capital_transaction()` RPC — row write + balance
+  delta in one transaction, the same pattern this whole pass's own
+  balance-reversal trigger mirrors) — never a silent overwrite, always a
+  visible, reversible, delete-able row in the equity history like any
+  other draw/contribution. The sheet shows "Currently tracked: $X" plus
+  a live preview ("Will record a $Y contribution" / "...draw" / "No
+  change") before the user commits.
+  CLEANUP TOOL (item 7): a new screen, `app/(tabs)/more/data-cleanup.tsx`
+  ("🧹 Data Cleanup," wired into `navRegistry.ts`'s Tools group — one
+  shared registry edit per the established NAV PARITY convention, and
+  into `dailyTips.ts`'s `DAILY_TIP_SCREEN_COVERAGE` map as
+  `'intentionalNone'`, same reasoning as the milestone-triggered Referral
+  screen: a one-time historical repair tool has nothing to nudge about
+  day to day). `src/data/orphanCleanup.ts`'s `fetchOrphanSummary()`
+  finds: tolls/maintenance_records with `source='settlement' AND
+  settlement_id IS NULL` (structurally impossible to be anything BUT a
+  pre-§61 orphan, never a false positive against a real manual/import
+  row); documents referenced by nothing (a set-difference against every
+  settlement/deduction/maintenance_records `document_id`); and — purely
+  informational, per the audit's own "genuinely independent" finding —
+  every `loans` row with `source='settlement'`, explicitly never offered
+  for deletion here (a real loan is real debt; this list exists so it's
+  never mistaken for a leftover, with a link straight to Loan Center for
+  anyone who decides one really is stale). The screen shows counts and
+  dollar totals per category, lets the user select specific rows, and
+  requires an explicit confirm (with the real amount named) before
+  removing anything — "let me remove them after review," not an
+  automatic sweep.
+  TESTS (item 8, all three named scenarios): `fakeSupabase.ts` gained a
+  parallel `SET_NULL_RULES` mechanism (mirroring the existing
+  `CASCADE_RULES`) and a `reverseSettlementBalanceCredits()` function
+  modeling the new trigger, wired into both the direct-delete path and
+  `cascadeDelete()`'s truck-cascade path — same "proves the
+  CLIENT-VISIBLE deletion shape is correct, not that live Postgres is
+  actually configured this way" honest boundary this file's fake
+  Supabase harness has always operated under (no Postgres runtime exists
+  in this environment). `settlementDeletion.test.ts` (new, 9 tests):
+  import → delete reverses `business_balance` to EXACTLY its prior value
+  (including a dedicated case for a NEGATIVE net-pay week — the balance
+  correctly goes back UP on delete, not down); every derived row
+  (loads/fuel/reimbursements/deductions/maintenance/tolls) and the
+  document + its Storage file are gone; a `loans` row from that
+  settlement survives with `settlement_id` set to null and `source`
+  still `'settlement'`; and the personally-paid-expenses independence
+  proof described above. `truckDeletion.test.ts` gained a
+  `seedTruckWithThreeSettlements()` case proving deleting a truck with 3
+  settlements reverses the SUM of all three credits via the cascade path
+  alone, with zero truck-deletion-specific balance code — the trigger
+  fires per cascaded row automatically.
+  DELIVERABLES: 121 suites / 3,397 tests pass; `tsc --noEmit` clean; all
+  7 locales confirmed key-parity (a full recursive key-set diff against
+  en.json — 0 missing/0 extra in every one of es/ru/tr/hi/ar/uk — run
+  directly, since this repo's glossary test only checks glossary-bearing
+  keys, not full parity; "settlement" kept in Latin script per the
+  glossary in every locale's `dataCleanup.*`/`loans.source*` strings; the
+  Arabic "view in Loan Center" link uses `←`, matching this locale's own
+  established RTL "link points toward the start" convention, not a
+  mechanical mirror of the LTR `→`). `docs/PENDING_SQL.md` §70 is **NOT
+  YET APPLIED** — `pending_70.sql` at the repo root has the exact SQL
+  (the trigger function + trigger, and the two new `loans` columns +
+  check constraint); until it's run, the client code degrades
+  gracefully: `business_balance_credit` still gets written on
+  save/re-import as before (unchanged behavior), but a settlement delete
+  won't reverse it until the trigger exists, and `mapSettlement()`/
+  `mapLoanAgreement()` will send `settlement_id`/`source` on every loan
+  upsert regardless, which Postgres will reject only if those columns
+  are missing entirely (review before running — same "assembled by hand,
+  not executed against a live database in this environment" limitation
+  every SQL migration in this codebase's history carries). No Edge
+  Function was touched this pass — every change is pure client-side
+  JS/TS plus this one pending SQL migration; no redeploy needed for
+  `ai-import`/`ai-advisor`/`reset-data`/`delete-account`/`referral-sync`.
+  Ships via a normal `eas update` once §70 has been run.
