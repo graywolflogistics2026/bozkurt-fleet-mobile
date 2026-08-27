@@ -26,6 +26,7 @@ import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
+import { matchesTruckScope } from '@/src/stats/kpi';
 import { resolveHeroPeriodDateWindow, filterRowsByDateWindow, calcHeroRevenueExpenseTrio } from '@/src/stats/heroPeriodWindow';
 import { FleetScopeSelectorStrip } from '@/src/components/FleetScopeSelectorStrip';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
@@ -738,24 +739,35 @@ export default function Dashboard() {
   // TREND is a directional chart, not a per-mile cost figure, so it stays
   // simpler). "All Trucks" scope (activeTruck null) passes every row
   // through unchanged, exactly as before.
+  // NULL-TRUCK EXCLUSION FIX (owner decision, device report: "the new KPI
+  // engine is dropping most of my data") — these used to filter by plain
+  // equality (`s.truck_id === activeTruck.id`), which excludes every
+  // fleet-level/unassigned row (truck_id null) the instant a specific
+  // truck is scoped — and since a single-truck account's activeTruck is
+  // ALWAYS a real truck (ActiveTruckContext's own n=1 shortcut, no "All
+  // Trucks" picker to fall back to), this silently dropped real data for
+  // the common case, not just a multi-truck edge case. Now shares
+  // src/stats/kpi.ts's matchesTruckScope() — the SAME null-inclusive rule
+  // entityHooks.ts's applyFilters() and loadsScope.ts's
+  // filterLoadsByTruckScope() already established.
   const scopedSettlements = useMemo(
-    () => (activeTruck ? (settlementsQuery.data ?? []).filter((s) => s.truck_id === activeTruck.id) : (settlementsQuery.data ?? [])),
+    () => (settlementsQuery.data ?? []).filter((s) => matchesTruckScope(s.truck_id, activeTruck?.id ?? null)),
     [settlementsQuery.data, activeTruck]
   );
   const scopedDeductions = useMemo(
-    () => (activeTruck ? (dedQuery.data ?? []).filter((d) => d.truck_id === activeTruck.id) : (dedQuery.data ?? [])),
+    () => (dedQuery.data ?? []).filter((d) => matchesTruckScope(d.truck_id, activeTruck?.id ?? null)),
     [dedQuery.data, activeTruck]
   );
   const scopedFuel = useMemo(
-    () => (activeTruck ? (fuelQuery.data ?? []).filter((f) => f.truck_id === activeTruck.id) : (fuelQuery.data ?? [])),
+    () => (fuelQuery.data ?? []).filter((f) => matchesTruckScope(f.truck_id, activeTruck?.id ?? null)),
     [fuelQuery.data, activeTruck]
   );
   const scopedMaintenance = useMemo(
-    () => (activeTruck ? (maintenanceQuery.data ?? []).filter((m) => m.truck_id === activeTruck.id) : (maintenanceQuery.data ?? [])),
+    () => (maintenanceQuery.data ?? []).filter((m) => matchesTruckScope(m.truck_id, activeTruck?.id ?? null)),
     [maintenanceQuery.data, activeTruck]
   );
   const scopedTolls = useMemo(
-    () => (activeTruck ? (tollsQuery.data ?? []).filter((tl) => tl.truck_id === activeTruck.id) : (tollsQuery.data ?? [])),
+    () => (tollsQuery.data ?? []).filter((tl) => matchesTruckScope(tl.truck_id, activeTruck?.id ?? null)),
     [tollsQuery.data, activeTruck]
   );
   // `loads` has no truck_id of its own — src/stats/loadsScope.ts's shared

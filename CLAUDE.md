@@ -8826,3 +8826,117 @@
   `weeklyReviewFallback.ytd` string in every translation). No SQL/Edge
   Function changes — every fix in this pass is pure client-side JS/TS.
   Ships via a normal `eas update`.
+- KPI CONSISTENCY — NULL-TRUCK EXCLUSION REINTRODUCED (owner decision,
+  device report immediately following the pass above: "the new KPI engine
+  is dropping most of my data" — expenses reading $0 including fuel
+  specifically, Scorecard miles reading 3,120 vs. the real 10,146, Weekly
+  Net Trend listing only 2 of 6 settlement weeks). No SQL/Edge Function
+  changes; pure client-side JS/TS.
+  **DIAGNOSIS (per the owner's own 4-point checklist, answered in order)**:
+  1. **YES, confirmed** — `computeKpis()`'s scoped-truck branch filtered
+     every row array by PLAIN EQUALITY (`row.truck_id === truckScope`) —
+     the EXACT bug class already found and fixed once in
+     `entityHooks.ts`'s `applyFilters()` and `loadsScope.ts`'s
+     `filterLoadsByTruckScope()`, reintroduced in the brand-new
+     `computeKpis()` path the immediately-preceding KPI CONSISTENCY pass
+     shipped. SQL equality never matches a NULL row; `ActiveTruckContext`'s
+     own n=1 shortcut means a SINGLE-TRUCK account's `activeTruckId` is
+     ALWAYS a real, non-null truck id (there is no "All Trucks" picker to
+     fall back to) — so this wasn't a rare multi-truck edge case, it
+     silently dropped every fleet-level/unassigned settlement, deduction,
+     fuel purchase, maintenance record, and toll for the common
+     single-truck account the instant a specific truck was scoped.
+  2. **NO** — `useEntityList()` (`src/data/entityHooks.ts`, what
+     `useSettlements`/`useDeductions`/`useFuelPurchases`/
+     `useMaintenanceRecords`/`useTolls` are all bound to) fetches the
+     table's FULL row set with no `.range()`/`.limit()` at all, confirmed
+     by re-reading the function directly — genuinely unbounded, matching
+     its own header comment ("stays fully unchanged... every aggregate
+     consumer... must keep reading complete data"). The opt-in
+     `useEntityListPaged()` companion exists but nothing in the KPI path
+     calls it. Pagination was not the cause.
+  3. **NO** — Scorecard passes `window: null` (explicitly "no time
+     filtering," its own documented all-time design) and `computeKpis()`
+     only ever filters by date once, at the top, and only when a real
+     window is given. Not double-applied, not narrower than intended.
+  4. **YES, they all reach the engine** — every one of
+     deductions/fuelPurchases/maintenanceRecords/tolls is a REQUIRED
+     (non-optional) array parameter on `computeKpis()`'s own TypeScript
+     type, and every real call site (Scorecard, `periodScopedCpm.ts`) was
+     confirmed passing real arrays via `queryResult.data ?? []`, not a
+     query object or a dropped await. The data reaching the function was
+     real and complete — it was FILTERED AWAY once inside, by the
+     plain-equality truck check in point 1. Fuel reading $0 specifically
+     is explained by the same root cause: most real fuel purchases DO
+     carry a `truck_id`, but this account's apparently didn't (or the
+     account is effectively single-truck with historically-unassigned
+     rows) — same mechanism, same fix, no separate bug in the fuel path.
+  **THE FIX**: `src/stats/kpi.ts` gained one exported predicate,
+  `matchesTruckScope(rowTruckId, truckScope)` — `truckScope: null` ("All
+  Trucks") matches everything; a real `truckScope` matches that truck's
+  own rows **OR** any null-truck row, mirroring `entityHooks.ts`'s own
+  established rule exactly ("`truck_id IS NULL` is never 'genuinely
+  truck-specific' to some OTHER truck, so including it in a specific
+  truck's own scoped view can never leak another truck's data, only ever
+  restore a fleet-level row's visibility" — the same accepted tradeoff:
+  in a genuine multi-truck account a still-unassigned row shows under
+  EVERY truck's own individual scope until fixed via the Truck
+  Assignments repair screen, which is strictly better than silently
+  dropping real data, per CLAUDE.md's own "no dollar silently lost"
+  principle). `computeKpis()` was restructured around this ONE shared
+  filter for both the "All Trucks" and scoped-truck branches — filtering
+  settlements/deductions/fuel/maintenance/tolls identically, THEN
+  computing gross/net/miles/CPM directly from that null-inclusive set,
+  rather than picking apart `buildTruckComparison()`'s own row (which
+  correctly stays PLAIN-EQUALITY/allocation-based for the completely
+  separate Per-Truck Profitability screen's "which truck should I keep"
+  concept — deliberately left untouched, since real multi-truck cost
+  ALLOCATION is still the right idea for THAT screen and was never the
+  bug here). `computeKpis()` no longer calls `buildTruckComparison()` at
+  all internally as a result — a real simplification, not just a fix.
+  The SAME exact bug, independently reintroduced in TWO screen-local
+  copies of "scope this row array to the active truck," was found and
+  fixed identically: `app/(tabs)/index.tsx`'s own `scopedSettlements`/
+  `scopedDeductions`/`scopedFuel`/`scopedMaintenance`/`scopedTolls`
+  (feeding the Hero Card, Revenue/Expense/Net trio, Recent Loads,
+  Best/Worst Lanes — pre-existing code from an EARLIER pass, not
+  introduced by the KPI CONSISTENCY pass, but the identical bug class)
+  and `app/(tabs)/more/scorecard.tsx`'s own equivalent five (feeding the
+  Weekly Net Trend list and the "settlements missing miles" Why?
+  breakdown section) — both now call the shared `matchesTruckScope()`
+  instead of hand-rolling their own plain-equality filter, which is
+  exactly how this bug was reintroduced in the first place.
+  **SILENT-ZERO GUARD** (owner's own explicit ask: "a zero expense figure
+  in accounting software is never an acceptable silent default"):
+  `computeKpis()` now validates every one of its 7 array-shaped inputs
+  (`trucks`/`settlements`/`loads`/`deductions`/`fuelPurchases`/
+  `maintenanceRecords`/`tolls`) with `assertArray()` — throws a
+  descriptive `Error` (never a silent `console.error`-and-continue; a
+  pure calculation function has no sensible "recover and keep going"
+  path once its inputs are invalid, and returning a zero-filled result IS
+  the exact bug this guard exists to prevent) naming the bad parameter
+  and its actual runtime type/shape, whether that's `undefined`, `null`,
+  or a whole react-query result object (`{ data: [...], isLoading, ... }`)
+  passed instead of its own `.data` array. Every real call site already
+  passes real arrays (confirmed above), so this is pure defense in depth
+  — it fires only if a future edit reintroduces the "wrong shape"/
+  "dropped await" class of bug the owner named.
+  **TESTS** (`src/stats/__tests__/kpi.test.ts`, all 5 explicitly requested
+  guards plus the missing-source guard): a realistic 6-settlement, mostly-
+  null-truck-id fixture (matching the real-world single-truck-account
+  shape that triggered this) proves (1) the fleet view's miles equal the
+  sum of every settlement's miles; (1b) a SCOPED truck also sees every
+  null-truck settlement, never a fraction of the real total; (2) null-
+  truck deduction/fuel/maintenance/toll rows are included in BOTH the
+  fleet view and a specific truck's own scoped view; (3) `matchesTruckScope()`
+  lists all 6 settlement weeks, none missing, for the same row shape the
+  Weekly Net Trend list reads; (4) expenses are non-zero for a scoped
+  truck whose expenses are ENTIRELY null-truck fuel rows — the literal
+  "fuel specifically reads $0" case; (5) the engine's own miles/gross
+  totals match `calcMiles()`/a raw sum for the identical rows. Plus the
+  missing-source guard: real fuel/maintenance/toll/deduction rows sum
+  exactly (not silently zeroed); `computeKpis()` throws for each of the 7
+  array params passed as `undefined`; and throws for a query-result-
+  object-shaped value passed where a plain array was expected. Full
+  suite: 118 suites / 3,014 tests pass (+13 new); `tsc --noEmit` clean.
+  Ships via a normal `eas update`.
