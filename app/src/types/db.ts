@@ -667,6 +667,16 @@ export type Profile = {
   ai_weekly_review: string | null;
   ai_weekly_review_generated_at: string | null;
   ai_weekly_review_week_ending: string | null;
+  // AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix
+  // (owner decision, docs/PENDING_SQL.md §65): the cache above had NO
+  // record of which language the cached text was actually generated in —
+  // switching the app's language never invalidated a review generated
+  // under the OLD language, so it kept showing (silently wrong-language)
+  // forever. Set to the exact i18n locale code active at generation time;
+  // src/stats/weeklyReview.ts's shouldGenerateWeeklyReview() now treats a
+  // mismatch against the CURRENT locale as a reason to regenerate, same
+  // as a genuinely new settlement week.
+  ai_weekly_review_locale: string | null;
   // REFERRAL PROGRAM (owner decision 2026-08-24, PART 1, docs/PENDING_SQL.md
   // §50) — referral_code is generated once per user by the handle_new_user()
   // DB trigger (never client-generated for a real account); referred_by is

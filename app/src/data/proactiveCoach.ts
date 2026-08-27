@@ -17,7 +17,16 @@ import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
-import { shouldGenerateWeeklyReview, buildWeeklyReviewPrompt } from '@/src/stats/weeklyReview';
+import {
+  shouldGenerateWeeklyReview,
+  buildWeeklyReviewPrompt,
+  buildWeeklyReviewFallbackText,
+  isCachedReviewUsable,
+  looksLikeExpectedScript,
+  type WeeklyReviewInputs,
+} from '@/src/stats/weeklyReview';
+import { useFormatters } from '@/src/i18n/format';
+import { useTranslation } from 'react-i18next';
 import { calcGoalProgress, calcGoalStreak, suggestGoalAdjustment } from '@/src/stats/goalProgress';
 import { buildPeriodicCoachNudgeCandidates, type CoachNudgeCandidate, type CoachNudgeTopic } from '@/src/alerts/periodicCoachNudges';
 import { selectNudgesToShow, recordNudgesShown, ONE_MONTH_MS, type NudgeState } from '@/src/alerts/nudgeFrequency';
@@ -40,6 +49,9 @@ import { selectNudgesToShow, recordNudgesShown, ONE_MONTH_MS, type NudgeState } 
 // rather than doubling it.
 export function useProactiveCoach() {
   const { session } = useAuth();
+  const { t } = useTranslation();
+  const { money, number } = useFormatters();
+  const pct = (n: number) => number(n, { style: 'percent', maximumFractionDigits: 1 });
   const { activeTruck } = useActiveTruck();
   const settlementsQuery = useSettlements();
   const fuelQuery = useFuelPurchases();
@@ -291,30 +303,54 @@ export function useProactiveCoach() {
   }, [visibleCoachNudges, profileQuery.data]);
 
   // ---- E1: weekly settlement review (ai-advisor, cached) ----
+  // AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix
+  // (owner decision, docs/PENDING_SQL.md §65): the cache now also tracks
+  // WHICH LOCALE it was generated in (ai_weekly_review_locale) — a
+  // mismatch against the current locale forces regeneration (item 5)
+  // AND, critically, the possibly-wrong-language cached text is never
+  // shown while that regeneration is pending (see weeklyReviewUsable
+  // below) — item 4's fallback requirement.
   const [generating, setGenerating] = useState(false);
   const cachedReview = profileQuery.data?.ai_weekly_review ?? null;
   const cachedWeekEnding = profileQuery.data?.ai_weekly_review_week_ending ?? null;
   const cachedGeneratedAt = profileQuery.data?.ai_weekly_review_generated_at ?? null;
-  const needsWeeklyReview = shouldGenerateWeeklyReview(cachedWeekEnding, cachedGeneratedAt, latestSettlement?.week_ending ?? null, now);
+  const cachedReviewLocale = profileQuery.data?.ai_weekly_review_locale ?? null;
+  const needsWeeklyReview = shouldGenerateWeeklyReview(
+    cachedWeekEnding,
+    cachedGeneratedAt,
+    cachedReviewLocale,
+    latestSettlement?.week_ending ?? null,
+    i18n.language,
+    now
+  );
+  // A cached review only counts as trustworthy when (a) its own tagged
+  // locale matches the CURRENT one (isCachedReviewUsable — catches a
+  // stale cache left over from before a language switch) AND (b), for
+  // the two script-checkable locales, it actually contains real text in
+  // that script (looksLikeExpectedScript — catches a currently-deployed
+  // ai-advisor that ignored the requested locale entirely, e.g. while a
+  // redeploy is blocked). Anything else falls through to the
+  // deterministic, always-correct template below instead of ever
+  // rendering possibly-wrong-language server text.
+  const weeklyReviewUsable =
+    isCachedReviewUsable(cachedReview, cachedReviewLocale, i18n.language) && looksLikeExpectedScript(cachedReview ?? '', i18n.language);
 
-  const generatingKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!needsWeeklyReview || !latestSettlement || !latestWeekTrend || generating) return;
-    if (generatingKeyRef.current === latestSettlement.week_ending) return;
-    generatingKeyRef.current = latestSettlement.week_ending;
-
+  // Same real-number inputs buildWeeklyReviewPrompt() sends to the model,
+  // pulled out of the generation effect below so the ALWAYS-CORRECT
+  // client-side fallback text can be composed from them too, regardless
+  // of whether a fresh AI generation is running/pending/cached.
+  const weeklyReviewInputs = useMemo<WeeklyReviewInputs | null>(() => {
+    if (!latestSettlement || !latestWeekTrend) return null;
     const ytdYear = new Date(`${latestSettlement.week_ending}T00:00:00`).getFullYear();
     const ytdTrend = weeklyTrend.filter((w) => new Date(`${w.weekEnding}T00:00:00`).getFullYear() === ytdYear);
     const ytdProfitAfter = ytdTrend.reduce((sum, w) => sum + w.net, 0);
     const ytdProfitBefore = ytdProfitAfter - latestWeekTrend.net;
-
     const biggestChargebacks = (deductionsQuery.data ?? [])
       .filter((d) => d.source === 'settlement' && d.ded_date === latestSettlement.week_ending)
       .sort((a, b) => Number(b.amount ?? 0) - Number(a.amount ?? 0))
       .slice(0, 3)
       .map((d) => ({ description: d.description ?? d.category ?? 'Chargeback', amount: Number(d.amount ?? 0) }));
-
-    const prompt = buildWeeklyReviewPrompt({
+    return {
       weekEnding: latestSettlement.week_ending,
       gross: latestSettlement.gross,
       net: latestWeekTrend.net,
@@ -327,10 +363,32 @@ export function useProactiveCoach() {
       ytdProfitBefore,
       ytdProfitAfter,
       goalProgress: weeklyGoal != null && goalProgress ? { weeklyGoal, ...goalProgress } : null,
-    });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestSettlement, latestWeekTrend, weeklyTrend, deductionsQuery.data, latestRpm, trailingAvgRpm, latestDeadheadPct, latestFuelPct, weeklyGoal, goalProgress]);
+
+  const weeklyReviewFallback = useMemo(
+    () => (weeklyReviewInputs ? buildWeeklyReviewFallbackText(weeklyReviewInputs, t, money, pct) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weeklyReviewInputs, i18n.language]
+  );
+
+  const generatingKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!needsWeeklyReview || !latestSettlement || !weeklyReviewInputs || generating) return;
+    // Key includes the locale — a language switch must be able to
+    // trigger a fresh attempt even for the SAME settlement week this
+    // session already tried (and possibly already succeeded for, under
+    // the old locale).
+    const key = `${latestSettlement.week_ending}:${i18n.language}`;
+    if (generatingKeyRef.current === key) return;
+    generatingKeyRef.current = key;
+
+    const prompt = buildWeeklyReviewPrompt(weeklyReviewInputs);
+    const requestedLocale = i18n.language;
 
     setGenerating(true);
-    callAiAdvisor([{ role: 'user', content: prompt }], i18n.language)
+    callAiAdvisor([{ role: 'user', content: prompt }], requestedLocale)
       .then((result) => {
         // NUDGE/WEEKLY-REVIEW WRITES ARE FIRE-AND-FORGET (P1 fix, FULL
         // SYSTEM AUDIT) — `generatingKeyRef` was set BEFORE this call even
@@ -350,6 +408,12 @@ export function useProactiveCoach() {
             ai_weekly_review: result.data,
             ai_weekly_review_generated_at: new Date().toISOString(),
             ai_weekly_review_week_ending: latestSettlement.week_ending,
+            // Tag with the locale that was ACTUALLY REQUESTED (never
+            // re-read from i18n.language after the fact — the user could
+            // have switched languages again while this call was in
+            // flight, and the response was generated for the ORIGINAL
+            // request, not whatever the language happens to be now).
+            ai_weekly_review_locale: requestedLocale,
           },
           {
             onError: (err) => {
@@ -365,11 +429,16 @@ export function useProactiveCoach() {
       })
       .finally(() => setGenerating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsWeeklyReview, latestSettlement, latestWeekTrend]);
+  }, [needsWeeklyReview, latestSettlement, weeklyReviewInputs, i18n.language]);
 
   return {
     isLoading,
-    weeklyReview: cachedReview,
+    weeklyReview: weeklyReviewUsable ? cachedReview : null,
+    // Always available (once real settlement data exists) — a plain
+    // i18n-template summary of the exact same real numbers, guaranteed
+    // correctly localized regardless of ai-advisor's own deploy/locale
+    // state. The UI shows this whenever `weeklyReview` above is null.
+    weeklyReviewFallback,
     weeklyReviewGenerating: generating,
     periodicNudge,
     weeklyGoal,

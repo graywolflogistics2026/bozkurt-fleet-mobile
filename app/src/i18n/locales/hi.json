@@ -1851,6 +1851,17 @@
     "homeOpenFull": "पूर्ण AI कोच खोलें →",
     "weeklyReviewTitle": "आपकी साप्ताहिक समीक्षा",
     "weeklyReviewGenerating": "आपकी साप्ताहिक समीक्षा तैयार की जा रही है...",
+    "weeklyReviewFallback": {
+      "intro": "{{date}} को समाप्त सप्ताह: {{gross}} राजस्व, {{net}} नेट।",
+      "rpm": "प्रति मील दर: {{rpm}}/मील।",
+      "rpmVsAvg": "प्रति मील दर: {{rpm}}/मील (आपका हालिया औसत: {{avg}}/मील)।",
+      "deadhead": "Deadhead: मील का {{pct}}।",
+      "fuel": "ईंधन: राजस्व का {{pct}}।",
+      "perDiem": "इस सप्ताह per diem दिन: {{count}}।",
+      "ytd": "वर्ष की शुरुआत से अब तक शुद्ध लाभ: {{amount}}।",
+      "goalMet": "आपने {{goal}} का अपना साप्ताहिक लक्ष्य पूरा किया।",
+      "goalShort": "आप अपने {{goal}} साप्ताहिक लक्ष्य से {{amount}} कम रहे।"
+    },
     "recommendations": {
       "headerTitle": "आपके आंकड़ों के आधार पर, आप अपना मासिक लाभ ~{{amount}} तक बढ़ा सकते हैं",
       "headerTitleZero": "यहां आपकी शीर्ष सिफारिशें हैं",

@@ -1851,6 +1851,17 @@
     "homeOpenFull": "افتح AI Coach الكامل ←",
     "weeklyReviewTitle": "مراجعتك الأسبوعية",
     "weeklyReviewGenerating": "جارٍ إعداد مراجعتك الأسبوعية...",
+    "weeklyReviewFallback": {
+      "intro": "الأسبوع المنتهي في {{date}}: إيرادات {{gross}}، صافي {{net}}.",
+      "rpm": "السعر لكل ميل: {{rpm}}/ميل.",
+      "rpmVsAvg": "السعر لكل ميل: {{rpm}}/ميل (متوسطك الأخير: {{avg}}/ميل).",
+      "deadhead": "Deadhead: {{pct}} من الأميال.",
+      "fuel": "الوقود: {{pct}} من الإيرادات.",
+      "perDiem": "أيام per diem هذا الأسبوع: {{count}}.",
+      "ytd": "صافي الربح منذ بداية العام: {{amount}}.",
+      "goalMet": "لقد حققت هدفك الأسبوعي البالغ {{goal}}.",
+      "goalShort": "كنت أقل من هدفك الأسبوعي البالغ {{goal}} بمقدار {{amount}}."
+    },
     "recommendations": {
       "headerTitle": "بناءً على أرقامك، يمكنك زيادة ربحك الشهري بحوالي {{amount}}",
       "headerTitleZero": "إليك أهم توصياتك",

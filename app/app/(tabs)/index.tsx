@@ -440,7 +440,16 @@ function AiCoachSection({
             NEXT PASS item E1) — composed from real settlement numbers,
             cached at most once per week per user (src/data/
             proactiveCoach.ts). Shown ahead of the recommendation list since
-            it's the more time-relevant, "just happened" content. */}
+            it's the more time-relevant, "just happened" content.
+            AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE fix (owner decision,
+            item 4): `proactive.weeklyReview` is ALREADY null whenever the
+            cached AI text isn't verified to match the current locale (see
+            useProactiveCoach()'s own weeklyReviewUsable check) — this
+            screen's only job is to never leave that gap silently empty:
+            fall back to `weeklyReviewFallback`, the deterministic,
+            always-correctly-localized template built from the exact same
+            real numbers, while a fresh AI generation is pending (or
+            genuinely unavailable). */}
         {proactive.weeklyReviewGenerating && (
           <MutedText style={{ marginBottom: spacing.sm }}>{t('ceoMode.weeklyReviewGenerating')}</MutedText>
         )}
@@ -448,6 +457,12 @@ function AiCoachSection({
           <View style={{ marginBottom: spacing.md }}>
             <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('ceoMode.weeklyReviewTitle')}</Text>
             <Text style={{ color: colors.text, lineHeight: 20 }}>{proactive.weeklyReview}</Text>
+          </View>
+        )}
+        {!proactive.weeklyReview && !!proactive.weeklyReviewFallback && (
+          <View style={{ marginBottom: spacing.md }}>
+            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('ceoMode.weeklyReviewTitle')}</Text>
+            <Text style={{ color: colors.text, lineHeight: 20 }}>{proactive.weeklyReviewFallback}</Text>
           </View>
         )}
 

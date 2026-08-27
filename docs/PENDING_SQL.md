@@ -3667,6 +3667,41 @@ of either screen is automatically correct with zero extra code.
 
 ---
 
+## 65. profiles.ai_weekly_review_locale (AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix, owner decision) — NOT YET APPLIED
+
+**The finding**: `profiles.ai_weekly_review` (§49) caches the AI-generated
+weekly settlement review to cap `ai-advisor` usage at one call per user
+per week — but the cache had no record of WHICH LANGUAGE the cached text
+was actually generated in. `src/stats/weeklyReview.ts`'s
+`shouldGenerateWeeklyReview()` only ever compared the cached
+`week_ending` and a 7-day cooldown — switching the app's language (even
+via the brand-new first-run language screen) never invalidated a review
+that was generated under the OLD language, so a Turkish-speaking user
+who had already gotten one English-language review before ever picking
+Turkish would keep seeing that same English text, silently, forever
+(the exact "not just Turkish — the text never goes through translation
+at all" bug report this section fixes). A single new nullable column
+closes the gap — no data migration needed, a null value is treated the
+same as "never generated," which is already `shouldGenerateWeeklyReview()`'s
+correct default.
+
+```sql
+alter table profiles add column if not exists ai_weekly_review_locale text;
+```
+
+That's the entire schema change — one idempotent `add column if not
+exists`, safe to re-run. See CLAUDE.md's own dated entry for this pass
+for the full client-side fix this column enables (locale-mismatch now
+forces regeneration bypassing the 7-day cooldown; a mismatched/unverified
+cached review is never shown — a deterministic, always-correctly-localized
+template-based summary is shown instead while a fresh AI review is
+pending).
+
+- [ ] 65 run (profiles gains ai_weekly_review_locale text, nullable,
+      default null)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

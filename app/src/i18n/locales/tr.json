@@ -1851,6 +1851,17 @@
     "homeOpenFull": "Tam AI Coach'u aç →",
     "weeklyReviewTitle": "Haftalık Değerlendirmeniz",
     "weeklyReviewGenerating": "Haftalık değerlendirmeniz hazırlanıyor...",
+    "weeklyReviewFallback": {
+      "intro": "{{date}} ile biten hafta: {{gross}} gelir, {{net}} net.",
+      "rpm": "Mil başına ücret: {{rpm}}/mil.",
+      "rpmVsAvg": "Mil başına ücret: {{rpm}}/mil (son ortalamanız: {{avg}}/mil).",
+      "deadhead": "Deadhead: millerin {{pct}}'i.",
+      "fuel": "Yakıt: gelirin {{pct}}'i.",
+      "perDiem": "Bu hafta per diem günleri: {{count}}.",
+      "ytd": "Yıl başından bugüne net kâr: {{amount}}.",
+      "goalMet": "{{goal}} haftalık hedefinizi karşıladınız.",
+      "goalShort": "{{goal}} haftalık hedefinizin {{amount}} altında kaldınız."
+    },
     "recommendations": {
       "headerTitle": "Rakamlarınıza göre aylık kârınızı ~{{amount}} artırabilirsiniz",
       "headerTitleZero": "İşte en önemli önerilerim",

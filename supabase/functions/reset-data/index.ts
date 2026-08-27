@@ -124,6 +124,10 @@ const PROFILE_DATA_RESET = {
   ai_weekly_review: null,
   ai_weekly_review_generated_at: null,
   ai_weekly_review_week_ending: null,
+  // AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix
+  // (owner decision, docs/PENDING_SQL.md §65) — new sibling of the three
+  // ai_weekly_review_* fields directly above; same CLEARED bucket.
+  ai_weekly_review_locale: null,
 };
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

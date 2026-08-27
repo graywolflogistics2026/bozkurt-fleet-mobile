@@ -1851,6 +1851,17 @@
     "homeOpenFull": "Abrir AI Coach completo →",
     "weeklyReviewTitle": "Tu Revisión Semanal",
     "weeklyReviewGenerating": "Componiendo tu revisión semanal...",
+    "weeklyReviewFallback": {
+      "intro": "Semana que termina el {{date}}: {{gross}} de ingresos, {{net}} neto.",
+      "rpm": "Tarifa por milla: {{rpm}}/mi.",
+      "rpmVsAvg": "Tarifa por milla: {{rpm}}/mi (tu promedio reciente: {{avg}}/mi).",
+      "deadhead": "Deadhead: {{pct}} de las millas.",
+      "fuel": "Combustible: {{pct}} de los ingresos.",
+      "perDiem": "Días de per diem esta semana: {{count}}.",
+      "ytd": "Beneficio neto en lo que va del año: {{amount}}.",
+      "goalMet": "Cumpliste tu meta semanal de {{goal}}.",
+      "goalShort": "Te faltaron {{amount}} para tu meta semanal de {{goal}}."
+    },
     "recommendations": {
       "headerTitle": "Según tus números, puedes aumentar tu ganancia mensual en ~{{amount}}",
       "headerTitleZero": "Aquí están tus principales recomendaciones",

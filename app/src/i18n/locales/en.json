@@ -1893,6 +1893,17 @@
     "homeOpenFull": "Open full AI Coach →",
     "weeklyReviewTitle": "Your Weekly Review",
     "weeklyReviewGenerating": "Composing your weekly review...",
+    "weeklyReviewFallback": {
+      "intro": "Week ending {{date}}: {{gross}} revenue, {{net}} net.",
+      "rpm": "Rate per mile: {{rpm}}/mi.",
+      "rpmVsAvg": "Rate per mile: {{rpm}}/mi (your recent average: {{avg}}/mi).",
+      "deadhead": "Deadhead: {{pct}} of miles.",
+      "fuel": "Fuel: {{pct}} of revenue.",
+      "perDiem": "Per diem days this week: {{count}}.",
+      "ytd": "Year-to-date net profit: {{amount}}.",
+      "goalMet": "You met your weekly goal of {{goal}}.",
+      "goalShort": "You were {{amount}} short of your {{goal}} weekly goal."
+    },
     "recommendations": {
       "headerTitle": "Based on your numbers, you can increase your monthly profit by ~{{amount}}",
       "headerTitleZero": "Here are your top recommendations",
