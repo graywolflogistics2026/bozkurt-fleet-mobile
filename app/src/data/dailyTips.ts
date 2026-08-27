@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useSettlements } from '@/src/data/settlements';
@@ -21,13 +21,29 @@ import { useTaxConfig } from '@/src/data/taxConfig';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
-import { buildDailyTipCandidates, selectDailyTip, selectDailyTipVariant, recordDailyTipShown, dismissDailyTip, type DailyTipTopic } from '@/src/alerts/dailyTips';
+import {
+  buildDailyTipCandidates,
+  selectDailyTip,
+  selectDailyTipVariant,
+  recordDailyTipShown,
+  dismissDailyTip,
+  findTodaysAnchorTip,
+  type DailyTipTopic,
+  type DailyTipCandidate,
+} from '@/src/alerts/dailyTips';
 import { findUnassignedRows } from '@/src/import/truckAssignmentRepair';
 import { calcCurrentYearDepreciation } from '@/src/tax/depreciation';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { calcMiles } from '@/src/stats/miles';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import type { NudgeState } from '@/src/alerts/nudgeFrequency';
+
+// A stable, shared empty-object reference — `profileQuery.data?.nudge_state
+// ?? {}` would otherwise allocate a NEW `{}` on every render whenever
+// nudge_state is genuinely empty, which would make every memo/effect that
+// depends on it (the sticky-anchor reconstruction below) think the state
+// had "changed" on every single render.
+const EMPTY_NUDGE_STATE: NudgeState<DailyTipTopic> = {};
 
 // DAILY TIPS — DATA WIRING (owner decision, Part 2 of the AI Coach daily-
 // tips request). Composes real account data into src/alerts/dailyTips.ts's
@@ -63,7 +79,39 @@ export function useDailyTip() {
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
 
-  const isLoading = settlementsQuery.isLoading || deductionsQuery.isLoading || profileQuery.isLoading;
+  // BUG FIX — "flash and vanish" (owner decision): the daily tip used to
+  // be selected the instant `settlements`/`deductions`/`profile` had
+  // loaded, while every OTHER query this hook reads (documents, equipment,
+  // trucks, drivers, loans, compliance, tax config/estimate, capital
+  // account, ...) could still be mid-fetch — their `?? []`/`?? 0`/`?? null`
+  // fallbacks are legitimate DEFAULT VALUES for a detector, not "no data
+  // yet" placeholders, so a detector could easily fire (or fail to fire)
+  // against those defaults, then flip the instant the real data arrived a
+  // moment later. `queriesLoading` now waits for every one of them before
+  // ever computing a candidate at all — see the selection effect below for
+  // the second half of the fix (never re-deriving an ALREADY-shown tip
+  // from a live recompute).
+  const queriesLoading =
+    settlementsQuery.isLoading ||
+    deductionsQuery.isLoading ||
+    fuelQuery.isLoading ||
+    maintenanceQuery.isLoading ||
+    tollsQuery.isLoading ||
+    loadsQuery.isLoading ||
+    reimbursementsQuery.isLoading ||
+    miscIncomeQuery.isLoading ||
+    documentsQuery.isLoading ||
+    equipmentQuery.isLoading ||
+    trucksQuery.isLoading ||
+    driversQuery.isLoading ||
+    driverPaymentsQuery.isLoading ||
+    loansQuery.isLoading ||
+    complianceQuery.isLoading ||
+    categoryLearningRulesQuery.isLoading ||
+    taxConfigQuery.isLoading ||
+    taxEstimateQuery.isLoading ||
+    capitalAccountQuery.isLoading ||
+    profileQuery.isLoading;
 
   const now = new Date();
   const accountCreatedAt = session?.user?.created_at ?? null;
@@ -189,42 +237,115 @@ export function useDailyTip() {
 
   const candidates = useMemo(() => buildDailyTipCandidates(candidateInput), [candidateInput]);
 
-  const tipState: NudgeState<DailyTipTopic> = (profileQuery.data?.nudge_state as NudgeState<DailyTipTopic>) ?? {};
+  const savedState: NudgeState<DailyTipTopic> = (profileQuery.data?.nudge_state as NudgeState<DailyTipTopic>) ?? EMPTY_NUDGE_STATE;
 
-  const selected = useMemo(() => selectDailyTip(candidates, tipState, accountCreatedAt, now), [candidates, tipState, accountCreatedAt]);
-  const variant = selected ? selectDailyTipVariant(selected.topic, tipState) : 0;
+  // OPTIMISTIC OVERLAY — the full nudge_state as this session currently
+  // understands it, once it's diverged from the server's own value (a
+  // "show me another"/dismiss action was taken). Falls back to
+  // `savedState` until that first local write happens, so a fresh mount
+  // always starts from the real, server-confirmed value. Written directly
+  // (never a React functional updater) precisely so two synchronous calls
+  // in the same handler (e.g. dismiss(), which both silences the current
+  // topic AND immediately records a replacement) can chain off of each
+  // other's already-computed result instead of racing to read stale state
+  // — see applyLocal()/recordAndDisplay() below.
+  const [overlay, setOverlay] = useState<NudgeState<DailyTipTopic> | null>(null);
+  const tipState = overlay ?? savedState;
 
-  const recordedKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!selected || !profileQuery.data) return;
-    const key = `${selected.topic}:${new Date().toISOString().slice(0, 10)}`;
-    if (recordedKeyRef.current === key) return;
-    recordedKeyRef.current = key;
-    const nextState = recordDailyTipShown(tipState, selected.topic, variant, new Date());
+  const [displayedTopic, setDisplayedTopic] = useState<DailyTipTopic | null>(null);
+  const [exhausted, setExhausted] = useState(false);
+
+  const ready = !queriesLoading;
+
+  // STICKY ANCHOR (the core of item 1's fix) — reconstructed directly from
+  // persisted state, never from a live re-run of selectDailyTip(). See
+  // findTodaysAnchorTip()'s own header comment in dailyTips.ts for exactly
+  // why re-running selection on every recompute was what caused the
+  // flash.
+  const anchorTopic = useMemo(() => (ready ? findTodaysAnchorTip(tipState, now) : null), [ready, tipState]);
+
+  function applyLocal(next: NudgeState<DailyTipTopic>) {
+    setOverlay(next);
     updateProfile.mutate(
-      { nudge_state: nextState },
-      {
-        onError: (err) => {
-          console.error('[useDailyTip] failed to record tip shown — rotation may repeat early:', err);
-          recordedKeyRef.current = null;
-        },
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, variant, profileQuery.data]);
-
-  function dismiss() {
-    if (!selected) return;
-    updateProfile.mutate(
-      { nudge_state: dismissDailyTip(tipState, selected.topic, new Date()) },
-      { onError: (err) => console.error('[useDailyTip] failed to dismiss tip:', err) }
+      { nudge_state: next },
+      { onError: (err) => console.error('[useDailyTip] failed to persist tip state — rotation/no-repeat may drift:', err) }
     );
   }
 
+  function recordAndDisplay(candidate: DailyTipCandidate, base: NudgeState<DailyTipTopic>) {
+    const variant = selectDailyTipVariant(candidate.topic, base);
+    applyLocal(recordDailyTipShown(base, candidate.topic, variant, new Date()));
+    setDisplayedTopic(candidate.topic);
+    setExhausted(false);
+  }
+
+  // Picks today's FIRST tip exactly once — as soon as everything's loaded
+  // and no anchor exists yet for today. Re-derives `anchorTopic` (via its
+  // own dependency) the moment this records one, so it naturally settles
+  // and doesn't refire once a real anchor exists; `candidates` stays a
+  // dependency so a still-empty day (nothing eligible yet, e.g. the
+  // signup grace period) keeps retrying as real data arrives later in the
+  // session, rather than giving up forever after one empty attempt.
+  useEffect(() => {
+    if (!ready) return;
+    if (anchorTopic) {
+      setDisplayedTopic(anchorTopic);
+      setExhausted(false);
+      return;
+    }
+    const fresh = selectDailyTip(candidates, tipState, accountCreatedAt, now);
+    if (fresh) recordAndDisplay(fresh, tipState);
+    else setDisplayedTopic(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, anchorTopic, candidates]);
+
+  const displayedCandidate = useMemo(
+    () => (displayedTopic ? candidates.find((c) => c.topic === displayedTopic) ?? null : null),
+    [displayedTopic, candidates]
+  );
+  const variant = displayedTopic ? tipState[displayedTopic]?.variantIndex ?? 0 : 0;
+
+  // ITEM 2 — "SHOW ME ANOTHER": advances to the next eligible topic
+  // immediately, recording it with THIS SAME `recordDailyTipShown()`
+  // mechanism (so the no-repeat/cooldown rule applies identically whether
+  // a topic was shown as today's automatic pick or via this manual
+  // advance) — never a separate budget or counter, so tomorrow's rotation
+  // is affected only by the same 30-day-per-topic rule every other pick
+  // already respects, never by how many were manually browsed today.
+  function showAnother() {
+    if (!ready) return;
+    const next = selectDailyTip(candidates, tipState, accountCreatedAt, now);
+    if (!next) {
+      setExhausted(true);
+      return;
+    }
+    recordAndDisplay(next, tipState);
+  }
+
+  // Dismissing silences the CURRENTLY DISPLAYED topic (permanently, same
+  // as every other nudge family's silence semantics) and — matching the
+  // pre-existing behavior this replaces — immediately offers a
+  // replacement if one is eligible, rather than just going blank for the
+  // rest of the day.
+  function dismiss() {
+    if (!displayedTopic) return;
+    const afterDismiss = dismissDailyTip(tipState, displayedTopic, new Date());
+    const next = selectDailyTip(candidates, afterDismiss, accountCreatedAt, now);
+    if (next) {
+      recordAndDisplay(next, afterDismiss);
+    } else {
+      applyLocal(afterDismiss);
+      setDisplayedTopic(null);
+      setExhausted(false);
+    }
+  }
+
   return {
-    isLoading,
-    tip: selected,
+    isLoading: queriesLoading,
+    tip: displayedCandidate,
     variant,
+    exhausted,
+    showAnother,
     dismiss,
   };
 }

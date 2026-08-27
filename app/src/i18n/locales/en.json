@@ -2234,6 +2234,8 @@
   "dailyTips": {
     "cardLabel": "Tip of the day",
     "actionButton": "Go",
+    "showAnother": "Show me another",
+    "exhausted": "You've read them all — new ones appear as your data grows.",
     "dismiss": "Dismiss",
     "tipTransactions": {
       "v0": "Transactions shows every row from every import — settlements, fuel, deductions, tolls — in one searchable list, so you never have to remember which screen a charge landed on.",

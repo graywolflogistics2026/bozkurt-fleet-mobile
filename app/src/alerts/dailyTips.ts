@@ -26,6 +26,24 @@
 // candidate was shown longest ago (or never shown) — a natural round-
 // robin that, combined with the explicit 30-day cooldown, guarantees no
 // repeat within a month whenever 2+ topics are eligible.
+//
+// STICKY ANCHOR + "SHOW ME ANOTHER" (owner decision, bug fix + feature):
+// `selectDailyTip()` is only ever called to pick a BRAND NEW topic —
+// once one has been recorded as shown today, `findTodaysAnchorTip()`
+// (below) reconstructs it directly from persisted state on every render,
+// never by recomputing selection live (see that function's own header
+// comment for the exact "flash and vanish" bug this closes). "Show me
+// another" (src/data/dailyTips.ts's `useDailyTip()`) just calls
+// `selectDailyTip()` again on top of the now-updated state — the
+// just-shown topic is automatically excluded (its own `lastShownAt` is
+// now "today," which the existing 30-day cooldown already treats as
+// ineligible), so advancing can never repeat a topic and — since that
+// same cooldown persists past today — never lets tomorrow's normal
+// rotation offer it again early either. The one thing that's NOT
+// persisted is which topic is currently DISPLAYED after several
+// advances — that's session-only UI state, so a fresh app open always
+// shows the original anchor again, never wherever the user last browsed
+// to.
 import type { NudgeState, NudgeStateEntry } from '@/src/alerts/nudgeFrequency';
 
 export type DailyTipCategory = 'setup' | 'money' | 'discovery' | 'knowledge';
@@ -617,6 +635,44 @@ export function selectDailyTip(
     return at ? new Date(at).getTime() : -Infinity;
   }
   return pool.reduce((oldest, c) => (lastShownMs(c.topic) < lastShownMs(oldest.topic) ? c : oldest), pool[0]);
+}
+
+// STICKY ANCHOR (owner decision, bug fix — "flash and vanish"): a topic's
+// own `isEligible()` check treats "shown within the last 30 days" as
+// ineligible — which includes TODAY itself, the instant it's recorded.
+// The original hook re-ran `selectDailyTip()` on every recompute
+// (including once real data replaced still-loading default/zero values),
+// which meant the moment today's pick got persisted, the VERY NEXT
+// recompute excluded it (already "shown," per that same 30-day rule) and
+// silently swapped in a different topic — or nothing, if none other was
+// eligible. That's the flash: the card would render one tip for a
+// frame, then a re-render (data settling in, or the just-completed
+// record itself) would compute a DIFFERENT `selected` value.
+//
+// The fix: never re-derive "today's tip" from a live recomputation of
+// `selectDailyTip()`. Once a topic has been recorded as shown TODAY (and
+// not since dismissed), that recorded fact is authoritative — reconstruct
+// it directly from persisted state, which is stable no matter how many
+// times the surrounding data refetches or the component re-renders.
+// `selectDailyTip()` itself is still exactly right for picking each NEW
+// entry (the first one of the day, or one picked by "show me another") —
+// this function is what makes an ALREADY-picked entry stick.
+//
+// Picks the EARLIEST-shown-today, non-silenced entry — "show me another"
+// records each additional tip with a LATER same-day timestamp than the
+// original, so a fresh render/reload always reconstructs the ORIGINAL
+// daily pick, never whatever the user last manually browsed to (that
+// browsing is session-only UI state, intentionally not itself sticky).
+export function findTodaysAnchorTip(state: NudgeState<DailyTipTopic>, now: Date = new Date()): DailyTipTopic | null {
+  const today = now.toISOString().slice(0, 10);
+  let best: { topic: DailyTipTopic; at: number } | null = null;
+  for (const [topic, entry] of Object.entries(state) as [DailyTipTopic, NudgeStateEntry | undefined][]) {
+    if (!entry?.lastShownAt || entry.silencedAt) continue;
+    if (entry.lastShownAt.slice(0, 10) !== today) continue;
+    const at = new Date(entry.lastShownAt).getTime();
+    if (!best || at < best.at) best = { topic, at };
+  }
+  return best?.topic ?? null;
 }
 
 // Cycles 0 -> 1 -> 2 -> 0 -> ... in order — every phrasing is used once

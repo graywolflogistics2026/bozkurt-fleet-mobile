@@ -2234,6 +2234,8 @@
   "dailyTips": {
     "cardLabel": "Günün ipucu",
     "actionButton": "Git",
+    "showAnother": "Bana başka bir tane göster",
+    "exhausted": "Hepsini okudunuz — verileriniz büyüdükçe yeni ipuçları görünecek.",
     "dismiss": "Kapat",
     "tipTransactions": {
       "v0": "İşlemler, her içe aktarımdan gelen her satırı — settlement, yakıt, kesintiler, geçiş ücretleri — tek bir aranabilir listede gösterir; bir ücretin hangi ekranda kaldığını hatırlamanıza gerek kalmaz.",

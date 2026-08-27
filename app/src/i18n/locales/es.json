@@ -2234,6 +2234,8 @@
   "dailyTips": {
     "cardLabel": "Consejo del día",
     "actionButton": "Ir",
+    "showAnother": "Mostrar otro",
+    "exhausted": "Ya los has leído todos — aparecerán otros nuevos a medida que crezcan tus datos.",
     "dismiss": "Descartar",
     "tipTransactions": {
       "v0": "Transacciones muestra cada movimiento de cada importación — settlements, combustible, deducciones, peajes — en una sola lista con búsqueda, para que nunca tengas que recordar en qué pantalla quedó un cargo.",

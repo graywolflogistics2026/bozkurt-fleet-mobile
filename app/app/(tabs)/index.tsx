@@ -541,10 +541,24 @@ function AiCoachSection({
               <View style={{ flex: 1 }}>
                 <MutedText style={{ fontSize: typography.size.xs, marginBottom: 2 }}>{t('dailyTips.cardLabel')}</MutedText>
                 <Text style={{ color: colors.text }}>{dailyTipText(dailyTip.tip, dailyTip.variant, t, moneyRounded, pct)}</Text>
-                <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs }}>
+                <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs, flexWrap: 'wrap', alignItems: 'center' }}>
                   <Pressable onPress={() => router.push(DAILY_TIP_ROUTE[dailyTip.tip!.topic] as Href)} hitSlop={8}>
                     <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('dailyTips.actionButton')}</Text>
                   </Pressable>
+                  {/* "SHOW ME ANOTHER" (item 2) — a subtle, optional escape
+                      hatch for a curious user: advances to the next
+                      eligible tip immediately, as many times as they want,
+                      without touching tomorrow's automatic pick (see
+                      useDailyTip()'s own header comment). Once nothing
+                      eligible remains, the link itself is replaced by a
+                      warm, one-time explanation rather than looping. */}
+                  {!dailyTip.exhausted ? (
+                    <Pressable onPress={dailyTip.showAnother} hitSlop={8}>
+                      <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.showAnother')}</Text>
+                    </Pressable>
+                  ) : (
+                    <MutedText style={{ fontSize: typography.size.sm, fontStyle: 'italic' }}>{t('dailyTips.exhausted')}</MutedText>
+                  )}
                   <Pressable onPress={dailyTip.dismiss} hitSlop={8}>
                     <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.dismiss')}</Text>
                   </Pressable>
