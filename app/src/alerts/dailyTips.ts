@@ -576,7 +576,6 @@ export const DAILY_TIP_SCREEN_COVERAGE: Record<string, DailyTipCoverageEntry> = 
 // ---------------------------------------------------------------------------
 
 export const DAILY_TIP_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // "no topic repeats within a month"
-const SIGNUP_GRACE_MS = 24 * 60 * 60 * 1000; // never on day one
 
 function isEligible(topic: DailyTipTopic, state: NudgeState<DailyTipTopic>, now: Date): boolean {
   const entry = state[topic];
@@ -586,6 +585,32 @@ function isEligible(topic: DailyTipTopic, state: NudgeState<DailyTipTopic>, now:
     if (now.getTime() - lastShownMs < DAILY_TIP_COOLDOWN_MS) return false;
   }
   return true;
+}
+
+// DIAGNOSTICS (owner decision, device report: "daily tip never appears...
+// this can never be invisible again") — one exhaustive, pure pass over
+// EVERY topic in the system (not just the ones that happened to become
+// candidates), reporting exactly why each one is or isn't currently
+// eligible. Used by useDailyTip()'s own dev-only console logging and by
+// Settings' dev-only diagnostic panel — both read from this SAME function
+// so they can never disagree about the count/reasons shown.
+export type DailyTipDiagnosticReason = 'precondition_not_met' | 'silenced' | 'cooldown' | 'eligible';
+export type DailyTipDiagnosticEntry = { topic: DailyTipTopic; reason: DailyTipDiagnosticReason };
+
+export function buildDailyTipDiagnostics(
+  candidates: DailyTipCandidate[],
+  state: NudgeState<DailyTipTopic>,
+  now: Date = new Date()
+): DailyTipDiagnosticEntry[] {
+  const candidateTopics = new Set(candidates.map((c) => c.topic));
+  const allTopics = Object.keys(DAILY_TIP_CATEGORY) as DailyTipTopic[];
+  return allTopics.map((topic) => {
+    if (!candidateTopics.has(topic)) return { topic, reason: 'precondition_not_met' };
+    const entry = state[topic];
+    if (entry?.silencedAt) return { topic, reason: 'silenced' };
+    if (!isEligible(topic, state, now)) return { topic, reason: 'cooldown' };
+    return { topic, reason: 'eligible' };
+  });
 }
 
 // The categories of whichever topics were shown on the 2 most-recent
@@ -608,20 +633,36 @@ function recentCategories(state: NudgeState<DailyTipTopic>): DailyTipCategory[] 
   return cats;
 }
 
+// BUG FIX (owner decision, device report: "daily tip never appears,"
+// most important for a brand-new/EMPTY account): this used to unconditionally
+// return null for the entire first 24 hours after signup ("never on day
+// one"), regardless of how many real, evergreen getting-started candidates
+// existed (tipMaintenance/tipAssetRegister/tipDocumentsRenewals/tipDrivers/
+// tipTruckHealth all fire immediately for a truly empty account — see each
+// one's own detector above, none of them require any account age at all).
+// Since onboarding (ToS + tutorial + the setup wizard) already gates entry
+// to Home behind several screens, there is no literal "mid-signup-flow"
+// instant left to protect against by the time a user ever SEES this card —
+// "day one" for this app already means "the user's first real session,"
+// which is exactly when a getting-started tip is most valuable, not least.
+// This is a deliberate reversal of the original "never on day one" design
+// decision, per an explicit, later, overriding owner instruction — an
+// empty/new account must see a tip on first launch, not 24 hours later.
+// `accountCreatedAt` is kept as a parameter (unused in the body) rather
+// than removed, so a future caller that still wants to pass it doesn't
+// need a signature change, and so the historical intent stays visible in
+// the type even though nothing gates on it anymore.
+
 // Picks the ONE tip to show today, or null if nothing is eligible right
 // now (e.g. every real, computable candidate's own precondition was
 // satisfied already, or everything is still on cooldown/silenced).
 export function selectDailyTip(
   candidates: DailyTipCandidate[],
   state: NudgeState<DailyTipTopic>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   accountCreatedAt: string | null,
   now: Date = new Date()
 ): DailyTipCandidate | null {
-  if (accountCreatedAt) {
-    const createdMs = new Date(accountCreatedAt).getTime();
-    if (!Number.isNaN(createdMs) && now.getTime() - createdMs < SIGNUP_GRACE_MS) return null;
-  }
-
   const eligible = candidates.filter((c) => isEligible(c.topic, state, now));
   if (eligible.length === 0) return null;
 

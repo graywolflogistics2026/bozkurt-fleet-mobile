@@ -704,3 +704,45 @@ where e.kind = 'action'
 group by e.name, account_age
 order by e.name, account_age;
 ```
+
+## Business Balance Ledger Reconciliation (owner decision, device report: business_balance grew by an unexplained amount)
+
+`profiles.business_balance` starts at 0 and is ONLY ever moved by two atomic
+mechanisms: a settlement's own `business_balance_credit` (applied on save/
+re-import, reversed automatically on delete via the `AFTER DELETE` trigger,
+docs/PENDING_SQL.md §70) and a manual `capital_transactions` row's own
+`business_balance_applied` (§60 — a LINKED contribution's own value is
+always 0). That means the CURRENT balance should always exactly equal the
+sum of every currently-existing settlement's own credit plus every
+currently-existing manual transaction's own applied delta — this query
+reconstructs that expected total and flags any account where it disagrees
+with what's actually stored (the same reconciliation the app itself now
+shows on Capital Account's own "🔍 Verify Balance" action, so the two can
+never disagree about the arithmetic):
+
+```sql
+select
+  u.email,
+  p.business_balance as stored_balance,
+  coalesce((select sum(s.business_balance_credit) from settlements s where s.user_id = u.id), 0) as settlements_total,
+  coalesce((select sum(c.business_balance_applied) from capital_transactions c where c.user_id = u.id), 0) as manual_transactions_total,
+  coalesce((select sum(s.business_balance_credit) from settlements s where s.user_id = u.id), 0)
+    + coalesce((select sum(c.business_balance_applied) from capital_transactions c where c.user_id = u.id), 0) as expected_balance,
+  p.business_balance -
+    (coalesce((select sum(s.business_balance_credit) from settlements s where s.user_id = u.id), 0)
+     + coalesce((select sum(c.business_balance_applied) from capital_transactions c where c.user_id = u.id), 0)) as drift
+from auth.users u
+join profiles p on p.user_id = u.id
+where p.plan is distinct from 'owner' -- remove this line to include your own testing
+having abs(p.business_balance -
+    (coalesce((select sum(s.business_balance_credit) from settlements s where s.user_id = u.id), 0)
+     + coalesce((select sum(c.business_balance_applied) from capital_transactions c where c.user_id = u.id), 0))) > 0.01
+group by u.email, p.business_balance, u.id
+order by abs(drift) desc;
+```
+
+An empty result means every account's tracked balance exactly matches its
+own ledger — a nonzero `drift` for a specific account is the real number to
+chase (double-tapped Reconcile/contribution, a retried import that somehow
+double-applied, etc.) — narrow to one account with `and u.email =
+'someone@example.com'`.

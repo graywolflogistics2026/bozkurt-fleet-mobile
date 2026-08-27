@@ -28,8 +28,10 @@ import {
   recordDailyTipShown,
   dismissDailyTip,
   findTodaysAnchorTip,
+  buildDailyTipDiagnostics,
   type DailyTipTopic,
   type DailyTipCandidate,
+  type DailyTipDiagnosticEntry,
 } from '@/src/alerts/dailyTips';
 import { findUnassignedRows } from '@/src/import/truckAssignmentRepair';
 import { calcCurrentYearDepreciation } from '@/src/tax/depreciation';
@@ -283,9 +285,10 @@ export function useDailyTip() {
   // and no anchor exists yet for today. Re-derives `anchorTopic` (via its
   // own dependency) the moment this records one, so it naturally settles
   // and doesn't refire once a real anchor exists; `candidates` stays a
-  // dependency so a still-empty day (nothing eligible yet, e.g. the
-  // signup grace period) keeps retrying as real data arrives later in the
-  // session, rather than giving up forever after one empty attempt.
+  // dependency so a still-empty day (nothing eligible yet — every
+  // evergreen candidate already silenced/on cooldown, for instance) keeps
+  // retrying as real data arrives later in the session, rather than
+  // giving up forever after one empty attempt.
   useEffect(() => {
     if (!ready) return;
     if (anchorTopic) {
@@ -304,6 +307,29 @@ export function useDailyTip() {
     [displayedTopic, candidates]
   );
   const variant = displayedTopic ? tipState[displayedTopic]?.variantIndex ?? 0 : 0;
+
+  // DIAGNOSTICS (owner decision, device report: "this can never be
+  // invisible again") — one shared computation, read by both this hook's
+  // own dev-only console log below AND Settings' dev-only diagnostic
+  // panel, so the two can never disagree about the count/topic/reason
+  // shown. `__DEV__` is React Native's own global, true only in a
+  // development build — never logs/computes in production.
+  const diagnostics = useMemo(() => buildDailyTipDiagnostics(candidates, tipState, now), [candidates, tipState]);
+  const eligibleCount = diagnostics.filter((d) => d.reason === 'eligible').length;
+
+  useEffect(() => {
+    if (!__DEV__ || !ready) return;
+    // eslint-disable-next-line no-console
+    console.log(
+      '[useDailyTip]',
+      `${eligibleCount} eligible of ${diagnostics.length} topics, showing "${displayedTopic ?? 'none'}".`,
+      diagnostics.reduce((acc: Record<string, DailyTipDiagnosticEntry[]>, d) => {
+        (acc[d.reason] ??= []).push(d);
+        return acc;
+      }, {})
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, diagnostics, displayedTopic]);
 
   // ITEM 2 — "SHOW ME ANOTHER": advances to the next eligible topic
   // immediately, recording it with THIS SAME `recordDailyTipShown()`
@@ -345,6 +371,11 @@ export function useDailyTip() {
     tip: displayedCandidate,
     variant,
     exhausted,
+    // Dev-only diagnostic surface (Settings' own panel reads this
+    // directly) — never rendered in a production build, but always
+    // computed here so a __DEV__ check at the CALL SITE is the only thing
+    // gating visibility, never a second, possibly-stale calculation.
+    diagnostics: { eligibleCount, consideredCount: diagnostics.length, displayedTopic, lastShownAt: displayedTopic ? tipState[displayedTopic]?.lastShownAt ?? null : null },
     showAnother,
     dismiss,
   };

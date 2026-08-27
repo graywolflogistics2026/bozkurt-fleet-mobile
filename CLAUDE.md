@@ -9984,3 +9984,158 @@
   ships, users will see the OLD (smaller) native splash handing off into
   the NEW animated intro — a real, temporary mismatch in relative sizing
   between the two, unavoidable until both halves are on the same build.
+- FOUR DEVICE ISSUES AFTER THE LATEST BUILD (owner decision, no SQL for
+  any of the four). Diagnosed and fixed in the order reported.
+  1. **BUSINESS BALANCE OVERCOUNTING, root cause found and reconstructed
+     from the real ledger**: audited every write site
+     (`aiImportSave.ts`'s `apply_settlement_business_balance_credit`
+     RPC, §70's `AFTER DELETE` trigger, §60's manual capital-transaction
+     RPCs, and every personally-paid-expense path) and confirmed the
+     settlement-import/delete mechanism is genuinely single-source (the
+     RPC re-reads `business_balance_credit` fresh under a row lock and
+     applies only the delta; the trigger only ever fires on a real
+     delete; personally-paid expenses still never touch it — reconfirmed,
+     not just assumed). The ACTUAL bug: Capital Account's own
+     draw/contribution/edit/reconcile handlers guarded ONLY with React
+     state (`savingDraw`/`savingContribution`/etc., checked via a
+     button's `disabled` prop) — a real gap, since a fast double-tap (or
+     a tap firing again before the next render) can pass that check
+     twice before either state update has applied. Unlike the settlement
+     RPC, `record_manual_capital_transaction()`/
+     `update_manual_capital_transaction()` apply a REAL new delta on
+     every call — nothing stopped a double-submitted contribution or
+     Reconcile action from applying twice, which is exactly the ~$5,741
+     excess on top of the earlier known drift. Fixed with one shared
+     synchronous `savingRef` guard across all four handlers (same
+     check-and-set pattern the import screen's own `savingRef` already
+     used) — closes the gap a React-state-only guard structurally can't.
+     **`src/stats/businessBalanceLedger.ts`'s `reconcileBusinessBalance()`**
+     (new, pure, tested) reconstructs the EXPECTED balance entirely from
+     data the app already has (every currently-existing settlement's own
+     `business_balance_credit` + every manual `capital_transactions`
+     row's own `business_balance_applied`) and compares it to what's
+     stored — "reconstruct it from the ledger and show me the
+     arithmetic," without needing direct database access. Capital
+     Account now shows a proactive ⚠️ drift warning the instant the two
+     disagree, plus a "🔍 Verify Balance" action opening a breakdown
+     (settlements total / manual total / expected / stored / match or
+     mismatch amount) — the exact arithmetic, in-app. `docs/
+     ADMIN_RUNBOOK.md` gained a matching SQL recipe (same reconciliation
+     formula, so the two can never disagree) to spot-check drift across
+     every account, excluding the owner/dev account by default.
+     **Test** (the literal requested one): `aiImportSave.settlement.test.ts`
+     gained "import, RETRY the identical import, then delete — balance
+     returns to EXACTLY its prior value, never double-credited" — proven
+     against the REAL `saveExtraction()` (a retry's delta is
+     `newCredit - previousCredit = 0`, since the credit is unchanged)
+     and the REAL delete path (fakeSupabase.ts's trigger simulation).
+  2. **DAILY TIP NEVER RENDERS, root cause confirmed by tracing the exact
+     empty-account path**: the component IS correctly mounted
+     (`app/(tabs)/index.tsx`'s `AiCoachSection`, gated only on
+     `aiCoach.isLoading`, which resolves normally for an empty account —
+     confirmed no query hangs forever, every one of the ~20 queries
+     `useDailyTip()`'s own `queriesLoading` ORs together uses `enabled:
+     !!userId` + this app's global `retry: 1`, so none can stay
+     `isLoading: true` indefinitely). Five real, evergreen candidates DO
+     exist for a truly empty account with zero settlements/trucks
+     (`tipMaintenance`/`tipAssetRegister`/`tipDocumentsRenewals`/
+     `tipDrivers`/`tipTruckHealth` — each fires on zero data alone,
+     confirmed by evaluating every one of the ~40 detectors by hand
+     against an all-zero `candidateInput`). The ACTUAL blocker:
+     `selectDailyTip()`'s own `SIGNUP_GRACE_MS` check unconditionally
+     returned `null` for the first 24 hours after signup — "never on day
+     one" — regardless of how many real candidates existed. Since
+     onboarding (ToS + tutorial + the setup wizard) already gates entry
+     to Home behind several screens, there's no literal mid-signup-flow
+     instant left to protect by the time a user ever sees this card —
+     removed the check entirely, a deliberate reversal of the original
+     design decision per this pass's own explicit, overriding
+     instruction ("an empty account must still get getting-started
+     tips — that's the most important case").
+     **Diagnostics, so this can't be invisible again**:
+     `buildDailyTipDiagnostics()` (new, pure, tested) reports, for EVERY
+     topic in the system, one of `precondition_not_met`/`silenced`/
+     `cooldown`/`eligible` — read by both `useDailyTip()`'s own dev-only
+     (`__DEV__`) console log and a new dev-only diagnostic card in
+     Settings ("N of M topics eligible, showing X, last shown Y"),
+     so the two surfaces can never disagree.
+     **Test** (the literal requested one): `dailyTips.test.ts` gained "an
+     EMPTY account (zero settlements, zero trucks, day 0) sees a real
+     tip on first launch" — built from the REAL `buildDailyTipCandidates()`
+     with every field genuinely zero, fed through the REAL
+     `selectDailyTip()`, asserting a non-null result.
+  3. **SPLASH WORDMARK STILL TOO SMALL, measured, root-caused, and fixed
+     for real this time**: measuring the PRIOR pass's own "fix" (a
+     height-driven fontSize formula) with a real pixel bounding-box scan
+     of the rendered PNG proved it was never actually applied — the
+     function's own width-overflow safety clamp was silently shrinking
+     the computed ~200px fontSize back down to ~64px, because "BOZKA
+     TRUCKING AI" (18 characters) cannot fit at anywhere near that height
+     on one line within a 1024px canvas, at ANY letter-spacing or weight.
+     This is a hard mathematical ceiling for a single line at this
+     string length, not a tunable ratio. **The fix: wrap onto two lines**
+     — "BOZKA" (matching `brand.ts`'s own `BRAND_SHORT_NAME`) / "TRUCKING
+     AI," the split that minimizes the WIDER line's own character-
+     weighted width (computed directly for all 3 reasonable splits, not
+     assumed — this one wins by a wide margin) — which lets the solved
+     fontSize itself grow from ~64px to ~105px, nearly double.
+     **Measured, not assumed, before committing**: the rendered text
+     line height grew from 51px (5.0% of canvas height) to 79px (7.7%),
+     with the wider line spanning 92.3% of canvas width — composited over
+     the real `#08080c` background at the exact requested 1080×1920
+     phone frame and visually confirmed before committing. Only
+     `splash-icon.png` changed (confirmed via `git status` after
+     regenerating every asset) — `icon.png`/favicon/Android adaptive
+     layers/store assets are untouched, matching every prior pass's own
+     "splash-only" scope.
+  4. **LOAN CENTER NONSENSE FIGURES, two independent causes, both
+     addressed**: (a) audited the mapping code and the screen's own
+     aggregate math and found BOTH correct — the likely cause is a bad
+     VALUE at the source, either an AI misread of an ambiguous
+     settlement loan-recap table or a manual-entry typo, not a bug in
+     how this app reads/sums the fields. `supabase/functions/ai-import/
+     index.ts`'s extraction prompt gained an explicit clarification:
+     `loans[].balance` is the loan's remaining/outstanding balance (a
+     large, tens-of-thousands figure); `loans[].payment` is ONLY the
+     recurring PERIODIC payment for one pay period (a small, few-
+     hundred-to-low-thousands figure) — never the balance, the original
+     loan amount, or a cumulative total; when genuinely ambiguous which
+     printed figure is which, the model is told to leave `payment` at 0
+     rather than guess, since a wrong `0` is far less misleading than a
+     payment that looks like it pays off the whole loan at once. (b) a
+     real, permanent backstop regardless of source:
+     `src/stats/loanSanity.ts`'s `isImplausibleLoanPayment()` (new, pure,
+     tested) — "a monthly payment greater than 10% of the loan balance is
+     implausible," the user's own explicit rule taken literally, since a
+     normal amortizing truck loan pays off over 3-7 years. A flagged
+     row shows a ⚠️ warning on its own card (real value, never hidden)
+     and is EXCLUDED from the screen's own "Est. Monthly Payments" total
+     (never silently folded in as fact) — with a note naming how many
+     rows and how much was excluded, so nothing just quietly vanishes
+     from the total either. Edit/delete for every loan field (name,
+     lender, original amount, balance, payment, frequency, APR, next
+     due) already existed on this screen before this pass — confirmed,
+     not rebuilt.
+  Tests: `businessBalanceLedger.test.ts` (new, 6 tests — matches when
+  the ledger reconciles, surfaces a nonzero drift plainly using the
+  exact reported-shape numbers, negative-net-pay/deleted-settlement/
+  floating-point-rounding cases, zero-row rows never counted).
+  `loanSanity.test.ts` (new, 11 tests — the weekly/biweekly/monthly
+  conversion, the exact reported ratio flagged true, a normal ratio
+  flagged false, the 10% boundary is strictly-greater-than not
+  greater-or-equal, zero/negative balance or payment never flags).
+  `dailyTips.test.ts` gained 7 new tests (the grace-period removal, the
+  literal empty-account scenario, and a full `buildDailyTipDiagnostics()`
+  block covering all 4 reasons). `aiImportSave.settlement.test.ts`
+  gained the retry+delete test described above. Full suite: 125 suites
+  / 3,463 tests pass; `tsc --noEmit` clean; all 7 locales confirmed at
+  full key-parity (a recursive key-set diff against en.json — 0
+  missing/0 extra in every one of es/ru/tr/hi/ar/uk).
+  `supabase/functions/ai-import/index.ts` was modified (item 4's
+  extraction-prompt clarification) and **needs redeploying**;
+  `ai-advisor`/`reset-data`/`delete-account`/`referral-sync` were NOT
+  touched. No SQL/PENDING_SQL changes for any of the four items — every
+  fix is pure client-side JS/TS plus the one Edge Function prompt edit.
+  Item 3 (the splash PNG) needs a fresh EAS BUILD, same standing
+  limitation every prior splash-asset pass has had — items 1, 2, and 4
+  ship via a normal `eas update` alone.

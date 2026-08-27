@@ -1,5 +1,6 @@
 import {
   buildDailyTipCandidates,
+  buildDailyTipDiagnostics,
   DAILY_TIP_CATEGORY,
   DAILY_TIP_ROUTE,
   DAILY_TIP_SCREEN_COVERAGE,
@@ -107,10 +108,81 @@ describe('selectDailyTip — rotation engine', () => {
     return topics.map((topic) => ({ topic, detail: {} }));
   }
 
-  test('signup grace — nothing shown in the first 24 hours', () => {
-    const now = new Date('2026-01-01T12:00:00Z'); // 12h after signup
+  // BUG FIX (owner decision, device report: "daily tip never appears,"
+  // most important for a brand-new/EMPTY account) — this used to
+  // unconditionally return null for the first 24 hours after signup
+  // ("never on day one"); that blanket block is now GONE, since an empty
+  // account seeing a getting-started tip on first launch is explicitly
+  // the most important case, per a later, overriding owner instruction.
+  test('a brand-new account (moments after signup) DOES get a tip when real candidates exist — the signup grace period no longer blocks it', () => {
+    const now = new Date('2026-01-01T00:05:00Z'); // 5 minutes after signup
     const result = selectDailyTip(allTopicsCandidates(['tipFuel', 'tipDeductions']), {}, CREATED, now);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+  });
+
+  // The literal requested test: an EMPTY account (no settlements, no
+  // trucks, nothing) sees a tip on first launch — using the REAL
+  // buildDailyTipCandidates() with every field genuinely empty/zero
+  // (never fabricated candidates), matching exactly what
+  // src/data/dailyTips.ts's candidateInput produces for a truly new
+  // account, fed through the REAL selectDailyTip().
+  test('an EMPTY account (zero settlements, zero trucks, day 0) sees a real tip on first launch', () => {
+    const now = new Date('2026-01-01T00:05:00Z');
+    const emptyAccountCandidates = buildDailyTipCandidates({
+      totalRows: 0,
+      documentsCount: 0,
+      settlementsCount: 0,
+      loadsCount: 0,
+      settlementsMissingMilesCount: 0,
+      reimbursementsCount: 0,
+      miscIncomeCount: 0,
+      fuelPctOfRevenue: null,
+      dueSoonOrOverdueMaintenanceCount: 0,
+      maintenanceRecordsCount: 0,
+      tollsCount: 0,
+      needsReviewCount: 0,
+      equipmentCount: 0,
+      trucksWithPurchasePriceCount: 0,
+      weeksOfHistory: 0,
+      quarterlyDeadlineDaysUntil: null,
+      accountAgeDays: 0,
+      hasTaxConfig: false,
+      weeklyTaxReserve: null,
+      hasPositiveNetWeek: false,
+      complianceItemsCount: 0,
+      learningRulesCount: 0,
+      trucksWithoutCostBasisCount: 0,
+      trucksWithoutDepreciationCount: 0,
+      depreciationPreviewTotal: null,
+      trucksCount: 0,
+      anyTruckHasTrailer: false,
+      unassignedRowsCount: 0,
+      driversCount: 0,
+      driverPaymentsCount: 0,
+      businessBalance: 0,
+      initialCapital: 0,
+      taxFreeRemaining: null,
+      activeTruckMaintenanceRecordsCount: 0,
+      distinctSettlementWeeks: 0,
+      settlementsWithMilesCount: 0,
+      loansCount: 0,
+      deadheadPct: null,
+      perDiemDaysYtd: 0,
+      escrowDeductionsCount: 0,
+      advanceRepaymentDeductionsCount: 0,
+    });
+    // A real, non-empty pool of evergreen getting-started candidates
+    // exists even for a truly empty account (tipMaintenance/
+    // tipAssetRegister/tipDocumentsRenewals/tipDrivers/tipTruckHealth all
+    // fire on zero data) — confirms this isn't ALSO blocked by "no
+    // candidates exist at all."
+    expect(emptyAccountCandidates.length).toBeGreaterThan(0);
+    expect(emptyAccountCandidates.map((c) => c.topic).sort()).toEqual(
+      ['tipAssetRegister', 'tipDocumentsRenewals', 'tipDrivers', 'tipMaintenance', 'tipTruckHealth'].sort()
+    );
+
+    const result = selectDailyTip(emptyAccountCandidates, {}, CREATED, now);
+    expect(result).not.toBeNull();
   });
 
   test('over 35 simulated days, no topic repeats within any rolling 30-day window, and every day picks the longest-unseen eligible topic', () => {
@@ -436,5 +508,57 @@ describe('"show me another" — advance through eligible tips without repeating 
     // Both the anchor AND the manually-advanced-to topic are excluded —
     // nothing else is eligible, so tomorrow's pick is null, not a repeat.
     expect(selectDailyTip(candidates, state, CREATED, tomorrow)).toBeNull();
+  });
+});
+
+// DIAGNOSTICS (owner decision, device report: "this can never be
+// invisible again") — buildDailyTipDiagnostics() is the ONE function both
+// useDailyTip()'s dev-only console log and Settings' dev-only panel read
+// from.
+describe('buildDailyTipDiagnostics — every topic accounted for, with a real reason', () => {
+  const NOW = new Date('2026-05-10T12:00:00Z');
+
+  test('every topic in the system gets exactly one entry, regardless of whether it was a candidate at all', () => {
+    const diagnostics = buildDailyTipDiagnostics([], {}, NOW);
+    const allTopics = Object.keys(DAILY_TIP_CATEGORY);
+    expect(diagnostics.length).toBe(allTopics.length);
+    expect(diagnostics.every((d) => d.reason === 'precondition_not_met')).toBe(true);
+  });
+
+  test('a topic whose precondition currently holds and has never been shown is "eligible"', () => {
+    const candidates = [{ topic: 'tipFuel' as DailyTipTopic, detail: {} }];
+    const diagnostics = buildDailyTipDiagnostics(candidates, {}, NOW);
+    const fuelEntry = diagnostics.find((d) => d.topic === 'tipFuel');
+    expect(fuelEntry?.reason).toBe('eligible');
+  });
+
+  test('a candidate that has been dismissed (silenced) is reported as "silenced," not just generically ineligible', () => {
+    const candidates = [{ topic: 'tipFuel' as DailyTipTopic, detail: {} }];
+    const state = dismissDailyTip({}, 'tipFuel', NOW);
+    const diagnostics = buildDailyTipDiagnostics(candidates, state, NOW);
+    expect(diagnostics.find((d) => d.topic === 'tipFuel')?.reason).toBe('silenced');
+  });
+
+  test('a candidate shown recently (within the 30-day cooldown) is reported as "cooldown," distinct from "silenced"', () => {
+    const candidates = [{ topic: 'tipFuel' as DailyTipTopic, detail: {} }];
+    const state = recordDailyTipShown({}, 'tipFuel', 0, new Date('2026-05-09T12:00:00Z'));
+    const diagnostics = buildDailyTipDiagnostics(candidates, state, NOW);
+    expect(diagnostics.find((d) => d.topic === 'tipFuel')?.reason).toBe('cooldown');
+  });
+
+  test('a topic whose precondition does NOT hold is "precondition_not_met" even if it was shown/silenced long ago (the precondition check always wins first)', () => {
+    const state = dismissDailyTip({}, 'tipFuel', new Date('2020-01-01T00:00:00Z'));
+    const diagnostics = buildDailyTipDiagnostics([], state, NOW); // tipFuel is NOT a candidate this time
+    expect(diagnostics.find((d) => d.topic === 'tipFuel')?.reason).toBe('precondition_not_met');
+  });
+
+  test('the exact empty-account scenario: only the 5 evergreen topics are eligible, everything else is precondition_not_met', () => {
+    const emptyAccountCandidates = ['tipMaintenance', 'tipAssetRegister', 'tipDocumentsRenewals', 'tipDrivers', 'tipTruckHealth'].map(
+      (topic) => ({ topic: topic as DailyTipTopic, detail: {} })
+    );
+    const diagnostics = buildDailyTipDiagnostics(emptyAccountCandidates, {}, NOW);
+    const eligible = diagnostics.filter((d) => d.reason === 'eligible').map((d) => d.topic).sort();
+    expect(eligible).toEqual(['tipAssetRegister', 'tipDocumentsRenewals', 'tipDrivers', 'tipMaintenance', 'tipTruckHealth'].sort());
+    expect(diagnostics.filter((d) => d.reason === 'precondition_not_met').length).toBe(diagnostics.length - 5);
   });
 });

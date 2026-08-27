@@ -9,6 +9,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/lib/supabase';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useAiCoachSummary } from '@/src/data/aiCoachSummary';
+import { useDailyTip } from '@/src/data/dailyTips';
 import { trailingAverageNet } from '@/src/stats/goalProgress';
 import { useAiUsageDisplay } from '@/src/data/aiUsageDisplay';
 import { CREDIT_PACK_OFFERS } from '@/src/usage/aiUsage';
@@ -87,6 +88,14 @@ export default function Settings() {
   // different starting number.
   const coach = useAiCoachSummary();
   const suggestedWeeklyGoal = useMemo(() => trailingAverageNet(coach.weeklyTrend), [coach.weeklyTrend]);
+  // DAILY TIP DIAGNOSTICS (owner decision, device report: "this can never
+  // be invisible again") — dev-build-only, see the panel rendered near the
+  // bottom of this screen. useDailyTip() is already a react-query-heavy
+  // hook mounted on Home; calling it again here is a harmless extra
+  // subscription (react-query dedupes the underlying network fetches by
+  // query key), same "multiple independent callers is fine" precedent
+  // already used throughout this app (useProfile(), useUsageTracking(), ...).
+  const dailyTipDiag = useDailyTip();
   const isOwner = isOwnerAccount(profileQuery.data);
   const aiUsage = useAiUsageDisplay(isOwner);
 
@@ -551,6 +560,26 @@ export default function Settings() {
         </Card>
 
         <SecondaryButton title={t('common.signOut')} onPress={signOut} />
+
+        {/* DAILY TIP DIAGNOSTICS (owner decision, device report: "this can
+            never be invisible again") — dev-build-only (__DEV__, React
+            Native's own global, never true in a production build), reads
+            the SAME diagnostics object useDailyTip()'s own dev-only
+            console.log already computes, so the two can never disagree. */}
+        {__DEV__ && (
+          <Card style={{ borderColor: colors.orange, borderWidth: 1 }}>
+            <Text style={{ color: colors.orange, fontWeight: '700', fontSize: typography.size.sm }}>🛠️ Daily Tip Diagnostics (dev only)</Text>
+            <MutedText style={{ marginTop: spacing.xs }}>
+              {dailyTipDiag.isLoading
+                ? 'still loading queries…'
+                : `${dailyTipDiag.diagnostics.eligibleCount} of ${dailyTipDiag.diagnostics.consideredCount} topics eligible, showing "${
+                    dailyTipDiag.diagnostics.displayedTopic ?? 'none'
+                  }", last shown ${
+                    dailyTipDiag.diagnostics.lastShownAt ? formatDate(dailyTipDiag.diagnostics.lastShownAt, i18n.language) : 'never'
+                  }.`}
+            </MutedText>
+          </Card>
+        )}
 
         {/* RUNTIME VISIBILITY (owner decision 2026-07-30): "which JS is
             on this device" should never be a guess — same buildInfo.ts

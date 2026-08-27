@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
+import { useSettlements } from '@/src/data/settlements';
+import { reconcileBusinessBalance } from '@/src/stats/businessBalanceLedger';
 import {
   useCapitalTransactions,
   useUpdateCapitalTransaction,
@@ -111,7 +113,9 @@ export default function CapitalAccount() {
 
   const summaryQuery = useCapitalAccountSummary();
   const txQuery = useCapitalTransactions();
+  const settlementsQuery = useSettlements();
   const taxConfigQuery = useTaxConfig();
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   // FULL PARITY pass (owner decision 2026-08-05, spec item E.3) — manual
   // draws/contributions from THIS screen apply a real business_balance
   // delta (useRecordManualCapitalTransaction/useDeleteManualCapitalTransaction);
@@ -153,6 +157,26 @@ export default function CapitalAccount() {
   const [editNote, setEditNote] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // DOUBLE-SUBMIT GUARD (owner decision, device report: business_balance
+  // grew by an unexplained ~$5,741) — every balance-moving handler below
+  // (draw/contribution/edit/reconcile) used to guard ONLY with React state
+  // (`savingDraw`/`savingContribution`/`savingEdit`/`savingBalance`,
+  // checked via the button's own `disabled` prop) — a real gap, since a
+  // state update is asynchronous: two taps in the same synchronous event
+  // tick (a fast double-tap, or a tap that fires again before the next
+  // render) can BOTH pass the "not currently saving" check before either
+  // one's state update has actually applied. Unlike the settlement-import
+  // RPC (idempotent by construction — re-applying the SAME credit nets to
+  // a $0 second delta), `record_manual_capital_transaction()`/
+  // `update_manual_capital_transaction()` insert/adjust a REAL new delta
+  // on every call — nothing stops a double-submitted contribution/
+  // reconcile from applying twice. One shared ref (not per-handler) is
+  // deliberately conservative — these four sheets are mutually exclusive
+  // in the UI, but sharing one guard also closes any hypothetical race
+  // between two of them firing back to back, same synchronous check-and-
+  // set pattern already used by the import screen's own `savingRef`.
+  const savingRef = useRef(false);
+
   const summary = summaryQuery.data;
   const isScorp = taxConfigQuery.data?.entity_type === 'scorp';
   const drawsLabel = isScorp ? t('capitalAccount.distributions') : t('capitalAccount.draws');
@@ -172,6 +196,19 @@ export default function CapitalAccount() {
   const capitalFlows = useMemo(() => summarizeCapitalFlows(rows), [rows]);
   const duplicateIds = useMemo(() => findDuplicateTransactionIds(rows), [rows]);
   const isPastCapital = !!summary && summary.effectiveContribution - summary.totalDraws < 0;
+
+  // BALANCE LEDGER RECONCILIATION (owner decision, device report:
+  // business_balance grew by an unexplained ~$5,741) — reconstructs the
+  // EXPECTED balance entirely from data this screen already has (every
+  // currently-existing settlement's own business_balance_credit + every
+  // manual capital_transactions row's own business_balance_applied) and
+  // compares it to what's actually stored — "reconstruct it from the
+  // ledger and show me the arithmetic," without needing direct database
+  // access.
+  const reconciliation = useMemo(
+    () => reconcileBusinessBalance(settlementsQuery.data ?? [], rows, summary?.businessBalance ?? 0),
+    [settlementsQuery.data, rows, summary?.businessBalance]
+  );
 
   // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 1) —
   // "no future dates beyond today, no obviously wrong years." Shared by
@@ -204,6 +241,8 @@ export default function CapitalAccount() {
   async function handleRecordDraw() {
     const amount = Number(drawAmount) || 0;
     if (amount <= 0 || !userId || drawDateError) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSavingDraw(true);
     try {
       await insertTx.mutateAsync({
@@ -221,6 +260,7 @@ export default function CapitalAccount() {
       Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
     } finally {
       setSavingDraw(false);
+      savingRef.current = false;
     }
   }
 
@@ -251,6 +291,8 @@ export default function CapitalAccount() {
   async function handleRecordContribution() {
     const amount = Number(contributionAmount) || 0;
     if (amount <= 0 || !userId || contributionDateError) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSavingContribution(true);
     try {
       await insertTx.mutateAsync({
@@ -268,6 +310,7 @@ export default function CapitalAccount() {
       Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
     } finally {
       setSavingContribution(false);
+      savingRef.current = false;
     }
   }
 
@@ -314,6 +357,8 @@ export default function CapitalAccount() {
     if (!editingTx || !userId || editDateError) return;
     const amount = Number(editAmount) || 0;
     if (!isEditingLinked && amount <= 0) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSavingEdit(true);
     try {
       if (isEditingLinked) {
@@ -346,6 +391,7 @@ export default function CapitalAccount() {
       Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
     } finally {
       setSavingEdit(false);
+      savingRef.current = false;
     }
   }
 
@@ -394,6 +440,7 @@ export default function CapitalAccount() {
   async function handleReconcileBalance() {
     const target = Number(balanceInput);
     if (!Number.isFinite(target) || !userId) return;
+    if (savingRef.current) return;
     const current = summary?.businessBalance ?? 0;
     const delta = Math.round((target - current) * 100) / 100;
     if (delta === 0) {
@@ -401,6 +448,7 @@ export default function CapitalAccount() {
       setBalanceInput('');
       return;
     }
+    savingRef.current = true;
     setSavingBalance(true);
     try {
       await insertTx.mutateAsync({
@@ -417,6 +465,7 @@ export default function CapitalAccount() {
       Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
     } finally {
       setSavingBalance(false);
+      savingRef.current = false;
     }
   }
 
@@ -463,6 +512,19 @@ export default function CapitalAccount() {
           <Text style={styles.statValue}>{money(summary?.businessBalance ?? 0)}</Text>
         </TappableCard>
 
+        {/* BALANCE LEDGER RECONCILIATION (owner decision, device report:
+            business_balance grew by an unexplained amount) — a proactive,
+            always-visible flag the instant the stored figure disagrees
+            with what every currently-existing settlement/equity row adds
+            up to, so a drift is never silently invisible again. */}
+        {!reconciliation.matches && (
+          <Pressable onPress={() => setVerifyModalOpen(true)}>
+            <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
+              ⚠️ {t('capitalAccount.balanceDriftWarning', { amount: money(Math.abs(reconciliation.drift)) })}
+            </MutedText>
+          </Pressable>
+        )}
+
         <MutedText style={{ marginTop: spacing.xs }}>{t('capitalAccount.cashMovesNotTaxNote')}</MutedText>
 
         <SecondaryButton title={t('capitalAccount.recordContribution')} onPress={openContribution} />
@@ -471,6 +533,7 @@ export default function CapitalAccount() {
           onPress={openDraw}
         />
         <SecondaryButton title={t('capitalAccount.reconcileBalance')} onPress={() => setBalanceModalOpen(true)} />
+        <SecondaryButton title={t('capitalAccount.verifyBalance')} onPress={() => setVerifyModalOpen(true)} />
         {duplicateIds.length > 0 && (
           <SecondaryButton title={t('capitalAccount.removeDuplicates')} onPress={handleRemoveDuplicates} />
         )}
@@ -618,6 +681,43 @@ export default function CapitalAccount() {
         <SecondaryButton title={t('common.cancel')} onPress={() => setBalanceModalOpen(false)} />
       </ModalSheet>
 
+      {/* BALANCE LEDGER RECONCILIATION (owner decision, device report:
+          business_balance grew by an unexplained ~$5,741) — "reconstruct
+          it from the ledger and show me the arithmetic." Entirely
+          computed from data this screen already has (see
+          reconcileBusinessBalance's own header comment for why the sum
+          of every currently-existing settlement's own credit + every
+          manual equity row's own applied delta should always equal the
+          stored balance exactly). */}
+      <ModalSheet visible={verifyModalOpen} onClose={() => setVerifyModalOpen(false)}>
+        <SheetTitle>{t('capitalAccount.verifyBalance')}</SheetTitle>
+        <MutedText style={{ marginBottom: spacing.sm }}>{t('capitalAccount.verifyBalanceExplain')}</MutedText>
+        <View style={styles.verifyRow}>
+          <MutedText>{t('capitalAccount.verifySettlementsTotal', { count: reconciliation.settlementCount })}</MutedText>
+          <Text style={styles.verifyAmount}>{money(reconciliation.settlementsTotal)}</Text>
+        </View>
+        <View style={styles.verifyRow}>
+          <MutedText>{t('capitalAccount.verifyManualTotal', { count: reconciliation.manualTransactionCount })}</MutedText>
+          <Text style={styles.verifyAmount}>{money(reconciliation.manualTransactionsTotal)}</Text>
+        </View>
+        <View style={[styles.verifyRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs, marginTop: spacing.xs }]}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('capitalAccount.verifyExpected')}</Text>
+          <Text style={[styles.verifyAmount, { fontWeight: '700' }]}>{money(reconciliation.expectedBalance)}</Text>
+        </View>
+        <View style={styles.verifyRow}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('capitalAccount.verifyStored')}</Text>
+          <Text style={[styles.verifyAmount, { fontWeight: '700' }]}>{money(reconciliation.storedBalance)}</Text>
+        </View>
+        {reconciliation.matches ? (
+          <MutedText style={{ color: colors.green, marginTop: spacing.sm }}>✓ {t('capitalAccount.verifyMatches')}</MutedText>
+        ) : (
+          <MutedText style={{ color: colors.orange, marginTop: spacing.sm }}>
+            ⚠️ {t('capitalAccount.verifyMismatch', { amount: money(Math.abs(reconciliation.drift)) })}
+          </MutedText>
+        )}
+        <SecondaryButton title={t('common.close')} onPress={() => setVerifyModalOpen(false)} />
+      </ModalSheet>
+
       {/* CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item
           3 "every row editable") — one shared edit sheet for every
           history row, linked or manual. A linked contribution's amount is
@@ -702,5 +802,15 @@ const styles = {
     color: colors.muted,
     fontSize: typography.size.md,
     fontWeight: '700' as const,
+  },
+  verifyRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 4,
+  },
+  verifyAmount: {
+    color: colors.text,
+    fontWeight: '600' as const,
   },
 };

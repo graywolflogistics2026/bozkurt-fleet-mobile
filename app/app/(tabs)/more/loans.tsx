@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useLoanRows, useInsertLoanRow, useUpdateLoanRow, useDeleteLoanRow } from '@/src/data/loans';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { isImplausibleLoanPayment, monthlyEquivalentPayment } from '@/src/stats/loanSanity';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -37,6 +38,11 @@ function LoanCard({ x, onEdit, onDelete }: { x: LoanRow; onEdit: () => void; onD
   const { t } = useTranslation();
   const { money, date } = useFormatters();
   const paidPct = x.original_amount ? Math.max(0, Math.min(1, 1 - (x.balance ?? 0) / x.original_amount)) : null;
+  // SANITY GUARD (owner decision, device report: "Est. monthly payments"
+  // nearly equal to the total balance) — flag, never silently trust, a
+  // payment/balance ratio no real amortizing loan would ever have.
+  const monthlyEquivalent = monthlyEquivalentPayment(x.payment, x.frequency);
+  const implausible = isImplausibleLoanPayment(x.balance, monthlyEquivalent);
   return (
     <Pressable onPress={onEdit} style={styles.row}>
       <View style={{ flex: 1 }}>
@@ -58,6 +64,7 @@ function LoanCard({ x, onEdit, onDelete }: { x: LoanRow; onEdit: () => void; onD
         {x.source === 'settlement' && (
           <MutedText>{x.settlement_id ? t('loans.sourceSettlementLinked') : t('loans.sourceSettlementUnlinked')}</MutedText>
         )}
+        {implausible && <MutedText style={{ color: colors.orange }}>{t('loans.implausiblePaymentWarning')}</MutedText>}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.balance ?? 0)}</Text>
@@ -124,13 +131,25 @@ export default function LoanCenter() {
 
   const totals = useMemo(() => {
     const balance = rows.reduce((sum, x) => sum + Number(x.balance ?? 0), 0);
-    const monthlyPayment = rows.reduce((sum, x) => {
-      const p = Number(x.payment ?? 0);
-      if (x.frequency === 'weekly') return sum + p * 4.33;
-      if (x.frequency === 'biweekly') return sum + p * 2.17;
-      return sum + p;
-    }, 0);
-    return { balance, monthlyPayment };
+    // SANITY GUARD (owner decision, device report: "Est. monthly payments"
+    // nearly equal to the total balance) — a row whose payment/balance
+    // ratio is implausible is excluded from the TRUSTED total (never
+    // silently folded in as fact) — its own row still shows a ⚠️ warning
+    // and its real value, so nothing is hidden, just not summed as if it
+    // were verified.
+    let monthlyPayment = 0;
+    let excludedCount = 0;
+    let excludedTotal = 0;
+    for (const x of rows) {
+      const monthlyEquivalent = monthlyEquivalentPayment(x.payment, x.frequency);
+      if (isImplausibleLoanPayment(x.balance, monthlyEquivalent)) {
+        excludedCount += 1;
+        excludedTotal += monthlyEquivalent;
+        continue;
+      }
+      monthlyPayment += monthlyEquivalent;
+    }
+    return { balance, monthlyPayment, excludedCount, excludedTotal };
   }, [rows]);
 
   function openAdd() {
@@ -278,6 +297,11 @@ export default function LoanCenter() {
               <Text style={styles.statValue}>{money(totals.monthlyPayment)}</Text>
             </View>
           </View>
+          {totals.excludedCount > 0 && (
+            <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
+              {t('loans.excludedFromTotalNote', { count: totals.excludedCount, amount: money(totals.excludedTotal) })}
+            </MutedText>
+          )}
         </Card>
 
         <Card>

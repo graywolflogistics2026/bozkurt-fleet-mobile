@@ -41,11 +41,27 @@ const sharp = require('sharp');
 // app/src either.
 const BG_COLOR = '#08080c'; // theme.ts colors.bg
 const MARK_COLOR_LIGHT = '#ffffff'; // BrandLogo.tsx BRAND_LOGO_LIGHT
-// SPLASH SCREEN WORDMARK (owner decision) — app/src/brand.ts's BRAND_NAME,
-// copied as a plain string literal for the same "each standalone tool
-// keeps its own copy in sync by hand" reason as BG_COLOR/MARK_COLOR_LIGHT
-// above (this script can't import a TS module).
-const WORDMARK_TEXT = 'BOZKA TRUCKING AI';
+// SPLASH SCREEN WORDMARK (owner decision) — app/src/brand.ts's BRAND_NAME/
+// BRAND_SHORT_NAME, copied as plain string literals for the same "each
+// standalone tool keeps its own copy in sync by hand" reason as
+// BG_COLOR/MARK_COLOR_LIGHT above (this script can't import a TS module).
+//
+// TWO LINES, NOT ONE (owner decision, round 4 — device report: "still too
+// small... should be a clearly dominant element, not a caption," MEASURED
+// after round 3's fix and found still small — see composeSplashWithWordmarkSvg's
+// own header comment for the measured proof of why one line has a hard
+// mathematical ceiling for this string). "BOZKA" (matching brand.ts's own
+// BRAND_SHORT_NAME) / "TRUCKING AI" is the split that maximizes achievable
+// font size — of every 2-line split of "BOZKA TRUCKING AI," this one
+// minimizes the WIDER line's own character-weighted width (verified by
+// computing all 3 reasonable splits directly, not assumed): "BOZKA" +
+// "TRUCKING AI" -> the wider line's width-factor is 9.15; "BOZKA TRUCKING"
+// + "AI" -> 11.79; one line -> 14.06. Since achievable fontSize is
+// (available width) / (width-factor), the lowest width-factor wins the
+// largest font — nearly 1.5x bigger than the next-best split, and ~1.6x
+// bigger than the previous single-line, letter-spacing-only fixes ever
+// could reach at this string length.
+const WORDMARK_LINES = ['BOZKA', 'TRUCKING AI'];
 
 // BrandLogo.tsx's own viewBox and 5 shapes, verbatim (stroke-based line
 // art, strokeWidth 2, matching every stroke/fill/linejoin/linecap
@@ -103,72 +119,88 @@ function composeSquareSvg({ size, backgroundColor, markColor, widthFraction, cor
 // fraction) — only its vertical position shifts up to make room for the
 // wordmark sitting below it; the pair is then centered as ONE block
 // within the square canvas, with generous padding on every side.
-function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textColor, widthFraction, text }) {
+function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textColor, widthFraction, lines }) {
   const markWidth = size * widthFraction;
   const markHeight = markWidth * (VIEWBOX_HEIGHT / VIEWBOX_WIDTH);
   const scale = markWidth / VIEWBOX_WIDTH;
   const markTx = (size - markWidth) / 2;
 
-  // WORDMARK SIZE FIX (owner decision, device report: "'BOZKA TRUCKING AI'
-  // under the truck is barely visible") — the previous fontSize was a
-  // fixed, tiny fraction of the CANVAS (size * 0.032) with no relationship
-  // to the mark's own width at all, so at the mark's real on-canvas size
-  // the wordmark rendered roughly 1/20th its width — unreadable at launch-
-  // screen scale on a real device. Sized algebraically instead: solve for
-  // the fontSize whose rendered string width (glyphs + letter-spacing
-  // gaps) lands at TARGET_TEXT_WIDTH_FRACTION of the MARK's own width
-  // ("roughly the width of the truck mark," the exact device-report ask)
-  // using a measured-in-practice average glyph-width-to-fontSize ratio for
-  // BOLD Arial/Helvetica uppercase (ordinary letters ~0.66x their own
-  // fontSize; the two spaces in "BOZKA TRUCKING AI" narrower, ~0.32x) —
-  // this makes the sizing robust to a future wordmark-text change too,
-  // rather than a magic number tuned for this one exact string.
-  const TARGET_TEXT_WIDTH_FRACTION = 0.96;
-  // LAUNCH EXPERIENCE (owner decision, round 2 — device report: "still too
-  // small") — heavier weight (900, was 800) and GENEROUS letter-spacing
-  // again (0.18, up from the previous pass's deliberately-tightened 0.1 —
-  // a fresh, explicit ask that supersedes that earlier choice) per the
-  // owner's own literal wording. Increasing letter-spacing spends more of
-  // the same target text WIDTH on spacing and correspondingly less on
-  // glyph size, which is fine — TARGET_TEXT_WIDTH_FRACTION still pins the
-  // overall rendered width, only the glyph/space balance within it shifts.
-  const LETTER_SPACING_FACTOR = 0.18;
-  const AVG_LETTER_WIDTH_FACTOR = 0.66;
-  const AVG_SPACE_WIDTH_FACTOR = 0.32;
-  const letterCount = [...text].filter((c) => c !== ' ').length;
-  const spaceCount = text.length - letterCount;
-  const gapCount = Math.max(text.length - 1, 0);
-  const targetTextWidth = markWidth * TARGET_TEXT_WIDTH_FRACTION;
-  const widthPerFontSizeUnit =
-    letterCount * AVG_LETTER_WIDTH_FACTOR + spaceCount * AVG_SPACE_WIDTH_FACTOR + gapCount * LETTER_SPACING_FACTOR;
-  const fontSize = targetTextWidth / widthPerFontSizeUnit;
-  const letterSpacing = fontSize * LETTER_SPACING_FACTOR;
-  // Clear separation from the mark (owner decision, round 2 — slightly
-  // more than the prior pass's already-increased 0.09).
-  const gap = size * 0.11;
+  // WORDMARK SIZE, ROUND 4 — MEASURED AGAIN, ROOT-CAUSED FOR REAL (owner
+  // decision, device report: "still too small" even after round 3's
+  // height-driven fontSize). Round 3's own fontSize (~200px, derived from
+  // 0.42 * markHeight) was computed correctly — but then this same
+  // function's own MAX_TEXT_WIDTH_FRACTION safety clamp silently shrank
+  // it back down to ~64px, because "BOZKA TRUCKING AI" (18 characters
+  // including spaces) simply CANNOT fit on one line at anywhere close to
+  // a 200px font within a 1024px-wide canvas — confirmed by measuring the
+  // ACTUAL rendered round-3 PNG with scripts/_measureSplash.js: the text
+  // band came out only 51px tall (5.0% of canvas height), nowhere near
+  // the ~140px cap-height a 200px font would produce, proving the width
+  // clamp — not the height formula — was the real governing constraint
+  // the whole time. No amount of tuning the height ratio, weight, or
+  // letter-spacing changes this: for THIS string on THIS canvas width,
+  // one line has a hard mathematical ceiling around 60-80px regardless.
+  //
+  // THE ACTUAL FIX: wrap onto TWO LINES (see WORDMARK_LINES's own header
+  // comment for why "BOZKA" / "TRUCKING AI" specifically) — this lets
+  // fontSize be solved directly from the WIDER of the two lines' own
+  // character-weighted width, which is what actually determines how big
+  // the text can get. No more height-driven starting guess; the width
+  // constraint was always binding, so this solves it directly instead of
+  // computing a value that then gets silently overridden.
+  const LETTER_SPACING_FACTOR = 0.16; // generous, proportional to fontSize
+  const AVG_LETTER_WIDTH_FACTOR = 0.72; // measured at font-weight 900
+  const AVG_SPACE_WIDTH_FACTOR = 0.35;
+  const MAX_TEXT_WIDTH_FRACTION = 0.94; // safe canvas margin
 
-  const blockHeight = markHeight + gap + fontSize;
+  function widthFactor(line) {
+    const letterCount = [...line].filter((c) => c !== ' ').length;
+    const spaceCount = line.length - letterCount;
+    const gapCount = Math.max(line.length - 1, 0);
+    return letterCount * AVG_LETTER_WIDTH_FACTOR + spaceCount * AVG_SPACE_WIDTH_FACTOR + gapCount * LETTER_SPACING_FACTOR;
+  }
+
+  const maxTextWidth = size * MAX_TEXT_WIDTH_FRACTION;
+  const widestLineFactor = Math.max(...lines.map(widthFactor));
+  const fontSize = maxTextWidth / widestLineFactor;
+  const letterSpacing = fontSize * LETTER_SPACING_FACTOR;
+
+  // Clear separation from the mark, and a tighter gap BETWEEN the two
+  // text lines than between the mark and the text block (owner decision —
+  // the two lines should read as one cohesive wordmark, not two separate
+  // elements).
+  const markToTextGap = size * 0.11;
+  const interLineGap = fontSize * 0.22;
+  const lineHeight = fontSize; // cap-height-driven text-block spacing, not a full font em-box
+
+  const blockHeight = markHeight + markToTextGap + lines.length * lineHeight + (lines.length - 1) * interLineGap;
   const blockTop = (size - blockHeight) / 2;
   const markTy = blockTop;
-  const textBaselineY = blockTop + markHeight + gap + fontSize * 0.78; // ~cap-height baseline offset
 
   const bg = backgroundColor ? `<rect x="0" y="0" width="${size}" height="${size}" fill="${backgroundColor}" />` : '';
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    ${bg}
-    <g transform="translate(${markTx.toFixed(3)}, ${markTy.toFixed(3)}) scale(${scale.toFixed(6)})">
-      ${truckMarkInnerSvg(markColor)}
-    </g>
-    <text
+  const textElements = lines
+    .map((line, i) => {
+      const lineTop = blockTop + markHeight + markToTextGap + i * (lineHeight + interLineGap);
+      const baselineY = lineTop + fontSize * 0.78; // ~cap-height baseline offset
+      return `<text
       x="${(size / 2).toFixed(3)}"
-      y="${textBaselineY.toFixed(3)}"
+      y="${baselineY.toFixed(3)}"
       text-anchor="middle"
       font-family="Arial, Helvetica, sans-serif"
       font-weight="900"
       font-size="${fontSize.toFixed(3)}"
       letter-spacing="${letterSpacing.toFixed(3)}"
       fill="${textColor}"
-    >${text}</text>
+    >${line}</text>`;
+    })
+    .join('\n    ');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    ${bg}
+    <g transform="translate(${markTx.toFixed(3)}, ${markTy.toFixed(3)}) scale(${scale.toFixed(6)})">
+      ${truckMarkInnerSvg(markColor)}
+    </g>
+    ${textElements}
   </svg>`;
 }
 
@@ -286,7 +318,7 @@ async function main() {
       markColor: MARK_COLOR_LIGHT,
       textColor: MARK_COLOR_LIGHT,
       widthFraction: SPLASH_WIDTH_FRACTION,
-      text: WORDMARK_TEXT,
+      lines: WORDMARK_LINES,
     }),
     path.join(ASSETS_DIR, 'splash-icon.png')
   );
