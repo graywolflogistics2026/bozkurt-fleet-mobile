@@ -9231,3 +9231,110 @@
   Supabase SQL Editor (PREVIEW first, then UPDATE) whenever convenient —
   it's a data-quality improvement for already-imported history, not
   something the app depends on to function correctly going forward.
+- AI COACH — FIX STALE CACHE + WEEKLY REVIEW GAINS CPM (owner decision,
+  docs/PENDING_SQL.md §68, NOT YET APPLIED — two parts of a 3-part request;
+  the third part, daily tips, is a separate, much larger feature gated on
+  a coverage-map review before implementation and is NOT part of this
+  entry).
+  **PART 1 — STALE CACHE BUG**: device report — every settlement was
+  deleted and the AI Coach kept showing the old weekly review, quoting
+  dollar figures that no longer existed. Root cause: the cache
+  (`ai_weekly_review`/`ai_weekly_review_week_ending`/
+  `ai_weekly_review_generated_at`/`ai_weekly_review_locale`) only ever
+  tracked WHICH SETTLEMENT WEEK and LOCALE a review covers — never
+  whether the underlying FIGURES (revenue, net, RPM, ...) it quotes are
+  still what the account's real data currently produces.
+  `shouldGenerateWeeklyReview()` correctly declined to regenerate once
+  `latestWeekEnding` went null (nothing to review), but nothing ever
+  stopped the STALE cached text from being DISPLAYED — a completely
+  separate, unguarded code path (`weeklyReviewUsable`, which only ever
+  checked locale + script, never data currency).
+  **Fix**: `src/stats/weeklyReview.ts` gained
+  `computeWeeklyReviewFingerprint(inputs)` — a deterministic digest of
+  every figure the prompt/fallback actually quotes (gross, net, rpm,
+  trailingAvgRpm, cpm, deadheadPct, fuelPctOfRevenue, chargebacks,
+  perDiemDays, ytdProfitBefore/After, settlementCountYtd, goalProgress).
+  `isCachedReviewUsable()` now REQUIRES the cached fingerprint to match
+  the CURRENT one (computed fresh from whatever `useSettlements()`/
+  `useDeductions()`/etc. currently return) before ever showing cached
+  text — `currentFingerprint === null` (nothing to review right now) can
+  never match any cached fingerprint, which is the literal fix for "I
+  deleted every settlement and the coach kept quoting the old numbers."
+  `shouldGenerateWeeklyReview()` treats a fingerprint mismatch FOR THE
+  SAME WEEK (a correction/edit to data that doesn't change week_ending)
+  the same way a locale switch already was — it bypasses the normal
+  7-day cooldown and regenerates immediately. **A real design bug was
+  caught by this pass's own test suite before it shipped**: since the
+  fingerprint includes `weekEnding` itself, a genuinely NEW settlement
+  week always produces a different fingerprint too — an early version of
+  this fix let ANY fingerprint mismatch bypass the cooldown, which would
+  have meant every single new settlement import immediately fired an AI
+  call regardless of the "one call per week" cap. Fixed by scoping the
+  cooldown-bypass to `sameWeek && !dataUnchanged` specifically — a new
+  week still respects the ordinary cooldown (unchanged, established
+  behavior); only an edit within the SAME already-reviewed week forces
+  an immediate regeneration attempt. This mechanism needed NO changes to
+  any settlement/truck/deduction mutation call site — `weeklyReviewInputs`
+  (and therefore the fingerprint) is derived live from the exact same
+  `useSettlements()`/`useDeductions()`/`useFuelPurchases()`/
+  `useMaintenanceRecords()`/`useTolls()` queries every other screen
+  already correctly refreshes via the established ONE REFRESH PATH
+  `invalidateFinancialData()` convention (confirmed: both the settlement
+  delete flow and `deleteTruckCompletely()`'s own caller already issue an
+  unscoped `invalidateFinancialData(queryClient)` sweep, and Reset All
+  Data already nulls the whole `ai_weekly_review*` cache bucket directly
+  server-side). New **empty state**: `useProactiveCoach()` returns
+  `weeklyReviewEmpty` (true once loading has settled and there's
+  genuinely no settlement to review) — Home now shows
+  `ceoMode.weeklyReviewEmpty` ("Nothing to review yet — import a
+  settlement and I'll break down your week.") instead of silently
+  rendering nothing.
+  **PART 3 — WEEKLY REVIEW GAINS CPM**: the prompt/fallback/fingerprint
+  were missing Cost Per Mile entirely despite it being one of the KPIs
+  explicitly requested — `WeeklyReviewInputs` gained `cpm: number | null`,
+  wired in `proactiveCoach.ts` from the SAME account-wide canonical
+  `computeKpis()` call (`latestKpi.cpm`) that already fed
+  `latestCpm`/`cpmComparisonRpm` for the periodic-nudge engine — never a
+  second CPM formula, the literal same figure Scorecard/Home's per-mile
+  trio show. New `ceoMode.weeklyReviewFallback.cpm` key deliberately
+  spells out "cost per mile" per-language rather than embedding the bare
+  glossary token "CPM" (same established precedent as Cash Flow's own
+  `avgRpm` string) — no glossary constraint triggered since the term
+  isn't literally present in `en.json`'s own string. The review now
+  covers every KPI this request asked for: revenue, net, RPM vs trailing
+  average, CPM, deadhead %, fuel % of revenue, biggest chargebacks,
+  per-diem days, goal progress, and YTD movement — still 2-3 sentences
+  plus up to 3 action items, still one `ai-advisor` call per user per
+  week at most, unchanged.
+  Tests: `weeklyReview.test.ts` gained a `computeWeeklyReviewFingerprint`
+  describe block (identical inputs match; a changed gross/net/CPM/YTD/
+  chargeback/goal figure each independently changes the digest), a "data
+  fingerprint mismatch" describe block under `shouldGenerateWeeklyReview`
+  (same-week data change bypasses cooldown; null cached fingerprint
+  treated as a mismatch; all-settlements-deleted never regenerates; the
+  dedicated regression guard for the "new week's naturally-different
+  fingerprint must NOT bypass the cooldown" bug caught mid-pass), 3 new
+  `isCachedReviewUsable` cases (the literal delete-all-settlements
+  scenario; a same-week data change; a null cached fingerprint), and CPM
+  coverage added to the existing prompt/fallback tests. Full suite: 118
+  suites / 3,061 tests pass; `tsc --noEmit` clean; all 7 locales
+  confirmed key-parity (`ceoMode.weeklyReviewEmpty`/
+  `ceoMode.weeklyReviewFallback.cpm` — es/ru/tr/hi/ar fully translated
+  keeping "settlement" in Latin script per the glossary, uk as an
+  untranslated English copy per its own still-disabled status; glossary
+  test re-passed clean). `docs/PENDING_SQL.md` §68
+  (`profiles.ai_weekly_review_fingerprint text`, mirrored as
+  `pending_68.sql` at the repo root) is **NOT YET APPLIED** — the client
+  degrades gracefully until it's run (a `null`/absent column value is
+  already treated as "never trust this cache," so the bug fix's own
+  logic is unaffected by whether the migration has landed yet; the ONE
+  thing that doesn't work pre-migration is caching a NEW fingerprint,
+  which simply no-ops as an unknown column write until §68 is applied —
+  same graceful-degradation precedent as every other new `profiles`
+  column added ahead of its own migration in this codebase's history).
+  `supabase/functions/reset-data/index.ts` was updated (new field added
+  to `PROFILE_DATA_RESET`'s CLEARED bucket) and **needs redeploying**
+  once §68 has been run; `ai-advisor`/`ai-import`/`delete-account`/
+  `referral-sync` were NOT touched. No new native dependency — pure
+  client-side JS/TS plus one small SQL migration — ships via a normal
+  `eas update`.

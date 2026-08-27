@@ -1857,10 +1857,12 @@
     "homeOpenFull": "Tam AI Coach'u aç →",
     "weeklyReviewTitle": "Haftalık Değerlendirmeniz",
     "weeklyReviewGenerating": "Haftalık değerlendirmeniz hazırlanıyor...",
+    "weeklyReviewEmpty": "Henüz incelenecek bir şey yok — bir settlement içe aktarın, haftanızı sizin için özetleyeyim.",
     "weeklyReviewFallback": {
       "intro": "{{date}} ile biten hafta: {{gross}} gelir, {{net}} net.",
       "rpm": "Mil başına ücret: {{rpm}}/mil.",
       "rpmVsAvg": "Mil başına ücret: {{rpm}}/mil (son ortalamanız: {{avg}}/mil).",
+      "cpm": "Mil başına maliyet (tüm gerçek işletme giderleri): {{cpm}}/mil.",
       "deadhead": "Deadhead: millerin {{pct}}'i.",
       "fuel": "Yakıt: gelirin {{pct}}'i.",
       "perDiem": "Bu hafta per diem günleri: {{count}}.",

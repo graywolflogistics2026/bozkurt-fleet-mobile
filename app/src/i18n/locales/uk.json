@@ -1857,10 +1857,12 @@
     "homeOpenFull": "Open full AI Coach →",
     "weeklyReviewTitle": "Your Weekly Review",
     "weeklyReviewGenerating": "Composing your weekly review...",
+    "weeklyReviewEmpty": "Nothing to review yet — import a settlement and I'll break down your week.",
     "weeklyReviewFallback": {
       "intro": "Week ending {{date}}: {{gross}} revenue, {{net}} net.",
       "rpm": "Rate per mile: {{rpm}}/mi.",
       "rpmVsAvg": "Rate per mile: {{rpm}}/mi (your recent average: {{avg}}/mi).",
+      "cpm": "Cost per mile (all real operating costs): {{cpm}}/mi.",
       "deadhead": "Deadhead: {{pct}} of miles.",
       "fuel": "Fuel: {{pct}} of revenue.",
       "perDiem": "Per diem days this week: {{count}}.",

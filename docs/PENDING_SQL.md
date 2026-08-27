@@ -3820,6 +3820,43 @@ service_role/db credentials here). Run the PREVIEW query first.
 
 ---
 
+## 68. profiles.ai_weekly_review_fingerprint (AI COACH — FIX STALE CACHE, owner decision) — NOT YET APPLIED
+
+**The finding**: device report — every settlement was deleted and the AI
+Coach kept showing the old weekly review, quoting dollar figures that no
+longer existed. Root cause: the cache (`ai_weekly_review`/
+`ai_weekly_review_week_ending`/`ai_weekly_review_generated_at`/
+`ai_weekly_review_locale`) only ever tracked WHICH SETTLEMENT WEEK and
+LOCALE a review covers — never whether the underlying FIGURES (revenue,
+net, RPM, ...) it quotes are still what the account's real data currently
+produces. Deleting every settlement correctly stopped
+`shouldGenerateWeeklyReview()` from trying to regenerate (nothing to
+review), but nothing ever stopped the STALE cached text from being
+DISPLAYED — a separate, unguarded code path. This column stores a digest
+of the exact figures a review was generated from
+(`src/stats/weeklyReview.ts`'s `computeWeeklyReviewFingerprint()`) — a
+mismatch against the account's CURRENT figures (from a settlement/
+deduction/fuel/maintenance/toll insert, update, or delete; a truck
+delete; a Reset All Data — anything that moves a KPI total) means the
+cached text is never shown, and a fresh regeneration attempt is triggered
+immediately, bypassing the normal 7-day cooldown, same treatment a locale
+mismatch already got (see CLAUDE.md's own dated entry for this pass for
+the full before/after).
+
+```sql
+alter table profiles add column if not exists ai_weekly_review_fingerprint text;
+```
+
+One idempotent `add column if not exists`, safe to re-run. Nullable —
+`null` simply means "no fingerprint recorded yet," which
+`isCachedReviewUsable()` already treats as "never trust this cache"
+(a `null` current fingerprint, meaning nothing to review right now, can
+never match a `null` OR any real cached fingerprint either).
+
+- [ ] 68 run (profiles gains ai_weekly_review_fingerprint text, nullable)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

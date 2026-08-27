@@ -465,6 +465,14 @@ function AiCoachSection({
             <Text style={{ color: colors.text, lineHeight: 20 }}>{proactive.weeklyReviewFallback}</Text>
           </View>
         )}
+        {/* AI COACH — FIX STALE CACHE (owner decision): explicit empty
+            state once there's genuinely nothing to review (no settlement
+            ever imported, or every one deleted) — never silently blank,
+            and never the old cached text quoting data that no longer
+            exists. */}
+        {proactive.weeklyReviewEmpty && (
+          <MutedText style={{ marginBottom: spacing.md }}>{t('ceoMode.weeklyReviewEmpty')}</MutedText>
+        )}
 
         {coach.recommendations.length === 0 ? (
           <MutedText>{t('ceoMode.homeAllCaughtUp')}</MutedText>

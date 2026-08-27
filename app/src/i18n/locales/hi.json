@@ -1857,10 +1857,12 @@
     "homeOpenFull": "पूर्ण AI कोच खोलें →",
     "weeklyReviewTitle": "आपकी साप्ताहिक समीक्षा",
     "weeklyReviewGenerating": "आपकी साप्ताहिक समीक्षा तैयार की जा रही है...",
+    "weeklyReviewEmpty": "अभी समीक्षा के लिए कुछ नहीं है — एक settlement इम्पोर्ट करें और मैं आपके सप्ताह का विश्लेषण करूँगा।",
     "weeklyReviewFallback": {
       "intro": "{{date}} को समाप्त सप्ताह: {{gross}} राजस्व, {{net}} नेट।",
       "rpm": "प्रति मील दर: {{rpm}}/मील।",
       "rpmVsAvg": "प्रति मील दर: {{rpm}}/मील (आपका हालिया औसत: {{avg}}/मील)।",
+      "cpm": "प्रति मील लागत (सभी वास्तविक परिचालन लागतें): {{cpm}}/मील।",
       "deadhead": "Deadhead: मील का {{pct}}।",
       "fuel": "ईंधन: राजस्व का {{pct}}।",
       "perDiem": "इस सप्ताह per diem दिन: {{count}}।",

@@ -690,6 +690,15 @@ export type Profile = {
   // mismatch against the CURRENT locale as a reason to regenerate, same
   // as a genuinely new settlement week.
   ai_weekly_review_locale: string | null;
+  // AI COACH — FIX STALE CACHE (owner decision, docs/PENDING_SQL.md §68):
+  // a digest of every real figure the cached review quotes (revenue, net,
+  // RPM, ...), computed by src/stats/weeklyReview.ts's
+  // computeWeeklyReviewFingerprint(). A mismatch against the account's
+  // CURRENT figures means the underlying data changed since generation
+  // (a settlement/deduction/fuel/maintenance/toll insert, update, or
+  // delete; a truck delete; a Reset All Data) — the cached text is never
+  // shown in that case, same treatment as a locale mismatch already got.
+  ai_weekly_review_fingerprint: string | null;
   // REFERRAL PROGRAM (owner decision 2026-08-24, PART 1, docs/PENDING_SQL.md
   // §50) — referral_code is generated once per user by the handle_new_user()
   // DB trigger (never client-generated for a real account); referred_by is

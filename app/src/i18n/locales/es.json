@@ -1857,10 +1857,12 @@
     "homeOpenFull": "Abrir AI Coach completo →",
     "weeklyReviewTitle": "Tu Revisión Semanal",
     "weeklyReviewGenerating": "Componiendo tu revisión semanal...",
+    "weeklyReviewEmpty": "Aún no hay nada que revisar — importa un settlement y te explicaré tu semana.",
     "weeklyReviewFallback": {
       "intro": "Semana que termina el {{date}}: {{gross}} de ingresos, {{net}} neto.",
       "rpm": "Tarifa por milla: {{rpm}}/mi.",
       "rpmVsAvg": "Tarifa por milla: {{rpm}}/mi (tu promedio reciente: {{avg}}/mi).",
+      "cpm": "Costo por milla (todos los costos operativos reales): {{cpm}}/mi.",
       "deadhead": "Deadhead: {{pct}} de las millas.",
       "fuel": "Combustible: {{pct}} de los ingresos.",
       "perDiem": "Días de per diem esta semana: {{count}}.",

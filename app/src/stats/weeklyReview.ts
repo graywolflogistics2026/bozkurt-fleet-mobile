@@ -28,32 +28,101 @@ const REGENERATE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 // BYPASSES the 7-day cooldown below (a language switch is a rare,
 // deliberate user action, not something worth rate-limiting the same way
 // as "yet another settlement imported this week" is).
+// AI COACH — FIX STALE CACHE (owner decision, docs/PENDING_SQL.md §68).
+// Device report: every settlement was deleted and the coach kept showing
+// the old weekly review, quoting dollar figures that no longer existed.
+// Root cause: the cache only ever tracked WHICH SETTLEMENT WEEK and
+// LOCALE a review covers — never whether the underlying FIGURES
+// (revenue, net, RPM, ...) it quotes are still what the account's real
+// data currently produces. Deleting every settlement left
+// `latestWeekEnding` null and `shouldGenerateWeeklyReview()` correctly
+// declined to regenerate ("nothing to review yet — no meaning in
+// re-running the AI"), but nothing ever stopped the STALE cached text
+// from being DISPLAYED — that was a separate, unguarded code path.
+// `computeWeeklyReviewFingerprint()` is a deterministic digest of every
+// figure the prompt/fallback actually quotes; a mismatch between it and
+// the cached one means the account's data changed since generation
+// (a settlement/deduction/fuel/maintenance/toll insert, update, or
+// delete; a truck delete; a Reset All Data; anything that moves a KPI
+// total) — treated exactly like a locale switch already was: it forces
+// an immediate regeneration attempt, bypassing the 7-day cooldown, AND
+// — critically, this is the actual bug fix — the stale cached text is
+// never shown while that happens (see isCachedReviewUsable() below).
+export function computeWeeklyReviewFingerprint(inputs: WeeklyReviewInputs): string {
+  const num = (n: number | null | undefined) => (n == null ? 'x' : n.toFixed(2));
+  const chargebacks = inputs.biggestChargebacks.map((c) => `${c.description}:${num(c.amount)}`).join('|');
+  const goal = inputs.goalProgress
+    ? `${num(inputs.goalProgress.weeklyGoal)}:${num(inputs.goalProgress.progressDollars)}:${inputs.goalProgress.metGoal ? 1 : 0}`
+    : 'none';
+  return [
+    inputs.weekEnding,
+    num(inputs.gross),
+    num(inputs.net),
+    num(inputs.rpm),
+    num(inputs.trailingAvgRpm),
+    num(inputs.cpm),
+    num(inputs.deadheadPct),
+    num(inputs.fuelPctOfRevenue),
+    chargebacks,
+    String(inputs.perDiemDays),
+    num(inputs.ytdProfitBefore),
+    num(inputs.ytdProfitAfter),
+    String(inputs.settlementCountYtd),
+    goal,
+  ].join('~');
+}
+
 export function shouldGenerateWeeklyReview(
   cachedWeekEnding: string | null,
   cachedGeneratedAt: string | null,
   cachedLocale: string | null,
+  cachedFingerprint: string | null,
   latestWeekEnding: string | null,
   currentLocale: string,
+  currentFingerprint: string | null,
   now: Date = new Date()
 ): boolean {
   if (!latestWeekEnding) return false; // nothing imported yet — nothing to review
   const sameWeek = latestWeekEnding === cachedWeekEnding;
   const localeMatches = cachedLocale === currentLocale;
-  if (sameWeek && localeMatches) return false; // already reviewed this exact week, in this exact language
+  const dataUnchanged = currentFingerprint != null && currentFingerprint === cachedFingerprint;
+  if (sameWeek && localeMatches && dataUnchanged) return false; // already reviewed this exact week, this language, this data
   if (!cachedGeneratedAt) return true; // never generated one before
   if (!localeMatches) return true; // language switch — always regenerate now, cooldown doesn't apply
+  // A genuinely NEW settlement week naturally produces a different
+  // fingerprint too (it includes weekEnding) — that case still respects
+  // the normal weekly cooldown below, same established behavior as
+  // before this fix. What's NEW here: the underlying figures for THIS
+  // SAME week changing (a settlement correction, a deleted/edited
+  // deduction, a truck reassignment, ...) is treated like a locale
+  // switch — it bypasses the cooldown, since the currently cached text
+  // is quoting numbers that no longer describe reality right now, not
+  // "just another day has passed since a perfectly good review."
+  if (sameWeek && !dataUnchanged) return true;
   const sinceLastMs = now.getTime() - new Date(cachedGeneratedAt).getTime();
   return sinceLastMs >= REGENERATE_COOLDOWN_MS;
 }
 
-// A cached review is only safe to SHOW when it was tagged as generated
-// for the locale currently active — anything else (never generated, or
-// generated under a different language) must not be displayed, even
+// A cached review is only safe to SHOW when (a) it was tagged as
+// generated for the locale currently active AND (b) its fingerprint
+// still matches the account's CURRENT real figures — anything else
+// (never generated, generated under a different language, or generated
+// from data that has since changed/vanished) must not be displayed, even
 // while a fresh regeneration request is in flight. Extracted as its own
 // tiny predicate (rather than inlined at each call site) so the "what
 // makes a cached review trustworthy" rule lives in exactly one place.
-export function isCachedReviewUsable(cachedReview: string | null, cachedLocale: string | null, currentLocale: string): boolean {
-  return !!cachedReview && cachedLocale === currentLocale;
+// `currentFingerprint === null` (no settlements at all right now) can
+// never match any cached fingerprint, which is exactly the fix for the
+// reported bug: delete every settlement and the cached review instantly
+// stops being "usable," regardless of what its own text still says.
+export function isCachedReviewUsable(
+  cachedReview: string | null,
+  cachedLocale: string | null,
+  currentLocale: string,
+  cachedFingerprint: string | null,
+  currentFingerprint: string | null
+): boolean {
+  return !!cachedReview && cachedLocale === currentLocale && currentFingerprint != null && currentFingerprint === cachedFingerprint;
 }
 
 // SECOND LAYER OF DEFENSE, for the two non-Latin-script enabled locales
@@ -91,6 +160,12 @@ export type WeeklyReviewInputs = {
   net: number;
   rpm: number | null; // this week's own revenue/loaded-mile
   trailingAvgRpm: number | null; // the user's own trailing average, for comparison
+  // AI COACH — DAILY TIPS + WEEKLY REVIEW COVERAGE (owner decision) — the
+  // account-wide canonical cost-per-mile from src/stats/kpi.ts's
+  // computeKpis() (the SAME figure Scorecard/Home's per-mile trio show,
+  // never a second CPM formula) — null whenever there isn't yet a real
+  // miles total to divide by.
+  cpm: number | null;
   deadheadPct: number | null; // 0-1, null when no mileage data at all
   fuelPctOfRevenue: number | null; // 0-1
   biggestChargebacks: { description: string; amount: number }[]; // already sorted desc, caller caps the length
@@ -141,6 +216,7 @@ export function buildWeeklyReviewPrompt(inputs: WeeklyReviewInputs): string {
     inputs.rpm != null
       ? `Rate per mile this week: ${money(inputs.rpm)}/mi${inputs.trailingAvgRpm != null ? `, vs your own trailing average of ${money(inputs.trailingAvgRpm)}/mi` : ''}.`
       : '',
+    inputs.cpm != null ? `Cost per mile (account-wide, all real operating costs including truck cost basis): ${money(inputs.cpm)}/mi.` : '',
     inputs.deadheadPct != null ? `Deadhead: ${pct(inputs.deadheadPct)} of miles.` : '',
     inputs.fuelPctOfRevenue != null ? `Fuel was ${pct(inputs.fuelPctOfRevenue)} of revenue.` : '',
     inputs.biggestChargebacks.length > 0
@@ -207,6 +283,7 @@ export function buildWeeklyReviewFallbackText(
         ? t('ceoMode.weeklyReviewFallback.rpmVsAvg', { rpm: money(inputs.rpm), avg: money(inputs.trailingAvgRpm) })
         : t('ceoMode.weeklyReviewFallback.rpm', { rpm: money(inputs.rpm) })
       : '',
+    inputs.cpm != null ? t('ceoMode.weeklyReviewFallback.cpm', { cpm: money(inputs.cpm) }) : '',
     inputs.deadheadPct != null ? t('ceoMode.weeklyReviewFallback.deadhead', { pct: pct(inputs.deadheadPct) }) : '',
     inputs.fuelPctOfRevenue != null ? t('ceoMode.weeklyReviewFallback.fuel', { pct: pct(inputs.fuelPctOfRevenue) }) : '',
     inputs.perDiemDays > 0 ? t('ceoMode.weeklyReviewFallback.perDiem', { count: inputs.perDiemDays }) : '',

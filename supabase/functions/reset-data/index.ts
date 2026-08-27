@@ -133,6 +133,10 @@ const PROFILE_DATA_RESET = {
   // (owner decision, docs/PENDING_SQL.md §65) — new sibling of the three
   // ai_weekly_review_* fields directly above; same CLEARED bucket.
   ai_weekly_review_locale: null,
+  // AI COACH — FIX STALE CACHE (owner decision, docs/PENDING_SQL.md §68)
+  // — the fingerprint of the real figures the cached review was generated
+  // from; same CLEARED bucket as its 4 siblings above.
+  ai_weekly_review_fingerprint: null,
 };
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

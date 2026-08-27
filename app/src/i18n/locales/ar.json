@@ -1857,10 +1857,12 @@
     "homeOpenFull": "افتح AI Coach الكامل ←",
     "weeklyReviewTitle": "مراجعتك الأسبوعية",
     "weeklyReviewGenerating": "جارٍ إعداد مراجعتك الأسبوعية...",
+    "weeklyReviewEmpty": "لا يوجد شيء لمراجعته بعد — قم باستيراد settlement وسأحلل أسبوعك لك.",
     "weeklyReviewFallback": {
       "intro": "الأسبوع المنتهي في {{date}}: إيرادات {{gross}}، صافي {{net}}.",
       "rpm": "السعر لكل ميل: {{rpm}}/ميل.",
       "rpmVsAvg": "السعر لكل ميل: {{rpm}}/ميل (متوسطك الأخير: {{avg}}/ميل).",
+      "cpm": "التكلفة لكل ميل (جميع تكاليف التشغيل الفعلية): {{cpm}}/ميل.",
       "deadhead": "Deadhead: {{pct}} من الأميال.",
       "fuel": "الوقود: {{pct}} من الإيرادات.",
       "perDiem": "أيام per diem هذا الأسبوع: {{count}}.",

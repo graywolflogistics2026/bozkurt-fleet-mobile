@@ -19,6 +19,7 @@ import {
   shouldGenerateWeeklyReview,
   buildWeeklyReviewPrompt,
   buildWeeklyReviewFallbackText,
+  computeWeeklyReviewFingerprint,
   isCachedReviewUsable,
   looksLikeExpectedScript,
   type WeeklyReviewInputs,
@@ -293,25 +294,7 @@ export function useProactiveCoach() {
   const cachedWeekEnding = profileQuery.data?.ai_weekly_review_week_ending ?? null;
   const cachedGeneratedAt = profileQuery.data?.ai_weekly_review_generated_at ?? null;
   const cachedReviewLocale = profileQuery.data?.ai_weekly_review_locale ?? null;
-  const needsWeeklyReview = shouldGenerateWeeklyReview(
-    cachedWeekEnding,
-    cachedGeneratedAt,
-    cachedReviewLocale,
-    latestSettlement?.week_ending ?? null,
-    i18n.language,
-    now
-  );
-  // A cached review only counts as trustworthy when (a) its own tagged
-  // locale matches the CURRENT one (isCachedReviewUsable — catches a
-  // stale cache left over from before a language switch) AND (b), for
-  // the two script-checkable locales, it actually contains real text in
-  // that script (looksLikeExpectedScript — catches a currently-deployed
-  // ai-advisor that ignored the requested locale entirely, e.g. while a
-  // redeploy is blocked). Anything else falls through to the
-  // deterministic, always-correct template below instead of ever
-  // rendering possibly-wrong-language server text.
-  const weeklyReviewUsable =
-    isCachedReviewUsable(cachedReview, cachedReviewLocale, i18n.language) && looksLikeExpectedScript(cachedReview ?? '', i18n.language);
+  const cachedReviewFingerprint = profileQuery.data?.ai_weekly_review_fingerprint ?? null;
 
   // Same real-number inputs buildWeeklyReviewPrompt() sends to the model,
   // pulled out of the generation effect below so the ALWAYS-CORRECT
@@ -354,6 +337,12 @@ export function useProactiveCoach() {
       net: latestWeekTrend.net,
       rpm: latestRpm,
       trailingAvgRpm,
+      // AI COACH — WEEKLY REVIEW COVERAGE (owner decision) — the SAME
+      // account-wide canonical CPM figure computeKpis() already produces
+      // for `latestKpi`/`latestCpm` above (Scorecard/Home's own per-mile
+      // trio), never a second CPM formula — this is what actually makes
+      // "cost per mile" one of the numbers the weekly review cites.
+      cpm: latestCpm,
       deadheadPct: latestDeadheadPct,
       fuelPctOfRevenue: latestFuelPct,
       biggestChargebacks,
@@ -364,7 +353,7 @@ export function useProactiveCoach() {
       goalProgress: weeklyGoal != null && goalProgress ? { weeklyGoal, ...goalProgress } : null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestSettlement, latestWeekTrend, weeklyTrend, sortedSettlements, deductionsQuery.data, latestRpm, trailingAvgRpm, latestDeadheadPct, latestFuelPct, weeklyGoal, goalProgress]);
+  }, [latestSettlement, latestWeekTrend, weeklyTrend, sortedSettlements, deductionsQuery.data, latestRpm, trailingAvgRpm, latestCpm, latestDeadheadPct, latestFuelPct, weeklyGoal, goalProgress]);
 
   const weeklyReviewFallback = useMemo(
     () => (weeklyReviewInputs ? buildWeeklyReviewFallbackText(weeklyReviewInputs, t, money, pct) : null),
@@ -372,19 +361,66 @@ export function useProactiveCoach() {
     [weeklyReviewInputs, i18n.language]
   );
 
+  // AI COACH — FIX STALE CACHE (owner decision, docs/PENDING_SQL.md §68):
+  // a digest of every figure the current week's review actually quotes —
+  // null whenever there's nothing to review at all (every settlement was
+  // deleted, or none exist yet). Any settlement/deduction/fuel/
+  // maintenance/toll insert, update, or delete, any truck delete, or a
+  // Reset All Data all flow through the SAME react-query invalidation
+  // this hook's own settlementsQuery/dedQuery/etc. already depend on —
+  // this fingerprint recomputes fresh from whatever that refetch returns,
+  // with no separate wiring needed per mutation type.
+  const currentFingerprint = weeklyReviewInputs ? computeWeeklyReviewFingerprint(weeklyReviewInputs) : null;
+  const needsWeeklyReview = shouldGenerateWeeklyReview(
+    cachedWeekEnding,
+    cachedGeneratedAt,
+    cachedReviewLocale,
+    cachedReviewFingerprint,
+    latestSettlement?.week_ending ?? null,
+    i18n.language,
+    currentFingerprint,
+    now
+  );
+  // A cached review only counts as trustworthy when (a) its own tagged
+  // locale matches the CURRENT one (isCachedReviewUsable — catches a
+  // stale cache left over from before a language switch), (b) its own
+  // tagged fingerprint matches the CURRENT real figures
+  // (isCachedReviewUsable — catches a stale cache left over from a
+  // settlement/truck delete, edit, or a Reset All Data; `currentFingerprint
+  // === null`, meaning nothing to review right now, can never match any
+  // cached fingerprint, which is the actual fix for "I deleted every
+  // settlement and the coach kept quoting the old numbers"), AND (c), for
+  // the two script-checkable locales, it actually contains real text in
+  // that script (looksLikeExpectedScript — catches a currently-deployed
+  // ai-advisor that ignored the requested locale entirely, e.g. while a
+  // redeploy is blocked). Anything else falls through to the
+  // deterministic, always-correct template below instead of ever
+  // rendering possibly-wrong-language or possibly-stale server text.
+  const weeklyReviewUsable =
+    isCachedReviewUsable(cachedReview, cachedReviewLocale, i18n.language, cachedReviewFingerprint, currentFingerprint) &&
+    looksLikeExpectedScript(cachedReview ?? '', i18n.language);
+
   const generatingKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!needsWeeklyReview || !latestSettlement || !weeklyReviewInputs || generating) return;
-    // Key includes the locale — a language switch must be able to
-    // trigger a fresh attempt even for the SAME settlement week this
-    // session already tried (and possibly already succeeded for, under
-    // the old locale).
-    const key = `${latestSettlement.week_ending}:${i18n.language}`;
+    // Key includes the locale AND the data fingerprint — a language
+    // switch, or any change to the underlying figures (a settlement/
+    // deduction/fuel/maintenance/toll edit that doesn't change
+    // week_ending, a re-import, ...), must be able to trigger a fresh
+    // attempt even for the SAME settlement week this session already
+    // tried (and possibly already succeeded for, under the old
+    // locale/data).
+    const key = `${latestSettlement.week_ending}:${i18n.language}:${currentFingerprint ?? ''}`;
     if (generatingKeyRef.current === key) return;
     generatingKeyRef.current = key;
 
     const prompt = buildWeeklyReviewPrompt(weeklyReviewInputs);
     const requestedLocale = i18n.language;
+    // Captured BEFORE the async call, same reasoning as requestedLocale
+    // above — the account's data could keep changing while this call is
+    // in flight, but the response being generated is for THIS snapshot,
+    // not whatever the figures happen to be by the time it resolves.
+    const requestedFingerprint = currentFingerprint;
 
     setGenerating(true);
     callAiAdvisor([{ role: 'user', content: prompt }], requestedLocale)
@@ -413,6 +449,11 @@ export function useProactiveCoach() {
             // flight, and the response was generated for the ORIGINAL
             // request, not whatever the language happens to be now).
             ai_weekly_review_locale: requestedLocale,
+            // AI COACH — FIX STALE CACHE (owner decision, docs/PENDING_SQL.md
+            // §68) — tag with the fingerprint of the figures this review
+            // was ACTUALLY generated from, same "captured before the call,
+            // never re-derived after" reasoning as the locale above.
+            ai_weekly_review_fingerprint: requestedFingerprint,
           },
           {
             onError: (err) => {
@@ -428,7 +469,7 @@ export function useProactiveCoach() {
       })
       .finally(() => setGenerating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsWeeklyReview, latestSettlement, weeklyReviewInputs, i18n.language]);
+  }, [needsWeeklyReview, latestSettlement, weeklyReviewInputs, i18n.language, currentFingerprint]);
 
   return {
     isLoading,
@@ -438,6 +479,13 @@ export function useProactiveCoach() {
     // correctly localized regardless of ai-advisor's own deploy/locale
     // state. The UI shows this whenever `weeklyReview` above is null.
     weeklyReviewFallback,
+    // AI COACH — FIX STALE CACHE (owner decision) — true once loading has
+    // settled and there is genuinely no settlement to review (never
+    // imported one, or every one was deleted). The screen's own job is to
+    // never leave this gap silently blank: show
+    // "Nothing to review yet — import a settlement and I'll break down
+    // your week" instead, rather than nothing at all.
+    weeklyReviewEmpty: !isLoading && !weeklyReviewInputs,
     weeklyReviewGenerating: generating,
     periodicNudge,
     weeklyGoal,
