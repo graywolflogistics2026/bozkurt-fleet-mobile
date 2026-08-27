@@ -482,6 +482,41 @@ describe('classifySettlementLine (settlement-line classifier, owner decision 202
   });
 });
 
+describe('UNIFIED CLASSIFICATION PATH (owner decision) — classifySettlementLine() and guessCategory() agree', () => {
+  // Regression guard for the exact bug that motivated the unification:
+  // classifySettlementLine() recognized IRP/IFTA/HVUT/2290 while
+  // guessCategory() (or vice versa) did not, for Permits and ELD
+  // specifically — plus 3 more categories that had the identical
+  // divergence risk (Tolls & Scales, Bank & Merchant Fees, Legal &
+  // Professional Services) even though nobody had reported them yet.
+  // Each description below is chosen to be unambiguous under BOTH
+  // functions' own (different) rule orderings — it must not accidentally
+  // match an earlier-checked category in either one.
+  const sharedCategoryCases: Array<[string, string]> = [
+    ['IRP', 'Permits, Licenses & Road Taxes'],
+    ['IFTA quarterly filing', 'Permits, Licenses & Road Taxes'],
+    ['HVUT payment', 'Permits, Licenses & Road Taxes'],
+    ['Form 2290', 'Permits, Licenses & Road Taxes'],
+    ['ELD FEE', 'ELD & Communications'],
+    ['Weigh station fee', 'Tolls & Scales'],
+    ['Merchant fee', 'Bank & Merchant Fees'],
+    ['Bookkeeping service', 'Legal & Professional Services'],
+  ];
+
+  it.each(sharedCategoryCases)('classifySettlementLine(%j) and guessCategory(%j, undefined) agree on %j', (desc, expected) => {
+    expect(classifySettlementLine(desc)).toBe(expected);
+    expect(guessCategory(desc, undefined)).toBe(expected);
+  });
+
+  it('the exact reported bug (IRP recognized by one function, not the other) is fixed both ways', () => {
+    // Before this fix: classifySettlementLine('IRP') was null (its own
+    // FED_HWY_TAX_RE never listed "irp"), while guessCategory already
+    // recognized it — proving they used to disagree on the SAME text.
+    expect(classifySettlementLine('IRP')).toBe(guessCategory('IRP', undefined));
+    expect(classifySettlementLine('IRP')).toBe('Permits, Licenses & Road Taxes');
+  });
+});
+
 describe('applyScheduleCDefault (tax safety rail, owner decision 2026-07-10)', () => {
   it('defaults schedule_c_bucket to "Misc" for an expense category with none given', () => {
     const result = applyScheduleCDefault({ user_id: 'u1', name: 'New Category', kind: 'expense' });

@@ -3747,6 +3747,79 @@ own dated entry for this pass for the full client-side merge logic
 
 ---
 
+## 67. Re-classify existing "Misc" settlement-withheld deductions (UNIFIED CLASSIFICATION PATH, owner decision) — NOT YET APPLIED (ONE-TIME DATA REPAIR, not a schema change — no ALTER TABLE)
+
+**The finding**: `classifySettlementLine()` (settlement-withheld deduction
+lines) and `guessCategory()` (general document/purchase categorization)
+each hand-rolled their OWN separate regex for the same shared category in
+at least 5 places — confirmed to have already diverged for Permits,
+Licenses & Road Taxes (one recognized IRP/IFTA/HVUT/2290, the other
+didn't) and ELD & Communications, with the identical risk latent in Tolls
+& Scales, Bank & Merchant Fees, and (a genuine, deliberate exception —
+see below) Legal & Professional Services. Fixed in
+`app/src/import/category.ts` by extracting each shared category's
+matching logic into ONE exported detector function
+(`isPermitsOrRoadTax`/`isEldOrCommunications`/`isTollsOrScales`/
+`isBankOrMerchantFee`, the union of whatever terms either function
+previously recognized) that BOTH `classifySettlementLine()` and
+`guessCategory()` now call — this class of divergence cannot recur for
+any of these five. **One deliberate, documented exception**: Legal &
+Professional Services is NOT fully unified — `guessCategory()` keeps the
+bare words "accountant"/"accounting" in its own broader
+`isLegalOrProfessionalServices()` (a standalone document can legitimately
+be titled "ABC Accounting Services"), but `classifySettlementLine()` uses
+a narrower `isLegalOrProfessionalServicesSettlementSafe()` that excludes
+those two words — Prime Inc's own carrier-specific chargeback code is the
+literal text "ACCOUNTING SERV" (docs/CARRIER_CODES.md), and unifying the
+broader regex briefly broke this file's own CARRIER ISOLATION hard
+invariant (caught immediately by the existing test suite failing before
+this could ship). `src/import/__tests__/category.test.ts` gained a new
+"UNIFIED CLASSIFICATION PATH" describe block asserting
+`classifySettlementLine()` and `guessCategory()` resolve the SAME
+description to the SAME category for every one of the 5 shared
+categories, plus a dedicated regression case reproducing the exact
+reported bug (IRP).
+
+**This section is the retroactive half of that fix**: a settlement
+deduction row imported BEFORE this pass — which landed in "Misc" (or with
+no category at all) purely because the OLD, narrower regex didn't
+recognize its real chargeback type — stays wrong forever unless it's
+re-run through the corrected rules once. `pending_67.sql` (mirrored at
+the repo root) re-applies the corrected classification directly in SQL
+(hand-translated from the same regexes above, `\b` → `\y` for Postgres's
+word-boundary syntax), scoped to `source = 'settlement' AND (category is
+null or category = 'Misc') AND description is not null` — never touching
+a row that already has a real category, including a different one the AI
+already got right the first time, and never touching an out-of-pocket
+'Misc' row (those go through `guessCategory()`'s vendor/store-aware
+logic at import time, a different classifier this migration doesn't
+retroactively re-run). Includes a read-only PREVIEW query (old_category →
+new_category, row counts, dollar totals) to run and review before the
+actual UPDATE. Safe to re-run — the UPDATE's own WHERE clause only
+matches rows where the corrected classification would actually change
+the stored value, via an `is distinct from category` guard.
+
+```sql
+-- See pending_67.sql at the repo root for the full PREVIEW + UPDATE
+-- script (too long to duplicate here without drifting out of sync —
+-- keep pending_67.sql as the single source of truth for this section
+-- until it's run, deleted, and this note is replaced with the final
+-- SQL, matching this file's own established convention for every other
+-- section).
+```
+
+**REVIEW BEFORE RUNNING**: assembled by hand-translating
+`app/src/import/category.ts`'s JS regexes into PostgreSQL POSIX-ERE
+syntax — NOT executed against a live database in this environment (no
+service_role/db credentials here). Run the PREVIEW query first.
+
+- [ ] 67 run (re-classifies deductions.category for source='settlement'
+      rows currently 'Misc'/null, using the corrected, unified
+      classification rules) — run `pending_67.sql`'s PREVIEW query first,
+      review its output, then run the UPDATE.
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

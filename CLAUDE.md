@@ -9139,3 +9139,95 @@
   patterns); `tsc --noEmit` clean. No SQL/Edge Function changes — every
   fix in this pass is pure client-side JS/TS (a text-classification regex
   and one new test). Ships via a normal `eas update`.
+- UNIFIED CLASSIFICATION PATH + RETROACTIVE RE-CLASSIFICATION (owner
+  decision, direct follow-up to the previous pass — "you found
+  classifySettlementLine() and guessCategory() disagreeing... unify them
+  into ONE classification path"). Full audit, not just the two named
+  categories: read `app/src/import/category.ts` end to end and found the
+  ELD/IRP divergence the owner reported was one of FIVE — Permits,
+  Licenses & Road Taxes and ELD & Communications (the two named) plus
+  three more nobody had reported yet: Tolls & Scales (guessCategory only
+  matched "cat scale," missing classifySettlementLine's own bare
+  `\bscale\b`), Bank & Merchant Fees (guessCategory had two extra terms,
+  "overdraft"/"nsf fee," classifySettlementLine lacked), and Legal &
+  Professional Services (classifySettlementLine's own ACCOUNTING_SERVICE_RE
+  was deliberately much narrower than guessCategory's full legal/
+  accounting term list).
+  **UNIFICATION**: 4 of the 5 are now fully unified — each shared category
+  gets exactly ONE exported detector function (`isPermitsOrRoadTax`/
+  `isEldOrCommunications`/`isTollsOrScales`/`isBankOrMerchantFee`, each
+  the UNION of whatever terms either function previously recognized on
+  its own, so neither function loses coverage the other one already had)
+  that BOTH `classifySettlementLine()` and `guessCategory()` now call —
+  following the exact same `isXxx(text): boolean` pattern this file
+  already used for `isInsuranceChargeback`/`isRestaurantPurchase`/
+  `isWarrantyService`/`isLumperFee` (already correctly shared before this
+  pass). This class of divergence — one function recognizing a term, the
+  other silently not — cannot recur for any of these four.
+  **THE ONE DELIBERATE, DOCUMENTED EXCEPTION**: Legal & Professional
+  Services is NOT fully unified, and the reason was caught by this file's
+  own existing test suite the instant the naive full unification was
+  tried — `isLegalOrProfessionalServices()`'s broader guessCategory-side
+  regex includes the bare words "accountant"/"accounting," and Prime
+  Inc's own carrier-specific chargeback code is the literal text
+  "ACCOUNTING SERV" (docs/CARRIER_CODES.md) — unifying the two functions
+  naively made `classifySettlementLine('ACCOUNTING SERV')` return "Legal
+  & Professional Services" instead of `null`, a direct violation of this
+  file's own hard CARRIER ISOLATION invariant (a carrier's own internal
+  abbreviated code text must never be recognized by the generic
+  classifier — that's `carrier_code_maps`' job, scoped to the carrier
+  that actually issued the statement). Fixed by keeping TWO functions:
+  `isLegalOrProfessionalServices()` (unchanged, still used by
+  `guessCategory()` — a standalone imported document CAN legitimately be
+  titled "ABC Accounting Services") and a new
+  `isLegalOrProfessionalServicesSettlementSafe()` (every term from the
+  first EXCEPT "accountant"/"accounting," used ONLY by
+  `classifySettlementLine()`). This is documented in `category.ts` itself
+  as a genuine, deliberate exception — not a leftover divergence — since
+  every OTHER shared category has no such carrier-code collision and IS
+  fully unified.
+  **TEST** (the explicit ask — "add a test asserting both entry points
+  resolve the same description to the same category"):
+  `src/import/__tests__/category.test.ts` gained a new "UNIFIED
+  CLASSIFICATION PATH" describe block — 8 realistic descriptions (IRP,
+  IFTA quarterly filing, HVUT payment, Form 2290, ELD FEE, Weigh station
+  fee, Merchant fee, Bookkeeping service), each chosen to be unambiguous
+  under BOTH functions' own different rule orderings, asserting
+  `classifySettlementLine(desc) === guessCategory(desc, undefined) ===`
+  the expected category for every one — plus a dedicated regression case
+  reproducing the exact reported bug (`classifySettlementLine('IRP')`
+  used to be `null` while `guessCategory('IRP', undefined)` was already
+  correct; both now agree). The CARRIER ISOLATION regression this test
+  run caught (`classifySettlementLine('ACCOUNTING SERV')` briefly
+  resolving instead of staying `null`) is itself proof this test suite
+  does what it's supposed to — it failed loudly the moment the wrong
+  unification was tried, before it could ship.
+  **RETROACTIVE RE-CLASSIFICATION** (the explicit third ask — "add a
+  one-time migration that re-classifies existing rows currently sitting
+  in Misc"): docs/PENDING_SQL.md §67 (mirrored as `pending_67.sql` at the
+  repo root, **NOT YET APPLIED**) — a one-time DATA repair, no schema
+  change. Hand-translates the same corrected regexes into PostgreSQL
+  POSIX-ERE syntax (`\b` → `\y` for word boundaries) as one ordered CASE
+  WHEN chain, scoped to `source = 'settlement' AND (category is null or
+  category = 'Misc') AND description is not null` — deliberately narrow:
+  never touches a row that already has a real category (including a
+  DIFFERENT one the AI already got right the first time, or one a user
+  manually corrected), and never touches an out-of-pocket 'Misc' row
+  (those go through `guessCategory()`'s vendor/store-aware logic at
+  import time, a different classifier this migration doesn't retroactively
+  re-run). Includes a read-only PREVIEW query (old_category →
+  new_category, row counts, dollar totals) to run and review BEFORE the
+  actual UPDATE, and is safe to re-run — the UPDATE's own WHERE clause
+  carries an `is distinct from category` guard so a second run finds
+  nothing left to change. HONESTLY FLAGGED, same standing limitation as
+  every other SQL migration in this codebase's history: assembled by
+  hand-translating JS regexes into Postgres syntax, NOT executed against
+  a live database in this environment (no service_role/db credentials
+  here) — review the PREVIEW output carefully before running the UPDATE.
+  Full suite: 118 suites / 3,036 tests pass (+9 new: 8 parity cases + 1
+  regression case); `tsc --noEmit` clean. No Edge Function changes —
+  every code fix in this pass is pure client-side JS/TS. Ships via a
+  normal `eas update`; §67 itself needs to be run manually via the
+  Supabase SQL Editor (PREVIEW first, then UPDATE) whenever convenient —
+  it's a data-quality improvement for already-imported history, not
+  something the app depends on to function correctly going forward.

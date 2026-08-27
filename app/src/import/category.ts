@@ -280,10 +280,104 @@ export function isLodging(text: string | undefined): boolean {
   return LODGING_RE.test(text ?? '');
 }
 
-// Accounting/CPA/legal — generic wording only. Prime's own abbreviated
-// "ACCOUNTING SERV" code text lives in carrier_code_maps, not here — see
-// the CARRIER ISOLATION note below classifySettlementLine().
-const ACCOUNTING_SERVICE_RE = /trust service|\bbookkeep/i;
+// UNIFIED CLASSIFICATION PATH (owner decision) — classifySettlementLine()
+// and guessCategory() used to each hand-roll their OWN separate regex for
+// several categories they BOTH recognize (Tolls & Scales, Bank & Merchant
+// Fees, Permits/Road Tax, ELD & Communications, Legal & Professional
+// Services) — the exact class of bug that let ELD/IRP silently diverge
+// between the two (one recognized them, the other didn't) and could
+// recur for any of the others without warning. Each shared category now
+// has exactly ONE exported detector function — the UNION of whatever
+// terms either function previously recognized on its own, so neither
+// function loses coverage the other one already had — and BOTH
+// classifySettlementLine() and guessCategory() call the SAME function.
+// A category genuinely specific to ONE context (e.g. "Company Store," a
+// settlement-only concept with no guessCategory() equivalent at all) is
+// deliberately left as its own local rule — this unification is about
+// eliminating DIVERGENCE for a shared concept, not about forcing every
+// category into both functions regardless of context.
+//
+// Accounting/CPA/legal — deliberately NOT fully unified, and this is a
+// documented exception rather than a leftover divergence: guessCategory()
+// (imported documents — a standalone invoice can legitimately be titled
+// "ABC Accounting Services") keeps the bare words "accountant"/
+// "accounting" in its own regex, but classifySettlementLine() CANNOT
+// share that — Prime Inc's own carrier-specific chargeback code is the
+// literal text "ACCOUNTING SERV" (docs/CARRIER_CODES.md), and a bare
+// "accounting" substring match would swallow that carrier-specific code
+// straight back into the generic classifier, exactly the CARRIER
+// ISOLATION violation this file's own hard invariant forbids (see the
+// note below classifySettlementLine()) — confirmed by this file's own
+// test suite, which failed the instant "accounting" was unified in.
+// Every OTHER shared category below (Permits, ELD, Tolls & Scales, Bank
+// & Merchant Fees) has no such carrier-code collision and IS fully
+// unified into one shared function.
+const LEGAL_PROFESSIONAL_RE =
+  /trust service|\bbookkeep|legal|attorney|lawyer|llc filing|llc formation|registered agent|secretary of state|accountant|accounting|abacus|tax prep|\bcpa\b|drug (and alcohol )?consortium|drug testing consortium/i;
+
+export function isLegalOrProfessionalServices(text: string | undefined): boolean {
+  return LEGAL_PROFESSIONAL_RE.test(text ?? '');
+}
+
+// The settlement-line-safe subset of the above — every term EXCEPT
+// "accountant"/"accounting" (the Prime carrier-code collision explained
+// above). Used ONLY by classifySettlementLine(); guessCategory() keeps
+// using the fuller isLegalOrProfessionalServices() since it never sees a
+// carrier's own chargeback line text.
+const LEGAL_PROFESSIONAL_SETTLEMENT_SAFE_RE =
+  /trust service|\bbookkeep|legal|attorney|lawyer|llc filing|llc formation|registered agent|secretary of state|abacus|tax prep|\bcpa\b|drug (and alcohol )?consortium|drug testing consortium/i;
+
+export function isLegalOrProfessionalServicesSettlementSafe(text: string | undefined): boolean {
+  return LEGAL_PROFESSIONAL_SETTLEMENT_SAFE_RE.test(text ?? '');
+}
+
+// Permits, Licenses & Road Taxes — the union of classifySettlementLine()'s
+// own terms (fed hwy tax/license/permit/irp/ifta/hvut/2290/ucr) and
+// guessCategory()'s (dot number/mc number/boc-3/cdl/dot physical/kyu/
+// ny-hut/nm-wdt/weight-mile tax) — a real carrier settlement almost never
+// prints the literal word "permit" for an IRP/plate-registration line,
+// "IRP" itself is the common abbreviation, and a standalone imported
+// document could equally reference any of the DOT-registration terms
+// guessCategory() already recognized.
+const PERMITS_ROAD_TAX_RE =
+  /fed\.?\s*h?wy\.?\s*tax|federal highway (use )?tax|\blicens\w*\b|\bpermits?\b|\birp\b|\bifta\b|\bhvut\b|form\s*2290|\b2290\b|\bucr\b|dot number|mc number|boc-?3|\bcdl\b|dot physical|\bkyu\b|ny-?hut|nm-?wdt|weight.?mile tax/i;
+
+export function isPermitsOrRoadTax(text: string | undefined): boolean {
+  return PERMITS_ROAD_TAX_RE.test(text ?? '');
+}
+
+// ELD & Communications — the union of classifySettlementLine()'s own
+// terms (Qualcomm/Geotab rental, navigation charge, a bare "ELD",
+// "communications charge", "elog") and guessCategory()'s much larger
+// vendor-brand list (Motive, KeepTruckin, Samsara, Omnitracs, PeopleNet,
+// Garmin, Rand McNally, a load board, DAT, Truckstop.com, ...) — a
+// settlement withholding for this vendor's own subscription fee is just
+// as real a possibility as a standalone document naming the same brand.
+const ELD_COMMUNICATIONS_RE =
+  /qual\w*\s*rental|geo\w*\s*rental|navigation charge|\beld\b|communications?\s*charge|\belog\b|motive|keeptruckin|samsara|omnitracs|peoplenet|qualcomm|e-?log device|trucker path|garmin|rand mcnally|hammer.?maps?|maps? (subscription|purchase|app)|gps (app|subscription|unit|device)|dat load|truckstop\.com|load board/i;
+
+export function isEldOrCommunications(text: string | undefined): boolean {
+  return ELD_COMMUNICATIONS_RE.test(text ?? '');
+}
+
+// Tolls & Scales — classifySettlementLine() already had the wider, more
+// general form (a bare `\bscale\b` matches "cat scale" too); guessCategory()
+// had ONLY the narrower "cat scale" phrase and no bare "scale" match — a
+// settlement line coded just "SCALE" would have matched one function and
+// silently not the other.
+const TOLLS_SCALES_RE = /prepass|pre-pass|drivewyze|\bscale\b|weigh station|ezpass|e-zpass/i;
+
+export function isTollsOrScales(text: string | undefined): boolean {
+  return TOLLS_SCALES_RE.test(text ?? '');
+}
+
+// Bank & Merchant Fees — guessCategory() already had the superset
+// (classifySettlementLine() was missing "overdraft"/"nsf fee").
+const BANK_MERCHANT_FEE_RE = /bank fee|wire fee|merchant fee|processing fee|overdraft|nsf fee|card fee/i;
+
+export function isBankOrMerchantFee(text: string | undefined): boolean {
+  return BANK_MERCHANT_FEE_RE.test(text ?? '');
+}
 
 // ---------------------------------------------------------------------------
 // SETTLEMENT-LINE CLASSIFIER (docs/INDUSTRY_TAXONOMY.md §A extension, owner
@@ -321,33 +415,21 @@ const ACCOUNTING_SERVICE_RE = /trust service|\bbookkeep/i;
 // `carrier_code_maps` row (docs/CARRIER_CODES.md, docs/PENDING_SQL.md §53),
 // resolved by `applyCarrierCodeCategories()` (app/src/import/carrierCodes.ts)
 // BEFORE this generic classifier ever runs — never applied globally here.
-// `FED_HWY_TAX_RE`/`ELD_COMMS_CHARGE_RE`/`COMPANY_STORE_RE` deliberately keep
-// their abbreviated forms ("FED HWY TAX", "QUAL RENTAL"/"GEO RENTAL",
+// `isPermitsOrRoadTax`/`isEldOrCommunications`/`COMPANY_STORE_RE` deliberately
+// keep their abbreviated forms ("FED HWY TAX", "QUAL RENTAL"/"GEO RENTAL",
 // "COMPANY STORE") — these name a real universal IRS tax, real third-party
 // ELD/telematics vendor brands, and a common industry-wide concept
 // respectively, not one carrier's own invented terminology; any carrier's
 // statement could plausibly print exactly this text.
 // ---------------------------------------------------------------------------
-// CASH FLOW RECURRING-CHARGE CLASSIFIER — REAL DATA STILL FAILS (owner
-// decision, device report: "the classifier finds none of my Permits/ELD
-// charges" — traced to these two regexes specifically, not the
-// classification thresholds this pass's own prior fix already addressed).
-// Widened to match the SAME universal industry/regulatory terms
-// guessCategory() (below, a different context — imported documents, not
-// settlement-withheld lines) already recognized for these two categories
-// — IRP/IFTA/HVUT/2290/UCR and a bare "ELD" were never carrier-specific
-// terminology to begin with (this file's own header comment already
-// carves out exactly this class of universal term as fair game for the
-// generic classifier), they were simply missing from THIS function's own
-// narrower regex. A real carrier settlement almost never prints the
-// literal word "permit" for an IRP/plate-registration line — "IRP" is
-// the actual, common abbreviation printed on the statement.
-const FED_HWY_TAX_RE =
-  /fed\.?\s*h?wy\.?\s*tax|federal highway (use )?tax|\blicense(s)?\b|\bpermits?\b|\birp\b|\bifta\b|\bhvut\b|form\s*2290|\b2290\b|\bucr\b/i;
-const ELD_COMMS_CHARGE_RE = /qual\w*\s*rental|geo\w*\s*rental|navigation charge|\beld\b|communications?\s*charge|\belog\b/i;
-const TOLLS_SCALES_CHARGE_RE = /prepass|pre-pass|drivewyze|\bscale\b|weigh station|ezpass|e-zpass/i;
+// UNIFIED CLASSIFICATION PATH (owner decision, see the shared isXxx()
+// detector functions above) — this function used to hand-roll its own
+// separate regex for Permits/ELD/Tolls/Bank-Merchant/Legal that could
+// silently diverge from guessCategory()'s own version of the same concept
+// (this is exactly how ELD/IRP recognition drifted apart the first time).
+// Every one of those five now calls the SAME shared function guessCategory()
+// calls below, so this class of divergence cannot recur for any of them.
 const COMPANY_STORE_RE = /company store/i;
-const BANK_MERCHANT_CHARGE_RE = /bank fee|wire fee|merchant fee|processing fee|card fee/i;
 
 export function classifySettlementLine(desc: string | undefined): string | null {
   const text = desc ?? '';
@@ -355,13 +437,13 @@ export function classifySettlementLine(desc: string | undefined): string | null 
   if (isGenericAdvance(text)) return 'Advance Repayment';
   if (isEscrowDeposit(text)) return 'Escrow & Deposits';
   if (isWarrantyService(text)) return 'Warranty & Service Contracts';
-  if (ACCOUNTING_SERVICE_RE.test(text)) return 'Legal & Professional Services';
+  if (isLegalOrProfessionalServicesSettlementSafe(text)) return 'Legal & Professional Services';
   if (isInsuranceChargeback(text)) return 'Insurance—Truck';
-  if (FED_HWY_TAX_RE.test(text)) return 'Permits, Licenses & Road Taxes';
-  if (ELD_COMMS_CHARGE_RE.test(text)) return 'ELD & Communications';
-  if (TOLLS_SCALES_CHARGE_RE.test(text)) return 'Tolls & Scales';
+  if (isPermitsOrRoadTax(text)) return 'Permits, Licenses & Road Taxes';
+  if (isEldOrCommunications(text)) return 'ELD & Communications';
+  if (isTollsOrScales(text)) return 'Tolls & Scales';
   if (COMPANY_STORE_RE.test(text)) return 'Truck Supplies & Equipment';
-  if (BANK_MERCHANT_CHARGE_RE.test(text)) return 'Bank & Merchant Fees';
+  if (isBankOrMerchantFee(text)) return 'Bank & Merchant Fees';
   if (isRestaurantPurchase(text)) return 'Meals (per diem covered)';
   return null;
 }
@@ -512,29 +594,19 @@ export function guessCategory(name: string | undefined, store: string | undefine
   if (isFuelAdditive(combined)) return 'Fuel Additives';
   if (/comdata|efs\b|fuelman|fuel card|def\b|diesel exhaust fluid/.test(combined)) return 'Fuel & DEF';
   if (isWarrantyService(combined)) return 'Warranty & Service Contracts';
-  if (/\blumper\b/.test(combined)) return 'Lumper Fees';
+  if (isLumperFee(combined)) return 'Lumper Fees';
   if (isTruckWash(combined)) return 'Truck Wash & Detailing';
-  if (/prepass|pre-pass|ezpass|e-zpass|drivewyze|cat scale|weigh station/.test(combined)) return 'Tolls & Scales';
+  if (isTollsOrScales(combined)) return 'Tolls & Scales';
   if (/\booida\b|owner-?operator independent drivers|association due|union due|membership due/.test(combined))
     return 'Association Dues';
   if (/\bgusto\b|\badp\b|paychex|payroll service/.test(combined)) return 'Wages & Payroll Taxes (W-2)';
   if (/\btriumph\b|\brts\b|otr solutions|factoring (company|fee|advance)|dispatch fee|dispatch service/.test(combined))
     return 'Dispatch & Factoring Fees';
-  if (
-    /legal|attorney|lawyer|llc filing|llc formation|registered agent|secretary of state|accountant|accounting|bookkeep|abacus|tax prep|cpa\b|drug (and alcohol )?consortium|drug testing consortium/.test(
-      combined
-    )
-  )
-    return 'Legal & Professional Services';
+  if (isLegalOrProfessionalServices(combined)) return 'Legal & Professional Services';
   // ELD/GPS/load board (owner decision 2026-08-05, FULL PARITY pass — moved
   // off Software & Subscriptions per the spec's explicit "ELD/GPS/load
   // board = ELD & Communications" grouping).
-  if (
-    /motive|keeptruckin|samsara|eld\b|omnitracs|peoplenet|qualcomm|e-?log device|trucker path|garmin|rand mcnally|hammer.?maps?|maps? (subscription|purchase|app)|gps (app|subscription|unit|device)|dat load|truckstop\.com|load board/.test(
-      combined
-    )
-  )
-    return 'ELD & Communications';
+  if (isEldOrCommunications(combined)) return 'ELD & Communications';
   if (
     /anthropic|claude|openai|chatgpt|api credit|github|google workspace|gsuite|dropbox|icloud|microsoft 365|office 365|subscription|saas|software license/.test(
       combined
@@ -544,12 +616,7 @@ export function guessCategory(name: string | undefined, store: string | undefine
   if (/health insurance|medical insurance|dental insurance|vision insurance|health premium/.test(combined))
     return 'Insurance—Health';
   if (isInsuranceChargeback(combined)) return 'Insurance—Truck';
-  if (
-    /permit|licensing|dot number|mc number|ifta|irp|ucr\b|hvut|form 2290|boc-?3|cdl\b|dot physical|kyu\b|ny-?hut|nm-?wdt|weight.?mile tax/.test(
-      combined
-    )
-  )
-    return 'Permits, Licenses & Road Taxes';
+  if (isPermitsOrRoadTax(combined)) return 'Permits, Licenses & Road Taxes';
   // Major Repairs & Overhauls needs the dollar amount (>$2,500 threshold,
   // isMajorRepairOverhaul() above) which this function's signature doesn't
   // carry — applied instead at the call site that has both a description
@@ -567,7 +634,7 @@ export function guessCategory(name: string | undefined, store: string | undefine
     return 'Truck/Trailer Payments';
   if (isLodging(combined)) return 'Parking & Lodging';
   if (/office suppl|printer|paper|stapler|postage|shipping label|po box/.test(combined)) return 'Office & Admin';
-  if (/bank fee|wire fee|merchant fee|processing fee|overdraft|nsf fee|card fee/.test(combined)) return 'Bank & Merchant Fees';
+  if (isBankOrMerchantFee(combined)) return 'Bank & Merchant Fees';
   if (/advertis|marketing|vehicle wrap|sign lettering|business card/.test(combined)) return 'Advertising';
   if (/training|\bcourse\b|certification|cdl school|continuing education/.test(combined)) return 'Training & Education';
   if (/1099 contractor|independent contractor payment/.test(combined)) return 'Contract Labor (1099)';
