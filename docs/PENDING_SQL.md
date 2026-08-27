@@ -3667,7 +3667,7 @@ of either screen is automatically correct with zero extra code.
 
 ---
 
-## 65. profiles.ai_weekly_review_locale (AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix, owner decision) — ✅ APPLIED (confirmed live 2026-08-26 via a read-only PostgREST schema probe)
+## 65. profiles.ai_weekly_review_locale (AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix, owner decision) — ✅ APPLIED (run directly; reset-data/ai-advisor/ai-import redeployed, client update published to preview — also independently confirmed live 2026-08-26 via a read-only PostgREST schema probe, see the checklist note below)
 
 **The finding**: `profiles.ai_weekly_review` (§49) caches the AI-generated
 weekly settlement review to cap `ai-advisor` usage at one call per user
