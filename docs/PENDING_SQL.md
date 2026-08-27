@@ -3820,7 +3820,7 @@ service_role/db credentials here). Run the PREVIEW query first.
 
 ---
 
-## 68. profiles.ai_weekly_review_fingerprint (AI COACH — FIX STALE CACHE, owner decision) — NOT YET APPLIED
+## 68. profiles.ai_weekly_review_fingerprint (AI COACH — FIX STALE CACHE, owner decision) — ✅ APPLIED (reset-data redeployed, client update published to preview)
 
 **The finding**: device report — every settlement was deleted and the AI
 Coach kept showing the old weekly review, quoting dollar figures that no
@@ -3853,11 +3853,11 @@ One idempotent `add column if not exists`, safe to re-run. Nullable —
 (a `null` current fingerprint, meaning nothing to review right now, can
 never match a `null` OR any real cached fingerprint either).
 
-- [ ] 68 run (profiles gains ai_weekly_review_fingerprint text, nullable)
+- [x] 68 run (profiles gains ai_weekly_review_fingerprint text, nullable)
 
 ---
 
-## 69. profiles.accountant_package_exported_at (REFERRAL NUDGE "surface at the right moments", owner decision) — NOT YET APPLIED
+## 69. profiles.accountant_package_exported_at (REFERRAL NUDGE "surface at the right moments", owner decision) — ✅ APPLIED (reset-data redeployed, client update published to preview)
 
 **The finding**: Part 2 of the AI Coach daily-tips request asks the
 referral nudge to surface at 4 specific real moments, one of which is
@@ -3883,7 +3883,7 @@ already treats correctly as "this moment hasn't happened."
 account hasn't, as far as that fresh state is concerned, exported
 anything yet).
 
-- [ ] 69 run (profiles gains accountant_package_exported_at timestamptz,
+- [x] 69 run (profiles gains accountant_package_exported_at timestamptz,
       nullable)
 
 ---
