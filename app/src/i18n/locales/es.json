@@ -1924,7 +1924,14 @@
     "creditDays": "{{count}} día ganado",
     "creditDays_other": "{{count}} días ganados",
     "creditAppliesNote": "Se aplica automáticamente cuando se lancen los planes de pago.",
-    "tnc": "El crédito por referidos no tiene valor en efectivo y solo aplica una vez que se lancen los planes de pago. Solo estimaciones — no es una garantía financiera. Consulta los Términos de Uso para más detalles."
+    "tnc": "El crédito por referidos no tiene valor en efectivo y solo aplica una vez que se lancen los planes de pago. Solo estimaciones — no es una garantía financiera. Consulta los Términos de Uso para más detalles.",
+    "nudges": {
+      "referralQualified": "🎉 ¡Una de tus referencias acaba de calificar! Vas {{qualified}} de 3 hacia tus próximos 2 meses gratis — {{remaining}} más para llegar.",
+      "referralGoalWeek": "Acabas de superar tu meta semanal — ¿conoces a un conductor que quiera una app así? Tres referencias = 2 meses gratis.",
+      "referralFirstExport": "Acabas de armar un mes de contabilidad limpia. ¿Conoces a un conductor que aún usa una caja de zapatos? Tres referencias = 2 meses gratis.",
+      "referralActive3Weeks": "Llevas ya varias semanas usando la app — si te ha servido, compartirla vale 2 meses gratis por cada 3 referencias.",
+      "shareButton": "Compartir"
+    }
   },
   "accountantPackage": {
     "title": "Paquete para el Contador",
@@ -2192,6 +2199,211 @@
       "fuel": "Combustible",
       "maintenance": "Mantenimiento",
       "toll": "Peaje"
+    }
+  },
+  "dailyTips": {
+    "cardLabel": "Consejo del día",
+    "actionButton": "Ir",
+    "dismiss": "Descartar",
+    "tipTransactions": {
+      "v0": "Transacciones muestra cada movimiento de cada importación — settlements, combustible, deducciones, peajes — en una sola lista con búsqueda, para que nunca tengas que recordar en qué pantalla quedó un cargo.",
+      "v1": "¿Buscas un cargo específico rápido? Transacciones busca en todas las categorías a la vez en lugar de revisar cada pantalla por separado.",
+      "v2": "Ya tienes {{count}} transacciones registradas en todas las categorías — Transacciones es el único lugar para buscarlas y filtrarlas todas juntas."
+    },
+    "tipImport": {
+      "v0": "Puedes elegir varios documentos a la vez — Importar procesa un lote completo en segundo plano mientras sigues trabajando, y te avisa cuando termina.",
+      "v1": "¿Tienes una pila de recibos atrasados? Importar te permite seleccionar más de un archivo a la vez en lugar de importarlos uno por uno.",
+      "v2": "Importar documento por documento funciona, pero un lote de varios archivos es la misma función, solo más rápida cuando estás poniéndote al día con una semana de papeleo."
+    },
+    "tipLoads": {
+      "v0": "Registrar cada carga por separado (no solo el total del settlement) desbloquea la tarifa por milla por ruta, para que veas exactamente qué rutas realmente pagan bien.",
+      "v1": "¿Alguna vez te preguntaste qué ruta paga mejor? Registra tus cargas y la app las clasificará por ti en Best & Worst Lanes de Flujo de Caja.",
+      "v2": "El total bruto de un settlement es toda la semana — registrar sus cargas individuales es lo que desglosa ese número ruta por ruta."
+    },
+    "tipSettlements": {
+      "v0": "Settlements es la fuente de verdad de tus ingresos, gastos y per diem — todo lo demás en la app se construye a partir de lo que se registra aquí.",
+      "v1": "¿Le faltan millas a un settlement? Entra y edítalas ahí mismo — un ajuste único que corrige tu CPM y tu per diem de esa semana también.",
+      "v2": "Cada dólar y cada milla que muestra la app empieza en esta pantalla — vale la pena revisarla aunque sea solo para ver qué contiene un settlement completo."
+    },
+    "tipReimbursements": {
+      "v0": "Los créditos de garantía y otro dinero que te deben se registran aquí por separado, para que nunca desaparezcan silenciosamente dentro de una deducción.",
+      "v1": "¿Alguna vez te cambiaron una pieza bajo garantía y te devolvieron dinero? Eso va en Reembolsos, no mezclado en un gasto cualquiera.",
+      "v2": "Reembolsos mantiene los reembolsos y créditos separados de ingresos nuevos o gastos nuevos — una contabilidad precisa depende de mantener los tres separados."
+    },
+    "tipOtherIncome": {
+      "v0": "El detention, el layover y los pagos por referidos también son ingresos — registrarlos aquí hace que tus ingresos reflejen todo lo que realmente ganaste.",
+      "v1": "¿Alguna vez te pagaron detention o layover fuera de un settlement? Eso es ingreso real — Otros Ingresos es donde va.",
+      "v2": "Si el pago de detention o layover nunca se registra, tus ingresos se ven más bajos de lo que realmente son — Otros Ingresos existe para cerrar esa brecha."
+    },
+    "tipFuel": {
+      "v0": "Combustible compara cada compra contra tus ingresos, para que siempre sepas exactamente cuánto te cuesta el combustible como porcentaje de lo que ganas.",
+      "v1": "¿Sabes de memoria tu porcentaje de combustible? Combustible lo calcula automáticamente a partir de tus propias compras.",
+      "v2": "El combustible representa actualmente el {{pct}} de tus ingresos — Combustible desglosa eso compra por compra para que veas de dónde viene."
+    },
+    "tipMaintenance": {
+      "v0": "Mantenimiento rastrea los intervalos de servicio por millaje automáticamente, para que no tengas que recordar cuándo toca el próximo cambio de aceite o servicio de DPF.",
+      "v1": "¿Hiciste tu propio cambio de aceite en vez de pagar un taller? Marcar como Hecho sigue costando $0 registrarlo — solo mantiene tus intervalos exactos.",
+      "v2": "Un intervalo de servicio no significa nada hasta que se registra — Mantenimiento es lo que mantiene honestas las fechas de vencimiento de Estado del Camión."
+    },
+    "tipTolls": {
+      "v0": "Peajes y Tarifas mantiene cada cargo de peaje en su propio lugar — un costo real y deducible que es fácil perder de vista enterrado en una línea del settlement.",
+      "v1": "¿Sabes exactamente cuánto gastaste en peajes el mes pasado? Registrarlos aquí hace que siempre lo sepas.",
+      "v2": "Un peaje retenido en un settlement ya está contado — pero un peaje pagado de tu bolsillo solo cuenta si lo registras aquí."
+    },
+    "tipDeductions": {
+      "v0": "El filtro \"Necesita revisión\" marca todo lo que la IA no clasificó con plena confianza, así que una revisión rápida mantiene tu contabilidad precisa.",
+      "v1": "¿Curioso por saber qué falta revisar? El filtro \"Necesita revisión\" de Deducciones te muestra exactamente qué verificar.",
+      "v2": "Tienes {{count}} elemento(s) marcados para revisión ahora mismo — una revisión rápida mantiene confiables tus números del Schedule C."
+    },
+    "tipAssetRegister": {
+      "v0": "Registro de Activos mantiene cada compra del negocio — camión, remolque, equipo — en un solo lugar, junto con lo que vale para depreciación.",
+      "v1": "¿Quieres ver de un vistazo todo lo que posee el negocio? Registro de Activos está hecho exactamente para eso.",
+      "v2": "Nada aparece en Registro de Activos hasta que se ingresa — Camiones y Equipo son las dos pantallas que lo alimentan."
+    },
+    "tipAccountantPackage": {
+      "v0": "Paquete para el Contador exporta un mes limpio como PDF o Excel — gastos de bolsillo vs. retenidos en el settlement, detallado o resumido, listo para entregar.",
+      "v1": "¿Listo para enviarle a tu contador algo mejor que una caja de recibos? Paquete para el Contador lo arma por ti.",
+      "v2": "Los mismos números reales detrás de cada pantalla de la app se resumen en una sola exportación aquí — vale la pena probarlo aunque sea para ver cómo se ve."
+    },
+    "tipAiAdvisor": {
+      "v0": "AI Advisor ya conoce tus propios números — pregúntale lo que sea sobre tus ingresos, gastos o tendencias y responde con tus datos reales.",
+      "v1": "¿Alguna vez quisiste simplemente preguntar algo sobre tu propio negocio y recibir una respuesta directa? Para eso está AI Advisor.",
+      "v2": "Cada pantalla de esta app calcula cifras reales — AI Advisor es el único lugar donde puedes preguntar sobre ellas en lenguaje sencillo."
+    },
+    "tipTaxEstimator": {
+      "v0": "Estimador de Impuestos muestra tu reserva semanal de impuestos y tu próxima fecha límite trimestral, calculadas a partir de tus números reales (solo estimados — verifica con tu contador).",
+      "v1": "¿Sabes cuánto deberías apartar cada semana para impuestos? Estimador de Impuestos calcula una reserva real a partir de tu propia ganancia.",
+      "v2": "Los días de per diem, las fechas trimestrales y — una vez que la ganancia lo justifique — una comparación de S-Corp viven todos en una sola pantalla, todo estimado, nunca una declaración presentada."
+    },
+    "tipShareProfit": {
+      "v0": "Compartir Ganancia Semanal arma una tarjeta limpia y compartible con los números de tu semana — sin hoja de cálculo, sin editar capturas de pantalla.",
+      "v1": "¿Quieres mostrar una buena semana sin exponer toda tu contabilidad? Compartir Ganancia Semanal está hecho exactamente para eso.",
+      "v2": "Una semana realmente positiva vale la pena compartirla — esta pantalla la convierte en una imagen limpia en un par de toques."
+    },
+    "tipDocumentsRenewals": {
+      "v0": "Documentos y Renovaciones rastrea fechas de vencimiento — HVUT 2290, IRP, tarjeta médica, CDL, inspección — y te avisa antes de que alguna venza.",
+      "v1": "¿Sabes exactamente cuándo vence tu tarjeta médica o tu renovación de IRP? Documentos y Renovaciones lo rastrea para que no tengas que recordarlo.",
+      "v2": "Todavía no se está rastreando nada aquí — agregar tu primera fecha de renovación convierte esto en un sistema de alerta temprana en lugar de una pantalla vacía."
+    },
+    "tipDocuments": {
+      "v0": "Documentos guarda cada archivo subido — foto o PDF — almacenado y abrible en cualquier momento, listo para una auditoría sin buscar en el correo o la galería.",
+      "v1": "¿Alguna vez necesitas encontrar un recibo específico de hace meses? Documentos mantiene cada archivo que has importado buscable en un solo lugar.",
+      "v2": "Ya tienes {{count}} documentos guardados — Documentos es donde vive cada uno de ellos, siempre accesible."
+    },
+    "tipCategoryLearning": {
+      "v0": "Aprendizaje de Categorías recuerda cada categoría que has corregido, para que futuras importaciones del mismo proveedor se clasifiquen bien desde la primera vez.",
+      "v1": "¿Alguna vez corriges la misma categoría más de una vez para el mismo proveedor? Aprendizaje de Categorías lo recuerda, para que tú no tengas que hacerlo.",
+      "v2": "Le has enseñado a la app {{count}} corrección(es) hasta ahora — Aprendizaje de Categorías te muestra exactamente lo que ha aprendido."
+    },
+    "tipTruckCostBasis": {
+      "v0": "Ingresa lo que realmente costó tu camión y la app puede mostrarte tu costo real por milla — ahora mismo ese costo fijo falta en el cálculo.",
+      "v1": "¿Sabes lo que realmente te cuesta una milla? Dos minutos de configuración en Camiones y la app te lo dirá.",
+      "v2": "Tu CPM actualmente le falta su costo fijo más grande — {{count}} camión(es) todavía no tienen costo base ingresado."
+    },
+    "tipTruckDepreciation": {
+      "v0": "Una elección de depreciación en Camiones convierte el precio de compra de tu camión en una deducción de impuestos real — ahora mismo eso se está dejando pasar.",
+      "v1": "¿Sabes cuánto podría deducir la compra de tu camión de los impuestos de este año? Camiones tiene una sección de depreciación que lo calcula (estimado — verifica con tu contador).",
+      "v2": "{{count}} camión(es) todavía no tienen método de depreciación configurado — un precio de compra que ya ingresaste podría estar generando un efecto real en tu estimado de impuestos."
+    },
+    "tipTruckAddTrailer": {
+      "v0": "Un remolque tiene su propio costo base y financiamiento, independiente del tractor que lo jala — Camiones te permite rastrear ambos por separado.",
+      "v1": "¿Jalas un remolque que todavía no has agregado? Tiene su propia depreciación y costo base que vale la pena rastrear por su cuenta.",
+      "v2": "Un tractor y su remolque casi siempre se financian de forma distinta — Camiones mantiene esa distinción en vez de mezclar los dos."
+    },
+    "tipTruckComparison": {
+      "v0": "Comparación de Camiones muestra ingresos, costo y ganancia neta lado a lado para cada camión de la flota — así ves cuál realmente rinde.",
+      "v1": "¿Operas más de un camión? Comparación de Camiones responde la pregunta que todo dueño de varios camiones se hace tarde o temprano: ¿cuál realmente vale la pena conservar?",
+      "v2": "Los totales de toda la flota esconden mucho — Comparación de Camiones es lo que los desglosa camión por camión."
+    },
+    "tipFixTruckAssignments": {
+      "v0": "Corregir Asignación de Camiones encuentra cada registro sin camión asignado y te deja asignarlo en un par de toques, para que los números por camión sigan siendo exactos.",
+      "v1": "¿Alguna vez te preguntaste por qué los números de un camión se ven raros? Un registro sin asignar podría estar faltando silenciosamente en sus propios totales.",
+      "v2": "{{count}} registro(s) actualmente no tienen camión asignado — corregirlos mantiene honesta cada cifra por camión en esta app."
+    },
+    "tipEquipment": {
+      "v0": "Equipo rastrea todo lo que el negocio posee más allá del camión mismo — y, como el camión, es depreciable.",
+      "v1": "¿Compraste un generador, un lift gate, o un sistema de load bars para el negocio? Eso va en Equipo, no como una deducción suelta.",
+      "v2": "Todavía no hay nada registrado en Equipo — cualquier cosa duradera que hayas comprado para el negocio podría estar generando valor fiscal real en vez de estar sin registrar."
+    },
+    "tipDrivers": {
+      "v0": "Conductores te permite registrar quién maneja y cuánto le pagas, para que veas tu margen real después del costo del conductor, no solo el ingreso bruto.",
+      "v1": "¿Le pagas a un conductor y quieres saber qué le cuesta realmente al negocio? Conductores rastrea la cifra real.",
+      "v2": "Agregar el pago de un conductor aquí es lo que convierte \"ingresos\" en \"lo que realmente queda después de pagarle a alguien por manejar\"."
+    },
+    "tipCapitalAccount": {
+      "v0": "Cuenta de Capital rastrea el dinero que has puesto en el negocio contra lo que has retirado — y muestra exactamente cuánto puedes seguir retirando libre de impuestos.",
+      "v1": "¿Sabes cuánto puedes seguir retirando del negocio sin que cuente como ganancia gravable? Cuenta de Capital tiene la cifra real.",
+      "v2": "Cada contribución y cada retiro ya se están rastreando — Cuenta de Capital es solo la pantalla que los suma por ti."
+    },
+    "tipOperatingPnl": {
+      "v0": "Operating P&L es la vista orientada al contador — cada deducción contada, sin exclusiones, igual a lo que un contador esperaría ver.",
+      "v1": "¿Quieres los mismos números que tu contador calcularía a mano? Operating P&L está hecho para coincidir exactamente con eso.",
+      "v2": "Donde la Ganancia Real excluye cosas como comidas cubiertas por el per diem, Operating P&L deliberadamente cuenta todo — dos maneras distintas de ver los mismos datos."
+    },
+    "tipTruckHealth": {
+      "v0": "Estado del Camión rastrea los intervalos de mantenimiento por camión, para que tengas aviso antes de que algo marque OVERDUE.",
+      "v1": "¿Quieres anticiparte antes de que algo se atrase? Estado del Camión vigila tus intervalos para que no tengas que recordarlos de memoria.",
+      "v2": "Todavía no hay nada registrado para este camión — el primer registro de mantenimiento es lo que convierte esta pantalla de vacía en un sistema real de alerta temprana."
+    },
+    "tipCashFlow": {
+      "v0": "Flujo de Caja proyecta tus próximos 30 días — incluyendo tu semana más ajustada por venir y los cargos recurrentes que ya detectó.",
+      "v1": "¿Sabes qué semana del próximo mes va a ser la más ajustada en efectivo? El pronóstico de 30 días de Flujo de Caja responde exactamente eso.",
+      "v2": "Con algunas semanas de settlements registrados, Flujo de Caja ya puede proyectar hacia adelante en vez de solo mirar hacia atrás."
+    },
+    "tipScorecard": {
+      "v0": "Scorecard califica tu negocio de 0 a 100 y desglosa RPM, CPM y ganancia por milla — los números que realmente explican la calificación.",
+      "v1": "¿Quieres un solo número que resuma cómo va el negocio? Scorecard está hecho exactamente para eso, con el desglose justo detrás.",
+      "v2": "Tarifa, costo y ganancia por milla viven todos en una sola pantalla aquí, calculados de la misma forma cada vez que la revisas."
+    },
+    "tipLoans": {
+      "v0": "Préstamos separa el principal del interés — solo la parte de interés es realmente deducible de impuestos, y esta pantalla mantiene esa distinción clara.",
+      "v1": "¿Sabes cuánto de tu pago de camión es realmente deducible? Préstamos separa el principal del interés para que siempre lo sepas.",
+      "v2": "El pago de un préstamo no es una sola cifra deducible — Préstamos mantiene la parte de interés deducible separada del principal que solo estás pagando."
+    },
+    "tipProfitAnalysis": {
+      "v0": "Análisis de Ganancias muestra tu tendencia con el tiempo más una comparación con puntos de referencia de la industria — la pantalla hecha para responder \"¿estoy mejorando?\"",
+      "v1": "¿Te preguntas si el negocio realmente está mejorando con el tiempo, no solo esta semana? Análisis de Ganancias está hecho para responder eso.",
+      "v2": "Con suficientes semanas registradas, aquí se vuelve visible una tendencia real — vale la pena revisarla ahora que ya tienes el historial."
+    },
+    "tipAiCoachFull": {
+      "v0": "Esta tarjeta es un resumen — la pantalla completa de AI Coach agrega seguimiento de metas y un lugar para hacer preguntas de seguimiento sobre tu propia semana.",
+      "v1": "¿Quieres más que un resumen de una línea? Abre AI Coach completo para el informe completo.",
+      "v2": "Todo lo que se muestra aquí es solo el titular — la pantalla completa profundiza en los mismos números reales."
+    },
+    "tipDeadheadBenchmark": {
+      "v0": "El deadhead — millas manejadas sin carga — es normal hasta cierto punto, pero vale la pena vigilarlo porque cada una de esas millas sigue costando combustible y tiempo.",
+      "v1": "¿Sabes qué porcentaje de tus millas son deadhead? Actualmente es {{pct}} — vale la pena estar atento.",
+      "v2": "Tu deadhead está en {{pct}} del total de millas ahora mismo — una cifra útil para comparar con tu propia tendencia con el tiempo."
+    },
+    "tipPerDiemVsMeals": {
+      "v0": "El per diem ya cubre las comidas mientras estás fuera de casa — un recibo de comida aparte no es una deducción adicional sobre eso.",
+      "v1": "¿Te preguntas por qué los recibos de comida no suman a tu total de deducciones? El per diem ya cubre eso, a una tarifa diaria fija.",
+      "v2": "Llevas acumulados {{days}} día(s) de per diem este año — esa tarifa diaria es lo que ya cubre las comidas en la carretera."
+    },
+    "tipRepairVsCapitalImprovement": {
+      "v0": "Una reparación de rutina es un gasto deducible de inmediato — una reparación mayor de más de $2,500 en un componente central se trata distinto para efectos fiscales.",
+      "v1": "¿Te preguntas por qué un trabajo grande de motor o transmisión se marca distinto a una reparación normal? Es una distinción real del IRS, no un error.",
+      "v2": "Mantenimiento y Reparaciones y Reparaciones Mayores son dos categorías distintas a propósito — el umbral de dólares es lo que las diferencia."
+    },
+    "tipEscrowRefundable": {
+      "v0": "Un escrow o fianza de desempeño que retiene una empresa transportista es reembolsable — es tu dinero en depósito, no un gasto real del negocio.",
+      "v1": "¿Te preguntas por qué una deducción de escrow no cuenta contra tu ganancia? Ese dinero sigue siendo tuyo, solo retenido por ahora.",
+      "v2": "Escrow y Depósitos se excluye a propósito de la ganancia real y del CPM — ese dinero nunca salió realmente del negocio como costo."
+    },
+    "tipAdvanceRepayments": {
+      "v0": "Un reembolso de anticipo es devolver dinero que ya recibiste — no es un gasto nuevo, solo estás regresando efectivo que ya se contó como ingreso.",
+      "v1": "¿Te preguntas por qué un reembolso de anticipo no reduce tu ganancia gravable? Ya recibiste ese dinero una vez — esto solo lo devuelve.",
+      "v2": "Reembolso de Anticipo se excluye de la ganancia real precisamente por eso — contarlo de nuevo duplicaría los mismos dólares."
+    },
+    "tipQuarterlyDeadlines": {
+      "v0": "Tu próximo pago trimestral estimado de impuestos llega en {{days}} día(s) — vale la pena revisar Estimador de Impuestos antes de que llegue (solo estimado — verifica con tu contador).",
+      "v1": "¿Sabes de memoria tu próxima fecha límite trimestral de impuestos? Está a {{days}} día(s).",
+      "v2": "{{days}} día(s) para la próxima fecha límite trimestral — Estimador de Impuestos tiene el monto estimado listo cuando quieras revisarlo."
+    },
+    "tipSettings": {
+      "v0": "Configuración tiene tu idioma, detalles del plan, contacto de soporte, y exportación o eliminación completa de datos — todo lo de tu cuenta en un solo lugar.",
+      "v1": "¿Necesitas cambiar tu idioma o exportar tus datos? Configuración es donde vive cada opción a nivel de cuenta.",
+      "v2": "Desde el contacto de soporte hasta una exportación completa de datos, Configuración cubre todo sobre tu cuenta que no es una pantalla financiera."
     }
   }
 }

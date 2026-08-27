@@ -9338,3 +9338,151 @@
   `referral-sync` were NOT touched. No new native dependency — pure
   client-side JS/TS plus one small SQL migration — ships via a normal
   `eas update`.
+- AI COACH — DAILY TIPS COVERING THE WHOLE APP (owner decision, Part 2 of
+  the AI Coach "fix stale cache + daily tips" request, docs/PENDING_SQL.md
+  §69, NOT YET APPLIED). One tip per day on Home, chosen from whatever the
+  account's own setup/data justifies right now, composed entirely client-
+  side from i18n templates — **no AI call**, distinct from the weekly
+  financial review (Part 3 above), which stays this app's one AI call per
+  user per week.
+  **STEP 1 — the coverage map was presented and approved before any
+  implementation began**, per the request's own explicit gate: a table
+  covering all 34 reachable screens in `navRegistry.ts` (36 raw minus 2
+  feature-flagged-off — Credit Cards/Bank Statements) plus a "General
+  Trucking Knowledge" pool, each marked with its planned tip content and
+  precondition, or "intentionally none" with a reason (Home — tips render
+  here, would be circular; Invite & Earn — its own milestone-triggered
+  mechanism, not part of the daily rotation; Credit Cards/Bank
+  Statements — not reachable in the live app today).
+  **THE ENGINE, `src/alerts/dailyTips.ts`**: 40 topics (`DailyTipTopic`,
+  the 39 approved coverage-map topics — 33 screen-based + 6 general-
+  knowledge — plus `tipSettings`, caught missing during implementation and
+  added before writing any tests), each with exactly 3 phrasings
+  (`dailyTips.<topic>.v0/v1/v2` — benefit-stated / question-framed /
+  leads-with-a-real-figure, matching the request's own worked example
+  archetypes). Every detector is a pure function taking minimal already-
+  fetched row shapes, same convention as `missingDataNudges.ts`/
+  `periodicCoachNudges.ts`; a tip's own precondition simply stopping being
+  true IS the "disappears entirely once the thing it teaches is done"
+  behavior, no separate mechanism needed. **A real content-safety design
+  constraint found while writing this**: since `selectDailyTip()` chooses
+  a topic's variant BY ROTATION INDEX, not by which figure happens to be
+  available that day, a variant can never safely reference a detail field
+  (`{{count}}`/`{{days}}`/`{{pct}}`/...) unless EVERY branch of that
+  topic's detector guarantees the field is present whenever the topic
+  fires at all — audited detector-by-detector; topics with an
+  optional/conditional detail field (`tipSettlements`, `tipMaintenance`,
+  `tipAccountantPackage`, `tipTaxEstimator`, `tipCapitalAccount`) simply
+  never reference that field in any of their 3 variants, avoiding a raw
+  unresolved `{{placeholder}}` ever rendering on a day the field happens
+  to be absent.
+  **ROTATION** (`selectDailyTip()`/`selectDailyTipVariant()`): filters to
+  precondition-eligible topics, then to ones not silenced and not shown
+  within the last 30 days ("no topic repeats within a month" —
+  `DAILY_TIP_COOLDOWN_MS`), then avoids a 3rd consecutive day of the SAME
+  category (`setup`/`money`/`discovery`/`knowledge`, generalizing the
+  request's own literal "never three tax tips in a row" example) when a
+  different-category alternative exists, then picks whichever eligible
+  candidate was shown longest ago (or never) — a natural round-robin that,
+  combined with the explicit cooldown, guarantees no repeat within a month
+  whenever 2+ topics are eligible (proven directly by a 35-simulated-day
+  test using this app's real ~35-topic pool, plus a separate small-pool
+  test proving the engine correctly returns `null` once every topic is on
+  cooldown rather than repeating one early). Variants cycle strictly
+  0→1→2→0→... in order, so a topic never repeats a phrasing before the
+  other two have been used.
+  **PERSISTENCE**: reuses `profiles.nudge_state` — a THIRD disjoint
+  topic-key family (every key prefixed `tip`) sharing the same column the
+  missing-data (item D) and periodic-coach (item E2) nudge families
+  already use, per this app's own established "disjoint key sets, one
+  column" precedent. `NudgeStateEntry` (`nudgeFrequency.ts`) gained two
+  new optional fields: `variantIndex` (which phrasing was shown last) and
+  `dismissCount` (see the referral nudge below) — both simply unused by
+  the two original families, no behavior change for them.
+  **A real, confirmed bug found and fixed while wiring this in**:
+  `recordNudgesShown()`/`silenceNudgeTopic()` used to build a BRAND-NEW
+  entry object with only `lastShownAt`/`silencedAt`, silently DROPPING
+  `variantIndex`/`dismissCount` if either was already set on that topic —
+  the referral-nudge family's own "never after two dismissals" counter
+  would have been wiped the very next time that same topic was simply
+  shown again. Both functions now preserve every field they don't
+  themselves own (`{...next[topic], lastShownAt: ..., silencedAt: ...}`).
+  Caught by this pass's own test suite, not shipped broken.
+  **`src/data/dailyTips.ts`** (`useDailyTip()`) is the data-fetching half
+  — composes real figures from the SAME canonical functions every other
+  screen already uses, never a second calculation: `findUnassignedRows()`
+  (truck-assignment repair), `calcCurrentYearDepreciation()` (the real
+  depreciation preview total), `calcPerDiemDays()` (YTD per-diem days),
+  `calcMiles()` (deadhead %), `nextQuarterlyDeadline()`,
+  `useCapitalAccountSummary()`, `useTaxEstimate()`'s own
+  `estimate.weeklyTaxReserve`. Wired into Home's `AiCoachSection` (a new
+  card block below the existing periodic-nudge/unlock-nudge lines, its
+  own icon + label + action button + Dismiss), distinct from and
+  additional to the existing periodic AI-Coach-voiced nudge.
+  **REFERRAL NUDGE, a deliberately SEPARATE mechanism**
+  (`src/referral/referralNudge.ts` + `src/data/referralNudge.ts`) — the
+  request's own explicit "surface at the RIGHT moments, not randomly,"
+  never part of the daily rotation pool. `detectReferralNudge()` fires at
+  exactly the 4 named moments, priority-ordered (a qualified referral >
+  a goal-beating week > a first Accountant Package export > active 3+
+  weeks), reusing the existing `computeReferralProgress()` for the real
+  "N of 3" progress line and the existing `selectNudgesToShow()` engine
+  for a 14-day cooldown ("once every two weeks"). "After their first
+  accountant export" needed a genuinely new signal this app never had —
+  `profiles.accountant_package_exported_at` (docs/PENDING_SQL.md §69,
+  NOT YET APPLIED), set fire-and-forget right after a successful PDF/
+  Excel export. "Never after two dismissals" is a real new mechanism,
+  not a reuse of the daily-tip engine's simple silence-on-dismiss:
+  `recordReferralNudgeDismissed()` tracks `dismissCount` and only
+  silences on the 2nd dismissal — **a second real bug caught by this
+  pass's own tests before shipping**: the first version called the
+  shared `silenceNudgeTopic()` helper on the silencing branch, which has
+  no `dismissCount` parameter of its own — the topic was correctly
+  silenced but its own `dismissCount` stayed stuck at 1 instead of 2 (a
+  cosmetic-only bug today, since silencing is already terminal, but a
+  real latent trap for any future caller that reads the count). Fixed by
+  writing the entry directly in `recordReferralNudgeDismissed()` itself
+  rather than delegating to a helper that doesn't know about this field.
+  On Home, a separate `ReferralNudgeCard` (its own small `Card`, not
+  folded into the AI Coach block — this isn't "AI Coach content") shows
+  the message, progress, a Share button reusing the EXACT SAME
+  `buildReferralShareMessage()`/`shareViaSystemSheet()` pipeline the
+  dedicated Invite & Earn screen already uses (so the shared message can
+  never disagree between the two surfaces), and a Dismiss link.
+  **Tests**: `src/alerts/__tests__/dailyTips.test.ts` (new, 24 tests) —
+  a `DAILY_TIP_SCREEN_COVERAGE` completeness check asserting every href
+  in `navRegistry.ts`'s `RAW_NAV_GROUPS` has either a real topic or an
+  explicit `'intentionalNone'` entry (**the literal "a test FAILS when a
+  new screen enters the nav registry without either a tip or an explicit
+  entry" requirement**), detector precondition-gating spot checks
+  (including the exact "disappears once done" proof — the same
+  `buildDailyTipCandidates()` call before/after a precondition stops
+  holding), the 35-day rotation proof, the small-pool exhaustion proof,
+  variant-cycling, category-alternation (both the "avoids it" and the
+  "never blocks entirely when no alternative exists" cases), signup
+  grace, and dismiss/silence. `src/referral/__tests__/referralNudge.test.ts`
+  (new, 15 tests) — priority order, the "never randomly" day-one/
+  recency gating (`hasQualifiedReferralRecently`'s own 14-day window,
+  proven to reject a referral that qualified months ago), the 14-day
+  cooldown via the shared engine, and the full dismiss-count-then-
+  silence lifecycle including the bug fix above. Full suite: 120 suites
+  / 3,351 tests pass; `tsc --noEmit` clean; all 7 locales confirmed key-
+  parity — 3 general keys + 40 topics × 3 variants + 5 referral-nudge
+  keys, es/ru/tr/hi/ar fully translated (glossary terms — per diem, CPM,
+  RPM, deadhead, escrow, Schedule C, HVUT/2290, IRP, CDL, DPF, S-Corp —
+  kept in Latin script throughout; "settlement" kept English per the
+  glossary in every locale that references one), uk as an untranslated
+  English copy per its own still-disabled status; glossary test re-
+  passed clean (1,554 checks).
+  `docs/PENDING_SQL.md` §69 (`profiles.accountant_package_exported_at
+  timestamptz`, mirrored as `pending_69.sql` at the repo root) is **NOT
+  YET APPLIED** — until it's run, `useReferralNudge()`'s
+  `hasExportedAccountantPackage` check simply reads `undefined`/falsy
+  (an unknown column), so the "first export" moment never fires but
+  nothing breaks; the other 3 referral moments and the entire daily-tips
+  feature work standalone regardless. `supabase/functions/reset-data/
+  index.ts` was updated (new field in `PROFILE_DATA_RESET`'s CLEARED
+  bucket) and **needs redeploying** once §69 has been run;
+  `ai-advisor`/`ai-import`/`delete-account`/`referral-sync` were NOT
+  touched. No new native dependency — pure client-side JS/TS plus one
+  small SQL migration — ships via a normal `eas update`.

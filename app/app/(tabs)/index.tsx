@@ -43,6 +43,9 @@ import { useProactiveCoach } from '@/src/data/proactiveCoach';
 import { coachNudgeText } from '@/src/alerts/periodicCoachNudges';
 import { useAlertsData } from '@/src/data/alerts';
 import { NUDGE_ICON, NUDGE_ROUTE, unlockNudgeText } from '@/src/alerts/unlockNudgePresentation';
+import { useDailyTip } from '@/src/data/dailyTips';
+import { DAILY_TIP_ICON, DAILY_TIP_ROUTE, dailyTipText } from '@/src/alerts/dailyTips';
+import { useReferralNudge } from '@/src/data/referralNudge';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
 import { useReferralSyncOnce } from '@/src/data/referral';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
@@ -398,16 +401,19 @@ function AiCoachSection({
   proactive,
   name,
   topUnlockNudge,
+  dailyTip,
 }: {
   coach: AiCoachSummary;
   proactive: ReturnType<typeof useProactiveCoach>;
   name: string;
   topUnlockNudge: ReturnType<typeof useAlertsData>['nudges'][number] | null;
+  dailyTip: ReturnType<typeof useDailyTip>;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { money } = useFormatters();
+  const { money, number } = useFormatters();
   const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
+  const pct = (n: number) => number(n, { style: 'percent', maximumFractionDigits: 1 });
   const hour = new Date().getHours();
   // SELF-TEST AUDIT (owner decision, MULTI-TRUCK MODEL) — useAiCoachSummary()/
   // useProactiveCoach() are deliberately fleet-wide always (see those
@@ -519,6 +525,35 @@ function AiCoachSection({
           </Pressable>
         )}
 
+        {/* DAILY TIPS — WHOLE-APP COVERAGE (owner decision, Part 2 of the AI
+            Coach daily-tips request) — one rotating, dismissible tip per
+            day, chosen by src/alerts/dailyTips.ts's selectDailyTip() from
+            whatever the account's own data currently justifies, composed
+            entirely client-side from templates (no AI call). Distinct from
+            the periodic AI-Coach-voiced nudge and the "unlock" missing-data
+            teaser above — this one covers the WHOLE app (every screen in
+            the nav registry, see DAILY_TIP_SCREEN_COVERAGE), not just
+            missing setup fields. */}
+        {dailyTip.tip && (
+          <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+              <Text style={{ fontSize: 16 }}>{DAILY_TIP_ICON[dailyTip.tip.topic]}</Text>
+              <View style={{ flex: 1 }}>
+                <MutedText style={{ fontSize: typography.size.xs, marginBottom: 2 }}>{t('dailyTips.cardLabel')}</MutedText>
+                <Text style={{ color: colors.text }}>{dailyTipText(dailyTip.tip, dailyTip.variant, t, moneyRounded, pct)}</Text>
+                <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs }}>
+                  <Pressable onPress={() => router.push(DAILY_TIP_ROUTE[dailyTip.tip!.topic] as Href)} hitSlop={8}>
+                    <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('dailyTips.actionButton')}</Text>
+                  </Pressable>
+                  <Pressable onPress={dailyTip.dismiss} hitSlop={8}>
+                    <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.dismiss')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
         <Pressable onPress={() => router.push('/(tabs)/more/ceo-mode')} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
           <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('ceoMode.homeOpenFull')}</Text>
         </Pressable>
@@ -526,6 +561,35 @@ function AiCoachSection({
         <LegalFootnote />
       </Card>
     </>
+  );
+}
+
+// REFERRAL NUDGE "surface at the right moments" (owner decision, Part 2 of
+// the AI Coach daily-tips request) — a milestone-triggered card, separate
+// from the AI Coach block above it (this isn't "AI Coach content," it's
+// its own concern), shown only at the 4 named moments
+// (src/referral/referralNudge.ts's detectReferralNudge()). Reuses the
+// SAME share pipeline (buildReferralShareMessage/shareViaSystemSheet) the
+// dedicated Invite & Earn screen uses, so the message/deep-link can never
+// disagree between the two surfaces.
+function ReferralNudgeCard({ nudge }: { nudge: ReturnType<typeof useReferralNudge> }) {
+  const { t } = useTranslation();
+  if (!nudge.nudge) return null;
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <Text style={{ color: colors.text }}>
+        {t(`referral.nudges.${nudge.nudge.topic}`, {
+          qualified: nudge.progress.inCurrentCycle,
+          remaining: nudge.progress.remaining,
+        })}
+      </Text>
+      <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
+        <SecondaryButton title={t('referral.nudges.shareButton')} onPress={() => nudge.share(t)} disabled={nudge.sharing} />
+        <Pressable onPress={nudge.dismiss} hitSlop={8} style={{ justifyContent: 'center' }}>
+          <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.dismiss')}</Text>
+        </Pressable>
+      </View>
+    </Card>
   );
 }
 
@@ -722,6 +786,15 @@ export default function Dashboard() {
   // dedupes this against Alerts' own call by query key, no double-fetch).
   const alertsData = useAlertsData();
   const topUnlockNudge = alertsData.nudges[0] ?? null;
+  // DAILY TIPS — WHOLE-APP COVERAGE (owner decision, Part 2) — one
+  // rotating, dismissible tip per day, composed client-side from
+  // templates (no AI call), distinct from both the periodic AI-Coach-
+  // voiced nudge above and the "unlock" missing-data teaser below it.
+  const dailyTip = useDailyTip();
+  // REFERRAL NUDGE "surface at the right moments" (owner decision) —
+  // reuses proactiveCoach's own already-computed goal progress rather
+  // than a second calculation.
+  const referralNudge = useReferralNudge(proactiveCoach.goalProgress?.metGoal ?? false);
   const taxQuery = useTaxEstimate();
   // REFERRAL PROGRAM (owner decision 2026-08-24) — opportunistic, once-
   // per-session qualification check so a referral can resolve during
@@ -1177,7 +1250,10 @@ export default function Dashboard() {
             </TappableCard>
           </>
         ) : (
-          <AiCoachSection coach={aiCoach} proactive={proactiveCoach} name={heroFirstName} topUnlockNudge={topUnlockNudge} />
+          <>
+            <AiCoachSection coach={aiCoach} proactive={proactiveCoach} name={heroFirstName} topUnlockNudge={topUnlockNudge} dailyTip={dailyTip} />
+            <ReferralNudgeCard nudge={referralNudge} />
+          </>
         )}
 
         <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>

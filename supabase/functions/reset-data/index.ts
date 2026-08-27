@@ -137,6 +137,10 @@ const PROFILE_DATA_RESET = {
   // — the fingerprint of the real figures the cached review was generated
   // from; same CLEARED bucket as its 4 siblings above.
   ai_weekly_review_fingerprint: null,
+  // REFERRAL NUDGE "surface at the right moments" (owner decision,
+  // docs/PENDING_SQL.md §69) — a reset account hasn't (as far as this
+  // fresh state is concerned) exported anything yet.
+  accountant_package_exported_at: null,
 };
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

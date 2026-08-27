@@ -668,7 +668,13 @@ export type Profile = {
   // the "what's your role?" ask-once prompt (src/alerts/roleFilter.ts's
   // resolveRolePromptNeeded) has never been dismissed without answering —
   // same "null = never done, set once" pattern as onboarding_completed_at.
-  nudge_state: Record<string, { lastShownAt: string | null; silencedAt: string | null }>;
+  // DAILY TIPS (owner decision) — gained two optional fields this pass,
+  // `variantIndex`/`dismissCount` — see src/alerts/nudgeFrequency.ts's own
+  // NudgeStateEntry comment for what each powers. A THIRD disjoint topic-
+  // key family (src/alerts/dailyTips.ts / src/referral/referralNudge.ts)
+  // shares this same column/shape, same "disjoint key sets, one column"
+  // precedent as the original two families.
+  nudge_state: Record<string, { lastShownAt: string | null; silencedAt: string | null; variantIndex?: number; dismissCount?: number }>;
   role_prompt_dismissed_at: string | null;
   // AI COACH — PROACTIVE WEEKLY REVIEW (owner decision 2026-08-24, NEXT
   // PASS item E1, docs/PENDING_SQL.md §49): cached so it costs at most one
@@ -699,6 +705,12 @@ export type Profile = {
   // delete; a truck delete; a Reset All Data) — the cached text is never
   // shown in that case, same treatment as a locale mismatch already got.
   ai_weekly_review_fingerprint: string | null;
+  // REFERRAL NUDGE "surface at the right moments" (owner decision,
+  // docs/PENDING_SQL.md §69) — set once, client-side, right after a
+  // successful Accountant Package PDF/Excel export
+  // (app/(tabs)/more/accountant-package.tsx); the referral nudge
+  // (src/referral/referralNudge.ts) only checks "is this non-null."
+  accountant_package_exported_at: string | null;
   // REFERRAL PROGRAM (owner decision 2026-08-24, PART 1, docs/PENDING_SQL.md
   // §50) — referral_code is generated once per user by the handle_new_user()
   // DB trigger (never client-generated for a real account); referred_by is

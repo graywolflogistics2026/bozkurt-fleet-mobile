@@ -1966,7 +1966,14 @@
     "creditDays": "{{count}} day earned",
     "creditDays_other": "{{count}} days earned",
     "creditAppliesNote": "Applies automatically when paid plans launch.",
-    "tnc": "Referral credit has no cash value and applies only once paid plans launch. Estimates only — not a financial guarantee. See Terms of Use for full details."
+    "tnc": "Referral credit has no cash value and applies only once paid plans launch. Estimates only — not a financial guarantee. See Terms of Use for full details.",
+    "nudges": {
+      "referralQualified": "🎉 One of your referrals just qualified! You're at {{qualified}} of 3 toward your next 2 months free — {{remaining}} more to go.",
+      "referralGoalWeek": "You just beat your weekly goal — know a driver who'd want an app like this? Three referrals = 2 months free.",
+      "referralFirstExport": "You just built a month of clean books. Know a driver still using a shoebox? Three referrals = 2 months free.",
+      "referralActive3Weeks": "You've been using the app for a few weeks now — if it's been worth it, sharing it is worth 2 months free for every 3 referrals.",
+      "shareButton": "Share"
+    }
   },
   "accountantPackage": {
     "title": "Accountant Package",
@@ -2193,5 +2200,210 @@
     "nextDocument": "Next Document",
     "finishReview": "Finish",
     "reviewAll": "Review All ({{count}})"
+  },
+  "dailyTips": {
+    "cardLabel": "Tip of the day",
+    "actionButton": "Go",
+    "dismiss": "Dismiss",
+    "tipTransactions": {
+      "v0": "Transactions shows every row from every import — settlements, fuel, deductions, tolls — in one searchable list, so you never have to remember which screen a charge landed on.",
+      "v1": "Trying to find one specific charge fast? Transactions searches across every category at once instead of checking each screen separately.",
+      "v2": "You've got {{count}} transactions logged across every category — Transactions is the one place to search and filter all of them together."
+    },
+    "tipImport": {
+      "v0": "You can pick several documents at once — Import processes a whole batch in the background while you keep working, and notifies you when it's done.",
+      "v1": "Got a stack of receipts to catch up on? Import lets you select more than one file at a time instead of importing them one by one.",
+      "v2": "Importing document by document works, but a multi-file batch is the same feature, just faster when you're catching up on a week's worth of paperwork."
+    },
+    "tipLoads": {
+      "v0": "Logging individual loads (not just the settlement total) unlocks rate-per-mile by lane, so you can see exactly which routes actually pay.",
+      "v1": "Ever wonder which lane really pays best? Log your loads and the app will rank them for you on Cash Flow's Best & Worst Lanes.",
+      "v2": "A settlement's own gross is the whole week — logging its individual loads is what breaks that number down lane by lane."
+    },
+    "tipSettlements": {
+      "v0": "Settlements is the source of truth for income, expenses and per diem — everything else in the app is built from what's recorded here.",
+      "v1": "Missing miles on a settlement? Tap into it and edit them inline — a one-time fix that corrects your CPM and per diem for that week too.",
+      "v2": "Every dollar and every mile the app shows starts on this screen — worth a look even just to see what a full settlement record contains."
+    },
+    "tipReimbursements": {
+      "v0": "Warranty credits and other money owed back to you get tracked separately here, so they never quietly disappear into a deduction instead.",
+      "v1": "Ever had a part replaced under warranty and gotten money back? That belongs on Reimbursements, not folded into a random expense.",
+      "v2": "Reimbursements keeps refunds and credits distinct from new income or new expenses — accurate books depend on keeping the three separate."
+    },
+    "tipOtherIncome": {
+      "v0": "Detention, layover and referral pay are income too — recording them here means your revenue actually reflects everything you earned.",
+      "v1": "Ever gotten paid for detention or layover outside a settlement? That's real income — Other Income is where it belongs.",
+      "v2": "If detention or layover pay never gets recorded, your revenue looks lower than it really is — Other Income exists to close that gap."
+    },
+    "tipFuel": {
+      "v0": "Fuel tracks every purchase against your revenue, so you always know exactly what fuel is costing you as a share of what you earn.",
+      "v1": "Know your fuel percentage off the top of your head? Fuel calculates it automatically from your own purchases.",
+      "v2": "Fuel is currently {{pct}} of your revenue — Fuel breaks that down purchase by purchase so you can see where it's coming from."
+    },
+    "tipMaintenance": {
+      "v0": "Maintenance tracks service intervals by mileage automatically, so you don't have to remember when the next oil change or DPF service is due.",
+      "v1": "Did your own oil change instead of paying a shop? Mark as Done still costs $0 to log — it just keeps your intervals accurate.",
+      "v2": "A service interval means nothing until it's logged — Maintenance is what keeps Truck Health's due dates honest."
+    },
+    "tipTolls": {
+      "v0": "Tolls & Fees keeps every toll charge in its own place — a real, deductible cost that's easy to lose track of buried in a settlement line.",
+      "v1": "Know exactly what you spent on tolls last month? Logging them here means you always will.",
+      "v2": "A toll withheld in a settlement is already counted — but a toll paid out of pocket only counts if it's logged here."
+    },
+    "tipDeductions": {
+      "v0": "The \"Needs review\" filter flags anything the AI wasn't fully confident about, so a quick check keeps your books accurate.",
+      "v1": "Curious what still needs a second look? Deductions' \"Needs review\" filter shows you exactly what to check.",
+      "v2": "You've got {{count}} item(s) flagged for review right now — a quick pass keeps your Schedule C numbers trustworthy."
+    },
+    "tipAssetRegister": {
+      "v0": "Asset Register keeps every business purchase — truck, trailer, equipment — in one place, alongside what it's worth for depreciation.",
+      "v1": "Want to see everything the business owns at a glance? Asset Register is built for exactly that.",
+      "v2": "Nothing shows up on Asset Register until it's entered — Trucks and Equipment are the two screens that feed it."
+    },
+    "tipAccountantPackage": {
+      "v0": "Accountant Package exports a clean month as PDF or Excel — out-of-pocket vs. settlement-withheld, detailed or summary, ready to hand off.",
+      "v1": "Ready to send your CPA something besides a shoebox of receipts? Accountant Package builds it for you.",
+      "v2": "The same real numbers behind every screen in this app roll up into one export here — worth trying just to see what it looks like."
+    },
+    "tipAiAdvisor": {
+      "v0": "AI Advisor already knows your own numbers — ask it anything about your revenue, expenses or trends and it answers from your real data.",
+      "v1": "Ever wish you could just ask a question about your own business and get a straight answer? That's what AI Advisor is for.",
+      "v2": "Every screen in this app computes real figures — AI Advisor is the one place you can ask about them in plain language."
+    },
+    "tipTaxEstimator": {
+      "v0": "Tax Estimator shows your weekly tax reserve and next quarterly due date, calculated from your real numbers (estimates only — verify with your CPA).",
+      "v1": "Know how much you should be setting aside for taxes each week? Tax Estimator calculates a real reserve figure from your own profit.",
+      "v2": "Per diem days, quarterly deadlines and — once profit justifies it — an S-Corp comparison all live on one screen, all estimates, never a filed return."
+    },
+    "tipShareProfit": {
+      "v0": "Share Weekly Profit builds a clean, shareable card of your week's numbers — no spreadsheet, no screenshot editing.",
+      "v1": "Want to show off a good week without exposing your full books? Share Weekly Profit is built exactly for that.",
+      "v2": "A real positive week is worth sharing — this screen turns it into one clean image in a couple of taps."
+    },
+    "tipDocumentsRenewals": {
+      "v0": "Documents & Renewals tracks expiry dates — HVUT 2290, IRP, medical card, CDL, inspection — and warns you before any of them lapse.",
+      "v1": "Know exactly when your medical card or IRP renewal is due? Documents & Renewals tracks it so you don't have to remember.",
+      "v2": "Nothing's being tracked here yet — adding your first renewal date turns this into an early-warning system instead of an empty screen."
+    },
+    "tipDocuments": {
+      "v0": "Documents keeps every uploaded file — photo or PDF — stored and openable any time, audit-ready without digging through email or a camera roll.",
+      "v1": "Ever need to find one specific receipt from months ago? Documents keeps every file you've ever imported searchable in one place.",
+      "v2": "You've got {{count}} documents stored already — Documents is where every one of them lives, always reachable."
+    },
+    "tipCategoryLearning": {
+      "v0": "Category Learning remembers every category you've corrected, so future imports from the same vendor get classified right the first time.",
+      "v1": "Ever correct the same category more than once for the same vendor? Category Learning remembers, so you shouldn't have to.",
+      "v2": "You've taught the app {{count}} correction(s) so far — Category Learning shows you exactly what it's learned."
+    },
+    "tipTruckCostBasis": {
+      "v0": "Enter what your truck actually cost and the app can show your real cost per mile — right now that fixed cost is missing from the math.",
+      "v1": "Do you know what a mile actually costs you? Two minutes of setup on Trucks and the app will tell you.",
+      "v2": "Your CPM is currently missing its biggest fixed cost — {{count}} truck(s) still have no cost basis entered."
+    },
+    "tipTruckDepreciation": {
+      "v0": "A depreciation election on Trucks turns your truck's purchase price into a real tax deduction — right now that's left on the table.",
+      "v1": "Know what your truck purchase could deduct from this year's taxes? Trucks has a depreciation section that calculates it (estimate only — verify with your CPA).",
+      "v2": "{{count}} truck(s) have no depreciation method set yet — a purchase price you've already entered could be doing real work on your tax estimate."
+    },
+    "tipTruckAddTrailer": {
+      "v0": "A trailer has its own cost basis and financing, independent of the tractor pulling it — Trucks lets you track both separately.",
+      "v1": "Pulling a trailer you haven't added yet? It has its own depreciation and cost basis worth tracking on its own.",
+      "v2": "A tractor and its trailer are financed differently more often than not — Trucks keeps that distinction instead of blending the two."
+    },
+    "tipTruckComparison": {
+      "v0": "Truck Comparison shows revenue, cost and net profit side by side for every truck in the fleet — so you can see which one actually earns.",
+      "v1": "Running more than one truck? Truck Comparison answers the question every multi-truck owner eventually asks: which one's really worth keeping?",
+      "v2": "Fleet-wide totals hide a lot — Truck Comparison is what breaks them back down truck by truck."
+    },
+    "tipFixTruckAssignments": {
+      "v0": "Fix Truck Assignments finds every row with no truck attached and lets you assign it in a couple of taps, so per-truck numbers stay accurate.",
+      "v1": "Ever wonder why one truck's numbers look off? An unassigned row could be quietly missing from its own totals.",
+      "v2": "{{count}} row(s) currently have no truck assigned — fixing them keeps every per-truck figure in this app honest."
+    },
+    "tipEquipment": {
+      "v0": "Equipment tracks everything the business owns beyond the truck itself — and like the truck, it's depreciable.",
+      "v1": "Bought a generator, a lift gate, or a load bar system for the business? Equipment is where that belongs, not a one-off deduction.",
+      "v2": "Nothing's logged on Equipment yet — anything durable you've bought for the business could be sitting there building real tax value instead."
+    },
+    "tipDrivers": {
+      "v0": "Drivers lets you record who's driving and what you pay them, so you can see your real margin after driver cost, not just gross revenue.",
+      "v1": "Paying a driver and want to know what that actually costs the business? Drivers tracks the real number.",
+      "v2": "Adding a driver's pay here is what turns \"revenue\" into \"what's actually left after paying someone to drive.\""
+    },
+    "tipCapitalAccount": {
+      "v0": "Capital Account tracks money you've put into the business against what you've drawn out — and shows exactly what you can still take tax-free.",
+      "v1": "Know how much you can still draw from the business without it counting as taxable profit? Capital Account has the real number.",
+      "v2": "Every contribution and every draw is already being tracked — Capital Account is just the screen that adds them up for you."
+    },
+    "tipOperatingPnl": {
+      "v0": "Operating P&L is the accountant-facing view — every deduction counted, no exclusions, matching what a bookkeeper would expect to see.",
+      "v1": "Want the same numbers your accountant would compute by hand? Operating P&L is built to match that exactly.",
+      "v2": "Where True Profit excludes things like per-diem-covered meals, Operating P&L deliberately counts everything — two lenses on the same data."
+    },
+    "tipTruckHealth": {
+      "v0": "Truck Health tracks maintenance intervals per truck, so you get a heads-up before anything reads OVERDUE.",
+      "v1": "Want a head start before something goes overdue? Truck Health watches your intervals so you don't have to track them by memory.",
+      "v2": "Nothing's logged for this truck yet — the first maintenance record is what turns this screen from a blank slate into a real early-warning system."
+    },
+    "tipCashFlow": {
+      "v0": "Cash Flow projects your next 30 days — including your tightest upcoming week and the recurring charges it's already detected.",
+      "v1": "Know which week in the next month is going to be tightest on cash? Cash Flow's 30-day forecast answers exactly that.",
+      "v2": "With a few weeks of settlements on file, Cash Flow can now project forward instead of just looking back."
+    },
+    "tipScorecard": {
+      "v0": "Scorecard scores your business 0-100 and breaks down RPM, CPM and profit-per-mile — the numbers that actually explain the score.",
+      "v1": "Want one number that sums up how the business is doing? Scorecard is built exactly for that, with the breakdown right behind it.",
+      "v2": "Rate, cost and profit per mile all live on one screen here, computed the same way every time you check."
+    },
+    "tipLoans": {
+      "v0": "Loans tracks principal separately from interest — only the interest portion is actually tax-deductible, and this screen keeps that split clear.",
+      "v1": "Know how much of your truck payment is actually deductible? Loans separates principal from interest so you always know.",
+      "v2": "A loan payment isn't one deductible number — Loans keeps the deductible interest portion distinct from the principal you're just paying down."
+    },
+    "tipProfitAnalysis": {
+      "v0": "Profit Analysis shows your trend over time plus an industry-benchmark comparison — the one screen built to answer \"am I improving?\"",
+      "v1": "Wondering if the business is actually getting better over time, not just this week? Profit Analysis is built to answer that.",
+      "v2": "With enough weeks on file, a real trend line becomes visible here — worth checking now that you've got the history for it."
+    },
+    "tipAiCoachFull": {
+      "v0": "This card is a summary — the full AI Coach screen adds goal-tracking and a place to ask follow-up questions about your own week.",
+      "v1": "Want more than a one-line summary? Open full AI Coach for the complete briefing.",
+      "v2": "Everything shown here is just the headline — the full screen goes deeper into the same real numbers."
+    },
+    "tipDeadheadBenchmark": {
+      "v0": "Deadhead — miles driven with no load — is normal to a point, but it's worth watching since every one of those miles still costs fuel and time.",
+      "v1": "Know what share of your miles are deadhead? It's currently {{pct}} — worth keeping an eye on.",
+      "v2": "Your deadhead is running {{pct}} of total miles right now — a useful number to compare against your own trend over time."
+    },
+    "tipPerDiemVsMeals": {
+      "v0": "Per diem already covers meals while you're away from home — a separate meal receipt on top of that isn't an additional deduction.",
+      "v1": "Wondering why meal receipts don't add to your deduction total? Per diem already covers that, at a flat daily rate.",
+      "v2": "You've accumulated {{days}} per diem day(s) so far this year — that daily rate is what already accounts for meals on the road."
+    },
+    "tipRepairVsCapitalImprovement": {
+      "v0": "A routine repair is a deductible expense right away — a major overhaul over $2,500 on a core component gets treated differently for tax purposes.",
+      "v1": "Wondering why a big engine or transmission job gets flagged differently than a regular repair? It's a real IRS distinction, not a glitch.",
+      "v2": "Maintenance & Repairs and Major Repairs & Overhauls are two different categories on purpose — the dollar threshold is what tells them apart."
+    },
+    "tipEscrowRefundable": {
+      "v0": "An escrow or performance bond a carrier holds is refundable — it's your money on deposit, not a real business expense.",
+      "v1": "Ever wonder why an escrow deduction doesn't count against your profit? That money is still yours, just held back for now.",
+      "v2": "Escrow & Deposits is excluded from true profit and CPM on purpose — it never actually left the business as a cost."
+    },
+    "tipAdvanceRepayments": {
+      "v0": "An advance repayment is you paying back money you already received — it's not a new expense, just returning cash already counted as income.",
+      "v1": "Wondering why an advance repayment doesn't lower your taxable profit? You already got that money once — this is just giving it back.",
+      "v2": "Advance Repayment is excluded from true profit for exactly this reason — counting it again would double-count the same dollars."
+    },
+    "tipQuarterlyDeadlines": {
+      "v0": "Your next estimated quarterly tax payment is coming up in {{days}} day(s) — worth a look at Tax Estimator before it arrives (estimate only — verify with your CPA).",
+      "v1": "Know your next quarterly tax deadline off the top of your head? It's {{days}} day(s) away.",
+      "v2": "{{days}} day(s) until the next quarterly due date — Tax Estimator has the estimated amount ready whenever you want to check."
+    },
+    "tipSettings": {
+      "v0": "Settings holds your language, plan details, support contact, and full data export or deletion — everything account-level in one place.",
+      "v1": "Need to change your language or export your data? Settings is where every account-level option lives.",
+      "v2": "From support contact to a full data export, Settings covers everything about your account that isn't a financial screen."
+    }
   }
 }

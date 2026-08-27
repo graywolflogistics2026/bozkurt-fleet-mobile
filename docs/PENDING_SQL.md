@@ -3857,6 +3857,37 @@ never match a `null` OR any real cached fingerprint either).
 
 ---
 
+## 69. profiles.accountant_package_exported_at (REFERRAL NUDGE "surface at the right moments", owner decision) — NOT YET APPLIED
+
+**The finding**: Part 2 of the AI Coach daily-tips request asks the
+referral nudge to surface at 4 specific real moments, one of which is
+"after their first accountant export" — this app had no existing signal
+anywhere for "has this user ever exported the Accountant Package." Set
+once, client-side, right after a successful PDF or Excel export
+(`app/(tabs)/more/accountant-package.tsx`'s `recordExportedForReferralNudge()`,
+called from both `handleExportPdf()`/`handleExportExcel()` after
+`Sharing.shareAsync()` succeeds — fire-and-forget, never blocks the
+export/share the user is already waiting on). The referral nudge
+(`src/referral/referralNudge.ts`) only ever checks "is this non-null,"
+never re-derives a count or a "first" vs. "Nth" distinction.
+
+```sql
+alter table profiles add column if not exists accountant_package_exported_at timestamptz;
+```
+
+One idempotent `add column if not exists`, safe to re-run. Nullable —
+`null` simply means "never exported yet," which
+`hasExportedAccountantPackage: !!profileQuery.data?.accountant_package_exported_at`
+already treats correctly as "this moment hasn't happened."
+`reset-data`'s `PROFILE_DATA_RESET` clears this back to `null` (a reset
+account hasn't, as far as that fresh state is concerned, exported
+anything yet).
+
+- [ ] 69 run (profiles gains accountant_package_exported_at timestamptz,
+      nullable)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

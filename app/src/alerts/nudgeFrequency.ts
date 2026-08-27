@@ -7,7 +7,18 @@
 // server-side as profiles.nudge_state (jsonb, docs/PENDING_SQL.md §49) —
 // ONE shared column/shape for both nudge families (they use disjoint topic
 // key sets, so they can never collide in the same object).
-export type NudgeStateEntry = { lastShownAt: string | null; silencedAt: string | null };
+// DAILY TIPS (owner decision) — two new OPTIONAL fields, a third disjoint
+// topic-key family (all prefixed "tip"/"referral" so they can never
+// collide with the existing missing-data/periodic-coach topic strings):
+// `variantIndex` remembers which of a topic's several phrasings was shown
+// last (src/alerts/dailyTips.ts rotates through them in order before any
+// repeat); `dismissCount` powers "never after two dismissals" for the
+// referral-nudge family (src/referral/referralNudge.ts) — auto-silences
+// once it reaches 2, a small extension of the existing silence mechanism
+// rather than a second one. Both are optional and simply unused by the
+// two original nudge families, so nothing about their own behavior
+// changes.
+export type NudgeStateEntry = { lastShownAt: string | null; silencedAt: string | null; variantIndex?: number; dismissCount?: number };
 export type NudgeState<Topic extends string = string> = Partial<Record<Topic, NudgeStateEntry>>;
 export type FrequencyCandidate<Topic extends string> = { topic: Topic; detail: Record<string, number | string> };
 
@@ -60,16 +71,22 @@ export function selectNudgesToShow<Topic extends string>(
 // on every recompute, or the cooldown would never engage (see
 // src/data/alerts.ts / src/data/aiCoachNudges.ts for the render-then-record
 // wiring).
+// DAILY TIPS fix: this used to build a BRAND-NEW entry object with only
+// lastShownAt/silencedAt, silently dropping dismissCount (and
+// variantIndex) if either was already set — the referral-nudge family's
+// own "never after two dismissals" tracking would have been wiped the
+// next time the SAME topic was simply shown again. Now preserves every
+// field it doesn't itself own.
 export function recordNudgesShown<Topic extends string>(state: NudgeState<Topic>, topics: Topic[], now: Date = new Date()): NudgeState<Topic> {
   const next = { ...state };
   for (const topic of topics) {
-    next[topic] = { lastShownAt: now.toISOString(), silencedAt: next[topic]?.silencedAt ?? null };
+    next[topic] = { ...next[topic], lastShownAt: now.toISOString(), silencedAt: next[topic]?.silencedAt ?? null };
   }
   return next;
 }
 
 export function silenceNudgeTopic<Topic extends string>(state: NudgeState<Topic>, topic: Topic, now: Date = new Date()): NudgeState<Topic> {
-  return { ...state, [topic]: { lastShownAt: state[topic]?.lastShownAt ?? null, silencedAt: now.toISOString() } } as NudgeState<Topic>;
+  return { ...state, [topic]: { ...state[topic], lastShownAt: state[topic]?.lastShownAt ?? null, silencedAt: now.toISOString() } } as NudgeState<Topic>;
 }
 
 export function unsilenceNudgeTopic<Topic extends string>(state: NudgeState<Topic>, topic: Topic): NudgeState<Topic> {

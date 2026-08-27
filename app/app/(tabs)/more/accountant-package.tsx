@@ -19,6 +19,7 @@ import { useUserCategories } from '@/src/data/userCategories';
 import { useLearnCategoryCorrection } from '@/src/data/categoryLearningRules';
 import { defaultTaxDeductible } from '@/src/import/category';
 import { useTaxYearData } from '@/src/data/taxYearData';
+import { useUpdateProfile } from '@/src/data/profile';
 import { useAuth } from '@/src/context/AuthContext';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import {
@@ -151,6 +152,7 @@ export default function AccountantPackage() {
   const queryClient = useQueryClient();
   const { session, profile } = useAuth();
   const userId = session?.user.id;
+  const updateProfile = useUpdateProfile();
 
   const settlementsQuery = useSettlements();
   const deductionsQuery = useDeductions();
@@ -539,6 +541,20 @@ export default function AccountantPackage() {
     return { input, strings };
   }
 
+  // REFERRAL NUDGE "surface at the right moments" (owner decision,
+  // docs/PENDING_SQL.md §69) — "after their first accountant export" is
+  // one of the 4 named moments; this is the ONE place a real export
+  // actually happens, so it's the one place that signal can be set.
+  // Fire-and-forget (never blocks the export/share the user is already
+  // waiting on) and unconditional (re-setting on every export is
+  // harmless — the referral nudge only ever checks "is this non-null").
+  function recordExportedForReferralNudge() {
+    updateProfile.mutate(
+      { accountant_package_exported_at: new Date().toISOString() },
+      { onError: (err) => console.error('[accountant-package] failed to record export for referral nudge:', err) }
+    );
+  }
+
   async function handleExportPdf(scopeMonth: number | null) {
     const key = scopeMonth == null ? 'pdfYear' : 'pdfMonth';
     setExporting(key);
@@ -561,6 +577,7 @@ export default function AccountantPackage() {
       if (renamed.exists) renamed.delete();
       new File(uri).copy(renamed);
       await Sharing.shareAsync(renamed.uri);
+      recordExportedForReferralNudge();
     } catch (err) {
       Alert.alert(t('accountantPackage.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {
@@ -585,6 +602,7 @@ export default function AccountantPackage() {
         return;
       }
       await Sharing.shareAsync(file.uri, { mimeType: 'application/vnd.ms-excel' });
+      recordExportedForReferralNudge();
     } catch (err) {
       Alert.alert(t('accountantPackage.exportFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
     } finally {

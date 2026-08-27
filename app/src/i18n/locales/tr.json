@@ -1924,7 +1924,14 @@
     "creditDays": "{{count}} gün kazanıldı",
     "creditDays_other": "{{count}} gün kazanıldı",
     "creditAppliesNote": "Ücretli planlar başladığında otomatik olarak uygulanır.",
-    "tnc": "Davet kredisinin nakit değeri yoktur ve yalnızca ücretli planlar başladığında uygulanır. Sadece tahminlerdir — finansal bir garanti değildir. Ayrıntılar için Kullanım Şartları'na bakın."
+    "tnc": "Davet kredisinin nakit değeri yoktur ve yalnızca ücretli planlar başladığında uygulanır. Sadece tahminlerdir — finansal bir garanti değildir. Ayrıntılar için Kullanım Şartları'na bakın.",
+    "nudges": {
+      "referralQualified": "🎉 Referanslarınızdan biri az önce hak kazandı! Bir sonraki 2 ücretsiz ayınıza doğru 3'te {{qualified}}'desiniz — {{remaining}} kaldı.",
+      "referralGoalWeek": "Az önce haftalık hedefinizi geçtiniz — böyle bir uygulamayı isteyecek bir şoför tanıyor musunuz? Üç referans = 2 ay ücretsiz.",
+      "referralFirstExport": "Az önce bir aylık temiz kayıt oluşturdunuz. Hâlâ ayakkabı kutusuyla idare eden bir şoför tanıyor musunuz? Üç referans = 2 ay ücretsiz.",
+      "referralActive3Weeks": "Birkaç haftadır uygulamayı kullanıyorsunuz — işinize yaradıysa, paylaşmak her 3 referans için 2 ay ücretsize değer.",
+      "shareButton": "Paylaş"
+    }
   },
   "accountantPackage": {
     "title": "Muhasebeci Paketi",
@@ -2192,6 +2199,211 @@
       "fuel": "Yakıt",
       "maintenance": "Bakım",
       "toll": "Geçiş Ücreti"
+    }
+  },
+  "dailyTips": {
+    "cardLabel": "Günün ipucu",
+    "actionButton": "Git",
+    "dismiss": "Kapat",
+    "tipTransactions": {
+      "v0": "İşlemler, her içe aktarımdan gelen her satırı — settlement, yakıt, kesintiler, geçiş ücretleri — tek bir aranabilir listede gösterir; bir ücretin hangi ekranda kaldığını hatırlamanıza gerek kalmaz.",
+      "v1": "Belirli bir ücreti hızlıca bulmanız mı gerekiyor? İşlemler her ekranı ayrı ayrı kontrol etmek yerine tüm kategorilerde birden arar.",
+      "v2": "Her kategoride toplam {{count}} işlem kaydınız var — İşlemler hepsini birlikte arayıp filtreleyebileceğiniz tek yer."
+    },
+    "tipImport": {
+      "v0": "Aynı anda birden fazla belge seçebilirsiniz — İçe Aktar tüm grubu arka planda işler, siz çalışmaya devam edersiniz, bitince size haber verir.",
+      "v1": "Birikmiş bir fiş yığınınız mı var? İçe Aktar, dosyaları tek tek yüklemek yerine birden fazlasını aynı anda seçmenize izin verir.",
+      "v2": "Belge belge içe aktarmak da işe yarar, ama toplu içe aktarma aynı özelliğin daha hızlı hâli — bir haftalık evrakı toparlarken fark yaratır."
+    },
+    "tipLoads": {
+      "v0": "Yükleri tek tek kaydetmek (yalnızca settlement toplamını değil) mil başına gelir bilgisini açığa çıkarır, hangi güzergâhın gerçekten kazandırdığını görürsünüz.",
+      "v1": "Hangi güzergâhın en iyi ödediğini hiç merak ettiniz mi? Yüklerinizi kaydedin, uygulama Cash Flow'daki En İyi & En Kötü Güzergâhlar bölümünde sizin için sıralasın.",
+      "v2": "Bir settlement'ın brüt tutarı tüm haftayı kapsar — yükleri tek tek kaydetmek bu rakamı güzergâh güzergâh ayırır."
+    },
+    "tipSettlements": {
+      "v0": "Settlements, gelir, gider ve per diem için tek doğru kaynaktır — uygulamadaki her şey burada kayıtlı olanlardan hesaplanır.",
+      "v1": "Bir settlement'ta mil eksik mi? İçine girip yerinde düzenleyin — o haftanın CPM ve per diem hesabını da aynı anda düzeltir.",
+      "v2": "Uygulamanın gösterdiği her dolar ve her mil bu ekrandan başlar — tam bir settlement kaydının neler içerdiğini görmek için bile bakmaya değer."
+    },
+    "tipReimbursements": {
+      "v0": "Garanti kredileri ve size geri ödenmesi gereken diğer paralar burada ayrı takip edilir, sessizce bir kesinti kaleminin içinde kaybolmaz.",
+      "v1": "Bir parça garanti kapsamında değiştirildi ve para iade mi aldınız? Bu, Geri Ödemeler'e ait, rastgele bir gidere değil.",
+      "v2": "Geri Ödemeler, iadeleri ve kredileri yeni gelirden ya da yeni giderden ayrı tutar — doğru muhasebe bu üçünü ayrı tutmakla başlar."
+    },
+    "tipOtherIncome": {
+      "v0": "Detention, layover ve referans ödemeleri de gelirdir — burada kaydetmek gelirinizin gerçekten kazandığınız her şeyi yansıtmasını sağlar.",
+      "v1": "Hiç settlement dışında detention ya da layover ödemesi aldınız mı? Bu gerçek bir gelir — Diğer Gelirler tam da bunun için var.",
+      "v2": "Detention veya layover ödemesi hiç kaydedilmezse gelirinizin gerçekte olduğundan düşük görünür — Diğer Gelirler tam da bu boşluğu kapatır."
+    },
+    "tipFuel": {
+      "v0": "Yakıt, her alımı gelirinize karşı kıyaslar; yakıtın kazancınızın ne kadarını götürdüğünü her zaman tam olarak bilirsiniz.",
+      "v1": "Yakıt yüzdenizi ezbere biliyor musunuz? Yakıt bunu kendi alımlarınızdan otomatik hesaplar.",
+      "v2": "Yakıt şu anda gelirinizin {{pct}}'ini oluşturuyor — Yakıt bunu alım alım ayrıştırır, nereden geldiğini görebilirsiniz."
+    },
+    "tipMaintenance": {
+      "v0": "Bakım, servis aralıklarını mesafeye göre otomatik takip eder; bir sonraki yağ değişiminin ya da DPF servisinin ne zaman geldiğini ezberlemenize gerek kalmaz.",
+      "v1": "Yağ değişimini bir servise değil kendiniz mi yaptınız? Yapıldı Olarak İşaretle yine de $0'a mal olur — sadece aralıkları doğru tutar.",
+      "v2": "Bir servis aralığı kaydedilmeden hiçbir anlam ifade etmez — Bakım, Truck Health'teki vade tarihlerini dürüst tutan şeydir."
+    },
+    "tipTolls": {
+      "v0": "Geçiş Ücretleri & Harçlar her geçiş ücretini kendi yerinde tutar — bir settlement satırının içinde kaybolması kolay olan gerçek, indirilebilir bir maliyettir.",
+      "v1": "Geçen ay geçiş ücretlerine tam olarak ne kadar harcadığınızı biliyor musunuz? Burada kaydetmek her zaman bilmenizi sağlar.",
+      "v2": "Bir settlement'ta kesilen geçiş ücreti zaten sayılmıştır — ama cepten ödenen bir geçiş ücreti yalnızca burada kaydedilirse sayılır."
+    },
+    "tipDeductions": {
+      "v0": "\"İncelemesi gerekiyor\" filtresi, yapay zekânın tam emin olamadığı her şeyi işaretler; hızlı bir kontrol kayıtlarınızı doğru tutar.",
+      "v1": "Neyin hâlâ ikinci bir bakış istediğini merak ediyor musunuz? Kesintiler'deki \"İncelemesi gerekiyor\" filtresi tam olarak neyi kontrol edeceğinizi gösterir.",
+      "v2": "Şu anda incelenmek üzere işaretlenmiş {{count}} kalem var — hızlı bir geçiş Schedule C rakamlarınızı güvenilir tutar."
+    },
+    "tipAssetRegister": {
+      "v0": "Varlık Kaydı, işletmenin yaptığı her alımı — çekici, römork, ekipman — amortisman değeriyle birlikte tek bir yerde tutar.",
+      "v1": "İşletmenin sahip olduğu her şeyi tek bakışta görmek ister misiniz? Varlık Kaydı tam olarak bunun için var.",
+      "v2": "Girilmeden hiçbir şey Varlık Kaydı'nda görünmez — Kamyonlar ve Ekipman onu besleyen iki ekrandır."
+    },
+    "tipAccountantPackage": {
+      "v0": "Muhasebeci Paketi bir ayı PDF veya Excel olarak dışa aktarır — cepten ödenen ile settlement'ta kesilen ayrı, ayrıntılı veya özet, teslime hazır.",
+      "v1": "CPM'nize bir ayakkabı kutusu dolusu fiş yerine düzgün bir şey göndermeye hazır mısınız? Muhasebeci Paketi bunu sizin için hazırlar.",
+      "v2": "Uygulamadaki her ekranın arkasındaki aynı gerçek rakamlar burada tek bir dışa aktarımda toplanır — nasıl göründüğünü görmek için bile denemeye değer."
+    },
+    "tipAiAdvisor": {
+      "v0": "AI Advisor zaten kendi rakamlarınızı biliyor — gelir, gider veya trendler hakkında ne isterseniz sorun, gerçek verilerinizden yanıt verir.",
+      "v1": "Kendi işiniz hakkında bir soru sorup direkt bir yanıt almak ister miydiniz? AI Advisor tam olarak bunun için var.",
+      "v2": "Uygulamadaki her ekran gerçek rakamlar hesaplıyor — AI Advisor bunlar hakkında sade bir dille soru sorabileceğiniz tek yer."
+    },
+    "tipTaxEstimator": {
+      "v0": "Vergi Tahmincisi, haftalık vergi rezervinizi ve bir sonraki üç aylık ödeme tarihinizi gerçek rakamlarınızdan hesaplar (yalnızca tahmin — CPA'nızla doğrulayın).",
+      "v1": "Her hafta vergi için ne kadar ayırmanız gerektiğini biliyor musunuz? Vergi Tahmincisi bunu kendi kârınızdan gerçek bir rakamla hesaplar.",
+      "v2": "Per diem günleri, üç aylık son tarihler ve — kâr yeterli olduğunda — bir S-Corp karşılaştırması hepsi tek ekranda, hepsi tahmin, asla dosyalanmış bir beyanname değil."
+    },
+    "tipShareProfit": {
+      "v0": "Haftalık Kârı Paylaş, haftanızın rakamlarından temiz, paylaşılabilir bir kart oluşturur — tablo yok, ekran görüntüsü düzenlemek yok.",
+      "v1": "Tüm defterlerinizi açığa çıkarmadan iyi bir haftayı göstermek ister misiniz? Haftalık Kârı Paylaş tam olarak bunun için var.",
+      "v2": "Gerçekten iyi bir hafta paylaşılmaya değer — bu ekran onu birkaç dokunuşla tek, temiz bir görsele dönüştürür."
+    },
+    "tipDocumentsRenewals": {
+      "v0": "Belgeler & Yenilemeler son kullanma tarihlerini takip eder — HVUT 2290, IRP, sağlık kartı, CDL, muayene — ve süresi dolmadan sizi uyarır.",
+      "v1": "Sağlık kartınızın veya IRP yenilemenizin tam olarak ne zaman geldiğini biliyor musunuz? Belgeler & Yenilemeler bunu takip eder, siz hatırlamak zorunda kalmazsınız.",
+      "v2": "Burada henüz hiçbir şey takip edilmiyor — ilk yenileme tarihinizi eklemek bu ekranı boş bir sayfadan erken uyarı sistemine dönüştürür."
+    },
+    "tipDocuments": {
+      "v0": "Belgeler, yüklenen her dosyayı — fotoğraf ya da PDF — her zaman açılabilir, denetime hazır şekilde saklar; e-posta ya da fotoğraf galerisinde aramaya gerek kalmaz.",
+      "v1": "Aylar öncesinden belirli bir fişi bulmanız mı gerekiyor? Belgeler, içe aktardığınız her dosyayı tek bir yerde aranabilir tutar.",
+      "v2": "Zaten {{count}} belgeniz kayıtlı — Belgeler, her birinin yaşadığı, her zaman ulaşılabilir yerdir."
+    },
+    "tipCategoryLearning": {
+      "v0": "Kategori Öğrenimi düzelttiğiniz her kategoriyi hatırlar, aynı satıcıdan gelecek içe aktarımlar ilk seferde doğru sınıflandırılır.",
+      "v1": "Aynı satıcı için aynı kategoriyi birden fazla kez mi düzeltiyorsunuz? Kategori Öğrenimi bunu hatırlar, siz hatırlamak zorunda kalmazsınız.",
+      "v2": "Uygulamaya şimdiye kadar {{count}} düzeltme öğrettiniz — Kategori Öğrenimi tam olarak neyi öğrendiğini size gösterir."
+    },
+    "tipTruckCostBasis": {
+      "v0": "Kamyonunuzun gerçek maliyetini girin, uygulama size gerçek mil başına maliyetinizi göstersin — şu anda bu sabit maliyet hesaptan eksik.",
+      "v1": "Bir milin size gerçekte ne kadara mal olduğunu biliyor musunuz? Kamyonlar'da iki dakikalık bir kurulum ve uygulama size söyler.",
+      "v2": "CPM'nizde şu anda en büyük sabit maliyet eksik — {{count}} kamyonun hâlâ maliyet tabanı girilmemiş."
+    },
+    "tipTruckDepreciation": {
+      "v0": "Kamyonlar'daki bir amortisman seçimi, kamyonunuzun satın alma fiyatını gerçek bir vergi indirimine dönüştürür — şu anda bu masada bırakılıyor.",
+      "v1": "Kamyon alımınızın bu yılki vergilerden ne kadar indirim sağlayabileceğini biliyor musunuz? Kamyonlar'da bunu hesaplayan bir amortisman bölümü var (yalnızca tahmin — CPA'nızla doğrulayın).",
+      "v2": "{{count}} kamyonda hâlâ amortisman yöntemi seçilmemiş — zaten girdiğiniz bir satın alma fiyatı vergi tahmininizde gerçek bir iş yapabilirdi."
+    },
+    "tipTruckAddTrailer": {
+      "v0": "Bir römorkun, onu çeken çekiciden bağımsız kendi maliyet tabanı ve finansmanı vardır — Kamyonlar ikisini de ayrı ayrı takip etmenize izin verir.",
+      "v1": "Henüz eklemediğiniz bir römork mu çekiyorsunuz? Kendi amortismanı ve maliyet tabanı ayrı ayrı takip edilmeye değer.",
+      "v2": "Bir çekici ve römorkü çoğu zaman farklı şekilde finanse edilir — Kamyonlar bu ayrımı korur, ikisini birbirine karıştırmaz."
+    },
+    "tipTruckComparison": {
+      "v0": "Kamyon Karşılaştırması, filodaki her kamyonun gelir, maliyet ve net kârını yan yana gösterir — hangisinin gerçekten kazandırdığını görürsünüz.",
+      "v1": "Birden fazla kamyon mu işletiyorsunuz? Kamyon Karşılaştırması, birden fazla kamyonu olan her sahibin er ya da geç sorduğu soruyu yanıtlar: hangisi gerçekten elde tutmaya değer?",
+      "v2": "Filo genelindeki toplamlar çok şeyi gizler — Kamyon Karşılaştırması bunları tekrar kamyon kamyon ayırır."
+    },
+    "tipFixTruckAssignments": {
+      "v0": "Kamyon Atamalarını Düzelt, kamyon atanmamış her satırı bulur ve birkaç dokunuşla atamanıza izin verir; böylece kamyon başına rakamlar doğru kalır.",
+      "v1": "Bir kamyonun rakamlarının neden yanlış göründüğünü hiç merak ettiniz mi? Atanmamış bir satır sessizce kendi toplamlarından eksik olabilir.",
+      "v2": "Şu anda {{count}} satırın kamyonu atanmamış — bunları düzeltmek bu uygulamadaki her kamyon başına rakamı dürüst tutar."
+    },
+    "tipEquipment": {
+      "v0": "Ekipman, işletmenin kamyonun ötesinde sahip olduğu her şeyi takip eder — ve kamyon gibi, amortismana tabidir.",
+      "v1": "İşletme için bir jeneratör, lift gate ya da yük çubuğu sistemi mi aldınız? Bu, tek seferlik bir kesinti değil, Ekipman'a aittir.",
+      "v2": "Ekipman'da henüz hiçbir şey kayıtlı değil — işletme için satın aldığınız dayanıklı her şey, kayıtsız kalmak yerine gerçek vergi değeri oluşturabilirdi."
+    },
+    "tipDrivers": {
+      "v0": "Sürücüler, kimin sürdüğünü ve ona ne ödediğinizi kaydetmenizi sağlar; yalnızca brüt geliri değil, sürücü maliyetinden sonraki gerçek marjınızı görürsünüz.",
+      "v1": "Bir sürücüye ödeme yapıyor ve bunun işletmeye gerçekte ne kadara mal olduğunu bilmek mi istiyorsunuz? Sürücüler gerçek rakamı takip eder.",
+      "v2": "Buraya bir sürücünün ödemesini eklemek, \"geliri\", \"birine sürmesi için ödeme yaptıktan sonra gerçekte elde kalan\" hâline getirir."
+    },
+    "tipCapitalAccount": {
+      "v0": "Sermaye Hesabı, işletmeye koyduğunuz parayı çektiğiniz parayla karşılaştırır ve vergisiz olarak hâlâ ne kadar çekebileceğinizi tam olarak gösterir.",
+      "v1": "İşletmeden vergilendirilebilir kâr sayılmadan hâlâ ne kadar çekebileceğinizi biliyor musunuz? Sermaye Hesabı'nda gerçek rakam var.",
+      "v2": "Her katkı ve her çekim zaten takip ediliyor — Sermaye Hesabı sadece onları sizin için toplayan ekrandır."
+    },
+    "tipOperatingPnl": {
+      "v0": "Operating P&L muhasebeciye yönelik görünümdür — hiçbir istisna olmadan her kesinti sayılır, tam olarak bir muhasebecinin görmeyi bekleyeceği gibi.",
+      "v1": "Muhasebecinizin elle hesaplayacağı aynı rakamları mı istiyorsunuz? Operating P&L tam olarak buna uyacak şekilde tasarlandı.",
+      "v2": "True Profit, per diem'in kapsadığı yemekler gibi şeyleri dışlarken, Operating P&L kasıtlı olarak her şeyi sayar — aynı verilere iki farklı bakış açısı."
+    },
+    "tipTruckHealth": {
+      "v0": "Truck Health kamyon başına bakım aralıklarını takip eder; herhangi biri OVERDUE olarak görünmeden önce sizi uyarır.",
+      "v1": "Bir şey vadesi geçmeden önce önde olmak ister misiniz? Truck Health aralıklarınızı izler, siz hafızada tutmak zorunda kalmazsınız.",
+      "v2": "Bu kamyon için henüz hiçbir şey kaydedilmedi — ilk bakım kaydı bu ekranı boş bir sayfadan gerçek bir erken uyarı sistemine dönüştürür."
+    },
+    "tipCashFlow": {
+      "v0": "Cash Flow önümüzdeki 30 günü öngörür — en zor geçecek haftanız ve zaten tespit ettiği tekrarlayan ücretler dahil.",
+      "v1": "Önümüzdeki ayın hangi haftasının nakit açısından en zor olacağını biliyor musunuz? Cash Flow'un 30 günlük tahmini tam olarak buna cevap verir.",
+      "v2": "Birkaç haftalık settlement kaydıyla Cash Flow artık sadece geriye bakmak yerine ileriye doğru öngörüde bulunabilir."
+    },
+    "tipScorecard": {
+      "v0": "Scorecard işinizi 0-100 arasında puanlar ve RPM, CPM ve mil başına kârı ayrıştırır — puanı gerçekten açıklayan rakamlar bunlardır.",
+      "v1": "İşin nasıl gittiğini özetleyen tek bir rakam mı istiyorsunuz? Scorecard tam olarak bunun için var, hemen arkasında ayrıntılı dökümüyle.",
+      "v2": "Mil başına ücret, maliyet ve kâr hepsi burada tek bir ekranda, her kontrol ettiğinizde aynı şekilde hesaplanmış olarak yaşar."
+    },
+    "tipLoans": {
+      "v0": "Krediler anaparayı faizden ayırır — yalnızca faiz kısmı gerçekten vergiden düşülebilir, ve bu ekran o ayrımı net tutar.",
+      "v1": "Kamyon ödemenizin ne kadarının gerçekten indirilebilir olduğunu biliyor musunuz? Krediler anaparayı faizden ayırır, siz her zaman bilirsiniz.",
+      "v2": "Bir kredi ödemesi tek bir indirilebilir rakam değildir — Krediler, indirilebilir faiz kısmını sadece kapattığınız anaparadan ayrı tutar."
+    },
+    "tipProfitAnalysis": {
+      "v0": "Kâr Analizi, zaman içindeki trendinizi ve bir sektör kıyaslamasını gösterir — \"gelişiyor muyum?\" sorusuna cevap vermek için tasarlanmış tek ekran.",
+      "v1": "İşin sadece bu hafta değil, zaman içinde gerçekten daha iyiye gidip gitmediğini mi merak ediyorsunuz? Kâr Analizi bunu yanıtlamak için var.",
+      "v2": "Yeterli haftalık veriyle burada gerçek bir trend çizgisi görünür hâle gelir — artık bu geçmişe sahip olduğunuza göre kontrol etmeye değer."
+    },
+    "tipAiCoachFull": {
+      "v0": "Bu kart bir özet — tam AI Coach ekranı hedef takibi ve haftanız hakkında takip sorusu sorabileceğiniz bir yer ekler.",
+      "v1": "Tek satırlık bir özetten fazlasını mı istiyorsunuz? Tam brifing için tam AI Coach'u açın.",
+      "v2": "Burada gösterilen her şey sadece manşet — tam ekran aynı gerçek rakamlara daha derinden iniyor."
+    },
+    "tipDeadheadBenchmark": {
+      "v0": "Deadhead — yüksüz kat edilen miller — belli bir noktaya kadar normaldir, ama izlemeye değer çünkü her biri yine de yakıt ve zamana mal olur.",
+      "v1": "Millerinizin ne kadarının deadhead olduğunu biliyor musunuz? Şu anda {{pct}} — göz atmaya değer.",
+      "v2": "Deadhead'iniz şu anda toplam millerin {{pct}}'i — zaman içindeki kendi trendinizle karşılaştırmak için işe yarar bir rakam."
+    },
+    "tipPerDiemVsMeals": {
+      "v0": "Per diem, evden uzaktayken yemekleri zaten kapsar — üzerine ayrıca bir yemek fişi ek bir kesinti sağlamaz.",
+      "v1": "Yemek fişlerinin neden kesinti toplamınıza eklenmediğini merak ediyor musunuz? Per diem bunu sabit bir günlük oranla zaten kapsıyor.",
+      "v2": "Bu yıl şimdiye kadar {{days}} gün per diem biriktirdiniz — yoldaki yemekleri zaten kapsayan o günlük orandır."
+    },
+    "tipRepairVsCapitalImprovement": {
+      "v0": "Rutin bir tamir hemen indirilebilir bir giderdir — temel bir bileşende $2,500'ün üzerindeki büyük bir onarım vergi açısından farklı işlem görür.",
+      "v1": "Büyük bir motor ya da şanzıman işinin neden normal bir tamirden farklı işaretlendiğini merak ediyor musunuz? Bu bir hata değil, gerçek bir IRS ayrımı.",
+      "v2": "Bakım & Onarım ile Büyük Onarımlar kasıtlı olarak iki farklı kategoridir — onları ayıran şey dolar eşiğidir."
+    },
+    "tipEscrowRefundable": {
+      "v0": "Bir taşıyıcının tuttuğu escrow ya da performans teminatı iade edilebilir — bu depozitteki paranızdır, gerçek bir işletme gideri değil.",
+      "v1": "Bir escrow kesintisinin neden kârınızdan düşülmediğini merak ediyor musunuz? O para hâlâ sizin, sadece şimdilik tutuluyor.",
+      "v2": "Escrow & Depozitolar kasıtlı olarak gerçek kâr ve CPM'den hariç tutulur — o para işletmeden gerçekte hiç maliyet olarak çıkmadı."
+    },
+    "tipAdvanceRepayments": {
+      "v0": "Avans geri ödemesi, zaten aldığınız parayı geri vermenizdir — yeni bir gider değil, zaten gelir olarak sayılmış nakdi iade etmektir.",
+      "v1": "Bir avans geri ödemesinin neden vergilendirilebilir kârınızı düşürmediğini merak ediyor musunuz? O parayı zaten bir kez aldınız — bu sadece geri veriyor.",
+      "v2": "Avans Geri Ödemesi tam olarak bu nedenle gerçek kârdan hariç tutulur — tekrar saymak aynı doları iki kez saymak olurdu."
+    },
+    "tipQuarterlyDeadlines": {
+      "v0": "Bir sonraki tahmini üç aylık vergi ödemeniz {{days}} gün sonra — gelmeden önce Vergi Tahmincisi'ne bakmaya değer (yalnızca tahmin — CPA'nızla doğrulayın).",
+      "v1": "Bir sonraki üç aylık vergi son tarihinizi ezbere biliyor musunuz? {{days}} gün kaldı.",
+      "v2": "Bir sonraki üç aylık son tarihe {{days}} gün kaldı — Vergi Tahmincisi kontrol etmek istediğinizde tahmini tutarı hazır tutar."
+    },
+    "tipSettings": {
+      "v0": "Ayarlar; dilinizi, plan detaylarınızı, destek iletişiminizi ve tam veri dışa aktarma ya da silme işlemini tek bir yerde tutar.",
+      "v1": "Dilinizi değiştirmeniz ya da verinizi dışa aktarmanız mı gerekiyor? Ayarlar, hesap düzeyindeki her seçeneğin yaşadığı yerdir.",
+      "v2": "Destek iletişiminden tam veri dışa aktarımına kadar, Ayarlar finansal bir ekran olmayan hesabınızla ilgili her şeyi kapsar."
     }
   }
 }
