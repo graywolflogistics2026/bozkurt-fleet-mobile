@@ -12,6 +12,8 @@ import { IntroProvider, useIntro } from '@/src/context/IntroContext';
 import { LanguageGateProvider, useLanguageGate } from '@/src/context/LanguageGateContext';
 import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { useUsageTracking } from '@/src/data/usageTracking';
+import { checkShouldShowLaunchIntro } from '@/src/launch/launchIntro';
+import { LaunchIntroOverlay } from '@/src/components/LaunchIntroOverlay';
 import { colors } from '@/src/theme';
 import { initI18n } from '@/src/i18n';
 import { resolveRootRedirect } from '@/src/navigation/rootRedirect';
@@ -77,6 +79,24 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { trackScreenOpen } = useUsageTracking();
+  const [launchIntroDecision, setLaunchIntroDecision] = useState<'pending' | 'show' | 'skip'>('pending');
+
+  // ANIMATED BRAND INTRO — GATING (owner decision). Resolved exactly once
+  // per component mount (which itself only ever happens once per cold
+  // start, same as every other provider in this file) — never re-run on a
+  // session change, language change, etc. See src/launch/launchIntro.ts's
+  // own header comment for why a plain module-level flag (not
+  // AsyncStorage) is what makes this correctly "cold start only, never on
+  // return from background."
+  useEffect(() => {
+    let mounted = true;
+    checkShouldShowLaunchIntro().then((show) => {
+      if (mounted) setLaunchIntroDecision(show ? 'show' : 'skip');
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — ONE
   // navigation observer here covers every current and future screen
@@ -94,12 +114,19 @@ function RootLayoutNav() {
   }, [pathname, loading, session]);
 
   useEffect(() => {
-    if (loading) return;
+    // ANIMATED BRAND INTRO: also wait for launchIntroDecision to resolve
+    // (a fast native check, Linking/Notifications) before hiding the
+    // native splash — this is what makes the handoff seamless: whichever
+    // comes next (the intro overlay, matching the splash's own background/
+    // mark position exactly, or the real app directly) is already known
+    // and ready to render the INSTANT the splash disappears, never a gap
+    // where stale/default content could flash underneath.
+    if (loading || launchIntroDecision === 'pending') return;
     // Auth bootstrap is done (success or timeout-fallback) — safe to reveal
     // the app now. finally-equivalent: this fires no matter which path
     // AuthContext's loading=false came from.
     SplashScreen.hideAsync().catch(() => {});
-  }, [loading]);
+  }, [loading, launchIntroDecision]);
 
   useEffect(() => {
     if (loading || introSeen === null || languageScreenSeen === null) return;
@@ -120,19 +147,29 @@ function RootLayoutNav() {
     if (target) router.replace(target as Href);
   }, [session, loading, languageScreenSeen, needsEmailConfirmation, needsTos, needsTutorial, needsOnboarding, introSeen, segments, router]);
 
-  if (loading || introSeen === null || languageScreenSeen === null) return <LoadingScreen />;
+  if (loading || introSeen === null || languageScreenSeen === null || launchIntroDecision === 'pending') return <LoadingScreen />;
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-      <Stack.Screen name="language" />
-      <Stack.Screen name="intro" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="confirm-email" />
-      <Stack.Screen name="reset-password" />
-      <Stack.Screen name="tos" />
-      <Stack.Screen name="tutorial" />
-      <Stack.Screen name="onboarding" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="language" />
+        <Stack.Screen name="intro" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="confirm-email" />
+        <Stack.Screen name="reset-password" />
+        <Stack.Screen name="tos" />
+        <Stack.Screen name="tutorial" />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+      {/* ANIMATED BRAND INTRO — rendered as an OVERLAY on top of the
+          already-mounted, already-navigating Stack (never in place of
+          it) — this is what lets the existing redirect effect above keep
+          working completely unchanged: the real destination screen is
+          already rendering underneath by the time the overlay fades out
+          a moment later, so there's no blank/loading flash at the
+          handoff. */}
+      {launchIntroDecision === 'show' && <LaunchIntroOverlay onFinish={() => setLaunchIntroDecision('skip')} />}
+    </View>
   );
 }

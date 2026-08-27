@@ -9850,3 +9850,137 @@
   pending SQL migration; no redeploy needed for
   `ai-import`/`ai-advisor`/`reset-data`/`delete-account`/`referral-sync`.
   Ships via a normal `eas update` once §71 has been run.
+- LAUNCH EXPERIENCE — BIGGER WORDMARK + ANIMATED BRAND INTRO (owner
+  decision, no SQL). Two parts.
+  1. **NATIVE SPLASH, round 2 — the real cause of "still too small"**:
+     `generateBrandAssets.js`'s `composeSplashWithWordmarkSvg()` already
+     sized the wordmark to ~96% of the MARK's own width (the previous
+     pass's fix) — the remaining problem was that the mark itself was
+     only ever sized to `ICON_WIDTH_FRACTION = 0.62` of the 1024×1024
+     canvas, a fraction tuned for an APP-ICON safe zone (so an OS
+     icon-mask never clips it) that has no bearing on a splash screen,
+     which `expo-splash-screen`'s `resizeMode: "contain"` displays
+     un-cropped. With ~20% of the canvas sitting empty on every side and
+     "contain" scaling the WHOLE 1024×1024 image (padding included) to
+     fit the device width, all that invisible margin was silently
+     shrinking the visible content along with it. New
+     `SPLASH_WIDTH_FRACTION = 0.86` (splash-only, `icon.png`/favicon/
+     Android adaptive layers/store assets untouched — confirmed via `git
+     status` after regenerating everything, only `splash-icon.png`
+     changed) shrinks that wasted margin to ~7% per side, which is what
+     actually makes the mark+wordmark noticeably bigger on a real device
+     — not a further change to the already-correct text-to-mark ratio.
+     Also: heavier weight (900, was 800) and GENEROUS letter-spacing
+     again (0.18, up from the immediately-prior pass's deliberately-
+     tightened 0.1 — a fresh, explicit owner ask that supersedes that
+     earlier choice) and more separation from the mark (gap 0.11, was
+     0.09), all per this pass's own literal wording. **Verified before
+     committing**: composited the regenerated `splash-icon.png` over the
+     real `#08080c` background at a phone-portrait (1080×2340) and a
+     tablet-portrait (1600×2560) canvas using `resizeMode:"contain"`
+     semantics, viewed both — wordmark reads clearly bold at both scales,
+     clear separation from the mark, no clipping.
+  2. **ANIMATED BRAND INTRO**: a short (~1.5s, within the requested
+     1.2-1.8s), cold-start-only sequence on the app's own first JS
+     screen. `src/launch/launchIntroGate.ts` (pure, tested) —
+     `shouldShowLaunchIntro()` — and `src/launch/launchIntro.ts` (the
+     untested, native-calling orchestrator; same "no jest-expo/RN
+     runtime in this repo's plain-Node ts-jest setup" split this
+     codebase already uses for `buildInfo.ts`/`buildInfoFormat.ts`) —
+     `checkShouldShowLaunchIntro()`. **Cold-start-only, not "once ever"
+     and not AsyncStorage-backed**: a plain module-level `let
+     hasCheckedThisProcess` — correct BY CONSTRUCTION, since it resets to
+     `false` only when the JS engine/module registry is torn down and
+     re-evaluated from scratch, which happens exactly on a real cold
+     start (the OS actually killing and relaunching the process), never
+     on backgrounding/foregrounding. **Deep-link/notification skip**:
+     `Linking.getInitialURL()` + (defensively capability-checked, same
+     convention as `importJobNotifications.ts`)
+     `Notifications.getLastNotificationResponseAsync()`, both resolved
+     before the decision is made — either signal present means "the user
+     is going somewhere specific," skip entirely. **Reduced motion is
+     NOT a gating condition** — it changes HOW the intro animates (fade
+     only, no scale/translateY, same overall stage timing either way),
+     never WHETHER it shows; handled inside `LaunchIntroOverlay.tsx` via
+     reanimated 4's own `useReducedMotion()` (available since 3.5, no new
+     dependency — this app already had `react-native-reanimated` as a
+     dependency with ZERO actual usages anywhere before this pass, and
+     `babel-preset-expo` already auto-injects the worklets plugin per
+     this repo's own `babel.config.js` header comment, so no build config
+     changed either).
+     **HANDOFF CONTINUITY, an explicit, stated design call**: the native
+     splash is a STATIC image (mark + wordmark already both fully
+     visible together) — there's no way for a static PNG to stage a
+     reveal, so "the wordmark rises beneath [the mark] with a soft fade"
+     and "the starting frame matches the native splash exactly" are in
+     real tension when taken fully literally together. Resolved the way
+     real apps commonly do: the MARK stays visually continuous across the
+     handoff (starts already mostly opaque/full-size — opacity 0.6→1,
+     scale 0.94→1 — a subtle settle, not a hard pop; background color and
+     mark position/size never change, so there's no color flash and no
+     jump), while the WORDMARK and TAGLINE (which the static splash has
+     no equivalent staged-reveal mechanism for) perform the actual
+     staged entrance — a deliberate "replay" flourish that reads as
+     intentional motion specifically because the background/position
+     never move under it, documented plainly in the component's own
+     header comment rather than silently glossed over.
+     **Sequence** (`LaunchIntroOverlay.tsx`, reanimated `useSharedValue`/
+     `useAnimatedStyle`/`withTiming`/`withDelay`): mark fade+scale-in
+     (0-460ms) → wordmark rises+fades in (200-600ms, `translateY 14→0`
+     skipped under reduced motion) → tagline fades in (520-860ms) → hold
+     → whole block eases out (opacity 1→0 + a gentle 1→1.03 scale release
+     under normal motion, fade-only under reduced motion) from 1100ms to
+     1500ms — `onFinish` fires via `runOnJS` off the LAST animation's
+     completion callback, exactly once.
+     **Wiring** (`app/_layout.tsx`'s `RootLayoutNav`): the overlay is
+     rendered as a SIBLING on top of the already-mounted `<Stack>` (never
+     in place of it) — this is what lets the EXISTING redirect effect
+     keep working completely unchanged: by the time the overlay's ~1.5s
+     animation finishes and fades away, the real destination screen
+     (sign-in, tabs, wherever `resolveRootRedirect()` sent the user) is
+     already rendered underneath, so there's no blank/loading flash at
+     the reveal. `SplashScreen.hideAsync()` now also waits on the intro
+     decision (in addition to the existing `loading` gate) — this is
+     what makes the native-splash-to-overlay handoff itself seamless:
+     whichever comes next (the overlay, or the real app directly when
+     skipped) is already known and ready to render the instant the
+     native splash disappears.
+     **Also wired into the SAME `RootLayoutNav`, no extra plumbing
+     needed**: this pass's own earlier USAGE ANALYTICS entry's screen-
+     open observer already lives here — confirmed the two features don't
+     interfere (the analytics observer only fires once `!loading &&
+     session`, independent of the intro overlay's own mount state, and
+     the overlay sits visually on top without blocking the observer's
+     `usePathname()` tracking underneath).
+  Tests: `src/launch/__tests__/launchIntroGate.test.ts` (new, 6 tests) —
+  every branch of `shouldShowLaunchIntro()` (shows on a clean cold start;
+  never again once this process already decided, even if the other two
+  signals would otherwise allow it; skips on a deep link; skips on a
+  notification; skips when both are present). The animation
+  component/orchestrator itself (native Linking/Notifications calls,
+  reanimated worklets) is not independently unit-tested — same standing
+  "no React Native rendering harness in this repo" limitation every
+  other hook/animation-heavy feature in this codebase has flagged
+  honestly. `jest.config.js`'s `testMatch` gained
+  `src/launch/**/*.test.ts` (a new source directory, previously
+  unlisted — same class of gap the `analytics`/`onboarding` directories
+  once hit). Full suite: 123 suites / 3,426 tests pass; `tsc --noEmit`
+  clean. No i18n changes — `BRAND_NAME`/`BRAND_TAGLINE` are reused,
+  never-translated brand-voice constants (CLAUDE.md invariant #11's own
+  "brand voice stays English regardless of locale" carve-out), no new
+  user-facing string was added.
+  **What needs a NEW EAS BUILD vs. what ships via `eas update`, stated
+  plainly (item 3's own explicit ask)**: `splash-icon.png` is a
+  NATIVE-level asset baked into the compiled binary at build time via
+  `app.config.js`'s `expo-splash-screen` plugin config (unchanged this
+  pass) — an OTA `eas update` CANNOT touch it; only a fresh EAS Build
+  re-bundles the new PNG, same standing limitation this codebase's own
+  APP ICON + SPLASH entry already documented for the very first splash
+  asset. The ENTIRE animated intro (the gating logic, the reanimated
+  sequence, the `_layout.tsx` wiring) is pure JS/TS with no new native
+  dependency (`react-native-reanimated` was already installed and
+  already had its babel plugin wired) — ships via a normal `eas update`
+  alone, no rebuild needed for that half. Until a fresh build actually
+  ships, users will see the OLD (smaller) native splash handing off into
+  the NEW animated intro — a real, temporary mismatch in relative sizing
+  between the two, unavoidable until both halves are on the same build.

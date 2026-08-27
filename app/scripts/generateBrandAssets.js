@@ -124,8 +124,15 @@ function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textCo
   // this makes the sizing robust to a future wordmark-text change too,
   // rather than a magic number tuned for this one exact string.
   const TARGET_TEXT_WIDTH_FRACTION = 0.96;
-  const LETTER_SPACING_FACTOR = 0.1; // tighter than the old 0.22 -> reads
-  // denser/heavier at this larger size instead of airy and thin.
+  // LAUNCH EXPERIENCE (owner decision, round 2 — device report: "still too
+  // small") — heavier weight (900, was 800) and GENEROUS letter-spacing
+  // again (0.18, up from the previous pass's deliberately-tightened 0.1 —
+  // a fresh, explicit ask that supersedes that earlier choice) per the
+  // owner's own literal wording. Increasing letter-spacing spends more of
+  // the same target text WIDTH on spacing and correspondingly less on
+  // glyph size, which is fine — TARGET_TEXT_WIDTH_FRACTION still pins the
+  // overall rendered width, only the glyph/space balance within it shifts.
+  const LETTER_SPACING_FACTOR = 0.18;
   const AVG_LETTER_WIDTH_FACTOR = 0.66;
   const AVG_SPACE_WIDTH_FACTOR = 0.32;
   const letterCount = [...text].filter((c) => c !== ' ').length;
@@ -136,10 +143,9 @@ function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textCo
     letterCount * AVG_LETTER_WIDTH_FACTOR + spaceCount * AVG_SPACE_WIDTH_FACTOR + gapCount * LETTER_SPACING_FACTOR;
   const fontSize = targetTextWidth / widthPerFontSizeUnit;
   const letterSpacing = fontSize * LETTER_SPACING_FACTOR;
-  // Generous breathing room between the mark and the wordmark, per the
-  // device report's own explicit ask (was size * 0.045 — visually cramped
-  // right under the truck's own wheels).
-  const gap = size * 0.09;
+  // Clear separation from the mark (owner decision, round 2 — slightly
+  // more than the prior pass's already-increased 0.09).
+  const gap = size * 0.11;
 
   const blockHeight = markHeight + gap + fontSize;
   const blockTop = (size - blockHeight) / 2;
@@ -158,7 +164,7 @@ function composeSplashWithWordmarkSvg({ size, backgroundColor, markColor, textCo
       y="${textBaselineY.toFixed(3)}"
       text-anchor="middle"
       font-family="Arial, Helvetica, sans-serif"
-      font-weight="800"
+      font-weight="900"
       font-size="${fontSize.toFixed(3)}"
       letter-spacing="${letterSpacing.toFixed(3)}"
       fill="${textColor}"
@@ -205,6 +211,22 @@ async function renderSvgToPng(svgString, outPath, { size } = {}) {
 //   margin below that guarantee rather than sitting right at its edge.
 const ICON_WIDTH_FRACTION = 0.62;
 const ADAPTIVE_WIDTH_FRACTION = 0.5;
+// SPLASH SIZE FIX (owner decision, round 2 — device report: "still too
+// small," verified — 0.62 is an APP-ICON safe-zone fraction, tuned so an
+// OS icon-mask never clips the mark; a launch screen is displayed
+// un-cropped via resizeMode "contain," so that safe-zone concern doesn't
+// apply here at all. The REAL reason the splash read small on a real
+// device: with the mark at only 0.62 of the 1024x1024 canvas and the
+// wordmark sized relative to THAT (composeSplashWithWordmarkSvg's own
+// TARGET_TEXT_WIDTH_FRACTION), roughly 20% of the canvas on every side was
+// simply empty transparent padding no OS mask ever needed — and "contain"
+// scales that WHOLE 1024x1024 image (padding included) to fit the
+// device's width, so all that invisible margin was silently shrinking the
+// visible content along with it. 0.86 shrinks that wasted margin down to
+// roughly 7% per side, which is what actually makes the on-screen mark +
+// wordmark noticeably bigger — not a further change to the text-to-mark
+// ratio, which was already correct.
+const SPLASH_WIDTH_FRACTION = 0.86;
 
 const ROOT = path.resolve(__dirname, '..', '..'); // repo root
 const ASSETS_DIR = path.join(ROOT, 'app', 'assets', 'images');
@@ -263,7 +285,7 @@ async function main() {
       backgroundColor: null,
       markColor: MARK_COLOR_LIGHT,
       textColor: MARK_COLOR_LIGHT,
-      widthFraction: ICON_WIDTH_FRACTION,
+      widthFraction: SPLASH_WIDTH_FRACTION,
       text: WORDMARK_TEXT,
     }),
     path.join(ASSETS_DIR, 'splash-icon.png')
