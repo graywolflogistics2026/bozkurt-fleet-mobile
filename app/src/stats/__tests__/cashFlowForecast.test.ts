@@ -9,6 +9,8 @@ import {
   type CashFlowOverrides,
 } from '../cashFlowForecast';
 import { classifyCashFlowSpending } from '../cashFlowClassification';
+import { mapSettlement } from '@/src/import/mapExtraction';
+import type { Extraction } from '@/src/import/types';
 
 const TODAY = new Date('2026-08-15T12:00:00Z');
 
@@ -283,5 +285,83 @@ describe('buildCashFlowForecastFromData — end to end on a realistic dataset', 
     expect(result.classification.variable.some((v) => v.category === 'Fuel & DEF')).toBe(true);
     // The 2290 due Aug 25 lands somewhere in the 4-week window.
     expect(result.weeks.some((w) => w.periodicItems.some((p) => p.id === 'c1'))).toBe(true);
+  });
+
+  // REAL DATA, NOT SYNTHETIC (owner decision, device report: "the
+  // synthetic test passes while my real data doesn't"). Every deduction
+  // row here is produced by the REAL src/import/mapExtraction.ts
+  // mapSettlement() — the exact function every real settlement import
+  // runs through — from realistic invoice-number-embedded descriptions
+  // ("MAYFR BT/DH INS A623338") and slight week-to-week amount variance,
+  // withheld from the settlement (source: 'settlement'), never a
+  // shortcut that hands classifyCashFlowSpending() a pre-decided
+  // category directly. This is what actually caught the real bug this
+  // pass fixes: src/import/category.ts's ELD_COMMS_CHARGE_RE only
+  // matched Qualcomm/Geotab RENTAL fees, never a bare "ELD FEE" line,
+  // and FED_HWY_TAX_RE never matched "IRP" at all — both real, common
+  // carrier abbreviations, neither one a hardcoded synthetic label.
+  it('REAL CLASSIFICATION PIPELINE — 6 realistic settlement weeks, invoice-numbered withheld deduction lines, all three recurring charges detected AND reach the Fixed Expenses total end to end', () => {
+    const weekEndings = ['2026-07-17', '2026-07-24', '2026-07-31', '2026-08-07', '2026-08-14', '2026-08-21'];
+    const insuranceAmounts = [30.43, 30.43, 29.99, 30.43, 30.43, 29.99];
+    const invoiceSuffixes = ['A623338', 'A624120', 'A625009', 'A625887', 'A626771', 'A627654'];
+
+    const settlements: { week_ending: string; gross: number; net: number; miles: number }[] = [];
+    const allDeductions: ReturnType<typeof mapSettlement>['deductions'] = [];
+
+    weekEndings.forEach((weekEnding, i) => {
+      const extraction: Extraction = {
+        docType: 'settlement',
+        settlement: {
+          weekEnding,
+          grossRevenue: 2200,
+          netPay: 2200 - insuranceAmounts[i] - 12.5 - 18,
+          totalMiles: 1200,
+          deductions: [
+            { code: 'INS', desc: `MAYFR BT/DH INS ${invoiceSuffixes[i]}`, amount: insuranceAmounts[i] },
+            { code: 'IRP', desc: `MAYFR IRP FEE ${invoiceSuffixes[i]}`, amount: 12.5 },
+            { code: 'ELD', desc: `MAYFR ELD FEE ${invoiceSuffixes[i]}`, amount: 18 },
+          ],
+        },
+      };
+      const mapping = mapSettlement(extraction, 'user-1', 'truck-1');
+      settlements.push({ week_ending: weekEnding, gross: mapping.settlement.gross ?? 0, net: mapping.settlement.net ?? 0, miles: mapping.settlement.miles ?? 0 });
+      allDeductions.push(...mapping.deductions);
+    });
+
+    // Sanity: the REAL classifier actually resolved real categories, not
+    // NULL/a raw code string, for every one of the 18 withheld rows.
+    expect(allDeductions.every((d) => d.category != null)).toBe(true);
+
+    const result = buildCashFlowForecastFromData({
+      bankBalance: 0,
+      settlements,
+      deductions: allDeductions as unknown as Parameters<typeof buildCashFlowForecastFromData>[0]['deductions'],
+      fuelPurchases: [],
+      maintenanceRecords: [],
+      tolls: [],
+      reimbursements: [],
+      complianceItems: [],
+      documents: [],
+      overrides: EMPTY_CASH_FLOW_OVERRIDES,
+      today: new Date('2026-08-24T12:00:00Z'),
+    });
+
+    const detectedCategories = result.classification.fixed.map((f) => f.category).sort();
+    expect(detectedCategories).toEqual(['ELD & Communications', 'Insurance—Truck', 'Permits, Licenses & Road Taxes']);
+
+    // ITEM 3 — "a detected recurring charge that doesn't reach the total
+    // is its own bug; verify the wiring end to end." fixedCharges (the
+    // MERGED, screen-facing list) must contain all three, and
+    // weeklyFixed must be their real sum.
+    const fixedCategories = result.fixedCharges.map((f) => f.category).sort();
+    expect(fixedCategories).toEqual(['ELD & Communications', 'Insurance—Truck', 'Permits, Licenses & Road Taxes']);
+    const insurance = result.fixedCharges.find((f) => f.category === 'Insurance—Truck')!;
+    const irp = result.fixedCharges.find((f) => f.category === 'Permits, Licenses & Road Taxes')!;
+    const eld = result.fixedCharges.find((f) => f.category === 'ELD & Communications')!;
+    expect(insurance.weeklyAmount).toBeCloseTo((30.43 * 4 + 29.99 * 2) / 6, 2);
+    expect(irp.weeklyAmount).toBeCloseTo(12.5, 2);
+    expect(eld.weeklyAmount).toBeCloseTo(18, 2);
+    expect(result.weeklyFixed).toBeCloseTo(insurance.weeklyAmount + irp.weeklyAmount + eld.weeklyAmount, 2);
+    expect(result.weeklyFixed).toBeGreaterThan(0); // the literal reported symptom, fixed
   });
 });

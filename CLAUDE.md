@@ -9060,3 +9060,82 @@
   this pass is pure client-side JS/TS and ships via a normal `eas update`
   regardless of whether §66 has been run yet (the client degrades
   gracefully either way, per its own `?? {}` fallback).
+- CASH FLOW CLASSIFIER — STILL $0 ON REAL DATA, THE ACTUAL CAUSE (owner
+  decision, device report immediately following the threshold fix above:
+  the classifier still detected nothing on the real account, even though
+  the recurring-charges UI now renders). No SQL/Edge Function changes.
+  **DIAGNOSIS (instrumented against realistic invoice-numbered
+  descriptions, not the account's own literal rows — this environment
+  has no way to read a real user's data, only the anon-key/RLS-blocked
+  schema probe used for the two prior §65/§66 confirmations, which
+  cannot return real rows — flagged honestly rather than silently
+  assumed)**: item 2's own hypothesis (grouping by an unstable key, e.g.
+  the raw description with an invoice number embedded) was checked
+  directly and RULED OUT — `classifyCashFlowSpending()` has only ever
+  grouped by `SpendEvent.category`, never by description, and
+  `buildSpendEvents()` sets `category` from the deduction row's own
+  `category` DB column, never from `description`. The REAL bug was one
+  step further upstream, in what gets WRITTEN to that `category` column
+  in the first place: `src/import/mapExtraction.ts`'s `mapSettlement()`
+  resolves a withheld deduction's category via
+  `classifySettlementLine(x.desc) || chargebackType-label || x.category
+  || null` — and `classifySettlementLine()`'s own two regexes for
+  exactly the categories named in the report had real, confirmed gaps:
+  `ELD_COMMS_CHARGE_RE` matched ONLY Qualcomm/Geotab "RENTAL" phrasing or
+  "navigation charge" — a plain, extremely common "ELD FEE"/"ELD CHARGE"
+  line (which is what most real carrier statements actually print) never
+  matched at all; `FED_HWY_TAX_RE` matched "permit(s)"/"license(s)"
+  literally or "fed hwy tax," but never "IRP" (International Registration
+  Plan) — the single most common abbreviation a real carrier settlement
+  prints for a plate-registration withholding, and one the codebase's
+  OWN OTHER, more general `guessCategory()` function (used for imported
+  documents, a different context) already recognized correctly
+  (`/permit|licensing|...|irp|ucr\b|hvut|form 2290|.../`) — a real,
+  confirmed inconsistency between the two functions, not a guess. Proven
+  directly: a realistic 6-week dataset of `MAYFR BT/DH INS A623338`-style
+  invoice-numbered withheld deduction lines, run through the ACTUAL
+  `classifySettlementLine()` (not a shortcut that hands the classifier a
+  pre-decided category), classified Insurance—Truck correctly on every
+  row (its own regex already covers "BT/DH INS") but returned `null` for
+  every IRP and ELD row before this fix — confirming Insurance was never
+  the problem, and Permits/ELD were.
+  **THE FIX**: `src/import/category.ts`'s `FED_HWY_TAX_RE` gained
+  `\birp\b|\bifta\b|\bhvut\b|form\s*2290|\b2290\b|\bucr\b`;
+  `ELD_COMMS_CHARGE_RE` gained `\beld\b|communications?\s*charge|\belog\b`
+  — all universal industry/regulatory terms (IRP/IFTA/HVUT/2290/ELD are
+  never one carrier's own invented terminology, matching this file's own
+  existing "fair game for the generic classifier" rule for exactly this
+  class of term), word-boundary-guarded the same way every other regex in
+  this file already is. Re-run against the same realistic dataset: all
+  three categories now resolve correctly and consistently.
+  **WIRING VERIFIED END TO END** (item 3's own explicit ask — "a detected
+  recurring charge that doesn't reach the total is its own bug"): a new
+  test builds 6 settlement weeks through the REAL `mapSettlement()`
+  (never a shortcut), feeds the resulting saved-shaped deduction rows
+  through the REAL `buildCashFlowForecastFromData()` (the exact function
+  the Cash Flow screen itself calls), and asserts `result.classification.
+  fixed`, `result.fixedCharges` (the merged, screen-facing list), AND
+  `result.weeklyFixed` (the actual dollar figure the forecast projects)
+  all reflect the same three categories with the correct summed amount —
+  proving detection, merging, AND the forecast total all agree, not just
+  the classifier in isolation.
+  **TESTS** (item 4, "a REALISTIC carrier dataset — descriptions with
+  invoice numbers and slight amount variance, charges withheld in the
+  settlement rather than paid out of pocket — not clean synthetic rows"):
+  the new `cashFlowForecast.test.ts` test above is exactly this — every
+  one of its 18 deduction rows is produced by the real `mapSettlement()`
+  from `MAYFR ... A######`-style descriptions with a real invoice suffix
+  per week, `source: 'settlement'` throughout, with the report's own
+  $30.43/$30.43/$29.99 insurance variation. This is a genuinely different
+  (and stronger) test than this pass's own prior "6-settlement dataset"
+  coverage, which — confirmed by re-reading it — constructed `SpendEvent`
+  objects with an explicit, pre-decided `category` field directly,
+  bypassing `classifySettlementLine()` entirely; that gap is exactly why
+  the earlier synthetic tests passed while the real account didn't, per
+  the owner's own diagnosis. Full suite: 118 suites / 3,027 tests pass
+  (+1 new end-to-end test; the category.ts regex widening needed no new
+  unit tests of its own since the existing `category.test.ts`/
+  `carrierCodes.test.ts` suites already re-passed clean against the wider
+  patterns); `tsc --noEmit` clean. No SQL/Edge Function changes — every
+  fix in this pass is pure client-side JS/TS (a text-classification regex
+  and one new test). Ships via a normal `eas update`.

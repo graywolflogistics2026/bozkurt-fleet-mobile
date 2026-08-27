@@ -328,8 +328,23 @@ const ACCOUNTING_SERVICE_RE = /trust service|\bbookkeep/i;
 // respectively, not one carrier's own invented terminology; any carrier's
 // statement could plausibly print exactly this text.
 // ---------------------------------------------------------------------------
-const FED_HWY_TAX_RE = /fed\.?\s*h?wy\.?\s*tax|federal highway (use )?tax|\blicense(s)?\b|\bpermits?\b/i;
-const ELD_COMMS_CHARGE_RE = /qual\w*\s*rental|geo\w*\s*rental|navigation charge/i;
+// CASH FLOW RECURRING-CHARGE CLASSIFIER — REAL DATA STILL FAILS (owner
+// decision, device report: "the classifier finds none of my Permits/ELD
+// charges" — traced to these two regexes specifically, not the
+// classification thresholds this pass's own prior fix already addressed).
+// Widened to match the SAME universal industry/regulatory terms
+// guessCategory() (below, a different context — imported documents, not
+// settlement-withheld lines) already recognized for these two categories
+// — IRP/IFTA/HVUT/2290/UCR and a bare "ELD" were never carrier-specific
+// terminology to begin with (this file's own header comment already
+// carves out exactly this class of universal term as fair game for the
+// generic classifier), they were simply missing from THIS function's own
+// narrower regex. A real carrier settlement almost never prints the
+// literal word "permit" for an IRP/plate-registration line — "IRP" is
+// the actual, common abbreviation printed on the statement.
+const FED_HWY_TAX_RE =
+  /fed\.?\s*h?wy\.?\s*tax|federal highway (use )?tax|\blicense(s)?\b|\bpermits?\b|\birp\b|\bifta\b|\bhvut\b|form\s*2290|\b2290\b|\bucr\b/i;
+const ELD_COMMS_CHARGE_RE = /qual\w*\s*rental|geo\w*\s*rental|navigation charge|\beld\b|communications?\s*charge|\belog\b/i;
 const TOLLS_SCALES_CHARGE_RE = /prepass|pre-pass|drivewyze|\bscale\b|weigh station|ezpass|e-zpass/i;
 const COMPANY_STORE_RE = /company store/i;
 const BANK_MERCHANT_CHARGE_RE = /bank fee|wire fee|merchant fee|processing fee|card fee/i;
