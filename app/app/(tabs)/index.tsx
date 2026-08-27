@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
@@ -766,17 +765,17 @@ export default function Dashboard() {
     [loadsQuery.data, settlementsQuery.data, activeTruck]
   );
 
-  // MILES READ BUT NOT USED (owner decision 2026-08-24, device report),
-  // extended by the SELF-TEST FIX above: `null` here (fleet-wide) is
-  // still correct for "All Trucks" scope, matching Scorecard/Settlements'
-  // own canonical fleet-wide read; when a specific truck IS scoped, this
-  // now correctly follows it so grossRevenue/totalMiles below are that
-  // truck's own — the original bug this comment described (a settlement
-  // silently excluded by a truck-scoped query) can no longer happen since
-  // there's no other, DIVERGING truck-scoped query left on this screen.
-  const statsQuery = useFleetStats(activeTruck?.id ?? null);
-
-  const stats = statsQuery.data;
+  // KPI CONSISTENCY (owner decision) — DELETED a competing implementation
+  // here: `useFleetStats(activeTruck?.id ?? null)` (a `statsQuery`/`stats`
+  // pair) used to be declared on this screen but, per a repo-wide grep,
+  // had zero remaining consumers — every real KPI figure on Home had
+  // already been migrated to `periodScopedCpm`/`heroPeriodTrio` (both
+  // ultimately backed by src/stats/kpi.ts's computeKpis(), the one
+  // canonical KPI function) by an earlier pass, leaving this query as
+  // dead weight that both wasted a network round-trip and was a live
+  // landmine — a future edit reaching for "stats" here would have
+  // silently resurrected the exact all-time/unscoped-vs-scoped mismatch
+  // this whole KPI CONSISTENCY pass exists to eliminate.
   const capital = capitalQuery.data;
 
   // Zone 1 hero chart data — the FULL (unsliced) weekly trend, so 1M/3M/

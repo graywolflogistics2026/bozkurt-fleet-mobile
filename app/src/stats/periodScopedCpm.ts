@@ -2,31 +2,18 @@
 // the ONE shared orchestration every period-aware CPM display (currently
 // Home's per-mile trio + its own "Why?" breakdown) reads from — resolves
 // the Hero Card's selected period to a concrete date window
-// (src/stats/heroPeriodWindow.ts), filters EVERY input row array
-// (settlements/loads/deductions/fuel/maintenance/tolls) through that SAME
-// window before any of them reach buildTruckComparison(), and derives
-// the truck-scoped-or-fleet-wide CPM the exact same way scorecard.tsx's
-// own (deliberately all-time, unwindowed) fix already established —
-// never a second, screen-local recomputation. Because numerator (every
-// cost/revenue row) and denominator (miles, via calcMiles over the SAME
-// filtered settlements+loads) are filtered through the identical
-// function call with the identical window, they cannot drift onto
-// different date ranges from each other.
-import { calcMiles, resolveMilesTotal } from '@/src/stats/miles';
-import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CanonicalCpmResult } from '@/src/stats/cpm';
-import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
-import {
-  buildTruckComparison,
-  withAllocatedBucket,
-  type ComparisonTruck,
-  type ComparisonSettlement,
-  type ComparisonDeduction,
-  type ComparisonFuel,
-  type ComparisonMaintenance,
-  type ComparisonToll,
-  type TruckComparisonResult,
-  type TruckComparisonRow,
-} from '@/src/stats/truckComparison';
+// (src/stats/heroPeriodWindow.ts) and delegates every actual computation
+// to src/stats/kpi.ts's computeKpis() — the ONE canonical KPI function
+// every screen (Home, Scorecard, AI Coach) now shares (KPI CONSISTENCY
+// pass, owner decision). This module is kept as a thin, HeroPeriod-aware
+// adapter (resolve period -> DateWindow -> computeKpis() -> re-shape into
+// the {window, comparison, scopedRow, cpm} triple Home's existing render
+// code already destructures) rather than folding directly into computeKpis
+// itself, so Home's large, already-correct rendering code needed zero
+// changes — the only thing that moved is WHERE the math actually happens.
+import { buildTruckComparison, type ComparisonTruck, type ComparisonSettlement, type ComparisonDeduction, type ComparisonFuel, type ComparisonMaintenance, type ComparisonToll, type TruckComparisonResult, type TruckComparisonRow } from '@/src/stats/truckComparison';
+import { computeKpis, type KpiResult } from '@/src/stats/kpi';
+import type { CanonicalCpmResult } from '@/src/stats/cpm';
 import { resolveHeroPeriodDateWindow, filterRowsByDateWindow, type DateWindow, type HeroPeriod } from '@/src/stats/heroPeriodWindow';
 
 type DatedDeduction = ComparisonDeduction & { ded_date: string | null };
@@ -50,6 +37,11 @@ export type PeriodScopedCpmResult = {
   // proven in truckComparison.test.ts), or the fleet-wide aggregate for
   // "All Trucks" scope. null when there's no window or no miles.
   cpm: CanonicalCpmResult | null;
+  // KPI CONSISTENCY (owner decision) — the full canonical KpiResult this
+  // window/scope produced, for any caller that wants the flat
+  // gross/net/miles/rpm/cpm/ppm/perDiemDays shape directly instead of
+  // picking fields back out of `comparison`/`cpm`.
+  kpi: KpiResult | null;
 };
 
 export function buildPeriodScopedCpm(
@@ -68,6 +60,11 @@ export function buildPeriodScopedCpm(
 ): PeriodScopedCpmResult {
   const window = resolveHeroPeriodDateWindow(period, sortedWeekEndings, now);
 
+  // Still built directly here (not just inside computeKpis) because
+  // callers (Home) need the FULL TruckComparisonResult — every truck's
+  // own row, the Unassigned row, fleetTotals — for the "All Trucks"
+  // per-truck breakdown card, not just the scoped figure computeKpis()
+  // itself returns.
   const fSettlements = filterRowsByDateWindow(settlements, (s) => s.week_ending, window);
   const fSettlementIds = new Set(fSettlements.map((s) => s.id));
   const fLoads = loads.filter((l) => l.settlement_id != null && fSettlementIds.has(l.settlement_id));
@@ -80,44 +77,54 @@ export function buildPeriodScopedCpm(
   const scopedRow = activeTruckId ? (comparison.rows.find((r) => r.truckId === activeTruckId) ?? null) : null;
 
   if (!window) {
-    return { window: null, comparison, scopedRow, cpm: null };
+    return { window: null, comparison, scopedRow, cpm: null, kpi: null };
   }
 
+  const kpi = computeKpis({
+    trucks,
+    settlements,
+    loads,
+    deductions,
+    fuelPurchases,
+    maintenanceRecords,
+    tolls,
+    truckScope: activeTruckId,
+    manualMilesOverride,
+    window,
+  });
+
   if (scopedRow) {
-    if (!scopedRow.cpmBreakdown) return { window, comparison, scopedRow, cpm: null };
-    const milesSource = resolveMilesTotal({ totalMiles: scopedRow.totalMiles }, manualMilesOverride);
-    const withAlloc = withAllocatedBucket(scopedRow.cpmBreakdown, scopedRow.allocatedExpenses, milesSource.totalMiles);
-    const revenuePerMile = milesSource.totalMiles > 0 ? scopedRow.grossRevenue / milesSource.totalMiles : null;
-    const profitPerMile = revenuePerMile != null && withAlloc.costPerMile != null ? revenuePerMile - withAlloc.costPerMile : null;
-    return { window, comparison, scopedRow, cpm: { ...withAlloc, revenuePerMile, profitPerMile } };
+    if (!scopedRow.cpmBreakdown) return { window, comparison, scopedRow, cpm: null, kpi };
+    const cpm: CanonicalCpmResult = {
+      revenuePerMile: kpi.rpm,
+      costPerMile: kpi.cpm,
+      profitPerMile: kpi.ppm,
+      buckets: kpi.buckets,
+      excludedTotal: kpi.excludedTotal,
+      excludedOneOffs: kpi.excludedOneOffs,
+      fixedTotal: kpi.expenses.fixed,
+      variableTotal: kpi.expenses.variable,
+      fixedCostPerMile: kpi.miles.total > 0 ? kpi.expenses.fixed / kpi.miles.total : null,
+      variableCostPerMile: kpi.miles.total > 0 ? kpi.expenses.variable / kpi.miles.total : null,
+    };
+    return { window, comparison, scopedRow, cpm, kpi };
   }
 
   // "All Trucks" scope — same fleet-wide calcCanonicalCpm() shape every
-  // prior pass established, now fed WINDOW-filtered rows instead of
-  // all-time ones, with the fixed-cost total naturally pro-rated to the
-  // window (each truck's own weekly cost basis × its own settlement
-  // count WITHIN this window — a month-long window naturally sums ~4
-  // settlement weeks per truck, a single week sums 1, never a
-  // multi-week total charged against one week's miles).
-  const carrierWithholdsLoan = carrierWithholdsLoanPayment(fDeductions);
-  const fleetFixedCostTotal = trucks.reduce((sum, tr) => {
-    const count = fSettlements.filter((s) => s.truck_id === tr.id).length;
-    return sum + calcTruckCostBasisWeekly(tr, carrierWithholdsLoan).weeklyFixedTotal * count;
-  }, 0);
-  const grossRevenue = fSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const totalMiles = calcMiles(fSettlements, fLoads).totalMiles;
-  if (totalMiles <= 0) {
-    return {
-      window,
-      comparison,
-      scopedRow: null,
-      cpm: calcCanonicalCpm(grossRevenue, 0, fDeductions, fFuel, fMaintenance, fTolls, fleetFixedCostTotal),
-    };
-  }
-  return {
-    window,
-    comparison,
-    scopedRow: null,
-    cpm: calcCanonicalCpm(grossRevenue, totalMiles, fDeductions, fFuel, fMaintenance, fTolls, fleetFixedCostTotal),
+  // prior pass established, now sourced from computeKpis() (which itself
+  // pro-rates each truck's own fixed cost to however many of ITS settlement
+  // weeks actually fall in the window).
+  const cpm: CanonicalCpmResult = {
+    revenuePerMile: kpi.rpm,
+    costPerMile: kpi.cpm,
+    profitPerMile: kpi.ppm,
+    buckets: kpi.buckets,
+    excludedTotal: kpi.excludedTotal,
+    excludedOneOffs: kpi.excludedOneOffs,
+    fixedTotal: kpi.expenses.fixed,
+    variableTotal: kpi.expenses.variable,
+    fixedCostPerMile: kpi.miles.total > 0 ? kpi.expenses.fixed / kpi.miles.total : null,
+    variableCostPerMile: kpi.miles.total > 0 ? kpi.expenses.variable / kpi.miles.total : null,
   };
+  return { window, comparison, scopedRow: null, cpm, kpi };
 }

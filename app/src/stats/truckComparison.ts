@@ -66,7 +66,16 @@ export type ComparisonDeduction = {
   truck_id?: string | null;
 };
 export type ComparisonFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null; truck_id?: string | null };
-export type ComparisonMaintenance = { cost: number | null; truck_id?: string | null };
+export type ComparisonMaintenance = {
+  cost: number | null;
+  truck_id?: string | null;
+  // KPI CONSISTENCY (owner decision) — threaded through to
+  // calcCanonicalCpm() so a major one-off repair logged as a
+  // maintenance_records row (not a deductions row) is excluded from CPM
+  // the same way one logged as a deduction already was.
+  description?: string | null;
+  service_type?: string | null;
+};
 export type ComparisonToll = { amount: number | null; truck_id?: string | null };
 export type ComparisonDriverPayment = { driver_id: string; settlement_id: string | null; gross_pay: number | null; employer_taxes: number | null };
 export type ComparisonDriver = { id: string; default_truck_id: string | null; name: string };

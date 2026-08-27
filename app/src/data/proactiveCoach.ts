@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/src/context/AuthContext';
-import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useSettlements } from '@/src/data/settlements';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
 import { useDeductions } from '@/src/data/deductions';
 import { useLoads } from '@/src/data/loads';
-import { useFleetStats } from '@/src/data/dashboardStats';
+import { useTrucksList } from '@/src/data/trucks';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import i18n from '@/src/i18n';
-import { calcMiles, resolveMilesTotal } from '@/src/stats/miles';
-import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
-import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
+import { calcMiles } from '@/src/stats/miles';
+import { computeKpis } from '@/src/stats/kpi';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import {
@@ -52,20 +50,16 @@ export function useProactiveCoach() {
   const { t } = useTranslation();
   const { money, number } = useFormatters();
   const pct = (n: number) => number(n, { style: 'percent', maximumFractionDigits: 1 });
-  const { activeTruck } = useActiveTruck();
   const settlementsQuery = useSettlements();
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
   const deductionsQuery = useDeductions();
   const loadsQuery = useLoads();
+  const trucksQuery = useTrucksList();
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
   const taxQuery = useTaxEstimate();
-  // CPM FORMULA DIVERGENCE (P1 fix, FULL SYSTEM AUDIT) — fleet-wide stats,
-  // needed to compute the SAME canonical CPM figure Scorecard shows (see
-  // the latestCpm computation below for the full reasoning).
-  const fleetStatsQuery = useFleetStats(null);
 
   const isLoading =
     settlementsQuery.isLoading || fuelQuery.isLoading || deductionsQuery.isLoading || profileQuery.isLoading || taxQuery.isLoading;
@@ -122,58 +116,42 @@ export function useProactiveCoach() {
 
   const latestWeekTrend = weeklyTrend.find((w) => w.weekEnding === latestSettlement?.week_ending) ?? null;
 
-  // CPM FORMULA DIVERGENCE (P1 fix, FULL SYSTEM AUDIT) — this used to be a
-  // THIRD, ad-hoc approximation, (thisWeek.gross - thisWeek.trueProfitNet) /
-  // thisWeek.miles — neither the legacy calcCpm() nor Scorecard's own
-  // calcCanonicalCpm(). Compared directly against calcCanonicalCpm() and
-  // found two real, opposite-direction divergences: (1) a week containing
-  // a major one-off repair/vehicle purchase spiked the ad-hoc figure
-  // artificially high (true-profit's own weekly net DOES subtract that
-  // one-off dollar-for-dollar in the week it happened), which
-  // calcCanonicalCpm() deliberately excludes from the per-mile figure for
-  // exactly this reason — a real false-positive "CPM above RPM" nudge
-  // risk; (2) the ad-hoc formula never added the truck's own fixed cost
-  // basis (loan/lease payment, warranty) unless it happened to already be
-  // a settlement-withheld deduction row, so it could UNDER-count CPM for
-  // an owner with a real, non-withheld loan payment — a false-negative
-  // risk in the other direction. Fixed by computing the SAME
-  // calcCanonicalCpm() figure Scorecard shows, over the SAME account-wide
-  // scope (not a single week — Scorecard's own CPM is already an
-  // all-account aggregate, so a per-week canonical figure would be a NEW,
-  // unproven calculation this codebase has never needed before; reusing
-  // the identical inputs/scope Scorecard already validates is the lower-
-  // risk "unify on the canonical one" reading) — this is now the literal
-  // SAME number a user would see by tapping through to Scorecard, never a
-  // second figure that could disagree with it. Compared against
-  // trailingAvgRpm (falling back to latestRpm only when there isn't yet
-  // enough history for a trailing average) rather than latestRpm alone,
-  // since pairing an account-wide cost figure against a single week's
-  // revenue rate would just trade one apples-to-oranges comparison for
-  // another — a trailing average is the more honest "typical" pairing.
-  const carrierWithholdsLoan = useMemo(() => carrierWithholdsLoanPayment(deductionsQuery.data ?? []), [deductionsQuery.data]);
-  const truckCostBasis = useMemo(
-    () => (activeTruck ? calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan) : null),
-    [activeTruck, carrierWithholdsLoan]
+  // KPI CONSISTENCY (owner decision) — this used to be its OWN, THIRD
+  // ad-hoc calcCanonicalCpm() call (a "CPM FORMULA DIVERGENCE" fix from an
+  // earlier pass) — a real, separate implementation from Scorecard's own,
+  // with its own subtle divergence (one truck's cost basis × the WHOLE
+  // FLEET's settlement count, rather than every truck's own basis × its
+  // own count). Replaced with ONE call to src/stats/kpi.ts's
+  // computeKpis() — the SAME canonical function Scorecard/Home read from
+  // — window: null (all-time, matching this figure's own established
+  // "account-wide aggregate" reasoning) and truckScope: null (fleet-wide,
+  // matching AI Coach's own deliberate always-fleet-wide design, CLAUDE.md's
+  // "MULTI-TRUCK MODEL — AUDIT OF 3 PREVIOUSLY-UNREVIEWED SCREENS" entry).
+  // This is now the literal SAME number a user would see on Scorecard in
+  // "All Trucks" scope, never a second figure that could disagree with it
+  // — and it gets the maintenance-one-off CPM-inflation fix automatically,
+  // for free, by sharing the same underlying calcCanonicalCpm() call.
+  // Compared against trailingAvgRpm (falling back to latestRpm only when
+  // there isn't yet enough history) rather than latestRpm alone, since
+  // pairing an account-wide cost figure against a single week's revenue
+  // rate would just trade one apples-to-oranges comparison for another —
+  // a trailing average is the more honest "typical" pairing.
+  const latestKpi = useMemo(
+    () =>
+      computeKpis({
+        trucks: trucksQuery.data ?? [],
+        settlements: settlementsQuery.data ?? [],
+        loads: loadsQuery.data ?? [],
+        deductions: deductionsQuery.data ?? [],
+        fuelPurchases: fuelQuery.data ?? [],
+        maintenanceRecords: maintenanceQuery.data ?? [],
+        tolls: tollsQuery.data ?? [],
+        truckScope: null,
+        window: null,
+      }),
+    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
   );
-  const truckFixedCostTotal = useMemo(
-    () => (truckCostBasis ? truckCostBasis.weeklyFixedTotal * (fleetStatsQuery.data?.settlementCount ?? 0) : 0),
-    [truckCostBasis, fleetStatsQuery.data]
-  );
-  const canonicalMilesTotal = fleetStatsQuery.data
-    ? resolveMilesTotal({ totalMiles: fleetStatsQuery.data.totalMiles }, activeTruck?.manual_total_miles_override).totalMiles
-    : null;
-  const latestCpm = useMemo(() => {
-    if (!fleetStatsQuery.data || !canonicalMilesTotal) return null;
-    return calcCanonicalCpm(
-      fleetStatsQuery.data.grossRevenue,
-      canonicalMilesTotal,
-      deductionsQuery.data ?? [],
-      fuelQuery.data ?? [],
-      maintenanceQuery.data ?? [],
-      tollsQuery.data ?? [],
-      truckFixedCostTotal
-    ).costPerMile;
-  }, [fleetStatsQuery.data, canonicalMilesTotal, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, truckFixedCostTotal]);
+  const latestCpm = latestKpi.cpm;
   const cpmComparisonRpm = trailingAvgRpm ?? latestRpm;
 
   const quarterlyDeadline = taxQuery.data ? nextQuarterlyDeadline(taxQuery.data.taxYearData.quarterly_deadlines) : null;
@@ -345,6 +323,16 @@ export function useProactiveCoach() {
     const ytdTrend = weeklyTrend.filter((w) => new Date(`${w.weekEnding}T00:00:00`).getFullYear() === ytdYear);
     const ytdProfitAfter = ytdTrend.reduce((sum, w) => sum + w.net, 0);
     const ytdProfitBefore = ytdProfitAfter - latestWeekTrend.net;
+    // KPI CONSISTENCY (owner decision, device report: "AI Coach says 'YTD
+    // net $4,543.27, after just one settlement' while Scorecard shows 6
+    // settlements") — the REAL settlement row count for the same calendar
+    // year the YTD figure covers, from the SAME sortedSettlements array
+    // Scorecard's own weekly trend is built from (fleet-wide, matching
+    // this hook's own established always-fleet-wide design) — never a
+    // week count (a week can hold 2+ settlements in a multi-truck fleet).
+    const settlementCountYtd = sortedSettlements.filter(
+      (s) => new Date(`${s.week_ending}T00:00:00`).getFullYear() === ytdYear
+    ).length;
     const biggestChargebacks = (deductionsQuery.data ?? [])
       .filter((d) => d.source === 'settlement' && d.ded_date === latestSettlement.week_ending)
       .sort((a, b) => Number(b.amount ?? 0) - Number(a.amount ?? 0))
@@ -352,7 +340,17 @@ export function useProactiveCoach() {
       .map((d) => ({ description: d.description ?? d.category ?? 'Chargeback', amount: Number(d.amount ?? 0) }));
     return {
       weekEnding: latestSettlement.week_ending,
-      gross: latestSettlement.gross,
+      // KPI CONSISTENCY (owner decision) — this used to be
+      // `latestSettlement.gross`, ONE settlement row's own gross, while
+      // `net` right below it was already `latestWeekTrend.net` —
+      // buildWeeklyTrueProfitTrend()'s AGGREGATE across every settlement
+      // sharing that same week_ending. In a multi-truck fleet where 2+
+      // trucks settle the same week, that mixed a single truck's revenue
+      // with the WHOLE FLEET's expenses in the same weekly review — gross
+      // and net now both come from the identical aggregated
+      // `latestWeekTrend` point, so they can never describe two different
+      // truck sets.
+      gross: latestWeekTrend.gross,
       net: latestWeekTrend.net,
       rpm: latestRpm,
       trailingAvgRpm,
@@ -362,10 +360,11 @@ export function useProactiveCoach() {
       perDiemDays: latestSettlement.per_diem_days,
       ytdProfitBefore,
       ytdProfitAfter,
+      settlementCountYtd,
       goalProgress: weeklyGoal != null && goalProgress ? { weeklyGoal, ...goalProgress } : null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestSettlement, latestWeekTrend, weeklyTrend, deductionsQuery.data, latestRpm, trailingAvgRpm, latestDeadheadPct, latestFuelPct, weeklyGoal, goalProgress]);
+  }, [latestSettlement, latestWeekTrend, weeklyTrend, sortedSettlements, deductionsQuery.data, latestRpm, trailingAvgRpm, latestDeadheadPct, latestFuelPct, weeklyGoal, goalProgress]);
 
   const weeklyReviewFallback = useMemo(
     () => (weeklyReviewInputs ? buildWeeklyReviewFallbackText(weeklyReviewInputs, t, money, pct) : null),

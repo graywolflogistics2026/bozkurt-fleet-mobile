@@ -40,7 +40,7 @@ export function ppmColor(ppm: number): 'green' | 'orange' | 'red' {
 // wants the literal legacy `rDash()` figure — this is the NEW canonical
 // CPM every screen should read from.
 import { reducesTrueProfit } from '@/src/stats/trueProfit';
-import { isVehiclePurchaseOneOff } from '@/src/import/category';
+import { isVehiclePurchaseOneOff, isMajorRepairOverhaul } from '@/src/import/category';
 
 export type CpmCostType = 'fixed' | 'variable';
 export type CpmBucket = { category: string; amount: number; type: CpmCostType };
@@ -170,7 +170,16 @@ type CpmDeduction = {
   description?: string | null;
 };
 type CpmFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null };
-type CpmMaintenance = { cost: number | null };
+// KPI CONSISTENCY (owner decision) — description/service_type are optional
+// so every existing test/call site passing a bare `{cost}` object keeps
+// compiling unchanged; when present they feed the SAME
+// isMajorRepairOverhaul()/isVehiclePurchaseOneOff() one-off exclusion the
+// deductions loop below already applies — see that loop's own comment for
+// why this was a real, confirmed gap (a major engine/transmission
+// overhaul or a truck purchase logged directly as a maintenance_records
+// row, never as a deductions row, had NO exclusion at all and could spike
+// CPM to something meaningless).
+type CpmMaintenance = { cost: number | null; description?: string | null; service_type?: string | null };
 type CpmToll = { amount: number | null };
 
 // Shared so a caller (Scorecard) can decide whether to even ask
@@ -239,7 +248,33 @@ export function calcCanonicalCpm(
   const fuelTotal = standaloneFuel.reduce((sum, f) => sum + Math.max(0, Number(f.amount ?? 0) - Number(f.discount ?? 0)), 0);
   add('Fuel & DEF', fuelTotal);
 
-  const maintTotal = maintenanceRecords.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
+  // KPI CONSISTENCY (owner decision, confirmed root cause of a real
+  // device-reported CPM inflation): a major one-off repair/overhaul is
+  // ONLY ever excluded when it's booked as a `deductions` row with
+  // category 'Major Repairs & Overhauls' (the loop above) — a
+  // maintenance_records row (the NORMAL way to log a repair via the
+  // Maintenance screen or a settlement's own maintenance line item) had
+  // NO equivalent exclusion at all, so a real $15k-$30k engine/
+  // transmission overhaul logged there divided straight into the
+  // per-mile figure with nothing to stop it. Applies the SAME
+  // isMajorRepairOverhaul()/isVehiclePurchaseOneOff() text+amount rules
+  // the deductions loop already uses, over the maintenance row's own
+  // description+service_type text.
+  let maintTotal = 0;
+  for (const m of maintenanceRecords) {
+    const amount = Number(m.cost ?? 0);
+    if (!amount) continue;
+    const text = [m.description, m.service_type].filter(Boolean).join(' ');
+    if (isMajorRepairOverhaul(text, amount)) {
+      excludedOneOffs.push({ description: m.description || m.service_type || 'Major repair/overhaul', amount, reason: 'major_repair_overhaul' });
+      continue;
+    }
+    if (isVehiclePurchaseOneOff(text)) {
+      excludedOneOffs.push({ description: m.description || m.service_type || 'Vehicle purchase', amount, reason: 'vehicle_purchase' });
+      continue;
+    }
+    maintTotal += amount;
+  }
   add('Maintenance & Repairs', maintTotal);
 
   const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);

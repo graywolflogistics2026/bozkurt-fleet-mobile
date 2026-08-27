@@ -1858,7 +1858,7 @@
       "deadhead": "Deadhead: {{pct}} de las millas.",
       "fuel": "Combustible: {{pct}} de los ingresos.",
       "perDiem": "Días de per diem esta semana: {{count}}.",
-      "ytd": "Beneficio neto en lo que va del año: {{amount}}.",
+      "ytd": "Beneficio neto en lo que va del año: {{amount}} en {{count}} settlement(s) hasta ahora este año.",
       "goalMet": "Cumpliste tu meta semanal de {{goal}}.",
       "goalShort": "Te faltaron {{amount}} para tu meta semanal de {{goal}}."
     },

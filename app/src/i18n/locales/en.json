@@ -1900,7 +1900,7 @@
       "deadhead": "Deadhead: {{pct}} of miles.",
       "fuel": "Fuel: {{pct}} of revenue.",
       "perDiem": "Per diem days this week: {{count}}.",
-      "ytd": "Year-to-date net profit: {{amount}}.",
+      "ytd": "Year-to-date net profit: {{amount}} across {{count}} settlement(s) so far this year.",
       "goalMet": "You met your weekly goal of {{goal}}.",
       "goalShort": "You were {{amount}} short of your {{goal}} weekly goal."
     },

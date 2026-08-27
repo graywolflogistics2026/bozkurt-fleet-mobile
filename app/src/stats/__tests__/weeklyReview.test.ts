@@ -108,6 +108,7 @@ function inputs(overrides: Partial<WeeklyReviewInputs> = {}): WeeklyReviewInputs
     perDiemDays: 7,
     ytdProfitBefore: 40000,
     ytdProfitAfter: 42800,
+    settlementCountYtd: 6,
     ...overrides,
   };
 }
@@ -125,6 +126,12 @@ describe('buildWeeklyReviewPrompt', () => {
     expect(prompt).toContain('Per diem days this week: 7');
     expect(prompt).toContain('$40000.00');
     expect(prompt).toContain('$42800.00');
+    // KPI CONSISTENCY (owner decision, device report: "AI Coach says
+    // 'after just one settlement' while Scorecard shows 6 settlements") —
+    // the real settlement count must be explicit in the prompt so the
+    // model can never imply a single-settlement history when there isn't
+    // one.
+    expect(prompt).toContain('across 6 settlement(s) recorded so far this year');
   });
 
   test('never invents a number for a null figure — omits that sentence entirely', () => {
@@ -250,6 +257,12 @@ describe('buildWeeklyReviewFallbackText', () => {
     expect(text).toContain('"pct":"22.0%"'); // fuel
     expect(text).toContain('"count":7'); // per diem days
     expect(text).toContain('"amount":"$42800.00"'); // YTD after
+  });
+
+  test('the real settlement count reaches the YTD line params (KPI CONSISTENCY — never omitted, never invented)', () => {
+    const text = buildWeeklyReviewFallbackText(inputs({ settlementCountYtd: 6 }), fakeT, money, pct);
+    expect(text).toContain('weeklyReviewFallback.ytd');
+    expect(text).toMatch(/"count":6/);
   });
 
   test('a null figure omits that key entirely, same "never invent" discipline as the AI prompt version', () => {

@@ -1858,7 +1858,7 @@
       "deadhead": "Deadhead: millerin {{pct}}'i.",
       "fuel": "Yakıt: gelirin {{pct}}'i.",
       "perDiem": "Bu hafta per diem günleri: {{count}}.",
-      "ytd": "Yıl başından bugüne net kâr: {{amount}}.",
+      "ytd": "Yıl başından bugüne net kâr: {{amount}} (bu yıl şu ana kadar {{count}} settlement).",
       "goalMet": "{{goal}} haftalık hedefinizi karşıladınız.",
       "goalShort": "{{goal}} haftalık hedefinizin {{amount}} altında kaldınız."
     },

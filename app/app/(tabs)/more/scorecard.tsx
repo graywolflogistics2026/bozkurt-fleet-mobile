@@ -15,11 +15,11 @@ import { useUpdateTruck, useTrucksList } from '@/src/data/trucks';
 import { useLoads } from '@/src/data/loads';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
-import { calcCanonicalCpm, carrierWithholdsLoanPayment } from '@/src/stats/cpm';
+import { carrierWithholdsLoanPayment } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
-import { resolveMilesTotal } from '@/src/stats/miles';
+import { computeKpis } from '@/src/stats/kpi';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
-import { buildTruckComparison, withAllocatedBucket } from '@/src/stats/truckComparison';
+import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { useFormatters } from '@/src/i18n/format';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
@@ -55,19 +55,10 @@ export default function Scorecard() {
   const router = useRouter();
   const updateTruck = useUpdateTruck();
   const updateSettlement = useUpdateSettlement();
-  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — this
-  // screen's canonicalCpm computation used to ALWAYS read fleet-wide
-  // unfiltered deductions/fuel/maintenance/tolls regardless of the active
-  // scope, only bolting the scoped truck's own fixed cost basis on top —
-  // a broken hybrid (full-fleet revenue/variable-costs + one truck's
-  // fixed cost) that got WORSE, not more accurate, when a specific truck
-  // was selected. `truckComparisonResult` is now computed UNCONDITIONALLY
-  // (not just for the "All Trucks" breakdown list) so `scopedTruckRow`
-  // below can supply the real, correct per-truck CPM (direct costs +
-  // labeled allocated share, exactly matching the Per-Truck Profitability
-  // screen) whenever a specific truck is scoped — see canonicalCpm's own
-  // comment further down for how the two cases (scoped vs. "All Trucks")
-  // are combined into one final figure.
+  // Only needed for the "All Trucks" Per-Truck Breakdown list below — the
+  // scoped-truck CPM/RPM/PPM figures themselves now come from the single
+  // `kpi` (computeKpis()) call further down, KPI CONSISTENCY (owner
+  // decision) — this screen no longer needs its own scopedTruckRow lookup.
   const trucksQuery = useTrucksList();
   const loadsQuery = useLoads();
   const truckComparisonResult = useMemo(
@@ -84,7 +75,6 @@ export default function Scorecard() {
     [trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
   );
   const truckBreakdown = isAllTrucks ? truckComparisonResult : null;
-  const scopedTruckRow = activeTruck ? (truckComparisonResult.rows.find((r) => r.truckId === activeTruck.id) ?? null) : null;
 
   const [refreshing, setRefreshing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -106,49 +96,58 @@ export default function Scorecard() {
   // MANUAL TOTAL OVERRIDE (owner decision 2026-08-05, FULL PARITY
   // follow-up item B.3) — a user-entered odometer/ELD total supersedes
   // the settlement/loads-derived total entirely for CPM/RPM. Lives on
-  // the ACTIVE truck, and (as of the MULTI-TRUCK MODEL re-audit fix
-  // below) is now correctly applied against just that truck's own
-  // scoped total, never the whole fleet's — the earlier "fleet-wide
-  // stats, deliberate simplification" limitation this comment used to
-  // describe no longer applies.
+  // the ACTIVE truck.
   const [overrideDraft, setOverrideDraft] = useState('');
   const [savingOverride, setSavingOverride] = useState(false);
   const [editingOverride, setEditingOverride] = useState(false);
-  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — this used
-  // to always read statsQuery.data.totalMiles, which is FLEET-WIDE
-  // (useFleetStats(null), unconditional) — a manual override + a specific
-  // truck's own real mileage were both silently ignored whenever a
-  // specific truck was scoped. Now sourced from scopedTruckRow's own
-  // truck-scoped total (via buildTruckComparison, below) when one truck
-  // is active, falling back to the fleet-wide total only in "All Trucks"
-  // scope.
-  const milesSource = scopedTruckRow
-    ? resolveMilesTotal({ totalMiles: scopedTruckRow.totalMiles }, activeTruck?.manual_total_miles_override)
-    : statsQuery.data
-      ? resolveMilesTotal({ totalMiles: statsQuery.data.totalMiles }, undefined)
-      : null;
-  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — every
-  // OTHER mile/revenue-derived figure on this screen (Revenue/Loaded
-  // Mile, the miles-missing warning, the Why? breakdown's Total/Loaded
-  // Miles + Deadhead % rows, each bucket's own $/mi line) used to read
-  // straight from statsQuery.data, which is FLEET-WIDE BY DESIGN on this
-  // screen (the legacy `scorecard` score's own established exemption,
-  // useFleetStats(null) unconditional) — showing the whole fleet's miles
-  // next to what's now a correctly SCOPED CPM figure whenever a specific
-  // truck was active. These three read from scopedTruckRow instead
-  // whenever one is active, falling back to statsQuery.data only in "All
-  // Trucks" scope.
-  const scopedGrossRevenue = scopedTruckRow ? scopedTruckRow.grossRevenue : (statsQuery.data?.grossRevenue ?? 0);
-  const scopedLoadedMiles = scopedTruckRow ? scopedTruckRow.loadedMiles : (statsQuery.data?.loadedMiles ?? 0);
-  const scopedDeadheadPct = scopedTruckRow ? scopedTruckRow.deadheadPct : (statsQuery.data?.deadheadPct ?? null);
-  // Derived from deadheadPct × totalMiles (the SAME ratio calcMiles()
-  // itself used to produce deadheadPct in the first place) rather than
-  // totalMiles − loadedMiles, which would overstate empty miles whenever
-  // a settlement's own printed total exceeds its loads' summed miles
-  // (calcMiles()'s own MAX-reconciliation rule) or a manual override is
-  // active.
-  const scopedEmptyMiles =
-    milesSource && scopedDeadheadPct != null ? Math.round(scopedDeadheadPct * milesSource.totalMiles) : 0;
+
+  // KPI CONSISTENCY (owner decision, device report: "three screens report
+  // three different numbers for the same week" — including, on THIS
+  // screen alone, "Net/Mile doesn't equal RPM - CPM"). Root cause: RPM/
+  // CPM/PPM/Total-Miles/Loaded-Miles/Deadhead%/the Why? breakdown were ALL
+  // already correctly truck-scoped (the MULTI-TRUCK MODEL re-audit fixes
+  // above), but Net/Mile — right next to them, in the SAME KPI card — kept
+  // reading `scorecard.netPerMile`, part of calcScorecard()'s deliberately
+  // FLEET-WIDE-ALWAYS legacy score (statsQuery = useFleetStats(null)) —
+  // two different SCOPES sitting in the same card, not just two different
+  // expense-set definitions. Every per-mile figure on this screen now
+  // reads from ONE call to src/stats/kpi.ts's computeKpis() — the SAME
+  // canonical function Home's per-mile trio reads from (via
+  // periodScopedCpm.ts, which now itself delegates to computeKpis()) —
+  // replacing this screen's own previously-separate canonicalCpm/
+  // fleetFixedCostTotal computation. `window: null` means "all data, no
+  // time filtering" — this screen's CPM stays deliberately all-time
+  // (matching the legacy score's own all-time convention), only the SCOPE
+  // (this truck vs. all trucks) varies. The 0-100 score/grade itself
+  // (calcScorecard(), below) is UNCHANGED — CLAUDE.md's own protected
+  // "verbatim legacy rScore() port, fleet-wide/ALL-deductions by design"
+  // exemption — only the surrounding per-mile TILES were ever the bug.
+  const kpi = useMemo(
+    () =>
+      computeKpis({
+        trucks: trucksQuery.data ?? [],
+        settlements: settlementsQuery.data ?? [],
+        loads: loadsQuery.data ?? [],
+        deductions: dedQuery.data ?? [],
+        fuelPurchases: fuelQuery.data ?? [],
+        maintenanceRecords: maintenanceQuery.data ?? [],
+        tolls: tollsQuery.data ?? [],
+        truckScope: activeTruck?.id ?? null,
+        manualMilesOverride: activeTruck?.manual_total_miles_override,
+        window: null,
+      }),
+    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, activeTruck]
+  );
+  // Fuel/Mile is now the SAME Fuel & DEF bucket the Why? breakdown itself
+  // shows (canonical: excludes a settlement-linked fuel row already
+  // represented elsewhere) rather than a raw, unscoped sum of every fuel
+  // purchase on the account — so it's always a real component of the
+  // Cost/Mile figure sitting right next to it, never a separately-scoped
+  // number that could disagree with it.
+  const scopedFuelPerMile = useMemo(() => {
+    const bucket = kpi.buckets.find((b) => b.category === 'Fuel & DEF')?.amount ?? 0;
+    return kpi.miles.total > 0 ? bucket / kpi.miles.total : null;
+  }, [kpi]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -240,57 +239,43 @@ export default function Scorecard() {
     return calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan);
   }, [activeTruck, carrierWithholdsLoan]);
 
-  // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — the fleet-
-  // wide ("All Trucks") CPM branch below used to add $0 fixed cost
-  // (truckFixedCostTotal was always derived from the single `activeTruck`,
-  // which is null in All-Trucks scope) — under-counting every truck's own
-  // real fixed ownership cost out of the fleet-average CPM. Sums EVERY
-  // truck's own cost basis, weighted by its own settlement count, same fix
-  // pattern as Home's own per-mile trio.
-  const fleetFixedCostTotal = useMemo(() => {
-    return (trucksQuery.data ?? []).reduce((sum, tr) => {
-      const count = (settlementsQuery.data ?? []).filter((s) => s.truck_id === tr.id).length;
-      return sum + calcTruckCostBasisWeekly(tr, carrierWithholdsLoan).weeklyFixedTotal * count;
-    }, 0);
-  }, [trucksQuery.data, settlementsQuery.data, carrierWithholdsLoan]);
-
-  // FULL PARITY pass (owner decision 2026-08-05, spec item C.4) —
-  // Cost/Mile reads the canonical, per-bucket CPM engine (src/stats/
-  // cpm.ts calcCanonicalCpm(), sharing calcTrueProfit()'s own Meals/
-  // Advance Repayment/Escrow exclusions and fuel/maintenance/tolls
-  // inclusion) instead of the legacy calcCpm()'s raw "ALL deductions"
-  // total, which counted non-expenses as if they were real operating
-  // costs. SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) —
-  // this used to run this SAME calcCanonicalCpm() call over fleet-wide
-  // unfiltered data regardless of scope, only the fixed-cost term
-  // changing with the active truck — a broken hybrid showing a WORSE
-  // number than the true fleet average once a specific truck was
-  // selected, never that truck's own real CPM. Now branches cleanly:
-  // a scoped truck reads its own row (direct costs + a clearly labeled
-  // allocated share of fleet-level costs, exactly matching the Per-Truck
-  // Profitability screen via withAllocatedBucket()); "All Trucks" scope
-  // keeps this same fleet-wide calcCanonicalCpm() call, now with the
-  // corrected fleetFixedCostTotal above instead of always $0.
-  const canonicalCpm = useMemo(() => {
-    if (!milesSource) return null;
-    if (scopedTruckRow) {
-      if (!scopedTruckRow.cpmBreakdown) return null;
-      const withAlloc = withAllocatedBucket(scopedTruckRow.cpmBreakdown, scopedTruckRow.allocatedExpenses, milesSource.totalMiles);
-      const revenuePerMile = milesSource.totalMiles > 0 ? scopedTruckRow.grossRevenue / milesSource.totalMiles : null;
-      const profitPerMile = revenuePerMile != null && withAlloc.costPerMile != null ? revenuePerMile - withAlloc.costPerMile : null;
-      return { ...withAlloc, revenuePerMile, profitPerMile };
-    }
-    if (!statsQuery.data) return null;
-    return calcCanonicalCpm(
-      statsQuery.data.grossRevenue,
-      milesSource.totalMiles,
-      dedQuery.data ?? [],
-      fuelQuery.data ?? [],
-      maintenanceQuery.data ?? [],
-      tollsQuery.data ?? [],
-      fleetFixedCostTotal
-    );
-  }, [milesSource, scopedTruckRow, statsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, fleetFixedCostTotal]);
+  // KPI CONSISTENCY (owner decision, device report: "Weekly Net Trend rows
+  // are offset by one... same week, three different nets"). Root cause:
+  // this list rendered `weekEnding`+`net` from the SAME object per row (so
+  // it was never literally two drifting parallel arrays), but the
+  // UNDERLYING data feeding it was completely UNSCOPED — every trucks'
+  // settlements/deductions/fuel/maintenance/tolls, regardless of the
+  // active truck — while every OTHER figure on this screen (the KPI card
+  // above) is correctly truck-scoped. In a multi-truck fleet, a week where
+  // only ANOTHER truck settled still showed up here (pulling in that
+  // OTHER truck's own gross/net), while a week where the ACTIVE truck
+  // itself settled but no other truck did could look comparatively
+  // "blank" — which is what read as an "offset" on device. Scoped to the
+  // active truck (same scopedSettlements/scopedDeductions/scopedFuel/
+  // scopedMaintenance/scopedTolls pattern app/(tabs)/index.tsx already
+  // established), falling through to the full fleet in "All Trucks" scope
+  // — exactly matching kpi's own truckScope above, so this list and the
+  // KPI card can never disagree about which truck's data they're showing.
+  const scopedSettlements = useMemo(
+    () => (activeTruck ? (settlementsQuery.data ?? []).filter((s) => s.truck_id === activeTruck.id) : (settlementsQuery.data ?? [])),
+    [settlementsQuery.data, activeTruck]
+  );
+  const scopedDeductions = useMemo(
+    () => (activeTruck ? (dedQuery.data ?? []).filter((d) => d.truck_id === activeTruck.id) : (dedQuery.data ?? [])),
+    [dedQuery.data, activeTruck]
+  );
+  const scopedFuel = useMemo(
+    () => (activeTruck ? (fuelQuery.data ?? []).filter((f) => f.truck_id === activeTruck.id) : (fuelQuery.data ?? [])),
+    [fuelQuery.data, activeTruck]
+  );
+  const scopedMaintenance = useMemo(
+    () => (activeTruck ? (maintenanceQuery.data ?? []).filter((m) => m.truck_id === activeTruck.id) : (maintenanceQuery.data ?? [])),
+    [maintenanceQuery.data, activeTruck]
+  );
+  const scopedTolls = useMemo(
+    () => (activeTruck ? (tollsQuery.data ?? []).filter((tl) => tl.truck_id === activeTruck.id) : (tollsQuery.data ?? [])),
+    [tollsQuery.data, activeTruck]
+  );
 
   // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): this used to be
   // buildWeeklyTrend()'s bare settlement `.net` (net PAY only, ignoring
@@ -298,15 +283,8 @@ export default function Scorecard() {
   // src/stats/trueProfit.ts figure Home/CEO Mode/Share Weekly
   // Profit/Profit Analysis all use.
   const weeklyTrend = useMemo(
-    () =>
-      buildWeeklyTrueProfitTrend(
-        settlementsQuery.data ?? [],
-        dedQuery.data ?? [],
-        fuelQuery.data ?? [],
-        maintenanceQuery.data ?? [],
-        tollsQuery.data ?? []
-      ).slice(-8),
-    [settlementsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
+    () => buildWeeklyTrueProfitTrend(scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls).slice(-8),
+    [scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls]
   );
 
   const loading = statsQuery.isLoading || fuelQuery.isLoading || settlementsQuery.isLoading || dedQuery.isLoading;
@@ -385,45 +363,43 @@ export default function Scorecard() {
             <Card>
               <View style={styles.row}>
                 <MutedText>{t('scorecard.revenuePerMile')}</MutedText>
-                <Text style={{ color: scorecard.revenuePerMile >= 2.0 ? colors.green : colors.orange, fontWeight: '700' }}>
-                  {money(scorecard.revenuePerMile, { maximumFractionDigits: 2 })}
+                <Text style={{ color: kpi.rpm != null && kpi.rpm >= 2.0 ? colors.green : colors.orange, fontWeight: '700' }}>
+                  {kpi.rpm != null ? money(kpi.rpm, { maximumFractionDigits: 2 }) : '—'}
                 </Text>
               </View>
-              {scopedLoadedMiles > 0 && (
+              {kpi.miles.loaded > 0 && (
                 <View style={[styles.row, styles.rowBorder]}>
                   <MutedText>{t('scorecard.revenuePerLoadedMile')}</MutedText>
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
-                    {money(scopedGrossRevenue / scopedLoadedMiles, { maximumFractionDigits: 2 })}
+                    {money(kpi.gross / kpi.miles.loaded, { maximumFractionDigits: 2 })}
                   </Text>
                 </View>
               )}
               <View style={[styles.row, styles.rowBorder]}>
                 <MutedText>{t('scorecard.fuelPerMile')}</MutedText>
-                <Text style={{ color: scorecard.fuelPerMile <= 0.65 ? colors.green : colors.red, fontWeight: '700' }}>
-                  {money(scorecard.fuelPerMile, { maximumFractionDigits: 2 })}
+                <Text style={{ color: scopedFuelPerMile != null && scopedFuelPerMile <= 0.65 ? colors.green : colors.red, fontWeight: '700' }}>
+                  {scopedFuelPerMile != null ? money(scopedFuelPerMile, { maximumFractionDigits: 2 }) : '—'}
                 </Text>
               </View>
               <View style={[styles.row, styles.rowBorder]}>
                 <MutedText>{t('scorecard.netPerMile')}</MutedText>
-                <Text style={{ color: scorecard.netPerMile >= 0.6 ? colors.green : colors.orange, fontWeight: '700' }}>
-                  {money(scorecard.netPerMile, { maximumFractionDigits: 2 })}
+                <Text style={{ color: kpi.ppm != null && kpi.ppm >= 0.6 ? colors.green : colors.orange, fontWeight: '700' }}>
+                  {kpi.ppm != null ? money(kpi.ppm, { maximumFractionDigits: 2 }) : '—'}
                 </Text>
               </View>
-              {canonicalCpm && (
-                <View style={[styles.row, styles.rowBorder]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                    <MutedText>{t('scorecard.costPerMile')}</MutedText>
-                    <Pressable onPress={() => setWhyOpen(true)} hitSlop={8}>
-                      <Text style={{ color: colors.accent, fontWeight: '700', fontSize: typography.size.xs }}>
-                        {t('scorecard.whyLink')}
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <Text style={{ color: colors.text, fontWeight: '700' }}>
-                    {canonicalCpm.costPerMile != null ? money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }) : '—'}
-                  </Text>
+              <View style={[styles.row, styles.rowBorder]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                  <MutedText>{t('scorecard.costPerMile')}</MutedText>
+                  <Pressable onPress={() => setWhyOpen(true)} hitSlop={8}>
+                    <Text style={{ color: colors.accent, fontWeight: '700', fontSize: typography.size.xs }}>
+                      {t('scorecard.whyLink')}
+                    </Text>
+                  </Pressable>
                 </View>
-              )}
+                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                  {kpi.cpm != null ? money(kpi.cpm, { maximumFractionDigits: 2 }) : '—'}
+                </Text>
+              </View>
               {activeTruck?.fleet_mpg != null && (
                 <View style={[styles.row, styles.rowBorder]}>
                   <MutedText>{t('scorecard.mpg')}</MutedText>
@@ -434,23 +410,23 @@ export default function Scorecard() {
 
             {/* FIXED vs VARIABLE (spec item C.3) — "variable adds cash
                 today, total covers everything." */}
-            {canonicalCpm && canonicalCpm.costPerMile != null && (
+            {kpi.cpm != null && (
               <MutedText style={{ marginTop: spacing.xs }}>
                 {t('scorecard.fixedVariableSummary', {
-                  variable: money(canonicalCpm.variableCostPerMile ?? 0, { maximumFractionDigits: 2 }),
-                  total: money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }),
+                  variable: money(kpi.miles.total > 0 ? kpi.expenses.variable / kpi.miles.total : 0, { maximumFractionDigits: 2 }),
+                  total: money(kpi.cpm, { maximumFractionDigits: 2 }),
                 })}
               </MutedText>
             )}
 
             {/* CPM/MILES WARNINGS (spec item C.4: "warn when CPM > $4 or
                 miles missing"). */}
-            {canonicalCpm && canonicalCpm.costPerMile != null && canonicalCpm.costPerMile > 4 && (
+            {kpi.cpm != null && kpi.cpm > 4 && (
               <MutedText style={{ color: colors.red, marginTop: spacing.xs, fontWeight: '700' }}>
-                ⚠️ {t('scorecard.cpmTooHighWarning', { cpm: money(canonicalCpm.costPerMile, { maximumFractionDigits: 2 }) })}
+                ⚠️ {t('scorecard.cpmTooHighWarning', { cpm: money(kpi.cpm, { maximumFractionDigits: 2 }) })}
               </MutedText>
             )}
-            {milesSource && milesSource.totalMiles <= 0 && (
+            {kpi.miles.total <= 0 && (
               <MutedText style={{ color: colors.orange, marginTop: spacing.xs, fontWeight: '700' }}>
                 ⚠️ {t('scorecard.milesMissingWarning')}
               </MutedText>
@@ -466,17 +442,17 @@ export default function Scorecard() {
                 PARITY follow-up item B.3) — a banner naming which mile
                 source is currently driving CPM/RPM, with a one-tap way
                 back to the calculated figure. */}
-            {activeTruck && milesSource && (
+            {activeTruck && (
               <Card>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1 }}>
                     <MutedText>
-                      {milesSource.source === 'manual'
-                        ? t('scorecard.milesSourceManual', { miles: number(milesSource.totalMiles) })
-                        : t('scorecard.milesSourceSettlements', { miles: number(milesSource.totalMiles) })}
+                      {activeTruck.manual_total_miles_override != null && activeTruck.manual_total_miles_override > 0
+                        ? t('scorecard.milesSourceManual', { miles: number(kpi.miles.total) })
+                        : t('scorecard.milesSourceSettlements', { miles: number(kpi.miles.total) })}
                     </MutedText>
                   </View>
-                  {milesSource.source === 'manual' ? (
+                  {activeTruck.manual_total_miles_override != null && activeTruck.manual_total_miles_override > 0 ? (
                     <SecondaryButton title={t('scorecard.useSettlementsInstead')} onPress={handleUseSettlementsInstead} loading={savingOverride} />
                   ) : (
                     <SecondaryButton title={t('scorecard.setManualTotal')} onPress={openOverrideEditor} />
@@ -531,11 +507,11 @@ export default function Scorecard() {
               <View style={styles.shareKpiRow}>
                 <View style={{ alignItems: 'center' }}>
                   <MutedText>{t('scorecard.revenuePerMile')}</MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '700' }}>{money(scorecard.revenuePerMile, { maximumFractionDigits: 2 })}</Text>
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>{kpi.rpm != null ? money(kpi.rpm, { maximumFractionDigits: 2 }) : '—'}</Text>
                 </View>
                 <View style={{ alignItems: 'center' }}>
                   <MutedText>{t('scorecard.netPerMile')}</MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '700' }}>{money(scorecard.netPerMile, { maximumFractionDigits: 2 })}</Text>
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>{kpi.ppm != null ? money(kpi.ppm, { maximumFractionDigits: 2 }) : '—'}</Text>
                 </View>
               </View>
               <View style={styles.shareBrandFooter}>
@@ -558,135 +534,120 @@ export default function Scorecard() {
           KPI card intentionally leaves out. */}
       <ModalSheet visible={whyOpen} onClose={() => setWhyOpen(false)}>
         <SheetTitle>{t('scorecard.whyTitle')}</SheetTitle>
-        {milesSource && (
+        <Text style={styles.whySectionTitle}>{t('scorecard.whyMilesTitle')}</Text>
+        <View style={styles.row}>
+          <MutedText>{t('scorecard.whyTotalMiles')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>{number(kpi.miles.total)}</Text>
+        </View>
+        <View style={[styles.row, styles.rowBorder]}>
+          <MutedText>{t('scorecard.whyLoadedMiles')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>{number(kpi.miles.loaded)}</Text>
+        </View>
+        <View style={[styles.row, styles.rowBorder]}>
+          <MutedText>{t('scorecard.whyEmptyMiles')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>{number(kpi.miles.empty)}</Text>
+        </View>
+        {kpi.miles.deadheadPct != null && (
+          <View style={[styles.row, styles.rowBorder]}>
+            <MutedText>{t('scorecard.whyDeadheadPct')}</MutedText>
+            <Text style={{ color: colors.text, fontWeight: '600' }}>
+              {number(kpi.miles.deadheadPct * 100, { maximumFractionDigits: 1 })}%
+            </Text>
+          </View>
+        )}
+
+        {kpi.rpm != null && (
           <>
-            <Text style={styles.whySectionTitle}>{t('scorecard.whyMilesTitle')}</Text>
+            <Text style={styles.whySectionTitle}>{t('scorecard.whyRpmPpmTitle')}</Text>
             <View style={styles.row}>
-              <MutedText>{t('scorecard.whyTotalMiles')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(milesSource.totalMiles)}</Text>
+              <MutedText>{t('scorecard.whyRpm')}</MutedText>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{money(kpi.rpm, { maximumFractionDigits: 2 })}</Text>
             </View>
             <View style={[styles.row, styles.rowBorder]}>
-              <MutedText>{t('scorecard.whyLoadedMiles')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(scopedLoadedMiles)}</Text>
+              <MutedText>{t('scorecard.whyPpm')}</MutedText>
+              <Text style={{ color: kpi.ppm != null && kpi.ppm >= 0 ? colors.green : colors.red, fontWeight: '600' }}>
+                {kpi.ppm != null ? money(kpi.ppm, { maximumFractionDigits: 2 }) : '—'}
+              </Text>
             </View>
-            <View style={[styles.row, styles.rowBorder]}>
-              <MutedText>{t('scorecard.whyEmptyMiles')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{number(scopedEmptyMiles)}</Text>
+          </>
+        )}
+
+        <Text style={styles.whySectionTitle}>{t('scorecard.whyBucketsTitle')}</Text>
+        {kpi.buckets.map((b, i) => (
+          <View key={b.category} style={[styles.row, i > 0 && styles.rowBorder]}>
+            <MutedText>
+              {b.category} · {t(`scorecard.cpmType.${b.type}`)}
+            </MutedText>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>{money(b.amount)}</Text>
+              {/* KPI CONSISTENCY (owner decision) — kpi.miles.total is the
+                  SAME denominator kpi.cpm itself was divided by, always
+                  correctly scoped (this truck's own miles, or fleet-wide
+                  only in "All Trucks" scope) — never a different total
+                  than the headline Cost/Mile figure above. */}
+              {kpi.miles.total > 0 && (
+                <MutedText style={{ fontSize: typography.size.xs }}>
+                  {money(b.amount / kpi.miles.total, { maximumFractionDigits: 2 })}/mi
+                </MutedText>
+              )}
             </View>
-            {scopedDeadheadPct != null && (
-              <View style={[styles.row, styles.rowBorder]}>
-                <MutedText>{t('scorecard.whyDeadheadPct')}</MutedText>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>
-                  {number(scopedDeadheadPct * 100, { maximumFractionDigits: 1 })}%
-                </Text>
-              </View>
+          </View>
+        ))}
+        <View style={[styles.row, styles.rowBorder]}>
+          <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyFixedTotal')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{money(kpi.expenses.fixed)}</Text>
+        </View>
+        <View style={[styles.row, styles.rowBorder]}>
+          <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyVariableTotal')}</MutedText>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{money(kpi.expenses.variable)}</Text>
+        </View>
+
+        {truckCostBasis && (
+          <>
+            <Text style={styles.whySectionTitle}>{t('scorecard.whyFixedSpreadTitle')}</Text>
+            {!truckCostBasis.isConfigured ? (
+              <MutedText>{t('scorecard.whyFixedSpreadNotSet')}</MutedText>
+            ) : (
+              <>
+                <View style={styles.row}>
+                  <MutedText>{t('scorecard.whyOwnershipMode')}</MutedText>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>
+                    {t(`scorecard.ownershipMode.${activeTruck?.cost_basis_ownership_mode ?? 'paid'}`)}
+                  </Text>
+                </View>
+                <View style={[styles.row, styles.rowBorder]}>
+                  <MutedText>{t('scorecard.whyWeeklyTruckPayment')}</MutedText>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyTruckPayment)}</Text>
+                </View>
+                {truckCostBasis.weeklyWarranty > 0 && (
+                  <View style={[styles.row, styles.rowBorder]}>
+                    <MutedText>{t('scorecard.whyWeeklyWarranty')}</MutedText>
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyWarranty)}</Text>
+                  </View>
+                )}
+              </>
             )}
           </>
         )}
 
-        {canonicalCpm && (
+        {kpi.excludedOneOffs.length > 0 && (
           <>
-            {canonicalCpm.revenuePerMile != null && (
-              <>
-                <Text style={styles.whySectionTitle}>{t('scorecard.whyRpmPpmTitle')}</Text>
-                <View style={styles.row}>
-                  <MutedText>{t('scorecard.whyRpm')}</MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>
-                    {money(canonicalCpm.revenuePerMile, { maximumFractionDigits: 2 })}
-                  </Text>
-                </View>
-                <View style={[styles.row, styles.rowBorder]}>
-                  <MutedText>{t('scorecard.whyPpm')}</MutedText>
-                  <Text style={{ color: canonicalCpm.profitPerMile != null && canonicalCpm.profitPerMile >= 0 ? colors.green : colors.red, fontWeight: '600' }}>
-                    {canonicalCpm.profitPerMile != null ? money(canonicalCpm.profitPerMile, { maximumFractionDigits: 2 }) : '—'}
-                  </Text>
-                </View>
-              </>
-            )}
-
-            <Text style={styles.whySectionTitle}>{t('scorecard.whyBucketsTitle')}</Text>
-            {canonicalCpm.buckets.map((b, i) => (
-              <View key={b.category} style={[styles.row, i > 0 && styles.rowBorder]}>
-                <MutedText>
-                  {b.category} · {t(`scorecard.cpmType.${b.type}`)}
-                </MutedText>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>{money(b.amount)}</Text>
-                  {/* SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL
-                      re-audit) — this used to always divide by
-                      statsQuery.data.totalMiles, which is FLEET-WIDE by
-                      design (the legacy score's own exemption) — the
-                      wrong denominator for a bucket that's this truck's
-                      own amount whenever a specific truck is scoped.
-                      milesSource.totalMiles is already correctly scoped
-                      (this truck's own miles, or fleet-wide only in "All
-                      Trucks" scope) — the same total canonicalCpm.
-                      costPerMile itself was divided by. */}
-                  {milesSource && milesSource.totalMiles > 0 && (
-                    <MutedText style={{ fontSize: typography.size.xs }}>
-                      {money(b.amount / milesSource.totalMiles, { maximumFractionDigits: 2 })}/mi
-                    </MutedText>
-                  )}
-                </View>
+            <Text style={styles.whySectionTitle}>{t('scorecard.whyExcludedOneOffsTitle')}</Text>
+            <MutedText>{t('scorecard.whyExcludedOneOffsNote')}</MutedText>
+            {kpi.excludedOneOffs.map((item, i) => (
+              <View key={`${item.description}-${i}`} style={[styles.row, i > 0 && styles.rowBorder]}>
+                <MutedText style={{ flex: 1 }}>{item.description}</MutedText>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(item.amount)}</Text>
               </View>
             ))}
-            <View style={[styles.row, styles.rowBorder]}>
-              <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyFixedTotal')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{money(canonicalCpm.fixedTotal)}</Text>
-            </View>
-            <View style={[styles.row, styles.rowBorder]}>
-              <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyVariableTotal')}</MutedText>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{money(canonicalCpm.variableTotal)}</Text>
-            </View>
-
-            {truckCostBasis && (
-              <>
-                <Text style={styles.whySectionTitle}>{t('scorecard.whyFixedSpreadTitle')}</Text>
-                {!truckCostBasis.isConfigured ? (
-                  <MutedText>{t('scorecard.whyFixedSpreadNotSet')}</MutedText>
-                ) : (
-                  <>
-                    <View style={styles.row}>
-                      <MutedText>{t('scorecard.whyOwnershipMode')}</MutedText>
-                      <Text style={{ color: colors.text, fontWeight: '600' }}>
-                        {t(`scorecard.ownershipMode.${activeTruck?.cost_basis_ownership_mode ?? 'paid'}`)}
-                      </Text>
-                    </View>
-                    <View style={[styles.row, styles.rowBorder]}>
-                      <MutedText>{t('scorecard.whyWeeklyTruckPayment')}</MutedText>
-                      <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyTruckPayment)}</Text>
-                    </View>
-                    {truckCostBasis.weeklyWarranty > 0 && (
-                      <View style={[styles.row, styles.rowBorder]}>
-                        <MutedText>{t('scorecard.whyWeeklyWarranty')}</MutedText>
-                        <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyWarranty)}</Text>
-                      </View>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {canonicalCpm.excludedOneOffs.length > 0 && (
-              <>
-                <Text style={styles.whySectionTitle}>{t('scorecard.whyExcludedOneOffsTitle')}</Text>
-                <MutedText>{t('scorecard.whyExcludedOneOffsNote')}</MutedText>
-                {canonicalCpm.excludedOneOffs.map((item, i) => (
-                  <View key={`${item.description}-${i}`} style={[styles.row, i > 0 && styles.rowBorder]}>
-                    <MutedText style={{ flex: 1 }}>{item.description}</MutedText>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>{money(item.amount)}</Text>
-                  </View>
-                ))}
-              </>
-            )}
-
-            {canonicalCpm.excludedTotal > 0 && (
-              <View style={[styles.row, styles.rowBorder]}>
-                <MutedText>{t('scorecard.cpmExcludedTotal')}</MutedText>
-                <MutedText>{money(canonicalCpm.excludedTotal)}</MutedText>
-              </View>
-            )}
           </>
+        )}
+
+        {kpi.excludedTotal > 0 && (
+          <View style={[styles.row, styles.rowBorder]}>
+            <MutedText>{t('scorecard.cpmExcludedTotal')}</MutedText>
+            <MutedText>{money(kpi.excludedTotal)}</MutedText>
+          </View>
         )}
 
         {settlementsMissingMiles.length > 0 && (

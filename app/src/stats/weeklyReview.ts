@@ -97,6 +97,19 @@ export type WeeklyReviewInputs = {
   perDiemDays: number; // 0-7
   ytdProfitBefore: number;
   ytdProfitAfter: number;
+  // KPI CONSISTENCY (owner decision, device report: "AI Coach says 'YTD
+  // net $X, after just one settlement' while Scorecard shows N settlements
+  // since [date]"). Root cause: nothing in this prompt ever told the model
+  // HOW MANY settlements the year-to-date figure actually reflects — it
+  // had "revenue $X for the week" and "YTD moved from A to B" with no
+  // count in between, so a model summarizing loosely could describe that
+  // as "after just one settlement" even when the real number was much
+  // higher. Always a real, already-computed count (never invented) —
+  // threaded through to both the AI prompt AND the always-correct
+  // fallback text below so a user reading either one sees the real
+  // count, matching Scorecard's own settlement history exactly (same
+  // settlements array, same calendar year).
+  settlementCountYtd: number;
   // WEEKLY GOAL DRIVES THE COACH (owner decision 2026-08-24, FIVE
   // ADDITIONS pass, PART 3 item 1) — optional: omitted entirely when the
   // user hasn't set a weekly goal yet (Part 3 item 3 — "no goal set -> the
@@ -134,7 +147,7 @@ export function buildWeeklyReviewPrompt(inputs: WeeklyReviewInputs): string {
       ? `Biggest settlement chargebacks: ${inputs.biggestChargebacks.map((c) => `${c.description} (${money(c.amount)})`).join(', ')}.`
       : 'No large settlement chargebacks this week.',
     `Per diem days this week: ${inputs.perDiemDays}.`,
-    `Year-to-date net profit moved from ${money(inputs.ytdProfitBefore)} to ${money(inputs.ytdProfitAfter)} with this week included.`,
+    `Year-to-date net profit moved from ${money(inputs.ytdProfitBefore)} to ${money(inputs.ytdProfitAfter)} across ${inputs.settlementCountYtd} settlement(s) recorded so far this year, with this week included.`,
     // PART 3 item 1: "states goal progress in dollars and percent, and when
     // short, what would close the gap in the user's own terms (miles at
     // their current RPM, or one load at their average revenue per load).
@@ -197,7 +210,7 @@ export function buildWeeklyReviewFallbackText(
     inputs.deadheadPct != null ? t('ceoMode.weeklyReviewFallback.deadhead', { pct: pct(inputs.deadheadPct) }) : '',
     inputs.fuelPctOfRevenue != null ? t('ceoMode.weeklyReviewFallback.fuel', { pct: pct(inputs.fuelPctOfRevenue) }) : '',
     inputs.perDiemDays > 0 ? t('ceoMode.weeklyReviewFallback.perDiem', { count: inputs.perDiemDays }) : '',
-    t('ceoMode.weeklyReviewFallback.ytd', { amount: money(inputs.ytdProfitAfter) }),
+    t('ceoMode.weeklyReviewFallback.ytd', { amount: money(inputs.ytdProfitAfter), count: inputs.settlementCountYtd }),
     inputs.goalProgress
       ? inputs.goalProgress.metGoal
         ? t('ceoMode.weeklyReviewFallback.goalMet', { goal: money(inputs.goalProgress.weeklyGoal) })
