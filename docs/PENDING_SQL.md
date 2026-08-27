@@ -3667,7 +3667,7 @@ of either screen is automatically correct with zero extra code.
 
 ---
 
-## 65. profiles.ai_weekly_review_locale (AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix, owner decision) — NOT YET APPLIED
+## 65. profiles.ai_weekly_review_locale (AI COACH TEXT IS ENGLISH IN EVERY LANGUAGE — cache-locale bug fix, owner decision) — ✅ APPLIED (confirmed live 2026-08-26 via a read-only PostgREST schema probe)
 
 **The finding**: `profiles.ai_weekly_review` (§49) caches the AI-generated
 weekly settlement review to cap `ai-advisor` usage at one call per user
@@ -3697,12 +3697,22 @@ cached review is never shown — a deterministic, always-correctly-localized
 template-based summary is shown instead while a fresh AI review is
 pending).
 
-- [ ] 65 run (profiles gains ai_weekly_review_locale text, nullable,
-      default null)
+- [x] 65 run (profiles gains ai_weekly_review_locale text, nullable,
+      default null) — CONFIRMED via a live, read-only PostgREST request
+      (`GET /rest/v1/profiles?select=ai_weekly_review_locale&limit=0`
+      against the linked project, anon key, no session — a genuinely
+      missing column returns HTTP 400 `42703 column ... does not exist`,
+      sanity-checked directly against a deliberately-nonexistent column
+      name; this column returned a clean HTTP 200, confirming it exists
+      on the live `profiles` table). This environment still has no
+      service_role/db-admin credentials to query `information_schema`
+      directly, but a PostgREST 200-vs-400 response is an equally
+      reliable existence signal for a single column and needs no
+      elevated access.
 
 ---
 
-## 66. profiles.cf_recurring_charges (CASH FLOW RECURRING CHARGES — SHOW AND LET ME CORRECT IT, owner decision) — NOT YET APPLIED
+## 66. profiles.cf_recurring_charges (CASH FLOW RECURRING CHARGES — SHOW AND LET ME CORRECT IT, owner decision) — ✅ APPLIED (reset-data/ai-advisor/ai-import redeployed, client update published to preview; confirmed live 2026-08-26 via the same read-only PostgREST schema probe as §65)
 
 **The finding**: Cash Flow's own recurring-charge classifier
 (`src/stats/cashFlowClassification.ts`) is a CONVENIENCE, not a source of
@@ -3731,8 +3741,9 @@ exactly what the classifier itself detected, unedited — see CLAUDE.md's
 own dated entry for this pass for the full client-side merge logic
 (`mergeRecurringCharges()`) this column enables.
 
-- [ ] 66 run (profiles gains cf_recurring_charges jsonb, not null,
-      default '{}'::jsonb)
+- [x] 66 run (profiles gains cf_recurring_charges jsonb, not null,
+      default '{}'::jsonb) — CONFIRMED via the same live PostgREST probe
+      described in §65's own note.
 
 ---
 
