@@ -647,6 +647,19 @@ export type Profile = {
   cf_fixed_override: number | null;
   cf_variable_override: number | null;
   cf_periodic_overrides: Record<string, number>;
+  // CASH FLOW RECURRING CHARGES — SHOW AND LET ME CORRECT IT (owner
+  // decision, docs/PENDING_SQL.md §66) — "detection is a convenience, not
+  // a cage." Keyed by category string (the SAME category the classifier
+  // itself groups by, src/stats/cashFlowClassification.ts) so a per-line
+  // correction survives a later re-classification of the same category
+  // untouched. `weeklyAmount` overrides a detected charge's own computed
+  // amount, OR (for a category the classifier never detected at all)
+  // adds a brand-new manual recurring charge. `removed: true` excludes an
+  // otherwise-detected category from the fixed total entirely, without
+  // needing to know/guess a replacement amount. `{}` (the DB default)
+  // means every recurring charge shown is exactly what the classifier
+  // itself detected, unedited.
+  cf_recurring_charges: Record<string, { weeklyAmount: number; removed?: boolean }>;
   // SMART ALERTS (owner decision 2026-08-24, NEXT PASS item D, docs/
   // PENDING_SQL.md §49) — one entry per nudge topic ever shown/silenced,
   // `Partial<Record<NudgeTopic, {lastShownAt, silencedAt}>>` (see

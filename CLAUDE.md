@@ -8940,3 +8940,123 @@
   object-shaped value passed where a plain array was expected. Full
   suite: 118 suites / 3,014 tests pass (+13 new); `tsc --noEmit` clean.
   Ships via a normal `eas update`.
+- CASH FLOW RECURRING-CHARGE CLASSIFIER — TOO STRICT FOR A YOUNG ACCOUNT,
+  AND NOT CORRECTABLE (owner decision, device report: "Fixed expenses $0
+  · 0 recurring charges detected" despite weekly Insurance/Permits/ELD
+  chargebacks in nearly every settlement). docs/PENDING_SQL.md §66,
+  **NOT YET APPLIED**; no Edge Function changes.
+  **DIAGNOSIS (instrumented before any fix, per the owner's own explicit
+  ask — "don't guess")**: a throwaway diagnostic test run against a
+  PERFECTLY clean 6-settlement/6-week dataset (identical weekly Insurance/
+  Permits/ELD amounts every week) already passed under the OLD thresholds
+  — `classifyCashFlowSpending()`'s math itself was never wrong for an
+  ideal case. The real failure mode, confirmed by instrumenting a second,
+  more realistic dataset: a charge that resolves correctly under the SAME
+  category in only SOME of a young account's real weeks (3-4 of 6 —
+  plausible from real-world OCR/text variance in how a carrier's own
+  chargeback line reads week to week, matching the report's own "nearly
+  every week" framing, not "literally every week") was held to the exact
+  same 60%-of-weeks-observed ratio + a flat 2-occurrence floor that an
+  ESTABLISHED, many-months account is held to — a ratio that is not a
+  statistically meaningful signal yet over only a handful of data points.
+  Two hypotheses were tested and ruled out directly rather than assumed:
+  the rows genuinely reach `classifyCashFlowSpending()` (confirmed via
+  `buildSpendEvents()`'s own output), and `weeksObserved` is NOT diluted
+  by variable-category (fuel/maintenance/toll) events landing in extra
+  weeks beyond the settlement weeks (the ISO-week grouping already
+  correctly collapses same-week events regardless of which bucket they
+  land in).
+  **THE THRESHOLD FIX**: `src/stats/cashFlowClassification.ts` replaces
+  the old flat `frequency >= 60%` + `occurrences >= 2` pair with ONE
+  scaled function, `requiredOccurrencesFor(weeksObserved)` — for an
+  account with 6 or fewer observed weeks, only 3 occurrences are required
+  (the owner's own explicit "allow classification from 3 occurrences"),
+  with an ABSOLUTE floor of 2 occurrences preserved regardless of how few
+  weeks exist (a charge seen exactly ONCE can never be "recurring," full
+  stop — a real regression this pass caught in its own pre-existing test
+  suite: `min(3, weeksObserved)` alone would have let a single random fee
+  in a brand-new 1-week account pass, since "occurring in the only 1 week
+  observed so far" trivially satisfies "3 occurrences" when weeksObserved
+  itself is 1). Above 6 weeks, the function converges back toward the
+  original 60% ratio (now occurrence-based: `max(3, ceil(weeksObserved *
+  0.6))`), so an established account's own behavior is materially
+  unchanged. The variance (CV ≤ 25%) threshold was left as-is — the
+  report's own $30.43/$30.43/$29.99 example already computes to ~0.7% CV,
+  nowhere near the existing threshold, confirmed by test rather than
+  assumed.
+  **SHOW AND LET ME CORRECT IT** (owner's own explicit item 3,
+  "detection is a convenience, not a cage"): `RecurringFixedCharge`
+  gained a `source: 'auto' | 'manual'` tag, and a new pure
+  `mergeRecurringCharges(detected, overrides)` combines the classifier's
+  own detected list with the user's own corrections — an edited amount
+  (still tagged `'auto'`, since the detection itself is still real, only
+  the dollar amount was corrected), a removal (`removed: true`, excludes
+  an otherwise-detected category entirely), or a brand-new manually-added
+  charge for a category the classifier never detected at all (tagged
+  `'manual'`, `occurrences: 0`). Persisted in a new
+  `profiles.cf_recurring_charges` jsonb column (docs/PENDING_SQL.md §66),
+  keyed by CATEGORY STRING — the SAME key the classifier itself groups
+  by — so a correction survives the next re-classification of the same
+  category untouched, exactly like `cf_periodic_overrides` (§57) already
+  does for periodic items; the client already reads it via `?? {}`, so
+  the screen stays fully usable (falls back to showing exactly what the
+  classifier detected, unedited) even before the migration has actually
+  been run. `buildCashFlowForecast()` now computes `weeklyFixed` from the
+  MERGED list (`mergeRecurringCharges(classification.fixed,
+  overrides.recurringCharges)`), not the classifier's own raw, uncorrected
+  `weeklyFixedTotal` — a correction now actually changes the projected
+  weekly figure. The older, coarser `cf_fixed_override` (override the
+  WHOLE weekly total in one shot) is left completely unchanged and still
+  wins over the merged per-charge sum when set — a deliberately additive,
+  non-breaking layer under it, not a replacement.
+  `app/(tabs)/more/cash-flow.tsx`'s "Recurring Fixed Charges" card now
+  lists every merged charge individually — tap to edit its amount inline,
+  a ✕ to remove it (with a "{{category}} removed · Restore" link so a
+  removal is never a one-way door), each row labeled "seen N of M weeks"
+  (detected) or "Added by you" (manual) — plus an always-visible "+ Add a
+  recurring charge" action (a plain category-name + weekly-amount form)
+  for anything the classifier missed entirely.
+  **NEVER PRESENT "$0 FIXED" AS FACT** (owner's own explicit item 4): the
+  card's empty state — shown identically whether the real reason is "not
+  enough history yet" or "the classifier genuinely found nothing" (the
+  owner's own explicit "either way" framing, never two different
+  messages implying one case is more certain than the other) — is now
+  "Not enough history yet — add your fixed costs manually," with the same
+  "+ Add a recurring charge" action right there, replacing the old bare
+  "$0 · 0 recurring charges detected" line that read as a confident,
+  final answer.
+  **TESTS** (item 5, all three explicitly requested): a realistic
+  6-settlement dataset (`cashFlowClassification.test.ts`) where Insurance
+  resolves in all 6 weeks (with the report's own $30.43/$30.43/$29.99
+  variation), Permits in 4 of 6, and ELD in exactly 3 of 6 (the literal
+  floor) — all three detected, the one-off $6,500 extended-warranty line
+  excluded and never inflating the weekly total. `requiredOccurrencesFor()`
+  gets its own dedicated coverage (the young-account floor, the
+  never-from-a-single-occurrence guard, and the established-account
+  convergence). `mergeRecurringCharges()` gets full coverage (pass-
+  through, edit, removal, manual addition) plus the literal "a manually
+  added recurring charge survives new imports" case — the SAME overrides
+  object applied against a classification that changed shape (simulating
+  a fresh import) still contributes the manual charge unchanged.
+  `cashFlowForecast.test.ts` gained the same "survives a new import" proof
+  one level up, through the real `buildCashFlowForecast()`, plus a direct
+  proof that `weeklyFixed`/`fixedCharges` are genuinely empty (never a
+  silently-wrong non-zero number) when nothing is detected and nothing was
+  manually added — two PRE-EXISTING tests in that file needed updating
+  (they patched `classification.weeklyFixedTotal` directly without a real
+  `fixed` array, a shortcut that stopped reflecting reality once
+  `buildCashFlowForecast()` started reading the merged per-charge list
+  instead of that pre-computed total). Full suite: 118 suites / 3,026
+  tests pass (+37 new); `tsc --noEmit` clean; all 7 locales confirmed
+  key-parity (6 new `cashFlowScreen.*` keys — es/ru/tr/hi/ar fully
+  translated, uk as an untranslated English copy per invariant #11;
+  "Insurance—Truck" kept as a literal example placeholder in every locale,
+  matching this app's own "domain category names stay English" convention).
+  `docs/PENDING_SQL.md` §66 (`profiles.cf_recurring_charges jsonb`,
+  mirrored as `pending_66.sql` at the repo root) is **NOT YET APPLIED** —
+  `supabase/functions/reset-data/index.ts` was updated to clear this new
+  column on Reset All Data and needs redeploying once §66 has actually
+  been run; no other Edge Function was touched. Every other change in
+  this pass is pure client-side JS/TS and ships via a normal `eas update`
+  regardless of whether §66 has been run yet (the client degrades
+  gracefully either way, per its own `?? {}` fallback).

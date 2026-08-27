@@ -34,6 +34,14 @@ export type RecurringFixedCharge = {
   category: string;
   weeklyAmount: number;
   occurrences: number;
+  // SHOW AND LET ME CORRECT IT (owner decision) — 'auto' = the classifier
+  // itself detected this category; 'manual' = the user added it (a
+  // category the classifier never detected on its own) or edited its
+  // amount (still tagged 'auto' — the OCCURRENCES/detection itself is
+  // still real, only the dollar amount was corrected). See
+  // mergeRecurringCharges() below for how a manual override interacts
+  // with what the classifier detects on a later re-import.
+  source: 'auto' | 'manual';
 };
 
 export type VariableRate = {
@@ -61,16 +69,47 @@ export type CashFlowClassification = {
   weeksObserved: number;
 };
 
-// A charge must appear in at least this fraction of the observed weeks…
+// THRESHOLDS TOO STRICT FOR A YOUNG ACCOUNT (owner decision, device
+// report: "Fixed expenses $0 · 0 recurring charges detected" despite
+// real weekly Insurance/Permits/ELD chargebacks in every settlement).
+// Instrumented against a realistic 6-settlement dataset before touching
+// anything (see CLAUDE.md's own dated entry for this pass for the full
+// diagnostic transcript): a PERFECTLY clean 6/6-occurrence case already
+// passed under the OLD thresholds — the actual failure mode is a
+// PARTIALLY noisy but still genuinely recurring charge (a category that
+// only resolves correctly in 3-4 of a young account's 6 real weeks, e.g.
+// due to OCR/text variance in how a carrier's own chargeback line reads
+// week to week) getting held to the SAME 60%-of-weeks ratio a
+// long-established account is held to — a ratio that's statistically
+// far too strict to be meaningful over only a handful of data points.
+// requiredOccurrencesFor() replaces the old flat `frequency >=
+// FIXED_FREQUENCY_THRESHOLD` + `occurrences >= MIN_OCCURRENCES_FOR_FIXED`
+// pair with ONE scaled occurrence floor: below YOUNG_ACCOUNT_WEEKS worth
+// of history, 3 occurrences is enough, full stop — no ratio test at all,
+// since a ratio isn't a meaningful signal yet. At or above that, it
+// converges back to (an occurrence-equivalent form of) the original 60%
+// ratio, so an established account's own behavior is unchanged.
+const YOUNG_ACCOUNT_WEEKS = 6;
+const YOUNG_ACCOUNT_MIN_OCCURRENCES = 3;
+// A charge seen only ONCE can never be "recurring," full stop, no matter
+// how few weeks of history exist (a single random fee trivially "occurs
+// in 100% of the 1 week observed so far" — this absolute floor is what
+// still rejects that, regardless of the young-account relaxation above).
+const ABSOLUTE_MIN_OCCURRENCES = 2;
 const FIXED_FREQUENCY_THRESHOLD = 0.6;
-// …AND its week-to-week amount must be this stable (coefficient of
-// variation = stdDev / mean) — a charge that's frequent but wildly
-// inconsistent in amount (e.g. ad-hoc "Misc" fees) is not a reliable
-// fixed weekly figure to project forward.
+// A charge's week-to-week amount must be this stable (coefficient of
+// variation = stdDev / mean) to be treated as a reliable fixed weekly
+// figure — a charge that's frequent but wildly inconsistent in amount
+// (e.g. ad-hoc "Misc" fees) should not be projected forward as if it
+// recurs at one fixed rate. Deliberately loose enough that real-world
+// minor variation (e.g. $30.43 / $30.43 / $29.99, CV ≈ 0.7%) always
+// qualifies with enormous headroom to spare.
 const FIXED_VARIANCE_THRESHOLD = 0.25;
-// A charge seen only once or twice can never be "recurring," regardless
-// of how the frequency ratio happens to work out against a short window.
-const MIN_OCCURRENCES_FOR_FIXED = 2;
+
+export function requiredOccurrencesFor(weeksObserved: number): number {
+  if (weeksObserved <= YOUNG_ACCOUNT_WEEKS) return Math.max(ABSOLUTE_MIN_OCCURRENCES, Math.min(YOUNG_ACCOUNT_MIN_OCCURRENCES, weeksObserved));
+  return Math.max(YOUNG_ACCOUNT_MIN_OCCURRENCES, Math.ceil(weeksObserved * FIXED_FREQUENCY_THRESHOLD));
+}
 
 // Monday-anchored ISO week key ("YYYY-Www") — the one shared "week" unit
 // for both settlement-withheld rows (whose date already equals a real
@@ -142,18 +181,18 @@ export function classifyCashFlowSpending(events: SpendEvent[], totalMiles: numbe
   const fixed: RecurringFixedCharge[] = [];
   const oneOffs: ExcludedOneOff[] = [];
 
+  const requiredOccurrences = requiredOccurrencesFor(weeksObserved);
   for (const [category, rows] of byCategory) {
     const perWeek = new Map<string, number>();
     for (const r of rows) perWeek.set(r.weekKey, (perWeek.get(r.weekKey) ?? 0) + r.amount);
     const amounts = [...perWeek.values()];
     const occurrences = amounts.length;
-    const frequency = weeksObserved > 0 ? occurrences / weeksObserved : 0;
     const mean = amounts.reduce((s, a) => s + a, 0) / occurrences;
     const variance = amounts.reduce((s, a) => s + (a - mean) ** 2, 0) / occurrences;
     const coefficientOfVariation = mean > 0 ? Math.sqrt(variance) / mean : 0;
 
-    if (occurrences >= MIN_OCCURRENCES_FOR_FIXED && frequency >= FIXED_FREQUENCY_THRESHOLD && coefficientOfVariation <= FIXED_VARIANCE_THRESHOLD) {
-      fixed.push({ category, weeklyAmount: mean, occurrences });
+    if (occurrences >= requiredOccurrences && coefficientOfVariation <= FIXED_VARIANCE_THRESHOLD) {
+      fixed.push({ category, weeklyAmount: mean, occurrences, source: 'auto' });
     } else {
       for (const r of rows) oneOffs.push({ category, description: r.description, amount: r.amount, date: r.date });
     }
@@ -168,6 +207,44 @@ export function classifyCashFlowSpending(events: SpendEvent[], totalMiles: numbe
     weeklyFixedTotal,
     weeksObserved,
   };
+}
+
+// SHOW AND LET ME CORRECT IT (owner decision) — "detection is a
+// convenience, not a cage." Every detected recurring charge, plus every
+// user correction (an edited amount, a removal, or a brand-new charge
+// the classifier never detected on its own), keyed by category string —
+// the SAME key `profiles.cf_recurring_charges` (docs/PENDING_SQL.md §66)
+// persists, so a correction survives the next re-classification of the
+// same category untouched, exactly like `cf_periodic_overrides` (§57)
+// already does for periodic items. Pure and independently testable from
+// the classifier itself, on purpose — the classifier's job is detection,
+// this function's job is "detection plus the user's own last word."
+export type RecurringChargeOverride = { weeklyAmount: number; removed?: boolean };
+
+export function mergeRecurringCharges(
+  detected: RecurringFixedCharge[],
+  overrides: Record<string, RecurringChargeOverride>
+): RecurringFixedCharge[] {
+  const merged: RecurringFixedCharge[] = [];
+  const detectedCategories = new Set(detected.map((f) => f.category));
+
+  for (const charge of detected) {
+    const override = overrides[charge.category];
+    if (override?.removed) continue;
+    merged.push(override ? { ...charge, weeklyAmount: override.weeklyAmount } : charge);
+  }
+
+  // Any override for a category the classifier never detected at all is
+  // a brand-new, user-added recurring charge — "add a recurring charge
+  // for anything missed" (owner decision). `occurrences: 0` is what
+  // distinguishes a manual addition from something the classifier itself
+  // ever observed, for a caller that wants to say so explicitly.
+  for (const [category, override] of Object.entries(overrides)) {
+    if (detectedCategories.has(category) || override.removed) continue;
+    merged.push({ category, weeklyAmount: override.weeklyAmount, occurrences: 0, source: 'manual' });
+  }
+
+  return merged.sort((a, b) => b.weeklyAmount - a.weeklyAmount);
 }
 
 // Generic "trailing N distinct weeks" average — the SAME averaging

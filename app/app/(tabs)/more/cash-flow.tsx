@@ -454,6 +454,14 @@ export default function CashFlow() {
       fixedWeekly: profileQuery.data?.cf_fixed_override ?? null,
       variableWeekly: profileQuery.data?.cf_variable_override ?? null,
       periodicAmounts: profileQuery.data?.cf_periodic_overrides ?? {},
+      // SHOW AND LET ME CORRECT IT (owner decision) — `?? {}` matters
+      // here specifically: until docs/PENDING_SQL.md §66 has actually
+      // been run, this column doesn't exist on the live profiles row yet
+      // and reads back as `undefined`, not `{}` — falling back keeps the
+      // screen fully usable (every recurring charge shown is exactly
+      // what the classifier detected, nothing "stuck" as broken) rather
+      // than crashing on a missing column.
+      recurringCharges: profileQuery.data?.cf_recurring_charges ?? {},
     }),
     [profileQuery.data]
   );
@@ -580,6 +588,85 @@ export default function CashFlow() {
     }
   }
 
+  // SHOW AND LET ME CORRECT IT (owner decision) — "detection is a
+  // convenience, not a cage." Same cf_periodic_overrides pattern as
+  // savePeriodicAmount() above, keyed by category instead of a
+  // compliance-item id — see src/stats/cashFlowClassification.ts's
+  // mergeRecurringCharges() for how these interact with what the
+  // classifier itself detects.
+  const [editingRecurringCategory, setEditingRecurringCategory] = useState<string | null>(null);
+  const [recurringDraft, setRecurringDraft] = useState('');
+  const [savingRecurringCategory, setSavingRecurringCategory] = useState<string | null>(null);
+  const [addingRecurring, setAddingRecurring] = useState(false);
+  const [newRecurringCategory, setNewRecurringCategory] = useState('');
+  const [newRecurringAmount, setNewRecurringAmount] = useState('');
+
+  function startEditRecurring(category: string, currentAmount: number) {
+    setEditingRecurringCategory(category);
+    setRecurringDraft(currentAmount ? String(Math.round(currentAmount * 100) / 100) : '');
+  }
+
+  async function saveRecurringAmount(category: string) {
+    setSavingRecurringCategory(category);
+    try {
+      const val = Number(recurringDraft) || 0;
+      const nextMap = { ...(profileQuery.data?.cf_recurring_charges ?? {}) };
+      nextMap[category] = { weeklyAmount: val };
+      await updateProfile.mutateAsync({ cf_recurring_charges: nextMap });
+      setEditingRecurringCategory(null);
+    } finally {
+      setSavingRecurringCategory(null);
+    }
+  }
+
+  async function removeRecurringCharge(category: string, currentAmount: number) {
+    setSavingRecurringCategory(category);
+    try {
+      const nextMap = { ...(profileQuery.data?.cf_recurring_charges ?? {}) };
+      nextMap[category] = { weeklyAmount: currentAmount, removed: true };
+      await updateProfile.mutateAsync({ cf_recurring_charges: nextMap });
+    } finally {
+      setSavingRecurringCategory(null);
+    }
+  }
+
+  async function restoreRecurringCharge(category: string) {
+    setSavingRecurringCategory(category);
+    try {
+      const nextMap = { ...(profileQuery.data?.cf_recurring_charges ?? {}) };
+      delete nextMap[category];
+      await updateProfile.mutateAsync({ cf_recurring_charges: nextMap });
+    } finally {
+      setSavingRecurringCategory(null);
+    }
+  }
+
+  async function addRecurringCharge() {
+    const category = newRecurringCategory.trim();
+    const val = Number(newRecurringAmount) || 0;
+    if (!category || !val) return;
+    setSavingRecurringCategory(category);
+    try {
+      const nextMap = { ...(profileQuery.data?.cf_recurring_charges ?? {}) };
+      nextMap[category] = { weeklyAmount: val };
+      await updateProfile.mutateAsync({ cf_recurring_charges: nextMap });
+      setAddingRecurring(false);
+      setNewRecurringCategory('');
+      setNewRecurringAmount('');
+    } finally {
+      setSavingRecurringCategory(null);
+    }
+  }
+
+  // Removed-but-still-detected categories (excluded from forecast.fixedCharges
+  // by mergeRecurringCharges(), but the classifier's OWN raw detection
+  // still names them) — shown with a "restore" action so a removal is
+  // never a one-way door if the user changes their mind.
+  const removedDetectedCategories = useMemo(() => {
+    const overridesMap = profileQuery.data?.cf_recurring_charges ?? {};
+    return forecast.classification.fixed.filter((f) => overridesMap[f.category]?.removed);
+  }, [forecast.classification.fixed, profileQuery.data]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -671,7 +758,7 @@ export default function CashFlow() {
                   basisCaption={
                     forecast.fixedIsOverridden
                       ? t('cashFlowScreen.basisManual')
-                      : t('cashFlowScreen.basisFixedCount', { count: forecast.classification.fixed.length })
+                      : t('cashFlowScreen.basisFixedCount', { count: forecast.fixedCharges.length })
                   }
                   isOverridden={forecast.fixedIsOverridden}
                   editing={editingOverride === 'fixed'}
@@ -709,20 +796,107 @@ export default function CashFlow() {
               </View>
             </Card>
 
-            {forecast.classification.fixed.length > 0 && (
-              <>
-                <Text style={styles.laneSectionTitle}>{t('cashFlowScreen.fixedChargesTitle')}</Text>
-                <Card>
-                  {forecast.classification.fixed.map((f, i) => (
-                    <View key={f.category} style={[styles.forecastRow, i > 0 ? styles.rowBorder : undefined]}>
-                      <MutedText>
-                        {f.category} · {t('cashFlowScreen.fixedChargeOccurrence', { occurrences: f.occurrences, weeks: forecast.classification.weeksObserved })}
-                      </MutedText>
-                      <Text style={{ color: colors.text }}>{money(f.weeklyAmount)}</Text>
-                    </View>
-                  ))}
-                </Card>
-              </>
+            {/* SHOW AND LET ME CORRECT IT (owner decision) — "detection is
+                a convenience, not a cage." Every detected recurring
+                charge PLUS every user correction, each individually
+                editable/removable, with an explicit "add a recurring
+                charge" action for anything the classifier missed — never
+                a confident "$0 fixed" with no way to fix it in place. */}
+            <Text style={styles.laneSectionTitle}>{t('cashFlowScreen.fixedChargesTitle')}</Text>
+            {forecast.fixedCharges.length === 0 ? (
+              // NEVER PRESENT "$0 FIXED" AS FACT (owner decision) — shown
+              // identically whether the real reason is "not enough
+              // history yet" or "nothing qualified" — either way, the
+              // honest state is "unknown," never a confident zero, with
+              // the fix (add one yourself) right there.
+              <Card>
+                <MutedText>{t('cashFlowScreen.noFixedChargesYet')}</MutedText>
+                <View style={{ marginTop: spacing.sm }}>
+                  <SecondaryButton title={`+ ${t('cashFlowScreen.addRecurringCharge')}`} onPress={() => setAddingRecurring(true)} />
+                </View>
+              </Card>
+            ) : (
+              <Card>
+                {forecast.fixedCharges.map((f, i) => (
+                  <View key={f.category} style={[i > 0 ? styles.rowBorder : undefined, { paddingVertical: spacing.xs }]}>
+                    {editingRecurringCategory === f.category ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <MutedText style={{ flex: 1 }}>{f.category}</MutedText>
+                        <View style={{ width: 90 }}>
+                          <Field keyboardType="numeric" value={recurringDraft} onChangeText={setRecurringDraft} placeholder="0" autoFocus />
+                        </View>
+                        <SecondaryButton title={t('common.cancel')} onPress={() => setEditingRecurringCategory(null)} />
+                        <PrimaryButton title={t('common.save')} onPress={() => saveRecurringAmount(f.category)} loading={savingRecurringCategory === f.category} />
+                      </View>
+                    ) : (
+                      <Pressable onPress={() => startEditRecurring(f.category, f.weeklyAmount)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: colors.text }}>{f.category}</Text>
+                          <MutedText>
+                            {f.source === 'manual'
+                              ? t('cashFlowScreen.addedByYou')
+                              : t('cashFlowScreen.fixedChargeOccurrence', { occurrences: f.occurrences, weeks: forecast.classification.weeksObserved })}
+                          </MutedText>
+                        </View>
+                        <Text style={{ color: colors.text, fontWeight: '600' }}>{money(f.weeklyAmount)}</Text>
+                        <Pressable onPress={() => removeRecurringCharge(f.category, f.weeklyAmount)} hitSlop={8} style={{ marginStart: spacing.sm }}>
+                          <Text style={{ color: colors.red, fontSize: typography.size.lg }}>✕</Text>
+                        </Pressable>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+                <View style={{ marginTop: spacing.sm }}>
+                  <SecondaryButton title={`+ ${t('cashFlowScreen.addRecurringCharge')}`} onPress={() => setAddingRecurring(true)} />
+                </View>
+              </Card>
+            )}
+
+            {removedDetectedCategories.length > 0 && (
+              <View style={{ marginTop: spacing.xs }}>
+                {removedDetectedCategories.map((f) => (
+                  <View key={f.category} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 }}>
+                    <MutedText>{t('cashFlowScreen.recurringChargeRemoved', { category: f.category })}</MutedText>
+                    <Pressable onPress={() => restoreRecurringCharge(f.category)} hitSlop={8}>
+                      <Text style={{ color: colors.accent, fontSize: typography.size.xs }}>{t('cashFlowScreen.restore')}</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {addingRecurring && (
+              <Card>
+                <MutedText>{t('cashFlowScreen.addRecurringCharge')}</MutedText>
+                <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs, alignItems: 'center' }}>
+                  <View style={{ flex: 2 }}>
+                    <Field
+                      value={newRecurringCategory}
+                      onChangeText={setNewRecurringCategory}
+                      placeholder={t('cashFlowScreen.recurringChargeNamePlaceholder')}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Field keyboardType="numeric" value={newRecurringAmount} onChangeText={setNewRecurringAmount} placeholder="0" />
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm }}>
+                  <SecondaryButton
+                    title={t('common.cancel')}
+                    onPress={() => {
+                      setAddingRecurring(false);
+                      setNewRecurringCategory('');
+                      setNewRecurringAmount('');
+                    }}
+                  />
+                  <PrimaryButton
+                    title={t('common.save')}
+                    onPress={addRecurringCharge}
+                    loading={savingRecurringCategory === newRecurringCategory.trim()}
+                    disabled={!newRecurringCategory.trim() || !newRecurringAmount}
+                  />
+                </View>
+              </Card>
             )}
 
             {forecast.classification.variable.length > 0 && (

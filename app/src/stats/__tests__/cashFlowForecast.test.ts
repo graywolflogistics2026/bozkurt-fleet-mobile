@@ -103,11 +103,17 @@ describe('upcomingReimbursementsByWeek', () => {
 
 describe('buildCashFlowForecast — week-by-week assembly', () => {
   it('chains opening/ending balances across 4 weeks and applies income/fixed/variable/periodic correctly', () => {
-    const classification = classifyCashFlowSpending([], 0);
+    // KPI CONSISTENCY / SHOW AND LET ME CORRECT IT (owner decision) —
+    // buildCashFlowForecast() now derives weeklyFixed from
+    // classification.fixed (via mergeRecurringCharges()), not the
+    // pre-computed weeklyFixedTotal shortcut this fixture used to patch
+    // directly — a real `fixed` entry is required for this to still mean
+    // what the test says it means.
+    const classification = { ...classifyCashFlowSpending([], 0), fixed: [{ category: 'Insurance—Truck', weeklyAmount: 300, occurrences: 6, source: 'auto' as const }] };
     const result = buildCashFlowForecast(
       1000,
       { average: 2000, weeksFound: 4 },
-      { ...classification, weeklyFixedTotal: 300 },
+      classification,
       { average: 2500, weeksFound: 4 },
       [],
       new Map(),
@@ -185,12 +191,55 @@ describe('buildCashFlowForecast — OVERRIDES survive a changed computed average
   });
 
   it('no override (null) falls back cleanly to the computed value', () => {
-    const classification = { ...classifyCashFlowSpending([], 0), weeklyFixedTotal: 300 };
+    const classification = { ...classifyCashFlowSpending([], 0), fixed: [{ category: 'Insurance—Truck', weeklyAmount: 300, occurrences: 6, source: 'auto' as const }] };
     const result = buildCashFlowForecast(0, { average: 2000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
     expect(result.weeklyIncome).toBe(2000);
     expect(result.incomeIsOverridden).toBe(false);
     expect(result.weeklyFixed).toBe(300);
     expect(result.fixedIsOverridden).toBe(false);
+  });
+});
+
+describe('buildCashFlowForecast — SHOW AND LET ME CORRECT IT (owner decision)', () => {
+  it('forecast.fixedCharges reflects detected + manual corrections, and weeklyFixed sums them (never the stale classification.weeklyFixedTotal alone)', () => {
+    const classification = {
+      ...classifyCashFlowSpending([], 0),
+      fixed: [{ category: 'Insurance—Truck', weeklyAmount: 36, occurrences: 6, source: 'auto' as const }],
+    };
+    const overrides: CashFlowOverrides = {
+      ...EMPTY_CASH_FLOW_OVERRIDES,
+      recurringCharges: { 'Permits, Licenses & Road Taxes': { weeklyAmount: 100 } },
+    };
+    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    expect(result.fixedCharges.map((f) => f.category).sort()).toEqual(['Insurance—Truck', 'Permits, Licenses & Road Taxes']);
+    expect(result.weeklyFixed).toBe(36 + 100);
+    expect(result.fixedIsOverridden).toBe(false); // this is the per-charge lever, not the whole-total override
+  });
+
+  it('A MANUALLY ADDED RECURRING CHARGE SURVIVES A NEW IMPORT end to end — the SAME overrides object still contributes after the underlying classification changes', () => {
+    const overrides: CashFlowOverrides = {
+      ...EMPTY_CASH_FLOW_OVERRIDES,
+      recurringCharges: { 'Roadside Assistance Plan': { weeklyAmount: 15 } },
+    };
+    const beforeImport = { ...classifyCashFlowSpending([], 0), fixed: [] as ReturnType<typeof classifyCashFlowSpending>['fixed'] };
+    const before = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, beforeImport, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    expect(before.weeklyFixed).toBe(15);
+
+    // A new settlement import changes what the classifier itself detects.
+    const afterImport = {
+      ...classifyCashFlowSpending([], 0),
+      fixed: [{ category: 'Insurance—Truck', weeklyAmount: 36, occurrences: 6, source: 'auto' as const }],
+    };
+    const after = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, afterImport, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    expect(after.fixedCharges.some((f) => f.category === 'Roadside Assistance Plan' && f.source === 'manual')).toBe(true);
+    expect(after.weeklyFixed).toBe(36 + 15);
+  });
+
+  it('NEVER PRESENTS "$0 FIXED" SILENTLY AS THE ONLY SIGNAL — fixedCharges is genuinely empty when nothing is detected and nothing was added, so the screen can show the "not enough history" message', () => {
+    const classification = classifyCashFlowSpending([], 0);
+    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    expect(result.fixedCharges).toHaveLength(0);
+    expect(result.weeklyFixed).toBe(0);
   });
 });
 

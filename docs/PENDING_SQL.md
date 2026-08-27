@@ -3702,6 +3702,40 @@ pending).
 
 ---
 
+## 66. profiles.cf_recurring_charges (CASH FLOW RECURRING CHARGES — SHOW AND LET ME CORRECT IT, owner decision) — NOT YET APPLIED
+
+**The finding**: Cash Flow's own recurring-charge classifier
+(`src/stats/cashFlowClassification.ts`) is a CONVENIENCE, not a source of
+truth — device report: "Fixed expenses $0 · 0 recurring charges detected"
+even though real weekly Insurance/Permits/ELD chargebacks existed in
+every settlement. The classifier's own frequency/occurrence thresholds
+were too strict for a young account (see CLAUDE.md's own dated entry for
+this pass for the full instrumented diagnosis), but even a perfectly
+tuned classifier can never be a source of truth for every real account's
+own weekly commitments — a user must always be able to see exactly what
+was detected and correct it (add a missed one, edit a wrong amount,
+remove a false positive) without that correction being silently
+overwritten by the next re-classification. `profiles.cf_periodic_overrides`
+(§57) already established this exact "flexible per-key jsonb override"
+pattern for periodic (dated) items — this is the same pattern for
+recurring (weekly) fixed charges, keyed by CATEGORY instead of a
+compliance-item id.
+
+```sql
+alter table profiles add column if not exists cf_recurring_charges jsonb not null default '{}'::jsonb;
+```
+
+One idempotent `add column if not exists`, safe to re-run. `{}` (the
+default) means every recurring charge the Cash Flow screen shows is
+exactly what the classifier itself detected, unedited — see CLAUDE.md's
+own dated entry for this pass for the full client-side merge logic
+(`mergeRecurringCharges()`) this column enables.
+
+- [ ] 66 run (profiles gains cf_recurring_charges jsonb, not null,
+      default '{}'::jsonb)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

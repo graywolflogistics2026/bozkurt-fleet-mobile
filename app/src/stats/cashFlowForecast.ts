@@ -16,19 +16,24 @@ import { reducesTrueProfit } from '@/src/stats/trueProfit';
 import {
   classifyCashFlowSpending,
   trailingWeeklyAverage,
+  mergeRecurringCharges,
   type CashFlowClassification,
   type SpendEvent,
+  type RecurringFixedCharge,
+  type RecurringChargeOverride,
 } from '@/src/stats/cashFlowClassification';
 import { buildPeriodicForecastItems, buildDocumentAmountLookup, type PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
 import type { ComplianceItem, DocumentRow } from '@/src/types/db';
 
 export {
   classifyCashFlowSpending,
+  mergeRecurringCharges,
   VARIABLE_PER_MILE_CATEGORIES,
   isoWeekKey,
   trailingWeeklyAverage,
   type CashFlowClassification,
   type RecurringFixedCharge,
+  type RecurringChargeOverride,
   type VariableRate,
   type ExcludedOneOff,
   type SpendEvent,
@@ -153,6 +158,15 @@ export type CashFlowOverrides = {
   variableWeekly: number | null;
   // complianceItemId -> overridden dollar amount for that one periodic item.
   periodicAmounts: Record<string, number>;
+  // SHOW AND LET ME CORRECT IT (owner decision) — category -> the user's
+  // own correction (an edited amount, a removal, or a brand-new manually-
+  // added recurring charge the classifier never detected). Always wins
+  // per-category over what classifyCashFlowSpending() itself detected —
+  // "detection is a convenience, not a cage." Independent of
+  // `fixedWeekly` above (the older, coarser "override the WHOLE weekly
+  // total" lever, kept unchanged and still wins for the actual forecast
+  // math when set — see buildCashFlowForecast()'s own comment).
+  recurringCharges: Record<string, RecurringChargeOverride>;
 };
 
 export const EMPTY_CASH_FLOW_OVERRIDES: CashFlowOverrides = {
@@ -160,6 +174,7 @@ export const EMPTY_CASH_FLOW_OVERRIDES: CashFlowOverrides = {
   fixedWeekly: null,
   variableWeekly: null,
   periodicAmounts: {},
+  recurringCharges: {},
 };
 
 export type CashFlowWeekProjection = {
@@ -181,6 +196,12 @@ export type CashFlowForecastResult = {
   weeksOfHistory: number;
   reliable: boolean;
   classification: CashFlowClassification;
+  // SHOW AND LET ME CORRECT IT (owner decision) — classification.fixed
+  // PLUS every user correction (mergeRecurringCharges()) — this is the
+  // list the screen actually renders/edits, never the raw
+  // classification.fixed alone (which reflects the classifier's own
+  // opinion only, before "not a cage" corrections are applied).
+  fixedCharges: RecurringFixedCharge[];
   // The steady-state weekly figures actually used (post-override) — the
   // screen builds its "avg of last N weeks" / "$X/mi × Y mi" basis
   // captions from these plus the raw classification/income data above,
@@ -219,8 +240,19 @@ export function buildCashFlowForecast(
   const variableRatePerMile = classification.variable.reduce((sum, v) => sum + v.ratePerMile, 0);
   const computedVariable = variableRatePerMile * milesAvg.average;
 
+  // SHOW AND LET ME CORRECT IT (owner decision) — every detected recurring
+  // charge PLUS the user's own corrections (an edited amount, a removal,
+  // or a brand-new manually-added charge the classifier never detected).
+  // `overrides.fixedWeekly` (the older, coarser "override the WHOLE
+  // weekly total" lever) still wins over BOTH when set, unchanged — but
+  // the default (no whole-total override) now sums the merged per-charge
+  // list instead of the classifier's own raw, uncorrected total, so a
+  // correction actually changes the projected weekly figure.
+  const fixedCharges = mergeRecurringCharges(classification.fixed, overrides.recurringCharges);
+  const mergedFixedTotal = fixedCharges.reduce((sum, f) => sum + f.weeklyAmount, 0);
+
   const weeklyIncome = overrides.incomeWeekly ?? incomeAvg.average;
-  const weeklyFixed = overrides.fixedWeekly ?? classification.weeklyFixedTotal;
+  const weeklyFixed = overrides.fixedWeekly ?? mergedFixedTotal;
   const weeklyVariable = overrides.variableWeekly ?? computedVariable;
 
   const todayIso = today.toISOString().slice(0, 10);
@@ -269,6 +301,7 @@ export function buildCashFlowForecast(
     weeksOfHistory,
     reliable: weeksOfHistory >= RELIABLE_HISTORY_WEEKS,
     classification,
+    fixedCharges,
     weeklyIncome,
     weeklyFixed,
     weeklyVariable,

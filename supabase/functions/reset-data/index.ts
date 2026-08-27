@@ -113,6 +113,11 @@ const PROFILE_DATA_RESET = {
   cf_fixed_override: null,
   cf_variable_override: null,
   cf_periodic_overrides: {},
+  // CASH FLOW RECURRING CHARGES (owner decision, docs/PENDING_SQL.md §66)
+  // — same CLEARED bucket as every other cf_* budget input above; a
+  // manually-added/edited/removed recurring charge is a budget input,
+  // not account identity, so a reset account must not keep it.
+  cf_recurring_charges: {},
   dashboard_layout: null,
   dashboard_sections_collapsed: null,
   // SMART ALERTS + PROACTIVE AI COACH STATE (NEXT PASS, owner decision
