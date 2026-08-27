@@ -3888,7 +3888,7 @@ anything yet).
 
 ---
 
-## 70. Settlement delete orphans — balance-reversal trigger + loan provenance (owner decision) — NOT YET APPLIED
+## 70. Settlement delete orphans — balance-reversal trigger + loan provenance (owner decision) — ✅ APPLIED (client update published to preview)
 
 **The finding**: device report — deleting every settlement left
 `profiles.business_balance` overstated by exactly the sum of the deleted
@@ -3918,22 +3918,42 @@ marker so a loan can always be identified as settlement-derived even
 after its `settlement_id` clears to null.
 
 ```sql
--- See pending_70.sql at the repo root for the full trigger function +
--- trigger + loans columns (too long to duplicate here without drifting
--- out of sync — keep pending_70.sql as the single source of truth for
--- this section until it's run, deleted, and this note is replaced with
--- the final SQL, matching this file's own established convention).
+create or replace function reverse_settlement_business_balance_credit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(old.business_balance_credit, 0) <> 0 then
+    update profiles
+    set business_balance = coalesce(business_balance, 0) - old.business_balance_credit
+    where user_id = old.user_id;
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists trg_reverse_settlement_business_balance_credit on settlements;
+create trigger trg_reverse_settlement_business_balance_credit
+after delete on settlements
+for each row
+execute function reverse_settlement_business_balance_credit();
+
+alter table loans add column if not exists settlement_id uuid references settlements on delete set null;
+alter table loans add column if not exists source text not null default 'manual';
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'loans_source_check'
+  ) then
+    alter table loans add constraint loans_source_check check (source in ('settlement','import','manual'));
+  end if;
+end $$;
+create index if not exists loans_settlement_id_idx on loans(settlement_id);
 ```
 
-**REVIEW BEFORE RUNNING**: the trigger reversal logic was NOT executed
-against a live database in this environment (no service_role/db
-credentials here) — hand-reviewed against the exact same
-`business_balance_credit`/`apply_settlement_business_balance_credit`
-columns and RPC already live and confirmed via a read-only PostgREST
-probe. Run it, then verify with a real settlement import + delete that
-`business_balance` returns to its exact prior value.
-
-- [ ] 70 run (reverse_settlement_business_balance_credit() trigger on
+- [x] 70 run (reverse_settlement_business_balance_credit() trigger on
       settlements; loans.settlement_id + loans.source)
 
 ---
