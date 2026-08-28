@@ -11001,3 +11001,159 @@
   tagged `equipment-link-insert` error (the column doesn't exist yet)
   rather than silently skipping the link — apply it before relying on
   this feature in production. Ships via a normal `eas update`.
+- USE PRIME'S OPERATING STATEMENT AS THE VERIFICATION SOURCE OF TRUTH
+  (owner decision, 2026-08-28). Prime Inc's own settlement statements
+  routinely include a Perryman & Associates operating-statement page
+  (docs/CARRIER_CODES.md's own "AS/ACCOUNTING SERVICE" chargeback row is
+  literally the cost of this page: "Cost of using Perryman & Associates &
+  includes the cost of the operating statement") — the carrier's OWN
+  verified weekly/YTD/LTD revenue, miles, and expenses, which this app's
+  own extraction is now cross-checked against, never the reverse.
+  **CARRIER ISOLATION, the hard invariant this whole feature is gated
+  behind**: every function in `app/src/import/primeOperatingStatement.ts`
+  re-checks the carrier ITSELF (never trusts a caller to have
+  pre-filtered) via `isPrimeCarrier()` (`normalizeCarrierKey()` against
+  the literal `'PRIME INC'` key `carrier_code_maps` is already seeded
+  with, CLAUDE.md's own CARRIER-SCOPED PAYROLL/SETTLEMENT CODES
+  invariant #52) — a non-Prime or unrecognized carrier (Landstar,
+  Schneider, Werner, empty, anything else) makes every exported function
+  a silent no-op: no mismatch flagged, no YTD check, nothing extracted,
+  falling back to exactly today's behavior. Proven by
+  `src/import/__tests__/primeOperatingStatement.test.ts`'s own "CARRIER
+  ISOLATION" block, mirroring `carrierCodes.test.ts`'s existing "Prime
+  codes never leak" test — a deliberately mismatched operating-statement
+  fixture that WOULD flag all 3 fields under Prime is proven to trigger
+  NOTHING under Landstar/Schneider/Werner/empty/undefined/null, and a
+  fictitious "Prime Logistics Partners" (a substring match, not an exact
+  one) is proven not to count as Prime either.
+  **HONEST LIMITATION, stated plainly**: this was built with NO real
+  Prime settlement PDF available in this sandbox to inspect. The field
+  inventory is inferred from (a) `docs/CARRIER_CODES.md`'s own real
+  chargeback vocabulary, which confirms the page's existence and that
+  Perryman & Associates prepares it, and (b) this app's own pre-existing
+  (previously completely unused — grepped, zero callers anywhere)
+  `settlement.operating` extraction field, which already had
+  `ytdRevenue`/`ytdExpenses`/`ytdNet`/`weeksInService` from an earlier
+  pass — this pass only WIDENED it (`weekRevenue`/`weekMiles`/
+  `weekExpenses`/`weekNet`, `ytdMiles`, `ltdRevenue`/`ltdMiles`) rather
+  than inventing a parallel schema. Deliberately did NOT attempt a
+  category-by-category expense breakdown cross-check — there is no way
+  to confirm, without a real document, whether Prime's operating
+  statement breaks expenses into named categories at all (as opposed to
+  one summary total), or whether any such breakdown would even use this
+  app's own `CANONICAL_CATEGORIES` vocabulary; inventing that mapping
+  would be exactly the "add categories unilaterally" mistake the owner's
+  own instruction warned against, so this is reported as a known
+  limitation rather than silently worked around. Scoped instead to the
+  four figures any operating statement of this kind virtually certainly
+  reports: revenue, miles, total expenses, net.
+  **Extraction, carrier-gated the identical "ONLY IF confirmed" way the
+  existing carrier-code prompt block already uses**:
+  `supabase/functions/ai-import/index.ts`'s settlement JSON schema
+  widened `operating`'s object literal; a new, HARD-CODED-to-"Prime Inc"
+  prompt instruction (deliberately separate from the `carrierCodeMaps`-
+  driven block above it, so seeding a second carrier's own code map
+  later can never accidentally also trigger Prime-shaped
+  operating-statement expectations against it) tells the model to
+  populate `settlement.operating` from the weekly/YTD/LTD columns of a
+  Perryman & Associates-style page ONLY when the document's own
+  letterhead confirms Prime Inc, and to leave it entirely at its zero/
+  empty defaults otherwise — never estimated or reconstructed from
+  elsewhere in the document. `app/src/import/types.ts`'s
+  `ExtractedSettlement.operating` gained the matching TypeScript shape
+  (previously extracted server-side into a loose
+  `Record<string, unknown>` in `chunking.ts` but never even typed on the
+  client, confirmed via grep to have zero client-side readers before
+  this pass).
+  **Item 2 — per-settlement cross-check**:
+  `checkPrimeOperatingStatementWeekly()`/`applyPrimeOperatingStatementCheck()`
+  are pure, extraction-only functions (no account/DB data needed) wired
+  into `app/src/data/aiImportCall.ts`'s existing sanitize-guard chain —
+  a new `sanitizeExtraction()` composes
+  `applyPrimeOperatingStatementCheck(sanitizeExtractionMiles(sanitizeExtractionDates(extraction)))`,
+  applied at both of that file's existing call sites (the terminal
+  result and the in-progress partial preview), same placement convention
+  `milesGuard.ts`'s `sanitizeExtractionMiles()` already established. A
+  mismatch beyond tolerance downgrades `confidence` to `'low'` — the
+  EXISTING needs-review machinery (`src/import/needsReview.ts`, CLAUDE.md
+  invariant #14) is what actually surfaces it, never a second, parallel
+  review mechanism. Tolerance: **$1 for dollar figures**, reusing
+  `settlementReconciliation.ts`'s own established rounding-tolerance
+  precedent rather than inventing a new one; **1 mile** for mileage
+  (no cent-level rounding risk the way dollars have — a genuine
+  discrepancy is virtually always tens of miles or more). A
+  present-but-zero operating-statement figure is treated as "not
+  actually printed" (never compared against, since the prompt tells the
+  model to leave an unseen field at its default) rather than a real
+  $0/0-mile claim to reconcile against.
+  **Item 3 — standing YTD reconciliation**: `checkPrimeYtdReconciliation()`
+  compares THIS app's own YTD (computed via the SAME canonical
+  `computeKpis()` every other screen already uses — never a second
+  calculation) against the YTD figures Prime's own MOST RECENT operating
+  statement reported. `readPrimeYtdSnapshotFromParsedJson()`/
+  `findMostRecentPrimeYtdSnapshot()` read this straight out of
+  `documents.parsed_json` — **no new column or table needed at all**,
+  since `parsed_json` already stores the FULL raw extraction verbatim
+  (CLAUDE.md's own D3 audit-trail invariant, invariant #14) — the widened
+  `operating` field is already persisted there automatically for any
+  Prime settlement the instant it's extracted, confirmed by reading
+  `aiImportSave.ts`'s own document-insert (`parsed_json: d`, the whole
+  extraction object). Tolerance for YTD is deliberately LOOSER than the
+  per-week check: 0.5% of Prime's own reported YTD figure, floored at
+  $25/25 miles — a YTD total accumulates many weeks' worth of Prime's own
+  rounding, so the flat $1/1-mile weekly tolerance would flag spurious
+  noise on almost every real account; a genuinely missing/duplicated week
+  is virtually always far outside this looser band. Wired into
+  `app/(tabs)/more/settlements.tsx` as a new orange-bordered banner card
+  (shown only when a mismatch exists) reading "Your year-to-date revenue
+  here is $X; Prime's own statement says $Y — worth checking" per field —
+  purely informational, NEVER overrides this app's own stored figures,
+  never blocks a save. **Scope decision**: deliberately computed from
+  fleet-wide data (never the screen's own truck-scoped
+  `settlementsQuery`) and only rendered when the current view is
+  genuinely fleet-wide (`isAllTrucks`, or a single-truck account where
+  "all trucks" and "the one truck" are the same set) — Prime's own
+  operating statement covers the whole leased operator's business, not
+  one truck within it, so comparing it against a narrowed, single-truck
+  view would be a real apples-to-oranges mismatch, not a genuine
+  reconciliation.
+  **Item 4 — category coverage, reported not implemented**: given the
+  honest limitation above (no confirmed category-level breakdown exists
+  to check against), no new category was added this pass. If a real
+  Prime operating statement is later confirmed to break expenses into
+  named categories, that mapping should be verified against an actual
+  document before any category is added — not inferred from
+  `docs/CARRIER_CODES.md`'s own settlement-line chargeback-code table,
+  which is a DIFFERENT section of the statement (the itemized
+  deductions) already fully covered by the existing
+  `carrier_code_maps`/`classifySettlementLine()` machinery.
+  **Tests**: `src/import/__tests__/primeOperatingStatement.test.ts` (new,
+  37 tests) — a realistic Prime-vocabulary layout reconciling cleanly
+  (including within-tolerance and zero-field-skip cases); the artificial
+  mismatch case for each of revenue/miles/expenses individually and
+  combined, proving `confidence` downgrades to `'low'` while the
+  underlying figures themselves are left untouched (informational only);
+  the standing YTD check triggering/not-triggering correctly, including
+  a zero-value Prime field never being compared against;
+  `readPrimeYtdSnapshotFromParsedJson()`'s own defense-in-depth carrier
+  re-check; `findMostRecentPrimeYtdSnapshot()` picking the latest
+  qualifying settlement and correctly skipping a newer Prime settlement
+  that lacks operating data in favor of an older one that has it; and
+  the full carrier-isolation block described above. Full suite: 130
+  suites / 3537 tests pass; `tsc --noEmit` clean; all 7 locales confirmed
+  key-parity (5 new `settlementsScreen.primeYtd*` keys — es/ru/tr/hi/ar
+  fully translated, "Prime" kept as the literal carrier name — a proper
+  noun, never translated — in every locale, "YTD" deliberately spelled
+  out as "year-to-date" in the English source string rather than left as
+  a bare, non-glossary-listed acronym, matching this app's own
+  established RPM/CPM-style "spell it out per language" precedent; uk as
+  an untranslated English copy per invariant #11).
+  **Deliverables**: `supabase/functions/ai-import/index.ts` was modified
+  (the widened `operating` schema literal + the new Prime-only prompt
+  block) and **needs redeploying**; `ai-advisor`/`reset-data`/
+  `delete-account`/`referral-sync` were NOT touched. No new
+  `docs/PENDING_SQL.md` section — this feature needed zero new columns
+  or tables, entirely built from already-extracted/computed data (see
+  item 3 above). No new native dependency — pure client-side JS/TS plus
+  one Edge Function prompt/schema change — ships via a normal
+  `eas update` once the Edge Function above has been redeployed.

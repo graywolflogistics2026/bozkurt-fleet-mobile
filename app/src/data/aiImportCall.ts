@@ -1,7 +1,18 @@
 import { supabase } from '@/src/lib/supabase';
 import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
+import { applyPrimeOperatingStatementCheck } from '@/src/import/primeOperatingStatement';
 import type { Extraction } from '@/src/import/types';
+
+// Composes every sanitize-guard in the established order (dates first,
+// then miles, then the Prime operating-statement cross-check last, since
+// it reads the ALREADY-corrected totalMiles/grossRevenue the miles guard
+// may have just fixed) — one function so the two call sites below (the
+// terminal result and the in-progress partial preview) can never drift
+// out of sync about which guards run or in what order.
+function sanitizeExtraction(extraction: Extraction): Extraction {
+  return applyPrimeOperatingStatementCheck(sanitizeExtractionMiles(sanitizeExtractionDates(extraction)));
+}
 
 // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
 // FIVE ADDITIONS pass, PART 5) — `used`/`allowance` are only ever present
@@ -236,7 +247,7 @@ export async function callAiImport(
         const through = response.progress?.through ?? response.nextOrderIndex;
         const total = response.progress?.total ?? response.pagesProcessed?.total ?? through;
         const partial = response.partialData as Extraction | undefined;
-        onProgress({ through, total, partialData: partial ? sanitizeExtractionMiles(sanitizeExtractionDates(partial)) : undefined });
+        onProgress({ through, total, partialData: partial ? sanitizeExtraction(partial) : undefined });
       }
       continue;
     }
@@ -252,7 +263,7 @@ export async function callAiImport(
     // (mapExtraction mappers, the import preview screen) automatically
     // sees the corrected date/miles without needing its own fix.
     return {
-      data: sanitizeExtractionMiles(sanitizeExtractionDates(extraction)),
+      data: sanitizeExtraction(extraction),
       ...(response?.pagesProcessed ? { pagesProcessed: response.pagesProcessed } : {}),
     };
   }

@@ -141,6 +141,31 @@ export type ExtractedSettlement = {
     drivewyze?: { total?: number; items?: ExtractedToll[] };
   };
   loans?: ExtractedLoan[];
+  // PRIME OPERATING STATEMENT (owner decision, USE PRIME'S "STATEMENT OF
+  // INCOME AND EXPENSE" AS THE VERIFICATION SOURCE OF TRUTH pass) — the
+  // carrier's OWN verified figures, extracted ONLY when the AI confirms
+  // the carrier is Prime Inc from the document's own letterhead (see
+  // ai-import/index.ts's carrier-gated prompt block) AND a Perryman &
+  // Associates-style operating-statement page is actually present.
+  // Present-but-zero and absent are BOTH treated as "nothing to
+  // reconcile against" by src/import/primeOperatingStatement.ts — this
+  // field existing at all is not itself a confirmation of anything; the
+  // carrier-isolation gate is the settlement's own `carrier` field,
+  // checked independently and deterministically after extraction, never
+  // trusted from the model's own behavior alone.
+  operating?: {
+    weekRevenue?: number;
+    weekMiles?: number;
+    weekExpenses?: number;
+    weekNet?: number;
+    ytdRevenue?: number;
+    ytdMiles?: number;
+    ytdExpenses?: number;
+    ytdNet?: number;
+    ltdRevenue?: number;
+    ltdMiles?: number;
+    weeksInService?: number;
+  };
 };
 
 export type ExtractedStandaloneFuel = {

@@ -14,12 +14,15 @@ import { useReimbursements } from '@/src/data/reimbursements';
 import { useLoads } from '@/src/data/loads';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useTolls } from '@/src/data/tolls';
 import { useDocuments } from '@/src/data/documents';
 import { useTrucksList } from '@/src/data/trucks';
 import { calcEscrowBalance } from '@/src/stats/escrowBalance';
 import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
 import { buildSettlementsTotalsBar } from '@/src/stats/settlementsSummary';
-import { PERIOD_OPTIONS, filterByPeriod, type PeriodOption } from '@/src/stats/periodFilter';
+import { PERIOD_OPTIONS, filterByPeriod, periodStartIso, type PeriodOption } from '@/src/stats/periodFilter';
+import { computeKpis } from '@/src/stats/kpi';
+import { findMostRecentPrimeYtdSnapshot, checkPrimeYtdReconciliation } from '@/src/import/primeOperatingStatement';
 import { buildPolylinePoints } from '@/src/stats/chartHelpers';
 import { useSessionState } from '@/src/lib/useSessionState';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -125,6 +128,7 @@ export default function Settlements() {
   const loadsQuery = useLoads();
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
+  const tollsQuery = useTolls();
   const documentsQuery = useDocuments();
   // MILES READ BUT NOT USED (owner decision 2026-08-24, item 5 —
   // diagnostic): shows which truck (if any) this settlement is assigned
@@ -272,6 +276,44 @@ export default function Settlements() {
   // genuinely was withheld from pay — just never counted against true
   // profit/tax deductions).
   const escrowBalance = useMemo(() => calcEscrowBalance(dedQuery.data ?? []), [dedQuery.data]);
+
+  // USE PRIME'S OPERATING STATEMENT AS THE VERIFICATION SOURCE OF TRUTH
+  // (owner decision, 2026-08-28) — the standing YTD reconciliation
+  // (item 3). CARRIER-ISOLATED: findMostRecentPrimeYtdSnapshot()/
+  // checkPrimeYtdReconciliation() (src/import/primeOperatingStatement.ts)
+  // are silent no-ops for an account with no Prime settlements at all —
+  // this banner simply never renders for a non-Prime account, exactly
+  // matching today's behavior.
+  //
+  // SCOPE DECISION: deliberately computed from FLEET-WIDE data
+  // (allRows/full deductions/fuel/maintenance/tolls, never the
+  // truck-scoped `settlementsQuery`), and only rendered when the current
+  // view is genuinely fleet-wide (isAllTrucks, or a single-truck account
+  // where "all trucks" and "the one truck" are the same set) — Prime's
+  // own operating statement covers the whole leased operator's business,
+  // not one truck within it, so comparing it against a narrowed,
+  // single-truck-scoped view would be a real apples-to-oranges mismatch,
+  // not a genuine reconciliation.
+  const primeYtdSnapshot = useMemo(() => findMostRecentPrimeYtdSnapshot(allRows, documentsById), [allRows, documentsById]);
+  const primeYtdMismatches = useMemo(() => {
+    if (!primeYtdSnapshot) return [];
+    const startIso = periodStartIso('ytd');
+    if (!startIso) return [];
+    const kpi = computeKpis({
+      trucks: trucksQuery.data ?? [],
+      settlements: allRows,
+      loads: loadsQuery.data ?? [],
+      deductions: dedQuery.data ?? [],
+      fuelPurchases: fuelQuery.data ?? [],
+      maintenanceRecords: maintenanceQuery.data ?? [],
+      tolls: tollsQuery.data ?? [],
+      truckScope: null,
+      manualMilesOverride: null,
+      window: { startIso, endIso: new Date().toISOString().slice(0, 10) },
+    });
+    return checkPrimeYtdReconciliation({ revenue: kpi.gross, miles: kpi.miles.total, expenses: kpi.expenses.total }, primeYtdSnapshot);
+  }, [primeYtdSnapshot, trucksQuery.data, allRows, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]);
+  const showPrimeYtdBanner = primeYtdMismatches.length > 0 && (isAllTrucks || (trucksQuery.data?.length ?? 0) <= 1);
 
   // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
   // testing round, item 2) — the SAME shared findLinkedRecords()/
@@ -472,6 +514,34 @@ export default function Settlements() {
             <MutedText>{t('settlementsScreen.escrowHeldLabel')}</MutedText>
             <Text style={styles.statValue}>{money(escrowBalance)}</Text>
             <MutedText>{t('settlementsScreen.escrowHeldNote')}</MutedText>
+          </Card>
+        )}
+
+        {/* PRIME OPERATING STATEMENT — STANDING YTD CHECK (owner decision,
+            2026-08-28, item 3). Carrier-isolated by construction — see
+            primeOperatingStatement.ts's own header comment; this card
+            simply never renders for a non-Prime account. Informational
+            only: never overrides this app's own stored figures, never
+            blocks anything. */}
+        {showPrimeYtdBanner && (
+          <Card style={{ borderColor: colors.orange, borderWidth: 1 }}>
+            <Text style={[styles.statValue, { color: colors.orange, fontSize: typography.size.md }]}>
+              {t('settlementsScreen.primeYtdMismatchTitle')}
+            </Text>
+            {primeYtdMismatches.map((m) => (
+              <MutedText key={m.field} style={{ marginTop: spacing.xs }}>
+                {m.field === 'revenue' &&
+                  t('settlementsScreen.primeYtdRevenueMismatch', { ours: money(m.ours), prime: money(m.prime) })}
+                {m.field === 'miles' && t('settlementsScreen.primeYtdMilesMismatch', { ours: number(m.ours), prime: number(m.prime) })}
+                {m.field === 'expenses' &&
+                  t('settlementsScreen.primeYtdExpensesMismatch', { ours: money(m.ours), prime: money(m.prime) })}
+              </MutedText>
+            ))}
+            {primeYtdSnapshot && (
+              <MutedText style={{ marginTop: spacing.xs }}>
+                {t('settlementsScreen.primeYtdAsOf', { date: date(primeYtdSnapshot.asOfWeekEnding) })}
+              </MutedText>
+            )}
           </Card>
         )}
 
