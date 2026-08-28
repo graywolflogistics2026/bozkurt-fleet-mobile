@@ -29,8 +29,8 @@ import { matchesTruckScope } from '@/src/stats/kpi';
 import { resolveHeroPeriodDateWindow, filterRowsByDateWindow, calcHeroRevenueExpenseTrio } from '@/src/stats/heroPeriodWindow';
 import { FleetScopeSelectorStrip } from '@/src/components/FleetScopeSelectorStrip';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
-import { type WeekOverWeekChange } from '@/src/stats/heroStats';
-import { calcHeroPeriod, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
+import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
+import { calcHeroChartPoints, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -169,11 +169,12 @@ function HeroAreaChart({ points }: { points: WeeklyRevenueExpensePoint[] }) {
 
 // UX MEGA-PASS item G (owner decision 2026-07-31): period tabs above the
 // eyebrow — This Week/Last Week/1M/3M/6M/Yearly — driving the number,
-// delta, and chart all together via src/stats/heroPeriod.ts's
-// calcHeroPeriod(). thisWeek/lastWeek keep the "vs last week" $-delta
-// copy (a real week-to-week comparison); every other period uses the
-// generic "vs previous period" copy since the comparison is a rolling
-// window, not literally a week.
+// delta, and chart all together (the number/delta via `periodScopedCpm`'s
+// canonical `computeKpis()` object, the chart via src/stats/heroPeriod.ts's
+// `calcHeroChartPoints()`). thisWeek/lastWeek keep the "vs last week"
+// $-delta copy (a real week-to-week comparison); every other period uses
+// the generic "vs previous period" copy since the comparison is a
+// rolling window, not literally a week.
 function HeroPeriodTabs({ period, onChange }: { period: HeroPeriod; onChange: (p: HeroPeriod) => void }) {
   const { t } = useTranslation();
   return (
@@ -927,10 +928,70 @@ export default function Dashboard() {
     () => resolveHeroPeriodDateWindow(heroPeriod, fullWeeklyTrueProfitTrend.map((p) => p.weekEnding), now),
     [heroPeriod, fullWeeklyTrueProfitTrend, now]
   );
-  const heroPeriodResult = useMemo(
-    () => calcHeroPeriod(fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now),
+  // "Dashboard Net Profit vs Expenses" root-cause pass (owner decision) —
+  // `periodScopedCpm` moved up here (it used to be declared much later,
+  // only feeding the per-mile trio) because the Hero Card's own headline
+  // Net Profit — and the trio's Net Profit tile — now read from it too.
+  // ROOT CAUSE this replaces: the OLD `calcHeroPeriod()` computed
+  // netProfit/deltaAmount/change by summing `fullWeeklyTrueProfitTrend`, a
+  // SETTLEMENT-WEEK-BUCKETED array (one entry per settlement week that
+  // exists) — with zero settlements that array is `[]`, so Net Profit was
+  // STRUCTURALLY $0 regardless of what real out-of-pocket expenses
+  // existed for the window, while `calcHeroRevenueExpenseTrio()`'s
+  // Expenses tile (below) correctly summed RAW deduction rows and could
+  // be genuinely non-zero for the exact same account state — two
+  // independently-computed figures that were never mathematically forced
+  // to relate. Net Profit now comes from `periodScopedCpm.kpi.net` — the
+  // SAME canonical `computeKpis()` object Scorecard/AI Coach/Profit
+  // Analysis already read from, itself built entirely from raw-row
+  // date-window filtering, never a bucketed trend — so it can no longer
+  // go structurally stuck at $0 just because no settlement happens to
+  // exist in the window. `previousKpi` (see periodScopedCpm.ts's own
+  // header comment) is the SAME mechanism for the "vs previous period"
+  // delta, replacing calcHeroPeriod()'s own bucketed-trend previous-window
+  // sum.
+  const periodScopedCpm = useMemo(
+    () =>
+      buildPeriodScopedCpm(
+        heroPeriod,
+        fullWeeklyTrueProfitTrend.map((p) => p.weekEnding),
+        trucks,
+        settlementsQuery.data ?? [],
+        loadsQuery.data ?? [],
+        dedQuery.data ?? [],
+        fuelQuery.data ?? [],
+        maintenanceQuery.data ?? [],
+        tollsQuery.data ?? [],
+        activeTruck?.id ?? null,
+        activeTruck?.manual_total_miles_override,
+        now
+      ),
+    [
+      heroPeriod,
+      fullWeeklyTrueProfitTrend,
+      trucks,
+      settlementsQuery.data,
+      loadsQuery.data,
+      dedQuery.data,
+      fuelQuery.data,
+      maintenanceQuery.data,
+      tollsQuery.data,
+      activeTruck,
+      now,
+    ]
+  );
+  const heroChartPoints = useMemo(
+    () => calcHeroChartPoints(fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now),
     [fullWeeklyTrueProfitAsRevenueExpense, heroPeriod, now]
   );
+  const heroNetProfit = periodScopedCpm.kpi?.net ?? 0;
+  const heroNetProfitPrevious = periodScopedCpm.previousKpi?.net ?? null;
+  const heroPeriodResult = {
+    netProfit: heroNetProfit,
+    deltaAmount: heroNetProfitPrevious == null ? null : heroNetProfit - heroNetProfitPrevious,
+    change: calcWeekOverWeekChange(heroNetProfit, heroNetProfitPrevious),
+    chartPoints: heroChartPoints,
+  };
   // ITEM 0 (owner decision, CPM/PPM BROKEN AGAIN follow-up) — the
   // Revenue/Expenses/Net Profit trio used to be a FIXED "this week vs
   // last week" comparison regardless of `heroPeriod`, while the Hero Card
@@ -943,10 +1004,15 @@ export default function Dashboard() {
   // bucketed trend — which is what guarantees this Expenses figure always
   // equals the Expense Total Explainer modal's own row sum below (both
   // filter the identical `scopedDeductions` by the identical `heroWindow`).
-  // Net Profit itself reuses `heroPeriodResult.netProfit`/`.change`
-  // directly (not a second, independently-computed figure) — it's the
-  // SAME true-profit number the Hero Card's own headline already shows,
-  // so the two can never disagree.
+  // This function's own Expenses definition (ALL deductions, unconditional
+  // — matching the "Total Deductions" card elsewhere, CLAUDE.md's own
+  // TRUE-PROFIT CONSISTENCY entry: "only Net Profit needed the exclusion")
+  // is DELIBERATELY kept as-is, unchanged by this pass — it was never the
+  // broken half (it already correctly read raw rows, unaffected by
+  // whether any settlement exists) and changing its definition now would
+  // both regress that established distinction AND desync it from the
+  // Expense Total Explainer modal below, which already matches it exactly.
+  // Net Profit is NOT computed here — see `heroPeriodResult` above.
   const heroPeriodTrio = useMemo(
     () => calcHeroRevenueExpenseTrio(scopedSettlements, scopedDeductions, heroPeriod, fullWeeklyTrueProfitTrend.map((p) => p.weekEnding), now),
     [scopedSettlements, scopedDeductions, heroPeriod, fullWeeklyTrueProfitTrend, now]
@@ -1043,56 +1109,22 @@ export default function Dashboard() {
 
   // PER-MILE TRIO — CPM/PPM BROKEN AGAIN, ROOT CAUSE FIX (owner decision,
   // device report: "implausible values, doesn't change when I switch the
-  // hero card's period tabs"). ROOT CAUSE (confirmed by trace, reported
-  // before this fix): this trio used to be computed from
-  // truckComparisonResult/stats — BOTH always ALL-TIME, completely
-  // independent of `heroPeriod` — so it never moved when the Hero Card's
-  // own period tabs changed, and an all-time blended average could look
-  // wildly implausible next to whatever single-period number the Hero
-  // Card above it was showing. `buildPeriodScopedCpm()` (src/stats/
+  // hero card's period tabs"). `buildPeriodScopedCpm()` (src/stats/
   // periodScopedCpm.ts) is the ONE shared resolver every period-aware CPM
   // consumer now uses — it resolves `heroPeriod` to a concrete date
-  // window (the SAME window src/stats/heroPeriod.ts's own
-  // calcHeroPeriod() uses for "this week"/"last week", since both read
-  // from the identical ascending week_ending list) and filters EVERY
-  // input row (settlements/loads/deductions/fuel/maintenance/tolls)
-  // through that SAME window before computing anything — so numerator
-  // (costs/revenue) and denominator (miles) can never drift onto
-  // different date ranges from each other, and a truck's fixed cost is
-  // naturally pro-rated to however many settlement weeks actually fall
-  // in the window (1 for "This Week," ~4 for "1M," ...) rather than a
-  // flat all-time lump sum. Scorecard's own CPM stays deliberately
-  // all-time/unwindowed (it has no period tabs) — this is Home-specific.
-  const periodScopedCpm = useMemo(
-    () =>
-      buildPeriodScopedCpm(
-        heroPeriod,
-        fullWeeklyTrueProfitTrend.map((p) => p.weekEnding),
-        trucks,
-        settlementsQuery.data ?? [],
-        loadsQuery.data ?? [],
-        dedQuery.data ?? [],
-        fuelQuery.data ?? [],
-        maintenanceQuery.data ?? [],
-        tollsQuery.data ?? [],
-        activeTruck?.id ?? null,
-        activeTruck?.manual_total_miles_override,
-        now
-      ),
-    [
-      heroPeriod,
-      fullWeeklyTrueProfitTrend,
-      trucks,
-      settlementsQuery.data,
-      loadsQuery.data,
-      dedQuery.data,
-      fuelQuery.data,
-      maintenanceQuery.data,
-      tollsQuery.data,
-      activeTruck,
-      now,
-    ]
-  );
+  // window and filters EVERY input row (settlements/loads/deductions/
+  // fuel/maintenance/tolls) through that SAME window before computing
+  // anything — so numerator (costs/revenue) and denominator (miles) can
+  // never drift onto different date ranges from each other, and a
+  // truck's fixed cost is naturally pro-rated to however many settlement
+  // weeks actually fall in the window (1 for "This Week," ~4 for "1M,"
+  // ...) rather than a flat all-time lump sum. Scorecard's own CPM stays
+  // deliberately all-time/unwindowed (it has no period tabs) — this is
+  // Home-specific. `periodScopedCpm` itself is declared ONCE, earlier
+  // (right after `heroWindow`/`now`), since the Hero Card's own headline
+  // Net Profit now reads from it too — see that declaration's own header
+  // comment for the full "Dashboard Net Profit vs Expenses" root-cause
+  // story.
   const canonicalCpm = periodScopedCpm.cpm;
   // SELF-TEST AUDIT (owner decision, CPM/PPM BROKEN AGAIN pass, item 4) —
   // see heroWindow's own comment above for the "two figures, different
@@ -1162,8 +1194,9 @@ export default function Dashboard() {
             trio now describes the SAME `heroPeriod` window as the Hero
             Card above it and the per-mile trio below it — Revenue/
             Expenses via `heroPeriodTrio` (its own delta vs. the equivalent
-            PRECEDING window, same convention as calcHeroPeriod()'s own
-            delta), Net Profit reusing `heroPeriodResult` directly so it
+            PRECEDING window, same convention `periodScopedCpm.previousKpi`
+            uses for its own delta), Net Profit reusing `heroPeriodResult`
+            (itself sourced from `periodScopedCpm.kpi`) directly so it
             can never show a different figure than the Hero Card's own
             headline number for the same period. */}
         <View style={styles.compactRow}>

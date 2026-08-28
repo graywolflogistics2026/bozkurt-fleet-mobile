@@ -11440,3 +11440,123 @@
   fully translated, uk as an untranslated English copy per invariant
   #11. No SQL/Edge Function changes — every change in this pass is pure
   client-side JS/TS. Ships via a normal `eas update`.
+- DASHBOARD NET PROFIT vs EXPENSES — ROOT-CAUSE FIX, NOT A RELOCATION
+  (owner decision 2026-08-28, direct follow-up to the Profit Analysis
+  pass's own flagged-not-rushed Dashboard finding). Root cause reported
+  before any fix, per the owner's own explicit ask, then fixed.
+  **Root cause, confirmed by tracing the real code (three calculations
+  that could drift apart, not one)**: Home's Hero Card headline Net
+  Profit came from `src/stats/heroPeriod.ts`'s OLD `calcHeroPeriod()` —
+  it summed ONLY `points: WeeklyRevenueExpensePoint[]`, itself mapped
+  from `buildWeeklyTrueProfitTrend()`'s own output, a SETTLEMENT-WEEK-
+  BUCKETED array (one entry per settlement week that exists). With zero
+  settlements that array is `[]`, so `netOf(undefined) = 0` /
+  `sumWindow([], ...)` summed nothing — Net Profit was STRUCTURALLY $0
+  for ANY zero-settlement account, on EVERY period tab, regardless of
+  what real deductions existed for the selected window. Meanwhile
+  `src/stats/heroPeriodWindow.ts`'s `calcHeroRevenueExpenseTrio()` (the
+  Revenue/Expenses tiles directly below the Hero Card — NOT Net Profit,
+  which `app/(tabs)/index.tsx`'s own pre-existing comment already noted
+  reused `heroPeriodResult.netProfit` directly rather than being computed
+  by this function) filters RAW settlement/deduction rows via
+  `filterRowsByDateWindow()` against a window from
+  `resolveHeroPeriodDateWindow()` — for the `'1M'/'3M'/'6M'/'yearly'`
+  tabs specifically, that window is computed purely from `now` and a
+  fixed day count, INDEPENDENT of whether any settlement exists, so
+  Expenses could be correctly non-zero with zero settlements while Net
+  Profit could not. This is the confirmed, exact mechanism behind "Net
+  Profit $0 next to a correctly non-zero Expenses tile" — two genuinely
+  different calculations, never mathematically forced to agree, not a
+  caching/staleness bug and not reachable on 'thisWeek'/'lastWeek' with
+  zero settlements (both `resolveHeroPeriodDateWindow()` and the OLD
+  `calcHeroPeriod()` return/sum nothing for those two tabs when
+  `sortedWeekEndings` is empty, so BOTH sides correctly show $0/no-data
+  together in that specific case — the mismatch is `1M`/`3M`/`6M`/
+  `yearly`-only, confirmed by tracing `resolveHeroPeriodDateWindow()`'s
+  own two branches directly).
+  **The fix — unified onto the canonical KPI object, not relocated**:
+  Net Profit (and its "vs previous period" delta) now comes from
+  `src/stats/periodScopedCpm.ts`'s `buildPeriodScopedCpm()` — the SAME
+  `computeKpis()` object Scorecard/AI Coach/Profit Analysis already read
+  from, itself built entirely from raw-row date-window filtering, never
+  a settlement-week-bucketed trend, so it can no longer go structurally
+  stuck at $0 just because no settlement happens to exist in the window.
+  `periodScopedCpm` was already computed on this exact screen (feeding
+  the per-mile trio) — it moved earlier in the component (right after
+  `heroWindow`/`now` are declared) since the Hero Card's own headline
+  number now reads from it too, and its own declaration further down was
+  deleted rather than duplicated. `PeriodScopedCpmResult` gained a new
+  `previousKpi: KpiResult | null` field — the SAME `computeKpis()` call
+  for the immediately PRECEDING, same-length, non-overlapping window
+  (via the already-existing `resolvePreviousHeroPeriodDateWindow()`),
+  `null` under the exact same conditions `kpi` is (no resolvable window,
+  or no settlement that far back yet for 'thisWeek'/'lastWeek') — this
+  is what lets the Hero Card's delta come from the SAME canonical
+  mechanism instead of a second, differently-sourced comparison.
+  **What did NOT change, deliberately**: the Revenue/Expenses tiles
+  (`calcHeroRevenueExpenseTrio()`) are completely UNCHANGED — they were
+  never the broken half (already correctly raw-row-filtered, already
+  unaffected by whether any settlement exists) and this trio's own
+  Expenses definition (ALL deductions unconditionally — matching the
+  "Total Deductions" card elsewhere, per this file's own pre-existing
+  TRUE-PROFIT CONSISTENCY entry: "only Net Profit needed the exclusion")
+  is DELIBERATELY preserved as its own, intentionally broader concept
+  from the canonical `expenses.total` (which excludes Meals/Advance
+  Repayment/Escrow & Deposits and includes fuel/maintenance/tolls) —
+  changing it would have both regressed that already-established,
+  documented distinction AND desynced it from the Expense Total
+  Explainer modal below it, which already matches the trio's own figure
+  exactly. "Unified onto ONE calculation" here means: Net Profit now
+  shares the SAME window-resolution mechanism, the SAME raw-row-filtering
+  primitive, and the SAME non-bucketed-trend data source every other
+  screen's own KPI figure already uses — not that Net Profit is forced
+  to equal `Revenue − Expenses(as literally displayed in the trio tile)`,
+  since those two tiles were never the established contract (confirmed
+  by the pre-existing TRUE-PROFIT CONSISTENCY comment) and forcing it
+  would itself be a regression, not a fix.
+  **`calcHeroPeriod()` narrowed, not left as a landmine**: renamed to
+  `calcHeroChartPoints()`, returning `WeeklyRevenueExpensePoint[]`
+  directly — the OLD `netProfit`/`deltaAmount`/`change` fields and the
+  `HeroPeriodResult` type are deleted entirely, along with the
+  revenue/expenses/net summation half of `netOf()`/`sumWindow()`, rather
+  than merely left uncalled (which would have been exactly the "unused,
+  misleading parallel calculation sitting in the codebase as a landmine
+  for a future editor" this file's own KPI CONSISTENCY entry already
+  warns against). The function still owns real, distinct logic worth
+  keeping: the Hero Card's sparkline chart inherently wants "one point
+  per settlement week" — a week with no settlement legitimately
+  contributing no point to a WEEKLY chart is a rendering choice, not a
+  numeric-correctness issue the way a headline NUMBER silently
+  defaulting to $0 is, so the chart-points windowing (both the
+  `thisWeek`/`lastWeek` 8-point slice and the `1M`/`3M`/`6M`/`yearly`
+  rolling-window filter) is unchanged in behavior, just narrowed to only
+  what it's still used for. `calcHeroRevenueExpenseTrio()` was
+  confirmed NOT dead code (still the Revenue/Expenses tiles' real
+  source) and left untouched.
+  **Tests** (`src/stats/__tests__/kpiConsistency.test.ts`'s new
+  "DASHBOARD NET PROFIT vs EXPENSES — root-cause fix" block): (1) THE
+  BUG, reproduced directly — `buildWeeklyTrueProfitTrend([], ...)` is
+  proven to return `[]` for a zero-settlement account, and summing over
+  that empty array is proven to be exactly `0`, the literal old
+  mechanism, contrasted against the SAME account's real, non-zero raw
+  deduction total (the "next to a correctly non-zero Expenses tile"
+  half); (2) THE FIX — the identical zero-settlement, non-zero-deduction
+  dataset run through the real `buildPeriodScopedCpm()` on the `'1M'` tab
+  proves `kpi.net` is correctly negative (`gross 0 − expenses ~$1,372.98`),
+  never the old mechanism's structural $0; (3) `previousKpi` proven to
+  power a genuine two-period delta (a $500 current-period deduction vs. a
+  $200 previous-period one, both correctly bucketed into
+  `resolvePreviousHeroPeriodDateWindow()`'s own resolved boundaries); (4)
+  NO SIDE-EFFECT DRIFT — Revenue (`kpi.gross`), the per-mile trio
+  (`rpm`/`cpm`/`ppm`/`miles.total`), and the pre-existing multi-truck
+  fixture's own already-passing assertions are all re-proven byte-
+  identical to before this pass, since `previousKpi` is a purely additive
+  field that never touched how `kpi`/`cpm`/`comparison`/`scopedRow` are
+  computed. `src/stats/__tests__/heroPeriod.test.ts` rewritten for
+  `calcHeroChartPoints()` (chart-points windowing only — the netProfit/
+  delta assertions it used to carry are now covered by `computeKpis()`'s
+  own extensive existing test suite, which this pass's new block builds
+  directly on top of). Full suite: 130 suites / 3558 tests pass (+6);
+  `tsc --noEmit` clean. No new i18n strings — this is a pure calculation-
+  unification pass, no user-facing copy changed. No SQL/Edge Function
+  changes. Ships via a normal `eas update`.

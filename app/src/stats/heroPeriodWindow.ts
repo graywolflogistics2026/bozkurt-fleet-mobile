@@ -10,9 +10,9 @@
 // period-aware CPM consumer uses to turn a `HeroPeriod` selection into a
 // concrete date window, so "this week"/"last week" here always means the
 // EXACT SAME settlement week src/stats/heroPeriod.ts's own
-// calcHeroPeriod() resolves them to (both read from the same ascending,
-// distinct week_ending list) — never a second, independently-computed
-// notion of "this week."
+// calcHeroChartPoints() resolves them to (both read from the same
+// ascending, distinct week_ending list) — never a second,
+// independently-computed notion of "this week."
 import { HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
@@ -23,7 +23,7 @@ const PERIOD_DAYS: Partial<Record<HeroPeriod, number>> = { '1M': 30, '3M': 90, '
 
 // `sortedWeekEndings` must be ascending, distinct settlement week_ending
 // values (e.g. the weekly true-profit trend's own `.weekEnding` list) —
-// the SAME array calcHeroPeriod() itself indexes into for its
+// the SAME array calcHeroChartPoints() itself indexes into for its
 // thisWeek/lastWeek tabs. Returns `null` when the window can't be
 // resolved (e.g. "This Week" selected on an account with zero
 // settlements yet) — callers must treat that as "no data for this
@@ -124,10 +124,15 @@ function sumInWindow<T>(
 // for the SAME rows (both read `filterRowsByDateWindow(deductions, ...,
 // heroWindow)`), rather than the modal silently covering a different set
 // of rows than the tile it opens from. Net Profit is deliberately NOT
-// computed here — Home reuses calcHeroPeriod()'s own canonical
-// true-profit figure directly, so the trio's Net Profit tile and the
-// Hero Card's own headline number are provably the same value, never two
-// independently-computed ones that could disagree.
+// computed here — "Dashboard Net Profit vs Expenses" root-cause pass
+// (owner decision): Home now reuses `periodScopedCpm.kpi.net`
+// (src/stats/periodScopedCpm.ts, itself src/stats/kpi.ts's canonical
+// `computeKpis()`) directly for Net Profit, so the trio's Net Profit
+// tile and the Hero Card's own headline number are provably the same
+// value, never two independently-computed ones that could disagree —
+// and, unlike the OLD settlement-week-bucketed calcHeroPeriod() this
+// replaced, it's never structurally stuck at $0 for a zero-settlement
+// account with real recorded expenses.
 export function calcHeroRevenueExpenseTrio<S extends TrioSettlementRow, D extends TrioDeductionRow>(
   settlements: S[],
   deductions: D[],

@@ -14,7 +14,13 @@
 import { buildTruckComparison, type ComparisonTruck, type ComparisonSettlement, type ComparisonDeduction, type ComparisonFuel, type ComparisonMaintenance, type ComparisonToll, type TruckComparisonResult, type TruckComparisonRow } from '@/src/stats/truckComparison';
 import { computeKpis, type KpiResult } from '@/src/stats/kpi';
 import type { CanonicalCpmResult } from '@/src/stats/cpm';
-import { resolveHeroPeriodDateWindow, filterRowsByDateWindow, type DateWindow, type HeroPeriod } from '@/src/stats/heroPeriodWindow';
+import {
+  resolveHeroPeriodDateWindow,
+  resolvePreviousHeroPeriodDateWindow,
+  filterRowsByDateWindow,
+  type DateWindow,
+  type HeroPeriod,
+} from '@/src/stats/heroPeriodWindow';
 
 type DatedDeduction = ComparisonDeduction & { ded_date: string | null };
 type DatedFuel = ComparisonFuel & { purchase_date: string | null };
@@ -42,6 +48,17 @@ export type PeriodScopedCpmResult = {
   // gross/net/miles/rpm/cpm/ppm/perDiemDays shape directly instead of
   // picking fields back out of `comparison`/`cpm`.
   kpi: KpiResult | null;
+  // "Dashboard Net Profit vs Expenses" root-cause pass (owner decision):
+  // the SAME canonical computeKpis() result for the immediately PRECEDING,
+  // same-length, non-overlapping window (resolvePreviousHeroPeriodDateWindow())
+  // — this is what lets a caller (Home's Hero Card) compute a genuine
+  // "vs previous period" delta for `net`/`gross`/`expenses.total` without
+  // falling back to a second, differently-sourced calculation the way the
+  // old calcHeroPeriod() did (summing a settlement-week-bucketed trend
+  // that's `[]`, and therefore net:0, for any zero-settlement account).
+  // `null` under the exact same conditions `kpi` is: no resolvable window,
+  // or (for 'thisWeek'/'lastWeek') no settlement that far back yet.
+  previousKpi: KpiResult | null;
 };
 
 export function buildPeriodScopedCpm(
@@ -77,7 +94,7 @@ export function buildPeriodScopedCpm(
   const scopedRow = activeTruckId ? (comparison.rows.find((r) => r.truckId === activeTruckId) ?? null) : null;
 
   if (!window) {
-    return { window: null, comparison, scopedRow, cpm: null, kpi: null };
+    return { window: null, comparison, scopedRow, cpm: null, kpi: null, previousKpi: null };
   }
 
   const kpi = computeKpis({
@@ -93,8 +110,27 @@ export function buildPeriodScopedCpm(
     window,
   });
 
+  // See PeriodScopedCpmResult's own `previousKpi` comment — null under the
+  // exact same conditions `window`/`kpi` are (e.g. no settlement that far
+  // back yet for 'thisWeek'/'lastWeek'), never a fabricated comparison.
+  const previousWindow = resolvePreviousHeroPeriodDateWindow(period, sortedWeekEndings, now);
+  const previousKpi = previousWindow
+    ? computeKpis({
+        trucks,
+        settlements,
+        loads,
+        deductions,
+        fuelPurchases,
+        maintenanceRecords,
+        tolls,
+        truckScope: activeTruckId,
+        manualMilesOverride,
+        window: previousWindow,
+      })
+    : null;
+
   if (scopedRow) {
-    if (!scopedRow.cpmBreakdown) return { window, comparison, scopedRow, cpm: null, kpi };
+    if (!scopedRow.cpmBreakdown) return { window, comparison, scopedRow, cpm: null, kpi, previousKpi };
     const cpm: CanonicalCpmResult = {
       revenuePerMile: kpi.rpm,
       costPerMile: kpi.cpm,
@@ -107,7 +143,7 @@ export function buildPeriodScopedCpm(
       fixedCostPerMile: kpi.miles.total > 0 ? kpi.expenses.fixed / kpi.miles.total : null,
       variableCostPerMile: kpi.miles.total > 0 ? kpi.expenses.variable / kpi.miles.total : null,
     };
-    return { window, comparison, scopedRow, cpm, kpi };
+    return { window, comparison, scopedRow, cpm, kpi, previousKpi };
   }
 
   // "All Trucks" scope — same fleet-wide calcCanonicalCpm() shape every
@@ -126,5 +162,5 @@ export function buildPeriodScopedCpm(
     fixedCostPerMile: kpi.miles.total > 0 ? kpi.expenses.fixed / kpi.miles.total : null,
     variableCostPerMile: kpi.miles.total > 0 ? kpi.expenses.variable / kpi.miles.total : null,
   };
-  return { window, comparison, scopedRow: null, cpm, kpi };
+  return { window, comparison, scopedRow: null, cpm, kpi, previousKpi };
 }

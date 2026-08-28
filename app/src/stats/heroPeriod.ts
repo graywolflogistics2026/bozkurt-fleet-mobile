@@ -1,5 +1,4 @@
 import type { WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
-import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 
 // UX MEGA-PASS item G (owner decision 2026-07-31): the Hero Card gets
 // period tabs driving its number/delta/chart all together, instead of
@@ -19,68 +18,53 @@ export type HeroPeriod = (typeof HERO_PERIODS)[number];
 
 const PERIOD_DAYS: Partial<Record<HeroPeriod, number>> = { '1M': 30, '3M': 90, '6M': 180, yearly: 365 };
 
-export type HeroPeriodResult = {
-  netProfit: number;
-  deltaAmount: number | null;
-  change: WeekOverWeekChange;
-  chartPoints: WeeklyRevenueExpensePoint[];
-};
-
-function netOf(p: WeeklyRevenueExpensePoint | undefined): number {
-  return p ? p.revenue - p.expenses : 0;
-}
-
-function sumWindow(
-  points: WeeklyRevenueExpensePoint[],
-  start: Date,
-  end: Date
-): { revenue: number; expenses: number; net: number; points: WeeklyRevenueExpensePoint[] } {
-  const inWindow = points.filter((p) => {
-    const d = new Date(`${p.weekEnding}T12:00:00`);
-    return d >= start && d < end;
-  });
-  const revenue = inWindow.reduce((sum, p) => sum + p.revenue, 0);
-  const expenses = inWindow.reduce((sum, p) => sum + p.expenses, 0);
-  // Identical to the old `inWindow.reduce((sum, p) => sum + netOf(p), 0)` —
-  // sum(revenue - expenses) === sum(revenue) - sum(expenses) — so
-  // calcHeroPeriod()'s own pre-existing behavior is unchanged by this
-  // refactor; only the newly-exposed revenue/expenses fields are new.
-  return { revenue, expenses, net: revenue - expenses, points: inWindow };
-}
-
-// `points` must be sorted ascending by weekEnding (buildWeeklyRevenueExpenseTrend's
-// own output order) and unsliced — this function does its own windowing.
-export function calcHeroPeriod(points: WeeklyRevenueExpensePoint[], period: HeroPeriod, now: Date = new Date()): HeroPeriodResult {
+// NARROWED (owner decision, "Dashboard Net Profit vs Expenses" root-cause
+// pass) — this module used to ALSO compute `netProfit`/`deltaAmount`/
+// `change` (the old `HeroPeriodResult` type) by summing a
+// SETTLEMENT-WEEK-BUCKETED trend (`buildWeeklyTrueProfitTrend()`'s own
+// output, one entry per settlement week that exists). With zero
+// settlements that bucketed array is `[]`, so the old `netOf(undefined)`/
+// `sumWindow([], ...)` always returned `netProfit: 0` — STRUCTURALLY,
+// regardless of what real out-of-pocket expenses existed for the
+// selected window, since this function never read a single raw
+// deduction/fuel/maintenance/toll row. That is the confirmed root cause
+// of "Net Profit $0 next to a correctly non-zero Expenses tile": Home's
+// Hero Card headline (this module) and its own Revenue/Expenses trio
+// (`heroPeriodWindow.ts`'s `calcHeroRevenueExpenseTrio()`, which filters
+// RAW rows and has never needed a settlement to exist) were two
+// genuinely different calculations that could not be forced to agree.
+//
+// Net Profit (and its delta) now comes from `src/stats/periodScopedCpm.ts`'s
+// `buildPeriodScopedCpm()` — the SAME canonical `computeKpis()` object
+// every other screen (Scorecard, AI Coach, Profit Analysis) already
+// reads from, itself built entirely from raw-row date-window filtering,
+// never a bucketed trend — see `app/(tabs)/index.tsx`'s own wiring. This
+// module is deliberately narrowed to ONLY what still needs the bucketed
+// trend for a real, distinct reason: the Hero Card's sparkline chart,
+// which inherently wants "one point per settlement week" (a week with no
+// settlement legitimately contributing no point to a WEEKLY chart is a
+// rendering choice, not a numeric-correctness issue the way a headline
+// NUMBER silently defaulting to $0 is). Keeping a full `netProfit`/
+// `deltaAmount`/`change`-shaped result sitting here, unused by the
+// screen that used to read it, would be exactly the kind of "unused,
+// misleading parallel calculation" landmine that caused this bug in the
+// first place — so those fields, `HeroPeriodResult`, and the old
+// `netOf()`/`sumWindow()` revenue/expenses/net summation are removed
+// entirely rather than merely left uncalled.
+export function calcHeroChartPoints(points: WeeklyRevenueExpensePoint[], period: HeroPeriod, now: Date = new Date()): WeeklyRevenueExpensePoint[] {
   if (period === 'thisWeek' || period === 'lastWeek') {
     const offset = period === 'thisWeek' ? 0 : 1;
     const currentIndex = points.length - 1 - offset;
-    const current = points[currentIndex];
-    const previous = points[currentIndex - 1];
-    const currentNet = netOf(current);
-    const previousNet = previous ? netOf(previous) : null;
-    return {
-      netProfit: currentNet,
-      deltaAmount: previousNet == null ? null : currentNet - previousNet,
-      change: calcWeekOverWeekChange(currentNet, previousNet),
-      chartPoints: points.slice(Math.max(0, currentIndex - 7), currentIndex + 1),
-    };
+    return points.slice(Math.max(0, currentIndex - 7), currentIndex + 1);
   }
 
   const days = PERIOD_DAYS[period] as number;
   const windowEnd = new Date(now);
   const windowStart = new Date(now);
   windowStart.setDate(windowStart.getDate() - days);
-  const prevWindowStart = new Date(windowStart);
-  prevWindowStart.setDate(prevWindowStart.getDate() - days);
 
-  const currentWindow = sumWindow(points, windowStart, windowEnd);
-  const previousWindow = sumWindow(points, prevWindowStart, windowStart);
-  const hasPreviousData = previousWindow.points.length > 0;
-
-  return {
-    netProfit: currentWindow.net,
-    deltaAmount: hasPreviousData ? currentWindow.net - previousWindow.net : null,
-    change: calcWeekOverWeekChange(currentWindow.net, hasPreviousData ? previousWindow.net : null),
-    chartPoints: currentWindow.points,
-  };
+  return points.filter((p) => {
+    const d = new Date(`${p.weekEnding}T12:00:00`);
+    return d >= windowStart && d < windowEnd;
+  });
 }

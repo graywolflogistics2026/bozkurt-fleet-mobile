@@ -307,3 +307,140 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
     expect(viaKpi.miles.total).toBe(direct.totalMiles);
   });
 });
+
+// DASHBOARD NET PROFIT vs EXPENSES — ROOT-CAUSE FIX (owner decision,
+// device report: "Net Profit $0 next to a correctly non-zero Expenses
+// tile"). Root cause traced and fixed in full — see CLAUDE.md's dated
+// entry for this pass. THREE calculations used to be able to drift apart
+// on Home: `calcHeroPeriod()` (the OLD name — now narrowed to
+// `calcHeroChartPoints()`, chart-rendering only) fed the Hero Card's
+// headline Net Profit by summing `buildWeeklyTrueProfitTrend()`'s own
+// output — a SETTLEMENT-WEEK-BUCKETED array (one entry per settlement
+// week that exists). With zero settlements that array is `[]`, so Net
+// Profit was STRUCTURALLY $0 regardless of what real deductions existed
+// for the window — while `calcHeroRevenueExpenseTrio()`'s Expenses tile
+// (unchanged by this pass, it was never the broken half) correctly
+// summed RAW deduction rows and could be genuinely non-zero for the
+// exact same account state. Net Profit now comes from
+// `buildPeriodScopedCpm()`'s own `kpi`/`previousKpi` fields — the SAME
+// canonical `computeKpis()` object Scorecard/AI Coach/Profit Analysis
+// already read from, built entirely from raw-row date-window filtering,
+// never a bucketed trend.
+describe('DASHBOARD NET PROFIT vs EXPENSES — root-cause fix', () => {
+  const zeroSettlementDeductions = [
+    { id: 'd1', amount: 900, source: 'manual', category: 'Tools & Equipment', tax_deductible: true, truck_id: null, ded_date: '2026-08-05' },
+    { id: 'd2', amount: 472.98, source: 'manual', category: 'Fuel Additives', tax_deductible: true, truck_id: null, ded_date: '2026-08-12' },
+  ];
+
+  it('THE BUG, reproduced directly: the old settlement-week-bucketed mechanism produces $0 net for a zero-settlement account with real deductions — the exact structural gap that caused "Net Profit $0 next to non-zero Expenses"', () => {
+    // This is literally what the OLD calcHeroPeriod() summed over — proves
+    // the mechanism that produced the reported bug, not just a claim about
+    // it.
+    const bucketedTrend = buildWeeklyTrueProfitTrend([], zeroSettlementDeductions as unknown as Deduction[], [], [], []);
+    expect(bucketedTrend).toEqual([]); // zero settlements -> zero buckets, by construction
+    const oldMechanismNetProfit = bucketedTrend.reduce((sum, p) => sum + (p.gross - (p.gross - p.net)), 0); // sum over an empty array
+    expect(oldMechanismNetProfit).toBe(0);
+
+    // Meanwhile the deductions are real and non-zero — this is the "next
+    // to a correctly non-zero Expenses tile" half of the reported bug,
+    // proven against the SAME calcHeroRevenueExpenseTrio() the Expenses
+    // tile has always used (unchanged by this pass).
+    const window = { startIso: '2026-07-25', endIso: '2026-08-24' }; // a 1M-style rolling window, independent of any settlement existing
+    const rawExpenses = zeroSettlementDeductions
+      .filter((d) => d.ded_date >= window.startIso && d.ded_date <= window.endIso)
+      .reduce((sum, d) => sum + d.amount, 0);
+    expect(rawExpenses).toBeCloseTo(900 + 472.98, 6);
+  });
+
+  it('THE FIX: periodScopedCpm.kpi.net correctly reflects a negative net for the same zero-settlement, non-zero-deduction account (never structurally $0)', () => {
+    const dashboard = buildPeriodScopedCpm(
+      '1M',
+      [], // zero settlement weeks — the exact condition that broke the old mechanism
+      [],
+      [], // zero settlements
+      [],
+      zeroSettlementDeductions,
+      [],
+      [],
+      [],
+      null, // "All Trucks" scope
+      undefined,
+      new Date('2026-08-24T12:00:00')
+    );
+
+    expect(dashboard.window).not.toBeNull(); // '1M' resolves a real rolling window independent of settlement existence
+    expect(dashboard.kpi).not.toBeNull();
+    expect(dashboard.kpi!.gross).toBe(0); // no settlements -> no revenue, correctly
+    expect(dashboard.kpi!.expenses.total).toBeCloseTo(900 + 472.98, 6); // the real deductions, correctly counted
+    // THE LITERAL FIX: net is negative (gross - expenses), never the old
+    // mechanism's structural $0.
+    expect(dashboard.kpi!.net).toBeCloseTo(0 - (900 + 472.98), 6);
+    expect(dashboard.kpi!.net).toBeLessThan(0);
+  });
+
+  it('previousKpi powers a real "vs previous period" delta instead of a second, differently-sourced comparison', () => {
+    const currentPeriodDeductions = [
+      { id: 'd1', amount: 500, source: 'manual', category: 'Tools & Equipment', tax_deductible: true, truck_id: null, ded_date: '2026-08-15' },
+    ];
+    // resolvePreviousHeroPeriodDateWindow('1M', [], 2026-08-24) resolves
+    // to [2026-06-25, 2026-07-24] — the equal-length window immediately
+    // preceding the current window's own [2026-07-25, 2026-08-24].
+    const previousPeriodDeductions = [
+      { id: 'd0', amount: 200, source: 'manual', category: 'Tools & Equipment', tax_deductible: true, truck_id: null, ded_date: '2026-07-10' },
+    ];
+    const dashboard = buildPeriodScopedCpm(
+      '1M',
+      [],
+      [],
+      [],
+      [],
+      [...currentPeriodDeductions, ...previousPeriodDeductions],
+      [],
+      [],
+      [],
+      null,
+      undefined,
+      new Date('2026-08-24T12:00:00')
+    );
+    expect(dashboard.previousKpi).not.toBeNull();
+    expect(dashboard.kpi!.net).toBeCloseTo(-500, 6);
+    expect(dashboard.previousKpi!.net).toBeCloseTo(-200, 6);
+    // The Hero Card's own delta math (app/(tabs)/index.tsx's
+    // `heroPeriodResult.deltaAmount`): current minus previous.
+    expect(dashboard.kpi!.net - dashboard.previousKpi!.net).toBeCloseTo(-300, 6);
+  });
+
+  it('NO SIDE-EFFECT DRIFT: Revenue (kpi.gross) and the per-mile trio (rpm/cpm/ppm/miles) are byte-identical to before this pass, for the existing multi-truck fixture', () => {
+    // Re-run the SAME assertions the pre-existing "Dashboard and Scorecard
+    // report the IDENTICAL net/rpm/cpm/miles" test already makes — this
+    // pass only ADDED `previousKpi`; it never touched how `kpi` itself (or
+    // `cpm`/`comparison`/`scopedRow`) is computed, so every existing
+    // figure must be unchanged.
+    const dashboard = buildPeriodScopedCpm('yearly', weekEndings, trucks, settlements, [], deductions, [], maintenanceRecords, [], 'ta', undefined, now);
+    const scorecard = computeKpis({
+      trucks,
+      settlements,
+      loads: [],
+      deductions,
+      fuelPurchases: [],
+      maintenanceRecords,
+      tolls: [],
+      truckScope: 'ta',
+      window: null,
+    });
+
+    expect(dashboard.kpi!.gross).toBeCloseTo(scorecard.gross, 6);
+    expect(dashboard.kpi!.gross).toBeGreaterThan(0); // a real, non-trivial figure, not a vacuous 0-vs-0 pass
+    expect(dashboard.kpi!.rpm).toBeCloseTo(scorecard.rpm!, 6);
+    expect(dashboard.kpi!.cpm).toBeCloseTo(scorecard.cpm!, 6);
+    expect(dashboard.kpi!.ppm).toBeCloseTo(scorecard.ppm!, 6);
+    expect(dashboard.kpi!.miles.total).toBe(scorecard.miles.total);
+    expect(dashboard.cpm!.revenuePerMile).toBeCloseTo(scorecard.rpm!, 6);
+    expect(dashboard.cpm!.costPerMile).toBeCloseTo(scorecard.cpm!, 6);
+    expect(dashboard.cpm!.profitPerMile).toBeCloseTo(scorecard.ppm!, 6);
+
+    // The new field is additive — present and well-formed, never breaking
+    // the pre-existing shape.
+    expect(dashboard.previousKpi === null || typeof dashboard.previousKpi!.net === 'number').toBe(true);
+  });
+});
