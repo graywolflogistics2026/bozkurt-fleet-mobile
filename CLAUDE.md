@@ -11764,3 +11764,89 @@
   suite: 131 suites / 3572 tests pass (+11); `tsc --noEmit` clean. No new
   i18n strings — both fixes are pure calculation/display logic, no new
   copy. Ships via a normal `eas update`.
+- EAS UPDATE NOT REACHING THE DEVICE, ROUND 2 — A MANUAL "CHECK FOR
+  UPDATE NOW" (owner decision 2026-08-28, follow-up to the same-day
+  round-1 diagnostic-visibility entry above). The user re-asked all four
+  diagnostic questions after the round-1 fix (channel/runtime-version now
+  shown in Settings' footer) couldn't yet have reached their device
+  itself — expected, per that entry's own stated circularity: a device
+  receiving zero OTA updates can't receive the fix that would prove it.
+  Items 1-3 and 5 are UNCHANGED from the round-1 entry (same confirmed
+  `runtimeVersion: {policy: 'appVersion'}`, same `1.0.0` never bumped,
+  same `preview` channel in `eas.json`, same "run these exact commands
+  yourself" limitation — this sandbox still has no `eas`
+  CLI/credentials, confirmed again by re-running `eas --version`) — not
+  repeated here, see that entry.
+  **Item 4, actually answered this time**: audited every file under
+  `app/` for a manual `Updates.checkForUpdateAsync()`/
+  `fetchUpdateAsync()`/`reloadAsync()` call — none exist anywhere
+  (confirmed by grep). This app has ALWAYS relied entirely on
+  `expo-updates`' own automatic background check, which — per
+  `expo-updates`' own `UpdatesCheckAutomaticallyValue` docs
+  (`node_modules/expo-updates/build/Updates.types.d.ts`) — defaults to
+  `ON_LOAD` ("checks for updates whenever the app is loaded... the
+  default setting") when `app.config.js` sets no override (confirmed:
+  it doesn't). So `checkAutomatically` is not misconfigured to disable
+  checking — but an automatic, silent, cold-start-only check has no way
+  to SURFACE its own result (found vs. not-found vs. a genuine fetch
+  error) to the user, ever, by design. That's the actual gap item 4 was
+  circling — not a swallowed error in app code (there was none to find,
+  since there was no app code doing the checking at all) but the total
+  ABSENCE of any observable, on-demand check.
+  **The fix**: `app/src/lib/checkForUpdateFormat.ts` (pure,
+  zero-`expo-updates`-import, tested — same
+  `buildInfo.ts`/`buildInfoFormat.ts` pure/impure split this codebase
+  already established for exactly this "native module vs. testable
+  logic" reason) + `app/src/lib/checkForUpdate.ts` (the thin
+  orchestrator — calls the real `Updates.isEnabled`/
+  `checkForUpdateAsync()`/`fetchUpdateAsync()`/`reloadAsync()`, hands the
+  raw outcome to the pure mapper). Wired into Settings
+  (`app/app/(tabs)/more/settings.tsx`) as a new, ALWAYS-VISIBLE "Check
+  for Update" card (deliberately NOT triple-tap-gated like the Daily Tip
+  Diagnostics panel next to it — this is a real, everyday action a user
+  should be able to reach without knowing a secret gesture) sitting
+  directly above the existing build-info footer line: a "Check for
+  Update Now" button calls `checkForUpdateNow()` and shows one of four
+  outcomes inline, in real language, with the raw underlying message
+  always visible underneath (never summarized away) — 🟠 **disabled**
+  (`Updates.isEnabled === false` — this build cannot receive an OTA
+  update AT ALL, full stop, regardless of channel/branch/runtime-version
+  investigation, since this is true for Expo Go and any development-
+  client build by `expo-updates`' own design); 🔴 **error** (the exact
+  caught exception message from `checkForUpdateAsync()` — a network
+  failure, a manifest/runtime-version mismatch, or a server error each
+  produce distinct real text here, never a generic "something went
+  wrong"); 🟢 **update-available** (with a "Download & Restart" button
+  that calls `downloadAndApplyUpdate()` — `fetchUpdateAsync()` then
+  `reloadAsync()` — right there, no waiting for the next cold start
+  either); and **up-to-date** (checked successfully, nothing new for
+  this build/channel/runtime-version combination). This answers "is OTA
+  delivery broken, and why" from the DEVICE ITSELF, on demand, which is
+  the one piece of this whole investigation that's answerable from a
+  real device but NOT from a dev sandbox with no EAS CLI/credentials.
+  **Item 6, satisfied by this same change**: the build-info footer line
+  from round 1 (channel/runtime-version, always visible, no tap needed)
+  already covers "a real, always-visible version/commit indicator" —
+  this pass adds the missing ACTIVE half: a button that actually
+  exercises the update-check path on demand and reports exactly what
+  happened, so a failed/blocked update is never invisible again on
+  EITHER axis (what's currently running, AND whether checking for
+  something new even works).
+  **Same circularity as round 1, stated again plainly**: since the
+  reporting device isn't receiving OTA updates, this new button — like
+  round 1's diagnostic line — cannot reach that device via `eas update`
+  either. It needs a native rebuild to actually appear. Once it does,
+  though, it becomes the definitive, permanent answer to "is my update
+  mechanism healthy right now" for every future device, with zero
+  dependency on this sandbox's own missing EAS CLI access.
+  Tests: `checkForUpdateFormat.test.ts` (new, 5 tests) — the disabled
+  state wins regardless of what outcome accompanies it, the error
+  message passes through verbatim, both branches of "available" (with
+  and without a manifest id), and the up-to-date case. Full suite: 132
+  suites / 3577 tests pass (+5); `tsc --noEmit` clean; all 7 locales
+  confirmed key-parity (`settings.checkForUpdate*`/`applyUpdate*` — es/
+  ru/tr/hi/ar fully translated, uk as an untranslated English copy per
+  invariant #11). No SQL/Edge Function changes — pure client-side JS/TS.
+  Ships via a normal `eas update` for every device that's already
+  receiving them; needs a native rebuild for the one that isn't, per the
+  circularity note above.

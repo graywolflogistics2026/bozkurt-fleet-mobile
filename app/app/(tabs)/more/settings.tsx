@@ -25,6 +25,7 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { ENABLED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
+import { checkForUpdateNow, downloadAndApplyUpdate, type CheckForUpdateResult } from '@/src/lib/checkForUpdate';
 import { isOwnerGrantedPlan, isOwnerAccount } from '@/src/entitlement/hasFullAccess';
 import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
 import { SUPPORT_EMAIL } from '@/src/brand';
@@ -117,6 +118,37 @@ export default function Settings() {
       setShowDailyTipDiagnostics((v) => !v);
     }
   }
+  // CHECK FOR UPDATE NOW (owner decision, device report: "eas update has
+  // never reached my device... a failed update is never invisible
+  // again"). Always visible, never triple-tap-gated like the daily-tip
+  // diagnostics panel above — this is a real, everyday-usable action, not
+  // a rare debugging tool. Calls src/lib/checkForUpdate.ts's
+  // checkForUpdateNow() directly against expo-updates, on demand, rather
+  // than waiting on (or guessing about) its silent automatic ON_LOAD
+  // check — see that module's own header comment for why this is the one
+  // thing about "is OTA delivery broken, and why" that's answerable from
+  // a real device.
+  const [checkUpdateResult, setCheckUpdateResult] = useState<CheckForUpdateResult | null>(null);
+  const [checkUpdateLoading, setCheckUpdateLoading] = useState(false);
+  const [applyUpdateLoading, setApplyUpdateLoading] = useState(false);
+  async function handleCheckForUpdate() {
+    setCheckUpdateLoading(true);
+    setCheckUpdateResult(null);
+    const result = await checkForUpdateNow();
+    setCheckUpdateResult(result);
+    setCheckUpdateLoading(false);
+  }
+  async function handleApplyUpdate() {
+    setApplyUpdateLoading(true);
+    const result = await downloadAndApplyUpdate();
+    // A success reloads the JS context (reloadAsync()) before this line
+    // would ever run in practice — this only fires on a genuine failure.
+    if (!result.success) {
+      setApplyUpdateLoading(false);
+      Alert.alert(t('settings.applyUpdateFailedTitle'), result.message);
+    }
+  }
+
   const isOwner = isOwnerAccount(profileQuery.data);
   const aiUsage = useAiUsageDisplay(isOwner);
 
@@ -612,6 +644,47 @@ export default function Settings() {
               ))}
           </Card>
         )}
+
+        {/* CHECK FOR UPDATE NOW — see the useState block above for the full
+            reasoning. Always visible (not triple-tap-gated) since this is
+            a real, everyday action, not a rare debugging tool. */}
+        <Card style={{ marginTop: spacing.lg }}>
+          <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.sm }}>{t('settings.checkForUpdateTitle')}</Text>
+          <MutedText style={{ marginTop: 2 }}>{t('settings.checkForUpdateSubtitle')}</MutedText>
+          <SecondaryButton title={t('settings.checkForUpdateButton')} onPress={handleCheckForUpdate} loading={checkUpdateLoading} />
+          {checkUpdateResult && (
+            <View style={{ marginTop: spacing.sm }}>
+              <Text
+                style={{
+                  color:
+                    checkUpdateResult.status === 'error'
+                      ? colors.red
+                      : checkUpdateResult.status === 'update-available'
+                        ? colors.green
+                        : checkUpdateResult.status === 'disabled'
+                          ? colors.orange
+                          : colors.text,
+                  fontWeight: '600',
+                  fontSize: typography.size.sm,
+                }}
+              >
+                {checkUpdateResult.status === 'error'
+                  ? t('settings.checkForUpdateError')
+                  : checkUpdateResult.status === 'update-available'
+                    ? t('settings.checkForUpdateAvailable')
+                    : checkUpdateResult.status === 'disabled'
+                      ? t('settings.checkForUpdateDisabled')
+                      : t('settings.checkForUpdateUpToDate')}
+              </Text>
+              <MutedText style={{ marginTop: 2, fontSize: typography.size.xs }}>{checkUpdateResult.message}</MutedText>
+              {checkUpdateResult.status === 'update-available' && (
+                <View style={{ marginTop: spacing.sm }}>
+                  <PrimaryButton title={t('settings.applyUpdateButton')} onPress={handleApplyUpdate} loading={applyUpdateLoading} />
+                </View>
+              )}
+            </View>
+          )}
+        </Card>
 
         {/* RUNTIME VISIBILITY (owner decision 2026-07-30): "which JS is
             on this device" should never be a guess — same buildInfo.ts
