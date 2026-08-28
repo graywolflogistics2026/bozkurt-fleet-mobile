@@ -27,6 +27,7 @@ const FALLBACK: BuildInfo = {
   updateId: null,
   updateIdShort: null,
   channel: null,
+  runtimeVersion: null,
   gitCommitHash: null,
   gitCommitHashShort: null,
   isEmbeddedLaunch: true,
@@ -42,6 +43,14 @@ export function getBuildInfo(): BuildInfo {
       updateId,
       updateIdShort: shorten(updateId),
       channel: Updates.channel ?? null,
+      // RUNTIME VERSION VISIBILITY (owner decision, device report: "vunknown
+      // · embedded build" — see buildInfoFormat.ts's own header comment on
+      // formatBuildInfoLine() for the full reasoning). Updates.runtimeVersion
+      // is expo-updates' own value for the CURRENTLY RUNNING binary — compare
+      // it directly against whatever `eas update:view` reports for the
+      // update you expect to be live; a mismatch is exactly what makes an
+      // OTA update incompatible with this build regardless of channel.
+      runtimeVersion: Updates.runtimeVersion ?? null,
       gitCommitHash,
       gitCommitHashShort: shorten(gitCommitHash, 7),
       isEmbeddedLaunch: Updates.isEmbeddedLaunch,

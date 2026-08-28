@@ -7,6 +7,7 @@ const buildInfo: BuildInfo = {
   updateId: 'abcdef1234567890',
   updateIdShort: 'abcdef12',
   channel: 'production',
+  runtimeVersion: '1.2.3',
   gitCommitHash: '1234567890abcdef',
   gitCommitHashShort: '1234567',
   isEmbeddedLaunch: false,

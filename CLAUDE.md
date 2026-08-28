@@ -11560,3 +11560,122 @@
   `tsc --noEmit` clean. No new i18n strings — this is a pure calculation-
   unification pass, no user-facing copy changed. No SQL/Edge Function
   changes. Ships via a normal `eas update`.
+- EAS UPDATE NOT REACHING THE DEVICE — DIAGNOSIS + THE ONE THING FIXABLE
+  FROM THIS ENVIRONMENT (owner decision 2026-08-28, device report:
+  Settings' own build-info footer read "vunknown · embedded build (no OTA
+  update)" — meaning no EAS Update has EVER applied to that device, not
+  "the latest one didn't," calling into question every "fixed and shipped
+  via `eas update`" claim made earlier the same day). **Hard limitation,
+  stated up front**: this sandbox has no `eas` CLI and no EAS
+  credentials (`eas --version`/`eas whoami` both fail — confirmed by
+  running them, not assumed) — nothing here can query
+  `eas build:list`/`eas update:list`/`eas channel:view` to see what the
+  EAS servers actually recorded for the last build or the last publish.
+  Everything below is either (a) confirmed directly from the repo's own
+  config files, or (b) a diagnostic the OWNER must run themselves,
+  handed over as exact commands — never guessed at or asserted as fact
+  without that distinction being explicit.
+  1. **Runtime version policy, confirmed from `app.config.js`**:
+     `runtimeVersion: { policy: 'appVersion' }` — the runtime version
+     used to match an OTA update to a native build is computed as
+     literally the `expo.version` string, currently `'1.0.0'` (also
+     confirmed — this has never been bumped anywhere in this project's
+     history). Since both the native build and every `eas update`
+     publish compute their own runtime version from THIS SAME policy at
+     their own respective times, a mismatch would only arise if (a) the
+     LAST native build was made before `runtimeVersion`/`updates.url`
+     were added to `app.config.js` at all (a materially older build,
+     predating EAS Update being configured for this project in any
+     form), or (b) `version` was different at build time than it is now
+     (ruled out — confirmed via `git log` that `1.0.0` has been the only
+     value used). **What I cannot tell you**: what runtime version the
+     actual last build was tagged with by the EAS servers, or what the
+     most recent `preview`-branch publishes were tagged with — run `eas
+     build:list --platform android --limit 3` and `eas update:list
+     --branch preview --limit 5` yourself and compare their own
+     `runtimeVersion` columns directly.
+  2. **Channel configuration, confirmed from `eas.json`**: the `preview`
+     build profile has `"channel": "preview"` — this is what gets baked
+     into a NATIVE BUILD made with `eas build --profile preview`, and is
+     the channel every `eas update --branch preview` command this
+     session has been running should be reaching. **What I cannot
+     verify**: whether the EAS project's own channel→branch mapping
+     actually routes the "preview" channel to the "preview" branch (this
+     mapping lives on Expo's servers, not in this repo) — a channel
+     pointed at the wrong branch, or unmapped entirely, would silently
+     swallow every update this session published with zero error on the
+     publishing side. Run `eas channel:view preview` to see exactly what
+     branch(es) that channel currently resolves to.
+  3. **What to do, precisely, once you have the two commands' output
+     above**: (a) if `eas channel:view preview` shows it's NOT pointing
+     at the `preview` branch — fix the mapping (`eas channel:edit`, or
+     republish to whatever branch it actually points to) — **no rebuild
+     needed**, this is a server-side routing fix. (b) if the channel
+     mapping IS correct but `eas build:list`'s last build predates
+     `runtimeVersion`/`updates.url` existing in `app.config.js` (i.e. it
+     was built before EAS Update was ever wired into this project) —
+     **one rebuild IS required**, since a build's OTA-update capability
+     (which URL to poll, which channel to report) is baked into the
+     native binary at build time and cannot be retrofitted by any
+     `eas update` — every fix "shipped" via `eas update` since that
+     build genuinely never had a chance to reach it. (c) if BOTH check
+     out — channel correctly mapped, build genuinely EAS-Update-capable
+     — and the device STILL shows `embedded build (no OTA update)`,
+     the next things to check are: was `eas update` ever actually run
+     against a build with a MATCHING runtime version (an update
+     published for `runtimeVersion: 1.0.0` is invisible to a build
+     whose own runtime version is anything else), and does the device
+     actually have network connectivity / has the app been fully
+     restarted (not just backgrounded) since the update was published —
+     `expo-updates` checks for a new update on cold start, not on
+     resume.
+  4. **The one thing actually fixable from this sandbox — item 4's own
+     ask, "a visible way to confirm this without guessing again"**:
+     `getBuildInfo()` (`app/src/lib/buildInfo.ts`) already captured
+     `Updates.channel` but the shared formatter,
+     `formatBuildInfoLine()` (`app/src/lib/buildInfoFormat.ts`), never
+     actually rendered it — which is why the device's own diagnostic
+     line showed no channel info at all, the exact gap this item is
+     about. Fixed two ways: (a) `channel` is now always appended to the
+     line (`channel preview` / `channel none` — a NULL channel here is
+     itself the single most decisive signal there is, since
+     `expo-updates`' own docs state this is always `null` for Expo Go
+     and a development-client build, meaning such a build can never
+     receive an OTA update no matter what's published, full stop, no
+     further investigation needed); (b) a brand-new `runtimeVersion`
+     field (`Updates.runtimeVersion`, never previously captured at all)
+     is now also always appended (`runtime 1.0.0` / `runtime unknown`)
+     so the runtime-version-mismatch hypothesis from item 1 can be
+     checked directly against `eas update:view <id>`'s own reported
+     runtime version, without needing to reconstruct it from
+     `app.config.js` by hand. Both appear on the SAME footer line
+     Settings already showed (and `ScreenErrorBoundary`'s crash screen
+     shares verbatim) — no new screen, no new tap target, the existing
+     triple-tap-for-daily-tip-diagnostics gesture on this same line is
+     unchanged. **Circularity, stated plainly**: since this device is
+     not receiving OTA updates AT ALL (that's the finding this whole
+     entry is about), this diagnostic improvement itself cannot reach
+     the device via `eas update` either — it will only become visible
+     after the next NATIVE BUILD, same as the runtime-version-mismatch
+     scenario in item 3(b) above.
+  5. **Re-verification of earlier "fixed and shipped" claims, per the
+     user's own explicit instruction**: every fix reported as "shipped"
+     via `eas update` earlier the same day (2026-08-28 — the AI Coach
+     chat reachability fix, the Prime operating-statement reconciliation,
+     the sub-ledger accounting verification, the Profit Analysis window
+     fix, and the Dashboard Net Profit unification) was verified CORRECT
+     IN THE REPOSITORY (committed, pushed, tests passing) but its
+     actual presence ON THE DEVICE cannot be confirmed from this
+     environment and must be re-checked once OTA delivery is confirmed
+     working (or after the next native build, whichever resolves this).
+     None of that code is suspect — only whether it has ever actually
+     executed on the reporting device.
+  Tests: `buildInfoFormat.test.ts` gained coverage for the new
+  channel/runtime-version segments (always shown, never omitted, unlike
+  the commit segment) including a dedicated case reproducing the exact
+  literal device string from the report. Full suite: 130 suites / 3561
+  tests pass (+3); `tsc --noEmit` clean. No SQL/Edge Function changes —
+  this is a pure client-side diagnostic addition. Per point 4's own
+  circularity note, this specific change needs a native rebuild to
+  actually reach the reporting device, unlike every other fix shipped
+  today.
