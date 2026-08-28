@@ -5,8 +5,10 @@ import {
   checkPrimeYtdReconciliation,
   readPrimeYtdSnapshotFromParsedJson,
   findMostRecentPrimeYtdSnapshot,
+  filterToPrimeSettlementSubledger,
   type PrimeYtdSnapshot,
 } from '@/src/import/primeOperatingStatement';
+import { computeKpis } from '@/src/stats/kpi';
 import type { Extraction } from '@/src/import/types';
 
 function makeExtraction(overrides: Partial<Extraction['settlement']> & { carrier?: string }): Extraction {
@@ -279,5 +281,118 @@ describe('CARRIER ISOLATION: a non-Prime settlement never triggers any part of t
     // e.g. a fictitious "Prime Logistics Partners" — normalizeCarrierKey()
     // requires an EXACT match against 'PRIME INC', not a substring.
     expect(isPrimeCarrier('Prime Logistics Partners')).toBe(false);
+  });
+});
+
+// ACCOUNTING MODEL — TWO LAYERS, NEVER CONFLATED (owner decision,
+// 2026-08-28). filterToPrimeSettlementSubledger() is what LAYER 1
+// (source of record) actually relies on: the Prime reconciliation must
+// stay internally verified against Prime's own operating statement and
+// NEVER be affected by the user's own manually-added deductions.
+describe('filterToPrimeSettlementSubledger — LAYER 1 isolation from manually-added rows', () => {
+  const primeSettlement = { id: 'sett-prime-1', carrier: 'Prime Inc' };
+  const primeDeduction = { id: 'ded-prime-1', settlement_id: 'sett-prime-1', amount: 700 };
+  // A manually-added deduction — no settlement_id, exactly what
+  // mapPurchase()/mapGenericDeduction() produce (mapExtraction.ts never
+  // sets settlement_id for either).
+  const manualDeduction = { id: 'ded-manual-1', settlement_id: null, amount: 500 };
+
+  test('excludes a manually-added deduction (settlement_id: null) even though it is in the same account', () => {
+    const result = filterToPrimeSettlementSubledger([primeSettlement], [primeDeduction, manualDeduction], [], [], []);
+    expect(result.deductions).toEqual([primeDeduction]);
+  });
+
+  test('excludes a deduction tied to a DIFFERENT, non-Prime settlement', () => {
+    const otherCarrierSettlement = { id: 'sett-other-1', carrier: 'Landstar' };
+    const otherCarrierDeduction = { id: 'ded-other-1', settlement_id: 'sett-other-1', amount: 900 };
+    const result = filterToPrimeSettlementSubledger(
+      [primeSettlement, otherCarrierSettlement],
+      [primeDeduction, otherCarrierDeduction],
+      [],
+      [],
+      []
+    );
+    expect(result.settlements).toEqual([primeSettlement]);
+    expect(result.deductions).toEqual([primeDeduction]);
+  });
+
+  // THE ACTUAL BUG THIS FIXES, reproduced end to end through the REAL
+  // computeKpis() and checkPrimeYtdReconciliation() — not asserted from
+  // the filter's own output in isolation. A Prime settlement whose own
+  // withheld deduction ($700) exactly matches what Prime's own YTD
+  // statement reports reconciles cleanly on its own; adding a real,
+  // unrelated $500 manual deduction to the SAME account must leave that
+  // result completely unaffected once the inputs are scoped through
+  // filterToPrimeSettlementSubledger() first — and, shown for contrast,
+  // WOULD have wrongly flagged a mismatch had the account-wide,
+  // unfiltered totals been used instead (exactly what
+  // app/(tabs)/more/settlements.tsx's own primeYtdMismatches memo did
+  // before this fix).
+  test('a manually-added deduction never affects whether the standing YTD check flags a mismatch', () => {
+    const primeYtd: PrimeYtdSnapshot = { revenue: 3200, miles: 2500, expenses: 700, asOfWeekEnding: '2026-08-01' };
+    const settlementRow = { id: 'sett-prime-1', truck_id: null, week_ending: '2026-08-01', gross: 3200, net: 2500, miles: 2500 };
+    const withheldDeduction = {
+      settlement_id: 'sett-prime-1',
+      amount: 700,
+      source: 'settlement' as const,
+      tax_deductible: false as const,
+    };
+    const manualReceipt = { settlement_id: null, amount: 500, source: 'manual' as const, tax_deductible: true as const };
+
+    // Cleanly reconciles with ONLY the Prime settlement's own rows.
+    const primeOnlyScope = filterToPrimeSettlementSubledger([primeSettlement], [withheldDeduction], [], [], []);
+    const kpiPrimeOnly = computeKpis({
+      trucks: [],
+      settlements: [{ ...settlementRow, ...primeOnlyScope.settlements[0] }],
+      loads: [],
+      deductions: primeOnlyScope.deductions,
+      fuelPurchases: [],
+      maintenanceRecords: [],
+      tolls: [],
+      truckScope: null,
+      manualMilesOverride: null,
+      window: null,
+    });
+    expect(checkPrimeYtdReconciliation({ revenue: kpiPrimeOnly.gross, miles: kpiPrimeOnly.miles.total, expenses: kpiPrimeOnly.expenses.total }, primeYtd)).toEqual([]);
+
+    // Same account, now WITH a real, unrelated manual deduction on the
+    // books too — filtering through the subledger first means the result
+    // is BYTE-IDENTICAL: still zero mismatches.
+    const withManualScope = filterToPrimeSettlementSubledger([primeSettlement], [withheldDeduction, manualReceipt], [], [], []);
+    const kpiWithManual = computeKpis({
+      trucks: [],
+      settlements: [{ ...settlementRow, ...withManualScope.settlements[0] }],
+      loads: [],
+      deductions: withManualScope.deductions,
+      fuelPurchases: [],
+      maintenanceRecords: [],
+      tolls: [],
+      truckScope: null,
+      manualMilesOverride: null,
+      window: null,
+    });
+    expect(kpiWithManual.expenses.total).toBe(kpiPrimeOnly.expenses.total); // manual $500 never entered the comparison
+    expect(checkPrimeYtdReconciliation({ revenue: kpiWithManual.gross, miles: kpiWithManual.miles.total, expenses: kpiWithManual.expenses.total }, primeYtd)).toEqual([]);
+
+    // CONTRAST — the bug this replaces: feeding the UNFILTERED, account-
+    // wide deductions straight into computeKpis() (what the code used to
+    // do) inflates expenses by the manual $500 and DOES wrongly flag a
+    // mismatch against Prime's own reported $700.
+    const kpiUnfiltered = computeKpis({
+      trucks: [],
+      settlements: [settlementRow],
+      loads: [],
+      deductions: [withheldDeduction, manualReceipt],
+      fuelPurchases: [],
+      maintenanceRecords: [],
+      tolls: [],
+      truckScope: null,
+      manualMilesOverride: null,
+      window: null,
+    });
+    expect(kpiUnfiltered.expenses.total).toBe(1200);
+    expect(
+      checkPrimeYtdReconciliation({ revenue: kpiUnfiltered.gross, miles: kpiUnfiltered.miles.total, expenses: kpiUnfiltered.expenses.total }, primeYtd)
+    ).toEqual([{ field: 'expenses', ours: 1200, prime: 700 }]);
   });
 });

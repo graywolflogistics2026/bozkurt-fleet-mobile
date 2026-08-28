@@ -22,7 +22,11 @@ import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
 import { buildSettlementsTotalsBar } from '@/src/stats/settlementsSummary';
 import { PERIOD_OPTIONS, filterByPeriod, periodStartIso, type PeriodOption } from '@/src/stats/periodFilter';
 import { computeKpis } from '@/src/stats/kpi';
-import { findMostRecentPrimeYtdSnapshot, checkPrimeYtdReconciliation } from '@/src/import/primeOperatingStatement';
+import {
+  findMostRecentPrimeYtdSnapshot,
+  checkPrimeYtdReconciliation,
+  filterToPrimeSettlementSubledger,
+} from '@/src/import/primeOperatingStatement';
 import { buildPolylinePoints } from '@/src/stats/chartHelpers';
 import { useSessionState } from '@/src/lib/useSessionState';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -285,28 +289,48 @@ export default function Settlements() {
   // this banner simply never renders for a non-Prime account, exactly
   // matching today's behavior.
   //
-  // SCOPE DECISION: deliberately computed from FLEET-WIDE data
-  // (allRows/full deductions/fuel/maintenance/tolls, never the
-  // truck-scoped `settlementsQuery`), and only rendered when the current
-  // view is genuinely fleet-wide (isAllTrucks, or a single-truck account
-  // where "all trucks" and "the one truck" are the same set) — Prime's
-  // own operating statement covers the whole leased operator's business,
-  // not one truck within it, so comparing it against a narrowed,
-  // single-truck-scoped view would be a real apples-to-oranges mismatch,
+  // SCOPE DECISION: deliberately computed from FLEET-WIDE data (allRows/
+  // full deductions/fuel/maintenance/tolls, never the truck-scoped
+  // `settlementsQuery`) — but ALSO first narrowed to just the Prime
+  // sub-ledger via filterToPrimeSettlementSubledger() below (ACCOUNTING
+  // MODEL — TWO LAYERS, NEVER CONFLATED, owner decision 2026-08-28): a
+  // manually-added deduction has no visibility to Prime and must never
+  // affect whether this check flags a mismatch. Only rendered when the
+  // current view is genuinely fleet-wide (isAllTrucks, or a single-truck
+  // account where "all trucks" and "the one truck" are the same set) —
+  // Prime's own operating statement covers the whole leased operator's
+  // business, not one truck within it, so comparing it against a
+  // narrowed, single-truck-scoped view would be a real apples-to-oranges
+  // mismatch,
   // not a genuine reconciliation.
   const primeYtdSnapshot = useMemo(() => findMostRecentPrimeYtdSnapshot(allRows, documentsById), [allRows, documentsById]);
   const primeYtdMismatches = useMemo(() => {
     if (!primeYtdSnapshot) return [];
     const startIso = periodStartIso('ytd');
     if (!startIso) return [];
+    // ACCOUNTING MODEL — TWO LAYERS, NEVER CONFLATED (owner decision,
+    // 2026-08-28): "ours" here must be reconstructed from ONLY the Prime
+    // sub-ledger — Prime has no visibility into the user's own manually-
+    // added deductions, so comparing an account-wide total (which used
+    // to be what this fed in) would flag a false mismatch the instant a
+    // real, unrelated manual receipt exists. filterToPrimeSettlementSubledger()
+    // reduces every input array down to just the rows that trace back to
+    // a confirmed-Prime settlement before computeKpis() ever sees them.
+    const primeScope = filterToPrimeSettlementSubledger(
+      allRows,
+      dedQuery.data ?? [],
+      fuelQuery.data ?? [],
+      maintenanceQuery.data ?? [],
+      tollsQuery.data ?? []
+    );
     const kpi = computeKpis({
       trucks: trucksQuery.data ?? [],
-      settlements: allRows,
+      settlements: primeScope.settlements,
       loads: loadsQuery.data ?? [],
-      deductions: dedQuery.data ?? [],
-      fuelPurchases: fuelQuery.data ?? [],
-      maintenanceRecords: maintenanceQuery.data ?? [],
-      tolls: tollsQuery.data ?? [],
+      deductions: primeScope.deductions,
+      fuelPurchases: primeScope.fuelPurchases,
+      maintenanceRecords: primeScope.maintenanceRecords,
+      tolls: primeScope.tolls,
       truckScope: null,
       manualMilesOverride: null,
       window: { startIso, endIso: new Date().toISOString().slice(0, 10) },

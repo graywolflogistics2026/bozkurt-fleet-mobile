@@ -158,6 +158,36 @@ describe('deleting a settlement — balance reversal', () => {
     expect(mockClient.__store.capital_transactions![0].amount).toBe(60000);
   });
 
+  // ACCOUNTING MODEL — TWO LAYERS, NEVER CONFLATED (owner decision,
+  // 2026-08-28, item 4): a manually-added deduction (a receipt the user
+  // logged themselves, `source: 'manual'`, `settlement_id: null` by
+  // construction — mapPurchase()/mapGenericDeduction() never set it,
+  // confirmed by reading app/src/import/mapExtraction.ts directly) has no
+  // FK value that could ever match a deleted settlement's own id, so
+  // `on delete cascade` can structurally never reach it — proven here
+  // against the real delete flow, not asserted from FK semantics alone.
+  it('a manually-added deduction (no settlement_id) survives a settlement delete untouched, while the settlement\'s own withheld deduction is removed', async () => {
+    const seed = seedFullSettlement();
+    seed.deductions.push({
+      id: 'ded-manual-1',
+      user_id: USER_ID,
+      settlement_id: null,
+      amount: 1372.98,
+      category: 'Truck Parts',
+      source: 'manual',
+    } as unknown as (typeof seed.deductions)[number]);
+    mockClient = createFakeSupabase(seed);
+
+    await deleteSettlementLikeTheScreenDoes(SETTLEMENT_ID, DOCUMENT_ID);
+
+    expect(mockClient.__store.deductions).toHaveLength(1);
+    const survivor = mockClient.__store.deductions![0];
+    expect(survivor.id).toBe('ded-manual-1');
+    expect(survivor.amount).toBe(1372.98);
+    expect(survivor.settlement_id).toBeNull();
+    expect(survivor.source).toBe('manual');
+  });
+
   it('a settlement with zero credit (e.g. already fully reversed once, or a $0 net week) leaves the balance untouched', async () => {
     const seed = seedFullSettlement();
     seed.settlements[0].business_balance_credit = 0;

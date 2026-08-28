@@ -233,6 +233,61 @@ export function readPrimeYtdSnapshotFromParsedJson(
   return { revenue, miles, expenses, asOfWeekEnding: weekEnding };
 }
 
+// ACCOUNTING MODEL — TWO LAYERS, NEVER CONFLATED (owner decision,
+// 2026-08-28). LAYER 1 (source of record) keeps the Prime sub-ledger
+// internally verified against Prime's own operating statement, and NEVER
+// reconciles against the user's own manually-added receipts — Prime has
+// no visibility into those, so comparing them would produce a false
+// mismatch every time. This filter is what actually enforces that: it
+// reduces a raw, account-wide dataset down to ONLY the rows that trace
+// back to a confirmed-Prime settlement (the settlement itself, plus
+// every deduction/fuel/maintenance/toll row whose `settlement_id` points
+// at one) — a manually-added row (`settlement_id: null` by construction,
+// see mapExtraction.ts's mapPurchase()/mapGenericDeduction(), neither of
+// which ever sets it) is excluded by construction, not by checking
+// `source` (which would miss a hypothetical future carrier's own
+// settlement-derived rows that aren't Prime — this filters on the
+// SETTLEMENT'S OWN CONFIRMED CARRIER, the same isPrimeCarrier() gate
+// every other function in this file already uses, never a second,
+// possibly-drifting classification).
+//
+// BUG THIS FIXES: the standing YTD check (checkPrimeYtdReconciliation)
+// takes `ours` as an ALREADY-COMPUTED input from its caller by design —
+// app/(tabs)/more/settlements.tsx's own primeYtdMismatches memo used to
+// compute that input from the account's FULL, unfiltered deductions/
+// fuel/maintenance/tolls (`dedQuery.data ?? []` etc.), which silently
+// included every manually-added deduction too — a user with real,
+// unrelated manual receipts on the books would see `ours.expenses`
+// inflated above what Prime's own YTD reports, and could get a false
+// "your numbers don't match Prime's" banner purely because of entries
+// Prime never saw. Fixed by scoping the KPI computation feeding that
+// check through this function first.
+export function filterToPrimeSettlementSubledger<
+  S extends { id: string; carrier: string | null },
+  D extends { settlement_id?: string | null },
+  F extends { settlement_id?: string | null },
+  M extends { settlement_id?: string | null },
+  T extends { settlement_id?: string | null },
+>(
+  settlements: S[],
+  deductions: D[],
+  fuelPurchases: F[],
+  maintenanceRecords: M[],
+  tolls: T[]
+): { settlements: S[]; deductions: D[]; fuelPurchases: F[]; maintenanceRecords: M[]; tolls: T[] } {
+  const primeSettlements = settlements.filter((s) => isPrimeCarrier(s.carrier));
+  const primeIds = new Set(primeSettlements.map((s) => s.id));
+  const belongsToPrime = (row: { settlement_id?: string | null }) =>
+    row.settlement_id != null && primeIds.has(row.settlement_id);
+  return {
+    settlements: primeSettlements,
+    deductions: deductions.filter(belongsToPrime),
+    fuelPurchases: fuelPurchases.filter(belongsToPrime),
+    maintenanceRecords: maintenanceRecords.filter(belongsToPrime),
+    tolls: tolls.filter(belongsToPrime),
+  };
+}
+
 // Finds the standing-check input (item 3's "most recent Prime
 // settlement's own operating-statement page") across a whole account's
 // settlements — the settlement with the LATEST week_ending that (a) is
