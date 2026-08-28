@@ -21,7 +21,11 @@ import type { Profile } from '@/src/types/db';
 // owner_operator, so a future carrier-lease-specific feature has
 // something to key off without a migration.
 const ROLES: NonNullable<Profile['role']>[] = ['owner_operator', 'lease_operator', 'company_driver_w2', 'contractor_1099', 'trainee'];
-const STEP_COUNT = 9;
+// REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — the
+// "starting business balance" step was removed outright (8 steps now,
+// was 9): the app no longer computes or persists a balance estimate at
+// all, so an input that fed straight into it would have gone nowhere.
+const STEP_COUNT = 8;
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -90,7 +94,6 @@ export default function Onboarding() {
   const [trailerYear, setTrailerYear] = useState('');
   const [trailerMake, setTrailerMake] = useState('');
   const [trailerModel, setTrailerModel] = useState('');
-  const [openingBalance, setOpeningBalance] = useState('0');
   const [taxYear, setTaxYear] = useState(String(new Date().getFullYear()));
 
   const [intervalDrafts, setIntervalDrafts] = useState<Record<string, { value: string; enabled: boolean }>>({});
@@ -238,15 +241,11 @@ export default function Onboarding() {
     );
   }
 
-  async function saveOpeningBalance() {
-    await updateProfile.mutateAsync({ business_balance: Number(openingBalance) || 0 });
-  }
-
   async function saveTaxYear() {
     await updateTaxConfig.mutateAsync({ tax_year: Number(taxYear) || new Date().getFullYear() });
   }
 
-  const STEP_ACTIONS = [saveCompanyName, saveHomeState, saveDotMc, saveRole, saveTruckInfo, saveTrailerInfo, saveMaintenanceSchedule, saveOpeningBalance, saveTaxYear];
+  const STEP_ACTIONS = [saveCompanyName, saveHomeState, saveDotMc, saveRole, saveTruckInfo, saveTrailerInfo, saveMaintenanceSchedule, saveTaxYear];
 
   function renderStep() {
     switch (step) {
@@ -396,14 +395,6 @@ export default function Onboarding() {
       case 7:
         return (
           <>
-            <Text style={styles.stepTitle}>{t('onboarding.steps.openingBalance.title')}</Text>
-            <MutedText>{t('onboarding.steps.openingBalance.subtitle')}</MutedText>
-            <Field keyboardType="numeric" value={openingBalance} onChangeText={setOpeningBalance} placeholder="0.00" />
-          </>
-        );
-      case 8:
-        return (
-          <>
             <Text style={styles.stepTitle}>{t('onboarding.steps.taxYear.title')}</Text>
             <MutedText>{t('onboarding.steps.taxYear.subtitle')}</MutedText>
             <Field keyboardType="numeric" value={taxYear} onChangeText={setTaxYear} maxLength={4} />
@@ -415,7 +406,7 @@ export default function Onboarding() {
     }
   }
 
-  const isOptionalStep = step === 2 || step === 5 || step === 7;
+  const isOptionalStep = step === 2 || step === 5;
   const isLastStep = step === STEP_COUNT - 1;
 
   return (

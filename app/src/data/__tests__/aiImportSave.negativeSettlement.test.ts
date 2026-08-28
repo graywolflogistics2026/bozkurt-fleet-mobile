@@ -109,17 +109,19 @@ describe('negative settlement end-to-end (real statement numbers)', () => {
     expect(settlements[0].net).toBe(-1155.35);
   });
 
-  test('business_balance DECREASES by the full negative net pay — never gated on netPay > 0', async () => {
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — a
+  // negative net-pay week (the exact real-statement shape that originally
+  // proved the balance math correct) now leaves business_balance
+  // completely untouched, same as any other settlement import.
+  test('business_balance is never touched, even by a real negative net pay week', async () => {
     const result = await saveExtraction(baseParams(realStatementExtraction()));
 
     const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
-    // Started at 200; a -1155.35 week takes it to -955.35 — negative
-    // business_balance is allowed, never clamped.
-    expect(profile?.business_balance).toBeCloseTo(-955.35, 2);
-    expect(result.netPayAdded).toBeCloseTo(-1155.35, 2);
+    expect(profile?.business_balance).toBe(200); // unchanged from the seeded starting value
+    expect(result).not.toHaveProperty('netPayAdded');
   });
 
-  test('a corrected re-import (still negative) applies only the delta to business_balance', async () => {
+  test('a corrected re-import (still negative) still never touches business_balance', async () => {
     await saveExtraction(baseParams(realStatementExtraction()));
     // Re-import with a corrected (less severe) negative net pay.
     const corrected = realStatementExtraction();
@@ -127,9 +129,8 @@ describe('negative settlement end-to-end (real statement numbers)', () => {
     const second = await saveExtraction(baseParams(corrected));
 
     const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
-    // 200 (start) - 1155.35 (first) + 255.35 (delta: -900 - (-1155.35)) = -700
-    expect(profile?.business_balance).toBeCloseTo(-700, 2);
-    expect(second.netPayAdded).toBeCloseTo(255.35, 2);
+    expect(profile?.business_balance).toBe(200); // still unchanged
+    expect(second).not.toHaveProperty('netPayAdded');
   });
 
   test('true profit excludes meals/advance/escrow, counting only the genuinely deductible $443.56', async () => {

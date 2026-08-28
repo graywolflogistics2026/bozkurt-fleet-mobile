@@ -181,18 +181,28 @@ export type CashFlowWeekProjection = {
   weekIndex: number; // 0-based
   startDate: string;
   endDate: string;
-  openingBalance: number;
   income: number;
   fixed: number;
   variable: number;
   periodic: number;
   periodicItems: PeriodicForecastItem[];
-  closingBalance: number;
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — the
+  // forecast no longer assumes an opening bank balance at all (the user's
+  // own real bank balance is the source of truth, not an app estimate
+  // this app has repeatedly gotten wrong). `net` is simply this week's
+  // own income minus its own fixed/variable/periodic outflows — a
+  // per-period figure, never a running total.
+  net: number;
 };
 
 export type CashFlowForecastResult = {
   weeks: CashFlowWeekProjection[];
-  tightestWeekIndex: number;
+  // "Tightest point" is now the period with the WEAKEST NET (the lowest
+  // income-minus-expenses week), never a running/ending balance — there
+  // is no more balance to compute. Renamed from the old tightestWeekIndex
+  // (which used to mean "lowest ending balance") to make the new meaning
+  // unambiguous at every call site.
+  weakestWeekIndex: number;
   weeksOfHistory: number;
   reliable: boolean;
   classification: CashFlowClassification;
@@ -217,18 +227,17 @@ export type CashFlowForecastResult = {
   variableMilesAvg: number;
 };
 
-// THE ASSEMBLY (spec item 3) — one opening/income/fixed/variable/
-// periodic/ending row per week, for FORECAST_WEEKS weeks starting today
-// (not calendar-Monday-aligned — "30 days from now," matching the
-// screen's own existing "30-Day Forecast" framing). A periodic item
-// lands in whichever week's [startDate, endDate] range contains its own
-// due_date; everything else (income/fixed/variable) is the SAME
-// steady-state weekly figure repeated across every week, exactly like
-// the forecast this replaces already did — this pass adds real periodic
-// variation on top of that steady state, it doesn't change the
-// steady-state assumption itself.
+// THE ASSEMBLY (spec item 3) — one income/fixed/variable/periodic/net row
+// per week, for FORECAST_WEEKS weeks starting today (not calendar-Monday-
+// aligned — "30 days from now," matching the screen's own existing
+// "30-Day Forecast" framing). A periodic item lands in whichever week's
+// [startDate, endDate] range contains its own due_date; everything else
+// (income/fixed/variable) is the SAME steady-state weekly figure repeated
+// across every week. REMOVE BUSINESS BALANCE TRACKING (owner decision
+// 2026-08-27): no opening/closing balance is computed anymore — the
+// forecast projects each week's own net (income minus that week's own
+// outflows) independently, never a running total.
 export function buildCashFlowForecast(
-  bankBalance: number,
   incomeAvg: { average: number; weeksFound: number },
   classification: CashFlowClassification,
   milesAvg: { average: number; weeksFound: number },
@@ -257,7 +266,6 @@ export function buildCashFlowForecast(
 
   const todayIso = today.toISOString().slice(0, 10);
   const weeks: CashFlowWeekProjection[] = [];
-  let balance = bankBalance;
 
   for (let i = 0; i < FORECAST_WEEKS; i++) {
     const start = new Date(today.getTime() + i * 7 * 86400000);
@@ -269,35 +277,32 @@ export function buildCashFlowForecast(
     const periodicTotal = weekPeriodicItems.reduce((sum, p) => sum + (overrides.periodicAmounts[p.id] ?? p.amount ?? 0), 0);
     const reimbursementThisWeek = reimbursementsByWeek.get(i) ?? 0;
 
-    const opening = balance;
     const incomeThisWeek = weeklyIncome + reimbursementThisWeek;
-    const closing = opening + incomeThisWeek - weeklyFixed - weeklyVariable - periodicTotal;
+    const net = incomeThisWeek - weeklyFixed - weeklyVariable - periodicTotal;
 
     weeks.push({
       weekIndex: i,
       startDate: startIso,
       endDate: endIso,
-      openingBalance: opening,
       income: incomeThisWeek,
       fixed: weeklyFixed,
       variable: weeklyVariable,
       periodic: periodicTotal,
       periodicItems: weekPeriodicItems,
-      closingBalance: closing,
+      net,
     });
-    balance = closing;
   }
 
-  let tightestWeekIndex = 0;
+  let weakestWeekIndex = 0;
   for (let i = 1; i < weeks.length; i++) {
-    if (weeks[i].closingBalance < weeks[tightestWeekIndex].closingBalance) tightestWeekIndex = i;
+    if (weeks[i].net < weeks[weakestWeekIndex].net) weakestWeekIndex = i;
   }
 
   const weeksOfHistory = Math.max(incomeAvg.weeksFound, classification.weeksObserved);
 
   return {
     weeks,
-    tightestWeekIndex,
+    weakestWeekIndex,
     weeksOfHistory,
     reliable: weeksOfHistory >= RELIABLE_HISTORY_WEEKS,
     classification,
@@ -321,7 +326,6 @@ export function buildCashFlowForecast(
 // exact pipeline is what the "realistic dataset" tests exercise end to
 // end (never just one function in isolation).
 export function buildCashFlowForecastFromData(input: {
-  bankBalance: number;
   settlements: SettlementLike[];
   deductions: DeductionLike[];
   fuelPurchases: FuelLike[];
@@ -348,7 +352,6 @@ export function buildCashFlowForecastFromData(input: {
   const reimbursementsByWeek = upcomingReimbursementsByWeek(input.reimbursements, today);
 
   return buildCashFlowForecast(
-    input.bankBalance,
     incomeAvg,
     classification,
     { average: incomeMilesAvg.average, weeksFound: incomeMilesAvg.weeksFound },

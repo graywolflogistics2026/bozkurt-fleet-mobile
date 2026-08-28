@@ -119,16 +119,18 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
   );
 }
 
-// A thin single-line "Apple Stocks style" trend of closing balance across
-// however many months are passed in — same buildPolylinePoints/
-// buildAreaPoints primitive as WeeklyTrendChart (CLAUDE.md's CHART
-// LANGUAGE CONSISTENCY invariant), colored by the LAST month's sign.
+// A thin single-line "Apple Stocks style" trend of NET across however
+// many months are passed in (REMOVE BUSINESS BALANCE TRACKING, owner
+// decision 2026-08-27: no more running balance to chart) — same
+// buildPolylinePoints/buildAreaPoints primitive as WeeklyTrendChart
+// (CLAUDE.md's CHART LANGUAGE CONSISTENCY invariant), colored by the LAST
+// month's sign.
 function MonthlyTrendChart({ months }: { months: CashFlowMonthProjection[] }) {
   const { monthLabel: monthLabelFmt } = useFormatters();
   const [width, setWidth] = useState(0);
   const height = CHART_HEIGHT;
 
-  const values = months.map((m) => m.closingBalance);
+  const values = months.map((m) => m.net);
   const domain: [number, number] = [Math.min(0, ...values), Math.max(0, ...values)];
   const line = buildPolylinePoints(values, width, height, domain);
   const area = width > 0 && values.length >= 2 ? buildAreaPoints(line, width, height) : '';
@@ -166,24 +168,23 @@ function MonthlyTrendChart({ months }: { months: CashFlowMonthProjection[] }) {
 // the month "today" falls in, a steady-state projection for a future
 // month, dimmed with a "Projected" label per the spec ("clearly
 // distinguished"). Collapsed by default; tapping opens the same
-// opening/income/fixed/variable/periodic/closing breakdown WeekCard
-// already shows for the 30-day view (spec item 4, "same breakdown...
-// keeping the 'where it came from' basis and manual overrides" — the
-// figures here already reflect whatever income/fixed/variable/periodic
-// overrides are set, since they're computed from the exact same
-// forecast.weeklyIncome/weeklyFixed/weeklyVariable/overrides the 30-day
-// view uses).
+// income/fixed/variable/periodic/net breakdown WeekCard already shows
+// for the 30-day view (spec item 4, "same breakdown... keeping the
+// 'where it came from' basis and manual overrides"). REMOVE BUSINESS
+// BALANCE TRACKING (owner decision 2026-08-27): no more opening/ending
+// balance row — the headline and the breakdown's bottom line are both
+// this month's own NET.
 function MonthCard({
   m,
   expanded,
   onToggle,
-  isTightest,
+  isWeakest,
   isBest,
 }: {
   m: CashFlowMonthProjection;
   expanded: boolean;
   onToggle: () => void;
-  isTightest: boolean;
+  isWeakest: boolean;
   isBest: boolean;
 }) {
   const { t } = useTranslation();
@@ -199,7 +200,7 @@ function MonthCard({
     <Pressable onPress={onToggle}>
       <Card
         style={{
-          ...(isTightest ? { borderColor: colors.orange, borderWidth: 1 } : isBest ? { borderColor: colors.green, borderWidth: 1 } : {}),
+          ...(isWeakest ? { borderColor: colors.orange, borderWidth: 1 } : isBest ? { borderColor: colors.green, borderWidth: 1 } : {}),
           ...(dimmed ? { opacity: 0.65 } : {}),
         }}
       >
@@ -212,21 +213,17 @@ function MonthCard({
             {m.status === 'current' && (
               <Text style={{ color: colors.accent, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthCurrentBadge')}</Text>
             )}
-            {isTightest && <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthTightestBadge')}</Text>}
+            {isWeakest && <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthWeakestBadge')}</Text>}
             {isBest && <Text style={{ color: colors.green, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.monthBestBadge')}</Text>}
           </View>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-          <MutedText>{t('cashFlowScreen.endingBalanceLabel')}</MutedText>
-          <Text style={{ color: m.closingBalance >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(m.closingBalance)}</Text>
+          <MutedText>{t('cashFlowScreen.netLabel')}</MutedText>
+          <Text style={{ color: m.net >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(m.net)}</Text>
         </View>
 
         {expanded && (
           <View style={{ marginTop: spacing.xs, gap: 2 }}>
-            <View style={styles.forecastRow}>
-              <MutedText>{t('cashFlowScreen.openingBalanceLabel')}</MutedText>
-              <Text style={{ color: colors.text }}>{money(m.openingBalance)}</Text>
-            </View>
             <View style={styles.forecastRow}>
               <MutedText>{t('cashFlowScreen.incomeLabel')}</MutedText>
               <Text style={{ color: colors.green }}>+{money(m.income)}</Text>
@@ -251,8 +248,8 @@ function MonthCard({
               </MutedText>
             ))}
             <View style={[styles.forecastRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs, marginTop: spacing.xs }]}>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cashFlowScreen.endingBalanceLabel')}</Text>
-              <Text style={{ color: m.closingBalance >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(m.closingBalance)}</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cashFlowScreen.netLabel')}</Text>
+              <Text style={{ color: m.net >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(m.net)}</Text>
             </View>
           </View>
         )}
@@ -354,28 +351,29 @@ function OverridableStat({
   );
 }
 
+// REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — no more
+// opening/ending balance row; the card's own bottom line is now this
+// week's own NET (income minus that week's own outflows), never a
+// running total. "Tightest" -> "weakest" throughout, matching
+// buildCashFlowForecast()'s own renamed weakestWeekIndex.
 function WeekCard({
   week,
-  isTightest,
+  isWeakest,
 }: {
   week: CashFlowWeekProjection;
-  isTightest: boolean;
+  isWeakest: boolean;
 }) {
   const { t } = useTranslation();
   const { money, date } = useFormatters();
   return (
-    <Card style={isTightest ? { borderColor: colors.orange, borderWidth: 1 } : undefined}>
+    <Card style={isWeakest ? { borderColor: colors.orange, borderWidth: 1 } : undefined}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text style={{ color: colors.text, fontWeight: '700' }}>
           {date(week.startDate, { month: 'short', day: 'numeric' })} – {date(week.endDate, { month: 'short', day: 'numeric' })}
         </Text>
-        {isTightest && <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.tightestBadge')}</Text>}
+        {isWeakest && <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('cashFlowScreen.weakestBadge')}</Text>}
       </View>
       <View style={{ marginTop: spacing.xs, gap: 2 }}>
-        <View style={styles.forecastRow}>
-          <MutedText>{t('cashFlowScreen.openingBalanceLabel')}</MutedText>
-          <Text style={{ color: colors.text }}>{money(week.openingBalance)}</Text>
-        </View>
         <View style={styles.forecastRow}>
           <MutedText>{t('cashFlowScreen.incomeLabel')}</MutedText>
           <Text style={{ color: colors.green }}>+{money(week.income)}</Text>
@@ -400,8 +398,8 @@ function WeekCard({
           </MutedText>
         ))}
         <View style={[styles.forecastRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs, marginTop: spacing.xs }]}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cashFlowScreen.endingBalanceLabel')}</Text>
-          <Text style={{ color: week.closingBalance >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(week.closingBalance)}</Text>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cashFlowScreen.netLabel')}</Text>
+          <Text style={{ color: week.net >= 0 ? colors.green : colors.red, fontWeight: '700' }}>{money(week.net)}</Text>
         </View>
       </View>
     </Card>
@@ -431,7 +429,6 @@ export default function CashFlow() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [savingBudget, setSavingBudget] = useState(false);
-  const [bankBalanceDraft, setBankBalanceDraft] = useState<string | null>(null);
   const [taxReservePctDraft, setTaxReservePctDraft] = useState<string | null>(null);
 
   const [editingOverride, setEditingOverride] = useState<OverrideField | null>(null);
@@ -445,7 +442,6 @@ export default function CashFlow() {
   const [monthlyYear, setMonthlyYear] = useState(now.getFullYear());
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
 
-  const bankBalance = bankBalanceDraft ?? (profileQuery.data?.cf_bank_balance != null ? String(profileQuery.data.cf_bank_balance) : '');
   const taxReservePct = taxReservePctDraft ?? (profileQuery.data?.cf_tax_reserve_pct != null ? String(profileQuery.data.cf_tax_reserve_pct) : '');
 
   const overrides: CashFlowOverrides = useMemo(
@@ -469,7 +465,6 @@ export default function CashFlow() {
   const forecast = useMemo(
     () =>
       buildCashFlowForecastFromData({
-        bankBalance: bankBalance ? Number(bankBalance) : 0,
         settlements: settlementsQuery.data ?? [],
         deductions: deductionsQuery.data ?? [],
         fuelPurchases: fuelQuery.data ?? [],
@@ -480,7 +475,7 @@ export default function CashFlow() {
         documents: documentsQuery.data ?? [],
         overrides,
       }),
-    [bankBalance, settlementsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data, complianceItemsQuery.data, documentsQuery.data, overrides]
+    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data, complianceItemsQuery.data, documentsQuery.data, overrides]
   );
 
   // Same income/fixed/variable weekly figures + classification + overrides
@@ -490,7 +485,6 @@ export default function CashFlow() {
   // the 30-day forecast's own lookback.
   const monthlySharedInput = useMemo(
     () => ({
-      todayBalance: bankBalance ? Number(bankBalance) : 0,
       weeklyIncome: forecast.weeklyIncome,
       weeklyFixed: forecast.weeklyFixed,
       weeklyVariable: forecast.weeklyVariable,
@@ -512,7 +506,7 @@ export default function CashFlow() {
       overrides,
       today: now,
     }),
-    [bankBalance, forecast, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, settlementsQuery.data, complianceItemsQuery.data, documentsQuery.data, overrides, now]
+    [forecast, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, settlementsQuery.data, complianceItemsQuery.data, documentsQuery.data, overrides, now]
   );
 
   const availableYears = useMemo(() => {
@@ -537,14 +531,13 @@ export default function CashFlow() {
   );
   const thisMonthEntry = thisMonthMonths.find((m) => m.month === currentMonthNow);
 
-  const tightestMonthIdx = findTightestMonthIndex(monthlyOverview);
+  const weakestMonthIdx = findTightestMonthIndex(monthlyOverview);
   const bestMonthIdx = findBestMonthIndex(monthlyOverview);
 
   async function handleSaveBudget() {
     setSavingBudget(true);
     try {
       await updateProfile.mutateAsync({
-        cf_bank_balance: bankBalance ? Number(bankBalance) : null,
         cf_tax_reserve_pct: taxReservePct ? Number(taxReservePct) : null,
       });
     } finally {
@@ -681,9 +674,12 @@ export default function CashFlow() {
   const lanes = useMemo(() => rankLoadsByRpm(loadsQuery.data ?? []), [loadsQuery.data]);
   const hasSettlements = (settlementsQuery.data ?? []).length > 0;
 
-  const tightestWeek = forecast.weeks[forecast.tightestWeekIndex];
-  const tightestWeekLabel = tightestWeek ? date(tightestWeek.endDate, { month: 'short', day: 'numeric' }) : '';
-  const tightestReasonItem = tightestWeek?.periodicItems[0];
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) —
+  // "tightest point" is now the WEAKEST NET week, never a lowest ending
+  // balance (there is no more balance to compute).
+  const weakestWeek = forecast.weeks[forecast.weakestWeekIndex];
+  const weakestWeekLabel = weakestWeek ? date(weakestWeek.endDate, { month: 'short', day: 'numeric' }) : '';
+  const weakestReasonItem = weakestWeek?.periodicItems[0];
   const oneOffTotal = forecast.classification.oneOffs.reduce((sum, o) => sum + o.amount, 0);
 
   return (
@@ -717,17 +713,9 @@ export default function CashFlow() {
             )}
 
             <Card>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <View style={{ flex: 1 }}>
-                  <MutedText>{t('cashFlowScreen.bankBalanceLabel')}</MutedText>
-                  <Field keyboardType="numeric" value={bankBalance} onChangeText={setBankBalanceDraft} placeholder="0" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <MutedText>{t('cashFlowScreen.taxReservePctLabel')}</MutedText>
-                  <Field keyboardType="numeric" value={taxReservePct} onChangeText={setTaxReservePctDraft} placeholder="0" />
-                  <MutedText>{t('cashFlowScreen.taxReservePctSuggestion', { pct: TAX_RESERVE_SUGGESTED_PCT })}</MutedText>
-                </View>
-              </View>
+              <MutedText>{t('cashFlowScreen.taxReservePctLabel')}</MutedText>
+              <Field keyboardType="numeric" value={taxReservePct} onChangeText={setTaxReservePctDraft} placeholder="0" />
+              <MutedText>{t('cashFlowScreen.taxReservePctSuggestion', { pct: TAX_RESERVE_SUGGESTED_PCT })}</MutedText>
               <PrimaryButton title={`💾 ${t('cashFlowScreen.saveBudget')}`} onPress={handleSaveBudget} loading={savingBudget} />
             </Card>
 
@@ -956,12 +944,12 @@ export default function CashFlow() {
               </>
             )}
 
-            {tightestWeek && (
+            {weakestWeek && (
               <MutedText style={{ marginTop: spacing.sm }}>
                 🎯{' '}
-                {tightestReasonItem
-                  ? t('cashFlowScreen.tightestPointWithReason', { amount: money(tightestWeek.closingBalance), date: tightestWeekLabel, label: tightestReasonItem.label })
-                  : t('cashFlowScreen.tightestPointLine', { amount: money(tightestWeek.closingBalance), date: tightestWeekLabel })}
+                {weakestReasonItem
+                  ? t('cashFlowScreen.weakestPointWithReason', { amount: money(weakestWeek.net), date: weakestWeekLabel, label: weakestReasonItem.label })
+                  : t('cashFlowScreen.weakestPointLine', { amount: money(weakestWeek.net), date: weakestWeekLabel })}
               </MutedText>
             )}
 
@@ -975,7 +963,7 @@ export default function CashFlow() {
               <>
                 <Text style={styles.sectionTitle}>{t('cashFlowScreen.weekByWeekTitle')}</Text>
                 {forecast.weeks.map((w) => (
-                  <WeekCard key={w.weekIndex} week={w} isTightest={w.weekIndex === forecast.tightestWeekIndex} />
+                  <WeekCard key={w.weekIndex} week={w} isWeakest={w.weekIndex === forecast.weakestWeekIndex} />
                 ))}
               </>
             )}
@@ -984,7 +972,7 @@ export default function CashFlow() {
               (thisMonthEntry ? (
                 <>
                   <Text style={styles.sectionTitle}>{t('cashFlowScreen.periodThisMonth')}</Text>
-                  <MonthCard m={thisMonthEntry} expanded onToggle={() => {}} isTightest={false} isBest={false} />
+                  <MonthCard m={thisMonthEntry} expanded onToggle={() => {}} isWeakest={false} isBest={false} />
                 </>
               ) : null)}
 
@@ -1005,19 +993,19 @@ export default function CashFlow() {
                   </>
                 )}
 
-                {tightestMonthIdx >= 0 && bestMonthIdx >= 0 && (
+                {weakestMonthIdx >= 0 && bestMonthIdx >= 0 && (
                   <View style={{ marginTop: spacing.sm, gap: 2 }}>
                     {/* MONTH FILTER OFF-BY-ONE fix (owner decision) — see
                         src/i18n/format.ts's formatMonthLabel() for the
                         full root-cause writeup. */}
                     <MutedText>
                       🎯{' '}
-                      {t('cashFlowScreen.tightestMonthLine', {
-                        month: monthLabel(monthlyOverview[tightestMonthIdx].year, monthlyOverview[tightestMonthIdx].month, {
+                      {t('cashFlowScreen.weakestMonthLine', {
+                        month: monthLabel(monthlyOverview[weakestMonthIdx].year, monthlyOverview[weakestMonthIdx].month, {
                           year: 'numeric',
                           month: 'long',
                         }),
-                        amount: money(monthlyOverview[tightestMonthIdx].closingBalance),
+                        amount: money(monthlyOverview[weakestMonthIdx].net),
                       })}
                     </MutedText>
                     <MutedText>
@@ -1027,7 +1015,7 @@ export default function CashFlow() {
                           year: 'numeric',
                           month: 'long',
                         }),
-                        amount: money(monthlyOverview[bestMonthIdx].closingBalance),
+                        amount: money(monthlyOverview[bestMonthIdx].net),
                       })}
                     </MutedText>
                   </View>
@@ -1042,7 +1030,7 @@ export default function CashFlow() {
                       m={m}
                       expanded={expandedMonthKey === key}
                       onToggle={() => setExpandedMonthKey((cur) => (cur === key ? null : key))}
-                      isTightest={i === tightestMonthIdx}
+                      isWeakest={i === weakestMonthIdx}
                       isBest={i === bestMonthIdx}
                     />
                   );

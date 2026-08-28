@@ -350,6 +350,11 @@
     "taxDeductibleNo": "لا",
     "nonDeductibleTag": "غير قابل للخصم الضريبي",
     "personalPaymentNote": "💰 طريقة الدفع الشخصية تعني أن هذا دُفع من مال المالك الخاص — سيتم تسجيله (أو مزامنته) كمساهمة في حساب رأس المال.",
+    "attachmentLabel": "إرفاق إيصال (اختياري)",
+    "attachTakePhoto": "التقاط صورة",
+    "attachChooseFromLibrary": "اختيار من المكتبة",
+    "attachImportFile": "استيراد ملف",
+    "attachFailedTitle": "فشل الإرفاق",
     "deleteConfirmTitle": "حذف هذا الخصم؟",
     "deleteConfirmBody": "سيؤدي هذا أيضًا إلى إزالة أي مساهمة مالك مرتبطة والمستند/الصورة المصدر (إذا كان هذا السجل قد جاء من أحدهما).",
     "saveFailedTitle": "فشل الحفظ",
@@ -518,7 +523,6 @@
     "savedSettlementNew": "تم حفظ الـ settlement لأسبوع W/E {{date}} (جديد)",
     "savedSettlementReplaced": "تم حفظ الـ settlement لأسبوع W/E {{date}} (تم الاستبدال)",
     "skippedRowsWarning": "تعذر حفظ {{count}} صف/صفوف وتم تخطيها:",
-    "balanceAdded": "💰 الرصيد {{amount}}",
     "contributionAdded": "💰 أُضيف كمساهمة في حساب رأس المال: {{amount}} (مدفوع من أموال شخصية)",
     "savedToPath": "📁 حُفظ في {{path}}",
     "importAnother": "استيراد آخر",
@@ -1650,10 +1654,6 @@
         "title": "جدول الصيانة",
         "subtitle": "قمنا بتعبئة قيم افتراضية معقولة مسبقًا — عدّل أي فاصل زمني الآن أو لاحقًا في Truck Health."
       },
-      "openingBalance": {
-        "title": "الرصيد الافتتاحي للعمل",
-        "subtitle": "رصيد حسابك الجاري الحالي. الافتراضي هو 0$ — تخطَّ هذا إذا كنت تفضل البدء من الصفر."
-      },
       "taxYear": {
         "title": "تأكيد السنة الضريبية",
         "subtitle": "السنة التي تُحسب تقديراتك بناءً عليها."
@@ -1687,7 +1687,6 @@
       "entityTypeNotSet": "أكّد نوع كيان عملك → احصل على تقدير ضريبي دقيق ومقارنة توفير S-Corp.",
       "homeStateNotSet": "حدد ولايتك → يمكن أن يشمل تقدير الضرائب ضريبة الولاية.",
       "firstReceiptMissing": "أضف أول إيصال دفعته من جيبك → افتح تقرير مصروفات حزمة المحاسب.",
-      "businessBalanceNotSet": "أدخل رصيد حسابك المصرفي → افتح توقعات تدفق نقدي حقيقية.",
       "settlementMissingMiles_amount_one": "settlement واحد به إيرادات لكن بدون أميال مسجّلة — أضفها لتصحيح التكلفة/الميل (يظهر حاليًا مبالغًا فيه {{currentCpm}}/ميل).",
       "settlementMissingMiles_amount_other": "{{count}} settlement بها إيرادات لكن بدون أميال مسجّلة — أضفها لتصحيح التكلفة/الميل (يظهر حاليًا مبالغًا فيه {{currentCpm}}/ميل).",
       "depreciationNotSet_amount_one": "شاحنة واحدة لم يتم اختيار طريقة إهلاك لها — اختر واحدة لفتح ما يصل إلى {{previewTotal}} من الخصومات هذا العام.",
@@ -2243,6 +2242,7 @@
     "bulkTitle": "تخصيص المحدد ({{count}}) إلى:",
     "assignSelected": "تخصيص {{count}} محدد",
     "assignThisRow": "تخصيص هذا الصف إلى",
+    "partialFailureTitle": "تعذّر تعيين {{count}} صف",
     "kind": {
       "settlement": "Settlement",
       "fuel": "وقود",

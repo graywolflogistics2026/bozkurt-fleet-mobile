@@ -24,7 +24,6 @@ export type NudgeTopic =
   | 'entityTypeNotSet'
   | 'homeStateNotSet'
   | 'firstReceiptMissing'
-  | 'businessBalanceNotSet'
   | 'perDiemZeroMileWeek';
 
 export type NudgeCandidate = {
@@ -162,13 +161,6 @@ export function detectFirstReceiptMissing(deductionsCount: number, role: Profile
   return deductionsCount === 0 ? { topic: 'firstReceiptMissing', detail: {} } : null;
 }
 
-// Owners only — Cash Flow's 30-day forecast (cf_bank_balance) is an
-// owner-operator planning tool.
-export function detectBusinessBalanceNotSet(cfBankBalance: number | null, role: ProfileRole): NudgeCandidate | null {
-  if (!isOwnerRole(role)) return null;
-  return cfBankBalance == null ? { topic: 'businessBalanceNotSet', detail: {} } : null;
-}
-
 // A 0-mile settlement week smart-defaults per_diem_days to 0 ("home week,"
 // src/tax/perDiem.ts's defaultPerDiemDaysForMiles()) — usually correct,
 // but a 0-mile week can still be a real day away from home (e.g. stuck at
@@ -211,7 +203,6 @@ export function buildMissingDataNudgeCandidates(input: {
   entityTypeSet?: boolean;
   homeState?: string | null;
   deductionsCount?: number;
-  cfBankBalance?: number | null;
   perDiemDailyRate?: number | null;
   // Explicit opt-in — omitted settlement rows have no `per_diem_days` key
   // at all in the two existing callers' fixtures, and an omitted field
@@ -234,7 +225,6 @@ export function buildMissingDataNudgeCandidates(input: {
     input.entityTypeSet !== undefined ? detectEntityTypeNotSet(input.entityTypeSet, input.role) : null,
     input.homeState !== undefined ? detectHomeStateNotSet(input.homeState) : null,
     input.deductionsCount !== undefined ? detectFirstReceiptMissing(input.deductionsCount, input.role) : null,
-    input.cfBankBalance !== undefined ? detectBusinessBalanceNotSet(input.cfBankBalance, input.role) : null,
     input.checkPerDiemZeroMileWeek
       ? detectPerDiemZeroMileWeek(
           input.settlements.map((s) => ({ miles: s.miles ?? 0, per_diem_days: s.per_diem_days ?? null })),

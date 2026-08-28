@@ -17,7 +17,6 @@ export const NUDGE_ICON: Record<NudgeTopic, string> = {
   entityTypeNotSet: '🏛️',
   homeStateNotSet: '📍',
   firstReceiptMissing: '🧾',
-  businessBalanceNotSet: '💵',
   perDiemZeroMileWeek: '🏠',
 };
 
@@ -36,7 +35,6 @@ export const NUDGE_TIME_ESTIMATE_MINUTES: Record<NudgeTopic, number> = {
   entityTypeNotSet: 1,
   homeStateNotSet: 1,
   firstReceiptMissing: 2,
-  businessBalanceNotSet: 1,
   perDiemZeroMileWeek: 1,
 };
 
@@ -51,7 +49,6 @@ export const NUDGE_ROUTE: Record<NudgeTopic, string> = {
   entityTypeNotSet: '/(tabs)/more/tax-estimator',
   homeStateNotSet: '/(tabs)/more/settings',
   firstReceiptMissing: '/(tabs)/import',
-  businessBalanceNotSet: '/(tabs)/more/cash-flow',
   perDiemZeroMileWeek: '/(tabs)/more/settlements',
 };
 

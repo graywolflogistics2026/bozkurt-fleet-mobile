@@ -356,6 +356,11 @@
     "taxDeductibleNo": "No",
     "nonDeductibleTag": "Not tax deductible",
     "personalPaymentNote": "💰 A personal payment method means this was paid with the owner's own money — it will be recorded (or kept in sync) as a Capital Account contribution.",
+    "attachmentLabel": "Attach a receipt (optional)",
+    "attachTakePhoto": "Take Photo",
+    "attachChooseFromLibrary": "Choose from Library",
+    "attachImportFile": "Import a File",
+    "attachFailedTitle": "Attachment failed",
     "deleteConfirmTitle": "Delete this deduction?",
     "deleteConfirmBody": "This also removes any linked Owner Contribution and the source document/photo (if this row came from one).",
     "saveFailedTitle": "Save failed",
@@ -519,7 +524,6 @@
     "savedSettlementNew": "Saved settlement W/E {{date}} (new)",
     "savedSettlementReplaced": "Saved settlement W/E {{date}} (replaced)",
     "skippedRowsWarning": "{{count}} row(s) could not be saved and were skipped:",
-    "balanceAdded": "💰 Balance {{amount}}",
     "contributionAdded": "💰 Added as a Capital Account contribution: {{amount}} (paid from personal funds)",
     "savedToPath": "📁 Saved to {{path}}",
     "importAnother": "Import Another",
@@ -1540,6 +1544,7 @@
     "bulkTitle": "Assign selected ({{count}}) to:",
     "assignSelected": "Assign {{count}} Selected",
     "assignThisRow": "Assign this row to",
+    "partialFailureTitle": "{{count}} row(s) could not be assigned",
     "kind": {
       "settlement": "Settlement",
       "fuel": "Fuel",
@@ -1718,10 +1723,6 @@
         "title": "Maintenance schedule",
         "subtitle": "We've pre-filled sensible defaults — adjust any interval now or later in Truck Health."
       },
-      "openingBalance": {
-        "title": "Opening business balance",
-        "subtitle": "Your current checking account balance. Defaults to $0 — skip if you'd rather start from zero."
-      },
       "taxYear": {
         "title": "Confirm tax year",
         "subtitle": "The year your estimates are computed against."
@@ -1755,7 +1756,6 @@
       "entityTypeNotSet": "Confirm your business entity type → unlock an accurate tax estimate and S-Corp savings comparison.",
       "homeStateNotSet": "Set your home state → your tax estimate can include state tax.",
       "firstReceiptMissing": "Add your first out-of-pocket receipt → unlock your Accountant Package expense report.",
-      "businessBalanceNotSet": "Enter your bank balance → unlock real Cash Flow forecasting.",
       "settlementMissingMiles_amount_one": "{{count}} settlement has revenue but no miles recorded — add them to fix your Cost/Mile (currently showing an inflated {{currentCpm}}/mi).",
       "settlementMissingMiles_amount_other": "{{count}} settlements have revenue but no miles recorded — add them to fix your Cost/Mile (currently showing an inflated {{currentCpm}}/mi).",
       "depreciationNotSet_amount_one": "{{count}} truck has no depreciation method chosen — pick one to unlock up to {{previewTotal}} in deductions this year.",

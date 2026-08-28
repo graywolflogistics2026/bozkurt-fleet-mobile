@@ -4006,6 +4006,174 @@ just avoids a wasted network call.
 
 ---
 
+## 72. REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — NOT YET APPLIED
+
+**The decision**: `profiles.business_balance` has been a recurring source
+of drift/confusion across multiple prior passes (§37/§38/§59/§60/§70 all
+exist specifically because this estimate kept getting out of sync with
+reality). The owner has decided the app's own balance ESTIMATE adds no
+value over the owner's own real bank balance — it is retired as a
+displayed/computed feature everywhere, but every underlying column/table
+stays in place, INERT, so this is fully reversible later without a data
+migration. See CLAUDE.md's own dated entry for this pass for the full
+client-side audit (every UI surface removed, every write path
+neutralized).
+
+**What this section does, SQL-side**: (a) drops the §70 `AFTER DELETE`
+reversal trigger on `settlements` — since nothing writes
+`business_balance_credit` anymore, a settlement carrying a STALE,
+pre-this-pass credit value that later gets deleted must not still
+decrement `business_balance` on the way out (the trigger FUNCTION itself
+is left in place, `DROP TRIGGER` only — its `CREATE FUNCTION`/
+`CREATE TRIGGER` statements are preserved verbatim in §70's own historical
+entry above, so restoring this is a straight copy-paste, not a rewrite);
+(b) `CREATE OR REPLACE`s the three §60 manual-capital-transaction RPCs to
+drop their balance-delta half while keeping the `capital_transactions` row
+write completely unchanged — draws, contributions, reimbursements, and
+everything Capital Account's own four-flow summary/Net Position/
+tax-free-remaining computation depends on are 100% unaffected (verified in
+the client-side audit: `calcCapitalAccount()`/`summarizeCapitalFlows()`
+compute directly from `capital_transactions` rows + `initial_capital`,
+never from `business_balance`). Each RPC now writes
+`business_balance_applied = 0` on every row (informational-only column,
+nothing reads it anymore, but `0` is the honest value — "this transaction
+did not move any tracked balance" — rather than leaving a stale nonzero
+figure with nothing left to apply it). `apply_settlement_business_balance_credit()`
+(§60) and `apply_business_balance_delta()` (§37) are BOTH left completely
+untouched — the client no longer calls either one, so they're already
+inert without any SQL change; leaving their definitions alone keeps this
+section's own diff minimal and both fully restorable.
+
+**NOT YET APPLIED** (no live DB access in this sandbox) — must be run by
+the owner via the Supabase SQL Editor. The CLIENT code changes (no longer
+calling the balance-touching parts) ship independently via `eas update`
+and are safe to deploy before this SQL runs: `record_manual_capital_transaction`/
+`update_manual_capital_transaction`/`delete_manual_capital_transaction`
+would still also silently apply a now-invisible balance delta server-side
+until this migration lands, which is harmless since nothing reads
+`business_balance` anymore on the client. The settlement trigger drop is
+the one piece with a real (if narrow) reason to run promptly: until it's
+applied, deleting an OLD settlement that still carries a stale
+`business_balance_credit` from before this pass will still silently move
+`business_balance` one more time.
+
+```sql
+-- Part A — drop the §70 reversal trigger. The function itself
+-- (reverse_settlement_business_balance_credit()) is intentionally left
+-- defined — only the trigger binding is removed — so restoring this is
+-- exactly the two-line `CREATE TRIGGER` statement already on file in
+-- §70 above, no function rewrite needed.
+drop trigger if exists trg_reverse_settlement_business_balance_credit on settlements;
+
+-- Part B — the three manual capital-transaction RPCs, balance-delta
+-- application removed, row write unchanged.
+create or replace function record_manual_capital_transaction(
+  p_user_id uuid,
+  p_tx_type text,
+  p_amount numeric,
+  p_tx_date date,
+  p_note text,
+  p_linked_deduction_id uuid default null
+)
+returns capital_transactions
+language plpgsql
+security invoker
+as $$
+declare
+  v_row capital_transactions;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'record_manual_capital_transaction: user mismatch' using errcode = '28000';
+  end if;
+  if p_tx_type not in ('contribution', 'draw') then
+    raise exception 'record_manual_capital_transaction: invalid tx_type %', p_tx_type;
+  end if;
+
+  insert into capital_transactions (user_id, tx_type, amount, tx_date, note, linked_deduction_id, business_balance_applied)
+  values (p_user_id, p_tx_type, p_amount, p_tx_date, p_note, p_linked_deduction_id, 0)
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function record_manual_capital_transaction(uuid, text, numeric, date, text, uuid) to authenticated;
+
+create or replace function update_manual_capital_transaction(
+  p_id uuid,
+  p_user_id uuid,
+  p_tx_type text,
+  p_amount numeric,
+  p_tx_date date,
+  p_note text
+)
+returns capital_transactions
+language plpgsql
+security invoker
+as $$
+declare
+  v_row capital_transactions;
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'update_manual_capital_transaction: user mismatch' using errcode = '28000';
+  end if;
+  if p_tx_type not in ('contribution', 'draw') then
+    raise exception 'update_manual_capital_transaction: invalid tx_type %', p_tx_type;
+  end if;
+
+  update capital_transactions
+  set amount = p_amount, tx_date = p_tx_date, note = p_note, business_balance_applied = 0
+  where id = p_id and user_id = p_user_id
+  returning * into v_row;
+
+  if not found then
+    raise exception 'update_manual_capital_transaction: no capital_transactions row % for user %', p_id, p_user_id
+      using errcode = 'P0002';
+  end if;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function update_manual_capital_transaction(uuid, uuid, text, numeric, date, text) to authenticated;
+
+create or replace function delete_manual_capital_transaction(
+  p_id uuid,
+  p_user_id uuid
+)
+returns void
+language plpgsql
+security invoker
+as $$
+begin
+  if p_user_id is distinct from auth.uid() then
+    raise exception 'delete_manual_capital_transaction: user mismatch' using errcode = '28000';
+  end if;
+
+  delete from capital_transactions where id = p_id and user_id = p_user_id;
+
+  if not found then
+    raise exception 'delete_manual_capital_transaction: no capital_transactions row % for user %', p_id, p_user_id
+      using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+grant execute on function delete_manual_capital_transaction(uuid, uuid) to authenticated;
+```
+
+`app/src/data/capitalTransactions.ts`'s four mutation hooks call these
+same three RPC names unchanged (only their SQL bodies differ) —
+`app/src/data/aiImportSave.ts`'s settlement save path no longer calls
+`apply_settlement_business_balance_credit` at all (confirmed by grep, no
+SQL change needed for that RPC itself — it's simply unreferenced now).
+
+- [ ] 72 run (drop trg_reverse_settlement_business_balance_credit;
+      CREATE OR REPLACE record_manual_capital_transaction /
+      update_manual_capital_transaction / delete_manual_capital_transaction)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

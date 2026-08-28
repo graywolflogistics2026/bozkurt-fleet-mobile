@@ -103,8 +103,8 @@ describe('upcomingReimbursementsByWeek', () => {
   });
 });
 
-describe('buildCashFlowForecast — week-by-week assembly', () => {
-  it('chains opening/ending balances across 4 weeks and applies income/fixed/variable/periodic correctly', () => {
+describe('buildCashFlowForecast — week-by-week assembly (REMOVE BUSINESS BALANCE TRACKING, owner decision 2026-08-27: no opening/closing balance is computed anymore — each week reports its own net)', () => {
+  it('applies income/fixed/variable/periodic correctly for each independent week', () => {
     // KPI CONSISTENCY / SHOW AND LET ME CORRECT IT (owner decision) —
     // buildCashFlowForecast() now derives weeklyFixed from
     // classification.fixed (via mergeRecurringCharges()), not the
@@ -113,7 +113,6 @@ describe('buildCashFlowForecast — week-by-week assembly', () => {
     // what the test says it means.
     const classification = { ...classifyCashFlowSpending([], 0), fixed: [{ category: 'Insurance—Truck', weeklyAmount: 300, occurrences: 6, source: 'auto' as const }] };
     const result = buildCashFlowForecast(
-      1000,
       { average: 2000, weeksFound: 4 },
       classification,
       { average: 2500, weeksFound: 4 },
@@ -123,37 +122,36 @@ describe('buildCashFlowForecast — week-by-week assembly', () => {
       TODAY
     );
     expect(result.weeks).toHaveLength(4);
-    expect(result.weeks[0].openingBalance).toBe(1000);
     // net = income(2000) - fixed(300) - variable(computed rate * miles, 0
     // here since classification has no variable categories) = 1700
-    expect(result.weeks[0].closingBalance).toBe(1000 + 2000 - 300 - 0);
-    expect(result.weeks[1].openingBalance).toBe(result.weeks[0].closingBalance);
+    expect(result.weeks[0].net).toBe(2000 - 300 - 0);
+    expect(result.weeks[1].net).toBe(result.weeks[0].net); // same steady-state figure every week
   });
 
   it('a periodic item lands in the exact week whose date range contains its due date', () => {
     const classification = classifyCashFlowSpending([], 0);
     const periodicItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2290', dueDate: '2026-08-25', amount: 550, amountSource: 'document' as const }];
-    const result = buildCashFlowForecast(1000, { average: 1000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    const result = buildCashFlowForecast({ average: 1000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
     // TODAY=2026-08-15, week 0 = Aug15-21, week 1 = Aug22-28 -> due date Aug 25 lands in week 1.
     expect(result.weeks[0].periodicItems).toHaveLength(0);
     expect(result.weeks[1].periodicItems).toHaveLength(1);
     expect(result.weeks[1].periodic).toBe(550);
   });
 
-  it('identifies the tightest (lowest ending balance) week', () => {
+  it('identifies the weakest (lowest net) week', () => {
     const classification = classifyCashFlowSpending([], 0);
     const periodicItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2290', dueDate: '2026-08-25', amount: 5000, amountSource: 'document' as const }];
-    const result = buildCashFlowForecast(2000, { average: 1000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
-    expect(result.tightestWeekIndex).toBe(1);
+    const result = buildCashFlowForecast({ average: 1000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    expect(result.weakestWeekIndex).toBe(1);
   });
 
   it('reliability flag is false under 3 weeks of history, true at/above it', () => {
     const classification = classifyCashFlowSpending([], 0);
-    const unreliable = buildCashFlowForecast(0, { average: 0, weeksFound: 2 }, { ...classification, weeksObserved: 2 }, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    const unreliable = buildCashFlowForecast({ average: 0, weeksFound: 2 }, { ...classification, weeksObserved: 2 }, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
     expect(unreliable.reliable).toBe(false);
     expect(unreliable.weeksOfHistory).toBe(2);
 
-    const reliable = buildCashFlowForecast(0, { average: 0, weeksFound: 3 }, { ...classification, weeksObserved: 3 }, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    const reliable = buildCashFlowForecast({ average: 0, weeksFound: 3 }, { ...classification, weeksObserved: 3 }, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
     expect(reliable.reliable).toBe(true);
   });
 });
@@ -163,13 +161,13 @@ describe('buildCashFlowForecast — OVERRIDES survive a changed computed average
     const classification = classifyCashFlowSpending([], 0);
     const overrides: CashFlowOverrides = { ...EMPTY_CASH_FLOW_OVERRIDES, incomeWeekly: 4000 };
 
-    const before = buildCashFlowForecast(0, { average: 2000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    const before = buildCashFlowForecast({ average: 2000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
     expect(before.weeklyIncome).toBe(4000);
     expect(before.incomeIsOverridden).toBe(true);
 
     // Simulate a NEW settlement import changing the underlying average —
     // the SAME override object must still win.
-    const after = buildCashFlowForecast(0, { average: 2600, weeksFound: 5 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    const after = buildCashFlowForecast({ average: 2600, weeksFound: 5 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
     expect(after.weeklyIncome).toBe(4000);
     expect(after.incomeIsOverridden).toBe(true);
   });
@@ -177,7 +175,7 @@ describe('buildCashFlowForecast — OVERRIDES survive a changed computed average
   it('a fixed/variable override each independently wins over their own computed figure', () => {
     const classification = { ...classifyCashFlowSpending([], 0), weeklyFixedTotal: 300 };
     const overrides: CashFlowOverrides = { ...EMPTY_CASH_FLOW_OVERRIDES, fixedWeekly: 500, variableWeekly: 900 };
-    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 1000, weeksFound: 4 }, [], new Map(), overrides, TODAY);
+    const result = buildCashFlowForecast({ average: 0, weeksFound: 0 }, classification, { average: 1000, weeksFound: 4 }, [], new Map(), overrides, TODAY);
     expect(result.weeklyFixed).toBe(500);
     expect(result.fixedIsOverridden).toBe(true);
     expect(result.weeklyVariable).toBe(900);
@@ -188,13 +186,13 @@ describe('buildCashFlowForecast — OVERRIDES survive a changed computed average
     const classification = classifyCashFlowSpending([], 0);
     const periodicItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2290', dueDate: '2026-08-20', amount: 550, amountSource: 'document' as const }];
     const overrides: CashFlowOverrides = { ...EMPTY_CASH_FLOW_OVERRIDES, periodicAmounts: { c1: 620 } };
-    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), overrides, TODAY);
+    const result = buildCashFlowForecast({ average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, periodicItems, new Map(), overrides, TODAY);
     expect(result.weeks[0].periodic).toBe(620);
   });
 
   it('no override (null) falls back cleanly to the computed value', () => {
     const classification = { ...classifyCashFlowSpending([], 0), fixed: [{ category: 'Insurance—Truck', weeklyAmount: 300, occurrences: 6, source: 'auto' as const }] };
-    const result = buildCashFlowForecast(0, { average: 2000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    const result = buildCashFlowForecast({ average: 2000, weeksFound: 4 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
     expect(result.weeklyIncome).toBe(2000);
     expect(result.incomeIsOverridden).toBe(false);
     expect(result.weeklyFixed).toBe(300);
@@ -212,7 +210,7 @@ describe('buildCashFlowForecast — SHOW AND LET ME CORRECT IT (owner decision)'
       ...EMPTY_CASH_FLOW_OVERRIDES,
       recurringCharges: { 'Permits, Licenses & Road Taxes': { weeklyAmount: 100 } },
     };
-    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    const result = buildCashFlowForecast({ average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
     expect(result.fixedCharges.map((f) => f.category).sort()).toEqual(['Insurance—Truck', 'Permits, Licenses & Road Taxes']);
     expect(result.weeklyFixed).toBe(36 + 100);
     expect(result.fixedIsOverridden).toBe(false); // this is the per-charge lever, not the whole-total override
@@ -224,7 +222,7 @@ describe('buildCashFlowForecast — SHOW AND LET ME CORRECT IT (owner decision)'
       recurringCharges: { 'Roadside Assistance Plan': { weeklyAmount: 15 } },
     };
     const beforeImport = { ...classifyCashFlowSpending([], 0), fixed: [] as ReturnType<typeof classifyCashFlowSpending>['fixed'] };
-    const before = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, beforeImport, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    const before = buildCashFlowForecast({ average: 0, weeksFound: 0 }, beforeImport, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
     expect(before.weeklyFixed).toBe(15);
 
     // A new settlement import changes what the classifier itself detects.
@@ -232,14 +230,14 @@ describe('buildCashFlowForecast — SHOW AND LET ME CORRECT IT (owner decision)'
       ...classifyCashFlowSpending([], 0),
       fixed: [{ category: 'Insurance—Truck', weeklyAmount: 36, occurrences: 6, source: 'auto' as const }],
     };
-    const after = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, afterImport, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
+    const after = buildCashFlowForecast({ average: 0, weeksFound: 0 }, afterImport, { average: 0, weeksFound: 0 }, [], new Map(), overrides, TODAY);
     expect(after.fixedCharges.some((f) => f.category === 'Roadside Assistance Plan' && f.source === 'manual')).toBe(true);
     expect(after.weeklyFixed).toBe(36 + 15);
   });
 
   it('NEVER PRESENTS "$0 FIXED" SILENTLY AS THE ONLY SIGNAL — fixedCharges is genuinely empty when nothing is detected and nothing was added, so the screen can show the "not enough history" message', () => {
     const classification = classifyCashFlowSpending([], 0);
-    const result = buildCashFlowForecast(0, { average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
+    const result = buildCashFlowForecast({ average: 0, weeksFound: 0 }, classification, { average: 0, weeksFound: 0 }, [], new Map(), EMPTY_CASH_FLOW_OVERRIDES, TODAY);
     expect(result.fixedCharges).toHaveLength(0);
     expect(result.weeklyFixed).toBe(0);
   });
@@ -266,7 +264,6 @@ describe('buildCashFlowForecastFromData — end to end on a realistic dataset', 
     const complianceItems = [{ id: 'c1', type: 'hvut_2290' as const, label: '2026 HVUT 2290', due_date: '2026-08-25', source_document_id: null }];
 
     const result = buildCashFlowForecastFromData({
-      bankBalance: 5000,
       settlements,
       deductions,
       fuelPurchases,
@@ -333,7 +330,6 @@ describe('buildCashFlowForecastFromData — end to end on a realistic dataset', 
     expect(allDeductions.every((d) => d.category != null)).toBe(true);
 
     const result = buildCashFlowForecastFromData({
-      bankBalance: 0,
       settlements,
       deductions: allDeductions as unknown as Parameters<typeof buildCashFlowForecastFromData>[0]['deductions'],
       fuelPurchases: [],

@@ -7,6 +7,14 @@
 // actual-to-date + projected-remainder figure for the month "today"
 // falls inside (never a guess about days that haven't happened, never a
 // stale figure for days that have).
+//
+// REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27): this
+// module used to chain opening/closing BALANCES month to month, anchored
+// to a single "today's bank balance" input — that whole mechanism is
+// gone. Every month is now computed entirely independently (no more
+// backward/forward walk needed at all, since nothing carries a running
+// total across months anymore) — each month just reports its own
+// income/fixed/variable/periodic/net for that month alone.
 import type { CashFlowClassification, SpendEvent } from '@/src/stats/cashFlowClassification';
 import type { PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
 import type { CashFlowOverrides } from '@/src/stats/cashFlowForecast';
@@ -17,14 +25,12 @@ export type CashFlowMonthProjection = {
   year: number;
   month: number; // 1-12
   status: MonthStatus;
-  openingBalance: number;
   income: number;
   fixed: number;
   variable: number;
   periodic: number;
   periodicItems: PeriodicForecastItem[];
   net: number;
-  closingBalance: number;
 };
 
 type SettlementNetLike = { week_ending: string | null; net: number | null };
@@ -41,11 +47,6 @@ function monthBoundsIso(year: number, month: number): { startIso: string; endIso
 
 function monthIndex(year: number, month: number): number {
   return year * 12 + (month - 1);
-}
-
-function addMonths(year: number, month: number, delta: number): { year: number; month: number } {
-  const idx = monthIndex(year, month) + delta;
-  return { year: Math.floor(idx / 12), month: (idx % 12) + 1 };
 }
 
 function sumSettlementsNet(settlements: SettlementNetLike[], startIso: string, endIso: string): number {
@@ -91,9 +92,7 @@ function sumPeriodic(
   return { total, items: inRange };
 }
 
-type MonthCore = Omit<CashFlowMonthProjection, 'openingBalance' | 'closingBalance'>;
-
-function computeMonthCore(
+function computeMonth(
   year: number,
   month: number,
   status: MonthStatus,
@@ -106,7 +105,7 @@ function computeMonthCore(
   periodicItems: PeriodicForecastItem[],
   overrides: CashFlowOverrides,
   today: Date
-): MonthCore {
+): CashFlowMonthProjection {
   const { startIso, endIso } = monthBoundsIso(year, month);
 
   if (status === 'actual') {
@@ -153,41 +152,12 @@ function computeMonthCore(
   return { year, month, status, income, fixed, variable, periodic, periodicItems: periodicItemsInMonth, net: income - fixed - variable - periodic };
 }
 
-// Only the ACTUAL-TO-DATE share of the current month (month start through
-// today) — used purely to anchor the balance chain: today's own real
-// bank balance already reflects this portion, so it's backed OUT to find
-// the month's opening balance, while the full (actual + projected) net
-// from computeMonthCore is used going FORWARD from today to find the
-// month's closing balance.
-function actualToDateNet(
-  year: number,
-  month: number,
-  variableCategories: Set<string>,
-  allEvents: SpendEvent[],
-  allSettlements: SettlementNetLike[],
-  periodicItems: PeriodicForecastItem[],
-  overrides: CashFlowOverrides,
-  today: Date
-): number {
-  const { startIso } = monthBoundsIso(year, month);
-  const todayIso = today.toISOString().slice(0, 10);
-  const income = sumSettlementsNet(allSettlements, startIso, todayIso);
-  const { fixed, variable } = sumEventsByBucket(allEvents, startIso, todayIso, variableCategories);
-  const { total: periodic } = sumPeriodic(periodicItems, startIso, todayIso, overrides);
-  return income - fixed - variable - periodic;
-}
-
-// THE ASSEMBLY — 12 months of `year`, with real chained opening/closing
-// balances anchored to the ONE true data point available: today's own
-// bank balance. Walks outward from the current month (which may or may
-// not fall inside the requested `year`) in both directions — backward
-// reconstructs past months' balances from real actuals (never a guess),
-// forward projects future months from the steady-state weekly figures —
-// so a past year's December and next year's January are just as
-// correctly chained as the current month itself.
+// THE ASSEMBLY — 12 independent months of `year`. Each month is computed
+// entirely on its own (no more balance chain to walk backward/forward for)
+// — a past year's December and next year's January are each simply their
+// own actual/projected figures, nothing carried between them.
 export function buildMonthlyCashFlowOverview(input: {
   year: number;
-  todayBalance: number;
   weeklyIncome: number;
   weeklyFixed: number;
   weeklyVariable: number;
@@ -211,92 +181,42 @@ export function buildMonthlyCashFlowOverview(input: {
     return 'projected';
   }
 
-  function core(y: number, m: number): MonthCore {
-    return computeMonthCore(
-      y,
-      m,
-      statusFor(y, m),
-      input.weeklyIncome,
-      input.weeklyFixed,
-      input.weeklyVariable,
-      variableCategories,
-      input.allEvents,
-      input.allSettlements,
-      input.periodicItems,
-      input.overrides,
-      today
-    );
-  }
-
-  const currentCore = core(currentYear, currentMonth);
-  const currentActualToDate = actualToDateNet(
-    currentYear,
-    currentMonth,
-    variableCategories,
-    input.allEvents,
-    input.allSettlements,
-    input.periodicItems,
-    input.overrides,
-    today
-  );
-  const currentOpening = input.todayBalance - currentActualToDate;
-  const currentClosing = input.todayBalance + (currentCore.net - currentActualToDate);
-
-  const byIndex = new Map<number, CashFlowMonthProjection>();
-  byIndex.set(monthIndex(currentYear, currentMonth), { ...currentCore, openingBalance: currentOpening, closingBalance: currentClosing });
-
-  const targetStartIdx = monthIndex(input.year, 1);
-  const targetEndIdx = monthIndex(input.year, 12);
-  const curIdx = monthIndex(currentYear, currentMonth);
-
-  // Walk forward from the current month through whichever future month
-  // the requested year's own December sits at (a no-op loop if the
-  // requested year doesn't reach past the current month at all).
-  let prevClosing = currentClosing;
-  for (let idx = curIdx + 1; idx <= Math.max(targetEndIdx, curIdx); idx++) {
-    const y = Math.floor(idx / 12);
-    const m = (idx % 12) + 1;
-    const c = core(y, m);
-    const opening = prevClosing;
-    const closing = opening + c.net;
-    byIndex.set(idx, { ...c, openingBalance: opening, closingBalance: closing });
-    prevClosing = closing;
-  }
-
-  // Walk backward from the current month through whichever past month
-  // the requested year's own January sits at.
-  let nextOpening = currentOpening;
-  for (let idx = curIdx - 1; idx >= Math.min(targetStartIdx, curIdx); idx--) {
-    const y = Math.floor(idx / 12);
-    const m = (idx % 12) + 1;
-    const c = core(y, m);
-    const closing = nextOpening;
-    const opening = closing - c.net;
-    byIndex.set(idx, { ...c, openingBalance: opening, closingBalance: closing });
-    nextOpening = opening;
-  }
-
   const result: CashFlowMonthProjection[] = [];
   for (let m = 1; m <= 12; m++) {
-    const entry = byIndex.get(monthIndex(input.year, m));
-    if (entry) result.push(entry);
+    result.push(
+      computeMonth(
+        input.year,
+        m,
+        statusFor(input.year, m),
+        input.weeklyIncome,
+        input.weeklyFixed,
+        input.weeklyVariable,
+        variableCategories,
+        input.allEvents,
+        input.allSettlements,
+        input.periodicItems,
+        input.overrides,
+        today
+      )
+    );
   }
   return result;
 }
 
 // "Highlight the tightest and best month" (spec item 3) — lowest and
-// highest closing balance across the given months. Returns -1 for an
-// empty list rather than throwing.
+// highest NET across the given months (no more balance to compute a
+// tightest/best POINT from). Returns -1 for an empty list rather than
+// throwing.
 export function findTightestMonthIndex(months: CashFlowMonthProjection[]): number {
   if (months.length === 0) return -1;
   let idx = 0;
-  for (let i = 1; i < months.length; i++) if (months[i].closingBalance < months[idx].closingBalance) idx = i;
+  for (let i = 1; i < months.length; i++) if (months[i].net < months[idx].net) idx = i;
   return idx;
 }
 
 export function findBestMonthIndex(months: CashFlowMonthProjection[]): number {
   if (months.length === 0) return -1;
   let idx = 0;
-  for (let i = 1; i < months.length; i++) if (months[i].closingBalance > months[idx].closingBalance) idx = i;
+  for (let i = 1; i < months.length; i++) if (months[i].net > months[idx].net) idx = i;
   return idx;
 }

@@ -85,7 +85,7 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     }
   });
 
-  test('re-importing the same week with a CORRECTED net pay applies only the delta (owner decision 2026-08-02)', async () => {
+  test('re-importing the same week with a CORRECTED net pay never touches business_balance (REMOVE BUSINESS BALANCE TRACKING, owner decision 2026-08-27)', async () => {
     const first = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1000)));
     const second = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1500)));
 
@@ -93,15 +93,14 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     expect(settlements).toHaveLength(1);
     expect(settlements[0].net).toBe(1500);
 
-    // First import credits the full 1000; the re-import corrects net pay
-    // to 1500, so the balance applies just the +500 delta (1000 -> 1500),
-    // not "credited once and never again."
+    // Neither the first import nor the corrected re-import moves
+    // profiles.business_balance at all anymore — that column is
+    // permanently frozen at whatever it started as (0 in this fixture).
     const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
-    expect(profile?.business_balance).toBe(1500);
-    expect(settlements[0].business_balance_credit).toBe(1500);
+    expect(profile?.business_balance).toBe(0);
 
-    expect(first.netPayAdded).toBe(1000);
-    expect(second.netPayAdded).toBe(500);
+    expect(first).not.toHaveProperty('netPayAdded');
+    expect(second).not.toHaveProperty('netPayAdded');
 
     // Save-confirmation fields (owner decision 2026-07-30): the caller can
     // tell the user plainly whether this was a new week or a replace.
@@ -111,51 +110,35 @@ describe('saveExtraction settlement coexistence (CLAUDE.md invariant #10)', () =
     expect(second.isSettlementReimport).toBe(true);
   });
 
-  test('re-importing with a LOWER corrected net pay reduces the balance by the negative delta', async () => {
+  test('a settlement with a NEGATIVE net pay still never touches business_balance', async () => {
     await saveExtraction(baseParams(settlementExtraction('2026-07-05', 2000)));
-    const second = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1200)));
+    await saveExtraction(baseParams(settlementExtraction('2026-07-05', -800)));
 
     const profile = mockClient.__store.profiles.find((p) => p.user_id === USER_ID);
-    expect(profile?.business_balance).toBe(1200);
-    expect(second.netPayAdded).toBe(-800);
+    expect(profile?.business_balance).toBe(0);
   });
 
-  // BALANCE LEDGER RECONCILIATION (owner decision, device report:
-  // business_balance grew by an unexplained amount) — item 1's own
-  // explicit ask: "an import followed by a delete leaves the balance
-  // unchanged even when the import is retried." A RETRY (the exact same
-  // extraction submitted twice — a double-tap, a background job re-running
-  // after a dropped response, the user re-importing the identical file)
-  // must apply the SAME net pay's credit exactly ONCE, and a subsequent
-  // delete must return the balance to EXACTLY its pre-import value — proven
-  // against the REAL saveExtraction() (which re-reads business_balance_credit
-  // fresh under a row lock and applies only the delta) AND the REAL delete
-  // path (which fakeSupabase.ts's AFTER DELETE trigger simulation reverses),
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — item 1's
+  // own explicit requirement: "None should compute or persist a balance
+  // anymore." Proven against the REAL saveExtraction() (no RPC call, no
+  // business_balance_credit write) AND the REAL delete path (fakeSupabase.ts's
+  // AFTER DELETE trigger simulation — a no-op now since nothing was ever
+  // credited to reverse), across a new import, a RETRY, and a delete —
   // never asserted by hand.
-  test('import, RETRY the identical import, then delete — balance returns to EXACTLY its prior value, never double-credited', async () => {
+  test('import, RETRY the identical import, then delete — business_balance never moves at any step', async () => {
     const startingBalance = Number(mockClient.__store.profiles[0].business_balance);
 
-    // First import: credits the full 1000.
     await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1000)));
-    const afterFirst = mockClient.__store.profiles.find((p) => p.user_id === USER_ID)!.business_balance;
-    expect(afterFirst).toBe(startingBalance + 1000);
+    expect(mockClient.__store.profiles.find((p) => p.user_id === USER_ID)!.business_balance).toBe(startingBalance);
 
-    // RETRY — the identical extraction, same week, same net pay, exactly
-    // as a double-tap/background-job-retry/re-import-the-same-file would
-    // produce. The delta (newCredit - previousCredit) is 1000 - 1000 = 0,
-    // so the balance must NOT move a second time.
     const retry = await saveExtraction(baseParams(settlementExtraction('2026-07-05', 1000)));
-    const afterRetry = mockClient.__store.profiles.find((p) => p.user_id === USER_ID)!.business_balance;
-    expect(afterRetry).toBe(startingBalance + 1000); // unchanged from after the first import
-    expect(retry.netPayAdded).toBe(0); // the retry's own delta is zero
+    expect(mockClient.__store.profiles.find((p) => p.user_id === USER_ID)!.business_balance).toBe(startingBalance);
+    expect(retry).not.toHaveProperty('netPayAdded');
     expect(mockClient.__store.settlements).toHaveLength(1); // still exactly one settlement row, never two
 
-    // Delete it — must return to EXACTLY the starting value, not "starting
-    // value minus 1000 twice" (which a double-credited retry would produce).
     const settlementId = mockClient.__store.settlements[0].id;
     await mockClient.from('settlements').delete().eq('id', settlementId);
-    const afterDelete = mockClient.__store.profiles.find((p) => p.user_id === USER_ID)!.business_balance;
-    expect(afterDelete).toBe(startingBalance);
+    expect(mockClient.__store.profiles.find((p) => p.user_id === USER_ID)!.business_balance).toBe(startingBalance);
   });
 
   test('re-import ordering: new child rows exist before old ones are removed, and old rows never survive', async () => {

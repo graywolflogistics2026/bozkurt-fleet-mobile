@@ -150,26 +150,17 @@ describe('step-tagged errors', () => {
     expect(result.skippedRows[0]).toMatchObject({ table: 'deductions', reason: 'value too long for column "category"' });
   });
 
-  test('a balance-update (RPC) failure is tagged and shows every child row already saved', async () => {
-    // BALANCE LEDGER ATOMICITY FIX (docs/PENDING_SQL.md §60): the
-    // settlement save path now calls apply_settlement_business_balance_credit,
-    // not the plain apply_business_balance_delta (that RPC is still used
-    // elsewhere, e.g. capitalTransactions.ts's own callers pre-§60 — but no
-    // longer here).
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — the
+  // settlement save path no longer calls apply_settlement_business_balance_credit
+  // (or any other balance RPC) at all, so a failure injected on it can
+  // never fire — proving the removal directly rather than just by absence:
+  // even with the RPC configured to fail, a settlement save completes
+  // successfully because that call is never made.
+  test('a settlement save completes successfully even with the (now-unused) balance RPC configured to fail', async () => {
     withFailure({ table: 'rpc:apply_settlement_business_balance_credit', error: { message: 'No settlement row matched.', code: 'P0002' } });
-    try {
-      await saveExtraction(baseParams(settlementExtraction()));
-      throw new Error('expected saveExtraction to throw');
-    } catch (err) {
-      expect(isSaveExtractionError(err)).toBe(true);
-      if (isSaveExtractionError(err)) {
-        expect(err.step).toBe('balance-update');
-        expect(err.partial.settlementSaved).toBe(true);
-        expect(err.partial.childRowsSaved).toBe(true);
-        expect(err.partial.oldRowsCleanedUp).toBe(true);
-        expect(err.partial.balanceUpdated).toBe(false);
-      }
-    }
+    const result = await saveExtraction(baseParams(settlementExtraction()));
+    expect(result.documentId).toBeTruthy();
+    expect(mockClient.__store.settlements).toHaveLength(1);
   });
 
   test('a duplicate-settlement-race (unique violation) is flagged distinctly', async () => {

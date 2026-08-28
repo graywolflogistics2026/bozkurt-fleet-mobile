@@ -3,8 +3,9 @@ import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from
 import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { useImportJobs, useRetryImportJob, useDismissImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
-import { sortImportJobsForDisplay, jobProgressFraction, isStrandedJob, type ImportJob } from '@/src/import/importJobs';
+import { useImportJobs, useRetryImportJob, useDismissImportJob, fetchImportJobResult, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
+import { sortImportJobsForDisplay, sortJobIdsByDocumentDate, jobProgressFraction, isStrandedJob, type ImportJob } from '@/src/import/importJobs';
+import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, Card, MutedText, SecondaryButton, PrimaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -120,6 +121,7 @@ export default function ImportJobsScreen() {
   const dismissJob = useDismissImportJob();
   const [refreshing, setRefreshing] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [preparingReviewAll, setPreparingReviewAll] = useState(false);
 
   useFocusEffect(() => {
     // A cheap, deliberate extra refetch on focus (on top of the hook's
@@ -169,8 +171,28 @@ export default function ImportJobsScreen() {
   // still covers the one-ready-job case.
   const readyJobs = jobs.filter((j) => j.status === 'ready');
 
-  function handleReviewAll() {
-    router.push({ pathname: '/(tabs)/import', params: { reviewJobIds: readyJobs.map((j) => j.id).join(',') } } as unknown as Href);
+  // MULTI-FILE IMPORT ORDER vs DISPLAY ORDER (owner decision) — the queue
+  // order Review All used to send was `readyJobs`' own creation-time
+  // order, not each document's own date. Fetches every ready job's own
+  // extracted date (already-completed extractions, one read each — cheap,
+  // bounded by however many are actually ready) and reorders via
+  // sortJobIdsByDocumentDate() before navigating, so the batch review
+  // walkthrough always presents newest-document-first regardless of which
+  // job happened to finish processing first.
+  async function handleReviewAll() {
+    setPreparingReviewAll(true);
+    try {
+      const withDates = await Promise.all(
+        readyJobs.map(async (j) => {
+          const extraction = await fetchImportJobResult(j.id).catch(() => null);
+          return { id: j.id, date: extraction ? getPrimaryExtractionDate(extraction) || null : null };
+        })
+      );
+      const orderedIds = sortJobIdsByDocumentDate(withDates);
+      router.push({ pathname: '/(tabs)/import', params: { reviewJobIds: orderedIds.join(',') } } as unknown as Href);
+    } finally {
+      setPreparingReviewAll(false);
+    }
   }
 
   return (
@@ -190,7 +212,11 @@ export default function ImportJobsScreen() {
         ) : (
           <>
             {readyJobs.length >= 2 && (
-              <PrimaryButton title={t('importJobs.reviewAll', { count: readyJobs.length })} onPress={handleReviewAll} />
+              <PrimaryButton
+                title={t('importJobs.reviewAll', { count: readyJobs.length })}
+                onPress={handleReviewAll}
+                loading={preparingReviewAll}
+              />
             )}
             {jobs.map((job) => (
             <JobRow

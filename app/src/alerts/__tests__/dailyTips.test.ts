@@ -78,9 +78,9 @@ describe('individual detectors — precondition gating (spot check across topics
     expect(detectTipTruckDepreciation(0, 8500)).toBeNull();
   });
 
-  test('tipCapitalAccount fires once real money has moved, includes the real tax-free-remaining figure when positive', () => {
-    expect(detectTipCapitalAccount(0, 0, null)).toBeNull();
-    expect(detectTipCapitalAccount(5000, 0, 3200)).toEqual({ topic: 'tipCapitalAccount', detail: { remaining: 3200 } });
+  test('tipCapitalAccount fires once real contributions are on file, includes the real tax-free-remaining figure when positive', () => {
+    expect(detectTipCapitalAccount(0, null)).toBeNull();
+    expect(detectTipCapitalAccount(5000, 3200)).toEqual({ topic: 'tipCapitalAccount', detail: { remaining: 3200 } });
   });
 
   test('tipTaxEstimator requires tax_config to exist, never fires on a bare profit figure alone', () => {
@@ -159,7 +159,6 @@ describe('selectDailyTip — rotation engine', () => {
       unassignedRowsCount: 0,
       driversCount: 0,
       driverPaymentsCount: 0,
-      businessBalance: 0,
       initialCapital: 0,
       taxFreeRemaining: null,
       activeTruckMaintenanceRecordsCount: 0,

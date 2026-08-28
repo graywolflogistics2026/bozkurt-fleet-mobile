@@ -29,9 +29,27 @@ type DeductionLike = {
   tax_deductible: boolean | null;
 };
 
+// ONE KPI ENGINE (owner decision, device report: "Profit Analysis shows
+// Net Income $1,372, independent of what Dashboard/Scorecard/AI Coach
+// show for the same period and scope"). Root cause traced to this
+// function specifically: it used UTC-based date arithmetic
+// (`setUTCDate`) while `src/stats/heroPeriodWindow.ts`'s
+// `resolveHeroPeriodDateWindow()` — the ONE shared window resolver every
+// computeKpis() consumer (Home's "1M" tab, Scorecard, AI Coach) uses for
+// an identical "trailing 30 days" period — uses LOCAL-time arithmetic
+// (`setDate`). For a timezone that observes DST, a 30/90/180/365-day
+// window spanning a DST transition can land on a genuinely different UTC
+// calendar day between the two methods (the same "MONTH FILTER
+// OFF-BY-ONE" UTC-vs-local mismatch class this codebase has hit before —
+// src/i18n/format.ts's formatMonthLabel()). Now uses the IDENTICAL
+// local-time arithmetic resolveHeroPeriodDateWindow() uses, so a
+// windowDays=30 call here can never diverge from Home's own "1M" period
+// boundary again. The formula itself (revenue minus sumCanonicalExpenses())
+// already matched computeKpis()'s `net` exactly — the window boundary was
+// the only real divergence.
 export function windowStartIso(windowDays: number, now: Date = new Date()): string {
   const d = new Date(now);
-  d.setUTCDate(d.getUTCDate() - windowDays);
+  d.setDate(d.getDate() - windowDays);
   return d.toISOString().slice(0, 10);
 }
 
@@ -62,13 +80,19 @@ export function buildProfitAnalysis(
   tolls: TollLike[] = []
 ): ProfitAnalysisRollup {
   const start = windowStartIso(windowDays, now);
+  // Explicit upper bound too (`<= end`), matching computeKpis()'s own
+  // [startIso, endIso] inclusive window filtering exactly — a future-dated
+  // row shouldn't normally exist in real data, but this keeps the two
+  // filtering rules structurally identical rather than merely usually
+  // agreeing.
+  const end = now.toISOString().slice(0, 10);
 
-  const inWindow = settlements.filter((s) => (s.week_ending ?? '') >= start);
+  const inWindow = settlements.filter((s) => (s.week_ending ?? '') >= start && (s.week_ending ?? '') <= end);
   const revenue = inWindow.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const windowDeductions = deductions.filter((d) => (d.ded_date ?? '') >= start);
-  const windowFuel = fuelPurchases.filter((f) => (f.purchase_date ?? '') >= start);
-  const windowMaintenance = maintenanceRecords.filter((m) => (m.service_date ?? '') >= start);
-  const windowTolls = tolls.filter((t) => (t.toll_date ?? '') >= start);
+  const windowDeductions = deductions.filter((d) => (d.ded_date ?? '') >= start && (d.ded_date ?? '') <= end);
+  const windowFuel = fuelPurchases.filter((f) => (f.purchase_date ?? '') >= start && (f.purchase_date ?? '') <= end);
+  const windowMaintenance = maintenanceRecords.filter((m) => (m.service_date ?? '') >= start && (m.service_date ?? '') <= end);
+  const windowTolls = tolls.filter((t) => (t.toll_date ?? '') >= start && (t.toll_date ?? '') <= end);
   const trueExpenses = sumCanonicalExpenses(windowDeductions, windowFuel, windowMaintenance, windowTolls);
   const netIncome = revenue - trueExpenses;
   const totalMiles = inWindow.reduce((sum, s) => sum + Number(s.miles ?? 0), 0);

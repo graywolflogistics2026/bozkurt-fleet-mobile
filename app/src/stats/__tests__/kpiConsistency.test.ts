@@ -39,6 +39,7 @@
 import { computeKpis } from '@/src/stats/kpi';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
+import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { calcMiles } from '@/src/stats/miles';
 import type { ComparisonTruck } from '@/src/stats/truckComparison';
 import type { Settlement, Deduction } from '@/src/types/db';
@@ -253,6 +254,38 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       window: { startIso: '2026-01-01', endIso: '2026-12-31' },
     });
     expect(accountantGrossIncome).toBeCloseTo(canonical.gross, 6);
+  });
+
+  // ONE KPI ENGINE (owner decision, device report: "Profit Analysis shows
+  // Net Income $1,372, independent of what Dashboard/Scorecard/AI Coach
+  // show"). Profit Analysis (buildProfitAnalysis(), app/(tabs)/more/
+  // profit-analysis.tsx) is fleet-wide-always (FleetScopeLabel
+  // variant="fleetOnly") with a fixed trailing-30-day window — this test
+  // proves its Net Income now agrees exactly with computeKpis()'s own
+  // `net` for the SAME fleet-wide scope and the SAME 30-day window.
+  it('Profit Analysis (buildProfitAnalysis) netIncome matches computeKpis().net for the same fleet-wide 30-day window', () => {
+    const now = new Date('2026-08-24T12:00:00Z');
+    const profitAnalysis = buildProfitAnalysis(settlements, [], maintenanceRecords, deductions, 30, now, []);
+
+    const canonical = computeKpis({
+      trucks,
+      settlements,
+      loads: [],
+      deductions,
+      fuelPurchases: [],
+      maintenanceRecords,
+      tolls: [],
+      truckScope: null, // Profit Analysis is always fleet-wide (FleetScopeLabel variant="fleetOnly")
+      window: { startIso: '2026-07-25', endIso: '2026-08-24' }, // the same 30-day window windowStartIso(30, now) resolves to
+    });
+
+    // A real, non-trivial subset of the fixture (only s3/s4/s5 + their
+    // deductions/maintenance fall in this window) — proves this isn't
+    // vacuously true over an empty or all-inclusive window.
+    expect(profitAnalysis.revenue).toBeCloseTo(canonical.gross, 6);
+    expect(profitAnalysis.revenue).toBeGreaterThan(0);
+    expect(profitAnalysis.revenue).toBeLessThan(settlements.reduce((s, x) => s + x.gross, 0)); // strictly fewer than all 5 settlements
+    expect(profitAnalysis.netIncome).toBeCloseTo(canonical.net, 6);
   });
 
   it('miles: calcMiles() (the Accountant/Settlements-screen-facing primitive) and computeKpis().miles.total agree exactly for the same rows', () => {

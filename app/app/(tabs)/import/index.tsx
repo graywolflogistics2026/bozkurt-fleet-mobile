@@ -247,7 +247,7 @@ export default function Import() {
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [fileMeta, setFileMeta] = useState<{ uri: string; ext: string; mediaType: string; name?: string } | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
-  const [existingSettlementWeek, setExistingSettlementWeek] = useState<{ id: string; business_balance_credit: number | null } | null>(null);
+  const [existingSettlementWeek, setExistingSettlementWeek] = useState<{ id: string } | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
   const [needsTruckPicker, setNeedsTruckPicker] = useState(false);
   const [driverId, setDriverId] = useState<string | null>(null);
@@ -1446,19 +1446,6 @@ export default function Import() {
                 {result.isSettlementReimport
                   ? t('importScreen.savedSettlementReplaced', { date: result.settlementWeekEnding })
                   : t('importScreen.savedSettlementNew', { date: result.settlementWeekEnding })}
-              </MutedText>
-            )}
-            {result.netPayAdded != null && result.netPayAdded !== 0 && (
-              // Re-import ordering / balance delta (owner decision
-              // 2026-08-02): a corrected settlement can now REDUCE the
-              // balance (negative delta) — money() already renders a
-              // negative amount with its own "-" sign, so only a positive
-              // delta gets an explicit "+" prefix here (never hardcoded
-              // into the i18n string itself).
-              <MutedText style={result.netPayAdded < 0 ? { color: colors.red } : undefined}>
-                {t('importScreen.balanceAdded', {
-                  amount: `${result.netPayAdded > 0 ? '+' : ''}${money(result.netPayAdded, i18n.language)}`,
-                })}
               </MutedText>
             )}
             {result.contributionTotal > 0 && (

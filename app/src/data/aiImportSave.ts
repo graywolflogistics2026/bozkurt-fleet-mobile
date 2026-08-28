@@ -96,17 +96,17 @@ export async function findExistingSettlement(
   userId: string,
   weekEnding: string,
   truckId: string | null
-): Promise<{ id: string; business_balance_credit: number | null } | null> {
+): Promise<{ id: string } | null> {
   if (!weekEnding) return null;
   let query = supabase
     .from('settlements')
-    .select('id, business_balance_credit')
+    .select('id')
     .eq('user_id', userId)
     .eq('week_ending', weekEnding);
   query = truckId ? query.eq('truck_id', truckId) : query.is('truck_id', null);
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
-  return (data as { id: string; business_balance_credit: number | null } | null) ?? null;
+  return (data as { id: string } | null) ?? null;
 }
 
 export type SaveExtractionParams = {
@@ -141,13 +141,6 @@ export type SaveExtractionParams = {
 export type SaveExtractionResult = {
   documentId: string;
   storagePath: string | null;
-  // The amount actually applied to profiles.business_balance by THIS save
-  // — null when nothing changed (delta 0). For a brand-new settlement this
-  // is always >= 0 (matches the old "netPayAdded" meaning exactly); for a
-  // re-import with a CORRECTED net pay (owner decision 2026-08-02) this can
-  // be negative (the corrected net pay was lower than what was originally
-  // credited) — the UI must not assume a positive number.
-  netPayAdded: number | null;
   contributionTotal: number;
   // Settlement week-ending confirmation (owner decision 2026-07-30): lets
   // the "Saved" screen tell the user plainly whether this was a brand-new
@@ -319,7 +312,6 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   const documentId = must('documents-insert', docRow, docError, partial).id as string;
   partial.documentId = documentId;
 
-  let netPayAdded: number | null = null;
   let contributionTotal = 0;
   let settlementWeekEnding: string | null = null;
   let isSettlementReimport = false;
@@ -360,7 +352,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // can never disagree. An explicit select-then-update-or-insert (not a
     // Postgres upsert/onConflict) — the match key includes a nullable
     // truck_id, which onConflict's column-list inference can't express.
-    let existingSett: { id: string; business_balance_credit: number | null } | null;
+    let existingSett: { id: string } | null;
     try {
       existingSett = await findExistingSettlement(userId, mapping.settlement.week_ending, truckId);
     } catch (err) {
@@ -369,32 +361,6 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     const isReimport = !!existingSett;
     settlementWeekEnding = mapping.settlement.week_ending;
     isSettlementReimport = isReimport;
-
-    // NEGATIVE SETTLEMENTS (owner decision 2026-08-02, verified against a
-    // real statement: W/E 2026-07-24, 0 miles, $5.16 revenue, $1,160.51
-    // deductions, net -$1,155.35 — the owner OWES the carrier that week):
-    // newCredit is the SIGNED net pay, uncapped in either direction, and
-    // business_balance is allowed to go negative (no DB check constraint
-    // enforces >= 0 — see docs/SCHEMA.sql). A losing week is real money
-    // leaving the business the same as a positive week is real money
-    // entering it.
-    //
-    // BALANCE LEDGER ATOMICITY FIX (docs/PENDING_SQL.md §60, FULL SYSTEM
-    // AUDIT owner decision 2026-08-26): the settlement insert/update below
-    // deliberately does NOT set `business_balance_credit` anymore — it
-    // used to, right here, which meant a settlement row could end up
-    // claiming a credit that was never actually applied if ANY later step
-    // (a child-row insert, the re-import cleanup) threw. A RETRY would
-    // then read that already-stale `business_balance_credit` back as
-    // `previousCredit` and compute a delta of 0 against itself — the
-    // money silently never applied, even on a clean retry, with no error
-    // anywhere. `business_balance_credit` is now written ONLY by the new
-    // `apply_settlement_business_balance_credit` RPC, far below, AFTER
-    // every child row and the re-import cleanup have already succeeded —
-    // and that RPC re-reads the column's CURRENT value (row-locked)
-    // itself rather than trusting anything computed here, so it's correct
-    // even if this whole function is retried after a partial failure.
-    const newCredit = mapping.netPay;
 
     let settlementId: string;
     if (isReimport) {
@@ -636,28 +602,12 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     }
     partial.oldRowsCleanedUp = true;
 
-    // Business balance: ONE atomic RPC (docs/PENDING_SQL.md §60) that
-    // re-reads the settlement's own CURRENT business_balance_credit
-    // (row-locked) and applies BOTH that column AND profiles.business_balance
-    // together, in a single transaction — replacing the old two-step
-    // "write business_balance_credit early, apply the delta at the very
-    // end" ordering (see the comment above the settlement insert/update
-    // for why that was unsafe). Always called (never gated on a
-    // client-computed "did anything change" guard) — the RPC itself is
-    // the one source of truth for what the real delta is, computed fresh
-    // from the database, never from a value this function captured
-    // before all the async work in between. `netPayAdded` (shown to the
-    // user as "+/-$X added to your balance") is the RPC's own returned
-    // delta, not a client-side guess, so it can never disagree with what
-    // was actually applied.
-    const { data: creditResult, error: balErr } = await supabase.rpc('apply_settlement_business_balance_credit', {
-      p_settlement_id: settlementId,
-      p_user_id: userId,
-      p_new_credit: newCredit,
-    });
-    if (balErr) throw new SaveExtractionError('balance-update', balErr, partial);
-    netPayAdded = Number(creditResult ?? 0);
-    partial.balanceUpdated = true;
+    // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — a
+    // settlement import no longer computes or applies any balance delta
+    // at all. `apply_settlement_business_balance_credit()` (§60) and
+    // `settlements.business_balance_credit` are both left in place,
+    // inert (reversible later, docs/PENDING_SQL.md §72), but nothing in
+    // this file calls the RPC or writes that column anymore.
   } else if (d.docType === 'fuel' && d.fuel) {
     const row = mapFuel(d, userId, truckId);
     const { error } = await supabase.from('fuel_purchases').insert(row);
@@ -806,5 +756,5 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // (see mapExtraction.ts's mapGenericDeduction comment; universal AI
   // capture, owner decision 2026-07-10 — v1.x backlog, PROMPTS.md).
 
-  return { documentId, storagePath, netPayAdded, contributionTotal, settlementWeekEnding, isSettlementReimport, skippedRows };
+  return { documentId, storagePath, contributionTotal, settlementWeekEnding, isSettlementReimport, skippedRows };
 }

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useDeductions, useDeleteDeduction, useUpdateDeduction } from '@/src/data/deductions';
+import { uploadDeductionAttachment } from '@/src/data/deductionAttachment';
 import { useTrucksList } from '@/src/data/trucks';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
@@ -298,6 +301,16 @@ export default function Deductions() {
   const [addDate, setAddDate] = useState('');
   const [addTaxDeductible, setAddTaxDeductible] = useState(true);
   const [addSaving, setAddSaving] = useState(false);
+  // DEDUCTIONS MANUAL ENTRY — ATTACH A RECEIPT (owner decision) — uploads
+  // immediately on pick (not deferred to Save), storing the resulting
+  // document id here — same "upload first, reference its id" order as
+  // compliance.tsx's own attachment flow. Best-effort: a failure here
+  // never blocks the rest of the form from being filled out/saved. The
+  // manual fields stay the source of truth — this never re-extracts
+  // anything from the photo/PDF's own contents.
+  const [addAttachmentDocumentId, setAddAttachmentDocumentId] = useState<string | null>(null);
+  const [addAttachmentFilename, setAddAttachmentFilename] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState(false);
 
   // Meals & advance repayments (owner decision 2026-07-17): a smart default
   // from the picked category, recomputed only while the row is still being
@@ -558,11 +571,55 @@ export default function Deductions() {
     setAddAmount('');
     setAddDate(new Date().toISOString().slice(0, 10));
     setAddTaxDeductible(true);
+    setAddAttachmentDocumentId(null);
+    setAddAttachmentFilename(null);
     setAdding(true);
   }
 
   function closeAdd() {
     setAdding(false);
+  }
+
+  // DEDUCTIONS MANUAL ENTRY — ATTACH A RECEIPT (owner decision) — three
+  // actions mirroring compliance.tsx's own attachment flow, plus a camera
+  // capture option (expo-image-picker's launchCameraAsync — already a
+  // dependency, no new native module). Each uploads immediately on pick.
+  async function handleAttachTakePhoto() {
+    if (!userId) return;
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return;
+    const picked = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    await saveAddAttachment(picked.assets[0].uri, picked.assets[0].fileName || `photo-${Date.now()}.jpg`, picked.assets[0].mimeType || 'image/jpeg');
+  }
+
+  async function handleAttachChooseFromLibrary() {
+    if (!userId) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    await saveAddAttachment(picked.assets[0].uri, picked.assets[0].fileName || `photo-${Date.now()}.jpg`, picked.assets[0].mimeType || 'image/jpeg');
+  }
+
+  async function handleAttachImportFile() {
+    if (!userId) return;
+    const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    const asset = picked.assets[0];
+    await saveAddAttachment(asset.uri, asset.name, asset.mimeType || 'application/pdf');
+  }
+
+  async function saveAddAttachment(uri: string, filename: string, mediaType: string) {
+    if (!userId) return;
+    setAttaching(true);
+    try {
+      const documentId = await uploadDeductionAttachment(userId, addDescription, uri, filename, mediaType, addDate || null);
+      setAddAttachmentDocumentId(documentId);
+      setAddAttachmentFilename(filename);
+    } catch (err) {
+      Alert.alert(t('deductions.attachFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setAttaching(false);
+    }
   }
 
   async function handleSaveAdd() {
@@ -602,7 +659,7 @@ export default function Deductions() {
           })
         : null;
 
-      await insertDeductionWithContributionSync({
+      const inserted = await insertDeductionWithContributionSync({
         userId,
         description: addDescription || null,
         category: addCategory,
@@ -614,8 +671,24 @@ export default function Deductions() {
         contributionNote: plan?.action === 'create' ? plan.note : undefined,
       });
 
+      // DEDUCTIONS MANUAL ENTRY — ATTACH A RECEIPT (owner decision) — a
+      // plain, separate follow-up update (same precedent as
+      // handleAssignTruck() above: attaching a document has no
+      // interaction with the atomic RPC's own money-correctness
+      // guarantees, so it's never folded into that RPC's own signature).
+      // Best-effort: a failure here never undoes the deduction itself,
+      // which has already saved successfully.
+      if (addAttachmentDocumentId) {
+        try {
+          await updateDeduction.mutateAsync({ id: inserted.id, values: { document_id: addAttachmentDocumentId } });
+        } catch {
+          // Non-fatal — the deduction itself already saved; the
+          // attachment simply won't be linked this time.
+        }
+      }
+
       await invalidateFinancialData(queryClient, {
-        entities: createContribution ? ['deductions', 'capital_transactions'] : ['deductions'],
+        entities: createContribution ? ['deductions', 'capital_transactions', 'documents'] : ['deductions', 'documents'],
       });
       setAdding(false);
     } catch (err) {
@@ -1004,6 +1077,24 @@ export default function Deductions() {
             <Text style={{ color: colors.orange, fontSize: typography.size.xs }}>
               {t('deductions.personalPaymentNote')}
             </Text>
+          </View>
+        )}
+
+        {/* DEDUCTIONS MANUAL ENTRY — ATTACH A RECEIPT (owner decision) —
+            optional; the manual fields above stay the source of truth,
+            this attaches proof only. Reuses the exact same upload-on-pick
+            pattern compliance.tsx's own attachment flow already
+            established. */}
+        <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+          <MutedText>{t('deductions.attachmentLabel')}</MutedText>
+        </View>
+        {addAttachmentFilename ? (
+          <MutedText style={{ color: colors.green }}>✓ {addAttachmentFilename}</MutedText>
+        ) : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            <SecondaryButton title={`📷 ${t('deductions.attachTakePhoto')}`} onPress={handleAttachTakePhoto} loading={attaching} />
+            <SecondaryButton title={`🖼️ ${t('deductions.attachChooseFromLibrary')}`} onPress={handleAttachChooseFromLibrary} loading={attaching} />
+            <SecondaryButton title={`📄 ${t('deductions.attachImportFile')}`} onPress={handleAttachImportFile} loading={attaching} />
           </View>
         )}
 

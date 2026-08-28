@@ -153,10 +153,16 @@ export function useAiCoachSummary(): AiCoachSummary {
     () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,
     [benchmarksQuery.data]
   );
-  const taxReserveShortfall =
-    taxQuery.data && taxQuery.data.estimate.quarterlyPayment > 0
-      ? Math.max(0, taxQuery.data.estimate.quarterlyPayment - (profileQuery.data?.business_balance ?? 0))
-      : null;
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — this
+  // recommendation used to compare the quarterly tax payment against
+  // profiles.business_balance; that column is now permanently frozen
+  // (nothing writes it anymore), so using it here would silently compare
+  // against a stale, increasingly-wrong number instead of a real one.
+  // Disabled outright rather than left to quietly mislead —
+  // buildRecommendationCandidates() already treats `null` as "don't
+  // offer this recommendation at all," same as when no tax estimate
+  // exists yet.
+  const taxReserveShortfall: number | null = null;
   const recommendations = useMemo(() => {
     const candidates = buildRecommendationCandidates({
       fuelPctOfRevenue: profitAnalysisRollup.fuelPctOfRevenue,

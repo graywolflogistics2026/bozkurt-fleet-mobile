@@ -18,7 +18,6 @@ function classification(overrides: Partial<CashFlowClassification> = {}): CashFl
 function baseInput(overrides: Partial<Parameters<typeof buildMonthlyCashFlowOverview>[0]> = {}) {
   return {
     year: 2026,
-    todayBalance: 5000,
     weeklyIncome: 1000,
     weeklyFixed: 100,
     weeklyVariable: 200,
@@ -127,41 +126,20 @@ describe('buildMonthlyCashFlowOverview — CURRENT month blends actual-to-date +
   });
 });
 
-describe('buildMonthlyCashFlowOverview — balance chaining', () => {
-  it("each month's opening balance equals the previous month's closing balance", () => {
-    const months = buildMonthlyCashFlowOverview(baseInput());
-    for (let i = 1; i < months.length; i++) {
-      expect(months[i].openingBalance).toBeCloseTo(months[i - 1].closingBalance, 5);
-    }
-  });
-
-  it("the current month's closing balance is today's real balance plus only the PROJECTED remainder (not the actual-to-date portion, which already happened)", () => {
-    const allSettlements = [{ week_ending: '2026-08-08', net: 900 }];
-    const months = buildMonthlyCashFlowOverview(baseInput({ allSettlements, todayBalance: 5000 }));
-    const august = months.find((m) => m.month === 8)!;
-    // closing = todayBalance + (full month net - actual-to-date net) = todayBalance + projected remainder net
-    const remainingDays = 31 - 15;
-    const remainderWeeks = remainingDays / 7;
-    const projectedRemainderNet = 1000 * remainderWeeks - 100 * remainderWeeks - 200 * remainderWeeks;
-    expect(august.closingBalance).toBeCloseTo(5000 + projectedRemainderNet, 5);
-  });
-
-  it('a past year and the following year chain continuously across the boundary (Dec closing = next Jan opening)', () => {
-    const input2025 = baseInput({ year: 2025 });
-    const input2026 = baseInput({ year: 2026 });
-    const months2025 = buildMonthlyCashFlowOverview(input2025);
-    const months2026 = buildMonthlyCashFlowOverview(input2026);
-    const dec2025 = months2025.find((m) => m.month === 12)!;
-    const jan2026 = months2026.find((m) => m.month === 1)!;
-    expect(dec2025.closingBalance).toBeCloseTo(jan2026.openingBalance, 5);
-  });
-
-  it('a future year continues chaining forward from the current year', () => {
-    const months2026 = buildMonthlyCashFlowOverview(baseInput({ year: 2026 }));
+describe('buildMonthlyCashFlowOverview — REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27): months are independent, no more balance chain', () => {
+  it("a requested year's own months never depend on ANOTHER call's result — each buildMonthlyCashFlowOverview() call is self-contained", () => {
+    // Both 2027 and 2028 are fully FUTURE relative to TODAY (Aug 2026),
+    // so December is 'projected' in both — same steady-state inputs must
+    // produce byte-identical figures either way, proving neither call's
+    // result leaks into or depends on the other's (no shared chain).
     const months2027 = buildMonthlyCashFlowOverview(baseInput({ year: 2027 }));
-    const dec2026 = months2026.find((m) => m.month === 12)!;
-    const jan2027 = months2027.find((m) => m.month === 1)!;
-    expect(dec2026.closingBalance).toBeCloseTo(jan2027.openingBalance, 5);
+    const months2028 = buildMonthlyCashFlowOverview(baseInput({ year: 2028 }));
+    const dec2027 = months2027.find((m) => m.month === 12)!;
+    const dec2028 = months2028.find((m) => m.month === 12)!;
+    expect(dec2027.status).toBe('projected');
+    expect(dec2028.status).toBe('projected');
+    expect(dec2027.income).toBeCloseTo(dec2028.income, 5);
+    expect(dec2027.net).toBeCloseTo(dec2028.net, 5);
   });
 
   it('a fully-past requested year (all 12 months "actual") still resolves without error', () => {
@@ -195,11 +173,11 @@ describe('buildMonthlyCashFlowOverview — overrides apply the same way as the 3
 });
 
 describe('findTightestMonthIndex / findBestMonthIndex', () => {
-  function month(closingBalance: number): CashFlowMonthProjection {
-    return { year: 2026, month: 1, status: 'projected', openingBalance: 0, income: 0, fixed: 0, variable: 0, periodic: 0, periodicItems: [], net: 0, closingBalance };
+  function month(net: number): CashFlowMonthProjection {
+    return { year: 2026, month: 1, status: 'projected', income: 0, fixed: 0, variable: 0, periodic: 0, periodicItems: [], net };
   }
 
-  it('finds the lowest and highest closing balance', () => {
+  it('finds the lowest and highest NET month (never a balance — REMOVE BUSINESS BALANCE TRACKING, owner decision 2026-08-27)', () => {
     const months = [month(500), month(-200), month(1000), month(50)];
     expect(findTightestMonthIndex(months)).toBe(1);
     expect(findBestMonthIndex(months)).toBe(2);

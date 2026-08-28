@@ -5,8 +5,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
-import { useSettlements } from '@/src/data/settlements';
-import { reconcileBusinessBalance } from '@/src/stats/businessBalanceLedger';
 import {
   useCapitalTransactions,
   useUpdateCapitalTransaction,
@@ -29,7 +27,6 @@ import {
   Screen,
   ScreenTitle,
   Card,
-  TappableCard,
   MutedText,
   ModalSheet,
   SheetTitle,
@@ -113,21 +110,18 @@ export default function CapitalAccount() {
 
   const summaryQuery = useCapitalAccountSummary();
   const txQuery = useCapitalTransactions();
-  const settlementsQuery = useSettlements();
   const taxConfigQuery = useTaxConfig();
-  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
-  // FULL PARITY pass (owner decision 2026-08-05, spec item E.3) — manual
-  // draws/contributions from THIS screen apply a real business_balance
-  // delta (useRecordManualCapitalTransaction/useDeleteManualCapitalTransaction);
-  // a LINKED contribution never reaches this screen's own insert/delete
-  // path (it's read-only here, auto-synced from deductionMutations.ts).
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — these
+  // four hooks still write/edit/delete the real capital_transactions row
+  // (contributions, draws, reimbursements — unaffected by removing the
+  // balance estimate); the RPCs they call no longer touch
+  // profiles.business_balance at all (docs/PENDING_SQL.md §72). A LINKED
+  // contribution never reaches this screen's own insert/delete path
+  // (it's read-only here, auto-synced from deductionMutations.ts).
   const insertTx = useRecordManualCapitalTransaction();
   const deleteTx = useDeleteManualCapitalTransaction();
-  // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3) —
-  // updateManualTx adjusts business_balance by the delta (a manual, non-
-  // linked row); updateTx is the plain entity-hook update (no balance
-  // side effect at all) used for a LINKED contribution's date/note edit,
-  // since a linked row never applies a balance delta in the first place.
+  // updateTx is the plain entity-hook update, used for a LINKED
+  // contribution's date/note edit only.
   const updateManualTx = useUpdateManualCapitalTransaction();
   const updateTx = useUpdateCapitalTransaction();
 
@@ -144,10 +138,6 @@ export default function CapitalAccount() {
   const [contributionAmount, setContributionAmount] = useState('');
   const [contributionNote, setContributionNote] = useState('');
   const [savingContribution, setSavingContribution] = useState(false);
-
-  const [balanceModalOpen, setBalanceModalOpen] = useState(false);
-  const [balanceInput, setBalanceInput] = useState('');
-  const [savingBalance, setSavingBalance] = useState(false);
 
   // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3) —
   // one shared edit sheet for every history row, linked or manual.
@@ -196,19 +186,6 @@ export default function CapitalAccount() {
   const capitalFlows = useMemo(() => summarizeCapitalFlows(rows), [rows]);
   const duplicateIds = useMemo(() => findDuplicateTransactionIds(rows), [rows]);
   const isPastCapital = !!summary && summary.effectiveContribution - summary.totalDraws < 0;
-
-  // BALANCE LEDGER RECONCILIATION (owner decision, device report:
-  // business_balance grew by an unexplained ~$5,741) — reconstructs the
-  // EXPECTED balance entirely from data this screen already has (every
-  // currently-existing settlement's own business_balance_credit + every
-  // manual capital_transactions row's own business_balance_applied) and
-  // compares it to what's actually stored — "reconstruct it from the
-  // ledger and show me the arithmetic," without needing direct database
-  // access.
-  const reconciliation = useMemo(
-    () => reconcileBusinessBalance(settlementsQuery.data ?? [], rows, summary?.businessBalance ?? 0),
-    [settlementsQuery.data, rows, summary?.businessBalance]
-  );
 
   // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 1) —
   // "no future dates beyond today, no obviously wrong years." Shared by
@@ -423,52 +400,6 @@ export default function CapitalAccount() {
     );
   }
 
-  // RECONCILE (owner decision, docs/PENDING_SQL.md §70, item 6 — "I enter
-  // the true figure and the app records the difference as a labeled
-  // adjustment row, visible in the equity list, never a silent
-  // overwrite"). Replaces the old handleUpdateBalance()'s plain
-  // `profiles.business_balance = X` write (useUpdateBusinessBalance() —
-  // still exported from capitalAccount.ts, now unused, a genuine silent-
-  // overwrite this pass deliberately retires from the UI) with a real,
-  // atomic manual capital transaction: the SAME mechanism/RPC every other
-  // contribution/draw on this screen already uses, so the adjustment
-  // shows up in the history list like any other real entry, is reversible
-  // by deleting it like any other manual row, and moves business_balance
-  // correctly via record_manual_capital_transaction()'s own atomic delta.
-  // A delta of exactly $0 records nothing — "reconciling" to the figure
-  // already on file isn't a real adjustment.
-  async function handleReconcileBalance() {
-    const target = Number(balanceInput);
-    if (!Number.isFinite(target) || !userId) return;
-    if (savingRef.current) return;
-    const current = summary?.businessBalance ?? 0;
-    const delta = Math.round((target - current) * 100) / 100;
-    if (delta === 0) {
-      setBalanceModalOpen(false);
-      setBalanceInput('');
-      return;
-    }
-    savingRef.current = true;
-    setSavingBalance(true);
-    try {
-      await insertTx.mutateAsync({
-        user_id: userId,
-        tx_type: delta > 0 ? 'contribution' : 'draw',
-        amount: Math.abs(delta),
-        tx_date: todayIso(),
-        note: t('capitalAccount.reconcileNote', { from: money(current), to: money(target) }),
-      });
-      await invalidateFinancialData(queryClient, { entities: ['capital_transactions', 'profiles'] });
-      setBalanceModalOpen(false);
-      setBalanceInput('');
-    } catch (err) {
-      Alert.alert(t('capitalAccount.saveFailedTitle'), err instanceof Error ? err.message : t('capitalAccount.genericRetry'));
-    } finally {
-      setSavingBalance(false);
-      savingRef.current = false;
-    }
-  }
-
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -507,24 +438,6 @@ export default function CapitalAccount() {
           )}
         </Card>
 
-        <TappableCard onPress={() => router.push('/(tabs)/more/cash-flow')}>
-          <MutedText>{t('capitalAccount.businessBalance')}</MutedText>
-          <Text style={styles.statValue}>{money(summary?.businessBalance ?? 0)}</Text>
-        </TappableCard>
-
-        {/* BALANCE LEDGER RECONCILIATION (owner decision, device report:
-            business_balance grew by an unexplained amount) — a proactive,
-            always-visible flag the instant the stored figure disagrees
-            with what every currently-existing settlement/equity row adds
-            up to, so a drift is never silently invisible again. */}
-        {!reconciliation.matches && (
-          <Pressable onPress={() => setVerifyModalOpen(true)}>
-            <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
-              ⚠️ {t('capitalAccount.balanceDriftWarning', { amount: money(Math.abs(reconciliation.drift)) })}
-            </MutedText>
-          </Pressable>
-        )}
-
         <MutedText style={{ marginTop: spacing.xs }}>{t('capitalAccount.cashMovesNotTaxNote')}</MutedText>
 
         <SecondaryButton title={t('capitalAccount.recordContribution')} onPress={openContribution} />
@@ -532,8 +445,6 @@ export default function CapitalAccount() {
           title={isScorp ? t('capitalAccount.recordDistribution') : t('capitalAccount.recordDraw')}
           onPress={openDraw}
         />
-        <SecondaryButton title={t('capitalAccount.reconcileBalance')} onPress={() => setBalanceModalOpen(true)} />
-        <SecondaryButton title={t('capitalAccount.verifyBalance')} onPress={() => setVerifyModalOpen(true)} />
         {duplicateIds.length > 0 && (
           <SecondaryButton title={t('capitalAccount.removeDuplicates')} onPress={handleRemoveDuplicates} />
         )}
@@ -654,95 +565,6 @@ export default function CapitalAccount() {
         <SecondaryButton title={t('common.cancel')} onPress={() => setContributionModalOpen(false)} />
       </ModalSheet>
 
-      <ModalSheet visible={balanceModalOpen} onClose={() => setBalanceModalOpen(false)}>
-        <SheetTitle>{t('capitalAccount.reconcileSheetTitle')}</SheetTitle>
-        <MutedText>{t('capitalAccount.reconcileLabel')}</MutedText>
-        <MutedText style={{ marginBottom: spacing.sm }}>
-          {t('capitalAccount.reconcileCurrentBalance', { amount: money(summary?.businessBalance ?? 0) })}
-        </MutedText>
-        <Field keyboardType="numeric" value={balanceInput} onChangeText={setBalanceInput} placeholder="0.00" />
-        {!!balanceInput && Number.isFinite(Number(balanceInput)) && (
-          <MutedText style={{ marginTop: spacing.xs }}>
-            {(() => {
-              const delta = Math.round((Number(balanceInput) - (summary?.businessBalance ?? 0)) * 100) / 100;
-              if (delta === 0) return t('capitalAccount.reconcileNoChange');
-              return delta > 0
-                ? t('capitalAccount.reconcileWillAddContribution', { amount: money(delta) })
-                : t('capitalAccount.reconcileWillAddDraw', { amount: money(Math.abs(delta)) });
-            })()}
-          </MutedText>
-        )}
-        <PrimaryButton
-          title={`💾 ${t('common.save')}`}
-          onPress={handleReconcileBalance}
-          loading={savingBalance}
-          disabled={!balanceInput || !Number.isFinite(Number(balanceInput))}
-        />
-        <SecondaryButton title={t('common.cancel')} onPress={() => setBalanceModalOpen(false)} />
-      </ModalSheet>
-
-      {/* BALANCE LEDGER RECONCILIATION (owner decision, device report:
-          business_balance grew by an unexplained ~$5,741) — "reconstruct
-          it from the ledger and show me the arithmetic." Entirely
-          computed from data this screen already has (see
-          reconcileBusinessBalance's own header comment for why the sum
-          of every currently-existing settlement's own credit + every
-          manual equity row's own applied delta should always equal the
-          stored balance exactly). */}
-      <ModalSheet visible={verifyModalOpen} onClose={() => setVerifyModalOpen(false)}>
-        <SheetTitle>{t('capitalAccount.verifyBalance')}</SheetTitle>
-        <MutedText style={{ marginBottom: spacing.sm }}>{t('capitalAccount.verifyBalanceExplain')}</MutedText>
-        <View style={styles.verifyRow}>
-          <MutedText>{t('capitalAccount.verifySettlementsTotal', { count: reconciliation.settlementCount })}</MutedText>
-          <Text style={styles.verifyAmount}>{money(reconciliation.settlementsTotal)}</Text>
-        </View>
-        <View style={styles.verifyRow}>
-          <MutedText>{t('capitalAccount.verifyManualTotal', { count: reconciliation.manualTransactionCount })}</MutedText>
-          <Text style={styles.verifyAmount}>{money(reconciliation.manualTransactionsTotal)}</Text>
-        </View>
-        <View style={[styles.verifyRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xs, marginTop: spacing.xs }]}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('capitalAccount.verifyExpected')}</Text>
-          <Text style={[styles.verifyAmount, { fontWeight: '700' }]}>{money(reconciliation.expectedBalance)}</Text>
-        </View>
-        <View style={styles.verifyRow}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('capitalAccount.verifyStored')}</Text>
-          <Text style={[styles.verifyAmount, { fontWeight: '700' }]}>{money(reconciliation.storedBalance)}</Text>
-        </View>
-        {reconciliation.matches ? (
-          <MutedText style={{ color: colors.green, marginTop: spacing.sm }}>✓ {t('capitalAccount.verifyMatches')}</MutedText>
-        ) : (
-          <>
-            <MutedText style={{ color: colors.orange, marginTop: spacing.sm }}>
-              ⚠️ {t('capitalAccount.verifyMismatch', { amount: money(Math.abs(reconciliation.drift)) })}
-            </MutedText>
-            {/* BUSINESS BALANCE — WHY VERIFY BALANCE MUST EXPLAIN, NOT JUST
-                SHOW A NUMBER (owner decision, device report: a mismatch with
-                ZERO currently-existing settlements has NO ledger row that
-                could explain it — reconcileBusinessBalance() can only ever
-                sum CURRENTLY EXISTING settlements/capital_transactions, so a
-                settlement deleted BEFORE the §70 AFTER DELETE reversal
-                trigger existed applied its own credit once, permanently,
-                with zero trace left for this screen to show — that absence
-                IS the diagnostic signal, not a bug in the reconciliation
-                itself. Stated in plain language instead of leaving the user
-                to guess what a bare dollar mismatch means. */}
-            <MutedText style={{ marginTop: spacing.xs }}>
-              {reconciliation.settlementCount === 0
-                ? t('capitalAccount.verifyLikelyHistoricalDriftZero')
-                : t('capitalAccount.verifyLikelyHistoricalDrift')}
-            </MutedText>
-            <PrimaryButton
-              title={t('capitalAccount.reconcileBalance')}
-              onPress={() => {
-                setVerifyModalOpen(false);
-                setBalanceModalOpen(true);
-              }}
-            />
-          </>
-        )}
-        <SecondaryButton title={t('common.close')} onPress={() => setVerifyModalOpen(false)} />
-      </ModalSheet>
-
       {/* CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item
           3 "every row editable") — one shared edit sheet for every
           history row, linked or manual. A linked contribution's amount is
@@ -827,15 +649,5 @@ const styles = {
     color: colors.muted,
     fontSize: typography.size.md,
     fontWeight: '700' as const,
-  },
-  verifyRow: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 4,
-  },
-  verifyAmount: {
-    color: colors.text,
-    fontWeight: '600' as const,
   },
 };

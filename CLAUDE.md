@@ -10356,3 +10356,341 @@
   added to `profiles`/`capital_transactions`). No new native dependency —
   pure JS/TS plus one Edge Function prompt edit — ships via a normal
   `eas update` once `ai-import` has been redeployed.
+- SIX-ITEM FINAL PASS (owner decision 2026-08-27) — a large, deliberately
+  rigorous pass: remove business balance tracking outright, unify every
+  screen onto the one canonical KPI engine, fix a confirmed Fix Truck
+  Assignments data-loss report, add a manual-deduction receipt
+  attachment, audit (not blindly re-fix) the daily-tip diagnostic, and
+  close the multi-file import ordering gap. Deliverables: 128 suites /
+  3,496 tests pass; `tsc --noEmit` clean; all 7 locale files confirmed at
+  full recursive key-parity (0 missing/0 extra keys each, glossary test
+  re-passed clean, 1,602 checks).
+  1. **REMOVE BUSINESS BALANCE TRACKING (binding owner decision — no
+     longer a bug-fix target, a retired feature)**: the estimate has been
+     a recurring drift/confusion source across §37/§38/§59/§60/§70 and
+     both prior 2026-08-27 passes — the owner decided it adds no value
+     over the owner's own real bank balance. Removed as a displayed/
+     computed feature everywhere; every underlying column/table is left
+     INERT (not dropped), fully reversible. Exhaustive grep-first audit
+     (51 files hit on `business_balance|businessBalance|cf_bank_balance`)
+     before touching anything.
+     **UI removed**: Dashboard's `CashBalanceSlimCard` (`app/(tabs)/
+     index.tsx`, deleted with its lone call site and the now-dead
+     `useCapitalAccountSummary()` query on that screen); Capital
+     Account's Business Balance card, "🔍 Verify Balance"/"🏦 Reconcile
+     Balance" actions and both ModalSheets, `handleReconcileBalance()`
+     (`app/(tabs)/more/capital-account.tsx`) — `src/stats/
+     businessBalanceLedger.ts` and its test were deleted outright (zero
+     other references after removal, confirmed by grep); Cash Flow's
+     bank-balance input, `handleSaveBudget()`'s `cf_bank_balance` write,
+     and the whole opening/closing-balance concept (`app/(tabs)/more/
+     cash-flow.tsx`, `src/stats/cashFlowForecast.ts`, `src/stats/
+     cashFlowMonthly.ts`) — the 30-day forecast and Monthly View now
+     project income/fixed/variable/periodic/**net** per period with no
+     running total at all; `CashFlowWeekProjection`/`CashFlowMonthProjection`
+     dropped `openingBalance`/`closingBalance` in favor of a plain `net`
+     field, `buildCashFlowForecast()`/`buildMonthlyCashFlowOverview()`
+     dropped their `bankBalance`/`todayBalance` parameters entirely (the
+     Monthly engine's old bidirectional balance-chaining walk — genuinely
+     unnecessary once there's no balance to chain — collapsed to 12
+     independent per-month computations, a real simplification, not just
+     a deletion). "Tightest point"/`tightestWeekIndex`/
+     `findTightestMonthIndex()` renamed `weakestWeekIndex`/
+     `findTightestMonthIndex()` (kept name, redefined) to mean the
+     WEAKEST-NET period, never a lowest-balance one — UI copy/badges
+     renamed to match (`weakestBadge`/`monthWeakestBadge`/
+     `weakestPointLine`/`weakestMonthLine`, `netLabel` replacing
+     `endingBalanceLabel`/`openingBalanceLabel`).
+     **Every write path neutralized** (not just hidden): `aiImportSave.ts`
+     no longer calls `apply_settlement_business_balance_credit` on
+     settlement import/re-import — `findExistingSettlement()`'s own
+     return type/select dropped `business_balance_credit` entirely (now
+     just `{id}`); `SaveExtractionResult.netPayAdded` was removed from the
+     type/return/import-screen display (`importScreen.balanceAdded` i18n
+     key deleted) rather than left permanently `null`. Onboarding's
+     "Opening business balance" step (`app/onboarding.tsx`, was step 7 of
+     9) was removed OUTRIGHT, not just its write — an unpersisted input
+     would have been actively confusing — `STEP_COUNT` 9→8,
+     `STEP_ACTIONS` and the `case 7`/`case 8` render switch renumbered,
+     `isOptionalStep` corrected (`onboarding.steps.openingBalance.*`
+     deleted from all 7 locales). `bank-statements.tsx`'s "Update Business
+     Balance To…" checking-statement action and its dedicated
+     `src/lib/confirmBusinessBalanceUpdate.ts` (fully orphaned, zero other
+     references — deleted outright) were removed; the screen still shows
+     the statement's own opening/closing figures, just doesn't write
+     either into `profiles` anymore. `legacyImport/importLegacyBackup.ts`'s
+     `updateBusinessBalance()` (writing a legacy backup's `bizBalance`
+     into `profiles`) deleted, its caller's warning-push removed. Two
+     smaller consumers found and fixed in the same audit:
+     `aiCoachSummary.ts`'s `taxReserveShortfall` recommendation input
+     (compared the quarterly tax payment against a now-permanently-frozen
+     balance) hardcoded to `null` — disabled outright rather than left
+     comparing against an increasingly-stale number, since
+     `buildRecommendationCandidates()` already treats `null` as "don't
+     offer this one"; `dailyTips.ts`'s `detectTipCapitalAccount()` dropped
+     its `businessBalance` OR-condition, keeping `initialCapital` alone
+     (a real, live, still-correctly-computed contributions figure) as the
+     trigger. `reset-data`'s existing `business_balance: 0` reset line and
+     `backupSnapshot.ts`'s read-only export of the column were
+     deliberately left as-is — harmless (an inert-column reset; a backup
+     naturally still exports whatever's on file).
+     **New PENDING_SQL §72, NOT YET APPLIED** (mirrored as `pending_72.sql`
+     at the repo root): drops the §70 `AFTER DELETE` reversal trigger on
+     `settlements` (function definition left intact — restoring is a
+     straight copy-paste of §70's own `CREATE TRIGGER` statement) — needed
+     because an OLD settlement row still carrying a pre-this-pass
+     `business_balance_credit` value would otherwise still decrement
+     `business_balance` on delete even though nothing writes that credit
+     anymore; and `CREATE OR REPLACE`s the three §60 manual-capital-
+     transaction RPCs (`record_manual_capital_transaction`/
+     `update_manual_capital_transaction`/`delete_manual_capital_transaction`)
+     to drop their balance-delta application while keeping the
+     `capital_transactions` row write byte-identical — `business_balance_applied`
+     now always written as `0` (informational-only column, nothing reads
+     it anymore; `0` is the honest value). **Confirmed unaffected**:
+     Capital Account's contributions/draws/reimbursements/four-flow
+     summary/Net Position/tax-free-remaining — `calcCapitalAccount()`/
+     `summarizeCapitalFlows()` compute directly from `capital_transactions`
+     rows + `profiles.initial_capital`, never from `business_balance`
+     (re-verified by reading both functions fresh, not assumed). Client
+     code ships independently via `eas update` — the RPCs would just also
+     silently apply a now-invisible delta server-side until §72 lands,
+     harmless since nothing reads it.
+     Tests: `aiImportSave.settlement.test.ts`'s balance-delta tests
+     rewritten to prove `profiles.business_balance` is NEVER touched by a
+     new import, a corrected re-import, a negative-net-pay week, a RETRY,
+     or a delete (previously proved a delta was applied correctly — now
+     proves no delta is applied at all);
+     `aiImportSave.negativeSettlement.test.ts` likewise;
+     `aiImportSave.errorReporting.test.ts`'s balance-RPC-failure test
+     replaced with one proving a settlement save completes successfully
+     even with that (now-unreachable) RPC configured to fail — the
+     positive-space proof that the call is genuinely never made, not just
+     that failing it produces no error; `cashFlowForecast.test.ts`/
+     `cashFlowMonthly.test.ts` rewritten around `net` instead of opening/
+     closing balances, including a dedicated "months are independent, no
+     shared chain" test replacing the old balance-chaining suite;
+     `missingDataNudges.test.ts`/`dailyTips.test.ts` updated for the
+     dropped `cfBankBalance`/`businessBalance` fields. Full suite re-run
+     clean after every edit in this item (128 suites / 3,496 tests, see
+     the pass-level summary above).
+  2. **ONE KPI ENGINE — Profit Analysis found broken, root-caused, fixed**:
+     Profit Analysis's formula (`buildProfitAnalysis()`,
+     `src/stats/profitAnalysis.ts`) already used the SAME canonical
+     `sumCanonicalExpenses()` `computeKpis()` itself is built from —
+     confirmed NOT a formula divergence. The real, confirmed bug:
+     `windowStartIso()`'s 30-day window used UTC-based date arithmetic
+     (`setUTCDate`) while `src/stats/heroPeriodWindow.ts`'s
+     `resolveHeroPeriodDateWindow()` — the ONE shared resolver every
+     `computeKpis()` consumer (Home's "1M" tab, Scorecard, AI Coach) uses
+     for an identical trailing-30-day period — uses LOCAL-time arithmetic
+     (`setDate`), the same "MONTH FILTER OFF-BY-ONE" UTC-vs-local mismatch
+     class this codebase has hit before (`formatMonthLabel()`). For a
+     30/90/180/365-day window spanning a DST transition, the two methods
+     can land on a genuinely different UTC calendar day — EMPIRICALLY
+     confirmed via a real `America/Chicago` DST-crossing case
+     (`now=2026-03-20T23:30:00Z`): old UTC-based → `2026-02-18`, new
+     local-time-based → `2026-02-19`, a full day's transactions'
+     difference. Fixed by switching `windowStartIso()` to the identical
+     `setDate()` arithmetic `resolveHeroPeriodDateWindow()` uses, plus
+     adding the matching explicit upper bound (`<= end`) to
+     `buildProfitAnalysis()`'s own window filters, which only ever had a
+     lower bound before. **Confirmed already correct, no fix needed**:
+     Share Weekly Profit (already routes through the canonical
+     `buildWeeklyTrueProfitTrend()`); Operating P&L/Truck Comparison/
+     Accountant Package/Cash Flow — all deliberately exempt per their own
+     established design (verbatim-legacy P&L port, the Per-Truck
+     allocation model, an itemized ledger, a forecast) and left untouched.
+     Tests: `profitAnalysis.test.ts` gained a cross-timezone
+     (`America/Chicago`/`UTC`/`Pacific/Honolulu`/`Europe/London`)
+     agreement test against `resolveHeroPeriodDateWindow('1M', ...)`, plus
+     a dedicated DST-crossing test reproducing the OLD buggy
+     `setUTCDate`-based implementation directly to prove it would have
+     produced `2026-02-18` (a real, different day) where the fix produces
+     `2026-02-19` — this test would have caught the original bug, not
+     just asserted the fix's own behavior. `kpiConsistency.test.ts` gained
+     a new case: `buildProfitAnalysis()`'s `netIncome` matches
+     `computeKpis().net` exactly for the identical fleet-wide 30-day
+     window on the file's existing realistic multi-truck fixture — a
+     genuinely partial window (only 3 of 5 fixture settlements fall
+     inside it), not a vacuous all-inclusive check.
+  3. **CRITICAL — Fix Truck Assignments "data loss" report: audited,
+     confirmed NOT a delete anywhere in the reachable code, refactored
+     for testability + a real resilience gap fixed**. Full trace before
+     writing anything, per the explicit instruction: `app/(tabs)/more/
+     truck-assignments.tsx`'s per-row handler (`openRowPicker` →
+     `assignOne()`, pre-refactor) and bulk handler (`handleBulkAssign()`)
+     both called ONLY `useUpdateSettlement`/`useUpdateFuelPurchase`/
+     `useUpdateMaintenanceRecord`/`useUpdateToll` — every one of those is
+     `createEntityHooks(<table>).useEntityUpdate` (`src/data/
+     entityHooks.ts:182-192`), which issues
+     `supabase.from(table).update(values).eq('id', id)`. `useEntityDelete`
+     (`entityHooks.ts:194-204`) is a genuinely separate function with its
+     own `.delete()` call — confirmed, by reading both side by side, that
+     nothing in this screen's call chain ever reaches it. Git history
+     confirms this isn't a regression either: `git log --oneline -- app/
+     (tabs)/more/truck-assignments.tsx app/src/import/
+     truckAssignmentRepair.ts` shows exactly ONE commit (`08cdc2c`) ever
+     touched either file — there is no prior "correct" version this could
+     have regressed from. **Cannot confirm "why it deletes instead of
+     updates" because it does not delete** — stated plainly rather than
+     inventing a root cause to match the report. Most likely explanations
+     for what was actually observed, in order of plausibility: (a) the
+     similarly-named "Data Cleanup" screen (`app/(tabs)/more/
+     data-cleanup.tsx`) DOES delete rows by design (orphaned tolls/
+     maintenance/documents/duplicate loans, each behind its own explicit
+     "Remove Selected" confirm) — easy to conflate with "fixing truck
+     assignments"; (b) a genuine, if narrow, resilience gap this audit
+     DID find and fix (below).
+     **The real gap, fixed**: `handleBulkAssign()`'s old inline logic
+     wrapped its whole per-row loop in ONE shared try/catch, so a single
+     row's update failure (e.g. a genuine
+     `settlements_user_week_truck_uidx` collision — two unassigned
+     same-week settlements bulk-assigned to the same truck in one batch)
+     aborted the ENTIRE remaining batch with no per-row report of what
+     happened or didn't. Refactored the previously inline, unexported,
+     untestable logic into `app/src/data/truckAssignments.ts`'s exported
+     `assignRowsToTruck(rows, truckId)` — never anything but
+     `update({truck_id}).eq('id', row.id)` per row, for any of the 4
+     tables — which now NEVER aborts on one row's failure: every row is
+     attempted, successes and failures are both collected and returned
+     (mirroring `aiImportSave.ts`'s own established
+     `insertBatchResilient()` convention for exactly this "one bad row
+     must never take down the whole batch" problem). The screen's bulk
+     handler now shows a "{{count}} row(s) could not be assigned" alert
+     naming which ones and why, re-selecting only the failed rows so the
+     user can retry just those.
+     **Proof, as required — a real test against the real exported
+     handler**: `src/data/__tests__/truckAssignments.test.ts` (new, 5
+     tests, using `fakeSupabase.ts`) — 0 rows selected (no-op, no crash);
+     all rows selected across 2 tables (N in, N out, every one correctly
+     assigned, no other column touched); a row already assigned to a
+     DIFFERENT truck (reassigned, not duplicated or dropped — row count
+     unchanged); the bulk-select path specifically, across all 4 tables
+     at once (same total row count, all correctly assigned); and the
+     resilience fix itself — one row's injected update failure mid-batch
+     leaves the OTHER rows correctly assigned and the failed row's own
+     row count/existence completely unchanged (still exists, just
+     unassigned) — proving no row is ever removed on failure either.
+     **Honestly stated, not glossed over**: the literal git-stash-verify-
+     it-fails-then-passes step this item's own instructions called for
+     could not be performed meaningfully — there is no prior "buggy"
+     version of this logic to stash back to (confirmed by the git-log
+     check above), so a stash-and-rerun would just make the test file and
+     `truckAssignments.ts` disappear entirely (nothing to run, not a
+     failing assertion). The proof that exists instead: the reachable
+     code was read line by line and traced to a plain `.update()` call at
+     every step (cited above with exact file:line), and the 5 new tests
+     pass against the REAL exported function, not a reimplementation.
+  4. **Deductions manual entry — attach a receipt**: `src/deductions/
+     attachment.ts`'s `buildDeductionAttachmentPath()` (pure path
+     builder, `{user_id}/Receipts/{slugified description}/{filename}`)
+     and `src/data/deductionAttachment.ts`'s `uploadDeductionAttachment()`
+     mirror `src/compliance/attachment.ts`/`src/data/
+     complianceAttachment.ts`'s already-established manual-attachment
+     pattern exactly (upload-immediately-on-pick, `doc_type: 'other'`, no
+     AI extraction). Three actions on the manual add-deduction sheet
+     (`app/(tabs)/deductions.tsx`) — "📷 Take Photo" (`expo-image-picker`'s
+     `launchCameraAsync`, camera permission already configured in
+     `app.config.js` for this exact plugin), "🖼️ Choose from Library"
+     (`launchImageLibraryAsync`), "📄 Import a File"
+     (`expo-document-picker`) — all already-installed dependencies, no
+     new native module. Manual fields stay the sole source of truth (no
+     re-extraction of the photo/PDF's own contents) — the attachment is
+     proof only. On Save, `insertDeductionWithContributionSync()` (the
+     atomic §62 RPC) creates the deduction as before, unmodified; if an
+     attachment was uploaded, a SEPARATE plain `updateDeduction.mutateAsync({
+     document_id })` follow-up links it — same "attaching has no
+     interaction with the RPC's own money-correctness guarantees, so it's
+     never folded into that RPC's signature" precedent this exact
+     screen's own `handleAssignTruck()` already established for truck
+     assignment. Best-effort: an attachment-link failure never undoes the
+     already-successfully-saved deduction. Appears in Documents & Renewals
+     automatically, no new UI needed there — `documents.tsx`'s existing
+     `findLinkedRecords()`/`documentTitle.ts` machinery already surfaces
+     any deduction with a real `document_id` (confirmed by reading
+     `documentsFilter.ts:126-138` before claiming this, not assumed).
+     Tests: `src/deductions/__tests__/attachment.test.ts` (new, 3 tests —
+     the path shape, the user-id-prefix RLS convention, the empty-
+     description fallback). `jest.config.js`'s `testMatch` gained
+     `src/deductions/**/*.test.ts` (a new source directory, previously
+     unlisted — same class of gap this codebase has hit for `analytics`/
+     `launch`/`onboarding` before).
+  5. **Daily tip diagnostic — AUDITED, reachability CONFIRMED, no fix
+     applied** (per the explicit instruction: do not write another
+     speculative fix). Traced the full render tree in `app/(tabs)/more/
+     settings.tsx`: the triple-tap gesture handler
+     (`handleDiagnosticsFooterTap`, lines 108-119) and the diagnostics
+     panel it reveals (`showDailyTipDiagnostics && (...)`, lines 595-613)
+     are both UNCONDITIONALLY reachable — no `__DEV__` gate, no
+     `isOwnerAccount()`/`hasFullAccess()` check, no loading-state early
+     return anywhere in this component's render path (confirmed by
+     grepping for every early `return`/`if` in the file — none of them
+     gate the top-level JSX tree). `useDailyTip()` (line 98) and its
+     `diagnostics` object are correctly wired to the panel's render
+     (`dailyTipDiag.diagnostics.eligibleCount`/`displayedTopic`/
+     `entries`, lines 599-611) — confirmed not stale/orphaned. The gesture
+     itself (a 1500ms rolling tap-time window, 3 taps required) has no
+     apparent silent-failure mode. **This code is already live** — it
+     shipped in commit `1993783`, the immediately-preceding pass in this
+     same session — so no new fix was needed or made. **Exact steps for
+     the user**: open Settings (Menu → Settings) → scroll to the very
+     bottom → triple-tap the small gray build-info text line (app
+     version / EAS update id / commit hash) within about 1.5 seconds →
+     an orange-bordered "🛠️ Daily Tip Diagnostics" card appears directly
+     above that line, showing "N of M topics eligible, showing
+     '<topic>', last shown <date>" plus a per-topic
+     precondition_not_met/silenced/cooldown/eligible breakdown. If this
+     genuinely doesn't appear on the real device after confirming the
+     latest `eas update` has landed and the app was fully restarted, the
+     next diagnostic step is pasting the exact on-screen output here (per
+     the user's own stated plan) — there is nothing further to fix
+     blind.
+  6. **Multi-file import order — base lists confirmed correct, batch
+     review queue found broken and fixed**. `entityHooks.ts`'s
+     `ORDER_COLUMN` map (Settlements→`week_ending`, Loads→`load_date`,
+     Deductions→`ded_date`, Fuel→`purchase_date`, Maintenance→
+     `service_date`, Tolls→`toll_date`, Documents→`imported_at`) is
+     applied via `.order(orderColumn, {ascending:false, nullsFirst:false})`
+     on EVERY `useEntityList()` call, confirmed still correctly wired for
+     all 7 — these lists are already immune to processing/finish order by
+     construction, re-verified rather than assumed (`entityHooks.test.ts`
+     already covers this).
+     **The real gap**: `app/(tabs)/import/jobs.tsx`'s `handleReviewAll()`
+     built its `reviewJobIds` queue straight from `readyJobs` — itself
+     `sortImportJobsForDisplay()`'s own output, ordered by job CREATION
+     time (when each upload/job was STARTED), not by the underlying
+     document's own extracted date. With bounded concurrency, a job
+     started 3rd can finish (and become `'ready'`) 1st — start-time order
+     and true chronological order routinely disagree, exactly the
+     reported symptom. Fixed with a new pure sorter,
+     `src/import/importJobs.ts`'s `sortJobIdsByDocumentDate()` (descending
+     by date, a row with no resolvable date sorts LAST, never first —
+     never let an unknown date masquerade as "most recent"). `handleReviewAll()`
+     is now async: it fetches every READY job's own extracted date
+     (`fetchImportJobResult()`, one read per already-completed job — cheap,
+     bounded, never touches a still-queued/processing job, which has no
+     result yet) via `getPrimaryExtractionDate()` (the same settlement-
+     weekEnding-aware resolver `duplicateCheck.ts` already uses), sorts,
+     THEN navigates — a small loading spinner (`preparingReviewAll`) covers
+     the brief async gap.
+     Tests: `src/import/__tests__/importJobs.test.ts` gained
+     `sortJobIdsByDocumentDate` coverage — the LITERAL reported scenario
+     (processing order week3→week1→week2, asserted review order
+     week3→week2→week1 regardless), immunity to every permutation of
+     finish order for the same 3 entries (proving the sort output can
+     never depend on completion order at all, not just for one lucky
+     ordering), the no-resolvable-date-sorts-last rule, non-mutation of
+     the input, and the empty-input case.
+  Every item above ships via a normal `eas update` — no native rebuild
+  needed (every new dependency used — `expo-image-picker`'s
+  `launchCameraAsync`, `expo-document-picker` — was already installed).
+  `docs/PENDING_SQL.md` §72 (mirrored as `pending_72.sql` at the repo
+  root) is **NOT YET APPLIED** — the client-side removal of every
+  balance-touching call ships and is safe regardless of whether §72 has
+  been run; §72 itself should be applied promptly since it's what
+  actually stops the §70 trigger from moving `business_balance` one more
+  time for an old settlement carrying a stale pre-this-pass credit value.
+  No Edge Function was touched in this entire six-item pass — no
+  redeploy needed for `ai-import`/`ai-advisor`/`reset-data`/
+  `delete-account`/`referral-sync`.

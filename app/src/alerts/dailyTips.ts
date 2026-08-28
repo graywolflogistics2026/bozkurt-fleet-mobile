@@ -348,8 +348,14 @@ export function detectTipDrivers(driversCount: number, driverPaymentsCount: numb
   return driversCount === 0 || (driversCount > 0 && driverPaymentsCount === 0) ? { topic: 'tipDrivers', detail: {} } : null;
 }
 
-export function detectTipCapitalAccount(businessBalance: number, initialCapital: number, taxFreeRemaining: number | null): DailyTipCandidate | null {
-  if (businessBalance <= 0 && initialCapital <= 0) return null;
+// REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — this
+// used to also gate on businessBalance > 0; that column is now
+// permanently frozen (nothing writes it anymore), so it was dropped
+// entirely rather than left as a stale, increasingly-meaningless trigger
+// — initialCapital alone (real contributions on file) is still a live,
+// correctly-computed signal worth nudging on.
+export function detectTipCapitalAccount(initialCapital: number, taxFreeRemaining: number | null): DailyTipCandidate | null {
+  if (initialCapital <= 0) return null;
   const detail: Record<string, number> = {};
   if (taxFreeRemaining != null && taxFreeRemaining > 0) detail.remaining = Math.round(taxFreeRemaining);
   return { topic: 'tipCapitalAccount', detail };
@@ -447,7 +453,6 @@ export type DailyTipBuilderInput = {
   unassignedRowsCount?: number;
   driversCount?: number;
   driverPaymentsCount?: number;
-  businessBalance?: number;
   initialCapital?: number;
   taxFreeRemaining?: number | null;
   activeTruckMaintenanceRecordsCount?: number;
@@ -500,8 +505,8 @@ export function buildDailyTipCandidates(input: DailyTipBuilderInput): DailyTipCa
   if (input.equipmentCount !== undefined && input.accountAgeDays !== undefined) candidates.push(detectTipEquipment(input.equipmentCount, input.accountAgeDays));
   if (input.driversCount !== undefined && input.driverPaymentsCount !== undefined)
     candidates.push(detectTipDrivers(input.driversCount, input.driverPaymentsCount));
-  if (input.businessBalance !== undefined && input.initialCapital !== undefined)
-    candidates.push(detectTipCapitalAccount(input.businessBalance, input.initialCapital, input.taxFreeRemaining ?? null));
+  if (input.initialCapital !== undefined)
+    candidates.push(detectTipCapitalAccount(input.initialCapital, input.taxFreeRemaining ?? null));
   if (input.weeksOfHistory !== undefined) candidates.push(detectTipOperatingPnl(input.weeksOfHistory));
   if (input.activeTruckMaintenanceRecordsCount !== undefined) candidates.push(detectTipTruckHealth(input.activeTruckMaintenanceRecordsCount));
   if (input.distinctSettlementWeeks !== undefined) candidates.push(detectTipCashFlow(input.distinctSettlementWeeks));

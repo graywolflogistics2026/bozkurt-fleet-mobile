@@ -350,6 +350,11 @@
     "taxDeductibleNo": "No",
     "nonDeductibleTag": "No deducible de impuestos",
     "personalPaymentNote": "💰 Un método de pago personal significa que esto se pagó con el dinero propio del propietario — se registrará (o mantendrá sincronizado) como un aporte a la Cuenta de Capital.",
+    "attachmentLabel": "Adjuntar un recibo (opcional)",
+    "attachTakePhoto": "Tomar Foto",
+    "attachChooseFromLibrary": "Elegir de la Galería",
+    "attachImportFile": "Importar un Archivo",
+    "attachFailedTitle": "Error al adjuntar",
     "deleteConfirmTitle": "¿Eliminar esta deducción?",
     "deleteConfirmBody": "Esto también elimina cualquier Aporte del Propietario vinculado y el documento/foto de origen (si esta fila provino de uno).",
     "saveFailedTitle": "Error al guardar",
@@ -518,7 +523,6 @@
     "savedSettlementNew": "Settlement guardado W/E {{date}} (nuevo)",
     "savedSettlementReplaced": "Settlement guardado W/E {{date}} (reemplazado)",
     "skippedRowsWarning": "{{count}} fila(s) no se pudieron guardar y fueron omitidas:",
-    "balanceAdded": "💰 Saldo {{amount}}",
     "contributionAdded": "💰 Agregado como aporte a la Cuenta de Capital: {{amount}} (pagado con fondos personales)",
     "savedToPath": "📁 Guardado en {{path}}",
     "importAnother": "Importar Otro",
@@ -1650,10 +1654,6 @@
         "title": "Calendario de mantenimiento",
         "subtitle": "Hemos precargado valores predeterminados razonables — ajusta cualquier intervalo ahora o después en Truck Health."
       },
-      "openingBalance": {
-        "title": "Saldo inicial del negocio",
-        "subtitle": "El saldo actual de tu cuenta de cheques. Por defecto es $0 — omite si prefieres empezar desde cero."
-      },
       "taxYear": {
         "title": "Confirma el año fiscal",
         "subtitle": "El año contra el cual se calculan tus estimaciones."
@@ -1687,7 +1687,6 @@
       "entityTypeNotSet": "Confirma el tipo de entidad de tu negocio → obtén una estimación de impuestos precisa y una comparación de ahorros con S-Corp.",
       "homeStateNotSet": "Indica tu estado de residencia → tu estimación de impuestos podrá incluir el impuesto estatal.",
       "firstReceiptMissing": "Agrega tu primer recibo pagado de tu bolsillo → desbloquea tu reporte de gastos del Paquete para el Contador.",
-      "businessBalanceNotSet": "Ingresa el saldo de tu cuenta bancaria → desbloquea una proyección real de Flujo de Caja.",
       "settlementMissingMiles_amount_one": "{{count}} settlement tiene ingresos pero sin millas registradas — agrégalas para corregir tu Costo/Milla (actualmente muestra un inflado {{currentCpm}}/mi).",
       "settlementMissingMiles_amount_other": "{{count}} settlements tienen ingresos pero sin millas registradas — agrégalas para corregir tu Costo/Milla (actualmente muestra un inflado {{currentCpm}}/mi).",
       "depreciationNotSet_amount_one": "{{count}} camión no tiene método de depreciación elegido — elige uno para desbloquear hasta {{previewTotal}} en deducciones este año.",
@@ -2243,6 +2242,7 @@
     "bulkTitle": "Asignar seleccionados ({{count}}) a:",
     "assignSelected": "Asignar {{count}} Seleccionados",
     "assignThisRow": "Asignar esta fila a",
+    "partialFailureTitle": "No se pudieron asignar {{count}} fila(s)",
     "kind": {
       "settlement": "Settlement",
       "fuel": "Combustible",

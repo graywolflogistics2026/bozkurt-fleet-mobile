@@ -9,7 +9,6 @@ import {
   detectEntityTypeNotSet,
   detectHomeStateNotSet,
   detectFirstReceiptMissing,
-  detectBusinessBalanceNotSet,
   detectPerDiemZeroMileWeek,
   buildMissingDataNudgeCandidates,
 } from '@/src/alerts/missingDataNudges';
@@ -162,7 +161,6 @@ describe('buildMissingDataNudgeCandidates', () => {
     expect(topics).not.toContain('entityTypeNotSet');
     expect(topics).not.toContain('homeStateNotSet');
     expect(topics).not.toContain('firstReceiptMissing');
-    expect(topics).not.toContain('businessBalanceNotSet');
     expect(topics).not.toContain('perDiemZeroMileWeek');
   });
 
@@ -180,7 +178,6 @@ describe('buildMissingDataNudgeCandidates', () => {
       entityTypeSet: false,
       homeState: null,
       deductionsCount: 0,
-      cfBankBalance: null,
       perDiemDailyRate: 64,
       checkPerDiemZeroMileWeek: true,
     });
@@ -193,7 +190,6 @@ describe('buildMissingDataNudgeCandidates', () => {
         'entityTypeNotSet',
         'homeStateNotSet',
         'firstReceiptMissing',
-        'businessBalanceNotSet',
         'perDiemZeroMileWeek',
       ].sort()
     );
@@ -297,17 +293,6 @@ describe('detectFirstReceiptMissing', () => {
   });
 });
 
-describe('detectBusinessBalanceNotSet', () => {
-  test('owner, unset — fires', () => {
-    expect(detectBusinessBalanceNotSet(null, 'owner_operator')).toEqual({ topic: 'businessBalanceNotSet', detail: {} });
-  });
-  test('owner, an explicit 0 counts as SET (a real value, not "unset")', () => {
-    expect(detectBusinessBalanceNotSet(0, 'owner_operator')).toBeNull();
-  });
-  test('company driver — never fires', () => {
-    expect(detectBusinessBalanceNotSet(null, 'company_driver_w2')).toBeNull();
-  });
-});
 
 describe('detectPerDiemZeroMileWeek', () => {
   test('no 0-mile/0-per-diem weeks — null', () => {

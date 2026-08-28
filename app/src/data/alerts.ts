@@ -155,7 +155,6 @@ export function useAlertsData() {
         entityTypeSet: taxConfigQuery.data ? !!taxConfigQuery.data.entity_type : undefined,
         homeState: profileQuery.data ? (profileQuery.data.home_state ?? null) : undefined,
         deductionsCount: deductionsQuery.data ? deductionsQuery.data.length : undefined,
-        cfBankBalance: profileQuery.data ? (profileQuery.data.cf_bank_balance ?? null) : undefined,
         perDiemDailyRate: taxYearDataQuery.data?.data.per_diem.daily_rate ?? null,
         checkPerDiemZeroMileWeek: (settlementsQuery.data?.length ?? 0) > 0,
       }),

@@ -11,6 +11,7 @@ import {
   nextBatchReviewStep,
   MAX_BATCH_IMPORT_FILES,
   sortImportJobsForDisplay,
+  sortJobIdsByDocumentDate,
   type ImportJob,
 } from '../importJobs';
 
@@ -396,5 +397,66 @@ describe('nextBatchReviewStep (BATCH REVIEW FLOW pass)', () => {
 describe('MAX_BATCH_IMPORT_FILES', () => {
   it('caps a single picker selection at 10', () => {
     expect(MAX_BATCH_IMPORT_FILES).toBe(10);
+  });
+});
+
+// MULTI-FILE IMPORT ORDER vs DISPLAY ORDER (owner decision, device
+// report: "importing up to 10 files at once can mix weeks in any order").
+// The literal reported scenario: 3 settlements processed in the order
+// week 3, week 1, week 2 (finish/processing order does NOT match
+// chronological order) — the batch review queue must present them week
+// 3, week 2, week 1 (newest first) regardless of that finish order.
+describe('sortJobIdsByDocumentDate (MULTI-FILE IMPORT ORDER pass)', () => {
+  it('the literal reported scenario: finish order week3, week1, week2 -> review order week3, week2, week1', () => {
+    // Jobs completed processing in this order (job ids reflect PROCESSING
+    // order, not date order): "job-w3" finished 1st but is week 3
+    // (newest), "job-w1" finished 2nd but is week 1 (oldest), "job-w2"
+    // finished 3rd and is week 2 (middle).
+    const entries = [
+      { id: 'job-w3', date: '2026-08-15' }, // week 3 — newest, finished FIRST
+      { id: 'job-w1', date: '2026-08-01' }, // week 1 — oldest, finished SECOND
+      { id: 'job-w2', date: '2026-08-08' }, // week 2 — middle, finished THIRD
+    ];
+    expect(sortJobIdsByDocumentDate(entries)).toEqual(['job-w3', 'job-w2', 'job-w1']);
+  });
+
+  it('is immune to finish order entirely — every permutation of the same 3 entries produces the identical result', () => {
+    const base = [
+      { id: 'a', date: '2026-08-01' },
+      { id: 'b', date: '2026-08-15' },
+      { id: 'c', date: '2026-08-08' },
+    ];
+    const permutations = [
+      [base[0], base[1], base[2]],
+      [base[1], base[2], base[0]],
+      [base[2], base[0], base[1]],
+      [base[2], base[1], base[0]],
+    ];
+    for (const perm of permutations) {
+      expect(sortJobIdsByDocumentDate(perm)).toEqual(['b', 'c', 'a']);
+    }
+  });
+
+  it('a job with no resolvable date sorts LAST, never first', () => {
+    const entries = [
+      { id: 'known-old', date: '2026-08-01' },
+      { id: 'unknown', date: null },
+      { id: 'known-new', date: '2026-08-15' },
+    ];
+    expect(sortJobIdsByDocumentDate(entries)).toEqual(['known-new', 'known-old', 'unknown']);
+  });
+
+  it('does not mutate the input array', () => {
+    const entries = [
+      { id: 'a', date: '2026-08-01' },
+      { id: 'b', date: '2026-08-15' },
+    ];
+    const copy = entries.map((e) => ({ ...e }));
+    sortJobIdsByDocumentDate(entries);
+    expect(entries).toEqual(copy);
+  });
+
+  it('empty input returns an empty list', () => {
+    expect(sortJobIdsByDocumentDate([])).toEqual([]);
   });
 });

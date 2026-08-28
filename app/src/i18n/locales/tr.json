@@ -350,6 +350,11 @@
     "taxDeductibleNo": "Hayır",
     "nonDeductibleTag": "Vergiden düşülemez",
     "personalPaymentNote": "💰 Kişisel bir ödeme yöntemi, bunun sahibinin kendi parasıyla ödendiği anlamına gelir — Sermaye Hesabı katkısı olarak kaydedilecek (veya senkronize tutulacak).",
+    "attachmentLabel": "Fiş ekle (isteğe bağlı)",
+    "attachTakePhoto": "Fotoğraf Çek",
+    "attachChooseFromLibrary": "Kitaplıktan Seç",
+    "attachImportFile": "Dosya İçe Aktar",
+    "attachFailedTitle": "Ekleme başarısız",
     "deleteConfirmTitle": "Bu kesinti silinsin mi?",
     "deleteConfirmBody": "Bu ayrıca bağlı herhangi bir Sahip Katkısını ve kaynak belge/fotoğrafı da kaldırır (bu kayıt birinden geldiyse).",
     "saveFailedTitle": "Kaydetme başarısız",
@@ -518,7 +523,6 @@
     "savedSettlementNew": "Settlement kaydedildi W/E {{date}} (yeni)",
     "savedSettlementReplaced": "Settlement kaydedildi W/E {{date}} (değiştirildi)",
     "skippedRowsWarning": "{{count}} satır kaydedilemedi ve atlandı:",
-    "balanceAdded": "💰 Bakiye {{amount}}",
     "contributionAdded": "💰 Sermaye Hesabı katkısı olarak eklendi: {{amount}} (kişisel fonlardan ödendi)",
     "savedToPath": "📁 Şuraya kaydedildi: {{path}}",
     "importAnother": "Başka Bir Tane İçe Aktar",
@@ -1650,10 +1654,6 @@
         "title": "Bakım takvimi",
         "subtitle": "Makul varsayılan değerleri önceden doldurduk — herhangi bir aralığı şimdi veya daha sonra Truck Health'te ayarlayın."
       },
-      "openingBalance": {
-        "title": "Açılış işletme bakiyesi",
-        "subtitle": "Mevcut çek hesabı bakiyeniz. Varsayılan olarak $0 — sıfırdan başlamak isterseniz atlayın."
-      },
       "taxYear": {
         "title": "Vergi yılını onaylayın",
         "subtitle": "Tahminlerinizin hesaplandığı yıl."
@@ -1687,7 +1687,6 @@
       "entityTypeNotSet": "İşletme yapı türünü onayla → doğru bir vergi tahmini ve S-Corp tasarruf karşılaştırması aç.",
       "homeStateNotSet": "Eyaletini belirt → vergi tahminine eyalet vergisi de dahil edilebilir.",
       "firstReceiptMissing": "Cepten ödediğin ilk fişi ekle → Muhasebeci Paketi gider raporunu aç.",
-      "businessBalanceNotSet": "Banka bakiyeni gir → gerçek Nakit Akışı tahminini aç.",
       "settlementMissingMiles_amount_one": "{{count}} settlement gelir gösteriyor ama mil kaydı yok — Mil Başına Maliyetini düzeltmek için ekle (şu an şişirilmiş {{currentCpm}}/mil gösteriyor).",
       "settlementMissingMiles_amount_other": "{{count}} settlement gelir gösteriyor ama mil kaydı yok — Mil Başına Maliyetini düzeltmek için ekle (şu an şişirilmiş {{currentCpm}}/mil gösteriyor).",
       "depreciationNotSet_amount_one": "{{count}} kamyon için amortisman yöntemi seçilmemiş — bu yıl {{previewTotal}}'a kadar kesinti açmak için birini seç.",
@@ -2243,6 +2242,7 @@
     "bulkTitle": "Seçilenleri ({{count}}) şuna ata:",
     "assignSelected": "{{count}} Seçileni Ata",
     "assignThisRow": "Bu satırı şuna ata",
+    "partialFailureTitle": "{{count}} satır atanamadı",
     "kind": {
       "settlement": "Settlement",
       "fuel": "Yakıt",

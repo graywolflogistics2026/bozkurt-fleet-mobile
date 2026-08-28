@@ -1,4 +1,5 @@
 import { buildProfitAnalysis, compareToBenchmark, windowStartIso } from '@/src/stats/profitAnalysis';
+import { resolveHeroPeriodDateWindow } from '@/src/stats/heroPeriodWindow';
 import type { Benchmark } from '@/src/types/db';
 
 const NOW = new Date('2026-06-30T00:00:00Z');
@@ -23,6 +24,52 @@ function benchmark(overrides: Partial<Benchmark>): Benchmark {
 describe('windowStartIso', () => {
   it('returns the date N days before now, ISO date only', () => {
     expect(windowStartIso(30, NOW)).toBe('2026-05-31');
+  });
+
+  // ONE KPI ENGINE (owner decision, device report: "Profit Analysis...
+  // independent of what Dashboard/Scorecard/AI Coach show for the same
+  // period and scope") — proves the actual root cause and its fix: a
+  // 30-day window computed here must always match the SAME window
+  // resolveHeroPeriodDateWindow('1M', ...) computes for Home/Scorecard/AI
+  // Coach, in every timezone, including one that crosses a DST boundary
+  // within the 30-day span (the exact case a UTC-vs-local mismatch could
+  // silently produce a different calendar day for).
+  it('matches resolveHeroPeriodDateWindow(\'1M\', ...) exactly, across timezones', () => {
+    const originalTz = process.env.TZ;
+    try {
+      for (const tz of ['America/Chicago', 'UTC', 'Pacific/Honolulu', 'Europe/London']) {
+        process.env.TZ = tz;
+        const now = new Date('2026-06-30T00:00:00Z');
+        const heroWindow = resolveHeroPeriodDateWindow('1M', [], now)!;
+        expect(windowStartIso(30, now)).toBe(heroWindow.startIso);
+      }
+    } finally {
+      process.env.TZ = originalTz;
+    }
+  });
+
+  it('still matches resolveHeroPeriodDateWindow(\'1M\', ...) when the 30-day window crosses a real DST boundary (America/Chicago\'s own 2026-03-08 start)', () => {
+    const originalTz = process.env.TZ;
+    try {
+      process.env.TZ = 'America/Chicago';
+      const dstNow = new Date('2026-03-20T23:30:00.000Z');
+      const dstHeroWindow = resolveHeroPeriodDateWindow('1M', [], dstNow)!;
+      expect(windowStartIso(30, dstNow)).toBe(dstHeroWindow.startIso);
+      expect(windowStartIso(30, dstNow)).toBe('2026-02-19');
+
+      // Reproduces the OLD buggy implementation (setUTCDate) directly to
+      // prove this test would have caught the original divergence, not
+      // just asserted behavior the fix already guarantees.
+      const oldBuggyImpl = (days: number, n: Date) => {
+        const d = new Date(n);
+        d.setUTCDate(d.getUTCDate() - days);
+        return d.toISOString().slice(0, 10);
+      };
+      expect(oldBuggyImpl(30, dstNow)).toBe('2026-02-18');
+      expect(oldBuggyImpl(30, dstNow)).not.toBe(windowStartIso(30, dstNow));
+    } finally {
+      process.env.TZ = originalTz;
+    }
   });
 });
 

@@ -3,11 +3,12 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTrucksList } from '@/src/data/trucks';
-import { useSettlements, useUpdateSettlement } from '@/src/data/settlements';
-import { useFuelPurchases, useUpdateFuelPurchase } from '@/src/data/fuelPurchases';
-import { useMaintenanceRecords, useUpdateMaintenanceRecord } from '@/src/data/maintenanceRecords';
-import { useTolls, useUpdateToll } from '@/src/data/tolls';
-import { findUnassignedRows, UNASSIGNED_ROW_TABLE, type UnassignedRow, type UnassignedRowKind } from '@/src/import/truckAssignmentRepair';
+import { useSettlements } from '@/src/data/settlements';
+import { useFuelPurchases } from '@/src/data/fuelPurchases';
+import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
+import { useTolls } from '@/src/data/tolls';
+import { findUnassignedRows, type UnassignedRow, type UnassignedRowKind } from '@/src/import/truckAssignmentRepair';
+import { assignRowsToTruck } from '@/src/data/truckAssignments';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, TappableCard, PrimaryButton } from '@/src/components/ui';
@@ -33,10 +34,6 @@ export default function TruckAssignments() {
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
-  const updateSettlement = useUpdateSettlement();
-  const updateFuel = useUpdateFuelPurchase();
-  const updateMaintenance = useUpdateMaintenanceRecord();
-  const updateToll = useUpdateToll();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTruckId, setBulkTruckId] = useState<string | null>(null);
@@ -62,13 +59,6 @@ export default function TruckAssignments() {
     });
   }
 
-  async function assignOne(r: UnassignedRow, truckId: string) {
-    if (r.kind === 'settlement') await updateSettlement.mutateAsync({ id: r.id, values: { truck_id: truckId } });
-    else if (r.kind === 'fuel') await updateFuel.mutateAsync({ id: r.id, values: { truck_id: truckId } });
-    else if (r.kind === 'maintenance') await updateMaintenance.mutateAsync({ id: r.id, values: { truck_id: truckId } });
-    else await updateToll.mutateAsync({ id: r.id, values: { truck_id: truckId } });
-  }
-
   function openRowPicker(r: UnassignedRow) {
     Alert.alert(
       t('truckAssignments.assignThisRow'),
@@ -77,32 +67,43 @@ export default function TruckAssignments() {
         .map((truck) => ({
           text: truck.unit_number ?? truck.id,
           onPress: async () => {
-            try {
-              await assignOne(r, truck.id);
-              await invalidateFinancialData(queryClient, { entities: [UNASSIGNED_ROW_TABLE[r.kind]] });
-            } catch (err) {
-              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+            const result = await assignRowsToTruck([r], truck.id);
+            if (result.failed.length > 0) {
+              Alert.alert(t('common.error'), result.failed[0].message);
+              return;
             }
+            await invalidateFinancialData(queryClient, {
+              entities: ['settlements', 'fuel_purchases', 'maintenance_records', 'tolls'],
+            });
           },
         }))
         .concat([{ text: t('truckSwitcher.cancel'), style: 'cancel' } as any])
     );
   }
 
+  // Never aborts the whole batch on one row's failure (e.g. a genuine
+  // settlements_user_week_truck_uidx collision when two same-week rows are
+  // bulk-assigned to the same truck) — every selected row is attempted;
+  // only the rows that actually succeeded are cleared from `selected`, and
+  // any failures are reported by name/count so nothing silently vanishes.
   async function handleBulkAssign() {
     if (!bulkTruckId || selected.size === 0) return;
     setAssigning(true);
     try {
       const selectedRows = rows.filter((r) => selected.has(rowKey(r)));
-      for (const r of selectedRows) {
-        await assignOne(r, bulkTruckId);
-      }
+      const result = await assignRowsToTruck(selectedRows, bulkTruckId);
       await invalidateFinancialData(queryClient, {
         entities: ['settlements', 'fuel_purchases', 'maintenance_records', 'tolls'],
       });
-      setSelected(new Set());
-    } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+      if (result.failed.length > 0) {
+        setSelected(new Set(result.failed.map((f) => rowKey(f.row))));
+        Alert.alert(
+          t('truckAssignments.partialFailureTitle', { count: result.failed.length }),
+          result.failed.map((f) => `${kindLabel(t, f.row.kind)}${f.row.label ? ` · ${f.row.label}` : ''}: ${f.message}`).join('\n')
+        );
+      } else {
+        setSelected(new Set());
+      }
     } finally {
       setAssigning(false);
     }

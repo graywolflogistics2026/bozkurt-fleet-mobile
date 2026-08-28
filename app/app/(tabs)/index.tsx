@@ -10,7 +10,6 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
-import { useCapitalAccountSummary } from '@/src/data/capitalAccount';
 import { useLoads } from '@/src/data/loads';
 import { useDeductions, useDeleteDeduction } from '@/src/data/deductions';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
@@ -301,27 +300,6 @@ function OverviewTile({
       <Text style={{ color: deltaColor, fontSize: 10, marginTop: 2, fontWeight: '700' }} numberOfLines={1}>
         {change.pct == null ? t('dashboard.hero.newThisWeek') : `${arrow} ${Math.abs(change.pct).toFixed(1)}%`}
       </Text>
-    </Pressable>
-  );
-}
-
-// Session 9e-B4: a slim Business Balance row.
-function CashBalanceSlimCard({ balance, onPress }: { balance: number; onPress: () => void }) {
-  const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
-  const color = balance > 10000 ? colors.green : balance > 3000 ? colors.orange : colors.red;
-
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.slimCard, pressed && { opacity: 0.85 }]}>
-      <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>💰 {t('dashboard.businessBalance')}</Text>
-      <Text style={{ color, fontWeight: '700', fontSize: typography.size.lg }}>{money(balance)}</Text>
-      {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02): a losing week
-          is real money owed back to the carrier — the balance itself can
-          now go negative (never clamped to 0), so this makes what a
-          negative number MEANS explicit rather than reading as an
-          unusually small positive figure. */}
-      {balance < 0 && <Text style={{ color: colors.red, fontSize: typography.size.xs }}>{t('dashboard.businessBalanceOwed')}</Text>}
     </Pressable>
   );
 }
@@ -791,7 +769,6 @@ export default function Dashboard() {
     }
   }, [queryClient]);
 
-  const capitalQuery = useCapitalAccountSummary();
   const aiCoach = useAiCoachSummary();
   const proactiveCoach = useProactiveCoach();
   // "UNLOCK" NUDGES (owner decision 2026-08-24, FIVE ADDITIONS pass PART 1)
@@ -883,8 +860,6 @@ export default function Dashboard() {
   // landmine — a future edit reaching for "stats" here would have
   // silently resurrected the exact all-time/unscoped-vs-scoped mismatch
   // this whole KPI CONSISTENCY pass exists to eliminate.
-  const capital = capitalQuery.data;
-
   // Zone 1 hero chart data — the FULL (unsliced) weekly trend, so 1M/3M/
   // 6M/yearly can window arbitrarily far back, not just a fixed recent
   // slice. TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31): every
@@ -1244,16 +1219,6 @@ export default function Dashboard() {
             "All Trucks" mode only. */}
         {perTruckThisWeek && (
           <PerTruckThisWeekCard result={perTruckThisWeek} onSelectTruck={setActiveTruckId} />
-        )}
-
-        <CashBalanceSlimCard balance={capital?.businessBalance ?? 0} onPress={() => router.push('/(tabs)/more/cash-flow')} />
-        {/* Fleet-level card (requirement 2's 1st category) — carries a
-            small "fleet-wide" label ONLY when a single truck is currently
-            selected, so it's never mistaken for that one truck's own
-            balance (a multi-truck account viewing "All Trucks" already
-            has no such ambiguity to clear up). */}
-        {!isAllTrucks && trucks.length > 1 && (
-          <MutedText style={{ marginTop: -spacing.sm, marginBottom: spacing.md }}>{t('fleetScope.fleetWideAlways')}</MutedText>
         )}
 
         {aiCoach.isLoading ? (

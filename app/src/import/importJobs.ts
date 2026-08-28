@@ -201,6 +201,40 @@ export function nextBatchReviewStep(queue: string[]): { next: string | null; rem
   return { next, remaining };
 }
 
+// MULTI-FILE IMPORT ORDER vs DISPLAY ORDER (owner decision, device
+// report: "importing up to 10 files at once can mix weeks in any order").
+// The base entity lists (Settlements/Loads/Fuel/Maintenance/Tolls/
+// Deductions/Documents) already sort by each row's OWN date column via
+// entityHooks.ts's ORDER_COLUMN map, independent of upload/processing
+// order — confirmed correct, unchanged by this pass. The one real gap:
+// `handleReviewAll()` (app/(tabs)/import/jobs.tsx) used to build its
+// `reviewJobIds` list straight from `readyJobs` — which is
+// `sortImportJobsForDisplay()`'s own output, ordered by job CREATION time
+// (when each upload/job was STARTED), not by the underlying document's
+// own extracted date. With bounded concurrency, a job started 3rd can
+// finish (and become 'ready') 1st, so start-time order and true
+// chronological (document date) order routinely disagree.
+//
+// This pure sorter is the fix: given each READY job's own id + its
+// extracted document date (fetched once the job's result_json exists,
+// impure layer's job — src/data/importJobs.ts), it orders newest-first,
+// matching every list's own convention. A job with no resolvable date
+// (extraction failed to find one, or the fetch itself failed) sorts
+// LAST, never first — never let an unknown date masquerade as "most
+// recent." This runs ONLY over jobs already in a REVIEWABLE state
+// (isReviewableJob() true) — a job still queued/processing has no
+// result yet and is never part of this ordering decision at all.
+export function sortJobIdsByDocumentDate(entries: Array<{ id: string; date: string | null }>): string[] {
+  return [...entries]
+    .sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return b.date.localeCompare(a.date);
+    })
+    .map((e) => e.id);
+}
+
 // null = no total known yet (job just queued, page count not determined)
 // — the caller shows an indeterminate spinner rather than a fraction.
 // Clamped to [0, 1] defensively — pagesDone should never exceed

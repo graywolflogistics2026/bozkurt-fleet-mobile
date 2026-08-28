@@ -200,7 +200,6 @@ export function useDailyTip() {
       unassignedRowsCount: unassigned.length,
       driversCount: driversQuery.data?.length ?? 0,
       driverPaymentsCount: driverPaymentsQuery.data?.length ?? 0,
-      businessBalance: capitalAccountQuery.data?.businessBalance ?? 0,
       initialCapital: capitalAccountQuery.data?.effectiveContribution ?? 0,
       taxFreeRemaining: capitalAccountQuery.data?.taxFreeRemaining ?? null,
       activeTruckMaintenanceRecordsCount,

@@ -727,14 +727,6 @@ async function applyHealthOverrides(userId: string, truckId: string, health: Leg
   return Object.keys(overrides).length;
 }
 
-async function updateBusinessBalance(userId: string, bizBalance: LegacyBackupPayload['bizBalance']) {
-  if (bizBalance === undefined || bizBalance === null) return false;
-  const value = num(bizBalance, NaN);
-  if (Number.isNaN(value)) return false;
-  await supabase.from('profiles').update({ business_balance: value }).eq('user_id', userId);
-  return true;
-}
-
 // ---------- 16. Consistency passes (mirrors legacy's on-load re-sync) ----------
 async function runConsistencyPasses(userId: string): Promise<string[]> {
   const warnings: string[] = [];
@@ -909,12 +901,9 @@ export async function importLegacyBackup(
       warnings.push(`Truck Health override sync failed: ${errorMessage(err)}`);
     }
   }
-  try {
-    const balanceUpdated = await updateBusinessBalance(userId, payload.bizBalance);
-    if (balanceUpdated) warnings.push('Business balance updated from backup.');
-  } catch (err) {
-    warnings.push(`Business balance update failed: ${errorMessage(err)}`);
-  }
+  // REMOVE BUSINESS BALANCE TRACKING (owner decision 2026-08-27) — a
+  // legacy backup's own bizBalance figure is no longer written anywhere;
+  // profiles.business_balance is a permanently frozen, inert column now.
 
   if (db.docs && db.docs.length > 0) {
     warnings.push(`Skipped ${db.docs.length} legacy document-archive entr(y/ies) — no source file to store.`);
