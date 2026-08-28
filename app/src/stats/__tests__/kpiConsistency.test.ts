@@ -39,7 +39,7 @@
 import { computeKpis } from '@/src/stats/kpi';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
-import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
+import { buildProfitAnalysis, windowStartIso } from '@/src/stats/profitAnalysis';
 import { calcMiles } from '@/src/stats/miles';
 import type { ComparisonTruck } from '@/src/stats/truckComparison';
 import type { Settlement, Deduction } from '@/src/types/db';
@@ -265,7 +265,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
   // `net` for the SAME fleet-wide scope and the SAME 30-day window.
   it('Profit Analysis (buildProfitAnalysis) netIncome matches computeKpis().net for the same fleet-wide 30-day window', () => {
     const now = new Date('2026-08-24T12:00:00Z');
-    const profitAnalysis = buildProfitAnalysis(settlements, [], maintenanceRecords, deductions, 30, now, []);
+    const profitAnalysis = buildProfitAnalysis(settlements, [], maintenanceRecords, deductions, windowStartIso(30, now), now, []);
 
     const canonical = computeKpis({
       trucks,

@@ -93,7 +93,7 @@ describe('buildProfitAnalysis', () => {
   ];
 
   it('sums only rows within the trailing window', () => {
-    const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, 30, NOW);
+    const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, windowStartIso(30, NOW), NOW);
     expect(result.revenue).toBe(3000);
     // FULL PARITY pass (owner decision 2026-08-05, spec item C.2): netIncome
     // now genuinely subtracts fuel/maintenance too, not just deductions —
@@ -109,27 +109,99 @@ describe('buildProfitAnalysis', () => {
   });
 
   it('excludes non-deductible rows (a Meal covered by per diem, an Advance Repayment) from netIncome', () => {
-    const result = buildProfitAnalysis(settlements, [], [], deductions, 30, NOW);
+    const result = buildProfitAnalysis(settlements, [], [], deductions, windowStartIso(30, NOW), NOW);
     expect(result.netIncome).toBe(2800); // the $40 non-deductible row never subtracted (no fuel/maintenance passed here)
   });
 
   it('excludes a SETTLEMENT-LINKED fuel purchase from netIncome (already represented by the settlement\'s own withheld deductions) but still shows it in the fuelExpense tile', () => {
     const linkedFuel = [{ purchase_date: '2026-06-20', amount: 700, discount: 50, settlement_id: 'sett-1' }];
-    const result = buildProfitAnalysis(settlements, linkedFuel, [], [], 30, NOW);
+    const result = buildProfitAnalysis(settlements, linkedFuel, [], [], windowStartIso(30, NOW), NOW);
     expect(result.netIncome).toBe(3000); // settlement-linked fuel not double-subtracted
     expect(result.fuelExpense).toBe(650); // still shown in the display tile
   });
 
   it('computes fuel % of revenue and maintenance $/mile ratios', () => {
-    const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, 30, NOW);
+    const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, windowStartIso(30, NOW), NOW);
     expect(result.fuelPctOfRevenue).toBeCloseTo(650 / 3000, 5);
     expect(result.maintenanceCostPerMile).toBeCloseTo(300 / 2000, 5);
   });
 
   it('returns null ratios rather than dividing by zero when revenue/miles are 0', () => {
-    const result = buildProfitAnalysis([], [], [], [], 30, NOW);
+    const result = buildProfitAnalysis([], [], [], [], windowStartIso(30, NOW), NOW);
     expect(result.fuelPctOfRevenue).toBeNull();
     expect(result.maintenanceCostPerMile).toBeNull();
+  });
+
+  // "GHOST VALUE" pass (owner decision 2026-08-28) — startIso is now an
+  // explicit caller-supplied bound (or null for 'all') instead of a
+  // baked-in windowDays count, and the return value exposes the full
+  // reconciliation breakdown.
+  describe('explicit startIso / null bound / reconciliation breakdown', () => {
+    it('startIso=null (the "all" period) includes every row regardless of date', () => {
+      const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, null, NOW);
+      expect(result.revenue).toBe(8000); // both settlements
+      expect(result.deductionsGrossTotal).toBe(1239); // 200 + 40 + 999
+      expect(result.startIso).toBeNull();
+    });
+
+    it('deductionsGrossTotal matches the unconditional sum every deduction row contributes for the SAME date range — the exact figure Deductions\' own "Total" tile shows', () => {
+      const result = buildProfitAnalysis([], [], [], deductions, windowStartIso(30, NOW), NOW);
+      // Both in-window rows (200 deductible + 40 non-deductible) — unconditional,
+      // matching buildDeductionsTotalsBar()'s own "Total = every row's amount" rule.
+      expect(result.deductionsGrossTotal).toBe(240);
+      expect(result.deductionsCountedTotal).toBe(200); // only what actually reduces netIncome
+      expect(result.deductionsExcludedTotal).toBe(40); // gross - counted, reconciles exactly
+      expect(result.deductionsGrossTotal).toBe(result.deductionsCountedTotal + result.deductionsExcludedTotal);
+    });
+
+    it('totalExpenses always equals revenue - netIncome, and equals deductionsCountedTotal + canonicalFuelExpense + maintenanceExpense + tollsExpense', () => {
+      const tolls = [{ toll_date: '2026-06-14', amount: 15 }];
+      const result = buildProfitAnalysis(settlements, fuel, maintenance, deductions, windowStartIso(30, NOW), NOW, tolls);
+      expect(result.totalExpenses).toBeCloseTo(result.revenue - result.netIncome, 6);
+      expect(result.totalExpenses).toBeCloseTo(
+        result.deductionsCountedTotal + result.canonicalFuelExpense + result.maintenanceExpense + result.tollsExpense,
+        6
+      );
+      expect(result.tollsExpense).toBe(15);
+    });
+
+    it('canonicalFuelExpense excludes settlement-linked fuel while fuelExpense (the display tile) still includes it', () => {
+      const linkedFuel = [{ purchase_date: '2026-06-20', amount: 700, discount: 50, settlement_id: 'sett-1' }];
+      const result = buildProfitAnalysis(settlements, linkedFuel, [], [], windowStartIso(30, NOW), NOW);
+      expect(result.fuelExpense).toBe(650);
+      expect(result.canonicalFuelExpense).toBe(0);
+    });
+
+    // THE EXACT REPORTED SYMPTOM (device report, 2026-08-28): "-$1,372.98
+    // trailing 30 days vs. $5,800.72 all-time" — reproduces this shape and
+    // proves it is a genuine, correctly-computed SCOPE difference (not
+    // stale/wrong data): the smaller 30-day figure is the true subset of
+    // the larger all-time figure, and both are live, deterministic
+    // functions of the SAME input rows for their own date range.
+    it('a zero-revenue, manual-deductions-only account: the "all" period returns the full deductions total; a narrower period returns only its own true subset', () => {
+      const now = new Date('2026-08-28T12:00:00Z');
+      const manualDeductions = [
+        { ded_date: '2026-07-01', amount: 4427.74, tax_deductible: true }, // outside the trailing 30 days from 2026-08-28
+        { ded_date: '2026-08-10', amount: 872.98, tax_deductible: true }, // inside
+        { ded_date: '2026-08-20', amount: 500.0, tax_deductible: true }, // inside
+      ];
+      // 872.98 + 500.00 = 1372.98 — the exact reported "ghost" figure.
+      const trailing30 = buildProfitAnalysis([], [], [], manualDeductions, windowStartIso(30, now), now);
+      expect(trailing30.revenue).toBe(0);
+      expect(trailing30.netIncome).toBeCloseTo(-1372.98, 2);
+      expect(trailing30.deductionsGrossTotal).toBeCloseTo(1372.98, 2);
+
+      // 4427.74 + 872.98 + 500.00 = 5800.72 — the exact reported Deductions
+      // screen "Total" figure, for the SAME rows under the 'all' period.
+      const allTime = buildProfitAnalysis([], [], [], manualDeductions, null, now);
+      expect(allTime.revenue).toBe(0);
+      expect(allTime.netIncome).toBeCloseTo(-5800.72, 2);
+      expect(allTime.deductionsGrossTotal).toBeCloseTo(5800.72, 2);
+
+      // The 30-day figure is a strict, real subset of the all-time one —
+      // never a different/unrelated number.
+      expect(trailing30.deductionsGrossTotal).toBeLessThan(allTime.deductionsGrossTotal);
+    });
   });
 });
 

@@ -14,7 +14,7 @@ import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
 import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
 import { buildWeeklyTrueProfitTrend, type TrueProfitWeeklyPoint } from '@/src/stats/trueProfit';
-import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
+import { buildProfitAnalysis, windowStartIso } from '@/src/stats/profitAnalysis';
 import { calcComplianceStatus } from '@/src/compliance/status';
 import { isDeductionNeedsReview } from '@/src/import/needsReview';
 import { buildRecommendationCandidates, selectTopRecommendations, sumRecommendationImpact, type Recommendation } from '@/src/stats/aiRecommendations';
@@ -136,19 +136,18 @@ export function useAiCoachSummary(): AiCoachSummary {
     [truckHealthResults]
   );
 
-  const profitAnalysisRollup = useMemo(
-    () =>
-      buildProfitAnalysis(
-        settlementsQuery.data ?? [],
-        fuelQuery.data ?? [],
-        allMaintenanceQuery.data ?? [],
-        deductionsQuery.data ?? [],
-        30,
-        new Date(),
-        tollsQuery.data ?? []
-      ),
-    [settlementsQuery.data, fuelQuery.data, allMaintenanceQuery.data, deductionsQuery.data, tollsQuery.data]
-  );
+  const profitAnalysisRollup = useMemo(() => {
+    const now = new Date();
+    return buildProfitAnalysis(
+      settlementsQuery.data ?? [],
+      fuelQuery.data ?? [],
+      allMaintenanceQuery.data ?? [],
+      deductionsQuery.data ?? [],
+      windowStartIso(30, now),
+      now,
+      tollsQuery.data ?? []
+    );
+  }, [settlementsQuery.data, fuelQuery.data, allMaintenanceQuery.data, deductionsQuery.data, tollsQuery.data]);
   const fuelBenchmark = useMemo(
     () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,
     [benchmarksQuery.data]

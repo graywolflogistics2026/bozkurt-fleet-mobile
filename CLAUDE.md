@@ -11287,3 +11287,156 @@
   for `ai-import`/`ai-advisor`/`reset-data`/`delete-account`/
   `referral-sync`. No new i18n strings. No new native dependency — ships
   via a normal `eas update`.
+- PROFIT ANALYSIS "GHOST VALUE" — TRACED AND FIXED, NOT STALE/CACHED
+  (owner decision 2026-08-28, device report: "Profit Analysis shows
+  -$1,372.98, but the Deductions screen's own total is $5,800.72 — these
+  must reconcile and they clearly don't"). Traced the exact render path
+  BEFORE writing any fix, per the owner's own explicit demand for real
+  evidence over another guess.
+  **Root cause, confirmed by reading the actual code, not theorized**:
+  `app/(tabs)/more/profit-analysis.tsx`'s `rollup30d` useMemo (now
+  `rollup`) called `buildProfitAnalysis(settlementsQuery.data ?? [],
+  fuelQuery.data ?? [], maintenanceQuery.data ?? [], dedQuery.data ?? [],
+  30, new Date(), tollsQuery.data ?? [])` — every one of those five
+  inputs is a LIVE React Query hook (`useSettlements()`,
+  `useDeductions()`, etc.), and the `useMemo` recomputes fresh on every
+  render whenever any of them changes. **This was never a caching or
+  stale-invalidation bug** — there is no persisted/cached intermediate
+  value anywhere in this path. The real cause: `buildProfitAnalysis()`
+  (`src/stats/profitAnalysis.ts`) took a hardcoded `windowDays = 30`
+  parameter — a ROLLING trailing-30-day window — and filtered EVERY
+  input (settlements by `week_ending`, deductions by `ded_date`, fuel/
+  maintenance/tolls similarly) to just that window. Meanwhile the
+  Deductions screen's own period selector
+  (`app/(tabs)/deductions.tsx:264`, `useSessionState<PeriodOption>(
+  'deductions-period', 'all')`) **defaults to `'all'`** — no lower
+  bound. -$1,372.98 and $5,800.72 were both live, both correctly
+  computed — for two different, invisibly-mismatched date ranges. A
+  second, smaller structural difference compounded the confusion:
+  Deductions' own "Total" tile (`buildDeductionsTotalsBar()`,
+  `src/stats/deductionsSummary.ts`) is the unconditional sum of every
+  deduction row's amount, with no fuel/maintenance/tolls folded in at
+  all (those live in separate tables Deductions never reads); Profit
+  Analysis's Net Income has always subtracted the canonical
+  `sumCanonicalExpenses()` figure (`src/stats/trueProfit.ts`) — deducts
+  Meals (per diem covered)/Advance Repayment/Escrow & Deposits, and DOES
+  fold in fuel/maintenance/tolls. Two genuinely different quantities,
+  not just two different windows.
+  **The fix, two parts**: (1) `buildProfitAnalysis()`'s 5th parameter is
+  now `startIso: string | null` (an explicit lower bound, or `null` for
+  no bound) instead of a baked-in `windowDays` count — `windowStartIso()`
+  is kept exported unchanged for the one caller that still legitimately
+  wants a rolling window (`src/data/aiCoachSummary.ts`'s own internal
+  `profitAnalysisRollup`, used only to feed recommendation-candidate
+  thresholds, never displayed as a headline figure — unaffected by this
+  fix, still trailing 30 days). The screen now offers the SAME period
+  selector Deductions/Settlements already use
+  (`src/stats/periodFilter.ts`'s `PERIOD_OPTIONS` — This Month/3M/YTD/
+  All, `periodStartIso()`), defaulting to `'all'` so the two screens
+  agree by default without the user having to know to change anything.
+  (2) `ProfitAnalysisRollup` now exposes the full reconciliation
+  breakdown (`deductionsGrossTotal`/`deductionsExcludedTotal`/
+  `deductionsCountedTotal`/`canonicalFuelExpense`/`tollsExpense`/
+  `totalExpenses`) instead of just the rolled-up `netIncome` — extracted
+  from a new shared `canonicalExpenseBreakdown()`
+  (`src/stats/trueProfit.ts`), which `sumCanonicalExpenses()` is now a
+  thin wrapper over (`.total`) so its own exported signature/behavior is
+  completely unchanged for every other existing caller. The screen
+  renders this as a "Total Expenses Breakdown" card — Deductions (gross,
+  the SAME figure Deductions' own "Total" tile would show for an
+  identical date range) minus an excluded-amount caption (meals/advance/
+  escrow) plus Fuel/Maintenance/Tolls, equals Total Expenses — so the
+  relationship between the two screens' numbers is visible, not
+  implicit, per the owner's own framing ("Total Expenses should relate
+  to Total Deductions plus/minus whatever other canonical inputs
+  apply").
+  **Cross-screen check (item 4 of the request), a real additional bug
+  found and DELIBERATELY NOT fixed in this pass, flagged plainly**:
+  audited Dashboard, Scorecard, and AI Coach for the exact same
+  zero-settlement/manual-deductions-only account state.
+  - **Scorecard**: no bug. Its per-mile KPI trio already reads from the
+    canonical `computeKpis()` (migrated in an earlier pass, verified
+    correct for this exact sub-ledger shape by the immediately-preceding
+    "sub-ledger/general-ledger" pass); its "Weekly Net Trend" list uses
+    `buildWeeklyTrueProfitTrend()` too, but only to populate a per-week
+    ROW LIST (correctly empty with zero settlements — a list, not a
+    headline figure that could read as "wrong").
+  - **AI Coach**: no bug. `src/data/aiCoachSummary.ts:83`'s `latestWeek
+    = weeklyTrend[weeklyTrend.length - 1] ?? null` correctly resolves to
+    `null` for zero settlements, and `ceo-mode.tsx` renders `latestWeek
+    ? money(latestWeek.gross) : '—'` — an honest "—", never a misleading
+    $0. Defensible: "this week's profit" is inherently a settlement-week
+    concept (invariant #9's "weekly is this app's only revenue
+    granularity") — there genuinely is no "this week" to report on.
+  - **Dashboard — CONFIRMED BUG, not fixed here**: `app/(tabs)/
+    index.tsx:930-933`'s `heroPeriodResult` (the Hero Card's headline
+    number) is `calcHeroPeriod(fullWeeklyTrueProfitAsRevenueExpense,
+    heroPeriod, now)`, and `fullWeeklyTrueProfitAsRevenueExpense` is
+    derived from `buildWeeklyTrueProfitTrend(scopedSettlements, ...)`
+    (`src/stats/trueProfit.ts:192`), whose own `weekEndings` array is
+    built SOLELY from `settlements` — `[...new Set(settlements.filter(s
+    => s.week_ending)...)]`. Zero settlements means zero weekly points,
+    unconditionally, regardless of how many manual deductions exist for
+    any date. `calcHeroPeriod()`'s own `netOf(undefined) = 0`
+    (`heroPeriod.ts:29-31`) and `sumWindow([], ...)` both return exactly
+    `0` for an empty points array — this is CORRECT given what the
+    function is fed, but what it's fed is wrong for this case. The
+    practical effect: for every ROLLING tab (1M/3M/6M/yearly — NOT
+    thisWeek/lastWeek, which legitimately have no "current week" to
+    speak of with zero settlements and correctly resolve to `null` via
+    `resolveHeroPeriodDateWindow()`), the Hero Card's headline Net
+    Profit shows **exactly $0**, always, regardless of real manual
+    deductions — while the Revenue/Expenses/Net Profit trio directly
+    below it shows a CORRECT, non-zero Expenses figure for the identical
+    window (`calcHeroRevenueExpenseTrio()`, `index.tsx:950-953`,
+    deliberately raw-row-filtered by `heroWindow` rather than
+    settlement-week-bucketed, specifically to avoid this exact gap-date
+    problem — CLAUDE.md's own prior "CPM/PPM BROKEN AGAIN" entry). The
+    Trio's own Net Profit tile (`index.tsx:1186-1193`) then deliberately
+    REUSES `heroPeriodResult.netProfit` "so it can never show a
+    different figure than the Hero Card's own headline" — which means
+    Home can currently show Revenue: $0 · Expenses: $(real total) · Net
+    Profit: $0 side by side, an internally-inconsistent arithmetic
+    result (Net Profit ≠ Revenue − Expenses) directly on the app's own
+    landing screen, for exactly the account shape (zero settlements,
+    manual-only deductions) the owner's own account is currently in.
+    **Why not fixed in this pass**: fixing the Trio tile ALONE (compute
+    it as `heroPeriodTrio.revenue - heroPeriodTrio.expenses` instead of
+    reusing `heroPeriodResult.netProfit`) would just move the
+    inconsistency rather than remove it — it would make the Trio correct
+    while making it disagree with the Hero Card's own headline number
+    right above it, breaking the OTHER intentional invariant that
+    comment protects. Fixing it properly means giving `calcHeroPeriod()`
+    (or a rolling-period-only alternative to it) a raw-row-based
+    computation for BOTH the current AND the equivalent PRECEDING window
+    (needed for `.change`/`.deltaAmount`, mirroring
+    `resolvePreviousHeroPeriodDateWindow()`'s own existing symmetry) —
+    a real, non-trivial change to code the chart/delta rendering also
+    depends on, judged too risky to rush within this same pass. Flagged
+    here explicitly as a confirmed, scoped, actionable follow-up rather
+    than silently left for a future device report to rediscover from
+    scratch.
+  **Tests** (`src/stats/__tests__/profitAnalysis.test.ts`): every
+  existing `buildProfitAnalysis()` call site updated to the new
+  `startIso` signature (`windowStartIso(30, NOW)` in place of the bare
+  `30`, unchanged behavior); a new `explicit startIso / null bound /
+  reconciliation breakdown` describe block — `startIso=null` includes
+  every row regardless of date; `deductionsGrossTotal` always equals
+  `deductionsCountedTotal + deductionsExcludedTotal` exactly;
+  `totalExpenses` always equals `revenue - netIncome` AND the sum of its
+  own 4 breakdown parts; `canonicalFuelExpense` excludes settlement-
+  linked fuel while the display-tile `fuelExpense` still includes it;
+  and — the literal reported scenario — a fixture reproducing the exact
+  $1,372.98 (trailing 30 days) vs. $5,800.72 (all time) figures from a
+  single realistic manual-deductions-only dataset, proving the smaller
+  figure is a genuine, correctly-computed subset of the larger one, not
+  a different/wrong number. `src/stats/__tests__/kpiConsistency.test.ts`
+  updated to the new signature (unchanged assertions). Full suite: 130
+  suites / 3552 tests pass (+11); `tsc --noEmit` clean; all 7 locales
+  confirmed at full recursive key-parity (a direct key-set diff, not
+  just the glossary test) — `profitAnalysis.last30Days` removed
+  (confirmed unused everywhere first), 10 new keys added, "escrow" kept
+  in Latin script per the glossary in every translation, es/ru/tr/hi/ar
+  fully translated, uk as an untranslated English copy per invariant
+  #11. No SQL/Edge Function changes — every change in this pass is pure
+  client-side JS/TS. Ships via a normal `eas update`.

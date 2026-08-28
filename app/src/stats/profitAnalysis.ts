@@ -1,13 +1,42 @@
 import type { Benchmark } from '@/src/types/db';
-import { sumCanonicalExpenses } from '@/src/stats/trueProfit';
+import { canonicalExpenseBreakdown } from '@/src/stats/trueProfit';
 
 // Profit Analysis v1 (PROMPTS.md Session 9a item 11, CLAUDE.md invariant
 // #22 — composed ONLY from the user's own account data, no external
-// feeds). A trailing-N-day rollup (default 30) of revenue/fuel/maintenance/
-// net plus the two ratio insights the benchmarks table (docs/PENDING_SQL.md
-// §25) has reference ranges for.
+// feeds). A rollup of revenue/fuel/maintenance/net for a caller-supplied
+// date range, plus the two ratio insights the benchmarks table
+// (docs/PENDING_SQL.md §25) has reference ranges for.
+//
+// "GHOST VALUE" pass (owner decision 2026-08-28, device report: "Profit
+// Analysis shows -$1,372.98, but the Deductions screen's own total is
+// $5,800.72 — these must reconcile and they clearly don't"). Traced end
+// to end: this was NEVER a caching/staleness bug — the screen's own
+// useMemo already recomputed fresh from live React Query data on every
+// render (app/(tabs)/more/profit-analysis.tsx's rollup useMemo, keyed on
+// settlementsQuery.data/dedQuery.data/etc.). The real cause was a WINDOW
+// mismatch: this function was hardcoded to a rolling trailing-30-day
+// window (`windowDays = 30` below, unconditionally) while the Deductions
+// screen's own "Total" tile defaults to the 'all' period (no lower
+// bound) — two structurally different quantities besides the date range
+// too (Deductions' Total is every deduction row's amount, unconditional;
+// this rollup's netIncome subtracts the SAME canonical
+// deductionsTotal+fuelTotal+maintenanceTotal+tollsTotal
+// canonicalExpenseBreakdown() every other "true profit" screen already
+// shares, excluding Meals/Advance Repayment/Escrow & Deposits per
+// reducesTrueProfit()). Fixed two ways: (1) `startIso` is now an
+// explicit caller-supplied lower bound (or `null` for no bound) instead
+// of a baked-in day count — the screen now offers the SAME period
+// selector (This Month/3M/YTD/All, src/stats/periodFilter.ts) Deductions/
+// Settlements already use, defaulting to 'all' so the two screens agree
+// by default; (2) the return value now exposes the FULL reconciliation
+// breakdown (deductionsGrossTotal/deductionsExcludedTotal/
+// deductionsCountedTotal/canonicalFuelExpense/tollsExpense/
+// totalExpenses) so "Total Expenses" is never a black box next to
+// Deductions' own "Total" — the screen renders the actual arithmetic
+// connecting the two, for whatever period is currently selected.
 export type ProfitAnalysisRollup = {
-  windowDays: number;
+  startIso: string | null;
+  endIso: string;
   revenue: number;
   fuelExpense: number;
   maintenanceExpense: number;
@@ -15,6 +44,16 @@ export type ProfitAnalysisRollup = {
   netIncome: number;
   fuelPctOfRevenue: number | null;
   maintenanceCostPerMile: number | null;
+  // RECONCILIATION BREAKDOWN — every figure below sums to `totalExpenses`
+  // (= revenue - netIncome exactly), and deductionsGrossTotal is the SAME
+  // unconditional sum Deductions' own "Total" tile shows for an identical
+  // date range (src/stats/deductionsSummary.ts's buildDeductionsTotalsBar()).
+  deductionsGrossTotal: number;
+  deductionsExcludedTotal: number;
+  deductionsCountedTotal: number;
+  canonicalFuelExpense: number;
+  tollsExpense: number;
+  totalExpenses: number;
 };
 
 type SettlementLike = { week_ending: string; gross: number | null; net: number | null; miles: number | null };
@@ -75,34 +114,42 @@ export function buildProfitAnalysis(
   fuelPurchases: FuelLike[],
   maintenanceRecords: MaintenanceLike[],
   deductions: DeductionLike[],
-  windowDays = 30,
+  startIso: string | null,
   now: Date = new Date(),
   tolls: TollLike[] = []
 ): ProfitAnalysisRollup {
-  const start = windowStartIso(windowDays, now);
   // Explicit upper bound too (`<= end`), matching computeKpis()'s own
   // [startIso, endIso] inclusive window filtering exactly — a future-dated
   // row shouldn't normally exist in real data, but this keeps the two
   // filtering rules structurally identical rather than merely usually
-  // agreeing.
+  // agreeing. `startIso === null` means no lower bound at all (the 'all'
+  // period) — mirrors src/stats/periodFilter.ts's own periodStartIso('all').
   const end = now.toISOString().slice(0, 10);
+  const inRange = (d: string | null | undefined) => !!d && (startIso == null || d >= startIso) && d <= end;
 
-  const inWindow = settlements.filter((s) => (s.week_ending ?? '') >= start && (s.week_ending ?? '') <= end);
+  const inWindow = settlements.filter((s) => inRange(s.week_ending));
   const revenue = inWindow.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const windowDeductions = deductions.filter((d) => (d.ded_date ?? '') >= start && (d.ded_date ?? '') <= end);
-  const windowFuel = fuelPurchases.filter((f) => (f.purchase_date ?? '') >= start && (f.purchase_date ?? '') <= end);
-  const windowMaintenance = maintenanceRecords.filter((m) => (m.service_date ?? '') >= start && (m.service_date ?? '') <= end);
-  const windowTolls = tolls.filter((t) => (t.toll_date ?? '') >= start && (t.toll_date ?? '') <= end);
-  const trueExpenses = sumCanonicalExpenses(windowDeductions, windowFuel, windowMaintenance, windowTolls);
-  const netIncome = revenue - trueExpenses;
+  const windowDeductions = deductions.filter((d) => inRange(d.ded_date));
+  const windowFuel = fuelPurchases.filter((f) => inRange(f.purchase_date));
+  const windowMaintenance = maintenanceRecords.filter((m) => inRange(m.service_date));
+  const windowTolls = tolls.filter((t) => inRange(t.toll_date));
+
+  const breakdown = canonicalExpenseBreakdown(windowDeductions, windowFuel, windowMaintenance, windowTolls);
+  const netIncome = revenue - breakdown.total;
   const totalMiles = inWindow.reduce((sum, s) => sum + Number(s.miles ?? 0), 0);
 
+  // fuelExpense/maintenanceExpense stay the FULL totals (every purchase/
+  // record in range, settlement-linked fuel included) — a deliberately
+  // wider display tile than what's actually subtracted into netIncome
+  // (canonicalFuelExpense below), per this file's own pre-existing "how
+  // much fuel did I buy" vs. "how much reduced my net profit" distinction.
   const fuelExpense = windowFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0);
-
   const maintenanceExpense = windowMaintenance.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
+  const deductionsGrossTotal = windowDeductions.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
 
   return {
-    windowDays,
+    startIso,
+    endIso: end,
     revenue,
     fuelExpense,
     maintenanceExpense,
@@ -110,6 +157,12 @@ export function buildProfitAnalysis(
     netIncome,
     fuelPctOfRevenue: revenue > 0 ? fuelExpense / revenue : null,
     maintenanceCostPerMile: totalMiles > 0 ? maintenanceExpense / totalMiles : null,
+    deductionsGrossTotal,
+    deductionsExcludedTotal: deductionsGrossTotal - breakdown.deductionsTotal,
+    deductionsCountedTotal: breakdown.deductionsTotal,
+    canonicalFuelExpense: breakdown.fuelTotal,
+    tollsExpense: breakdown.tollsTotal,
+    totalExpenses: breakdown.total,
   };
 }
 

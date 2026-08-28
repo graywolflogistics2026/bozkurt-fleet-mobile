@@ -113,6 +113,38 @@ type CanonicalMaintenance = { cost: number | null };
 type CanonicalToll = { amount: number | null };
 type CanonicalDeduction = { amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null };
 
+// "GHOST VALUE" pass (owner decision 2026-08-28) — src/stats/
+// profitAnalysis.ts's own reconciliation breakdown (Profit Analysis
+// screen: "$X deductions (Y excluded) + $Z fuel + $W maintenance + $V
+// tolls = $Total Expenses") needs the SAME per-category math
+// sumCanonicalExpenses() already computes internally, not a second,
+// possibly-drifting reimplementation. Extracted here as the one shared
+// building block; sumCanonicalExpenses() below is now a thin wrapper
+// over it (`.total`) — its own exported signature/behavior is completely
+// unchanged, every existing caller/test is unaffected.
+export type CanonicalExpenseBreakdown = {
+  deductionsTotal: number;
+  fuelTotal: number;
+  maintenanceTotal: number;
+  tollsTotal: number;
+  total: number;
+};
+
+export function canonicalExpenseBreakdown(
+  deductions: CanonicalDeduction[],
+  fuelPurchases: CanonicalFuel[],
+  maintenanceRecords: CanonicalMaintenance[],
+  tolls: CanonicalToll[]
+): CanonicalExpenseBreakdown {
+  const deductionsTotal = deductions.filter(reducesTrueProfit).reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const fuelTotal = fuelPurchases
+    .filter((f) => !f.settlement_id)
+    .reduce((sum, f) => sum + Math.max(0, Number(f.amount ?? 0) - Number(f.discount ?? 0)), 0);
+  const maintenanceTotal = maintenanceRecords.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
+  const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  return { deductionsTotal, fuelTotal, maintenanceTotal, tollsTotal, total: deductionsTotal + fuelTotal + maintenanceTotal + tollsTotal };
+}
+
 // Exported so every OTHER "what's my profit/cost" module (currently
 // src/stats/profitAnalysis.ts's buildProfitAnalysis()) can share the
 // exact same canonical total instead of re-deriving its own — the whole
@@ -123,13 +155,7 @@ export function sumCanonicalExpenses(
   maintenanceRecords: CanonicalMaintenance[],
   tolls: CanonicalToll[]
 ): number {
-  const dedTotal = deductions.filter(reducesTrueProfit).reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
-  const fuelTotal = fuelPurchases
-    .filter((f) => !f.settlement_id)
-    .reduce((sum, f) => sum + Math.max(0, Number(f.amount ?? 0) - Number(f.discount ?? 0)), 0);
-  const maintTotal = maintenanceRecords.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
-  const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
-  return dedTotal + fuelTotal + maintTotal + tollsTotal;
+  return canonicalExpenseBreakdown(deductions, fuelPurchases, maintenanceRecords, tolls).total;
 }
 
 export function calcTrueProfit(
