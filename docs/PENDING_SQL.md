@@ -4174,7 +4174,7 @@ SQL change needed for that RPC itself — it's simply unreferenced now).
 
 ---
 
-## 73. EQUIPMENT AUTO-POPULATE FROM IMPORTS (owner decision, SIMPLIFICATION PASS, item 7, binding) — NOT YET APPLIED
+## 73. EQUIPMENT AUTO-POPULATE FROM IMPORTS (owner decision, SIMPLIFICATION PASS, item 7, binding) — ✅ APPLIED 2026-08-27
 
 **The decision**: settlement statements and standalone purchase receipts
 routinely carry equipment-type purchases (tools, safety gear, electronics,
@@ -4187,13 +4187,23 @@ CLAUDE.md's own dated entry for this pass for the full client-side audit.
 `linked_deduction_id uuid references deductions(id) on delete cascade`
 (mirrors `capital_transactions.linked_deduction_id`'s own established
 pattern exactly) and `vendor text` (mirrors `deductions.store` — no
-existing column served this purpose). See `pending_73.sql`'s own header
-comment for the full reasoning on why the delete direction is `cascade`
-here specifically (deduction deleted -> equipment row goes with it,
-DB-level, free) while the REVERSE direction (equipment deleted -> its
-linked deduction goes too) is handled explicitly in app code instead
-(`app/(tabs)/more/equipment.tsx`'s own delete handler) — a plain FK has
-no way to cascade in a direction nothing points at.
+existing column served this purpose).
+
+`linked_deduction_id` is deliberately `on delete cascade`, not `set
+null` — this is the chosen half of the bidirectional-delete requirement:
+deleting the DEDUCTION removes its linked Equipment row automatically,
+at the DB level, zero app code needed, exactly mirroring
+`capital_transactions.linked_deduction_id`'s own established convention.
+The REVERSE direction (deleting the EQUIPMENT row also removes its
+linked deduction) has no equivalent DB-level mechanism — a `deductions`
+row has no FK pointing at `equipment` for a trigger-free cascade to hang
+off of — so it's handled explicitly in app code instead
+(`app/(tabs)/more/equipment.tsx`'s own delete handler now also deletes
+the linked deduction, best-effort, documented in that file), the same
+"some cascades are DB-level, some are explicit app-level calls, chosen
+per direction" pattern this codebase already uses elsewhere (e.g.
+`cleanupOrphanedDocument()`'s own explicit re-check-then-delete, rather
+than a blanket DB trigger, for orphaned Storage files).
 
 ```sql
 alter table equipment add column if not exists linked_deduction_id uuid references deductions(id) on delete cascade;
@@ -4208,16 +4218,16 @@ which categories qualify — `app/src/import/equipmentLink.ts`'s
 `buildLinkedEquipmentInsert()` is the pure function every
 deduction-insert call site in `aiImportSave.ts` (settlement-withheld,
 standalone purchase, generic fallback) routes through via the shared
-`maybeLinkEquipment()` helper. Until this migration is applied, every one
-of those calls fails cleanly with a step-tagged `SaveExtractionError`
-(`equipment-link-insert`) the moment it tries to insert a row referencing
-a column that doesn't exist yet — apply this before relying on the
-feature; nothing else in the save path depends on it (a save that would
+`maybeLinkEquipment()` helper. Before this migration was applied, every
+one of those calls failed cleanly with a step-tagged `SaveExtractionError`
+(`equipment-link-insert`) the moment it tried to insert a row referencing
+a column that didn't exist yet — now live, so those calls succeed
+normally; nothing else in the save path depends on it (a save that would
 have created a linked Equipment row simply throws at that step instead of
 silently skipping it, matching this file's own "never silently fail"
 convention for every other write).
 
-- [ ] 73 run (equipment.linked_deduction_id, equipment.vendor, index)
+- [x] 73 run (equipment.linked_deduction_id, equipment.vendor, index) — ✅ APPLIED 2026-08-27, client update published
 
 ---
 
