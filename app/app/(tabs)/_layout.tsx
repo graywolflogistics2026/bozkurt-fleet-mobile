@@ -272,7 +272,11 @@ export default function TabsLayout() {
         }}
         onAskAi={() => {
           setActionSheetOpen(false);
-          router.push('/(tabs)/more/ai-advisor');
+          // AI Advisor was removed as a separate screen (SIMPLIFICATION
+          // PASS, owner decision) — its free-form chat capability was
+          // folded into AI Coach (ceo-mode.tsx's own "Ask a question"
+          // section) first, so this shortcut still lands somewhere real.
+          router.push('/(tabs)/more/ceo-mode');
         }}
       />
       {/* BACKGROUND IMPORT (owner decision 2026-08-24) — always mounted

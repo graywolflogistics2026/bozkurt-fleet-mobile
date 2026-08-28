@@ -4,6 +4,8 @@ import { supabase } from '@/src/lib/supabase';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { findDuplicateLoanGroups, type LoanDuplicateGroup, type LoanMatchCandidate } from '@/src/import/loanMatch';
+import { EQUIPMENT_TYPE_CATEGORIES } from '@/src/import/category';
+import { buildLinkedEquipmentInsert, findMissingEquipmentBackfill, type BackfillDeductionRow, type ExistingEquipmentRow } from '@/src/import/equipmentLink';
 
 // ORPHAN CLEANUP TOOL (owner decision, docs/PENDING_SQL.md §70, item 7) —
 // a one-time, user-reviewable sweep for records whose parent settlement
@@ -48,10 +50,11 @@ export type OrphanSummary = {
   documents: OrphanDocument[];
   settlementSourcedLoans: SettlementSourcedLoan[];
   duplicateLoanGroups: LoanDuplicateGroup<DuplicateLoanRow>[];
+  missingEquipment: BackfillDeductionRow[];
 };
 
 async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
-  const [tollsRes, maintRes, documentsRes, settlementsRes, dedRes, loansRes, allLoansRes] = await Promise.all([
+  const [tollsRes, maintRes, documentsRes, settlementsRes, dedRes, loansRes, allLoansRes, equipDedRes, equipRes] = await Promise.all([
     // A toll/maintenance row extracted from a settlement's own recap
     // section (source='settlement') that has no settlement_id at all —
     // structurally impossible to have come from anywhere else once
@@ -74,6 +77,12 @@ async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
     // now matches on (loanMatch.ts's findDuplicateLoanGroups()), so this
     // list is exactly "what the fix would now treat as one loan."
     supabase.from('loans').select('id, name, lender, balance, original_amount, created_at, source').eq('user_id', userId),
+    // EQUIPMENT AUTO-POPULATE BACKFILL (owner decision, SIMPLIFICATION
+    // PASS, item 7.4) — every existing deduction already sitting in a
+    // durable-goods category, scanned against every existing Equipment
+    // row (both by link and by fuzzy match) in findMissingEquipmentBackfill().
+    supabase.from('deductions').select('id, category, description, amount, ded_date, store').eq('user_id', userId).in('category', EQUIPMENT_TYPE_CATEGORIES as string[]),
+    supabase.from('equipment').select('linked_deduction_id, name, purchase_price, purchase_date').eq('user_id', userId),
   ]);
   if (tollsRes.error) throw tollsRes.error;
   if (maintRes.error) throw maintRes.error;
@@ -82,6 +91,8 @@ async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
   if (dedRes.error) throw dedRes.error;
   if (loansRes.error) throw loansRes.error;
   if (allLoansRes.error) throw allLoansRes.error;
+  if (equipDedRes.error) throw equipDedRes.error;
+  if (equipRes.error) throw equipRes.error;
 
   // A document is orphaned once NOTHING references it via document_id —
   // same 3-table check cleanupOrphanedDocument() itself uses (settlements/
@@ -112,12 +123,18 @@ async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
       }),
     }));
 
+  const missingEquipment = findMissingEquipmentBackfill(
+    (equipDedRes.data ?? []) as BackfillDeductionRow[],
+    (equipRes.data ?? []) as ExistingEquipmentRow[]
+  );
+
   return {
     tolls: (tollsRes.data ?? []) as OrphanToll[],
     maintenanceRecords: (maintRes.data ?? []) as OrphanMaintenanceRecord[],
     documents: documents as OrphanDocument[],
     settlementSourcedLoans: (loansRes.data ?? []) as SettlementSourcedLoan[],
     duplicateLoanGroups,
+    missingEquipment,
   };
 }
 
@@ -201,6 +218,39 @@ export function useDeleteOrphanDocuments() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['orphan-summary'] });
       await invalidateFinancialData(queryClient, { entities: ['documents'] });
+    },
+  });
+}
+
+// EQUIPMENT AUTO-POPULATE BACKFILL (owner decision, SIMPLIFICATION PASS,
+// item 7.4) — creates the missing linked Equipment row for each selected
+// deduction. Reuses buildLinkedEquipmentInsert() — the SAME function
+// aiImportSave.ts's own live import path calls — so a backfilled row is
+// built exactly the same way a freshly-imported one would be, never a
+// second, drifting construction. Never re-checks for a duplicate itself
+// (the summary's own findMissingEquipmentBackfill() already excluded
+// anything already covered at the moment it was fetched) — a genuinely
+// new collision in the narrow window between fetch and this action is the
+// same accepted, rare race every other bulk action on this screen already
+// tolerates (documents' own cleanupOrphanedDocument() is the one
+// exception that re-checks, because ITS failure mode — deleting a still-
+// referenced file — is destructive; this one's failure mode is at worst a
+// harmless duplicate Equipment row the user can delete like any other).
+export function useRunEquipmentBackfill() {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (rows: BackfillDeductionRow[]) => {
+      if (!userId || rows.length === 0) return;
+      const inserts = rows.map((row) => buildLinkedEquipmentInsert(row, row.id, userId)).filter((row): row is NonNullable<typeof row> => !!row);
+      if (inserts.length === 0) return;
+      const { error } = await supabase.from('equipment').insert(inserts);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['orphan-summary'] });
+      await invalidateFinancialData(queryClient, { entities: ['equipment'] });
     },
   });
 }

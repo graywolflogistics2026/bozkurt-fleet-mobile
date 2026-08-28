@@ -10694,3 +10694,310 @@
   No Edge Function was touched in this entire six-item pass — no
   redeploy needed for `ai-import`/`ai-advisor`/`reset-data`/
   `delete-account`/`referral-sync`.
+- SIMPLIFICATION PASS (owner decision 2026-08-27, eight items — remove
+  features not earning their place, fix a data-cleanup gap, adapt
+  Equipment to auto-populate, calm the daily tip down). No SQL/Edge
+  Function changes needed for items 1-6/8; item 7 needs
+  docs/PENDING_SQL.md §73 (below). Every code change ships via a normal
+  `eas update` — no new native dependency, no native rebuild needed for
+  anything in this pass.
+  1. **DAILY TIP PERSISTENCE, re-diagnosed from scratch**: the prior
+     "flash and vanish" fix (`findTodaysAnchorTip()`) was necessary but
+     not sufficient. Two real, independent bugs found by tracing the
+     actual render tree, not by re-applying the same hypothesis: (a) the
+     daily-tip card used to live INSIDE `AiCoachSection`
+     (`app/(tabs)/index.tsx`), which only mounts once `aiCoach.isLoading`
+     (`useAiCoachSummary()` — 7 required queries) resolves — but
+     `useDailyTip()` itself needs ~20 queries to compute a FRESH pick
+     (strictly MORE than aiCoach needs), so `AiCoachSection` would mount
+     first with the tip block still empty inside it, then pop in later;
+     worse, if `aiCoach.isLoading` ever flipped back to `true` for any
+     reason during a session, the WHOLE section (tip included) would
+     UNMOUNT, showing the unrelated loading placeholder in its place — a
+     real, visible flash/vanish with nothing to do with the tip's own
+     data readiness. Fixed by extracting a new, always-mounted
+     `DailyTipCard` component rendered as a sibling OUTSIDE the
+     `aiCoach.isLoading` branch (`app/(tabs)/index.tsx`), gated only on
+     its own sticky `dailyTip.tip` state. (b) `useDailyTip()`
+     (`app/src/data/dailyTips.ts`) gated even RECONSTRUCTING an
+     already-recorded anchor for today on the FULL `ready` (all ~20
+     queries) — but reconstructing an anchor only ever needs
+     `profileQuery` (nudge_state lives on the profile row); the other ~19
+     queries exist solely to let `buildDailyTipCandidates()` pick a FRESH
+     topic when nothing's been shown yet. Split into `profileReady`
+     (gates anchor reconstruction — fast) vs. the existing `ready` (still
+     gates picking a NEW topic — needs the full data), so the common case
+     ("today's tip was already decided, just show it again") now renders
+     almost instantly instead of waiting on the slowest of ~20 independent
+     queries on every fresh Home mount. **Honest limitation**: this repo
+     has no React Native rendering harness (standing, documented
+     limitation throughout this file) — the fix is structural and
+     directly explains the exact reported symptom ("not require
+     re-navigation to see it"), but there is no automated test that
+     exercises the actual mount/unmount timing; verify on-device.
+  2. **DELETED (RETIRED) DRIVER STILL OFFERED IN IMPORT — root cause
+     found and fixed**: there is no hard-delete UI for a driver at all —
+     `app/(tabs)/more/drivers.tsx`'s own header comment already says so
+     ("'active' toggle is the retire equivalent — no delete from the UI,
+     drivers can have settlement/payment history"); `useDeleteDriver`
+     (the hard-delete hook, `app/src/data/drivers.ts`) has ZERO callers
+     anywhere in the app, confirmed by grep. So "I deleted a driver" means
+     the user toggled it to `active: false` — and the import screen's own
+     `useDrivers()` call (`app/(tabs)/import/index.tsx`) fetched EVERY
+     driver, active or not, so `resolveDriverMatch()`
+     (`app/src/import/driverMatch.ts`, itself confirmed 100% pure — no
+     hidden persistence, driven entirely by whatever `drivers` array it's
+     given) kept auto-matching and offering a retired driver forever.
+     Fixed by filtering the import screen's own fetch to
+     `useDrivers({ active: true })` — the EXACT SAME filtering mechanism
+     already established two lines below it for a different entity
+     (`useUserCategories({ active: true })`), never a new pattern.
+     Matches `ActiveTruckContext`'s own `.eq('is_active', true)` fetch for
+     trucks, which never had this bug in the first place. **Audited the
+     same class of bug for trucks and loans, per the user's own
+     directive**: trucks were ALREADY correctly filtered
+     (`ActiveTruckContext.tsx:94`); loans have no "existing loan" picker
+     reachable during import at all (`resolveLoanAssetMatch()` only
+     matches a NEW loan's asset NAME against truck/equipment, never
+     selects among existing loans, so there's no stale-list surface for
+     this bug class to hide in) — but ONE real, lower-severity instance
+     was found and fixed anyway for consistency:
+     `app/src/data/aiImportSave.ts`'s own `loan_agreement` docType asset-
+     link lookup fetched trucks with no `is_active` filter at all,
+     meaning a NEW loan-agreement document could theoretically match a
+     RETIRED truck's own unit_number — added `.eq('is_active', true)`
+     there too. Test: `entityHooks.test.ts` gained a case proving
+     `useDrivers({ active: true })` issues a real `.eq('active', true)`
+     constraint — the exact mechanism the import-screen fix depends on.
+  3. **REMOVED: Fix Truck Assignments screen**, entirely — deleted
+     `app/(tabs)/more/truck-assignments.tsx`, its `navRegistry.ts`/
+     `more/_layout.tsx` wiring, and — confirmed via grep to have no OTHER
+     caller — `app/src/data/truckAssignments.ts` (`assignRowsToTruck()`,
+     the P0-audit-verified bulk-update-not-delete logic from the prior
+     FINAL PASS entry) and `app/src/import/truckAssignmentRepair.ts`
+     (`findUnassignedRows()`/`UnassignedRow`), plus both files' own test
+     suites. **KEPT**: `buildTruckComparison()`'s own, entirely separate
+     `unassignedRow` aggregate (`src/stats/truckComparison.ts` — a
+     different mechanism, never called `findUnassignedRows()`) still
+     surfaces revenue with no truck attribution on the Per-Truck
+     Profitability screen; its own "fix" card
+     (`app/(tabs)/more/truck-comparison.tsx`) is repointed from the now-
+     deleted screen to `/(tabs)/more/settlements`, where ordinary per-row
+     truck reassignment already exists on each settlement's own edit
+     sheet (MULTI-TRUCK MODEL, above) — the i18n string itself
+     (`truckComparison.unassignedFixLink`) was reworded from "Fix truck
+     assignments →" to "Assign trucks in Settlements →" so it no longer
+     promises a screen that's gone.
+  4. **REMOVED: AI Advisor as a separate screen** — deleted
+     `app/(tabs)/more/ai-advisor.tsx` and its `navRegistry.ts`/
+     `more/_layout.tsx` entries. Audited what it offered beyond AI Coach
+     BEFORE deleting, per the user's own explicit instruction: it had ONE
+     real capability AI Coach's own `handleGetBriefing()` didn't — a
+     genuine multi-turn, free-form Q&A chat (running message history
+     forwarded on every send), vs. AI Coach's own one-shot "compose one
+     prompt, send it once" briefing. Folded in FIRST, before deletion: a
+     new "Ask a Question" section in `app/(tabs)/more/ceo-mode.tsx`
+     (`chatMessages`/`chatInput`/`chatSend`/`handleSendChat()`) reusing
+     the exact same `callAiAdvisor()` call and running-history convention
+     the deleted screen used, verbatim in spirit. The tab bar's own raised
+     [+] action sheet had a real, now-fixed dead-end reachability bug
+     found during this pass: `app/(tabs)/_layout.tsx`'s `onAskAi` handler
+     pushed straight to the now-deleted `/(tabs)/more/ai-advisor` route —
+     repointed to `/(tabs)/more/ceo-mode`, where the folded-in chat now
+     lives. `callAiAdvisor()`/`aiAdvisorCall.ts` itself is UNTOUCHED and
+     still called by CEO Mode's own briefing, Maintenance, Profit
+     Analysis, `proactiveCoach.ts`, and `weeklyReview.ts` — none of those
+     go through the deleted screen, confirmed by grep before removing it.
+  5. **TRIMMED: the estimates-only disclaimer under Home's greeting** —
+     removed `<LegalFootnote/>` from `AiCoachSection`
+     (`app/(tabs)/index.tsx`, right under its own "🧑‍✈️ Good Evening"
+     line) specifically, since none of that card's own content
+     (recommendations, weekly review, periodic nudges) is a computed TAX
+     figure — this is a MOVE, not a deletion of invariant #8. Confirmed
+     (not assumed) the disclaimer is still present everywhere it's
+     load-bearing: Tax Estimator (`tax-estimator.tsx:255,493`),
+     Accountant Package (screen `accountant-package.tsx:896` AND both
+     PDF/Excel exports via `t('common.legalFootnote')` threaded into
+     `accountantPackageReport.ts`'s `disclaimer` string, rendered at
+     `accountantPackageReport.ts:348`), and Home's own Tax Strip card
+     (`app/(tabs)/index.tsx:762`, unchanged) — the ONLY screens that carry
+     it after this change, matching invariant #8's own requirement
+     exactly.
+  6. **REMOVED: Share Weekly Profit screen** — deleted
+     `app/(tabs)/more/share-profit.tsx` and its nav wiring. Confirmed
+     (not assumed) the shared share-card pipeline
+     (`src/components/shareCard/ShareCardModal.tsx`/`useShareCapture.ts`/
+     `useShareMessages.ts`/`shareDestinations.ts`/
+     `ShareDestinationsRow.tsx`) is genuinely, independently reused by
+     BOTH CEO Mode's own "📤 Share" button (`ceo-mode.tsx:272`) and
+     Scorecard's own (`scorecard.tsx:502`) — KEPT entirely, untouched.
+     Confirmed the referral flow's own share mechanism
+     (`src/referral/referralShare.ts`) is a genuinely SEPARATE, plain
+     `Linking`/`Share`/clipboard implementation with no dependency on the
+     deleted screen (its own header comment already documented this).
+     i18n: the `shareProfit.*` block was NOT deleted wholesale — only its
+     screen-specific sub-keys (`title`/`subtitle`/`noSettlements`/
+     `metrics.*`/`weekOf`/`weekPickerLabel`), confirmed orphaned by grep
+     first; `shareProfit.share`/`.captionTemplate`/`.shareTo`/
+     `.destinations.*`/`.notAvailableTitle`/`.imageCopiedTitle`/
+     `.imageCopiedBody`/`.copiedTitle`/`.copiedBody`/`.shareFailedTitle`
+     are all still genuinely used by the shared pipeline and were kept.
+  7. **EQUIPMENT AUTO-POPULATED FROM IMPORTS (owner decision, binding)**:
+     a settlement or standalone purchase deduction line landing in a
+     durable-goods category now ALSO creates a linked Equipment row, the
+     same "one item, two views, id-linked" pattern this codebase already
+     established for personally-paid expenses <-> capital contributions.
+     **Categories** (`app/src/import/category.ts`'s new
+     `EQUIPMENT_TYPE_CATEGORIES`, one shared constant, no re-typed second
+     list anywhere): `Tools & Equipment`, `Truck Supplies & Equipment`,
+     `Electronics`, `Comfort & Sleeper`, `Safety Gear & Workwear` — every
+     one a real, pre-existing `CANONICAL_CATEGORIES` string, never
+     invented. Deliberately EXCLUDES `Truck Parts` (that category's own
+     existing comment already draws this exact line: a CONSUMED part,
+     not a standing asset) and `Major Repairs & Overhauls`/`Warranty &
+     Service Contracts` (a repair/service, not a tracked physical item).
+     **Schema** (docs/PENDING_SQL.md §73, mirrored as `pending_73.sql`,
+     **NOT YET APPLIED**): `equipment.linked_deduction_id uuid references
+     deductions(id) on delete cascade` (mirrors
+     `capital_transactions.linked_deduction_id` exactly) + `equipment.
+     vendor text` (mirrors `deductions.store` — no existing column served
+     this purpose). **Wiring** (`app/src/import/equipmentLink.ts`'s pure
+     `buildLinkedEquipmentInsert()`, called from THREE sites in
+     `app/src/data/aiImportSave.ts` — settlement-withheld deductions
+     [after `insertBatchResilient()` was extended to return inserted
+     rows' real ids via `.select()`, a backward-compatible change every
+     existing caller already ignored the return value of], standalone
+     purchase deductions [`mapPurchase()`'s own loop, already had
+     `savedDed.id`], and the generic fallback deduction): a failure to
+     create the linked row THROWS a step-tagged `SaveExtractionError`
+     (`equipment-link-insert`, added to `saveExtractionError.ts`'s
+     `SaveExtractionStep` union and `errorStepGroups.ts`'s
+     `savingRecords` bucket) — never silently swallowed, matching this
+     file's own "never let a save look complete when it wasn't"
+     convention. **Bidirectional delete, the mechanism chosen and why**:
+     deleting the DEDUCTION side is a pure DB-level cascade (§73's `on
+     delete cascade`, zero app code, free) — the REVERSE direction
+     (deleting Equipment also deletes its linked deduction) has no FK to
+     hang a cascade off of, so it's one explicit, directly-testable
+     function, `app/src/data/equipmentMutations.ts`'s
+     `deleteEquipmentWithLinkedDeduction()` (extracted out of
+     `equipment.tsx`'s own delete handler specifically so it's
+     exercisable against the fake Supabase client — this repo has no RN
+     rendering harness to call a screen's own event handler directly) —
+     the Equipment row's own delete always commits FIRST and is never
+     undone if the linked-deduction delete then fails (reported back,
+     never thrown). **Field sync on edit** (item 7.5): editing a
+     deduction's amount/date/description/store on the Deductions screen
+     (`app/(tabs)/deductions.tsx`'s `handleSaveEdit()`) now also calls
+     `app/src/data/deductionMutations.ts`'s new `syncLinkedEquipment()` —
+     a plain `.update(...).eq('linked_deduction_id', deductionId)` (no
+     lookup step needed; a deduction with no linked row simply updates
+     zero rows, the correct no-op), best-effort/never-blocks
+     (`.catch(console.error)`), mirroring `applyContributionSync()`'s own
+     spirit rather than a second atomic RPC (unlike a capital
+     contribution, a linked Equipment row has zero effect on any profit/
+     tax total, so there's nothing here needing that same all-or-nothing
+     guarantee). `category` is DELIBERATELY never synced (the user may
+     want the asset side classified differently from the expense side);
+     every Equipment-only field (financing, loan_id, depreciation,
+     tags, notes) obviously has nothing to sync from. **Canonical totals
+     verified unaffected — structurally, not just by absence of a bug
+     today**: grepped `sumCanonicalExpenses()`/`computeKpis()`/
+     `calcCanonicalCpm()`/`buildTruckComparison()` for any reference to
+     an `equipment` table/param — none exists; none of these functions
+     even ACCEPT an equipment array as input, so there is no code path
+     for Equipment's existence to affect any total, ever. Proven directly
+     in `aiImportSave.equipmentLink.test.ts`'s own dedicated test
+     (deleting the just-created Equipment row leaves
+     `sumCanonicalExpenses()`'s output byte-identical). **Backfill**
+     (item 7.4/7.7): `app/src/import/equipmentLink.ts`'s pure
+     `findMissingEquipmentBackfill()` (checked BOTH by
+     `linked_deduction_id` AND, defensively, a fuzzy match on
+     name+amount+date, in case an Equipment row was created some other
+     way before this feature existed) feeds a new "Missing Equipment
+     Entries" section on Data Cleanup
+     (`app/(tabs)/more/data-cleanup.tsx`/`orphanCleanup.ts`'s
+     `useOrphanSummary()`/`useRunEquipmentBackfill()`) — additive, never
+     destructive, so no blocking confirmation dialog like the delete
+     tools on that same screen, still gated behind the same explicit
+     multi-select + button pattern (nothing auto-created on page load).
+     **Equipment screen** (`equipment.tsx`) gained a "📥 From an import"
+     badge (mirrors Loan Center's own established "📥 From a settlement"
+     provenance-badge convention) and a vendor line on any auto-linked
+     row. **Equipment tip rewritten** (item 7.8, see item 8 below).
+     Tests: `equipmentLink.test.ts` (13, the pure category/insert/backfill
+     logic), `equipmentMutations.test.ts` (4, the real bidirectional-
+     delete function against the fake Supabase client — including the
+     "cascade from the deduction side" case and the "linked-delete
+     failure never undoes the already-committed Equipment delete" case),
+     `aiImportSave.equipmentLink.test.ts` (5, end-to-end through the REAL
+     `saveExtraction()` — settlement AND standalone-purchase paths both
+     proven to create linked rows, a consumable category proven to
+     create NONE, the cascade-on-delete proven, and the canonical-totals-
+     unaffected proof).
+  8. **DAILY TIP LIBRARY updated to match items 3/4/6/7**: removed
+     `tipFixTruckAssignments`/`tipAiAdvisor`/`tipShareProfit` entirely —
+     their `DailyTipTopic` union members, `DAILY_TIP_CATEGORY`/
+     `DAILY_TIP_ROUTE`/`DAILY_TIP_ICON` entries, detector functions
+     (`detectTipFixTruckAssignments`/`detectTipAiAdvisor`/
+     `detectTipShareProfit`), `DailyTipBuilderInput` fields
+     (`unassignedRowsCount`/`hasPositiveNetWeek`, now unused since their
+     only detectors are gone — `app/src/data/dailyTips.ts`'s own
+     `findUnassignedRows()`/`hasPositiveNetWeek` computations removed
+     too), `buildDailyTipCandidates()` wiring, coverage-map entries, AND
+     — a real gap this pass's own audit caught, not just the TS topic
+     union — the actual i18n STRING blocks
+     (`dailyTips.tipFixTruckAssignments.v0/v1/v2` etc.) in all 7 locale
+     files, which the TS-level removal alone would have left dangling.
+     Equipment tip (`dailyTips.tipEquipment.v0/v1/v2`) rewritten in all 7
+     locales to describe automatic population from imports, correcting
+     the old, now-FALSE "not a one-off deduction" framing (it now
+     appears in BOTH places, deliberately). **Coverage-map test
+     genuinely strengthened, not just updated**: the existing test
+     (`dailyTips.test.ts`) only ever checked the FORWARD direction (every
+     nav href has a coverage entry) — it would NEVER have caught a STALE
+     coverage-map entry left behind for a since-removed screen, exactly
+     the mistake this pass could have made. Added a new REVERSE-direction
+     test (`every coverage-map key still names a REAL nav registry href`)
+     and directly VERIFIED it catches the mistake it's designed for:
+     temporarily re-added a
+     `'/(tabs)/more/truck-assignments': 'intentionalNone'` entry, re-ran
+     the suite, watched it fail with that exact key listed in `orphaned`,
+     then reverted and confirmed it passes clean — not just asserted in
+     a comment.
+  **i18n across the board**: new keys added to all 7 locales (es/ru/tr/
+  hi/ar fully translated, uk as an untranslated English copy per
+  invariant #11) — `ceoMode.chatTitle/chatEmpty/chatInputPlaceholder/
+  chatSend/chatFailedTitle` (reusing the just-orphaned `aiAdvisor.*`
+  translations' own wording before that block was deleted, so the
+  folded-in capability reads identically to what it replaced),
+  `equipmentScreen.fromImport` (+ `deleteConfirmBody` reworded to
+  mention the linked-deduction removal), `dataCleanup.
+  missingEquipmentTitle/missingEquipmentNote/createSelected/
+  viewInEquipment`. Orphaned keys removed from all 7 locales:
+  `nav.truckAssignments`/`nav.aiAdvisor`/`nav.shareProfit`, the entire
+  `truckAssignments.*`/`aiAdvisor.*` blocks, `shareProfit.*`'s
+  screen-only sub-keys (kept the shared-pipeline ones), and the 3
+  orphaned `dailyTips.tip*` blocks. `docs/ADMIN_RUNBOOK.md`'s own
+  hand-maintained "every screen as of this writing" SQL route list
+  (its own header comment: "update this list whenever a screen is
+  added/removed") updated to drop the 3 removed routes. Glossary/parity
+  test re-passed clean after one real catch: `truckComparison.
+  unassignedFixLink`'s new wording had translated "Settlements" into
+  es/ru/tr/ar instead of keeping it in Latin script per the glossary —
+  fixed to keep the literal route name in English in all four before
+  committing.
+  **Deliverables**: 129 suites / 3500 tests pass (the JS test count
+  reads slightly lower than the prior pass's 3512 despite ~22 new pure-
+  logic tests added — the glossary test dynamically generates one
+  case per glossary-term-occurrence per locale, and removing 3 topic
+  blocks + several `shareProfit`/`aiAdvisor`/`truckAssignments` i18n
+  keys genuinely shrank that count; confirmed no test FILE was lost,
+  same 129 suites both times); `tsc --noEmit` clean. No Edge Function
+  was touched — no redeploy needed for `ai-import`/`ai-advisor`/
+  `reset-data`/`delete-account`/`referral-sync`. `docs/PENDING_SQL.md`
+  §73 is **NOT YET APPLIED** — until it's run, any deduction landing in
+  an equipment-type category during import fails cleanly with a step-
+  tagged `equipment-link-insert` error (the column doesn't exist yet)
+  rather than silently skipping the link — apply it before relying on
+  this feature in production. Ships via a normal `eas update`.

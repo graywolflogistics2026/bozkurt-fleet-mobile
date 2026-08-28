@@ -45,7 +45,7 @@ describe('saveExtraction loan_agreement docType', () => {
   beforeEach(() => {
     mockClient = createFakeSupabase({
       profiles: [{ user_id: USER_ID, business_balance: 0 }],
-      trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: '4471', trailer_unit_number: 'TR-100' }],
+      trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: '4471', trailer_unit_number: 'TR-100', is_active: true }],
       equipment: [{ id: 'equip-1', user_id: USER_ID, name: 'Thermo King Reefer Unit' }],
     });
   });

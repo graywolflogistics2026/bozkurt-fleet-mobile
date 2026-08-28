@@ -54,16 +54,13 @@
     "profitAnalysis": "Profit Analysis",
     "scorecard": "Scorecard",
     "ceoMode": "AI Coach",
-    "aiAdvisor": "AI Advisor",
-    "shareProfit": "Share Weekly Profit",
     "compliance": "Documents & Renewals",
     "documents": "Documents",
     "categoryLearning": "Category Learning",
     "referral": "Invite & Earn",
     "dataCleanup": "Data Cleanup",
     "accountantPackage": "Accountant Package",
-    "truckComparison": "Truck Comparison",
-    "truckAssignments": "Fix Truck Assignments"
+    "truckComparison": "Truck Comparison"
   },
   "auth": {
     "signUpTagline": "{{brand}} — for owner-operators",
@@ -921,7 +918,8 @@
     "enterNameTitle": "Enter a name",
     "saveFailedTitle": "Save failed",
     "deleteConfirmTitle": "Delete this equipment?",
-    "deleteConfirmBody": "This removes it from your records. Any linked loan in Loan Center is unaffected."
+    "deleteConfirmBody": "This removes it from your records. If it was created automatically from an import, its linked deduction is removed too. Any linked loan in Loan Center is unaffected.",
+    "fromImport": "From an import"
   },
   "assetFinancing": {
     "purchasePriceLabel": "Purchase Price ($)",
@@ -1429,15 +1427,6 @@
     "aiFailed": "Could not reach the advisor service."
   },
   "shareProfit": {
-    "title": "Share Weekly Profit",
-    "subtitle": "Pick which figures to include — you're never forced to share all three.",
-    "noSettlements": "Import a settlement to share your numbers.",
-    "metrics": {
-      "revenue": "Revenue",
-      "profit": "Profit",
-      "mpg": "MPG"
-    },
-    "weekOf": "Week of {{date}}",
     "notAvailableTitle": "Sharing isn't available on this device.",
     "shareFailedTitle": "Share failed",
     "shareTo": "Share to",
@@ -1458,7 +1447,6 @@
     "copiedTitle": "Copied",
     "copiedBody": "The branded card image and caption were copied to your clipboard — paste them into any app.",
     "captionTemplate": "{{weekSummary}} — tracked with {{brand}}",
-    "weekPickerLabel": "Week",
     "share": "Share"
   },
   "monthGroups": {
@@ -1901,15 +1889,12 @@
       "taxReserveShortfall": "Reserve {{amount}} more before your next tax payment",
       "maintenanceCatchUp": "{{count}} maintenance item(s) due soon or overdue",
       "complianceCatchUp": "{{count}} renewal item(s) due soon or overdue"
-    }
-  },
-  "aiAdvisor": {
-    "title": "AI Advisor",
-    "subtitle": "Ask anything about your business — answers use your own account data.",
-    "empty": "Ask a question to get started, e.g. \"How can I improve my profit per mile?\"",
-    "failedTitle": "Could not reach the advisor",
-    "inputPlaceholder": "Ask a question...",
-    "send": "Send"
+    },
+    "chatTitle": "Ask a Question",
+    "chatEmpty": "Ask anything about your business — answers use your own account data.",
+    "chatInputPlaceholder": "Ask a question...",
+    "chatSend": "Send",
+    "chatFailedTitle": "Could not reach the advisor"
   },
   "categoryLearning": {
     "title": "Category Learning",
@@ -2204,7 +2189,7 @@
     "empty": "No settlements yet for any truck in this period.",
     "unassignedTitle": "Some revenue isn't assigned to a truck",
     "unassignedBody": "{{count}} settlement(s) totaling {{amount}} have no truck set, so they aren't included in any truck's numbers above.",
-    "unassignedFixLink": "Fix truck assignments →",
+    "unassignedFixLink": "Assign trucks in Settlements →",
     "fleetTotalsTitle": "Fleet Totals",
     "allocationNote": "Fleet-level costs (insurance, accounting fees, permits, and other charges with no specific truck) are allocated to each truck by its share of total fleet miles — an allocation, not a direct cost."
   },
@@ -2232,23 +2217,11 @@
     "duplicateLoansTitle": "Possible Duplicate Loans ({{count}} group(s))",
     "duplicateLoansNote": "These loans share the same name and were likely created by re-importing the same recurring obligation before duplicate detection was fixed. The green-labeled row in each group is the one with the most complete balance data (or the oldest, if balances are equally complete) — review before removing the rest.",
     "duplicateLoansRecommendedKeep": "✓ Recommended: keep this one",
-    "confirmDuplicateLoansBody": "This will permanently remove {{count}} loan record(s). This cannot be undone — make sure you're keeping the right one from each group."
-  },
-  "truckAssignments": {
-    "title": "Fix Truck Assignments",
-    "subtitle": "Assign a truck to rows that don't have one yet. This isn't necessarily broken — a row created before your 2nd truck simply has none.",
-    "needsMultipleTrucks": "You only have one truck — nothing to assign.",
-    "empty": "Every settlement, fuel purchase, maintenance record, and toll already has a truck assigned.",
-    "bulkTitle": "Assign selected ({{count}}) to:",
-    "assignSelected": "Assign {{count}} Selected",
-    "assignThisRow": "Assign this row to",
-    "partialFailureTitle": "{{count}} row(s) could not be assigned",
-    "kind": {
-      "settlement": "Settlement",
-      "fuel": "Fuel",
-      "maintenance": "Maintenance",
-      "toll": "Toll"
-    }
+    "confirmDuplicateLoansBody": "This will permanently remove {{count}} loan record(s). This cannot be undone — make sure you're keeping the right one from each group.",
+    "missingEquipmentTitle": "Missing Equipment Entries ({{count}} · {{amount}})",
+    "missingEquipmentNote": "These deductions are already in a durable-goods category (tools, electronics, safety gear, sleeper comfort) but don't have a linked Equipment entry yet — create one so it's tracked as an asset, not just an expense.",
+    "createSelected": "Create Selected ({{count}})",
+    "viewInEquipment": "View in Equipment →"
   },
   "dailyTips": {
     "cardLabel": "Tip of the day",
@@ -2316,20 +2289,10 @@
       "v1": "Ready to send your CPA something besides a shoebox of receipts? Accountant Package builds it for you.",
       "v2": "The same real numbers behind every screen in this app roll up into one export here — worth trying just to see what it looks like."
     },
-    "tipAiAdvisor": {
-      "v0": "AI Advisor already knows your own numbers — ask it anything about your revenue, expenses or trends and it answers from your real data.",
-      "v1": "Ever wish you could just ask a question about your own business and get a straight answer? That's what AI Advisor is for.",
-      "v2": "Every screen in this app computes real figures — AI Advisor is the one place you can ask about them in plain language."
-    },
     "tipTaxEstimator": {
       "v0": "Tax Estimator shows your weekly tax reserve and next quarterly due date, calculated from your real numbers (estimates only — verify with your CPA).",
       "v1": "Know how much you should be setting aside for taxes each week? Tax Estimator calculates a real reserve figure from your own profit.",
       "v2": "Per diem days, quarterly deadlines and — once profit justifies it — an S-Corp comparison all live on one screen, all estimates, never a filed return."
-    },
-    "tipShareProfit": {
-      "v0": "Share Weekly Profit builds a clean, shareable card of your week's numbers — no spreadsheet, no screenshot editing.",
-      "v1": "Want to show off a good week without exposing your full books? Share Weekly Profit is built exactly for that.",
-      "v2": "A real positive week is worth sharing — this screen turns it into one clean image in a couple of taps."
     },
     "tipDocumentsRenewals": {
       "v0": "Documents & Renewals tracks expiry dates — HVUT 2290, IRP, medical card, CDL, inspection — and warns you before any of them lapse.",
@@ -2366,15 +2329,10 @@
       "v1": "Running more than one truck? Truck Comparison answers the question every multi-truck owner eventually asks: which one's really worth keeping?",
       "v2": "Fleet-wide totals hide a lot — Truck Comparison is what breaks them back down truck by truck."
     },
-    "tipFixTruckAssignments": {
-      "v0": "Fix Truck Assignments finds every row with no truck attached and lets you assign it in a couple of taps, so per-truck numbers stay accurate.",
-      "v1": "Ever wonder why one truck's numbers look off? An unassigned row could be quietly missing from its own totals.",
-      "v2": "{{count}} row(s) currently have no truck assigned — fixing them keeps every per-truck figure in this app honest."
-    },
     "tipEquipment": {
-      "v0": "Equipment tracks everything the business owns beyond the truck itself — and like the truck, it's depreciable.",
-      "v1": "Bought a generator, a lift gate, or a load bar system for the business? Equipment is where that belongs, not a one-off deduction.",
-      "v2": "Nothing's logged on Equipment yet — anything durable you've bought for the business could be sitting there building real tax value instead."
+      "v0": "Equipment tracks everything durable the business owns beyond the truck itself — tools, electronics, and gear from your imports now land here automatically, alongside their own expense entry.",
+      "v1": "Bought a generator, a lift gate, or a load bar system for the business? Import the receipt and it's tracked as equipment automatically — or add one by hand any time.",
+      "v2": "Nothing's logged on Equipment yet — durable purchases (tools, electronics, sleeper comfort, safety gear) from your imports populate it on their own now, no extra step needed."
     },
     "tipDrivers": {
       "v0": "Drivers lets you record who's driving and what you pay them, so you can see your real margin after driver cost, not just gross revenue.",

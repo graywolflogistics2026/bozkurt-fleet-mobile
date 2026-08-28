@@ -87,6 +87,13 @@ export type Equipment = {
   loan_id: string | null;
   notes: string | null;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
+  // docs/PENDING_SQL.md §73 (EQUIPMENT AUTO-POPULATE FROM IMPORTS, owner
+  // decision, SIMPLIFICATION PASS) — set only when this row was created
+  // automatically from a deduction line landing in a durable-goods
+  // category (app/src/import/equipmentLink.ts); null for every manually
+  // added row.
+  linked_deduction_id: string | null;
+  vendor: string | null;
   created_at: string;
   updated_at: string;
 };

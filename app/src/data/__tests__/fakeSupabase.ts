@@ -61,6 +61,14 @@ const CASCADE_RULES: Array<{ table: string; column: string; parent: string }> = 
   { table: 'maintenance_records', column: 'settlement_id', parent: 'settlements' },
   { table: 'tolls', column: 'settlement_id', parent: 'settlements' },
   { table: 'capital_transactions', column: 'linked_deduction_id', parent: 'deductions' },
+  // EQUIPMENT AUTO-POPULATE FROM IMPORTS (owner decision, SIMPLIFICATION
+  // PASS, item 7, docs/PENDING_SQL.md §73) — mirrors capital_transactions'
+  // own linked_deduction_id cascade exactly: deleting a deduction removes
+  // its linked Equipment row automatically. The REVERSE direction
+  // (deleting Equipment removes its linked deduction) has no FK to model
+  // here — it's handled explicitly in app code (equipment.tsx's own
+  // delete handler), not a cascade at all.
+  { table: 'equipment', column: 'linked_deduction_id', parent: 'deductions' },
 ];
 
 // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md §70) —

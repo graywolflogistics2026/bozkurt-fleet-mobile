@@ -225,10 +225,15 @@ export default function TruckComparison() {
         )}
 
         {/* UNASSIGNED (requirement 7 — a null-truck row never disappears)
-            — nudges toward the repair flow rather than silently losing
-            this revenue from the comparison. */}
+            — nudges toward Settlements (where every row's own truck field
+            is already editable inline, per the MULTI-TRUCK MODEL work)
+            rather than silently losing this revenue from the comparison.
+            SIMPLIFICATION PASS (owner decision) — the dedicated bulk
+            "Fix Truck Assignments" screen this used to link to was
+            removed; ordinary per-row truck reassignment on each list
+            screen's own edit sheet already covers the same need. */}
         {result.unassignedRow && (
-          <TappableCard onPress={() => router.push('/(tabs)/more/truck-assignments' as any)} style={{ borderColor: colors.orange, borderWidth: 1 }}>
+          <TappableCard onPress={() => router.push('/(tabs)/more/settlements')} style={{ borderColor: colors.orange, borderWidth: 1 }}>
             <Text style={{ color: colors.orange, fontWeight: '700', marginBottom: spacing.xs }}>
               ⚠️ {t('truckComparison.unassignedTitle')}
             </Text>

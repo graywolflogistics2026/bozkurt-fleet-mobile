@@ -7,7 +7,7 @@ import {
   DAILY_TIP_VARIANT_COUNT,
   detectTipCapitalAccount,
   detectTipDeductions,
-  detectTipFixTruckAssignments,
+  detectTipEquipment,
   detectTipFuel,
   detectTipMaintenance,
   detectTipSettlements,
@@ -41,6 +41,24 @@ describe('DAILY_TIP_SCREEN_COVERAGE — every nav registry href is accounted for
       expect(DAILY_TIP_CATEGORY[entry]).toBeDefined();
     }
   });
+
+  // REVERSE DIRECTION (owner decision, SIMPLIFICATION PASS, item 8) — the
+  // test above only ever caught a screen with NO coverage entry; it never
+  // caught the opposite mistake, a STALE coverage-map key left behind for
+  // a screen that was since REMOVED from the nav registry (exactly what
+  // would have happened here if the Fix Truck Assignments/AI Advisor/
+  // Share Weekly Profit entries had been left in DAILY_TIP_SCREEN_COVERAGE
+  // after their screens were deleted this pass). Verified this test
+  // actually catches that: temporarily re-added
+  // '/(tabs)/more/truck-assignments': 'intentionalNone' to the coverage
+  // map (a removed-screen href) and re-ran this suite — it failed with
+  // that key listed in `orphaned`, exactly as intended, before the key
+  // was removed again.
+  test('every coverage-map key still names a REAL nav registry href — no orphaned entry for a removed screen', () => {
+    const hrefs = new Set(RAW_NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href as string)));
+    const orphaned = Object.keys(DAILY_TIP_SCREEN_COVERAGE).filter((href) => !hrefs.has(href));
+    expect(orphaned).toEqual([]);
+  });
 });
 
 describe('individual detectors — precondition gating (spot check across topics)', () => {
@@ -66,10 +84,13 @@ describe('individual detectors — precondition gating (spot check across topics
     expect(detectTipSettlements(5, 0)).toBeNull();
   });
 
-  test('tipFixTruckAssignments never fires for a single-truck account, even with unassigned rows', () => {
-    expect(detectTipFixTruckAssignments(1, 5)).toBeNull();
-    expect(detectTipFixTruckAssignments(2, 5)).toEqual({ topic: 'tipFixTruckAssignments', detail: { count: 5 } });
-    expect(detectTipFixTruckAssignments(2, 0)).toBeNull();
+  // SIMPLIFICATION PASS (owner decision) — tipFixTruckAssignments was
+  // removed along with the dedicated Fix Truck Assignments screen; this
+  // spot-check was swapped for tipEquipment, unaffected by that removal.
+  test('tipEquipment only fires for a genuinely empty, established account', () => {
+    expect(detectTipEquipment(0, 14)).toEqual({ topic: 'tipEquipment', detail: {} });
+    expect(detectTipEquipment(0, 5)).toBeNull();
+    expect(detectTipEquipment(1, 14)).toBeNull();
   });
 
   test('tipTruckDepreciation includes the real preview dollar figure only when the caller actually computed one', () => {
@@ -148,7 +169,6 @@ describe('selectDailyTip — rotation engine', () => {
       accountAgeDays: 0,
       hasTaxConfig: false,
       weeklyTaxReserve: null,
-      hasPositiveNetWeek: false,
       complianceItemsCount: 0,
       learningRulesCount: 0,
       trucksWithoutCostBasisCount: 0,
@@ -156,7 +176,6 @@ describe('selectDailyTip — rotation engine', () => {
       depreciationPreviewTotal: null,
       trucksCount: 0,
       anyTruckHasTrailer: false,
-      unassignedRowsCount: 0,
       driversCount: 0,
       driverPaymentsCount: 0,
       initialCapital: 0,
@@ -199,13 +218,13 @@ describe('selectDailyTip — rotation engine', () => {
       'tipLoans',
       'tipTransactions',
       'tipDocuments',
-      'tipAiAdvisor',
+      'tipPerDiemVsMeals',
       'tipCapitalAccount',
       'tipTolls',
       'tipTruckComparison',
       'tipProfitAnalysis',
       'tipOperatingPnl',
-      'tipShareProfit',
+      'tipEscrowRefundable',
       'tipCategoryLearning',
       'tipAssetRegister',
       'tipTruckHealth',

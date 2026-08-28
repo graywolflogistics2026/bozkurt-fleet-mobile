@@ -54,16 +54,13 @@
     "profitAnalysis": "Análisis de Ganancias",
     "scorecard": "Calificación",
     "ceoMode": "Coach de IA",
-    "aiAdvisor": "Asesor de IA",
-    "shareProfit": "Compartir Ganancias Semanales",
     "compliance": "Documentos y Renovaciones",
     "documents": "Documentos",
     "categoryLearning": "Aprendizaje de Categorías",
     "referral": "Invitar y Ganar",
     "dataCleanup": "Limpieza de Datos",
     "accountantPackage": "Paquete para el Contador",
-    "truckComparison": "Comparación de Camiones",
-    "truckAssignments": "Corregir Asignaciones de Camión"
+    "truckComparison": "Comparación de Camiones"
   },
   "auth": {
     "signUpTagline": "{{brand}} — para operadores propietarios",
@@ -921,7 +918,8 @@
     "enterNameTitle": "Ingrese un nombre",
     "saveFailedTitle": "Error al guardar",
     "deleteConfirmTitle": "¿Eliminar este equipo?",
-    "deleteConfirmBody": "Esto lo elimina de sus registros. Cualquier préstamo vinculado en el Centro de Préstamos no se ve afectado."
+    "deleteConfirmBody": "Esto lo elimina de sus registros. Si se creó automáticamente desde una importación, su deducción vinculada también se elimina. Cualquier préstamo vinculado en el Centro de Préstamos no se ve afectado.",
+    "fromImport": "De una importación"
   },
   "assetFinancing": {
     "purchasePriceLabel": "Precio de Compra ($)",
@@ -1429,15 +1427,6 @@
     "aiFailed": "No se pudo conectar con el servicio de asesoría."
   },
   "shareProfit": {
-    "title": "Compartir Ganancias Semanales",
-    "subtitle": "Elige qué cifras incluir — nunca estás obligado a compartir las tres.",
-    "noSettlements": "Importa un settlement para compartir tus cifras.",
-    "metrics": {
-      "revenue": "Ingresos",
-      "profit": "Ganancia",
-      "mpg": "MPG"
-    },
-    "weekOf": "Semana del {{date}}",
     "notAvailableTitle": "Compartir no está disponible en este dispositivo.",
     "shareFailedTitle": "Error al compartir",
     "shareTo": "Compartir en",
@@ -1458,7 +1447,6 @@
     "copiedTitle": "Copiado",
     "copiedBody": "La imagen de la tarjeta y la leyenda se copiaron a tu portapapeles — pégalas en cualquier app.",
     "captionTemplate": "{{weekSummary}} — con seguimiento de {{brand}}",
-    "weekPickerLabel": "Semana",
     "share": "Compartir"
   },
   "monthGroups": {
@@ -1901,15 +1889,12 @@
       "taxReserveShortfall": "Reserva {{amount}} más antes de tu próximo pago de impuestos",
       "maintenanceCatchUp": "{{count}} elemento(s) de mantenimiento próximo(s) o vencido(s)",
       "complianceCatchUp": "{{count}} elemento(s) de renovación próximo(s) o vencido(s)"
-    }
-  },
-  "aiAdvisor": {
-    "title": "Asesor de IA",
-    "subtitle": "Pregunta lo que quieras sobre tu negocio — las respuestas usan los datos de tu propia cuenta.",
-    "empty": "Haz una pregunta para comenzar, ej. \"¿Cómo puedo mejorar mi ganancia por milla?\"",
-    "failedTitle": "No se pudo conectar con el asesor",
-    "inputPlaceholder": "Haz una pregunta...",
-    "send": "Enviar"
+    },
+    "chatTitle": "Haz una Pregunta",
+    "chatEmpty": "Pregunta lo que quieras sobre tu negocio — las respuestas usan los datos de tu propia cuenta.",
+    "chatInputPlaceholder": "Haz una pregunta...",
+    "chatSend": "Enviar",
+    "chatFailedTitle": "No se pudo conectar con el asesor"
   },
   "categoryLearning": {
     "title": "Aprendizaje de Categorías",
@@ -2204,7 +2189,7 @@
     "empty": "Aún no hay Settlement para ningún camión en este período.",
     "unassignedTitle": "Parte de los ingresos no está asignada a un camión",
     "unassignedBody": "{{count}} Settlement por un total de {{amount}} no tienen camión asignado, por lo que no se incluyen en los números de ningún camión arriba.",
-    "unassignedFixLink": "Corregir asignaciones de camión →",
+    "unassignedFixLink": "Asignar camiones en Settlements →",
     "fleetTotalsTitle": "Totales de la Flota",
     "allocationNote": "Los costos a nivel de flota (seguro, honorarios contables, permisos y otros cargos sin camión específico) se asignan a cada camión según su parte del total de millas de la flota — una asignación, no un costo directo."
   },
@@ -2232,23 +2217,11 @@
     "duplicateLoansTitle": "Posibles Préstamos Duplicados ({{count}} grupo(s))",
     "duplicateLoansNote": "Estos préstamos comparten el mismo nombre y probablemente se crearon al volver a importar la misma obligación recurrente antes de que se corrigiera la detección de duplicados. La fila marcada en verde en cada grupo es la que tiene los datos de saldo más completos (o la más antigua, si los saldos son igualmente completos) — revisa antes de eliminar el resto.",
     "duplicateLoansRecommendedKeep": "✓ Recomendado: conserva este",
-    "confirmDuplicateLoansBody": "Esto eliminará permanentemente {{count}} registro(s) de préstamo. Esto no se puede deshacer — asegúrate de conservar el correcto de cada grupo."
-  },
-  "truckAssignments": {
-    "title": "Corregir Asignaciones de Camión",
-    "subtitle": "Asigna un camión a las filas que aún no tienen uno. Esto no necesariamente está roto — una fila creada antes de tu 2do camión simplemente no tiene ninguno.",
-    "needsMultipleTrucks": "Solo tienes un camión — no hay nada que asignar.",
-    "empty": "Cada Settlement, compra de combustible, registro de mantenimiento y peaje ya tiene un camión asignado.",
-    "bulkTitle": "Asignar seleccionados ({{count}}) a:",
-    "assignSelected": "Asignar {{count}} Seleccionados",
-    "assignThisRow": "Asignar esta fila a",
-    "partialFailureTitle": "No se pudieron asignar {{count}} fila(s)",
-    "kind": {
-      "settlement": "Settlement",
-      "fuel": "Combustible",
-      "maintenance": "Mantenimiento",
-      "toll": "Peaje"
-    }
+    "confirmDuplicateLoansBody": "Esto eliminará permanentemente {{count}} registro(s) de préstamo. Esto no se puede deshacer — asegúrate de conservar el correcto de cada grupo.",
+    "missingEquipmentTitle": "Entradas de Equipo Faltantes ({{count}} · {{amount}})",
+    "missingEquipmentNote": "Estas deducciones ya están en una categoría de bienes duraderos (herramientas, electrónica, equipo de seguridad, confort del sleeper) pero aún no tienen una entrada de Equipo vinculada — crea una para que se rastree como activo, no solo como gasto.",
+    "createSelected": "Crear Seleccionados ({{count}})",
+    "viewInEquipment": "Ver en Equipo →"
   },
   "dailyTips": {
     "cardLabel": "Consejo del día",
@@ -2316,20 +2289,10 @@
       "v1": "¿Listo para enviarle a tu contador algo mejor que una caja de recibos? Paquete para el Contador lo arma por ti.",
       "v2": "Los mismos números reales detrás de cada pantalla de la app se resumen en una sola exportación aquí — vale la pena probarlo aunque sea para ver cómo se ve."
     },
-    "tipAiAdvisor": {
-      "v0": "AI Advisor ya conoce tus propios números — pregúntale lo que sea sobre tus ingresos, gastos o tendencias y responde con tus datos reales.",
-      "v1": "¿Alguna vez quisiste simplemente preguntar algo sobre tu propio negocio y recibir una respuesta directa? Para eso está AI Advisor.",
-      "v2": "Cada pantalla de esta app calcula cifras reales — AI Advisor es el único lugar donde puedes preguntar sobre ellas en lenguaje sencillo."
-    },
     "tipTaxEstimator": {
       "v0": "Estimador de Impuestos muestra tu reserva semanal de impuestos y tu próxima fecha límite trimestral, calculadas a partir de tus números reales (solo estimados — verifica con tu contador).",
       "v1": "¿Sabes cuánto deberías apartar cada semana para impuestos? Estimador de Impuestos calcula una reserva real a partir de tu propia ganancia.",
       "v2": "Los días de per diem, las fechas trimestrales y — una vez que la ganancia lo justifique — una comparación de S-Corp viven todos en una sola pantalla, todo estimado, nunca una declaración presentada."
-    },
-    "tipShareProfit": {
-      "v0": "Compartir Ganancia Semanal arma una tarjeta limpia y compartible con los números de tu semana — sin hoja de cálculo, sin editar capturas de pantalla.",
-      "v1": "¿Quieres mostrar una buena semana sin exponer toda tu contabilidad? Compartir Ganancia Semanal está hecho exactamente para eso.",
-      "v2": "Una semana realmente positiva vale la pena compartirla — esta pantalla la convierte en una imagen limpia en un par de toques."
     },
     "tipDocumentsRenewals": {
       "v0": "Documentos y Renovaciones rastrea fechas de vencimiento — HVUT 2290, IRP, tarjeta médica, CDL, inspección — y te avisa antes de que alguna venza.",
@@ -2366,15 +2329,10 @@
       "v1": "¿Operas más de un camión? Comparación de Camiones responde la pregunta que todo dueño de varios camiones se hace tarde o temprano: ¿cuál realmente vale la pena conservar?",
       "v2": "Los totales de toda la flota esconden mucho — Comparación de Camiones es lo que los desglosa camión por camión."
     },
-    "tipFixTruckAssignments": {
-      "v0": "Corregir Asignación de Camiones encuentra cada registro sin camión asignado y te deja asignarlo en un par de toques, para que los números por camión sigan siendo exactos.",
-      "v1": "¿Alguna vez te preguntaste por qué los números de un camión se ven raros? Un registro sin asignar podría estar faltando silenciosamente en sus propios totales.",
-      "v2": "{{count}} registro(s) actualmente no tienen camión asignado — corregirlos mantiene honesta cada cifra por camión en esta app."
-    },
     "tipEquipment": {
-      "v0": "Equipo rastrea todo lo que el negocio posee más allá del camión mismo — y, como el camión, es depreciable.",
-      "v1": "¿Compraste un generador, un lift gate, o un sistema de load bars para el negocio? Eso va en Equipo, no como una deducción suelta.",
-      "v2": "Todavía no hay nada registrado en Equipo — cualquier cosa duradera que hayas comprado para el negocio podría estar generando valor fiscal real en vez de estar sin registrar."
+      "v0": "Equipo rastrea todo lo duradero que el negocio posee más allá del camión mismo — herramientas, electrónica y artículos de tus importaciones ahora aparecen aquí automáticamente, junto a su propio gasto.",
+      "v1": "¿Compraste un generador, un lift gate, o un sistema de load bars para el negocio? Importa el recibo y se registra como equipo automáticamente — o agrégalo a mano cuando quieras.",
+      "v2": "Todavía no hay nada registrado en Equipo — las compras duraderas (herramientas, electrónica, confort del sleeper, equipo de seguridad) de tus importaciones ahora lo llenan solas, sin ningún paso extra."
     },
     "tipDrivers": {
       "v0": "Conductores te permite registrar quién maneja y cuánto le pagas, para que veas tu margen real después del costo del conductor, no solo el ingreso bruto.",

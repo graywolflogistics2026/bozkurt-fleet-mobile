@@ -187,6 +187,8 @@ function equipmentRow(overrides: Partial<Equipment>): Equipment {
     loan_id: null,
     notes: null,
     tags: null,
+    linked_deduction_id: null,
+    vendor: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,

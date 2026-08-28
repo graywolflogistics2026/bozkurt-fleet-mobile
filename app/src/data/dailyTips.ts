@@ -33,7 +33,6 @@ import {
   type DailyTipCandidate,
   type DailyTipDiagnosticEntry,
 } from '@/src/alerts/dailyTips';
-import { findUnassignedRows } from '@/src/import/truckAssignmentRepair';
 import { calcCurrentYearDepreciation } from '@/src/tax/depreciation';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { calcMiles } from '@/src/stats/miles';
@@ -52,7 +51,7 @@ const EMPTY_NUDGE_STATE: NudgeState<DailyTipTopic> = {};
 // pure detectors, same "React hook that fetches, pure module that decides"
 // split as useAlertsData()/useProactiveCoach(). Every figure passed to a
 // detector is real and already computed elsewhere in this app (reusing
-// the SAME canonical functions those other screens use — findUnassignedRows,
+// the SAME canonical functions those other screens use —
 // calcCurrentYearDepreciation, calcPerDiemDays, calcMiles,
 // nextQuarterlyDeadline — never a second, competing calculation), never
 // fabricated for the tip's own sake.
@@ -157,10 +156,6 @@ export function useDailyTip() {
     const anyTruckHasTrailer = trucks.some((t) => !!t.trailer_unit_number);
     const trucksWithPurchasePriceCount = trucks.filter((t) => !!t.purchase_price).length;
 
-    const unassigned = findUnassignedRows(settlements, fuel, maintenance, tolls);
-
-    const hasPositiveNetWeek = settlements.some((s) => Number(s.net ?? 0) > 0);
-
     const quarterlyDeadline = taxEstimateQuery.data ? nextQuarterlyDeadline(taxEstimateQuery.data.taxYearData.quarterly_deadlines) : null;
 
     const activeTruckId = activeTruck?.id ?? null;
@@ -189,7 +184,6 @@ export function useDailyTip() {
       accountAgeDays,
       hasTaxConfig: !!taxConfigQuery.data?.entity_type,
       weeklyTaxReserve: taxEstimateQuery.data?.estimate.weeklyTaxReserve ?? null,
-      hasPositiveNetWeek,
       complianceItemsCount: complianceQuery.data?.length ?? 0,
       learningRulesCount: categoryLearningRulesQuery.data?.length ?? 0,
       trucksWithoutCostBasisCount,
@@ -197,7 +191,6 @@ export function useDailyTip() {
       depreciationPreviewTotal,
       trucksCount: trucks.length,
       anyTruckHasTrailer,
-      unassignedRowsCount: unassigned.length,
       driversCount: driversQuery.data?.length ?? 0,
       driverPaymentsCount: driverPaymentsQuery.data?.length ?? 0,
       initialCapital: capitalAccountQuery.data?.effectiveContribution ?? 0,
@@ -258,12 +251,23 @@ export function useDailyTip() {
 
   const ready = !queriesLoading;
 
-  // STICKY ANCHOR (the core of item 1's fix) — reconstructed directly from
-  // persisted state, never from a live re-run of selectDailyTip(). See
-  // findTodaysAnchorTip()'s own header comment in dailyTips.ts for exactly
-  // why re-running selection on every recompute was what caused the
-  // flash.
-  const anchorTopic = useMemo(() => (ready ? findTodaysAnchorTip(tipState, now) : null), [ready, tipState]);
+  // PERSIST-ON-HOME FIX (owner decision, device report: "must render on
+  // Home and STAY there... not require re-navigation to see it").
+  // Reconstructing an ALREADY-RECORDED anchor for today only needs
+  // `profileQuery` (nudge_state lives on the profile row) — it never
+  // needs the other ~19 queries `queriesLoading`/`ready` waits on, since
+  // those exist only to let `buildDailyTipCandidates()` pick a FRESH
+  // topic when nothing's been shown yet today. Gating the anchor
+  // reconstruction on the full `ready` (as this used to) meant the common
+  // case — "today's tip was already decided, just show it again" — was
+  // held hostage to the slowest of ~20 independent queries (documents,
+  // equipment, drivers, loans, category-learning rules, capital account,
+  // tax config/estimate, ...) resolving on every fresh Home mount, which
+  // is what made the card appear to "not render" until something else
+  // (a slow query finally settling, often only noticed after navigating
+  // away and back) unblocked it.
+  const profileReady = !profileQuery.isLoading;
+  const anchorTopic = useMemo(() => (profileReady ? findTodaysAnchorTip(tipState, now) : null), [profileReady, tipState]);
 
   function applyLocal(next: NudgeState<DailyTipTopic>) {
     setOverlay(next);
@@ -289,17 +293,21 @@ export function useDailyTip() {
   // retrying as real data arrives later in the session, rather than
   // giving up forever after one empty attempt.
   useEffect(() => {
-    if (!ready) return;
+    if (!profileReady) return;
     if (anchorTopic) {
       setDisplayedTopic(anchorTopic);
       setExhausted(false);
       return;
     }
+    // No anchor recorded for today yet — picking a FRESH one genuinely
+    // needs every candidate-input query, so this branch (only) still
+    // waits on the full `ready`.
+    if (!ready) return;
     const fresh = selectDailyTip(candidates, tipState, accountCreatedAt, now);
     if (fresh) recordAndDisplay(fresh, tipState);
     else setDisplayedTopic(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, anchorTopic, candidates]);
+  }, [profileReady, ready, anchorTopic, candidates]);
 
   const displayedCandidate = useMemo(
     () => (displayedTopic ? candidates.find((c) => c.topic === displayedTopic) ?? null : null),

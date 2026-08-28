@@ -9,7 +9,7 @@ import { trailingAverageNet } from '@/src/stats/goalProgress';
 import { RECOMMENDATION_ICON, recommendationText, recommendationRoute } from '@/src/stats/aiRecommendations';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
-import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Field, PrimaryButton } from '@/src/components/ui';
+import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Field, PrimaryButton, ErrorText } from '@/src/components/ui';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
@@ -44,6 +44,19 @@ export default function CeoMode() {
   const [shareOpen, setShareOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // REMOVE AI ADVISOR AS A SEPARATE SCREEN (owner decision, SIMPLIFICATION
+  // PASS) — the deleted ai-advisor.tsx offered ONE real capability AI
+  // Coach didn't already have: a genuine multi-turn, free-form Q&A chat
+  // against callAiAdvisor() (this screen's own handleGetBriefing() only
+  // ever sent ONE composed message and never kept a running history).
+  // Folded in here, verbatim in spirit — same ChatMessage shape, same
+  // "forward the full running history on every send so the model can
+  // follow up on earlier turns" behavior — before the dedicated screen
+  // was removed.
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const loadingData = coach.isLoading || documentsQuery.isLoading || profileQuery.isLoading;
   const latestWeek = coach.latestWeek;
@@ -122,6 +135,28 @@ export default function CeoMode() {
       setError(err instanceof Error ? err.message : t('ceoMode.briefingFailed'));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSendChat() {
+    const question = chatInput.trim();
+    if (!question || chatSending) return;
+    setChatError(null);
+    const nextMessages: { role: 'user' | 'assistant'; content: string }[] = [...chatMessages, { role: 'user', content: question }];
+    setChatMessages(nextMessages);
+    setChatInput('');
+    setChatSending(true);
+    try {
+      const result = await callAiAdvisor(nextMessages, i18n.language);
+      if (result.error) {
+        setChatError(result.error.message || t('ceoMode.chatFailedTitle'));
+      } else if (result.data) {
+        setChatMessages((prev) => [...prev, { role: 'assistant', content: result.data as string }]);
+      }
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : t('ceoMode.chatFailedTitle'));
+    } finally {
+      setChatSending(false);
     }
   }
 
@@ -260,6 +295,43 @@ export default function CeoMode() {
                     </>
                   )}
                   {error && <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>{error}</MutedText>}
+                </Card>
+
+                {/* ASK A QUESTION — folded in from the removed ai-advisor.tsx
+                    (owner decision, SIMPLIFICATION PASS): the one capability
+                    that screen had and AI Coach didn't — a genuine, multi-
+                    turn free-form chat, not just a one-shot briefing. */}
+                <Text style={styles.sectionTitle}>{t('ceoMode.chatTitle')}</Text>
+                <Card>
+                  {chatMessages.length === 0 ? (
+                    <MutedText>{t('ceoMode.chatEmpty')}</MutedText>
+                  ) : (
+                    chatMessages.map((m, i) => (
+                      <View key={i} style={{ alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: spacing.sm }}>
+                        <View
+                          style={{
+                            maxWidth: '85%',
+                            backgroundColor: m.role === 'user' ? colors.accent : colors.card2,
+                            borderColor: colors.border,
+                            borderWidth: m.role === 'user' ? 0 : 1,
+                            borderRadius: radii.md,
+                            padding: spacing.sm,
+                          }}
+                        >
+                          <Text style={{ color: colors.text, fontSize: typography.size.md, lineHeight: 20 }}>{m.content}</Text>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                  <ErrorText>{chatError}</ErrorText>
+                  <Field
+                    value={chatInput}
+                    onChangeText={setChatInput}
+                    placeholder={t('ceoMode.chatInputPlaceholder')}
+                    onSubmitEditing={handleSendChat}
+                  />
+                  <PrimaryButton title={t('ceoMode.chatSend')} onPress={handleSendChat} loading={chatSending} disabled={!chatInput.trim()} />
+                  <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
                 </Card>
               </>
             )}

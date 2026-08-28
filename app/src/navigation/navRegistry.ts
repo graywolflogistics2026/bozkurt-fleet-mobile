@@ -66,9 +66,15 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/(tabs)/more/asset-register', labelKey: 'nav.assetRegister', emoji: '🗄️' },
       { href: '/(tabs)/more/accountant-package', labelKey: 'nav.accountantPackage', emoji: '📁' },
-      { href: '/(tabs)/more/ai-advisor', labelKey: 'nav.aiAdvisor', emoji: '🤖' },
+      // AI Advisor (SIMPLIFICATION PASS, owner decision) — the dedicated
+      // free-form chat screen was removed; its one real capability (multi-
+      // turn Q&A) was folded into AI Coach (ceo-mode.tsx's own "Ask a
+      // question" section) before deletion, so nothing was lost.
       { href: '/(tabs)/more/tax-estimator', labelKey: 'nav.taxEstimator', emoji: '🧮' },
-      { href: '/(tabs)/more/share-profit', labelKey: 'nav.shareProfit', emoji: '📤' },
+      // Share Weekly Profit (SIMPLIFICATION PASS, owner decision) — the
+      // dedicated screen was removed; its own share-card pipeline
+      // (src/components/shareCard/) is still fully used by CEO Mode's and
+      // Scorecard's own "📤 Share" buttons, unaffected.
       { href: '/(tabs)/more/compliance', labelKey: 'nav.compliance', emoji: '🪪' },
       { href: '/(tabs)/more/documents' as Href, labelKey: 'nav.documents', emoji: '🗃️' },
       { href: '/(tabs)/more/category-learning' as Href, labelKey: 'nav.categoryLearning', emoji: '🧠' },
@@ -84,10 +90,14 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
     titleKey: 'sidebar.sections.business',
     items: [
       { href: '/(tabs)/more/trucks', labelKey: 'nav.trucks', emoji: '🚚' },
-      // MULTI-TRUCK MODEL (owner decision) — requirements 3 (repair flow)
-      // and 4 (per-truck profitability comparison).
+      // MULTI-TRUCK MODEL (owner decision) — requirement 4 (per-truck
+      // profitability comparison). The dedicated bulk "Fix Truck
+      // Assignments" screen (requirement 3's original repair flow) was
+      // removed (SIMPLIFICATION PASS, owner decision) — ordinary per-row
+      // truck reassignment already exists on Deductions/Settlements/Fuel/
+      // Maintenance/Tolls' own edit sheets, making a dedicated bulk screen
+      // redundant.
       { href: '/(tabs)/more/truck-comparison' as Href, labelKey: 'nav.truckComparison', emoji: '📊' },
-      { href: '/(tabs)/more/truck-assignments' as Href, labelKey: 'nav.truckAssignments', emoji: '🔗' },
       { href: '/(tabs)/more/equipment' as Href, labelKey: 'nav.equipment', emoji: '🛠️' },
       { href: '/(tabs)/more/drivers', labelKey: 'nav.drivers', emoji: '🧑‍✈️' },
       { href: '/(tabs)/more/capital-account', labelKey: 'nav.capitalAccount', emoji: '💰' },

@@ -379,13 +379,11 @@ function AiCoachSection({
   proactive,
   name,
   topUnlockNudge,
-  dailyTip,
 }: {
   coach: AiCoachSummary;
   proactive: ReturnType<typeof useProactiveCoach>;
   name: string;
   topUnlockNudge: ReturnType<typeof useAlertsData>['nudges'][number] | null;
-  dailyTip: ReturnType<typeof useDailyTip>;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -503,56 +501,88 @@ function AiCoachSection({
           </Pressable>
         )}
 
-        {/* DAILY TIPS — WHOLE-APP COVERAGE (owner decision, Part 2 of the AI
-            Coach daily-tips request) — one rotating, dismissible tip per
-            day, chosen by src/alerts/dailyTips.ts's selectDailyTip() from
-            whatever the account's own data currently justifies, composed
-            entirely client-side from templates (no AI call). Distinct from
-            the periodic AI-Coach-voiced nudge and the "unlock" missing-data
-            teaser above — this one covers the WHOLE app (every screen in
-            the nav registry, see DAILY_TIP_SCREEN_COVERAGE), not just
-            missing setup fields. */}
-        {dailyTip.tip && (
-          <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-              <Text style={{ fontSize: 16 }}>{DAILY_TIP_ICON[dailyTip.tip.topic]}</Text>
-              <View style={{ flex: 1 }}>
-                <MutedText style={{ fontSize: typography.size.xs, marginBottom: 2 }}>{t('dailyTips.cardLabel')}</MutedText>
-                <Text style={{ color: colors.text }}>{dailyTipText(dailyTip.tip, dailyTip.variant, t, moneyRounded, pct)}</Text>
-                <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <Pressable onPress={() => router.push(DAILY_TIP_ROUTE[dailyTip.tip!.topic] as Href)} hitSlop={8}>
-                    <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('dailyTips.actionButton')}</Text>
-                  </Pressable>
-                  {/* "SHOW ME ANOTHER" (item 2) — a subtle, optional escape
-                      hatch for a curious user: advances to the next
-                      eligible tip immediately, as many times as they want,
-                      without touching tomorrow's automatic pick (see
-                      useDailyTip()'s own header comment). Once nothing
-                      eligible remains, the link itself is replaced by a
-                      warm, one-time explanation rather than looping. */}
-                  {!dailyTip.exhausted ? (
-                    <Pressable onPress={dailyTip.showAnother} hitSlop={8}>
-                      <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.showAnother')}</Text>
-                    </Pressable>
-                  ) : (
-                    <MutedText style={{ fontSize: typography.size.sm, fontStyle: 'italic' }}>{t('dailyTips.exhausted')}</MutedText>
-                  )}
-                  <Pressable onPress={dailyTip.dismiss} hitSlop={8}>
-                    <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.dismiss')}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
         <Pressable onPress={() => router.push('/(tabs)/more/ceo-mode')} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
           <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('ceoMode.homeOpenFull')}</Text>
         </Pressable>
-
-        <LegalFootnote />
+        {/* TRIM THE DISCLAIMER UNDER THE GREETING (owner decision,
+            SIMPLIFICATION PASS) — this card's own content (recommendations,
+            weekly review, nudges) is operational guidance, never a
+            computed TAX figure — the estimates-only/consult-your-CPA
+            notice (invariant #8) stays wherever a real tax number is
+            actually shown: Tax Estimator, the Accountant Package export,
+            and Home's own Tax Strip cards (below, still carries its own
+            <LegalFootnote/>) — it no longer clutters the greeting area on
+            every single app open regardless of whether any tax figure is
+            even present that day. */}
       </Card>
     </>
+  );
+}
+
+// DAILY TIPS — WHOLE-APP COVERAGE (owner decision, Part 2 of the AI Coach
+// daily-tips request) — one rotating, dismissible tip per day, chosen by
+// src/alerts/dailyTips.ts's selectDailyTip() from whatever the account's
+// own data currently justifies, composed entirely client-side from
+// templates (no AI call).
+//
+// PERSIST-ON-HOME FIX (owner decision, device report: "must render on Home
+// and STAY there for the whole day — not flash, not require re-navigation
+// to see it"). Root cause: this card used to live INSIDE AiCoachSection,
+// which only mounts once `aiCoach.isLoading` (useAiCoachSummary()'s own
+// isLoading — 7 queries) resolves. useDailyTip() itself needs ~20 queries
+// to compute a FRESH pick, strictly more than aiCoach needs — so
+// AiCoachSection would mount first (aiCoach ready sooner), rendering
+// EMPTY where the tip card should be, then the tip would pop in later
+// once its own slower query set finished. Worse: if aiCoach.isLoading
+// ever flipped back to true for any reason during a session, the whole
+// AiCoachSection (and the tip nested inside it) would UNMOUNT, showing
+// the loading placeholder in its place — a real, visible flash/vanish,
+// completely unrelated to whether the tip's own data was ready. Fixed by
+// pulling this card OUT to its own top-level, ALWAYS-mounted block in
+// Home, gated only on the tip's own sticky `displayedTopic` state (see
+// useDailyTip()'s own header comment for the matching fix that makes
+// that state populate fast — instantly once `profileQuery` has loaded,
+// when today's tip was already decided, rather than waiting on all ~20
+// queries every time).
+function DailyTipCard({ dailyTip }: { dailyTip: ReturnType<typeof useDailyTip> }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { money, number } = useFormatters();
+  const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
+  const pct = (n: number) => number(n, { style: 'percent', maximumFractionDigits: 1 });
+  if (!dailyTip.tip) return null;
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        <Text style={{ fontSize: 16 }}>{DAILY_TIP_ICON[dailyTip.tip.topic]}</Text>
+        <View style={{ flex: 1 }}>
+          <MutedText style={{ fontSize: typography.size.xs, marginBottom: 2 }}>{t('dailyTips.cardLabel')}</MutedText>
+          <Text style={{ color: colors.text }}>{dailyTipText(dailyTip.tip, dailyTip.variant, t, moneyRounded, pct)}</Text>
+          <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Pressable onPress={() => router.push(DAILY_TIP_ROUTE[dailyTip.tip!.topic] as Href)} hitSlop={8}>
+              <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('dailyTips.actionButton')}</Text>
+            </Pressable>
+            {/* "SHOW ME ANOTHER" (item 2) — a subtle, optional escape
+                hatch for a curious user: advances to the next eligible tip
+                immediately, as many times as they want, without touching
+                tomorrow's automatic pick (see useDailyTip()'s own header
+                comment). Once nothing eligible remains, the link itself is
+                replaced by a warm, one-time explanation rather than
+                looping. */}
+            {!dailyTip.exhausted ? (
+              <Pressable onPress={dailyTip.showAnother} hitSlop={8}>
+                <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.showAnother')}</Text>
+              </Pressable>
+            ) : (
+              <MutedText style={{ fontSize: typography.size.sm, fontStyle: 'italic' }}>{t('dailyTips.exhausted')}</MutedText>
+            )}
+            <Pressable onPress={dailyTip.dismiss} hitSlop={8}>
+              <Text style={{ color: colors.muted, fontSize: typography.size.sm }}>{t('dailyTips.dismiss')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Card>
   );
 }
 
@@ -1230,10 +1260,15 @@ export default function Dashboard() {
           </>
         ) : (
           <>
-            <AiCoachSection coach={aiCoach} proactive={proactiveCoach} name={heroFirstName} topUnlockNudge={topUnlockNudge} dailyTip={dailyTip} />
+            <AiCoachSection coach={aiCoach} proactive={proactiveCoach} name={heroFirstName} topUnlockNudge={topUnlockNudge} />
             <ReferralNudgeCard nudge={referralNudge} />
           </>
         )}
+        {/* Deliberately OUTSIDE the aiCoach.isLoading branch above — see
+            DailyTipCard's own header comment for why: this card must never
+            unmount/remount (and re-flash) just because the UNRELATED AI
+            Coach summary is (re)loading. */}
+        <DailyTipCard dailyTip={dailyTip} />
 
         <ScreenTitle>{t('dashboard.recentLoadsTitle')}</ScreenTitle>
         <TappableCard onPress={() => router.push('/(tabs)/more/loads')}>

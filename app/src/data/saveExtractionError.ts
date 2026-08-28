@@ -44,7 +44,8 @@ export type SaveExtractionStep =
   | 'loan-agreement-insert'
   | 'asset-link-lookup'
   | 'asset-link-update'
-  | 'generic-deduction-insert';
+  | 'generic-deduction-insert'
+  | 'equipment-link-insert';
 
 export type SaveExtractionPartialState = {
   documentId: string | null;
@@ -146,6 +147,7 @@ export const STEP_LABELS: Record<SaveExtractionStep, string> = {
   'asset-link-lookup': 'Looking up trucks/equipment to link the loan',
   'asset-link-update': 'Linking the loan to a truck/trailer/equipment',
   'generic-deduction-insert': 'Saving the record',
+  'equipment-link-insert': 'Saving the linked equipment record',
 };
 
 // Builds the full "Copy Details" report text — one shared format so a

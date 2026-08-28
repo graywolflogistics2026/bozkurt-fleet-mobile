@@ -100,7 +100,7 @@ beforeEach(() => {
   mockClient = createFakeSupabase(
     {
       profiles: [{ user_id: USER_ID, business_balance: 0 }],
-      trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: 'Unit 4471', trailer_unit_number: null }],
+      trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: 'Unit 4471', trailer_unit_number: null, is_active: true }],
     },
     { failures }
   );
@@ -111,7 +111,7 @@ function withFailure(failure: import('./fakeSupabase').FakeSupabaseFailure) {
   mockClient = createFakeSupabase(
     {
       profiles: [{ user_id: USER_ID, business_balance: 0 }],
-      trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: 'Unit 4471', trailer_unit_number: null }],
+      trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: 'Unit 4471', trailer_unit_number: null, is_active: true }],
     },
     { failures }
   );
@@ -225,7 +225,7 @@ describe('IMPORT SAVE BUG FIX (resilient batch insert)', () => {
     mockClient = createFakeSupabase(
       {
         profiles: [{ user_id: USER_ID, business_balance: 0 }],
-        trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: 'Unit 4471', trailer_unit_number: null }],
+        trucks: [{ id: 'truck-1', user_id: USER_ID, unit_number: 'Unit 4471', trailer_unit_number: null, is_active: true }],
         settlements: [{ id: 'sett-old', user_id: USER_ID, week_ending: '2026-07-05', truck_id: null, business_balance_credit: 500 }],
       },
       { failures: [{ table: 'deductions', mode: 'insert', error: { message: 'bad deduction row', code: '22001' } }] }

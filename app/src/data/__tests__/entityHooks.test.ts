@@ -165,6 +165,27 @@ describe('useEntityList — real ordering', () => {
     expect(currentCalls.some((c) => c.method === 'eq' && c.args[0] === 'truck_id')).toBe(false);
     expect(rows).toHaveLength(2);
   });
+
+  // STALE-REFERENCE FIX (owner decision, device report: "a retired driver
+  // still gets auto-matched/offered during settlement import"). There is
+  // no hard-delete UI for a driver — drivers.tsx's own comment: "'active'
+  // toggle is the retire equivalent — no delete from the UI." The import
+  // screen's own useDrivers() call used to fetch every driver
+  // unconditionally (active or not), so resolveDriverMatch() and the
+  // manual picker kept referencing a "deleted" (really: retired) driver
+  // forever. Proves the real queryFn now issues .eq('active', true) when
+  // the import screen passes { active: true } — the same filtering
+  // mechanism useUserCategories({ active: true }) already relied on for a
+  // different entity, now applied to drivers too.
+  it('a driver list filtered to { active: true } issues eq("active", true) — the mechanism the import screen\'s stale-reference fix depends on', async () => {
+    setSpyRows([{ id: 'driver-1', name: 'Active Driver', active: true }]);
+    const hooks = createEntityHooks<{ id: string }, object, object>('drivers');
+    const result = hooks.useEntityList({ active: true }) as unknown as FakeUseQueryResult<{ id: string }[]>;
+    const rows = await result.__config.queryFn();
+
+    expect(currentCalls.some((c) => c.method === 'eq' && c.args[0] === 'active' && c.args[1] === true)).toBe(true);
+    expect(rows).toHaveLength(1);
+  });
 });
 
 describe('useEntityListPaged — real pagination', () => {

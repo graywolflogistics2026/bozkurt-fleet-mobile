@@ -61,9 +61,7 @@ export type DailyTipTopic =
   | 'tipDeductions'
   | 'tipAssetRegister'
   | 'tipAccountantPackage'
-  | 'tipAiAdvisor'
   | 'tipTaxEstimator'
-  | 'tipShareProfit'
   | 'tipDocumentsRenewals'
   | 'tipDocuments'
   | 'tipCategoryLearning'
@@ -71,7 +69,6 @@ export type DailyTipTopic =
   | 'tipTruckDepreciation'
   | 'tipTruckAddTrailer'
   | 'tipTruckComparison'
-  | 'tipFixTruckAssignments'
   | 'tipEquipment'
   | 'tipDrivers'
   | 'tipCapitalAccount'
@@ -109,9 +106,7 @@ export const DAILY_TIP_CATEGORY: Record<DailyTipTopic, DailyTipCategory> = {
   tipDeductions: 'money',
   tipAssetRegister: 'setup',
   tipAccountantPackage: 'discovery',
-  tipAiAdvisor: 'discovery',
   tipTaxEstimator: 'money',
-  tipShareProfit: 'discovery',
   tipDocumentsRenewals: 'setup',
   tipDocuments: 'discovery',
   tipCategoryLearning: 'discovery',
@@ -119,7 +114,6 @@ export const DAILY_TIP_CATEGORY: Record<DailyTipTopic, DailyTipCategory> = {
   tipTruckDepreciation: 'setup',
   tipTruckAddTrailer: 'setup',
   tipTruckComparison: 'money',
-  tipFixTruckAssignments: 'setup',
   tipEquipment: 'setup',
   tipDrivers: 'setup',
   tipCapitalAccount: 'money',
@@ -152,9 +146,7 @@ export const DAILY_TIP_ROUTE: Record<DailyTipTopic, string> = {
   tipDeductions: '/(tabs)/deductions',
   tipAssetRegister: '/(tabs)/more/asset-register',
   tipAccountantPackage: '/(tabs)/more/accountant-package',
-  tipAiAdvisor: '/(tabs)/more/ai-advisor',
   tipTaxEstimator: '/(tabs)/more/tax-estimator',
-  tipShareProfit: '/(tabs)/more/share-profit',
   tipDocumentsRenewals: '/(tabs)/more/compliance',
   tipDocuments: '/(tabs)/more/documents',
   tipCategoryLearning: '/(tabs)/more/category-learning',
@@ -162,7 +154,6 @@ export const DAILY_TIP_ROUTE: Record<DailyTipTopic, string> = {
   tipTruckDepreciation: '/(tabs)/more/trucks',
   tipTruckAddTrailer: '/(tabs)/more/trucks',
   tipTruckComparison: '/(tabs)/more/truck-comparison',
-  tipFixTruckAssignments: '/(tabs)/more/truck-assignments',
   tipEquipment: '/(tabs)/more/equipment',
   tipDrivers: '/(tabs)/more/drivers',
   tipCapitalAccount: '/(tabs)/more/capital-account',
@@ -195,9 +186,7 @@ export const DAILY_TIP_ICON: Record<DailyTipTopic, string> = {
   tipDeductions: '🧾',
   tipAssetRegister: '🗄️',
   tipAccountantPackage: '📁',
-  tipAiAdvisor: '🤖',
   tipTaxEstimator: '🧮',
-  tipShareProfit: '📤',
   tipDocumentsRenewals: '🪪',
   tipDocuments: '🗃️',
   tipCategoryLearning: '🧠',
@@ -205,7 +194,6 @@ export const DAILY_TIP_ICON: Record<DailyTipTopic, string> = {
   tipTruckDepreciation: '📉',
   tipTruckAddTrailer: '🚛',
   tipTruckComparison: '📊',
-  tipFixTruckAssignments: '🔗',
   tipEquipment: '🛠️',
   tipDrivers: '🧑‍✈️',
   tipCapitalAccount: '💰',
@@ -289,20 +277,12 @@ export function detectTipAccountantPackage(weeksOfHistory: number, quarterlyDead
   return weeksOfHistory >= 4 ? { topic: 'tipAccountantPackage', detail: {} } : null;
 }
 
-export function detectTipAiAdvisor(accountAgeDays: number): DailyTipCandidate | null {
-  return accountAgeDays >= 14 ? { topic: 'tipAiAdvisor', detail: {} } : null;
-}
-
 export function detectTipTaxEstimator(hasTaxConfig: boolean, weeklyReserve: number | null, quarterlyDaysUntil: number | null): DailyTipCandidate | null {
   if (!hasTaxConfig) return null;
   const detail: Record<string, number> = {};
   if (weeklyReserve != null && weeklyReserve > 0) detail.reserve = Math.round(weeklyReserve);
   if (quarterlyDaysUntil != null && quarterlyDaysUntil >= 0) detail.days = quarterlyDaysUntil;
   return { topic: 'tipTaxEstimator', detail };
-}
-
-export function detectTipShareProfit(hasPositiveNetWeek: boolean): DailyTipCandidate | null {
-  return hasPositiveNetWeek ? { topic: 'tipShareProfit', detail: {} } : null;
 }
 
 export function detectTipDocumentsRenewals(complianceItemsCount: number): DailyTipCandidate | null {
@@ -334,10 +314,6 @@ export function detectTipTruckAddTrailer(trucksCount: number, anyTruckHasTrailer
 
 export function detectTipTruckComparison(trucksCount: number): DailyTipCandidate | null {
   return trucksCount >= 2 ? { topic: 'tipTruckComparison', detail: {} } : null;
-}
-
-export function detectTipFixTruckAssignments(trucksCount: number, unassignedCount: number): DailyTipCandidate | null {
-  return trucksCount >= 2 && unassignedCount > 0 ? { topic: 'tipFixTruckAssignments', detail: { count: unassignedCount } } : null;
 }
 
 export function detectTipEquipment(equipmentCount: number, accountAgeDays: number): DailyTipCandidate | null {
@@ -442,7 +418,6 @@ export type DailyTipBuilderInput = {
   accountAgeDays?: number;
   hasTaxConfig?: boolean;
   weeklyTaxReserve?: number | null;
-  hasPositiveNetWeek?: boolean;
   complianceItemsCount?: number;
   learningRulesCount?: number;
   trucksWithoutCostBasisCount?: number;
@@ -450,7 +425,6 @@ export type DailyTipBuilderInput = {
   depreciationPreviewTotal?: number | null;
   trucksCount?: number;
   anyTruckHasTrailer?: boolean;
-  unassignedRowsCount?: number;
   driversCount?: number;
   driverPaymentsCount?: number;
   initialCapital?: number;
@@ -488,10 +462,8 @@ export function buildDailyTipCandidates(input: DailyTipBuilderInput): DailyTipCa
     candidates.push(detectTipAssetRegister(input.equipmentCount, input.trucksWithPurchasePriceCount));
   if (input.weeksOfHistory !== undefined)
     candidates.push(detectTipAccountantPackage(input.weeksOfHistory, input.quarterlyDeadlineDaysUntil ?? null));
-  if (input.accountAgeDays !== undefined) candidates.push(detectTipAiAdvisor(input.accountAgeDays));
   if (input.hasTaxConfig !== undefined)
     candidates.push(detectTipTaxEstimator(input.hasTaxConfig, input.weeklyTaxReserve ?? null, input.quarterlyDeadlineDaysUntil ?? null));
-  if (input.hasPositiveNetWeek !== undefined) candidates.push(detectTipShareProfit(input.hasPositiveNetWeek));
   if (input.complianceItemsCount !== undefined) candidates.push(detectTipDocumentsRenewals(input.complianceItemsCount));
   if (input.learningRulesCount !== undefined) candidates.push(detectTipCategoryLearning(input.learningRulesCount));
   if (input.trucksWithoutCostBasisCount !== undefined) candidates.push(detectTipTruckCostBasis(input.trucksWithoutCostBasisCount));
@@ -500,8 +472,6 @@ export function buildDailyTipCandidates(input: DailyTipBuilderInput): DailyTipCa
   if (input.trucksCount !== undefined && input.anyTruckHasTrailer !== undefined)
     candidates.push(detectTipTruckAddTrailer(input.trucksCount, input.anyTruckHasTrailer));
   if (input.trucksCount !== undefined) candidates.push(detectTipTruckComparison(input.trucksCount));
-  if (input.trucksCount !== undefined && input.unassignedRowsCount !== undefined)
-    candidates.push(detectTipFixTruckAssignments(input.trucksCount, input.unassignedRowsCount));
   if (input.equipmentCount !== undefined && input.accountAgeDays !== undefined) candidates.push(detectTipEquipment(input.equipmentCount, input.accountAgeDays));
   if (input.driversCount !== undefined && input.driverPaymentsCount !== undefined)
     candidates.push(detectTipDrivers(input.driversCount, input.driverPaymentsCount));
@@ -550,9 +520,7 @@ export const DAILY_TIP_SCREEN_COVERAGE: Record<string, DailyTipCoverageEntry> = 
   '/(tabs)/deductions': 'tipDeductions',
   '/(tabs)/more/asset-register': 'tipAssetRegister',
   '/(tabs)/more/accountant-package': 'tipAccountantPackage',
-  '/(tabs)/more/ai-advisor': 'tipAiAdvisor',
   '/(tabs)/more/tax-estimator': 'tipTaxEstimator',
-  '/(tabs)/more/share-profit': 'tipShareProfit',
   '/(tabs)/more/compliance': 'tipDocumentsRenewals',
   '/(tabs)/more/documents': 'tipDocuments',
   '/(tabs)/more/category-learning': 'tipCategoryLearning',
@@ -560,7 +528,6 @@ export const DAILY_TIP_SCREEN_COVERAGE: Record<string, DailyTipCoverageEntry> = 
   '/(tabs)/more/data-cleanup': 'intentionalNone', // one-time historical repair tool (docs/PENDING_SQL.md §70) — nothing to nudge about day to day
   '/(tabs)/more/trucks': 'tipTruckCostBasis',
   '/(tabs)/more/truck-comparison': 'tipTruckComparison',
-  '/(tabs)/more/truck-assignments': 'tipFixTruckAssignments',
   '/(tabs)/more/equipment': 'tipEquipment',
   '/(tabs)/more/drivers': 'tipDrivers',
   '/(tabs)/more/capital-account': 'tipCapitalAccount',

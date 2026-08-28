@@ -51,6 +51,51 @@ export async function applyContributionSync(
   if (error) throw error;
 }
 
+// EQUIPMENT AUTO-POPULATE — FIELD SYNC ON EDIT (owner decision,
+// SIMPLIFICATION PASS, item 7.5) — mirrors applyContributionSync()'s own
+// spirit (best-effort, never blocks the primary deduction save — the
+// caller wraps this in try/catch and only logs a failure, same as the
+// established `console.error('[useDailyTip] failed to persist...')`
+// pattern elsewhere in this codebase) rather than a second atomic RPC:
+// unlike a capital contribution, a linked Equipment row has NO effect on
+// any profit/tax total, so there's nothing here that needs the same
+// all-or-nothing guarantee update_deduction_with_contribution_sync()
+// provides. `.eq('linked_deduction_id', deductionId)` is deliberately a
+// plain filtered UPDATE, not a lookup-then-update — a deduction with no
+// linked Equipment row simply updates zero rows (no error), which is
+// exactly the correct "nothing to sync" no-op.
+//
+// Fields that sync: description -> name, amount -> purchase_price,
+// ded_date -> purchase_date, store -> vendor — the same 4 fields
+// buildLinkedEquipmentInsert() populates at creation time. Fields that
+// stay INDEPENDENT, deliberately never touched here: category (the user
+// may want to reclassify the Equipment side differently — e.g. "Tools &
+// Equipment" on the expense line but a more specific manual category on
+// the asset side — without that choice being silently overwritten by a
+// later expense edit), and every Equipment-only field (financing,
+// loan_id, depreciation election, tags, notes) — none of those have any
+// deduction-side equivalent to sync from.
+export async function syncLinkedEquipment(
+  deductionId: string,
+  fields: { description: string | null; amount: number; ded_date: string | null; store: string | null }
+): Promise<void> {
+  const name = (fields.description ?? '').trim();
+  const { error } = await supabase
+    .from('equipment')
+    .update({
+      // A genuinely blank description never overwrites an existing,
+      // real Equipment name with an empty string — same "a real value
+      // always wins over a blank one" rule buildLinkedEquipmentInsert()
+      // itself already follows at creation time.
+      ...(name ? { name } : {}),
+      purchase_price: fields.amount,
+      purchase_date: fields.ded_date,
+      vendor: fields.store?.trim() || null,
+    })
+    .eq('linked_deduction_id', deductionId);
+  if (error) throw error;
+}
+
 // DEDUCTION EDIT + CONTRIBUTION SYNC NOT ATOMIC (P1 fix, FULL SYSTEM
 // AUDIT, docs/PENDING_SQL.md §62) — updateDeduction.mutateAsync() followed
 // by a SEPARATE applyContributionSync() call was two independent network

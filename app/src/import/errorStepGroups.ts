@@ -52,6 +52,7 @@ const GROUP_BY_STEP: Record<SaveExtractionStep, DisplayStepGroup> = {
   'asset-link-lookup': 'savingLoan',
   'asset-link-update': 'savingLoan',
   'generic-deduction-insert': 'savingRecords',
+  'equipment-link-insert': 'savingRecords',
 };
 
 export function groupStepForDisplay(step: SaveExtractionStep): DisplayStepGroup {

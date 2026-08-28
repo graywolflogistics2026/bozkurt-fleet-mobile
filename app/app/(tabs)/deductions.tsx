@@ -18,6 +18,7 @@ import {
   cleanupOrphanedDocument,
   updateDeductionWithContributionSync,
   insertDeductionWithContributionSync,
+  syncLinkedEquipment,
 } from '@/src/data/deductionMutations';
 import { fetchReimbursementStatus, useReimburseMyself } from '@/src/data/capitalTransactions';
 import type { ReimbursementStatus } from '@/src/stats/capitalAccount';
@@ -546,6 +547,15 @@ export default function Deductions() {
         const carrier = await fetchCarrierForDeduction(editing);
         learnCategoryCorrection.mutate({ userId, description: editing.description, category: editCategory, carrier });
       }
+      // EQUIPMENT AUTO-POPULATE — FIELD SYNC ON EDIT (owner decision,
+      // SIMPLIFICATION PASS, item 7.5) — a no-op for a deduction with no
+      // linked Equipment row (syncLinkedEquipment()'s own header comment
+      // explains why); best-effort for one that does, mirroring the
+      // category-learning call right above it — never blocks the save
+      // this screen just already committed.
+      syncLinkedEquipment(editing.id, { description: editing.description, amount, ded_date: editing.ded_date, store: editing.store ?? null }).catch(
+        (err) => console.error('[deductions] failed to sync the linked equipment row:', err)
+      );
       // UNBOUNDED QUERIES / SCOPED INVALIDATION FIX (P0, FULL SYSTEM AUDIT
       // owner decision 2026-08-26) — the measured scenario: this save
       // always touches 'deductions'; the atomic RPC above may create/

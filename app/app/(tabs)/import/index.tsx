@@ -199,7 +199,21 @@ export default function Import() {
   const router = useRouter();
   const { session } = useAuth();
   const { trucks, refreshTrucks } = useActiveTruck();
-  const { data: driversData } = useDrivers();
+  // STALE-REFERENCE FIX (owner decision, device report: "I retired a
+  // driver and the import flow still auto-matches/offers it"). There is
+  // no hard-delete UI for a driver at all (drivers.tsx's own comment:
+  // "'active' toggle is the retire equivalent — no delete from the UI,
+  // drivers can have settlement/payment history") — a driver a user
+  // considers "deleted" is really just `active: false`. This screen used
+  // to call the unfiltered `useDrivers()` (every driver, active or not),
+  // so a retired driver's name kept matching in resolveDriverMatch() and
+  // kept appearing in the manual picker below, forever. `useUserCategories
+  // ({ active: true })` two lines below is the exact same filtering
+  // convention already established for a different entity — mirrored
+  // here rather than inventing a new one. Matches ActiveTruckContext's
+  // own `.eq('is_active', true)` fetch for trucks, which never had this
+  // bug in the first place.
+  const { data: driversData } = useDrivers({ active: true });
   const drivers = driversData ?? [];
   // Custom categories (owner decision 2026-07-10, PRODUCT DECISION): the
   // user's own active category names, forwarded to ai-import so

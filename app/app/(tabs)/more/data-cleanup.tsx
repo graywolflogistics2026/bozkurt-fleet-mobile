@@ -8,11 +8,13 @@ import {
   useDeleteOrphanMaintenanceRecords,
   useDeleteOrphanDocuments,
   useDeleteDuplicateLoans,
+  useRunEquipmentBackfill,
   type OrphanToll,
   type OrphanMaintenanceRecord,
   type OrphanDocument,
   type DuplicateLoanRow,
 } from '@/src/data/orphanCleanup';
+import type { BackfillDeductionRow } from '@/src/import/equipmentLink';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton } from '@/src/components/ui';
 import { colors, spacing } from '@/src/theme';
@@ -37,15 +39,18 @@ export default function DataCleanup() {
   const deleteMaintenance = useDeleteOrphanMaintenanceRecords();
   const deleteDocuments = useDeleteOrphanDocuments();
   const deleteDuplicateLoans = useDeleteDuplicateLoans();
+  const runEquipmentBackfill = useRunEquipmentBackfill();
 
   const [selectedTolls, setSelectedTolls] = useState<Set<string>>(new Set());
   const [selectedMaintenance, setSelectedMaintenance] = useState<Set<string>>(new Set());
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
   const [selectedLoans, setSelectedLoans] = useState<Set<string>>(new Set());
+  const [selectedMissingEquipment, setSelectedMissingEquipment] = useState<Set<string>>(new Set());
 
   const summary = summaryQuery.data;
   const tollsTotal = useMemo(() => sum((summary?.tolls ?? []).map((x) => x.amount)), [summary]);
   const maintenanceTotal = useMemo(() => sum((summary?.maintenanceRecords ?? []).map((x) => x.cost)), [summary]);
+  const missingEquipmentTotal = useMemo(() => sum((summary?.missingEquipment ?? []).map((x) => x.amount)), [summary]);
 
   const isEmpty =
     !!summary &&
@@ -53,7 +58,8 @@ export default function DataCleanup() {
     summary.maintenanceRecords.length === 0 &&
     summary.documents.length === 0 &&
     summary.settlementSourcedLoans.length === 0 &&
-    summary.duplicateLoanGroups.length === 0;
+    summary.duplicateLoanGroups.length === 0 &&
+    summary.missingEquipment.length === 0;
 
   function toggle(set: Set<string>, setSet: (s: Set<string>) => void, id: string) {
     const next = new Set(set);
@@ -189,6 +195,27 @@ export default function DataCleanup() {
     return [x.balance != null ? money(x.balance) : '—', date(x.created_at)].filter(Boolean).join(' · ');
   }
 
+  function missingEquipmentRowSubtitle(x: BackfillDeductionRow) {
+    return [x.category, x.ded_date ? date(x.ded_date) : null].filter(Boolean).join(' · ') || t('dataCleanup.noDetails');
+  }
+
+  // EQUIPMENT AUTO-POPULATE BACKFILL (owner decision, SIMPLIFICATION
+  // PASS, item 7.4) — additive, never destructive, so no blocking
+  // confirmation dialog like the delete actions above; still gated
+  // behind the same explicit multi-select + button pattern (never
+  // auto-created on page load) so the user reviews before anything is
+  // written.
+  async function handleCreateMissingEquipment(ids: string[]) {
+    if (ids.length === 0) return;
+    const rows = (summary?.missingEquipment ?? []).filter((x) => ids.includes(x.id));
+    try {
+      await runEquipmentBackfill.mutateAsync(rows);
+      setSelectedMissingEquipment(new Set());
+    } catch (err) {
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    }
+  }
+
   function confirmDeleteDuplicateLoans(ids: string[]) {
     if (ids.length === 0) return;
     Alert.alert(
@@ -317,6 +344,46 @@ export default function DataCleanup() {
                     loading={deleteDocuments.isPending}
                   />
                 </View>
+              </Card>
+            )}
+
+            {/* EQUIPMENT AUTO-POPULATE BACKFILL (owner decision,
+                SIMPLIFICATION PASS, item 7.4) — deduction rows already
+                sitting in a durable-goods category from before this
+                feature existed, missing their own linked Equipment
+                entry. */}
+            {(summary?.missingEquipment.length ?? 0) > 0 && (
+              <Card>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs }}>
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {t('dataCleanup.missingEquipmentTitle', { count: summary!.missingEquipment.length, amount: money(missingEquipmentTotal) })}
+                  </Text>
+                  <Pressable onPress={() => selectAll(summary!.missingEquipment.map((x) => x.id), setSelectedMissingEquipment)}>
+                    <Text style={{ color: colors.accent, fontWeight: '600' }}>{t('dataCleanup.selectAll')}</Text>
+                  </Pressable>
+                </View>
+                <MutedText style={{ marginBottom: spacing.xs }}>{t('dataCleanup.missingEquipmentNote')}</MutedText>
+                {summary!.missingEquipment.map((x) => (
+                  <Row
+                    key={x.id}
+                    checked={selectedMissingEquipment.has(x.id)}
+                    onToggle={() => toggle(selectedMissingEquipment, setSelectedMissingEquipment, x.id)}
+                    title={x.description || x.category || t('dataCleanup.orphanDocumentRow')}
+                    subtitle={missingEquipmentRowSubtitle(x)}
+                    amount={money(x.amount)}
+                  />
+                ))}
+                <View style={{ marginTop: spacing.sm }}>
+                  <PrimaryButton
+                    title={t('dataCleanup.createSelected', { count: selectedMissingEquipment.size })}
+                    onPress={() => handleCreateMissingEquipment([...selectedMissingEquipment])}
+                    disabled={selectedMissingEquipment.size === 0}
+                    loading={runEquipmentBackfill.isPending}
+                  />
+                </View>
+                <Pressable onPress={() => router.push('/(tabs)/more/equipment' as any)} style={{ marginTop: spacing.sm }}>
+                  <Text style={{ color: colors.accent, fontWeight: '600' }}>{t('dataCleanup.viewInEquipment')}</Text>
+                </Pressable>
               </Card>
             )}
 

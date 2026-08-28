@@ -54,16 +54,13 @@
     "profitAnalysis": "Kâr Analizi",
     "scorecard": "Karne",
     "ceoMode": "Yapay Zeka Koçu",
-    "aiAdvisor": "Yapay Zeka Danışmanı",
-    "shareProfit": "Haftalık Kârı Paylaş",
     "compliance": "Belgeler ve Yenilemeler",
     "documents": "Belgeler",
     "categoryLearning": "Kategori Öğrenimi",
     "referral": "Davet Et ve Kazan",
     "dataCleanup": "Veri Temizliği",
     "accountantPackage": "Muhasebeci Paketi",
-    "truckComparison": "Kamyon Karşılaştırması",
-    "truckAssignments": "Kamyon Atamalarını Düzelt"
+    "truckComparison": "Kamyon Karşılaştırması"
   },
   "auth": {
     "signUpTagline": "{{brand}} — sahibi-operatörler için",
@@ -921,7 +918,8 @@
     "enterNameTitle": "Bir ad girin",
     "saveFailedTitle": "Kaydetme başarısız",
     "deleteConfirmTitle": "Bu ekipman silinsin mi?",
-    "deleteConfirmBody": "Bu, kayıtlarınızdan kaldırılır. Kredi Merkezi'ndeki bağlı bir kredi etkilenmez."
+    "deleteConfirmBody": "Bu, kayıtlarınızdan kaldırılır. Bir içe aktarımdan otomatik olarak oluşturulduysa, bağlı kesintisi de kaldırılır. Kredi Merkezi'ndeki bağlı bir kredi etkilenmez.",
+    "fromImport": "Bir içe aktarımdan"
   },
   "assetFinancing": {
     "purchasePriceLabel": "Satın Alma Fiyatı ($)",
@@ -1429,15 +1427,6 @@
     "aiFailed": "Danışman servisine ulaşılamadı."
   },
   "shareProfit": {
-    "title": "Haftalık Kârı Paylaş",
-    "subtitle": "Hangi rakamların dahil edileceğini seçin — asla üçünü birden paylaşmaya zorlanmazsınız.",
-    "noSettlements": "Rakamlarınızı paylaşmak için bir settlement içe aktarın.",
-    "metrics": {
-      "revenue": "Gelir",
-      "profit": "Kâr",
-      "mpg": "MPG"
-    },
-    "weekOf": "{{date}} Haftası",
     "notAvailableTitle": "Bu cihazda paylaşım kullanılamıyor.",
     "shareFailedTitle": "Paylaşma başarısız",
     "shareTo": "Şuraya paylaş",
@@ -1458,7 +1447,6 @@
     "copiedTitle": "Kopyalandı",
     "copiedBody": "Markalı kart görseli ve açıklama panoya kopyalandı — herhangi bir uygulamaya yapıştırabilirsiniz.",
     "captionTemplate": "{{weekSummary}} — {{brand}} ile takip edildi",
-    "weekPickerLabel": "Hafta",
     "share": "Paylaş"
   },
   "monthGroups": {
@@ -1901,15 +1889,12 @@
       "taxReserveShortfall": "Bir sonraki vergi ödemenizden önce {{amount}} daha ayırın",
       "maintenanceCatchUp": "{{count}} bakım kalemi yakında gerekiyor veya gecikmiş",
       "complianceCatchUp": "{{count}} yenileme kalemi yakında gerekiyor veya gecikmiş"
-    }
-  },
-  "aiAdvisor": {
-    "title": "Yapay Zeka Danışmanı",
-    "subtitle": "İşiniz hakkında her şeyi sorun — yanıtlar kendi hesap verilerinizi kullanır.",
-    "empty": "Başlamak için bir soru sorun, örn. \"Mil başına kârımı nasıl artırabilirim?\"",
-    "failedTitle": "Danışmana ulaşılamadı",
-    "inputPlaceholder": "Bir soru sorun...",
-    "send": "Gönder"
+    },
+    "chatTitle": "Bir Soru Sor",
+    "chatEmpty": "İşiniz hakkında her şeyi sorun — yanıtlar kendi hesap verilerinizi kullanır.",
+    "chatInputPlaceholder": "Bir soru sorun...",
+    "chatSend": "Gönder",
+    "chatFailedTitle": "Danışmana ulaşılamadı"
   },
   "categoryLearning": {
     "title": "Kategori Öğrenimi",
@@ -2204,7 +2189,7 @@
     "empty": "Bu dönemde henüz hiçbir kamyon için Settlement yok.",
     "unassignedTitle": "Bazı gelirler bir kamyona atanmamış",
     "unassignedBody": "{{amount}} toplamındaki {{count}} Settlement'ın kamyonu ayarlanmamış, bu yüzden yukarıdaki hiçbir kamyonun rakamlarına dahil değiller.",
-    "unassignedFixLink": "Kamyon atamalarını düzelt →",
+    "unassignedFixLink": "Kamyonları Settlements ekranında atayın →",
     "fleetTotalsTitle": "Filo Toplamları",
     "allocationNote": "Filo geneli maliyetler (sigorta, muhasebe ücretleri, izinler ve belirli bir kamyonu olmayan diğer masraflar), her kamyona toplam filo mil payına göre dağıtılır — bu bir tahsis işlemidir, doğrudan bir maliyet değildir."
   },
@@ -2232,23 +2217,11 @@
     "duplicateLoansTitle": "Olası Yinelenen Krediler ({{count}} grup)",
     "duplicateLoansNote": "Bu krediler aynı adı paylaşıyor ve muhtemelen yinelenen tespiti düzeltilmeden önce aynı tekrarlayan yükümlülüğün yeniden içe aktarılmasıyla oluşturuldu. Her gruptaki yeşille işaretli satır, en eksiksiz bakiye verisine sahip olandır (veya bakiyeler eşit derecede eksiksizse en eski olan) — geri kalanını kaldırmadan önce inceleyin.",
     "duplicateLoansRecommendedKeep": "✓ Önerilen: bunu tut",
-    "confirmDuplicateLoansBody": "Bu, {{count}} kredi kaydını kalıcı olarak kaldıracaktır. Bu geri alınamaz — her gruptan doğru olanı tuttuğunuzdan emin olun."
-  },
-  "truckAssignments": {
-    "title": "Kamyon Atamalarını Düzelt",
-    "subtitle": "Henüz kamyonu olmayan satırlara bir kamyon atayın. Bu mutlaka bozuk anlamına gelmez — 2. kamyonunuzdan önce oluşturulan bir satırın basitçe ataması yoktur.",
-    "needsMultipleTrucks": "Sadece bir kamyonunuz var — atanacak bir şey yok.",
-    "empty": "Her Settlement, yakıt alımı, bakım kaydı ve geçiş ücreti zaten bir kamyona atanmış.",
-    "bulkTitle": "Seçilenleri ({{count}}) şuna ata:",
-    "assignSelected": "{{count}} Seçileni Ata",
-    "assignThisRow": "Bu satırı şuna ata",
-    "partialFailureTitle": "{{count}} satır atanamadı",
-    "kind": {
-      "settlement": "Settlement",
-      "fuel": "Yakıt",
-      "maintenance": "Bakım",
-      "toll": "Geçiş Ücreti"
-    }
+    "confirmDuplicateLoansBody": "Bu, {{count}} kredi kaydını kalıcı olarak kaldıracaktır. Bu geri alınamaz — her gruptan doğru olanı tuttuğunuzdan emin olun.",
+    "missingEquipmentTitle": "Eksik Ekipman Kayıtları ({{count}} · {{amount}})",
+    "missingEquipmentNote": "Bu kesintiler zaten dayanıklı mal kategorisinde (aletler, elektronikler, güvenlik ekipmanı, kabin konforu) ama henüz bağlı bir Ekipman kaydı yok — bir varlık olarak izlenmesi için bir tane oluşturun, sadece gider olarak değil.",
+    "createSelected": "Seçilenleri Oluştur ({{count}})",
+    "viewInEquipment": "Ekipman'da Görüntüle →"
   },
   "dailyTips": {
     "cardLabel": "Günün ipucu",
@@ -2316,20 +2289,10 @@
       "v1": "CPM'nize bir ayakkabı kutusu dolusu fiş yerine düzgün bir şey göndermeye hazır mısınız? Muhasebeci Paketi bunu sizin için hazırlar.",
       "v2": "Uygulamadaki her ekranın arkasındaki aynı gerçek rakamlar burada tek bir dışa aktarımda toplanır — nasıl göründüğünü görmek için bile denemeye değer."
     },
-    "tipAiAdvisor": {
-      "v0": "AI Advisor zaten kendi rakamlarınızı biliyor — gelir, gider veya trendler hakkında ne isterseniz sorun, gerçek verilerinizden yanıt verir.",
-      "v1": "Kendi işiniz hakkında bir soru sorup direkt bir yanıt almak ister miydiniz? AI Advisor tam olarak bunun için var.",
-      "v2": "Uygulamadaki her ekran gerçek rakamlar hesaplıyor — AI Advisor bunlar hakkında sade bir dille soru sorabileceğiniz tek yer."
-    },
     "tipTaxEstimator": {
       "v0": "Vergi Tahmincisi, haftalık vergi rezervinizi ve bir sonraki üç aylık ödeme tarihinizi gerçek rakamlarınızdan hesaplar (yalnızca tahmin — CPA'nızla doğrulayın).",
       "v1": "Her hafta vergi için ne kadar ayırmanız gerektiğini biliyor musunuz? Vergi Tahmincisi bunu kendi kârınızdan gerçek bir rakamla hesaplar.",
       "v2": "Per diem günleri, üç aylık son tarihler ve — kâr yeterli olduğunda — bir S-Corp karşılaştırması hepsi tek ekranda, hepsi tahmin, asla dosyalanmış bir beyanname değil."
-    },
-    "tipShareProfit": {
-      "v0": "Haftalık Kârı Paylaş, haftanızın rakamlarından temiz, paylaşılabilir bir kart oluşturur — tablo yok, ekran görüntüsü düzenlemek yok.",
-      "v1": "Tüm defterlerinizi açığa çıkarmadan iyi bir haftayı göstermek ister misiniz? Haftalık Kârı Paylaş tam olarak bunun için var.",
-      "v2": "Gerçekten iyi bir hafta paylaşılmaya değer — bu ekran onu birkaç dokunuşla tek, temiz bir görsele dönüştürür."
     },
     "tipDocumentsRenewals": {
       "v0": "Belgeler & Yenilemeler son kullanma tarihlerini takip eder — HVUT 2290, IRP, sağlık kartı, CDL, muayene — ve süresi dolmadan sizi uyarır.",
@@ -2366,15 +2329,10 @@
       "v1": "Birden fazla kamyon mu işletiyorsunuz? Kamyon Karşılaştırması, birden fazla kamyonu olan her sahibin er ya da geç sorduğu soruyu yanıtlar: hangisi gerçekten elde tutmaya değer?",
       "v2": "Filo genelindeki toplamlar çok şeyi gizler — Kamyon Karşılaştırması bunları tekrar kamyon kamyon ayırır."
     },
-    "tipFixTruckAssignments": {
-      "v0": "Kamyon Atamalarını Düzelt, kamyon atanmamış her satırı bulur ve birkaç dokunuşla atamanıza izin verir; böylece kamyon başına rakamlar doğru kalır.",
-      "v1": "Bir kamyonun rakamlarının neden yanlış göründüğünü hiç merak ettiniz mi? Atanmamış bir satır sessizce kendi toplamlarından eksik olabilir.",
-      "v2": "Şu anda {{count}} satırın kamyonu atanmamış — bunları düzeltmek bu uygulamadaki her kamyon başına rakamı dürüst tutar."
-    },
     "tipEquipment": {
-      "v0": "Ekipman, işletmenin kamyonun ötesinde sahip olduğu her şeyi takip eder — ve kamyon gibi, amortismana tabidir.",
-      "v1": "İşletme için bir jeneratör, lift gate ya da yük çubuğu sistemi mi aldınız? Bu, tek seferlik bir kesinti değil, Ekipman'a aittir.",
-      "v2": "Ekipman'da henüz hiçbir şey kayıtlı değil — işletme için satın aldığınız dayanıklı her şey, kayıtsız kalmak yerine gerçek vergi değeri oluşturabilirdi."
+      "v0": "Ekipman, işletmenin kamyonun ötesinde sahip olduğu dayanıklı her şeyi takip eder — içe aktarımlarınızdaki aletler, elektronikler ve ekipmanlar artık kendi gider kaydıyla birlikte buraya otomatik olarak düşer.",
+      "v1": "İşletme için bir jeneratör, lift gate ya da yük çubuğu sistemi mi aldınız? Fişi içe aktarın, otomatik olarak ekipman olarak kaydedilsin — ya da istediğiniz zaman elle ekleyin.",
+      "v2": "Ekipman'da henüz hiçbir şey kayıtlı değil — içe aktarımlarınızdaki dayanıklı satın alımlar (aletler, elektronikler, kabin konforu, güvenlik ekipmanı) artık fazladan adım gerekmeden kendiliğinden buraya doluyor."
     },
     "tipDrivers": {
       "v0": "Sürücüler, kimin sürdüğünü ve ona ne ödediğinizi kaydetmenizi sağlar; yalnızca brüt geliri değil, sürücü maliyetinden sonraki gerçek marjınızı görürsünüz.",

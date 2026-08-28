@@ -19,7 +19,6 @@ export default function MoreLayout() {
       <Stack.Screen name="maintenance" options={{ title: t('nav.maintenance') }} />
       <Stack.Screen name="trucks" options={{ title: t('nav.trucks') }} />
       <Stack.Screen name="truck-comparison" options={{ title: t('nav.truckComparison') }} />
-      <Stack.Screen name="truck-assignments" options={{ title: t('nav.truckAssignments') }} />
       <Stack.Screen name="equipment" options={{ title: t('nav.equipment') }} />
       <Stack.Screen name="drivers" options={{ title: t('nav.drivers') }} />
       <Stack.Screen name="loans" options={{ title: t('nav.loans') }} />
@@ -36,8 +35,6 @@ export default function MoreLayout() {
       <Stack.Screen name="profit-analysis" options={{ title: t('nav.profitAnalysis') }} />
       <Stack.Screen name="scorecard" options={{ title: t('nav.scorecard') }} />
       <Stack.Screen name="ceo-mode" options={{ title: t('nav.ceoMode') }} />
-      <Stack.Screen name="ai-advisor" options={{ title: t('nav.aiAdvisor') }} />
-      <Stack.Screen name="share-profit" options={{ title: t('nav.shareProfit') }} />
       <Stack.Screen name="compliance" options={{ title: t('nav.compliance') }} />
       <Stack.Screen name="documents" options={{ title: t('nav.documents') }} />
       <Stack.Screen name="category-learning" options={{ title: t('nav.categoryLearning') }} />

@@ -17,6 +17,7 @@ import {
 } from '@/src/import/mapExtraction';
 import { resolveLoanAssetMatch } from '@/src/import/loanAssetMatch';
 import { findMatchingLoan } from '@/src/import/loanMatch';
+import { buildLinkedEquipmentInsert } from '@/src/import/equipmentLink';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
@@ -183,6 +184,12 @@ type ResilientInsertTable = 'loads' | 'fuel_purchases' | 'deductions' | 'reimbur
 
 export type SkippedImportRow = { table: string; description: string; reason: string };
 
+// EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION PASS, item 7) —
+// this used to return void; callers that need the real inserted row (its
+// DB-generated `id`, for the deductions table specifically, so a linked
+// Equipment row can be created afterward) now get it back via `.select()`.
+// Every existing caller already ignored the return value, so this is a
+// backward-compatible widening, not a breaking change.
 async function insertBatchResilient<T extends Record<string, unknown>>(
   table: ResilientInsertTable,
   rows: T[],
@@ -191,17 +198,20 @@ async function insertBatchResilient<T extends Record<string, unknown>>(
   isReimport: boolean,
   partial: SaveExtractionPartialState,
   skipped: SkippedImportRow[]
-): Promise<void> {
-  if (rows.length === 0) return;
-  const { error } = await supabase.from(table).insert(rows as never[]);
-  if (!error) return;
+): Promise<(T & { id: string })[]> {
+  if (rows.length === 0) return [];
+  const { data, error } = await supabase.from(table).insert(rows as never[]).select();
+  if (!error) return (data ?? []) as (T & { id: string })[];
 
   let anyFailed = false;
+  const inserted: (T & { id: string })[] = [];
   for (const row of rows) {
-    const { error: rowError } = await supabase.from(table).insert(row as never);
+    const { data: rowData, error: rowError } = await supabase.from(table).insert(row as never).select().single();
     if (rowError) {
       anyFailed = true;
       skipped.push({ table, description: describe(row), reason: rowError.message });
+    } else if (rowData) {
+      inserted.push(rowData as T & { id: string });
     }
   }
   // A RE-IMPORT's old-row deletion (further down in saveExtraction())
@@ -218,6 +228,26 @@ async function insertBatchResilient<T extends Record<string, unknown>>(
       partial
     );
   }
+  return inserted;
+}
+
+// EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION PASS, item 7) —
+// the ONE place a saved deduction row (real id in hand) gets turned into a
+// linked Equipment row, shared by every deduction-insert call site below
+// (settlement-withheld, standalone purchase, generic fallback). A failure
+// here THROWS (never silently swallowed) — same "never let a save look
+// complete when it wasn't" principle as every other write in this file —
+// since a missing linked Equipment row would otherwise look like a clean
+// save while quietly failing to track a real asset.
+async function maybeLinkEquipment(
+  row: { id: string; category: string | null; description: string | null; amount: number; ded_date: string | null; store: string | null },
+  userId: string,
+  partial: SaveExtractionPartialState
+): Promise<void> {
+  const insert = buildLinkedEquipmentInsert(row, row.id, userId);
+  if (!insert) return;
+  const { error } = await supabase.from('equipment').insert(insert);
+  if (error) throw new SaveExtractionError('equipment-link-insert', error, partial);
 }
 
 // Writes rows exactly like legacy saveImport() (legacy/index.html:2502) —
@@ -454,7 +484,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       partial,
       skippedRows
     );
-    await insertBatchResilient(
+    const insertedDeductions = await insertBatchResilient(
       'deductions',
       mapping.deductions.map((x) => ({ ...x, settlement_id: settlementId, document_id: documentId })),
       (x) => x.description ?? x.category ?? 'Deduction',
@@ -463,6 +493,26 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       partial,
       skippedRows
     );
+    // EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION PASS, item
+    // 7) — a settlement's own withheld deduction line (e.g. a company-
+    // store tools/gear purchase) can land in a durable-goods category just
+    // like a standalone purchase can; maybeLinkEquipment() is the ONE
+    // gate deciding whether that happens, shared with every other
+    // deduction-insert call site below.
+    for (const dedRow of insertedDeductions) {
+      await maybeLinkEquipment(
+        {
+          id: dedRow.id,
+          category: (dedRow.category as string | null) ?? null,
+          description: (dedRow.description as string | null) ?? null,
+          amount: Number(dedRow.amount ?? 0),
+          ded_date: (dedRow.ded_date as string | null) ?? null,
+          store: (dedRow.store as string | null) ?? null,
+        },
+        userId,
+        partial
+      );
+    }
     await insertBatchResilient(
       'reimbursements',
       mapping.reimbursements.map((r) => ({ ...r, settlement_id: settlementId })),
@@ -676,6 +726,23 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         .select('id')
         .single();
       const savedDed = must('purchase-deduction-insert', dedRow, dedError, partial);
+      // EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION PASS, item
+      // 7) — a store/Amazon purchase line item landing in a durable-goods
+      // category (tools, electronics, sleeper comfort items, safety gear)
+      // also gets a linked Equipment row, the same "one item, two views"
+      // pattern as the settlement-deductions path above.
+      await maybeLinkEquipment(
+        {
+          id: savedDed.id,
+          category: (line.insert.category as string | null) ?? null,
+          description: (line.insert.description as string | null) ?? null,
+          amount: Number(line.insert.amount ?? 0),
+          ded_date: (line.insert.ded_date as string | null) ?? null,
+          store: (line.insert.store as string | null) ?? null,
+        },
+        userId,
+        partial
+      );
       // CLAUDE.md invariant #2: a personal-payment purchase only becomes an
       // id-linked capital contribution once the caller has confirmed it
       // with the user (once per receipt) — see confirmOwnerContribution()
@@ -712,8 +779,14 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     const { data: insertedLoanRow, error: loanInsertError } = await supabase.from('loans').insert(loanRow).select('id').single();
     const insertedLoan = must('loan-agreement-insert', insertedLoanRow, loanInsertError, partial);
 
+    // STALE-REFERENCE AUDIT (owner decision) — a retired truck's
+    // unit_number must not be matchable by a NEW loan-agreement document,
+    // same "a retired/deleted entity must vanish from every auto-match"
+    // rule fixed for drivers in the import screen. Equipment has no
+    // active/retired concept of its own, so no equivalent filter applies
+    // there.
     const [trucksRes, equipmentRes] = await Promise.all([
-      supabase.from('trucks').select('id, unit_number, trailer_unit_number').eq('user_id', userId),
+      supabase.from('trucks').select('id, unit_number, trailer_unit_number').eq('user_id', userId).eq('is_active', true),
       supabase.from('equipment').select('id, name').eq('user_id', userId),
     ]);
     const lookupError = trucksRes.error ?? equipmentRes.error;
@@ -748,8 +821,31 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       const learned = matchLearnedCategory(row.description, learningRules);
       if (learned) row.category = learned;
     }
-    const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
+    const { data: genericDedRow, error } = await supabase
+      .from('deductions')
+      .insert({ ...row, document_id: documentId })
+      .select('id')
+      .single();
     if (error) throw new SaveExtractionError('generic-deduction-insert', error, partial);
+    // EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION PASS, item
+    // 7) — the generic fallback can still land in a durable-goods category
+    // (guessCategory()'s own classification, or a user-confirmed
+    // categoryOverride from the NEEDS-REVIEW flow), so it gets the same
+    // treatment as every other deduction-insert call site.
+    if (genericDedRow) {
+      await maybeLinkEquipment(
+        {
+          id: genericDedRow.id as string,
+          category: (row.category as string | null) ?? null,
+          description: (row.description as string | null) ?? null,
+          amount: Number(row.amount ?? 0),
+          ded_date: (row.ded_date as string | null) ?? null,
+          store: (row as { store?: string | null }).store ?? null,
+        },
+        userId,
+        partial
+      );
+    }
   }
   // d.docType === 'w2' / 'government_or_misc_income': document saved above,
   // no financial row created — both are INCOME with no dedicated ledger yet

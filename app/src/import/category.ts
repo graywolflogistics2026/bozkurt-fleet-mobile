@@ -109,6 +109,35 @@ export const CANONICAL_CATEGORIES = [
 // re-overridden by a migration or a re-import of the same document.
 export const NON_DEDUCTIBLE_CATEGORIES: readonly string[] = ['Meals (per diem covered)', 'Advance Repayment', 'Escrow & Deposits'];
 
+// EQUIPMENT AUTO-POPULATE FROM IMPORTS (owner decision, SIMPLIFICATION
+// PASS) — the ONE source of truth for "which categories represent a
+// durable, trackable ASSET rather than a plain one-time expense line."
+// Reuses CANONICAL_CATEGORIES' own existing strings verbatim — never a
+// second, re-typed category list. Deliberately narrow:
+// - 'Tools & Equipment' / 'Truck Supplies & Equipment' / 'Electronics' /
+//   'Comfort & Sleeper' / 'Safety Gear & Workwear' — a reusable, durable
+//   item kept after purchase (a tool, a dash cam, a mattress, a jacket) —
+//   exactly the class of thing Equipment (the asset register) already
+//   exists to track.
+// - 'Truck Parts' is deliberately EXCLUDED — its own category comment in
+//   CANONICAL_CATEGORIES above already draws this exact line: a CONSUMED
+//   part (alternator, belts, filters) installed and gone, not a standing
+//   asset to track.
+// - 'Major Repairs & Overhauls' and 'Warranty & Service Contracts' are
+//   excluded too — a repair/service isn't itself a tracked physical item,
+//   even though it's a big-dollar line.
+export const EQUIPMENT_TYPE_CATEGORIES: readonly string[] = [
+  'Tools & Equipment',
+  'Truck Supplies & Equipment',
+  'Electronics',
+  'Comfort & Sleeper',
+  'Safety Gear & Workwear',
+];
+
+export function isEquipmentTypeCategory(category: string | null | undefined): boolean {
+  return !!category && EQUIPMENT_TYPE_CATEGORIES.includes(category);
+}
+
 export function defaultTaxDeductible(category: string | null | undefined): boolean {
   return !NON_DEDUCTIBLE_CATEGORIES.includes(category ?? '');
 }

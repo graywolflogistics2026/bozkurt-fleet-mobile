@@ -4174,6 +4174,53 @@ SQL change needed for that RPC itself — it's simply unreferenced now).
 
 ---
 
+## 73. EQUIPMENT AUTO-POPULATE FROM IMPORTS (owner decision, SIMPLIFICATION PASS, item 7, binding) — NOT YET APPLIED
+
+**The decision**: settlement statements and standalone purchase receipts
+routinely carry equipment-type purchases (tools, safety gear, electronics,
+comfort items bought through a carrier's company store or billed as a
+regular deduction line) that should land in Equipment as a depreciable/
+tracked asset, not JUST in Deductions as a plain expense line. See
+CLAUDE.md's own dated entry for this pass for the full client-side audit.
+
+**What this section does, SQL-side**: `equipment` gains two columns —
+`linked_deduction_id uuid references deductions(id) on delete cascade`
+(mirrors `capital_transactions.linked_deduction_id`'s own established
+pattern exactly) and `vendor text` (mirrors `deductions.store` — no
+existing column served this purpose). See `pending_73.sql`'s own header
+comment for the full reasoning on why the delete direction is `cascade`
+here specifically (deduction deleted -> equipment row goes with it,
+DB-level, free) while the REVERSE direction (equipment deleted -> its
+linked deduction goes too) is handled explicitly in app code instead
+(`app/(tabs)/more/equipment.tsx`'s own delete handler) — a plain FK has
+no way to cascade in a direction nothing points at.
+
+```sql
+alter table equipment add column if not exists linked_deduction_id uuid references deductions(id) on delete cascade;
+alter table equipment add column if not exists vendor text;
+create index if not exists idx_equipment_linked_deduction_id on equipment(linked_deduction_id) where linked_deduction_id is not null;
+```
+
+`app/src/import/category.ts`'s new `EQUIPMENT_TYPE_CATEGORIES` constant
+(Tools & Equipment / Truck Supplies & Equipment / Electronics / Comfort &
+Sleeper / Safety Gear & Workwear) is the ONE place this feature decides
+which categories qualify — `app/src/import/equipmentLink.ts`'s
+`buildLinkedEquipmentInsert()` is the pure function every
+deduction-insert call site in `aiImportSave.ts` (settlement-withheld,
+standalone purchase, generic fallback) routes through via the shared
+`maybeLinkEquipment()` helper. Until this migration is applied, every one
+of those calls fails cleanly with a step-tagged `SaveExtractionError`
+(`equipment-link-insert`) the moment it tries to insert a row referencing
+a column that doesn't exist yet — apply this before relying on the
+feature; nothing else in the save path depends on it (a save that would
+have created a linked Equipment row simply throws at that step instead of
+silently skipping it, matching this file's own "never silently fail"
+convention for every other write).
+
+- [ ] 73 run (equipment.linked_deduction_id, equipment.vendor, index)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

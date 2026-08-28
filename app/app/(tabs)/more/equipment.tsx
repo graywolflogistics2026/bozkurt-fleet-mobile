@@ -3,7 +3,8 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
-import { useEquipment, useInsertEquipment, useUpdateEquipment, useDeleteEquipment } from '@/src/data/equipment';
+import { useEquipment, useInsertEquipment, useUpdateEquipment } from '@/src/data/equipment';
+import { deleteEquipmentWithLinkedDeduction } from '@/src/data/equipmentMutations';
 import { useLoanRows, useInsertLoanRow } from '@/src/data/loans';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { AssetFinancingFields, emptyAssetFinancing, type AssetFinancingValue } from '@/src/components/AssetFinancingFields';
@@ -52,7 +53,6 @@ export default function EquipmentScreen() {
   const equipmentQuery = useEquipment();
   const insertEquipment = useInsertEquipment();
   const updateEquipment = useUpdateEquipment();
-  const deleteEquipment = useDeleteEquipment();
   const loansQuery = useLoanRows();
   const insertLoan = useInsertLoanRow();
   const loans = loansQuery.data ?? [];
@@ -123,6 +123,16 @@ export default function EquipmentScreen() {
     }
   }
 
+  // EQUIPMENT AUTO-POPULATE — BIDIRECTIONAL DELETE (owner decision,
+  // SIMPLIFICATION PASS, item 7): deleting the DEDUCTION side already
+  // cascades to remove its linked Equipment row automatically at the DB
+  // level (equipment.linked_deduction_id on delete cascade,
+  // docs/PENDING_SQL.md §73). The REVERSE direction is handled by
+  // deleteEquipmentWithLinkedDeduction() (src/data/equipmentMutations.ts)
+  // — extracted into its own function, rather than inlined here, so the
+  // actual delete-both-directions logic is directly testable against the
+  // fake Supabase client (this repo has no React Native rendering harness
+  // to exercise a screen's own event handler directly).
   function handleDelete(e: Equipment) {
     Alert.alert(t('equipmentScreen.deleteConfirmTitle'), t('equipmentScreen.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -131,8 +141,11 @@ export default function EquipmentScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteEquipment.mutateAsync(e.id);
-            await invalidateFinancialData(queryClient, { entities: ['equipment', 'loans'] });
+            const { linkedDeductionDeleteFailed } = await deleteEquipmentWithLinkedDeduction(e.id, e.linked_deduction_id);
+            if (linkedDeductionDeleteFailed) {
+              console.error('[equipment] failed to delete the linked deduction after deleting its equipment row');
+            }
+            await invalidateFinancialData(queryClient, { entities: ['equipment', 'deductions', 'loans'] });
             setEditing(null);
           } catch (err) {
             Alert.alert(t('equipmentScreen.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -186,7 +199,14 @@ export default function EquipmentScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.text, fontWeight: '700' }}>{e.name}</Text>
-                    <MutedText>{e.category || '—'}</MutedText>
+                    <MutedText>
+                      {[e.category || '—', e.vendor].filter(Boolean).join(' · ')}
+                    </MutedText>
+                    {/* EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION
+                        PASS, item 7) — same "📥 From a settlement" badge
+                        convention Loan Center's own LoanCard already
+                        established for an auto-created row's provenance. */}
+                    {e.linked_deduction_id && <MutedText style={{ fontSize: typography.size.xs }}>📥 {t('equipmentScreen.fromImport')}</MutedText>}
                   </View>
                   {e.purchase_price != null && <Text style={{ color: colors.text, fontWeight: '700' }}>{money(e.purchase_price)}</Text>}
                 </View>
