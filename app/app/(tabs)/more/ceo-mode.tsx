@@ -296,45 +296,57 @@ export default function CeoMode() {
                   )}
                   {error && <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>{error}</MutedText>}
                 </Card>
-
-                {/* ASK A QUESTION — folded in from the removed ai-advisor.tsx
-                    (owner decision, SIMPLIFICATION PASS): the one capability
-                    that screen had and AI Coach didn't — a genuine, multi-
-                    turn free-form chat, not just a one-shot briefing. */}
-                <Text style={styles.sectionTitle}>{t('ceoMode.chatTitle')}</Text>
-                <Card>
-                  {chatMessages.length === 0 ? (
-                    <MutedText>{t('ceoMode.chatEmpty')}</MutedText>
-                  ) : (
-                    chatMessages.map((m, i) => (
-                      <View key={i} style={{ alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: spacing.sm }}>
-                        <View
-                          style={{
-                            maxWidth: '85%',
-                            backgroundColor: m.role === 'user' ? colors.accent : colors.card2,
-                            borderColor: colors.border,
-                            borderWidth: m.role === 'user' ? 0 : 1,
-                            borderRadius: radii.md,
-                            padding: spacing.sm,
-                          }}
-                        >
-                          <Text style={{ color: colors.text, fontSize: typography.size.md, lineHeight: 20 }}>{m.content}</Text>
-                        </View>
-                      </View>
-                    ))
-                  )}
-                  <ErrorText>{chatError}</ErrorText>
-                  <Field
-                    value={chatInput}
-                    onChangeText={setChatInput}
-                    placeholder={t('ceoMode.chatInputPlaceholder')}
-                    onSubmitEditing={handleSendChat}
-                  />
-                  <PrimaryButton title={t('ceoMode.chatSend')} onPress={handleSendChat} loading={chatSending} disabled={!chatInput.trim()} />
-                  <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
-                </Card>
               </>
             )}
+
+            {/* ASK A QUESTION — folded in from the removed ai-advisor.tsx
+                (owner decision, SIMPLIFICATION PASS): the one capability
+                that screen had and AI Coach didn't — a genuine, multi-
+                turn free-form chat, not just a one-shot briefing.
+                REACHABILITY FIX (owner decision, device report: "AI Coach
+                chat still missing" — confirmed by tracing the render tree,
+                not a repeat of the same guess). This block used to sit
+                INSIDE the `weeklyGoal == null` ternary's else-branch above
+                — that gate exists to hold the BRIEFING back until a goal is
+                set (device feedback round 2, owner decision 2026-07-13),
+                but the chat section, added later, inherited it by accident:
+                chatMessages/handleSendChat have zero dependency on
+                weeklyGoal, so a user who hasn't set a weekly goal yet could
+                never reach the chat at all. Moved out to render
+                unconditionally alongside every other post-loading section
+                instead. */}
+            <Text style={styles.sectionTitle}>{t('ceoMode.chatTitle')}</Text>
+            <Card>
+              {chatMessages.length === 0 ? (
+                <MutedText>{t('ceoMode.chatEmpty')}</MutedText>
+              ) : (
+                chatMessages.map((m, i) => (
+                  <View key={i} style={{ alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: spacing.sm }}>
+                    <View
+                      style={{
+                        maxWidth: '85%',
+                        backgroundColor: m.role === 'user' ? colors.accent : colors.card2,
+                        borderColor: colors.border,
+                        borderWidth: m.role === 'user' ? 0 : 1,
+                        borderRadius: radii.md,
+                        padding: spacing.sm,
+                      }}
+                    >
+                      <Text style={{ color: colors.text, fontSize: typography.size.md, lineHeight: 20 }}>{m.content}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+              <ErrorText>{chatError}</ErrorText>
+              <Field
+                value={chatInput}
+                onChangeText={setChatInput}
+                placeholder={t('ceoMode.chatInputPlaceholder')}
+                onSubmitEditing={handleSendChat}
+              />
+              <PrimaryButton title={t('ceoMode.chatSend')} onPress={handleSendChat} loading={chatSending} disabled={!chatInput.trim()} />
+              <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
+            </Card>
             <LegalFootnote />
           </>
         )}
