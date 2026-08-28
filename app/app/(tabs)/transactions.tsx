@@ -9,6 +9,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, TappableCard, MutedText } from '@/src/components/ui';
 import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
 import { isDeductionNeedsReview, isSettlementNeedsReview } from '@/src/import/needsReview';
+import { isNegativeTransactionRow } from '@/src/stats/transactionDisplay';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 type TransactionType = 'income' | 'expense';
@@ -105,27 +106,35 @@ export default function Transactions() {
         {filtered.length === 0 ? (
           <MutedText>{t('transactions.empty')}</MutedText>
         ) : (
-          filtered.map((row) => (
-            <TappableCard
-              key={`${row.type}-${row.id}`}
-              onPress={() => router.push(row.type === 'income' ? '/(tabs)/more/settlements' : '/(tabs)/deductions')}
-              style={needsReviewRowStyle(row.needsReview)}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
-                    {row.label}
+          filtered.map((row) => {
+            // SIGN-DRIVEN, NOT TYPE-DRIVEN — see src/stats/transactionDisplay.ts's
+            // own header comment for the full reasoning (a "you owe the
+            // carrier" negative-net settlement used to render green/positive
+            // here despite Settlements' own screen correctly framing it as
+            // negative).
+            const negative = isNegativeTransactionRow(row);
+            return (
+              <TappableCard
+                key={`${row.type}-${row.id}`}
+                onPress={() => router.push(row.type === 'income' ? '/(tabs)/more/settlements' : '/(tabs)/deductions')}
+                style={needsReviewRowStyle(row.needsReview)}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
+                      {row.label}
+                    </Text>
+                    <MutedText>{date(row.date)}</MutedText>
+                    {row.needsReview && <NeedsReviewChip />}
+                  </View>
+                  <Text style={{ color: negative ? colors.red : colors.green, fontWeight: '700' }}>
+                    {negative ? '-' : '+'}
+                    {money(Math.abs(row.amount))}
                   </Text>
-                  <MutedText>{date(row.date)}</MutedText>
-                  {row.needsReview && <NeedsReviewChip />}
                 </View>
-                <Text style={{ color: row.type === 'income' ? colors.green : colors.red, fontWeight: '700' }}>
-                  {row.type === 'income' ? '+' : '-'}
-                  {money(Math.abs(row.amount))}
-                </Text>
-              </View>
-            </TappableCard>
-          ))
+              </TappableCard>
+            );
+          })
         )}
       </ScrollView>
     </Screen>

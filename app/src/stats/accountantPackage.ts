@@ -1,4 +1,4 @@
-import { DEFAULT_SCHEDULE_C_BUCKET, scheduleCLineFor } from '@/src/import/category';
+import { DEFAULT_SCHEDULE_C_BUCKET, scheduleCLineFor, NON_DEDUCTIBLE_CATEGORIES } from '@/src/import/category';
 import { isPersonalPayment } from '@/src/import/paymentMethods';
 import { resolveScheduleCBucket } from '@/src/stats/profitLoss';
 import {
@@ -230,6 +230,25 @@ export type LineItem = {
   reference: string | null;
 };
 
+// TOO MUCH NOISE IN THE OUT-OF-POCKET SCOPE (owner decision, device
+// report: an out-of-pocket accountant deliverable included weight
+// tickets, advance repayments, and other non-deductible/settlement-
+// mechanics rows that don't belong in a Schedule C expense report). Root
+// cause: `buildLineItems()` filtered by scope/origin (settlement-withheld
+// vs. out-of-pocket) and by period, but never excluded a row whose own
+// CATEGORY is one of the three non-deductible ones (Meals — per-diem
+// already covers it; Advance Repayment — loan principal, not a new
+// expense; Escrow & Deposits — a refundable carrier-held deposit, never
+// spent) — `NON_DEDUCTIBLE_CATEGORIES` (src/import/category.ts) already
+// existed and is what `reducesTrueProfit()`/Deductions' own "excludes
+// $X meals, advances and escrow" caption already key off of, but
+// `buildLineItems()` never applied it. Deliberately scoped to
+// `scope === 'outOfPocket'` ONLY — the withheld/combined scopes may
+// legitimately want to show these for reference (a settlement-withheld
+// escrow reconciliation, an advance-repayment schedule the owner wants
+// visible), so this exclusion never touches them.
+const OUT_OF_POCKET_EXCLUDED_CATEGORIES = new Set<string>(NON_DEDUCTIBLE_CATEGORIES);
+
 // The ONE line-item builder every report section (category table, lumper
 // table, warnings) reads from — period + scope filtered, and (spec item
 // C.1) a row whose net amount is exactly $0 (a self-service Mark-as-Done
@@ -252,6 +271,9 @@ export function buildLineItems(
     if (!inAccountantPeriod(d.ded_date, year, month)) continue;
     const origin: LineItemOrigin = (d.source as LineItemOrigin) ?? 'manual';
     if (!matchesAccountantScope(origin, scope)) continue;
+    // TOO MUCH NOISE (see this function's own header comment above) —
+    // out-of-pocket only, never withheld/combined.
+    if (scope === 'outOfPocket' && OUT_OF_POCKET_EXCLUDED_CATEGORIES.has(d.category ?? '')) continue;
     items.push({
       id: d.id,
       kind: 'deduction',

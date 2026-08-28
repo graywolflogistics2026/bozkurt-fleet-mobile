@@ -11679,3 +11679,88 @@
   circularity note, this specific change needs a native rebuild to
   actually reach the reporting device, unlike every other fix shipped
   today.
+- TRANSACTIONS SIGN BUG + ACCOUNTANT PACKAGE OUT-OF-POCKET NOISE (owner
+  decision 2026-08-28, two unrelated device reports). Both pure
+  client-side calculation/display fixes — no SQL, no Edge Function.
+  **Item 1 — negative settlements shown as positive/green in
+  Transactions**: `app/app/(tabs)/transactions.tsx` mapped every
+  settlement into a `TransactionRow` with `type: 'income'` hardcoded
+  unconditionally (never checking `s.net`'s own sign), then rendered
+  color/prefix purely from `row.type` (`row.type === 'income' ?
+  colors.green : colors.red`, always `+`) and stripped the sign entirely
+  via `money(Math.abs(row.amount))` — a "you owe the carrier"
+  negative-net settlement showed green and positive despite Settlements'
+  own screen already correctly framing it as negative. `amount: s.net`
+  itself was never flipped — this was 100% display-only. **Per-consumer
+  total audit, every canonical figure checked explicitly, none affected**:
+  `computeKpis()` (`kpi.ts:226`), `trueProfit.ts`'s `calcTrueProfit()`/
+  `buildWeeklyTrueProfitTrend()` (:168, :196), `profitAnalysis.ts`'s
+  `buildProfitAnalysis()`, `truckComparison.ts` (Scorecard/per-truck,
+  :200/:258/:262/:270), and the Accountant Package's own `grossIncome`
+  (`accountant-package.tsx:290`) all read `.gross` (freight revenue,
+  architecturally non-negative) unclamped, never `.net` — true
+  profit/net is always computed FRESH as `gross − expenses`, never by
+  reading the settlement's own precomputed `.net` column, so none of
+  these could ever be sign-corrupted by this bug even in principle.
+  Exactly two consumers DO read `.net` directly, both correctly, both
+  unclamped: `settlementsSummary.ts:23` (Settlements' own totals bar —
+  confirmed already correct, matching the device report's own
+  observation) and `dashboardStats.ts:61`'s `netRevenue`, which feeds
+  `taxEstimate.ts:75`'s `netProfitBeforeDepreciation` — a real,
+  significant total (your tax estimate) — verified unclamped and
+  correctly signed too, so a negative-net settlement correctly reduces
+  estimated taxable profit, exactly per CLAUDE.md invariant #1's
+  net-pay model. **Fix**: extracted `src/stats/transactionDisplay.ts`'s
+  `isNegativeTransactionRow()` (this repo has no RN rendering harness,
+  same "pure logic here, thin render reads from it" split every other
+  `src/stats/*.ts` module uses) — an income row's sign is now driven by
+  its own `amount` (settlement `net` genuinely can be negative); an
+  expense row stays unconditionally negative (`deductions.amount` is
+  always a positive magnitude, confirmed against this codebase's own
+  NEGATIVE SETTLEMENTS fixtures — a $550 advance-repayment or $100
+  escrow line is never itself negative, only a settlement's own net pay
+  can be). Test: `transactionDisplay.test.ts`, using the exact
+  established NEGATIVE SETTLEMENTS fixture numbers (gross $5.16, net
+  -$1,155.35).
+  **Item 2 — Accountant Package out-of-pocket export had too much
+  noise**: `accountantPackage.ts`'s `buildLineItems()` already filtered
+  by scope/origin (`matchesAccountantScope()`, correctly excludes a
+  settlement-withheld row — including a genuinely settlement-withheld
+  "weight ticket"/scale fee, verified with a dedicated test — from the
+  out-of-pocket scope) and by period, but never excluded a row whose own
+  CATEGORY is one of the three non-deductible ones
+  (`NON_DEDUCTIBLE_CATEGORIES` — Meals/Advance Repayment/Escrow &
+  Deposits, `category.ts`) — the same set `reducesTrueProfit()`/
+  Deductions' own "excludes $X meals, advances and escrow" caption
+  already key off of, just never applied here. A manually-tracked (not
+  settlement-withheld) Advance Repayment/Escrow/Meals row therefore
+  leaked straight into the out-of-pocket line-item list and its category
+  table. Fixed with `OUT_OF_POCKET_EXCLUDED_CATEGORIES`, applied ONLY
+  when `scope === 'outOfPocket'` — the withheld/combined scopes are
+  deliberately unchanged (they may legitimately want these rows for
+  reference), proven by a dedicated regression test using the same mixed
+  fixture. **Lumper Fees, audited per the explicit "reimbursed vs
+  paid-out split, as originally designed" ask**: no such split has ever
+  existed in `buildLumperFees()`'s history — confirmed by reading this
+  function's full history, not assumed; it has always been a flat,
+  unconditional sum of every Lumper-Fees-categorized line item in scope
+  +period, computationally correct and unregressed. The OLDER, no-longer-
+  used `buildAccountantPackage()` rollup (kept only for a hypothetical
+  future caller) DOES net a reimbursement against a matched category via
+  `matchReimbursementCategory()`'s `/lumper/i` keyword rule, but that
+  mechanism was never carried over into the current line-item-first
+  engine — flagged as a genuine, real-world limitation (a reimbursed
+  lumper fee still shows as a full out-of-pocket expense) rather than
+  silently assumed correct OR invented as a new feature under this
+  pass's own narrower audit scope; a dedicated test pins the current,
+  correct-as-is behavior so a future pass that adds the offset changes
+  it deliberately. Tests: `accountantPackage.test.ts` gained a full
+  "OUT-OF-POCKET SCOPE NOISE" describe block (exclusion proof, the
+  origin-rule-vs-category-fix distinction for the weight-ticket case,
+  withheld-scope-unchanged proof, combined-scope-unchanged proof, the
+  category-table-never-includes-excluded-categories proof, and the
+  item-4 mixed-dataset scenario with the two permitted content sections'
+  correct amounts) plus the Lumper Fees audit-confirmation test. Full
+  suite: 131 suites / 3572 tests pass (+11); `tsc --noEmit` clean. No new
+  i18n strings — both fixes are pure calculation/display logic, no new
+  copy. Ships via a normal `eas update`.

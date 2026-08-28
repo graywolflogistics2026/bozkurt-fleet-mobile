@@ -619,6 +619,99 @@ describe('buildLineItems (owner decision 2026-08-05, FULL PARITY pass item B.1/C
   });
 });
 
+// TOO MUCH NOISE IN THE OUT-OF-POCKET SCOPE (owner decision, device
+// report: the out-of-pocket accountant deliverable included weight
+// tickets, advance repayments, and other non-deductible/settlement-
+// mechanics rows). Root cause: buildLineItems() filtered by scope/origin
+// and period but never excluded NON_DEDUCTIBLE_CATEGORIES (Meals/Advance
+// Repayment/Escrow & Deposits) — the SAME set reducesTrueProfit()/
+// Deductions' own "excludes $X meals, advances and escrow" caption
+// already key off of. Fixed scoped to `scope === 'outOfPocket'` ONLY.
+describe('buildLineItems — OUT-OF-POCKET SCOPE NOISE (owner decision, device report)', () => {
+  const mixedDeductions: Deduction[] = [
+    deduction({ id: 'real-expense', amount: 250, ded_date: '2026-06-05', category: 'Tools & Equipment', source: 'manual' }),
+    deduction({ id: 'lumper-1', amount: 75, ded_date: '2026-06-06', category: 'Lumper Fees', source: 'manual' }),
+    deduction({ id: 'meals-oop', amount: 40, ded_date: '2026-06-07', category: 'Meals (per diem covered)', source: 'manual', tax_deductible: false }),
+    deduction({ id: 'advance-oop', amount: 300, ded_date: '2026-06-08', category: 'Advance Repayment', source: 'manual', tax_deductible: false }),
+    deduction({ id: 'escrow-oop', amount: 100, ded_date: '2026-06-09', category: 'Escrow & Deposits', source: 'manual', tax_deductible: false }),
+    // "Weight tickets" — a scale/weigh-station fee is a real, legitimate
+    // Tolls & Scales expense; the ONLY reason it shouldn't appear in the
+    // out-of-pocket scope is when it's genuinely settlement-WITHHELD (the
+    // carrier billed and withheld it) — which the pre-existing ORIGIN RULE
+    // (matchesAccountantScope) already excludes correctly, verified here
+    // alongside the new category fix rather than assumed.
+    deduction({ id: 'weight-ticket-withheld', amount: 35, ded_date: '2026-06-10', category: 'Tolls & Scales', source: 'settlement' }),
+  ];
+
+  it('excludes Meals/Advance Repayment/Escrow & Deposits from the OUT-OF-POCKET scope', () => {
+    const items = buildLineItems(mixedDeductions, [], [], [], 2026, 6, 'outOfPocket');
+    expect(items.map((i) => i.id).sort()).toEqual(['lumper-1', 'real-expense']);
+  });
+
+  it('a settlement-withheld "weight ticket" (Tolls & Scales) is excluded from OUT-OF-POCKET via the pre-existing origin rule, not the new category fix', () => {
+    const items = buildLineItems(mixedDeductions, [], [], [], 2026, 6, 'outOfPocket');
+    expect(items.find((i) => i.id === 'weight-ticket-withheld')).toBeUndefined();
+  });
+
+  it('does NOT regress the WITHHELD scope — Meals/Advance/Escrow still appear when they are the withheld-origin rows present', () => {
+    const withheldRows: Deduction[] = [
+      deduction({ id: 'meals-withheld', amount: 40, ded_date: '2026-06-07', category: 'Meals (per diem covered)', source: 'settlement', tax_deductible: false }),
+      deduction({ id: 'advance-withheld', amount: 300, ded_date: '2026-06-08', category: 'Advance Repayment', source: 'settlement', tax_deductible: false }),
+      deduction({ id: 'escrow-withheld', amount: 100, ded_date: '2026-06-09', category: 'Escrow & Deposits', source: 'settlement', tax_deductible: false }),
+    ];
+    const items = buildLineItems(withheldRows, [], [], [], 2026, 6, 'withheld');
+    expect(items.map((i) => i.id).sort()).toEqual(['advance-withheld', 'escrow-withheld', 'meals-withheld']);
+  });
+
+  it('does NOT regress the COMBINED scope — every row (out-of-pocket AND withheld, every category) still appears', () => {
+    const items = buildLineItems(mixedDeductions, [], [], [], 2026, 6, 'combined');
+    expect(items.map((i) => i.id).sort()).toEqual(
+      ['advance-oop', 'escrow-oop', 'lumper-1', 'meals-oop', 'real-expense', 'weight-ticket-withheld'].sort()
+    );
+  });
+
+  it('the out-of-pocket category table (buildScheduleCTotals) never includes a Meals/Advance/Escrow dollar, only genuinely deductible categories', () => {
+    const items = buildLineItems(mixedDeductions, [], [], [], 2026, 6, 'outOfPocket');
+    const totals = buildScheduleCTotals(items, []);
+    const categories = totals.map((t) => t.category);
+    expect(categories).not.toContain('Meals (per diem covered)');
+    expect(categories).not.toContain('Advance Repayment');
+    expect(categories).not.toContain('Escrow & Deposits');
+    // "Tools & Equipment" resolves into whatever Schedule C bucket it
+    // maps to (checked via the real amount, not the raw category name,
+    // matching this file's own established groupLineItemsByScheduleCBucket
+    // convention) — the point is the $250 real expense AND the $75
+    // Lumper Fees row (a real, intentionally-double-shown Schedule C
+    // category, see the MIXED DATASET test below) are still counted;
+    // nothing from the 3 excluded categories or the withheld weight
+    // ticket contributes.
+    expect(totals.reduce((sum, t) => sum + t.amount, 0)).toBe(325);
+  });
+
+  it('MIXED DATASET, item 4\'s literal scenario: the out-of-pocket export contains only the four permitted sections\' worth of content with correct amounts', () => {
+    const items = buildLineItems(mixedDeductions, [], [], [], 2026, 6, 'outOfPocket');
+    const totals = buildScheduleCTotals(items, []);
+    const lumperFees = buildLumperFees(items);
+    // Category expense table sums the FULL filtered line-item set (real
+    // expense + Lumper Fees are both real Schedule C categories — Lumper
+    // Fees is intentionally shown in BOTH its own dedicated section below
+    // AND counted here, per this screen's own established design; see
+    // accountant-package.tsx:249-258, which feeds buildScheduleCTotals()
+    // the unfiltered lineItems, not lumperFees-excluded ones): $250 +
+    // $75 = $325. Neither the excluded categories (Meals/Advance/Escrow)
+    // nor the settlement-withheld weight ticket contribute anything.
+    expect(totals.reduce((sum, t) => sum + t.amount, 0)).toBe(325);
+    // Lumper Fees: $75, its own section.
+    expect(lumperFees.map((i) => i.id)).toEqual(['lumper-1']);
+    expect(lumperFees.reduce((sum, i) => sum + i.amount, 0)).toBe(75);
+    // Nothing else (weight ticket, advance, escrow, meals) survives into
+    // the filtered line-item set at all — exactly the four permitted
+    // sections' worth of content (per-diem/Owner's Equity are separate,
+    // independently-tested functions not fed by lineItems).
+    expect(items).toHaveLength(2);
+  });
+});
+
 describe('buildScheduleCTotals (owner decision 2026-08-05, FULL PARITY pass item A.5/B.2)', () => {
   it('sums line items by category and attaches a Schedule C line', () => {
     const items = buildLineItems(
@@ -684,6 +777,42 @@ describe('buildLumperFees (owner decision 2026-08-05, FULL PARITY pass item B.2)
       'combined'
     );
     expect(buildLumperFees(items).map((i) => i.id)).toEqual(['lumper']);
+  });
+
+  // LUMPER FEES AUDIT (owner decision, device report: "confirm the
+  // reimbursed vs paid-out split, as originally designed"). Audited this
+  // function's own history end to end — no reimbursed-vs-paid-out split
+  // has EVER existed for buildLumperFees()/buildLineItems() (this is not
+  // a regression); it has always been a flat sum of every Lumper-Fees-
+  // categorized line item in scope+period, with no reimbursements offset.
+  // A DIFFERENT, OLDER, no-longer-used rollup (buildAccountantPackage(),
+  // above — kept only for a hypothetical future caller, not read by the
+  // Accountant Package screen) DOES net a reimbursement against a
+  // matched category via matchReimbursementCategory()'s `/lumper/i`
+  // keyword rule, but that mechanism was never carried over when
+  // buildLumperFees() was built — flagged here as a genuine, real-world
+  // limitation (a lumper fee that gets reimbursed by the carrier is
+  // still shown as a full out-of-pocket expense with no offset) rather
+  // than silently assumed correct or invented as a new feature under
+  // this pass's own narrower "audit, don't scope-creep" directive. This
+  // test pins the CURRENT, unregressed behavior so a future pass that
+  // does build the offset changes this assertion deliberately, not by
+  // accident.
+  it('AUDIT: sums every Lumper Fees row unconditionally — no reimbursement offset exists (confirmed, not a regression)', () => {
+    const items = buildLineItems(
+      [
+        deduction({ id: 'lumper-1', amount: 75, category: 'Lumper Fees', ded_date: '2026-06-05', source: 'manual' }),
+        deduction({ id: 'lumper-2', amount: 50, category: 'Lumper Fees', ded_date: '2026-06-06', source: 'manual' }),
+      ],
+      [],
+      [],
+      [],
+      2026,
+      6,
+      'outOfPocket'
+    );
+    const lumperFees = buildLumperFees(items);
+    expect(lumperFees.reduce((sum, i) => sum + i.amount, 0)).toBe(125);
   });
 });
 
