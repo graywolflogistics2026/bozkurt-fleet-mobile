@@ -10139,3 +10139,220 @@
   Item 3 (the splash PNG) needs a fresh EAS BUILD, same standing
   limitation every prior splash-asset pass has had — items 1, 2, and 4
   ship via a normal `eas update` alone.
+- FOUR MORE DEVICE ISSUES — THE PRIOR FIXES DIDN'T ACTUALLY FIX THEM
+  (owner decision, device report: warranty loan still duplicating, balance
+  still wrong, daily tip still invisible). No SQL needed for any of the
+  four — every fix is pure client-side JS/TS plus one ai-import prompt
+  clarification.
+  1. **WARRANTY LOAN DUPLICATED ON EVERY IMPORT, ROOT CAUSE CONFIRMED**:
+     `aiImportSave.ts`'s loan-upsert loop matched an existing Loan Center
+     row via EXACT STRING EQUALITY — `.eq('name', loan.name)` — and the
+     settlement schema's own `loans[]` section
+     (`supabase/functions/ai-import/index.ts`,
+     `{"name":"","balance":0,"payment":0,"frequency":"","nextDue":""}`)
+     has no separate lender/original-amount field, so `name` was the ONLY
+     identifying value available. The AI's own extracted wording for a
+     recurring loan-recap line naturally varies week to week (a trailing
+     reference/invoice suffix, punctuation, capitalization) — the exact
+     match missed the existing row on nearly every re-import and inserted
+     a new one instead, exactly matching the reported symptom (one new
+     "duplicate" per import, each individually flagged needs-review by
+     the low-confidence machinery since a lone, un-cross-referenced loan
+     recap line reads as low-confidence). Fixed two ways, together:
+     (a) new `app/src/import/loanMatch.ts` — `normalizeLoanKey()` (the
+     same normalize-then-match approach `categoryLearning.ts`'s
+     `normalizeKeyword()` already uses for exactly this "same vendor,
+     slightly different text every time" problem, tuned with a 6-token
+     budget for a loan's own longer name/lender text) and
+     `findMatchingLoan()` — normalized-name equality/containment, with a
+     conservative guard (a same-named candidate is rejected if BOTH sides
+     have a real balance and they differ by more than 6x, and if BOTH
+     sides have a recorded lender that disagrees) so a same-named-but-
+     wildly-different-amount pair (e.g. a $500/week warranty repayment
+     vs. a $58,000 truck loan that happens to share a word) is never
+     silently merged. `aiImportSave.ts`'s loop now fetches every existing
+     loan ONCE (not per-line) and matches via this function; a newly-
+     inserted loan is pushed into the local candidate list so two
+     loans[] lines in the SAME settlement that both normalize to the
+     same key merge into one row instead of both inserting. (b) a new
+     `ai-import` prompt APPROVED ADDITION: `loans[]` must ONLY be
+     populated from a genuine, DEDICATED loan/financing recap section —
+     never synthesized merely because a `deductions[]` line looks like a
+     repayment (the "ADVANCE — EXT WARRANTY" line already belongs ONLY in
+     `deductions[]` with category "Advance Repayment," as the existing
+     prompt text already said — this addition explicitly forbids ALSO
+     mirroring it into `loans[]`), and `loans[].name` must stay STABLE
+     across weeks (no invoice numbers, reference IDs, dates, or check
+     numbers) since the app matches this loan to the same Loan Center row
+     by name across every settlement. **AUDIT — no other recurring
+     settlement line has this shape**: `loans[]` is the ONLY array in the
+     settlement schema representing a standing, repeatedly-re-extracted
+     obligation matched by name across imports; `assets`/`operating` are
+     singular per-settlement snapshot objects, never upserted against a
+     named standing entity, so they carry no equivalent duplication risk.
+  2. **WARRANTY REPAYMENT — CONFIRMED ALREADY CORRECT, NOT DOUBLE-
+     COUNTED**: verified by reading the actual classification/exclusion
+     code, not assumed. `category.ts`'s `classifySettlementLine()`
+     (line ~436-439) checks `isGenericAdvance()` BEFORE
+     `isWarrantyService()` — "ADVANCE — EXT WARRANTY" matches the generic-
+     advance rule first and resolves to category "Advance Repayment,"
+     never "Warranty & Service Contracts" (that category is reserved for
+     the ORIGINAL one-time purchase line, a real deductible expense,
+     documented in the file's own ORDER MATTERS comment). "Advance
+     Repayment" is in both `NON_DEDUCTIBLE_CATEGORIES` (category.ts:110)
+     and `trueProfit.ts`'s `TRUE_PROFIT_EXCLUDED_CATEGORIES` (line 68) —
+     it never reduces true profit or appears in the Accountant Package's
+     out-of-pocket deductible view. `mapSettlement()` also stamps
+     `tax_deductible: false` unconditionally on every withheld deduction
+     row (invariant #1's defense-in-depth). Separately confirmed the
+     loan's own `balance`/`payment` fields are NEVER read by any true-
+     profit/CPM calculation — `calcCanonicalCpm()`'s fixed-cost estimate
+     comes from `truckCostBasis.ts`'s `calcTruckCostBasisWeekly()`, which
+     reads the truck's own manually-set `cost_basis_loan_monthly_payment`
+     column, never derived from any `loans` table row (CLAUDE.md's own
+     TRUCK COST BASIS entry: "never a synthetic loan estimate"). So the
+     warranty amount appears exactly ONCE as a real expense (the withheld
+     deduction, correctly excluded from true profit) and the loan's
+     balance/payment fields exist purely for Loan Center's own display,
+     with zero path into any profit/tax/CPM figure.
+  3. **BUSINESS BALANCE $61,897 WITH ZERO SETTLEMENTS — WRITE-SITE AUDIT
+     + WHY VERIFY BALANCE MUST EXPLAIN THIS**: `reconcileBusinessBalance()`
+     (`businessBalanceLedger.ts`) can only ever reconstruct the expected
+     balance from CURRENTLY EXISTING rows — every settlement's own
+     `business_balance_credit` plus every currently-existing
+     `capital_transactions` row's own `business_balance_applied`. With
+     zero settlements on file, a real $60,000 contribution and a real
+     $5,000 draw reconstruct to exactly $55,000 (verified directly by a
+     new test using these exact numbers) — a stored $61,897 is a $6,897
+     drift with structurally NO possible explanation from the ledger
+     alone, which IS the diagnostic signal: something moved the balance
+     before the row(s) that could explain it still existed, or through a
+     path the ledger was never designed to see. Full write-site audit
+     (grepped `business_balance` across `app/src` and
+     `supabase/functions`, not assumed): (a)
+     `apply_settlement_business_balance_credit` RPC — settlement import/
+     re-import, atomic, re-reads current state under lock (§60); (b) the
+     §70 `AFTER DELETE` trigger — settlement delete, reverses the exact
+     credit; (c) `record_manual_capital_transaction`/
+     `update_manual_capital_transaction`/`delete_manual_capital_transaction`
+     RPCs — manual draws/contributions, atomic (§60); (d)
+     `useUpdateBusinessBalance()` (`capitalAccount.ts:74`) — confirmed
+     TRULY DEAD, zero call sites anywhere in the app beyond its own
+     definition (grepped); (e) `reset-data` Edge Function — resets to
+     exactly `0` on a full account reset, not a source of "extra" drift;
+     (f) a GENUINE ADDITIONAL WRITE PATH found during this audit,
+     NOT previously catalogued: `legacyImport/importLegacyBackup.ts`'s
+     `updateBusinessBalance()` (line 730-736) sets `business_balance`
+     DIRECTLY from the legacy backup JSON's own `bizBalance` field via a
+     plain `.update()` — completely bypassing the RPC/ledger system, with
+     no settlement or capital_transactions row left behind to explain it.
+     This is the single most plausible explanation for a drift with zero
+     current settlements: a one-time legacy-backup restore, at any point
+     in the account's history, could have set this value directly, and
+     `reconcileBusinessBalance()` — by design, reconstructing only from
+     rows that still exist — has no way to see that write after the fact.
+     **Fix — Verify Balance now explains itself instead of showing a bare
+     mismatch**: Capital Account's Verify Balance sheet
+     (`capital-account.tsx`) now shows a plain-language explanation
+     whenever a mismatch is found — a settlement-count-zero-specific
+     message naming BOTH plausible causes (a settlement deleted before
+     §70's automatic correction existed, or a legacy backup restore that
+     set the value directly) when `reconciliation.settlementCount === 0`,
+     a more general version otherwise — plus a direct "🏦 Reconcile
+     Balance" button that closes Verify Balance and opens the existing
+     Reconcile Balance sheet in one tap, rather than leaving the user to
+     find it themselves. **The actual $61,897 correction still has to
+     happen on the user's own device** (this environment has no
+     production database access to do it remotely) — opening Verify
+     Balance will now show the real current numbers and the explanation
+     above; Reconcile Balance corrects it to the real value with one
+     recorded, reversible equity entry (never a silent overwrite, §60's
+     existing atomic mechanism). Going forward, this cannot recur through
+     any of the FOUR atomic mechanisms above — only a future legacy-
+     backup restore (an explicit, rare, user-initiated action, unchanged
+     by this pass) could bypass the ledger again, and it would now be
+     immediately visible and explained the next time Verify Balance is
+     opened, rather than silently invisible.
+  4. **DAILY TIP DIAGNOSTIC — NOW REACHABLE IN A SHIPPED BUILD**: the
+     prior pass's panel was gated on `__DEV__` (React Native's own
+     global, always `false` in a real EAS build) — invisible on the
+     user's actual device by construction, not a bug in the diagnostics
+     themselves. Fixed by making the SAME panel reachable in ANY build
+     type: a triple-tap (within 1.5s) on the build-info footer line at
+     the bottom of Settings — the same production-debugging pattern
+     CLAUDE.md's own (now-deleted) CUSTOMIZE DASHBOARD DIAGNOSTICS entry
+     established, reimplemented inline here since that screen's own
+     shared component no longer exists (removed in DASHBOARD
+     SIMPLIFICATION) — toggles a `showDailyTipDiagnostics` state that
+     reveals the panel regardless of `__DEV__`. The panel itself now also
+     shows the FULL per-topic breakdown (`useDailyTip()`'s
+     `diagnostics.entries`, every topic tagged
+     precondition_not_met/silenced/cooldown/eligible — previously only
+     the summary counts were exposed from the hook, not the per-topic
+     list), so "what blocked it if none [were eligible]" is answerable
+     directly on the device, not just the eligible/considered/shown
+     summary line. The existing `__DEV__`-gated `console.log` inside
+     `useDailyTip()` itself is unchanged (harmless, additive) — only the
+     Settings-side visibility gate changed, from `__DEV__` to the tap
+     gesture.
+  5. **DATA CLEANUP — DUPLICATE WARRANTY LOANS TOOL**: `orphanCleanup.ts`
+     gained a new, SEPARATE section from the pre-existing informational-
+     only `settlementSourcedLoans` list — `duplicateLoanGroups`, built via
+     `loanMatch.ts`'s new `findDuplicateLoanGroups()` (the SAME normalized-
+     name grouping the fixed upsert now matches on, applied to every loan
+     on the account regardless of source, so a group here is exactly what
+     the fix would now treat as "the same loan" going forward). Each
+     group is sorted so the RECOMMENDED row to keep is first — a real,
+     nonzero balance beats a null one (it's actually been updated by a
+     real recap line), tie-broken by earliest `created_at` (the
+     original) — shown in the Data Cleanup screen
+     (`app/(tabs)/more/data-cleanup.tsx`) with a green "✓ Recommended:
+     keep this one" label, per-row checkboxes, and a new
+     `useDeleteDuplicateLoans()` bulk-delete mutation (same confirm-then-
+     remove pattern as the tolls/maintenance sections above it) — a real,
+     standing-obligation table, so nothing here is auto-selected or auto-
+     merged; the user reviews and chooses. GUIDANCE FOR THE USER, stated
+     honestly since this environment has no access to the real account's
+     data: the recommended-keep heuristic (most complete balance, then
+     oldest) is a reasonable DEFAULT for a typical case, but the actual
+     Loan Center list should be checked against it before deleting
+     anything — if a MORE RECENT duplicate happens to carry a more
+     accurate/complete balance than an older "original," the tool's own
+     sort already surfaces that one first, but the user's own judgment
+     about which balance figure is actually correct should win regardless
+     of which row the tool recommends.
+  Tests: `app/src/import/__tests__/loanMatch.test.ts` (new, 11 tests) —
+  `normalizeLoanKey()`'s tokenization/stopword/reference-suffix-stripping;
+  `findMatchingLoan()`'s exact/fuzzy-name match, the wildly-different-
+  balance rejection, the disagreeing-lender rejection, the agreeing-lender
+  match, and the no-name-at-all guard; `findDuplicateLoanGroups()`'s
+  grouping + singleton exclusion.
+  `app/src/data/__tests__/aiImportSave.loanDedupe.test.ts` (new, 6 tests,
+  against the REAL `saveExtraction()` and an in-memory fake Supabase
+  client) — the literal requested proof: three settlements with
+  progressively different warranty-loan wording resolve to ONE loan row
+  with the balance updated to the latest figure; a same-named-but-wildly-
+  different-balance line is NOT merged (2 loans, not 1); two loans[]
+  lines in the same settlement that normalize to the same key merge into
+  one row; a same-week re-import updates rather than duplicates; the
+  withheld deduction resolves to non-deductible "Advance Repayment" (not
+  "Warranty & Service Contracts"); true profit correctly excludes the
+  advance-repayment amount regardless of the loan's own balance.
+  `app/src/stats/__tests__/businessBalanceLedger.test.ts` gained the
+  exact reported-numbers regression (zero settlements + $60k contribution
+  + $5k draw reconstructs to exactly $55,000; the same data against a
+  stored $61,897 surfaces a $6,897 drift with `settlementCount: 0` and
+  `settlementsTotal: 0` — the literal "unattributable to anything
+  currently on file" signal). Full suite: 127 suites / 3,494 tests pass;
+  `tsc --noEmit` clean; all 7 locales confirmed key-parity (glossary test
+  re-passed clean — "settlement" kept in Latin script in every locale's
+  new Verify Balance explanation strings). `supabase/functions/ai-import/
+  index.ts` was modified (the new loans[]-is-a-recap-field prompt
+  addition) and **needs redeploying**; `ai-advisor`/`reset-data`/
+  `delete-account`/`referral-sync` were NOT touched. No new
+  `docs/PENDING_SQL.md` section was needed — every fix in this pass reads/
+  writes columns that already exist (`loans.lender`/`original_amount`
+  have existed since the original Loan Center schema; nothing new was
+  added to `profiles`/`capital_transactions`). No new native dependency —
+  pure JS/TS plus one Edge Function prompt edit — ships via a normal
+  `eas update` once `ai-import` has been redeployed.

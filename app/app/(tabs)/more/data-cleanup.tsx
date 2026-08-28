@@ -7,9 +7,11 @@ import {
   useDeleteOrphanTolls,
   useDeleteOrphanMaintenanceRecords,
   useDeleteOrphanDocuments,
+  useDeleteDuplicateLoans,
   type OrphanToll,
   type OrphanMaintenanceRecord,
   type OrphanDocument,
+  type DuplicateLoanRow,
 } from '@/src/data/orphanCleanup';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton } from '@/src/components/ui';
@@ -34,10 +36,12 @@ export default function DataCleanup() {
   const deleteTolls = useDeleteOrphanTolls();
   const deleteMaintenance = useDeleteOrphanMaintenanceRecords();
   const deleteDocuments = useDeleteOrphanDocuments();
+  const deleteDuplicateLoans = useDeleteDuplicateLoans();
 
   const [selectedTolls, setSelectedTolls] = useState<Set<string>>(new Set());
   const [selectedMaintenance, setSelectedMaintenance] = useState<Set<string>>(new Set());
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [selectedLoans, setSelectedLoans] = useState<Set<string>>(new Set());
 
   const summary = summaryQuery.data;
   const tollsTotal = useMemo(() => sum((summary?.tolls ?? []).map((x) => x.amount)), [summary]);
@@ -48,7 +52,8 @@ export default function DataCleanup() {
     summary.tolls.length === 0 &&
     summary.maintenanceRecords.length === 0 &&
     summary.documents.length === 0 &&
-    summary.settlementSourcedLoans.length === 0;
+    summary.settlementSourcedLoans.length === 0 &&
+    summary.duplicateLoanGroups.length === 0;
 
   function toggle(set: Set<string>, setSet: (s: Set<string>) => void, id: string) {
     const next = new Set(set);
@@ -180,6 +185,33 @@ export default function DataCleanup() {
     return [x.doc_type, date(x.imported_at)].filter(Boolean).join(' · ');
   }
 
+  function loanRowSubtitle(x: DuplicateLoanRow) {
+    return [x.balance != null ? money(x.balance) : '—', date(x.created_at)].filter(Boolean).join(' · ');
+  }
+
+  function confirmDeleteDuplicateLoans(ids: string[]) {
+    if (ids.length === 0) return;
+    Alert.alert(
+      t('dataCleanup.confirmTitle', { count: ids.length }),
+      t('dataCleanup.confirmDuplicateLoansBody', { count: ids.length }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('dataCleanup.removeButton'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDuplicateLoans.mutateAsync(ids);
+              setSelectedLoans(new Set());
+            } catch (err) {
+              Alert.alert(t('common.error'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+            }
+          },
+        },
+      ]
+    );
+  }
+
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -285,6 +317,45 @@ export default function DataCleanup() {
                     loading={deleteDocuments.isPending}
                   />
                 </View>
+              </Card>
+            )}
+
+            {(summary?.duplicateLoanGroups.length ?? 0) > 0 && (
+              <Card>
+                <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
+                  {t('dataCleanup.duplicateLoansTitle', { count: summary!.duplicateLoanGroups.length })}
+                </Text>
+                <MutedText style={{ marginBottom: spacing.sm }}>{t('dataCleanup.duplicateLoansNote')}</MutedText>
+                {summary!.duplicateLoanGroups.map((group) => (
+                  <View key={group.key} style={{ marginBottom: spacing.sm }}>
+                    <MutedText style={{ marginBottom: spacing.xs, textTransform: 'capitalize' }}>{group.key}</MutedText>
+                    {group.loans.map((x, i) => (
+                      <View key={x.id}>
+                        {i === 0 && (
+                          <MutedText style={{ color: colors.green, marginBottom: 2 }}>{t('dataCleanup.duplicateLoansRecommendedKeep')}</MutedText>
+                        )}
+                        <Row
+                          checked={selectedLoans.has(x.id)}
+                          onToggle={() => toggle(selectedLoans, setSelectedLoans, x.id)}
+                          title={x.name ?? t('dataCleanup.orphanDocumentRow')}
+                          subtitle={loanRowSubtitle(x)}
+                          amount={null}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ))}
+                <View style={{ marginTop: spacing.sm }}>
+                  <PrimaryButton
+                    title={t('dataCleanup.removeSelected', { count: selectedLoans.size })}
+                    onPress={() => confirmDeleteDuplicateLoans([...selectedLoans])}
+                    disabled={selectedLoans.size === 0}
+                    loading={deleteDuplicateLoans.isPending}
+                  />
+                </View>
+                <Pressable onPress={() => router.push('/(tabs)/more/loans')} style={{ marginTop: spacing.sm }}>
+                  <Text style={{ color: colors.accent, fontWeight: '600' }}>{t('dataCleanup.viewInLoanCenter')}</Text>
+                </Pressable>
               </Card>
             )}
 

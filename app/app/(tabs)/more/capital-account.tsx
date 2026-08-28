@@ -711,9 +711,34 @@ export default function CapitalAccount() {
         {reconciliation.matches ? (
           <MutedText style={{ color: colors.green, marginTop: spacing.sm }}>✓ {t('capitalAccount.verifyMatches')}</MutedText>
         ) : (
-          <MutedText style={{ color: colors.orange, marginTop: spacing.sm }}>
-            ⚠️ {t('capitalAccount.verifyMismatch', { amount: money(Math.abs(reconciliation.drift)) })}
-          </MutedText>
+          <>
+            <MutedText style={{ color: colors.orange, marginTop: spacing.sm }}>
+              ⚠️ {t('capitalAccount.verifyMismatch', { amount: money(Math.abs(reconciliation.drift)) })}
+            </MutedText>
+            {/* BUSINESS BALANCE — WHY VERIFY BALANCE MUST EXPLAIN, NOT JUST
+                SHOW A NUMBER (owner decision, device report: a mismatch with
+                ZERO currently-existing settlements has NO ledger row that
+                could explain it — reconcileBusinessBalance() can only ever
+                sum CURRENTLY EXISTING settlements/capital_transactions, so a
+                settlement deleted BEFORE the §70 AFTER DELETE reversal
+                trigger existed applied its own credit once, permanently,
+                with zero trace left for this screen to show — that absence
+                IS the diagnostic signal, not a bug in the reconciliation
+                itself. Stated in plain language instead of leaving the user
+                to guess what a bare dollar mismatch means. */}
+            <MutedText style={{ marginTop: spacing.xs }}>
+              {reconciliation.settlementCount === 0
+                ? t('capitalAccount.verifyLikelyHistoricalDriftZero')
+                : t('capitalAccount.verifyLikelyHistoricalDrift')}
+            </MutedText>
+            <PrimaryButton
+              title={t('capitalAccount.reconcileBalance')}
+              onPress={() => {
+                setVerifyModalOpen(false);
+                setBalanceModalOpen(true);
+              }}
+            />
+          </>
         )}
         <SecondaryButton title={t('common.close')} onPress={() => setVerifyModalOpen(false)} />
       </ModalSheet>

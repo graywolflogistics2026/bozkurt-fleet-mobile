@@ -419,6 +419,8 @@
     "verifyStored": "Currently tracked",
     "verifyMatches": "Matches — every dollar is accounted for.",
     "verifyMismatch": "Off by {{amount}} — something moved the balance outside the tracked ledger.",
+    "verifyLikelyHistoricalDriftZero": "This gap has no matching event in your current transaction history — with zero settlements on file, nothing here could have produced it. It's most likely a leftover from before automatic balance tracking covered every path: a settlement that was deleted before that correction existed, or a legacy backup restore that set this value directly. Whatever the source, it's gone from your history now, so there's nothing left to show you here. Use Reconcile Balance below to correct your balance to its real value.",
+    "verifyLikelyHistoricalDrift": "This gap doesn't match any settlement or equity entry currently on file — most likely a leftover from before automatic balance tracking covered every path (a deleted/edited record, or a legacy backup restore that set this value directly). Use Reconcile Balance below to correct your balance to its real value.",
     "deleteDrawConfirmTitle": "Delete this {{label}}?",
     "deleteDrawConfirmBody": "Made a typo? This is how to fix it.",
     "deleteContributionConfirmTitle": "Delete this contribution?",
@@ -2227,7 +2229,11 @@
     "orphanDocumentRow": "Orphaned document",
     "loansTitle": "Loans From Settlements ({{count}})",
     "loansNote": "These loans were created from a settlement import. A loan is a real, ongoing obligation — it's shown here for visibility only, never removed by this tool. Manage or delete a loan from Loan Center.",
-    "viewInLoanCenter": "View in Loan Center →"
+    "viewInLoanCenter": "View in Loan Center →",
+    "duplicateLoansTitle": "Possible Duplicate Loans ({{count}} group(s))",
+    "duplicateLoansNote": "These loans share the same name and were likely created by re-importing the same recurring obligation before duplicate detection was fixed. The green-labeled row in each group is the one with the most complete balance data (or the oldest, if balances are equally complete) — review before removing the rest.",
+    "duplicateLoansRecommendedKeep": "✓ Recommended: keep this one",
+    "confirmDuplicateLoansBody": "This will permanently remove {{count}} loan record(s). This cannot be undone — make sure you're keeping the right one from each group."
   },
   "truckAssignments": {
     "title": "Fix Truck Assignments",

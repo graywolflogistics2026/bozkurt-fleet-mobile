@@ -16,6 +16,7 @@ import {
   numOrNull,
 } from '@/src/import/mapExtraction';
 import { resolveLoanAssetMatch } from '@/src/import/loanAssetMatch';
+import { findMatchingLoan } from '@/src/import/loanMatch';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
@@ -528,29 +529,64 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // calls' `error` field (including the lookup select), so a loan
     // save/update failure was completely silent — the import would report
     // success while a loan row silently failed to save/update.
-    for (const loan of mapping.loans) {
-      if (!loan.name) continue;
-      // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md
-      // §70) — every upsert (new or existing loan) is stamped with the
-      // REAL settlement id now that one exists, so this loan is always
-      // linked to the MOST RECENT settlement that touched it (an
-      // `on delete set null` FK, never cascade — see the migration's own
-      // header comment for why a standing loan must never be deleted
-      // just because one settlement mentioning it was).
-      const loanWithSettlement = { ...loan, settlement_id: settlementId };
-      const { data: existingLoan, error: lookupError } = await supabase
+    //
+    // LOAN DEDUPE FIX (owner decision, device report: "the extended
+    // warranty loan is re-created on every settlement import") — root
+    // cause was this loop's match key: exact string equality on
+    // `loans.name` (`.eq('name', loan.name)`). The settlement schema's
+    // own loans[] section has no separate lender/original-amount field,
+    // so `name` was the ONLY identifying value — and the AI's own
+    // extracted wording for a recurring loan-recap line naturally varies
+    // week to week (a trailing reference suffix, punctuation,
+    // capitalization), so the exact match silently missed the existing
+    // row on nearly every re-import and inserted a new one instead. Fixed
+    // by fetching every existing loan ONCE (not per-line) and matching
+    // via loanMatch.ts's findMatchingLoan() — normalized-name equality/
+    // containment, the same "tolerate natural wording drift" approach
+    // categoryLearning.ts's normalizeKeyword() already uses for
+    // deduction descriptions, with a conservative balance-ratio guard so
+    // a same-named-but-wildly-different-amount pair is never silently
+    // merged. A newly-inserted loan is pushed into the local candidate
+    // list so two loans[] lines in the SAME settlement that both
+    // normalize to the same key match each other too, instead of both
+    // inserting.
+    if (mapping.loans.length > 0) {
+      const { data: existingLoansAll, error: loansListError } = await supabase
         .from('loans')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('name', loan.name)
-        .maybeSingle();
-      if (lookupError) throw new SaveExtractionError('loans-upsert', lookupError, partial);
-      if (existingLoan) {
-        const { error } = await supabase.from('loans').update(loanWithSettlement).eq('id', existingLoan.id);
-        if (error) throw new SaveExtractionError('loans-upsert', error, partial);
-      } else {
-        const { error } = await supabase.from('loans').insert(loanWithSettlement);
-        if (error) throw new SaveExtractionError('loans-upsert', error, partial);
+        .select('id, name, lender, balance, original_amount')
+        .eq('user_id', userId);
+      if (loansListError) throw new SaveExtractionError('loans-upsert', loansListError, partial);
+      const candidates = (existingLoansAll ?? []) as Array<{
+        id: string;
+        name: string | null;
+        lender: string | null;
+        balance: number | null;
+        original_amount: number | null;
+      }>;
+      for (const loan of mapping.loans) {
+        if (!loan.name) continue;
+        // SETTLEMENT DELETE ORPHANS (owner decision, docs/PENDING_SQL.md
+        // §70) — every upsert (new or existing loan) is stamped with the
+        // REAL settlement id now that one exists, so this loan is always
+        // linked to the MOST RECENT settlement that touched it (an
+        // `on delete set null` FK, never cascade — see the migration's
+        // own header comment for why a standing loan must never be
+        // deleted just because one settlement mentioning it was).
+        const loanWithSettlement = { ...loan, settlement_id: settlementId };
+        const match = findMatchingLoan(loan, candidates);
+        if (match) {
+          const { error } = await supabase.from('loans').update(loanWithSettlement).eq('id', match.id);
+          if (error) throw new SaveExtractionError('loans-upsert', error, partial);
+          match.balance = loan.balance ?? match.balance;
+        } else {
+          const { data: inserted, error } = await supabase
+            .from('loans')
+            .insert(loanWithSettlement)
+            .select('id, name, lender, balance, original_amount')
+            .single();
+          if (error) throw new SaveExtractionError('loans-upsert', error, partial);
+          if (inserted) candidates.push(inserted as (typeof candidates)[number]);
+        }
       }
     }
     // Driver compensation types (owner decision 2026-07-10): the owner's

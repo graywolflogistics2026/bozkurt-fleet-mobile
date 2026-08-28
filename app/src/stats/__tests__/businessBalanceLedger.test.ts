@@ -58,6 +58,36 @@ describe('reconcileBusinessBalance — reconstructs the ledger from data the app
     expect(result.matches).toBe(true);
   });
 
+  test('THREE PERSISTENT ISSUES item 3 — zero settlements, $60k contribution, $5k draw reconstructs to exactly $55,000', () => {
+    const capitalTransactions = [
+      { id: 'c1', tx_type: 'contribution' as const, business_balance_applied: 60000 },
+      { id: 'c2', tx_type: 'draw' as const, business_balance_applied: -5000 },
+    ];
+    const result = reconcileBusinessBalance([], capitalTransactions, 55000);
+    expect(result.settlementsTotal).toBe(0);
+    expect(result.manualTransactionsTotal).toBe(55000);
+    expect(result.expectedBalance).toBe(55000);
+    expect(result.matches).toBe(true);
+  });
+
+  test('THREE PERSISTENT ISSUES item 3 — the SAME data against the reported stored value of $61,897 surfaces the exact drift', () => {
+    const capitalTransactions = [
+      { id: 'c1', tx_type: 'contribution' as const, business_balance_applied: 60000 },
+      { id: 'c2', tx_type: 'draw' as const, business_balance_applied: -5000 },
+    ];
+    const result = reconcileBusinessBalance([], capitalTransactions, 61897);
+    expect(result.expectedBalance).toBe(55000);
+    expect(result.storedBalance).toBe(61897);
+    expect(result.drift).toBe(6897);
+    expect(result.matches).toBe(false);
+    // Zero settlements means settlementsTotal can never explain any part
+    // of this drift — the entire gap is unattributable to anything
+    // currently on file, exactly the diagnostic signal that distinguishes
+    // "inherited drift from something now deleted" from a live bug.
+    expect(result.settlementCount).toBe(0);
+    expect(result.settlementsTotal).toBe(0);
+  });
+
   test('counts only nonzero rows for the display counts (a linked contribution never counts)', () => {
     const settlements = [{ id: 's1', business_balance_credit: 0 }];
     const capitalTransactions = [{ id: 'c1', tx_type: 'contribution' as const, business_balance_applied: 0 }];

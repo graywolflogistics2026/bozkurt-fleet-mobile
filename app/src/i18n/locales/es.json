@@ -419,6 +419,8 @@
     "verifyStored": "Actualmente registrado",
     "verifyMatches": "Coincide — cada dólar está contabilizado.",
     "verifyMismatch": "Difiere en {{amount}} — algo movió el saldo fuera del libro mayor registrado.",
+    "verifyLikelyHistoricalDriftZero": "Esta diferencia no coincide con ningún evento en tu historial de transacciones actual — con cero settlements registrados, nada aquí podría haberla producido. Lo más probable es que sea un remanente de antes de que el seguimiento automático del saldo cubriera todos los casos: un settlement eliminado antes de que existiera esa corrección, o una restauración de copia de seguridad antigua que estableció este valor directamente. Sea cual sea el origen, ya no está en tu historial, así que no hay nada más que mostrarte aquí. Usa Conciliar Saldo abajo para corregir tu saldo a su valor real.",
+    "verifyLikelyHistoricalDrift": "Esta diferencia no coincide con ningún settlement ni entrada de patrimonio en tu registro actual — lo más probable es que sea un remanente de antes de que el seguimiento automático del saldo cubriera todos los casos (un registro eliminado o editado, o una restauración de copia de seguridad antigua que estableció este valor directamente). Usa Conciliar Saldo abajo para corregir tu saldo a su valor real.",
     "deleteDrawConfirmTitle": "¿Eliminar este {{label}}?",
     "deleteDrawConfirmBody": "¿Se equivocó? Así es como se corrige.",
     "deleteContributionConfirmTitle": "¿Eliminar este aporte?",
@@ -2227,7 +2229,11 @@
     "orphanDocumentRow": "Documento huérfano",
     "loansTitle": "Préstamos de Settlements ({{count}})",
     "loansNote": "Estos préstamos se crearon a partir de la importación de un Settlement. Un préstamo es una obligación real y continua — se muestra aquí solo para visibilidad, nunca se elimina con esta herramienta. Administra o elimina un préstamo desde el Centro de Préstamos.",
-    "viewInLoanCenter": "Ver en Centro de Préstamos →"
+    "viewInLoanCenter": "Ver en Centro de Préstamos →",
+    "duplicateLoansTitle": "Posibles Préstamos Duplicados ({{count}} grupo(s))",
+    "duplicateLoansNote": "Estos préstamos comparten el mismo nombre y probablemente se crearon al volver a importar la misma obligación recurrente antes de que se corrigiera la detección de duplicados. La fila marcada en verde en cada grupo es la que tiene los datos de saldo más completos (o la más antigua, si los saldos son igualmente completos) — revisa antes de eliminar el resto.",
+    "duplicateLoansRecommendedKeep": "✓ Recomendado: conserva este",
+    "confirmDuplicateLoansBody": "Esto eliminará permanentemente {{count}} registro(s) de préstamo. Esto no se puede deshacer — asegúrate de conservar el correcto de cada grupo."
   },
   "truckAssignments": {
     "title": "Corregir Asignaciones de Camión",

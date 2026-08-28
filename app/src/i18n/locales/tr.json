@@ -419,6 +419,8 @@
     "verifyStored": "Şu anda kayıtlı",
     "verifyMatches": "Eşleşiyor — her dolar hesaba katıldı.",
     "verifyMismatch": "{{amount}} fark var — bir şey bakiyeyi izlenen defterin dışında hareket ettirdi.",
+    "verifyLikelyHistoricalDriftZero": "Bu fark, mevcut işlem geçmişinizdeki hiçbir olayla eşleşmiyor — sıfır settlement varken bunu hiçbir şey üretmiş olamaz. En olası açıklama, otomatik bakiye takibi her yolu kapsamadan önceki bir kalıntı: bu düzeltme var olmadan önce silinen bir settlement veya bu değeri doğrudan ayarlayan eski bir yedekleme geri yüklemesi. Kaynağı ne olursa olsun, artık geçmişinizde yok, bu yüzden burada gösterecek bir şey kalmadı. Bakiyenizi gerçek değerine düzeltmek için aşağıdaki Bakiyeyi Uzlaştır'ı kullanın.",
+    "verifyLikelyHistoricalDrift": "Bu fark, mevcut kayıtlı hiçbir settlement veya özsermaye girişiyle eşleşmiyor — en olası açıklama, otomatik bakiye takibi her yolu kapsamadan önceki bir kalıntı (silinmiş/düzenlenmiş bir kayıt veya bu değeri doğrudan ayarlayan eski bir yedekleme geri yüklemesi). Bakiyenizi gerçek değerine düzeltmek için aşağıdaki Bakiyeyi Uzlaştır'ı kullanın.",
     "deleteDrawConfirmTitle": "Bu {{label}} silinsin mi?",
     "deleteDrawConfirmBody": "Yanlışlıkla mı girdiniz? İşte düzeltme yolu.",
     "deleteContributionConfirmTitle": "Bu katkı silinsin mi?",
@@ -2227,7 +2229,11 @@
     "orphanDocumentRow": "Yetim belge",
     "loansTitle": "Settlement'lardan Gelen Krediler ({{count}})",
     "loansNote": "Bu krediler bir Settlement içe aktarımından oluşturuldu. Bir kredi gerçek, devam eden bir yükümlülüktür — burada yalnızca görünürlük için gösterilir, bu araçla asla kaldırılmaz. Krediyi Kredi Merkezi'nden yönetin veya silin.",
-    "viewInLoanCenter": "Kredi Merkezi'nde Görüntüle →"
+    "viewInLoanCenter": "Kredi Merkezi'nde Görüntüle →",
+    "duplicateLoansTitle": "Olası Yinelenen Krediler ({{count}} grup)",
+    "duplicateLoansNote": "Bu krediler aynı adı paylaşıyor ve muhtemelen yinelenen tespiti düzeltilmeden önce aynı tekrarlayan yükümlülüğün yeniden içe aktarılmasıyla oluşturuldu. Her gruptaki yeşille işaretli satır, en eksiksiz bakiye verisine sahip olandır (veya bakiyeler eşit derecede eksiksizse en eski olan) — geri kalanını kaldırmadan önce inceleyin.",
+    "duplicateLoansRecommendedKeep": "✓ Önerilen: bunu tut",
+    "confirmDuplicateLoansBody": "Bu, {{count}} kredi kaydını kalıcı olarak kaldıracaktır. Bu geri alınamaz — her gruptan doğru olanı tuttuğunuzdan emin olun."
   },
   "truckAssignments": {
     "title": "Kamyon Atamalarını Düzelt",

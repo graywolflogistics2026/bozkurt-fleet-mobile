@@ -371,11 +371,22 @@ export function useDailyTip() {
     tip: displayedCandidate,
     variant,
     exhausted,
-    // Dev-only diagnostic surface (Settings' own panel reads this
-    // directly) — never rendered in a production build, but always
-    // computed here so a __DEV__ check at the CALL SITE is the only thing
-    // gating visibility, never a second, possibly-stale calculation.
-    diagnostics: { eligibleCount, consideredCount: diagnostics.length, displayedTopic, lastShownAt: displayedTopic ? tipState[displayedTopic]?.lastShownAt ?? null : null },
+    // DIAGNOSTIC SURFACE, REACHABLE IN A SHIPPED BUILD TOO (owner
+    // decision, device report: "__DEV__ is false in a real EAS build, so
+    // the panel is invisible on my actual device"). Settings' own
+    // triple-tap-gated panel reads this SAME object (both `entries`, the
+    // full per-topic precondition_not_met/silenced/cooldown/eligible
+    // breakdown, and the summary fields below) regardless of `__DEV__` —
+    // only the dev console.log above stays gated on `__DEV__` (harmless,
+    // additive, unchanged). The two surfaces can never disagree since
+    // both read the one `diagnostics`/`eligibleCount` computed above.
+    diagnostics: {
+      eligibleCount,
+      consideredCount: diagnostics.length,
+      displayedTopic,
+      lastShownAt: displayedTopic ? tipState[displayedTopic]?.lastShownAt ?? null : null,
+      entries: diagnostics,
+    },
     showAnother,
     dismiss,
   };

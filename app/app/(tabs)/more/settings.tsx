@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -96,6 +96,27 @@ export default function Settings() {
   // query key), same "multiple independent callers is fine" precedent
   // already used throughout this app (useProfile(), useUsageTracking(), ...).
   const dailyTipDiag = useDailyTip();
+  // DAILY TIP DIAGNOSTICS — REACHABLE IN A SHIPPED BUILD (owner decision,
+  // device report: "__DEV__ is false in a real EAS build, so the panel
+  // is invisible on my actual device"). Same production-debugging pattern
+  // CLAUDE.md's own CUSTOMIZE DASHBOARD DIAGNOSTICS entry established
+  // (that screen was later deleted in the DASHBOARD SIMPLIFICATION pass,
+  // so there's no shared component to reuse — reimplemented here,
+  // inline): a triple-tap within 1.5s on the build-info footer line at
+  // the bottom of this screen reveals the SAME diagnostics object the
+  // __DEV__ console log already computes, regardless of build type.
+  const [showDailyTipDiagnostics, setShowDailyTipDiagnostics] = useState(false);
+  const diagnosticsTapTimes = useRef<number[]>([]);
+  function handleDiagnosticsFooterTap() {
+    const now = Date.now();
+    const recent = diagnosticsTapTimes.current.filter((t) => now - t < 1500);
+    recent.push(now);
+    diagnosticsTapTimes.current = recent;
+    if (recent.length >= 3) {
+      diagnosticsTapTimes.current = [];
+      setShowDailyTipDiagnostics((v) => !v);
+    }
+  }
   const isOwner = isOwnerAccount(profileQuery.data);
   const aiUsage = useAiUsageDisplay(isOwner);
 
@@ -562,13 +583,18 @@ export default function Settings() {
         <SecondaryButton title={t('common.signOut')} onPress={signOut} />
 
         {/* DAILY TIP DIAGNOSTICS (owner decision, device report: "this can
-            never be invisible again") — dev-build-only (__DEV__, React
-            Native's own global, never true in a production build), reads
-            the SAME diagnostics object useDailyTip()'s own dev-only
-            console.log already computes, so the two can never disagree. */}
-        {__DEV__ && (
+            never be invisible again... make the diagnostic available in
+            the SHIPPED build too") — reachable in ANY build (dev or
+            production) via a triple-tap on the build-info footer line
+            below, not gated on __DEV__ — reads the SAME diagnostics
+            object useDailyTip()'s own dev-only console.log already
+            computes, so the two can never disagree. Shows the full
+            per-topic precondition_not_met/silenced/cooldown/eligible
+            breakdown, not just the summary count, so "what blocked it if
+            none [were eligible]" is answerable on the actual device. */}
+        {showDailyTipDiagnostics && (
           <Card style={{ borderColor: colors.orange, borderWidth: 1 }}>
-            <Text style={{ color: colors.orange, fontWeight: '700', fontSize: typography.size.sm }}>🛠️ Daily Tip Diagnostics (dev only)</Text>
+            <Text style={{ color: colors.orange, fontWeight: '700', fontSize: typography.size.sm }}>🛠️ Daily Tip Diagnostics</Text>
             <MutedText style={{ marginTop: spacing.xs }}>
               {dailyTipDiag.isLoading
                 ? 'still loading queries…'
@@ -578,16 +604,26 @@ export default function Settings() {
                     dailyTipDiag.diagnostics.lastShownAt ? formatDate(dailyTipDiag.diagnostics.lastShownAt, i18n.language) : 'never'
                   }.`}
             </MutedText>
+            {!dailyTipDiag.isLoading &&
+              dailyTipDiag.diagnostics.entries.map((entry) => (
+                <MutedText key={entry.topic} style={{ marginTop: 2, fontSize: typography.size.xs }}>
+                  {entry.topic}: {entry.reason}
+                </MutedText>
+              ))}
           </Card>
         )}
 
         {/* RUNTIME VISIBILITY (owner decision 2026-07-30): "which JS is
             on this device" should never be a guess — same buildInfo.ts
             module ScreenErrorBoundary reads from, so the two can never
-            disagree about the format. */}
-        <Text style={{ color: colors.muted, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.lg }}>
-          {formatBuildInfoLine(getBuildInfo())}
-        </Text>
+            disagree about the format. Triple-tap this line to reveal the
+            Daily Tip Diagnostics panel above — same target on every build
+            type, dev or shipped. */}
+        <Pressable onPress={handleDiagnosticsFooterTap}>
+          <Text style={{ color: colors.muted, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.lg }}>
+            {formatBuildInfoLine(getBuildInfo())}
+          </Text>
+        </Pressable>
       </ScrollView>
 
       <ModalSheet visible={deleteConfirming} onClose={() => setDeleteConfirming(false)}>

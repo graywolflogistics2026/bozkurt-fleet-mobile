@@ -3,6 +3,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/lib/supabase';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
+import { findDuplicateLoanGroups, type LoanDuplicateGroup, type LoanMatchCandidate } from '@/src/import/loanMatch';
 
 // ORPHAN CLEANUP TOOL (owner decision, docs/PENDING_SQL.md §70, item 7) —
 // a one-time, user-reviewable sweep for records whose parent settlement
@@ -30,15 +31,27 @@ export type OrphanMaintenanceRecord = { id: string; cost: number | null; service
 export type OrphanDocument = { id: string; filename: string | null; doc_type: string | null; imported_at: string; storage_path: string | null };
 export type SettlementSourcedLoan = { id: string; name: string | null; balance: number | null; settlement_id: string | null };
 
+// LOAN DEDUPE CLEANUP (owner decision, device report: "give me a tool
+// listing the duplicate warranty loans so I can merge/remove them") —
+// this is a SEPARATE, DELETABLE section from settlementSourcedLoans
+// above (which stays informational-only, never offered for deletion): a
+// row grouped here is one the FIXED loan-upsert matching (loanMatch.ts's
+// findMatchingLoan(), applied going forward in aiImportSave.ts) would now
+// treat as "the same obligation" and update in place — these groups are
+// the historical backlog created by the OLD exact-string-match bug,
+// before that fix existed.
+export type DuplicateLoanRow = LoanMatchCandidate & { created_at: string; source: string | null };
+
 export type OrphanSummary = {
   tolls: OrphanToll[];
   maintenanceRecords: OrphanMaintenanceRecord[];
   documents: OrphanDocument[];
   settlementSourcedLoans: SettlementSourcedLoan[];
+  duplicateLoanGroups: LoanDuplicateGroup<DuplicateLoanRow>[];
 };
 
 async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
-  const [tollsRes, maintRes, documentsRes, settlementsRes, dedRes, loansRes] = await Promise.all([
+  const [tollsRes, maintRes, documentsRes, settlementsRes, dedRes, loansRes, allLoansRes] = await Promise.all([
     // A toll/maintenance row extracted from a settlement's own recap
     // section (source='settlement') that has no settlement_id at all —
     // structurally impossible to have come from anywhere else once
@@ -56,6 +69,11 @@ async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
     supabase.from('settlements').select('document_id').eq('user_id', userId).not('document_id', 'is', null),
     supabase.from('deductions').select('document_id').eq('user_id', userId).not('document_id', 'is', null),
     supabase.from('loans').select('id, name, balance, settlement_id').eq('user_id', userId).eq('source', 'settlement'),
+    // LOAN DEDUPE CLEANUP — every loan on the account, regardless of
+    // source, grouped by the SAME normalized-name key the fixed upsert
+    // now matches on (loanMatch.ts's findDuplicateLoanGroups()), so this
+    // list is exactly "what the fix would now treat as one loan."
+    supabase.from('loans').select('id, name, lender, balance, original_amount, created_at, source').eq('user_id', userId),
   ]);
   if (tollsRes.error) throw tollsRes.error;
   if (maintRes.error) throw maintRes.error;
@@ -63,6 +81,7 @@ async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
   if (settlementsRes.error) throw settlementsRes.error;
   if (dedRes.error) throw dedRes.error;
   if (loansRes.error) throw loansRes.error;
+  if (allLoansRes.error) throw allLoansRes.error;
 
   // A document is orphaned once NOTHING references it via document_id —
   // same 3-table check cleanupOrphanedDocument() itself uses (settlements/
@@ -77,11 +96,28 @@ async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
   ]);
   const documents = (documentsRes.data ?? []).filter((d) => !referencedDocIds.has(d.id));
 
+  const duplicateLoanGroups = findDuplicateLoanGroups((allLoansRes.data ?? []) as DuplicateLoanRow[])
+    // Recommend a "keep" candidate per group: the row with the most
+    // complete balance data (a real, nonzero balance beats a null one —
+    // it has actually been updated by a real recap line), tie-broken by
+    // earliest created_at (the original). Sorted so the UI can render the
+    // recommended row first without any extra logic of its own.
+    .map((group) => ({
+      ...group,
+      loans: [...group.loans].sort((a, b) => {
+        const aHasBalance = a.balance != null && a.balance !== 0;
+        const bHasBalance = b.balance != null && b.balance !== 0;
+        if (aHasBalance !== bHasBalance) return aHasBalance ? -1 : 1;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }),
+    }));
+
   return {
     tolls: (tollsRes.data ?? []) as OrphanToll[],
     maintenanceRecords: (maintRes.data ?? []) as OrphanMaintenanceRecord[],
     documents: documents as OrphanDocument[],
     settlementSourcedLoans: (loansRes.data ?? []) as SettlementSourcedLoan[],
+    duplicateLoanGroups,
   };
 }
 
@@ -121,6 +157,30 @@ export function useDeleteOrphanMaintenanceRecords() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['orphan-summary'] });
       await invalidateFinancialData(queryClient, { entities: ['maintenance_records'] });
+    },
+  });
+}
+
+// LOAN DEDUPE CLEANUP — plain delete by id list, same shape as
+// useDeleteOrphanTolls/useDeleteOrphanMaintenanceRecords above. Unlike
+// those two, this is deleting REAL LOAN ROWS the user has explicitly
+// reviewed and chosen to remove (a duplicate created by the old exact-
+// match bug, per the recommended "keep" row shown above each group) —
+// still a real, standing-obligation table, so this action requires the
+// same explicit multi-select + confirm flow every other bulk delete in
+// this screen already uses; nothing here is auto-selected or auto-merged
+// on the user's behalf.
+export function useDeleteDuplicateLoans() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const { error } = await supabase.from('loans').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['orphan-summary'] });
+      await invalidateFinancialData(queryClient, { entities: ['loans'] });
     },
   });
 }
