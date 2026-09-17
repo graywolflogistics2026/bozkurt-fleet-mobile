@@ -60,6 +60,7 @@
     "referral": "Davet Et ve Kazan",
     "dataCleanup": "Veri Temizliği",
     "accountantPackage": "Muhasebeci Paketi",
+    "primeDriverExpenses": "Prime Inc Sürücüleri İçin",
     "truckComparison": "Kamyon Karşılaştırması"
   },
   "auth": {
@@ -2050,6 +2051,28 @@
     "exportPdfYear": "Yılı PDF Olarak Dışa Aktar",
     "exportExcelMonth": "Ayı Excel Olarak Dışa Aktar",
     "exportExcelYear": "Yılı Excel Olarak Dışa Aktar"
+  },
+  "primeDriverExpenses": {
+    "title": "Prime Inc Sürücüleri İçin",
+    "subtitle": "Muhasebecinizin kendi rapor biçimiyle eşleşen aylık cepten harcama kaydı — Kesintilerden ayrı.",
+    "disclaimer": "Bu araç, kendi kayıtlarınızı düzenlemenize yardımcı olmak için sağlanmıştır. Hiçbir girişin doğruluğunu doğrulamaz, denetlemez veya garanti etmez — buraya girdiğiniz bilgilerden ve bunların vergi beyannamelerinizde nasıl kullanıldığından yalnızca siz sorumlusunuz. Bu muhasebe, vergi veya hukuki danışmanlık değildir — nitelikli bir mali müşavire veya vergi uzmanına danışın.",
+    "yearLabel": "Yıl",
+    "monthLabel": "Ay",
+    "addExpense": "Gider Ekle",
+    "editExpense": "Gideri Düzenle",
+    "dateLabel": "Tarih",
+    "amountLabel": "Tutar",
+    "categoryLabel": "Kategori",
+    "noteLabel": "Not (isteğe bağlı)",
+    "notePlaceholder": "Satıcı veya not",
+    "attachmentLabel": "Makbuz (isteğe bağlı)",
+    "daysAwayFromHome": "Evden Uzakta Geçen Gün Sayısı",
+    "grandTotal": "Genel Toplam",
+    "noEntries": "Bu ay giriş yok.",
+    "categoryTableTitle": "Kategoriler",
+    "exportTitle": "Bu Ayı Dışa Aktar",
+    "exportPdf": "PDF Olarak Dışa Aktar",
+    "exportExcel": "Excel Olarak Dışa Aktar"
   },
   "scorecard": {
     "title": "Karne",

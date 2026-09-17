@@ -60,6 +60,7 @@
     "referral": "Invitar y Ganar",
     "dataCleanup": "Limpieza de Datos",
     "accountantPackage": "Paquete para el Contador",
+    "primeDriverExpenses": "Para Conductores de Prime Inc",
     "truckComparison": "Comparación de Camiones"
   },
   "auth": {
@@ -2050,6 +2051,28 @@
     "exportPdfYear": "Exportar Año como PDF",
     "exportExcelMonth": "Exportar Mes como Excel",
     "exportExcelYear": "Exportar Año como Excel"
+  },
+  "primeDriverExpenses": {
+    "title": "Para Conductores de Prime Inc",
+    "subtitle": "Un registro mensual de gastos de bolsillo que coincide con el formato del informe de tu contador — independiente de Deducciones.",
+    "disclaimer": "Esta herramienta se proporciona para ayudarte a organizar tus propios registros. No verifica, audita ni garantiza la exactitud de ninguna entrada — eres el único responsable de lo que ingreses aquí y de cómo se use en tus declaraciones de impuestos. Esto no es asesoría contable, fiscal ni legal — consulta a un contador público certificado o profesional fiscal calificado.",
+    "yearLabel": "Año",
+    "monthLabel": "Mes",
+    "addExpense": "Agregar Gasto",
+    "editExpense": "Editar Gasto",
+    "dateLabel": "Fecha",
+    "amountLabel": "Monto",
+    "categoryLabel": "Categoría",
+    "noteLabel": "Nota (opcional)",
+    "notePlaceholder": "Proveedor o nota",
+    "attachmentLabel": "Recibo (opcional)",
+    "daysAwayFromHome": "Días Fuera de Casa",
+    "grandTotal": "Total General",
+    "noEntries": "Sin entradas este mes.",
+    "categoryTableTitle": "Categorías",
+    "exportTitle": "Exportar Este Mes",
+    "exportPdf": "Exportar como PDF",
+    "exportExcel": "Exportar como Excel"
   },
   "scorecard": {
     "title": "Calificación",

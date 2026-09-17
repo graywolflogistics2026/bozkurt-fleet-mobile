@@ -526,6 +526,7 @@ export const DAILY_TIP_SCREEN_COVERAGE: Record<string, DailyTipCoverageEntry> = 
   '/(tabs)/more/category-learning': 'tipCategoryLearning',
   '/(tabs)/more/referral': 'intentionalNone', // milestone-triggered (src/referral/referralNudge.ts), not part of the daily rotation
   '/(tabs)/more/data-cleanup': 'intentionalNone', // one-time historical repair tool (docs/PENDING_SQL.md §70) — nothing to nudge about day to day
+  '/(tabs)/more/prime-driver-expenses': 'intentionalNone', // niche, accountant-template-specific tool (owner decision 2026-09-17) — nothing to nudge about day to day
   '/(tabs)/more/trucks': 'tipTruckCostBasis',
   '/(tabs)/more/truck-comparison': 'tipTruckComparison',
   '/(tabs)/more/equipment': 'tipEquipment',

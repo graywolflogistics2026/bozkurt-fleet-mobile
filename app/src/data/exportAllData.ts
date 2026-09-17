@@ -49,6 +49,13 @@ export const EXPORT_TABLES = [
   // own audit already found and fixed for `equipment` above.
   'account_credits',
   'ai_credit_purchases',
+  // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision
+  // 2026-09-17, docs/PENDING_SQL.md §74) — genuinely real, user-entered
+  // financial data (unlike ai_usage_log/import_jobs, which are transient
+  // telemetry/job state deliberately excluded from this export) — belongs
+  // in a full-data export the same way every other manually-entered table
+  // above does.
+  'prime_driver_expenses',
 ] as const;
 
 export type AllUserData = Record<(typeof EXPORT_TABLES)[number], unknown[]> & { referrals: unknown[] };

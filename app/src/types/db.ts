@@ -916,3 +916,32 @@ export type Benchmark = {
   created_at: string;
   updated_at: string;
 };
+
+// "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision
+// 2026-09-17, docs/PENDING_SQL.md §74, NOT YET APPLIED) — a standalone
+// manual-entry table, deliberately NOT `deductions`. `category` is one of
+// the 16 fixed accountant-template values in
+// `app/src/primeDriverExpenses/categories.ts`'s
+// `PRIME_DRIVER_EXPENSE_CATEGORIES` — a completely separate vocabulary
+// from `CANONICAL_CATEGORIES`. This table is NEVER read by
+// computeKpis()/sumCanonicalExpenses()/calcCanonicalCpm()/
+// buildTruckComparison()/the tax estimate/the Accountant Package's own
+// buildLineItems() — see this type's own isolation proof in
+// src/stats/__tests__/primeDriverExpenses.test.ts.
+export type PrimeDriverExpense = {
+  id: string;
+  user_id: string;
+  exp_date: string;
+  amount: number;
+  category: string;
+  note: string | null;
+  document_id: string | null;
+  created_at: string;
+};
+export type PrimeDriverExpenseInsert = Partial<Omit<PrimeDriverExpense, 'id' | 'created_at'>> & {
+  user_id: string;
+  exp_date: string;
+  amount: number;
+  category: string;
+};
+export type PrimeDriverExpenseUpdate = Partial<Omit<PrimeDriverExpense, 'id' | 'user_id' | 'created_at'>>;

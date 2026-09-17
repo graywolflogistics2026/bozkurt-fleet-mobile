@@ -65,6 +65,13 @@ const TABLES_IN_DELETION_ORDER = [
   // auth user itself is deleted) — same "drivers" precedent this file's
   // own header comment already documents.
   "import_jobs",
+  // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision
+  // 2026-09-17, docs/PENDING_SQL.md §74) — a user's own manually-entered
+  // rows are real business data, same reasoning as every other table in
+  // this list. `user_id ... on delete cascade` means delete-account needs
+  // NO explicit entry (same import_jobs precedent above); reset-data DOES
+  // need one, since it never deletes the auth user.
+  "prime_driver_expenses",
 ];
 
 // profiles.* fields that hold actual business/financial DATA (a balance,

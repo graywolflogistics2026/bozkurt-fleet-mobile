@@ -68,6 +68,11 @@ describe('invalidateFinancialData', () => {
       // job/processing state, wiped by reset-data explicitly (unlike
       // delete-account, which relies on user_id ... on delete cascade).
       'import_jobs',
+      // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner
+      // decision 2026-09-17, §74) — a real user-scoped table, wiped by
+      // reset-data explicitly (unlike delete-account, which relies on
+      // user_id ... on delete cascade).
+      'prime_driver_expenses',
     ];
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, 'invalidateQueries');
@@ -173,7 +178,11 @@ describe('invalidateFinancialData — scoped mode (entities option)', () => {
     await invalidateFinancialData(scopedClient, { entities: ['deductions', 'capital_transactions'] });
     const invalidatedKeys = scopedSpy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey[0]);
 
-    expect(beforeCount).toBe(32); // 28 AFFECTED_TABLES + 4 AFFECTED_AGGREGATES, unscoped
+    // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner
+    // decision 2026-09-17, §74) added 'prime_driver_expenses' to
+    // AFFECTED_TABLES — 29 AFFECTED_TABLES + 4 AFFECTED_AGGREGATES,
+    // unscoped (was 32/28+4 before this table existed).
+    expect(beforeCount).toBe(33);
     expect(new Set(invalidatedKeys)).toEqual(
       new Set(['deductions', 'capital_transactions', 'fleet-stats', 'driver-stats', 'capital-account-summary'])
     );

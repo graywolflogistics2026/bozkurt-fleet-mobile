@@ -60,6 +60,7 @@
     "referral": "دعوة واكسب",
     "dataCleanup": "تنظيف البيانات",
     "accountantPackage": "حزمة المحاسب",
+    "primeDriverExpenses": "لسائقي Prime Inc",
     "truckComparison": "مقارنة الشاحنات"
   },
   "auth": {
@@ -2050,6 +2051,28 @@
     "exportPdfYear": "تصدير السنة كملف PDF",
     "exportExcelMonth": "تصدير الشهر كملف Excel",
     "exportExcelYear": "تصدير السنة كملف Excel"
+  },
+  "primeDriverExpenses": {
+    "title": "لسائقي Prime Inc",
+    "subtitle": "سجل شهري للمصاريف الشخصية يطابق تنسيق تقرير محاسبك الخاص — منفصل عن الخصومات.",
+    "disclaimer": "يتم توفير هذه الأداة لمساعدتك على تنظيم سجلاتك الخاصة. لا يتحقق التطبيق من دقة أي إدخال أو يدققه أو يضمنه — أنت وحدك المسؤول عن دقة ما تدخله هنا وعن كيفية استخدامه في إقراراتك الضريبية. هذا ليس استشارة محاسبية أو ضريبية أو قانونية — استشر محاسبًا قانونيًا مؤهلاً أو أخصائي ضرائب.",
+    "yearLabel": "السنة",
+    "monthLabel": "الشهر",
+    "addExpense": "إضافة مصروف",
+    "editExpense": "تعديل المصروف",
+    "dateLabel": "التاريخ",
+    "amountLabel": "المبلغ",
+    "categoryLabel": "الفئة",
+    "noteLabel": "ملاحظة (اختياري)",
+    "notePlaceholder": "المورد أو ملاحظة",
+    "attachmentLabel": "إيصال (اختياري)",
+    "daysAwayFromHome": "أيام بعيدًا عن المنزل",
+    "grandTotal": "الإجمالي الكلي",
+    "noEntries": "لا توجد إدخالات هذا الشهر.",
+    "categoryTableTitle": "الفئات",
+    "exportTitle": "تصدير هذا الشهر",
+    "exportPdf": "تصدير كملف PDF",
+    "exportExcel": "تصدير كملف Excel"
   },
   "scorecard": {
     "title": "بطاقة الأداء",

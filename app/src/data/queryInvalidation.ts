@@ -66,6 +66,11 @@ const AFFECTED_TABLES = [
   // TABLES_IN_DELETION_ORDER); this key is what useImportJobs() reads
   // from, so a stale cached job list would otherwise survive a reset.
   'import_jobs',
+  // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision
+  // 2026-09-17, docs/PENDING_SQL.md §74) — a real, user-scoped table like
+  // every other entry above; queried via the plain `usePrimeDriverExpenses()`
+  // entity-hook list key.
+  'prime_driver_expenses',
 ];
 
 // Derived/aggregate query keys that read from the tables above but aren't

@@ -39,6 +39,7 @@ export default function MoreLayout() {
       <Stack.Screen name="documents" options={{ title: t('nav.documents') }} />
       <Stack.Screen name="category-learning" options={{ title: t('nav.categoryLearning') }} />
       <Stack.Screen name="accountant-package" options={{ title: t('nav.accountantPackage') }} />
+      <Stack.Screen name="prime-driver-expenses" options={{ title: t('nav.primeDriverExpenses') }} />
       <Stack.Screen name="tax-estimator" options={{ title: t('nav.taxEstimator') }} />
       <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
       <Stack.Screen name="terms-of-use" options={{ title: t('nav.termsOfUse') }} />

@@ -66,6 +66,12 @@ export const RAW_NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/(tabs)/more/asset-register', labelKey: 'nav.assetRegister', emoji: '🗄️' },
       { href: '/(tabs)/more/accountant-package', labelKey: 'nav.accountantPackage', emoji: '📁' },
+      // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner
+      // decision 2026-09-17) — a standalone, accountant-template-matching
+      // monthly expense tool, deliberately distinct from Deductions/
+      // Schedule-C (src/stats/primeDriverExpenses.ts's own header comment
+      // has the full isolation guarantee).
+      { href: '/(tabs)/more/prime-driver-expenses' as Href, labelKey: 'nav.primeDriverExpenses', emoji: '🧳' },
       // AI Advisor (SIMPLIFICATION PASS, owner decision) — the dedicated
       // free-form chat screen was removed; its one real capability (multi-
       // turn Q&A) was folded into AI Coach (ceo-mode.tsx's own "Ask a

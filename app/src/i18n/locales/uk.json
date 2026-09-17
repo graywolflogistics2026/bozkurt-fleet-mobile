@@ -60,6 +60,7 @@
     "referral": "Invite & Earn",
     "dataCleanup": "Data Cleanup",
     "accountantPackage": "Accountant Package",
+    "primeDriverExpenses": "For Prime Inc Drivers",
     "truckComparison": "Truck Comparison"
   },
   "auth": {
@@ -2050,6 +2051,28 @@
     "exportPdfYear": "Export Year as PDF",
     "exportExcelMonth": "Export Month as Excel",
     "exportExcelYear": "Export Year as Excel"
+  },
+  "primeDriverExpenses": {
+    "title": "For Prime Inc Drivers",
+    "subtitle": "A monthly out-of-pocket expense log matching your accountant's own report format — separate from Deductions.",
+    "disclaimer": "This tool is provided to help organize your own records. It does not verify, audit, or guarantee the accuracy of any entry — you're solely responsible for what you enter here and for how it's used in your tax filings. This is not accounting, tax, or legal advice — consult a qualified CPA or tax professional.",
+    "yearLabel": "Year",
+    "monthLabel": "Month",
+    "addExpense": "Add Expense",
+    "editExpense": "Edit Expense",
+    "dateLabel": "Date",
+    "amountLabel": "Amount",
+    "categoryLabel": "Category",
+    "noteLabel": "Note (optional)",
+    "notePlaceholder": "Vendor or note",
+    "attachmentLabel": "Receipt (optional)",
+    "daysAwayFromHome": "Days Away From Home",
+    "grandTotal": "Grand Total",
+    "noEntries": "No entries this month.",
+    "categoryTableTitle": "Categories",
+    "exportTitle": "Export This Month",
+    "exportPdf": "Export as PDF",
+    "exportExcel": "Export as Excel"
   },
   "scorecard": {
     "title": "Scorecard",

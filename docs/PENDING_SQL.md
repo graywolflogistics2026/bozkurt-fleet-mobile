@@ -4231,6 +4231,69 @@ convention for every other write).
 
 ---
 
+## 74. "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision 2026-09-17) — NOT YET APPLIED
+
+**The decision**: a brand-new, standalone screen exists purely to match
+the exact monthly out-of-pocket expense report format the user's
+accountant already works from — 16 fixed categories, a per-category
+subtotal, a Days Away From Home line, and a grand total. This is
+deliberately NOT a change to `deductions`/Schedule-C — it's independent
+manual entry into its own new table,
+`app/src/stats/primeDriverExpenses.ts`'s own header comment carries the
+full isolation guarantee (this table is never read by `computeKpis()`/
+`sumCanonicalExpenses()`/`calcCanonicalCpm()`/`buildTruckComparison()`/
+the Accountant Package's own `buildLineItems()`/the tax estimate),
+proven end to end by
+`src/stats/__tests__/primeDriverExpenses.test.ts`'s "CANONICAL
+ISOLATION" test.
+
+```sql
+create table prime_driver_expenses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  exp_date date not null,
+  amount numeric(12,2) not null,
+  category text not null check (category in (
+    'Lumpers', 'Cash Tolls/Parking Fees', 'Scales',
+    'Equipment/Operating Supplies', 'Safety/Weather Gear', 'Cash Fuel',
+    'Oil & Additives', 'Truck & Trailer Wash', 'Repairs', 'Communication',
+    'Advertising', 'Office Supplies', 'Lodging', 'Laundry/Showers',
+    'Bank/ATM Fees', 'Misc'
+  )),
+  note text,
+  document_id uuid references documents(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index prime_driver_expenses_user_id_idx on prime_driver_expenses(user_id, exp_date desc);
+
+alter table prime_driver_expenses enable row level security;
+create policy "prime_driver_expenses_select_own" on prime_driver_expenses for select using (auth.uid() = user_id);
+create policy "prime_driver_expenses_insert_own" on prime_driver_expenses for insert with check (auth.uid() = user_id);
+create policy "prime_driver_expenses_update_own" on prime_driver_expenses for update using (auth.uid() = user_id);
+create policy "prime_driver_expenses_delete_own" on prime_driver_expenses for delete using (auth.uid() = user_id);
+```
+
+The 16-value check constraint is the exact same list as
+`app/src/primeDriverExpenses/categories.ts`'s
+`PRIME_DRIVER_EXPENSE_CATEGORIES` — kept in sync by hand, same
+"TypeScript enum and SQL check constraint" convention every other
+category-shaped column in this schema already uses. `user_id ... on
+delete cascade` means `delete-account` needs NO explicit table-list
+entry (same `import_jobs`/`ai_credit_purchases` precedent —
+`auth.admin.deleteUser()` cleans it up automatically); `reset-data` DOES
+need one (it never deletes the auth user) — already added to its
+`TABLES_IN_DELETION_ORDER`. Also added to `queryInvalidation.ts`'s
+`AFFECTED_TABLES` and `exportAllData.ts`'s `EXPORT_TABLES` (this is
+genuinely real, user-entered data — unlike `ai_usage_log`/`import_jobs`,
+which are deliberately excluded from the export as transient telemetry/
+job state). See CLAUDE.md's own dated entry for this pass for the full
+feature writeup (the report export, the disclaimer, the isolation test).
+
+- [ ] 74 run (prime_driver_expenses table + RLS + index)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —
