@@ -35,6 +35,7 @@ function deduction(overrides: Partial<Deduction>): Deduction {
     tags: null,
     tax_deductible: true,
     reviewed_at: null,
+    accountant_category: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,

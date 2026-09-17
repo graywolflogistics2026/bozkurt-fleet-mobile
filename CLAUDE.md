@@ -11987,3 +11987,148 @@
   `delete-account`/`referral-sync` (this is a pure manual-entry feature,
   no AI extraction involved). No new native dependency — ships via a
   normal `eas update` once §74 has been run.
+- MAP EXISTING OUT-OF-POCKET DEDUCTIONS INTO THE 16 ACCOUNTANT CATEGORIES
+  (owner decision 2026-09-17, "CRITICAL ACCURACY TASK," docs/PENDING_SQL.md
+  §75, NOT YET APPLIED). A two-phase task, gated by an explicit owner
+  review of the full mapping table BEFORE any code was written — the
+  approved mapping below is final and binding.
+  **THE ORIGIN RULE, the single most important constraint in this task,
+  stated in the owner's own words and enforced literally**: a row is
+  ONLY eligible for an `accountant_category` and ONLY eligible to ever
+  appear on the "For Prime Inc Drivers" report if it is genuinely
+  out-of-pocket. Category name and origin are two independent checks —
+  origin is checked FIRST, alone, on every single row, no exceptions. A
+  settlement-withheld "Truck Wash & Detailing" row must never receive an
+  `accountant_category`, even though that category name maps to "Truck &
+  Trailer Wash" below. Enforced by ONE function,
+  `app/src/primeDriverExpenses/categoryMapping.ts`'s
+  `isEligibleForAccountantReport(source)` — deliberately the exact same
+  check `src/stats/accountantPackage.ts`'s own `matchesAccountantScope(
+  origin, 'outOfPocket')` already established for its own out-of-pocket
+  scope, proven identical by a dedicated test rather than merely
+  described as such, so the two definitions of "out-of-pocket" can never
+  silently drift apart. Per the owner's own explicit instruction, this
+  is the VERY FIRST test in the new test suite
+  (`src/primeDriverExpenses/__tests__/categoryMapping.test.ts`'s "THE
+  ORIGIN RULE" describe block, its first `it()`): two rows both
+  categorized "Truck Wash & Detailing" — one `source: 'settlement'`, one
+  `source: 'manual'` — proving only the out-of-pocket one is ever
+  eligible, before any other assertion in the file.
+  **The approved mapping** (`CANONICAL_TO_ACCOUNTANT_CATEGORY`, one
+  exported constant, every one of the 38 real `CANONICAL_CATEGORIES`
+  values covered explicitly — even the unmapped ones, as `null`, so a
+  future new canonical category with no corresponding entry is a
+  detectable test failure, never a silent fallthrough):
+  Fuel & DEF→Cash Fuel · Fuel Additives→Oil & Additives · Maintenance &
+  Repairs/Major Repairs & Overhauls/Truck Parts/Tires→Repairs · Truck
+  Wash & Detailing→Truck & Trailer Wash · Tolls & Scales→Cash
+  Tolls/Parking Fees · Parking & Lodging→Lodging · ELD &
+  Communications→Communication · Office & Admin→Office Supplies ·
+  Safety Gear & Workwear→Safety/Weather Gear · Truck Supplies &
+  Equipment/Tools & Equipment/Electronics/Comfort & Sleeper→Equipment/
+  Operating Supplies · Lumper Fees→Lumpers · Bank & Merchant
+  Fees→Bank/ATM Fees · Advertising→Advertising · Misc/Other→Misc ·
+  everything else (Truck/Trailer Payments, Insurance—Truck,
+  Insurance—Health, Permits Licenses & Road Taxes, Software &
+  Subscriptions, Dispatch & Factoring Fees, Legal & Professional
+  Services, Warranty & Service Contracts, Contract Labor (1099), Wages &
+  Payroll Taxes (W-2), Training & Education, Association Dues, Lease &
+  Rent, Utilities & Subscriptions, Meals (per diem covered), Advance
+  Repayment, Escrow & Deposits) → unmapped (`null`). "Scales" and
+  "Laundry/Showers" — 2 of the 16 accountant categories — have no
+  canonical source mapping to them at all; reachable only via manual
+  re-categorization or a direct `prime_driver_expenses` entry.
+  **`deductions.accountant_category`** (new nullable column, §75) is a
+  REPORTING LABEL ONLY — the exact same isolation guarantee §74 already
+  established for `prime_driver_expenses`, extended to cover this field
+  explicitly: never read by `computeKpis()`/`sumCanonicalExpenses()`/
+  `calcCanonicalCpm()`/`buildTruckComparison()`/`buildLineItems()`
+  (Accountant Package)/`calcTaxEstimate()`, proven by
+  `primeDriverExpenses.test.ts`'s extended "CANONICAL ISOLATION" block —
+  a live before/after test setting/changing `accountant_category` on
+  real deduction rows and proving every canonical total stays byte-
+  identical, plus the same source-file grep now also checking for the
+  literal string `accountant_category` across every canonical file
+  (widened to include `src/tax/perDiem.ts` too, for item 8 below).
+  **AUTO-SUGGEST FOR EXISTING HISTORY, ALWAYS EDITABLE** (a deliberate,
+  SCOPED exception to this codebase's own standing "never auto-assign,
+  always a deliberate user choice" convention — the owner explicitly
+  asked for accurate automatic placement across history, correctable
+  afterward, not a blank slate): `findAccountantCategoryBackfillCandidates()`
+  never touches a row that already has a non-null `accountant_category`
+  (whether auto-set by an earlier run or manually corrected), and always
+  re-checks origin first — safe to run any number of times, surfaced as
+  a "🔄 Auto-fill N category suggestion(s)" button on the report itself
+  whenever candidates exist. **New entries going forward** get the same
+  suggestion applied immediately at save time (`suggestAccountantCategory()`,
+  the ONE function every out-of-pocket deduction-insert call site uses):
+  the settlement-withheld batch insert in `aiImportSave.ts` is
+  deliberately NEVER touched by this (the origin rule's own "never set
+  this field at all" for a withheld row); the standalone-purchase,
+  generic-fallback, and financial-doc insert paths, plus Deductions'
+  own manual add flow (a best-effort follow-up update, same precedent as
+  that flow's existing receipt-attachment follow-up), all get it.
+  **ZERO DUPLICATION** (item 5): the report's monthly view is the plain
+  concatenation (`mergePrimeDriverExpenseRows()`) of two structurally
+  DISJOINT sources — `prime_driver_expenses` rows (always manual, no
+  origin concept) and eligible `deductions` rows
+  (`eligibleDeductionRowsForReport()`, the origin check applied a SECOND
+  time here as the report's own last line of defense even though every
+  write path already enforces it) — there is no shared identity between
+  the two tables for a real collision to occur, so "never both for the
+  same real-world expense" is satisfied by clear UI labeling ("from
+  Deductions, {{date}}" vs. a silent direct entry) rather than a
+  de-duplication algorithm. **Delete consistency** (item 6): a
+  deduction-sourced row's delete action on this screen calls the EXACT
+  SAME path Deductions' own screen uses (`useDeleteDeduction` +
+  `cleanupOrphanedDocument()` for its linked document, the linked
+  `capital_transactions` row cascading automatically per CLAUDE.md
+  invariant #5) — never a parallel, thinner delete — so it disappears
+  from both screens immediately, live-read, no caching; a
+  `prime_driver_expenses`-only row uses that table's own existing
+  delete and only ever affects this report. **Category picker on this
+  screen** (item 7) is the 16-value `PRIME_DRIVER_EXPENSE_CATEGORIES`
+  list ONLY for a deduction-sourced row, never the 38-value canonical
+  picker — editing it writes ONLY `accountant_category`, the real
+  Schedule-C `category` is completely untouched (the edit sheet hides
+  date/amount/note entirely for a deduction-sourced row, since those are
+  managed on Deductions' own screen, this report only ever reads them).
+  **DAYS AWAY FROM HOME OVERRIDE** (item 8): new `profiles.
+  prime_driver_days_override` jsonb column, keyed `"YYYY-MM"` — the
+  SAME "per-period user correction, one jsonb column" shape
+  `profiles.cf_periodic_overrides` (§57) already established, reused
+  rather than a dedicated table. Display-only for THIS report alone —
+  `buildPrimeDriverExpenseMonth()`'s new optional 5th parameter is the
+  ONLY way this value ever reaches anything, and neither
+  `calcPerDiemDays()` nor `buildPerDiemBlock()` (Tax Estimator/the
+  Accountant Package's own per-diem block) has any parameter to receive
+  it at all — proven by the same source-grep (now covering
+  `src/tax/perDiem.ts` too) plus a dedicated live-before/after isolation
+  test. When unset, the auto-computed month figure shows with no
+  indicator; when set, a small "✎ manually set" indicator plus a one-tap
+  "↺ Reset to calculated value" action (clearing the key from the jsonb
+  map) appears. `reset-data`'s `PROFILE_DATA_RESET` gained this new
+  field in its CLEARED bucket (CLAUDE.md invariant #24's own rule: an
+  unlisted new `profiles` column is silently KEPT, the wrong default for
+  a per-report override tied to business data).
+  Tests: `categoryMapping.test.ts` (new, 12 tests — the origin-rule test
+  FIRST as instructed, the full 38-category mapping table pinned
+  verbatim, the backfill's never-overwrite and idempotent-re-run
+  guarantees). `primeDriverExpenses.test.ts` extended (8 new tests — the
+  days-override display/flag behavior, `eligibleDeductionRowsForReport()`'s
+  own origin enforcement, the zero-duplication union proof, the
+  accountant_category isolation proof, the days-override isolation
+  proof). Full suite: 136 suites / 3614 tests pass (+19); `tsc --noEmit`
+  clean; all 7 locales confirmed key-parity (7 new
+  `primeDriverExpenses.*` keys — es/ru/tr/hi/ar fully translated, uk as
+  an untranslated English copy per invariant #11; glossary test
+  re-passed clean). `docs/PENDING_SQL.md` §75 (mirrored as
+  `pending_75.sql` at the repo root) is **NOT YET APPLIED** — until it's
+  run, `accountant_category`/`prime_driver_days_override` writes fail
+  cleanly against columns that don't exist yet (no crash — every write
+  site already wraps its own best-effort follow-up in try/catch, same
+  established convention as every other optional post-save enrichment in
+  this codebase). No Edge Function was touched — no redeploy needed for
+  `ai-import`/`ai-advisor`/`reset-data`(config-only column-list
+  change)/`delete-account`/`referral-sync`. No new native dependency —
+  ships via a normal `eas update` once §75 has been run.

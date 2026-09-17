@@ -2072,7 +2072,14 @@
     "categoryTableTitle": "Categorías",
     "exportTitle": "Exportar Este Mes",
     "exportPdf": "Exportar como PDF",
-    "exportExcel": "Exportar como Excel"
+    "exportExcel": "Exportar como Excel",
+    "backfillButton": "Autocompletar {{count}} sugerencia(s) de categoría desde Deducciones",
+    "backfillDoneTitle": "Categorías completadas",
+    "backfillDoneBody": "{{count}} deducción(es) se categorizaron automáticamente. Cada una sigue siendo editable aquí mismo.",
+    "fromDeductions": "desde Deducciones, {{date}}",
+    "manuallySet": "establecido manualmente",
+    "resetToCalculated": "↺ Restablecer al valor calculado",
+    "editingDeductionNote": "Esta línea proviene de Deducciones — su fecha, monto y nota se gestionan allí. Solo la categoría contable de abajo es editable desde este informe."
   },
   "scorecard": {
     "title": "Calificación",

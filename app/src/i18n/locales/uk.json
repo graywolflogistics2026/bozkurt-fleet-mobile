@@ -2072,7 +2072,14 @@
     "categoryTableTitle": "Categories",
     "exportTitle": "Export This Month",
     "exportPdf": "Export as PDF",
-    "exportExcel": "Export as Excel"
+    "exportExcel": "Export as Excel",
+    "backfillButton": "Auto-fill {{count}} category suggestion(s) from Deductions",
+    "backfillDoneTitle": "Categories filled in",
+    "backfillDoneBody": "{{count}} deduction(s) were auto-categorized. Every one is still editable right here.",
+    "fromDeductions": "from Deductions, {{date}}",
+    "manuallySet": "manually set",
+    "resetToCalculated": "↺ Reset to calculated value",
+    "editingDeductionNote": "This row comes from Deductions — its date, amount, and note are managed there. Only the accountant category below is editable from this report."
   },
   "scorecard": {
     "title": "Scorecard",

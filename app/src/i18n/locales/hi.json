@@ -2072,7 +2072,14 @@
     "categoryTableTitle": "श्रेणियां",
     "exportTitle": "इस महीने को एक्सपोर्ट करें",
     "exportPdf": "PDF के रूप में एक्सपोर्ट करें",
-    "exportExcel": "Excel के रूप में एक्सपोर्ट करें"
+    "exportExcel": "Excel के रूप में एक्सपोर्ट करें",
+    "backfillButton": "Deductions से {{count}} श्रेणी सुझाव अपने आप भरें",
+    "backfillDoneTitle": "श्रेणियां भर दी गईं",
+    "backfillDoneBody": "{{count}} deduction को अपने आप श्रेणीबद्ध किया गया। हर एक अभी भी यहीं से संपादित की जा सकती है।",
+    "fromDeductions": "Deductions से, {{date}}",
+    "manuallySet": "मैन्युअल रूप से सेट",
+    "resetToCalculated": "↺ गणना किए गए मान पर रीसेट करें",
+    "editingDeductionNote": "यह पंक्ति Deductions से आई है — इसकी तारीख, राशि और नोट वहीं प्रबंधित होते हैं। इस रिपोर्ट से केवल नीचे दी गई accountant श्रेणी संपादित की जा सकती है।"
   },
   "scorecard": {
     "title": "स्कोरकार्ड",

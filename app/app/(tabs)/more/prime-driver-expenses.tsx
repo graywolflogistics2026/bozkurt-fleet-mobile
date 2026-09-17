@@ -8,9 +8,11 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { useAuth } from '@/src/context/AuthContext';
-import { useProfile } from '@/src/data/profile';
+import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useTrucksList } from '@/src/data/trucks';
 import { useSettlements } from '@/src/data/settlements';
+import { useDeductions, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
+import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import {
   usePrimeDriverExpenses,
   useInsertPrimeDriverExpense,
@@ -19,7 +21,14 @@ import {
 } from '@/src/data/primeDriverExpenses';
 import { uploadPrimeDriverExpenseAttachment } from '@/src/data/primeDriverExpenseAttachment';
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
-import { buildPrimeDriverExpenseMonth, type PrimeDriverExpenseRow } from '@/src/stats/primeDriverExpenses';
+import { findAccountantCategoryBackfillCandidates, type BackfillCandidateRow } from '@/src/primeDriverExpenses/categoryMapping';
+import {
+  buildPrimeDriverExpenseMonth,
+  eligibleDeductionRowsForReport,
+  mergePrimeDriverExpenseRows,
+  daysOverrideKey,
+  type PrimeDriverExpenseRow,
+} from '@/src/stats/primeDriverExpenses';
 import { buildPrimeDriverExpenseReportHtml, buildPrimeDriverExpenseReportFilename } from '@/src/stats/primeDriverExpenseReport';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useFormatters } from '@/src/i18n/format';
@@ -58,21 +67,48 @@ export default function PrimeDriverExpensesScreen() {
   const queryClient = useQueryClient();
 
   const profileQuery = useProfile();
+  const updateProfile = useUpdateProfile();
   const trucksQuery = useTrucksList();
   const settlementsQuery = useSettlements();
   const expensesQuery = usePrimeDriverExpenses();
   const insertExpense = useInsertPrimeDriverExpense();
   const updateExpense = useUpdatePrimeDriverExpense();
   const deleteExpense = useDeletePrimeDriverExpense();
+  // ZERO DUPLICATION (item 5) — the report reads deductions LIVE, never a
+  // copy: a deduction-sourced row shown here IS the same row Deductions'
+  // own screen shows, edited/deleted through the identical hooks/cleanup
+  // that screen uses (items 6/7), never a parallel write path.
+  const deductionsQuery = useDeductions();
+  const updateDeduction = useUpdateDeduction();
+  const deleteDeduction = useDeleteDeduction();
 
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
-  const rows: PrimeDriverExpenseRow[] = expensesQuery.data ?? [];
+  const directRows: PrimeDriverExpenseRow[] = useMemo(
+    () => (expensesQuery.data ?? []).map((r) => ({ ...r, origin: 'direct' as const })),
+    [expensesQuery.data]
+  );
+  const deductionRows = useMemo(() => eligibleDeductionRowsForReport(deductionsQuery.data ?? []), [deductionsQuery.data]);
+  const rows: PrimeDriverExpenseRow[] = useMemo(() => mergePrimeDriverExpenseRows(directRows, deductionRows), [directRows, deductionRows]);
   const settlements = settlementsQuery.data ?? [];
 
-  const monthData = useMemo(() => buildPrimeDriverExpenseMonth(rows, settlements, year, month), [rows, settlements, year, month]);
+  // DAYS AWAY FROM HOME OVERRIDE (item 8) — a per-month correction stored
+  // on profiles.prime_driver_days_override (docs/PENDING_SQL.md §75),
+  // keyed "YYYY-MM" — read-only default is the auto-computed figure;
+  // setting a value here NEVER writes back to settlements.per_diem_days,
+  // calcPerDiemDays(), Tax Estimator, or the Accountant Package's own
+  // per-diem block (all of those keep reading the real calculated figure
+  // regardless — see src/stats/primeDriverExpenses.ts's own header
+  // comment for the isolation proof).
+  const daysOverrideMap = profileQuery.data?.prime_driver_days_override ?? {};
+  const currentDaysOverride = daysOverrideMap[daysOverrideKey(year, month)] ?? null;
+
+  const monthData = useMemo(
+    () => buildPrimeDriverExpenseMonth(rows, settlements, year, month, currentDaysOverride),
+    [rows, settlements, year, month, currentDaysOverride]
+  );
 
   const availableYears = useMemo(() => {
     const years = new Set<number>([now.getFullYear()]);
@@ -82,6 +118,52 @@ export default function PrimeDriverExpensesScreen() {
     }
     return [...years].sort((a, b) => b - a);
   }, [rows, now]);
+
+  // "DAYS AWAY FROM HOME" — inline edit state.
+  const [editingDays, setEditingDays] = useState(false);
+  const [daysInput, setDaysInput] = useState('');
+  async function handleSaveDaysOverride() {
+    const n = Number(daysInput);
+    if (!Number.isFinite(n) || n < 0) return;
+    await updateProfile.mutateAsync({ prime_driver_days_override: { ...daysOverrideMap, [daysOverrideKey(year, month)]: n } });
+    setEditingDays(false);
+  }
+  async function handleResetDaysOverride() {
+    const next = { ...daysOverrideMap };
+    delete next[daysOverrideKey(year, month)];
+    await updateProfile.mutateAsync({ prime_driver_days_override: next });
+  }
+
+  // AUTO-SUGGEST FOR EXISTING HISTORY (item 3) — a one-time, idempotent
+  // backfill over already-imported out-of-pocket deductions, using the
+  // owner-approved mapping (categoryMapping.ts). Never overwrites a row
+  // that already has a non-null accountant_category, whether auto-set by
+  // an earlier run or manually corrected — safe to tap any number of
+  // times.
+  const [backfilling, setBackfilling] = useState(false);
+  const backfillCandidates = useMemo(() => {
+    const candidateRows: BackfillCandidateRow[] = (deductionsQuery.data ?? []).map((d) => ({
+      id: d.id,
+      category: d.category,
+      source: d.source,
+      accountant_category: d.accountant_category,
+    }));
+    return findAccountantCategoryBackfillCandidates(candidateRows);
+  }, [deductionsQuery.data]);
+  async function handleRunBackfill() {
+    setBackfilling(true);
+    try {
+      for (const c of backfillCandidates) {
+        await updateDeduction.mutateAsync({ id: c.id, values: { accountant_category: c.accountantCategory } });
+      }
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+      Alert.alert(t('primeDriverExpenses.backfillDoneTitle'), t('primeDriverExpenses.backfillDoneBody', { count: backfillCandidates.length }));
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   const companyName = profileQuery.data?.company_name?.trim() || null;
   const activeTruck = (trucksQuery.data ?? []).find((tr) => tr.is_active) ?? (trucksQuery.data ?? [])[0] ?? null;
@@ -190,15 +272,26 @@ export default function PrimeDriverExpensesScreen() {
     setEditNote(row.note ?? '');
   }
 
+  // ITEM 7 — the category picker on a DEDUCTION-sourced row is the
+  // 16-value list ONLY, and editing it writes ONLY
+  // `deductions.accountant_category` — never `deductions.category` (the
+  // real Schedule-C category is completely untouched). Date/amount/note
+  // for a deduction-sourced row are managed on Deductions' own screen,
+  // not duplicated here — this report reads them live.
   async function handleSaveEdit() {
     if (!editingRow || !editCategory) return;
     setEditSaving(true);
     try {
-      await updateExpense.mutateAsync({
-        id: editingRow.id,
-        values: { exp_date: editDate || todayIso(), amount: Number(editAmount) || 0, category: editCategory, note: editNote.trim() || null },
-      });
-      await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
+      if (editingRow.origin === 'deduction') {
+        await updateDeduction.mutateAsync({ id: editingRow.id, values: { accountant_category: editCategory } });
+        await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+      } else {
+        await updateExpense.mutateAsync({
+          id: editingRow.id,
+          values: { exp_date: editDate || todayIso(), amount: Number(editAmount) || 0, category: editCategory, note: editNote.trim() || null },
+        });
+        await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
+      }
       setEditingRow(null);
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -207,6 +300,14 @@ export default function PrimeDriverExpensesScreen() {
     }
   }
 
+  // DELETE CONSISTENCY (item 6) — a deduction-sourced row's delete calls
+  // the EXACT SAME path Deductions' own screen uses (useDeleteDeduction +
+  // cleanupOrphanedDocument for its linked document; the linked
+  // capital_transactions row cascades automatically per CLAUDE.md
+  // invariant #5) — never a parallel, thinner delete — so it disappears
+  // from BOTH screens immediately, live-read, no caching. A
+  // prime_driver_expenses-only row uses that table's own existing
+  // delete and only ever affects this report.
   function handleDelete(row: PrimeDriverExpenseRow) {
     Alert.alert(t('deductions.deleteConfirmTitle'), t('deductions.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -215,8 +316,17 @@ export default function PrimeDriverExpensesScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteExpense.mutateAsync(row.id);
-            await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
+            if (row.origin === 'deduction') {
+              const source = (deductionsQuery.data ?? []).find((d) => d.id === row.id);
+              await deleteDeduction.mutateAsync(row.id);
+              if (source?.document_id) await cleanupOrphanedDocument(source.document_id);
+              await invalidateFinancialData(queryClient, {
+                entities: source?.document_id ? ['deductions', 'capital_transactions', 'documents'] : ['deductions', 'capital_transactions'],
+              });
+            } else {
+              await deleteExpense.mutateAsync(row.id);
+              await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
+            }
             setEditingRow(null);
           } catch (err) {
             Alert.alert(t('deductions.deleteFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -288,7 +398,7 @@ export default function PrimeDriverExpensesScreen() {
     }
   }
 
-  const loading = expensesQuery.isLoading || settlementsQuery.isLoading;
+  const loading = expensesQuery.isLoading || settlementsQuery.isLoading || deductionsQuery.isLoading;
 
   return (
     <Screen>
@@ -319,6 +429,17 @@ export default function PrimeDriverExpensesScreen() {
 
         <PrimaryButton title={`➕ ${t('primeDriverExpenses.addExpense')}`} onPress={openAdd} />
 
+        {/* AUTO-SUGGEST FOR EXISTING HISTORY (item 3) — a one-time,
+            re-runnable backfill; only shown when there's genuinely
+            something left to fill in. */}
+        {backfillCandidates.length > 0 && (
+          <SecondaryButton
+            title={`🔄 ${t('primeDriverExpenses.backfillButton', { count: backfillCandidates.length })}`}
+            onPress={handleRunBackfill}
+            loading={backfilling}
+          />
+        )}
+
         {loading ? (
           <Card>
             <MutedText>{t('common.loading')}</MutedText>
@@ -335,10 +456,19 @@ export default function PrimeDriverExpensesScreen() {
                   <MutedText style={{ marginTop: spacing.xs }}>{t('primeDriverExpenses.noEntries')}</MutedText>
                 ) : (
                   section.rows.map((r) => (
-                    <Pressable key={r.id} onPress={() => openEdit(r)} style={styles.lineRow}>
+                    <Pressable key={`${r.origin}-${r.id}`} onPress={() => openEdit(r)} style={styles.lineRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: colors.text }}>{r.exp_date ? date(r.exp_date) : ''}</Text>
                         {r.note ? <MutedText numberOfLines={1}>{r.note}</MutedText> : null}
+                        {/* ZERO DUPLICATION (item 5) — a deduction-sourced
+                            row is clearly labeled so the user is never
+                            tempted to double-enter the same expense in
+                            both places. */}
+                        {r.origin === 'deduction' && (
+                          <MutedText style={{ color: colors.accent, fontSize: typography.size.xs }}>
+                            {t('primeDriverExpenses.fromDeductions', { date: r.exp_date ? date(r.exp_date) : '' })}
+                          </MutedText>
+                        )}
                       </View>
                       <Text style={{ color: colors.text, fontWeight: '600' }}>{money(Number(r.amount ?? 0))}</Text>
                     </Pressable>
@@ -350,8 +480,42 @@ export default function PrimeDriverExpensesScreen() {
             <Card style={{ marginTop: spacing.md }}>
               <View style={styles.row}>
                 <MutedText>{t('primeDriverExpenses.daysAwayFromHome')}</MutedText>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{monthData.daysAwayFromHome}</Text>
+                {editingDays ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Field
+                      value={daysInput}
+                      onChangeText={setDaysInput}
+                      keyboardType="numeric"
+                      style={{ width: 60, marginBottom: 0 }}
+                    />
+                    <Pressable onPress={handleSaveDaysOverride} hitSlop={8} style={{ marginStart: spacing.sm }}>
+                      <Text style={{ color: colors.accent, fontWeight: '700' }}>{t('common.save')}</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={() => {
+                      setDaysInput(String(monthData.daysAwayFromHome));
+                      setEditingDays(true);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>
+                      {monthData.daysAwayFromHome} {monthData.daysAwayFromHomeIsOverridden ? '✎' : ''}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
+              {monthData.daysAwayFromHomeIsOverridden && !editingDays && (
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 }}>
+                  <MutedText style={{ fontSize: typography.size.xs, marginEnd: spacing.sm }}>{t('primeDriverExpenses.manuallySet')}</MutedText>
+                  <Pressable onPress={handleResetDaysOverride} hitSlop={8}>
+                    <Text style={{ color: colors.accent, fontSize: typography.size.xs, fontWeight: '600' }}>
+                      {t('primeDriverExpenses.resetToCalculated')}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
               <View style={[styles.row, { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm }]}>
                 <Text style={styles.categoryTitle}>{t('primeDriverExpenses.grandTotal')}</Text>
                 <Text style={styles.grandTotal}>{money(monthData.grandTotal)}</Text>
@@ -410,18 +574,33 @@ export default function PrimeDriverExpensesScreen() {
 
       <ModalSheet visible={!!editingRow} onClose={() => setEditingRow(null)}>
         <SheetTitle>{t('primeDriverExpenses.editExpense')}</SheetTitle>
-        <MutedText>{t('primeDriverExpenses.dateLabel')}</MutedText>
-        <Field value={editDate} onChangeText={setEditDate} placeholder="YYYY-MM-DD" />
-        <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.amountLabel')}</MutedText>
-        <Field value={editAmount} onChangeText={setEditAmount} keyboardType="numeric" placeholder="0.00" />
+        {editingRow?.origin === 'deduction' ? (
+          // ITEM 7 — a deduction-sourced row's editor here is the 16-value
+          // accountant category picker ONLY: date/amount/note are managed
+          // on Deductions' own screen (this report reads them live, never
+          // a copy) and the real Schedule-C category is never touched
+          // from here.
+          <MutedText style={{ marginBottom: spacing.sm }}>{t('primeDriverExpenses.editingDeductionNote')}</MutedText>
+        ) : (
+          <>
+            <MutedText>{t('primeDriverExpenses.dateLabel')}</MutedText>
+            <Field value={editDate} onChangeText={setEditDate} placeholder="YYYY-MM-DD" />
+            <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.amountLabel')}</MutedText>
+            <Field value={editAmount} onChangeText={setEditAmount} keyboardType="numeric" placeholder="0.00" />
+          </>
+        )}
         <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.categoryLabel')}</MutedText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {PRIME_DRIVER_EXPENSE_CATEGORIES.map((c) => (
             <Pill key={c} label={c} selected={editCategory === c} onPress={() => setEditCategory(c)} />
           ))}
         </View>
-        <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.noteLabel')}</MutedText>
-        <Field value={editNote} onChangeText={setEditNote} placeholder={t('primeDriverExpenses.notePlaceholder')} />
+        {editingRow?.origin !== 'deduction' && (
+          <>
+            <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.noteLabel')}</MutedText>
+            <Field value={editNote} onChangeText={setEditNote} placeholder={t('primeDriverExpenses.notePlaceholder')} />
+          </>
+        )}
 
         <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={editSaving} disabled={!editCategory} />
         <Pressable onPress={() => editingRow && handleDelete(editingRow)} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>

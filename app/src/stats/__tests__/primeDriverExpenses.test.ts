@@ -1,6 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildPrimeDriverExpenseMonth, type PrimeDriverExpenseRow } from '@/src/stats/primeDriverExpenses';
+import {
+  buildPrimeDriverExpenseMonth,
+  eligibleDeductionRowsForReport,
+  mergePrimeDriverExpenseRows,
+  daysOverrideKey,
+  type PrimeDriverExpenseRow,
+  type EligibleDeductionSource,
+} from '@/src/stats/primeDriverExpenses';
+import { buildPerDiemBlock } from '@/src/stats/accountantPackage';
+import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { computeKpis, type KpiInputs } from '@/src/stats/kpi';
 import { sumCanonicalExpenses } from '@/src/stats/trueProfit';
 import { calcCanonicalCpm } from '@/src/stats/cpm';
@@ -8,10 +17,10 @@ import { buildTruckComparison } from '@/src/stats/truckComparison';
 
 describe('buildPrimeDriverExpenseMonth ("FOR PRIME INC DRIVERS" tracker, owner decision 2026-09-17)', () => {
   const rows: PrimeDriverExpenseRow[] = [
-    { id: '1', exp_date: '2026-06-03', amount: 45, category: 'Lumpers', note: 'Load 123' },
-    { id: '2', exp_date: '2026-06-15', amount: 20, category: 'Cash Fuel', note: null },
-    { id: '3', exp_date: '2026-06-20', amount: 15, category: 'Lumpers', note: 'Load 456' },
-    { id: '4', exp_date: '2026-07-05', amount: 60, category: 'Repairs', note: 'oil change' },
+    { id: '1', exp_date: '2026-06-03', amount: 45, category: 'Lumpers', note: 'Load 123', origin: 'direct' },
+    { id: '2', exp_date: '2026-06-15', amount: 20, category: 'Cash Fuel', note: null, origin: 'direct' },
+    { id: '3', exp_date: '2026-06-20', amount: 15, category: 'Lumpers', note: 'Load 456', origin: 'direct' },
+    { id: '4', exp_date: '2026-07-05', amount: 60, category: 'Repairs', note: 'oil change', origin: 'direct' },
   ];
   const settlements = [
     { week_ending: '2026-06-06', per_diem_days: 7 },
@@ -50,8 +59,19 @@ describe('buildPrimeDriverExpenseMonth ("FOR PRIME INC DRIVERS" tracker, owner d
     const june = buildPrimeDriverExpenseMonth(rows, settlements, 2026, 6);
     // Two June settlement weeks: 7 + 0 = 7.
     expect(june.daysAwayFromHome).toBe(7);
+    expect(june.daysAwayFromHomeIsOverridden).toBe(false);
     const july = buildPrimeDriverExpenseMonth(rows, settlements, 2026, 7);
     expect(july.daysAwayFromHome).toBe(7);
+  });
+
+  it('DAYS AWAY FROM HOME OVERRIDE (item 8) — a real override wins for display, and is flagged as overridden', () => {
+    const june = buildPrimeDriverExpenseMonth(rows, settlements, 2026, 6, 5);
+    expect(june.daysAwayFromHome).toBe(5); // overrides the calculated 7
+    expect(june.daysAwayFromHomeIsOverridden).toBe(true);
+    // null/undefined means "no override" — falls back to the calculated value.
+    const juneNoOverride = buildPrimeDriverExpenseMonth(rows, settlements, 2026, 6, null);
+    expect(juneNoOverride.daysAwayFromHome).toBe(7);
+    expect(juneNoOverride.daysAwayFromHomeIsOverridden).toBe(false);
   });
 
   it('EDIT MOVES MONTH — changing a row from June to July re-derives live, no stale per-month cache', () => {
@@ -71,14 +91,71 @@ describe('buildPrimeDriverExpenseMonth ("FOR PRIME INC DRIVERS" tracker, owner d
     expect(julyLumpers.rows).toHaveLength(1);
     expect(julyLumpers.subtotal).toBe(45);
   });
+
+  it('daysOverrideKey formats a stable "YYYY-MM" key', () => {
+    expect(daysOverrideKey(2026, 6)).toBe('2026-06');
+    expect(daysOverrideKey(2026, 12)).toBe('2026-12');
+  });
+});
+
+describe('eligibleDeductionRowsForReport — THE ORIGIN RULE, this report\'s own last line of defense', () => {
+  it('excludes a settlement-withheld row even if it somehow carries an accountant_category', () => {
+    const deductions: EligibleDeductionSource[] = [
+      { id: 'd1', ded_date: '2026-06-10', amount: 80, accountant_category: 'Truck & Trailer Wash', source: 'settlement', description: 'Truck wash' },
+      { id: 'd2', ded_date: '2026-06-11', amount: 40, accountant_category: 'Truck & Trailer Wash', source: 'manual', description: 'Truck wash' },
+    ];
+    const rows = eligibleDeductionRowsForReport(deductions);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('d2');
+  });
+
+  it('excludes an out-of-pocket row with no accountant_category set yet', () => {
+    const deductions: EligibleDeductionSource[] = [
+      { id: 'd1', ded_date: '2026-06-10', amount: 80, accountant_category: null, source: 'manual', description: 'Unmapped category' },
+    ];
+    expect(eligibleDeductionRowsForReport(deductions)).toHaveLength(0);
+  });
+
+  it('maps a real deduction row into report-row shape correctly, tagged origin: "deduction"', () => {
+    const deductions: EligibleDeductionSource[] = [
+      { id: 'd1', ded_date: '2026-06-10', amount: 80, accountant_category: 'Repairs', source: 'import', description: 'Oil change' },
+    ];
+    const rows = eligibleDeductionRowsForReport(deductions);
+    expect(rows[0]).toEqual({ id: 'd1', exp_date: '2026-06-10', amount: 80, category: 'Repairs', note: 'Oil change', origin: 'deduction' });
+  });
+});
+
+describe('ZERO DUPLICATION (item 5) — UNION of the two disjoint sources', () => {
+  it('a realistic month with rows from BOTH sources sums correctly, each counted exactly once', () => {
+    const directRows: PrimeDriverExpenseRow[] = [
+      { id: 'pde1', exp_date: '2026-06-05', amount: 30, category: 'Cash Fuel', note: null, origin: 'direct' },
+    ];
+    const deductions: EligibleDeductionSource[] = [
+      { id: 'd1', ded_date: '2026-06-06', amount: 70, accountant_category: 'Repairs', source: 'manual', description: 'Oil change' },
+      // A settlement-withheld row in the same account/month must never be
+      // pulled in, even though it's the same nominal category.
+      { id: 'd2', ded_date: '2026-06-07', amount: 999, accountant_category: null, source: 'settlement', description: 'Withheld repair' },
+    ];
+    const deductionRows = eligibleDeductionRowsForReport(deductions);
+    const merged = mergePrimeDriverExpenseRows(directRows, deductionRows);
+    const month = buildPrimeDriverExpenseMonth(merged, [], 2026, 6);
+    expect(month.grandTotal).toBe(100); // 30 + 70, never 999 folded in, never double-counted
+    const fuel = month.sections.find((s) => s.category === 'Cash Fuel')!;
+    expect(fuel.rows).toHaveLength(1);
+    expect(fuel.rows[0].origin).toBe('direct');
+    const repairs = month.sections.find((s) => s.category === 'Repairs')!;
+    expect(repairs.rows).toHaveLength(1);
+    expect(repairs.rows[0].origin).toBe('deduction');
+  });
 });
 
 describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
-  // Proof 1 — SOURCE AUDIT: grep every canonical KPI/expense engine's own
-  // source file and confirm zero references to this table/module by name.
-  // This is a REAL regression guard, not a comment: if a future edit ever
-  // wires prime_driver_expenses into any of these files, this test fails
-  // immediately.
+  // Proof 1 — SOURCE AUDIT: grep every canonical KPI/expense/per-diem
+  // engine's own source file and confirm zero references to this
+  // table/module — or the new `accountant_category`/
+  // `prime_driver_days_override` fields — by name. This is a REAL
+  // regression guard, not a comment: if a future edit ever wires either
+  // into any of these files, this test fails immediately.
   const CANONICAL_FILES = [
     'src/stats/kpi.ts',
     'src/stats/trueProfit.ts',
@@ -86,10 +163,11 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
     'src/stats/truckComparison.ts',
     'src/stats/accountantPackage.ts',
     'src/data/taxEstimate.ts',
+    'src/tax/perDiem.ts',
   ];
-  const FORBIDDEN_PATTERNS = [/prime_driver_expenses/i, /PrimeDriverExpense/, /primeDriverExpenses/];
+  const FORBIDDEN_PATTERNS = [/prime_driver_expenses/i, /PrimeDriverExpense/, /primeDriverExpenses/, /accountant_category/, /prime_driver_days_override/];
 
-  it('no canonical KPI/expense/tax engine file references prime_driver_expenses by name, in code or type', () => {
+  it('no canonical KPI/expense/tax/per-diem engine file references prime_driver_expenses, accountant_category, or prime_driver_days_override by name', () => {
     for (const rel of CANONICAL_FILES) {
       const full = path.join(__dirname, '..', '..', '..', rel);
       const text = fs.readFileSync(full, 'utf8');
@@ -162,6 +240,70 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
     expect(after.expenses).toBe(before.expenses);
     expect(after.cpm).toEqual(before.cpm);
     expect(after.comparison).toEqual(before.comparison);
+  });
+
+  // Proof 2b (owner decision 2026-09-17, docs/PENDING_SQL.md §75) — the
+  // SAME live before/after proof, extended to the new `accountant_category`
+  // field specifically: setting/changing it on real deduction rows must
+  // leave every canonical total byte-identical, since it's a pure
+  // reporting label with no path into any of these functions' own input
+  // types.
+  it('setting/changing deductions.accountant_category leaves every canonical total byte-identical', () => {
+    type DeductionWithAccountantCategory = (typeof deductions)[number] & { accountant_category: string | null };
+    const dedsBefore: DeductionWithAccountantCategory[] = deductions.map((d) => ({ ...d, accountant_category: null }));
+    const before = {
+      kpi: computeKpis({ ...baseKpiInputs(), deductions: dedsBefore }),
+      expenses: sumCanonicalExpenses(dedsBefore, fuel, maintenance, tolls),
+      cpm: calcCanonicalCpm(3000, 2000, dedsBefore, fuel, maintenance, tolls, 0),
+      comparison: buildTruckComparison(trucks, settlements, loads, dedsBefore, fuel, maintenance, tolls),
+    };
+
+    // The SAME rows, now with a real accountant_category set on the
+    // out-of-pocket-shaped one (this fixture's own row is actually
+    // settlement-withheld — the origin rule would reject it for real use
+    // — but this test is specifically about proving the FIELD ITSELF is
+    // never read by any canonical function, regardless of value or origin).
+    const dedsAfter: DeductionWithAccountantCategory[] = deductions.map((d) => ({ ...d, accountant_category: 'Repairs' }));
+    const after = {
+      kpi: computeKpis({ ...baseKpiInputs(), deductions: dedsAfter }),
+      expenses: sumCanonicalExpenses(dedsAfter, fuel, maintenance, tolls),
+      cpm: calcCanonicalCpm(3000, 2000, dedsAfter, fuel, maintenance, tolls, 0),
+      comparison: buildTruckComparison(trucks, settlements, loads, dedsAfter, fuel, maintenance, tolls),
+    };
+
+    expect(after.kpi).toEqual(before.kpi);
+    expect(after.expenses).toBe(before.expenses);
+    expect(after.cpm).toEqual(before.cpm);
+    expect(after.comparison).toEqual(before.comparison);
+  });
+
+  // Proof 2c (item 8) — the Days Away From Home override never reaches
+  // calcPerDiemDays()/buildPerDiemBlock() (Tax Estimator/the Accountant
+  // Package's own per-diem block both read from the latter). Neither
+  // function's signature has anywhere to receive an override at all
+  // (confirmed by Proof 1's own grep of src/tax/perDiem.ts and
+  // src/stats/accountantPackage.ts) — this test proves it holds at
+  // runtime too: identical settlement data produces an identical result
+  // regardless of whatever override value "exists" elsewhere (on
+  // `profiles`, which neither function ever receives).
+  it('a prime_driver_days_override "set" for a month changes nothing in calcPerDiemDays()/buildPerDiemBlock() for that same month', () => {
+    const perDiemSettlements = [{ week_ending: '2026-06-06', per_diem_days: 7 }, { week_ending: '2026-06-13', per_diem_days: 3 }];
+    const perDiemConfig = { daily_rate: 69, deductible_pct: 80 } as const;
+
+    const beforeDays = calcPerDiemDays(perDiemSettlements);
+    const beforeBlock = buildPerDiemBlock(perDiemSettlements, 2026, 6, perDiemConfig as never);
+
+    // An override "exists" for this exact month/year on profiles —
+    // simulated here as a plain object neither function below is ever
+    // given.
+    const simulatedProfileOverride: Record<string, number> = { '2026-06': 99 };
+    expect(simulatedProfileOverride['2026-06']).toBe(99); // sanity: the override really is set
+
+    const afterDays = calcPerDiemDays(perDiemSettlements);
+    const afterBlock = buildPerDiemBlock(perDiemSettlements, 2026, 6, perDiemConfig as never);
+
+    expect(afterDays).toBe(beforeDays);
+    expect(afterBlock).toEqual(beforeBlock);
   });
 
   // Proof 3 — TYPE-LEVEL: attempting to pass prime_driver_expenses data

@@ -284,6 +284,13 @@ export type Deduction = {
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   tax_deductible: boolean; // docs/PENDING_SQL.md §33 (meals & advance repayments, owner decision 2026-07-17)
   reviewed_at: string | null; // docs/PENDING_SQL.md §55a (NEEDS REVIEW WON'T CLEAR fix, owner decision 2026-08-24)
+  // "FOR PRIME INC DRIVERS" (owner decision 2026-09-17, docs/PENDING_SQL.md
+  // §75) — a REPORTING LABEL ONLY (one of the 16 accountant categories,
+  // app/src/primeDriverExpenses/categories.ts), never read by any
+  // canonical KPI/expense/tax function. ORIGIN RULE: must only ever be
+  // non-null when source !== 'settlement' — see
+  // app/src/primeDriverExpenses/categoryMapping.ts's own header comment.
+  accountant_category: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -678,6 +685,14 @@ export type Profile = {
   // means every recurring charge shown is exactly what the classifier
   // itself detected, unedited.
   cf_recurring_charges: Record<string, { weeklyAmount: number; removed?: boolean }>;
+  // "FOR PRIME INC DRIVERS" — DAYS AWAY FROM HOME OVERRIDE (owner
+  // decision 2026-09-17, docs/PENDING_SQL.md §75) — keyed by "YYYY-MM",
+  // same "per-period user correction, one jsonb column" shape as
+  // cf_periodic_overrides above. Display-only correction for THIS report
+  // alone — never read by calcPerDiemDays()/Tax Estimator/the Accountant
+  // Package's own per-diem block. `{}` (the DB default) means every
+  // month shows its auto-computed day count, unedited.
+  prime_driver_days_override: Record<string, number>;
   // SMART ALERTS (owner decision 2026-08-24, NEXT PASS item D, docs/
   // PENDING_SQL.md §49) — one entry per nudge topic ever shown/silenced,
   // `Partial<Record<NudgeTopic, {lastShownAt, silencedAt}>>` (see

@@ -2072,7 +2072,14 @@
     "categoryTableTitle": "Kategoriler",
     "exportTitle": "Bu Ayı Dışa Aktar",
     "exportPdf": "PDF Olarak Dışa Aktar",
-    "exportExcel": "Excel Olarak Dışa Aktar"
+    "exportExcel": "Excel Olarak Dışa Aktar",
+    "backfillButton": "Kesintiler'den {{count}} kategori önerisini otomatik doldur",
+    "backfillDoneTitle": "Kategoriler dolduruldu",
+    "backfillDoneBody": "{{count}} kesinti otomatik olarak kategorilendirildi. Her biri burada düzenlenebilir durumda.",
+    "fromDeductions": "Kesintiler'den, {{date}}",
+    "manuallySet": "manuel olarak ayarlandı",
+    "resetToCalculated": "↺ Hesaplanan değere sıfırla",
+    "editingDeductionNote": "Bu satır Kesintiler'den geliyor — tarihi, tutarı ve notu orada yönetilir. Bu rapordan yalnızca aşağıdaki muhasebe kategorisi düzenlenebilir."
   },
   "scorecard": {
     "title": "Karne",

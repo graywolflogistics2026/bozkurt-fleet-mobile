@@ -12,7 +12,7 @@ const fmt = { money: (n: number) => `$${n.toFixed(2)}`, date: (iso: string) => i
 
 describe('buildPrimeDriverExpenseReportHtml ("FOR PRIME INC DRIVERS" export, owner decision 2026-09-17)', () => {
   const rows: PrimeDriverExpenseRow[] = [
-    { id: '1', exp_date: '2026-06-03', amount: 45, category: 'Lumpers', note: 'Load 123' },
+    { id: '1', exp_date: '2026-06-03', amount: 45, category: 'Lumpers', note: 'Load 123', origin: 'direct' },
   ];
   const settlements = [{ week_ending: '2026-06-06', per_diem_days: 7 }];
   const monthData = buildPrimeDriverExpenseMonth(rows, settlements, 2026, 6);
@@ -54,7 +54,7 @@ describe('buildPrimeDriverExpenseReportHtml ("FOR PRIME INC DRIVERS" export, own
   });
 
   it('escapes untrusted note text', () => {
-    const withHtml: PrimeDriverExpenseRow[] = [{ id: '1', exp_date: '2026-06-03', amount: 10, category: 'Misc', note: '<script>alert(1)</script>' }];
+    const withHtml: PrimeDriverExpenseRow[] = [{ id: '1', exp_date: '2026-06-03', amount: 10, category: 'Misc', note: '<script>alert(1)</script>', origin: 'direct' }];
     const data = buildPrimeDriverExpenseMonth(withHtml, settlements, 2026, 6);
     const html = buildPrimeDriverExpenseReportHtml('Header', data, strings, fmt);
     expect(html).not.toContain('<script>alert(1)</script>');

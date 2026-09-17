@@ -4294,6 +4294,74 @@ feature writeup (the report export, the disclaimer, the isolation test).
 
 ---
 
+## 75. MAP EXISTING OUT-OF-POCKET DEDUCTIONS INTO THE 16 ACCOUNTANT CATEGORIES (owner decision 2026-09-17) — NOT YET APPLIED
+
+**The decision**: a "CRITICAL ACCURACY TASK" — the owner reviewed and
+approved a full 38-category → 16-accountant-category mapping table (see
+`app/src/primeDriverExpenses/categoryMapping.ts`'s own
+`CANONICAL_TO_ACCOUNTANT_CATEGORY`, the single source of truth) before
+any code was written. `deductions.accountant_category` is a REPORTING
+LABEL ONLY, exactly like `prime_driver_expenses`'s own isolation
+guarantee (§74) — never read by `computeKpis()`/`sumCanonicalExpenses()`/
+`calcCanonicalCpm()`/`buildTruckComparison()`/`buildLineItems()`
+(Accountant Package)/`calcTaxEstimate()`, proven by
+`src/stats/__tests__/primeDriverExpenses.test.ts`'s extended "CANONICAL
+ISOLATION" block. `profiles.prime_driver_days_override` is the "Days
+Away From Home" per-month correction for this SAME report only — never
+read by `calcPerDiemDays()`/Tax Estimator/the Accountant Package's own
+`buildPerDiemBlock()`, proven by the same test file's dedicated
+isolation case.
+
+**THE ORIGIN RULE, restated because it is the entire point of this
+migration**: `accountant_category` must only ever be set on a row where
+`source != 'settlement'` (out-of-pocket) — a settlement-withheld row
+must never carry a value here regardless of its own `category` string.
+This is enforced entirely in application code
+(`isEligibleForAccountantReport()`/`suggestAccountantCategory()`,
+`categoryMapping.ts`) and proven by
+`primeDriverExpenses.test.ts`'s very first test (two rows both
+categorized "Truck Wash & Detailing" — one `source: 'settlement'`, one
+`source: 'manual'` — only the out-of-pocket one is ever eligible) — the
+CHECK constraint below only constrains which of the 16 VALUES are legal,
+it cannot itself enforce the origin rule (that needs the row's
+`source`, a separate column, which a column-level CHECK can't
+cross-reference in Postgres without a trigger this migration
+deliberately doesn't add, since every write path already goes through
+the one shared TypeScript function).
+
+```sql
+alter table deductions add column if not exists accountant_category text
+  check (accountant_category in (
+    'Lumpers', 'Cash Tolls/Parking Fees', 'Scales',
+    'Equipment/Operating Supplies', 'Safety/Weather Gear', 'Cash Fuel',
+    'Oil & Additives', 'Truck & Trailer Wash', 'Repairs', 'Communication',
+    'Advertising', 'Office Supplies', 'Lodging', 'Laundry/Showers',
+    'Bank/ATM Fees', 'Misc'
+  ));
+
+alter table profiles add column if not exists prime_driver_days_override jsonb not null default '{}'::jsonb;
+```
+
+The 16-value check constraint is the exact same list as
+`prime_driver_expenses.category`'s own §74 constraint and
+`app/src/primeDriverExpenses/categories.ts`'s
+`PRIME_DRIVER_EXPENSE_CATEGORIES` — kept in sync by hand across all
+three, same convention as every other category-shaped column in this
+schema. `prime_driver_days_override` is a `jsonb` map keyed by
+`"YYYY-MM"` → a plain integer day count, mirroring `profiles.
+cf_periodic_overrides`'s own established "per-period user correction,
+one jsonb column, never a dedicated table" shape (docs/PENDING_SQL.md
+§57) — `reset-data`'s `PROFILE_DATA_RESET` gained this new field in its
+CLEARED bucket (CLAUDE.md invariant #24: an unlisted new `profiles`
+column is silently KEPT, which is the wrong default for a per-report
+override tied to business data the user might reset). No change was
+needed to `reset-data`'s table-list for `accountant_category` — it's a
+column on the already-listed `deductions` table, not a new table.
+
+- [ ] 75 run (deductions.accountant_category + profiles.prime_driver_days_override)
+
+---
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

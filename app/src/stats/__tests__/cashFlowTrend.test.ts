@@ -56,6 +56,7 @@ function ded(overrides: Partial<Deduction>): Deduction {
     code: null,
     description: null,
     reviewed_at: null,
+    accountant_category: null,
     amount: 100,
     category: null,
     store: null,

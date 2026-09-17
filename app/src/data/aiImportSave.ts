@@ -23,6 +23,7 @@ import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
+import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import {
   SaveExtractionError,
   emptyPartialState,
@@ -672,7 +673,15 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // insurance/lease_rent/factoring_statement/utility_subscription — real
     // out-of-pocket business expenses, routed like any other deduction.
     const row = mapFinancialDocDeduction(d, userId);
-    const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId });
+    // "FOR PRIME INC DRIVERS" AUTO-SUGGEST (owner decision 2026-09-17) —
+    // this path always produces an out-of-pocket row (source defaults to
+    // 'manual'/'import', never 'settlement'), so suggestAccountantCategory()'s
+    // own origin check passes through harmlessly; still routed through the
+    // one shared function rather than assuming eligibility here, so a
+    // future change to how this mapper stamps `source` can't silently
+    // violate the origin rule.
+    const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
+    const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId, accountant_category: accountantCategory });
     if (error) throw new SaveExtractionError('financial-doc-insert', error, partial);
   } else if ((COMPLIANCE_DOC_TYPES as readonly string[]).includes(d.docType)) {
     // AI feature package (owner decision 2026-07-10) — find-or-update by
@@ -720,9 +729,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       if (learned) line.insert = { ...line.insert, category: learned };
     }
     for (const line of lines) {
+      // "FOR PRIME INC DRIVERS" AUTO-SUGGEST (owner decision 2026-09-17) —
+      // a standalone purchase line is always out-of-pocket by construction
+      // (mapPurchase() never stamps source: 'settlement'), but routed
+      // through the one shared function regardless, per the same
+      // "never assume eligibility, always check" discipline as every
+      // other call site.
+      const accountantCategory = suggestAccountantCategory(
+        line.insert.category as string | null,
+        (line.insert.source as string | null) ?? 'manual'
+      );
       const { data: dedRow, error: dedError } = await supabase
         .from('deductions')
-        .insert({ ...line.insert, document_id: documentId })
+        .insert({ ...line.insert, document_id: documentId, accountant_category: accountantCategory })
         .select('id')
         .single();
       const savedDed = must('purchase-deduction-insert', dedRow, dedError, partial);
@@ -821,9 +840,16 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       const learned = matchLearnedCategory(row.description, learningRules);
       if (learned) row.category = learned;
     }
+    // "FOR PRIME INC DRIVERS" AUTO-SUGGEST (owner decision 2026-09-17) —
+    // the generic fallback CAN occasionally produce a settlement-derived
+    // row via categoryOverride's own upstream context, so this call site
+    // genuinely relies on suggestAccountantCategory()'s own origin check
+    // (not just a defensive formality) to keep a settlement-withheld
+    // fallback row from ever receiving an accountant_category.
+    const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
     const { data: genericDedRow, error } = await supabase
       .from('deductions')
-      .insert({ ...row, document_id: documentId })
+      .insert({ ...row, document_id: documentId, accountant_category: accountantCategory })
       .select('id')
       .single();
     if (error) throw new SaveExtractionError('generic-deduction-insert', error, partial);

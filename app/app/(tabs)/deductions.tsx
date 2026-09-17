@@ -21,6 +21,7 @@ import {
   syncLinkedEquipment,
 } from '@/src/data/deductionMutations';
 import { fetchReimbursementStatus, useReimburseMyself } from '@/src/data/capitalTransactions';
+import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import type { ReimbursementStatus } from '@/src/stats/capitalAccount';
 import { useLearnCategoryCorrection, fetchCarrierForDeduction } from '@/src/data/categoryLearningRules';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -694,6 +695,23 @@ export default function Deductions() {
         } catch {
           // Non-fatal — the deduction itself already saved; the
           // attachment simply won't be linked this time.
+        }
+      }
+
+      // "FOR PRIME INC DRIVERS" AUTO-SUGGEST (owner decision 2026-09-17) —
+      // a brand-new manual deduction is always out-of-pocket by
+      // construction (no settlement_id, source defaults to 'manual'), so
+      // it always gets the same auto-suggestion new imported rows do,
+      // still freely editable afterward on the "For Prime Inc Drivers"
+      // report. Same best-effort, never-blocks-the-save precedent as the
+      // attachment follow-up directly above.
+      const suggestedAccountantCategory = suggestAccountantCategory(addCategory, 'manual');
+      if (suggestedAccountantCategory) {
+        try {
+          await updateDeduction.mutateAsync({ id: inserted.id, values: { accountant_category: suggestedAccountantCategory } });
+        } catch {
+          // Non-fatal — the deduction itself already saved; the
+          // accountant category simply won't be pre-filled this time.
         }
       }
 

@@ -2072,7 +2072,14 @@
     "categoryTableTitle": "الفئات",
     "exportTitle": "تصدير هذا الشهر",
     "exportPdf": "تصدير كملف PDF",
-    "exportExcel": "تصدير كملف Excel"
+    "exportExcel": "تصدير كملف Excel",
+    "backfillButton": "تعبئة {{count}} اقتراح فئة تلقائيًا من الخصومات",
+    "backfillDoneTitle": "تمت تعبئة الفئات",
+    "backfillDoneBody": "تم تصنيف {{count}} خصم(خصومات) تلقائيًا. لا يزال بإمكانك تعديل كل واحد منها هنا مباشرة.",
+    "fromDeductions": "من الخصومات، {{date}}",
+    "manuallySet": "تم تعيينه يدويًا",
+    "resetToCalculated": "↺ إعادة التعيين إلى القيمة المحسوبة",
+    "editingDeductionNote": "هذا السطر مصدره الخصومات — يتم إدارة تاريخه ومبلغه وملاحظته هناك. يمكن تعديل فئة المحاسب أدناه فقط من هذا التقرير."
   },
   "scorecard": {
     "title": "بطاقة الأداء",

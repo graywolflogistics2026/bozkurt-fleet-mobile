@@ -565,6 +565,7 @@ describe('MONTH FILTER OFF-BY-ONE — full chain: label, filter, and exported HT
       tags: null,
       tax_deductible: true,
       reviewed_at: null,
+      accountant_category: null,
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     };
