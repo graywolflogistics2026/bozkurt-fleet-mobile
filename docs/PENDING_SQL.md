@@ -4231,7 +4231,7 @@ convention for every other write).
 
 ---
 
-## 74. "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision 2026-09-17) — NOT YET APPLIED
+## 74. "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision 2026-09-17) — ✅ APPLIED 2026-09-17
 
 **The decision**: a brand-new, standalone screen exists purely to match
 the exact monthly out-of-pocket expense report format the user's
@@ -4290,7 +4290,7 @@ which are deliberately excluded from the export as transient telemetry/
 job state). See CLAUDE.md's own dated entry for this pass for the full
 feature writeup (the report export, the disclaimer, the isolation test).
 
-- [ ] 74 run (prime_driver_expenses table + RLS + index)
+- [x] 74 run (prime_driver_expenses table + RLS + index) — ✅ APPLIED 2026-09-17, client update published
 
 ---
 
