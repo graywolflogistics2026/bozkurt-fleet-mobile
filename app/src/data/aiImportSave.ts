@@ -440,11 +440,29 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     let oldMaintenanceIds: string[] = [];
     let oldTollIds: string[] = [];
     if (isReimport) {
+      // LUMPER REIMBURSEMENT COMPANION EXPENSE (owner decision 2026-09-19)
+      // — the deductions old-id capture below used to be scoped to
+      // `.eq('source', 'settlement')`, which was harmless-but-redundant
+      // as long as `settlement_id` was ONLY EVER set on withheld
+      // (source==='settlement') rows, the case for every deduction this
+      // mapper ever produced before this pass. mapSettlement() now ALSO
+      // tags a genuinely out-of-pocket "Lumper Fees" companion row
+      // (source: 'import') with the same settlement_id, so that filter
+      // would have permanently excluded those rows from re-import
+      // cleanup — re-importing the same settlement twice would have
+      // silently DUPLICATED the lumper expense forever, one new row per
+      // re-import, instead of replacing it. Dropped: `settlement_id` is
+      // exclusively assigned by THIS code path (line ~499 below), so
+      // capturing every deduction tied to this settlement regardless of
+      // `source` can never sweep up an unrelated row — it can only ever
+      // be a withheld chargeback or a lumper companion, both of which are
+      // freshly re-derived from this exact extraction on every import and
+      // must both be replaced together.
       const [loadsOld, fuelOld, reimbOld, dedOld, payOld, maintOld, tollOld] = await Promise.all([
         supabase.from('loads').select('id').eq('settlement_id', settlementId),
         supabase.from('fuel_purchases').select('id').eq('settlement_id', settlementId),
         supabase.from('reimbursements').select('id').eq('settlement_id', settlementId),
-        supabase.from('deductions').select('id').eq('settlement_id', settlementId).eq('source', 'settlement'),
+        supabase.from('deductions').select('id').eq('settlement_id', settlementId),
         supabase.from('driver_payments').select('id').eq('settlement_id', settlementId),
         supabase.from('maintenance_records').select('id').eq('settlement_id', settlementId),
         supabase.from('tolls').select('id').eq('settlement_id', settlementId),

@@ -2079,7 +2079,21 @@
     "fromDeductions": "Kesintiler'den, {{date}}",
     "manuallySet": "manuel olarak ayarlandı",
     "resetToCalculated": "↺ Hesaplanan değere sıfırla",
-    "editingDeductionNote": "Bu satır Kesintiler'den geliyor — tarihi, tutarı ve notu orada yönetilir. Bu rapordan yalnızca aşağıdaki muhasebe kategorisi düzenlenebilir."
+    "editingDeductionNote": "Bu satır Kesintiler'den geliyor — tarihi, tutarı ve notu orada yönetilir. Bu rapordan yalnızca aşağıdaki muhasebe kategorisi düzenlenebilir.",
+    "lumperGapsButton_one": "Geri ödemelerden {{count}} eksik lumper gider kaydı oluştur",
+    "lumperGapsButton_other": "Geri ödemelerden {{count}} eksik lumper gider kaydı oluştur",
+    "lumperGapsDoneTitle": "Lumper giderleri oluşturuldu",
+    "lumperGapsDoneBody": "Settlement geri ödemelerinizden {{count}} lumper gider kaydı oluşturuldu. Her biri burada düzenlenebilir durumda.",
+    "diagnosticsToggle": "Lumper ödemelerini teşhis et",
+    "diagnosticsTitle": "🔍 Lumper Ödemesi Teşhisi",
+    "diagnosticsNoRows": "Hesabınızda lumper adı geçen bir kesinti bulunamadı.",
+    "diagnosticsEligible": "✓ Uygun — raporda",
+    "diagnosticsReason": {
+      "excluded_settlement_withheld": "✕ Hariç tutuldu — settlement üzerinden kesildi, cepten değil",
+      "category_mismatch": "✕ Hariç tutuldu — açıklamada lumper geçiyor ama kategori farklı",
+      "missing_accountant_category": "✕ Hariç tutuldu — henüz kategorilendirilmedi; yukarıdaki Otomatik doldur'a dokunun"
+    },
+    "diagnosticsGapsNote": "{{count}} settlement geri ödemesinde lumper geçiyor ama henüz eşleşen bir gider kaydı yok — bunları oluşturmak için yukarıdaki butonu kullanın."
   },
   "scorecard": {
     "title": "Karne",

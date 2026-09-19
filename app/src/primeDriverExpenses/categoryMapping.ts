@@ -1,4 +1,4 @@
-import { CANONICAL_CATEGORIES } from '@/src/import/category';
+import { CANONICAL_CATEGORIES, isLumperFee } from '@/src/import/category';
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
 
 // MAP EXISTING OUT-OF-POCKET DEDUCTIONS INTO THE 16 ACCOUNTANT CATEGORIES
@@ -139,4 +139,143 @@ export function findAccountantCategoryBackfillCandidates(rows: BackfillCandidate
     if (suggested) candidates.push({ id: row.id, accountantCategory: suggested });
   }
   return candidates;
+}
+
+// LUMPER PAYMENTS MISSING FROM THE REPORT (owner decision 2026-09-19, bug
+// investigation + fix) — DIAGNOSIS, not a guess: read end to end, this
+// mapping/backfill/origin-rule/report code was already correct for a
+// genuine out-of-pocket `deductions` row (category='Lumper Fees',
+// source!=='settlement'). The confirmed root cause found by tracing the
+// actual extraction pipeline: a lumper fee the driver pays personally at
+// the dock, then gets reimbursed for through the settlement's own
+// reimbursementItems section, NEVER created a matching `deductions` row
+// at all anywhere in this app — `reimbursements` has no category column,
+// so the expense side of that transaction was completely invisible to
+// this report (and to the Accountant Package, and to true profit/tax,
+// which is a materially bigger correctness gap this same fix closes).
+// mapExtraction.ts's mapSettlement() now creates that companion deduction
+// automatically for every FUTURE import; this function is the one-time,
+// re-runnable HISTORICAL counterpart for reimbursements already saved
+// before that fix existed — same "always editable, never silently
+// destructive" spirit as findAccountantCategoryBackfillCandidates() above.
+export type LumperReimbursementRow = {
+  id: string;
+  description: string | null;
+  amount: number | null;
+  reimb_date: string | null;
+};
+
+// The minimal shape needed to detect whether a reimbursement ALREADY has
+// a companion out-of-pocket "Lumper Fees" deduction — reimbursements and
+// deductions have no direct link column to check by id, so this is a
+// deliberately conservative heuristic proxy (same date + same amount):
+// false positives (skipping a genuinely-missing companion) are the safe
+// failure mode here, never a duplicate.
+export type ExistingLumperDeductionRow = {
+  amount: number | null;
+  ded_date: string | null;
+  category: string | null;
+  source: string | null;
+};
+
+export type LumperReimbursementGap = {
+  reimbursementId: string;
+  description: string | null;
+  amount: number;
+  date: string | null;
+};
+
+export function findLumperReimbursementGaps(
+  reimbursements: LumperReimbursementRow[],
+  existingDeductions: ExistingLumperDeductionRow[]
+): LumperReimbursementGap[] {
+  const existingLumperOutOfPocket = existingDeductions.filter(
+    (d) => d.category === 'Lumper Fees' && isEligibleForAccountantReport(d.source)
+  );
+  const gaps: LumperReimbursementGap[] = [];
+  for (const r of reimbursements) {
+    if (!isLumperFee(r.description ?? undefined)) continue;
+    const amount = Number(r.amount ?? 0);
+    const hasCompanion = existingLumperOutOfPocket.some(
+      (d) => Number(d.amount ?? 0) === amount && (d.ded_date ?? null) === (r.reimb_date ?? null)
+    );
+    if (hasCompanion) continue;
+    gaps.push({ reimbursementId: r.id, description: r.description, amount, date: r.reimb_date });
+  }
+  return gaps;
+}
+
+// The full, per-row eligibility breakdown for every deduction that names a
+// lumper — whether it resolved to category 'Lumper Fees' directly, or
+// (item 2's own explicit hypothesis) fell through to a DIFFERENT category
+// string despite its own description clearly naming a lumper, which would
+// itself be a real, separate classification bug worth surfacing. Reports
+// real row data (id/date/amount/description/category/source/eligibility)
+// so a device-side diagnostic can show the user their OWN actual rows —
+// this repo has no live database access to run this check remotely, so
+// the check itself has to run on the user's own device against their own
+// real data, never fabricated.
+export type LumperDeductionDiagnosis = {
+  id: string;
+  description: string | null;
+  amount: number | null;
+  ded_date: string | null;
+  category: string | null;
+  source: string | null;
+  accountant_category: string | null;
+  eligible: boolean;
+  reason: 'eligible' | 'excluded_settlement_withheld' | 'category_mismatch' | 'missing_accountant_category';
+};
+
+export type LumperDeductionRow = {
+  id: string;
+  description: string | null;
+  amount: number | null;
+  ded_date: string | null;
+  category: string | null;
+  source: string | null;
+  accountant_category: string | null;
+};
+
+export function diagnoseLumperDeductions(rows: LumperDeductionRow[]): LumperDeductionDiagnosis[] {
+  const results: LumperDeductionDiagnosis[] = [];
+  for (const row of rows) {
+    // Only rows that actually LOOK like a lumper fee (by category OR by
+    // description text — item 2's "is the category name mismatched
+    // somewhere" check) are included at all.
+    const looksLikeLumper = row.category === 'Lumper Fees' || isLumperFee(row.description ?? undefined);
+    if (!looksLikeLumper) continue;
+
+    let reason: LumperDeductionDiagnosis['reason'];
+    let eligible: boolean;
+    if (!isEligibleForAccountantReport(row.source)) {
+      reason = 'excluded_settlement_withheld';
+      eligible = false;
+    } else if (row.category !== 'Lumper Fees') {
+      // The description names a lumper but the saved category string is
+      // something else entirely — a real classification mismatch, not an
+      // origin exclusion.
+      reason = 'category_mismatch';
+      eligible = false;
+    } else if (!row.accountant_category) {
+      reason = 'missing_accountant_category';
+      eligible = false;
+    } else {
+      reason = 'eligible';
+      eligible = true;
+    }
+
+    results.push({
+      id: row.id,
+      description: row.description,
+      amount: row.amount,
+      ded_date: row.ded_date,
+      category: row.category,
+      source: row.source,
+      accountant_category: row.accountant_category,
+      eligible,
+      reason,
+    });
+  }
+  return results;
 }

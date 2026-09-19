@@ -4294,7 +4294,7 @@ feature writeup (the report export, the disclaimer, the isolation test).
 
 ---
 
-## 75. MAP EXISTING OUT-OF-POCKET DEDUCTIONS INTO THE 16 ACCOUNTANT CATEGORIES (owner decision 2026-09-17) — NOT YET APPLIED
+## 75. MAP EXISTING OUT-OF-POCKET DEDUCTIONS INTO THE 16 ACCOUNTANT CATEGORIES (owner decision 2026-09-17) — ✅ APPLIED 2026-09-19
 
 **The decision**: a "CRITICAL ACCURACY TASK" — the owner reviewed and
 approved a full 38-category → 16-accountant-category mapping table (see
@@ -4358,7 +4358,7 @@ override tied to business data the user might reset). No change was
 needed to `reset-data`'s table-list for `accountant_category` — it's a
 column on the already-listed `deductions` table, not a new table.
 
-- [ ] 75 run (deductions.accountant_category + profiles.prime_driver_days_override)
+- [x] 75 run (deductions.accountant_category + profiles.prime_driver_days_override) — ✅ APPLIED 2026-09-19, client update published
 
 ---
 

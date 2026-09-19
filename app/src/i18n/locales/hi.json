@@ -2079,7 +2079,21 @@
     "fromDeductions": "Deductions से, {{date}}",
     "manuallySet": "मैन्युअल रूप से सेट",
     "resetToCalculated": "↺ गणना किए गए मान पर रीसेट करें",
-    "editingDeductionNote": "यह पंक्ति Deductions से आई है — इसकी तारीख, राशि और नोट वहीं प्रबंधित होते हैं। इस रिपोर्ट से केवल नीचे दी गई accountant श्रेणी संपादित की जा सकती है।"
+    "editingDeductionNote": "यह पंक्ति Deductions से आई है — इसकी तारीख, राशि और नोट वहीं प्रबंधित होते हैं। इस रिपोर्ट से केवल नीचे दी गई accountant श्रेणी संपादित की जा सकती है।",
+    "lumperGapsButton_one": "रीइम्बर्समेंट्स से {{count}} गायब lumper खर्च एंट्री बनाएं",
+    "lumperGapsButton_other": "रीइम्बर्समेंट्स से {{count}} गायब lumper खर्च एंट्रीज़ बनाएं",
+    "lumperGapsDoneTitle": "Lumper खर्च बनाए गए",
+    "lumperGapsDoneBody": "आपके settlement रीइम्बर्समेंट्स से {{count}} lumper खर्च एंट्री बनाई गईं। हर एक अभी भी यहीं से संपादित की जा सकती है।",
+    "diagnosticsToggle": "Lumper भुगतानों का निदान करें",
+    "diagnosticsTitle": "🔍 Lumper भुगतान निदान",
+    "diagnosticsNoRows": "आपके खाते में lumper का उल्लेख करने वाली कोई deduction नहीं मिली।",
+    "diagnosticsEligible": "✓ पात्र — रिपोर्ट में शामिल",
+    "diagnosticsReason": {
+      "excluded_settlement_withheld": "✕ बाहर रखा गया — settlement से रोका गया, जेब से नहीं दिया गया",
+      "category_mismatch": "✕ बाहर रखा गया — विवरण में lumper का उल्लेख है लेकिन category अलग है",
+      "missing_accountant_category": "✕ बाहर रखा गया — अभी तक श्रेणीबद्ध नहीं; ऊपर Auto-fill पर टैप करें"
+    },
+    "diagnosticsGapsNote": "{{count}} settlement रीइम्बर्समेंट्स में lumper का उल्लेख है लेकिन अभी तक कोई मेल खाती खर्च एंट्री नहीं है — इन्हें बनाने के लिए ऊपर दिया गया बटन उपयोग करें।"
   },
   "scorecard": {
     "title": "स्कोरकार्ड",

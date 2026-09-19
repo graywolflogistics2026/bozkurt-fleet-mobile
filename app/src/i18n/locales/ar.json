@@ -2079,7 +2079,21 @@
     "fromDeductions": "من الخصومات، {{date}}",
     "manuallySet": "تم تعيينه يدويًا",
     "resetToCalculated": "↺ إعادة التعيين إلى القيمة المحسوبة",
-    "editingDeductionNote": "هذا السطر مصدره الخصومات — يتم إدارة تاريخه ومبلغه وملاحظته هناك. يمكن تعديل فئة المحاسب أدناه فقط من هذا التقرير."
+    "editingDeductionNote": "هذا السطر مصدره الخصومات — يتم إدارة تاريخه ومبلغه وملاحظته هناك. يمكن تعديل فئة المحاسب أدناه فقط من هذا التقرير.",
+    "lumperGapsButton_one": "إنشاء إدخال مصروف lumper واحد مفقود من المبالغ المستردة",
+    "lumperGapsButton_other": "إنشاء {{count}} إدخالات مصروف lumper مفقودة من المبالغ المستردة",
+    "lumperGapsDoneTitle": "تم إنشاء مصاريف lumper",
+    "lumperGapsDoneBody": "تم إنشاء {{count}} إدخال(إدخالات) مصروف lumper من مبالغ settlement المستردة الخاصة بك. لا يزال بإمكانك تعديل كل واحد منها هنا مباشرة.",
+    "diagnosticsToggle": "تشخيص مدفوعات lumper",
+    "diagnosticsTitle": "🔍 تشخيص مدفوعات lumper",
+    "diagnosticsNoRows": "لم يتم العثور على خصومات تذكر lumper في حسابك.",
+    "diagnosticsEligible": "✓ مؤهل — في التقرير",
+    "diagnosticsReason": {
+      "excluded_settlement_withheld": "✕ مستبعد — محتجز ضمن settlement، وليس من جيبك الخاص",
+      "category_mismatch": "✕ مستبعد — الوصف يذكر lumper لكن الفئة مختلفة",
+      "missing_accountant_category": "✕ مستبعد — لم يتم تصنيفه بعد؛ اضغط على \"تعبئة تلقائية\" أعلاه"
+    },
+    "diagnosticsGapsNote": "{{count}} من مبالغ settlement المستردة تذكر lumper لكن ليس لها إدخال مصروف مطابق بعد — استخدم الزر أعلاه لإنشائها."
   },
   "scorecard": {
     "title": "بطاقة الأداء",

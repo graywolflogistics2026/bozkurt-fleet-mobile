@@ -2079,7 +2079,21 @@
     "fromDeductions": "из Вычетов, {{date}}",
     "manuallySet": "установлено вручную",
     "resetToCalculated": "↺ Сбросить к расчётному значению",
-    "editingDeductionNote": "Эта строка взята из раздела «Вычеты» — её дата, сумма и заметка управляются там. Здесь можно изменить только бухгалтерскую категорию ниже."
+    "editingDeductionNote": "Эта строка взята из раздела «Вычеты» — её дата, сумма и заметка управляются там. Здесь можно изменить только бухгалтерскую категорию ниже.",
+    "lumperGapsButton_one": "Создать {{count}} недостающую запись расхода lumper из возмещений",
+    "lumperGapsButton_other": "Создать {{count}} недостающих записей расходов lumper из возмещений",
+    "lumperGapsDoneTitle": "Расходы lumper созданы",
+    "lumperGapsDoneBody": "{{count}} запись(и) расхода lumper были созданы на основе возмещений вашего settlement. Каждую по-прежнему можно изменить прямо здесь.",
+    "diagnosticsToggle": "Диагностика платежей lumper",
+    "diagnosticsTitle": "🔍 Диагностика платежей lumper",
+    "diagnosticsNoRows": "На вашем счёте не найдено вычетов, упоминающих lumper.",
+    "diagnosticsEligible": "✓ Подходит — в отчёте",
+    "diagnosticsReason": {
+      "excluded_settlement_withheld": "✕ Исключено — удержано в settlement, а не оплачено лично",
+      "category_mismatch": "✕ Исключено — в описании упоминается lumper, но категория другая",
+      "missing_accountant_category": "✕ Исключено — категория ещё не назначена; нажмите «Автозаполнить» выше"
+    },
+    "diagnosticsGapsNote": "{{count}} возмещение(й) settlement упоминают lumper, но не имеют соответствующей записи расхода — используйте кнопку выше, чтобы создать их."
   },
   "scorecard": {
     "title": "Оценка эффективности",

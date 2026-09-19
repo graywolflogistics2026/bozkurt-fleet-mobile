@@ -5,12 +5,14 @@ import {
   detectMaintType,
   getCatNote,
   guessCategory,
+  isLumperFee,
   isMajorRepairOverhaul,
   toDbServiceType,
 } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import { toDateOrNull } from '@/src/import/dateGuard';
 import { clampPerDiemDays, defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
+import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import type {
   ComplianceItemInsert,
   ComplianceType,
@@ -270,6 +272,64 @@ export function mapSettlement(
     toReimbInsert(r, userId, settlementFallbackDate)
   );
 
+  // LUMPER REIMBURSEMENT COMPANION EXPENSE (owner decision 2026-09-19,
+  // "For Prime Inc Drivers" report bug fix — root cause: a lumper fee the
+  // driver pays personally at the dock, then gets reimbursed for via the
+  // settlement's own reimbursementItems section, NEVER created a matching
+  // deductions row anywhere in this app — `reimbursements` has no category
+  // concept at all, so the expense side of that transaction was invisible
+  // to the Deductions screen, the Accountant Package, AND the "For Prime
+  // Inc Drivers" report, regardless of any category-mapping/backfill fix.
+  // This also silently OVERSTATED true profit/taxable income: the
+  // carrier's own printed net-pay figure already includes this
+  // reimbursement as a credit (that's what "reimbursement" means on a
+  // settlement), so without a matching expense the driver's real cash
+  // outlay was never recognized anywhere in the app's own totals.
+  //
+  // isLumperFee() is the SAME shared, carrier-neutral detector
+  // classifySettlementLine()/guessCategory() already use — a reimbursement
+  // whose own description names a lumper (per the ai-import prompt's own
+  // "reimbursement (carrier paying back tolls/scales/washout/lumper/
+  // permits the driver already paid)" incomeType guidance) gets a
+  // companion out-of-pocket deduction: category 'Lumper Fees', source
+  // 'import' (genuinely out-of-pocket — the driver paid cash, this was
+  // never withheld from pay), NEVER 'settlement' (which would wrongly
+  // exclude it from the out-of-pocket report per the origin rule).
+  // accountant_category is computed directly here via
+  // suggestAccountantCategory() rather than deferred to aiImportSave.ts's
+  // own insert-time convention, since this row's whole reason for
+  // existing is to make a genuinely out-of-pocket Lumper Fees expense
+  // visible — no reason to leave a window where it's saved without one.
+  // payment_method is deliberately left null (never guessed) — CLAUDE.md
+  // invariant #2's personal-payment/capital-contribution confirmation
+  // flow must never fire off an assumption about how the driver paid.
+  // truck_id/driver_id match every other row this mapper builds, since
+  // this expense genuinely belongs to the same truck/driver as the rest
+  // of the settlement it was extracted from. settlement_id/document_id
+  // are assigned by aiImportSave.ts afterward, identically to every other
+  // item in this same `deductions` array — this is what makes the
+  // re-import-replace logic (widened in aiImportSave.ts to stop scoping
+  // its old-id capture to source==='settlement' only) correctly clean up
+  // and recreate this row on re-import, never duplicating it.
+  const lumperExpenseCategory = 'Lumper Fees';
+  const lumperCompanionDeductions: DeductionInsert[] = (s.reimbursementItems ?? [])
+    .filter((r) => isLumperFee(r.desc))
+    .map((r) => ({
+      user_id: userId,
+      truck_id: truckId,
+      settlement_id: null,
+      driver_id: driverId,
+      ded_date: settlementFallbackDate ?? null,
+      code: r.ref ?? null,
+      description: r.desc ?? null,
+      amount: num(r.amount),
+      category: lumperExpenseCategory,
+      payment_method: null,
+      source: 'import',
+      tax_deductible: true,
+      accountant_category: suggestAccountantCategory(lumperExpenseCategory, 'import'),
+    }));
+
   const tolls: TollInsert[] = [
     ...(s.tolls?.ezpass?.items ?? []).map((t) => toTollInsert(t, 'ezpass', userId, settlementFallbackDate, truckId)),
     ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, 'drivewyze', userId, settlementFallbackDate, truckId)),
@@ -290,7 +350,26 @@ export function mapSettlement(
     source: 'settlement',
   }));
 
-  return { settlement, loads, fuel, deductions, maintenance, reimbursements, tolls, loans, netPay: num(s.netPay) };
+  return {
+    settlement,
+    loads,
+    fuel,
+    // The lumper-reimbursement companion rows are appended AFTER the
+    // withheld-deduction batch, not merged in earlier — this is what lets
+    // applyCarrierCodeCategories()/applyLearnedCategories() (both run on
+    // the WHOLE array by aiImportSave.ts, right after mapSettlement()
+    // returns) apply uniformly to every deduction regardless of which
+    // half of this function produced it, with zero special-casing needed
+    // there. Neither of those two functions ever touches `source`, only
+    // `category`/`tax_deductible` — so a companion row's already-correct
+    // `source: 'import'` origin tag can never be silently overwritten.
+    deductions: [...deductions, ...lumperCompanionDeductions],
+    maintenance,
+    reimbursements,
+    tolls,
+    loans,
+    netPay: num(s.netPay),
+  };
 }
 
 // ---------- standalone fuel (legacy saveImport() fuel branch, legacy/index.html:2528-2530) ----------

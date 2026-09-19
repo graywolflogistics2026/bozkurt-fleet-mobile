@@ -6,7 +6,12 @@ import {
   suggestAccountantCategory,
   findUnmappedCanonicalCategories,
   findAccountantCategoryBackfillCandidates,
+  findLumperReimbursementGaps,
+  diagnoseLumperDeductions,
   type BackfillCandidateRow,
+  type LumperReimbursementRow,
+  type ExistingLumperDeductionRow,
+  type LumperDeductionRow,
 } from '@/src/primeDriverExpenses/categoryMapping';
 
 // THE ORIGIN RULE — the single most important constraint in this whole
@@ -143,5 +148,153 @@ describe('findAccountantCategoryBackfillCandidates — historical backfill, alwa
       return applied ? { ...r, accountant_category: applied.accountantCategory } : r;
     });
     expect(findAccountantCategoryBackfillCandidates(rowsAfterApplying)).toEqual([]);
+  });
+});
+
+// LUMPER PAYMENTS MISSING FROM THE REPORT (owner decision 2026-09-19, bug
+// investigation). Confirmed root cause: a lumper fee the driver pays
+// personally, then gets reimbursed for through a settlement's own
+// reimbursementItems section, never created a matching deductions row
+// anywhere in this app — reimbursements has no category column. These
+// tests prove the diagnostic surfaces real rows correctly AND the
+// historical-gap detector only ever proposes a genuinely missing
+// companion, never a duplicate.
+describe('diagnoseLumperDeductions — the per-row eligibility breakdown', () => {
+  it('an out-of-pocket, correctly-categorized, correctly-suggested row is eligible', () => {
+    const rows: LumperDeductionRow[] = [
+      {
+        id: 'd1',
+        description: 'Outside lumper at Walmart DC',
+        amount: 75,
+        ded_date: '2026-06-01',
+        category: 'Lumper Fees',
+        source: 'import',
+        accountant_category: 'Lumpers',
+      },
+    ];
+    expect(diagnoseLumperDeductions(rows)).toEqual([
+      {
+        id: 'd1',
+        description: 'Outside lumper at Walmart DC',
+        amount: 75,
+        ded_date: '2026-06-01',
+        category: 'Lumper Fees',
+        source: 'import',
+        accountant_category: 'Lumpers',
+        eligible: true,
+        reason: 'eligible',
+      },
+    ]);
+  });
+
+  it('a settlement-withheld lumper row (H1) is excluded with the correct reason, even though its category is right', () => {
+    const rows: LumperDeductionRow[] = [
+      { id: 'd1', description: 'LM LUMPER UNLOAD', amount: 50, ded_date: '2026-06-01', category: 'Lumper Fees', source: 'settlement', accountant_category: null },
+    ];
+    const diag = diagnoseLumperDeductions(rows);
+    expect(diag[0].eligible).toBe(false);
+    expect(diag[0].reason).toBe('excluded_settlement_withheld');
+  });
+
+  it('a category-name mismatch (H2) — the description names a lumper but the saved category is something else — is flagged distinctly from an origin exclusion', () => {
+    const rows: LumperDeductionRow[] = [
+      { id: 'd1', description: 'Outside lumper fee', amount: 60, ded_date: '2026-06-01', category: 'Misc', source: 'manual', accountant_category: null },
+    ];
+    const diag = diagnoseLumperDeductions(rows);
+    expect(diag[0].eligible).toBe(false);
+    expect(diag[0].reason).toBe('category_mismatch');
+  });
+
+  it('an out-of-pocket row correctly categorized but not yet backfilled (H3) is flagged distinctly', () => {
+    const rows: LumperDeductionRow[] = [
+      { id: 'd1', description: 'Outside lumper fee', amount: 60, ded_date: '2026-06-01', category: 'Lumper Fees', source: 'manual', accountant_category: null },
+    ];
+    const diag = diagnoseLumperDeductions(rows);
+    expect(diag[0].eligible).toBe(false);
+    expect(diag[0].reason).toBe('missing_accountant_category');
+  });
+
+  it('a row that neither names a lumper nor is categorized Lumper Fees is excluded from the diagnosis entirely, not flagged as any reason', () => {
+    const rows: LumperDeductionRow[] = [
+      { id: 'd1', description: 'Truck wash', amount: 30, ded_date: '2026-06-01', category: 'Truck Wash & Detailing', source: 'manual', accountant_category: null },
+    ];
+    expect(diagnoseLumperDeductions(rows)).toEqual([]);
+  });
+
+  it('a genuine advance-repaid lumper-shaped line (an ADV line without the word lumper) is not swept into the diagnosis by description alone', () => {
+    // classifySettlementLine() resolves this to 'Advance Repayment', never
+    // 'Lumper Fees' — and its own description contains no "lumper" text,
+    // so diagnoseLumperDeductions() correctly has nothing to say about it.
+    const rows: LumperDeductionRow[] = [
+      { id: 'd1', description: 'ADVANCE REPAYMENT WK3', amount: 40, ded_date: '2026-06-01', category: 'Advance Repayment', source: 'settlement', accountant_category: null },
+    ];
+    expect(diagnoseLumperDeductions(rows)).toEqual([]);
+  });
+});
+
+describe('findLumperReimbursementGaps — the confirmed historical root cause', () => {
+  it('a lumper-shaped reimbursement with no matching out-of-pocket deduction is a real gap', () => {
+    const reimbursements: LumperReimbursementRow[] = [
+      { id: 'r1', description: 'Reimbursement for outside lumper', amount: 65, reimb_date: '2026-06-01' },
+    ];
+    expect(findLumperReimbursementGaps(reimbursements, [])).toEqual([
+      { reimbursementId: 'r1', description: 'Reimbursement for outside lumper', amount: 65, date: '2026-06-01' },
+    ]);
+  });
+
+  it('a non-lumper reimbursement (tolls/scales/washout) is never flagged — scope is Lumper Fees specifically', () => {
+    const reimbursements: LumperReimbursementRow[] = [
+      { id: 'r1', description: 'Reimbursement for tolls', amount: 20, reimb_date: '2026-06-01' },
+    ];
+    expect(findLumperReimbursementGaps(reimbursements, [])).toEqual([]);
+  });
+
+  it('a lumper reimbursement that already has a matching out-of-pocket deduction (same date+amount) is NOT flagged again', () => {
+    const reimbursements: LumperReimbursementRow[] = [
+      { id: 'r1', description: 'Reimbursement for outside lumper', amount: 65, reimb_date: '2026-06-01' },
+    ];
+    const existing: ExistingLumperDeductionRow[] = [{ amount: 65, ded_date: '2026-06-01', category: 'Lumper Fees', source: 'import' }];
+    expect(findLumperReimbursementGaps(reimbursements, existing)).toEqual([]);
+  });
+
+  it('a SETTLEMENT-WITHHELD lumper deduction sharing the same date+amount never counts as an existing companion — only an out-of-pocket one does', () => {
+    const reimbursements: LumperReimbursementRow[] = [
+      { id: 'r1', description: 'Reimbursement for outside lumper', amount: 65, reimb_date: '2026-06-01' },
+    ];
+    // A withheld chargeback happening to share this date/amount is a
+    // DIFFERENT transaction (money never left the driver's pocket) — it
+    // must never be mistaken for the reimbursement's own companion.
+    const existing: ExistingLumperDeductionRow[] = [{ amount: 65, ded_date: '2026-06-01', category: 'Lumper Fees', source: 'settlement' }];
+    expect(findLumperReimbursementGaps(reimbursements, existing)).toEqual([
+      { reimbursementId: 'r1', description: 'Reimbursement for outside lumper', amount: 65, date: '2026-06-01' },
+    ]);
+  });
+
+  it('is idempotent — running it again after the gap has been filled in finds nothing left to create', () => {
+    const reimbursements: LumperReimbursementRow[] = [
+      { id: 'r1', description: 'Reimbursement for outside lumper', amount: 65, reimb_date: '2026-06-01' },
+    ];
+    const gaps = findLumperReimbursementGaps(reimbursements, []);
+    expect(gaps).toHaveLength(1);
+    const afterCreating: ExistingLumperDeductionRow[] = gaps.map((g) => ({
+      amount: g.amount,
+      ded_date: g.date,
+      category: 'Lumper Fees',
+      source: 'import',
+    }));
+    expect(findLumperReimbursementGaps(reimbursements, afterCreating)).toEqual([]);
+  });
+
+  it('THE FULL MIXED SCENARIO (item 4) — out-of-pocket, settlement-withheld, advance-repaid, and a reimbursement gap, all in one realistic dataset', () => {
+    const reimbursements: LumperReimbursementRow[] = [
+      { id: 'r1', description: 'Reimbursement for outside lumper', amount: 65, reimb_date: '2026-06-08' },
+    ];
+    const existingDeductions: ExistingLumperDeductionRow[] = [
+      { amount: 50, ded_date: '2026-06-01', category: 'Lumper Fees', source: 'settlement' }, // withheld — not a companion for anything
+      { amount: 40, ded_date: '2026-06-15', category: 'Advance Repayment', source: 'settlement' }, // advance-repaid, not even category Lumper Fees
+    ];
+    expect(findLumperReimbursementGaps(reimbursements, existingDeductions)).toEqual([
+      { reimbursementId: 'r1', description: 'Reimbursement for outside lumper', amount: 65, date: '2026-06-08' },
+    ]);
   });
 });

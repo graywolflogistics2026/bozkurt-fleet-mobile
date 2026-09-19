@@ -87,7 +87,14 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     expect(mockClient.__store.fuel_purchases).toHaveLength(2);
     expect(mockClient.__store.reimbursements).toHaveLength(1);
     expect(mockClient.__store.loads).toHaveLength(2);
-    expect(mockClient.__store.deductions).toHaveLength(1);
+    // 2, not 1: the withheld "Weekly insurance" chargeback, PLUS the
+    // genuinely out-of-pocket "Lumper Fees" companion deduction
+    // (mapExtraction.ts, owner decision 2026-09-19) mapSettlement() now
+    // creates from this fixture's own "Lumper fee" reimbursementItems
+    // entry — the confirmed fix for lumper payments missing from the
+    // "For Prime Inc Drivers" report (a reimbursement previously had no
+    // path into `deductions` at all).
+    expect(mockClient.__store.deductions).toHaveLength(2);
   });
 
   test('child rows with no per-line date inherit the settlement week_ending, never null', async () => {
@@ -127,9 +134,13 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     const settlements = mockClient.__store.settlements as Settlement[];
     const deductions = mockClient.__store.deductions as Deduction[];
 
-    // gross 4000 - withheld insurance 200 = 3800 (regression guard for the
-    // bug where withheld rows were silently excluded from true profit).
-    expect(calcTrueProfit(settlements, deductions)).toBe(3800);
+    // gross 4000 - withheld insurance 200 - the lumper companion expense 75
+    // (owner decision 2026-09-19, see the deductions-count comment above)
+    // = 3725 (regression guard for the ORIGINAL bug where withheld rows
+    // were silently excluded from true profit, still verified here: if
+    // the withheld $200 insurance row were wrongly excluded again, this
+    // would read 3925, not 3725).
+    expect(calcTrueProfit(settlements, deductions)).toBe(3725);
   });
 
   test('Cash Flow forecast: settlement-derived spend events reflect the imported settlement, and never double-count settlement-linked fuel', async () => {
@@ -196,8 +207,16 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     const deductions = mockClient.__store.deductions as Deduction[];
     const realSettlementId = settlements[0].id;
 
-    expect(deductions).toHaveLength(1);
-    const saved = deductions[0];
+    // 2, not 1: the malicious withheld deduction, PLUS the genuine
+    // out-of-pocket "Lumper Fees" companion deduction mapSettlement() now
+    // creates from this fixture's own "Lumper fee" reimbursementItems
+    // entry (owner decision 2026-09-19) — unrelated to this test's own
+    // concern, but present since settlementExtraction() is the shared
+    // fixture. Found by its own description/category, never assumed to
+    // be at a fixed array index now that two rows exist.
+    expect(deductions).toHaveLength(2);
+    const saved = deductions.find((d) => d.description === 'Weekly insurance')!;
+    expect(saved).toBeTruthy();
     expect(saved.source).toBe('settlement'); // never 'manual' from the payload
     expect(saved.settlement_id).toBe(realSettlementId); // never 'attacker-settlement-id'
     expect(saved.settlement_id).not.toBe('attacker-settlement-id');

@@ -11,7 +11,8 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useTrucksList } from '@/src/data/trucks';
 import { useSettlements } from '@/src/data/settlements';
-import { useDeductions, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
+import { useDeductions, useInsertDeduction, useUpdateDeduction, useDeleteDeduction } from '@/src/data/deductions';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import {
   usePrimeDriverExpenses,
@@ -21,7 +22,13 @@ import {
 } from '@/src/data/primeDriverExpenses';
 import { uploadPrimeDriverExpenseAttachment } from '@/src/data/primeDriverExpenseAttachment';
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
-import { findAccountantCategoryBackfillCandidates, type BackfillCandidateRow } from '@/src/primeDriverExpenses/categoryMapping';
+import {
+  findAccountantCategoryBackfillCandidates,
+  findLumperReimbursementGaps,
+  diagnoseLumperDeductions,
+  suggestAccountantCategory,
+  type BackfillCandidateRow,
+} from '@/src/primeDriverExpenses/categoryMapping';
 import {
   buildPrimeDriverExpenseMonth,
   eligibleDeductionRowsForReport,
@@ -81,6 +88,13 @@ export default function PrimeDriverExpensesScreen() {
   const deductionsQuery = useDeductions();
   const updateDeduction = useUpdateDeduction();
   const deleteDeduction = useDeleteDeduction();
+  // LUMPER PAYMENTS MISSING FROM THE REPORT (owner decision 2026-09-19) —
+  // read-only, used only by the diagnostic panel and the "create missing
+  // lumper expense entries" backfill below; never fed into the report's
+  // own row list (a reimbursement is never a report row by itself, only
+  // the companion deduction it may be missing is).
+  const reimbursementsQuery = useReimbursements();
+  const insertDeduction = useInsertDeduction();
 
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
@@ -162,6 +176,80 @@ export default function PrimeDriverExpensesScreen() {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
       setBackfilling(false);
+    }
+  }
+
+  // LUMPER PAYMENTS MISSING FROM THE REPORT — DIAGNOSIS (owner decision
+  // 2026-09-19). This repo has no live database access from outside the
+  // app itself, so "run the eligibility check against every existing
+  // Lumper Fees deduction row" runs HERE, on the user's own device,
+  // against their own real rows — diagnoseLumperDeductions() surfaces
+  // every deduction that names a lumper (by category OR by description
+  // text, catching a category-name mismatch too) with its real
+  // source/category/accountant_category and exactly why it's or isn't
+  // eligible. findLumperReimbursementGaps() separately surfaces the
+  // CONFIRMED root cause this pass fixed going forward: a settlement
+  // reimbursement that names a lumper but has no matching out-of-pocket
+  // expense row at all (reimbursements have no category column, so this
+  // money was previously invisible to this report no matter what).
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const lumperDiagnostics = useMemo(
+    () =>
+      diagnoseLumperDeductions(
+        (deductionsQuery.data ?? []).map((d) => ({
+          id: d.id,
+          description: d.description,
+          amount: d.amount,
+          ded_date: d.ded_date,
+          category: d.category,
+          source: d.source,
+          accountant_category: d.accountant_category,
+        }))
+      ),
+    [deductionsQuery.data]
+  );
+  const lumperReimbursementGaps = useMemo(
+    () =>
+      findLumperReimbursementGaps(
+        (reimbursementsQuery.data ?? []).map((r) => ({ id: r.id, description: r.description, amount: r.amount, reimb_date: r.reimb_date })),
+        (deductionsQuery.data ?? []).map((d) => ({ amount: d.amount, ded_date: d.ded_date, category: d.category, source: d.source }))
+      ),
+    [reimbursementsQuery.data, deductionsQuery.data]
+  );
+
+  // HISTORICAL FIX for a settlement imported BEFORE this pass shipped —
+  // creates the exact same companion deduction shape mapExtraction.ts now
+  // creates automatically for every future import (category 'Lumper
+  // Fees', source 'import' — genuinely out-of-pocket, never 'settlement',
+  // so the origin rule correctly includes it going forward). Explicit,
+  // reviewable, never silent — same "Auto-fill" convention as the
+  // existing category backfill above.
+  const [creatingLumperExpenses, setCreatingLumperExpenses] = useState(false);
+  async function handleCreateMissingLumperExpenses() {
+    if (!userId) return;
+    setCreatingLumperExpenses(true);
+    try {
+      for (const gap of lumperReimbursementGaps) {
+        await insertDeduction.mutateAsync({
+          user_id: userId,
+          ded_date: gap.date,
+          description: gap.description,
+          amount: gap.amount,
+          category: 'Lumper Fees',
+          source: 'import',
+          tax_deductible: true,
+          accountant_category: suggestAccountantCategory('Lumper Fees', 'import'),
+        });
+      }
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+      Alert.alert(
+        t('primeDriverExpenses.lumperGapsDoneTitle'),
+        t('primeDriverExpenses.lumperGapsDoneBody', { count: lumperReimbursementGaps.length })
+      );
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setCreatingLumperExpenses(false);
     }
   }
 
@@ -438,6 +526,60 @@ export default function PrimeDriverExpensesScreen() {
             onPress={handleRunBackfill}
             loading={backfilling}
           />
+        )}
+
+        {/* LUMPER PAYMENTS MISSING FROM THE REPORT — the historical fix
+            (owner decision 2026-09-19): a settlement reimbursement that
+            names a lumper but has no matching out-of-pocket expense row —
+            the confirmed root cause for lumper payments imported before
+            this pass. Explicit, reviewable, never silent. */}
+        {lumperReimbursementGaps.length > 0 && (
+          <SecondaryButton
+            title={`🔄 ${t('primeDriverExpenses.lumperGapsButton', { count: lumperReimbursementGaps.length })}`}
+            onPress={handleCreateMissingLumperExpenses}
+            loading={creatingLumperExpenses}
+          />
+        )}
+
+        {/* DIAGNOSTIC PANEL — same "no live database access from this
+            environment, so the check has to run on the user's own device
+            against their own real rows" pattern this app already uses for
+            the Daily Tip diagnostics/Verify Balance breakdown. */}
+        <Pressable onPress={() => setShowDiagnostics((v) => !v)} style={{ marginTop: spacing.sm }}>
+          <MutedText style={{ fontSize: typography.size.xs }}>
+            {showDiagnostics ? '▾ ' : '▸ '}
+            {t('primeDriverExpenses.diagnosticsToggle')}
+          </MutedText>
+        </Pressable>
+        {showDiagnostics && (
+          <Card style={{ marginTop: spacing.xs, borderColor: colors.accent, borderWidth: 1 }}>
+            <Text style={styles.categoryTitle}>{t('primeDriverExpenses.diagnosticsTitle')}</Text>
+            {lumperDiagnostics.length === 0 ? (
+              <MutedText style={{ marginTop: spacing.xs }}>{t('primeDriverExpenses.diagnosticsNoRows')}</MutedText>
+            ) : (
+              lumperDiagnostics.map((d) => (
+                <View key={d.id} style={{ marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm }}>
+                  <Text style={{ color: colors.text }}>
+                    {d.ded_date ? date(d.ded_date) : '—'} · {money(Number(d.amount ?? 0))}
+                  </Text>
+                  {d.description ? <MutedText numberOfLines={1}>{d.description}</MutedText> : null}
+                  <MutedText style={{ fontSize: typography.size.xs }}>
+                    category: {d.category ?? '(none)'} · source: {d.source ?? '(none)'} · accountant_category: {d.accountant_category ?? '(none)'}
+                  </MutedText>
+                  <Text style={{ color: d.eligible ? colors.green : colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>
+                    {d.eligible ? t('primeDriverExpenses.diagnosticsEligible') : t(`primeDriverExpenses.diagnosticsReason.${d.reason}`)}
+                  </Text>
+                </View>
+              ))
+            )}
+            {lumperReimbursementGaps.length > 0 && (
+              <View style={{ marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm }}>
+                <MutedText style={{ fontSize: typography.size.xs }}>
+                  {t('primeDriverExpenses.diagnosticsGapsNote', { count: lumperReimbursementGaps.length })}
+                </MutedText>
+              </View>
+            )}
+          </Card>
         )}
 
         {loading ? (
