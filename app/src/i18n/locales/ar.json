@@ -2094,15 +2094,13 @@
     "lumperBanner": {
       "title_one": "دفعة lumper واحدة ليست في هذا التقرير بعد",
       "title_other": "{{count}} دفعة lumper ليست في هذا التقرير بعد",
-      "body": "تم العثور عليها في كشوف settlement الخاصة بك. مدفوعات lumper التي دُفعت بسلفة lumper من Prime (\"ADV FOR OUTSIDE LUMPER\") خُصمت من دفعة settlement، لذلك استُبعدت من تقرير المصاريف الشخصية هذا. اضغط أدناه لإضافتها. يمكنك تعديل كل واحدة لاحقًا. تُدرج Prime هذه المبالغ أيضًا تحت LUMPERS في operating statement، لذا أخبر محاسبك أنها تظهر في المكانين.",
-      "sourceAdvance": "سلفة lumper من Prime · {{date}}",
+      "body": "دفعت مبالغ lumper هذه من جيبك الخاص لكنها ليست في هذا التقرير بعد. اضغط أدناه لإضافتها. يمكنك تعديل كل واحدة لاحقًا. مبالغ lumper التي قدمتها لك Prime كسلفة (\"ADV FOR OUTSIDE LUMPER\") لا تظهر هنا أبدًا: كانت أموال Prime وليست أموالك.",
       "sourceReimbursement": "مبلغ مسترد من settlement · {{date}}",
       "sourceUncategorized": "غير مصنف بعد · {{date}}",
       "button_one": "إضافة دفعة lumper واحدة إلى هذا التقرير",
       "button_other": "إضافة كل الـ {{count}} دفعة lumper إلى هذا التقرير",
       "doneTitle": "تمت إضافة مدفوعات lumper",
-      "doneBody": "تمت إضافة {{count}} إدخال(ات) lumper. يتم الآن عرض {{month}}. اضغط على أي سطر لتغيير فئته أو تاريخه أو مبلغه.",
-      "addedNote": "{{description}} (settlement من Prime بتاريخ {{date}})"
+      "doneBody": "تمت إضافة {{count}} إدخال(ات) lumper. يتم الآن عرض {{month}}. اضغط على أي سطر لتغيير فئته أو تاريخه أو مبلغه."
     }
   },
   "scorecard": {

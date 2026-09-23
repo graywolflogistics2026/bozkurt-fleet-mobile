@@ -66,7 +66,11 @@ beforeEach(() => {
 });
 
 describe('lumper reimbursement companion expense (owner decision 2026-09-19)', () => {
-  test('THE FULL MIXED SCENARIO (item 4): out-of-pocket (via reimbursement), settlement-withheld, and advance-repaid lumper lines all in one settlement — only the out-of-pocket one appears on the report', async () => {
+  // ORIGIN RULE (owner decision 2026-09-23): a lumper the carrier ADVANCED
+  // ("ADV FOR OUTSIDE LUMPER") is carrier money fronted and taken back —
+  // never out-of-pocket — even if the same settlement also shows a lumper
+  // reimbursement line. Nothing from this settlement may reach the report.
+  test('a settlement with a withheld lumper advance puts NOTHING on the report, even with a lumper reimbursement line', async () => {
     const extraction: Extraction = {
       docType: 'settlement',
       settlement: {
@@ -75,23 +79,11 @@ describe('lumper reimbursement companion expense (owner decision 2026-09-19)', (
         netPay: 2200,
         totalMiles: 2000,
         loads: [{ order: 'L1', from: 'A', to: 'B', revenue: 1500 }],
-        // A genuine settlement-withheld lumper charge — the carrier paid
-        // the lumper company directly and deducted it from pay. This must
-        // stay excluded from the out-of-pocket report (the origin rule).
         deductions: [
           { code: 'LM', desc: 'LM LUMPER UNLOAD', amount: 50 },
-          // An advance-shaped line that also names a lumper — resolves to
-          // category 'Lumper Fees' too (isLumperFee checked before
-          // isGenericAdvance in classifySettlementLine), but is STILL
-          // source==='settlement' — still excluded, exactly the same as
-          // the plain LM line above, proving the origin rule (not the
-          // category name) is what governs eligibility.
-          { code: 'ADV', desc: 'ADV FOR OUTSIDE LUMPER', amount: 45 },
+          { code: 'WA', desc: 'ADV FOR OUTSIDE LUMPER', amount: 217.55 },
         ],
-        // The genuinely out-of-pocket case: the driver paid a lumper
-        // company $65 in cash, and the settlement reimburses them for it
-        // — this is the confirmed root cause this pass fixes.
-        reimbursementItems: [{ desc: 'Reimbursement for outside lumper fee', ref: 'RB-1', amount: 65 }],
+        reimbursementItems: [{ desc: 'Reimbursement for outside lumper fee', ref: 'RB-1', amount: 215 }],
       },
     };
 
@@ -99,37 +91,49 @@ describe('lumper reimbursement companion expense (owner decision 2026-09-19)', (
 
     const deductions = (mockClient.__store.deductions ?? []) as Deduction[];
     const lumperDeductions = deductions.filter((d) => d.category === 'Lumper Fees');
-    // Three rows total: the two settlement-withheld ones, plus the new
-    // out-of-pocket companion created from the reimbursement.
-    expect(lumperDeductions).toHaveLength(3);
+    // Only the two withheld rows — no out-of-pocket companion.
+    expect(lumperDeductions).toHaveLength(2);
+    expect(lumperDeductions.every((d) => d.source === 'settlement')).toBe(true);
+    for (const w of lumperDeductions) expect(w.accountant_category ?? null).toBeNull();
 
-    const companion = lumperDeductions.find((d) => d.source === 'import');
-    expect(companion).toBeTruthy();
+    // The reimbursement itself is still saved, unchanged.
+    expect((mockClient.__store.reimbursements ?? []) as Reimbursement[]).toHaveLength(1);
+
+    const reportRows = eligibleDeductionRowsForReport(
+      deductions.map((d) => ({
+        id: d.id,
+        ded_date: d.ded_date,
+        amount: d.amount,
+        accountant_category: d.accountant_category,
+        source: d.source,
+        description: d.description,
+      }))
+    );
+    expect(reportRows.filter((r) => r.category === 'Lumpers')).toHaveLength(0);
+  });
+
+  test('a lumper reimbursement with NO carrier advance (driver paid cash) creates one out-of-pocket expense on the report', async () => {
+    const extraction: Extraction = {
+      docType: 'settlement',
+      settlement: {
+        weekEnding: '2026-06-06',
+        grossRevenue: 3000,
+        netPay: 2200,
+        totalMiles: 2000,
+        loads: [{ order: 'L1', from: 'A', to: 'B', revenue: 1500 }],
+        deductions: [{ code: 'MY', desc: 'MAYFAIR PHY DAM', amount: 36.08 }],
+        reimbursementItems: [{ desc: 'Reimbursement for outside lumper fee', ref: 'RB-1', amount: 65 }],
+      },
+    };
+
+    await saveExtraction(baseParams(extraction));
+
+    const deductions = (mockClient.__store.deductions ?? []) as Deduction[];
+    const companion = deductions.find((d) => d.category === 'Lumper Fees' && d.source === 'import');
     expect(companion?.amount).toBe(65);
     expect(companion?.accountant_category).toBe('Lumpers');
-    expect(companion?.tax_deductible).toBe(true);
     expect(companion?.payment_method).toBeNull();
 
-    const withheld = lumperDeductions.filter((d) => d.source === 'settlement');
-    expect(withheld).toHaveLength(2);
-    for (const w of withheld) {
-      // mapSettlement()'s withheld-deduction mapper never sets
-      // accountant_category at all — it's genuinely unset (`null` once a
-      // real Postgres column default applies; the in-memory fake store
-      // simply omits the key, `undefined`) either way, never a real value.
-      expect(w.accountant_category ?? null).toBeNull();
-    }
-
-    // The reimbursement itself was also saved to the reimbursements
-    // table, unchanged — the companion deduction is ADDITIVE, never a
-    // replacement for the existing reimbursement-mapping behavior.
-    const reimbursements = (mockClient.__store.reimbursements ?? []) as Reimbursement[];
-    expect(reimbursements).toHaveLength(1);
-    expect(reimbursements[0].amount).toBe(65);
-
-    // THE ACTUAL REPORT FUNCTION — only the out-of-pocket companion
-    // surfaces; both settlement-withheld lumper lines are correctly
-    // excluded regardless of sharing the identical category.
     const reportRows = eligibleDeductionRowsForReport(
       deductions.map((d) => ({
         id: d.id,

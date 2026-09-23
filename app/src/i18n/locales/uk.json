@@ -2094,15 +2094,13 @@
     "lumperBanner": {
       "title_one": "{{count}} lumper payment is not on this report yet",
       "title_other": "{{count}} lumper payments are not on this report yet",
-      "body": "Found on your settlements. Lumpers paid with a Prime lumper advance (\"ADV FOR OUTSIDE LUMPER\") were withheld from your settlement pay, so they were left off this out-of-pocket report. Tap below to add them. You can edit every one afterward. Prime also lists these under LUMPERS on your operating statement, so tell your accountant they appear in both places.",
-      "sourceAdvance": "Prime lumper advance · {{date}}",
+      "body": "These lumper payments were paid out of your own pocket but are not on this report yet. Tap below to add them. You can edit every one afterward. Lumpers Prime advanced to you (\"ADV FOR OUTSIDE LUMPER\") are never listed here: that was Prime's money, not yours.",
       "sourceReimbursement": "Settlement reimbursement · {{date}}",
       "sourceUncategorized": "Not yet categorized · {{date}}",
       "button_one": "Add {{count}} lumper to this report",
       "button_other": "Add all {{count}} lumpers to this report",
       "doneTitle": "Lumpers added",
-      "doneBody": "{{count}} lumper entries were added. Now showing {{month}}. Tap any row to change its category, date, or amount.",
-      "addedNote": "{{description}} (Prime settlement {{date}})"
+      "doneBody": "{{count}} lumper entries were added. Now showing {{month}}. Tap any row to change its category, date, or amount."
     }
   },
   "scorecard": {

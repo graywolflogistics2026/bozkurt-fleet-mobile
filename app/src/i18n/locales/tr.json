@@ -2094,15 +2094,13 @@
     "lumperBanner": {
       "title_one": "{{count}} lumper ödemesi henüz bu raporda değil",
       "title_other": "{{count}} lumper ödemesi henüz bu raporda değil",
-      "body": "Settlement'larınızda bulundu. Prime lumper avansıyla (\"ADV FOR OUTSIDE LUMPER\") ödenen lumper'lar settlement ödemenizden kesildiği için bu cepten ödenen giderler raporunun dışında kaldı. Eklemek için aşağıya dokunun. Her birini sonradan düzenleyebilirsiniz. Prime bunları operating statement'ınızda LUMPERS altında da gösterir, bu yüzden muhasebecinize iki yerde de göründüğünü söyleyin.",
-      "sourceAdvance": "Prime lumper avansı · {{date}}",
+      "body": "Bu lumper ödemeleri kendi cebinizden yapıldı ama henüz bu raporda değil. Eklemek için aşağıya dokunun. Her birini sonradan düzenleyebilirsiniz. Prime'ın size avans olarak verdiği lumper'lar (\"ADV FOR OUTSIDE LUMPER\") burada asla listelenmez: o para sizin değil, Prime'ındı.",
       "sourceReimbursement": "Settlement geri ödemesi · {{date}}",
       "sourceUncategorized": "Henüz kategorilendirilmedi · {{date}}",
       "button_one": "{{count}} lumper'ı bu rapora ekle",
       "button_other": "{{count}} lumper'ın tümünü bu rapora ekle",
       "doneTitle": "Lumper'lar eklendi",
-      "doneBody": "{{count}} lumper kaydı eklendi. Şu an {{month}} gösteriliyor. Kategorisini, tarihini veya tutarını değiştirmek için herhangi bir satıra dokunun.",
-      "addedNote": "{{description}} (Prime settlement {{date}})"
+      "doneBody": "{{count}} lumper kaydı eklendi. Şu an {{month}} gösteriliyor. Kategorisini, tarihini veya tutarını değiştirmek için herhangi bir satıra dokunun."
     }
   },
   "scorecard": {

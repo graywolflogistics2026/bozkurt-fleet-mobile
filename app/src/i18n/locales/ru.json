@@ -2094,15 +2094,13 @@
     "lumperBanner": {
       "title_one": "{{count}} платёж lumper ещё не в этом отчёте",
       "title_other": "{{count}} платежа lumper ещё не в этом отчёте",
-      "body": "Найдено в ваших settlement. Lumper, оплаченные авансом Prime («ADV FOR OUTSIDE LUMPER»), были удержаны из выплаты по settlement, поэтому не попали в этот отчёт о личных расходах. Нажмите ниже, чтобы добавить их. Каждую запись можно потом изменить. Prime также показывает их в строке LUMPERS вашего operating statement, поэтому сообщите бухгалтеру, что они есть в обоих местах.",
-      "sourceAdvance": "Аванс Prime на lumper · {{date}}",
+      "body": "Эти платежи lumper вы оплатили из собственного кармана, но их ещё нет в этом отчёте. Нажмите ниже, чтобы добавить их. Каждую запись можно потом изменить. Lumper, оплаченные авансом Prime («ADV FOR OUTSIDE LUMPER»), здесь никогда не показываются: это были деньги Prime, а не ваши.",
       "sourceReimbursement": "Возмещение settlement · {{date}}",
       "sourceUncategorized": "Ещё без категории · {{date}}",
       "button_one": "Добавить {{count}} lumper в отчёт",
       "button_other": "Добавить все {{count}} lumper в отчёт",
       "doneTitle": "Lumper добавлены",
-      "doneBody": "Добавлено записей lumper: {{count}}. Показан {{month}}. Нажмите на любую строку, чтобы изменить категорию, дату или сумму.",
-      "addedNote": "{{description}} (settlement Prime {{date}})"
+      "doneBody": "Добавлено записей lumper: {{count}}. Показан {{month}}. Нажмите на любую строку, чтобы изменить категорию, дату или сумму."
     }
   },
   "scorecard": {

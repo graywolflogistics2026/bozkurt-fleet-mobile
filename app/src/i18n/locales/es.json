@@ -2094,15 +2094,13 @@
     "lumperBanner": {
       "title_one": "{{count}} pago de lumper aún no está en este informe",
       "title_other": "{{count}} pagos de lumper aún no están en este informe",
-      "body": "Encontrados en tus settlements. Los lumpers pagados con un adelanto de Prime (\"ADV FOR OUTSIDE LUMPER\") se retuvieron de tu pago de settlement, por eso quedaron fuera de este informe de gastos de bolsillo. Toca abajo para agregarlos. Después puedes editar cada uno. Prime también los muestra como LUMPERS en tu estado operativo, así que avisa a tu contador que aparecen en ambos lugares.",
-      "sourceAdvance": "Adelanto de lumper de Prime · {{date}}",
+      "body": "Estos pagos de lumper salieron de tu propio bolsillo pero aún no están en este informe. Toca abajo para agregarlos. Después puedes editar cada uno. Los lumpers que Prime te adelantó (\"ADV FOR OUTSIDE LUMPER\") nunca aparecen aquí: fue dinero de Prime, no tuyo.",
       "sourceReimbursement": "Reembolso de settlement · {{date}}",
       "sourceUncategorized": "Aún sin categoría · {{date}}",
       "button_one": "Agregar {{count}} lumper a este informe",
       "button_other": "Agregar los {{count}} lumpers a este informe",
       "doneTitle": "Lumpers agregados",
-      "doneBody": "Se agregaron {{count}} entradas de lumper. Mostrando {{month}}. Toca cualquier línea para cambiar su categoría, fecha o monto.",
-      "addedNote": "{{description}} (settlement de Prime {{date}})"
+      "doneBody": "Se agregaron {{count}} entradas de lumper. Mostrando {{month}}. Toca cualquier línea para cambiar su categoría, fecha o monto."
     }
   },
   "scorecard": {

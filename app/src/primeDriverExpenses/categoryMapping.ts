@@ -160,6 +160,7 @@ export function findAccountantCategoryBackfillCandidates(rows: BackfillCandidate
 // destructive" spirit as findAccountantCategoryBackfillCandidates() above.
 export type LumperReimbursementRow = {
   id: string;
+  settlement_id?: string | null;
   description: string | null;
   amount: number | null;
   reimb_date: string | null;
@@ -172,6 +173,8 @@ export type LumperReimbursementRow = {
 // false positives (skipping a genuinely-missing companion) are the safe
 // failure mode here, never a duplicate.
 export type ExistingLumperDeductionRow = {
+  settlement_id?: string | null;
+  description?: string | null;
   amount: number | null;
   ded_date: string | null;
   category: string | null;
@@ -192,9 +195,16 @@ export function findLumperReimbursementGaps(
   const existingLumperOutOfPocket = existingDeductions.filter(
     (d) => d.category === 'Lumper Fees' && isEligibleForAccountantReport(d.source)
   );
+  const settlementsWithLumperAdvance = new Set(
+    existingDeductions
+      .filter((d) => d.settlement_id && isWithheldLumperAdvance({ category: d.category, description: d.description ?? null, source: d.source }))
+      .map((d) => d.settlement_id as string)
+  );
   const gaps: LumperReimbursementGap[] = [];
   for (const r of reimbursements) {
     if (!isLumperFee(r.description ?? undefined)) continue;
+    // Carrier-advanced lumper on the same settlement -> not out-of-pocket.
+    if (r.settlement_id && settlementsWithLumperAdvance.has(r.settlement_id)) continue;
     const amount = Number(r.amount ?? 0);
     const hasCompanion = existingLumperOutOfPocket.some(
       (d) => Number(d.amount ?? 0) === amount && (d.ded_date ?? null) === (r.reimb_date ?? null)
@@ -205,70 +215,14 @@ export function findLumperReimbursementGaps(
   return gaps;
 }
 
-// PRIME LUMPER ADVANCES (owner decision 2026-09-23, "lumper fees still show
-// $0" — the REAL root cause, confirmed against the owner's actual Prime
-// settlement PDFs). Prime never puts an outside lumper in the
-// Reimbursement section at all, so findLumperReimbursementGaps() above
-// finds nothing for a Prime account. Prime's real structure is:
-//   REVENUE    LM <order> OUTSIDE LUMPER          215.00  (1099 pay)
-//   DEDUCTION  WA <order> ADV FOR OUTSIDE LUMPER  217.55  (advance incl. wire fee)
-// revenueItems are never persisted, so the ONLY row this app keeps is the
-// withheld deduction (source 'settlement'), which the origin rule
-// correctly keeps off the report on its own. This finder surfaces those
-// rows so the user can EXPLICITLY copy them onto the report as
-// `prime_driver_expenses` rows — that table is isolated from every
-// canonical total (src/stats/primeDriverExpenses.ts header), so this never
-// double-counts true profit/tax (invariant #1), and the withheld
-// deduction itself still never receives an accountant_category.
-//
-// Detected by category OR description, since a carrier code map could
-// recategorize the line. Skips a row already copied (its id is in
-// `alreadyAddedIds`, a device-local record) or one with a matching direct
-// "Lumpers" row on the same date for the same amount.
-export type SettlementLumperSourceRow = {
-  id: string;
-  description: string | null;
-  amount: number | null;
-  ded_date: string | null;
-  category: string | null;
-  source: string | null;
-};
-
-export type ExistingDirectReportRow = {
-  exp_date: string | null;
-  amount: number | null;
-  category: string | null;
-};
-
-export type SettlementLumperCandidate = {
-  deductionId: string;
-  description: string | null;
-  amount: number;
-  date: string | null;
-};
-
-function sameCents(a: number | null | undefined, b: number | null | undefined): boolean {
-  return Math.round(Number(a ?? 0) * 100) === Math.round(Number(b ?? 0) * 100);
-}
-
-export function findSettlementLumperAdvances(
-  deductions: SettlementLumperSourceRow[],
-  existingDirectRows: ExistingDirectReportRow[],
-  alreadyAddedIds: ReadonlySet<string>
-): SettlementLumperCandidate[] {
-  const directLumpers = existingDirectRows.filter((r) => r.category === 'Lumpers');
-  const candidates: SettlementLumperCandidate[] = [];
-  for (const d of deductions) {
-    if (isEligibleForAccountantReport(d.source)) continue;
-    if (d.category !== 'Lumper Fees' && !isLumperFee(d.description ?? undefined)) continue;
-    if (alreadyAddedIds.has(d.id)) continue;
-    const amount = Number(d.amount ?? 0);
-    if (amount <= 0) continue;
-    const alreadyOnReport = directLumpers.some((r) => (r.exp_date ?? null) === (d.ded_date ?? null) && sameCents(r.amount, amount));
-    if (alreadyOnReport) continue;
-    candidates.push({ deductionId: d.id, description: d.description, amount, date: d.ded_date });
-  }
-  return candidates;
+// A settlement-withheld lumper line (e.g. Prime's "ADV FOR OUTSIDE LUMPER")
+// is money the carrier fronted and took back out of the settlement — NEVER
+// out-of-pocket (owner decision 2026-09-23, reaffirming the origin rule).
+// Used to veto a reimbursement-section lumper on the same settlement: if
+// the carrier advanced the lumper, a matching reimbursement is the carrier
+// washing its own money, not repaying the driver's cash.
+export function isWithheldLumperAdvance(row: { category: string | null; description: string | null; source: string | null }): boolean {
+  return !isEligibleForAccountantReport(row.source) && (row.category === 'Lumper Fees' || isLumperFee(row.description ?? undefined));
 }
 
 // The full, per-row eligibility breakdown for every deduction that names a

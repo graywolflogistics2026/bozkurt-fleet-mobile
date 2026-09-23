@@ -312,7 +312,14 @@ export function mapSettlement(
   // its old-id capture to source==='settlement' only) correctly clean up
   // and recreate this row on re-import, never duplicating it.
   const lumperExpenseCategory = 'Lumper Fees';
-  const lumperCompanionDeductions: DeductionInsert[] = (s.reimbursementItems ?? [])
+  // ORIGIN RULE VETO (owner decision 2026-09-23): if this same settlement
+  // also withholds a lumper advance (e.g. Prime's "ADV FOR OUTSIDE
+  // LUMPER"), the carrier fronted the lumper and a reimbursement line is
+  // the carrier washing its own money — not out-of-pocket, so no companion
+  // expense. Conservative on purpose: a missed genuine lumper is fixed with
+  // the report's manual "Add Expense"; a wrong one would overstate expenses.
+  const settlementHasLumperAdvance = (s.deductions ?? []).some((x) => isLumperFee(x.desc));
+  const lumperCompanionDeductions: DeductionInsert[] = (settlementHasLumperAdvance ? [] : s.reimbursementItems ?? [])
     .filter((r) => isLumperFee(r.desc))
     .map((r) => ({
       user_id: userId,

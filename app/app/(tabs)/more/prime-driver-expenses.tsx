@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,7 +25,6 @@ import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from
 import {
   findAccountantCategoryBackfillCandidates,
   findLumperReimbursementGaps,
-  findSettlementLumperAdvances,
   diagnoseLumperDeductions,
   suggestAccountantCategory,
   type BackfillCandidateRow,
@@ -119,12 +117,6 @@ function DatePickerField({ value, onChange }: { value: string; onChange: (iso: s
     </View>
   );
 }
-
-// Device-local record of settlement lumper deductions already copied onto
-// this report, so deleting or re-dating a copied row never makes the
-// banner offer it again. findSettlementLumperAdvances() also dedupes by
-// date+amount, which covers a reinstall.
-const addedLumperIdsKey = (userId: string) => `prime-driver-expenses:added-settlement-lumpers:${userId}`;
 
 export default function PrimeDriverExpensesScreen() {
   const { t } = useTranslation();
@@ -271,89 +263,38 @@ export default function PrimeDriverExpensesScreen() {
   const lumperReimbursementGaps = useMemo(
     () =>
       findLumperReimbursementGaps(
-        (reimbursementsQuery.data ?? []).map((r) => ({ id: r.id, description: r.description, amount: r.amount, reimb_date: r.reimb_date })),
-        (deductionsQuery.data ?? []).map((d) => ({ amount: d.amount, ded_date: d.ded_date, category: d.category, source: d.source }))
+        (reimbursementsQuery.data ?? []).map((r) => ({ id: r.id, settlement_id: r.settlement_id, description: r.description, amount: r.amount, reimb_date: r.reimb_date })),
+        (deductionsQuery.data ?? []).map((d) => ({ settlement_id: d.settlement_id, description: d.description, amount: d.amount, ded_date: d.ded_date, category: d.category, source: d.source }))
       ),
     [reimbursementsQuery.data, deductionsQuery.data]
   );
 
-  // LUMPER BANNER (owner decision 2026-09-23, "lumper fees still show $0").
-  // The previous pass only looked for lumpers in the settlement's
-  // Reimbursement section — Prime never puts them there (see
-  // findSettlementLumperAdvances()'s header), so its button never
-  // rendered and there was nothing to tap. This banner collects EVERY
-  // kind of lumper row that isn't on the report yet, lists them, and adds
-  // them all with one tap:
-  //   - settlement lumper advances -> copied as prime_driver_expenses rows
-  //     (isolated table, never touches true profit/tax)
+  // LUMPER BANNER (owner decision 2026-09-23) — lists every GENUINELY
+  // OUT-OF-POCKET lumper that isn't on the report yet, and adds them with
+  // one tap:
   //   - out-of-pocket Lumper Fees deductions with no accountant_category
-  //     -> accountant_category set (same write as Auto-fill)
-  //   - reimbursement-only lumpers -> companion deduction (previous pass)
-  const [addedLumperIds, setAddedLumperIds] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    AsyncStorage.getItem(addedLumperIdsKey(userId))
-      .then((raw) => {
-        if (cancelled || !raw) return;
-        const ids = JSON.parse(raw);
-        if (Array.isArray(ids)) setAddedLumperIds(new Set(ids.map(String)));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  const settlementLumpers = useMemo(
-    () =>
-      findSettlementLumperAdvances(
-        (deductionsQuery.data ?? []).map((d) => ({
-          id: d.id,
-          description: d.description,
-          amount: d.amount,
-          ded_date: d.ded_date,
-          category: d.category,
-          source: d.source,
-        })),
-        (expensesQuery.data ?? []).map((r) => ({ exp_date: r.exp_date, amount: r.amount, category: r.category })),
-        addedLumperIds
-      ),
-    [deductionsQuery.data, expensesQuery.data, addedLumperIds]
-  );
+  //   - reimbursement-section lumpers with no companion expense (and no
+  //     withheld lumper advance on the same settlement)
+  // A Prime "ADV FOR OUTSIDE LUMPER" line is money Prime fronted and took
+  // back — NEVER out-of-pocket. It is never a banner item, never copied
+  // onto this report, and never gets an accountant_category (origin rule).
   const uncategorizedLumpers = useMemo(() => {
     const ids = new Set(backfillCandidates.filter((c) => c.accountantCategory === 'Lumpers').map((c) => c.id));
     return (deductionsQuery.data ?? []).filter((d) => ids.has(d.id));
   }, [backfillCandidates, deductionsQuery.data]);
   const lumperBannerItems = useMemo(
     () => [
-      ...settlementLumpers.map((s) => ({ key: `s-${s.deductionId}`, kind: 'sourceAdvance' as const, date: s.date, amount: s.amount, description: s.description })),
       ...uncategorizedLumpers.map((d) => ({ key: `u-${d.id}`, kind: 'sourceUncategorized' as const, date: d.ded_date, amount: Number(d.amount ?? 0), description: d.description })),
       ...lumperReimbursementGaps.map((g) => ({ key: `r-${g.reimbursementId}`, kind: 'sourceReimbursement' as const, date: g.date, amount: g.amount, description: g.description })),
     ],
-    [settlementLumpers, uncategorizedLumpers, lumperReimbursementGaps]
+    [uncategorizedLumpers, lumperReimbursementGaps]
   );
 
   const [addingLumpers, setAddingLumpers] = useState(false);
   async function handleAddAllLumpers() {
     if (!userId) return;
     setAddingLumpers(true);
-    const addedIds = new Set(addedLumperIds);
     try {
-      for (const s of settlementLumpers) {
-        await insertExpense.mutateAsync({
-          user_id: userId,
-          exp_date: s.date || todayIso(),
-          amount: s.amount,
-          category: 'Lumpers',
-          note: t('primeDriverExpenses.lumperBanner.addedNote', {
-            description: s.description ?? 'Lumpers',
-            date: s.date ? date(s.date) : '',
-          }),
-        });
-        addedIds.add(s.deductionId);
-        await AsyncStorage.setItem(addedLumperIdsKey(userId), JSON.stringify([...addedIds])).catch(() => {});
-      }
       for (const d of uncategorizedLumpers) {
         await updateDeduction.mutateAsync({ id: d.id, values: { accountant_category: 'Lumpers' } });
       }
@@ -369,8 +310,7 @@ export default function PrimeDriverExpensesScreen() {
           accountant_category: suggestAccountantCategory('Lumper Fees', 'import'),
         });
       }
-      setAddedLumperIds(addedIds);
-      await invalidateFinancialData(queryClient, { entities: ['deductions', 'prime_driver_expenses'] });
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
       // Jump to the earliest month that just received a lumper, so the
       // result is on screen instead of the current (possibly empty) month.
       const firstDate = lumperBannerItems.map((i) => i.date).filter((x): x is string => !!x).sort()[0];
@@ -384,7 +324,6 @@ export default function PrimeDriverExpensesScreen() {
         })
       );
     } catch (err) {
-      setAddedLumperIds(addedIds);
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
       setAddingLumpers(false);
