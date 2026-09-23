@@ -2079,11 +2079,7 @@
     "fromDeductions": "desde Deducciones, {{date}}",
     "manuallySet": "establecido manualmente",
     "resetToCalculated": "↺ Restablecer al valor calculado",
-    "editingDeductionNote": "Esta línea proviene de Deducciones — su fecha, monto y nota se gestionan allí. Solo la categoría contable de abajo es editable desde este informe.",
-    "lumperGapsButton_one": "Crear {{count}} gasto de lumper faltante desde los reembolsos",
-    "lumperGapsButton_other": "Crear {{count}} gastos de lumper faltantes desde los reembolsos",
-    "lumperGapsDoneTitle": "Gastos de lumper creados",
-    "lumperGapsDoneBody": "Se crearon {{count}} entrada(s) de gasto de lumper a partir de los reembolsos de tu settlement. Cada una sigue siendo editable aquí mismo.",
+    "editingDeductionNote": "Esta línea proviene de Deducciones — su monto y nota se gestionan allí. Aquí puedes cambiar la categoría contable y la fecha; un cambio de fecha también actualiza la misma línea en Deducciones.",
     "diagnosticsToggle": "Diagnosticar pagos de lumper",
     "diagnosticsTitle": "🔍 Diagnóstico de Pagos de Lumper",
     "diagnosticsNoRows": "No se encontraron deducciones que mencionen un lumper en tu cuenta.",
@@ -2093,7 +2089,21 @@
       "category_mismatch": "✕ Excluido — la descripción menciona un lumper pero la categoría es diferente",
       "missing_accountant_category": "✕ Excluido — aún no categorizado; toca Autocompletar arriba"
     },
-    "diagnosticsGapsNote": "{{count}} reembolso(s) de settlement mencionan un lumper pero no tienen una entrada de gasto correspondiente todavía — usa el botón de arriba para crearlas."
+    "diagnosticsGapsNote": "{{count}} reembolso(s) de settlement mencionan un lumper pero no tienen una entrada de gasto correspondiente todavía — usa el aviso de lumper de arriba para agregarlos.",
+    "dayLabel": "Día",
+    "lumperBanner": {
+      "title_one": "{{count}} pago de lumper aún no está en este informe",
+      "title_other": "{{count}} pagos de lumper aún no están en este informe",
+      "body": "Encontrados en tus settlements. Los lumpers pagados con un adelanto de Prime (\"ADV FOR OUTSIDE LUMPER\") se retuvieron de tu pago de settlement, por eso quedaron fuera de este informe de gastos de bolsillo. Toca abajo para agregarlos. Después puedes editar cada uno. Prime también los muestra como LUMPERS en tu estado operativo, así que avisa a tu contador que aparecen en ambos lugares.",
+      "sourceAdvance": "Adelanto de lumper de Prime · {{date}}",
+      "sourceReimbursement": "Reembolso de settlement · {{date}}",
+      "sourceUncategorized": "Aún sin categoría · {{date}}",
+      "button_one": "Agregar {{count}} lumper a este informe",
+      "button_other": "Agregar los {{count}} lumpers a este informe",
+      "doneTitle": "Lumpers agregados",
+      "doneBody": "Se agregaron {{count}} entradas de lumper. Mostrando {{month}}. Toca cualquier línea para cambiar su categoría, fecha o monto.",
+      "addedNote": "{{description}} (settlement de Prime {{date}})"
+    }
   },
   "scorecard": {
     "title": "Calificación",

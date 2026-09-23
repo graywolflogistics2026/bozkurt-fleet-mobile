@@ -2079,11 +2079,7 @@
     "fromDeductions": "из Вычетов, {{date}}",
     "manuallySet": "установлено вручную",
     "resetToCalculated": "↺ Сбросить к расчётному значению",
-    "editingDeductionNote": "Эта строка взята из раздела «Вычеты» — её дата, сумма и заметка управляются там. Здесь можно изменить только бухгалтерскую категорию ниже.",
-    "lumperGapsButton_one": "Создать {{count}} недостающую запись расхода lumper из возмещений",
-    "lumperGapsButton_other": "Создать {{count}} недостающих записей расходов lumper из возмещений",
-    "lumperGapsDoneTitle": "Расходы lumper созданы",
-    "lumperGapsDoneBody": "{{count}} запись(и) расхода lumper были созданы на основе возмещений вашего settlement. Каждую по-прежнему можно изменить прямо здесь.",
+    "editingDeductionNote": "Эта строка взята из раздела «Вычеты» — её сумма и заметка управляются там. Здесь можно изменить бухгалтерскую категорию и дату; изменение даты также обновит эту же строку в «Вычетах».",
     "diagnosticsToggle": "Диагностика платежей lumper",
     "diagnosticsTitle": "🔍 Диагностика платежей lumper",
     "diagnosticsNoRows": "На вашем счёте не найдено вычетов, упоминающих lumper.",
@@ -2093,7 +2089,21 @@
       "category_mismatch": "✕ Исключено — в описании упоминается lumper, но категория другая",
       "missing_accountant_category": "✕ Исключено — категория ещё не назначена; нажмите «Автозаполнить» выше"
     },
-    "diagnosticsGapsNote": "{{count}} возмещение(й) settlement упоминают lumper, но не имеют соответствующей записи расхода — используйте кнопку выше, чтобы создать их."
+    "diagnosticsGapsNote": "{{count}} возмещение(й) settlement упоминают lumper, но не имеют соответствующей записи расхода — используйте баннер lumper выше, чтобы добавить их.",
+    "dayLabel": "День",
+    "lumperBanner": {
+      "title_one": "{{count}} платёж lumper ещё не в этом отчёте",
+      "title_other": "{{count}} платежа lumper ещё не в этом отчёте",
+      "body": "Найдено в ваших settlement. Lumper, оплаченные авансом Prime («ADV FOR OUTSIDE LUMPER»), были удержаны из выплаты по settlement, поэтому не попали в этот отчёт о личных расходах. Нажмите ниже, чтобы добавить их. Каждую запись можно потом изменить. Prime также показывает их в строке LUMPERS вашего operating statement, поэтому сообщите бухгалтеру, что они есть в обоих местах.",
+      "sourceAdvance": "Аванс Prime на lumper · {{date}}",
+      "sourceReimbursement": "Возмещение settlement · {{date}}",
+      "sourceUncategorized": "Ещё без категории · {{date}}",
+      "button_one": "Добавить {{count}} lumper в отчёт",
+      "button_other": "Добавить все {{count}} lumper в отчёт",
+      "doneTitle": "Lumper добавлены",
+      "doneBody": "Добавлено записей lumper: {{count}}. Показан {{month}}. Нажмите на любую строку, чтобы изменить категорию, дату или сумму.",
+      "addedNote": "{{description}} (settlement Prime {{date}})"
+    }
   },
   "scorecard": {
     "title": "Оценка эффективности",

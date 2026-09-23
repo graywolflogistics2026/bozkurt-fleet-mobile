@@ -7,11 +7,13 @@ import {
   findUnmappedCanonicalCategories,
   findAccountantCategoryBackfillCandidates,
   findLumperReimbursementGaps,
+  findSettlementLumperAdvances,
   diagnoseLumperDeductions,
   type BackfillCandidateRow,
   type LumperReimbursementRow,
   type ExistingLumperDeductionRow,
   type LumperDeductionRow,
+  type SettlementLumperSourceRow,
 } from '@/src/primeDriverExpenses/categoryMapping';
 
 // THE ORIGIN RULE — the single most important constraint in this whole
@@ -296,5 +298,56 @@ describe('findLumperReimbursementGaps — the confirmed historical root cause', 
     expect(findLumperReimbursementGaps(reimbursements, existingDeductions)).toEqual([
       { reimbursementId: 'r1', description: 'Reimbursement for outside lumper', amount: 65, date: '2026-06-08' },
     ]);
+  });
+});
+
+// "LUMPER FEES STILL SHOW $0" (owner decision 2026-09-23) — the real
+// Prime structure, taken line-for-line from the owner's own settlements:
+// Prime never uses the Reimbursement section for a lumper, so the only
+// persisted row is the withheld "ADV FOR OUTSIDE LUMPER" deduction.
+describe('findSettlementLumperAdvances — Prime lumper advances', () => {
+  const primeRows: SettlementLumperSourceRow[] = [
+    { id: 'd1', description: 'ADV FOR OUTSIDE LUMPER', amount: 217.55, ded_date: '2026-07-17', category: 'Lumper Fees', source: 'settlement' },
+    { id: 'd2', description: 'ADV FOR OUTSIDE LUMPER', amount: 328.54, ded_date: '2026-07-31', category: 'Lumper Fees', source: 'settlement' },
+    { id: 'd3', description: 'ADV FOR OUTSIDE LUMPER', amount: 216.0, ded_date: '2026-07-31', category: 'Lumper Fees', source: 'settlement' },
+    // Non-lumper withheld lines on the same settlements — never candidates.
+    { id: 'd4', description: 'ADVANCE', amount: 500, ded_date: '2026-07-17', category: 'Advance Repayment', source: 'settlement' },
+    { id: 'd5', description: 'ADV FOR LATE FEE', amount: 253.77, ded_date: '2026-07-31', category: 'Advance Repayment', source: 'settlement' },
+  ];
+
+  it('the real $0 cause: Prime has no lumper in reimbursements, so the reimbursement-gap finder returns nothing', () => {
+    expect(findLumperReimbursementGaps([], primeRows)).toEqual([]);
+  });
+
+  it('finds all three withheld Prime lumper advances, with their settlement dates and amounts', () => {
+    expect(findSettlementLumperAdvances(primeRows, [], new Set())).toEqual([
+      { deductionId: 'd1', description: 'ADV FOR OUTSIDE LUMPER', amount: 217.55, date: '2026-07-17' },
+      { deductionId: 'd2', description: 'ADV FOR OUTSIDE LUMPER', amount: 328.54, date: '2026-07-31' },
+      { deductionId: 'd3', description: 'ADV FOR OUTSIDE LUMPER', amount: 216, date: '2026-07-31' },
+    ]);
+  });
+
+  it('detects a lumper line by description even if a carrier code map recategorized it', () => {
+    const rows: SettlementLumperSourceRow[] = [
+      { id: 'x', description: 'ADV FOR OUTSIDE LUMPER', amount: 100, ded_date: '2026-07-17', category: 'Advance Repayment', source: 'settlement' },
+    ];
+    expect(findSettlementLumperAdvances(rows, [], new Set())).toHaveLength(1);
+  });
+
+  it('never offers an out-of-pocket row — those reach the report through accountant_category instead', () => {
+    const rows: SettlementLumperSourceRow[] = [
+      { id: 'o', description: 'Lumper at dock', amount: 80, ded_date: '2026-07-17', category: 'Lumper Fees', source: 'manual' },
+    ];
+    expect(findSettlementLumperAdvances(rows, [], new Set())).toEqual([]);
+  });
+
+  it('skips rows already added (by id), and rows with a matching direct Lumpers entry on the same date for the same amount', () => {
+    const direct = [{ exp_date: '2026-07-31', amount: 328.54, category: 'Lumpers' }];
+    expect(findSettlementLumperAdvances(primeRows, direct, new Set(['d1'])).map((c) => c.deductionId)).toEqual(['d3']);
+  });
+
+  it('a direct row in a different category does not count as already added', () => {
+    const direct = [{ exp_date: '2026-07-17', amount: 217.55, category: 'Misc' }];
+    expect(findSettlementLumperAdvances(primeRows, direct, new Set()).map((c) => c.deductionId)).toEqual(['d1', 'd2', 'd3']);
   });
 });

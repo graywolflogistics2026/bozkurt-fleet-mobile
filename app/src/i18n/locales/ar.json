@@ -2079,11 +2079,7 @@
     "fromDeductions": "من الخصومات، {{date}}",
     "manuallySet": "تم تعيينه يدويًا",
     "resetToCalculated": "↺ إعادة التعيين إلى القيمة المحسوبة",
-    "editingDeductionNote": "هذا السطر مصدره الخصومات — يتم إدارة تاريخه ومبلغه وملاحظته هناك. يمكن تعديل فئة المحاسب أدناه فقط من هذا التقرير.",
-    "lumperGapsButton_one": "إنشاء إدخال مصروف lumper واحد مفقود من المبالغ المستردة",
-    "lumperGapsButton_other": "إنشاء {{count}} إدخالات مصروف lumper مفقودة من المبالغ المستردة",
-    "lumperGapsDoneTitle": "تم إنشاء مصاريف lumper",
-    "lumperGapsDoneBody": "تم إنشاء {{count}} إدخال(إدخالات) مصروف lumper من مبالغ settlement المستردة الخاصة بك. لا يزال بإمكانك تعديل كل واحد منها هنا مباشرة.",
+    "editingDeductionNote": "هذا السطر مصدره الخصومات — يتم إدارة مبلغه وملاحظته هناك. يمكنك تغيير فئة المحاسب والتاريخ هنا؛ تغيير التاريخ يحدّث أيضًا نفس السطر في الخصومات.",
     "diagnosticsToggle": "تشخيص مدفوعات lumper",
     "diagnosticsTitle": "🔍 تشخيص مدفوعات lumper",
     "diagnosticsNoRows": "لم يتم العثور على خصومات تذكر lumper في حسابك.",
@@ -2093,7 +2089,21 @@
       "category_mismatch": "✕ مستبعد — الوصف يذكر lumper لكن الفئة مختلفة",
       "missing_accountant_category": "✕ مستبعد — لم يتم تصنيفه بعد؛ اضغط على \"تعبئة تلقائية\" أعلاه"
     },
-    "diagnosticsGapsNote": "{{count}} من مبالغ settlement المستردة تذكر lumper لكن ليس لها إدخال مصروف مطابق بعد — استخدم الزر أعلاه لإنشائها."
+    "diagnosticsGapsNote": "{{count}} من مبالغ settlement المستردة تذكر lumper لكن ليس لها إدخال مصروف مطابق بعد — استخدم تنبيه lumper أعلاه لإضافتها.",
+    "dayLabel": "اليوم",
+    "lumperBanner": {
+      "title_one": "دفعة lumper واحدة ليست في هذا التقرير بعد",
+      "title_other": "{{count}} دفعة lumper ليست في هذا التقرير بعد",
+      "body": "تم العثور عليها في كشوف settlement الخاصة بك. مدفوعات lumper التي دُفعت بسلفة lumper من Prime (\"ADV FOR OUTSIDE LUMPER\") خُصمت من دفعة settlement، لذلك استُبعدت من تقرير المصاريف الشخصية هذا. اضغط أدناه لإضافتها. يمكنك تعديل كل واحدة لاحقًا. تُدرج Prime هذه المبالغ أيضًا تحت LUMPERS في operating statement، لذا أخبر محاسبك أنها تظهر في المكانين.",
+      "sourceAdvance": "سلفة lumper من Prime · {{date}}",
+      "sourceReimbursement": "مبلغ مسترد من settlement · {{date}}",
+      "sourceUncategorized": "غير مصنف بعد · {{date}}",
+      "button_one": "إضافة دفعة lumper واحدة إلى هذا التقرير",
+      "button_other": "إضافة كل الـ {{count}} دفعة lumper إلى هذا التقرير",
+      "doneTitle": "تمت إضافة مدفوعات lumper",
+      "doneBody": "تمت إضافة {{count}} إدخال(ات) lumper. يتم الآن عرض {{month}}. اضغط على أي سطر لتغيير فئته أو تاريخه أو مبلغه.",
+      "addedNote": "{{description}} (settlement من Prime بتاريخ {{date}})"
+    }
   },
   "scorecard": {
     "title": "بطاقة الأداء",

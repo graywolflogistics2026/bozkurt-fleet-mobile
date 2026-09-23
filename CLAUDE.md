@@ -12256,3 +12256,29 @@
   checks). No SQL/Edge Function changes — every fix in this pass is pure
   client-side JS/TS reading/writing columns §74/§75 already added. Ships
   via a normal `eas update`.
+- LUMPER FEES STILL $0 — REAL ROOT CAUSE + PERMANENT MANUAL CONTROL (owner
+  decision 2026-09-23). The 2026-09-19 fix above targeted the wrong place:
+  verified against the owner's own Prime settlement PDFs, Prime NEVER puts
+  an outside lumper in the Reimbursement section. Its structure is a
+  REVENUE line `LM <order> OUTSIDE LUMPER 215.00` (1099 pay, not persisted
+  — revenueItems has no table) plus a withheld DEDUCTION line
+  `WA <order> ADV FOR OUTSIDE LUMPER 217.55` (the advance, incl. a small
+  wire/Comchek fee). So findLumperReimbursementGaps() found 0, its button
+  never rendered, and the only persisted lumper row is source='settlement'
+  — correctly excluded by the origin rule. Fix: findSettlementLumperAdvances()
+  (categoryMapping.ts) surfaces those withheld lumper rows in an
+  always-visible orange banner at the top of "For Prime Inc Drivers" that
+  lists every row and adds them with one tap as `prime_driver_expenses`
+  rows (category 'Lumpers') — that table is isolated from every canonical
+  total, so invariant #1 and the origin rule both still hold (the withheld
+  deduction itself never gets an accountant_category). The same banner
+  also covers uncategorized out-of-pocket lumpers and reimbursement-only
+  lumpers. The banner copy tells the owner that Prime also lists these
+  under LUMPERS on the operating statement (so the accountant can avoid
+  counting them twice). Dedupe: a device-local AsyncStorage id set plus a
+  same-date/same-amount match. Also: a pure-JS year/month/day
+  DatePickerField (no native module, ships via EAS Update) on both the
+  add and edit sheets; deduction-sourced rows can now have their DATE
+  edited from the report (writes the same `deductions.ded_date` —
+  never a copy); after any add/edit/banner-add the view jumps to the
+  row's month.

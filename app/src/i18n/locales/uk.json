@@ -2079,11 +2079,7 @@
     "fromDeductions": "from Deductions, {{date}}",
     "manuallySet": "manually set",
     "resetToCalculated": "↺ Reset to calculated value",
-    "editingDeductionNote": "This row comes from Deductions — its date, amount, and note are managed there. Only the accountant category below is editable from this report.",
-    "lumperGapsButton_one": "Create {{count}} missing lumper expense entry from reimbursements",
-    "lumperGapsButton_other": "Create {{count}} missing lumper expense entries from reimbursements",
-    "lumperGapsDoneTitle": "Lumper expenses created",
-    "lumperGapsDoneBody": "{{count}} lumper expense entry(ies) were created from your settlement reimbursements. Every one is still editable right here.",
+    "editingDeductionNote": "This row comes from Deductions — its amount and note are managed there. You can change the accountant category and the date here; a date change also updates the same row on Deductions.",
     "diagnosticsToggle": "Diagnose lumper payments",
     "diagnosticsTitle": "🔍 Lumper Payment Diagnostics",
     "diagnosticsNoRows": "No deductions naming a lumper were found on your account.",
@@ -2093,7 +2089,21 @@
       "category_mismatch": "✕ Excluded — description names a lumper but category is different",
       "missing_accountant_category": "✕ Excluded — not yet categorized; tap Auto-fill above"
     },
-    "diagnosticsGapsNote": "{{count}} settlement reimbursement(s) name a lumper but have no matching expense entry yet — use the button above to create them."
+    "diagnosticsGapsNote": "{{count}} settlement reimbursement(s) name a lumper but have no matching expense entry yet — use the lumper banner above to add them.",
+    "dayLabel": "Day",
+    "lumperBanner": {
+      "title_one": "{{count}} lumper payment is not on this report yet",
+      "title_other": "{{count}} lumper payments are not on this report yet",
+      "body": "Found on your settlements. Lumpers paid with a Prime lumper advance (\"ADV FOR OUTSIDE LUMPER\") were withheld from your settlement pay, so they were left off this out-of-pocket report. Tap below to add them. You can edit every one afterward. Prime also lists these under LUMPERS on your operating statement, so tell your accountant they appear in both places.",
+      "sourceAdvance": "Prime lumper advance · {{date}}",
+      "sourceReimbursement": "Settlement reimbursement · {{date}}",
+      "sourceUncategorized": "Not yet categorized · {{date}}",
+      "button_one": "Add {{count}} lumper to this report",
+      "button_other": "Add all {{count}} lumpers to this report",
+      "doneTitle": "Lumpers added",
+      "doneBody": "{{count}} lumper entries were added. Now showing {{month}}. Tap any row to change its category, date, or amount.",
+      "addedNote": "{{description}} (Prime settlement {{date}})"
+    }
   },
   "scorecard": {
     "title": "Scorecard",

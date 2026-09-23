@@ -2079,11 +2079,7 @@
     "fromDeductions": "Deductions से, {{date}}",
     "manuallySet": "मैन्युअल रूप से सेट",
     "resetToCalculated": "↺ गणना किए गए मान पर रीसेट करें",
-    "editingDeductionNote": "यह पंक्ति Deductions से आई है — इसकी तारीख, राशि और नोट वहीं प्रबंधित होते हैं। इस रिपोर्ट से केवल नीचे दी गई accountant श्रेणी संपादित की जा सकती है।",
-    "lumperGapsButton_one": "रीइम्बर्समेंट्स से {{count}} गायब lumper खर्च एंट्री बनाएं",
-    "lumperGapsButton_other": "रीइम्बर्समेंट्स से {{count}} गायब lumper खर्च एंट्रीज़ बनाएं",
-    "lumperGapsDoneTitle": "Lumper खर्च बनाए गए",
-    "lumperGapsDoneBody": "आपके settlement रीइम्बर्समेंट्स से {{count}} lumper खर्च एंट्री बनाई गईं। हर एक अभी भी यहीं से संपादित की जा सकती है।",
+    "editingDeductionNote": "यह पंक्ति Deductions से आई है — इसकी राशि और नोट वहीं प्रबंधित होते हैं। आप यहाँ accountant श्रेणी और तारीख बदल सकते हैं; तारीख बदलने से Deductions में वही पंक्ति भी अपडेट हो जाती है।",
     "diagnosticsToggle": "Lumper भुगतानों का निदान करें",
     "diagnosticsTitle": "🔍 Lumper भुगतान निदान",
     "diagnosticsNoRows": "आपके खाते में lumper का उल्लेख करने वाली कोई deduction नहीं मिली।",
@@ -2093,7 +2089,21 @@
       "category_mismatch": "✕ बाहर रखा गया — विवरण में lumper का उल्लेख है लेकिन category अलग है",
       "missing_accountant_category": "✕ बाहर रखा गया — अभी तक श्रेणीबद्ध नहीं; ऊपर Auto-fill पर टैप करें"
     },
-    "diagnosticsGapsNote": "{{count}} settlement रीइम्बर्समेंट्स में lumper का उल्लेख है लेकिन अभी तक कोई मेल खाती खर्च एंट्री नहीं है — इन्हें बनाने के लिए ऊपर दिया गया बटन उपयोग करें।"
+    "diagnosticsGapsNote": "{{count}} settlement रीइम्बर्समेंट्स में lumper का उल्लेख है लेकिन अभी तक कोई मेल खाती खर्च एंट्री नहीं है — इन्हें जोड़ने के लिए ऊपर दिया गया lumper बैनर उपयोग करें।",
+    "dayLabel": "दिन",
+    "lumperBanner": {
+      "title_one": "{{count}} lumper भुगतान अभी इस रिपोर्ट में नहीं है",
+      "title_other": "{{count}} lumper भुगतान अभी इस रिपोर्ट में नहीं हैं",
+      "body": "आपके settlements में मिले। Prime lumper एडवांस (\"ADV FOR OUTSIDE LUMPER\") से चुकाए गए lumpers आपके settlement भुगतान से काटे गए थे, इसलिए वे इस जेब-से-खर्च रिपोर्ट से बाहर रह गए। इन्हें जोड़ने के लिए नीचे टैप करें। बाद में हर एक को संपादित कर सकते हैं। Prime इन्हें आपके operating statement में LUMPERS के तहत भी दिखाता है, इसलिए अपने accountant को बताएं कि ये दोनों जगह दिखते हैं।",
+      "sourceAdvance": "Prime lumper एडवांस · {{date}}",
+      "sourceReimbursement": "Settlement रीइम्बर्समेंट · {{date}}",
+      "sourceUncategorized": "अभी श्रेणीबद्ध नहीं · {{date}}",
+      "button_one": "{{count}} lumper इस रिपोर्ट में जोड़ें",
+      "button_other": "सभी {{count}} lumpers इस रिपोर्ट में जोड़ें",
+      "doneTitle": "Lumpers जोड़े गए",
+      "doneBody": "{{count}} lumper एंट्रीज़ जोड़ी गईं। अब {{month}} दिखाया जा रहा है। श्रेणी, तारीख या राशि बदलने के लिए किसी भी पंक्ति पर टैप करें।",
+      "addedNote": "{{description}} (Prime settlement {{date}})"
+    }
   },
   "scorecard": {
     "title": "स्कोरकार्ड",

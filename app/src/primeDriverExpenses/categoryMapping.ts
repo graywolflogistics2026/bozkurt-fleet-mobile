@@ -205,6 +205,72 @@ export function findLumperReimbursementGaps(
   return gaps;
 }
 
+// PRIME LUMPER ADVANCES (owner decision 2026-09-23, "lumper fees still show
+// $0" — the REAL root cause, confirmed against the owner's actual Prime
+// settlement PDFs). Prime never puts an outside lumper in the
+// Reimbursement section at all, so findLumperReimbursementGaps() above
+// finds nothing for a Prime account. Prime's real structure is:
+//   REVENUE    LM <order> OUTSIDE LUMPER          215.00  (1099 pay)
+//   DEDUCTION  WA <order> ADV FOR OUTSIDE LUMPER  217.55  (advance incl. wire fee)
+// revenueItems are never persisted, so the ONLY row this app keeps is the
+// withheld deduction (source 'settlement'), which the origin rule
+// correctly keeps off the report on its own. This finder surfaces those
+// rows so the user can EXPLICITLY copy them onto the report as
+// `prime_driver_expenses` rows — that table is isolated from every
+// canonical total (src/stats/primeDriverExpenses.ts header), so this never
+// double-counts true profit/tax (invariant #1), and the withheld
+// deduction itself still never receives an accountant_category.
+//
+// Detected by category OR description, since a carrier code map could
+// recategorize the line. Skips a row already copied (its id is in
+// `alreadyAddedIds`, a device-local record) or one with a matching direct
+// "Lumpers" row on the same date for the same amount.
+export type SettlementLumperSourceRow = {
+  id: string;
+  description: string | null;
+  amount: number | null;
+  ded_date: string | null;
+  category: string | null;
+  source: string | null;
+};
+
+export type ExistingDirectReportRow = {
+  exp_date: string | null;
+  amount: number | null;
+  category: string | null;
+};
+
+export type SettlementLumperCandidate = {
+  deductionId: string;
+  description: string | null;
+  amount: number;
+  date: string | null;
+};
+
+function sameCents(a: number | null | undefined, b: number | null | undefined): boolean {
+  return Math.round(Number(a ?? 0) * 100) === Math.round(Number(b ?? 0) * 100);
+}
+
+export function findSettlementLumperAdvances(
+  deductions: SettlementLumperSourceRow[],
+  existingDirectRows: ExistingDirectReportRow[],
+  alreadyAddedIds: ReadonlySet<string>
+): SettlementLumperCandidate[] {
+  const directLumpers = existingDirectRows.filter((r) => r.category === 'Lumpers');
+  const candidates: SettlementLumperCandidate[] = [];
+  for (const d of deductions) {
+    if (isEligibleForAccountantReport(d.source)) continue;
+    if (d.category !== 'Lumper Fees' && !isLumperFee(d.description ?? undefined)) continue;
+    if (alreadyAddedIds.has(d.id)) continue;
+    const amount = Number(d.amount ?? 0);
+    if (amount <= 0) continue;
+    const alreadyOnReport = directLumpers.some((r) => (r.exp_date ?? null) === (d.ded_date ?? null) && sameCents(r.amount, amount));
+    if (alreadyOnReport) continue;
+    candidates.push({ deductionId: d.id, description: d.description, amount, date: d.ded_date });
+  }
+  return candidates;
+}
+
 // The full, per-row eligibility breakdown for every deduction that names a
 // lumper — whether it resolved to category 'Lumper Fees' directly, or
 // (item 2's own explicit hypothesis) fell through to a DIFFERENT category

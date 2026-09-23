@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +26,7 @@ import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from
 import {
   findAccountantCategoryBackfillCandidates,
   findLumperReimbursementGaps,
+  findSettlementLumperAdvances,
   diagnoseLumperDeductions,
   suggestAccountantCategory,
   type BackfillCandidateRow,
@@ -65,6 +67,64 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+function parseIsoParts(iso: string | null | undefined): { y: number; m: number; d: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '');
+  if (match) return { y: Number(match[1]), m: Number(match[2]), d: Number(match[3]) };
+  const now = new Date();
+  return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
+}
+
+function toIso(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+// EXACT-DATE PICKER (owner decision 2026-09-23, "full control over which
+// month it lands in") — pure JS year/month/day pills rather than a native
+// date-picker module, so it ships over EAS Update with no new build. The
+// report groups rows purely by this date (rowsInMonth()), so whatever is
+// picked here is exactly the month the row is counted under.
+function DatePickerField({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const { t } = useTranslation();
+  const { date, monthLabel } = useFormatters();
+  const { y, m, d } = parseIsoParts(value);
+  const thisYear = new Date().getFullYear();
+  const years = [...new Set([thisYear - 3, thisYear - 2, thisYear - 1, thisYear, thisYear + 1, y])].sort((a, b) => a - b);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const pick = (ny: number, nm: number, nd: number) => onChange(toIso(ny, nm, Math.min(nd, new Date(ny, nm, 0).getDate())));
+
+  return (
+    <View>
+      <Text style={{ color: colors.text, fontSize: typography.size.lg, fontWeight: '700', marginVertical: spacing.xs }}>
+        📅 {date(toIso(y, m, d))}
+      </Text>
+      <MutedText style={{ fontSize: typography.size.xs }}>{t('primeDriverExpenses.yearLabel')}</MutedText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {years.map((yy) => (
+          <Pill key={yy} label={String(yy)} selected={yy === y} onPress={() => pick(yy, m, d)} />
+        ))}
+      </View>
+      <MutedText style={{ fontSize: typography.size.xs }}>{t('primeDriverExpenses.monthLabel')}</MutedText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((mm) => (
+          <Pill key={mm} label={monthLabel(y, mm, { month: 'short' })} selected={mm === m} onPress={() => pick(y, mm, d)} />
+        ))}
+      </View>
+      <MutedText style={{ fontSize: typography.size.xs }}>{t('primeDriverExpenses.dayLabel')}</MutedText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((dd) => (
+          <Pill key={dd} label={String(dd)} selected={dd === d} onPress={() => pick(y, m, dd)} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Device-local record of settlement lumper deductions already copied onto
+// this report, so deleting or re-dating a copied row never makes the
+// banner offer it again. findSettlementLumperAdvances() also dedupes by
+// date+amount, which covers a reinstall.
+const addedLumperIdsKey = (userId: string) => `prime-driver-expenses:added-settlement-lumpers:${userId}`;
 
 export default function PrimeDriverExpensesScreen() {
   const { t } = useTranslation();
@@ -217,18 +277,86 @@ export default function PrimeDriverExpensesScreen() {
     [reimbursementsQuery.data, deductionsQuery.data]
   );
 
-  // HISTORICAL FIX for a settlement imported BEFORE this pass shipped —
-  // creates the exact same companion deduction shape mapExtraction.ts now
-  // creates automatically for every future import (category 'Lumper
-  // Fees', source 'import' — genuinely out-of-pocket, never 'settlement',
-  // so the origin rule correctly includes it going forward). Explicit,
-  // reviewable, never silent — same "Auto-fill" convention as the
-  // existing category backfill above.
-  const [creatingLumperExpenses, setCreatingLumperExpenses] = useState(false);
-  async function handleCreateMissingLumperExpenses() {
+  // LUMPER BANNER (owner decision 2026-09-23, "lumper fees still show $0").
+  // The previous pass only looked for lumpers in the settlement's
+  // Reimbursement section — Prime never puts them there (see
+  // findSettlementLumperAdvances()'s header), so its button never
+  // rendered and there was nothing to tap. This banner collects EVERY
+  // kind of lumper row that isn't on the report yet, lists them, and adds
+  // them all with one tap:
+  //   - settlement lumper advances -> copied as prime_driver_expenses rows
+  //     (isolated table, never touches true profit/tax)
+  //   - out-of-pocket Lumper Fees deductions with no accountant_category
+  //     -> accountant_category set (same write as Auto-fill)
+  //   - reimbursement-only lumpers -> companion deduction (previous pass)
+  const [addedLumperIds, setAddedLumperIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
     if (!userId) return;
-    setCreatingLumperExpenses(true);
+    let cancelled = false;
+    AsyncStorage.getItem(addedLumperIdsKey(userId))
+      .then((raw) => {
+        if (cancelled || !raw) return;
+        const ids = JSON.parse(raw);
+        if (Array.isArray(ids)) setAddedLumperIds(new Set(ids.map(String)));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const settlementLumpers = useMemo(
+    () =>
+      findSettlementLumperAdvances(
+        (deductionsQuery.data ?? []).map((d) => ({
+          id: d.id,
+          description: d.description,
+          amount: d.amount,
+          ded_date: d.ded_date,
+          category: d.category,
+          source: d.source,
+        })),
+        (expensesQuery.data ?? []).map((r) => ({ exp_date: r.exp_date, amount: r.amount, category: r.category })),
+        addedLumperIds
+      ),
+    [deductionsQuery.data, expensesQuery.data, addedLumperIds]
+  );
+  const uncategorizedLumpers = useMemo(() => {
+    const ids = new Set(backfillCandidates.filter((c) => c.accountantCategory === 'Lumpers').map((c) => c.id));
+    return (deductionsQuery.data ?? []).filter((d) => ids.has(d.id));
+  }, [backfillCandidates, deductionsQuery.data]);
+  const lumperBannerItems = useMemo(
+    () => [
+      ...settlementLumpers.map((s) => ({ key: `s-${s.deductionId}`, kind: 'sourceAdvance' as const, date: s.date, amount: s.amount, description: s.description })),
+      ...uncategorizedLumpers.map((d) => ({ key: `u-${d.id}`, kind: 'sourceUncategorized' as const, date: d.ded_date, amount: Number(d.amount ?? 0), description: d.description })),
+      ...lumperReimbursementGaps.map((g) => ({ key: `r-${g.reimbursementId}`, kind: 'sourceReimbursement' as const, date: g.date, amount: g.amount, description: g.description })),
+    ],
+    [settlementLumpers, uncategorizedLumpers, lumperReimbursementGaps]
+  );
+
+  const [addingLumpers, setAddingLumpers] = useState(false);
+  async function handleAddAllLumpers() {
+    if (!userId) return;
+    setAddingLumpers(true);
+    const addedIds = new Set(addedLumperIds);
     try {
+      for (const s of settlementLumpers) {
+        await insertExpense.mutateAsync({
+          user_id: userId,
+          exp_date: s.date || todayIso(),
+          amount: s.amount,
+          category: 'Lumpers',
+          note: t('primeDriverExpenses.lumperBanner.addedNote', {
+            description: s.description ?? 'Lumpers',
+            date: s.date ? date(s.date) : '',
+          }),
+        });
+        addedIds.add(s.deductionId);
+        await AsyncStorage.setItem(addedLumperIdsKey(userId), JSON.stringify([...addedIds])).catch(() => {});
+      }
+      for (const d of uncategorizedLumpers) {
+        await updateDeduction.mutateAsync({ id: d.id, values: { accountant_category: 'Lumpers' } });
+      }
       for (const gap of lumperReimbursementGaps) {
         await insertDeduction.mutateAsync({
           user_id: userId,
@@ -241,16 +369,32 @@ export default function PrimeDriverExpensesScreen() {
           accountant_category: suggestAccountantCategory('Lumper Fees', 'import'),
         });
       }
-      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+      setAddedLumperIds(addedIds);
+      await invalidateFinancialData(queryClient, { entities: ['deductions', 'prime_driver_expenses'] });
+      // Jump to the earliest month that just received a lumper, so the
+      // result is on screen instead of the current (possibly empty) month.
+      const firstDate = lumperBannerItems.map((i) => i.date).filter((x): x is string => !!x).sort()[0];
+      if (firstDate) showMonthOf(firstDate);
+      const { y, m } = parseIsoParts(firstDate ?? todayIso());
       Alert.alert(
-        t('primeDriverExpenses.lumperGapsDoneTitle'),
-        t('primeDriverExpenses.lumperGapsDoneBody', { count: lumperReimbursementGaps.length })
+        t('primeDriverExpenses.lumperBanner.doneTitle'),
+        t('primeDriverExpenses.lumperBanner.doneBody', {
+          count: lumperBannerItems.length,
+          month: monthLabel(y, m, { year: 'numeric', month: 'long' }),
+        })
       );
     } catch (err) {
+      setAddedLumperIds(addedIds);
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
-      setCreatingLumperExpenses(false);
+      setAddingLumpers(false);
     }
+  }
+
+  function showMonthOf(iso: string) {
+    const { y, m } = parseIsoParts(iso);
+    setYear(y);
+    setMonth(m);
   }
 
   const companyName = profileQuery.data?.company_name?.trim() || null;
@@ -336,6 +480,7 @@ export default function PrimeDriverExpensesScreen() {
         }
       }
       await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
+      showMonthOf(addDate || todayIso());
       setAdding(false);
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -363,23 +508,33 @@ export default function PrimeDriverExpensesScreen() {
   // ITEM 7 — the category picker on a DEDUCTION-sourced row is the
   // 16-value list ONLY, and editing it writes ONLY
   // `deductions.accountant_category` — never `deductions.category` (the
-  // real Schedule-C category is completely untouched). Date/amount/note
-  // for a deduction-sourced row are managed on Deductions' own screen,
-  // not duplicated here — this report reads them live.
+  // real Schedule-C category is completely untouched). Amount/note for a
+  // deduction-sourced row are managed on Deductions' own screen. The DATE
+  // is editable here too (owner decision 2026-09-23) — it writes the same
+  // `deductions.ded_date` Deductions shows, never a report-only copy, so
+  // both screens always agree on which month the row belongs to.
   async function handleSaveEdit() {
     if (!editingRow || !editCategory) return;
     setEditSaving(true);
     try {
+      const newDate = editDate || todayIso();
       if (editingRow.origin === 'deduction') {
-        await updateDeduction.mutateAsync({ id: editingRow.id, values: { accountant_category: editCategory } });
+        await updateDeduction.mutateAsync({
+          id: editingRow.id,
+          values: {
+            accountant_category: editCategory,
+            ...(newDate !== editingRow.exp_date ? { ded_date: newDate } : {}),
+          },
+        });
         await invalidateFinancialData(queryClient, { entities: ['deductions'] });
       } else {
         await updateExpense.mutateAsync({
           id: editingRow.id,
-          values: { exp_date: editDate || todayIso(), amount: Number(editAmount) || 0, category: editCategory, note: editNote.trim() || null },
+          values: { exp_date: newDate, amount: Number(editAmount) || 0, category: editCategory, note: editNote.trim() || null },
         });
         await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
       }
+      showMonthOf(newDate);
       setEditingRow(null);
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -515,6 +670,34 @@ export default function PrimeDriverExpensesScreen() {
           ))}
         </View>
 
+        {/* LUMPER BANNER (owner decision 2026-09-23) — deliberately at the
+            top, above everything else, with every row listed, so it can't
+            be missed. Renders whenever any lumper isn't on the report. */}
+        {lumperBannerItems.length > 0 && (
+          <Card style={{ marginTop: spacing.md, borderColor: colors.orange, borderWidth: 2 }}>
+            <Text style={[styles.categoryTitle, { color: colors.orange }]}>
+              ⚠️ {t('primeDriverExpenses.lumperBanner.title', { count: lumperBannerItems.length })}
+            </Text>
+            <MutedText style={{ marginTop: spacing.xs }}>{t('primeDriverExpenses.lumperBanner.body')}</MutedText>
+            {lumperBannerItems.map((item) => (
+              <View key={item.key} style={styles.lineRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text }}>{item.description ?? ''}</Text>
+                  <MutedText style={{ fontSize: typography.size.xs }}>
+                    {t(`primeDriverExpenses.lumperBanner.${item.kind}`, { date: item.date ? date(item.date) : '—' })}
+                  </MutedText>
+                </View>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(item.amount)}</Text>
+              </View>
+            ))}
+            <PrimaryButton
+              title={t('primeDriverExpenses.lumperBanner.button', { count: lumperBannerItems.length })}
+              onPress={handleAddAllLumpers}
+              loading={addingLumpers}
+            />
+          </Card>
+        )}
+
         <PrimaryButton title={`➕ ${t('primeDriverExpenses.addExpense')}`} onPress={openAdd} />
 
         {/* AUTO-SUGGEST FOR EXISTING HISTORY (item 3) — a one-time,
@@ -525,19 +708,6 @@ export default function PrimeDriverExpensesScreen() {
             title={`🔄 ${t('primeDriverExpenses.backfillButton', { count: backfillCandidates.length })}`}
             onPress={handleRunBackfill}
             loading={backfilling}
-          />
-        )}
-
-        {/* LUMPER PAYMENTS MISSING FROM THE REPORT — the historical fix
-            (owner decision 2026-09-19): a settlement reimbursement that
-            names a lumper but has no matching out-of-pocket expense row —
-            the confirmed root cause for lumper payments imported before
-            this pass. Explicit, reviewable, never silent. */}
-        {lumperReimbursementGaps.length > 0 && (
-          <SecondaryButton
-            title={`🔄 ${t('primeDriverExpenses.lumperGapsButton', { count: lumperReimbursementGaps.length })}`}
-            onPress={handleCreateMissingLumperExpenses}
-            loading={creatingLumperExpenses}
           />
         )}
 
@@ -676,9 +846,9 @@ export default function PrimeDriverExpensesScreen() {
       <ModalSheet visible={adding} onClose={() => setAdding(false)}>
         <SheetTitle>{t('primeDriverExpenses.addExpense')}</SheetTitle>
         <MutedText>{t('primeDriverExpenses.dateLabel')}</MutedText>
-        <Field value={addDate} onChangeText={setAddDate} placeholder="YYYY-MM-DD" />
+        <DatePickerField value={addDate} onChange={setAddDate} />
         <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.amountLabel')}</MutedText>
-        <Field value={addAmount} onChangeText={setAddAmount} keyboardType="numeric" placeholder="0.00" />
+        <Field value={addAmount} onChangeText={setAddAmount} keyboardType="decimal-pad" placeholder="0.00" />
         <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.categoryLabel')}</MutedText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {PRIME_DRIVER_EXPENSE_CATEGORIES.map((c) => (
@@ -723,12 +893,13 @@ export default function PrimeDriverExpensesScreen() {
           // a copy) and the real Schedule-C category is never touched
           // from here.
           <MutedText style={{ marginBottom: spacing.sm }}>{t('primeDriverExpenses.editingDeductionNote')}</MutedText>
-        ) : (
+        ) : null}
+        <MutedText>{t('primeDriverExpenses.dateLabel')}</MutedText>
+        <DatePickerField value={editDate} onChange={setEditDate} />
+        {editingRow?.origin !== 'deduction' && (
           <>
-            <MutedText>{t('primeDriverExpenses.dateLabel')}</MutedText>
-            <Field value={editDate} onChangeText={setEditDate} placeholder="YYYY-MM-DD" />
             <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.amountLabel')}</MutedText>
-            <Field value={editAmount} onChangeText={setEditAmount} keyboardType="numeric" placeholder="0.00" />
+            <Field value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" placeholder="0.00" />
           </>
         )}
         <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.categoryLabel')}</MutedText>
