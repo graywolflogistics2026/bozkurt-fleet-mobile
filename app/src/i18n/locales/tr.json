@@ -2108,11 +2108,12 @@
     "needsCategory": {
       "title_one": "{{count}} gider için muhasebe kategorisi gerekiyor",
       "title_other": "{{count}} gider için muhasebe kategorisi gerekiyor",
-      "body": "Bu cepten ödenen giderlerin kategorisinin bu raporda karşılığı yok, bu yüzden henüz sayılmıyorlar. Nereye gideceğini seçmek için birine dokunun. Bu yalnızca bu raporu etkiler; Kesintiler ekranındaki kategori aynı kalır.",
+      "body": "Bu cepten ödenen giderler bu rapora ait olabilir ama nereye gideceği kesin değil, bu yüzden henüz sayılmıyorlar. Seçmek için birine dokunun. Bu yalnızca bu raporu etkiler; Kesintiler ekranındaki kategori aynı kalır.",
       "canonical": "Kesintiler'deki kategori: {{category}}",
       "noCategory": "(yok)",
       "tapToPick": "Muhasebe kategorisi seçmek için dokunun",
-      "pickTitle": "Muhasebe kategorisi seçin"
+      "pickTitle": "Muhasebe kategorisi seçin",
+      "suggested": "Önerilen: {{category}}"
     }
   },
   "scorecard": {

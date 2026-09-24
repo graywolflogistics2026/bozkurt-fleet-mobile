@@ -1,4 +1,4 @@
-import { CANONICAL_CATEGORIES, isLumperFee } from '@/src/import/category';
+import { CANONICAL_CATEGORIES, isLumperFee, isVehiclePurchaseOneOff } from '@/src/import/category';
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
 
 // MAP EXISTING OUT-OF-POCKET DEDUCTIONS INTO THE 16 ACCOUNTANT CATEGORIES
@@ -27,7 +27,9 @@ export const CANONICAL_TO_ACCOUNTANT_CATEGORY: Record<string, PrimeDriverExpense
   'Maintenance & Repairs': 'Repairs',
   'Major Repairs & Overhauls': 'Repairs',
   'Truck Parts': 'Repairs',
-  Tires: 'Repairs',
+  // Owner decision 2026-09-23: ambiguous — asked via the needs list (see
+  // AMBIGUOUS_ACCOUNTANT_CATEGORIES), no automatic mapping.
+  Tires: null,
   'Truck Wash & Detailing': 'Truck & Trailer Wash',
   'Truck/Trailer Payments': null,
   'Insurance—Truck': null,
@@ -142,15 +144,50 @@ export function findAccountantCategoryBackfillCandidates(rows: BackfillCandidate
   return candidates;
 }
 
-// "NEEDS A CATEGORY" LIST (owner decision 2026-09-23) — every genuinely
-// out-of-pocket expense (origin rule first) with no accountant_category
-// whose canonical category has NO approved mapping (Insurance, Permits,
-// Software, a custom category, no category at all, ...). The "For Prime
-// Inc Drivers" screen lists these permanently until the user picks one
-// of the 16 accountant categories — they never silently vanish. A row
-// whose category IS mapped but still blank is not listed here: that is
-// what the Auto-fill backfill is for. Read-only: callers write only
-// `accountant_category`, never the canonical category.
+// SCREEN SCOPE (owner decision 2026-09-23, final): the "For Prime Inc
+// Drivers" screen is a CASH EXPENSE RECORD for exactly two things —
+// (a) out-of-pocket expenses that genuinely belong in one of the 16
+// accountant categories, and (b) Prime settlement lumpers (the report-only
+// exception in src/stats/primeDriverExpenses.ts, unaffected by this).
+//
+// AMBIGUOUS ALLOWLIST — the ONLY canonical categories ever put in front of
+// the user as "needs a category": a plausible-but-uncertain path into the
+// 16, so no automatic mapping is made; the value is the suggestion shown.
+export const AMBIGUOUS_ACCOUNTANT_CATEGORIES: Record<string, PrimeDriverExpenseCategory> = {
+  Tires: 'Repairs',
+  'Warranty & Service Contracts': 'Repairs',
+};
+
+// Vehicle purchase/sale, registration, title and plate fees are capital/
+// asset items (Asset Register), never this report — excluded by
+// description too, since such a row can be filed under Misc/Other.
+const VEHICLE_REGISTRATION_RE =
+  /\bregistration\b|\blicen[cs]e\s*plates?\b|\bplate\s*(fee|renewal|registration)\b|\btag\s*renewal\b|\btitle\s*(application|fee|transfer|transfers)\b|\bapportioned\b|\birp\b/i;
+
+export function isVehicleAssetOrRegistration(description: string | null | undefined): boolean {
+  return isVehiclePurchaseOneOff(description ?? undefined) || VEHICLE_REGISTRATION_RE.test(description ?? '');
+}
+
+// IN SCOPE = a canonical category with an automatic mapping, or one on the
+// ambiguous allowlist — AND not a vehicle purchase/registration. Everything
+// else (Insurance, Permits, Software, Dispatch, Legal, Contract Labor,
+// Wages, Training, Association Dues, Lease, Meals, Advance Repayment,
+// Escrow, Truck/Trailer Payments, custom or missing categories) is never
+// shown on this screen — not in the report, not in the needs list — even
+// if it somehow already carries an accountant_category. Direct
+// prime_driver_expenses rows (the screen's own Add Expense) are not
+// deductions and are not filtered by this.
+export function isInAccountantReportScope(category: string | null | undefined, description: string | null | undefined): boolean {
+  if (!category) return false;
+  const mapped = CANONICAL_TO_ACCOUNTANT_CATEGORY[category] ?? null;
+  if (!mapped && !(category in AMBIGUOUS_ACCOUNTANT_CATEGORIES)) return false;
+  return !isVehicleAssetOrRegistration(description);
+}
+
+// "NEEDS A CATEGORY" LIST — out-of-pocket rows in an AMBIGUOUS_ACCOUNTANT_
+// CATEGORIES category with no accountant_category yet. Listed across all
+// months on every visit until one of the 16 is picked (callers write only
+// `accountant_category`, never the canonical category).
 export type NeedsCategoryRow = {
   id: string;
   ded_date: string | null;
@@ -167,7 +204,9 @@ export function findRowsNeedingAccountantCategory<T extends NeedsCategoryRow>(ro
       (r) =>
         isEligibleForAccountantReport(r.source) &&
         !r.accountant_category &&
-        suggestAccountantCategory(r.category, r.source) === null
+        !!r.category &&
+        r.category in AMBIGUOUS_ACCOUNTANT_CATEGORIES &&
+        isInAccountantReportScope(r.category, r.description)
     )
     .sort((a, b) => (b.ded_date ?? '').localeCompare(a.ded_date ?? ''));
 }

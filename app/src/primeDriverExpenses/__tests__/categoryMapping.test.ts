@@ -7,7 +7,9 @@ import {
   findUnmappedCanonicalCategories,
   findAccountantCategoryBackfillCandidates,
   findRowsNeedingAccountantCategory,
-  type NeedsCategoryRow,
+  isInAccountantReportScope,
+  isVehicleAssetOrRegistration,
+  AMBIGUOUS_ACCOUNTANT_CATEGORIES,
   findLumperReimbursementGaps,
   isWithheldLumperAdvance,
   diagnoseLumperDeductions,
@@ -78,7 +80,7 @@ describe('CANONICAL_TO_ACCOUNTANT_CATEGORY — the owner-approved mapping table,
       'Maintenance & Repairs': 'Repairs',
       'Major Repairs & Overhauls': 'Repairs',
       'Truck Parts': 'Repairs',
-      Tires: 'Repairs',
+      Tires: null,
       'Truck Wash & Detailing': 'Truck & Trailer Wash',
       'Truck/Trailer Payments': null,
       'Insurance—Truck': null,
@@ -375,46 +377,114 @@ describe('Utilities & Subscriptions maps to Communication', () => {
   });
 });
 
-// "NEEDS A CATEGORY" LIST (owner decision 2026-09-23).
-describe('findRowsNeedingAccountantCategory — the permanent "needs a category" list', () => {
-  const row = (id: string, category: string | null, source: string, accountant_category: string | null = null, ded_date = '2026-07-10'): NeedsCategoryRow => ({
-    id,
-    ded_date,
-    amount: 100,
-    description: id,
-    category,
-    source,
-    accountant_category,
+// "NEEDS A CATEGORY" — NARROWED TO AN EXPLICIT ALLOWLIST (owner decision
+// 2026-09-23). This screen is a cash expense record for out-of-pocket
+// expenses that belong in the 16 accountant categories, plus Prime
+// settlement lumpers. Nothing else is ever shown or flagged.
+describe('screen scope — ambiguous allowlist and permanently out-of-scope categories', () => {
+  const row = (
+    id: string,
+    category: string | null,
+    source = 'manual',
+    accountant_category: string | null = null,
+    description: string | null = id,
+    ded_date = '2026-07-10'
+  ) => ({ id, ded_date, amount: 100, description, category, source, accountant_category });
+
+  it('the allowlist is exactly Tires and Warranty & Service Contracts, both suggesting Repairs, with no automatic mapping', () => {
+    expect(AMBIGUOUS_ACCOUNTANT_CATEGORIES).toEqual({ Tires: 'Repairs', 'Warranty & Service Contracts': 'Repairs' });
+    expect(suggestAccountantCategory('Tires', 'manual')).toBeNull();
+    expect(suggestAccountantCategory('Warranty & Service Contracts', 'manual')).toBeNull();
   });
 
-  const rows = [
-    row('insurance', 'Insurance—Truck', 'manual', null, '2026-05-01'),
-    row('software', 'Software & Subscriptions', 'import', null, '2026-08-15'),
-    row('permits', 'Permits, Licenses & Road Taxes', 'manual', null, '2026-07-10'),
-    row('noCategory', null, 'manual', null, '2026-06-01'),
-    row('custom', 'My Own Custom Category', 'manual', null, '2026-06-02'),
-    // Not listed:
-    row('withheldInsurance', 'Insurance—Truck', 'settlement'),
-    row('alreadyAssigned', 'Legal & Professional Services', 'manual', 'Office Supplies'),
-    row('tires', 'Tires', 'manual'), // mapped (Repairs) — Auto-fill's job, not this list
-    row('utilities', 'Utilities & Subscriptions', 'manual'), // mapped now (Communication)
-  ];
-
-  it('lists every out-of-pocket row with an unmapped category and no accountant category, from import or manual entry, across all months, newest first', () => {
-    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toEqual(['software', 'permits', 'custom', 'noCategory', 'insurance']);
+  it('ITEM 6: an out-of-pocket Insurance—Truck expense never appears anywhere on this screen — not in the needs list, not in the report, even with an accountant category already set', () => {
+    const blank = row('ins-blank', 'Insurance—Truck');
+    const alreadySet = row('ins-set', 'Insurance—Truck', 'manual', 'Misc');
+    expect(findRowsNeedingAccountantCategory([blank, alreadySet])).toEqual([]);
+    expect(eligibleDeductionRowsForReport([blank, alreadySet])).toEqual([]);
   });
 
-  it('once a category is picked, the row leaves the list and appears on the report under that category', () => {
-    const assigned = rows.map((r) => (r.id === 'insurance' ? { ...r, accountant_category: 'Misc' } : r));
-    expect(findRowsNeedingAccountantCategory(assigned).map((r) => r.id)).not.toContain('insurance');
-    const reportRow = eligibleDeductionRowsForReport(assigned).find((r) => r.id === 'insurance');
-    expect(reportRow?.category).toBe('Misc');
-    // The canonical category on the row itself is unchanged.
-    expect(assigned.find((r) => r.id === 'insurance')?.category).toBe('Insurance—Truck');
+  it('ITEM 6: an out-of-pocket Tires expense DOES appear in the needs list (the genuine ambiguous case), and on the report once a category is picked', () => {
+    const tires = row('tires', 'Tires', 'import');
+    expect(findRowsNeedingAccountantCategory([tires]).map((r) => r.id)).toEqual(['tires']);
+    expect(eligibleDeductionRowsForReport([tires])).toEqual([]);
+    const picked = { ...tires, accountant_category: 'Repairs' };
+    expect(findRowsNeedingAccountantCategory([picked])).toEqual([]);
+    expect(eligibleDeductionRowsForReport([picked]).map((r) => r.category)).toEqual(['Repairs']);
+    // Only accountant_category changed — the canonical category is untouched.
+    expect(picked.category).toBe('Tires');
   });
 
-  it('a row that is never assigned stays in the list on every visit', () => {
-    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toContain('insurance');
-    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toContain('insurance');
+  it('ITEM 6: a vehicle registration fee never appears on this screen, whatever category it was filed under', () => {
+    const rows = [
+      row('reg-permits', 'Permits, Licenses & Road Taxes', 'manual', null, 'TX vehicle registration fee'),
+      row('reg-misc', 'Misc', 'manual', 'Misc', 'Truck registration and license plate renewal'),
+      row('title-other', 'Other', 'import', 'Misc', 'Title application fee 2026'),
+      row('downpayment', 'Misc', 'manual', 'Misc', 'Down payment on truck'),
+      row('plate-tires', 'Tires', 'manual', null, 'IRP apportioned plate fee'),
+    ];
+    expect(findRowsNeedingAccountantCategory(rows)).toEqual([]);
+    expect(eligibleDeductionRowsForReport(rows)).toEqual([]);
+    for (const r of rows) expect(isVehicleAssetOrRegistration(r.description)).toBe(true);
+  });
+
+  it('a Truck Parts row mentioning a fifth-wheel plate is NOT mistaken for a plate fee', () => {
+    expect(isVehicleAssetOrRegistration('Fifth wheel plate grease')).toBe(false);
+    expect(eligibleDeductionRowsForReport([row('fw', 'Truck Parts', 'manual', 'Repairs', 'Fifth wheel plate grease')])).toHaveLength(1);
+  });
+
+  it('every permanently out-of-scope category (plus custom and missing categories) is never listed and never reported', () => {
+    const outOfScope = [
+      'Insurance—Truck',
+      'Insurance—Health',
+      'Permits, Licenses & Road Taxes',
+      'Software & Subscriptions',
+      'Dispatch & Factoring Fees',
+      'Legal & Professional Services',
+      'Contract Labor (1099)',
+      'Wages & Payroll Taxes (W-2)',
+      'Training & Education',
+      'Association Dues',
+      'Lease & Rent',
+      'Meals (per diem covered)',
+      'Advance Repayment',
+      'Escrow & Deposits',
+      'Truck/Trailer Payments',
+      'My Own Custom Category',
+      null,
+    ];
+    for (const category of outOfScope) {
+      expect(isInAccountantReportScope(category, 'x')).toBe(false);
+      const blank = row('b', category);
+      const set = row('s', category, 'manual', 'Misc');
+      expect(findRowsNeedingAccountantCategory([blank, set])).toEqual([]);
+      expect(eligibleDeductionRowsForReport([blank, set])).toEqual([]);
+    }
+  });
+
+  it('every automatically mapped category plus the allowlist is in scope, and nothing else among the canonical categories', () => {
+    const inScope = CANONICAL_CATEGORIES.filter((c) => isInAccountantReportScope(c, 'x')).sort();
+    const expected = [
+      ...Object.entries(CANONICAL_TO_ACCOUNTANT_CATEGORY)
+        .filter(([, v]) => v !== null)
+        .map(([k]) => k),
+      ...Object.keys(AMBIGUOUS_ACCOUNTANT_CATEGORIES),
+    ]
+      .filter((c) => (CANONICAL_CATEGORIES as readonly string[]).includes(c))
+      .sort();
+    expect(inScope).toEqual(expected);
+  });
+
+  it('a settlement-withheld Tires row is never in the needs list (origin rule first)', () => {
+    expect(findRowsNeedingAccountantCategory([row('t', 'Tires', 'settlement')])).toEqual([]);
+  });
+
+  it('a Tires row never assigned stays in the list on every visit, newest first alongside Warranty', () => {
+    const rows = [
+      row('old-tires', 'Tires', 'manual', null, 'Steer tire', '2026-05-01'),
+      row('warranty', 'Warranty & Service Contracts', 'import', null, 'Extended warranty', '2026-08-01'),
+    ];
+    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toEqual(['warranty', 'old-tires']);
+    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toEqual(['warranty', 'old-tires']);
   });
 });

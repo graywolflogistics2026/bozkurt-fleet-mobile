@@ -1,5 +1,5 @@
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
-import { isEligibleForAccountantReport, isWithheldLumperAdvance } from '@/src/primeDriverExpenses/categoryMapping';
+import { isEligibleForAccountantReport, isInAccountantReportScope, isWithheldLumperAdvance } from '@/src/primeDriverExpenses/categoryMapping';
 import { calcPerDiemDays, type SettlementWeek } from '@/src/tax/perDiem';
 
 // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision
@@ -144,6 +144,10 @@ export function eligibleDeductionRowsForReport(
   for (const d of deductions) {
     if (!isEligibleForAccountantReport(d.source)) continue;
     if (!d.accountant_category) continue;
+    // SCREEN SCOPE (owner decision 2026-09-23): only categories with an
+    // automatic mapping or on the ambiguous allowlist, never a vehicle
+    // purchase/registration — even if an accountant_category is already set.
+    if (!isInAccountantReportScope(d.category, d.description)) continue;
     if (
       d.accountant_category === 'Lumpers' &&
       d.source === 'import' &&

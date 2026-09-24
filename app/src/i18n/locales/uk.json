@@ -2108,11 +2108,12 @@
     "needsCategory": {
       "title_one": "{{count}} expense needs an accountant category",
       "title_other": "{{count}} expenses need an accountant category",
-      "body": "These out-of-pocket expenses have a category with no match on this report, so they aren't counted yet. Tap one to choose where it goes. This only affects this report; the category on your Deductions screen stays the same.",
+      "body": "These out-of-pocket expenses could belong on this report, but where they go isn't certain, so they aren't counted yet. Tap one to choose. This only affects this report; the category on your Deductions screen stays the same.",
       "canonical": "Category on Deductions: {{category}}",
       "noCategory": "(none)",
       "tapToPick": "Tap to choose an accountant category",
-      "pickTitle": "Choose an accountant category"
+      "pickTitle": "Choose an accountant category",
+      "suggested": "Suggested: {{category}}"
     }
   },
   "scorecard": {

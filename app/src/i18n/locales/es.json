@@ -2108,11 +2108,12 @@
     "needsCategory": {
       "title_one": "{{count}} gasto necesita una categoría contable",
       "title_other": "{{count}} gastos necesitan una categoría contable",
-      "body": "Estos gastos de tu bolsillo tienen una categoría sin equivalente en este informe, así que aún no se cuentan. Toca uno para elegir dónde va. Esto solo afecta a este informe; la categoría en tu pantalla de Deducciones no cambia.",
+      "body": "Estos gastos de tu bolsillo podrían pertenecer a este informe, pero no es seguro dónde van, así que aún no se cuentan. Toca uno para elegir. Esto solo afecta a este informe; la categoría en tu pantalla de Deducciones no cambia.",
       "canonical": "Categoría en Deducciones: {{category}}",
       "noCategory": "(ninguna)",
       "tapToPick": "Toca para elegir una categoría contable",
-      "pickTitle": "Elige una categoría contable"
+      "pickTitle": "Elige una categoría contable",
+      "suggested": "Sugerido: {{category}}"
     }
   },
   "scorecard": {

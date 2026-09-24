@@ -12323,3 +12323,23 @@
   job. The Deductions screen, deductions.category, and every
   profit/tax/CPM/Accountant Package number are untouched (canonical source
   audit in primeDriverExpenses.test.ts still guards this).
+- "FOR PRIME INC DRIVERS" SCREEN SCOPE — EXPLICIT ALLOWLIST (owner decision
+  2026-09-23; SUPERSEDES the broad "needs a category" list in the entry
+  above). The screen is a cash expense record for exactly two things:
+  out-of-pocket expenses that genuinely belong in the 16 accountant
+  categories, and Prime settlement lumpers (report-only exception,
+  untouched). AMBIGUOUS_ACCOUNTANT_CATEGORIES (categoryMapping.ts) is the
+  ONLY source of "needs a category" rows: Tires -> suggest Repairs, Warranty
+  & Service Contracts -> suggest Repairs; neither is auto-mapped (Tires was
+  Repairs before; existing Tires rows already holding Repairs keep it —
+  never overwritten). isInAccountantReportScope(): a deduction row reaches
+  the report or the needs list only if its canonical category is auto-mapped
+  or allowlisted AND its description isn't a vehicle purchase
+  (isVehiclePurchaseOneOff) or registration/title/plate fee (those are
+  Asset Register items). Everything else — Insurance, Permits, Software,
+  Dispatch, Legal, Contract Labor, Wages, Training, Association Dues, Lease,
+  Meals, Advance Repayment, Escrow, Truck/Trailer Payments, custom and
+  missing categories — is never shown on this screen, even with an
+  accountant_category already set. Direct prime_driver_expenses rows (the
+  screen's own Add Expense) are not filtered. Still writes only
+  accountant_category; Deductions and all canonical numbers untouched.

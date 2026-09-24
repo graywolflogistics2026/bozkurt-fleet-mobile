@@ -148,6 +148,7 @@ describe('lumper reimbursement companion expense (owner decision 2026-09-19)', (
         accountant_category: d.accountant_category,
         source: d.source,
         description: d.description,
+        category: d.category,
       }))
     );
     const lumperReportRows = reportRows.filter((r) => r.category === 'Lumpers');

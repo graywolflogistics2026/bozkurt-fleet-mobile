@@ -25,6 +25,7 @@ import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from
 import {
   findAccountantCategoryBackfillCandidates,
   findRowsNeedingAccountantCategory,
+  AMBIGUOUS_ACCOUNTANT_CATEGORIES,
   findLumperReimbursementGaps,
   diagnoseLumperDeductions,
   suggestAccountantCategory,
@@ -720,6 +721,11 @@ export default function PrimeDriverExpensesScreen() {
                   <MutedText style={{ fontSize: typography.size.xs }}>
                     {t('primeDriverExpenses.needsCategory.canonical', { category: d.category ?? t('primeDriverExpenses.needsCategory.noCategory') })}
                   </MutedText>
+                  {d.category && AMBIGUOUS_ACCOUNTANT_CATEGORIES[d.category] ? (
+                    <MutedText style={{ fontSize: typography.size.xs }}>
+                      {t('primeDriverExpenses.needsCategory.suggested', { category: AMBIGUOUS_ACCOUNTANT_CATEGORIES[d.category] })}
+                    </MutedText>
+                  ) : null}
                   <Text style={{ color: colors.accent, fontSize: typography.size.xs, fontWeight: '700' }}>
                     {t('primeDriverExpenses.needsCategory.tapToPick')}
                   </Text>
@@ -989,7 +995,12 @@ export default function PrimeDriverExpensesScreen() {
         ) : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {PRIME_DRIVER_EXPENSE_CATEGORIES.map((c) => (
-            <Pill key={c} label={c} selected={false} onPress={() => !assignSaving && handleAssignCategory(c)} />
+            <Pill
+              key={c}
+              label={c}
+              selected={!!assigningRow?.category && AMBIGUOUS_ACCOUNTANT_CATEGORIES[assigningRow.category] === c}
+              onPress={() => !assignSaving && handleAssignCategory(c)}
+            />
           ))}
         </View>
         {assignSaving && <MutedText>{t('common.loading')}</MutedText>}

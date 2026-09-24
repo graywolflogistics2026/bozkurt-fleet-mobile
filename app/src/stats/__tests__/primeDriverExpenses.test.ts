@@ -104,8 +104,8 @@ describe('buildPrimeDriverExpenseMonth ("FOR PRIME INC DRIVERS" tracker, owner d
 describe('eligibleDeductionRowsForReport — THE ORIGIN RULE, this report\'s own last line of defense', () => {
   it('excludes a settlement-withheld row even if it somehow carries an accountant_category', () => {
     const deductions: EligibleDeductionSource[] = [
-      { id: 'd1', ded_date: '2026-06-10', amount: 80, accountant_category: 'Truck & Trailer Wash', source: 'settlement', description: 'Truck wash' },
-      { id: 'd2', ded_date: '2026-06-11', amount: 40, accountant_category: 'Truck & Trailer Wash', source: 'manual', description: 'Truck wash' },
+      { id: 'd1', ded_date: '2026-06-10', amount: 80, accountant_category: 'Truck & Trailer Wash', source: 'settlement', description: 'Truck wash', category: 'Truck Wash & Detailing' },
+      { id: 'd2', ded_date: '2026-06-11', amount: 40, accountant_category: 'Truck & Trailer Wash', source: 'manual', description: 'Truck wash', category: 'Truck Wash & Detailing' },
     ];
     const rows = eligibleDeductionRowsForReport(deductions);
     expect(rows).toHaveLength(1);
@@ -121,7 +121,7 @@ describe('eligibleDeductionRowsForReport — THE ORIGIN RULE, this report\'s own
 
   it('maps a real deduction row into report-row shape correctly, tagged origin: "deduction"', () => {
     const deductions: EligibleDeductionSource[] = [
-      { id: 'd1', ded_date: '2026-06-10', amount: 80, accountant_category: 'Repairs', source: 'import', description: 'Oil change' },
+      { id: 'd1', ded_date: '2026-06-10', amount: 80, accountant_category: 'Repairs', source: 'import', description: 'Oil change', category: 'Maintenance & Repairs' },
     ];
     const rows = eligibleDeductionRowsForReport(deductions);
     expect(rows[0]).toEqual({ id: 'd1', exp_date: '2026-06-10', amount: 80, category: 'Repairs', note: 'Oil change', origin: 'deduction' });
@@ -134,7 +134,7 @@ describe('ZERO DUPLICATION (item 5) — UNION of the two disjoint sources', () =
       { id: 'pde1', exp_date: '2026-06-05', amount: 30, category: 'Cash Fuel', note: null, origin: 'direct' },
     ];
     const deductions: EligibleDeductionSource[] = [
-      { id: 'd1', ded_date: '2026-06-06', amount: 70, accountant_category: 'Repairs', source: 'manual', description: 'Oil change' },
+      { id: 'd1', ded_date: '2026-06-06', amount: 70, accountant_category: 'Repairs', source: 'manual', description: 'Oil change', category: 'Maintenance & Repairs' },
       // A settlement-withheld row in the same account/month must never be
       // pulled in, even though it's the same nominal category.
       { id: 'd2', ded_date: '2026-06-07', amount: 999, accountant_category: null, source: 'settlement', description: 'Withheld repair' },
