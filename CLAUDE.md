@@ -12288,7 +12288,21 @@
   Fees deduction, a reimbursement-only lumper (companion deduction), or
   manual Add Expense. Known gap: a Prime `LM OUTSIDE LUMPER` revenue line
   with no withheld advance is not detected (revenueItems are not persisted
-  and no real example exists yet) — manual Add Expense covers it. Also: a pure-JS year/month/day DatePickerField on the add and edit
+  and no real example exists yet) — manual Add Expense covers it.
+  GUARANTEES (same day, src/data/__tests__/aiImportSave.primeLumperReport.test.ts,
+  real saveExtraction() end to end): (1) not month-specific — the screen
+  passes the full unfiltered deductions list, and only
+  buildPrimeDriverExpenseMonth() picks a month by ded_date (= week ending);
+  (2) a new or back-dated import shows up in its own month with no extra
+  step (the import screen's unscoped invalidateFinancialData() refetches
+  deductions + settlements); (3) counted once — a same week+truck
+  re-import replaces (saveExtraction()); the same document imported once
+  with a truck and once "not truck-specific" (missed by the week+truck
+  match) is deduped by the report, one-for-one on date + description +
+  cents (two DIFFERENT trucks' identical lines are both kept); a
+  reimbursement + withheld lumper on one settlement shows only the withheld
+  line (import refuses the companion; the report also skips a companion
+  saved by the Sep 19 build before that refusal existed). Also: a pure-JS year/month/day DatePickerField on the add and edit
   sheets (no native module, ships via EAS Update); deduction-sourced rows'
   date is editable from the report (writes deductions.ded_date, never a
   copy); the view jumps to the row's month after add/edit.

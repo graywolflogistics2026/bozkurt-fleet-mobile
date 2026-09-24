@@ -86,20 +86,72 @@ export type EligibleDeductionSource = {
 // Prime; lumpers from those stay excluded. A settlement with no recorded
 // carrier is treated as Prime, since this screen is Prime-only.
 // Every other category keeps the strict origin rule.
+//
+// NOT MONTH-SPECIFIC: this reads every row it's given (the screen passes
+// the account's full, unfiltered deductions list) and only
+// buildPrimeDriverExpenseMonth() later picks a month, by each row's own
+// ded_date (a settlement line's ded_date = that settlement's week ending).
+//
+// COUNTED ONCE (owner decision 2026-09-23):
+//  - Re-importing the same week + truck REPLACES that settlement's rows
+//    (saveExtraction()), so nothing to do here.
+//  - Same document imported once WITH a truck and once "not truck-specific"
+//    is missed by that week+truck match. `settlementTruckIds` (settlement
+//    id -> truck_id) lets this drop a null-truck settlement's lumper line
+//    one-for-one against an identical line (same date, description, cents)
+//    on a truck-assigned settlement. Two different trucks' identical lines
+//    are both kept — that's a real fleet, not a duplicate.
+//  - A reimbursement-derived "companion" Lumper Fees row (source 'import',
+//    settlement_id set — only mapSettlement() creates those) on a
+//    settlement that also withholds a lumper line is the same lumper seen
+//    twice; only the withheld line is shown. Import now refuses to create
+//    such companions; this also covers ones saved before that fix.
 export function eligibleDeductionRowsForReport(
   deductions: EligibleDeductionSource[],
-  nonPrimeSettlementIds: ReadonlySet<string> = new Set()
+  nonPrimeSettlementIds: ReadonlySet<string> = new Set(),
+  settlementTruckIds: ReadonlyMap<string, string | null> = new Map()
 ): PrimeDriverExpenseRow[] {
+  const primeLumpers = deductions.filter(
+    (d) =>
+      !isEligibleForAccountantReport(d.source) &&
+      !(d.settlement_id && nonPrimeSettlementIds.has(d.settlement_id)) &&
+      isWithheldLumperAdvance({ category: d.category ?? null, description: d.description, source: d.source })
+  );
+  const settlementsWithWithheldLumper = new Set(primeLumpers.map((d) => d.settlement_id).filter((id): id is string => !!id));
+
+  const lineKey = (d: EligibleDeductionSource) => `${d.ded_date ?? ''}|${(d.description ?? '').trim().toUpperCase()}|${Math.round(Number(d.amount ?? 0) * 100)}`;
+  const isNullTruckSettlement = (d: EligibleDeductionSource) =>
+    !!d.settlement_id && settlementTruckIds.has(d.settlement_id) && settlementTruckIds.get(d.settlement_id) == null;
+  const truckAssignedCount = new Map<string, number>();
+  for (const d of primeLumpers) {
+    if (d.settlement_id && settlementTruckIds.get(d.settlement_id) != null) {
+      truckAssignedCount.set(lineKey(d), (truckAssignedCount.get(lineKey(d)) ?? 0) + 1);
+    }
+  }
+
   const rows: PrimeDriverExpenseRow[] = [];
-  for (const d of deductions) {
-    if (!isEligibleForAccountantReport(d.source)) {
-      const isPrime = !(d.settlement_id && nonPrimeSettlementIds.has(d.settlement_id));
-      if (isPrime && isWithheldLumperAdvance({ category: d.category ?? null, description: d.description, source: d.source })) {
-        rows.push({ id: d.id, exp_date: d.ded_date, amount: d.amount, category: 'Lumpers', note: d.description, origin: 'prime_settlement' });
+  for (const d of primeLumpers) {
+    if (isNullTruckSettlement(d)) {
+      const remaining = truckAssignedCount.get(lineKey(d)) ?? 0;
+      if (remaining > 0) {
+        truckAssignedCount.set(lineKey(d), remaining - 1);
+        continue;
       }
+    }
+    rows.push({ id: d.id, exp_date: d.ded_date, amount: d.amount, category: 'Lumpers', note: d.description, origin: 'prime_settlement' });
+  }
+
+  for (const d of deductions) {
+    if (!isEligibleForAccountantReport(d.source)) continue;
+    if (!d.accountant_category) continue;
+    if (
+      d.accountant_category === 'Lumpers' &&
+      d.source === 'import' &&
+      d.settlement_id &&
+      settlementsWithWithheldLumper.has(d.settlement_id)
+    ) {
       continue;
     }
-    if (!d.accountant_category) continue;
     rows.push({
       id: d.id,
       exp_date: d.ded_date,

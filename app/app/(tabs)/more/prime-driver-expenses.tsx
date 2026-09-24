@@ -161,7 +161,14 @@ export default function PrimeDriverExpensesScreen() {
   // eligibleDeductionRowsForReport(). Only lumpers from a settlement whose
   // recorded carrier is a known non-Prime carrier are left out.
   const nonPrimeIds = useMemo(() => nonPrimeSettlementIds(settlementsQuery.data ?? []), [settlementsQuery.data]);
-  const deductionRows = useMemo(() => eligibleDeductionRowsForReport(deductionsQuery.data ?? [], nonPrimeIds), [deductionsQuery.data, nonPrimeIds]);
+  const settlementTruckIds = useMemo(
+    () => new Map((settlementsQuery.data ?? []).map((s) => [s.id, s.truck_id ?? null] as const)),
+    [settlementsQuery.data]
+  );
+  const deductionRows = useMemo(
+    () => eligibleDeductionRowsForReport(deductionsQuery.data ?? [], nonPrimeIds, settlementTruckIds),
+    [deductionsQuery.data, nonPrimeIds, settlementTruckIds]
+  );
   const rows: PrimeDriverExpenseRow[] = useMemo(() => mergePrimeDriverExpenseRows(directRows, deductionRows), [directRows, deductionRows]);
   const settlements = settlementsQuery.data ?? [];
 
