@@ -12344,7 +12344,7 @@
   screen's own Add Expense) are not filtered. Still writes only
   accountant_category; Deductions and all canonical numbers untouched.
 - DOCUMENT TITLES (owner decision 2026-09-23, docs/PENDING_SQL.md §76 —
-  NOT YET APPLIED; mirror pending_76.sql). `documents.title` +
+  ✅ APPLIED 2026-09-23). `documents.title` +
   `title_source` ('ai' | 'record' | 'user'). On import, saveExtraction()
   stores the AI's own `title` (ai-import prompt's "document titles"
   addition) or one built from the extraction by buildTitleFromExtraction()

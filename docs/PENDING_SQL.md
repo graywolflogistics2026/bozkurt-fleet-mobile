@@ -4362,7 +4362,7 @@ column on the already-listed `deductions` table, not a new table.
 
 ---
 
-## 76. DOCUMENT TITLES (owner decision 2026-09-23) — NOT YET APPLIED
+## 76. DOCUMENT TITLES (owner decision 2026-09-23) — ✅ APPLIED 2026-09-23
 
 **The decision**: every document showed a generic title ("Document" / the
 docType label) once there were many. Documents now carry a real,
@@ -4377,7 +4377,7 @@ never overwritten by any automatic pass (`shouldApplyAutoTitle()`,
 non-fatal update after the documents row is inserted, so imports keep
 working if this hasn't been run yet (titles just won't save until it is).
 
-Mirror file: `pending_76.sql` at the repo root.
+Mirror file `pending_76.sql` removed after the owner confirmed it was run (2026-09-23).
 
 ```sql
 alter table documents
