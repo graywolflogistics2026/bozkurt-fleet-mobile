@@ -54,7 +54,8 @@ export const CANONICAL_TO_ACCOUNTANT_CATEGORY: Record<string, PrimeDriverExpense
   'Training & Education': null,
   'Association Dues': null,
   'Lease & Rent': null,
-  'Utilities & Subscriptions': null,
+  // Owner decision 2026-09-23: phone/internet-type bills -> Communication.
+  'Utilities & Subscriptions': 'Communication',
   'Meals (per diem covered)': null,
   'Advance Repayment': null,
   'Escrow & Deposits': null,
@@ -139,6 +140,36 @@ export function findAccountantCategoryBackfillCandidates(rows: BackfillCandidate
     if (suggested) candidates.push({ id: row.id, accountantCategory: suggested });
   }
   return candidates;
+}
+
+// "NEEDS A CATEGORY" LIST (owner decision 2026-09-23) — every genuinely
+// out-of-pocket expense (origin rule first) with no accountant_category
+// whose canonical category has NO approved mapping (Insurance, Permits,
+// Software, a custom category, no category at all, ...). The "For Prime
+// Inc Drivers" screen lists these permanently until the user picks one
+// of the 16 accountant categories — they never silently vanish. A row
+// whose category IS mapped but still blank is not listed here: that is
+// what the Auto-fill backfill is for. Read-only: callers write only
+// `accountant_category`, never the canonical category.
+export type NeedsCategoryRow = {
+  id: string;
+  ded_date: string | null;
+  amount: number | null;
+  description: string | null;
+  category: string | null;
+  source: string | null;
+  accountant_category: string | null;
+};
+
+export function findRowsNeedingAccountantCategory<T extends NeedsCategoryRow>(rows: T[]): T[] {
+  return rows
+    .filter(
+      (r) =>
+        isEligibleForAccountantReport(r.source) &&
+        !r.accountant_category &&
+        suggestAccountantCategory(r.category, r.source) === null
+    )
+    .sort((a, b) => (b.ded_date ?? '').localeCompare(a.ded_date ?? ''));
 }
 
 // LUMPER PAYMENTS MISSING FROM THE REPORT (owner decision 2026-09-19, bug

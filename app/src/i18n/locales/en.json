@@ -2161,7 +2161,16 @@
       "doneBody": "{{count}} lumper entries were added. Now showing {{month}}. Tap any row to change its category, date, or amount."
     },
     "fromPrimeSettlement": "from Prime settlement, {{date}}",
-    "primeSettlementLumperNote": "This lumper went through your Prime settlement (for example an \"ADV FOR OUTSIDE LUMPER\" advance). It is shown here under Lumpers so your accountant can see it. Everywhere else in the app it stays settlement-withheld and non-deductible, exactly as before. It is read-only here because changing or deleting it would change your profit and tax numbers. To correct it, edit the settlement."
+    "primeSettlementLumperNote": "This lumper went through your Prime settlement (for example an \"ADV FOR OUTSIDE LUMPER\" advance). It is shown here under Lumpers so your accountant can see it. Everywhere else in the app it stays settlement-withheld and non-deductible, exactly as before. It is read-only here because changing or deleting it would change your profit and tax numbers. To correct it, edit the settlement.",
+    "needsCategory": {
+      "title_one": "{{count}} expense needs an accountant category",
+      "title_other": "{{count}} expenses need an accountant category",
+      "body": "These out-of-pocket expenses have a category with no match on this report, so they aren't counted yet. Tap one to choose where it goes. This only affects this report; the category on your Deductions screen stays the same.",
+      "canonical": "Category on Deductions: {{category}}",
+      "noCategory": "(none)",
+      "tapToPick": "Tap to choose an accountant category",
+      "pickTitle": "Choose an accountant category"
+    }
   },
   "scorecard": {
     "title": "Scorecard",

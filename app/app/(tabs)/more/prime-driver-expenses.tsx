@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +24,7 @@ import { uploadPrimeDriverExpenseAttachment } from '@/src/data/primeDriverExpens
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
 import {
   findAccountantCategoryBackfillCandidates,
+  findRowsNeedingAccountantCategory,
   findLumperReimbursementGaps,
   diagnoseLumperDeductions,
   suggestAccountantCategory,
@@ -240,6 +241,54 @@ export default function PrimeDriverExpensesScreen() {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
       setBackfilling(false);
+    }
+  }
+
+  // UTILITIES & SUBSCRIPTIONS -> COMMUNICATION (owner decision 2026-09-23):
+  // applied to existing rows automatically, once, the first time this
+  // screen sees them. Same rule as Auto-fill: only a blank
+  // accountant_category is ever filled, never one set by hand. Writes
+  // only accountant_category.
+  const utilitiesAttempted = useRef(new Set<string>());
+  useEffect(() => {
+    const utilityIds = new Set(
+      (deductionsQuery.data ?? []).filter((d) => d.category === 'Utilities & Subscriptions').map((d) => d.id)
+    );
+    const pending = backfillCandidates.filter((c) => utilityIds.has(c.id) && !utilitiesAttempted.current.has(c.id));
+    if (pending.length === 0) return;
+    for (const c of pending) utilitiesAttempted.current.add(c.id);
+    (async () => {
+      for (const c of pending) {
+        try {
+          await updateDeduction.mutateAsync({ id: c.id, values: { accountant_category: c.accountantCategory } });
+        } catch {
+          // Non-fatal — the row just stays in the Auto-fill count.
+        }
+      }
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backfillCandidates, deductionsQuery.data]);
+
+  // "NEEDS A CATEGORY" (owner decision 2026-09-23) — out-of-pocket
+  // expenses whose canonical category has no accountant mapping. Listed
+  // across ALL months (not just the selected one) on every visit until a
+  // category is picked. Picking writes ONLY accountant_category — the
+  // Deductions screen's own category is never touched.
+  const needsCategoryRows = useMemo(() => findRowsNeedingAccountantCategory(deductionsQuery.data ?? []), [deductionsQuery.data]);
+  const [assigningRow, setAssigningRow] = useState<(typeof needsCategoryRows)[number] | null>(null);
+  const [assignSaving, setAssignSaving] = useState(false);
+  async function handleAssignCategory(category: PrimeDriverExpenseCategory) {
+    if (!assigningRow) return;
+    setAssignSaving(true);
+    try {
+      await updateDeduction.mutateAsync({ id: assigningRow.id, values: { accountant_category: category } });
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+      setAssigningRow(null);
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setAssignSaving(false);
     }
   }
 
@@ -654,6 +703,33 @@ export default function PrimeDriverExpensesScreen() {
           </Card>
         )}
 
+        {/* NEEDS A CATEGORY (owner decision 2026-09-23) — permanent until
+            each row gets one of the 16 accountant categories. */}
+        {needsCategoryRows.length > 0 && (
+          <Card style={{ marginTop: spacing.md, borderColor: colors.accent, borderWidth: 2 }}>
+            <Text style={styles.categoryTitle}>
+              🏷️ {t('primeDriverExpenses.needsCategory.title', { count: needsCategoryRows.length })}
+            </Text>
+            <MutedText style={{ marginTop: spacing.xs }}>{t('primeDriverExpenses.needsCategory.body')}</MutedText>
+            {needsCategoryRows.map((d) => (
+              <Pressable key={d.id} onPress={() => setAssigningRow(d)} style={styles.lineRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text }}>
+                    {d.ded_date ? date(d.ded_date) : '—'} · {d.description ?? ''}
+                  </Text>
+                  <MutedText style={{ fontSize: typography.size.xs }}>
+                    {t('primeDriverExpenses.needsCategory.canonical', { category: d.category ?? t('primeDriverExpenses.needsCategory.noCategory') })}
+                  </MutedText>
+                  <Text style={{ color: colors.accent, fontSize: typography.size.xs, fontWeight: '700' }}>
+                    {t('primeDriverExpenses.needsCategory.tapToPick')}
+                  </Text>
+                </View>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(Number(d.amount ?? 0))}</Text>
+              </Pressable>
+            ))}
+          </Card>
+        )}
+
         <PrimaryButton title={`➕ ${t('primeDriverExpenses.addExpense')}`} onPress={openAdd} />
 
         {/* AUTO-SUGGEST FOR EXISTING HISTORY (item 3) — a one-time,
@@ -895,6 +971,28 @@ export default function PrimeDriverExpensesScreen() {
             </Pressable>
           </>
         )}
+      </ModalSheet>
+      <ModalSheet visible={!!assigningRow} onClose={() => setAssigningRow(null)}>
+        <SheetTitle>{t('primeDriverExpenses.needsCategory.pickTitle')}</SheetTitle>
+        {assigningRow ? (
+          <>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>
+              {assigningRow.ded_date ? date(assigningRow.ded_date) : '—'} · {money(Number(assigningRow.amount ?? 0))}
+            </Text>
+            {assigningRow.description ? <MutedText>{assigningRow.description}</MutedText> : null}
+            <MutedText style={{ fontSize: typography.size.xs, marginBottom: spacing.sm }}>
+              {t('primeDriverExpenses.needsCategory.canonical', {
+                category: assigningRow.category ?? t('primeDriverExpenses.needsCategory.noCategory'),
+              })}
+            </MutedText>
+          </>
+        ) : null}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {PRIME_DRIVER_EXPENSE_CATEGORIES.map((c) => (
+            <Pill key={c} label={c} selected={false} onPress={() => !assignSaving && handleAssignCategory(c)} />
+          ))}
+        </View>
+        {assignSaving && <MutedText>{t('common.loading')}</MutedText>}
       </ModalSheet>
     </Screen>
   );

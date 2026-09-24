@@ -12306,3 +12306,20 @@
   sheets (no native module, ships via EAS Update); deduction-sourced rows'
   date is editable from the report (writes deductions.ded_date, never a
   copy); the view jumps to the row's month after add/edit.
+- "FOR PRIME INC DRIVERS" — UTILITIES MAPPING + "NEEDS A CATEGORY" LIST
+  (owner decision 2026-09-23, scoped to this screen and accountant_category
+  only). 'Utilities & Subscriptions' -> 'Communication' in
+  CANONICAL_TO_ACCOUNTANT_CATEGORY; existing blank out-of-pocket Utilities
+  rows are filled automatically the first time the screen sees them (never
+  overwriting a hand-set value). Note the mapping is shared: the importer
+  (aiImportSave.ts) and the Deductions screen's Add also call
+  suggestAccountantCategory() at insert, so NEW Utilities rows get
+  'Communication' too — still only accountant_category, which nothing but
+  this report reads. findRowsNeedingAccountantCategory() lists every
+  out-of-pocket row with no accountant_category whose canonical category has
+  no mapping (incl. custom/null categories), across all months, on every
+  visit until one of the 16 is picked (a one-tap picker that writes ONLY
+  accountant_category). Mapped-but-blank rows stay the Auto-fill button's
+  job. The Deductions screen, deductions.category, and every
+  profit/tax/CPM/Accountant Package number are untouched (canonical source
+  audit in primeDriverExpenses.test.ts still guards this).

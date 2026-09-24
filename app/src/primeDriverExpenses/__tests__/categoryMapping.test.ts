@@ -6,6 +6,8 @@ import {
   suggestAccountantCategory,
   findUnmappedCanonicalCategories,
   findAccountantCategoryBackfillCandidates,
+  findRowsNeedingAccountantCategory,
+  type NeedsCategoryRow,
   findLumperReimbursementGaps,
   isWithheldLumperAdvance,
   diagnoseLumperDeductions,
@@ -14,6 +16,7 @@ import {
   type ExistingLumperDeductionRow,
   type LumperDeductionRow,
 } from '@/src/primeDriverExpenses/categoryMapping';
+import { eligibleDeductionRowsForReport } from '@/src/stats/primeDriverExpenses';
 
 // THE ORIGIN RULE — the single most important constraint in this whole
 // task (owner decision 2026-09-17, "CRITICAL ACCURACY TASK"). This is
@@ -102,7 +105,7 @@ describe('CANONICAL_TO_ACCOUNTANT_CATEGORY — the owner-approved mapping table,
       'Training & Education': null,
       'Association Dues': null,
       'Lease & Rent': null,
-      'Utilities & Subscriptions': null,
+      'Utilities & Subscriptions': 'Communication',
       'Meals (per diem covered)': null,
       'Advance Repayment': null,
       'Escrow & Deposits': null,
@@ -351,5 +354,67 @@ describe('Prime lumper advances are never banner items (no double count)', () =>
       'prime_settlement_lumper',
       'prime_settlement_lumper',
     ]);
+  });
+});
+
+// UTILITIES & SUBSCRIPTIONS -> COMMUNICATION (owner decision 2026-09-23).
+describe('Utilities & Subscriptions maps to Communication', () => {
+  it('an out-of-pocket Utilities & Subscriptions row gets Communication; a settlement-withheld one gets nothing', () => {
+    expect(suggestAccountantCategory('Utilities & Subscriptions', 'manual')).toBe('Communication');
+    expect(suggestAccountantCategory('Utilities & Subscriptions', 'import')).toBe('Communication');
+    expect(suggestAccountantCategory('Utilities & Subscriptions', 'settlement')).toBeNull();
+  });
+
+  it('the backfill fills a blank Utilities row but never overwrites one set by hand', () => {
+    const rows: BackfillCandidateRow[] = [
+      { id: 'blank', category: 'Utilities & Subscriptions', source: 'manual', accountant_category: null },
+      { id: 'handSet', category: 'Utilities & Subscriptions', source: 'manual', accountant_category: 'Misc' },
+      { id: 'withheld', category: 'Utilities & Subscriptions', source: 'settlement', accountant_category: null },
+    ];
+    expect(findAccountantCategoryBackfillCandidates(rows)).toEqual([{ id: 'blank', accountantCategory: 'Communication' }]);
+  });
+});
+
+// "NEEDS A CATEGORY" LIST (owner decision 2026-09-23).
+describe('findRowsNeedingAccountantCategory — the permanent "needs a category" list', () => {
+  const row = (id: string, category: string | null, source: string, accountant_category: string | null = null, ded_date = '2026-07-10'): NeedsCategoryRow => ({
+    id,
+    ded_date,
+    amount: 100,
+    description: id,
+    category,
+    source,
+    accountant_category,
+  });
+
+  const rows = [
+    row('insurance', 'Insurance—Truck', 'manual', null, '2026-05-01'),
+    row('software', 'Software & Subscriptions', 'import', null, '2026-08-15'),
+    row('permits', 'Permits, Licenses & Road Taxes', 'manual', null, '2026-07-10'),
+    row('noCategory', null, 'manual', null, '2026-06-01'),
+    row('custom', 'My Own Custom Category', 'manual', null, '2026-06-02'),
+    // Not listed:
+    row('withheldInsurance', 'Insurance—Truck', 'settlement'),
+    row('alreadyAssigned', 'Legal & Professional Services', 'manual', 'Office Supplies'),
+    row('tires', 'Tires', 'manual'), // mapped (Repairs) — Auto-fill's job, not this list
+    row('utilities', 'Utilities & Subscriptions', 'manual'), // mapped now (Communication)
+  ];
+
+  it('lists every out-of-pocket row with an unmapped category and no accountant category, from import or manual entry, across all months, newest first', () => {
+    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toEqual(['software', 'permits', 'custom', 'noCategory', 'insurance']);
+  });
+
+  it('once a category is picked, the row leaves the list and appears on the report under that category', () => {
+    const assigned = rows.map((r) => (r.id === 'insurance' ? { ...r, accountant_category: 'Misc' } : r));
+    expect(findRowsNeedingAccountantCategory(assigned).map((r) => r.id)).not.toContain('insurance');
+    const reportRow = eligibleDeductionRowsForReport(assigned).find((r) => r.id === 'insurance');
+    expect(reportRow?.category).toBe('Misc');
+    // The canonical category on the row itself is unchanged.
+    expect(assigned.find((r) => r.id === 'insurance')?.category).toBe('Insurance—Truck');
+  });
+
+  it('a row that is never assigned stays in the list on every visit', () => {
+    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toContain('insurance');
+    expect(findRowsNeedingAccountantCategory(rows).map((r) => r.id)).toContain('insurance');
   });
 });

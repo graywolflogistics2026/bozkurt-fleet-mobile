@@ -2104,7 +2104,16 @@
       "doneBody": "{{count}} lumper kaydı eklendi. Şu an {{month}} gösteriliyor. Kategorisini, tarihini veya tutarını değiştirmek için herhangi bir satıra dokunun."
     },
     "fromPrimeSettlement": "Prime settlement'ından, {{date}}",
-    "primeSettlementLumperNote": "Bu lumper Prime settlement'ınızdan geçti (örneğin bir \"ADV FOR OUTSIDE LUMPER\" avansı). Muhasebeciniz görebilsin diye burada Lumpers altında gösterilir. Uygulamanın geri kalanında eskisi gibi settlement'tan kesilmiş ve vergiden düşülemez olarak kalır. Burada salt okunurdur, çünkü değiştirmek veya silmek kâr ve vergi rakamlarınızı değiştirir. Düzeltmek için settlement'ı düzenleyin."
+    "primeSettlementLumperNote": "Bu lumper Prime settlement'ınızdan geçti (örneğin bir \"ADV FOR OUTSIDE LUMPER\" avansı). Muhasebeciniz görebilsin diye burada Lumpers altında gösterilir. Uygulamanın geri kalanında eskisi gibi settlement'tan kesilmiş ve vergiden düşülemez olarak kalır. Burada salt okunurdur, çünkü değiştirmek veya silmek kâr ve vergi rakamlarınızı değiştirir. Düzeltmek için settlement'ı düzenleyin.",
+    "needsCategory": {
+      "title_one": "{{count}} gider için muhasebe kategorisi gerekiyor",
+      "title_other": "{{count}} gider için muhasebe kategorisi gerekiyor",
+      "body": "Bu cepten ödenen giderlerin kategorisinin bu raporda karşılığı yok, bu yüzden henüz sayılmıyorlar. Nereye gideceğini seçmek için birine dokunun. Bu yalnızca bu raporu etkiler; Kesintiler ekranındaki kategori aynı kalır.",
+      "canonical": "Kesintiler'deki kategori: {{category}}",
+      "noCategory": "(yok)",
+      "tapToPick": "Muhasebe kategorisi seçmek için dokunun",
+      "pickTitle": "Muhasebe kategorisi seçin"
+    }
   },
   "scorecard": {
     "title": "Karne",

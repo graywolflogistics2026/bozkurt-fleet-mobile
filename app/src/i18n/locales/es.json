@@ -2104,7 +2104,16 @@
       "doneBody": "Se agregaron {{count}} entradas de lumper. Mostrando {{month}}. Toca cualquier línea para cambiar su categoría, fecha o monto."
     },
     "fromPrimeSettlement": "del settlement de Prime, {{date}}",
-    "primeSettlementLumperNote": "Este lumper pasó por tu settlement de Prime (por ejemplo, un adelanto \"ADV FOR OUTSIDE LUMPER\"). Se muestra aquí en Lumpers para que tu contador lo vea. En el resto de la app sigue como retenido en el settlement y no deducible, igual que antes. Aquí es de solo lectura porque cambiarlo o borrarlo cambiaría tus cifras de ganancia e impuestos. Para corregirlo, edita el settlement."
+    "primeSettlementLumperNote": "Este lumper pasó por tu settlement de Prime (por ejemplo, un adelanto \"ADV FOR OUTSIDE LUMPER\"). Se muestra aquí en Lumpers para que tu contador lo vea. En el resto de la app sigue como retenido en el settlement y no deducible, igual que antes. Aquí es de solo lectura porque cambiarlo o borrarlo cambiaría tus cifras de ganancia e impuestos. Para corregirlo, edita el settlement.",
+    "needsCategory": {
+      "title_one": "{{count}} gasto necesita una categoría contable",
+      "title_other": "{{count}} gastos necesitan una categoría contable",
+      "body": "Estos gastos de tu bolsillo tienen una categoría sin equivalente en este informe, así que aún no se cuentan. Toca uno para elegir dónde va. Esto solo afecta a este informe; la categoría en tu pantalla de Deducciones no cambia.",
+      "canonical": "Categoría en Deducciones: {{category}}",
+      "noCategory": "(ninguna)",
+      "tapToPick": "Toca para elegir una categoría contable",
+      "pickTitle": "Elige una categoría contable"
+    }
   },
   "scorecard": {
     "title": "Calificación",
