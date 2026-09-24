@@ -1,5 +1,6 @@
 import type { DocType, Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate } from '@/src/import/dateGuard';
+import { realText } from '@/src/lib/descriptionText';
 
 // Verbatim ports of legacy/index.html's Drive-organization helpers
 // (~lines 1102-1163), retargeted at Supabase Storage paths instead of
@@ -59,7 +60,9 @@ export function buildDocFolderParts(docType: DocType, dateStr: string | undefine
     return wk ? [month, 'Payroll', `Week-${wk}`] : [month, 'Payroll'];
   }
   if (docType === 'amazon' || docType === 'store') {
-    const store = (vendor || 'Unknown Store').trim().replace(/[/\\]/g, '-');
+    // A spaces-only vendor used to survive `||` and then trim to '', leaving
+    // an empty folder segment (…/Equipment-Deductions//file).
+    const store = (realText(vendor) ?? 'Unknown Store').replace(/[/\\]/g, '-');
     return [month, 'Equipment-Deductions', store];
   }
   return [month, orgFolderName(docType, vendor)];
@@ -74,7 +77,10 @@ export function buildDocFolderParts(docType: DocType, dateStr: string | undefine
 // real, silent misfile bug (never a lost row, but hid it in the wrong
 // month/week folder in Storage).
 export function buildDocFileName(d: Extraction, ext: string): string {
-  const date = getPrimaryExtractionDate(d) || 'undated';
+  // Only a clean YYYY-MM-DD goes into a filename — a hand-edited date like
+  // "07/14/2026" would otherwise add path separators to the filename.
+  const rawDate = getPrimaryExtractionDate(d) ?? '';
+  const date = /^\d{4}-\d{2}-\d{2}/.test(rawDate) ? rawDate.slice(0, 10) : 'undated';
   if (d.docType === 'amazon' || d.docType === 'store') {
     const vendor = slugify(d.vendor || 'Unknown-Store');
     const firstItem = d.purchase?.items?.[0]?.name;

@@ -1,3 +1,5 @@
+import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
+import { describeDeduction } from '@/src/lib/descriptionText';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -44,6 +46,7 @@ export default function Transactions() {
   const { t } = useTranslation();
   const router = useRouter();
   const { money: moneyFmt, date } = useFormatters();
+  const descriptionFormat = useDescriptionFormat();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const settlementsQuery = useSettlements();
   const deductionsQuery = useDeductions();
@@ -70,12 +73,12 @@ export default function Transactions() {
       id: d.id,
       date: d.ded_date ?? '',
       type: 'expense',
-      label: d.description?.trim() || d.category?.trim() || t('transactions.expenseFallback'),
+      label: describeDeduction(d, descriptionFormat),
       amount: d.amount,
       needsReview: isDeductionNeedsReview(d),
     }));
     return [...income, ...expenses].sort((a, b) => b.date.localeCompare(a.date));
-  }, [settlementsQuery.data, deductionsQuery.data, documentsById, t, date]);
+  }, [settlementsQuery.data, deductionsQuery.data, documentsById, t, date, descriptionFormat]);
 
   const filtered = useMemo(
     () =>

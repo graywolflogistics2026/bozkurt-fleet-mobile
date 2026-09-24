@@ -1,3 +1,4 @@
+import { ensureDescription } from '@/src/lib/descriptionText';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -116,7 +117,7 @@ function convertLineItemToDeductionInsert(item: LineItem, userId: string, newCat
   return {
     user_id: userId,
     ded_date: item.date,
-    description: item.description,
+    description: ensureDescription(item.description, { category: newCategory, date: item.date }),
     amount: item.amount,
     category: newCategory,
     source: 'manual',

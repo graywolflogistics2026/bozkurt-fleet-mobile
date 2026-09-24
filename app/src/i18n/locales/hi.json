@@ -372,7 +372,18 @@
     "reimbursedPartial": "स्वयं भुगतान किया · {{total}} में से {{reimbursed}} की प्रतिपूर्ति की गई",
     "notYetReimbursed": "स्वयं भुगतान किया · अभी तक प्रतिपूर्ति नहीं की गई",
     "reimburseMyself": "स्वयं को प्रतिपूर्ति करें ({{amount}})",
-    "truckLabel": "ट्रक"
+    "truckLabel": "ट्रक",
+    "descriptionDefaultHint": "इसे “{{fallback}}” के रूप में सहेजने के लिए खाली छोड़ें।",
+    "needsDescription": {
+      "title_one": "{{count}} खर्च का कोई विवरण नहीं है",
+      "title_other": "{{count}} खर्चों का कोई विवरण नहीं है",
+      "body": "ये खाली या केवल एक चिह्न के साथ सहेजे गए थे। साफ़ विवरण सहेजने के लिए इनकी समीक्षा करें। आपके चुनने तक कुछ नहीं बदलता।",
+      "reviewButton": "विवरणों की समीक्षा करें",
+      "reviewTitle": "विवरण चाहिए",
+      "allDone": "हर खर्च का विवरण है।",
+      "useSuggestion": "“{{text}}” इस्तेमाल करें",
+      "placeholder": "विवरण लिखें"
+    }
   },
   "capitalAccount": {
     "title": "कैपिटल अकाउंट",

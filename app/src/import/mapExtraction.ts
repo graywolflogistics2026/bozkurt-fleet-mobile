@@ -1,3 +1,4 @@
+import { joinReal, realText } from '@/src/lib/descriptionText';
 import {
   CHARGEBACK_CATEGORY_LABEL,
   classifySettlementLine,
@@ -431,7 +432,7 @@ export function mapMaintenance(d: Extraction, userId: string, truckId: string | 
       ? {
           user_id: userId,
           reimb_date: toDateOrNull(d.date),
-          description: `Warranty — ${m.description ?? ''}`,
+          description: joinReal(['Warranty', m.description]) ?? 'Warranty',
           reference: m.invoice ?? null,
           amount: warrantyAmount,
         }
@@ -487,10 +488,10 @@ function distributeProportional(costs: number[], extra: number): number[] {
 // ones; legacy never had that distinction to make.
 export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMapping[] {
   const p = d.purchase ?? {};
-  const storeName = d.vendor || d.docType;
+  const storeName = realText(d.vendor) ?? d.docType;
   const payMethod = normalizePaymentMethod(p.paymentMethod);
   const personal = isPersonalPayment(payMethod);
-  const rawItems = p.items && p.items.length > 0 ? p.items : [{ name: d.summary || 'Purchase', price: d.totalAmount, qty: 1 }];
+  const rawItems = p.items && p.items.length > 0 ? p.items : [{ name: realText(d.summary) ?? 'Purchase', price: d.totalAmount, qty: 1 }];
 
   type RealItem = { name: string; qty: number; cost: number; warrantyYears?: number; extra: number };
   type ServiceLine = { name: string; cost: number; parent?: string };
@@ -596,7 +597,10 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
     const note = getCatNote(cat);
     const qtyLabel = item.qty > 1 ? `${item.qty}× ` : '';
     const foldSuffix = item.extra > 0.009 ? ` (incl. ${money(item.extra)} tax/fees/services)` : '';
-    const desc = `${qtyLabel}${item.name} — ${note}${foldSuffix} | ${storeName} | ${payMethod}${personal ? ' — Owner Contribution' : ''}`;
+    // A blank item name never leaves a leading " — ": the item's own
+    // category stands in for it (shared description rule, 2026-09-24).
+    const itemLabel = realText(item.name) ?? cat;
+    const desc = `${qtyLabel}${itemLabel} — ${note}${foldSuffix} | ${storeName} | ${payMethod}${personal ? ' — Owner Contribution' : ''}`;
     return buildRow(desc, finalCost, cat, item.warrantyYears ?? null);
   });
 }
@@ -645,13 +649,13 @@ const FINANCIAL_DOC_CATEGORY: Record<FinancialDocKind, string> = {
 export function mapFinancialDocDeduction(d: Extraction, userId: string): DeductionInsert {
   const f = d.financialDoc ?? {};
   const kind = f.kind ?? (d.docType as FinancialDocKind);
-  const refSuffix = f.reference ? ` (${f.reference})` : '';
-  const periodSuffix = f.period ? ` — ${f.period}` : '';
+  const refSuffix = realText(f.reference) ? ` (${realText(f.reference)})` : '';
+  const periodSuffix = realText(f.period) ? ` — ${realText(f.period)}` : '';
   return {
     user_id: userId,
     ded_date: toDateOrNull(d.date),
     code: 'FINDOC',
-    description: `${f.description || d.summary || d.vendor || 'Business expense'}${refSuffix}${periodSuffix}`,
+    description: `${realText(f.description) ?? realText(d.summary) ?? realText(d.vendor) ?? 'Business expense'}${refSuffix}${periodSuffix}`,
     amount: num(f.amount ?? d.totalAmount),
     category: FINANCIAL_DOC_CATEGORY[kind] ?? 'Misc',
     store: d.vendor ?? null,
@@ -759,7 +763,7 @@ export function mapGenericDeduction(d: Extraction, userId: string, categoryOverr
     user_id: userId,
     ded_date: toDateOrNull(d.date),
     code: 'OTHER',
-    description: isOther ? `NEEDS REVIEW: ${d.summary || d.suggestedCategory || 'Document'}` : d.summary || 'Document',
+    description: isOther ? `NEEDS REVIEW: ${realText(d.summary) ?? realText(d.suggestedCategory) ?? 'Document'}` : realText(d.summary) ?? 'Document',
     amount: num(d.totalAmount),
     category,
     source: 'import',

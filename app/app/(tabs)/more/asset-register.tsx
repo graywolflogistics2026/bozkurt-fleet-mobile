@@ -1,3 +1,4 @@
+import { ensureDescription } from '@/src/lib/descriptionText';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -245,7 +246,7 @@ export default function AssetRegister() {
     try {
       const newDed = await insertDeduction.mutateAsync({
         user_id: userId,
-        description: addForm.name || null,
+        description: ensureDescription(addForm.name, { category: addForm.category, date: addForm.date || null }),
         category: addForm.category,
         store: addForm.store || null,
         payment_method: addForm.payment,
@@ -261,7 +262,7 @@ export default function AssetRegister() {
           isPersonal: true,
           amount,
           date: addForm.date || null,
-          description: addForm.name || null,
+          description: ensureDescription(addForm.name, { category: addForm.category, date: addForm.date || null }),
           paymentMethod: addForm.payment,
           existingContributionId: null,
         });
@@ -313,7 +314,7 @@ export default function AssetRegister() {
         isPersonal: personal,
         amount,
         date: editForm.date || null,
-        description: editForm.name || null,
+        description: ensureDescription(editForm.name, { category: editForm.category, date: editForm.date || null }),
         paymentMethod: editForm.payment,
         existingContributionId,
       });
@@ -325,7 +326,7 @@ export default function AssetRegister() {
       await updateDeduction.mutateAsync({
         id: editing.deduction.id,
         values: {
-          description: editForm.name || null,
+          description: ensureDescription(editForm.name, { category: editForm.category, date: editForm.date || null }),
           category: editForm.category,
           store: editForm.store || null,
           payment_method: editForm.payment,

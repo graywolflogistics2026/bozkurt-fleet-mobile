@@ -46,6 +46,8 @@ import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { isPersonalPayment, normalizePaymentMethod, PAYMENT_METHODS, type PaymentMethod } from '@/src/import/paymentMethods';
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useFormatters } from '@/src/i18n/format';
+import { describeDeduction, ensureDescription, findDeductionsNeedingDescription, hasRealText, resolveDescription } from '@/src/lib/descriptionText';
+import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -139,13 +141,14 @@ function DedRow({
 }) {
   const { t } = useTranslation();
   const { money } = useFormatters();
+  const descriptionFormat = useDescriptionFormat();
   const personal = isPersonalPayment(x.payment_method);
   const needsReview = isDeductionNeedsReview(x);
   return (
     <Pressable onPress={onPress} style={[styles.row, needsReviewRowStyle(needsReview)]}>
       <View style={{ flex: 1 }}>
         <Text style={styles.desc} numberOfLines={2}>
-          {x.description ?? '—'}
+          {describeDeduction(x, descriptionFormat)}
         </Text>
         <MutedText>
           {x.ded_date ?? '—'} · {x.category ?? '—'}
@@ -242,6 +245,7 @@ function DedSection({
 export default function Deductions() {
   const { t } = useTranslation();
   const { money } = useFormatters();
+  const descriptionFormat = useDescriptionFormat();
   const { session } = useAuth();
   const userId = session?.user.id;
   const router = useRouter();
@@ -271,6 +275,11 @@ export default function Deductions() {
   const dedQuery = useDeductions({ truck_id: truckIdFilterFor(activeTruckId) });
   const trucksQuery = useTrucksList();
   const updateDeduction = useUpdateDeduction();
+  // "NEEDS A DESCRIPTION" review (owner decision 2026-09-24, item 5) — a
+  // manual pass: nothing is rewritten until the user accepts or types.
+  const [reviewingDescriptions, setReviewingDescriptions] = useState(false);
+  const [ownDescriptions, setOwnDescriptions] = useState<Record<string, string>>({});
+  const [savingDescriptionFor, setSavingDescriptionFor] = useState<string | null>(null);
   const [assigningTruck, setAssigningTruck] = useState(false);
   const learnCategoryCorrection = useLearnCategoryCorrection();
   const deleteDeduction = useDeleteDeduction();
@@ -335,6 +344,20 @@ export default function Deductions() {
   }, [queryClient]);
 
   const allRows = dedQuery.data ?? [];
+  const needsDescription = useMemo(() => findDeductionsNeedingDescription(allRows), [allRows]);
+  async function saveDescription(id: string, text: string) {
+    const value = text.trim();
+    if (!hasRealText(value)) return;
+    setSavingDescriptionFor(id);
+    try {
+      await updateDeduction.mutateAsync({ id, values: { description: value } });
+      await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+    } catch (err) {
+      Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setSavingDescriptionFor(null);
+    }
+  }
   // PERIOD TABS (spec item 2b) drive the totals bar, chart, and list
   // together — period-filtered first, then needs-review, matching the
   // pre-existing filter order. `totalsBarRows` (origin-inclusive) is what
@@ -433,7 +456,7 @@ export default function Deductions() {
         userId,
         deductionId: editing.id,
         amount: reimbursementStatus.outstandingAmount,
-        note: `${(editing.description ?? 'Deduction').split(' — ')[0]} — reimbursed to owner`,
+        note: `${describeDeduction(editing, descriptionFormat).split(' — ')[0]} — reimbursed to owner`,
       });
       const refreshed = await fetchReimbursementStatus(userId, editing.id);
       setReimbursementStatus(refreshed);
@@ -664,7 +687,7 @@ export default function Deductions() {
             isPersonal: true,
             amount,
             date: addDate || null,
-            description: addDescription || null,
+            description: ensureDescription(addDescription, { category: addCategory, date: addDate || null }),
             paymentMethod: addPayment,
             existingContributionId: null,
           })
@@ -672,7 +695,7 @@ export default function Deductions() {
 
       const inserted = await insertDeductionWithContributionSync({
         userId,
-        description: addDescription || null,
+        description: ensureDescription(addDescription, { category: addCategory, date: addDate || null }),
         category: addCategory,
         paymentMethod: addPayment,
         amount,
@@ -765,6 +788,16 @@ export default function Deductions() {
           </Pressable>
         </View>
         <FleetScopeLabel />
+
+        {needsDescription.length > 0 && (
+          <Card style={{ marginBottom: spacing.sm, borderColor: colors.accent, borderWidth: 2 }}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>
+              ✏️ {t('deductions.needsDescription.title', { count: needsDescription.length })}
+            </Text>
+            <MutedText style={{ marginTop: spacing.xs }}>{t('deductions.needsDescription.body')}</MutedText>
+            <PrimaryButton title={t('deductions.needsDescription.reviewButton')} onPress={() => setReviewingDescriptions(true)} />
+          </Card>
+        )}
 
         {/* TOTALS BAR (spec item 2a) — three tappable tiles reflecting the
             selected period; tapping one is exactly equivalent to tapping
@@ -935,7 +968,7 @@ export default function Deductions() {
         <SheetTitle>{t('deductions.editTitle')}</SheetTitle>
         {editing && (
           <MutedText>
-            {(editing.description ?? 'Deduction').split(' — ')[0]} — {money(editing.amount)}
+            {describeDeduction(editing, descriptionFormat).split(' — ')[0]} — {money(editing.amount)}
           </MutedText>
         )}
         {editing && isDeductionNeedsReview(editing) && (
@@ -1060,6 +1093,16 @@ export default function Deductions() {
           <MutedText>{t('deductions.descriptionLabel')}</MutedText>
         </View>
         <Field value={addDescription} onChangeText={setAddDescription} placeholder={t('deductions.descriptionPlaceholder')} />
+        {/* SHARED DESCRIPTION RULE (owner decision 2026-09-24): a blank or
+            separator-only description is never saved — the category + date
+            default is used instead, and shown here before saving. */}
+        {!hasRealText(addDescription) && (
+          <MutedText style={{ fontSize: typography.size.xs, marginBottom: spacing.sm }}>
+            {t('deductions.descriptionDefaultHint', {
+              fallback: resolveDescription({ category: addCategory, date: addDate || null }, descriptionFormat),
+            })}
+          </MutedText>
+        )}
 
         <View style={{ marginBottom: spacing.xs }}>
           <MutedText>{t('deductions.categoryLabel')}</MutedText>
@@ -1128,6 +1171,49 @@ export default function Deductions() {
 
         <PrimaryButton title={`💾 ${t('common.save')}`} onPress={handleSaveAdd} loading={addSaving} />
         <SecondaryButton title={t('common.cancel')} onPress={closeAdd} />
+      </ModalSheet>
+      <ModalSheet visible={reviewingDescriptions} onClose={() => setReviewingDescriptions(false)}>
+        <SheetTitle>{t('deductions.needsDescription.reviewTitle')}</SheetTitle>
+        {needsDescription.length === 0 ? (
+          <MutedText>{t('deductions.needsDescription.allDone')}</MutedText>
+        ) : (
+          needsDescription.map((x) => {
+            const suggestion = describeDeduction(x, descriptionFormat);
+            const own = ownDescriptions[x.id] ?? '';
+            const saving = savingDescriptionFor === x.id;
+            return (
+              <View key={x.id} style={{ paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <MutedText>
+                  {x.ded_date ?? '—'} · {x.category ?? '—'} · {money(x.amount)}
+                </MutedText>
+                <PrimaryButton
+                  title={t('deductions.needsDescription.useSuggestion', { text: suggestion })}
+                  onPress={() => saveDescription(x.id, suggestion)}
+                  loading={saving}
+                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs }}>
+                  <View style={{ flex: 1 }}>
+                    <Field
+                      value={own}
+                      onChangeText={(text) => setOwnDescriptions((prev) => ({ ...prev, [x.id]: text }))}
+                      placeholder={t('deductions.needsDescription.placeholder')}
+                      style={{ marginBottom: 0 }}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => hasRealText(own) && !saving && saveDescription(x.id, own)}
+                    hitSlop={8}
+                    style={{ marginStart: spacing.sm }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={{ color: hasRealText(own) ? colors.accent : colors.muted, fontWeight: '700' }}>{t('common.save')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })
+        )}
+        <SecondaryButton title={t('common.close')} onPress={() => setReviewingDescriptions(false)} />
       </ModalSheet>
     </Screen>
   );

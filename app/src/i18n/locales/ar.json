@@ -367,7 +367,18 @@
     "reimbursedPartial": "دُفع شخصيًا · تم رد {{reimbursed}} من {{total}}",
     "notYetReimbursed": "دُفع شخصيًا · لم يُرد بعد",
     "reimburseMyself": "رد المبلغ لنفسي ({{amount}})",
-    "truckLabel": "الشاحنة"
+    "truckLabel": "الشاحنة",
+    "descriptionDefaultHint": "اتركه فارغًا لحفظه باسم “{{fallback}}”.",
+    "needsDescription": {
+      "title_one": "مصروف واحد بلا وصف",
+      "title_other": "{{count}} مصروفات بلا وصف",
+      "body": "حُفظت فارغة أو برمز فقط. راجعها لحفظ وصف واضح. لا يتغير شيء حتى تختار.",
+      "reviewButton": "مراجعة الأوصاف",
+      "reviewTitle": "يحتاج إلى وصف",
+      "allDone": "كل المصروفات لها وصف.",
+      "useSuggestion": "استخدم “{{text}}”",
+      "placeholder": "اكتب وصفًا"
+    }
   },
   "capitalAccount": {
     "title": "حساب رأس المال",

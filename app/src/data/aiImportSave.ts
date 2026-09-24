@@ -25,6 +25,16 @@ import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from 
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { buildTitleFromExtraction, cleanTitle, type TitleContext } from '@/src/data/documentTitle';
+import { ensureDescription } from '@/src/lib/descriptionText';
+
+// SHARED DESCRIPTION RULE (owner decision 2026-09-24): the last step before
+// any deduction row is inserted — after carrier-code and learned categories
+// have been applied, so the category + date fallback uses the final
+// category. A blank, whitespace-only or separator-only description (the AI
+// template's default "desc":"") is never stored.
+function withSafeDescription<T extends { description?: string | null; category?: string | null; ded_date?: string | null }>(row: T): T {
+  return { ...row, description: ensureDescription(row.description, { category: row.category, date: row.ded_date }) };
+}
 import {
   SaveExtractionError,
   emptyPartialState,
@@ -522,7 +532,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     );
     const insertedDeductions = await insertBatchResilient(
       'deductions',
-      mapping.deductions.map((x) => ({ ...x, settlement_id: settlementId, document_id: documentId })),
+      mapping.deductions.map((x) => withSafeDescription({ ...x, settlement_id: settlementId, document_id: documentId })),
       (x) => x.description ?? x.category ?? 'Deduction',
       'deductions-insert',
       isReimport,
@@ -716,7 +726,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // future change to how this mapper stamps `source` can't silently
     // violate the origin rule.
     const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
-    const { error } = await supabase.from('deductions').insert({ ...row, document_id: documentId, accountant_category: accountantCategory });
+    const { error } = await supabase.from('deductions').insert(withSafeDescription({ ...row, document_id: documentId, accountant_category: accountantCategory }));
     if (error) throw new SaveExtractionError('financial-doc-insert', error, partial);
   } else if ((COMPLIANCE_DOC_TYPES as readonly string[]).includes(d.docType)) {
     // AI feature package (owner decision 2026-07-10) — find-or-update by
@@ -776,7 +786,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       );
       const { data: dedRow, error: dedError } = await supabase
         .from('deductions')
-        .insert({ ...line.insert, document_id: documentId, accountant_category: accountantCategory })
+        .insert(withSafeDescription({ ...line.insert, document_id: documentId, accountant_category: accountantCategory }))
         .select('id')
         .single();
       const savedDed = must('purchase-deduction-insert', dedRow, dedError, partial);
@@ -884,7 +894,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
     const { data: genericDedRow, error } = await supabase
       .from('deductions')
-      .insert({ ...row, document_id: documentId, accountant_category: accountantCategory })
+      .insert(withSafeDescription({ ...row, document_id: documentId, accountant_category: accountantCategory }))
       .select('id')
       .single();
     if (error) throw new SaveExtractionError('generic-deduction-insert', error, partial);

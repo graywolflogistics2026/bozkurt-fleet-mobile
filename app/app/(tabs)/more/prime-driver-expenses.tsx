@@ -1,3 +1,5 @@
+import { describeDeduction, realText } from '@/src/lib/descriptionText';
+import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -124,6 +126,7 @@ function DatePickerField({ value, onChange }: { value: string; onChange: (iso: s
 export default function PrimeDriverExpensesScreen() {
   const { t } = useTranslation();
   const { money, date, monthLabel } = useFormatters();
+  const descriptionFormat = useDescriptionFormat();
   const { session } = useAuth();
   const userId = session?.user.id;
   const queryClient = useQueryClient();
@@ -473,7 +476,7 @@ export default function PrimeDriverExpensesScreen() {
         exp_date: addDate || todayIso(),
         amount,
         category: addCategory,
-        note: addNote.trim() || null,
+        note: realText(addNote),
       });
       if (addAttachmentDocumentId) {
         try {
@@ -533,7 +536,7 @@ export default function PrimeDriverExpensesScreen() {
       } else {
         await updateExpense.mutateAsync({
           id: editingRow.id,
-          values: { exp_date: newDate, amount: Number(editAmount) || 0, category: editCategory, note: editNote.trim() || null },
+          values: { exp_date: newDate, amount: Number(editAmount) || 0, category: editCategory, note: realText(editNote) },
         });
         await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
       }
@@ -716,7 +719,7 @@ export default function PrimeDriverExpensesScreen() {
               <Pressable key={d.id} onPress={() => setAssigningRow(d)} style={styles.lineRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.text }}>
-                    {d.ded_date ? date(d.ded_date) : '—'} · {d.description ?? ''}
+                    {d.ded_date ? date(d.ded_date) : '—'} · {describeDeduction(d, descriptionFormat)}
                   </Text>
                   <MutedText style={{ fontSize: typography.size.xs }}>
                     {t('primeDriverExpenses.needsCategory.canonical', { category: d.category ?? t('primeDriverExpenses.needsCategory.noCategory') })}
@@ -809,7 +812,7 @@ export default function PrimeDriverExpensesScreen() {
                     <Pressable key={`${r.origin}-${r.id}`} onPress={() => openEdit(r)} style={styles.lineRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: colors.text }}>{r.exp_date ? date(r.exp_date) : ''}</Text>
-                        {r.note ? <MutedText numberOfLines={1}>{r.note}</MutedText> : null}
+                        {realText(r.note) ? <MutedText numberOfLines={1}>{realText(r.note)}</MutedText> : null}
                         {/* ZERO DUPLICATION (item 5) — a deduction-sourced
                             row is clearly labeled so the user is never
                             tempted to double-enter the same expense in
@@ -985,7 +988,7 @@ export default function PrimeDriverExpensesScreen() {
             <Text style={{ color: colors.text, fontWeight: '700' }}>
               {assigningRow.ded_date ? date(assigningRow.ded_date) : '—'} · {money(Number(assigningRow.amount ?? 0))}
             </Text>
-            {assigningRow.description ? <MutedText>{assigningRow.description}</MutedText> : null}
+            <MutedText>{describeDeduction(assigningRow, descriptionFormat)}</MutedText>
             <MutedText style={{ fontSize: typography.size.xs, marginBottom: spacing.sm }}>
               {t('primeDriverExpenses.needsCategory.canonical', {
                 category: assigningRow.category ?? t('primeDriverExpenses.needsCategory.noCategory'),

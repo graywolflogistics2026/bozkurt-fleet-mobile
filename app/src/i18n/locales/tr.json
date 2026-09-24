@@ -367,7 +367,18 @@
     "reimbursedPartial": "Şahsen ödendi · {{total}} üzerinden {{reimbursed}} geri ödendi",
     "notYetReimbursed": "Şahsen ödendi · henüz geri ödenmedi",
     "reimburseMyself": "Kendime Geri Öde ({{amount}})",
-    "truckLabel": "Kamyon"
+    "truckLabel": "Kamyon",
+    "descriptionDefaultHint": "“{{fallback}}” olarak kaydetmek için boş bırakın.",
+    "needsDescription": {
+      "title_one": "{{count}} giderin açıklaması yok",
+      "title_other": "{{count}} giderin açıklaması yok",
+      "body": "Bunlar boş veya yalnızca bir simgeyle kaydedildi. Net bir açıklama kaydetmek için gözden geçirin. Siz seçmeden hiçbir şey değişmez.",
+      "reviewButton": "Açıklamaları gözden geçir",
+      "reviewTitle": "Açıklama gerekiyor",
+      "allDone": "Tüm giderlerin açıklaması var.",
+      "useSuggestion": "“{{text}}” kullan",
+      "placeholder": "Bir açıklama yazın"
+    }
   },
   "capitalAccount": {
     "title": "Sermaye Hesabı",

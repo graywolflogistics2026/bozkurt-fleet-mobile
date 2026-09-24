@@ -1,3 +1,4 @@
+import { ensureDescription } from '@/src/lib/descriptionText';
 import { supabase } from '@/src/lib/supabase';
 import { importIdempotent, type ImportOutcome } from '@/src/data/legacyImport/idempotent';
 import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
@@ -328,7 +329,7 @@ async function importDeductions(userId: string, ded: LegacyDeduction[], dateToSe
       settlement_id: source === 'settlement' ? dateToSettlementId.get(d.date ?? '') ?? null : null,
       ded_date: d.date ?? null,
       code: d.code ?? null,
-      description: d.desc ?? null,
+      description: ensureDescription(d.desc, { category: d.category ?? null, date: d.date ?? null }),
       amount: num(d.amount),
       category: d.category ?? null,
       store: d.store ?? null,

@@ -1,3 +1,4 @@
+import { realText } from '@/src/lib/descriptionText';
 import type { Deduction, DocumentRow, Settlement } from '@/src/types/db';
 
 // BETA FEEDBACK ROUND 2 (owner decision 2026-07-31, device tester
@@ -68,7 +69,11 @@ const NEEDS_REVIEW_PREFIX_RE = /^\s*NEEDS REVIEW:\s*/;
 // Never touches a description that doesn't actually have the prefix.
 export function stripNeedsReviewPrefix(description: string | null): string | null {
   if (!description) return description;
-  return description.replace(NEEDS_REVIEW_PREFIX_RE, '').trim();
+  if (!NEEDS_REVIEW_PREFIX_RE.test(description)) return description;
+  // SHARED DESCRIPTION RULE (owner decision 2026-09-24): stripping must
+  // never leave "" or a bare separator behind — null lets every screen fall
+  // back to "<category> — <date>" and puts the row in the description review.
+  return realText(description.replace(NEEDS_REVIEW_PREFIX_RE, ''));
 }
 
 // Pure builders for the "Mark reviewed" mutations (src/data/

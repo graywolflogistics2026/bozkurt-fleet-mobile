@@ -1,3 +1,5 @@
+import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
+import { describeDeduction } from '@/src/lib/descriptionText';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
@@ -115,6 +117,7 @@ function extractRevenueItems(parsedJson: Record<string, unknown> | null | undefi
 export default function Settlements() {
   const { t } = useTranslation();
   const { money, number, date } = useFormatters();
+  const descriptionFormat = useDescriptionFormat();
   const router = useRouter();
   const { openId } = useLocalSearchParams<{ openId?: string }>();
   const autoOpenedRef = useRef(false);
@@ -741,7 +744,7 @@ export default function Settlements() {
                 chargebacks.map((d) => (
                   <View key={d.id} style={styles.detailRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.detailDesc}>{d.description ?? d.category ?? '—'}</Text>
+                      <Text style={styles.detailDesc}>{describeDeduction(d, descriptionFormat)}</Text>
                       {d.category && <MutedText>{d.category}</MutedText>}
                     </View>
                     <Text style={styles.detailDesc}>{money(d.amount)}</Text>

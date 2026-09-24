@@ -367,7 +367,18 @@
     "reimbursedPartial": "Pagado personalmente · reembolsado {{reimbursed}} de {{total}}",
     "notYetReimbursed": "Pagado personalmente · aún no reembolsado",
     "reimburseMyself": "Reembolsarme ({{amount}})",
-    "truckLabel": "Camión"
+    "truckLabel": "Camión",
+    "descriptionDefaultHint": "Déjalo en blanco para guardarlo como “{{fallback}}”.",
+    "needsDescription": {
+      "title_one": "{{count}} gasto no tiene descripción",
+      "title_other": "{{count}} gastos no tienen descripción",
+      "body": "Se guardaron en blanco o solo con un símbolo. Revísalos para guardar una descripción clara. Nada cambia hasta que tú elijas.",
+      "reviewButton": "Revisar descripciones",
+      "reviewTitle": "Necesita una descripción",
+      "allDone": "Todos los gastos tienen descripción.",
+      "useSuggestion": "Usar “{{text}}”",
+      "placeholder": "Escribe una descripción"
+    }
   },
   "capitalAccount": {
     "title": "Cuenta de Capital",

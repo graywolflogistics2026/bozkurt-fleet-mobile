@@ -367,7 +367,18 @@
     "reimbursedInFull": "Paid personally · reimbursed in full ({{amount}})",
     "reimbursedPartial": "Paid personally · reimbursed {{reimbursed}} of {{total}}",
     "notYetReimbursed": "Paid personally · not yet reimbursed",
-    "reimburseMyself": "Reimburse Myself ({{amount}})"
+    "reimburseMyself": "Reimburse Myself ({{amount}})",
+    "descriptionDefaultHint": "Leave blank to save it as “{{fallback}}”.",
+    "needsDescription": {
+      "title_one": "{{count}} expense has no description",
+      "title_other": "{{count}} expenses have no description",
+      "body": "These were saved blank or with only a symbol. Review them to save a clear description. Nothing changes until you choose.",
+      "reviewButton": "Review descriptions",
+      "reviewTitle": "Needs a description",
+      "allDone": "Every expense has a description.",
+      "useSuggestion": "Use “{{text}}”",
+      "placeholder": "Type a description"
+    }
   },
   "capitalAccount": {
     "title": "Capital Account",

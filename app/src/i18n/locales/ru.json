@@ -367,7 +367,18 @@
     "reimbursedPartial": "Оплачено лично · возмещено {{reimbursed}} из {{total}}",
     "notYetReimbursed": "Оплачено лично · ещё не возмещено",
     "reimburseMyself": "Возместить себе ({{amount}})",
-    "truckLabel": "Грузовик"
+    "truckLabel": "Грузовик",
+    "descriptionDefaultHint": "Оставьте пустым, чтобы сохранить как «{{fallback}}».",
+    "needsDescription": {
+      "title_one": "У {{count}} расхода нет описания",
+      "title_other": "У {{count}} расходов нет описания",
+      "body": "Они были сохранены пустыми или только с символом. Просмотрите их, чтобы сохранить понятное описание. Ничего не меняется, пока вы не выберете.",
+      "reviewButton": "Просмотреть описания",
+      "reviewTitle": "Нужно описание",
+      "allDone": "У всех расходов есть описание.",
+      "useSuggestion": "Использовать «{{text}}»",
+      "placeholder": "Введите описание"
+    }
   },
   "capitalAccount": {
     "title": "Капитальный Счёт",

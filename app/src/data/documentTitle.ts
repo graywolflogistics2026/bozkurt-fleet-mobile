@@ -1,3 +1,4 @@
+import { realText } from '@/src/lib/descriptionText';
 // UX MEGA-PASS item E (owner decision 2026-07-31, device evidence: a
 // document's title/label must reflect the actual store or document
 // subject, e.g. "Walmart", not the raw docType label "Store/Amazon
@@ -53,8 +54,9 @@ type TitledDocument = {
 const MAX_TITLE_LENGTH = 80;
 
 export function cleanTitle(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const collapsed = value.replace(/\s+/g, ' ').trim();
+  // Shared description rule (2026-09-24): "", spaces, or a bare separator
+  // like "/" or "—" is not a title.
+  const collapsed = realText(value);
   if (!collapsed) return null;
   return collapsed.length > MAX_TITLE_LENGTH ? `${collapsed.slice(0, MAX_TITLE_LENGTH - 1).trimEnd()}…` : collapsed;
 }
