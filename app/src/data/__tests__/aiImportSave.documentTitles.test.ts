@@ -28,6 +28,8 @@ import {
   displayDocumentTitle,
   findDocumentsNeedingTitle,
   linkedTitleInputsFor,
+  resolveDocumentTitle,
+  type LinkedTitleSources,
   shouldApplyAutoTitle,
   suggestDocumentTitle,
   type TitleContext,
@@ -160,8 +162,8 @@ describe("2. a user's manual rename survives every automatic pass", () => {
   });
 });
 
-describe('3. the review queue lists only generically-titled documents, newest first', () => {
-  test('titled and vendor-named documents are left out; the rest are newest first', () => {
+describe('3. the review queue lists only documents with no saved title, newest first', () => {
+  test('documents with a saved title are left out; the rest are newest first', () => {
     const list = [
       doc({ id: 'old-generic', doc_date: '2026-05-01' }),
       doc({ id: 'titled', doc_date: '2026-09-01', title: 'IRS Form 2290', title_source: 'ai' }),
@@ -169,7 +171,7 @@ describe('3. the review queue lists only generically-titled documents, newest fi
       doc({ id: 'new-generic', doc_date: '2026-08-20' }),
       doc({ id: 'undated-generic', doc_date: null, imported_at: '2026-07-01T10:00:00Z' }),
     ];
-    expect(findDocumentsNeedingTitle(list).map((d) => d.id)).toEqual(['new-generic', 'undated-generic', 'old-generic']);
+    expect(findDocumentsNeedingTitle(list).map((d) => d.id)).toEqual(['new-generic', 'vendor', 'undated-generic', 'old-generic']);
   });
 });
 
@@ -220,9 +222,76 @@ describe('5. accepting a suggestion updates the title everywhere it is displayed
     expect(findDocumentsNeedingTitle(docs())).toEqual([]);
   });
 
-  test('the Documents screen shows titles only through displayDocumentTitle() (list and viewer)', () => {
+  test('the Documents screen computes titles ONCE with resolveDocumentTitle() and shows that same value on the list row and in the detail view', () => {
     const screen = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'app', '(tabs)', 'more', 'documents.tsx'), 'utf8');
-    expect(screen).not.toMatch(/deriveDocumentTitle\(/);
-    expect((screen.match(/displayDocumentTitle\(/g) ?? []).length).toBe(2);
+    expect(screen).not.toMatch(/deriveDocumentTitle\(|displayDocumentTitle\(/);
+    expect((screen.match(/resolveDocumentTitle\(/g) ?? []).length).toBe(1);
+    expect(screen).toMatch(/const title = titles\.get\(doc\.id\)/); // list row
+    expect(screen).toMatch(/const selectedTitle = titles\.get\(selected\.id\)/); // detail view
+    // The detail title is itself a text field (no separate rename menu).
+    expect(screen).toMatch(/<TextInput\s+value=\{titleDraft\}/);
+    expect(screen).not.toMatch(/renaming|handleSaveRename/);
+  });
+});
+
+// THE LIST VIEW (owner decision 2026-09-23, "the list itself must show the
+// meaningful title immediately"). listTitle() is exactly what each list row
+// renders: the screen's titles map = resolveDocumentTitle(doc,
+// linkedTitleInputsFor(doc.id, sources), ctx, docType label).
+describe('6. the list row shows a meaningful title immediately', () => {
+  function listTitle(d: DocumentRow, sources: LinkedTitleSources = {}): string {
+    const label = en.docTypes[d.doc_type ?? 'other']?.label ?? en.docTypes.other.label;
+    return resolveDocumentTitle(d, linkedTitleInputsFor(d.id, sources), ctx, label);
+  }
+
+  test('NEW document: a fuel receipt imported now shows its title on the list row right away', async () => {
+    await importDoc({ docType: 'fuel', date: '2026-07-14', vendor: 'PILOT', fuel: { station: 'Pilot #412', gallons: 100, gross: 412.5 } });
+    expect(listTitle(docs()[0])).toBe('Fuel Receipt — Pilot, 7/14');
+  });
+
+  test('EXISTING document imported before §76 (no saved title) shows a title built from its stored extraction — no review needed first', async () => {
+    await importDoc({ docType: 'fuel', date: '2026-07-14', vendor: 'PILOT', fuel: { gallons: 100, gross: 412.5 } });
+    const old = { ...docs()[0], title: null, title_source: null }; // what a pre-§76 row looks like
+    expect(listTitle(old)).toBe('Fuel Receipt — Pilot, 7/14');
+    // Still offered in the review so the title can be saved or changed.
+    expect(findDocumentsNeedingTitle([old])).toHaveLength(1);
+  });
+
+  test('EXISTING receipt attached from Deductions (no extraction, stored as "other") shows its linked deduction on the list row', () => {
+    const receipt = doc({ id: 'att1', doc_type: 'other', doc_date: '2026-07-14' });
+    const sources: LinkedTitleSources = {
+      deductions: [{ document_id: 'att1', category: 'Fuel Additives', description: 'Howes', ded_date: '2026-07-14' }],
+    };
+    expect(listTitle(receipt)).toBe('Document'); // the old behavior, without the link
+    expect(listTitle(receipt, sources)).toBe('Fuel Additives receipt — 7/14');
+  });
+
+  test('EXISTING receipt attached on For Prime Inc Drivers shows its expense category and date', () => {
+    const receipt = doc({ id: 'att2', doc_type: 'other' });
+    expect(listTitle(receipt, { primeDriverExpenses: [{ document_id: 'att2', category: 'Lumpers', exp_date: '2026-07-20' }] })).toBe(
+      'Lumpers receipt — 7/20'
+    );
+  });
+
+  test('EXISTING settlement document with no saved title shows carrier + week ending from its settlement', () => {
+    const d = doc({ id: 'set1', doc_type: 'settlement' });
+    expect(listTitle(d, { settlements: [{ document_id: 'set1', week_ending: '2026-07-17', carrier: 'PRIME INC' }] })).toBe(
+      'Prime Inc Settlement — W/E 7/17'
+    );
+  });
+
+  test('a document with nothing to go on still shows the type label, and is in the review with no suggestion', () => {
+    const d = doc({ id: 'blank' });
+    expect(listTitle(d)).toBe('Document');
+    expect(suggestDocumentTitle(d, linkedTitleInputsFor('blank', {}), ctx)).toBeNull();
+  });
+
+  test("the user's own title wins on the list row over everything else, and survives an automatic pass", async () => {
+    await importDoc({ docType: 'fuel', date: '2026-07-14', vendor: 'Pilot', fuel: { gallons: 100, gross: 400 } });
+    const id = docs()[0].id;
+    await setDocumentTitle(id, 'Denver fill-up', 'user');
+    await setDocumentTitle(id, 'Fuel Receipt — Pilot, 7/14', 'ai');
+    const sources: LinkedTitleSources = { deductions: [{ document_id: id, category: 'Fuel & DEF', description: 'Diesel', ded_date: '2026-07-14' }] };
+    expect(listTitle(docs()[0], sources)).toBe('Denver fill-up');
   });
 });

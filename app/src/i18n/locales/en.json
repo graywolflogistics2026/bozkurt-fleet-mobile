@@ -1900,9 +1900,9 @@
     "preparingShare": "Preparing file to share…",
     "linkedRecords": "Linked Records",
     "titles": {
-      "bannerTitle_one": "{{count}} document needs a title",
-      "bannerTitle_other": "{{count}} documents need a title",
-      "bannerBody": "These still show a generic name. Review them to give each a clear title. Nothing is renamed until you choose.",
+      "bannerTitle_one": "{{count}} document has no saved title",
+      "bannerTitle_other": "{{count}} documents have no saved title",
+      "bannerBody": "Their list names are suggested from your records. Review them to save a title or type your own. Nothing is saved until you choose.",
       "reviewButton": "Review titles",
       "reviewTitle": "Needs a title",
       "allDone": "Every document has a title.",
@@ -1911,7 +1911,7 @@
       "placeholder": "Type a title",
       "renameLabel": "Document title",
       "rename": "Rename document",
-      "tapToRename": "Tap to rename",
+      "tapToRename": "Tap the title to change it",
       "saveFailed": "Couldn't save the title"
     }
   },

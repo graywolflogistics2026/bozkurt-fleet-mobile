@@ -12363,3 +12363,19 @@
   Historical documents with neither a linked record nor usable extracted
   data get no suggestion (the user types one) — there is no automatic
   re-run of the AI on the stored file.
+- DOCUMENT TITLES ON THE LIST (owner decision 2026-09-23, follow-up — "the
+  list still shows Document"). Root cause: the list read the right field
+  (useDocuments() selects '*'; displayDocumentTitle() showed title first),
+  but the title was only SAVED for documents imported after §76 was applied.
+  Everything imported earlier, and every receipt attached from Deductions /
+  Compliance / For Prime Inc Drivers (those uploads never go through
+  saveExtraction(), doc_type 'other', no parsed_json), had title NULL, and
+  linked-record titles were only computed inside the review sheet. Fix:
+  resolveDocumentTitle() is computed once per document at render time
+  (saved title -> linked record incl. prime_driver_expenses -> extraction ->
+  vendor -> type label) into a `titles` map that BOTH the list row and the
+  detail header read — nothing is written. The detail header is itself a
+  TextInput (tap and type; saves as 'user' on blur/Done; empty or unchanged
+  reverts). The "Needs a title" review now lists every document with no
+  SAVED title (its list row may already show a computed one) so it can be
+  saved or changed.

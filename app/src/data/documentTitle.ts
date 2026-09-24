@@ -123,6 +123,8 @@ export type LinkedTitleInputs = {
   deductions?: Array<{ category: string | null; description: string | null; ded_date: string | null }>;
   maintenance?: { description: string | null; service_type?: string | null; service_date: string | null } | null;
   complianceLabel?: string | null;
+  // A receipt attached on the "For Prime Inc Drivers" screen.
+  primeDriverExpense?: { category: string | null; exp_date: string | null } | null;
 };
 
 export function buildTitleFromLinkedRecords(linked: LinkedTitleInputs, ctx: TitleContext): string | null {
@@ -147,6 +149,12 @@ export function buildTitleFromLinkedRecords(linked: LinkedTitleInputs, ctx: Titl
   }
   const compliance = cleanTitle(linked.complianceLabel);
   if (compliance) return compliance;
+  if (linked.primeDriverExpense) {
+    const p = linked.primeDriverExpense;
+    const category = str(p.category);
+    const when = isIsoDate(p.exp_date) ? ctx.shortDate(p.exp_date) : null;
+    if (category) return cleanTitle(when ? `${ctx.receiptFor(category)} — ${when}` : ctx.receiptFor(category));
+  }
   return null;
 }
 
@@ -157,6 +165,7 @@ export type LinkedTitleSources = {
   deductions?: Array<{ document_id: string | null; category: string | null; description: string | null; ded_date: string | null }>;
   maintenanceRecords?: Array<{ document_id: string | null; description: string | null; service_type?: string | null; service_date: string | null }>;
   complianceItems?: Array<{ source_document_id: string | null; label: string }>;
+  primeDriverExpenses?: Array<{ document_id: string | null; category: string | null; exp_date: string | null }>;
 };
 
 export function linkedTitleInputsFor(documentId: string, sources: LinkedTitleSources): LinkedTitleInputs {
@@ -165,6 +174,7 @@ export function linkedTitleInputsFor(documentId: string, sources: LinkedTitleSou
     deductions: (sources.deductions ?? []).filter((d) => d.document_id === documentId),
     maintenance: (sources.maintenanceRecords ?? []).find((m) => m.document_id === documentId) ?? null,
     complianceLabel: (sources.complianceItems ?? []).find((c) => c.source_document_id === documentId)?.label ?? null,
+    primeDriverExpense: (sources.primeDriverExpenses ?? []).find((p) => p.document_id === documentId) ?? null,
   };
 }
 
@@ -186,18 +196,41 @@ export function displayDocumentTitle(doc: Pick<TitledDocument, 'title' | 'parsed
   return cleanTitle(doc.title) ?? deriveDocumentTitle(doc.parsed_json, fallbackLabel);
 }
 
+// THE TITLE A DOCUMENT SHOWS — on its list row AND at the top of its detail
+// view (owner decision 2026-09-23, "the list itself must show the meaningful
+// title immediately"). Computed at render time, nothing is written:
+//   1. the saved title (the user's rename, or the one saved at import)
+//   2. a linked record's own confirmed data (settlement, single deduction,
+//      maintenance, compliance item, For Prime Inc Drivers expense)
+//   3. the stored extraction (the AI's title, or one built from it)
+//   4. the vendor, 5. the docType label ("Document")
+// Before this, only (1), (4) and (5) were ever shown, so every document
+// imported before §76 was applied, and every receipt attached from
+// Deductions/Compliance/For Prime Inc Drivers (never titled at upload),
+// showed "Document" or a bare vendor in the list.
+export function resolveDocumentTitle(
+  doc: Pick<TitledDocument, 'title' | 'parsed_json'>,
+  linked: LinkedTitleInputs,
+  ctx: TitleContext,
+  fallbackLabel: string
+): string {
+  const saved = cleanTitle(doc.title);
+  if (saved) return saved;
+  const suggestion = suggestDocumentTitle(doc, linked, ctx);
+  if (suggestion) return suggestion.title;
+  return deriveDocumentTitle(doc.parsed_json, fallbackLabel);
+}
+
 // A user's own rename is never overwritten by an automatic pass.
 export function shouldApplyAutoTitle(doc: Pick<TitledDocument, 'title_source'>): boolean {
   return doc.title_source !== 'user';
 }
 
-// "Needs a title": no stored title AND nothing more specific than the
-// generic docType label to show (a vendor-derived title like "Walmart" is
-// already readable). Newest first, by the document's own date.
-export function isGenericallyTitled(doc: Pick<TitledDocument, 'title' | 'parsed_json'>): boolean {
-  if (cleanTitle(doc.title)) return false;
-  const vendor = doc.parsed_json?.vendor;
-  return !(typeof vendor === 'string' && vendor.trim().length > 0);
+// "Needs a title" review: every document with no SAVED title, newest first.
+// Its list row may already show a computed title (resolveDocumentTitle());
+// the review is where the user confirms it (saved) or types their own.
+export function isGenericallyTitled(doc: Pick<TitledDocument, 'title'>): boolean {
+  return !cleanTitle(doc.title);
 }
 
 export function findDocumentsNeedingTitle<T extends TitledDocument>(docs: T[]): T[] {

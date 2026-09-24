@@ -1843,9 +1843,9 @@
     "preparingShare": "Preparando archivo para compartir…",
     "linkedRecords": "Registros Vinculados",
     "titles": {
-      "bannerTitle_one": "{{count}} documento necesita un título",
-      "bannerTitle_other": "{{count}} documentos necesitan un título",
-      "bannerBody": "Todavía muestran un nombre genérico. Revísalos para darle a cada uno un título claro. No se cambia nada hasta que tú elijas.",
+      "bannerTitle_one": "{{count}} documento no tiene título guardado",
+      "bannerTitle_other": "{{count}} documentos no tienen título guardado",
+      "bannerBody": "Sus nombres en la lista se sugieren a partir de tus registros. Revísalos para guardar un título o escribir el tuyo. No se guarda nada hasta que tú elijas.",
       "reviewButton": "Revisar títulos",
       "reviewTitle": "Necesita un título",
       "allDone": "Todos los documentos tienen título.",
@@ -1854,7 +1854,7 @@
       "placeholder": "Escribe un título",
       "renameLabel": "Título del documento",
       "rename": "Cambiar nombre del documento",
-      "tapToRename": "Toca para cambiar el nombre",
+      "tapToRename": "Toca el título para cambiarlo",
       "saveFailed": "No se pudo guardar el título"
     }
   },

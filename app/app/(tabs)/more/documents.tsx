@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +24,8 @@ import {
   type LinkedRecordRef,
 } from '@/src/data/documentsFilter';
 import { getSignedDocumentUrl, shareDocumentFile } from '@/src/data/documentViewer';
-import { displayDocumentTitle, findDocumentsNeedingTitle, linkedTitleInputsFor, suggestDocumentTitle } from '@/src/data/documentTitle';
+import { findDocumentsNeedingTitle, linkedTitleInputsFor, resolveDocumentTitle, suggestDocumentTitle } from '@/src/data/documentTitle';
+import { usePrimeDriverExpenses } from '@/src/data/primeDriverExpenses';
 import { useSetDocumentTitle } from '@/src/data/documentTitleMutations';
 import { useDocumentTitleContext } from '@/src/data/useDocumentTitleContext';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
@@ -81,6 +82,7 @@ export default function DocumentsArchive() {
   const fuelQuery = useFuelPurchases();
   const loadsQuery = useLoads();
   const reimbursementsQuery = useReimbursements();
+  const primeDriverExpensesQuery = usePrimeDriverExpenses();
   const markDocumentReviewed = useMarkDocumentReviewed();
   const updateDeduction = useUpdateDeduction();
   const [markingReviewed, setMarkingReviewed] = useState(false);
@@ -101,8 +103,8 @@ export default function DocumentsArchive() {
   // DOCUMENT TITLES (owner decision 2026-09-23, docs/PENDING_SQL.md §76).
   const titleContext = useDocumentTitleContext();
   const setDocumentTitle = useSetDocumentTitle();
-  const [renaming, setRenaming] = useState(false);
-  const [renameText, setRenameText] = useState('');
+  // Inline title editing in the detail view: the title IS a text field.
+  const [titleDraft, setTitleDraft] = useState('');
   const [reviewingTitles, setReviewingTitles] = useState(false);
   const [ownTitles, setOwnTitles] = useState<Record<string, string>>({});
   const [savingTitleFor, setSavingTitleFor] = useState<string | null>(null);
@@ -110,15 +112,32 @@ export default function DocumentsArchive() {
   const allDocs = documentsQuery.data ?? [];
   // "Needs a title" — only generically titled documents, newest first.
   const needsTitle = useMemo(() => findDocumentsNeedingTitle(allDocs), [allDocs]);
-  const titleSuggestions = useMemo(() => {
-    const sources = {
+  const titleSources = useMemo(
+    () => ({
       settlements: settlementsQuery.data,
       deductions: deductionsQuery.data,
       maintenanceRecords: maintenanceQuery.data,
       complianceItems: complianceItemsQuery.data,
-    };
-    return new Map(needsTitle.map((doc) => [doc.id, suggestDocumentTitle(doc, linkedTitleInputsFor(doc.id, sources), titleContext)]));
-  }, [needsTitle, settlementsQuery.data, deductionsQuery.data, maintenanceQuery.data, complianceItemsQuery.data, titleContext]);
+      primeDriverExpenses: primeDriverExpensesQuery.data,
+    }),
+    [settlementsQuery.data, deductionsQuery.data, maintenanceQuery.data, complianceItemsQuery.data, primeDriverExpensesQuery.data]
+  );
+  // THE title every list row AND the detail view shows (saved title, then
+  // linked record, then extraction, then vendor, then the type label).
+  const titles = useMemo(
+    () =>
+      new Map(
+        allDocs.map((doc) => [
+          doc.id,
+          resolveDocumentTitle(doc, linkedTitleInputsFor(doc.id, titleSources), titleContext, docTypeMeta((doc.doc_type as DocType) ?? 'other').label),
+        ])
+      ),
+    [allDocs, titleSources, titleContext, docTypeMeta]
+  );
+  const titleSuggestions = useMemo(
+    () => new Map(needsTitle.map((doc) => [doc.id, suggestDocumentTitle(doc, linkedTitleInputsFor(doc.id, titleSources), titleContext)])),
+    [needsTitle, titleSources, titleContext]
+  );
 
   async function saveTitle(documentId: string, title: string, source: 'ai' | 'record' | 'user') {
     setSavingTitleFor(documentId);
@@ -134,13 +153,24 @@ export default function DocumentsArchive() {
     }
   }
 
-  async function handleSaveRename() {
-    if (!selected || !renameText.trim()) return;
-    if (await saveTitle(selected.id, renameText, 'user')) {
-      setSelected({ ...selected, title: renameText.trim(), title_source: 'user' });
-      setRenaming(false);
+  // Commit an inline title edit (on "done" or when the field loses focus).
+  // An empty field or an unchanged title just reverts — nothing is saved.
+  async function commitTitleEdit(doc: DocumentRow, shownTitle: string) {
+    const next = titleDraft.trim();
+    if (!next || next === shownTitle) {
+      setTitleDraft(shownTitle);
+      return;
+    }
+    if (await saveTitle(doc.id, next, 'user')) {
+      setSelected((current) => (current && current.id === doc.id ? { ...current, title: next, title_source: 'user' } : current));
     }
   }
+
+  // Seed the editable title whenever a document is opened.
+  useEffect(() => {
+    if (selected) setTitleDraft(titles.get(selected.id) ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
   const types = useMemo(() => distinctDocTypes(allDocs), [allDocs]);
   const rows = useMemo(
     () =>
@@ -227,7 +257,6 @@ export default function DocumentsArchive() {
   }, [selected, t]);
 
   function closeViewer() {
-    setRenaming(false);
     setSelected(null);
     setSignedUrl(null);
     setUrlError(null);
@@ -378,7 +407,7 @@ export default function DocumentsArchive() {
           renderRows={(monthRows) =>
             monthRows.map((doc) => {
               const meta = docTypeMeta((doc.doc_type as DocType) ?? 'other');
-              const title = displayDocumentTitle(doc, meta.label);
+              const title = titles.get(doc.id) ?? meta.label;
               const needsReview = isDocumentNeedsReview(doc);
               return (
                 <TappableCard key={doc.id} onPress={() => setSelected(doc)} style={needsReviewRowStyle(needsReview)}>
@@ -405,34 +434,32 @@ export default function DocumentsArchive() {
       <ModalSheet visible={!!selected} onClose={closeViewer}>
         {selected && (() => {
           const selectedMeta = docTypeMeta((selected.doc_type as DocType) ?? 'other');
-          const selectedTitle = displayDocumentTitle(selected, selectedMeta.label);
+          const selectedTitle = titles.get(selected.id) ?? selectedMeta.label;
           return (
             <>
-              {renaming ? (
-                <>
-                  <MutedText>{t('documentsArchive.titles.renameLabel')}</MutedText>
-                  <Field value={renameText} onChangeText={setRenameText} placeholder={t('documentsArchive.titles.placeholder')} autoFocus />
-                  <PrimaryButton
-                    title={t('common.save')}
-                    onPress={handleSaveRename}
-                    loading={savingTitleFor === selected.id}
-                    disabled={!renameText.trim()}
-                  />
-                  <SecondaryButton title={t('common.cancel')} onPress={() => setRenaming(false)} />
-                </>
-              ) : (
-                <Pressable
-                  onPress={() => {
-                    setRenameText(selectedTitle);
-                    setRenaming(true);
-                  }}
-                  accessibilityRole="button"
+              {/* INLINE TITLE (owner decision 2026-09-23) — the title at the
+                  top IS the text field: tap it and type, no rename menu.
+                  Saves as the user's own title when you tap Done or leave the
+                  field; empty or unchanged just reverts. */}
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TextInput
+                  value={titleDraft}
+                  onChangeText={setTitleDraft}
+                  onBlur={() => commitTitleEdit(selected, selectedTitle)}
+                  placeholder={t('documentsArchive.titles.placeholder')}
+                  placeholderTextColor={colors.muted}
+                  selectTextOnFocus
+                  returnKeyType="done"
+                  blurOnSubmit
+                  multiline={false}
                   accessibilityLabel={t('documentsArchive.titles.rename')}
-                >
-                  <SheetTitle>{selectedTitle} ✎</SheetTitle>
-                  <MutedText style={{ color: colors.accent, fontSize: typography.size.xs }}>{t('documentsArchive.titles.tapToRename')}</MutedText>
-                </Pressable>
-              )}
+                  style={{ flex: 1, color: colors.text, fontSize: typography.size.lg, fontWeight: '700', paddingVertical: spacing.xs }}
+                />
+                <Text style={{ color: colors.accent, fontSize: typography.size.md, marginStart: spacing.xs }}>✎</Text>
+              </View>
+              <MutedText style={{ color: colors.accent, fontSize: typography.size.xs, marginBottom: spacing.sm }}>
+                {savingTitleFor === selected.id ? t('common.loading') : t('documentsArchive.titles.tapToRename')}
+              </MutedText>
               {selectedTitle !== selectedMeta.label && <MutedText>{selectedMeta.label}</MutedText>}
               {isDocumentNeedsReview(selected) && (
                 <>
