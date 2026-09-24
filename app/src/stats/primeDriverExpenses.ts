@@ -1,5 +1,5 @@
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
-import { isEligibleForAccountantReport } from '@/src/primeDriverExpenses/categoryMapping';
+import { isEligibleForAccountantReport, isWithheldLumperAdvance } from '@/src/primeDriverExpenses/categoryMapping';
 import { calcPerDiemDays, type SettlementWeek } from '@/src/tax/perDiem';
 
 // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision
@@ -39,7 +39,12 @@ export type PrimeDriverExpenseRow = {
   // read of a real `deductions` row (never copied/duplicated) — editing
   // or deleting one of these must go through the SAME code path
   // Deductions' own screen uses, never a parallel write path.
-  origin: 'direct' | 'deduction';
+  // 'prime_settlement' = a settlement-withheld Prime lumper line shown
+  // under Lumpers by this report's Prime-only exception (see
+  // eligibleDeductionRowsForReport()). READ-ONLY here: it is the real
+  // withheld deductions row, so editing or deleting it from this screen
+  // would change true profit/tax elsewhere.
+  origin: 'direct' | 'deduction' | 'prime_settlement';
 };
 
 // The shape this module needs from a real `deductions` row — deliberately
@@ -53,6 +58,8 @@ export type EligibleDeductionSource = {
   accountant_category: string | null;
   source: string | null;
   description: string | null;
+  category?: string | null;
+  settlement_id?: string | null;
 };
 
 // THE ORIGIN RULE, applied here too (item 2's own explicit requirement:
@@ -62,10 +69,36 @@ export type EligibleDeductionSource = {
 // (which should never happen given every write path already checks this —
 // see categoryMapping.ts — but this is the report's own last line of
 // defense, not the only one).
-export function eligibleDeductionRowsForReport(deductions: EligibleDeductionSource[]): PrimeDriverExpenseRow[] {
+//
+// PRIME LUMPER EXCEPTION (owner decision 2026-09-23) — the ONE exception
+// to the origin rule, scoped to THIS report, the Lumpers category, and
+// Prime settlements only. This screen exists to translate Prime's format
+// for the owner's accountant, whose system can't read Prime's lumper
+// structure (an "OUTSIDE LUMPER" revenue line paired with a withheld
+// "ADV FOR OUTSIDE LUMPER" advance). So every settlement-withheld lumper
+// line is shown here under Lumpers, read live, never copied, and never
+// given an accountant_category. Nothing outside this function sees the
+// exception: the deduction row keeps source='settlement' and
+// tax_deductible=false, so Deductions, KPIs, true profit, CPM, tax and
+// the Accountant Package treat it exactly as before (proven by
+// primeDriverExpenses.test.ts's "PRIME LUMPER EXCEPTION" test).
+// `nonPrimeSettlementIds` = settlements whose carrier is known and is not
+// Prime; lumpers from those stay excluded. A settlement with no recorded
+// carrier is treated as Prime, since this screen is Prime-only.
+// Every other category keeps the strict origin rule.
+export function eligibleDeductionRowsForReport(
+  deductions: EligibleDeductionSource[],
+  nonPrimeSettlementIds: ReadonlySet<string> = new Set()
+): PrimeDriverExpenseRow[] {
   const rows: PrimeDriverExpenseRow[] = [];
   for (const d of deductions) {
-    if (!isEligibleForAccountantReport(d.source)) continue;
+    if (!isEligibleForAccountantReport(d.source)) {
+      const isPrime = !(d.settlement_id && nonPrimeSettlementIds.has(d.settlement_id));
+      if (isPrime && isWithheldLumperAdvance({ category: d.category ?? null, description: d.description, source: d.source })) {
+        rows.push({ id: d.id, exp_date: d.ded_date, amount: d.amount, category: 'Lumpers', note: d.description, origin: 'prime_settlement' });
+      }
+      continue;
+    }
     if (!d.accountant_category) continue;
     rows.push({
       id: d.id,
@@ -171,4 +204,15 @@ export function buildPrimeDriverExpenseMonth(
 // differently.
 export function daysOverrideKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+// Settlements whose recorded carrier is known and is NOT Prime Inc — the
+// only settlements excluded from the Prime lumper exception above.
+export function nonPrimeSettlementIds(settlements: Array<{ id: string; carrier?: string | null }>): Set<string> {
+  const ids = new Set<string>();
+  for (const s of settlements) {
+    const carrier = (s.carrier ?? '').trim();
+    if (carrier && !/\bprime\b/i.test(carrier)) ids.add(s.id);
+  }
+  return ids;
 }

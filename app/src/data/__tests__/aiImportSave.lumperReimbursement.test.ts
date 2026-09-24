@@ -66,11 +66,13 @@ beforeEach(() => {
 });
 
 describe('lumper reimbursement companion expense (owner decision 2026-09-19)', () => {
-  // ORIGIN RULE (owner decision 2026-09-23): a lumper the carrier ADVANCED
-  // ("ADV FOR OUTSIDE LUMPER") is carrier money fronted and taken back —
-  // never out-of-pocket — even if the same settlement also shows a lumper
-  // reimbursement line. Nothing from this settlement may reach the report.
-  test('a settlement with a withheld lumper advance puts NOTHING on the report, even with a lumper reimbursement line', async () => {
+  // A carrier-ADVANCED lumper ("ADV FOR OUTSIDE LUMPER") stays settlement-
+  // withheld and non-deductible, so no out-of-pocket companion expense is
+  // created from a reimbursement on the same settlement. The "For Prime
+  // Inc Drivers" report still shows each withheld lumper line under
+  // Lumpers via its Prime-only exception (owner decision 2026-09-23) —
+  // exactly once, never also as a reimbursement-derived companion.
+  test('a settlement with withheld lumper lines: no companion expense, and the report shows each withheld lumper exactly once', async () => {
     const extraction: Extraction = {
       docType: 'settlement',
       settlement: {
@@ -107,9 +109,13 @@ describe('lumper reimbursement companion expense (owner decision 2026-09-19)', (
         accountant_category: d.accountant_category,
         source: d.source,
         description: d.description,
+        category: d.category,
+        settlement_id: d.settlement_id,
       }))
     );
-    expect(reportRows.filter((r) => r.category === 'Lumpers')).toHaveLength(0);
+    const lumperReportRows = reportRows.filter((r) => r.category === 'Lumpers');
+    expect(lumperReportRows.map((r) => r.amount).sort()).toEqual([217.55, 50]);
+    expect(lumperReportRows.every((r) => r.origin === 'prime_settlement')).toBe(true);
   });
 
   test('a lumper reimbursement with NO carrier advance (driver paid cash) creates one out-of-pocket expense on the report', async () => {

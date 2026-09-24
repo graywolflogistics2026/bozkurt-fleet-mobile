@@ -244,7 +244,7 @@ export type LumperDeductionDiagnosis = {
   source: string | null;
   accountant_category: string | null;
   eligible: boolean;
-  reason: 'eligible' | 'excluded_settlement_withheld' | 'category_mismatch' | 'missing_accountant_category';
+  reason: 'eligible' | 'prime_settlement_lumper' | 'excluded_settlement_withheld' | 'category_mismatch' | 'missing_accountant_category';
 };
 
 export type LumperDeductionRow = {
@@ -255,9 +255,13 @@ export type LumperDeductionRow = {
   category: string | null;
   source: string | null;
   accountant_category: string | null;
+  settlement_id?: string | null;
 };
 
-export function diagnoseLumperDeductions(rows: LumperDeductionRow[]): LumperDeductionDiagnosis[] {
+export function diagnoseLumperDeductions(
+  rows: LumperDeductionRow[],
+  nonPrimeSettlementIds: ReadonlySet<string> = new Set()
+): LumperDeductionDiagnosis[] {
   const results: LumperDeductionDiagnosis[] = [];
   for (const row of rows) {
     // Only rows that actually LOOK like a lumper fee (by category OR by
@@ -269,8 +273,13 @@ export function diagnoseLumperDeductions(rows: LumperDeductionRow[]): LumperDedu
     let reason: LumperDeductionDiagnosis['reason'];
     let eligible: boolean;
     if (!isEligibleForAccountantReport(row.source)) {
-      reason = 'excluded_settlement_withheld';
-      eligible = false;
+      // PRIME LUMPER EXCEPTION (owner decision 2026-09-23) — mirrors
+      // eligibleDeductionRowsForReport(): a withheld lumper line from a
+      // Prime settlement is shown on the "For Prime Inc Drivers" report
+      // under Lumpers; one from a known non-Prime carrier is not.
+      const nonPrime = !!row.settlement_id && nonPrimeSettlementIds.has(row.settlement_id);
+      reason = nonPrime ? 'excluded_settlement_withheld' : 'prime_settlement_lumper';
+      eligible = !nonPrime;
     } else if (row.category !== 'Lumper Fees') {
       // The description names a lumper but the saved category string is
       // something else entirely — a real classification mismatch, not an

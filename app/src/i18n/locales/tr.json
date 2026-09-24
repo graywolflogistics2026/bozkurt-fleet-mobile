@@ -2087,21 +2087,24 @@
     "diagnosticsReason": {
       "excluded_settlement_withheld": "✕ Hariç tutuldu — settlement üzerinden kesildi, cepten değil",
       "category_mismatch": "✕ Hariç tutuldu — açıklamada lumper geçiyor ama kategori farklı",
-      "missing_accountant_category": "✕ Hariç tutuldu — henüz kategorilendirilmedi; yukarıdaki Otomatik doldur'a dokunun"
+      "missing_accountant_category": "✕ Hariç tutuldu — henüz kategorilendirilmedi; yukarıdaki Otomatik doldur'a dokunun",
+      "prime_settlement_lumper": "✓ Bu raporda Lumpers altında (Prime settlement lumper'ı)"
     },
     "diagnosticsGapsNote": "{{count}} settlement geri ödemesinde lumper geçiyor ama henüz eşleşen bir gider kaydı yok — bunları eklemek için yukarıdaki lumper uyarısını kullanın.",
     "dayLabel": "Gün",
     "lumperBanner": {
       "title_one": "{{count}} lumper ödemesi henüz bu raporda değil",
       "title_other": "{{count}} lumper ödemesi henüz bu raporda değil",
-      "body": "Bu lumper ödemeleri kendi cebinizden yapıldı ama henüz bu raporda değil. Eklemek için aşağıya dokunun. Her birini sonradan düzenleyebilirsiniz. Prime'ın size avans olarak verdiği lumper'lar (\"ADV FOR OUTSIDE LUMPER\") burada asla listelenmez: o para sizin değil, Prime'ındı.",
+      "body": "Bu lumper ödemeleri kendi cebinizden yapıldı ama henüz bu raporda değil. Eklemek için aşağıya dokunun. Her birini sonradan düzenleyebilirsiniz. Prime settlement'larınızdan geçen lumper'lar zaten otomatik olarak Lumpers altında sayılıyor.",
       "sourceReimbursement": "Settlement geri ödemesi · {{date}}",
       "sourceUncategorized": "Henüz kategorilendirilmedi · {{date}}",
       "button_one": "{{count}} lumper'ı bu rapora ekle",
       "button_other": "{{count}} lumper'ın tümünü bu rapora ekle",
       "doneTitle": "Lumper'lar eklendi",
       "doneBody": "{{count}} lumper kaydı eklendi. Şu an {{month}} gösteriliyor. Kategorisini, tarihini veya tutarını değiştirmek için herhangi bir satıra dokunun."
-    }
+    },
+    "fromPrimeSettlement": "Prime settlement'ından, {{date}}",
+    "primeSettlementLumperNote": "Bu lumper Prime settlement'ınızdan geçti (örneğin bir \"ADV FOR OUTSIDE LUMPER\" avansı). Muhasebeciniz görebilsin diye burada Lumpers altında gösterilir. Uygulamanın geri kalanında eskisi gibi settlement'tan kesilmiş ve vergiden düşülemez olarak kalır. Burada salt okunurdur, çünkü değiştirmek veya silmek kâr ve vergi rakamlarınızı değiştirir. Düzeltmek için settlement'ı düzenleyin."
   },
   "scorecard": {
     "title": "Karne",

@@ -188,13 +188,19 @@ describe('diagnoseLumperDeductions — the per-row eligibility breakdown', () =>
     ]);
   });
 
-  it('a settlement-withheld lumper row (H1) is excluded with the correct reason, even though its category is right', () => {
+  // PRIME LUMPER EXCEPTION (owner decision 2026-09-23): a withheld lumper
+  // line from a Prime settlement IS on the report (under Lumpers); one
+  // from a known non-Prime carrier's settlement is still excluded.
+  it('a settlement-withheld lumper row (H1) is on the report via the Prime lumper exception, unless its settlement is a known non-Prime carrier', () => {
     const rows: LumperDeductionRow[] = [
-      { id: 'd1', description: 'LM LUMPER UNLOAD', amount: 50, ded_date: '2026-06-01', category: 'Lumper Fees', source: 'settlement', accountant_category: null },
+      { id: 'd1', settlement_id: 's1', description: 'LM LUMPER UNLOAD', amount: 50, ded_date: '2026-06-01', category: 'Lumper Fees', source: 'settlement', accountant_category: null },
     ];
-    const diag = diagnoseLumperDeductions(rows);
-    expect(diag[0].eligible).toBe(false);
-    expect(diag[0].reason).toBe('excluded_settlement_withheld');
+    const prime = diagnoseLumperDeductions(rows);
+    expect(prime[0].eligible).toBe(true);
+    expect(prime[0].reason).toBe('prime_settlement_lumper');
+    const nonPrime = diagnoseLumperDeductions(rows, new Set(['s1']));
+    expect(nonPrime[0].eligible).toBe(false);
+    expect(nonPrime[0].reason).toBe('excluded_settlement_withheld');
   });
 
   it('a category-name mismatch (H2) — the description names a lumper but the saved category is something else — is flagged distinctly from an origin exclusion', () => {
@@ -300,11 +306,13 @@ describe('findLumperReimbursementGaps — the confirmed historical root cause', 
   });
 });
 
-// ORIGIN RULE, REAFFIRMED (owner decision 2026-09-23): Prime's "ADV FOR
-// OUTSIDE LUMPER" is money Prime fronted and took back — NEVER
-// out-of-pocket. Real lines from the owner's own settlements. None of the
-// banner's inputs may ever surface one of these rows.
-describe('Prime lumper advances never reach the report or the lumper banner', () => {
+// Real lines from the owner's own Prime settlements.
+// Prime lumper advances are shown on the report automatically (read live
+// by eligibleDeductionRowsForReport(), owner decision 2026-09-23 — see
+// src/stats/__tests__/primeDriverExpenses.test.ts) — so the banner, which
+// only ADDS missing out-of-pocket rows, must never also offer them, or
+// they'd be counted twice. They also never get an accountant_category.
+describe('Prime lumper advances are never banner items (no double count)', () => {
   const primeAdvances = [
     { id: 'd1', settlement_id: 's0717', description: 'ADV FOR OUTSIDE LUMPER', amount: 217.55, ded_date: '2026-07-17', category: 'Lumper Fees', source: 'settlement', accountant_category: null },
     { id: 'd2', settlement_id: 's0731', description: 'ADV FOR OUTSIDE LUMPER', amount: 328.54, ded_date: '2026-07-31', category: 'Lumper Fees', source: 'settlement', accountant_category: null },
@@ -337,11 +345,11 @@ describe('Prime lumper advances never reach the report or the lumper banner', ()
     ]);
   });
 
-  it('the diagnostic panel labels each advance as excluded (settlement-withheld)', () => {
+  it('the diagnostic panel labels each advance as on the report (Prime settlement lumper)', () => {
     expect(diagnoseLumperDeductions(primeAdvances).map((d) => d.reason)).toEqual([
-      'excluded_settlement_withheld',
-      'excluded_settlement_withheld',
-      'excluded_settlement_withheld',
+      'prime_settlement_lumper',
+      'prime_settlement_lumper',
+      'prime_settlement_lumper',
     ]);
   });
 });

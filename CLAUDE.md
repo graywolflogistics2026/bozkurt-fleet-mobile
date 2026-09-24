@@ -12256,27 +12256,39 @@
   checks). No SQL/Edge Function changes — every fix in this pass is pure
   client-side JS/TS reading/writing columns §74/§75 already added. Ships
   via a normal `eas update`.
-- LUMPER FEES $0 — ORIGIN RULE REAFFIRMED + PERMANENT MANUAL CONTROL (owner
-  decision 2026-09-23). Verified against the owner's real Prime settlement
-  PDFs: Prime never puts a lumper in the Reimbursement section. It prints a
-  REVENUE line `LM <order> OUTSIDE LUMPER` (not persisted) and a withheld
-  DEDUCTION `WA <order> ADV FOR OUTSIDE LUMPER` (source='settlement'). That
-  advance is money Prime FRONTED AND TOOK BACK — never out-of-pocket. It must
-  stay OFF the "For Prime Inc Drivers" report, never get an
-  accountant_category, and never appear in the lumper banner or be copied
-  into prime_driver_expenses by any automatic path. (A first draft of this
-  pass did copy them; the owner rejected it and it was removed in the same
-  session.) The $0 for Prime-advanced lumpers is therefore CORRECT.
-  Genuinely out-of-pocket lumpers reach the report via: a manual/receipt-
-  import Lumper Fees deduction (accountant_category set at insert, or via
-  the banner/Auto-fill if missing), a reimbursement-section lumper on a
-  settlement with NO withheld lumper advance (companion deduction at import
-  in mapSettlement(), or the banner for history — both vetoed by
-  isWithheldLumperAdvance() when the same settlement has an advance), or
-  the report's manual Add Expense. Known gap: a Prime `LM OUTSIDE LUMPER`
-  revenue line with no matching advance is not detected (revenueItems are
-  not persisted and no real example exists yet) — manual Add Expense covers
-  it. Also: a pure-JS year/month/day DatePickerField on the add and edit
+- PRIME LUMPER EXCEPTION ON "FOR PRIME INC DRIVERS" + PERMANENT MANUAL
+  CONTROL (owner decision 2026-09-23, final after two same-day reversals —
+  this entry supersedes both). Verified against the owner's real Prime
+  settlement PDFs: Prime never puts a lumper in the Reimbursement section.
+  It prints a REVENUE line `LM <order> OUTSIDE LUMPER` (not persisted) and
+  a withheld DEDUCTION `WA <order> ADV FOR OUTSIDE LUMPER` (source=
+  'settlement', ~$1–2.55 above the lumper itself: wire/Comchek fee).
+  The owner's accountant can't read that structure, and this screen exists
+  to translate Prime's format — so, for the LUMPERS category ONLY, on THIS
+  report ONLY, for Prime settlements ONLY, the origin rule does not apply:
+  eligibleDeductionRowsForReport() (src/stats/primeDriverExpenses.ts)
+  shows every settlement-withheld lumper line (isWithheldLumperAdvance(),
+  by category OR description) under Lumpers, read LIVE, origin
+  'prime_settlement', READ-ONLY on the screen (no edit/delete: it is the
+  real withheld row, and changing it would move true profit/tax). Excluded
+  only when its settlement's recorded carrier is known and not Prime
+  (nonPrimeSettlementIds(); a null carrier counts as Prime). NOTHING ELSE
+  CHANGES: the row keeps source='settlement', tax_deductible=false, and
+  never gets an accountant_category, so Deductions, KPIs, true profit, CPM,
+  tax and the Accountant Package treat it exactly as before — proven in
+  ONE test ("PRIME LUMPER EXCEPTION — on this report, invisible everywhere
+  else") plus the existing canonical source audit. Every other accountant
+  category keeps the strict origin rule (same test: a withheld wash and
+  toll on the same settlement stay at $0). No double counting: a
+  reimbursement-section lumper on a settlement that also withholds a
+  lumper line gets no out-of-pocket companion (mapSettlement() and
+  findLumperReimbursementGaps() both veto it), and the "add missing
+  lumpers" banner never offers withheld rows (they're already shown).
+  Out-of-pocket lumpers still reach the report via a manual/receipt Lumper
+  Fees deduction, a reimbursement-only lumper (companion deduction), or
+  manual Add Expense. Known gap: a Prime `LM OUTSIDE LUMPER` revenue line
+  with no withheld advance is not detected (revenueItems are not persisted
+  and no real example exists yet) — manual Add Expense covers it. Also: a pure-JS year/month/day DatePickerField on the add and edit
   sheets (no native module, ships via EAS Update); deduction-sourced rows'
   date is editable from the report (writes deductions.ded_date, never a
   copy); the view jumps to the row's month after add/edit.

@@ -2087,21 +2087,24 @@
     "diagnosticsReason": {
       "excluded_settlement_withheld": "✕ Excluido — retenido en el settlement, no es de tu bolsillo",
       "category_mismatch": "✕ Excluido — la descripción menciona un lumper pero la categoría es diferente",
-      "missing_accountant_category": "✕ Excluido — aún no categorizado; toca Autocompletar arriba"
+      "missing_accountant_category": "✕ Excluido — aún no categorizado; toca Autocompletar arriba",
+      "prime_settlement_lumper": "✓ En este informe en Lumpers (lumper de settlement de Prime)"
     },
     "diagnosticsGapsNote": "{{count}} reembolso(s) de settlement mencionan un lumper pero no tienen una entrada de gasto correspondiente todavía — usa el aviso de lumper de arriba para agregarlos.",
     "dayLabel": "Día",
     "lumperBanner": {
       "title_one": "{{count}} pago de lumper aún no está en este informe",
       "title_other": "{{count}} pagos de lumper aún no están en este informe",
-      "body": "Estos pagos de lumper salieron de tu propio bolsillo pero aún no están en este informe. Toca abajo para agregarlos. Después puedes editar cada uno. Los lumpers que Prime te adelantó (\"ADV FOR OUTSIDE LUMPER\") nunca aparecen aquí: fue dinero de Prime, no tuyo.",
+      "body": "Estos pagos de lumper salieron de tu propio bolsillo pero aún no están en este informe. Toca abajo para agregarlos. Después puedes editar cada uno. Los lumpers que pasaron por tus settlements de Prime ya se cuentan automáticamente en Lumpers.",
       "sourceReimbursement": "Reembolso de settlement · {{date}}",
       "sourceUncategorized": "Aún sin categoría · {{date}}",
       "button_one": "Agregar {{count}} lumper a este informe",
       "button_other": "Agregar los {{count}} lumpers a este informe",
       "doneTitle": "Lumpers agregados",
       "doneBody": "Se agregaron {{count}} entradas de lumper. Mostrando {{month}}. Toca cualquier línea para cambiar su categoría, fecha o monto."
-    }
+    },
+    "fromPrimeSettlement": "del settlement de Prime, {{date}}",
+    "primeSettlementLumperNote": "Este lumper pasó por tu settlement de Prime (por ejemplo, un adelanto \"ADV FOR OUTSIDE LUMPER\"). Se muestra aquí en Lumpers para que tu contador lo vea. En el resto de la app sigue como retenido en el settlement y no deducible, igual que antes. Aquí es de solo lectura porque cambiarlo o borrarlo cambiaría tus cifras de ganancia e impuestos. Para corregirlo, edita el settlement."
   },
   "scorecard": {
     "title": "Calificación",

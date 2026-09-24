@@ -33,6 +33,7 @@ import {
   buildPrimeDriverExpenseMonth,
   eligibleDeductionRowsForReport,
   mergePrimeDriverExpenseRows,
+  nonPrimeSettlementIds,
   daysOverrideKey,
   type PrimeDriverExpenseRow,
 } from '@/src/stats/primeDriverExpenses';
@@ -156,7 +157,11 @@ export default function PrimeDriverExpensesScreen() {
     () => (expensesQuery.data ?? []).map((r) => ({ ...r, origin: 'direct' as const })),
     [expensesQuery.data]
   );
-  const deductionRows = useMemo(() => eligibleDeductionRowsForReport(deductionsQuery.data ?? []), [deductionsQuery.data]);
+  // PRIME LUMPER EXCEPTION (owner decision 2026-09-23) — see
+  // eligibleDeductionRowsForReport(). Only lumpers from a settlement whose
+  // recorded carrier is a known non-Prime carrier are left out.
+  const nonPrimeIds = useMemo(() => nonPrimeSettlementIds(settlementsQuery.data ?? []), [settlementsQuery.data]);
+  const deductionRows = useMemo(() => eligibleDeductionRowsForReport(deductionsQuery.data ?? [], nonPrimeIds), [deductionsQuery.data, nonPrimeIds]);
   const rows: PrimeDriverExpenseRow[] = useMemo(() => mergePrimeDriverExpenseRows(directRows, deductionRows), [directRows, deductionRows]);
   const settlements = settlementsQuery.data ?? [];
 
@@ -250,15 +255,17 @@ export default function PrimeDriverExpensesScreen() {
       diagnoseLumperDeductions(
         (deductionsQuery.data ?? []).map((d) => ({
           id: d.id,
+          settlement_id: d.settlement_id,
           description: d.description,
           amount: d.amount,
           ded_date: d.ded_date,
           category: d.category,
           source: d.source,
           accountant_category: d.accountant_category,
-        }))
+        })),
+        nonPrimeIds
       ),
-    [deductionsQuery.data]
+    [deductionsQuery.data, nonPrimeIds]
   );
   const lumperReimbursementGaps = useMemo(
     () =>
@@ -453,7 +460,7 @@ export default function PrimeDriverExpensesScreen() {
   // `deductions.ded_date` Deductions shows, never a report-only copy, so
   // both screens always agree on which month the row belongs to.
   async function handleSaveEdit() {
-    if (!editingRow || !editCategory) return;
+    if (!editingRow || !editCategory || editingRow.origin === 'prime_settlement') return;
     setEditSaving(true);
     try {
       const newDate = editDate || todayIso();
@@ -491,6 +498,9 @@ export default function PrimeDriverExpensesScreen() {
   // prime_driver_expenses-only row uses that table's own existing
   // delete and only ever affects this report.
   function handleDelete(row: PrimeDriverExpenseRow) {
+    // A Prime settlement lumper is the real withheld deduction — deleting
+    // it here would change true profit/tax everywhere. Never deletable here.
+    if (row.origin === 'prime_settlement') return;
     Alert.alert(t('deductions.deleteConfirmTitle'), t('deductions.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
@@ -676,7 +686,7 @@ export default function PrimeDriverExpensesScreen() {
                     category: {d.category ?? '(none)'} · source: {d.source ?? '(none)'} · accountant_category: {d.accountant_category ?? '(none)'}
                   </MutedText>
                   <Text style={{ color: d.eligible ? colors.green : colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>
-                    {d.eligible ? t('primeDriverExpenses.diagnosticsEligible') : t(`primeDriverExpenses.diagnosticsReason.${d.reason}`)}
+                    {d.reason === 'eligible' ? t('primeDriverExpenses.diagnosticsEligible') : t(`primeDriverExpenses.diagnosticsReason.${d.reason}`)}
                   </Text>
                 </View>
               ))
@@ -718,6 +728,11 @@ export default function PrimeDriverExpensesScreen() {
                         {r.origin === 'deduction' && (
                           <MutedText style={{ color: colors.accent, fontSize: typography.size.xs }}>
                             {t('primeDriverExpenses.fromDeductions', { date: r.exp_date ? date(r.exp_date) : '' })}
+                          </MutedText>
+                        )}
+                        {r.origin === 'prime_settlement' && (
+                          <MutedText style={{ color: colors.accent, fontSize: typography.size.xs }}>
+                            {t('primeDriverExpenses.fromPrimeSettlement', { date: r.exp_date ? date(r.exp_date) : '' })}
                           </MutedText>
                         )}
                       </View>
@@ -825,39 +840,54 @@ export default function PrimeDriverExpensesScreen() {
 
       <ModalSheet visible={!!editingRow} onClose={() => setEditingRow(null)}>
         <SheetTitle>{t('primeDriverExpenses.editExpense')}</SheetTitle>
-        {editingRow?.origin === 'deduction' ? (
-          // ITEM 7 — a deduction-sourced row's editor here is the 16-value
-          // accountant category picker ONLY: date/amount/note are managed
-          // on Deductions' own screen (this report reads them live, never
-          // a copy) and the real Schedule-C category is never touched
-          // from here.
-          <MutedText style={{ marginBottom: spacing.sm }}>{t('primeDriverExpenses.editingDeductionNote')}</MutedText>
-        ) : null}
-        <MutedText>{t('primeDriverExpenses.dateLabel')}</MutedText>
-        <DatePickerField value={editDate} onChange={setEditDate} />
-        {editingRow?.origin !== 'deduction' && (
+        {editingRow?.origin === 'prime_settlement' ? (
+          // PRIME LUMPER EXCEPTION — read-only: this is the real withheld
+          // settlement line, shown here only for the accountant. Changing
+          // or deleting it would change true profit/tax elsewhere.
           <>
-            <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.amountLabel')}</MutedText>
-            <Field value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" placeholder="0.00" />
+            <Text style={{ color: colors.text, fontWeight: '700' }}>
+              {editingRow.exp_date ? date(editingRow.exp_date) : ''} · {money(Number(editingRow.amount ?? 0))}
+            </Text>
+            {editingRow.note ? <MutedText>{editingRow.note}</MutedText> : null}
+            <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.primeSettlementLumperNote')}</MutedText>
           </>
-        )}
-        <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.categoryLabel')}</MutedText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {PRIME_DRIVER_EXPENSE_CATEGORIES.map((c) => (
-            <Pill key={c} label={c} selected={editCategory === c} onPress={() => setEditCategory(c)} />
-          ))}
-        </View>
-        {editingRow?.origin !== 'deduction' && (
+        ) : (
           <>
-            <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.noteLabel')}</MutedText>
-            <Field value={editNote} onChangeText={setEditNote} placeholder={t('primeDriverExpenses.notePlaceholder')} />
-          </>
-        )}
+            {editingRow?.origin === 'deduction' ? (
+              // ITEM 7 — a deduction-sourced row's editor here is the 16-value
+              // accountant category picker ONLY: date/amount/note are managed
+              // on Deductions' own screen (this report reads them live, never
+              // a copy) and the real Schedule-C category is never touched
+              // from here.
+              <MutedText style={{ marginBottom: spacing.sm }}>{t('primeDriverExpenses.editingDeductionNote')}</MutedText>
+            ) : null}
+            <MutedText>{t('primeDriverExpenses.dateLabel')}</MutedText>
+            <DatePickerField value={editDate} onChange={setEditDate} />
+            {editingRow?.origin !== 'deduction' && (
+              <>
+                <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.amountLabel')}</MutedText>
+                <Field value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" placeholder="0.00" />
+              </>
+            )}
+            <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.categoryLabel')}</MutedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {PRIME_DRIVER_EXPENSE_CATEGORIES.map((c) => (
+                <Pill key={c} label={c} selected={editCategory === c} onPress={() => setEditCategory(c)} />
+              ))}
+            </View>
+            {editingRow?.origin !== 'deduction' && (
+              <>
+                <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.noteLabel')}</MutedText>
+                <Field value={editNote} onChangeText={setEditNote} placeholder={t('primeDriverExpenses.notePlaceholder')} />
+              </>
+            )}
 
-        <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={editSaving} disabled={!editCategory} />
-        <Pressable onPress={() => editingRow && handleDelete(editingRow)} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
-          <Text style={{ color: colors.red, fontWeight: '700', fontSize: typography.size.sm }}>{t('common.delete')}</Text>
-        </Pressable>
+            <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={editSaving} disabled={!editCategory} />
+            <Pressable onPress={() => editingRow && handleDelete(editingRow)} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
+              <Text style={{ color: colors.red, fontWeight: '700', fontSize: typography.size.sm }}>{t('common.delete')}</Text>
+            </Pressable>
+          </>
+        )}
       </ModalSheet>
     </Screen>
   );

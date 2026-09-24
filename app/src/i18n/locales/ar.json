@@ -2087,21 +2087,24 @@
     "diagnosticsReason": {
       "excluded_settlement_withheld": "✕ مستبعد — محتجز ضمن settlement، وليس من جيبك الخاص",
       "category_mismatch": "✕ مستبعد — الوصف يذكر lumper لكن الفئة مختلفة",
-      "missing_accountant_category": "✕ مستبعد — لم يتم تصنيفه بعد؛ اضغط على \"تعبئة تلقائية\" أعلاه"
+      "missing_accountant_category": "✕ مستبعد — لم يتم تصنيفه بعد؛ اضغط على \"تعبئة تلقائية\" أعلاه",
+      "prime_settlement_lumper": "✓ في هذا التقرير تحت Lumpers (lumper من settlement الخاص بـ Prime)"
     },
     "diagnosticsGapsNote": "{{count}} من مبالغ settlement المستردة تذكر lumper لكن ليس لها إدخال مصروف مطابق بعد — استخدم تنبيه lumper أعلاه لإضافتها.",
     "dayLabel": "اليوم",
     "lumperBanner": {
       "title_one": "دفعة lumper واحدة ليست في هذا التقرير بعد",
       "title_other": "{{count}} دفعة lumper ليست في هذا التقرير بعد",
-      "body": "دفعت مبالغ lumper هذه من جيبك الخاص لكنها ليست في هذا التقرير بعد. اضغط أدناه لإضافتها. يمكنك تعديل كل واحدة لاحقًا. مبالغ lumper التي قدمتها لك Prime كسلفة (\"ADV FOR OUTSIDE LUMPER\") لا تظهر هنا أبدًا: كانت أموال Prime وليست أموالك.",
+      "body": "دفعت مبالغ lumper هذه من جيبك الخاص لكنها ليست في هذا التقرير بعد. اضغط أدناه لإضافتها. يمكنك تعديل كل واحدة لاحقًا. مبالغ lumper التي مرّت عبر كشوف settlement من Prime محسوبة تلقائيًا تحت Lumpers.",
       "sourceReimbursement": "مبلغ مسترد من settlement · {{date}}",
       "sourceUncategorized": "غير مصنف بعد · {{date}}",
       "button_one": "إضافة دفعة lumper واحدة إلى هذا التقرير",
       "button_other": "إضافة كل الـ {{count}} دفعة lumper إلى هذا التقرير",
       "doneTitle": "تمت إضافة مدفوعات lumper",
       "doneBody": "تمت إضافة {{count}} إدخال(ات) lumper. يتم الآن عرض {{month}}. اضغط على أي سطر لتغيير فئته أو تاريخه أو مبلغه."
-    }
+    },
+    "fromPrimeSettlement": "من settlement الخاص بـ Prime، {{date}}",
+    "primeSettlementLumperNote": "مرّ مبلغ lumper هذا عبر settlement الخاص بك من Prime (مثل سلفة \"ADV FOR OUTSIDE LUMPER\"). يظهر هنا تحت Lumpers ليراه محاسبك. في بقية التطبيق يبقى محتجزًا ضمن settlement وغير قابل للخصم كما كان من قبل. هو للقراءة فقط هنا لأن تغييره أو حذفه سيغيّر أرقام الربح والضرائب. لتصحيحه، عدّل settlement."
   },
   "scorecard": {
     "title": "بطاقة الأداء",

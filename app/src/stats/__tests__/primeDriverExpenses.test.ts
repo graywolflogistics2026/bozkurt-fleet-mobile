@@ -5,10 +5,13 @@ import {
   eligibleDeductionRowsForReport,
   mergePrimeDriverExpenseRows,
   daysOverrideKey,
+  nonPrimeSettlementIds,
   type PrimeDriverExpenseRow,
   type EligibleDeductionSource,
 } from '@/src/stats/primeDriverExpenses';
-import { buildPerDiemBlock } from '@/src/stats/accountantPackage';
+import { buildPerDiemBlock, buildLineItems, matchesAccountantScope } from '@/src/stats/accountantPackage';
+import { calcTrueProfit, isDeductibleExpense } from '@/src/stats/trueProfit';
+import type { Deduction } from '@/src/types/db';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { computeKpis, type KpiInputs } from '@/src/stats/kpi';
 import { sumCanonicalExpenses } from '@/src/stats/trueProfit';
@@ -317,5 +320,110 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
     // this ever stops being a type error, this test itself will fail.
     const invalid: KpiInputs = { ...baseKpiInputs(), primeDriverExpenses: [{ amount: 1 }] };
     expect(invalid).toBeDefined();
+  });
+});
+
+// PRIME LUMPER EXCEPTION (owner decision 2026-09-23) — BOTH HALVES IN ONE
+// TEST, so this can never drift back to either extreme:
+//   (A) an "ADV FOR OUTSIDE LUMPER" row IS in this screen's Lumpers total;
+//   (B) every canonical engine treats it EXACTLY like any other
+//       settlement-withheld, non-deductible row — the lumper wording has
+//       zero effect anywhere outside this report.
+// (B) is proven by computing every canonical engine's output BEFORE the
+// report function runs and AFTER it runs on frozen rows: the exception
+// lives only in the report's own row builder, never mutates its input,
+// and no canonical engine can see its output (see the source audit above).
+describe('PRIME LUMPER EXCEPTION — on this report, invisible everywhere else', () => {
+  const settlements = [{ id: 's0717', truck_id: 't1', week_ending: '2026-07-17', gross: 1085.51, net: 317.42, miles: 445, per_diem_days: 3, carrier: 'PRIME INC' }];
+  const trucks = [
+    {
+      id: 't1',
+      unit_number: '283940',
+      is_active: true,
+      cost_basis_ownership_mode: null,
+      purchase_price: null,
+      cost_basis_loan_monthly_payment: null,
+      cost_basis_paid_spread_months: null,
+      cost_basis_warranty_cost: null,
+      cost_basis_warranty_term_months: null,
+    },
+  ];
+  const withheld = (id: string, description: string, category: string, amount: number) =>
+    ({
+      id,
+      user_id: 'u1',
+      truck_id: 't1',
+      settlement_id: 's0717',
+      ded_date: '2026-07-17',
+      description,
+      category,
+      amount,
+      source: 'settlement',
+      tax_deductible: false,
+      payment_method: 'Settlement Withheld',
+      accountant_category: null,
+    }) as unknown as Deduction;
+
+  // Real lines from the owner's 2026-07-17 Prime settlement.
+  const realRows = [
+    withheld('adv', 'ADV FOR OUTSIDE LUMPER', 'Lumper Fees', 217.55),
+    withheld('wash', 'TRUCK WASH', 'Truck Wash & Detailing', 45),
+    withheld('toll', 'EZ FAST LN TOLL', 'Tolls & Scales', 18.45),
+  ].map((d) => Object.freeze(d));
+
+  function canonical(deductions: Deduction[]) {
+    const kpiInputs: KpiInputs = { trucks, settlements, loads: [], deductions, fuelPurchases: [], maintenanceRecords: [], tolls: [], truckScope: null, window: null };
+    return {
+      kpi: computeKpis(kpiInputs),
+      trueProfit: calcTrueProfit(settlements, deductions),
+      expenses: sumCanonicalExpenses(deductions, [], [], []),
+      cpm: calcCanonicalCpm(1085.51, 445, deductions, [], [], [], 0),
+      comparison: buildTruckComparison(trucks, settlements, [], deductions, [], [], []),
+      taxDeductible: deductions.filter(isDeductibleExpense).reduce((sum, d) => sum + Number(d.amount), 0),
+      outOfPocketAmounts: buildLineItems(deductions, [], [], [], 2026, 7, 'outOfPocket').map((i) => i.amount),
+      withheldAmounts: buildLineItems(deductions, [], [], [], 2026, 7, 'withheld').map((i) => i.amount).sort(),
+    };
+  }
+
+  it('(A) the ADV FOR OUTSIDE LUMPER row is in this screen’s Lumpers total, and (B) every canonical engine is unaffected', () => {
+    const before = JSON.stringify(canonical(realRows));
+
+    // ---- (A) THIS SCREEN ----
+    const reportRows = eligibleDeductionRowsForReport(realRows, nonPrimeSettlementIds(settlements));
+    const july = buildPrimeDriverExpenseMonth(reportRows, settlements, 2026, 7);
+    const lumpers = july.sections.find((sec) => sec.category === 'Lumpers')!;
+    expect(lumpers.subtotal).toBe(217.55);
+    expect(lumpers.rows).toEqual([
+      { id: 'adv', exp_date: '2026-07-17', amount: 217.55, category: 'Lumpers', note: 'ADV FOR OUTSIDE LUMPER', origin: 'prime_settlement' },
+    ]);
+    // Item 3: every other category keeps the strict origin rule — the
+    // withheld wash and toll lines on the same settlement stay off.
+    expect(july.sections.find((sec) => sec.category === 'Truck & Trailer Wash')!.subtotal).toBe(0);
+    expect(july.sections.find((sec) => sec.category === 'Cash Tolls/Parking Fees')!.subtotal).toBe(0);
+    expect(july.grandTotal).toBe(217.55);
+    // The deduction row itself is untouched: still withheld, still no accountant_category.
+    expect(realRows[0].source).toBe('settlement');
+    expect(realRows[0].accountant_category).toBeNull();
+
+    // ---- (B) EVERYWHERE ELSE ----
+    const real = canonical(realRows);
+    expect(JSON.stringify(real)).toBe(before);
+    // Still exactly a settlement-withheld, non-deductible row: never a tax
+    // deduction, never in the Accountant Package's out-of-pocket scope,
+    // still in its withheld scope.
+    expect(real.taxDeductible).toBe(0);
+    expect(real.outOfPocketAmounts).toEqual([]);
+    expect(matchesAccountantScope('settlement', 'outOfPocket')).toBe(false);
+    expect(real.withheldAmounts).toContain(217.55);
+  });
+
+  it('a lumper advance on a settlement from a known NON-Prime carrier stays off this report', () => {
+    const werner = [{ id: 's0717', carrier: 'WERNER ENTERPRISES' }];
+    expect(eligibleDeductionRowsForReport(realRows, nonPrimeSettlementIds(werner))).toEqual([]);
+  });
+
+  it('a settlement with no recorded carrier is treated as Prime (this screen is Prime-only)', () => {
+    const unknown = [{ id: 's0717', carrier: null }];
+    expect(eligibleDeductionRowsForReport(realRows, nonPrimeSettlementIds(unknown)).map((r) => r.id)).toEqual(['adv']);
   });
 });

@@ -2144,21 +2144,24 @@
     "diagnosticsReason": {
       "excluded_settlement_withheld": "✕ Excluded — settlement-withheld, not out-of-pocket",
       "category_mismatch": "✕ Excluded — description names a lumper but category is different",
-      "missing_accountant_category": "✕ Excluded — not yet categorized; tap Auto-fill above"
+      "missing_accountant_category": "✕ Excluded — not yet categorized; tap Auto-fill above",
+      "prime_settlement_lumper": "✓ On this report under Lumpers (Prime settlement lumper)"
     },
     "diagnosticsGapsNote": "{{count}} settlement reimbursement(s) name a lumper but have no matching expense entry yet — use the lumper banner above to add them.",
     "dayLabel": "Day",
     "lumperBanner": {
       "title_one": "{{count}} lumper payment is not on this report yet",
       "title_other": "{{count}} lumper payments are not on this report yet",
-      "body": "These lumper payments were paid out of your own pocket but are not on this report yet. Tap below to add them. You can edit every one afterward. Lumpers Prime advanced to you (\"ADV FOR OUTSIDE LUMPER\") are never listed here: that was Prime's money, not yours.",
+      "body": "These lumper payments were paid out of your own pocket but are not on this report yet. Tap below to add them. You can edit every one afterward. Lumpers that went through your Prime settlements are already counted under Lumpers automatically.",
       "sourceReimbursement": "Settlement reimbursement · {{date}}",
       "sourceUncategorized": "Not yet categorized · {{date}}",
       "button_one": "Add {{count}} lumper to this report",
       "button_other": "Add all {{count}} lumpers to this report",
       "doneTitle": "Lumpers added",
       "doneBody": "{{count}} lumper entries were added. Now showing {{month}}. Tap any row to change its category, date, or amount."
-    }
+    },
+    "fromPrimeSettlement": "from Prime settlement, {{date}}",
+    "primeSettlementLumperNote": "This lumper went through your Prime settlement (for example an \"ADV FOR OUTSIDE LUMPER\" advance). It is shown here under Lumpers so your accountant can see it. Everywhere else in the app it stays settlement-withheld and non-deductible, exactly as before. It is read-only here because changing or deleting it would change your profit and tax numbers. To correct it, edit the settlement."
   },
   "scorecard": {
     "title": "Scorecard",
