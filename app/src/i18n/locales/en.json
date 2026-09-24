@@ -1898,7 +1898,22 @@
     "openDocument": "Open Document",
     "shareDownload": "Share / Download",
     "preparingShare": "Preparing file to share…",
-    "linkedRecords": "Linked Records"
+    "linkedRecords": "Linked Records",
+    "titles": {
+      "bannerTitle_one": "{{count}} document needs a title",
+      "bannerTitle_other": "{{count}} documents need a title",
+      "bannerBody": "These still show a generic name. Review them to give each a clear title. Nothing is renamed until you choose.",
+      "reviewButton": "Review titles",
+      "reviewTitle": "Needs a title",
+      "allDone": "Every document has a title.",
+      "useSuggestion": "Use \"{{title}}\"",
+      "noSuggestion": "No suggestion for this one. Type a title below.",
+      "placeholder": "Type a title",
+      "renameLabel": "Document title",
+      "rename": "Rename document",
+      "tapToRename": "Tap to rename",
+      "saveFailed": "Couldn't save the title"
+    }
   },
   "destinationSummary": {
     "title": "Payment & Destination",
@@ -2501,5 +2516,9 @@
       "v1": "Need to change your language or export your data? Settings is where every account-level option lives.",
       "v2": "From support contact to a full data export, Settings covers everything about your account that isn't a financial screen."
     }
+  },
+  "documentTitles": {
+    "weekEnding": "W/E {{date}}",
+    "receiptFor": "{{category}} receipt"
   }
 }

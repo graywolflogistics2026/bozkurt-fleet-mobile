@@ -4362,6 +4362,32 @@ column on the already-listed `deductions` table, not a new table.
 
 ---
 
+## 76. DOCUMENT TITLES (owner decision 2026-09-23) — NOT YET APPLIED
+
+**The decision**: every document showed a generic title ("Document" / the
+docType label) once there were many. Documents now carry a real,
+human-readable `title`: suggested by ai-import on import ("Fuel Receipt —
+Pilot, 7/14"), derived from a linked record for historical documents
+(record data first, since it's already confirmed), and always renamable by
+the user. `title_source` records where the title came from; `'user'` is
+never overwritten by any automatic pass (`shouldApplyAutoTitle()`,
+`app/src/data/documentTitle.ts`).
+
+**Safe before it's applied**: the app writes `title` in a separate,
+non-fatal update after the documents row is inserted, so imports keep
+working if this hasn't been run yet (titles just won't save until it is).
+
+Mirror file: `pending_76.sql` at the repo root.
+
+```sql
+alter table documents
+  add column title text,
+  add column title_source text check (title_source in ('ai', 'record', 'user'));
+```
+
+No RLS changes needed — both columns live on `documents`, which already
+has owner-only row policies.
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

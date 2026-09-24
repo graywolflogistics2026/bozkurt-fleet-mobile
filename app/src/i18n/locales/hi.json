@@ -1841,7 +1841,22 @@
     "openDocument": "दस्तावेज़ खोलें",
     "shareDownload": "साझा करें / डाउनलोड करें",
     "preparingShare": "साझा करने के लिए फ़ाइल तैयार की जा रही है…",
-    "linkedRecords": "लिंक किए गए रिकॉर्ड"
+    "linkedRecords": "लिंक किए गए रिकॉर्ड",
+    "titles": {
+      "bannerTitle_one": "{{count}} दस्तावेज़ को शीर्षक चाहिए",
+      "bannerTitle_other": "{{count}} दस्तावेज़ों को शीर्षक चाहिए",
+      "bannerBody": "ये अभी भी एक सामान्य नाम दिखा रहे हैं। हर एक को साफ़ शीर्षक देने के लिए इनकी समीक्षा करें। आपके चुनने तक कुछ भी नाम नहीं बदला जाता।",
+      "reviewButton": "शीर्षकों की समीक्षा करें",
+      "reviewTitle": "शीर्षक चाहिए",
+      "allDone": "हर दस्तावेज़ का शीर्षक है।",
+      "useSuggestion": "\"{{title}}\" इस्तेमाल करें",
+      "noSuggestion": "इसके लिए कोई सुझाव नहीं। नीचे शीर्षक लिखें।",
+      "placeholder": "शीर्षक लिखें",
+      "renameLabel": "दस्तावेज़ का शीर्षक",
+      "rename": "दस्तावेज़ का नाम बदलें",
+      "tapToRename": "नाम बदलने के लिए टैप करें",
+      "saveFailed": "शीर्षक सहेजा नहीं जा सका"
+    }
   },
   "destinationSummary": {
     "title": "भुगतान और गंतव्य",
@@ -2501,5 +2516,9 @@
       "v1": "भाषा बदलनी है या data export करना है? Settings वह जगह है जहां हर account-level विकल्प रहता है।",
       "v2": "support संपर्क से लेकर पूरे data export तक, Settings आपके खाते से जुड़ी हर वह चीज़ शामिल करता है जो कोई financial स्क्रीन नहीं है।"
     }
+  },
+  "documentTitles": {
+    "weekEnding": "स.स. {{date}}",
+    "receiptFor": "{{category}} रसीद"
   }
 }

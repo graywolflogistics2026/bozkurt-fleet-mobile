@@ -164,7 +164,11 @@ export type DocumentRow = {
   amount: number | null;
   storage_path: string | null;
   parsed_json: Record<string, unknown> | null;
-  reviewed_at: string | null; // docs/PENDING_SQL.md §55a (NEEDS REVIEW WON'T CLEAR fix, owner decision 2026-08-24)
+  reviewed_at: string | null; // docs/PENDING_SQL.md §55a (NEEDS REVIEW WON’T CLEAR fix, owner decision 2026-08-24)
+  // docs/PENDING_SQL.md §76 (DOCUMENT TITLES, owner decision 2026-09-23).
+  // NULL title = never titled (generic). 'user' is never overwritten.
+  title?: string | null;
+  title_source?: 'ai' | 'record' | 'user' | null;
   imported_at: string;
   updated_at: string;
 };

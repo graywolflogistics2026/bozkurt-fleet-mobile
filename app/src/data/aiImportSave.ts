@@ -24,6 +24,7 @@ import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
+import { buildTitleFromExtraction, cleanTitle, type TitleContext } from '@/src/data/documentTitle';
 import {
   SaveExtractionError,
   emptyPartialState,
@@ -133,6 +134,9 @@ export type SaveExtractionParams = {
   // caller has already confirmed it with the user (once per receipt) —
   // declining still saves the deduction, just with no linked contribution.
   createContribution: boolean;
+  // DOCUMENT TITLES (owner decision 2026-09-23): the caller's i18n labels,
+  // used to build a specific title when the AI didn't return one.
+  titleContext?: TitleContext;
   // Custom category picker (PROMPTS.md Session 9a item 9): the user's
   // edited/picked category for the (previously read-only) 'other' docType
   // preview line — null/undefined falls back to mapGenericDeduction()'s own
@@ -342,6 +346,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     .single();
   const documentId = must('documents-insert', docRow, docError, partial).id as string;
   partial.documentId = documentId;
+
+  // 2b. DOCUMENT TITLES (owner decision 2026-09-23, docs/PENDING_SQL.md
+  // §76) — a specific title instead of the generic "Document": the AI's
+  // own suggestion, else one built from what it extracted. A separate,
+  // NON-FATAL update so an import still saves if §76 hasn't been applied.
+  const autoTitle = params.titleContext ? buildTitleFromExtraction(d as unknown as Record<string, unknown>, params.titleContext) : cleanTitle(d.title);
+  if (autoTitle) {
+    try {
+      await supabase.from('documents').update({ title: autoTitle, title_source: 'ai' }).eq('id', documentId);
+    } catch {
+      // Title is cosmetic — never fail an import over it.
+    }
+  }
 
   let contributionTotal = 0;
   let settlementWeekEnding: string | null = null;

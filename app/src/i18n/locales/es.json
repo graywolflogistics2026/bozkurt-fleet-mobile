@@ -1841,7 +1841,22 @@
     "openDocument": "Abrir Documento",
     "shareDownload": "Compartir / Descargar",
     "preparingShare": "Preparando archivo para compartir…",
-    "linkedRecords": "Registros Vinculados"
+    "linkedRecords": "Registros Vinculados",
+    "titles": {
+      "bannerTitle_one": "{{count}} documento necesita un título",
+      "bannerTitle_other": "{{count}} documentos necesitan un título",
+      "bannerBody": "Todavía muestran un nombre genérico. Revísalos para darle a cada uno un título claro. No se cambia nada hasta que tú elijas.",
+      "reviewButton": "Revisar títulos",
+      "reviewTitle": "Necesita un título",
+      "allDone": "Todos los documentos tienen título.",
+      "useSuggestion": "Usar \"{{title}}\"",
+      "noSuggestion": "No hay sugerencia para este. Escribe un título abajo.",
+      "placeholder": "Escribe un título",
+      "renameLabel": "Título del documento",
+      "rename": "Cambiar nombre del documento",
+      "tapToRename": "Toca para cambiar el nombre",
+      "saveFailed": "No se pudo guardar el título"
+    }
   },
   "destinationSummary": {
     "title": "Pago y destino",
@@ -2501,5 +2516,9 @@
       "v1": "¿Necesitas cambiar tu idioma o exportar tus datos? Configuración es donde vive cada opción a nivel de cuenta.",
       "v2": "Desde el contacto de soporte hasta una exportación completa de datos, Configuración cubre todo sobre tu cuenta que no es una pantalla financiera."
     }
+  },
+  "documentTitles": {
+    "weekEnding": "S/F {{date}}",
+    "receiptFor": "Recibo de {{category}}"
   }
 }

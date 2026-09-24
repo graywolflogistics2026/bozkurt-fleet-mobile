@@ -1841,7 +1841,22 @@
     "openDocument": "Belgeyi Aç",
     "shareDownload": "Paylaş / İndir",
     "preparingShare": "Paylaşım için dosya hazırlanıyor…",
-    "linkedRecords": "Bağlantılı Kayıtlar"
+    "linkedRecords": "Bağlantılı Kayıtlar",
+    "titles": {
+      "bannerTitle_one": "{{count}} belgenin bir başlığa ihtiyacı var",
+      "bannerTitle_other": "{{count}} belgenin bir başlığa ihtiyacı var",
+      "bannerBody": "Bunlar hâlâ genel bir ad gösteriyor. Her birine net bir başlık vermek için gözden geçirin. Siz seçmeden hiçbir şeyin adı değişmez.",
+      "reviewButton": "Başlıkları gözden geçir",
+      "reviewTitle": "Başlık gerekiyor",
+      "allDone": "Tüm belgelerin bir başlığı var.",
+      "useSuggestion": "\"{{title}}\" kullan",
+      "noSuggestion": "Bunun için öneri yok. Aşağıya bir başlık yazın.",
+      "placeholder": "Bir başlık yazın",
+      "renameLabel": "Belge başlığı",
+      "rename": "Belgeyi yeniden adlandır",
+      "tapToRename": "Yeniden adlandırmak için dokunun",
+      "saveFailed": "Başlık kaydedilemedi"
+    }
   },
   "destinationSummary": {
     "title": "Ödeme ve Hedef",
@@ -2501,5 +2516,9 @@
       "v1": "Dilinizi değiştirmeniz ya da verinizi dışa aktarmanız mı gerekiyor? Ayarlar, hesap düzeyindeki her seçeneğin yaşadığı yerdir.",
       "v2": "Destek iletişiminden tam veri dışa aktarımına kadar, Ayarlar finansal bir ekran olmayan hesabınızla ilgili her şeyi kapsar."
     }
+  },
+  "documentTitles": {
+    "weekEnding": "H/S {{date}}",
+    "receiptFor": "{{category}} fişi"
   }
 }

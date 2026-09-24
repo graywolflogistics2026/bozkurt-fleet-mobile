@@ -45,7 +45,9 @@ export function filterDocuments(docs: DocumentRow[], filter: DocumentFilter = {}
       if (filter.dateTo && docDate > filter.dateTo) return false;
       if (filter.needsReviewOnly && !isDocumentNeedsReview(doc)) return false;
       if (search) {
-        const haystack = `${doc.filename ?? ''} ${doc.doc_type ?? ''} ${doc.amount ?? ''}`.toLowerCase();
+        // DOCUMENT TITLES (owner decision 2026-09-23) — a renamed or
+        // AI-titled document is findable by its title too.
+        const haystack = `${doc.title ?? ''} ${doc.filename ?? ''} ${doc.doc_type ?? ''} ${doc.amount ?? ''}`.toLowerCase();
         if (!haystack.includes(search)) return false;
       }
       return true;

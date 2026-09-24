@@ -24,7 +24,9 @@ import {
   type LinkedRecordRef,
 } from '@/src/data/documentsFilter';
 import { getSignedDocumentUrl, shareDocumentFile } from '@/src/data/documentViewer';
-import { deriveDocumentTitle } from '@/src/data/documentTitle';
+import { displayDocumentTitle, findDocumentsNeedingTitle, linkedTitleInputsFor, suggestDocumentTitle } from '@/src/data/documentTitle';
+import { useSetDocumentTitle } from '@/src/data/documentTitleMutations';
+import { useDocumentTitleContext } from '@/src/data/useDocumentTitleContext';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
 import { DestinationSummary } from '@/src/components/DestinationSummary';
@@ -96,7 +98,49 @@ export default function DocumentsArchive() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
 
+  // DOCUMENT TITLES (owner decision 2026-09-23, docs/PENDING_SQL.md §76).
+  const titleContext = useDocumentTitleContext();
+  const setDocumentTitle = useSetDocumentTitle();
+  const [renaming, setRenaming] = useState(false);
+  const [renameText, setRenameText] = useState('');
+  const [reviewingTitles, setReviewingTitles] = useState(false);
+  const [ownTitles, setOwnTitles] = useState<Record<string, string>>({});
+  const [savingTitleFor, setSavingTitleFor] = useState<string | null>(null);
+
   const allDocs = documentsQuery.data ?? [];
+  // "Needs a title" — only generically titled documents, newest first.
+  const needsTitle = useMemo(() => findDocumentsNeedingTitle(allDocs), [allDocs]);
+  const titleSuggestions = useMemo(() => {
+    const sources = {
+      settlements: settlementsQuery.data,
+      deductions: deductionsQuery.data,
+      maintenanceRecords: maintenanceQuery.data,
+      complianceItems: complianceItemsQuery.data,
+    };
+    return new Map(needsTitle.map((doc) => [doc.id, suggestDocumentTitle(doc, linkedTitleInputsFor(doc.id, sources), titleContext)]));
+  }, [needsTitle, settlementsQuery.data, deductionsQuery.data, maintenanceQuery.data, complianceItemsQuery.data, titleContext]);
+
+  async function saveTitle(documentId: string, title: string, source: 'ai' | 'record' | 'user') {
+    setSavingTitleFor(documentId);
+    try {
+      await setDocumentTitle.mutateAsync({ documentId, title, source });
+      await invalidateFinancialData(queryClient, { entities: ['documents'] });
+      return true;
+    } catch (err) {
+      Alert.alert(t('documentsArchive.titles.saveFailed'), err instanceof Error ? err.message : t('common.tryAgain'));
+      return false;
+    } finally {
+      setSavingTitleFor(null);
+    }
+  }
+
+  async function handleSaveRename() {
+    if (!selected || !renameText.trim()) return;
+    if (await saveTitle(selected.id, renameText, 'user')) {
+      setSelected({ ...selected, title: renameText.trim(), title_source: 'user' });
+      setRenaming(false);
+    }
+  }
   const types = useMemo(() => distinctDocTypes(allDocs), [allDocs]);
   const rows = useMemo(
     () =>
@@ -183,6 +227,7 @@ export default function DocumentsArchive() {
   }, [selected, t]);
 
   function closeViewer() {
+    setRenaming(false);
     setSelected(null);
     setSignedUrl(null);
     setUrlError(null);
@@ -273,6 +318,18 @@ export default function DocumentsArchive() {
         <FleetScopeLabel variant="fleetOnly" />
         <MutedText style={{ marginBottom: spacing.sm }}>{t('documentsArchive.subtitle')}</MutedText>
 
+        {/* NEEDS A TITLE (owner decision 2026-09-23) — a manual,
+            user-started review pass; nothing is renamed in the background. */}
+        {needsTitle.length > 0 && (
+          <Card style={{ marginBottom: spacing.sm, borderColor: colors.accent, borderWidth: 2 }}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>
+              🏷️ {t('documentsArchive.titles.bannerTitle', { count: needsTitle.length })}
+            </Text>
+            <MutedText style={{ marginTop: spacing.xs }}>{t('documentsArchive.titles.bannerBody')}</MutedText>
+            <PrimaryButton title={t('documentsArchive.titles.reviewButton')} onPress={() => setReviewingTitles(true)} />
+          </Card>
+        )}
+
         <Field
           value={search}
           onChangeText={setSearch}
@@ -321,7 +378,7 @@ export default function DocumentsArchive() {
           renderRows={(monthRows) =>
             monthRows.map((doc) => {
               const meta = docTypeMeta((doc.doc_type as DocType) ?? 'other');
-              const title = deriveDocumentTitle(doc.parsed_json, meta.label);
+              const title = displayDocumentTitle(doc, meta.label);
               const needsReview = isDocumentNeedsReview(doc);
               return (
                 <TappableCard key={doc.id} onPress={() => setSelected(doc)} style={needsReviewRowStyle(needsReview)}>
@@ -348,10 +405,34 @@ export default function DocumentsArchive() {
       <ModalSheet visible={!!selected} onClose={closeViewer}>
         {selected && (() => {
           const selectedMeta = docTypeMeta((selected.doc_type as DocType) ?? 'other');
-          const selectedTitle = deriveDocumentTitle(selected.parsed_json, selectedMeta.label);
+          const selectedTitle = displayDocumentTitle(selected, selectedMeta.label);
           return (
             <>
-              <SheetTitle>{selectedTitle}</SheetTitle>
+              {renaming ? (
+                <>
+                  <MutedText>{t('documentsArchive.titles.renameLabel')}</MutedText>
+                  <Field value={renameText} onChangeText={setRenameText} placeholder={t('documentsArchive.titles.placeholder')} autoFocus />
+                  <PrimaryButton
+                    title={t('common.save')}
+                    onPress={handleSaveRename}
+                    loading={savingTitleFor === selected.id}
+                    disabled={!renameText.trim()}
+                  />
+                  <SecondaryButton title={t('common.cancel')} onPress={() => setRenaming(false)} />
+                </>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    setRenameText(selectedTitle);
+                    setRenaming(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('documentsArchive.titles.rename')}
+                >
+                  <SheetTitle>{selectedTitle} ✎</SheetTitle>
+                  <MutedText style={{ color: colors.accent, fontSize: typography.size.xs }}>{t('documentsArchive.titles.tapToRename')}</MutedText>
+                </Pressable>
+              )}
               {selectedTitle !== selectedMeta.label && <MutedText>{selectedMeta.label}</MutedText>}
               {isDocumentNeedsReview(selected) && (
                 <>
@@ -411,6 +492,62 @@ export default function DocumentsArchive() {
             </>
           );
         })()}
+      </ModalSheet>
+
+      {/* NEEDS A TITLE — review queue. Accept the suggestion with one tap,
+          or type your own. A document leaves the list once it has a title. */}
+      <ModalSheet visible={reviewingTitles} onClose={() => setReviewingTitles(false)}>
+        <SheetTitle>{t('documentsArchive.titles.reviewTitle')}</SheetTitle>
+        {needsTitle.length === 0 ? (
+          <MutedText>{t('documentsArchive.titles.allDone')}</MutedText>
+        ) : (
+          needsTitle.map((doc) => {
+            const meta = docTypeMeta((doc.doc_type as DocType) ?? 'other');
+            const suggestion = titleSuggestions.get(doc.id) ?? null;
+            const own = ownTitles[doc.id] ?? '';
+            const saving = savingTitleFor === doc.id;
+            return (
+              <View key={doc.id} style={{ paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>
+                  {DOC_TYPE_ICON[(doc.doc_type as DocType) ?? 'other'] ?? '📄'} {meta.label}
+                </Text>
+                <MutedText>
+                  {doc.doc_date ? date(doc.doc_date) : date(doc.imported_at)}
+                  {doc.amount != null ? ` · ${money(doc.amount)}` : ''}
+                  {doc.filename ? ` · ${doc.filename}` : ''}
+                </MutedText>
+                {suggestion ? (
+                  <PrimaryButton
+                    title={t('documentsArchive.titles.useSuggestion', { title: suggestion.title })}
+                    onPress={() => saveTitle(doc.id, suggestion.title, suggestion.source)}
+                    loading={saving}
+                  />
+                ) : (
+                  <MutedText style={{ marginTop: spacing.xs }}>{t('documentsArchive.titles.noSuggestion')}</MutedText>
+                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs }}>
+                  <View style={{ flex: 1 }}>
+                    <Field
+                      value={own}
+                      onChangeText={(text) => setOwnTitles((prev) => ({ ...prev, [doc.id]: text }))}
+                      placeholder={t('documentsArchive.titles.placeholder')}
+                      style={{ marginBottom: 0 }}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => own.trim() && !saving && saveTitle(doc.id, own, 'user')}
+                    hitSlop={8}
+                    style={{ marginStart: spacing.sm }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={{ color: own.trim() ? colors.accent : colors.muted, fontWeight: '700' }}>{t('common.save')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })
+        )}
+        <SecondaryButton title={t('common.close')} onPress={() => setReviewingTitles(false)} />
       </ModalSheet>
     </Screen>
   );

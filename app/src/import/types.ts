@@ -322,6 +322,9 @@ export type Extraction = {
   docType: DocType;
   date?: string;
   vendor?: string;
+  // DOCUMENT TITLES (owner decision 2026-09-23) — the AI's own short,
+  // human-readable title for this document (ai-import prompt).
+  title?: string;
   totalAmount?: number;
   taxDeductible?: boolean;
   bizPct?: number;

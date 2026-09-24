@@ -12343,3 +12343,23 @@
   accountant_category already set. Direct prime_driver_expenses rows (the
   screen's own Add Expense) are not filtered. Still writes only
   accountant_category; Deductions and all canonical numbers untouched.
+- DOCUMENT TITLES (owner decision 2026-09-23, docs/PENDING_SQL.md §76 —
+  NOT YET APPLIED; mirror pending_76.sql). `documents.title` +
+  `title_source` ('ai' | 'record' | 'user'). On import, saveExtraction()
+  stores the AI's own `title` (ai-import prompt's "document titles"
+  addition) or one built from the extraction by buildTitleFromExtraction()
+  with the caller's i18n TitleContext (useDocumentTitleContext()) — in a
+  separate NON-FATAL update, so imports keep working before §76 is run.
+  displayDocumentTitle() is the ONLY way a screen shows a document title
+  (stored title -> vendor -> docType label); a source-audit test enforces
+  it on documents.tsx. Tap the title in the viewer to rename
+  (title_source 'user'); setDocumentTitle() re-reads the row and never lets
+  an 'ai'/'record' write replace a 'user' title. "Needs a title" review
+  queue (findDocumentsNeedingTitle(): no stored title AND no vendor, newest
+  first) is a manual, user-started pass: suggestion = a linked record's own
+  confirmed data first (buildTitleFromLinkedRecords: settlement carrier +
+  W/E, single deduction "<category> receipt — date", maintenance, compliance
+  label), then the stored extraction; one tap to accept or type your own.
+  Historical documents with neither a linked record nor usable extracted
+  data get no suggestion (the user types one) — there is no automatic
+  re-run of the AI on the stored file.

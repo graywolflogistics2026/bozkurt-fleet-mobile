@@ -37,6 +37,7 @@ import { useUsageTracking } from '@/src/data/usageTracking';
 import { isOwnerAccount } from '@/src/entitlement/hasFullAccess';
 import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { isSaveExtractionError, buildErrorReport } from '@/src/data/saveExtractionError';
+import { useDocumentTitleContext } from '@/src/data/useDocumentTitleContext';
 import { groupStepForDisplay, type DisplayStepGroup } from '@/src/import/errorStepGroups';
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -196,6 +197,8 @@ function buildPreviewLines(d: Extraction, t: TFunction, locale: string): Preview
 export default function Import() {
   const { t, i18n } = useTranslation();
   const docTypeMeta = useDocTypeMeta();
+  // DOCUMENT TITLES (owner decision 2026-09-23)
+  const titleContext = useDocumentTitleContext();
   const router = useRouter();
   const { session } = useAuth();
   const { trucks, refreshTrucks } = useActiveTruck();
@@ -929,6 +932,7 @@ export default function Import() {
         mediaType: fileMeta.mediaType,
         createContribution,
         categoryOverride: extraction.docType === 'other' ? categoryOverride : null,
+        titleContext,
       });
       setResult(saved);
       setPhase('done');
