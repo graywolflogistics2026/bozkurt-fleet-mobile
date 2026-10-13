@@ -1,5 +1,6 @@
 import type { Deduction, Settlement } from '@/src/types/db';
 import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
+import { statementWeekOf, type StatementSettlement, type StatementWeek } from '@/src/stats/statementRoute';
 
 // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31, follow-up to the
 // UX mega-pass's Net-to-Owner audit fix): the ONE canonical "what does
@@ -282,17 +283,95 @@ export function sumCanonicalExpenses(
   return canonicalExpenseBreakdown(deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements).total;
 }
 
-export function calcTrueProfit(
-  settlements: Array<{ gross: number | null }>,
+// ---------------------------------------------------------------------
+// TWO SETTLEMENT LAYERS (owner decision 2026-10-13,
+// docs/decisions/prime-statement-source.md). A statement-backed Prime
+// week (src/stats/statementRoute.ts) is counted from Prime's own
+// Statement of Income and Expense; every row linked to that settlement
+// (withheld deductions, its fuel list, reimbursements, settlement
+// maintenance/tolls, lumper companions) stays as detail and is NEVER
+// counted again. Every other settlement, and every row with no
+// settlement_id (the owner's own manual layer), goes through the
+// line-level engine above, unchanged.
+// ---------------------------------------------------------------------
+export type LayerSettlement = StatementSettlement & { gross: number | null };
+type Linked = { settlement_id?: string | null };
+
+export type SettlementLayers<D, F, M, T, R> = {
+  statementWeeks: StatementWeek[];
+  backedSettlementIds: Set<string>;
+  deductions: D[];
+  fuelPurchases: F[];
+  maintenanceRecords: M[];
+  tolls: T[];
+  reimbursements: R[];
+};
+
+export function splitSettlementLayers<D extends Linked, F extends Linked, M, T, R extends Linked>(
+  settlements: LayerSettlement[],
+  deductions: D[],
+  fuelPurchases: F[],
+  maintenanceRecords: M[],
+  tolls: T[],
+  reimbursements: R[]
+): SettlementLayers<D, F, M, T, R> {
+  const statementWeeks = settlements.map(statementWeekOf).filter((w): w is StatementWeek => w != null);
+  const backedSettlementIds = new Set(statementWeeks.map((w) => w.settlementId));
+  const notBacked = (row: unknown) => {
+    const id = (row as Linked).settlement_id;
+    return !id || !backedSettlementIds.has(id);
+  };
+  return {
+    statementWeeks,
+    backedSettlementIds,
+    deductions: deductions.filter(notBacked),
+    fuelPurchases: fuelPurchases.filter(notBacked),
+    maintenanceRecords: maintenanceRecords.filter(notBacked),
+    tolls: tolls.filter(notBacked),
+    reimbursements: reimbursements.filter(notBacked),
+  };
+}
+
+// Gross for a settlement: TOTAL REVENUE for a statement-backed week (the
+// self-check already proved it equals the settlement's gross within $1),
+// the settlement's own gross otherwise.
+export function layeredGross(settlements: LayerSettlement[]): number {
+  return settlements.reduce((sum, s) => sum + (statementWeekOf(s)?.gross ?? Number(s.gross ?? 0)), 0);
+}
+
+export type LayeredExpenseBreakdown = CanonicalExpenseBreakdown & {
+  // Line-level part only (the fields above) + the statement part here;
+  // `total` is the sum of both.
+  statementExpensesTotal: number;
+  statementWeeks: StatementWeek[];
+};
+
+export function layeredExpenseBreakdown(
+  settlements: LayerSettlement[],
   deductions: CanonicalDeduction[],
   fuelPurchases: CanonicalFuel[],
-  maintenanceRecords: CanonicalMaintenance[],
-  tolls: CanonicalToll[],
-  reimbursements: CanonicalReimbursement[]
+  maintenanceRecords: (CanonicalMaintenance & Linked)[],
+  tolls: (CanonicalToll & Linked)[],
+  reimbursements: (CanonicalReimbursement & Linked)[]
+): LayeredExpenseBreakdown {
+  const layers = splitSettlementLayers(settlements, deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements);
+  const lines = canonicalExpenseBreakdown(layers.deductions, layers.fuelPurchases, layers.maintenanceRecords, layers.tolls, layers.reimbursements);
+  const statementExpensesTotal = layers.statementWeeks.reduce((sum, w) => sum + w.expenses, 0);
+  return { ...lines, statementExpensesTotal, statementWeeks: layers.statementWeeks, total: lines.total + statementExpensesTotal };
+}
+
+export function calcTrueProfit(
+  settlements: LayerSettlement[],
+  deductions: CanonicalDeduction[],
+  fuelPurchases: CanonicalFuel[],
+  maintenanceRecords: (CanonicalMaintenance & Linked)[],
+  tolls: (CanonicalToll & Linked)[],
+  reimbursements: (CanonicalReimbursement & Linked)[]
 ): number {
-  const grossRevenue = settlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const trueExpenses = sumCanonicalExpenses(deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements);
-  return grossRevenue - trueExpenses;
+  return (
+    layeredGross(settlements) -
+    layeredExpenseBreakdown(settlements, deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements).total
+  );
 }
 
 // Same {weekEnding, gross, net} shape as cashFlowTrend.ts's
@@ -309,8 +388,8 @@ export function buildWeeklyTrueProfitTrend(
   settlements: Settlement[],
   deductions: Deduction[],
   fuelPurchases: Array<CanonicalFuel & { purchase_date?: string | null }>,
-  maintenanceRecords: Array<CanonicalMaintenance & { service_date?: string | null }>,
-  tolls: Array<CanonicalToll & { toll_date?: string | null }>,
+  maintenanceRecords: Array<CanonicalMaintenance & Linked & { service_date?: string | null }>,
+  tolls: Array<CanonicalToll & Linked & { toll_date?: string | null }>,
   reimbursements: Array<CanonicalReimbursement & { settlement_id?: string | null; reimb_date?: string | null }>
 ): TrueProfitWeeklyPoint[] {
   const weekEndings = [...new Set(settlements.filter((s) => s.week_ending).map((s) => s.week_ending as string))].sort();
@@ -318,7 +397,7 @@ export function buildWeeklyTrueProfitTrend(
   return weekEndings.map((weekEnding) => {
     const weekSettlements = settlements.filter((s) => s.week_ending === weekEnding);
     const weekSettlementIds = new Set(weekSettlements.map((s) => s.id));
-    const gross = weekSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
+    const gross = layeredGross(weekSettlements);
     const start = weekStartFromEnding(weekEnding);
     const inRange = (dateStr: string) => dateStr >= start && dateStr <= weekEnding;
     const inWindow = (dateStr: string | null | undefined) => !!dateStr && inRange(dateStr);
@@ -327,7 +406,7 @@ export function buildWeeklyTrueProfitTrend(
     const weekMaintenance = maintenanceRecords.filter((m) => inWindow(m.service_date));
     const weekTolls = tolls.filter((t) => inWindow(t.toll_date));
     const weekReimbursements = filterSettlementLinkedRowsToWindow(reimbursements, (r) => r.reimb_date, weekSettlementIds, inRange);
-    const trueExpenses = sumCanonicalExpenses(weekDeductions, weekFuel, weekMaintenance, weekTolls, weekReimbursements);
+    const trueExpenses = layeredExpenseBreakdown(weekSettlements, weekDeductions, weekFuel, weekMaintenance, weekTolls, weekReimbursements).total;
     return { weekEnding, gross, net: gross - trueExpenses };
   });
 }

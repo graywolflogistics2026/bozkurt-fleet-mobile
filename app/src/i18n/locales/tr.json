@@ -152,7 +152,10 @@
         "3M": "Son 90 günün kârı",
         "6M": "Son 6 ayın kârı",
         "yearly": "Bu yılın kârı"
-      }
+      },
+      "profitNotDeposits": "Kâr, yatırılan para değil",
+      "depositedToBank": "Bankanıza yatırılan: {{amount}}",
+      "owedToCarrier": "Taşıyıcıya borç: {{amount}}"
     },
     "overview": {
       "expenses": "Giderler"
@@ -172,7 +175,8 @@
       "excludedVehiclePurchase": "{{amount}} tutarındaki araç satın alımları hariç tutuldu — kayıtlarınızda tutulur ancak burada rutin gider olarak sayılmaz.",
       "largestRowsTitle": "En büyük giderler",
       "possibleDepreciableAsset": "Büyük gider — olası amortismana tabi varlık, muhasebecinize danışın",
-      "empty": "Bu dönem için henüz gider kaydedilmedi."
+      "empty": "Bu dönem için henüz gider kaydedilmedi.",
+      "fixedVariableNote": "Sabit ve değişken, Maliyet/Mil gibi tek seferlik alımları içermez."
     },
     "fleetHealth": {
       "title": "Filo Sağlığı Puanı",
@@ -331,7 +335,13 @@
       "differenceWhy": "Kayıtlı satırlar bu settlement'ın net ödemesiyle tam eşleşmiyor — yeniden içe aktarın veya satırlarını kontrol edin.",
       "profit": "Kâr",
       "reimbursementNote": "Geri ödemeler giderleri azaltır; asla gelir olarak sayılmaz.",
-      "fixedCostNote": "Kamyon maliyet tahmininiz ({{amount}}) yalnızca Maliyet/Mil ve Kâr/Mil hesabında kullanılır — bu kârdan düşülmez."
+      "fixedCostNote": "Kamyon maliyet tahmininiz ({{amount}}) yalnızca Maliyet/Mil ve Kâr/Mil hesabında kullanılır — bu kârdan düşülmez.",
+      "deposit": "Prime'ın yatırdığı",
+      "depositWhy": "Prime tablosunda basılı yatırılan tutar — okunur, asla hesaplanmaz.",
+      "interestIncome": "Faiz geliri",
+      "interestIncomeWhy": "Prime'ın sizin için tuttuğu paraya ödediği faiz — yatırılan tutarın içinde, işletme kârı değil.",
+      "profitEstimate": "Kâr (satırlardan tahmin)",
+      "crossCheck": "Satırlar Prime tablosundan {{amount}} farklı ({{date}} haftası). Kâr Prime tablosunu kullanır."
     }
   },
   "deductions": {
@@ -549,11 +559,6 @@
     "saveAnywayFlaggedConfirmTitle": "Tutmayan rakamlarla kaydedilsin mi?",
     "saveAnywayFlaggedConfirmBody": "Bu settlement okunduğu gibi kaydedilecek ve İnceleme Gerekli olarak işaretlenecek. Siz düzeltene kadar kârı yanlış olabilir.",
     "primeCheckOk": "✓ Prime'ın faaliyet tablosuyla eşleşiyor",
-    "primeCheckMismatch": "⚠️ Prime'ın faaliyet tablosuyla eşleşmiyor — lütfen kontrol edin",
-    "primeCheckRevenue": "Gelir {{ours}} · Prime toplam gelir {{prime}}",
-    "primeCheckMiles": "Mil {{ours}} · Prime {{prime}}",
-    "primeCheckExpenses": "Kesintiler {{deductions}} − geri ödenen {{reimbursed}} − faiz {{interest}} = {{ours}} · Prime faaliyet giderleri {{prime}}",
-    "primeCheckDeposit": "Net ödenecek {{netDue}} + faiz {{interest}} = {{ours}} · Prime tablo toplamı (yatırılan) {{prime}}",
     "lowConfidenceTitle": "⚠️ Kaydetmeden önce inceleyin",
     "lowConfidenceBody": "Yapay zeka bu belgeyi okurken tam emin değildi — kaydetmeden önce ayrıntıları kontrol edin.",
     "miscIncomeNoteTitle": "💵 İşletme geliri tespit edildi",
@@ -640,7 +645,39 @@
     "backfillOfferTitle": "Eski kayıtları mı tamamlıyorsun?",
     "backfillOfferBody": "Birkaç aylık geçmiş belgeyi içe aktarıyorsan, Yakalama Yılı paketi (1.000 içe aktarma, 90 gün geçerli) işine yarayabilir. Hesabına eklenmesini istersen destekle iletişime geç.",
     "processingPageProgressWithData": "{{total}} sayfadan {{through}}. sayfa · gelir ve kesintiler alındı",
-    "notTruckSpecific": "Belirli bir kamyona özgü değil"
+    "notTruckSpecific": "Belirli bir kamyona özgü değil",
+    "reconciliationDepositMismatch": "Net ödenecek + faiz {{computed}} ediyor, ancak ekstrede basılı yatırılan tutar {{stated}}.",
+    "primeCheckFailed": "🚫 Kaydedilemiyor — Prime'ın faaliyet tablosu okunduğu haliyle tutmuyor",
+    "primeCheckNumbers": "basılı {{printed}}, okunan {{read}}",
+    "primeLinesTitle": "Okunan tablo satırları ({{count}}), işaret basıldığı gibi",
+    "primeCheck": {
+      "revenueLines": "Gelir satırları = TOTAL REVENUE",
+      "section_fuel_oil_tax": "Yakıt, yağ, vergi satırları = toplamları",
+      "section_repair": "Onarım satırları = toplamları",
+      "section_tires": "Lastik satırları = toplamları",
+      "section_misc": "Çeşitli satırlar = toplamları",
+      "section_out_of_pocket": "Cepten ödenen satırlar = toplamları",
+      "section_fixed": "Sabit maliyet satırları = toplamları",
+      "section_other": "Diğer gelir ve gider satırları = toplamları",
+      "variableCosts": "Yakıt + onarım + lastik + çeşitli = TOTAL VARIABLE COSTS",
+      "operatingExpenses": "Değişken + cepten + sabit + diğer = TOTAL OPERATING EXPENSES",
+      "statementTotal": "Gelir − faaliyet giderleri = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "grossMatches": "TOTAL REVENUE = settlement brütü",
+      "milesMatch": "Tablodaki MILES = settlement milleri",
+      "requiredTotals": "Gelir, faaliyet gideri ve tablo toplamları basılı (3 üzerinden)"
+    },
+    "primeSection": {
+      "revenue": "Gelir",
+      "fuel_oil_tax": "Yakıt, yağ, vergi",
+      "repair": "Onarım",
+      "tires": "Lastik",
+      "misc": "Çeşitli",
+      "out_of_pocket": "Cepten",
+      "fixed": "Sabit",
+      "other": "Diğer"
+    }
   },
   "camera": {
     "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
@@ -1174,7 +1211,6 @@
     "primeYtdMismatchTitle": "Prime'ın kendi ekstresiyle karşılaştırmaya değer",
     "primeYtdRevenueMismatch": "Buradaki yıl başından bugüne gelirin {{ours}}; Prime'ın kendi ekstresi {{prime}} diyor — kontrol etmeye değer.",
     "primeYtdMilesMismatch": "Buradaki yıl başından bugüne mil sayın {{ours}}; Prime'ın kendi ekstresi {{prime}} diyor — kontrol etmeye değer.",
-    "primeYtdStatementMismatch": "Buradaki yılbaşından bu yana net ödemeniz {{ours}}; Prime'ın kendi tablosu {{prime}} ödediğini söylüyor — kontrol etmeye değer.",
     "primeYtdAsOf": "Prime'ın {{date}} ile biten hafta için işletme ekstresine göre.",
     "milesLabelShort": "Mil",
     "milesMissing": "Mil eksik — eklemek için dokunun",
@@ -1194,7 +1230,12 @@
     "reimportNote": "Bu haftaya ait bir settlement'ı yeniden içe aktarmak onun settlement'ını, yüklerini, yakıtını, geri ödemelerini ve kesilen kesintilerini yerinde değiştirir — asla çoğaltmaz.",
     "deleteConfirmTitle": "Bu settlement silinsin mi?",
     "deleteConfirmBody": "Bu, bağlı yükleri, yakıtı, geri ödemeleri ve kesilen kesintileri de kaldırır.",
-    "deleteFailedTitle": "Silme başarısız"
+    "deleteFailedTitle": "Silme başarısız",
+    "owedToCarrierLabel": "Taşıyıcıya borç",
+    "netDueLabel": "Net ödenecek",
+    "depositedLabel": "Yatırılan",
+    "profitThisWeekLabel": "Bu haftanın kârı",
+    "primeYtdDepositsInfo": "Prime'ın yılbaşından beri tutarı {{prime}}; içe aktardığınız haftaların toplamı {{ours}} ({{date}} itibarıyla)."
   },
   "reimbursements": {
     "title": "Geri Ödemeler",
@@ -1494,7 +1535,9 @@
     "aiInsightsTitle": "AI Öngörüleri",
     "askAi": "🤖 AI Öngörüleri Al",
     "aiFooter": "Genel bilgidir, profesyonel vergi danışmanlığı değildir.",
-    "aiFailed": "Danışman servisine ulaşılamadı."
+    "aiFailed": "Danışman servisine ulaşılamadı.",
+    "reimbursementsLine": "Geri ödemeler",
+    "primeStatementLine": "Prime tablolu haftalar (Prime'ın kendi tablosundan)"
   },
   "shareProfit": {
     "notAvailableTitle": "Bu cihazda paylaşım kullanılamıyor.",
@@ -2567,5 +2610,59 @@
   "documentTitles": {
     "weekEnding": "H/S {{date}}",
     "receiptFor": "{{category}} fişi"
+  },
+  "audit": {
+    "verification": {
+      "verified_prime": "Prime tablosuyla doğrulandı",
+      "totals_match": "Toplamlar tutuyor",
+      "unverified": "Doğrulanmadı"
+    },
+    "statusTitle": {
+      "counted": "Sayıldı",
+      "offset": "Mahsuplar (gideri azaltır)",
+      "excluded": "Hariç (gider değil)"
+    },
+    "status": {
+      "counted": "SAYILDI",
+      "offset": "MAHSUP",
+      "excluded": "HARİÇ"
+    },
+    "source": {
+      "prime_statement": "Prime tablosu",
+      "settlement": "Settlement satırı",
+      "manual": "Fişiniz"
+    },
+    "reason": {
+      "expense": "İşletme gideri",
+      "discount_credit": "İndirim veya alacak",
+      "reimbursement": "Geri ödeme — karşıladığı masrafı mahsup eder",
+      "pr_offset": "Kişisel ödeme — PR geri ödemesini mahsup eder",
+      "duplicate_fuel": "Bir settlement satırıyla aynı yakıt — bir kez sayıldı",
+      "non_deductible": "İndirilebilir bir gider değil",
+      "advance": "Avans geri ödemesi — gider değil",
+      "escrow": "Escrow veya teminat — hâlâ sizin paranız",
+      "meals_per_diem": "Yemek — zaten per diem kapsamında",
+      "truck_extras": "Kamyon ekstraları — Kamyon Maliyet Tabanında izlenir",
+      "owner_money_in": "Sahibin koyduğu para — gelir veya gider değil",
+      "interest_income": "Faiz geliri — işletme kârı değil"
+    },
+    "empty": "Bu dönemde satır yok.",
+    "showEveryRow": "Tüm satırları göster",
+    "hideRows": "Satırları gizle",
+    "shareAudit": "Denetimi paylaş",
+    "totalsLine": "Sayılan {{counted}} − mahsuplar {{offset}} = giderler {{expenses}}",
+    "share": {
+      "heading": "BOZKA TRUCKING AI — denetim",
+      "week": "{{date}} ile biten hafta · {{carrier}} · {{label}}",
+      "unknownCarrier": "taşıyıcı okunamadı",
+      "printed": "Basılı: brüt {{gross}} · geri ödemeler {{reimbursements}} · kesintiler {{deductions}} · net ödenecek {{netDue}}",
+      "notPrinted": "basılı değil",
+      "owed": "Taşıyıcıya borç: {{amount}}",
+      "netDueOnly": "Net ödenecek (basılı yatırma satırı yok): {{amount}}",
+      "deposited": "Yatırılan: {{amount}}",
+      "rowsTitle": "Tüm satırlar:",
+      "totals": "Sayılan {{counted}} − mahsuplar {{offset}} = giderler {{expenses}} (hariç {{excluded}})",
+      "profit": "Kâr = gelir {{gross}} − giderler {{expenses}} = {{profit}}"
+    }
   }
 }

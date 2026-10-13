@@ -1,6 +1,7 @@
 import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { resolveFuelRows } from '@/src/stats/trueProfit';
+import { printedDepositOf, printedInterestIncomeOf } from './settlementStatement';
 
 // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03,
 // device evidence: an 11-page settlement's continuation import correctly
@@ -30,6 +31,10 @@ export type ReconciliationIssue =
   | { type: 'revenueLinesMismatch'; stated: number; summed: number }
   | { type: 'reimbursementLinesMismatch'; stated: number; summed: number }
   | { type: 'netDueMismatch'; stated: number; computed: number }
+  // BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13): the
+  // printed deposit is checked, never replaced — net due + interest income
+  // must equal it within $1.
+  | { type: 'depositMismatch'; stated: number; computed: number }
   | { type: 'zeroNetNonzeroGross'; grossRevenue: number };
 
 export type ReconciliationResult = { ok: boolean; issues: ReconciliationIssue[] };
@@ -106,6 +111,12 @@ export function checkSettlementReconciliation(extraction: Extraction | null | un
     if (differs(netDue, computed)) issues.push({ type: 'netDueMismatch', stated: netDue, computed });
   }
 
+  const { deposit, depositSource } = printedDepositOf(extraction);
+  if (deposit != null && depositSource !== 'net_due' && netDue != null) {
+    const computed = netDue + printedInterestIncomeOf(extraction);
+    if (differs(deposit, computed)) issues.push({ type: 'depositMismatch', stated: deposit, computed });
+  }
+
   // A real settlement's net pay is essentially never EXACTLY $0.00 while
   // gross revenue is genuinely nonzero — that exact zero alongside nonzero
   // gross is the signature of a missing/never-reached net-pay figure.
@@ -121,6 +132,6 @@ export function checkSettlementReconciliation(extraction: Extraction | null | un
 // extraction is saved as-is but marked low-confidence — the existing
 // needs-review signal (src/import/needsReview.ts, CLAUDE.md invariant #14)
 // — with the failed checks kept in parsed_json for the audit trail.
-export function flagReconciliationOverride(extraction: Extraction, issues: ReconciliationIssue[]): Extraction {
+export function flagReconciliationOverride(extraction: Extraction, issues: unknown[]): Extraction {
   return { ...extraction, confidence: 'low', reconciliationOverride: issues };
 }

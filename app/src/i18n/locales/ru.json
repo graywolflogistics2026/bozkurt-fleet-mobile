@@ -152,7 +152,10 @@
         "3M": "Прибыль за последние 90 дней",
         "6M": "Прибыль за последние 6 месяцев",
         "yearly": "Прибыль за этот год"
-      }
+      },
+      "profitNotDeposits": "Прибыль, а не депозиты",
+      "depositedToBank": "Зачислено на ваш счёт: {{amount}}",
+      "owedToCarrier": "Долг перевозчику: {{amount}}"
     },
     "overview": {
       "expenses": "Расходы"
@@ -172,7 +175,8 @@
       "excludedVehiclePurchase": "{{amount}} за покупки транспортных средств исключено — сохранено в ваших записях, но не учитывается здесь как обычный расход.",
       "largestRowsTitle": "Крупнейшие расходы",
       "possibleDepreciableAsset": "Крупный расход — возможен амортизируемый актив, уточните у вашего бухгалтера",
-      "empty": "Расходы за этот период пока не записаны."
+      "empty": "Расходы за этот период пока не записаны.",
+      "fixedVariableNote": "Постоянные и переменные не включают разовые покупки, как и Стоимость/Миля."
     },
     "fleetHealth": {
       "title": "Оценка состояния автопарка",
@@ -331,7 +335,13 @@
       "differenceWhy": "Сохранённые строки не полностью совпадают с чистой выплатой этого settlement — импортируйте его заново или проверьте строки.",
       "profit": "Прибыль",
       "reimbursementNote": "Возмещения уменьшают расходы; они никогда не считаются доходом.",
-      "fixedCostNote": "Оценка стоимости вашего грузовика ({{amount}}) используется только в Стоимости/Миля и Прибыли/Миля — она не вычитается из этой прибыли."
+      "fixedCostNote": "Оценка стоимости вашего грузовика ({{amount}}) используется только в Стоимости/Миля и Прибыли/Миля — она не вычитается из этой прибыли.",
+      "deposit": "Зачислено Prime",
+      "depositWhy": "Депозит, напечатанный в отчёте Prime, — прочитан, никогда не вычисляется.",
+      "interestIncome": "Процентный доход",
+      "interestIncomeWhy": "Проценты, которые Prime начислил на ваши удерживаемые деньги, — внутри депозита, это не прибыль бизнеса.",
+      "profitEstimate": "Прибыль (оценка по строкам)",
+      "crossCheck": "Строки расходятся с отчётом Prime на {{amount}} (неделя {{date}}). Прибыль считается по отчёту Prime."
     }
   },
   "deductions": {
@@ -549,11 +559,6 @@
     "saveAnywayFlaggedConfirmTitle": "Сохранить с несходящимися цифрами?",
     "saveAnywayFlaggedConfirmBody": "Этот settlement будет сохранён в точности как прочитан и отмечен «Требует проверки». Прибыль может быть неверной, пока вы его не исправите.",
     "primeCheckOk": "✓ Совпадает с операционным отчётом Prime",
-    "primeCheckMismatch": "⚠️ Не совпадает с операционным отчётом Prime — проверьте",
-    "primeCheckRevenue": "Доход {{ours}} · Общий доход Prime {{prime}}",
-    "primeCheckMiles": "Мили {{ours}} · Prime {{prime}}",
-    "primeCheckExpenses": "Удержания {{deductions}} − возмещено {{reimbursed}} − проценты {{interest}} = {{ours}} · Операционные расходы Prime {{prime}}",
-    "primeCheckDeposit": "К выплате {{netDue}} + проценты {{interest}} = {{ours}} · Итог отчёта Prime (депозит) {{prime}}",
     "lowConfidenceTitle": "⚠️ Проверьте перед сохранением",
     "lowConfidenceBody": "ИИ не был полностью уверен при чтении этого документа — проверьте данные перед сохранением.",
     "miscIncomeNoteTitle": "💵 Обнаружен доход бизнеса",
@@ -640,7 +645,39 @@
     "backfillOfferTitle": "Наверстываете старые записи?",
     "backfillOfferBody": "Если вы импортируете документы за несколько прошлых месяцев, пакет \"Год Наверстывания\" (1000 импортов, действует 90 дней) может помочь. Свяжитесь с поддержкой, если хотите добавить его на аккаунт.",
     "processingPageProgressWithData": "Страница {{through}} из {{total}} · доход и вычеты получены",
-    "notTruckSpecific": "Не привязано к грузовику"
+    "notTruckSpecific": "Не привязано к грузовику",
+    "reconciliationDepositMismatch": "К выплате + проценты = {{computed}}, но напечатанный в выписке депозит — {{stated}}.",
+    "primeCheckFailed": "🚫 Нельзя сохранить — операционный отчёт Prime в прочитанном виде не сходится",
+    "primeCheckNumbers": "напечатано {{printed}}, прочитано {{read}}",
+    "primeLinesTitle": "Прочитанные строки отчёта ({{count}}), знак как напечатан",
+    "primeCheck": {
+      "revenueLines": "Строки дохода = TOTAL REVENUE",
+      "section_fuel_oil_tax": "Строки топлива, масла, налогов = их итог",
+      "section_repair": "Строки ремонта = их итог",
+      "section_tires": "Строки шин = их итог",
+      "section_misc": "Прочие строки = их итог",
+      "section_out_of_pocket": "Строки личных расходов = их итог",
+      "section_fixed": "Строки постоянных расходов = их итог",
+      "section_other": "Строки прочих доходов и расходов = их итог",
+      "variableCosts": "Топливо + ремонт + шины + прочее = TOTAL VARIABLE COSTS",
+      "operatingExpenses": "Переменные + личные + постоянные + прочие = TOTAL OPERATING EXPENSES",
+      "statementTotal": "Доход − операционные расходы = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "grossMatches": "TOTAL REVENUE = валовой доход settlement",
+      "milesMatch": "MILES отчёта = мили settlement",
+      "requiredTotals": "Напечатаны итоги дохода, операционных расходов и отчёта (из 3)"
+    },
+    "primeSection": {
+      "revenue": "Доход",
+      "fuel_oil_tax": "Топливо, масло, налоги",
+      "repair": "Ремонт",
+      "tires": "Шины",
+      "misc": "Прочее",
+      "out_of_pocket": "Личные расходы",
+      "fixed": "Постоянные",
+      "other": "Другое"
+    }
   },
   "camera": {
     "permissionNote": "Для фотографирования чеков и PDF settlement требуется доступ к камере.",
@@ -1174,7 +1211,6 @@
     "primeYtdMismatchTitle": "Стоит сверить с собственной ведомостью Prime",
     "primeYtdRevenueMismatch": "Ваш доход с начала года здесь составляет {{ours}}; собственная ведомость Prime указывает {{prime}} — стоит проверить.",
     "primeYtdMilesMismatch": "Ваш пробег с начала года здесь составляет {{ours}}; собственная ведомость Prime указывает {{prime}} — стоит проверить.",
-    "primeYtdStatementMismatch": "Ваша чистая выплата с начала года здесь — {{ours}}; в отчёте Prime указано, что выплачено {{prime}} — стоит проверить.",
     "primeYtdAsOf": "По данным операционной ведомости Prime за неделю, заканчивающуюся {{date}}.",
     "milesLabelShort": "Мили",
     "milesMissing": "Мили не указаны — нажмите, чтобы добавить",
@@ -1194,7 +1230,12 @@
     "reimportNote": "Повторный импорт settlement за эту неделю заменяет его settlement, грузы, топливо, возмещения и удержанные вычеты — никогда их не дублирует.",
     "deleteConfirmTitle": "Удалить этот settlement?",
     "deleteConfirmBody": "Это также удалит связанные грузы, топливо, возмещения и удержанные вычеты.",
-    "deleteFailedTitle": "Не удалось удалить"
+    "deleteFailedTitle": "Не удалось удалить",
+    "owedToCarrierLabel": "Долг перевозчику",
+    "netDueLabel": "К выплате",
+    "depositedLabel": "Зачислено",
+    "profitThisWeekLabel": "Прибыль за эту неделю",
+    "primeYtdDepositsInfo": "По данным Prime с начала года: {{prime}}; ваши импортированные недели дают {{ours}} (на {{date}})."
   },
   "reimbursements": {
     "title": "Возмещения",
@@ -1494,7 +1535,9 @@
     "aiInsightsTitle": "Аналитика ИИ",
     "askAi": "🤖 Получить аналитику ИИ",
     "aiFooter": "Общая информация, не является профессиональной налоговой консультацией.",
-    "aiFailed": "Не удалось связаться со службой консультирования."
+    "aiFailed": "Не удалось связаться со службой консультирования.",
+    "reimbursementsLine": "Возмещения",
+    "primeStatementLine": "Недели по отчёту Prime (из отчёта самого Prime)"
   },
   "shareProfit": {
     "notAvailableTitle": "Обмен недоступен на этом устройстве.",
@@ -2567,5 +2610,59 @@
   "documentTitles": {
     "weekEnding": "Н/О {{date}}",
     "receiptFor": "Чек: {{category}}"
+  },
+  "audit": {
+    "verification": {
+      "verified_prime": "Подтверждено отчётом Prime",
+      "totals_match": "Итоги сходятся",
+      "unverified": "Не проверено"
+    },
+    "statusTitle": {
+      "counted": "Учтено",
+      "offset": "Зачёты (уменьшают расходы)",
+      "excluded": "Исключено (не расходы)"
+    },
+    "status": {
+      "counted": "УЧТЕНО",
+      "offset": "ЗАЧЁТ",
+      "excluded": "ИСКЛЮЧЕНО"
+    },
+    "source": {
+      "prime_statement": "Отчёт Prime",
+      "settlement": "Строка settlement",
+      "manual": "Ваш чек"
+    },
+    "reason": {
+      "expense": "Расход бизнеса",
+      "discount_credit": "Скидка или кредит",
+      "reimbursement": "Возмещение — зачитывает возмещаемый расход",
+      "pr_offset": "Личный платёж — зачитывает возмещение PR",
+      "duplicate_fuel": "То же топливо, что и строка settlement, — учтено один раз",
+      "non_deductible": "Не вычитаемый расход",
+      "advance": "Погашение аванса — не расход",
+      "escrow": "Escrow или залог — это всё ещё ваши деньги",
+      "meals_per_diem": "Питание — уже покрыто per diem",
+      "truck_extras": "Доп. оборудование грузовика — учитывается в Базе стоимости грузовика",
+      "owner_money_in": "Деньги владельца — не доход и не расход",
+      "interest_income": "Процентный доход — не прибыль бизнеса"
+    },
+    "empty": "В этом периоде нет строк.",
+    "showEveryRow": "Показать все строки",
+    "hideRows": "Скрыть строки",
+    "shareAudit": "Поделиться аудитом",
+    "totalsLine": "Учтено {{counted}} − зачёты {{offset}} = расходы {{expenses}}",
+    "share": {
+      "heading": "BOZKA TRUCKING AI — аудит",
+      "week": "Неделя до {{date}} · {{carrier}} · {{label}}",
+      "unknownCarrier": "перевозчик не прочитан",
+      "printed": "Напечатано: валовой {{gross}} · возмещения {{reimbursements}} · удержания {{deductions}} · к выплате {{netDue}}",
+      "notPrinted": "не напечатано",
+      "owed": "Долг перевозчику: {{amount}}",
+      "netDueOnly": "К выплате (строка депозита не напечатана): {{amount}}",
+      "deposited": "Зачислено: {{amount}}",
+      "rowsTitle": "Все строки:",
+      "totals": "Учтено {{counted}} − зачёты {{offset}} = расходы {{expenses}} (исключено {{excluded}})",
+      "profit": "Прибыль = доход {{gross}} − расходы {{expenses}} = {{profit}}"
+    }
   }
 }

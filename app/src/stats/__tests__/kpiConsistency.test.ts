@@ -452,3 +452,35 @@ describe('DASHBOARD NET PROFIT vs EXPENSES — root-cause fix', () => {
     expect(dashboard.previousKpi === null || typeof dashboard.previousKpi!.net === 'number').toBe(true);
   });
 });
+
+// PROFIT IS NEVER THE DEPOSIT (owner decision 2026-10-13, B4): no label for
+// a deposit / net-pay / net-due figure may call it profit, on any screen.
+describe('labels — a deposit is never called profit', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const en = require('@/src/i18n/locales/en.json') as Record<string, unknown>;
+  const flat: Record<string, string> = {};
+  (function walk(o: unknown, prefix: string) {
+    if (typeof o === 'string') flat[prefix] = o;
+    else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walk(v, prefix ? `${prefix}.${k}` : k);
+  })(en, '');
+
+  const ALLOWED = new Set(['dashboard.hero.profitNotDeposits']);
+  const isDepositLabel = (key: string, value: string) =>
+    /deposit|netpay|netdue|nettotal|netlabelshort|owedtocarrier/i.test(key.split('.').pop() ?? '') || /\bdeposit(ed)?\b/i.test(value);
+
+  it('every deposit / net-pay / net-due label avoids "profit"', () => {
+    const offenders = Object.entries(flat).filter(
+      // A sentence that says something is NOT profit is the rule, not a breach.
+      ([key, value]) => !ALLOWED.has(key) && isDepositLabel(key, value) && /\bprofit\b/i.test(value) && !/\bnot\b[^.]*\bprofit\b/i.test(value)
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('the Home caption says profit is not deposits, and the deposit line says deposited', () => {
+    expect(flat['dashboard.hero.profitNotDeposits']).toBe('Profit, not deposits');
+    expect(flat['dashboard.hero.depositedToBank']).toMatch(/^Deposited to your bank/);
+    expect(flat['dashboard.hero.depositedToBank']).not.toMatch(/profit/i);
+    expect(flat['settlementsScreen.depositedLabel']).toBe('Deposited');
+    expect(flat['settlementsScreen.profitThisWeekLabel']).toBe('Profit from this week');
+  });
+});

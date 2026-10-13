@@ -1,3 +1,4 @@
+import { settlementDeposit, type SettlementStatement } from '@/src/import/settlementStatement';
 // CASH FLOW — MONTHLY VIEW (owner decision, "period tabs" pass). A
 // month-by-month view of the same income/fixed/variable/periodic engine
 // the 30-day forecast already uses (cashFlowForecast.ts/
@@ -33,7 +34,7 @@ export type CashFlowMonthProjection = {
   net: number;
 };
 
-type SettlementNetLike = { week_ending: string | null; net: number | null };
+type SettlementNetLike = { week_ending: string | null; net: number | null; statement?: SettlementStatement | null };
 
 function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -49,10 +50,13 @@ function monthIndex(year: number, month: number): number {
   return year * 12 + (month - 1);
 }
 
+// CASH IN (BANK DEPOSIT add-on, owner decision 2026-10-13): each week's
+// deposit as READ from the statement (else its net due); an owed-to-carrier
+// week adds 0 — the same per-week figure as Home's "Deposited to your bank".
 function sumSettlementsNet(settlements: SettlementNetLike[], startIso: string, endIso: string): number {
   return settlements
     .filter((s) => s.week_ending && s.week_ending >= startIso && s.week_ending <= endIso)
-    .reduce((sum, s) => sum + Number(s.net ?? 0), 0);
+    .reduce((sum, s) => sum + settlementDeposit(s).deposited, 0);
 }
 
 // Buckets ACTUAL spend events by the SAME fixed/variable category sets

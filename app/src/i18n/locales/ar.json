@@ -152,7 +152,10 @@
         "3M": "ربح آخر 90 يومًا",
         "6M": "ربح آخر 6 أشهر",
         "yearly": "ربح هذا العام"
-      }
+      },
+      "profitNotDeposits": "ربح، وليس إيداعات",
+      "depositedToBank": "أُودع في بنكك: {{amount}}",
+      "owedToCarrier": "مستحق لشركة النقل: {{amount}}"
     },
     "overview": {
       "expenses": "المصروفات"
@@ -172,7 +175,8 @@
       "excludedVehiclePurchase": "تم استبعاد {{amount}} من مشتريات المركبات — تبقى في سجلاتك لكن لا تُحتسب هنا كمصروف روتيني.",
       "largestRowsTitle": "أكبر المصروفات",
       "possibleDepreciableAsset": "مصروف كبير — قد يكون أصلاً قابلاً للاستهلاك، راجع محاسبك",
-      "empty": "لا توجد مصروفات مسجلة لهذه الفترة بعد."
+      "empty": "لا توجد مصروفات مسجلة لهذه الفترة بعد.",
+      "fixedVariableNote": "الثابت والمتغير لا يشملان المشتريات لمرة واحدة، مثل التكلفة/ميل."
     },
     "fleetHealth": {
       "title": "درجة صحة الأسطول",
@@ -331,7 +335,13 @@
       "differenceWhy": "البنود المحفوظة لا تطابق تمامًا صافي دفع هذا settlement — أعد استيراده أو راجع بنوده.",
       "profit": "الربح",
       "reimbursementNote": "التعويضات تخفض المصروفات؛ ولا تُحسب أبدًا كإيراد.",
-      "fixedCostNote": "تقدير تكلفة شاحنتك ({{amount}}) يُستخدم فقط في التكلفة/ميل والربح/ميل — ولا يُطرح من هذا الربح."
+      "fixedCostNote": "تقدير تكلفة شاحنتك ({{amount}}) يُستخدم فقط في التكلفة/ميل والربح/ميل — ولا يُطرح من هذا الربح.",
+      "deposit": "أودعته Prime",
+      "depositWhy": "الإيداع المطبوع في كشف Prime — يُقرأ، ولا يُحسب أبدًا.",
+      "interestIncome": "دخل الفائدة",
+      "interestIncomeWhy": "فائدة دفعتها Prime على أموال تحتفظ بها لك — ضمن الإيداع، وليست ربحًا تجاريًا.",
+      "profitEstimate": "الربح (تقدير من البنود)",
+      "crossCheck": "تختلف البنود عن كشف Prime بمقدار {{amount}} (أسبوع {{date}}). يستخدم الربح كشف Prime."
     }
   },
   "deductions": {
@@ -549,11 +559,6 @@
     "saveAnywayFlaggedConfirmTitle": "هل تحفظ بأرقام غير متطابقة؟",
     "saveAnywayFlaggedConfirmBody": "سيُحفظ هذا settlement كما قُرئ تمامًا ويُعلَّم بأنه يحتاج مراجعة. قد يكون ربحه خاطئًا حتى تصححه.",
     "primeCheckOk": "✓ يطابق كشف التشغيل من Prime",
-    "primeCheckMismatch": "⚠️ لا يطابق كشف التشغيل من Prime — يُرجى التحقق",
-    "primeCheckRevenue": "الإيراد {{ours}} · إجمالي إيراد Prime {{prime}}",
-    "primeCheckMiles": "الأميال {{ours}} · Prime {{prime}}",
-    "primeCheckExpenses": "الخصومات {{deductions}} − المُعوَّض {{reimbursed}} − الفائدة {{interest}} = {{ours}} · مصروفات التشغيل لدى Prime {{prime}}",
-    "primeCheckDeposit": "الصافي المستحق {{netDue}} + الفائدة {{interest}} = {{ours}} · إجمالي كشف Prime (الإيداع) {{prime}}",
     "lowConfidenceTitle": "⚠️ يرجى المراجعة قبل الحفظ",
     "lowConfidenceBody": "لم يكن الذكاء الاصطناعي واثقًا تمامًا من قراءة هذا المستند — راجع التفاصيل قبل الحفظ.",
     "miscIncomeNoteTitle": "💵 تم اكتشاف دخل تجاري",
@@ -640,7 +645,39 @@
     "backfillOfferTitle": "هل تُدخل سجلات قديمة؟",
     "backfillOfferBody": "إذا كنت تستورد عدة أشهر من المستندات القديمة، قد تساعدك حزمة سنة اللحاق (1000 عملية استيراد، صالحة 90 يومًا). تواصل مع الدعم إذا أردت إضافتها إلى حسابك.",
     "processingPageProgressWithData": "الصفحة {{through}} من {{total}} · تم استلام الإيرادات والخصومات",
-    "notTruckSpecific": "غير مرتبط بشاحنة محددة"
+    "notTruckSpecific": "غير مرتبط بشاحنة محددة",
+    "reconciliationDepositMismatch": "الصافي المستحق + الفائدة = {{computed}}، لكن الإيداع المطبوع في الكشف هو {{stated}}.",
+    "primeCheckFailed": "🚫 لا يمكن الحفظ — كشف التشغيل من Prime غير متطابق كما قُرئ",
+    "primeCheckNumbers": "مطبوع {{printed}}، مقروء {{read}}",
+    "primeLinesTitle": "بنود الكشف المقروءة ({{count}})، بالإشارة كما طُبعت",
+    "primeCheck": {
+      "revenueLines": "بنود الإيراد = TOTAL REVENUE",
+      "section_fuel_oil_tax": "بنود الوقود والزيت والضرائب = مجموعها",
+      "section_repair": "بنود الإصلاح = مجموعها",
+      "section_tires": "بنود الإطارات = مجموعها",
+      "section_misc": "البنود المتنوعة = مجموعها",
+      "section_out_of_pocket": "بنود المصروفات الشخصية = مجموعها",
+      "section_fixed": "بنود التكلفة الثابتة = مجموعها",
+      "section_other": "بنود الإيرادات والمصروفات الأخرى = مجموعها",
+      "variableCosts": "الوقود + الإصلاح + الإطارات + المتنوع = TOTAL VARIABLE COSTS",
+      "operatingExpenses": "المتغيرة + الشخصية + الثابتة + الأخرى = TOTAL OPERATING EXPENSES",
+      "statementTotal": "الإيراد − مصروفات التشغيل = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "grossMatches": "TOTAL REVENUE = إجمالي settlement",
+      "milesMatch": "MILES في الكشف = أميال settlement",
+      "requiredTotals": "مجاميع الإيراد ومصروفات التشغيل والكشف مطبوعة (من 3)"
+    },
+    "primeSection": {
+      "revenue": "الإيراد",
+      "fuel_oil_tax": "الوقود والزيت والضرائب",
+      "repair": "الإصلاح",
+      "tires": "الإطارات",
+      "misc": "متنوع",
+      "out_of_pocket": "من الجيب",
+      "fixed": "ثابت",
+      "other": "أخرى"
+    }
   },
   "camera": {
     "permissionNote": "يلزم الوصول إلى الكاميرا لتصوير الإيصالات وملفات PDF لـ Settlements.",
@@ -1174,7 +1211,6 @@
     "primeYtdMismatchTitle": "يستحق المقارنة مع كشف Prime الخاص",
     "primeYtdRevenueMismatch": "إيراداتك منذ بداية السنة هنا هي {{ours}}؛ كشف Prime الخاص يقول {{prime}} — يستحق التحقق.",
     "primeYtdMilesMismatch": "أميالك منذ بداية السنة هنا هي {{ours}}؛ كشف Prime الخاص يقول {{prime}} — يستحق التحقق.",
-    "primeYtdStatementMismatch": "صافي دفعك منذ بداية العام هنا هو {{ours}}؛ يقول كشف Prime إنه دفع {{prime}} — يستحق التحقق.",
     "primeYtdAsOf": "وفقًا لكشف تشغيل Prime الخاص للأسبوع المنتهي في {{date}}.",
     "milesLabelShort": "الأميال",
     "milesMissing": "الأميال مفقودة — اضغط للإضافة",
@@ -1194,7 +1230,12 @@
     "reimportNote": "إعادة استيراد Settlement لهذا الأسبوع تستبدل Settlement والحمولات والوقود والمبالغ المستردة والخصومات المحتجزة الخاصة به — لا تكررها أبدًا.",
     "deleteConfirmTitle": "حذف هذا الـ Settlement؟",
     "deleteConfirmBody": "سيؤدي هذا أيضًا إلى إزالة الحمولات والوقود والمبالغ المستردة والخصومات المحتجزة المرتبطة به.",
-    "deleteFailedTitle": "فشل الحذف"
+    "deleteFailedTitle": "فشل الحذف",
+    "owedToCarrierLabel": "مستحق لشركة النقل",
+    "netDueLabel": "الصافي المستحق",
+    "depositedLabel": "أُودع",
+    "profitThisWeekLabel": "ربح هذا الأسبوع",
+    "primeYtdDepositsInfo": "تقول Prime منذ بداية العام {{prime}}؛ وأسابيعك المستوردة مجموعها {{ours}} (حتى {{date}})."
   },
   "reimbursements": {
     "title": "المبالغ المستردة",
@@ -1494,7 +1535,9 @@
     "aiInsightsTitle": "رؤى الذكاء الاصطناعي",
     "askAi": "🤖 الحصول على رؤى الذكاء الاصطناعي",
     "aiFooter": "معلومات عامة، وليست استشارة ضريبية احترافية.",
-    "aiFailed": "تعذّر الوصول إلى خدمة الاستشارة."
+    "aiFailed": "تعذّر الوصول إلى خدمة الاستشارة.",
+    "reimbursementsLine": "التعويضات",
+    "primeStatementLine": "أسابيع كشف Prime (من كشف Prime نفسه)"
   },
   "shareProfit": {
     "notAvailableTitle": "المشاركة غير متوفرة على هذا الجهاز.",
@@ -2567,5 +2610,59 @@
   "documentTitles": {
     "weekEnding": "نهاية الأسبوع {{date}}",
     "receiptFor": "إيصال {{category}}"
+  },
+  "audit": {
+    "verification": {
+      "verified_prime": "موثّق بكشف Prime",
+      "totals_match": "المجاميع متطابقة",
+      "unverified": "غير موثّق"
+    },
+    "statusTitle": {
+      "counted": "محسوب",
+      "offset": "مقاصّات (تخفض المصروفات)",
+      "excluded": "مستبعد (ليس مصروفات)"
+    },
+    "status": {
+      "counted": "محسوب",
+      "offset": "مقاصة",
+      "excluded": "مستبعد"
+    },
+    "source": {
+      "prime_statement": "كشف Prime",
+      "settlement": "بند settlement",
+      "manual": "إيصالك"
+    },
+    "reason": {
+      "expense": "مصروف تجاري",
+      "discount_credit": "خصم أو رصيد دائن",
+      "reimbursement": "تعويض — يقابل التكلفة التي يسددها",
+      "pr_offset": "دفعة شخصية — تقابل تعويض PR",
+      "duplicate_fuel": "نفس الوقود في بند settlement — حُسب مرة واحدة",
+      "non_deductible": "ليس مصروفًا قابلًا للخصم",
+      "advance": "سداد سلفة — ليس مصروفًا",
+      "escrow": "escrow أو كفالة — ما زالت أموالك",
+      "meals_per_diem": "وجبة — يغطيها per diem بالفعل",
+      "truck_extras": "إضافات الشاحنة — تُتابع في أساس تكلفة الشاحنة",
+      "owner_money_in": "أموال المالك — ليست دخلًا ولا مصروفًا",
+      "interest_income": "دخل الفائدة — ليس ربحًا تجاريًا"
+    },
+    "empty": "لا توجد بنود في هذه الفترة.",
+    "showEveryRow": "عرض كل البنود",
+    "hideRows": "إخفاء البنود",
+    "shareAudit": "مشاركة التدقيق",
+    "totalsLine": "المحسوب {{counted}} − المقاصات {{offset}} = المصروفات {{expenses}}",
+    "share": {
+      "heading": "BOZKA TRUCKING AI — تدقيق",
+      "week": "الأسبوع المنتهي في {{date}} · {{carrier}} · {{label}}",
+      "unknownCarrier": "لم تُقرأ شركة النقل",
+      "printed": "المطبوع: الإجمالي {{gross}} · التعويضات {{reimbursements}} · الخصومات {{deductions}} · الصافي المستحق {{netDue}}",
+      "notPrinted": "غير مطبوع",
+      "owed": "مستحق لشركة النقل: {{amount}}",
+      "netDueOnly": "الصافي المستحق (لا يوجد بند إيداع مطبوع): {{amount}}",
+      "deposited": "أُودع: {{amount}}",
+      "rowsTitle": "كل البنود:",
+      "totals": "المحسوب {{counted}} − المقاصات {{offset}} = المصروفات {{expenses}} (المستبعد {{excluded}})",
+      "profit": "الربح = الإيراد {{gross}} − المصروفات {{expenses}} = {{profit}}"
+    }
   }
 }

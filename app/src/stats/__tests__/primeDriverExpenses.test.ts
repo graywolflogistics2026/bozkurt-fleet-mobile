@@ -217,7 +217,7 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
     const before = {
       kpi: computeKpis(baseKpiInputs()),
       expenses: sumCanonicalExpenses(deductions, fuel, maintenance, tolls, []),
-      cpm: calcCanonicalCpm(3000, 2000, deductions, fuel, maintenance, tolls, [], 0),
+      cpm: calcCanonicalCpm(3000, 2000, deductions, fuel, maintenance, tolls, [], [], 0),
       comparison: buildTruckComparison(trucks, settlements, loads, deductions, fuel, maintenance, tolls, []),
     };
 
@@ -235,7 +235,7 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
     const after = {
       kpi: computeKpis(baseKpiInputs()),
       expenses: sumCanonicalExpenses(deductions, fuel, maintenance, tolls, []),
-      cpm: calcCanonicalCpm(3000, 2000, deductions, fuel, maintenance, tolls, [], 0),
+      cpm: calcCanonicalCpm(3000, 2000, deductions, fuel, maintenance, tolls, [], [], 0),
       comparison: buildTruckComparison(trucks, settlements, loads, deductions, fuel, maintenance, tolls, []),
     };
 
@@ -257,7 +257,7 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
     const before = {
       kpi: computeKpis({ ...baseKpiInputs(), deductions: dedsBefore }),
       expenses: sumCanonicalExpenses(dedsBefore, fuel, maintenance, tolls, []),
-      cpm: calcCanonicalCpm(3000, 2000, dedsBefore, fuel, maintenance, tolls, [], 0),
+      cpm: calcCanonicalCpm(3000, 2000, dedsBefore, fuel, maintenance, tolls, [], [], 0),
       comparison: buildTruckComparison(trucks, settlements, loads, dedsBefore, fuel, maintenance, tolls, []),
     };
 
@@ -270,7 +270,7 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
     const after = {
       kpi: computeKpis({ ...baseKpiInputs(), deductions: dedsAfter }),
       expenses: sumCanonicalExpenses(dedsAfter, fuel, maintenance, tolls, []),
-      cpm: calcCanonicalCpm(3000, 2000, dedsAfter, fuel, maintenance, tolls, [], 0),
+      cpm: calcCanonicalCpm(3000, 2000, dedsAfter, fuel, maintenance, tolls, [], [], 0),
       comparison: buildTruckComparison(trucks, settlements, loads, dedsAfter, fuel, maintenance, tolls, []),
     };
 
@@ -377,7 +377,7 @@ describe('PRIME LUMPER EXCEPTION — on this report, invisible everywhere else',
       kpi: computeKpis(kpiInputs),
       trueProfit: calcTrueProfit(settlements, deductions, [], [], [], []),
       expenses: sumCanonicalExpenses(deductions, [], [], [], []),
-      cpm: calcCanonicalCpm(1085.51, 445, deductions, [], [], [], [], 0),
+      cpm: calcCanonicalCpm(1085.51, 445, deductions, [], [], [], [], [], 0),
       comparison: buildTruckComparison(trucks, settlements, [], deductions, [], [], [], []),
       taxDeductible: deductions.filter(isDeductibleExpense).reduce((sum, d) => sum + Number(d.amount), 0),
       outOfPocketAmounts: buildLineItems(deductions, [], [], [], 2026, 7, 'outOfPocket').map((i) => i.amount),

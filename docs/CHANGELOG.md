@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- PRIME STATEMENT AS SOURCE + SOURCE LABELS + PROFIT IS NEVER THE DEPOSIT
+  (owner decisions 2026-10-13, D1-D9, R1-R4, bank-deposit add-on). Prime
+  weeks with a self-checked Statement of Income and Expense count from it
+  (linked rows = detail); Verified / Totals match / Unverified labels;
+  printed deposit read (never computed), "Deposited to your bank" on Home,
+  Cash Flow cash-in uses it; audit ledger + Share audit; import preview
+  shows every statement line and check. §77 (settlements.statement jsonb,
+  no backfill). Redeploy ai-import. eas update.
+  docs/decisions/prime-statement-source.md.
+
 - GOLDEN SETTLEMENT (owner decision 2026-10-13). Real Prime week (unit
   283940, W/E 8/21) showed ~$4,549, correct $2,534.36. Fixed: reimbursements
   now offset expenses in every profit figure; duplicate-fuel guard per row

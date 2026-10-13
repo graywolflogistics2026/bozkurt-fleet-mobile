@@ -1,7 +1,7 @@
 import { supabase } from '@/src/lib/supabase';
 import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
-import { applyPrimeOperatingStatementCheck } from '@/src/import/primeOperatingStatement';
+import { applyPrimeOperatingStatementCheck } from '@/src/import/settlementStatement';
 import type { Extraction } from '@/src/import/types';
 
 // Composes every sanitize-guard in the established order (dates first,

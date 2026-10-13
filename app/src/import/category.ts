@@ -278,8 +278,12 @@ export function isGenericAdvance(text: string | undefined): boolean {
 const MAJOR_REPAIR_RE =
   /engine (in-?frame|rebuild|overhaul|replacement)|transmission (rebuild|overhaul|replacement)|differential (rebuild|overhaul)|\bcab\b\s*(replace(ment)?|swap)|\brepaint\b|frame (repair|straighten(ing)?)/i;
 
+// Shared with the Prime statement route (src/import/primeStatementLines.ts),
+// where a repair line has no description to test — only this amount rule.
+export const MAJOR_REPAIR_ONE_OFF_THRESHOLD = 2500;
+
 export function isMajorRepairOverhaul(text: string | undefined, amount: number): boolean {
-  return amount > 2500 && MAJOR_REPAIR_RE.test(text ?? '');
+  return amount > MAJOR_REPAIR_ONE_OFF_THRESHOLD && MAJOR_REPAIR_RE.test(text ?? '');
 }
 
 // FULL PARITY follow-up (owner decision 2026-08-05, spec item C.2) — a

@@ -76,10 +76,16 @@ import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import {
   canonicalExpenseBreakdown,
   filterSettlementLinkedRowsToWindow,
+  layeredGross,
   reducesTrueProfit,
   resolveFuelRows,
+  splitSettlementLayers,
   type CanonicalReimbursement,
+  type SettlementLayers,
 } from '@/src/stats/trueProfit';
+import { buildAuditLedger, type LedgerRow } from '@/src/stats/auditLedger';
+import type { StatementExcludeReason } from '@/src/import/primeStatementLines';
+import { settlementDeposit, settlementVerification, type SettlementStatement, type SettlementVerification } from '@/src/import/settlementStatement';
 import type { ComparisonTruck, ComparisonSettlement, ComparisonDeduction, ComparisonFuel, ComparisonMaintenance, ComparisonToll } from '@/src/stats/truckComparison';
 import { filterRowsByDateWindow, type DateWindow } from '@/src/stats/heroPeriodWindow';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
@@ -93,7 +99,7 @@ export type { DateWindow };
 // week_ending is `string | null` (a settlement can, structurally, have no
 // resolvable week yet), and forcing that narrower type here would make
 // every real call site's settlement array fail to type-check.
-type KpiSettlement = ComparisonSettlement & { per_diem_days?: number | null };
+type KpiSettlement = ComparisonSettlement & { per_diem_days?: number | null; statement?: SettlementStatement | null };
 type KpiDeduction = ComparisonDeduction & { ded_date?: string | null; settlement_id?: string | null };
 type KpiFuel = ComparisonFuel & { purchase_date?: string | null; fuel_type?: string | null };
 type KpiMaintenance = ComparisonMaintenance & { service_date?: string | null; settlement_id?: string | null };
@@ -153,6 +159,15 @@ export type KpiResult = {
   excludedTotal: number;
   excludedOneOffs: CpmExcludedOneOff[];
   reimbursementsTotal: number;
+  // Statement-backed Prime weeks' expenses (already inside expenses.total).
+  statementExpenses: number;
+  // DEPOSITED (owner decision 2026-10-13): Σ each week's printed deposit
+  // (else net due); owed-to-carrier weeks add 0 here and their amount to
+  // owedToCarrier. Cash, never profit.
+  deposits: number;
+  owedToCarrier: number;
+  // AUDIT LEDGER: every row behind expenses.total, with its status/reason.
+  ledger: LedgerRow[];
   bridge: ProfitBridge;
 };
 
@@ -169,8 +184,16 @@ export type KpiResult = {
 // it is reported separately as information, never as a bridge line.
 export type ProfitBridgeLine = { description: string; category: string | null; amount: number };
 export type ProfitBridge = {
+  // Net due of every week that is NOT statement-backed.
   netPay: number;
+  // B2: the actual deposits of statement-backed Prime weeks.
+  depositStart: number;
   nonExpenseLines: ProfitBridgeLine[];
+  // Excluded statement lines, as the amount each adds back from deposit to
+  // profit (advances, performance bond, ...).
+  statementAddBacks: { label: string; reason: StatementExcludeReason; amount: number; weekEnding: string | null }[];
+  // Interest income on statement-backed weeks — its own line (D8).
+  interestIncome: number;
   outOfPocketDeductions: number;
   standaloneFuel: number;
   maintenance: number;
@@ -179,6 +202,12 @@ export type ProfitBridge = {
   difference: number;
   profit: number;
   fixedCostEstimateInCpm: number;
+  // Item 6: weeks whose line items differ from Prime's statement by > $1.
+  crossChecks: { settlementId: string; weekEnding: string | null; lineExpenses: number; statementExpenses: number; difference: number }[];
+  // Part 2: every week's source label.
+  weeks: { settlementId: string; weekEnding: string | null; verification: SettlementVerification }[];
+  // Any Unverified week in the window: profit is an estimate from line items.
+  estimateFromLineItems: boolean;
 };
 
 // NULL-TRUCK EXCLUSION FIX — see this module's header comment. `null`
@@ -278,12 +307,22 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
   );
 
   // TRUE-PROFIT (this module's header comment) — gross minus every real
-  // recorded dollar, one-offs INCLUDED. Identical formula for both
-  // scopes; the only difference is which rows already passed the
-  // truck-scope filter above.
-  const grossRevenue = settlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const breakdown = canonicalExpenseBreakdown(deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements);
-  const trueExpenses = breakdown.total;
+  // recorded dollar, one-offs INCLUDED. TWO SETTLEMENT LAYERS (owner
+  // decision 2026-10-13): a statement-backed Prime week counts from
+  // Prime's own Statement of Income and Expense and its linked rows are
+  // removed here (detail only); every other row goes through the
+  // line-level engine. Identical formula for both scopes.
+  const layers = splitSettlementLayers(settlements, deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements);
+  const grossRevenue = layeredGross(settlements);
+  const lineBreakdown = canonicalExpenseBreakdown(
+    layers.deductions,
+    layers.fuelPurchases,
+    layers.maintenanceRecords,
+    layers.tolls,
+    layers.reimbursements
+  );
+  const statementExpenses = layers.statementWeeks.reduce((sum, w) => sum + w.expenses, 0);
+  const trueExpenses = lineBreakdown.total + statementExpenses;
   const net = grossRevenue - trueExpenses;
 
   // Fixed cost basis: a scoped truck charges only ITS OWN weekly cost ×
@@ -312,15 +351,38 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
   const cpmResult = calcCanonicalCpm(
     grossRevenue,
     milesSource.totalMiles,
-    deductions,
-    fuelPurchases,
-    maintenanceRecords,
-    tolls,
-    reimbursements,
+    layers.deductions,
+    layers.fuelPurchases,
+    layers.maintenanceRecords,
+    layers.tolls,
+    layers.reimbursements,
+    layers.statementWeeks,
     fixedCostBasisTotal
   );
 
-  const bridge = buildProfitBridge(settlements, deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements, net, fixedCostBasisTotal);
+  // DEPOSITED (owner decision 2026-10-13) — a sum of each week's PRINTED
+  // deposit (else net due); an owed-to-carrier week adds 0. Never a
+  // running balance.
+  const weekDeposits = settlements.map((s) => ({ s, d: settlementDeposit(s) }));
+  const deposits = weekDeposits.reduce((sum, x) => sum + x.d.deposited, 0);
+  const owedToCarrier = weekDeposits.reduce((sum, x) => sum + x.d.owedToCarrier, 0);
+
+  const ledger = buildAuditLedger(
+    layers.statementWeeks,
+    layers.deductions,
+    layers.fuelPurchases,
+    layers.maintenanceRecords,
+    layers.tolls,
+    layers.reimbursements
+  );
+
+  const bridge = buildProfitBridge({
+    settlements,
+    layers,
+    allLinked: { deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements },
+    profit: net,
+    fixedCostEstimateInCpm: fixedCostBasisTotal,
+  });
 
   return {
     window,
@@ -343,22 +405,39 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
     buckets: cpmResult.buckets,
     excludedTotal: cpmResult.excludedTotal,
     excludedOneOffs: cpmResult.excludedOneOffs,
-    reimbursementsTotal: breakdown.reimbursementsTotal,
+    reimbursementsTotal: lineBreakdown.reimbursementsTotal,
+    statementExpenses,
+    deposits,
+    owedToCarrier,
+    ledger,
     bridge,
   };
 }
 
-function buildProfitBridge(
-  settlements: KpiSettlement[],
-  deductions: KpiDeduction[],
-  fuelPurchases: KpiFuel[],
-  maintenanceRecords: KpiMaintenance[],
-  tolls: KpiToll[],
-  reimbursements: KpiReimbursement[],
-  profit: number,
-  fixedCostEstimateInCpm: number
-): ProfitBridge {
-  const netPay = settlements.reduce((sum, s) => sum + Number(s.net ?? 0), 0);
+function buildProfitBridge(args: {
+  settlements: KpiSettlement[];
+  layers: SettlementLayers<KpiDeduction, KpiFuel, KpiMaintenance, KpiToll, KpiReimbursement>;
+  allLinked: {
+    deductions: KpiDeduction[];
+    fuelPurchases: KpiFuel[];
+    maintenanceRecords: KpiMaintenance[];
+    tolls: KpiToll[];
+    reimbursements: KpiReimbursement[];
+  };
+  profit: number;
+  fixedCostEstimateInCpm: number;
+}): ProfitBridge {
+  const { settlements, layers, allLinked, profit, fixedCostEstimateInCpm } = args;
+  const { deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements } = layers;
+  const backed = layers.backedSettlementIds;
+
+  // B2: a statement-backed week starts from the actual deposit; every
+  // other week from its net due, as before.
+  const netPay = settlements.filter((s) => !backed.has(s.id)).reduce((sum, s) => sum + Number(s.net ?? 0), 0);
+  const depositStart = layers.statementWeeks.reduce((sum, w) => sum + w.deposit, 0);
+  const statementAddBacks = layers.statementWeeks.flatMap((w) => w.addBacks.map((a) => ({ ...a, weekEnding: w.weekEnding })));
+  const interestIncome = layers.statementWeeks.reduce((sum, w) => sum + w.interestIncome, 0);
+
   // A withheld line already sits inside its settlement's net pay; the ones
   // that do not reduce profit are added back.
   const withheld = (d: KpiDeduction) => d.source === 'settlement' && !!d.settlement_id;
@@ -376,16 +455,41 @@ function buildProfitBridge(
   const reimbursementsNotOnSettlement = reimbursements.filter((r) => !r.settlement_id).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
   const explained =
     netPay +
-    nonExpenseLines.reduce((sum, l) => sum + l.amount, 0) -
+    depositStart +
+    nonExpenseLines.reduce((sum, l) => sum + l.amount, 0) +
+    statementAddBacks.reduce((sum, a) => sum + a.amount, 0) -
+    interestIncome -
     outOfPocketDeductions -
     standaloneFuel -
     maintenance -
     tollsTotal +
     reimbursementsNotOnSettlement;
   const difference = Math.round((profit - explained) * 100) / 100;
+
+  // CROSS-CHECK (item 6): the week's own line items, counted the line way,
+  // vs Prime's statement. Profit stays the statement's.
+  const crossChecks = layers.statementWeeks
+    .map((w) => {
+      const linked = <R extends { settlement_id?: string | null }>(rows: R[]) => rows.filter((r) => r.settlement_id === w.settlementId);
+      const lineExpenses = canonicalExpenseBreakdown(
+        linked(allLinked.deductions),
+        linked(allLinked.fuelPurchases),
+        linked(allLinked.maintenanceRecords),
+        linked(allLinked.tolls),
+        linked(allLinked.reimbursements)
+      ).total;
+      return { settlementId: w.settlementId, weekEnding: w.weekEnding, lineExpenses, statementExpenses: w.expenses, difference: Math.round((lineExpenses - w.expenses) * 100) / 100 };
+    })
+    .filter((c) => Math.abs(c.difference) > 1);
+
+  const weeks = settlements.map((s) => ({ settlementId: s.id, weekEnding: s.week_ending, verification: settlementVerification(s) }));
+
   return {
     netPay,
+    depositStart,
     nonExpenseLines,
+    statementAddBacks,
+    interestIncome,
     outOfPocketDeductions,
     standaloneFuel,
     maintenance,
@@ -394,5 +498,8 @@ function buildProfitBridge(
     difference: difference === 0 ? 0 : difference,
     profit,
     fixedCostEstimateInCpm,
+    crossChecks,
+    weeks,
+    estimateFromLineItems: weeks.some((w) => w.verification === 'unverified'),
   };
 }

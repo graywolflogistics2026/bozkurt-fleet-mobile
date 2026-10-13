@@ -21,7 +21,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
       { amount: 200, source: 'manual', category: 'Advance Repayment', tax_deductible: false },
       { amount: 75, source: 'settlement', category: 'Escrow & Deposits', tax_deductible: false },
     ];
-    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], [], []);
+    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], [], [], []);
     expect(result.costPerMile).toBeCloseTo(0.1, 5); // only the $100 insurance counts
     expect(result.excludedTotal).toBe(325); // 50 + 200 + 75
   });
@@ -35,7 +35,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
     const fuel = [{ amount: 500, discount: 20, settlement_id: null }];
     const maintenance = [{ cost: 300 }];
     const tolls = [{ amount: 40 }];
-    const result = calcCanonicalCpm(5000, 1000, deductions, fuel, maintenance, tolls, []);
+    const result = calcCanonicalCpm(5000, 1000, deductions, fuel, maintenance, tolls, [], []);
     const byCategory = Object.fromEntries(result.buckets.map((b) => [b.category, b.amount]));
     expect(byCategory['Insurance']).toBe(100);
     expect(byCategory['Permits & Road Taxes']).toBe(60);
@@ -49,13 +49,13 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
   it('excludes a SETTLEMENT-LINKED fuel purchase from the Fuel & DEF bucket (already represented by withheld deductions)', () => {
     const deductions = [{ amount: 90, source: 'settlement', category: 'Fuel & DEF', tax_deductible: false, settlement_id: 'sett-1', description: 'TRACTOR FUEL' }];
     const linkedFuel = [{ amount: 90, discount: 0, settlement_id: 'sett-1', fuel_type: 'tractor' }];
-    const result = calcCanonicalCpm(5000, 1000, deductions, linkedFuel, [], [], []);
+    const result = calcCanonicalCpm(5000, 1000, deductions, linkedFuel, [], [], [], []);
     const byCategory = Object.fromEntries(result.buckets.map((b) => [b.category, b.amount]));
     expect(byCategory['Fuel & DEF']).toBe(90); // from the deduction, not doubled by the linked fuel row
   });
 
   it('adds an estimated loan payment ONLY when the carrier is not already withholding one', () => {
-    const noWithheldLoan = calcCanonicalCpm(5000, 1000, [], [], [], [], [], 250);
+    const noWithheldLoan = calcCanonicalCpm(5000, 1000, [], [], [], [], [], [], 250);
     const withheldLoan = calcCanonicalCpm(
       5000,
       1000,
@@ -63,7 +63,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
       [],
       [],
       [],
-      [], 250 // an estimate the caller computed anyway — must not be double-counted
+      [], [], 250 // an estimate the caller computed anyway — must not be double-counted
     );
     const noWithheldBucket = Object.fromEntries(noWithheldLoan.buckets.map((b) => [b.category, b.amount]));
     const withheldBucket = Object.fromEntries(withheldLoan.buckets.map((b) => [b.category, b.amount]));
@@ -72,7 +72,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
   });
 
   it('returns nulls when there are no miles (avoids divide-by-zero)', () => {
-    const result = calcCanonicalCpm(5000, 0, [], [], [], [], []);
+    const result = calcCanonicalCpm(5000, 0, [], [], [], [], [], []);
     expect(result.revenuePerMile).toBeNull();
     expect(result.costPerMile).toBeNull();
     expect(result.profitPerMile).toBeNull();
@@ -87,7 +87,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
     ];
     const fuel = [{ amount: 480, discount: 0, settlement_id: null }]; // variable
     const tolls = [{ amount: 40 }]; // variable
-    const result = calcCanonicalCpm(5000, 1000, deductions, fuel, [], tolls, []);
+    const result = calcCanonicalCpm(5000, 1000, deductions, fuel, [], tolls, [], []);
     expect(result.fixedTotal).toBe(160);
     expect(result.variableTotal).toBe(520);
     expect(result.fixedCostPerMile).toBeCloseTo(0.16, 5);
@@ -96,7 +96,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
   });
 
   it('a truck cost basis payment (5th param) is classified fixed', () => {
-    const result = calcCanonicalCpm(5000, 1000, [], [], [], [], [], 300);
+    const result = calcCanonicalCpm(5000, 1000, [], [], [], [], [], [], 300);
     expect(result.fixedTotal).toBe(300);
     expect(result.variableTotal).toBe(0);
   });
@@ -112,7 +112,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
         description: 'Engine in-frame overhaul',
       },
     ];
-    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], [], []);
+    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], [], [], []);
     expect(result.costPerMile).toBeCloseTo(0.4, 5); // only the $400 fuel line
     expect(result.excludedOneOffs).toHaveLength(1);
     expect(result.excludedOneOffs[0]).toMatchObject({
@@ -129,7 +129,7 @@ describe('calcCanonicalCpm (owner decision 2026-08-05, FULL PARITY pass item C.4
       { amount: 400, source: 'manual', category: 'Fuel & DEF', tax_deductible: true },
       { amount: 15000, source: 'manual', category: 'Other', tax_deductible: true, description: 'Truck down payment' },
     ];
-    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], [], []);
+    const result = calcCanonicalCpm(5000, 1000, deductions, [], [], [], [], []);
     expect(result.costPerMile).toBeCloseTo(0.4, 5);
     expect(result.excludedOneOffs).toHaveLength(1);
     expect(result.excludedOneOffs[0].reason).toBe('vehicle_purchase');

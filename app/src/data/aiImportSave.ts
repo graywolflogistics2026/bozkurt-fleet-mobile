@@ -23,6 +23,8 @@ import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
+import { buildSettlementStatement, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
+import { scrubBankDigits } from '@/src/import/bankDigits';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { buildTitleFromExtraction, cleanTitle, type TitleContext } from '@/src/data/documentTitle';
 import { ensureDescription } from '@/src/lib/descriptionText';
@@ -65,6 +67,20 @@ async function fetchLearningRules(userId: string): Promise<LearningRule[]> {
 // same "must never be able to break an import" contract as
 // fetchLearningRules() above — returns [] (identical to today's behavior)
 // if the table doesn't exist yet or the fetch otherwise fails.
+// First-appearance review flags (owner decision 2026-10-13, D3/D7): the
+// normalized statement labels already seen with a non-zero amount on this
+// account's earlier Prime statements. Before docs/PENDING_SQL.md §77 runs
+// the column doesn't exist — the select fails and nothing counts as seen.
+async function fetchPriorStatementLabels(userId: string): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabase.from('settlements').select('id, statement').eq('user_id', userId);
+    if (error || !data) return new Set();
+    return new Set(data.flatMap((r) => labelsSeenOn((r as { statement?: SettlementStatement | null }).statement)));
+  } catch {
+    return new Set();
+  }
+}
+
 async function fetchCarrierCodeMaps(): Promise<CarrierCode[]> {
   try {
     const { data, error } = await supabase
@@ -272,7 +288,10 @@ async function maybeLinkEquipment(
 // document id) into the pure mapping output, then performs the actual
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
-  const { extraction: d, userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution, categoryOverride } = params;
+  const { userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution, categoryOverride } = params;
+  // Never store bank digits (routing/account) the model may have copied
+  // into a free-text field — the deposit is read as an amount only.
+  let d = scrubBankDigits(params.extraction);
 
   const partial: SaveExtractionPartialState = emptyPartialState();
   // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — rows that failed
@@ -290,7 +309,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // mapping is computed here once and reused by the settlement branch
   // further down (mapSettlement() is pure — no reason to call it twice).
   let settlementMapping: ReturnType<typeof mapSettlement> | null = null;
+  // PRIME STATEMENT AS SOURCE + SOURCE LABELS (owner decision 2026-10-13):
+  // the statement's printed totals and, for Prime, its self-checked
+  // Statement of Income and Expense — saved to settlements.statement (§77).
+  let settlementStatement: SettlementStatement | null = null;
   if (d.docType === 'settlement' && d.settlement) {
+    settlementStatement = buildSettlementStatement(d, {
+      savedFlagged: Array.isArray(d.reconciliationOverride) && d.reconciliationOverride.length > 0,
+      priorLabelsSeen: await fetchPriorStatementLabels(userId),
+    });
+    // First appearance of an OT LOAD/UNLOAD ADVANCE, OUT OF POCKET COSTS,
+    // START UP line, an unknown label, or an unmatched personal payment:
+    // the whole document is flagged needs-review (the existing signal).
+    if (settlementStatement.reviewReasons.length > 0) d = { ...d, confidence: 'low' };
     settlementMapping = mapSettlement(d, userId, truckId, driverId);
     // A week_ending we can't pin down must never silently fall back to an
     // empty-string match key — two different weeks that both failed to
@@ -439,6 +470,17 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     }
     partial.settlementId = settlementId;
     partial.settlementSaved = true;
+
+    // A SEPARATE, NON-FATAL write: before docs/PENDING_SQL.md §77 adds the
+    // column this update fails and the settlement simply stays on the
+    // line-level engine (labeled Unverified) — the import itself succeeds.
+    if (settlementStatement) {
+      try {
+        await supabase.from('settlements').update({ statement: settlementStatement }).eq('id', settlementId);
+      } catch {
+        // Column missing (§77 not run yet) — line route, Unverified.
+      }
+    }
 
     // RE-IMPORT ORDERING (pre-launch hardening, owner decision 2026-08-02):
     // capture the PREVIOUS batch's row ids now (read-only) but do not

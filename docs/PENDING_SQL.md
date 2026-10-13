@@ -4506,6 +4506,44 @@ alter table documents
 No RLS changes needed — both columns live on `documents`, which already
 has owner-only row policies.
 
+## 77. SETTLEMENT STATEMENT FIGURES — PRIME STATEMENT AS SOURCE, SOURCE LABELS, READ DEPOSIT (owner decision 2026-10-13) — NOT YET APPLIED
+
+One nullable jsonb column on `settlements`. Every settlement import writes
+the statement's own printed totals (gross, reimbursements, total
+deductions, net due, the printed DEPOSIT amount and its source — never any
+bank digits) and, for a Prime statement whose Statement of Income and
+Expense page was extracted, every WEEKS-column line signed as printed,
+every printed subtotal and the self-check results. The KPI engine reads
+these typed figures (app/src/import/settlementStatement.ts,
+app/src/stats/statementRoute.ts) — never parsed_json. Full design:
+docs/decisions/prime-statement-source.md.
+
+No backfill (owner decision D9): weeks imported before this runs stay
+"Unverified" until re-imported. Safe before it runs: the import writes the
+column in a separate, non-fatal update, and every week without it uses the
+line-level engine.
+
+Not a `profiles` column (invariant #24 does not apply) and not a new
+table (the new-table checklist does not apply): Reset All Data and Delete
+Account already delete `settlements` rows; Export already selects `*`.
+RLS: `settlements` already has owner-only row policies.
+
+```sql
+alter table settlements add column if not exists statement jsonb;
+```
+
+Read-only verification (should return one row, data_type `jsonb`):
+
+```sql
+select column_name, data_type
+from information_schema.columns
+where table_schema = 'public' and table_name = 'settlements' and column_name = 'statement';
+```
+
+- [ ] 77 run
+
+Mirror file: `pending_77.sql` (repo root).
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

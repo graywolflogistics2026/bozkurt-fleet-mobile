@@ -26,13 +26,14 @@ import { calcScorecard } from '@/src/stats/scorecard';
 import { buildWeeklyTrueProfitTrend, filterSettlementLinkedRowsToWindow } from '@/src/stats/trueProfit';
 import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
-import { matchesTruckScope, type ProfitBridge } from '@/src/stats/kpi';
-import { resolveHeroPeriodDateWindow, filterRowsByDateWindow, calcHeroRevenueExpenseTrio } from '@/src/stats/heroPeriodWindow';
+import { matchesTruckScope } from '@/src/stats/kpi';
+import { LedgerList, ProfitBridgeView, hasExcludedTruckExtras } from '@/src/components/ProfitAudit';
+import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
+import { resolveHeroPeriodDateWindow, filterRowsByDateWindow } from '@/src/stats/heroPeriodWindow';
 import { FleetScopeSelectorStrip } from '@/src/components/FleetScopeSelectorStrip';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
 import { calcHeroChartPoints, HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
-import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
 import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useAiCoachSummary, type AiCoachSummary } from '@/src/data/aiCoachSummary';
@@ -227,6 +228,8 @@ function HeroCard({
   chartPoints,
   profitScore,
   onPress,
+  deposited,
+  owedToCarrier,
 }: {
   period: HeroPeriod;
   onPeriodChange: (p: HeroPeriod) => void;
@@ -236,6 +239,11 @@ function HeroCard({
   chartPoints: WeeklyRevenueExpensePoint[];
   profitScore: number | null;
   onPress: () => void;
+  // PROFIT IS NEVER THE DEPOSIT (owner decision 2026-10-13, B1): the same
+  // window's printed deposits (else net due), and any owed-to-carrier
+  // weeks — shown under the profit, never as profit.
+  deposited: number;
+  owedToCarrier: number;
 }) {
   const { t } = useTranslation();
   const { money: moneyFmt } = useFormatters();
@@ -250,6 +258,15 @@ function HeroCard({
         <LinearGradient colors={['#0f1a3d', colors.bg]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
           <Text style={styles.heroEyebrow}>{t(`dashboard.hero.eyebrowByPeriod.${period}`)}</Text>
           <Text style={[styles.heroBigValue, weekNetProfit < 0 && { color: colors.red }]}>{money(animatedNetProfit)}</Text>
+          <Text style={styles.heroScoreLabel}>{t('dashboard.hero.profitNotDeposits')}</Text>
+          <Text style={[styles.heroScoreLabel, { marginTop: spacing.xs }]}>
+            {t('dashboard.hero.depositedToBank', { amount: moneyFmt(deposited, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
+          </Text>
+          {owedToCarrier > 0 && (
+            <Text style={[styles.heroScoreLabel, { color: colors.red }]}>
+              {t('dashboard.hero.owedToCarrier', { amount: moneyFmt(owedToCarrier, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
+            </Text>
+          )}
           <HeroChange change={netProfitChange} deltaAmount={netProfitDeltaAmount} goodDirection="up" isWeekPeriod={isWeekPeriod} />
         {profitScore != null && (
           <View style={{ marginTop: spacing.lg }}>
@@ -265,79 +282,6 @@ function HeroCard({
           <HeroAreaChart points={chartPoints} />
         </LinearGradient>
       </Pressable>
-    </View>
-  );
-}
-
-// PROFIT BRIDGE (golden settlement pass, owner decision 2026-10-13) —
-// net pay + non-expense withheld lines − expenses that never passed
-// through a settlement + reimbursements not on a settlement = profit,
-// every line explained (src/stats/kpi.ts ProfitBridge). A difference the
-// saved lines can't explain is shown, never hidden; the truck fixed-cost
-// estimate is not part of profit and is stated as a note, not a line.
-function ProfitBridgeView({ bridge }: { bridge: ProfitBridge }) {
-  const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
-  const money = (n: number) => moneyFmt(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const rows: { key: string; label: string; why: string; amount: number; sign: '' | '+' | '−'; tone?: string }[] = [
-    { key: 'net', label: t('dashboard.profitBridge.netPay'), why: t('dashboard.profitBridge.netPayWhy'), amount: bridge.netPay, sign: '' },
-    ...bridge.nonExpenseLines.map((l, i) => ({
-      key: `ne-${i}`,
-      label: l.description,
-      why:
-        l.category === 'Escrow & Deposits'
-          ? t('dashboard.profitBridge.whyEscrow')
-          : l.category === 'Meals (per diem covered)'
-            ? t('dashboard.profitBridge.whyMeal')
-            : t('dashboard.profitBridge.whyAdvance'),
-      amount: l.amount,
-      sign: '+' as const,
-    })),
-  ];
-  const optional: [string, number, '+' | '−', string, string][] = [
-    ['oop', bridge.outOfPocketDeductions, '−', t('dashboard.profitBridge.outOfPocket'), t('dashboard.profitBridge.outOfPocketWhy')],
-    ['fuel', bridge.standaloneFuel, '−', t('dashboard.profitBridge.standaloneFuel'), t('dashboard.profitBridge.standaloneFuelWhy')],
-    ['maint', bridge.maintenance, '−', t('dashboard.profitBridge.maintenance'), t('dashboard.profitBridge.maintenanceWhy')],
-    ['tolls', bridge.tolls, '−', t('dashboard.profitBridge.tolls'), t('dashboard.profitBridge.tollsWhy')],
-    ['reimb', bridge.reimbursementsNotOnSettlement, '+', t('dashboard.profitBridge.reimbursements'), t('dashboard.profitBridge.reimbursementsWhy')],
-  ];
-  for (const [key, amount, sign, label, why] of optional) {
-    if (Math.abs(amount) >= 0.005) rows.push({ key, label, why, amount, sign });
-  }
-  if (bridge.difference !== 0) {
-    rows.push({
-      key: 'diff',
-      label: t('dashboard.profitBridge.difference'),
-      why: t('dashboard.profitBridge.differenceWhy'),
-      amount: Math.abs(bridge.difference),
-      sign: bridge.difference > 0 ? '+' : '−',
-      tone: colors.orange,
-    });
-  }
-  return (
-    <View>
-      {rows.map((r, i) => (
-        <View key={r.key} style={[{ paddingVertical: spacing.xs }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: r.tone ?? colors.text, fontWeight: '600', flex: 1, marginEnd: spacing.sm }}>{r.label}</Text>
-            <Text style={{ color: r.tone ?? colors.text, fontWeight: '700' }}>
-              {r.sign ? `${r.sign} ` : ''}
-              {money(r.amount)}
-            </Text>
-          </View>
-          <MutedText style={{ fontSize: typography.size.xs }}>{r.why}</MutedText>
-        </View>
-      ))}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 2, borderTopColor: colors.text, paddingTop: spacing.xs, marginTop: spacing.xs }}>
-        <Text style={{ color: colors.text, fontWeight: '700' }}>{t('dashboard.profitBridge.profit')}</Text>
-        <Text style={{ color: bridge.profit < 0 ? colors.red : colors.green, fontWeight: '700' }}>{money(bridge.profit)}</Text>
-      </View>
-      <MutedText style={{ marginTop: spacing.sm, fontSize: typography.size.xs }}>{t('dashboard.profitBridge.reimbursementNote')}</MutedText>
-      {bridge.fixedCostEstimateInCpm > 0 && (
-        <MutedText style={{ marginTop: spacing.xs, fontSize: typography.size.xs }}>
-          {t('dashboard.profitBridge.fixedCostNote', { amount: money(bridge.fixedCostEstimateInCpm) })}
-        </MutedText>
-      )}
     </View>
   );
 }
@@ -1093,10 +1037,35 @@ export default function Dashboard() {
   // both regress that established distinction AND desync it from the
   // Expense Total Explainer modal below, which already matches it exactly.
   // Net Profit is NOT computed here — see `heroPeriodResult` above.
-  const heroPeriodTrio = useMemo(
-    () => calcHeroRevenueExpenseTrio(scopedSettlements, scopedDeductions, heroPeriod, fullWeeklyTrueProfitTrend.map((p) => p.weekEnding), now),
-    [scopedSettlements, scopedDeductions, heroPeriod, fullWeeklyTrueProfitTrend, now]
-  );
+  // R4 (owner decision 2026-10-13): Revenue and Expenses come from the
+  // SAME computeKpis() result as Net Profit (periodScopedCpm.kpi), so
+  // Revenue − Expenses = Net Profit on this card for every period tab —
+  // statement-backed Prime weeks, offsets and exclusions included.
+  const heroPeriodTrio = useMemo(() => {
+    const k = periodScopedCpm.kpi;
+    const prev = periodScopedCpm.previousKpi;
+    const revenue = k?.gross ?? 0;
+    const expenses = k?.expenses.total ?? 0;
+    return {
+      revenue,
+      expenses,
+      revenueChange: calcWeekOverWeekChange(revenue, prev?.gross ?? null),
+      expensesChange: calcWeekOverWeekChange(expenses, prev?.expenses.total ?? null),
+    };
+  }, [periodScopedCpm]);
+  // Kept from the earlier explainer: the vehicle-purchase and possible-
+  // depreciable-asset notes (informational only — the totals above come
+  // from computeKpis()).
+  // The window's own settlements (bridge week labels + Share audit).
+  const heroWindowSettlements = useMemo(() => {
+    const ids = new Set(periodScopedCpm.kpi?.bridge.weeks.map((w) => w.settlementId) ?? []);
+    return (settlementsQuery.data ?? []).filter((s) => ids.has(s.id));
+  }, [periodScopedCpm, settlementsQuery.data]);
+  // D6: OPERATOR TRK EXTRAS excluded in this window, and no cost basis /
+  // warranty entered on the truck(s) in scope — show the unlock nudge.
+  const truckExtrasNeedCostBasis =
+    hasExcludedTruckExtras(periodScopedCpm.kpi) &&
+    (activeTruck ? [activeTruck] : trucks).some((tr) => !tr.cost_basis_ownership_mode && !tr.cost_basis_warranty_cost);
   // Both truck-scoped (scopedFuel/scopedDeductions, from the earlier
   // MULTI-TRUCK MODEL pass) AND period-scoped (via heroWindow) — the SAME
   // two-axis filtering the per-mile trio's own buildPeriodScopedCpm()
@@ -1108,6 +1077,7 @@ export default function Dashboard() {
     () => filterRowsByDateWindow(scopedDeductions, (d) => d.ded_date, heroWindow),
     [scopedDeductions, heroWindow]
   );
+  const expenseExplainerNotes = useMemo(() => buildExpenseTotalExplainer(periodDeductionsAll), [periodDeductionsAll]);
   const fuelCost = useMemo(
     () => periodFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0),
     [periodFuel]
@@ -1128,7 +1098,6 @@ export default function Dashboard() {
   // showed — the same "two figures, same card, must never disagree"
   // property this whole pass exists to enforce, now extended to the
   // tile-to-modal relationship too.
-  const expenseExplainer = useMemo(() => buildExpenseTotalExplainer(periodDeductionsAll), [periodDeductionsAll]);
 
   const thisWeekExpenseRows = useMemo(() => {
     if (!thisWeekPoint) return [];
@@ -1271,6 +1240,8 @@ export default function Dashboard() {
           chartPoints={heroPeriodResult.chartPoints}
           profitScore={profitScore}
           onPress={() => setProfitBridgeOpen(true)}
+          deposited={periodScopedCpm.kpi?.deposits ?? 0}
+          owedToCarrier={periodScopedCpm.kpi?.owedToCarrier ?? 0}
         />
 
         {/* ITEM 0 (owner decision, CPM/PPM BROKEN AGAIN follow-up): this
@@ -1414,68 +1385,45 @@ export default function Dashboard() {
       <ModalSheet visible={profitBridgeOpen} onClose={() => setProfitBridgeOpen(false)}>
         <SheetTitle>{t('dashboard.profitBridge.title')}</SheetTitle>
         {periodScopedCpm.kpi ? (
-          <ProfitBridgeView bridge={periodScopedCpm.kpi.bridge} />
+          <ProfitBridgeView kpi={periodScopedCpm.kpi} settlements={heroWindowSettlements} truckExtrasNeedCostBasis={truckExtrasNeedCostBasis} />
         ) : (
           <MutedText>{t('dashboard.profitBridge.empty')}</MutedText>
         )}
         <SecondaryButton title={t('common.close')} onPress={() => setProfitBridgeOpen(false)} />
       </ModalSheet>
 
+      {/* EXPENSE TOTAL EXPLAINER — R4 (owner decision 2026-10-13): the SAME
+          resolver as the tile (computeKpis().ledger), so its total is the
+          Expenses tile and Revenue − Expenses = Net Profit on the same card;
+          excluded non-expenses and offsets are their own rows. */}
       <ModalSheet visible={expenseExplainerOpen} onClose={() => setExpenseExplainerOpen(false)}>
         <SheetTitle>{t(`dashboard.expenseExplainer.titleByPeriod.${heroPeriod}`)}</SheetTitle>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm }}>
           <MutedText>{t('dashboard.expenseExplainer.total')}</MutedText>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>{money(expenseExplainer.total)}</Text>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{money(heroPeriodTrio.expenses)}</Text>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
           <MutedText>{t('dashboard.expenseExplainer.fixed')}</MutedText>
-          <Text style={{ color: colors.text, fontWeight: '600' }}>{money(expenseExplainer.fixedTotal)}</Text>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>{money(periodScopedCpm.kpi?.expenses.fixed ?? 0)}</Text>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs, marginBottom: spacing.sm }}>
           <MutedText>{t('dashboard.expenseExplainer.variable')}</MutedText>
-          <Text style={{ color: colors.text, fontWeight: '600' }}>{money(expenseExplainer.variableTotal)}</Text>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>{money(periodScopedCpm.kpi?.expenses.variable ?? 0)}</Text>
         </View>
-
-        {expenseExplainer.excludedVehiclePurchaseTotal > 0 && (
-          <MutedText style={{ marginBottom: spacing.sm }}>
-            {t('dashboard.expenseExplainer.excludedVehiclePurchase', { amount: money(expenseExplainer.excludedVehiclePurchaseTotal) })}
+        <MutedText style={{ fontSize: typography.size.xs }}>{t('dashboard.expenseExplainer.fixedVariableNote')}</MutedText>
+        {expenseExplainerNotes.excludedVehiclePurchaseTotal > 0 && (
+          <MutedText style={{ marginTop: spacing.xs }}>
+            {t('dashboard.expenseExplainer.excludedVehiclePurchase', { amount: money(expenseExplainerNotes.excludedVehiclePurchaseTotal) })}
           </MutedText>
         )}
-
-        {expenseExplainer.largestRows.length === 0 ? (
-          <MutedText>{t('dashboard.expenseExplainer.empty')}</MutedText>
-        ) : (
-          <>
-            <Text style={styles.expenseExplainerSectionTitle}>{t('dashboard.expenseExplainer.largestRowsTitle')}</Text>
-            {expenseExplainer.largestRows.map((row, i) => (
-              <View
-                key={row.id}
-                style={[
-                  { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs },
-                  i > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
-                ]}
-              >
-                <View style={{ flex: 1, marginEnd: spacing.sm }}>
-                  <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
-                    {row.description}
-                  </Text>
-                  {row.isPossibleDepreciableAsset && (
-                    <MutedText style={{ color: colors.orange, fontSize: typography.size.xs }}>
-                      {t('dashboard.expenseExplainer.possibleDepreciableAsset')}
-                    </MutedText>
-                  )}
-                </View>
-                <Text style={{ color: colors.text, fontWeight: '700', marginEnd: spacing.sm }}>{money(row.amount)}</Text>
-                <Pressable onPress={() => handleDeleteExpenseRow(row.id)} hitSlop={8} disabled={deletingExpenseRowId === row.id}>
-                  <Text style={{ color: colors.red, fontWeight: '700' }}>
-                    {deletingExpenseRowId === row.id ? '…' : '🗑️'}
-                  </Text>
-                </Pressable>
-              </View>
-            ))}
-          </>
-        )}
-
+        {expenseExplainerNotes.largestRows
+          .filter((row) => row.isPossibleDepreciableAsset)
+          .map((row) => (
+            <MutedText key={row.id} style={{ color: colors.orange, fontSize: typography.size.xs }}>
+              {row.description} — {t('dashboard.expenseExplainer.possibleDepreciableAsset')}
+            </MutedText>
+          ))}
+        <LedgerList rows={periodScopedCpm.kpi?.ledger ?? []} onDeleteDeduction={handleDeleteExpenseRow} deletingId={deletingExpenseRowId} />
         <SecondaryButton title={t('common.close')} onPress={() => setExpenseExplainerOpen(false)} />
       </ModalSheet>
 

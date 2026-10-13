@@ -1,0 +1,355 @@
+import type { Extraction } from './types';
+import { parseAmount, printedTotal, sumAmounts } from './amount';
+import { isPrimeCarrier } from './primeOperatingStatement';
+import {
+  STATEMENT_SECTIONS,
+  classifyStatementLine,
+  isStatementSubtotalLabel,
+  normalizeStatementLabel,
+  type StatementLine,
+  type StatementReviewReason,
+  type StatementSection,
+} from './primeStatementLines';
+
+// PRIME STATEMENT AS SOURCE + SOURCE LABELS (owner decision 2026-10-13,
+// docs/decisions/prime-statement-source.md). What is saved in
+// `settlements.statement` (docs/PENDING_SQL.md §77) for every imported
+// settlement, so the KPI engine reads typed figures, never parsed_json:
+//   - `printed`: the statement's own printed totals (every carrier) — the
+//     source of the "Totals match" label;
+//   - `prime`: Prime's Statement of Income and Expense, ONLY when that
+//     page was actually extracted from a Prime statement (carrier gate) —
+//     every line signed as printed, every printed subtotal, the self-check
+//     results. The Prime route is used only when `source` is
+//     'prime_statement' AND the self-check passed AND the week was not
+//     saved past a failing check ("Save anyway, flagged needs-review").
+
+export type PrimeStatementTotals = {
+  totalFreightRevenue: number | null;
+  totalOtherRevenue: number | null;
+  totalRevenue: number | null;
+  totalFuelOilTax: number | null;
+  totalRepair: number | null;
+  totalTires: number | null;
+  totalMiscellaneous: number | null;
+  totalVariableCosts: number | null;
+  totalOutOfPocket: number | null;
+  totalFixedCost: number | null;
+  totalOtherIncomeAndExpense: number | null;
+  totalOperatingExpenses: number | null;
+  totalStatement: number | null;
+  settlementToOperator: number | null;
+  directDeposit: number | null;
+  miles: number | null;
+};
+
+export type StatementCheckId =
+  | 'revenueLines'
+  | 'section_fuel_oil_tax'
+  | 'section_repair'
+  | 'section_tires'
+  | 'section_misc'
+  | 'section_out_of_pocket'
+  | 'section_fixed'
+  | 'section_other'
+  | 'variableCosts'
+  | 'operatingExpenses'
+  | 'statementTotal'
+  | 'settlementToOperator'
+  | 'directDeposit'
+  | 'grossMatches'
+  | 'milesMatch'
+  | 'requiredTotals';
+
+export type StatementCheck = { id: StatementCheckId; expected: number; actual: number; passed: boolean };
+
+export type PrimeStatementCheckResult = {
+  lines: StatementLine[];
+  totals: PrimeStatementTotals;
+  checks: StatementCheck[];
+  passed: boolean;
+};
+
+export type DepositSource = 'direct_deposit' | 'settlement_to_operator' | 'net_due';
+
+export type PrintedTotals = {
+  grossRevenue: number | null;
+  reimbursements: number | null;
+  reimbursementLines: number;
+  totalDeductions: number | null;
+  netDue: number | null;
+  // BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13): the
+  // printed deposit (Prime: DIRECT DEPOSIT TO BANK, else SETTLEMENT TO
+  // OPERATOR), else the printed net due (labeled "Net due"). Stored as
+  // printed — an amount only, never any bank digits.
+  deposit: number | null;
+  depositSource: DepositSource | null;
+  // Interest the carrier paid this week (Prime's INTEREST INCOME FROM
+  // DEPOSIT line), for the deposit check: net due + interest = deposit.
+  interestIncome: number;
+};
+
+export type SettlementStatement = {
+  version: 1;
+  source: 'prime_statement' | 'printed_totals';
+  printed: PrintedTotals;
+  prime: (PrimeStatementCheckResult & { prReimbursementTotal: number }) | null;
+  // Saved past a failing check — profit then comes from the line route
+  // and the week is never "Verified".
+  savedFlagged: boolean;
+  // Why this week was flagged needs-review at import (first appearances
+  // of D3/D7 lines, unknown labels, an unmatched personal payment).
+  reviewReasons: { reason: StatementReviewReason; label: string }[];
+};
+
+const DOLLAR_TOLERANCE = 1.0;
+const MILES_TOLERANCE = 1;
+
+const SECTION_TOTAL_KEY: Record<StatementSection, keyof PrimeStatementTotals> = {
+  revenue: 'totalRevenue',
+  fuel_oil_tax: 'totalFuelOilTax',
+  repair: 'totalRepair',
+  tires: 'totalTires',
+  misc: 'totalMiscellaneous',
+  out_of_pocket: 'totalOutOfPocket',
+  fixed: 'totalFixedCost',
+  other: 'totalOtherIncomeAndExpense',
+};
+
+function asSection(v: unknown): StatementSection | null {
+  return typeof v === 'string' && (STATEMENT_SECTIONS as string[]).includes(v) ? (v as StatementSection) : null;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Prime's operating-statement page as read by the AI, self-checked at
+// TOTAL level. Null when the carrier is not Prime or no statement lines
+// were extracted (carrier gate: a null/unknown carrier never selects it).
+export function buildPrimeStatementCheck(extraction: Extraction | null | undefined): PrimeStatementCheckResult | null {
+  if (!extraction || extraction.docType !== 'settlement' || !extraction.settlement) return null;
+  const s = extraction.settlement;
+  if (!isPrimeCarrier(s.carrier)) return null;
+  const op = s.operating;
+  const rawLines = op?.lines ?? [];
+  if (!op || rawLines.length === 0) return null;
+
+  const lines: StatementLine[] = [];
+  for (const l of rawLines) {
+    const section = asSection(l.section);
+    const amount = parseAmount(l.amount);
+    const label = (l.label ?? '').trim();
+    if (!section || !label || !Number.isFinite(amount) || isStatementSubtotalLabel(label)) continue;
+    lines.push({ section, label, amount });
+  }
+  if (lines.length === 0) return null;
+
+  // A printed total, signed as printed. 0 is a legitimate printed value
+  // for a subtotal only when it was actually printed — the schema default
+  // is 0 too, so 0 means "not printed" here (null never fails a check).
+  const t = (v: unknown) => printedTotal(v);
+  const totals: PrimeStatementTotals = {
+    totalFreightRevenue: t(op.weekTotalFreightRevenue),
+    totalOtherRevenue: t(op.weekTotalOtherRevenue),
+    totalRevenue: t(op.weekTotalRevenue),
+    totalFuelOilTax: t(op.weekTotalFuelOilTax),
+    totalRepair: t(op.weekTotalRepair),
+    totalTires: t(op.weekTotalTires),
+    totalMiscellaneous: t(op.weekTotalMiscellaneous),
+    totalVariableCosts: t(op.weekTotalVariableCosts),
+    totalOutOfPocket: t(op.weekTotalOutOfPocket),
+    totalFixedCost: t(op.weekTotalFixedCost),
+    totalOtherIncomeAndExpense: t(op.weekTotalOtherIncomeAndExpense),
+    totalOperatingExpenses: t(op.weekTotalOperatingExpenses),
+    totalStatement: t(op.weekTotalStatement),
+    settlementToOperator: t(op.settlementToOperator),
+    directDeposit: t(op.directDeposit),
+    miles: t(op.weekMiles),
+  };
+
+  const checks: StatementCheck[] = [];
+  const add = (id: StatementCheckId, expected: number | null, actual: number | null, tolerance = DOLLAR_TOLERANCE) => {
+    if (expected == null || actual == null) return;
+    checks.push({ id, expected: round2(expected), actual: round2(actual), passed: Math.abs(expected - actual) <= tolerance });
+  };
+  const sectionSum = (section: StatementSection) => lines.filter((l) => l.section === section).reduce((sum, l) => sum + l.amount, 0);
+  const hasLines = (section: StatementSection) => lines.some((l) => l.section === section);
+  // A block's value for the chain checks: its printed total, else the sum
+  // of its lines, else 0 when the block printed nothing at all.
+  const block = (section: StatementSection) => totals[SECTION_TOTAL_KEY[section]] ?? (hasLines(section) ? sectionSum(section) : 0);
+
+  add('revenueLines', totals.totalRevenue, hasLines('revenue') ? sectionSum('revenue') : null);
+  for (const section of STATEMENT_SECTIONS.filter((x) => x !== 'revenue')) {
+    add(`section_${section}` as StatementCheckId, totals[SECTION_TOTAL_KEY[section]], hasLines(section) ? sectionSum(section) : null);
+  }
+  const variable = block('fuel_oil_tax') + block('repair') + block('tires') + block('misc');
+  add('variableCosts', totals.totalVariableCosts, variable);
+  add(
+    'operatingExpenses',
+    totals.totalOperatingExpenses,
+    (totals.totalVariableCosts ?? variable) + block('out_of_pocket') + block('fixed') + block('other')
+  );
+  if (totals.totalRevenue != null && totals.totalOperatingExpenses != null) {
+    add('statementTotal', totals.totalStatement, totals.totalRevenue + totals.totalOperatingExpenses);
+  }
+  add('settlementToOperator', totals.settlementToOperator, totals.totalStatement);
+  add('directDeposit', totals.directDeposit, totals.totalStatement);
+  add('grossMatches', totals.totalRevenue, printedTotal(s.grossRevenue));
+  add('milesMatch', totals.miles, printedTotal(s.totalMiles), MILES_TOLERANCE);
+
+  // The route needs revenue, total operating expenses and the statement
+  // total actually printed — without them there is nothing to verify.
+  const required = totals.totalRevenue != null && totals.totalOperatingExpenses != null && totals.totalStatement != null;
+  if (!required) checks.push({ id: 'requiredTotals', expected: 3, actual: [totals.totalRevenue, totals.totalOperatingExpenses, totals.totalStatement].filter((v) => v != null).length, passed: false });
+
+  return { lines, totals, checks, passed: checks.every((c) => c.passed) };
+}
+
+// Prime's PR (personal payment) reimbursement lines — the R1 offset limit.
+export function prReimbursementTotal(extraction: Extraction): number {
+  const items = extraction.settlement?.reimbursementItems ?? [];
+  return sumAmounts(
+    items.filter((r) => (r.code ?? '').trim().toUpperCase() === 'PR' || (r.ref ?? '').trim().toUpperCase() === 'PR'),
+    (r) => r.amount
+  );
+}
+
+// The printed deposit, in the approved order: the deposit line itself,
+// else Prime's SETTLEMENT TO OPERATOR, else the printed net due.
+export function printedDepositOf(extraction: Extraction): { deposit: number | null; depositSource: DepositSource | null } {
+  const s = extraction.settlement ?? {};
+  const prime = isPrimeCarrier(s.carrier);
+  const direct = printedTotal(s.depositAmount) ?? (prime ? printedTotal(s.operating?.directDeposit) : null);
+  if (direct != null) return { deposit: direct, depositSource: 'direct_deposit' };
+  const toOperator = prime ? printedTotal(s.operating?.settlementToOperator) : null;
+  if (toOperator != null) return { deposit: toOperator, depositSource: 'settlement_to_operator' };
+  const netDue = printedTotal(s.netPay);
+  return netDue != null ? { deposit: netDue, depositSource: 'net_due' } : { deposit: null, depositSource: null };
+}
+
+// Interest income printed on a Prime statement page (0 for any other
+// carrier, or when no such line is printed).
+export function printedInterestIncomeOf(extraction: Extraction): number {
+  const s = extraction.settlement;
+  if (!s || !isPrimeCarrier(s.carrier)) return 0;
+  return round2(
+    (s.operating?.lines ?? [])
+      .filter((l) => {
+        if (asSection(l.section) == null || !l.label) return false;
+        const { treatment } = classifyStatementLine({ section: asSection(l.section)!, label: l.label });
+        return treatment.kind === 'exclude' && treatment.reason === 'interest_income';
+      })
+      .reduce((sum, l) => sum + (Number.isFinite(parseAmount(l.amount)) ? parseAmount(l.amount) : 0), 0)
+  );
+}
+
+export function printedTotalsOf(extraction: Extraction): PrintedTotals {
+  const s = extraction.settlement ?? {};
+  return {
+    grossRevenue: printedTotal(s.grossRevenue),
+    reimbursements: printedTotal(s.reimbursements),
+    reimbursementLines: round2(sumAmounts(s.reimbursementItems, (r) => r.amount)),
+    totalDeductions: printedTotal(s.totalDeductions),
+    netDue: printedTotal(s.netPay),
+    ...printedDepositOf(extraction),
+    interestIncome: printedInterestIncomeOf(extraction),
+  };
+}
+
+// ---------------------------------------------------------------------
+// DEPOSITED (owner decision 2026-10-13) — read per week, never computed,
+// never a running balance. A week where the owner owes the carrier
+// (negative) adds 0 to "Deposited" and shows "Owed to carrier".
+// ---------------------------------------------------------------------
+export type WeekDeposit = { deposited: number; owedToCarrier: number; source: DepositSource | 'owed_to_carrier' };
+
+export function settlementDeposit(settlement: { net?: number | null; statement?: SettlementStatement | null }): WeekDeposit {
+  const printed = settlement.statement?.printed;
+  const amount = printed?.deposit ?? printed?.netDue ?? Number(settlement.net ?? 0);
+  const source: DepositSource = printed?.depositSource ?? 'net_due';
+  if (amount < 0) return { deposited: 0, owedToCarrier: -amount, source: 'owed_to_carrier' };
+  return { deposited: amount, owedToCarrier: 0, source };
+}
+
+// Needs-review reasons from a passing statement. D3/D7 lines and unknown
+// labels flag only the FIRST time a non-zero amount appears on this
+// account (`priorLabelsSeen` = normalized labels already seen on earlier
+// statements); an unmatched personal payment (R1) flags every time.
+export function statementReviewReasons(
+  lines: StatementLine[],
+  prTotal: number,
+  priorLabelsSeen: Set<string>
+): SettlementStatement['reviewReasons'] {
+  const reasons: SettlementStatement['reviewReasons'] = [];
+  for (const line of lines) {
+    if (line.amount === 0) continue;
+    const { treatment, unknown } = classifyStatementLine(line);
+    const seen = priorLabelsSeen.has(normalizeStatementLabel(line.label));
+    if (unknown && !seen) reasons.push({ reason: 'unknown_line', label: line.label });
+    else if (treatment.kind === 'expense' && treatment.reviewOnFirst && !seen) reasons.push({ reason: treatment.reviewOnFirst, label: line.label });
+    else if (treatment.kind === 'personal_payment' && line.amount - Math.min(Math.max(line.amount, 0), prTotal) > 0.005) {
+      reasons.push({ reason: 'personal_payment_unmatched', label: line.label });
+    }
+  }
+  return reasons;
+}
+
+export function buildSettlementStatement(
+  extraction: Extraction,
+  options: { savedFlagged: boolean; priorLabelsSeen: Set<string> }
+): SettlementStatement {
+  const prime = buildPrimeStatementCheck(extraction);
+  const prTotal = prReimbursementTotal(extraction);
+  return {
+    version: 1,
+    source: prime ? 'prime_statement' : 'printed_totals',
+    printed: printedTotalsOf(extraction),
+    prime: prime ? { ...prime, prReimbursementTotal: round2(prTotal) } : null,
+    savedFlagged: options.savedFlagged,
+    reviewReasons: prime && prime.passed ? statementReviewReasons(prime.lines, prTotal, options.priorLabelsSeen) : [],
+  };
+}
+
+// Normalized labels with a non-zero amount on a stored statement — the
+// "already seen" set for first-appearance review flags.
+export function labelsSeenOn(statement: SettlementStatement | null | undefined): string[] {
+  return (statement?.prime?.lines ?? []).filter((l) => l.amount !== 0).map((l) => normalizeStatementLabel(l.label));
+}
+
+// ---------------------------------------------------------------------
+// SOURCE LABELS (Part 2) — one verification state per settlement week.
+// ---------------------------------------------------------------------
+export type SettlementVerification = 'verified_prime' | 'totals_match' | 'unverified';
+
+// The Prime route: a Prime statement page was extracted, its self-check
+// passed, and the week was not saved past a failing check.
+export function isStatementBacked(statement: SettlementStatement | null | undefined): boolean {
+  return !!statement && statement.source === 'prime_statement' && !!statement.prime?.passed && !statement.savedFlagged;
+}
+
+// "Totals match": gross, total deductions and net due printed, and
+// gross + reimbursements − deductions = net due within $1. Reimbursements
+// are the printed total, else the reimbursement lines (0 when none).
+export function printedTotalsMatch(printed: PrintedTotals | null | undefined): boolean {
+  if (!printed || printed.grossRevenue == null || printed.totalDeductions == null || printed.netDue == null) return false;
+  const reimbursements = printed.reimbursements ?? printed.reimbursementLines ?? 0;
+  return Math.abs(printed.grossRevenue + reimbursements - printed.totalDeductions - printed.netDue) <= DOLLAR_TOLERANCE;
+}
+
+export function settlementVerification(settlement: { statement?: SettlementStatement | null }): SettlementVerification {
+  const st = settlement.statement;
+  if (!st || st.savedFlagged) return 'unverified';
+  if (isStatementBacked(st)) return 'verified_prime';
+  // A Prime page that was extracted but failed its own check never reads
+  // as verified in any form.
+  if (st.source === 'prime_statement') return 'unverified';
+  return printedTotalsMatch(st.printed) ? 'totals_match' : 'unverified';
+}
+
+// Guard-chain step (src/data/aiImportCall.ts): a Prime statement page
+// that fails its own self-check downgrades confidence to 'low' (the
+// existing needs-review machinery); everything else passes unchanged.
+export function applyPrimeOperatingStatementCheck(extraction: Extraction): Extraction {
+  const check = buildPrimeStatementCheck(extraction);
+  if (!check || check.passed) return extraction;
+  return { ...extraction, confidence: 'low' };
+}

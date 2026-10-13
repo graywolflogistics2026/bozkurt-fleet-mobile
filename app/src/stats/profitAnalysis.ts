@@ -1,5 +1,6 @@
 import type { Benchmark } from '@/src/types/db';
-import { canonicalExpenseBreakdown, filterSettlementLinkedRowsToWindow } from '@/src/stats/trueProfit';
+import { filterSettlementLinkedRowsToWindow, layeredExpenseBreakdown, layeredGross } from '@/src/stats/trueProfit';
+import type { SettlementStatement } from '@/src/import/settlementStatement';
 
 // Profit Analysis v1 (PROMPTS.md Session 9a item 11, CLAUDE.md invariant
 // #22 — composed ONLY from the user's own account data, no external
@@ -52,14 +53,27 @@ export type ProfitAnalysisRollup = {
   deductionsExcludedTotal: number;
   deductionsCountedTotal: number;
   canonicalFuelExpense: number;
+  // Maintenance actually counted (rows linked to a statement-backed Prime
+  // week are replaced by that week's statement figures).
+  canonicalMaintenanceExpense: number;
   tollsExpense: number;
   // Reimbursements offset expenses (golden settlement pass, owner decision
   // 2026-10-13) — shown as their own "−" line in the reconciliation.
   reimbursementsTotal: number;
+  // Statement-backed Prime weeks (owner decision 2026-10-13) — counted
+  // from Prime's own statement, shown as their own reconciliation line.
+  statementExpenses: number;
   totalExpenses: number;
 };
 
-type SettlementLike = { id: string; week_ending: string; gross: number | null; net: number | null; miles: number | null };
+type SettlementLike = {
+  id: string;
+  week_ending: string;
+  gross: number | null;
+  net: number | null;
+  miles: number | null;
+  statement?: SettlementStatement | null;
+};
 type FuelLike = {
   purchase_date: string | null;
   amount: number | null;
@@ -68,8 +82,8 @@ type FuelLike = {
   fuel_type?: string | null;
 };
 type ReimbursementLike = { amount: number | null; settlement_id?: string | null; reimb_date?: string | null };
-type MaintenanceLike = { service_date: string | null; cost: number | null };
-type TollLike = { toll_date: string | null; amount: number | null };
+type MaintenanceLike = { service_date: string | null; cost: number | null; settlement_id?: string | null };
+type TollLike = { toll_date: string | null; amount: number | null; settlement_id?: string | null };
 type DeductionLike = {
   ded_date: string | null;
   amount: number | null;
@@ -141,7 +155,7 @@ export function buildProfitAnalysis(
   const inRange = (d: string | null | undefined) => !!d && (startIso == null || d >= startIso) && d <= end;
 
   const inWindow = settlements.filter((s) => inRange(s.week_ending));
-  const revenue = inWindow.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
+  const revenue = layeredGross(inWindow);
   const windowDeductions = deductions.filter((d) => inRange(d.ded_date));
   // Settlement-linked fuel/reimbursements follow their settlement's week
   // (same rule as computeKpis()).
@@ -151,7 +165,7 @@ export function buildProfitAnalysis(
   const windowMaintenance = maintenanceRecords.filter((m) => inRange(m.service_date));
   const windowTolls = tolls.filter((t) => inRange(t.toll_date));
 
-  const breakdown = canonicalExpenseBreakdown(windowDeductions, windowFuel, windowMaintenance, windowTolls, windowReimbursements);
+  const breakdown = layeredExpenseBreakdown(inWindow, windowDeductions, windowFuel, windowMaintenance, windowTolls, windowReimbursements);
   const netIncome = revenue - breakdown.total;
   const totalMiles = inWindow.reduce((sum, s) => sum + Number(s.miles ?? 0), 0);
 
@@ -162,7 +176,12 @@ export function buildProfitAnalysis(
   // much fuel did I buy" vs. "how much reduced my net profit" distinction.
   const fuelExpense = windowFuel.reduce((sum, f) => sum + Number(f.amount ?? 0) - Number(f.discount ?? 0), 0);
   const maintenanceExpense = windowMaintenance.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
-  const deductionsGrossTotal = windowDeductions.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  // Rows linked to a statement-backed Prime week are replaced by that
+  // week's statement figures (statementExpenses), not "excluded".
+  const backedIds = new Set(breakdown.statementWeeks.map((w) => w.settlementId));
+  const deductionsGrossTotal = windowDeductions
+    .filter((d) => !d.settlement_id || !backedIds.has(d.settlement_id))
+    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
 
   return {
     startIso,
@@ -178,8 +197,10 @@ export function buildProfitAnalysis(
     deductionsExcludedTotal: deductionsGrossTotal - breakdown.deductionsTotal,
     deductionsCountedTotal: breakdown.deductionsTotal,
     canonicalFuelExpense: breakdown.fuelTotal,
+    canonicalMaintenanceExpense: breakdown.maintenanceTotal,
     tollsExpense: breakdown.tollsTotal,
     reimbursementsTotal: breakdown.reimbursementsTotal,
+    statementExpenses: breakdown.statementExpensesTotal,
     totalExpenses: breakdown.total,
   };
 }

@@ -1,4 +1,5 @@
 import { realText } from '@/src/lib/descriptionText';
+import { settlementVerification } from '@/src/import/settlementStatement';
 import type { Deduction, DocumentRow, Settlement } from '@/src/types/db';
 
 // BETA FEEDBACK ROUND 2 (owner decision 2026-07-31, device tester
@@ -48,13 +49,21 @@ export function isDocumentNeedsReview(doc: Pick<DocumentRow, 'parsed_json' | 're
 // LINKED DOCUMENT reviewed, since that's the true source of this flag —
 // once that document's own reviewed_at is set, this automatically
 // reflects it too, with no separate settlement-level column needed.
+// SOURCE LABELS (owner decision 2026-10-13, Part 2 A1): an "Unverified"
+// week (no printed totals to compare, a failed identity, a Prime week
+// saved past its self-check, or any week imported before §77) is flagged
+// too — until its document is marked reviewed (the same explicit override
+// as every other needs-review signal). A settlement with no document has
+// nothing to mark reviewed, so it is never flagged.
 export function isSettlementNeedsReview(
-  settlement: Pick<Settlement, 'document_id'>,
+  settlement: Pick<Settlement, 'document_id' | 'statement'>,
   documentsById: Map<string, Pick<DocumentRow, 'parsed_json' | 'reviewed_at'>>
 ): boolean {
   if (!settlement.document_id) return false;
   const doc = documentsById.get(settlement.document_id);
-  return doc ? isDocumentNeedsReview(doc) : false;
+  if (!doc) return false;
+  if (doc.reviewed_at) return false;
+  return isDocumentNeedsReview(doc) || settlementVerification(settlement) === 'unverified';
 }
 
 // The exact prefix mapExtraction.ts writes (CLAUDE.md invariant #14) —

@@ -98,7 +98,7 @@ describe('buildTruckComparison', () => {
       [],
       [],
       [],
-      [], 0
+      [], [], 0
     );
     const wholeFleetTotalCost = wholeFleet.buckets.reduce((sum, b) => sum + b.amount, 0);
 
@@ -187,7 +187,7 @@ describe('buildTruckComparison', () => {
 });
 
 describe('withAllocatedBucket', () => {
-  const baseCpm = calcCanonicalCpm(1000, 500, [{ amount: 100, category: 'Maintenance & Repairs', tax_deductible: true, source: 'manual' }], [], [], [], [], 0);
+  const baseCpm = calcCanonicalCpm(1000, 500, [{ amount: 100, category: 'Maintenance & Repairs', tax_deductible: true, source: 'manual' }], [], [], [], [], [], 0);
 
   it('appends a distinct, labeled bucket and recomputes costPerMile/profitPerMile to include it', () => {
     const result = withAllocatedBucket(baseCpm, 50, 500);

@@ -1,3 +1,5 @@
+import type { SettlementStatement } from '@/src/import/settlementStatement';
+
 // Hand-written row types mirroring the LIVE Supabase schema — docs/SCHEMA.sql
 // plus everything applied on top of it per docs/PENDING_SQL.md sections 1, 3,
 // 4, 5 (tax_config, tax_year_data, household_*, profiles.tos_* — and note
@@ -204,6 +206,11 @@ export type Settlement = {
   // docs/PENDING_SQL.md §52) — the AI's own extracted carrier text,
   // verbatim (never normalized at rest). See app/src/import/carrierCodes.ts.
   carrier: string | null;
+  // PRIME STATEMENT AS SOURCE + SOURCE LABELS (owner decision 2026-10-13,
+  // docs/PENDING_SQL.md §77): the statement's printed totals and, for a
+  // Prime week, its self-checked Statement of Income and Expense. Optional:
+  // absent until §77 runs and on every week imported before it.
+  statement?: SettlementStatement | null;
   created_at: string;
   updated_at: string;
 };

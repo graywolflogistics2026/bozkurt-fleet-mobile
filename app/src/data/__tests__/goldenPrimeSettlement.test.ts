@@ -41,7 +41,7 @@ import { buildWeeklyTrueProfitTrend, calcTrueProfit, reducesTrueProfit } from '@
 import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { buildTruckComparison, type ComparisonTruck } from '@/src/stats/truckComparison';
 import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
-import { buildPrimeReconciliation } from '@/src/import/primeOperatingStatement';
+import { buildPrimeStatementCheck, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
 
 // ---------------------------------------------------------------------
 // ANSWER KEY (owner, independently verified)
@@ -87,7 +87,7 @@ const REVENUE_ITEMS = [
   { desc: 'TRIP REVENUE', order: '4942415', amount: 1839.41 },
 ];
 const REIMBURSEMENT_ITEMS = [
-  { desc: 'WIE14MB LD', ref: 'PR', amount: 1 },
+  { code: 'PR', desc: 'WIE14MB LD', ref: '', amount: 1 },
   { desc: 'REEFER FUEL', ref: 'A705706', amount: 10.37 },
   { desc: 'REEFER FUEL', ref: 'A705768', amount: 32.43 },
   { desc: 'REEFER FUEL', ref: 'A705795', amount: 76.04 },
@@ -152,24 +152,54 @@ const TRACTOR: FuelLine[] = [
 const asLine = ([code, desc, , amount]: FuelLine) => D(code, desc, amount);
 const asFuel = ([, , date, amount, discount]: FuelLine): ExtractedFuel => ({ date, amount, discount });
 
-const OPERATING = {
+// Prime's Statement of Income and Expense, WEEKS column (pages 5-6),
+// every line SIGNED AS PRINTED (trailing minus = negative).
+const STATEMENT_LINES = [
+  ['revenue', 'REVENUE FROM PRIME INC.', 3345.12],
+  ['revenue', 'EXTRA PAY', 175],
+  ['revenue', 'FUEL SURCG BILL', 1210.04],
+  ['revenue', 'REEF FUEL SURCG', 20.82],
+  ['revenue', 'SAFETY INC', 16.35],
+  ['revenue', 'SERVICE INC', 16.35],
+  ['revenue', 'TOLL 1099 PAY', 0.07],
+  ['fuel_oil_tax', 'TRACTOR FUEL', -1997.82],
+  ['fuel_oil_tax', 'TRACTOR FUEL DISCOUNT', 184.85],
+  ['fuel_oil_tax', 'TRACTOR DEF', -95.11],
+  ['fuel_oil_tax', 'REEFER FUEL', -46.23],
+  ['fuel_oil_tax', 'REEFER FUEL DISCOUNT', 17.92],
+  ['fuel_oil_tax', 'DEF DISCOUNT', 29.15],
+  ['fuel_oil_tax', 'STATE FUEL TAX', -46.54],
+  ['misc', 'TOLLS', -0.25],
+  ['misc', 'ADVANCES', -550],
+  ['misc', 'WEIGHT TICKETS', -15.25],
+  ['misc', 'QUALCOMM COST', -18.34],
+  ['misc', 'WIRE CHARGE', -2],
+  ['misc', 'TRIP XPRESS CHG', -5],
+  ['misc', 'PERSONAL PYMNT RCV', 1],
+  ['fixed', 'PHYSICAL DAMAGE INSURANCE', -30.43],
+  ['fixed', 'BT/DH INSURANCE', -5.98],
+  ['fixed', 'LICENSE AND PERMITS', -100],
+  ['fixed', 'STATEMENT PREPARATION', -89.37],
+  ['fixed', 'OPERATOR OCCUP ACC', -29.99],
+  ['other', 'ACCRUAL PERFORMANCE BOND', -100],
+  ['other', 'INTEREST INCOME FROM DEPOST', 0.37],
+].map(([section, label, amount]) => ({ section: section as string, label: label as string, amount: amount as number }));
+
+const STATEMENT = {
+  lines: STATEMENT_LINES,
   weekMiles: 2327,
-  weekRevenueFromPrime: 3345.12,
-  weekExtraPay: 175,
-  weekFuelSurchargeBill: 1210.04,
-  weekReeferFuelSurcharge: 20.82,
-  weekSafetyIncentive: 16.35,
-  weekServiceIncentive: 16.35,
-  weekToll1099Pay: 0.07,
+  weekTotalFreightRevenue: 3345.12,
+  weekTotalOtherRevenue: 1438.63,
   weekTotalRevenue: 4783.75,
-  weekFuelOilTax: 1953.78,
-  weekMiscellaneous: 589.84,
-  weekTotalVariableCosts: 2543.62,
-  weekTotalFixedCost: 255.77,
-  weekOtherIncomeAndExpense: 99.63,
-  weekInterestIncome: 0.37,
-  weekTotalOperatingExpenses: 2899.02,
+  weekTotalFuelOilTax: -1953.78,
+  weekTotalMiscellaneous: -589.84,
+  weekTotalVariableCosts: -2543.62,
+  weekTotalFixedCost: -255.77,
+  weekTotalOtherIncomeAndExpense: -99.63,
+  weekTotalOperatingExpenses: -2899.02,
   weekTotalStatement: 1884.73,
+  settlementToOperator: 1884.73,
+  directDeposit: 1884.73,
   ytdTotalRevenue: 24425.98,
   ytdMiles: 10146,
   ytdTotalStatement: 8099.66,
@@ -208,7 +238,8 @@ function goldenExtraction(shape: Shape, overrides: Partial<NonNullable<Extractio
       tractorFuel: [...TRACTOR, ...DEF].map(asFuel),
       reeferFuel: REEFER.map(asFuel),
       deductions: [...NON_FUEL_LINES, ...fuelLinesInDeductions.map(asLine)],
-      operating: OPERATING,
+      // Page 4 recap: DIRECT DEPOSIT TO BANK — the amount only.
+      depositAmount: KEY.deposit,
       ...overrides,
     },
   };
@@ -312,9 +343,12 @@ function weekKpi(rows: Rows, truck: ComparisonTruck = NO_COST_BASIS, truckScope:
 
 const r2 = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100) / 100);
 
-function expectAnswerKey(k: KpiResult) {
+// route 'statement': the week's reimbursements are inside Prime's own
+// figures (REEFER FUEL 46.23 is already net), so the line-level
+// reimbursement total is 0 — the same profit either way.
+function expectAnswerKey(k: KpiResult, route: 'line' | 'statement' = 'line') {
   expect(r2(k.gross)).toBe(KEY.revenue);
-  expect(r2(k.reimbursementsTotal)).toBe(KEY.reimbursements);
+  expect(r2(k.reimbursementsTotal)).toBe(route === 'line' ? KEY.reimbursements : 0);
   expect(r2(k.expenses.total)).toBe(KEY.expenses);
   expect(r2(k.net)).toBe(KEY.profit);
   expect(k.miles.total).toBe(KEY.miles);
@@ -333,7 +367,9 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
 
   test('the import checks pass on the real statement', () => {
     expect(checkSettlementReconciliation(goldenExtraction(shape))).toEqual({ ok: true, issues: [] });
-    expect(buildPrimeReconciliation(goldenExtraction(shape))!.mismatches).toEqual([]);
+    // The LINE route: no statement page extracted, so the Prime route is never selected.
+    expect(buildPrimeStatementCheck(goldenExtraction(shape))).toBeNull();
+    expect(settlementVerification(rows.settlements[0])).toBe('totals_match');
   });
 
   test('saved rows: one settlement, 2 loads, 16 fuel rows, 9 reimbursements (312.80)', () => {
@@ -435,9 +471,8 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
     expect(b.difference).toBe(0);
     expect(r2(b.profit)).toBe(KEY.profit);
     expect(b.fixedCostEstimateInCpm).toBe(0);
-    // The deposit relation lives only in the Prime reconciliation line.
-    const prime = buildPrimeReconciliation(goldenExtraction(shape))!;
-    expect(r2(prime.netDue! + prime.interestIncome)).toBe(KEY.deposit);
+    // Line route starts from net due; the deposit is read, never computed.
+    expect(settlementDeposit(rows.settlements[0]).deposited).toBe(KEY.deposit);
     expect(r2(KEY.deposit + KEY.nonExpenses - KEY.interest)).toBe(KEY.profit);
   });
 });
@@ -573,7 +608,8 @@ describe('trap 6 — revenue comes from the OWNER REVENUE column', () => {
   test('a gross taken from LOAD REVENUE fails the revenue, net-due and Prime checks', () => {
     const extraction = goldenExtraction('both', { grossRevenue: 4983.82 });
     expect(checkSettlementReconciliation(extraction).issues.map((i) => i.type)).toEqual(['revenueLinesMismatch', 'netDueMismatch']);
-    expect(buildPrimeReconciliation(extraction)!.mismatches.map((m) => m.field)).toEqual(['revenue']);
+    const check = buildPrimeStatementCheck({ ...extraction, settlement: { ...extraction.settlement!, operating: STATEMENT } })!;
+    expect(check.checks.filter((c) => !c.passed).map((c) => c.id)).toEqual(['grossMatches']);
   });
 });
 
@@ -587,25 +623,238 @@ describe('trap 7 — pages 7-8 are attachments (no revenue, no expense)', () => 
 });
 
 describe('trap 8 — net amount due 1,884.36 vs direct deposit 1,884.73', () => {
-  test('profit starts from net due; the .37 interest is only in the Prime reconciliation line', async () => {
+  test('line route: the bridge starts from net due; the deposit 1,884.73 is read from the printed line', async () => {
     const rows = await importGolden(goldenExtraction('both'));
     expect(weekKpi(rows).bridge.netPay).toBe(KEY.netDue);
-    const prime = buildPrimeReconciliation(goldenExtraction('both'))!;
-    expect(prime.interestIncome).toBe(KEY.interest);
-    expect(prime.totalStatement).toBe(KEY.deposit);
-    expect(prime.mismatches).toEqual([]);
+    expect(weekKpi(rows).deposits).toBe(KEY.deposit);
   });
 });
 
 describe('miles — the week, never LTD/QTD 10,146', () => {
   test('2,327 = 2,081 loaded + 246 empty; 10,146 as the week is flagged by the Prime check', () => {
-    expect(buildPrimeReconciliation(goldenExtraction('both', { totalMiles: 10146 }))!.mismatches.map((m) => m.field)).toEqual(['miles']);
+    const check = buildPrimeStatementCheck(goldenExtraction('both', { totalMiles: 10146, operating: STATEMENT }))!;
+    expect(check.checks.filter((c) => !c.passed).map((c) => c.id)).toEqual(['milesMatch']);
   });
 });
 
 describe('reconciliation escape hatch — a null printed total never fails a check', () => {
   test('a statement that prints no totals at all passes (nothing to compare, nothing guessed)', () => {
-    const extraction = goldenExtraction('both', { totalDeductions: undefined, reimbursements: undefined, grossRevenue: undefined, netPay: -5 });
+    const extraction = goldenExtraction('both', { totalDeductions: undefined, reimbursements: undefined, grossRevenue: undefined, netPay: -5, depositAmount: undefined });
     expect(checkSettlementReconciliation(extraction)).toEqual({ ok: true, issues: [] });
+  });
+});
+
+// =====================================================================
+// PRIME STATEMENT AS SOURCE (owner decision 2026-10-13,
+// docs/decisions/prime-statement-source.md) — the SAME golden week, now
+// with Prime's Statement of Income and Expense extracted. Profit comes
+// from the statement; the week's ~70 settlement-linked rows stay as
+// detail and are never counted twice.
+// =====================================================================
+const statementExtraction = (overrides: Partial<NonNullable<Extraction['settlement']>> = {}, shape: Shape = 'both') =>
+  goldenExtraction(shape, { operating: STATEMENT, ...overrides });
+
+describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('statement route, fuel shape "%s" — same answer key on every screen', (shape) => {
+  let rows: Rows;
+  beforeAll(async () => {
+    rows = await importGolden(statementExtraction({}, shape));
+  });
+
+  test('self-check passes; the stored week is "Verified by Prime statement"', () => {
+    const check = buildPrimeStatementCheck(statementExtraction({}, shape))!;
+    expect(check.checks.filter((c) => !c.passed)).toEqual([]);
+    expect(check.passed).toBe(true);
+    expect(rows.settlements[0].statement?.source).toBe('prime_statement');
+    expect(settlementVerification(rows.settlements[0])).toBe('verified_prime');
+  });
+
+  test('computeKpis / Home / trend / Profit Analysis / Per-Truck / calcTrueProfit all give 2,534.36', () => {
+    expectAnswerKey(weekKpi(rows), 'statement');
+    expectAnswerKey(weekKpi(rows, NO_COST_BASIS, null), 'statement');
+    const home = buildPeriodScopedCpm('thisWeek', [WEEK_ENDING], [NO_COST_BASIS], rows.settlements, rows.loads, rows.deductions, rows.fuel, [], [], rows.reimbursements, TRUCK_ID, null, NOW);
+    expectAnswerKey(home.kpi!, 'statement');
+    const trend = buildWeeklyTrueProfitTrend(rows.settlements, rows.deductions, rows.fuel, [], [], rows.reimbursements);
+    expect(r2(trend[0].net)).toBe(KEY.profit);
+    const pa = buildProfitAnalysis(rows.settlements, rows.fuel, [], rows.deductions, rows.reimbursements, WEEK_START, NOW, []);
+    expect(r2(pa.netIncome)).toBe(KEY.profit);
+    expect(r2(pa.statementExpenses)).toBe(KEY.expenses);
+    expect(r2(pa.totalExpenses)).toBe(KEY.expenses);
+    const row = buildTruckComparison([NO_COST_BASIS], rows.settlements, rows.loads, rows.deductions, rows.fuel, [], [], rows.reimbursements).rows[0];
+    expect(r2(row.netProfit)).toBe(KEY.profit);
+    expect(r2(calcTrueProfit(rows.settlements, rows.deductions, rows.fuel, [], [], rows.reimbursements))).toBe(KEY.profit);
+  });
+
+  test('R2: fixed = Prime\'s printed 255.77, variable 1,993.62', () => {
+    const k = weekKpi(rows);
+    expect(r2(k.expenses.fixed)).toBe(255.77);
+    expect(r2(k.expenses.variable)).toBe(1993.62);
+  });
+
+  test('no double count: every expense is the statement\'s; the ledger adds up to the same 2,249.39', () => {
+    const k = weekKpi(rows);
+    expect(r2(k.statementExpenses)).toBe(KEY.expenses);
+    expect(r2(k.reimbursementsTotal)).toBe(0); // linked reimbursements are detail on a statement week
+    expect(k.ledger.every((r) => r.source === 'prime_statement')).toBe(true);
+    const counted = k.ledger.filter((r) => r.status === 'counted').reduce((s, r) => s + r.amount, 0);
+    const offset = k.ledger.filter((r) => r.status === 'offset').reduce((s, r) => s + r.amount, 0);
+    expect(r2(counted - offset)).toBe(KEY.expenses);
+    const excluded = k.ledger.filter((r) => r.status === 'excluded').map((r) => [r.label, r.amount, r.reason]);
+    expect(excluded).toEqual([
+      ['ADVANCES', 550, 'advance'],
+      ['ACCRUAL PERFORMANCE BOND', 100, 'escrow'],
+      ['INTEREST INCOME FROM DEPOST', 0.37, 'interest_income'],
+    ]);
+  });
+
+  test('B2: the bridge starts from the actual deposit — 1,884.73 + 550.00 + 100.00 − 0.37 = 2,534.36', () => {
+    const b = weekKpi(rows).bridge;
+    expect(b.depositStart).toBe(KEY.deposit);
+    expect(b.netPay).toBe(0);
+    expect(b.statementAddBacks.map((a) => [a.label, a.amount])).toEqual([
+      ['ADVANCES', 550],
+      ['ACCRUAL PERFORMANCE BOND', 100],
+    ]);
+    expect(b.interestIncome).toBe(KEY.interest);
+    expect(b.difference).toBe(0);
+    expect(r2(b.profit)).toBe(KEY.profit);
+    // Item 6: the week's own line items agree with the statement.
+    expect(b.crossChecks).toEqual([]);
+  });
+
+  test('B1/B4: Home shows profit 2,534.36 and "Deposited to your bank" 1,884.73', () => {
+    const home = buildPeriodScopedCpm('thisWeek', [WEEK_ENDING], [NO_COST_BASIS], rows.settlements, rows.loads, rows.deductions, rows.fuel, [], [], rows.reimbursements, TRUCK_ID, null, NOW);
+    expect(r2(home.kpi!.net)).toBe(KEY.profit);
+    expect(home.kpi!.deposits).toBe(KEY.deposit);
+    // R4: Revenue − Expenses = Net Profit on the same card.
+    expect(r2(home.kpi!.gross - home.kpi!.expenses.total)).toBe(KEY.profit);
+  });
+});
+
+describe('statement route and line route agree on the golden week', () => {
+  test('both give 2,534.36', async () => {
+    const statementRows = await importGolden(statementExtraction());
+    const lineRows = await importGolden(goldenExtraction('both'));
+    expect(r2(weekKpi(statementRows).net)).toBe(KEY.profit);
+    expect(r2(weekKpi(lineRows).net)).toBe(KEY.profit);
+  });
+});
+
+describe('self-check: a misread number never becomes a silently wrong profit', () => {
+  const misread = () => ({
+    ...STATEMENT,
+    lines: STATEMENT_LINES.map((l) => (l.label === 'TRACTOR FUEL' ? { ...l, amount: -1979.82 } : l)),
+  });
+
+  test('one misread line is caught and names its check', () => {
+    const check = buildPrimeStatementCheck(statementExtraction({ operating: misread() }))!;
+    expect(check.passed).toBe(false);
+    expect(check.checks.filter((c) => !c.passed).map((c) => c.id)).toEqual(['section_fuel_oil_tax']);
+  });
+
+  test('a misread subtotal breaks the chain checks', () => {
+    const check = buildPrimeStatementCheck(statementExtraction({ operating: { ...STATEMENT, weekTotalOperatingExpenses: -2989.02 } }))!;
+    expect(check.checks.filter((c) => !c.passed).map((c) => c.id)).toEqual(['operatingExpenses', 'statementTotal']);
+  });
+
+  test('"Save anyway, flagged needs-review": profit falls back to the line route and the week is never Verified', async () => {
+    const flagged = { ...statementExtraction({ operating: misread() }), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] };
+    const rows = await importGolden(flagged);
+    expect(rows.settlements[0].statement?.savedFlagged).toBe(true);
+    expect(settlementVerification(rows.settlements[0])).toBe('unverified');
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit); // from the line items, labeled an estimate
+    expect(weekKpi(rows).bridge.estimateFromLineItems).toBe(true);
+  });
+});
+
+describe('BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13)', () => {
+  test('golden deposit 1,884.73 comes from the printed line', async () => {
+    const rows = await importGolden(statementExtraction());
+    expect(rows.settlements[0].statement?.printed.deposit).toBe(KEY.deposit);
+    expect(rows.settlements[0].statement?.printed.depositSource).toBe('direct_deposit');
+    expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: KEY.deposit, owedToCarrier: 0, source: 'direct_deposit' });
+  });
+
+  test('no deposit line printed -> net due 1,884.36, labeled net due', async () => {
+    const rows = await importGolden(goldenExtraction('both', { depositAmount: undefined }));
+    expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: KEY.netDue, owedToCarrier: 0, source: 'net_due' });
+  });
+
+  test('the check: net due 1,884.36 + interest 0.37 = deposit 1,884.73 passes; a misread deposit fails and names itself', () => {
+    expect(checkSettlementReconciliation(statementExtraction()).ok).toBe(true);
+    const bad = checkSettlementReconciliation(statementExtraction({ depositAmount: 1984.73 }));
+    expect(bad.issues).toEqual([{ type: 'depositMismatch', stated: 1984.73, computed: expect.closeTo(1884.73, 2) }]);
+  });
+
+  test('an owed-to-carrier week (negative net, no deposit line) adds 0 to Deposited', async () => {
+    const owed = goldenExtraction('both', {
+      depositAmount: undefined,
+      grossRevenue: 500,
+      revenueItems: [{ desc: 'TRIP REVENUE', amount: 500 }],
+      reimbursements: undefined,
+      reimbursementItems: [],
+      totalDeductions: 750,
+      deductions: [D('LP', 'LICENSE/PERMITS', 750)],
+      tractorFuel: [],
+      reeferFuel: [],
+      netPay: -250,
+    });
+    const rows = await importGolden(owed);
+    expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: 0, owedToCarrier: 250, source: 'owed_to_carrier' });
+    const k = weekKpi(rows);
+    expect(k.deposits).toBe(0);
+    expect(k.owedToCarrier).toBe(250);
+  });
+
+  test('no code path stores the routing number', async () => {
+    const withDigits: Extraction = {
+      ...statementExtraction(),
+      summary: 'Prime settlement — DIRECT DEPOSIT TO BANK ROUTING #111000025 for 1,884.73',
+      vendor: 'Prime Inc — acct 4455667788',
+    };
+    await importGolden(withDigits);
+    const everything = JSON.stringify(mockClient.__store);
+    expect(everything).not.toContain('111000025');
+    expect(everything).not.toContain('4455667788');
+    expect(everything).toContain('1884.73');
+  });
+});
+
+describe('SOURCE LABELS (Part 2) — other carriers', () => {
+  const otherCarrier = (overrides: Partial<NonNullable<Extraction['settlement']>> = {}): Extraction => ({
+    docType: 'settlement',
+    confidence: 'high',
+    settlement: {
+      weekEnding: '2026-08-14',
+      carrier: 'Landstar Ranger',
+      grossRevenue: 3000,
+      totalDeductions: 900,
+      netPay: 2100,
+      totalMiles: 1500,
+      revenueItems: [{ desc: 'LINEHAUL', amount: 3000 }],
+      deductions: [D('', 'INSURANCE', 400), D('', 'FUEL ADVANCE', 500)],
+      ...overrides,
+    },
+  });
+
+  test('a non-Prime statement with printed totals that add up -> "Totals match"', async () => {
+    const rows = await importGolden(otherCarrier());
+    expect(rows.settlements[0].statement?.source).toBe('printed_totals');
+    expect(settlementVerification(rows.settlements[0])).toBe('totals_match');
+  });
+
+  test('one without printed totals -> "Unverified"', async () => {
+    const rows = await importGolden(otherCarrier({ totalDeductions: undefined, netPay: 2100 }));
+    expect(settlementVerification(rows.settlements[0])).toBe('unverified');
+  });
+
+  test('Prime rules never touch it — even a Prime-shaped statement page is ignored', async () => {
+    const rows = await importGolden(otherCarrier({ operating: STATEMENT }));
+    expect(buildPrimeStatementCheck(otherCarrier({ operating: STATEMENT }))).toBeNull();
+    expect(rows.settlements[0].statement?.prime).toBeNull();
+    expect(rows.settlements[0].carrier).toBe('Landstar Ranger');
+  });
+
+  test('a null carrier alone never selects the Prime route', () => {
+    expect(buildPrimeStatementCheck({ ...statementExtraction(), settlement: { ...statementExtraction().settlement!, carrier: undefined } })).toBeNull();
   });
 });

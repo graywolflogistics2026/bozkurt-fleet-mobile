@@ -1,3 +1,4 @@
+import { settlementDeposit, type SettlementStatement } from '@/src/import/settlementStatement';
 // CASH FLOW 30-DAY FORECAST — BUILT FROM THE USER'S OWN DATA (owner
 // decision, binding — replaces the earlier manual-budget-entry design in
 // full). The forecast used to require the user to type 5 weekly budget
@@ -64,7 +65,13 @@ type DeductionLike = {
 type FuelLike = { purchase_date: string | null; amount: number | null; discount: number | null; location?: string | null; settlement_id?: string | null };
 type MaintenanceLike = { service_date: string | null; cost: number | null; description?: string | null; service_type?: string | null };
 type TollLike = { toll_date: string | null; amount: number | null; plaza?: string | null };
-type SettlementLike = { week_ending: string | null; gross: number | null; net: number | null; miles: number | null };
+type SettlementLike = {
+  week_ending: string | null;
+  gross: number | null;
+  net: number | null;
+  miles: number | null;
+  statement?: SettlementStatement | null;
+};
 type ReimbursementLike = { reimb_date: string | null; amount: number | null };
 
 // Merges deductions/fuel/maintenance/tolls into one flat list of spend
@@ -121,7 +128,9 @@ export function buildSpendEvents(
 // is simply absent, never assumed to be $0, so it can never silently
 // halve the average the way a fixed divide-by-4 would.
 export function trailingWeeklyNetIncomeAverage(settlements: SettlementLike[], weeks = INCOME_WINDOW_WEEKS): { average: number; weeksFound: number; total: number } {
-  return trailingWeeklyAverage(settlements, (s) => s.week_ending, (s) => Number(s.net ?? 0), weeks);
+  // CASH IN (owner decision 2026-10-13): the week's deposit as READ from the
+  // statement (else net due); an owed-to-carrier week counts as 0.
+  return trailingWeeklyAverage(settlements, (s) => s.week_ending, (s) => settlementDeposit(s).deposited, weeks);
 }
 
 export function trailingWeeklyMilesAverage(settlements: SettlementLike[], weeks = INCOME_WINDOW_WEEKS): { average: number; weeksFound: number; total: number } {

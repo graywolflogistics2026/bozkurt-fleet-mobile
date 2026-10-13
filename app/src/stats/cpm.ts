@@ -40,6 +40,7 @@ export function ppmColor(ppm: number): 'green' | 'orange' | 'red' {
 // wants the literal legacy `rDash()` figure — this is the NEW canonical
 // CPM every screen should read from.
 import { reducesTrueProfit, resolveFuelRows, sumReimbursements, type CanonicalFuel, type CanonicalReimbursement } from '@/src/stats/trueProfit';
+import type { StatementWeek } from '@/src/stats/statementRoute';
 import { isVehiclePurchaseOneOff, isMajorRepairOverhaul } from '@/src/import/category';
 
 export type CpmCostType = 'fixed' | 'variable';
@@ -93,6 +94,9 @@ const CPM_BUCKET_MAP: Record<string, string> = {
   Tires: 'Maintenance & Repairs',
   'Truck Wash & Detailing': 'Maintenance & Repairs',
   'Insurance—Truck': 'Insurance',
+  // R2 (owner decision 2026-10-13): occupational accident / health
+  // premiums are a fixed insurance cost in the canonical scheme too.
+  'Insurance—Health': 'Insurance',
   'Permits, Licenses & Road Taxes': 'Permits & Road Taxes',
   'Tolls & Scales': 'Tolls',
   'Parking & Lodging': 'Parking & Lodging',
@@ -212,14 +216,26 @@ export function calcCanonicalCpm(
   maintenanceRecords: CpmMaintenance[],
   tolls: CpmToll[],
   reimbursements: CanonicalReimbursement[],
+  // PRIME STATEMENT AS SOURCE (owner decision 2026-10-13): statement-backed
+  // weeks, whose settlement-linked rows the caller already removed
+  // (trueProfit.ts splitSettlementLayers()).
+  statementWeeks: StatementWeek[],
   truckFixedCostTotal = 0
 ): CanonicalCpmResult {
   const carrierAlreadyWithholdsLoanPayment = carrierWithholdsLoanPayment(deductions);
 
+  // fixed/variable are accumulated per amount, not per bucket: a Prime
+  // statement line carries its own type (R2 — the statement's FIXED
+  // section is fixed, everything else variable) even when its bucket's
+  // canonical type differs (e.g. QUALCOMM COST is ELD & Software).
   const buckets = new Map<string, number>();
-  function add(category: string, amount: number) {
+  let fixedAccumulated = 0;
+  let variableAccumulated = 0;
+  function add(bucket: string, amount: number, typeOverride?: CpmCostType) {
     if (!amount) return;
-    buckets.set(category, (buckets.get(category) ?? 0) + amount);
+    buckets.set(bucket, (buckets.get(bucket) ?? 0) + amount);
+    if ((typeOverride ?? typeFor(bucket)) === 'fixed') fixedAccumulated += amount;
+    else variableAccumulated += amount;
   }
 
   let excludedTotal = 0;
@@ -290,6 +306,21 @@ export function calcCanonicalCpm(
   // the offset instead of silently shrinking another bucket.
   add('Reimbursements', -sumReimbursements(reimbursements));
 
+  for (const week of statementWeeks) {
+    for (const entry of week.ledger) {
+      if (entry.status === 'excluded') {
+        if (entry.reason !== 'interest_income') excludedTotal += Math.abs(entry.printed);
+        continue;
+      }
+      if (entry.status === 'revenue' || !entry.contribution) continue;
+      if (entry.cpmOneOff) {
+        excludedOneOffs.push({ description: entry.label, amount: entry.contribution, reason: 'major_repair_overhaul' });
+        continue;
+      }
+      add(bucketFor(entry.category), entry.contribution, entry.costType ?? undefined);
+    }
+  }
+
   if (!carrierAlreadyWithholdsLoanPayment && truckFixedCostTotal > 0) {
     add('Loan/Lease Payment', truckFixedCostTotal);
   }
@@ -299,8 +330,8 @@ export function calcCanonicalCpm(
     .map(([category, amount]) => ({ category, amount, type: typeFor(category) }))
     .sort((a, b) => b.amount - a.amount);
 
-  const fixedTotal = bucketList.filter((b) => b.type === 'fixed').reduce((sum, b) => sum + b.amount, 0);
-  const variableTotal = bucketList.filter((b) => b.type === 'variable').reduce((sum, b) => sum + b.amount, 0);
+  const fixedTotal = fixedAccumulated;
+  const variableTotal = variableAccumulated;
 
   if (totalMiles <= 0) {
     return {

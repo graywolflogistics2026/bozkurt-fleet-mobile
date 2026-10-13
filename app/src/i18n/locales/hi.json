@@ -157,7 +157,10 @@
         "3M": "पिछले 90 दिनों का लाभ",
         "6M": "पिछले 6 महीनों का लाभ",
         "yearly": "इस वर्ष का लाभ"
-      }
+      },
+      "profitNotDeposits": "लाभ, जमा नहीं",
+      "depositedToBank": "आपके बैंक में जमा: {{amount}}",
+      "owedToCarrier": "कैरियर का बकाया: {{amount}}"
     },
     "overview": {
       "expenses": "व्यय"
@@ -177,7 +180,8 @@
       "excludedVehiclePurchase": "{{amount}} की वाहन खरीद को बाहर रखा गया — आपके रिकॉर्ड में रखा गया है लेकिन यहां नियमित व्यय के रूप में नहीं गिना गया।",
       "largestRowsTitle": "सबसे बड़े व्यय",
       "possibleDepreciableAsset": "बड़ा व्यय — संभावित मूल्यह्रास योग्य संपत्ति, अपने CPA से जांच करें",
-      "empty": "इस अवधि के लिए अभी तक कोई व्यय दर्ज नहीं किया गया है।"
+      "empty": "इस अवधि के लिए अभी तक कोई व्यय दर्ज नहीं किया गया है।",
+      "fixedVariableNote": "स्थिर और परिवर्तनीय में एक-बार की खरीद शामिल नहीं होती, लागत/मील की तरह।"
     },
     "fleetHealth": {
       "title": "फ्लीट स्वास्थ्य स्कोर",
@@ -336,7 +340,13 @@
       "differenceWhy": "सहेजी गई पंक्तियाँ इस settlement के शुद्ध भुगतान से पूरी तरह मेल नहीं खातीं — इसे फिर से आयात करें या इसकी पंक्तियाँ जाँचें।",
       "profit": "लाभ",
       "reimbursementNote": "प्रतिपूर्ति खर्च घटाती है; इसे कभी राजस्व नहीं गिना जाता।",
-      "fixedCostNote": "आपके ट्रक की लागत का अनुमान ({{amount}}) केवल लागत/मील और लाभ/मील में उपयोग होता है — इसे इस लाभ से नहीं घटाया जाता।"
+      "fixedCostNote": "आपके ट्रक की लागत का अनुमान ({{amount}}) केवल लागत/मील और लाभ/मील में उपयोग होता है — इसे इस लाभ से नहीं घटाया जाता।",
+      "deposit": "Prime द्वारा जमा",
+      "depositWhy": "Prime के स्टेटमेंट पर छपी जमा राशि — पढ़ी गई, कभी गणना नहीं की गई।",
+      "interestIncome": "ब्याज आय",
+      "interestIncomeWhy": "Prime द्वारा आपके लिए रखे गए पैसे पर दिया गया ब्याज — जमा के अंदर, व्यावसायिक लाभ नहीं।",
+      "profitEstimate": "लाभ (पंक्तियों से अनुमान)",
+      "crossCheck": "पंक्तियाँ Prime के स्टेटमेंट से {{amount}} अलग हैं ({{date}} का सप्ताह)। लाभ Prime के स्टेटमेंट से लिया जाता है।"
     }
   },
   "deductions": {
@@ -554,11 +564,6 @@
     "saveAnywayFlaggedConfirmTitle": "मेल न खाने वाले आँकड़ों के साथ सहेजें?",
     "saveAnywayFlaggedConfirmBody": "यह settlement ठीक वैसे ही सहेजा जाएगा जैसा पढ़ा गया और समीक्षा आवश्यक के रूप में चिह्नित होगा। जब तक आप इसे ठीक नहीं करते, इसका लाभ गलत हो सकता है।",
     "primeCheckOk": "✓ Prime के ऑपरेटिंग स्टेटमेंट से मेल खाता है",
-    "primeCheckMismatch": "⚠️ Prime के ऑपरेटिंग स्टेटमेंट से मेल नहीं खाता — कृपया जाँचें",
-    "primeCheckRevenue": "राजस्व {{ours}} · Prime कुल राजस्व {{prime}}",
-    "primeCheckMiles": "मील {{ours}} · Prime {{prime}}",
-    "primeCheckExpenses": "कटौतियाँ {{deductions}} − प्रतिपूर्ति {{reimbursed}} − ब्याज {{interest}} = {{ours}} · Prime परिचालन व्यय {{prime}}",
-    "primeCheckDeposit": "शुद्ध देय {{netDue}} + ब्याज {{interest}} = {{ours}} · Prime स्टेटमेंट कुल (जमा) {{prime}}",
     "lowConfidenceTitle": "⚠️ सहेजने से पहले कृपया समीक्षा करें",
     "lowConfidenceBody": "AI इस दस्तावेज़ को पढ़ने में पूरी तरह आश्वस्त नहीं था — सहेजने से पहले नीचे दिए गए विवरण जांचें।",
     "miscIncomeNoteTitle": "💵 बिज़नेस आय का पता चला",
@@ -645,7 +650,39 @@
     "backfillOfferTitle": "पुराने रिकॉर्ड पूरे कर रहे हैं?",
     "backfillOfferBody": "यदि आप पिछले कई महीनों के दस्तावेज़ आयात कर रहे हैं, तो Catch-Up Year पैक (1,000 आयात, 90 दिनों के लिए मान्य) मदद कर सकता है। यदि आप इसे अपने खाते में जोड़वाना चाहते हैं तो सहायता से संपर्क करें।",
     "processingPageProgressWithData": "पृष्ठ {{through}} में से {{total}} · राजस्व और कटौतियां दर्ज की गईं",
-    "notTruckSpecific": "ट्रक-विशिष्ट नहीं"
+    "notTruckSpecific": "ट्रक-विशिष्ट नहीं",
+    "reconciliationDepositMismatch": "शुद्ध देय + ब्याज = {{computed}}, लेकिन स्टेटमेंट पर छपी जमा राशि {{stated}} है।",
+    "primeCheckFailed": "🚫 सहेज नहीं सकते — पढ़े गए रूप में Prime का ऑपरेटिंग स्टेटमेंट मेल नहीं खाता",
+    "primeCheckNumbers": "छपा {{printed}}, पढ़ा {{read}}",
+    "primeLinesTitle": "पढ़ी गई स्टेटमेंट पंक्तियाँ ({{count}}), चिह्न जैसा छपा है",
+    "primeCheck": {
+      "revenueLines": "राजस्व पंक्तियाँ = TOTAL REVENUE",
+      "section_fuel_oil_tax": "ईंधन, तेल, कर पंक्तियाँ = उनका योग",
+      "section_repair": "मरम्मत पंक्तियाँ = उनका योग",
+      "section_tires": "टायर पंक्तियाँ = उनका योग",
+      "section_misc": "विविध पंक्तियाँ = उनका योग",
+      "section_out_of_pocket": "अपनी जेब से खर्च पंक्तियाँ = उनका योग",
+      "section_fixed": "स्थिर लागत पंक्तियाँ = उनका योग",
+      "section_other": "अन्य आय और व्यय पंक्तियाँ = उनका योग",
+      "variableCosts": "ईंधन + मरम्मत + टायर + विविध = TOTAL VARIABLE COSTS",
+      "operatingExpenses": "परिवर्तनीय + जेब से + स्थिर + अन्य = TOTAL OPERATING EXPENSES",
+      "statementTotal": "राजस्व − परिचालन व्यय = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "grossMatches": "TOTAL REVENUE = settlement सकल",
+      "milesMatch": "स्टेटमेंट MILES = settlement मील",
+      "requiredTotals": "राजस्व, परिचालन व्यय और स्टेटमेंट योग छपे (3 में से)"
+    },
+    "primeSection": {
+      "revenue": "राजस्व",
+      "fuel_oil_tax": "ईंधन, तेल, कर",
+      "repair": "मरम्मत",
+      "tires": "टायर",
+      "misc": "विविध",
+      "out_of_pocket": "जेब से",
+      "fixed": "स्थिर",
+      "other": "अन्य"
+    }
   },
   "camera": {
     "permissionNote": "रसीदों और settlement PDF की फोटो लेने के लिए कैमरा एक्सेस आवश्यक है।",
@@ -1179,7 +1216,6 @@
     "primeYtdMismatchTitle": "Prime के अपने स्टेटमेंट से मिलान करने लायक",
     "primeYtdRevenueMismatch": "यहाँ आपका वर्ष-दर-तारीख राजस्व {{ours}} है; Prime का अपना स्टेटमेंट {{prime}} बताता है — जांचने लायक।",
     "primeYtdMilesMismatch": "यहाँ आपके वर्ष-दर-तारीख मील {{ours}} हैं; Prime का अपना स्टेटमेंट {{prime}} बताता है — जांचने लायक।",
-    "primeYtdStatementMismatch": "यहाँ आपका वर्ष-से-अब-तक का शुद्ध भुगतान {{ours}} है; Prime का अपना स्टेटमेंट कहता है कि उसने {{prime}} भुगतान किया — जाँचने लायक है।",
     "primeYtdAsOf": "{{date}} को समाप्त सप्ताह के लिए Prime के अपने ऑपरेटिंग स्टेटमेंट के अनुसार।",
     "milesLabelShort": "मील",
     "milesMissing": "मील गायब हैं — जोड़ने के लिए टैप करें",
@@ -1199,7 +1235,12 @@
     "reimportNote": "इस सप्ताह के लिए settlement को फिर से आयात करने पर उसका settlement, लोड्स, ईंधन, प्रतिपूर्तियां, और रोकी गई कटौतियां यथावत बदल दी जाती हैं — यह उन्हें कभी डुप्लिकेट नहीं करता।",
     "deleteConfirmTitle": "इस settlement को हटाएं?",
     "deleteConfirmBody": "यह इसके लिंक किए गए लोड्स, ईंधन, प्रतिपूर्तियां, और रोकी गई कटौतियों को भी हटाता है।",
-    "deleteFailedTitle": "हटाना विफल"
+    "deleteFailedTitle": "हटाना विफल",
+    "owedToCarrierLabel": "कैरियर का बकाया",
+    "netDueLabel": "शुद्ध देय",
+    "depositedLabel": "जमा",
+    "profitThisWeekLabel": "इस सप्ताह का लाभ",
+    "primeYtdDepositsInfo": "Prime का वर्ष-से-अब-तक {{prime}} कहता है; आपके आयात किए गए सप्ताह {{ours}} बनाते हैं ({{date}} तक)।"
   },
   "reimbursements": {
     "title": "प्रतिपूर्तियां",
@@ -1499,7 +1540,9 @@
     "aiInsightsTitle": "AI इनसाइट्स",
     "askAi": "🤖 AI इनसाइट्स प्राप्त करें",
     "aiFooter": "सामान्य जानकारी, पेशेवर कर सलाह नहीं।",
-    "aiFailed": "सलाहकार सेवा तक नहीं पहुंचा जा सका।"
+    "aiFailed": "सलाहकार सेवा तक नहीं पहुंचा जा सका।",
+    "reimbursementsLine": "प्रतिपूर्ति",
+    "primeStatementLine": "Prime स्टेटमेंट वाले सप्ताह (Prime के अपने स्टेटमेंट से)"
   },
   "shareProfit": {
     "notAvailableTitle": "इस डिवाइस पर साझाकरण उपलब्ध नहीं है।",
@@ -2567,5 +2610,59 @@
   "documentTitles": {
     "weekEnding": "स.स. {{date}}",
     "receiptFor": "{{category}} रसीद"
+  },
+  "audit": {
+    "verification": {
+      "verified_prime": "Prime स्टेटमेंट से सत्यापित",
+      "totals_match": "योग मेल खाते हैं",
+      "unverified": "असत्यापित"
+    },
+    "statusTitle": {
+      "counted": "गिना गया",
+      "offset": "समायोजन (खर्च घटाते हैं)",
+      "excluded": "बाहर रखा गया (खर्च नहीं)"
+    },
+    "status": {
+      "counted": "गिना गया",
+      "offset": "समायोजन",
+      "excluded": "बाहर"
+    },
+    "source": {
+      "prime_statement": "Prime स्टेटमेंट",
+      "settlement": "Settlement पंक्ति",
+      "manual": "आपकी रसीद"
+    },
+    "reason": {
+      "expense": "व्यावसायिक खर्च",
+      "discount_credit": "छूट या क्रेडिट",
+      "reimbursement": "प्रतिपूर्ति — जिस लागत को लौटाती है उसे समायोजित करती है",
+      "pr_offset": "व्यक्तिगत भुगतान — PR प्रतिपूर्ति को समायोजित करता है",
+      "duplicate_fuel": "settlement पंक्ति जैसा ही ईंधन — एक बार गिना गया",
+      "non_deductible": "कटौती योग्य खर्च नहीं",
+      "advance": "अग्रिम का भुगतान — खर्च नहीं",
+      "escrow": "escrow या बॉन्ड — अब भी आपका पैसा",
+      "meals_per_diem": "भोजन — per diem में पहले से शामिल",
+      "truck_extras": "ट्रक एक्स्ट्रा — ट्रक लागत आधार में ट्रैक किए जाते हैं",
+      "owner_money_in": "मालिक का पैसा — न आय न खर्च",
+      "interest_income": "ब्याज आय — व्यावसायिक लाभ नहीं"
+    },
+    "empty": "इस अवधि में कोई पंक्ति नहीं।",
+    "showEveryRow": "हर पंक्ति दिखाएँ",
+    "hideRows": "पंक्तियाँ छिपाएँ",
+    "shareAudit": "ऑडिट साझा करें",
+    "totalsLine": "गिना गया {{counted}} − समायोजन {{offset}} = खर्च {{expenses}}",
+    "share": {
+      "heading": "BOZKA TRUCKING AI — ऑडिट",
+      "week": "{{date}} को समाप्त सप्ताह · {{carrier}} · {{label}}",
+      "unknownCarrier": "कैरियर नहीं पढ़ा गया",
+      "printed": "छपा: सकल {{gross}} · प्रतिपूर्ति {{reimbursements}} · कटौतियाँ {{deductions}} · शुद्ध देय {{netDue}}",
+      "notPrinted": "छपा नहीं",
+      "owed": "कैरियर का बकाया: {{amount}}",
+      "netDueOnly": "शुद्ध देय (कोई जमा पंक्ति नहीं छपी): {{amount}}",
+      "deposited": "जमा: {{amount}}",
+      "rowsTitle": "हर पंक्ति:",
+      "totals": "गिना गया {{counted}} − समायोजन {{offset}} = खर्च {{expenses}} (बाहर {{excluded}})",
+      "profit": "लाभ = राजस्व {{gross}} − खर्च {{expenses}} = {{profit}}"
+    }
   }
 }

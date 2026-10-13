@@ -44,7 +44,7 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
 import { checkSettlementReconciliation, flagReconciliationOverride } from '@/src/import/settlementReconciliation';
-import { buildPrimeReconciliation } from '@/src/import/primeOperatingStatement';
+import { buildPrimeStatementCheck } from '@/src/import/settlementStatement';
 import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
@@ -911,8 +911,15 @@ export default function Import() {
     // without going through that button (e.g. a stale re-render racing a
     // state update), same spirit as the double-tap guard above.
     const reconciliationResult = checkSettlementReconciliation(extraction);
-    if (!reconciliationResult.ok && !options.overrideReconciliation) return;
-    const extractionToSave = reconciliationResult.ok ? extraction : flagReconciliationOverride(extraction, reconciliationResult.issues);
+    // The Prime statement self-check (owner decision 2026-10-13) joins the
+    // same gate and the same "Save anyway, flagged needs-review" escape.
+    const statementCheck = buildPrimeStatementCheck(extraction);
+    const failedStatementChecks = statementCheck ? statementCheck.checks.filter((c) => !c.passed) : [];
+    const allOk = reconciliationResult.ok && failedStatementChecks.length === 0;
+    if (!allOk && !options.overrideReconciliation) return;
+    const extractionToSave = allOk
+      ? extraction
+      : flagReconciliationOverride(extraction, [...reconciliationResult.issues, ...failedStatementChecks]);
     savingRef.current = true;
     // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — the
     // single most decision-relevant started/completed pair in the app:
@@ -1011,7 +1018,8 @@ export default function Import() {
   // is a handful of arithmetic operations over a settlement's own
   // (already-in-memory) deduction array, not worth a useMemo.
   const reconciliation = checkSettlementReconciliation(extraction);
-  const primeReconciliation = extraction ? buildPrimeReconciliation(extraction) : null;
+  const primeStatement = extraction ? buildPrimeStatementCheck(extraction) : null;
+  const saveBlocked = !reconciliation.ok || (!!primeStatement && !primeStatement.passed);
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
   // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
   // team_split/trainee drivers get a split-entry field on the settlement
@@ -1172,6 +1180,8 @@ export default function Import() {
                       return <MutedText key={i}>{t('importScreen.reconciliationReimbursementLinesMismatch', { stated: m(issue.stated), summed: m(issue.summed) })}</MutedText>;
                     case 'netDueMismatch':
                       return <MutedText key={i}>{t('importScreen.reconciliationNetDueMismatch', { stated: m(issue.stated), computed: m(issue.computed) })}</MutedText>;
+                    case 'depositMismatch':
+                      return <MutedText key={i}>{t('importScreen.reconciliationDepositMismatch', { stated: m(issue.stated), computed: m(issue.computed) })}</MutedText>;
                     case 'zeroNetNonzeroGross':
                       return <MutedText key={i}>{t('importScreen.reconciliationZeroNet', { zero: m(0), gross: m(issue.grossRevenue) })}</MutedText>;
                   }
@@ -1179,56 +1189,46 @@ export default function Import() {
               </View>
             )}
 
-            {primeReconciliation && (
+            {/* PRIME STATEMENT AS SOURCE — R3 (owner decision 2026-10-13):
+                every line the AI read, with its printed sign, and every
+                self-check with its numbers, so the owner can compare with
+                the PDF before saving. A failing check blocks Save. */}
+            {primeStatement && (
               <View
                 style={{
-                  borderColor: primeReconciliation.mismatches.length === 0 ? colors.green : colors.orange,
+                  borderColor: primeStatement.passed ? colors.green : colors.red,
                   borderWidth: 1,
                   borderRadius: radii.sm,
                   padding: spacing.sm,
                   marginBottom: spacing.sm,
                 }}
               >
-                <Text style={{ color: primeReconciliation.mismatches.length === 0 ? colors.green : colors.orange, fontWeight: '700' }}>
-                  {primeReconciliation.mismatches.length === 0 ? t('importScreen.primeCheckOk') : t('importScreen.primeCheckMismatch')}
+                <Text style={{ color: primeStatement.passed ? colors.green : colors.red, fontWeight: '700' }}>
+                  {primeStatement.passed ? t('importScreen.primeCheckOk') : t('importScreen.primeCheckFailed')}
                 </Text>
-                {primeReconciliation.totalRevenue != null && primeReconciliation.grossRevenue != null && (
-                  <MutedText>
-                    {t('importScreen.primeCheckRevenue', {
-                      ours: money(primeReconciliation.grossRevenue, i18n.language),
-                      prime: money(primeReconciliation.totalRevenue, i18n.language),
-                    })}
-                  </MutedText>
-                )}
-                {primeReconciliation.miles != null && primeReconciliation.totalMiles != null && (
-                  <MutedText>
-                    {t('importScreen.primeCheckMiles', {
-                      ours: formatNumber(primeReconciliation.totalMiles, i18n.language),
-                      prime: formatNumber(primeReconciliation.miles, i18n.language),
-                    })}
-                  </MutedText>
-                )}
-                {primeReconciliation.totalOperatingExpenses != null && primeReconciliation.totalDeductions != null && (
-                  <MutedText>
-                    {t('importScreen.primeCheckExpenses', {
-                      deductions: money(primeReconciliation.totalDeductions, i18n.language),
-                      reimbursed: money(primeReconciliation.reimbursements, i18n.language),
-                      interest: money(primeReconciliation.interestIncome, i18n.language),
-                      ours: money(primeReconciliation.totalDeductions - primeReconciliation.reimbursements - primeReconciliation.interestIncome, i18n.language),
-                      prime: money(primeReconciliation.totalOperatingExpenses, i18n.language),
-                    })}
-                  </MutedText>
-                )}
-                {primeReconciliation.totalStatement != null && primeReconciliation.netDue != null && (
-                  <MutedText>
-                    {t('importScreen.primeCheckDeposit', {
-                      netDue: money(primeReconciliation.netDue, i18n.language),
-                      interest: money(primeReconciliation.interestIncome, i18n.language),
-                      ours: money(primeReconciliation.netDue + primeReconciliation.interestIncome, i18n.language),
-                      prime: money(primeReconciliation.totalStatement, i18n.language),
-                    })}
-                  </MutedText>
-                )}
+                {primeStatement.checks.map((c) => {
+                  const fmt = (n: number) =>
+                    c.id === 'milesMatch' || c.id === 'requiredTotals' ? formatNumber(n, i18n.language) : money(n, i18n.language);
+                  return (
+                    <MutedText key={c.id} style={!c.passed ? { color: colors.red, fontWeight: '700' } : undefined}>
+                      {c.passed ? '✓' : '✗'} {t(`importScreen.primeCheck.${c.id}`)} — {t('importScreen.primeCheckNumbers', { printed: fmt(c.expected), read: fmt(c.actual) })}
+                    </MutedText>
+                  );
+                })}
+                <Text style={{ color: colors.text, fontWeight: '700', marginTop: spacing.sm }}>
+                  {t('importScreen.primeLinesTitle', { count: primeStatement.lines.length })}
+                </Text>
+                {primeStatement.lines.map((l, i) => (
+                  <View key={`${l.section}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <MutedText style={{ flex: 1, marginEnd: spacing.sm }}>
+                      {t(`importScreen.primeSection.${l.section}`)} · {l.label}
+                    </MutedText>
+                    <Text style={{ color: colors.text }}>
+                      {formatNumber(Math.abs(l.amount), i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {l.amount < 0 ? '-' : ''}
+                    </Text>
+                  </View>
+                ))}
               </View>
             )}
 
@@ -1486,10 +1486,10 @@ export default function Import() {
                 (needsTruckPicker && !truckId) ||
                 (needsDriverPicker && !driverId) ||
                 settlementWeekEndingMissing ||
-                !reconciliation.ok
+                saveBlocked
               }
             />
-            {!reconciliation.ok && (
+            {saveBlocked && (
               <SecondaryButton
                 title={t('importScreen.saveAnywayFlagged')}
                 onPress={handleSaveFlagged}

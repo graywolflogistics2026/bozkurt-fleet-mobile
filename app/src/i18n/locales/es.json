@@ -152,7 +152,10 @@
         "3M": "Ganancia de los últimos 90 días",
         "6M": "Ganancia de los últimos 6 meses",
         "yearly": "Ganancia de este año"
-      }
+      },
+      "profitNotDeposits": "Ganancia, no depósitos",
+      "depositedToBank": "Depositado en su banco: {{amount}}",
+      "owedToCarrier": "Debe al transportista: {{amount}}"
     },
     "overview": {
       "expenses": "Gastos"
@@ -172,7 +175,8 @@
       "excludedVehiclePurchase": "{{amount}} en compras de vehículos excluidos — se mantienen en sus registros pero no se cuentan aquí como gasto rutinario.",
       "largestRowsTitle": "Gastos más grandes",
       "possibleDepreciableAsset": "Gasto grande — posible activo depreciable, consulte a su contador",
-      "empty": "Aún no hay gastos registrados para este período."
+      "empty": "Aún no hay gastos registrados para este período.",
+      "fixedVariableNote": "Fijo y variable excluyen las compras únicas, igual que Costo/Milla."
     },
     "fleetHealth": {
       "title": "Puntaje de Salud de la Flota",
@@ -331,7 +335,13 @@
       "differenceWhy": "Las líneas guardadas no coinciden del todo con el pago neto de este settlement — vuelva a importarlo o revise sus líneas.",
       "profit": "Ganancia",
       "reimbursementNote": "Los reembolsos reducen los gastos; nunca se cuentan como ingresos.",
-      "fixedCostNote": "Su costo estimado del camión ({{amount}}) se usa solo en Costo/Milla y Ganancia/Milla — no se resta de esta ganancia."
+      "fixedCostNote": "Su costo estimado del camión ({{amount}}) se usa solo en Costo/Milla y Ganancia/Milla — no se resta de esta ganancia.",
+      "deposit": "Depositado por Prime",
+      "depositWhy": "El depósito impreso en el estado de Prime — leído, nunca calculado.",
+      "interestIncome": "Ingresos por intereses",
+      "interestIncomeWhy": "Intereses que Prime pagó sobre el dinero que guarda para usted — dentro del depósito, no es ganancia del negocio.",
+      "profitEstimate": "Ganancia (estimación a partir de las líneas)",
+      "crossCheck": "Las líneas difieren del estado de Prime en {{amount}} (semana del {{date}}). La ganancia usa el estado de Prime."
     }
   },
   "deductions": {
@@ -549,11 +559,6 @@
     "saveAnywayFlaggedConfirmTitle": "¿Guardar con números que no cuadran?",
     "saveAnywayFlaggedConfirmBody": "Este settlement se guardará tal como se leyó y se marcará como Necesita revisión. Su ganancia puede ser incorrecta hasta que lo corrija.",
     "primeCheckOk": "✓ Coincide con el estado operativo de Prime",
-    "primeCheckMismatch": "⚠️ No coincide con el estado operativo de Prime — revíselo",
-    "primeCheckRevenue": "Ingresos {{ours}} · Ingresos totales de Prime {{prime}}",
-    "primeCheckMiles": "Millas {{ours}} · Prime {{prime}}",
-    "primeCheckExpenses": "Deducciones {{deductions}} − reembolsado {{reimbursed}} − intereses {{interest}} = {{ours}} · Gastos operativos de Prime {{prime}}",
-    "primeCheckDeposit": "Neto a pagar {{netDue}} + intereses {{interest}} = {{ours}} · Total del estado de Prime (depósito) {{prime}}",
     "lowConfidenceTitle": "⚠️ Revise antes de guardar",
     "lowConfidenceBody": "La IA no estuvo totalmente segura al leer este documento — revise los datos antes de guardar.",
     "miscIncomeNoteTitle": "💵 Ingreso comercial detectado",
@@ -640,7 +645,39 @@
     "backfillOfferTitle": "¿Poniéndote al día con registros antiguos?",
     "backfillOfferBody": "Si estás importando varios meses de documentos anteriores, el paquete Año de Recuperación (1,000 importaciones, válido 90 días) puede ayudarte. Contacta a soporte si quieres que se agregue a tu cuenta.",
     "processingPageProgressWithData": "Página {{through}} de {{total}} · ingresos y deducciones capturados",
-    "notTruckSpecific": "No específico de un camión"
+    "notTruckSpecific": "No específico de un camión",
+    "reconciliationDepositMismatch": "Neto a pagar + intereses da {{computed}}, pero el depósito impreso en el estado de cuenta es {{stated}}.",
+    "primeCheckFailed": "🚫 No se puede guardar — el estado operativo de Prime no cuadra tal como se leyó",
+    "primeCheckNumbers": "impreso {{printed}}, leído {{read}}",
+    "primeLinesTitle": "Líneas del estado leídas ({{count}}), signo tal como está impreso",
+    "primeCheck": {
+      "revenueLines": "Líneas de ingresos = TOTAL REVENUE",
+      "section_fuel_oil_tax": "Líneas de combustible, aceite e impuestos = su total",
+      "section_repair": "Líneas de reparación = su total",
+      "section_tires": "Líneas de llantas = su total",
+      "section_misc": "Líneas misceláneas = su total",
+      "section_out_of_pocket": "Líneas de gastos propios = su total",
+      "section_fixed": "Líneas de costo fijo = su total",
+      "section_other": "Líneas de otros ingresos y gastos = su total",
+      "variableCosts": "Combustible + reparación + llantas + misc. = TOTAL VARIABLE COSTS",
+      "operatingExpenses": "Variable + gastos propios + fijo + otros = TOTAL OPERATING EXPENSES",
+      "statementTotal": "Ingresos − gastos operativos = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "grossMatches": "TOTAL REVENUE = bruto del settlement",
+      "milesMatch": "MILES del estado = millas del settlement",
+      "requiredTotals": "Totales de ingresos, gastos operativos y del estado impresos (de 3)"
+    },
+    "primeSection": {
+      "revenue": "Ingresos",
+      "fuel_oil_tax": "Combustible, aceite, impuestos",
+      "repair": "Reparación",
+      "tires": "Llantas",
+      "misc": "Misc.",
+      "out_of_pocket": "Gastos propios",
+      "fixed": "Fijo",
+      "other": "Otros"
+    }
   },
   "camera": {
     "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de settlements.",
@@ -1174,7 +1211,6 @@
     "primeYtdMismatchTitle": "Vale la pena verificar con el propio estado de Prime",
     "primeYtdRevenueMismatch": "Tus ingresos acumulados del año aquí son {{ours}}; el propio estado de Prime dice {{prime}} — vale la pena verificarlo.",
     "primeYtdMilesMismatch": "Tus millas acumuladas del año aquí son {{ours}}; el propio estado de Prime dice {{prime}} — vale la pena verificarlo.",
-    "primeYtdStatementMismatch": "Su pago neto del año aquí es {{ours}}; el propio estado de Prime dice que pagó {{prime}} — vale la pena revisarlo.",
     "primeYtdAsOf": "Según el estado operativo de Prime para la semana que termina el {{date}}.",
     "milesLabelShort": "Millas",
     "milesMissing": "Faltan millas — toque para agregar",
@@ -1194,7 +1230,12 @@
     "reimportNote": "Reimportar un settlement de esta semana reemplaza su settlement, cargas, combustible, reembolsos y deducciones retenidas — nunca los duplica.",
     "deleteConfirmTitle": "¿Eliminar este settlement?",
     "deleteConfirmBody": "Esto también elimina sus cargas, combustible, reembolsos y deducciones retenidas vinculadas.",
-    "deleteFailedTitle": "Fallo al eliminar"
+    "deleteFailedTitle": "Fallo al eliminar",
+    "owedToCarrierLabel": "Debe al transportista",
+    "netDueLabel": "Neto a pagar",
+    "depositedLabel": "Depositado",
+    "profitThisWeekLabel": "Ganancia de esta semana",
+    "primeYtdDepositsInfo": "El acumulado del año de Prime dice {{prime}}; sus semanas importadas suman {{ours}} (al {{date}})."
   },
   "reimbursements": {
     "title": "Reembolsos",
@@ -1494,7 +1535,9 @@
     "aiInsightsTitle": "Perspectivas de IA",
     "askAi": "🤖 Obtener Perspectivas de IA",
     "aiFooter": "Información general, no es asesoría fiscal profesional.",
-    "aiFailed": "No se pudo conectar con el servicio de asesoría."
+    "aiFailed": "No se pudo conectar con el servicio de asesoría.",
+    "reimbursementsLine": "Reembolsos",
+    "primeStatementLine": "Semanas con estado de Prime (del propio estado de Prime)"
   },
   "shareProfit": {
     "notAvailableTitle": "Compartir no está disponible en este dispositivo.",
@@ -2567,5 +2610,59 @@
   "documentTitles": {
     "weekEnding": "S/F {{date}}",
     "receiptFor": "Recibo de {{category}}"
+  },
+  "audit": {
+    "verification": {
+      "verified_prime": "Verificado por el estado de Prime",
+      "totals_match": "Los totales cuadran",
+      "unverified": "Sin verificar"
+    },
+    "statusTitle": {
+      "counted": "Contado",
+      "offset": "Compensaciones (reducen gastos)",
+      "excluded": "Excluido (no son gastos)"
+    },
+    "status": {
+      "counted": "CONTADO",
+      "offset": "COMPENSACIÓN",
+      "excluded": "EXCLUIDO"
+    },
+    "source": {
+      "prime_statement": "Estado de Prime",
+      "settlement": "Línea del settlement",
+      "manual": "Su recibo"
+    },
+    "reason": {
+      "expense": "Gasto del negocio",
+      "discount_credit": "Descuento o crédito",
+      "reimbursement": "Reembolso — compensa el costo que devuelve",
+      "pr_offset": "Pago personal — compensa el reembolso PR",
+      "duplicate_fuel": "El mismo combustible que una línea del settlement — contado una vez",
+      "non_deductible": "No es un gasto deducible",
+      "advance": "Pago de un adelanto — no es un gasto",
+      "escrow": "Escrow o fianza — sigue siendo su dinero",
+      "meals_per_diem": "Comida — ya cubierta por el per diem",
+      "truck_extras": "Extras del camión — registrados en el Costo Base del Camión",
+      "owner_money_in": "Dinero del dueño — no es ingreso ni gasto",
+      "interest_income": "Ingresos por intereses — no es ganancia del negocio"
+    },
+    "empty": "No hay filas en este período.",
+    "showEveryRow": "Mostrar todas las filas",
+    "hideRows": "Ocultar filas",
+    "shareAudit": "Compartir auditoría",
+    "totalsLine": "Contado {{counted}} − compensaciones {{offset}} = gastos {{expenses}}",
+    "share": {
+      "heading": "BOZKA TRUCKING AI — auditoría",
+      "week": "Semana que termina el {{date}} · {{carrier}} · {{label}}",
+      "unknownCarrier": "transportista no leído",
+      "printed": "Impreso: bruto {{gross}} · reembolsos {{reimbursements}} · deducciones {{deductions}} · neto a pagar {{netDue}}",
+      "notPrinted": "no impreso",
+      "owed": "Debe al transportista: {{amount}}",
+      "netDueOnly": "Neto a pagar (sin línea de depósito impresa): {{amount}}",
+      "deposited": "Depositado: {{amount}}",
+      "rowsTitle": "Todas las filas:",
+      "totals": "Contado {{counted}} − compensaciones {{offset}} = gastos {{expenses}} (excluido {{excluded}})",
+      "profit": "Ganancia = ingresos {{gross}} − gastos {{expenses}} = {{profit}}"
+    }
   }
 }

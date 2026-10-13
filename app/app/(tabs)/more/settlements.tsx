@@ -41,6 +41,9 @@ import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList'
 import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
 import { DestinationSummary } from '@/src/components/DestinationSummary';
 import { isSettlementNeedsReview } from '@/src/import/needsReview';
+import { computeSettlementWeekKpi, primeDepositsYtd } from '@/src/stats/settlementWeek';
+import { settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
+import { ShareAuditButton, VerificationBadge } from '@/src/components/ProfitAudit';
 import { useFormatters } from '@/src/i18n/format';
 import {
   Screen,
@@ -153,6 +156,21 @@ export default function Settlements() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<Settlement | null>(null);
+  const selectedDeposit = useMemo(() => (selected ? settlementDeposit(selected) : { deposited: 0, owedToCarrier: 0, source: 'net_due' as const }), [selected]);
+  // B3 (owner decision 2026-10-13): "Profit from this week" for the open
+  // settlement — computeKpis() on its own week/truck, this settlement only.
+  const selectedWeekKpi = useMemo(() => {
+    if (!selected || !selected.week_ending) return null;
+    return computeSettlementWeekKpi(selected, {
+      trucks: trucksQuery.data ?? [],
+      loads: loadsQuery.data ?? [],
+      deductions: dedQuery.data ?? [],
+      fuelPurchases: fuelQuery.data ?? [],
+      maintenanceRecords: maintenanceQuery.data ?? [],
+      tolls: tollsQuery.data ?? [],
+      reimbursements: reimbQuery.data ?? [],
+    });
+  }, [selected, trucksQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);
   // BETA FEEDBACK ROUND 2: "Needs review only" filter, same treatment as
   // Deductions/Documents/Transactions.
   const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
@@ -340,9 +358,17 @@ export default function Settlements() {
       manualMilesOverride: null,
       window: { startIso, endIso: new Date().toISOString().slice(0, 10) },
     });
-    return checkPrimeYtdReconciliation({ revenue: kpi.gross, miles: kpi.miles.total, netPay: kpi.bridge.netPay }, primeYtdSnapshot);
+    return checkPrimeYtdReconciliation({ revenue: kpi.gross, miles: kpi.miles.total }, primeYtdSnapshot);
   }, [primeYtdSnapshot, trucksQuery.data, allRows, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);
   const showPrimeYtdBanner = primeYtdMismatches.length > 0 && (isAllTrucks || (trucksQuery.data?.length ?? 0) <= 1);
+  // BANK DEPOSIT add-on, item 6 (owner decision 2026-10-13) — informational
+  // only, never a warning, never blocking: Prime's printed YTD statement
+  // total vs the deposits read from the imported Prime weeks, so a missing
+  // or duplicate week is visible.
+  const primeDepositYtd = useMemo(() => {
+    if (!primeYtdSnapshot || !primeYtdSnapshot.totalStatement) return null;
+    return { prime: primeYtdSnapshot.totalStatement, ours: primeDepositsYtd(allRows, primeYtdSnapshot.asOfWeekEnding).total };
+  }, [primeYtdSnapshot, allRows]);
 
   // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
   // testing round, item 2) — the SAME shared findLinkedRecords()/
@@ -562,8 +588,6 @@ export default function Settlements() {
                 {m.field === 'revenue' &&
                   t('settlementsScreen.primeYtdRevenueMismatch', { ours: money(m.ours), prime: money(m.prime) })}
                 {m.field === 'miles' && t('settlementsScreen.primeYtdMilesMismatch', { ours: number(m.ours), prime: number(m.prime) })}
-                {m.field === 'totalStatement' &&
-                  t('settlementsScreen.primeYtdStatementMismatch', { ours: money(m.ours), prime: money(m.prime) })}
               </MutedText>
             ))}
             {primeYtdSnapshot && (
@@ -571,6 +595,18 @@ export default function Settlements() {
                 {t('settlementsScreen.primeYtdAsOf', { date: date(primeYtdSnapshot.asOfWeekEnding) })}
               </MutedText>
             )}
+          </Card>
+        )}
+
+        {primeDepositYtd && primeYtdSnapshot && (
+          <Card>
+            <MutedText>
+              {t('settlementsScreen.primeYtdDepositsInfo', {
+                prime: money(primeDepositYtd.prime),
+                ours: money(primeDepositYtd.ours),
+                date: date(primeYtdSnapshot.asOfWeekEnding),
+              })}
+            </MutedText>
           </Card>
         )}
 
@@ -622,6 +658,7 @@ export default function Settlements() {
                           breakdown visible at a glance in the list, not just
                           after tapping into the detail sheet. */}
                       <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
+                      <VerificationBadge verification={settlementVerification(x)} />
                       {needsReview && <NeedsReviewChip />}
                       {needsReview && (
                         <MarkReviewedButton onPress={() => handleMarkReviewed(x)} isPending={reviewingId === x.id} />
@@ -660,6 +697,36 @@ export default function Settlements() {
                 </View>
               )}
 
+              <VerificationBadge verification={settlementVerification(selected)} />
+              {/* PROFIT IS NEVER THE DEPOSIT (owner decision 2026-10-13, B3):
+                  the deposit read from the statement (never computed) and
+                  the week's profit, side by side, never the same label. */}
+              {selectedWeekKpi && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: spacing.sm }}>
+                  <View>
+                    {selectedDeposit.owedToCarrier > 0 ? (
+                      <>
+                        <MutedText style={{ color: colors.red }}>{t('settlementsScreen.owedToCarrierLabel')}</MutedText>
+                        <Text style={[styles.detailAmount, { color: colors.red }]}>{money(selectedDeposit.owedToCarrier)}</Text>
+                      </>
+                    ) : (
+                      <>
+                        <MutedText>
+                          {selectedDeposit.source === 'net_due' ? t('settlementsScreen.netDueLabel') : t('settlementsScreen.depositedLabel')}
+                        </MutedText>
+                        <Text style={styles.detailAmount}>{money(selectedDeposit.deposited)}</Text>
+                      </>
+                    )}
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <MutedText>{t('settlementsScreen.profitThisWeekLabel')}</MutedText>
+                    <Text style={[styles.detailAmount, { color: selectedWeekKpi.net < 0 ? colors.red : colors.green }]}>
+                      {money(selectedWeekKpi.net)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {selectedWeekKpi && <ShareAuditButton kpi={selectedWeekKpi} settlements={[selected]} />}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
                 <View>
                   <MutedText>{t('settlementsScreen.grossLabelShort')}</MutedText>

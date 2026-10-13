@@ -1,6 +1,6 @@
 import type { Extraction } from './types';
 import { normalizeCarrierKey } from './carrierCodes';
-import { parseAmount, printedTotal, sumAmounts } from './amount';
+import { printedTotal } from './amount';
 
 // USE PRIME'S "STATEMENT OF INCOME AND EXPENSE" AS THE VERIFICATION
 // SOURCE OF TRUTH (owner decision, 2026-08-28) — Prime Inc's own
@@ -18,31 +18,12 @@ import { parseAmount, printedTotal, sumAmounts } from './amount';
 // against the literal 'PRIME INC' key. A non-Prime or unrecognized
 // carrier makes every function in this file a silent no-op.
 //
-// REAL LAYOUT (golden settlement pass, owner decision 2026-10-13). The
-// first version of this module was built with no real Prime PDF and
-// assumed a weekly "expenses" figure equal to the statement's total
-// deductions — on a real statement that is never true, so EVERY real
-// Prime import was flagged. Read from a real 8-page Prime settlement
-// (pages 5-6, columns WEEKS TOTAL / ACTUAL-MILE / YTD / LTD, trailing
-// minus = expense), the weekly column is:
-//   MILES 2,327 | REVENUE FROM PRIME INC 3,345.12 | EXTRA PAY 175.00 |
-//   FUEL SURCG BILL 1,210.04 | REEF FUEL SURCG 20.82 | SAFETY INC 16.35 |
-//   SERVICE INC 16.35 | TOLL 1099 PAY .07 | TOTAL REVENUE 4,783.75 |
-//   TOTAL FUEL,OIL,TAX 1,953.78 | TOTAL MISCELLANEOUS 589.84 |
-//   TOTAL VARIABLE COSTS 2,543.62 | TOTAL FIXED COST 255.77 |
-//   TOTAL OTHER INCOME AND EXPENSE 99.63 (incl. INTEREST INCOME .37) |
-//   TOTAL OPERATING EXPENSES 2,899.02 | TOTAL STATEMENT 1,884.73.
-// Prime nets each reimbursement against its own expense line and books
-// lines under its own headings (the $1.00 fuel card under WIRE CHARGE,
-// PR 1.00 as PERSONAL PYMNT RCV, 16.25 split 15.25 WEIGHT TICKETS + 1.00
-// WIRE CHARGE), so reconciling line by line would misfire — this module
-// reconciles at TOTAL level only:
-//   TOTAL REVENUE            = settlement gross revenue
-//   MILES                    = settlement total miles
-//   TOTAL OPERATING EXPENSES = total deductions − reimbursements − interest
-//   TOTAL STATEMENT          = net due + interest (the direct deposit)
-// The interest (.37) appears ONLY here — the app's own profit bridge
-// starts from net due (owner decision 2026-10-13, no deposit columns).
+// PRIME STATEMENT AS SOURCE (owner decision 2026-10-13): the weekly
+// Statement of Income and Expense is now the source of truth for a Prime
+// settlement week — see src/import/settlementStatement.ts (self-check,
+// stored figures), src/import/primeStatementLines.ts (line table) and
+// docs/decisions/prime-statement-source.md. This module keeps the carrier
+// gate, the standing YTD check and the Prime sub-ledger filter.
 
 const PRIME_CARRIER_KEY = 'PRIME INC';
 
@@ -50,111 +31,9 @@ export function isPrimeCarrier(carrier: string | null | undefined): boolean {
   return normalizeCarrierKey(carrier) === PRIME_CARRIER_KEY;
 }
 
-// $1 dollar tolerance — settlementReconciliation.ts's own established
-// single-settlement rounding tolerance, reused so the app has ONE
-// dollar-rounding tolerance concept. Miles: 1 mile.
-const WEEKLY_DOLLAR_TOLERANCE = 1.0;
-const WEEKLY_MILES_TOLERANCE = 1;
-
-export type PrimeWeeklyMismatch =
-  | { field: 'revenue'; extracted: number; operatingStatement: number }
-  | { field: 'miles'; extracted: number; operatingStatement: number }
-  | { field: 'operatingExpenses'; extracted: number; operatingStatement: number }
-  | { field: 'totalStatement'; extracted: number; operatingStatement: number };
-
-// The Prime reconciliation line the import preview shows — every figure
-// it compares, so the user sees WHY it matches (or doesn't).
-export type PrimeReconciliation = {
-  totalRevenue: number | null;
-  grossRevenue: number | null;
-  miles: number | null;
-  totalMiles: number | null;
-  totalOperatingExpenses: number | null;
-  totalDeductions: number | null;
-  reimbursements: number;
-  interestIncome: number;
-  totalStatement: number | null;
-  netDue: number | null;
-  mismatches: PrimeWeeklyMismatch[];
-};
-
-function finiteOrZero(v: unknown): number {
-  const n = parseAmount(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-// Null when not a Prime settlement or no operating-statement page was
-// extracted. Each comparison runs only when BOTH sides were printed.
-export function buildPrimeReconciliation(extraction: Extraction): PrimeReconciliation | null {
-  if (extraction.docType !== 'settlement' || !extraction.settlement) return null;
-  const s = extraction.settlement;
-  if (!isPrimeCarrier(s.carrier)) return null;
-  const op = s.operating;
-  if (!op) return null;
-
-  const totalRevenue = printedTotal(op.weekTotalRevenue);
-  const miles = printedTotal(op.weekMiles);
-  const totalOperatingExpenses = printedTotal(op.weekTotalOperatingExpenses);
-  const totalStatement = printedTotal(op.weekTotalStatement);
-  if (totalRevenue == null && miles == null && totalOperatingExpenses == null && totalStatement == null) return null;
-
-  const grossRevenue = printedTotal(s.grossRevenue);
-  const totalMiles = printedTotal(s.totalMiles);
-  const totalDeductions = printedTotal(s.totalDeductions);
-  const netDue = printedTotal(s.netPay);
-  const reimbursements = printedTotal(s.reimbursements) ?? sumAmounts(s.reimbursementItems, (r) => r.amount);
-  // Interest is a line, not a total: absent means Prime paid none.
-  const interestIncome = finiteOrZero(op.weekInterestIncome);
-
-  const mismatches: PrimeWeeklyMismatch[] = [];
-  if (totalRevenue != null && grossRevenue != null && Math.abs(grossRevenue - totalRevenue) > WEEKLY_DOLLAR_TOLERANCE) {
-    mismatches.push({ field: 'revenue', extracted: grossRevenue, operatingStatement: totalRevenue });
-  }
-  if (miles != null && totalMiles != null && Math.abs(totalMiles - miles) > WEEKLY_MILES_TOLERANCE) {
-    mismatches.push({ field: 'miles', extracted: totalMiles, operatingStatement: miles });
-  }
-  if (totalOperatingExpenses != null && totalDeductions != null) {
-    const extracted = totalDeductions - reimbursements - interestIncome;
-    if (Math.abs(extracted - totalOperatingExpenses) > WEEKLY_DOLLAR_TOLERANCE) {
-      mismatches.push({ field: 'operatingExpenses', extracted, operatingStatement: totalOperatingExpenses });
-    }
-  }
-  if (totalStatement != null && netDue != null) {
-    const extracted = netDue + interestIncome;
-    if (Math.abs(extracted - totalStatement) > WEEKLY_DOLLAR_TOLERANCE) {
-      mismatches.push({ field: 'totalStatement', extracted, operatingStatement: totalStatement });
-    }
-  }
-
-  return {
-    totalRevenue,
-    grossRevenue,
-    miles,
-    totalMiles,
-    totalOperatingExpenses,
-    totalDeductions,
-    reimbursements,
-    interestIncome,
-    totalStatement,
-    netDue,
-    mismatches,
-  };
-}
-
-export function checkPrimeOperatingStatementWeekly(extraction: Extraction): PrimeWeeklyMismatch[] {
-  return buildPrimeReconciliation(extraction)?.mismatches ?? [];
-}
-
-// Guard-chain function (src/data/aiImportCall.ts) — downgrades
-// confidence to 'low' on a mismatch, which routes the settlement through
-// the EXISTING needs-review machinery (src/import/needsReview.ts,
-// CLAUDE.md invariant #14), and returns the extraction UNCHANGED
-// otherwise.
-export function applyPrimeOperatingStatementCheck(extraction: Extraction): Extraction {
-  const issues = checkPrimeOperatingStatementWeekly(extraction);
-  if (issues.length === 0) return extraction;
-  return { ...extraction, confidence: 'low' };
-}
+// The WEEKLY check of the Prime statement page (every line, every printed
+// subtotal, the deposit) lives in src/import/settlementStatement.ts
+// (buildPrimeStatementCheck()).
 
 // ---------------------------------------------------------------------
 // STANDING YTD RECONCILIATION — a Prime account's own running YTD totals
@@ -187,16 +66,17 @@ function ytdMilesTolerance(primeReported: number): number {
   return Math.max(YTD_MILES_TOLERANCE_FLOOR, Math.abs(primeReported) * YTD_MILES_TOLERANCE_PCT);
 }
 
-export type PrimeYtdMismatch =
-  | { field: 'revenue'; ours: number; prime: number }
-  | { field: 'miles'; ours: number; prime: number }
-  | { field: 'totalStatement'; ours: number; prime: number };
+// Deposits are NOT compared here (BANK DEPOSIT add-on, owner decision
+// 2026-10-13): Prime's YTD statement total vs the imported weeks' deposits
+// is informational only, never a warning — see
+// src/stats/settlementWeek.ts primeDepositsYtd().
+export type PrimeYtdMismatch = { field: 'revenue'; ours: number; prime: number } | { field: 'miles'; ours: number; prime: number };
 
 // Pure comparison — returns [] (never a guess) when `primeYtd` is null.
 // `ours` must come from this app's OWN canonical functions
 // (computeKpis() over the Prime sub-ledger) — never re-derived here.
 export function checkPrimeYtdReconciliation(
-  ours: { revenue: number; miles: number; netPay: number },
+  ours: { revenue: number; miles: number },
   primeYtd: PrimeYtdSnapshot | null
 ): PrimeYtdMismatch[] {
   if (!primeYtd) return [];
@@ -207,9 +87,6 @@ export function checkPrimeYtdReconciliation(
   }
   if (primeYtd.miles && Math.abs(ours.miles - primeYtd.miles) > ytdMilesTolerance(primeYtd.miles)) {
     issues.push({ field: 'miles', ours: ours.miles, prime: primeYtd.miles });
-  }
-  if (primeYtd.totalStatement && Math.abs(ours.netPay - primeYtd.totalStatement) > ytdDollarTolerance(primeYtd.totalStatement)) {
-    issues.push({ field: 'totalStatement', ours: ours.netPay, prime: primeYtd.totalStatement });
   }
   return issues;
 }

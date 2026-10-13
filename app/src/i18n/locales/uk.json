@@ -152,7 +152,10 @@
         "3M": "Last 90 days' profit",
         "6M": "Last 6 months' profit",
         "yearly": "This year's profit"
-      }
+      },
+      "profitNotDeposits": "Profit, not deposits",
+      "depositedToBank": "Deposited to your bank: {{amount}}",
+      "owedToCarrier": "Owed to carrier: {{amount}}"
     },
     "overview": {
       "expenses": "Expenses"
@@ -172,7 +175,8 @@
       "excludedVehiclePurchase": "{{amount}} in vehicle purchases excluded — kept in your records but not counted as a routine expense here.",
       "largestRowsTitle": "Largest expenses",
       "possibleDepreciableAsset": "Large expense — possible depreciable asset, check with your CPA",
-      "empty": "No expenses recorded for this period yet."
+      "empty": "No expenses recorded for this period yet.",
+      "fixedVariableNote": "Fixed and variable leave out one-off purchases, the same as Cost/Mile."
     },
     "fleetHealth": {
       "title": "Fleet Health Score",
@@ -331,7 +335,13 @@
       "differenceWhy": "The saved lines don't fully match this settlement's net pay — re-import it or check its lines.",
       "profit": "Profit",
       "reimbursementNote": "Reimbursements reduce expenses; they are never counted as revenue.",
-      "fixedCostNote": "Your truck cost estimate ({{amount}}) is used in Cost/Mile and Profit/Mile only — it is not subtracted from this profit."
+      "fixedCostNote": "Your truck cost estimate ({{amount}}) is used in Cost/Mile and Profit/Mile only — it is not subtracted from this profit.",
+      "deposit": "Deposited by Prime",
+      "depositWhy": "The deposit printed on Prime's statement — read, never computed.",
+      "interestIncome": "Interest income",
+      "interestIncomeWhy": "Interest Prime paid on money it holds for you — inside the deposit, not business profit.",
+      "profitEstimate": "Profit (estimate from line items)",
+      "crossCheck": "Line items differ from Prime's statement by {{amount}} (week of {{date}}). Profit uses Prime's statement."
     }
   },
   "deductions": {
@@ -549,11 +559,6 @@
     "saveAnywayFlaggedConfirmTitle": "Save with numbers that don't add up?",
     "saveAnywayFlaggedConfirmBody": "This settlement will be saved exactly as read and marked Needs Review. Its profit may be wrong until you correct it.",
     "primeCheckOk": "✓ Matches Prime's operating statement",
-    "primeCheckMismatch": "⚠️ Doesn't match Prime's operating statement — please check",
-    "primeCheckRevenue": "Revenue {{ours}} · Prime total revenue {{prime}}",
-    "primeCheckMiles": "Miles {{ours}} · Prime {{prime}}",
-    "primeCheckExpenses": "Deductions {{deductions}} − reimbursed {{reimbursed}} − interest {{interest}} = {{ours}} · Prime operating expenses {{prime}}",
-    "primeCheckDeposit": "Net due {{netDue}} + interest {{interest}} = {{ours}} · Prime total statement (deposit) {{prime}}",
     "lowConfidenceTitle": "⚠️ Please review before saving",
     "lowConfidenceBody": "The AI wasn't fully confident reading this document — check the details below before saving.",
     "miscIncomeNoteTitle": "💵 Business income detected",
@@ -640,7 +645,39 @@
     "backfillOfferTitle": "Catching up on old records?",
     "backfillOfferBody": "If you're importing several months of past documents, the Catch-Up Year pack (1,000 imports, valid 90 days) may help. Contact support if you'd like one added to your account.",
     "processingPageProgressWithData": "Page {{through}} of {{total}} · revenue and deductions captured",
-    "notTruckSpecific": "Not truck-specific"
+    "notTruckSpecific": "Not truck-specific",
+    "reconciliationDepositMismatch": "Net due + interest comes to {{computed}}, but the statement's printed deposit is {{stated}}.",
+    "primeCheckFailed": "🚫 Can't save — Prime's operating statement doesn't add up as read",
+    "primeCheckNumbers": "printed {{printed}}, read {{read}}",
+    "primeLinesTitle": "Statement lines read ({{count}}), sign as printed",
+    "primeCheck": {
+      "revenueLines": "Revenue lines = TOTAL REVENUE",
+      "section_fuel_oil_tax": "Fuel, oil, tax lines = their total",
+      "section_repair": "Repair lines = their total",
+      "section_tires": "Tire lines = their total",
+      "section_misc": "Miscellaneous lines = their total",
+      "section_out_of_pocket": "Out-of-pocket lines = their total",
+      "section_fixed": "Fixed cost lines = their total",
+      "section_other": "Other income and expense lines = their total",
+      "variableCosts": "Fuel + repair + tires + misc = TOTAL VARIABLE COSTS",
+      "operatingExpenses": "Variable + out of pocket + fixed + other = TOTAL OPERATING EXPENSES",
+      "statementTotal": "Revenue − operating expenses = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "grossMatches": "TOTAL REVENUE = settlement gross",
+      "milesMatch": "Statement MILES = settlement miles",
+      "requiredTotals": "Revenue, operating expenses and statement totals printed (of 3)"
+    },
+    "primeSection": {
+      "revenue": "Revenue",
+      "fuel_oil_tax": "Fuel, oil, tax",
+      "repair": "Repair",
+      "tires": "Tires",
+      "misc": "Misc",
+      "out_of_pocket": "Out of pocket",
+      "fixed": "Fixed",
+      "other": "Other"
+    }
   },
   "camera": {
     "permissionNote": "Camera access is needed to photograph receipts and settlement PDFs.",
@@ -1174,7 +1211,6 @@
     "primeYtdMismatchTitle": "Worth checking against Prime's own statement",
     "primeYtdRevenueMismatch": "Your year-to-date revenue here is {{ours}}; Prime's own statement says {{prime}} — worth checking.",
     "primeYtdMilesMismatch": "Your year-to-date miles here are {{ours}}; Prime's own statement says {{prime}} — worth checking.",
-    "primeYtdStatementMismatch": "Your year-to-date net pay here is {{ours}}; Prime's own statement says it paid out {{prime}} — worth checking.",
     "primeYtdAsOf": "As of Prime's own operating statement for week ending {{date}}.",
     "milesLabelShort": "Miles",
     "milesMissing": "Miles missing — tap to add",
@@ -1194,7 +1230,12 @@
     "reimportNote": "Re-importing a settlement for this week replaces its settlement, loads, fuel, reimbursements, and withheld deductions in place — it never duplicates them.",
     "deleteConfirmTitle": "Delete this settlement?",
     "deleteConfirmBody": "This also removes its linked loads, fuel, reimbursements, and withheld deductions.",
-    "deleteFailedTitle": "Delete failed"
+    "deleteFailedTitle": "Delete failed",
+    "owedToCarrierLabel": "Owed to carrier",
+    "netDueLabel": "Net due",
+    "depositedLabel": "Deposited",
+    "profitThisWeekLabel": "Profit from this week",
+    "primeYtdDepositsInfo": "Prime's YTD says {{prime}}; your imported weeks add up to {{ours}} (as of {{date}})."
   },
   "reimbursements": {
     "title": "Reimbursements",
@@ -1494,7 +1535,9 @@
     "aiInsightsTitle": "AI Insights",
     "askAi": "🤖 Get AI Insights",
     "aiFooter": "General information, not professional tax advice.",
-    "aiFailed": "Could not reach the advisor service."
+    "aiFailed": "Could not reach the advisor service.",
+    "reimbursementsLine": "Reimbursements",
+    "primeStatementLine": "Prime statement weeks (from Prime's own statement)"
   },
   "shareProfit": {
     "notAvailableTitle": "Sharing isn't available on this device.",
@@ -2567,5 +2610,59 @@
   "documentTitles": {
     "weekEnding": "W/E {{date}}",
     "receiptFor": "{{category}} receipt"
+  },
+  "audit": {
+    "verification": {
+      "verified_prime": "Verified by Prime statement",
+      "totals_match": "Totals match",
+      "unverified": "Unverified"
+    },
+    "statusTitle": {
+      "counted": "Counted",
+      "offset": "Offsets (reduce expenses)",
+      "excluded": "Excluded (not expenses)"
+    },
+    "status": {
+      "counted": "COUNTED",
+      "offset": "OFFSET",
+      "excluded": "EXCLUDED"
+    },
+    "source": {
+      "prime_statement": "Prime statement",
+      "settlement": "Settlement line",
+      "manual": "Your receipt"
+    },
+    "reason": {
+      "expense": "Business expense",
+      "discount_credit": "Discount or credit",
+      "reimbursement": "Reimbursement — offsets the cost it repays",
+      "pr_offset": "Personal payment — offsets the PR reimbursement",
+      "duplicate_fuel": "Same fuel as a settlement line — counted once",
+      "non_deductible": "Not a deductible expense",
+      "advance": "Advance repayment — not an expense",
+      "escrow": "Escrow or bond — still your money",
+      "meals_per_diem": "Meal — already covered by per diem",
+      "truck_extras": "Truck extras — tracked in Truck Cost Basis",
+      "owner_money_in": "Owner money in — not income or an expense",
+      "interest_income": "Interest income — not business profit"
+    },
+    "empty": "No rows in this period.",
+    "showEveryRow": "Show every row",
+    "hideRows": "Hide rows",
+    "shareAudit": "Share audit",
+    "totalsLine": "Counted {{counted}} − offsets {{offset}} = expenses {{expenses}}",
+    "share": {
+      "heading": "BOZKA TRUCKING AI — audit",
+      "week": "Week ending {{date}} · {{carrier}} · {{label}}",
+      "unknownCarrier": "carrier not read",
+      "printed": "Printed: gross {{gross}} · reimbursements {{reimbursements}} · deductions {{deductions}} · net due {{netDue}}",
+      "notPrinted": "not printed",
+      "owed": "Owed to carrier: {{amount}}",
+      "netDueOnly": "Net due (no deposit line printed): {{amount}}",
+      "deposited": "Deposited: {{amount}}",
+      "rowsTitle": "Every row:",
+      "totals": "Counted {{counted}} − offsets {{offset}} = expenses {{expenses}} (excluded {{excluded}})",
+      "profit": "Profit = revenue {{gross}} − expenses {{expenses}} = {{profit}}"
+    }
   }
 }

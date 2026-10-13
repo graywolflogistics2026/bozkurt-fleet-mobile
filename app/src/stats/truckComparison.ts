@@ -11,6 +11,8 @@ import { calcMiles, type LoadMilesInput } from '@/src/stats/miles';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CanonicalCpmResult } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly, type TruckCostBasisInput } from '@/src/stats/truckCostBasis';
 import { allocateByMiles } from '@/src/stats/costAllocation';
+import { layeredGross, splitSettlementLayers } from '@/src/stats/trueProfit';
+import type { SettlementStatement } from '@/src/import/settlementStatement';
 
 // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — Home and
 // Scorecard both used to compute their own headline CPM/RPM/PPM from
@@ -56,6 +58,9 @@ export type ComparisonSettlement = {
   gross: number | null;
   net: number | null;
   miles: number | null;
+  // §77 (owner decision 2026-10-13) — a statement-backed Prime week is
+  // counted from Prime's own statement (trueProfit.ts splitSettlementLayers()).
+  statement?: SettlementStatement | null;
 };
 export type ComparisonDeduction = {
   amount: number | null;
@@ -64,6 +69,7 @@ export type ComparisonDeduction = {
   tax_deductible: boolean | null;
   description?: string | null;
   truck_id?: string | null;
+  settlement_id?: string | null;
 };
 export type ComparisonFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null; truck_id?: string | null; fuel_type?: string | null; purchase_date?: string | null };
 // A reimbursement has no truck_id — it belongs to its settlement's truck,
@@ -153,15 +159,20 @@ export function buildTruckComparison(
   trucks: ComparisonTruck[],
   settlements: ComparisonSettlement[],
   loads: LoadMilesInput[],
-  deductions: ComparisonDeduction[],
-  fuelPurchases: ComparisonFuel[],
-  maintenanceRecords: ComparisonMaintenance[],
-  tolls: ComparisonToll[],
-  reimbursements: ComparisonReimbursement[],
+  allDeductions: ComparisonDeduction[],
+  allFuel: ComparisonFuel[],
+  allMaintenance: ComparisonMaintenance[],
+  allTolls: ComparisonToll[],
+  allReimbursements: ComparisonReimbursement[],
   driverPayments: ComparisonDriverPayment[] = [],
   drivers: ComparisonDriver[] = []
 ): TruckComparisonResult {
-  const carrierWithholdsLoan = carrierWithholdsLoanPayment(deductions);
+  const carrierWithholdsLoan = carrierWithholdsLoanPayment(allDeductions);
+  // TWO SETTLEMENT LAYERS (owner decision 2026-10-13): statement-backed
+  // Prime weeks count from Prime's statement; their linked rows are
+  // removed here so nothing is counted twice.
+  const layers = splitSettlementLayers(settlements, allDeductions, allFuel, allMaintenance, allTolls, allReimbursements);
+  const { deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements, statementWeeks } = layers;
 
   // Fleet-level cost pool (truck_id null on deductions/fuel/maintenance/
   // tolls) — reuses calcCanonicalCpm's own exclusion/double-count logic
@@ -175,7 +186,9 @@ export function buildTruckComparison(
   const settlementsById = new Map(settlements.map((s) => [s.id, s]));
   const reimbursementTruckId = (r: ComparisonReimbursement) => (r.settlement_id ? (settlementsById.get(r.settlement_id)?.truck_id ?? null) : null);
   const fleetLevelReimbursements = reimbursements.filter((r) => !reimbursementTruckId(r));
-  const fleetPool = calcCanonicalCpm(0, 1, fleetLevelDeductions, fleetLevelFuel, fleetLevelMaintenance, fleetLevelTolls, fleetLevelReimbursements, 0);
+  // A statement-backed week with no truck is a fleet-level cost too.
+  const fleetLevelStatementWeeks = statementWeeks.filter((w) => !w.truckId);
+  const fleetPool = calcCanonicalCpm(0, 1, fleetLevelDeductions, fleetLevelFuel, fleetLevelMaintenance, fleetLevelTolls, fleetLevelReimbursements, fleetLevelStatementWeeks, 0);
   const fleetPoolTotal = fleetPool.buckets.reduce((sum, b) => sum + b.amount, 0);
 
   const driversById = new Map(drivers.map((d) => [d.id, d]));
@@ -203,17 +216,18 @@ export function buildTruckComparison(
   function buildTruckRow(truck: ComparisonTruck): TruckComparisonRow {
     const truckSettlements = settlements.filter((s) => s.truck_id === truck.id);
     const milesResult = calcMiles(truckSettlements, loads);
-    const grossRevenue = truckSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
+    const grossRevenue = layeredGross(truckSettlements);
 
     const directDeductions = deductions.filter((d) => d.truck_id === truck.id);
     const directFuel = fuelPurchases.filter((f) => f.truck_id === truck.id);
     const directMaintenance = maintenanceRecords.filter((m) => m.truck_id === truck.id);
     const directTolls = tolls.filter((t) => t.truck_id === truck.id);
     const directReimbursements = reimbursements.filter((r) => reimbursementTruckId(r) === truck.id);
+    const directStatementWeeks = statementWeeks.filter((w) => w.truckId === truck.id);
 
     const truckFixedCostTotal = calcTruckCostBasisWeekly(truck, carrierWithholdsLoan).weeklyFixedTotal * truckSettlements.length;
 
-    const direct = calcCanonicalCpm(grossRevenue, milesResult.totalMiles, directDeductions, directFuel, directMaintenance, directTolls, directReimbursements, truckFixedCostTotal);
+    const direct = calcCanonicalCpm(grossRevenue, milesResult.totalMiles, directDeductions, directFuel, directMaintenance, directTolls, directReimbursements, directStatementWeeks, truckFixedCostTotal);
     const directTotal = direct.buckets.reduce((sum, b) => sum + b.amount, 0);
     const allocatedExpenses = allocateByMiles(fleetPoolTotal, truckMiles.get(truck.id) ?? 0, realTruckTotalMiles);
     const totalExpenses = directTotal + allocatedExpenses;
@@ -262,11 +276,11 @@ export function buildTruckComparison(
           truckId: null,
           unitNumber: 'Unassigned',
           isUnassigned: true,
-          grossRevenue: unassignedSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0),
+          grossRevenue: layeredGross(unassignedSettlements),
           directExpenses: 0,
           allocatedExpenses: 0,
           totalExpenses: 0,
-          netProfit: unassignedSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0),
+          netProfit: layeredGross(unassignedSettlements),
           totalMiles: calcMiles(unassignedSettlements, loads).totalMiles,
           loadedMiles: calcMiles(unassignedSettlements, loads).loadedMiles,
           deadheadPct: calcMiles(unassignedSettlements, loads).deadheadPct,
@@ -274,7 +288,7 @@ export function buildTruckComparison(
           costPerMile: null,
           profitPerMile: null,
           driverPay: 0,
-          netAfterDriverPay: unassignedSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0),
+          netAfterDriverPay: layeredGross(unassignedSettlements),
           settlementCount: unassignedSettlements.length,
           cpmBreakdown: null,
         };

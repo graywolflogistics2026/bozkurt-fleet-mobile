@@ -231,12 +231,24 @@ export default function ProfitAnalysis() {
               </View>
               <View style={[styles.row, styles.rowBorder]}>
                 <Text style={styles.rowLabel}>{t('profitAnalysis.maintenanceLine')}</Text>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(rollup.maintenanceExpense)}</Text>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{money(rollup.canonicalMaintenanceExpense)}</Text>
               </View>
               <View style={[styles.row, styles.rowBorder]}>
                 <Text style={styles.rowLabel}>{t('profitAnalysis.tollsLine')}</Text>
                 <Text style={{ color: colors.text, fontWeight: '600' }}>{money(rollup.tollsExpense)}</Text>
               </View>
+              {rollup.reimbursementsTotal !== 0 && (
+                <View style={[styles.row, styles.rowBorder]}>
+                  <Text style={styles.rowLabel}>{t('profitAnalysis.reimbursementsLine')}</Text>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>− {money(rollup.reimbursementsTotal)}</Text>
+                </View>
+              )}
+              {rollup.statementExpenses !== 0 && (
+                <View style={[styles.row, styles.rowBorder]}>
+                  <Text style={styles.rowLabel}>{t('profitAnalysis.primeStatementLine')}</Text>
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>{money(rollup.statementExpenses)}</Text>
+                </View>
+              )}
               <View style={[styles.row, styles.rowBorder]}>
                 <Text style={[styles.rowLabel, { fontWeight: '700' }]}>{t('profitAnalysis.totalExpensesLine')}</Text>
                 <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>

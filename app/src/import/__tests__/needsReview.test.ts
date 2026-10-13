@@ -60,8 +60,30 @@ describe('isSettlementNeedsReview', () => {
     expect(isSettlementNeedsReview({ document_id: 'doc-1' }, documentsById)).toBe(true);
   });
 
-  it('is false when the linked document is high-confidence', () => {
+  // SOURCE LABELS (owner decision 2026-10-13): a high-confidence week is
+  // still flagged when it is Unverified (no stored statement, e.g. imported
+  // before §77) — and clears once its printed totals match.
+  const totalsMatch = {
+    version: 1 as const,
+    source: 'printed_totals' as const,
+    printed: { grossRevenue: 1000, reimbursements: null, reimbursementLines: 0, totalDeductions: 300, netDue: 700, deposit: 700, depositSource: 'net_due' as const, interestIncome: 0 },
+    prime: null,
+    savedFlagged: false,
+    reviewReasons: [],
+  };
+
+  it('is false when the linked document is high-confidence and the printed totals match', () => {
     const documentsById = new Map([['doc-1', { parsed_json: { confidence: 'high' }, reviewed_at: null }]]);
+    expect(isSettlementNeedsReview({ document_id: 'doc-1', statement: totalsMatch }, documentsById)).toBe(false);
+  });
+
+  it('is true for an Unverified week (no stored statement) even when the document is high-confidence', () => {
+    const documentsById = new Map([['doc-1', { parsed_json: { confidence: 'high' }, reviewed_at: null }]]);
+    expect(isSettlementNeedsReview({ document_id: 'doc-1' }, documentsById)).toBe(true);
+  });
+
+  it('an Unverified week clears once its document is marked reviewed', () => {
+    const documentsById = new Map([['doc-1', { parsed_json: { confidence: 'high' }, reviewed_at: '2026-10-13T00:00:00Z' }]]);
     expect(isSettlementNeedsReview({ document_id: 'doc-1' }, documentsById)).toBe(false);
   });
 

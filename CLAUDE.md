@@ -207,6 +207,13 @@ the truck fixed-cost estimate is in CPM/PPM only, never in profit.
 Prime week (profit 2,534.36) on every profit screen — it must stay green.
 Full: `docs/decisions/golden-settlement.md`.
 
+**Prime statement as source; profit is never the deposit.** A Prime week
+whose Statement of Income and Expense passed its self-check counts from
+that statement (`settlements.statement`, §77); its linked rows are detail
+only. Every week carries Verified / Totals match / Unverified. The bank
+deposit is READ from the statement, never computed, and is never labeled
+profit. Full: `docs/decisions/prime-statement-source.md`.
+
 **Carrier isolation.** A carrier payroll/settlement code ("DH", "BT",
 "AP") means something only at the carrier that issued the statement. Code
 maps (`carrier_code_maps`, global, service_role-written; Prime Inc is the
@@ -1017,6 +1024,8 @@ under each is unchanged original wording.
   - §72 remove business-balance tracking — status UNCONFIRMED.
     `pending_72.sql` kept; a read-only check query is in §72. The client
     is safe either way.
+  - §77 settlement statement figures — NOT applied yet (owner runs
+    `pending_77.sql`). The client is safe before it runs.
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67.)
 - **Native build**: the owner's device reported "embedded build (no OTA
@@ -1042,6 +1051,8 @@ under each is unchanged original wording.
   unified classification, 16 accountant categories.
 - `docs/decisions/prime-oop-tracker.md` — "For Prime Inc Drivers" screen.
 - `docs/decisions/prime-lumper.md` — Prime lumper handling.
+- `docs/decisions/prime-statement-source.md` — Prime statement route,
+  line table, self-check, source labels, read deposit, audit ledger.
 - `docs/decisions/golden-settlement.md` — golden Prime settlement,
   reimbursement offset, per-row fuel guard, import totals checks, real
   Prime operating-statement layout, profit bridge.

@@ -51,7 +51,10 @@ export type ChargebackType =
   | 'other_chargeback';
 
 export type ExtractedRevenueItem = { desc?: string; order?: string; amount?: number; incomeType?: IncomeType };
-export type ExtractedReimbursementItem = { desc?: string; ref?: string; amount?: number };
+// code: the line's own 2-letter carrier code when printed (Prime "PR" =
+// personal-payment reimbursement — the R1 offset limit for PERSONAL PYMNT
+// RCV on Prime's operating statement).
+export type ExtractedReimbursementItem = { code?: string; desc?: string; ref?: string; amount?: number };
 export type ExtractedLoad = {
   order?: string;
   from?: string;
@@ -127,6 +130,11 @@ export type ExtractedSettlement = {
   reimbursements?: number;
   totalDeductions?: number;
   netPay?: number;
+  // BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13): the
+  // amount the statement says was deposited/paid to the bank (e.g. Prime's
+  // "DIRECT DEPOSIT TO BANK"), when such a line is printed. The AMOUNT
+  // only — never a routing, account or any other bank digits.
+  depositAmount?: number | string;
   totalMiles?: number;
   loadedMiles?: number;
   revenueItems?: ExtractedRevenueItem[];
@@ -154,36 +162,37 @@ export type ExtractedSettlement = {
   // checked independently and deterministically after extraction, never
   // trusted from the model's own behavior alone.
   //
-  // REAL LAYOUT (golden settlement pass, owner decision 2026-10-13 — read
-  // from a real 8-page Prime settlement, pages 5-6, columns WEEKS TOTAL /
-  // ACTUAL-MILE / YTD / LTD): every week* field is the WEEKS TOTAL column,
-  // as a POSITIVE amount (Prime prints expenses with a trailing minus).
-  // src/import/primeOperatingStatement.ts reconciles at TOTAL level only.
+  // PRIME STATEMENT AS SOURCE (owner decision 2026-10-13,
+  // docs/decisions/prime-statement-source.md): every line of the WEEKS
+  // column plus every printed subtotal, ALL SIGNED AS PRINTED (a trailing
+  // minus = negative). src/import/settlementStatement.ts self-checks them
+  // and src/import/primeStatementLines.ts classifies each line.
   operating?: {
+    lines?: { section?: string; label?: string; amount?: number | string }[];
     weekMiles?: number;
-    weekRevenueFromPrime?: number;
-    weekExtraPay?: number;
-    weekFuelSurchargeBill?: number;
-    weekReeferFuelSurcharge?: number;
-    weekSafetyIncentive?: number;
-    weekServiceIncentive?: number;
-    weekToll1099Pay?: number;
-    weekTotalRevenue?: number;
-    weekFuelOilTax?: number;
-    weekMiscellaneous?: number;
-    weekTotalVariableCosts?: number;
-    weekTotalFixedCost?: number;
-    weekOtherIncomeAndExpense?: number;
-    weekInterestIncome?: number;
-    weekTotalOperatingExpenses?: number;
-    weekTotalStatement?: number;
+    weekTotalFreightRevenue?: number | string;
+    weekTotalOtherRevenue?: number | string;
+    weekTotalRevenue?: number | string;
+    weekTotalFuelOilTax?: number | string;
+    weekTotalRepair?: number | string;
+    weekTotalTires?: number | string;
+    weekTotalMiscellaneous?: number | string;
+    weekTotalVariableCosts?: number | string;
+    weekTotalOutOfPocket?: number | string;
+    weekTotalFixedCost?: number | string;
+    weekTotalOtherIncomeAndExpense?: number | string;
+    weekTotalOperatingExpenses?: number | string;
+    weekTotalStatement?: number | string;
+    // Balance-sheet page "SETTLEMENT TO OPERATOR" (WEEKS column) and the
+    // recap page's "DIRECT DEPOSIT" line.
+    settlementToOperator?: number | string;
+    directDeposit?: number | string;
     ytdTotalRevenue?: number;
     ytdMiles?: number;
     ytdTotalStatement?: number;
     weeksInService?: number;
-    // OLD ASSUMED LAYOUT (before 2026-10-13) — never extracted any more,
-    // read only from settlements imported before then (their stored
-    // parsed_json), for the standing YTD check.
+    // OLD LAYOUTS (before this pass) — never extracted any more, read only
+    // from older stored parsed_json for the standing YTD check.
     ytdRevenue?: number;
     ytdNet?: number;
   };
