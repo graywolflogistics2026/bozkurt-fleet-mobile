@@ -199,6 +199,14 @@ appear on "For Prime Inc Drivers" (sole exception: Prime withheld lumper
 lines, read-only). Tax side: invariant #1. Full:
 `docs/decisions/accounting-model.md`, `docs/decisions/prime-lumper.md`.
 
+**Golden settlement (profit oracle).** Reimbursements OFFSET expenses
+(never revenue, every carrier); the duplicate-fuel guard is per row;
+settlement-linked fuel/reimbursements follow their settlement's week;
+the truck fixed-cost estimate is in CPM/PPM only, never in profit.
+`app/src/data/__tests__/goldenPrimeSettlement.test.ts` asserts the real
+Prime week (profit 2,534.36) on every profit screen — it must stay green.
+Full: `docs/decisions/golden-settlement.md`.
+
 **Carrier isolation.** A carrier payroll/settlement code ("DH", "BT",
 "AP") means something only at the carrier that issued the statement. Code
 maps (`carrier_code_maps`, global, service_role-written; Prime Inc is the
@@ -1034,6 +1042,9 @@ under each is unchanged original wording.
   unified classification, 16 accountant categories.
 - `docs/decisions/prime-oop-tracker.md` — "For Prime Inc Drivers" screen.
 - `docs/decisions/prime-lumper.md` — Prime lumper handling.
+- `docs/decisions/golden-settlement.md` — golden Prime settlement,
+  reimbursement offset, per-row fuel guard, import totals checks, real
+  Prime operating-statement layout, profit bridge.
 - `docs/decisions/cash-flow-forecast.md` — Cash Flow auto-fill,
   forecast, recurring-charge classifier.
 - `docs/decisions/balance-removal.md` — business balance removal (§72).

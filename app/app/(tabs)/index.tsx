@@ -10,6 +10,7 @@ import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { useLoads } from '@/src/data/loads';
 import { useDeductions, useDeleteDeduction } from '@/src/data/deductions';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
@@ -22,10 +23,10 @@ import {
   type RankedLoad,
 } from '@/src/stats/cashFlowTrend';
 import { calcScorecard } from '@/src/stats/scorecard';
-import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
+import { buildWeeklyTrueProfitTrend, filterSettlementLinkedRowsToWindow } from '@/src/stats/trueProfit';
 import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
-import { matchesTruckScope } from '@/src/stats/kpi';
+import { matchesTruckScope, type ProfitBridge } from '@/src/stats/kpi';
 import { resolveHeroPeriodDateWindow, filterRowsByDateWindow, calcHeroRevenueExpenseTrio } from '@/src/stats/heroPeriodWindow';
 import { FleetScopeSelectorStrip } from '@/src/components/FleetScopeSelectorStrip';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
@@ -264,6 +265,79 @@ function HeroCard({
           <HeroAreaChart points={chartPoints} />
         </LinearGradient>
       </Pressable>
+    </View>
+  );
+}
+
+// PROFIT BRIDGE (golden settlement pass, owner decision 2026-10-13) —
+// net pay + non-expense withheld lines − expenses that never passed
+// through a settlement + reimbursements not on a settlement = profit,
+// every line explained (src/stats/kpi.ts ProfitBridge). A difference the
+// saved lines can't explain is shown, never hidden; the truck fixed-cost
+// estimate is not part of profit and is stated as a note, not a line.
+function ProfitBridgeView({ bridge }: { bridge: ProfitBridge }) {
+  const { t } = useTranslation();
+  const { money: moneyFmt } = useFormatters();
+  const money = (n: number) => moneyFmt(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const rows: { key: string; label: string; why: string; amount: number; sign: '' | '+' | '−'; tone?: string }[] = [
+    { key: 'net', label: t('dashboard.profitBridge.netPay'), why: t('dashboard.profitBridge.netPayWhy'), amount: bridge.netPay, sign: '' },
+    ...bridge.nonExpenseLines.map((l, i) => ({
+      key: `ne-${i}`,
+      label: l.description,
+      why:
+        l.category === 'Escrow & Deposits'
+          ? t('dashboard.profitBridge.whyEscrow')
+          : l.category === 'Meals (per diem covered)'
+            ? t('dashboard.profitBridge.whyMeal')
+            : t('dashboard.profitBridge.whyAdvance'),
+      amount: l.amount,
+      sign: '+' as const,
+    })),
+  ];
+  const optional: [string, number, '+' | '−', string, string][] = [
+    ['oop', bridge.outOfPocketDeductions, '−', t('dashboard.profitBridge.outOfPocket'), t('dashboard.profitBridge.outOfPocketWhy')],
+    ['fuel', bridge.standaloneFuel, '−', t('dashboard.profitBridge.standaloneFuel'), t('dashboard.profitBridge.standaloneFuelWhy')],
+    ['maint', bridge.maintenance, '−', t('dashboard.profitBridge.maintenance'), t('dashboard.profitBridge.maintenanceWhy')],
+    ['tolls', bridge.tolls, '−', t('dashboard.profitBridge.tolls'), t('dashboard.profitBridge.tollsWhy')],
+    ['reimb', bridge.reimbursementsNotOnSettlement, '+', t('dashboard.profitBridge.reimbursements'), t('dashboard.profitBridge.reimbursementsWhy')],
+  ];
+  for (const [key, amount, sign, label, why] of optional) {
+    if (Math.abs(amount) >= 0.005) rows.push({ key, label, why, amount, sign });
+  }
+  if (bridge.difference !== 0) {
+    rows.push({
+      key: 'diff',
+      label: t('dashboard.profitBridge.difference'),
+      why: t('dashboard.profitBridge.differenceWhy'),
+      amount: Math.abs(bridge.difference),
+      sign: bridge.difference > 0 ? '+' : '−',
+      tone: colors.orange,
+    });
+  }
+  return (
+    <View>
+      {rows.map((r, i) => (
+        <View key={r.key} style={[{ paddingVertical: spacing.xs }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ color: r.tone ?? colors.text, fontWeight: '600', flex: 1, marginEnd: spacing.sm }}>{r.label}</Text>
+            <Text style={{ color: r.tone ?? colors.text, fontWeight: '700' }}>
+              {r.sign ? `${r.sign} ` : ''}
+              {money(r.amount)}
+            </Text>
+          </View>
+          <MutedText style={{ fontSize: typography.size.xs }}>{r.why}</MutedText>
+        </View>
+      ))}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 2, borderTopColor: colors.text, paddingTop: spacing.xs, marginTop: spacing.xs }}>
+        <Text style={{ color: colors.text, fontWeight: '700' }}>{t('dashboard.profitBridge.profit')}</Text>
+        <Text style={{ color: bridge.profit < 0 ? colors.red : colors.green, fontWeight: '700' }}>{money(bridge.profit)}</Text>
+      </View>
+      <MutedText style={{ marginTop: spacing.sm, fontSize: typography.size.xs }}>{t('dashboard.profitBridge.reimbursementNote')}</MutedText>
+      {bridge.fixedCostEstimateInCpm > 0 && (
+        <MutedText style={{ marginTop: spacing.xs, fontSize: typography.size.xs }}>
+          {t('dashboard.profitBridge.fixedCostNote', { amount: money(bridge.fixedCostEstimateInCpm) })}
+        </MutedText>
+      )}
     </View>
   );
 }
@@ -788,6 +862,9 @@ export default function Dashboard() {
   // follow-up item D) — tapping the "Expenses" tile opens this instead of
   // just navigating to Deductions.
   const [expenseExplainerOpen, setExpenseExplainerOpen] = useState(false);
+  // PROFIT BRIDGE (golden settlement pass, owner decision 2026-10-13) —
+  // tapping the profit figure explains how it follows from net pay.
+  const [profitBridgeOpen, setProfitBridgeOpen] = useState(false);
   const [deletingExpenseRowId, setDeletingExpenseRowId] = useState<string | null>(null);
   const deleteDeduction = useDeleteDeduction();
 
@@ -829,6 +906,7 @@ export default function Dashboard() {
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
+  const reimbursementsQuery = useReimbursements();
 
   // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — the
   // DASHBOARD LAYOUT PER SCOPE spec's own "Single truck: every money card
@@ -908,8 +986,8 @@ export default function Dashboard() {
   );
   const revenueExpenseTrend = useMemo(() => fullWeeklyRevenueExpenseTrend.slice(-8), [fullWeeklyRevenueExpenseTrend]);
   const fullWeeklyTrueProfitTrend = useMemo(
-    () => buildWeeklyTrueProfitTrend(scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls),
-    [scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls]
+    () => buildWeeklyTrueProfitTrend(scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls, reimbursementsQuery.data ?? []),
+    [scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls, reimbursementsQuery.data]
   );
   const fullWeeklyTrueProfitAsRevenueExpense = useMemo(
     () => fullWeeklyTrueProfitTrend.map((p) => ({ weekEnding: p.weekEnding, revenue: p.gross, expenses: p.gross - p.net })),
@@ -962,6 +1040,7 @@ export default function Dashboard() {
         fuelQuery.data ?? [],
         maintenanceQuery.data ?? [],
         tollsQuery.data ?? [],
+        reimbursementsQuery.data ?? [],
         activeTruck?.id ?? null,
         activeTruck?.manual_total_miles_override,
         now
@@ -976,6 +1055,7 @@ export default function Dashboard() {
       fuelQuery.data,
       maintenanceQuery.data,
       tollsQuery.data,
+      reimbursementsQuery.data,
       activeTruck,
       now,
     ]
@@ -1066,16 +1146,19 @@ export default function Dashboard() {
     if (!isAllTrucks || !thisWeekPoint) return null;
     const start = weekStartFromEnding(thisWeekPoint.weekEnding);
     const inWeek = (d: string | null) => !!d && d >= start && d <= thisWeekPoint.weekEnding;
+    const weekSettlements = (settlementsQuery.data ?? []).filter((s) => s.week_ending === thisWeekPoint.weekEnding);
+    const weekSettlementIds = new Set(weekSettlements.map((s) => s.id));
     return buildTruckComparison(
       trucks,
-      (settlementsQuery.data ?? []).filter((s) => s.week_ending === thisWeekPoint.weekEnding),
+      weekSettlements,
       loadsQuery.data ?? [],
       thisWeekExpenseRows,
-      (fuelQuery.data ?? []).filter((f) => inWeek(f.purchase_date)),
+      filterSettlementLinkedRowsToWindow(fuelQuery.data ?? [], (f) => f.purchase_date, weekSettlementIds, inWeek),
       (maintenanceQuery.data ?? []).filter((m) => inWeek(m.service_date)),
-      (tollsQuery.data ?? []).filter((tl) => inWeek(tl.toll_date))
+      (tollsQuery.data ?? []).filter((tl) => inWeek(tl.toll_date)),
+      filterSettlementLinkedRowsToWindow(reimbursementsQuery.data ?? [], (r) => r.reimb_date, weekSettlementIds, inWeek)
     );
-  }, [isAllTrucks, thisWeekPoint, trucks, settlementsQuery.data, loadsQuery.data, thisWeekExpenseRows, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]);
+  }, [isAllTrucks, thisWeekPoint, trucks, settlementsQuery.data, loadsQuery.data, thisWeekExpenseRows, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]);
 
   function handleDeleteExpenseRow(id: string) {
     Alert.alert(t('deductions.deleteConfirmTitle'), t('deductions.deleteConfirmBody'), [
@@ -1187,7 +1270,7 @@ export default function Dashboard() {
           netProfitDeltaAmount={heroPeriodResult.deltaAmount}
           chartPoints={heroPeriodResult.chartPoints}
           profitScore={profitScore}
-          onPress={() => router.push('/(tabs)/more/cash-flow')}
+          onPress={() => setProfitBridgeOpen(true)}
         />
 
         {/* ITEM 0 (owner decision, CPM/PPM BROKEN AGAIN follow-up): this
@@ -1222,7 +1305,7 @@ export default function Dashboard() {
             valueColor={heroPeriodResult.netProfit < 0 ? colors.red : colors.green}
             change={heroPeriodResult.change}
             goodDirection="up"
-            onPress={() => router.push('/(tabs)/more/cash-flow')}
+            onPress={() => setProfitBridgeOpen(true)}
           />
         </View>
 
@@ -1328,6 +1411,16 @@ export default function Dashboard() {
 
       {/* EXPENSE TOTAL EXPLAINER (owner decision 2026-08-05, FULL PARITY
           follow-up item D). */}
+      <ModalSheet visible={profitBridgeOpen} onClose={() => setProfitBridgeOpen(false)}>
+        <SheetTitle>{t('dashboard.profitBridge.title')}</SheetTitle>
+        {periodScopedCpm.kpi ? (
+          <ProfitBridgeView bridge={periodScopedCpm.kpi.bridge} />
+        ) : (
+          <MutedText>{t('dashboard.profitBridge.empty')}</MutedText>
+        )}
+        <SecondaryButton title={t('common.close')} onPress={() => setProfitBridgeOpen(false)} />
+      </ModalSheet>
+
       <ModalSheet visible={expenseExplainerOpen} onClose={() => setExpenseExplainerOpen(false)}>
         <SheetTitle>{t(`dashboard.expenseExplainer.titleByPeriod.${heroPeriod}`)}</SheetTitle>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm }}>

@@ -12,6 +12,7 @@ import {
 } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import { toDateOrNull } from '@/src/import/dateGuard';
+import { parseAmount } from '@/src/import/amount';
 import { clampPerDiemDays, defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import type {
@@ -36,9 +37,12 @@ import type {
   FinancialDocKind,
 } from '@/src/import/types';
 
+// parseAmount() (src/import/amount.ts) reads a trailing-minus credit
+// ("184.85-") as negative — golden settlement pass, owner decision
+// 2026-10-13. Every other input parses exactly as before.
 function num(v: unknown, fallback = 0): number {
-  const n = typeof v === 'string' ? parseFloat(v) : (v as number);
-  return Number.isFinite(n) ? (n as number) : fallback;
+  const n = parseAmount(v);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 // IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report) — the
@@ -51,8 +55,8 @@ function num(v: unknown, fallback = 0): number {
 // toDateOrNull() below.
 export function numOrNull(v: unknown): number | null {
   if (v === null || v === undefined) return null;
-  const n = typeof v === 'string' ? parseFloat(v) : (v as number);
-  return Number.isFinite(n) ? (n as number) : null;
+  const n = parseAmount(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 // ---------- settlement (legacy saveImport() settlement branch, legacy/index.html:2510-2527) ----------

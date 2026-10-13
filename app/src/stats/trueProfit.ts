@@ -90,83 +90,208 @@ export function reducesTrueProfit(d: {
 // same fix to every OTHER "what's my profit/cost" figure in the app, per
 // the spec's explicit "one canonical engine" requirement.)
 //
-// DOUBLE-COUNT GUARD, fuel only: a settlement's own withheld deductions
-// can include a `fuel_advance` chargeback (→ category 'Fuel & DEF') —
-// an informational categorization of the SAME underlying fuel cost that
-// ALSO has its own itemized row(s) in fuel_purchases (mapSettlement()
-// stamps a settlement-derived fuel_purchases row's `settlement_id`,
-// aiImportSave.ts). Counting both would double the real cost, so a
-// SETTLEMENT-LINKED fuel_purchases row (settlement_id set) is excluded
-// here — its cost is already represented by the settlement's own
-// withheld deductions, exactly as `reducesTrueProfit()` already decided.
-// Only STANDALONE fuel (settlement_id null — a fuel receipt imported on
-// its own, never previously reflected anywhere) is added. tolls/
-// maintenance_records have no settlement_id column at all to filter by —
-// same as `buildAccountantPackage()`'s own established precedent, they're
-// added unconditionally; the corresponding `tolls_transponder` chargeback
-// (rare in practice — most carriers bill toll-transponder fees as a flat
-// rental fee, not a per-toll pass-through) is an accepted, pre-existing
-// class of edge case, not a regression this pass introduces.
+// DOUBLE-COUNT GUARD, fuel only — PER ROW (golden settlement pass, owner
+// decision 2026-10-13, docs/decisions/golden-settlement.md). A settlement's
+// fuel can arrive in two places: its withheld deductions ("TRACTOR FUEL
+// 60.44") and/or its own itemized fuel list (fuel_purchases rows stamped
+// with the settlement's id). The old guard skipped EVERY settlement-linked
+// fuel row on the assumption that the same fuel was always also in the
+// deductions — when the extraction put fuel only in the fuel list, the
+// whole week's fuel vanished from profit (the golden Prime settlement read
+// $4,577 instead of $2,534). Now a settlement-linked fuel row is skipped
+// only when a withheld fuel deduction OF THE SAME SETTLEMENT matches it
+// (same amount within one cent — the row's charged amount or its amount
+// net of its per-line discount — and the same fuel type or date); each
+// deduction line can cover one fuel row at most. Every other row counts
+// once. A counted settlement-linked row counts at its CHARGED amount: its
+// per-line discount column is informational, because the settlement
+// applies the discount through its own credit lines (Prime's UD/RD/ED),
+// which are already negative deductions — subtracting both would double
+// the discount. Standalone fuel (settlement_id null, a receipt imported on
+// its own) still counts amount minus discount, as before. tolls/
+// maintenance_records have no settlement_id to match on — same as
+// buildAccountantPackage()'s precedent, they're added unconditionally.
 
-type CanonicalFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null };
+export type CanonicalFuel = {
+  amount: number | null;
+  discount?: number | null;
+  settlement_id?: string | null;
+  fuel_type?: string | null;
+  purchase_date?: string | null;
+};
 type CanonicalMaintenance = { cost: number | null };
 type CanonicalToll = { amount: number | null };
-type CanonicalDeduction = { amount: number | null; source?: string | null; category?: string | null; tax_deductible: boolean | null };
+export type CanonicalDeduction = {
+  amount: number | null;
+  source?: string | null;
+  category?: string | null;
+  tax_deductible: boolean | null;
+  settlement_id?: string | null;
+  description?: string | null;
+  ded_date?: string | null;
+};
+// REIMBURSEMENTS OFFSET EXPENSES (golden settlement pass, owner decision
+// 2026-10-13, every carrier): a reimbursement repays a cost the business
+// already booked (reefer fuel, a trailer wash, a lumper), so it reduces
+// expenses — it is NEVER counted as revenue, which keeps RPM on the
+// carrier's own revenue figure. Prime prints the same convention on its
+// operating statement (REEFER FUEL 262.53 deducted − 216.30 reimbursed =
+// 46.23).
+export type CanonicalReimbursement = { amount: number | null };
+
+const FUEL_LINE_RE = /\b(fuel|diesel|def|reefer|reef)\b/i;
+const NOT_FUEL_COST_RE = /\b(tax|taxes|card|dscnt|discount|surcg|surc|surcharge|additives?)\b/i;
+
+// A withheld deduction line that is itself a fuel/DEF purchase (not a fuel
+// tax, fuel-card fee, discount credit or surcharge).
+export function isWithheldFuelLine(d: CanonicalDeduction): boolean {
+  if (Number(d.amount ?? 0) <= 0) return false;
+  const text = d.description ?? '';
+  if (NOT_FUEL_COST_RE.test(text)) return false;
+  return d.category === 'Fuel & DEF' || FUEL_LINE_RE.test(text);
+}
+
+function fuelTypeOfLine(d: CanonicalDeduction): 'tractor' | 'reefer' {
+  return /\breef/i.test(d.description ?? '') ? 'reefer' : 'tractor';
+}
+
+const CENT_TOLERANCE = 0.01 + 1e-9;
+
+function sameAmount(a: number, b: number): boolean {
+  return Math.abs(a - b) <= CENT_TOLERANCE;
+}
+
+export type ResolvedFuelRow<F> = { row: F; cost: number };
+
+// The ONE place that decides which fuel rows count and for how much —
+// canonicalExpenseBreakdown() and calcCanonicalCpm() (src/stats/cpm.ts)
+// both read it, so profit and CPM can never disagree about fuel.
+export function resolveFuelRows<F extends CanonicalFuel>(
+  fuelPurchases: F[],
+  deductions: CanonicalDeduction[]
+): { counted: ResolvedFuelRow<F>[]; skippedAsDuplicate: F[] } {
+  const unusedLines = new Map<string, CanonicalDeduction[]>();
+  for (const d of deductions) {
+    if (!d.settlement_id || !isWithheldFuelLine(d)) continue;
+    const list = unusedLines.get(d.settlement_id) ?? [];
+    list.push(d);
+    unusedLines.set(d.settlement_id, list);
+  }
+
+  const counted: ResolvedFuelRow<F>[] = [];
+  const skippedAsDuplicate: F[] = [];
+  for (const f of fuelPurchases) {
+    const amount = Number(f.amount ?? 0);
+    const discount = Number(f.discount ?? 0);
+    if (!f.settlement_id) {
+      counted.push({ row: f, cost: Math.max(0, amount - discount) });
+      continue;
+    }
+    const candidates = unusedLines.get(f.settlement_id) ?? [];
+    const matchIndex = candidates.findIndex((d) => {
+      const lineAmount = Number(d.amount ?? 0);
+      const amountMatches = sameAmount(lineAmount, amount) || (discount > 0 && sameAmount(lineAmount, amount - discount));
+      if (!amountMatches) return false;
+      const typeMatches = !!f.fuel_type && fuelTypeOfLine(d) === f.fuel_type;
+      const dateMatches = !!f.purchase_date && d.ded_date === f.purchase_date;
+      return typeMatches || dateMatches;
+    });
+    if (matchIndex >= 0) {
+      candidates.splice(matchIndex, 1);
+      skippedAsDuplicate.push(f);
+      continue;
+    }
+    counted.push({ row: f, cost: amount });
+  }
+  return { counted, skippedAsDuplicate };
+}
+
+export function sumReimbursements(reimbursements: CanonicalReimbursement[]): number {
+  return reimbursements.reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+}
+
+// Settlement-linked fuel and reimbursement rows belong to their
+// SETTLEMENT's week, not to the per-line purchase date printed beside them
+// (a Prime week ending 8/21 itemizes fuel bought 8/13) — otherwise part of
+// a week's own fuel lands outside that week's window. Standalone rows keep
+// their own date. `inWindowSettlementIds` = the settlements already inside
+// the window/scope being computed.
+export function filterSettlementLinkedRowsToWindow<R extends { settlement_id?: string | null }>(
+  rows: R[],
+  getDate: (row: R) => string | null | undefined,
+  inWindowSettlementIds: Set<string>,
+  inWindow: (date: string) => boolean
+): R[] {
+  return rows.filter((r) => {
+    if (r.settlement_id) return inWindowSettlementIds.has(r.settlement_id);
+    const d = getDate(r);
+    return !!d && inWindow(d);
+  });
+}
 
 // "GHOST VALUE" pass (owner decision 2026-08-28) — src/stats/
 // profitAnalysis.ts's own reconciliation breakdown (Profit Analysis
 // screen: "$X deductions (Y excluded) + $Z fuel + $W maintenance + $V
-// tolls = $Total Expenses") needs the SAME per-category math
-// sumCanonicalExpenses() already computes internally, not a second,
-// possibly-drifting reimplementation. Extracted here as the one shared
-// building block; sumCanonicalExpenses() below is now a thin wrapper
-// over it (`.total`) — its own exported signature/behavior is completely
-// unchanged, every existing caller/test is unaffected.
+// tolls − $R reimbursements = $Total Expenses") needs the SAME
+// per-category math sumCanonicalExpenses() computes, not a second,
+// possibly-drifting reimplementation.
 export type CanonicalExpenseBreakdown = {
   deductionsTotal: number;
   fuelTotal: number;
   maintenanceTotal: number;
   tollsTotal: number;
+  reimbursementsTotal: number;
   total: number;
 };
 
+// Every expense source is REQUIRED (never an optional `= []`) — a
+// forgotten source silently overstates profit, the exact bug class the
+// golden settlement exposed for reimbursements.
 export function canonicalExpenseBreakdown(
   deductions: CanonicalDeduction[],
   fuelPurchases: CanonicalFuel[],
   maintenanceRecords: CanonicalMaintenance[],
-  tolls: CanonicalToll[]
+  tolls: CanonicalToll[],
+  reimbursements: CanonicalReimbursement[]
 ): CanonicalExpenseBreakdown {
   const deductionsTotal = deductions.filter(reducesTrueProfit).reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
-  const fuelTotal = fuelPurchases
-    .filter((f) => !f.settlement_id)
-    .reduce((sum, f) => sum + Math.max(0, Number(f.amount ?? 0) - Number(f.discount ?? 0)), 0);
+  const fuelTotal = resolveFuelRows(fuelPurchases, deductions).counted.reduce((sum, r) => sum + r.cost, 0);
   const maintenanceTotal = maintenanceRecords.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
   const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
-  return { deductionsTotal, fuelTotal, maintenanceTotal, tollsTotal, total: deductionsTotal + fuelTotal + maintenanceTotal + tollsTotal };
+  const reimbursementsTotal = sumReimbursements(reimbursements);
+  return {
+    deductionsTotal,
+    fuelTotal,
+    maintenanceTotal,
+    tollsTotal,
+    reimbursementsTotal,
+    total: deductionsTotal + fuelTotal + maintenanceTotal + tollsTotal - reimbursementsTotal,
+  };
 }
 
-// Exported so every OTHER "what's my profit/cost" module (currently
-// src/stats/profitAnalysis.ts's buildProfitAnalysis()) can share the
+// Exported so every OTHER "what's my profit/cost" module can share the
 // exact same canonical total instead of re-deriving its own — the whole
 // point of spec item C.2's "ONE canonical expense engine."
 export function sumCanonicalExpenses(
   deductions: CanonicalDeduction[],
   fuelPurchases: CanonicalFuel[],
   maintenanceRecords: CanonicalMaintenance[],
-  tolls: CanonicalToll[]
+  tolls: CanonicalToll[],
+  reimbursements: CanonicalReimbursement[]
 ): number {
-  return canonicalExpenseBreakdown(deductions, fuelPurchases, maintenanceRecords, tolls).total;
+  return canonicalExpenseBreakdown(deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements).total;
 }
 
 export function calcTrueProfit(
   settlements: Array<{ gross: number | null }>,
   deductions: CanonicalDeduction[],
-  fuelPurchases: CanonicalFuel[] = [],
-  maintenanceRecords: CanonicalMaintenance[] = [],
-  tolls: CanonicalToll[] = []
+  fuelPurchases: CanonicalFuel[],
+  maintenanceRecords: CanonicalMaintenance[],
+  tolls: CanonicalToll[],
+  reimbursements: CanonicalReimbursement[]
 ): number {
   const grossRevenue = settlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const trueExpenses = sumCanonicalExpenses(deductions, fuelPurchases, maintenanceRecords, tolls);
+  const trueExpenses = sumCanonicalExpenses(deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements);
   return grossRevenue - trueExpenses;
 }
 
@@ -174,33 +299,35 @@ export function calcTrueProfit(
 // buildWeeklyTrend() — a deliberate drop-in replacement wherever `.net`
 // was being read as "profit" rather than literally "this settlement's
 // own net pay field." `net` here is calcTrueProfit()'s figure for that
-// week's settlements + deductions/fuel/maintenance/tolls dated within the
-// settlement's 7-day window (weekStartFromEnding..weekEnding, same
-// window buildWeeklyRevenueExpenseTrend uses), not the settlement row's
-// own `net` column. fuelPurchases/maintenanceRecords/tolls default to
-// `[]` so existing callers keep compiling/working exactly as before while
-// each screen is migrated to pass real data (spec item C.2).
+// week's settlements + deductions/fuel/maintenance/tolls/reimbursements
+// dated within the settlement's 7-day window (weekStartFromEnding..
+// weekEnding); settlement-linked fuel/reimbursement rows follow their
+// settlement's week (filterSettlementLinkedRowsToWindow()).
 export type TrueProfitWeeklyPoint = { weekEnding: string; gross: number; net: number };
 
 export function buildWeeklyTrueProfitTrend(
   settlements: Settlement[],
   deductions: Deduction[],
-  fuelPurchases: Array<CanonicalFuel & { purchase_date?: string | null }> = [],
-  maintenanceRecords: Array<CanonicalMaintenance & { service_date?: string | null }> = [],
-  tolls: Array<CanonicalToll & { toll_date?: string | null }> = []
+  fuelPurchases: Array<CanonicalFuel & { purchase_date?: string | null }>,
+  maintenanceRecords: Array<CanonicalMaintenance & { service_date?: string | null }>,
+  tolls: Array<CanonicalToll & { toll_date?: string | null }>,
+  reimbursements: Array<CanonicalReimbursement & { settlement_id?: string | null; reimb_date?: string | null }>
 ): TrueProfitWeeklyPoint[] {
   const weekEndings = [...new Set(settlements.filter((s) => s.week_ending).map((s) => s.week_ending as string))].sort();
 
   return weekEndings.map((weekEnding) => {
     const weekSettlements = settlements.filter((s) => s.week_ending === weekEnding);
+    const weekSettlementIds = new Set(weekSettlements.map((s) => s.id));
     const gross = weekSettlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
     const start = weekStartFromEnding(weekEnding);
-    const inWindow = (dateStr: string | null | undefined) => !!dateStr && dateStr >= start && dateStr <= weekEnding;
+    const inRange = (dateStr: string) => dateStr >= start && dateStr <= weekEnding;
+    const inWindow = (dateStr: string | null | undefined) => !!dateStr && inRange(dateStr);
     const weekDeductions = deductions.filter((d) => inWindow(d.ded_date));
-    const weekFuel = fuelPurchases.filter((f) => inWindow(f.purchase_date));
+    const weekFuel = filterSettlementLinkedRowsToWindow(fuelPurchases, (f) => f.purchase_date, weekSettlementIds, inRange);
     const weekMaintenance = maintenanceRecords.filter((m) => inWindow(m.service_date));
     const weekTolls = tolls.filter((t) => inWindow(t.toll_date));
-    const trueExpenses = sumCanonicalExpenses(weekDeductions, weekFuel, weekMaintenance, weekTolls);
+    const weekReimbursements = filterSettlementLinkedRowsToWindow(reimbursements, (r) => r.reimb_date, weekSettlementIds, inRange);
+    const trueExpenses = sumCanonicalExpenses(weekDeductions, weekFuel, weekMaintenance, weekTolls, weekReimbursements);
     return { weekEnding, gross, net: gross - trueExpenses };
   });
 }

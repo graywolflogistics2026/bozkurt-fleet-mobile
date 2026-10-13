@@ -8,6 +8,7 @@ import { useFleetStats } from '@/src/data/dashboardStats';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { useSettlements, useUpdateSettlement } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
@@ -49,6 +50,7 @@ export default function Scorecard() {
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
+  const reimbursementsQuery = useReimbursements();
   const settlementsQuery = useSettlements();
   const dedQuery = useDeductions();
   const { activeTruck, isAllTrucks, setActiveTruckId, refreshTrucks } = useActiveTruck();
@@ -70,9 +72,10 @@ export default function Scorecard() {
         dedQuery.data ?? [],
         fuelQuery.data ?? [],
         maintenanceQuery.data ?? [],
-        tollsQuery.data ?? []
+        tollsQuery.data ?? [],
+        reimbursementsQuery.data ?? []
       ),
-    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
+    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]
   );
   const truckBreakdown = isAllTrucks ? truckComparisonResult : null;
 
@@ -132,11 +135,12 @@ export default function Scorecard() {
         fuelPurchases: fuelQuery.data ?? [],
         maintenanceRecords: maintenanceQuery.data ?? [],
         tolls: tollsQuery.data ?? [],
+        reimbursements: reimbursementsQuery.data ?? [],
         truckScope: activeTruck?.id ?? null,
         manualMilesOverride: activeTruck?.manual_total_miles_override,
         window: null,
       }),
-    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, activeTruck]
+    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data, activeTruck]
   );
   // Fuel/Mile is now the SAME Fuel & DEF bucket the Why? breakdown itself
   // shows (canonical: excludes a settlement-linked fuel row already
@@ -292,8 +296,9 @@ export default function Scorecard() {
   // src/stats/trueProfit.ts figure Home/CEO Mode/Share Weekly
   // Profit/Profit Analysis all use.
   const weeklyTrend = useMemo(
-    () => buildWeeklyTrueProfitTrend(scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls).slice(-8),
-    [scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls]
+    () =>
+      buildWeeklyTrueProfitTrend(scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls, reimbursementsQuery.data ?? []).slice(-8),
+    [scopedSettlements, scopedDeductions, scopedFuel, scopedMaintenance, scopedTolls, reimbursementsQuery.data]
   );
 
   const loading = statsQuery.isLoading || fuelQuery.isLoading || settlementsQuery.isLoading || dedQuery.isLoading;

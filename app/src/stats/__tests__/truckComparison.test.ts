@@ -43,7 +43,7 @@ describe('buildTruckComparison', () => {
       deductions,
       [],
       [],
-      []
+      [], []
     );
     expect(result.unassignedRow).not.toBeNull();
     expect(result.unassignedRow!.grossRevenue).toBe(800);
@@ -55,12 +55,12 @@ describe('buildTruckComparison', () => {
 
   it('omits the Unassigned row entirely when every settlement has a truck_id', () => {
     const assigned = settlements.filter((s) => s.truck_id);
-    const result = buildTruckComparison([truckA, truckB], assigned, [], deductions, [], [], []);
+    const result = buildTruckComparison([truckA, truckB], assigned, [], deductions, [], [], [], []);
     expect(result.unassignedRow).toBeNull();
   });
 
   it('per-truck CPM uses only that truck\'s own direct costs plus its allocated share of fleet-level costs', () => {
-    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], []);
+    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], [], []);
     const a = result.rows.find((r) => r.truckId === 'ta')!;
     const b = result.rows.find((r) => r.truckId === 'tb')!;
 
@@ -82,14 +82,14 @@ describe('buildTruckComparison', () => {
   });
 
   it('ranks trucks best-to-worst by net profit and flags best/worst', () => {
-    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], []);
+    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], [], []);
     expect(result.rows[0].truckId).toBe('ta'); // higher revenue, proportionally lower allocated cost
     expect(result.bestTruckId).toBe('ta');
     expect(result.worstTruckId).toBe('tb');
   });
 
   it("the comparison view's totals reconcile with a single whole-fleet canonical CPM run", () => {
-    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], []);
+    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], [], []);
 
     const wholeFleet = calcCanonicalCpm(
       settlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0),
@@ -98,7 +98,7 @@ describe('buildTruckComparison', () => {
       [],
       [],
       [],
-      0
+      [], 0
     );
     const wholeFleetTotalCost = wholeFleet.buckets.reduce((sum, b) => sum + b.amount, 0);
 
@@ -122,7 +122,7 @@ describe('buildTruckComparison', () => {
       purchase_price: 52000,
       cost_basis_paid_spread_months: 52, // -> $1000/month -> ~$230.77/week
     };
-    const result = buildTruckComparison([configuredA, truckB], settlements, [], [], [], [], []);
+    const result = buildTruckComparison([configuredA, truckB], settlements, [], [], [], [], [], []);
     const a = result.rows.find((r) => r.truckId === 'ta')!;
     const b = result.rows.find((r) => r.truckId === 'tb')!;
     expect(a.directExpenses).toBeGreaterThan(0);
@@ -138,7 +138,7 @@ describe('buildTruckComparison', () => {
       [],
       [],
       [],
-      [{ driver_id: 'd1', settlement_id: 's1', gross_pay: 1200, employer_taxes: 100 }],
+      [], [{ driver_id: 'd1', settlement_id: 's1', gross_pay: 1200, employer_taxes: 100 }],
       [{ id: 'd1', default_truck_id: 'ta', name: 'Driver One' }]
     );
     const a = result.rows.find((r) => r.truckId === 'ta')!;
@@ -158,7 +158,7 @@ describe('buildTruckComparison', () => {
       [],
       [],
       [],
-      [{ driver_id: 'd2', settlement_id: null, gross_pay: 500, employer_taxes: 0 }],
+      [], [{ driver_id: 'd2', settlement_id: null, gross_pay: 500, employer_taxes: 0 }],
       [{ id: 'd2', default_truck_id: 'tb', name: 'Driver Two' }]
     );
     const b = result.rows.find((r) => r.truckId === 'tb')!;
@@ -166,14 +166,14 @@ describe('buildTruckComparison', () => {
   });
 
   it('returns empty rows and no Unassigned row for a fleet with no settlements at all', () => {
-    const result = buildTruckComparison([truckA, truckB], [], [], [], [], [], []);
+    const result = buildTruckComparison([truckA, truckB], [], [], [], [], [], [], []);
     expect(result.rows.every((r) => r.grossRevenue === 0)).toBe(true);
     expect(result.unassignedRow).toBeNull();
     expect(result.fleetTotals.grossRevenue).toBe(0);
   });
 
   it("a row's own cpmBreakdown + withAllocatedBucket reproduces that SAME row's headline costPerMile/profitPerMile exactly (Home/Scorecard's single-truck CPM fix)", () => {
-    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], []);
+    const result = buildTruckComparison([truckA, truckB], settlements, [], deductions, [], [], [], []);
     const a = result.rows.find((r) => r.truckId === 'ta')!;
     expect(a.cpmBreakdown).not.toBeNull();
     const withAllocation = withAllocatedBucket(a.cpmBreakdown!, a.allocatedExpenses, a.totalMiles);
@@ -187,7 +187,7 @@ describe('buildTruckComparison', () => {
 });
 
 describe('withAllocatedBucket', () => {
-  const baseCpm = calcCanonicalCpm(1000, 500, [{ amount: 100, category: 'Maintenance & Repairs', tax_deductible: true, source: 'manual' }], [], [], [], 0);
+  const baseCpm = calcCanonicalCpm(1000, 500, [{ amount: 100, category: 'Maintenance & Repairs', tax_deductible: true, source: 'manual' }], [], [], [], [], 0);
 
   it('appends a distinct, labeled bucket and recomputes costPerMile/profitPerMile to include it', () => {
     const result = withAllocatedBucket(baseCpm, 50, 500);

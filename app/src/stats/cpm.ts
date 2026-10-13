@@ -39,7 +39,7 @@ export function ppmColor(ppm: number): 'green' | 'orange' | 'red' {
 // calcCpm() above is left in place, untouched, for any caller that still
 // wants the literal legacy `rDash()` figure — this is the NEW canonical
 // CPM every screen should read from.
-import { reducesTrueProfit } from '@/src/stats/trueProfit';
+import { reducesTrueProfit, resolveFuelRows, sumReimbursements, type CanonicalFuel, type CanonicalReimbursement } from '@/src/stats/trueProfit';
 import { isVehiclePurchaseOneOff, isMajorRepairOverhaul } from '@/src/import/category';
 
 export type CpmCostType = 'fixed' | 'variable';
@@ -168,8 +168,10 @@ type CpmDeduction = {
   category?: string | null;
   tax_deductible: boolean | null;
   description?: string | null;
+  settlement_id?: string | null;
+  ded_date?: string | null;
 };
-type CpmFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null };
+type CpmFuel = CanonicalFuel;
 // KPI CONSISTENCY (owner decision) — description/service_type are optional
 // so every existing test/call site passing a bare `{cost}` object keeps
 // compiling unchanged; when present they feed the SAME
@@ -209,6 +211,7 @@ export function calcCanonicalCpm(
   fuelPurchases: CpmFuel[],
   maintenanceRecords: CpmMaintenance[],
   tolls: CpmToll[],
+  reimbursements: CanonicalReimbursement[],
   truckFixedCostTotal = 0
 ): CanonicalCpmResult {
   const carrierAlreadyWithholdsLoanPayment = carrierWithholdsLoanPayment(deductions);
@@ -244,8 +247,10 @@ export function calcCanonicalCpm(
     add(bucketFor(d.category), amount);
   }
 
-  const standaloneFuel = fuelPurchases.filter((f) => !f.settlement_id);
-  const fuelTotal = standaloneFuel.reduce((sum, f) => sum + Math.max(0, Number(f.amount ?? 0) - Number(f.discount ?? 0)), 0);
+  // Same per-row duplicate-fuel rule as the true-profit engine
+  // (trueProfit.ts resolveFuelRows()) — profit and CPM never disagree
+  // about which fuel rows count.
+  const fuelTotal = resolveFuelRows(fuelPurchases, deductions).counted.reduce((sum, r) => sum + r.cost, 0);
   add('Fuel & DEF', fuelTotal);
 
   // KPI CONSISTENCY (owner decision, confirmed root cause of a real
@@ -279,6 +284,11 @@ export function calcCanonicalCpm(
 
   const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
   add('Tolls', tollsTotal);
+
+  // REIMBURSEMENTS OFFSET EXPENSES (golden settlement pass, owner decision
+  // 2026-10-13) — its own negative bucket so the "Why?" breakdown shows
+  // the offset instead of silently shrinking another bucket.
+  add('Reimbursements', -sumReimbursements(reimbursements));
 
   if (!carrierAlreadyWithholdsLoanPayment && truckFixedCostTotal > 0) {
     add('Loan/Lease Payment', truckFixedCostTotal);

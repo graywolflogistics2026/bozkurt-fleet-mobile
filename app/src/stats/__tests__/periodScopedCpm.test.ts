@@ -47,7 +47,7 @@ const now = new Date('2026-08-24T12:00:00');
 
 describe('buildPeriodScopedCpm — a dataset spanning several months, each period tab produces a different, correct trio', () => {
   it('"thisWeek" uses only the LATEST settlement week (2026-08-22)', () => {
-    const result = buildPeriodScopedCpm('thisWeek', weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now);
+    const result = buildPeriodScopedCpm('thisWeek', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now);
     expect(result.window).toEqual({ startIso: '2026-08-16', endIso: '2026-08-22' });
     expect(result.cpm!.revenuePerMile).toBeCloseTo(1500 / 500, 5);
     expect(result.cpm!.costPerMile).toBeCloseTo(120 / 500, 5);
@@ -55,14 +55,14 @@ describe('buildPeriodScopedCpm — a dataset spanning several months, each perio
   });
 
   it('"lastWeek" uses the settlement week BEFORE that (2026-08-15) — a genuinely different trio than "thisWeek"', () => {
-    const result = buildPeriodScopedCpm('lastWeek', weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now);
+    const result = buildPeriodScopedCpm('lastWeek', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now);
     expect(result.window).toEqual({ startIso: '2026-08-09', endIso: '2026-08-15' });
     expect(result.cpm!.revenuePerMile).toBeCloseTo(1400 / 500, 5);
     expect(result.cpm!.costPerMile).toBeCloseTo(110 / 500, 5);
   });
 
   it('"1M" aggregates the trailing 30 days (4 settlement weeks: 08-01..08-22) — different again', () => {
-    const result = buildPeriodScopedCpm('1M', weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now);
+    const result = buildPeriodScopedCpm('1M', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now);
     const revenue = 1200 + 1300 + 1400 + 1500;
     const miles = 500 * 4;
     const cost = 90 + 100 + 110 + 120;
@@ -72,7 +72,7 @@ describe('buildPeriodScopedCpm — a dataset spanning several months, each perio
   });
 
   it('"3M" aggregates the trailing 90 days (6 settlement weeks: 06-06..08-22) — different again', () => {
-    const result = buildPeriodScopedCpm('3M', weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now);
+    const result = buildPeriodScopedCpm('3M', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now);
     const revenue = 1000 + 1100 + 1200 + 1300 + 1400 + 1500;
     const miles = 500 * 6;
     const cost = 70 + 80 + 90 + 100 + 110 + 120;
@@ -82,8 +82,8 @@ describe('buildPeriodScopedCpm — a dataset spanning several months, each perio
   });
 
   it('"6M" (trailing 180 days) excludes the oldest settlement (2026-01-10) that "yearly" includes — the two periods must differ', () => {
-    const sixMonth = buildPeriodScopedCpm('6M', weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now);
-    const yearly = buildPeriodScopedCpm('yearly', weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now);
+    const sixMonth = buildPeriodScopedCpm('6M', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now);
+    const yearly = buildPeriodScopedCpm('yearly', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now);
     expect(sixMonth.window).toEqual({ startIso: '2026-02-25', endIso: '2026-08-24' });
     expect(yearly.window).toEqual({ startIso: '2025-08-24', endIso: '2026-08-24' });
     // 6M: s1..s7 (excludes s0); yearly: s0..s7 (includes it) — genuinely
@@ -100,13 +100,13 @@ describe('buildPeriodScopedCpm — a dataset spanning several months, each perio
   it('every period above produced a DISTINCT revenuePerMile — proves the trio actually moves when the tab changes', () => {
     const periods = ['thisWeek', 'lastWeek', '1M', '3M', '6M', 'yearly'] as const;
     const rpms = periods.map(
-      (p) => buildPeriodScopedCpm(p, weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now).cpm!.revenuePerMile
+      (p) => buildPeriodScopedCpm(p, weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now).cpm!.revenuePerMile
     );
     expect(new Set(rpms.map((r) => r!.toFixed(4))).size).toBe(periods.length);
   });
 
   it('numerator and denominator are always drawn from the identical window — costPerMile never divides a period-filtered cost by all-time miles or vice versa', () => {
-    const result = buildPeriodScopedCpm('1M', weekEndings, [truckA], settlements, [], deductions, [], [], [], 'ta', undefined, now);
+    const result = buildPeriodScopedCpm('1M', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], 'ta', undefined, now);
     // Manually recompute from the same 4-settlement window to prove the
     // function isn't secretly mixing a wider/narrower miles figure in.
     const windowSettlements = settlements.filter((s) => (s.week_ending as string) >= '2026-07-25' && (s.week_ending as string) <= '2026-08-24');
@@ -118,13 +118,13 @@ describe('buildPeriodScopedCpm — a dataset spanning several months, each perio
   });
 
   it('returns cpm: null and window: null for "This Week" on a truck/account with zero settlements — never a silent all-time fallback', () => {
-    const result = buildPeriodScopedCpm('thisWeek', [], [truckA], [], [], [], [], [], [], 'ta', undefined, now);
+    const result = buildPeriodScopedCpm('thisWeek', [], [truckA], [], [], [], [], [], [], [], 'ta', undefined, now);
     expect(result.window).toBeNull();
     expect(result.cpm).toBeNull();
   });
 
   it('"All Trucks" scope (activeTruckId null) still reconciles to the same window-filtered totals', () => {
-    const result = buildPeriodScopedCpm('thisWeek', weekEndings, [truckA], settlements, [], deductions, [], [], [], null, undefined, now);
+    const result = buildPeriodScopedCpm('thisWeek', weekEndings, [truckA], settlements, [], deductions, [], [], [], [], null, undefined, now);
     expect(result.scopedRow).toBeNull();
     expect(result.cpm!.revenuePerMile).toBeCloseTo(1500 / 500, 5);
   });
@@ -150,7 +150,7 @@ describe('buildPeriodScopedCpm — fixed cost pro-ration', () => {
       [],
       [],
       [],
-      'ta',
+      [], 'ta',
       undefined,
       now
     );
@@ -158,7 +158,7 @@ describe('buildPeriodScopedCpm — fixed cost pro-ration', () => {
   });
 
   it('"1M" (4 settlements) charges exactly FOUR weeks of fixed cost — pro-rated to the window, not a flat one-week charge', () => {
-    const result = buildPeriodScopedCpm('1M', weekEndings, [truckWithCostBasis], settlements, [], [], [], [], [], 'ta', undefined, now);
+    const result = buildPeriodScopedCpm('1M', weekEndings, [truckWithCostBasis], settlements, [], [], [], [], [], [], 'ta', undefined, now);
     const miles = 500 * 4;
     expect(result.cpm!.costPerMile).toBeCloseTo((weeklyFixed * 4) / miles, 4);
   });

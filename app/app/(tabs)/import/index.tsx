@@ -43,7 +43,8 @@ import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
-import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
+import { checkSettlementReconciliation, flagReconciliationOverride } from '@/src/import/settlementReconciliation';
+import { buildPrimeReconciliation } from '@/src/import/primeOperatingStatement';
 import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
@@ -55,7 +56,7 @@ import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
-import { formatMoney } from '@/src/i18n/format';
+import { formatMoney, formatNumber } from '@/src/i18n/format';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -882,7 +883,16 @@ export default function Import() {
     await startBackgroundJob(fileMeta.uri, fileMeta.mediaType, fileMeta.name ?? 'document.pdf');
   }
 
-  async function handleSave() {
+  // "Save anyway, flagged needs-review" (owner decision 2026-10-13) — the
+  // escape from the reconciliation block, confirmed first.
+  function handleSaveFlagged() {
+    Alert.alert(t('importScreen.saveAnywayFlaggedConfirmTitle'), t('importScreen.saveAnywayFlaggedConfirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('importScreen.saveAnywayFlagged'), onPress: () => void handleSave({ overrideReconciliation: true }) },
+    ]);
+  }
+
+  async function handleSave(options: { overrideReconciliation?: boolean } = {}) {
     // Double-tap guard (owner decision 2026-08-02, §34/§37 unique-index
     // audit): synchronous ref check-and-set, closing the gap between a
     // fast double-tap and React re-rendering the Save button away once
@@ -900,7 +910,9 @@ export default function Import() {
     // is defense in depth against any path that could reach handleSave()
     // without going through that button (e.g. a stale re-render racing a
     // state update), same spirit as the double-tap guard above.
-    if (!checkSettlementReconciliation(extraction).ok) return;
+    const reconciliationResult = checkSettlementReconciliation(extraction);
+    if (!reconciliationResult.ok && !options.overrideReconciliation) return;
+    const extractionToSave = reconciliationResult.ok ? extraction : flagReconciliationOverride(extraction, reconciliationResult.issues);
     savingRef.current = true;
     // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — the
     // single most decision-relevant started/completed pair in the app:
@@ -922,7 +934,7 @@ export default function Import() {
 
       setPhase('saving');
       const saved = await saveExtraction({
-        extraction,
+        extraction: extractionToSave,
         userId,
         truckId: truckId === NOT_TRUCK_SPECIFIC ? null : truckId,
         driverId,
@@ -999,6 +1011,7 @@ export default function Import() {
   // is a handful of arithmetic operations over a settlement's own
   // (already-in-memory) deduction array, not worth a useMemo.
   const reconciliation = checkSettlementReconciliation(extraction);
+  const primeReconciliation = extraction ? buildPrimeReconciliation(extraction) : null;
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
   // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
   // team_split/trainee drivers get a split-entry field on the settlement
@@ -1148,22 +1161,73 @@ export default function Import() {
             {!reconciliation.ok && (
               <View style={{ backgroundColor: 'rgba(239,68,68,0.12)', borderColor: colors.red, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
                 <Text style={{ color: colors.red, fontWeight: '700' }}>{t('importScreen.reconciliationTitle')}</Text>
-                {reconciliation.issues.map((issue, i) =>
-                  issue.type === 'deductionsMismatch' ? (
-                    <MutedText key={i}>
-                      {t('importScreen.reconciliationDeductionsMismatch', {
-                        stated: money(issue.stated, i18n.language),
-                        summed: money(issue.summed, i18n.language),
-                      })}
-                    </MutedText>
-                  ) : (
-                    <MutedText key={i}>
-                      {t('importScreen.reconciliationZeroNet', {
-                        zero: money(0, i18n.language),
-                        gross: money(issue.grossRevenue, i18n.language),
-                      })}
-                    </MutedText>
-                  )
+                {reconciliation.issues.map((issue, i) => {
+                  const m = (n: number) => money(n, i18n.language);
+                  switch (issue.type) {
+                    case 'deductionsMismatch':
+                      return <MutedText key={i}>{t('importScreen.reconciliationDeductionsMismatch', { stated: m(issue.stated), summed: m(issue.summed) })}</MutedText>;
+                    case 'revenueLinesMismatch':
+                      return <MutedText key={i}>{t('importScreen.reconciliationRevenueLinesMismatch', { stated: m(issue.stated), summed: m(issue.summed) })}</MutedText>;
+                    case 'reimbursementLinesMismatch':
+                      return <MutedText key={i}>{t('importScreen.reconciliationReimbursementLinesMismatch', { stated: m(issue.stated), summed: m(issue.summed) })}</MutedText>;
+                    case 'netDueMismatch':
+                      return <MutedText key={i}>{t('importScreen.reconciliationNetDueMismatch', { stated: m(issue.stated), computed: m(issue.computed) })}</MutedText>;
+                    case 'zeroNetNonzeroGross':
+                      return <MutedText key={i}>{t('importScreen.reconciliationZeroNet', { zero: m(0), gross: m(issue.grossRevenue) })}</MutedText>;
+                  }
+                })}
+              </View>
+            )}
+
+            {primeReconciliation && (
+              <View
+                style={{
+                  borderColor: primeReconciliation.mismatches.length === 0 ? colors.green : colors.orange,
+                  borderWidth: 1,
+                  borderRadius: radii.sm,
+                  padding: spacing.sm,
+                  marginBottom: spacing.sm,
+                }}
+              >
+                <Text style={{ color: primeReconciliation.mismatches.length === 0 ? colors.green : colors.orange, fontWeight: '700' }}>
+                  {primeReconciliation.mismatches.length === 0 ? t('importScreen.primeCheckOk') : t('importScreen.primeCheckMismatch')}
+                </Text>
+                {primeReconciliation.totalRevenue != null && primeReconciliation.grossRevenue != null && (
+                  <MutedText>
+                    {t('importScreen.primeCheckRevenue', {
+                      ours: money(primeReconciliation.grossRevenue, i18n.language),
+                      prime: money(primeReconciliation.totalRevenue, i18n.language),
+                    })}
+                  </MutedText>
+                )}
+                {primeReconciliation.miles != null && primeReconciliation.totalMiles != null && (
+                  <MutedText>
+                    {t('importScreen.primeCheckMiles', {
+                      ours: formatNumber(primeReconciliation.totalMiles, i18n.language),
+                      prime: formatNumber(primeReconciliation.miles, i18n.language),
+                    })}
+                  </MutedText>
+                )}
+                {primeReconciliation.totalOperatingExpenses != null && primeReconciliation.totalDeductions != null && (
+                  <MutedText>
+                    {t('importScreen.primeCheckExpenses', {
+                      deductions: money(primeReconciliation.totalDeductions, i18n.language),
+                      reimbursed: money(primeReconciliation.reimbursements, i18n.language),
+                      interest: money(primeReconciliation.interestIncome, i18n.language),
+                      ours: money(primeReconciliation.totalDeductions - primeReconciliation.reimbursements - primeReconciliation.interestIncome, i18n.language),
+                      prime: money(primeReconciliation.totalOperatingExpenses, i18n.language),
+                    })}
+                  </MutedText>
+                )}
+                {primeReconciliation.totalStatement != null && primeReconciliation.netDue != null && (
+                  <MutedText>
+                    {t('importScreen.primeCheckDeposit', {
+                      netDue: money(primeReconciliation.netDue, i18n.language),
+                      interest: money(primeReconciliation.interestIncome, i18n.language),
+                      ours: money(primeReconciliation.netDue + primeReconciliation.interestIncome, i18n.language),
+                      prime: money(primeReconciliation.totalStatement, i18n.language),
+                    })}
+                  </MutedText>
                 )}
               </View>
             )}
@@ -1417,7 +1481,7 @@ export default function Import() {
 
             <PrimaryButton
               title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
-              onPress={handleSave}
+              onPress={() => void handleSave()}
               disabled={
                 (needsTruckPicker && !truckId) ||
                 (needsDriverPicker && !driverId) ||
@@ -1425,6 +1489,13 @@ export default function Import() {
                 !reconciliation.ok
               }
             />
+            {!reconciliation.ok && (
+              <SecondaryButton
+                title={t('importScreen.saveAnywayFlagged')}
+                onPress={handleSaveFlagged}
+                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing}
+              />
+            )}
             {/* BATCH REVIEW FLOW — "Discard" doubles as "Skip" while
                 walking a batch: nothing here saves without an explicit tap
                 on Save above, per spec item 3; skipping just moves to the

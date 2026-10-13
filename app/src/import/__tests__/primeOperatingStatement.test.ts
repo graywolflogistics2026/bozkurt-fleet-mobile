@@ -1,5 +1,6 @@
 import {
   isPrimeCarrier,
+  buildPrimeReconciliation,
   checkPrimeOperatingStatementWeekly,
   applyPrimeOperatingStatementCheck,
   checkPrimeYtdReconciliation,
@@ -11,15 +12,45 @@ import {
 import { computeKpis } from '@/src/stats/kpi';
 import type { Extraction } from '@/src/import/types';
 
-function makeExtraction(overrides: Partial<Extraction['settlement']> & { carrier?: string }): Extraction {
+// The REAL layout (golden settlement pass, owner decision 2026-10-13),
+// with the golden Prime settlement's own printed figures (unit 283940,
+// week ending 2026-08-21 — pages 4-6 of GRWLLG-OY-PrimeInc6.pdf).
+const GOLDEN_OPERATING = {
+  weekMiles: 2327,
+  weekRevenueFromPrime: 3345.12,
+  weekExtraPay: 175,
+  weekFuelSurchargeBill: 1210.04,
+  weekReeferFuelSurcharge: 20.82,
+  weekSafetyIncentive: 16.35,
+  weekServiceIncentive: 16.35,
+  weekToll1099Pay: 0.07,
+  weekTotalRevenue: 4783.75,
+  weekFuelOilTax: 1953.78,
+  weekMiscellaneous: 589.84,
+  weekTotalVariableCosts: 2543.62,
+  weekTotalFixedCost: 255.77,
+  weekOtherIncomeAndExpense: 99.63,
+  weekInterestIncome: 0.37,
+  weekTotalOperatingExpenses: 2899.02,
+  weekTotalStatement: 1884.73,
+  ytdTotalRevenue: 24425.98,
+  ytdMiles: 10146,
+  ytdTotalStatement: 8099.66,
+  weeksInService: 5,
+};
+
+function makeExtraction(overrides: Omit<Partial<NonNullable<Extraction['settlement']>>, 'carrier'> & { carrier?: string | null }): Extraction {
   return {
     docType: 'settlement',
     settlement: {
-      weekEnding: '2026-08-01',
-      carrier: overrides.carrier ?? 'Prime Inc',
-      grossRevenue: 3200,
-      totalMiles: 2500,
-      totalDeductions: 900,
+      weekEnding: '2026-08-21',
+      carrier: overrides.carrier === undefined ? 'PRIME INC.' : overrides.carrier,
+      grossRevenue: 4783.75,
+      totalMiles: 2327,
+      totalDeductions: 3212.19,
+      reimbursements: 312.8,
+      netPay: 1884.36,
+      operating: GOLDEN_OPERATING,
       ...overrides,
     },
   } as Extraction;
@@ -40,163 +71,133 @@ describe('isPrimeCarrier', () => {
     expect(isPrimeCarrier(null)).toBe(false);
     expect(isPrimeCarrier(undefined)).toBe(false);
     expect(isPrimeCarrier('')).toBe(false);
+    expect(isPrimeCarrier('Prime Logistics Partners')).toBe(false);
   });
 });
 
-// A REALISTIC Prime operating-statement layout, matching docs/
-// CARRIER_CODES.md's own vocabulary — reconciles correctly (no mismatch)
-// when the extraction and the operating statement agree.
-describe('checkPrimeOperatingStatementWeekly — reconciles correctly', () => {
-  test('a Prime settlement where extraction matches the operating statement exactly', () => {
-    const extraction = makeExtraction({
-      grossRevenue: 3200,
-      totalMiles: 2500,
-      totalDeductions: 900,
-      operating: { weekRevenue: 3200, weekMiles: 2500, weekExpenses: 900, ytdRevenue: 96000, ytdMiles: 75000, ytdExpenses: 27000 },
-    });
+describe('weekly check — the golden Prime settlement reconciles at TOTAL level', () => {
+  test('revenue, miles, operating expenses and total statement all match', () => {
+    const extraction = makeExtraction({});
     expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([]);
     expect(applyPrimeOperatingStatementCheck(extraction)).toBe(extraction);
   });
 
-  test('within the documented tolerance ($1, 1 mile) — no mismatch', () => {
-    const extraction = makeExtraction({
-      grossRevenue: 3200.4,
-      totalMiles: 2500,
-      totalDeductions: 899.6,
-      operating: { weekRevenue: 3200, weekMiles: 2501, weekExpenses: 900 },
-    });
-    expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([]);
+  test('the reconciliation line carries every compared figure, interest only here', () => {
+    const r = buildPrimeReconciliation(makeExtraction({}))!;
+    expect(r.totalRevenue).toBe(4783.75);
+    expect(r.grossRevenue).toBe(4783.75);
+    expect(r.miles).toBe(2327);
+    // TOTAL OPERATING EXPENSES 2,899.02 = deductions 3,212.19 − reimbursed 312.80 − interest .37
+    expect(r.totalDeductions! - r.reimbursements - r.interestIncome).toBeCloseTo(2899.02, 2);
+    expect(r.totalOperatingExpenses).toBe(2899.02);
+    // TOTAL STATEMENT 1,884.73 = net due 1,884.36 + interest .37 (the direct deposit)
+    expect(r.netDue! + r.interestIncome).toBeCloseTo(1884.73, 2);
+    expect(r.totalStatement).toBe(1884.73);
+    expect(r.interestIncome).toBe(0.37);
   });
 
-  test('an operating-statement field left at its zero default is never compared against', () => {
-    const extraction = makeExtraction({
-      grossRevenue: 3200,
-      totalMiles: 2500,
-      totalDeductions: 900,
-      operating: { weekRevenue: 3200, weekMiles: 0, weekExpenses: 0 },
-    });
+  test('reimbursements fall back to the reimbursement lines when the total is not printed', () => {
+    const lines = [1, 10.37, 32.43, 76.04, 31.91, 18.13, 47.42, 52, 43.5].map((amount) => ({ amount }));
+    const r = buildPrimeReconciliation(makeExtraction({ reimbursements: undefined, reimbursementItems: lines }))!;
+    expect(r.reimbursements).toBeCloseTo(312.8, 2);
+    expect(r.mismatches).toEqual([]);
+  });
+
+  test('a total Prime did not print (0 default) is never compared', () => {
+    const extraction = makeExtraction({ operating: { ...GOLDEN_OPERATING, weekTotalOperatingExpenses: 0, weekTotalStatement: 0 }, netPay: 1 });
     expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([]);
   });
 
   test('no operating-statement data at all on a Prime settlement — silent no-op', () => {
-    const extraction = makeExtraction({ grossRevenue: 3200, totalMiles: 2500, totalDeductions: 900 });
-    expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([]);
+    expect(buildPrimeReconciliation(makeExtraction({ operating: undefined }))).toBeNull();
+    expect(checkPrimeOperatingStatementWeekly(makeExtraction({ operating: {} }))).toEqual([]);
   });
 });
 
-// An artificially mismatched case gets flagged via the EXISTING
-// needs-review machinery (confidence downgraded to 'low').
-describe('checkPrimeOperatingStatementWeekly / applyPrimeOperatingStatementCheck — flags a real mismatch', () => {
-  test('revenue off by more than $1 — flagged and confidence downgraded', () => {
-    const extraction = makeExtraction({
-      grossRevenue: 3050,
-      totalMiles: 2500,
-      totalDeductions: 900,
-      operating: { weekRevenue: 3200, weekMiles: 2500, weekExpenses: 900 },
-    });
-    const issues = checkPrimeOperatingStatementWeekly(extraction);
-    expect(issues).toEqual([{ field: 'revenue', extracted: 3050, operatingStatement: 3200 }]);
-
+describe('weekly check — flags a real mismatch', () => {
+  test('revenue read from the LOAD REVENUE column (trap 6) — flagged, confidence low, figures untouched', () => {
+    const extraction = makeExtraction({ grossRevenue: 4983.82 });
+    expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([
+      { field: 'revenue', extracted: 4983.82, operatingStatement: 4783.75 },
+    ]);
     const result = applyPrimeOperatingStatementCheck(extraction);
     expect(result.confidence).toBe('low');
-    // Never touches the underlying figures themselves — informational only.
-    expect(result.settlement?.grossRevenue).toBe(3050);
+    expect(result.settlement?.grossRevenue).toBe(4983.82);
   });
 
-  test('miles off by more than 1 — flagged', () => {
-    const extraction = makeExtraction({
-      grossRevenue: 3200,
-      totalMiles: 2400,
-      totalDeductions: 900,
-      operating: { weekRevenue: 3200, weekMiles: 2500, weekExpenses: 900 },
-    });
-    expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([{ field: 'miles', extracted: 2400, operatingStatement: 2500 }]);
+  test('LTD/QTD miles 10,146 taken as the week (trap) — flagged', () => {
+    expect(checkPrimeOperatingStatementWeekly(makeExtraction({ totalMiles: 10146 }))).toEqual([
+      { field: 'miles', extracted: 10146, operatingStatement: 2327 },
+    ]);
   });
 
-  test('expenses off by more than $1 — flagged', () => {
-    const extraction = makeExtraction({
-      grossRevenue: 3200,
-      totalMiles: 2500,
-      totalDeductions: 700,
-      operating: { weekRevenue: 3200, weekMiles: 2500, weekExpenses: 900 },
-    });
-    expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([{ field: 'expenses', extracted: 700, operatingStatement: 900 }]);
+  test('deductions missing a line — operating expenses flagged', () => {
+    const issues = checkPrimeOperatingStatementWeekly(makeExtraction({ totalDeductions: 3188.69 }));
+    expect(issues.map((i) => i.field)).toEqual(['operatingExpenses']);
   });
 
-  test('multiple mismatched fields are all reported', () => {
-    const extraction = makeExtraction({
-      grossRevenue: 3050,
-      totalMiles: 2400,
-      totalDeductions: 700,
-      operating: { weekRevenue: 3200, weekMiles: 2500, weekExpenses: 900 },
-    });
-    const issues = checkPrimeOperatingStatementWeekly(extraction);
-    expect(issues.map((i) => i.field).sort()).toEqual(['expenses', 'miles', 'revenue']);
+  test('net due misread — total statement flagged', () => {
+    const issues = checkPrimeOperatingStatementWeekly(makeExtraction({ netPay: 1234.36 }));
+    expect(issues.map((i) => i.field)).toEqual(['totalStatement']);
   });
 
-  test('applyPrimeOperatingStatementCheck preserves an EXISTING high confidence unless a mismatch is found', () => {
-    const clean: Extraction = {
-      ...makeExtraction({
-        grossRevenue: 3200,
-        totalMiles: 2500,
-        totalDeductions: 900,
-        operating: { weekRevenue: 3200, weekMiles: 2500, weekExpenses: 900 },
-      }),
-      confidence: 'high',
-    };
+  test('applyPrimeOperatingStatementCheck keeps an existing high confidence when everything matches', () => {
+    const clean: Extraction = { ...makeExtraction({}), confidence: 'high' };
     expect(applyPrimeOperatingStatementCheck(clean).confidence).toBe('high');
   });
 });
 
-// STANDING YTD CHECK — triggers correctly for a Prime account when this
-// app's own YTD and Prime's own reported YTD diverge beyond tolerance,
-// and does NOT trigger when they agree.
 describe('checkPrimeYtdReconciliation — standing YTD check', () => {
-  const primeYtd: PrimeYtdSnapshot = { revenue: 96000, miles: 75000, expenses: 27000, asOfWeekEnding: '2026-08-01' };
+  const primeYtd: PrimeYtdSnapshot = { revenue: 24425.98, miles: 10146, totalStatement: 8099.66, asOfWeekEnding: '2026-08-21' };
 
-  test('agrees within tolerance — no mismatch', () => {
-    expect(checkPrimeYtdReconciliation({ revenue: 96010, miles: 75005, expenses: 26990 }, primeYtd)).toEqual([]);
+  test('agrees within tolerance (interest .66 YTD absorbed) — no mismatch', () => {
+    expect(checkPrimeYtdReconciliation({ revenue: 24425.98, miles: 10146, netPay: 8099.0 }, primeYtd)).toEqual([]);
   });
 
-  test('diverges beyond tolerance on all three fields', () => {
-    const issues = checkPrimeYtdReconciliation({ revenue: 91000, miles: 71000, expenses: 25000 }, primeYtd);
-    expect(issues).toEqual([
-      { field: 'revenue', ours: 91000, prime: 96000 },
-      { field: 'miles', ours: 71000, prime: 75000 },
-      { field: 'expenses', ours: 25000, prime: 27000 },
+  test('a missing week — all three fields diverge beyond tolerance', () => {
+    expect(checkPrimeYtdReconciliation({ revenue: 19642.23, miles: 7819, netPay: 6214.93 }, primeYtd)).toEqual([
+      { field: 'revenue', ours: 19642.23, prime: 24425.98 },
+      { field: 'miles', ours: 7819, prime: 10146 },
+      { field: 'totalStatement', ours: 6214.93, prime: 8099.66 },
     ]);
   });
 
-  test('null snapshot (no Prime data seen yet) — never a guess, always []', () => {
-    expect(checkPrimeYtdReconciliation({ revenue: 1, miles: 1, expenses: 1 }, null)).toEqual([]);
+  test('null snapshot — never a guess', () => {
+    expect(checkPrimeYtdReconciliation({ revenue: 1, miles: 1, netPay: 1 }, null)).toEqual([]);
   });
 
   test('a zero-value field on the Prime side is never compared against', () => {
-    const partial: PrimeYtdSnapshot = { revenue: 96000, miles: 0, expenses: 0, asOfWeekEnding: '2026-08-01' };
-    expect(checkPrimeYtdReconciliation({ revenue: 40000, miles: 999999, expenses: 999999 }, partial)).toEqual([
-      { field: 'revenue', ours: 40000, prime: 96000 },
+    const partial: PrimeYtdSnapshot = { revenue: 24425.98, miles: 0, totalStatement: 0, asOfWeekEnding: '2026-08-21' };
+    expect(checkPrimeYtdReconciliation({ revenue: 100, miles: 999999, netPay: 999999 }, partial)).toEqual([
+      { field: 'revenue', ours: 100, prime: 24425.98 },
     ]);
   });
 });
 
 describe('readPrimeYtdSnapshotFromParsedJson', () => {
-  test('reads a real Prime-shaped parsed_json blob', () => {
-    const parsedJson = {
-      settlement: { carrier: 'Prime Inc', operating: { ytdRevenue: 96000, ytdMiles: 75000, ytdExpenses: 27000 } },
-    };
-    expect(readPrimeYtdSnapshotFromParsedJson(parsedJson, '2026-08-01')).toEqual({
-      revenue: 96000,
-      miles: 75000,
-      expenses: 27000,
-      asOfWeekEnding: '2026-08-01',
+  test('reads the real layout', () => {
+    const parsedJson = { settlement: { carrier: 'PRIME INC.', operating: GOLDEN_OPERATING } };
+    expect(readPrimeYtdSnapshotFromParsedJson(parsedJson, '2026-08-21')).toEqual({
+      revenue: 24425.98,
+      miles: 10146,
+      totalStatement: 8099.66,
+      asOfWeekEnding: '2026-08-21',
     });
   });
 
-  test('a non-Prime carrier embedded in the SAME parsed_json — defense in depth, returns null', () => {
-    const parsedJson = {
-      settlement: { carrier: 'Landstar', operating: { ytdRevenue: 96000, ytdMiles: 75000, ytdExpenses: 27000 } },
-    };
-    expect(readPrimeYtdSnapshotFromParsedJson(parsedJson, '2026-08-01')).toBeNull();
+  test('reads a settlement imported before the real layout (old ytdRevenue / ytdNet keys)', () => {
+    const parsedJson = { settlement: { carrier: 'Prime Inc', operating: { ytdRevenue: 19642.23, ytdMiles: 7819, ytdExpenses: 1, ytdNet: 6214.93 } } };
+    expect(readPrimeYtdSnapshotFromParsedJson(parsedJson, '2026-08-14')).toEqual({
+      revenue: 19642.23,
+      miles: 7819,
+      totalStatement: 6214.93,
+      asOfWeekEnding: '2026-08-14',
+    });
+  });
+
+  test('a non-Prime carrier inside the SAME parsed_json — returns null', () => {
+    const parsedJson = { settlement: { carrier: 'Landstar', operating: GOLDEN_OPERATING } };
+    expect(readPrimeYtdSnapshotFromParsedJson(parsedJson, '2026-08-21')).toBeNull();
   });
 
   test('no operating section, no settlement, or null parsed_json — all return null', () => {
@@ -207,35 +208,30 @@ describe('readPrimeYtdSnapshotFromParsedJson', () => {
 });
 
 describe('findMostRecentPrimeYtdSnapshot', () => {
-  test('picks the LATEST Prime settlement (by week_ending) that actually has operating data', () => {
+  test('picks the LATEST Prime settlement that actually has operating data', () => {
     const documentsById = new Map([
-      ['doc-old', { parsed_json: { settlement: { carrier: 'Prime Inc', operating: { ytdRevenue: 80000, ytdMiles: 60000, ytdExpenses: 20000 } } } }],
-      ['doc-new', { parsed_json: { settlement: { carrier: 'Prime Inc', operating: { ytdRevenue: 96000, ytdMiles: 75000, ytdExpenses: 27000 } } } }],
-      ['doc-other-carrier', { parsed_json: { settlement: { carrier: 'Landstar', operating: { ytdRevenue: 5000, ytdMiles: 4000, ytdExpenses: 1000 } } } }],
+      ['doc-old', { parsed_json: { settlement: { carrier: 'Prime Inc', operating: { ytdTotalRevenue: 19642.23, ytdMiles: 7819, ytdTotalStatement: 6214.93 } } } }],
+      ['doc-new', { parsed_json: { settlement: { carrier: 'Prime Inc', operating: GOLDEN_OPERATING } } }],
+      ['doc-other-carrier', { parsed_json: { settlement: { carrier: 'Landstar', operating: { ytdTotalRevenue: 5000, ytdMiles: 4000 } } } }],
     ]);
     const settlements = [
-      { carrier: 'Prime Inc', week_ending: '2026-07-01', document_id: 'doc-old' },
-      { carrier: 'Prime Inc', week_ending: '2026-08-01', document_id: 'doc-new' },
-      { carrier: 'Landstar', week_ending: '2026-08-08', document_id: 'doc-other-carrier' },
+      { carrier: 'Prime Inc', week_ending: '2026-08-14', document_id: 'doc-old' },
+      { carrier: 'Prime Inc', week_ending: '2026-08-21', document_id: 'doc-new' },
+      { carrier: 'Landstar', week_ending: '2026-08-28', document_id: 'doc-other-carrier' },
     ];
-    expect(findMostRecentPrimeYtdSnapshot(settlements, documentsById)).toEqual({
-      revenue: 96000,
-      miles: 75000,
-      expenses: 27000,
-      asOfWeekEnding: '2026-08-01',
-    });
+    expect(findMostRecentPrimeYtdSnapshot(settlements, documentsById)?.asOfWeekEnding).toBe('2026-08-21');
   });
 
-  test('skips a Prime settlement with no operating data, falling back to an older one that has it', () => {
+  test('skips a Prime settlement with no operating data, falling back to an older one', () => {
     const documentsById = new Map([
-      ['doc-old', { parsed_json: { settlement: { carrier: 'Prime Inc', operating: { ytdRevenue: 80000, ytdMiles: 60000, ytdExpenses: 20000 } } } }],
+      ['doc-old', { parsed_json: { settlement: { carrier: 'Prime Inc', operating: { ytdTotalRevenue: 19642.23, ytdMiles: 7819 } } } }],
       ['doc-newest', { parsed_json: { settlement: { carrier: 'Prime Inc' } } }],
     ]);
     const settlements = [
-      { carrier: 'Prime Inc', week_ending: '2026-07-01', document_id: 'doc-old' },
-      { carrier: 'Prime Inc', week_ending: '2026-08-15', document_id: 'doc-newest' },
+      { carrier: 'Prime Inc', week_ending: '2026-08-14', document_id: 'doc-old' },
+      { carrier: 'Prime Inc', week_ending: '2026-08-21', document_id: 'doc-newest' },
     ];
-    expect(findMostRecentPrimeYtdSnapshot(settlements, documentsById)?.asOfWeekEnding).toBe('2026-07-01');
+    expect(findMostRecentPrimeYtdSnapshot(settlements, documentsById)?.asOfWeekEnding).toBe('2026-08-14');
   });
 
   test('no settlements at all — null', () => {
@@ -243,156 +239,89 @@ describe('findMostRecentPrimeYtdSnapshot', () => {
   });
 });
 
-// CRITICAL — mirrors carrierCodes.test.ts's own "Prime codes never leak"
-// test. A non-Prime settlement (any other carrier, or unrecognized/empty
-// carrier text) never triggers ANY part of this reconciliation, proven
-// against the real exported functions.
+// CARRIER ISOLATION — mirrors carrierCodes.test.ts's "Prime codes never
+// leak": a non-Prime settlement never triggers any part of this module.
 describe('CARRIER ISOLATION: a non-Prime settlement never triggers any part of this reconciliation', () => {
-  const nonPrimeCarriers = ['Landstar', 'Schneider National', 'Werner', 'Unknown Carrier LLC', '', null, undefined];
+  const nonPrimeCarriers = ['Landstar', 'Schneider National', 'Werner', 'Unknown Carrier LLC', '', null];
 
-  test.each(nonPrimeCarriers)('checkPrimeOperatingStatementWeekly is a no-op for carrier=%p even with mismatched operating data', (carrier) => {
-    const extraction = makeExtraction({
-      carrier: carrier as string,
-      grossRevenue: 3050,
-      totalMiles: 2400,
-      totalDeductions: 700,
-      // Deliberately mismatched — if carrier isolation ever broke, this
-      // would trigger every one of the 3 mismatch fields.
-      operating: { weekRevenue: 3200, weekMiles: 2500, weekExpenses: 900 },
-    });
+  test.each(nonPrimeCarriers)('weekly check is a no-op for carrier=%p even with mismatched operating data', (carrier) => {
+    const extraction = makeExtraction({ carrier: carrier as string | null, grossRevenue: 1, totalMiles: 1, totalDeductions: 1, netPay: 1 });
+    expect(buildPrimeReconciliation(extraction)).toBeNull();
     expect(checkPrimeOperatingStatementWeekly(extraction)).toEqual([]);
     expect(applyPrimeOperatingStatementCheck(extraction)).toBe(extraction);
   });
 
   test.each(nonPrimeCarriers)('readPrimeYtdSnapshotFromParsedJson is a no-op for carrier=%p', (carrier) => {
-    const parsedJson = { settlement: { carrier, operating: { ytdRevenue: 96000, ytdMiles: 75000, ytdExpenses: 27000 } } };
-    expect(readPrimeYtdSnapshotFromParsedJson(parsedJson, '2026-08-01')).toBeNull();
-  });
-
-  test('findMostRecentPrimeYtdSnapshot never picks up a non-Prime settlement even when it is the ONLY one', () => {
-    const documentsById = new Map([
-      ['doc-1', { parsed_json: { settlement: { carrier: 'Landstar', operating: { ytdRevenue: 96000, ytdMiles: 75000, ytdExpenses: 27000 } } } }],
-    ]);
-    const settlements = [{ carrier: 'Landstar', week_ending: '2026-08-01', document_id: 'doc-1' }];
-    expect(findMostRecentPrimeYtdSnapshot(settlements, documentsById)).toBeNull();
-  });
-
-  test('a description/carrier field that merely CONTAINS "Prime" as a substring of a different name is not treated as Prime', () => {
-    // e.g. a fictitious "Prime Logistics Partners" — normalizeCarrierKey()
-    // requires an EXACT match against 'PRIME INC', not a substring.
-    expect(isPrimeCarrier('Prime Logistics Partners')).toBe(false);
+    expect(readPrimeYtdSnapshotFromParsedJson({ settlement: { carrier, operating: GOLDEN_OPERATING } }, '2026-08-21')).toBeNull();
   });
 });
 
-// ACCOUNTING MODEL — TWO LAYERS, NEVER CONFLATED (owner decision,
-// 2026-08-28). filterToPrimeSettlementSubledger() is what LAYER 1
-// (source of record) actually relies on: the Prime reconciliation must
-// stay internally verified against Prime's own operating statement and
-// NEVER be affected by the user's own manually-added deductions.
-describe('filterToPrimeSettlementSubledger — LAYER 1 isolation from manually-added rows', () => {
+// ACCOUNTING MODEL — TWO LAYERS (owner decision 2026-08-28): the standing
+// YTD check is fed ONLY the Prime sub-ledger.
+describe('filterToPrimeSettlementSubledger — LAYER 1 isolation', () => {
   const primeSettlement = { id: 'sett-prime-1', carrier: 'Prime Inc' };
-  const primeDeduction = { id: 'ded-prime-1', settlement_id: 'sett-prime-1', amount: 700 };
-  // A manually-added deduction — no settlement_id, exactly what
-  // mapPurchase()/mapGenericDeduction() produce (mapExtraction.ts never
-  // sets settlement_id for either).
-  const manualDeduction = { id: 'ded-manual-1', settlement_id: null, amount: 500 };
+  const otherSettlement = { id: 'sett-other-1', carrier: 'Landstar' };
 
-  test('excludes a manually-added deduction (settlement_id: null) even though it is in the same account', () => {
-    const result = filterToPrimeSettlementSubledger([primeSettlement], [primeDeduction, manualDeduction], [], [], []);
-    expect(result.deductions).toEqual([primeDeduction]);
-  });
-
-  test('excludes a deduction tied to a DIFFERENT, non-Prime settlement', () => {
-    const otherCarrierSettlement = { id: 'sett-other-1', carrier: 'Landstar' };
-    const otherCarrierDeduction = { id: 'ded-other-1', settlement_id: 'sett-other-1', amount: 900 };
+  test('keeps only rows tied to a Prime settlement — deductions and reimbursements alike', () => {
     const result = filterToPrimeSettlementSubledger(
-      [primeSettlement, otherCarrierSettlement],
-      [primeDeduction, otherCarrierDeduction],
+      [primeSettlement, otherSettlement],
+      [
+        { id: 'd1', settlement_id: 'sett-prime-1' },
+        { id: 'd2', settlement_id: null },
+        { id: 'd3', settlement_id: 'sett-other-1' },
+      ],
       [],
       [],
-      []
+      [],
+      [
+        { id: 'r1', settlement_id: 'sett-prime-1' },
+        { id: 'r2', settlement_id: null },
+        { id: 'r3', settlement_id: 'sett-other-1' },
+      ]
     );
     expect(result.settlements).toEqual([primeSettlement]);
-    expect(result.deductions).toEqual([primeDeduction]);
+    expect(result.deductions.map((d) => d.id)).toEqual(['d1']);
+    expect(result.reimbursements.map((r) => r.id)).toEqual(['r1']);
   });
 
-  // THE ACTUAL BUG THIS FIXES, reproduced end to end through the REAL
-  // computeKpis() and checkPrimeYtdReconciliation() — not asserted from
-  // the filter's own output in isolation. A Prime settlement whose own
-  // withheld deduction ($700) exactly matches what Prime's own YTD
-  // statement reports reconciles cleanly on its own; adding a real,
-  // unrelated $500 manual deduction to the SAME account must leave that
-  // result completely unaffected once the inputs are scoped through
-  // filterToPrimeSettlementSubledger() first — and, shown for contrast,
-  // WOULD have wrongly flagged a mismatch had the account-wide,
-  // unfiltered totals been used instead (exactly what
-  // app/(tabs)/more/settlements.tsx's own primeYtdMismatches memo did
-  // before this fix).
-  test('a manually-added deduction never affects whether the standing YTD check flags a mismatch', () => {
-    const primeYtd: PrimeYtdSnapshot = { revenue: 3200, miles: 2500, expenses: 700, asOfWeekEnding: '2026-08-01' };
-    const settlementRow = { id: 'sett-prime-1', truck_id: null, week_ending: '2026-08-01', gross: 3200, net: 2500, miles: 2500 };
-    const withheldDeduction = {
-      settlement_id: 'sett-prime-1',
-      amount: 700,
-      source: 'settlement' as const,
-      tax_deductible: false as const,
-    };
-    const manualReceipt = { settlement_id: null, amount: 500, source: 'manual' as const, tax_deductible: true as const };
-
-    // Cleanly reconciles with ONLY the Prime settlement's own rows.
-    const primeOnlyScope = filterToPrimeSettlementSubledger([primeSettlement], [withheldDeduction], [], [], []);
-    const kpiPrimeOnly = computeKpis({
+  test('a non-Prime settlement on the same account never makes the YTD check flag a mismatch', () => {
+    const primeYtd: PrimeYtdSnapshot = { revenue: 4783.75, miles: 2327, totalStatement: 1884.73, asOfWeekEnding: '2026-08-21' };
+    const rows = [
+      { id: 'sett-prime-1', carrier: 'Prime Inc', truck_id: null, week_ending: '2026-08-21', gross: 4783.75, net: 1884.36, miles: 2327 },
+      { id: 'sett-other-1', carrier: 'Landstar', truck_id: null, week_ending: '2026-08-14', gross: 3000, net: 2000, miles: 1500 },
+    ];
+    const scope = filterToPrimeSettlementSubledger(rows, [], [], [], [], []);
+    const kpi = computeKpis({
       trucks: [],
-      settlements: [{ ...settlementRow, ...primeOnlyScope.settlements[0] }],
+      settlements: scope.settlements,
       loads: [],
-      deductions: primeOnlyScope.deductions,
-      fuelPurchases: [],
-      maintenanceRecords: [],
-      tolls: [],
+      deductions: scope.deductions,
+      fuelPurchases: scope.fuelPurchases,
+      maintenanceRecords: scope.maintenanceRecords,
+      tolls: scope.tolls,
+      reimbursements: scope.reimbursements,
       truckScope: null,
       manualMilesOverride: null,
       window: null,
     });
-    expect(checkPrimeYtdReconciliation({ revenue: kpiPrimeOnly.gross, miles: kpiPrimeOnly.miles.total, expenses: kpiPrimeOnly.expenses.total }, primeYtd)).toEqual([]);
+    expect(checkPrimeYtdReconciliation({ revenue: kpi.gross, miles: kpi.miles.total, netPay: kpi.bridge.netPay }, primeYtd)).toEqual([]);
 
-    // Same account, now WITH a real, unrelated manual deduction on the
-    // books too — filtering through the subledger first means the result
-    // is BYTE-IDENTICAL: still zero mismatches.
-    const withManualScope = filterToPrimeSettlementSubledger([primeSettlement], [withheldDeduction, manualReceipt], [], [], []);
-    const kpiWithManual = computeKpis({
+    // CONTRAST — the unfiltered account would wrongly flag all three.
+    const unfiltered = computeKpis({
       trucks: [],
-      settlements: [{ ...settlementRow, ...withManualScope.settlements[0] }],
+      settlements: rows,
       loads: [],
-      deductions: withManualScope.deductions,
+      deductions: [],
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: null,
       manualMilesOverride: null,
       window: null,
     });
-    expect(kpiWithManual.expenses.total).toBe(kpiPrimeOnly.expenses.total); // manual $500 never entered the comparison
-    expect(checkPrimeYtdReconciliation({ revenue: kpiWithManual.gross, miles: kpiWithManual.miles.total, expenses: kpiWithManual.expenses.total }, primeYtd)).toEqual([]);
-
-    // CONTRAST — the bug this replaces: feeding the UNFILTERED, account-
-    // wide deductions straight into computeKpis() (what the code used to
-    // do) inflates expenses by the manual $500 and DOES wrongly flag a
-    // mismatch against Prime's own reported $700.
-    const kpiUnfiltered = computeKpis({
-      trucks: [],
-      settlements: [settlementRow],
-      loads: [],
-      deductions: [withheldDeduction, manualReceipt],
-      fuelPurchases: [],
-      maintenanceRecords: [],
-      tolls: [],
-      truckScope: null,
-      manualMilesOverride: null,
-      window: null,
-    });
-    expect(kpiUnfiltered.expenses.total).toBe(1200);
     expect(
-      checkPrimeYtdReconciliation({ revenue: kpiUnfiltered.gross, miles: kpiUnfiltered.miles.total, expenses: kpiUnfiltered.expenses.total }, primeYtd)
-    ).toEqual([{ field: 'expenses', ours: 1200, prime: 700 }]);
+      checkPrimeYtdReconciliation({ revenue: unfiltered.gross, miles: unfiltered.miles.total, netPay: unfiltered.bridge.netPay }, primeYtd).map((m) => m.field)
+    ).toEqual(['revenue', 'miles', 'totalStatement']);
   });
 });

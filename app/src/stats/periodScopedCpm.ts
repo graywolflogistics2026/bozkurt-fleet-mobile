@@ -12,7 +12,8 @@
 // itself, so Home's large, already-correct rendering code needed zero
 // changes — the only thing that moved is WHERE the math actually happens.
 import { buildTruckComparison, type ComparisonTruck, type ComparisonSettlement, type ComparisonDeduction, type ComparisonFuel, type ComparisonMaintenance, type ComparisonToll, type TruckComparisonResult, type TruckComparisonRow } from '@/src/stats/truckComparison';
-import { computeKpis, type KpiResult } from '@/src/stats/kpi';
+import { computeKpis, type KpiReimbursement, type KpiResult } from '@/src/stats/kpi';
+import { filterSettlementLinkedRowsToWindow } from '@/src/stats/trueProfit';
 import type { CanonicalCpmResult } from '@/src/stats/cpm';
 import {
   resolveHeroPeriodDateWindow,
@@ -23,7 +24,7 @@ import {
 } from '@/src/stats/heroPeriodWindow';
 
 type DatedDeduction = ComparisonDeduction & { ded_date: string | null };
-type DatedFuel = ComparisonFuel & { purchase_date: string | null };
+type DatedFuel = ComparisonFuel & { purchase_date: string | null; fuel_type?: string | null };
 type DatedMaintenance = ComparisonMaintenance & { service_date: string | null };
 type DatedToll = ComparisonToll & { toll_date: string | null };
 type LoadLike = { settlement_id: string | null; loaded_miles: number | null; empty_miles: number | null };
@@ -71,6 +72,7 @@ export function buildPeriodScopedCpm(
   fuelPurchases: DatedFuel[],
   maintenanceRecords: DatedMaintenance[],
   tolls: DatedToll[],
+  reimbursements: KpiReimbursement[],
   activeTruckId: string | null,
   manualMilesOverride: number | null | undefined,
   now: Date = new Date()
@@ -86,11 +88,15 @@ export function buildPeriodScopedCpm(
   const fSettlementIds = new Set(fSettlements.map((s) => s.id));
   const fLoads = loads.filter((l) => l.settlement_id != null && fSettlementIds.has(l.settlement_id));
   const fDeductions = filterRowsByDateWindow(deductions, (d) => d.ded_date, window);
-  const fFuel = filterRowsByDateWindow(fuelPurchases, (f) => f.purchase_date, window);
+  // Settlement-linked fuel/reimbursements follow their settlement's week
+  // (same rule as computeKpis()).
+  const inWindow = (d: string) => !!window && d >= window.startIso && d <= window.endIso;
+  const fFuel = filterSettlementLinkedRowsToWindow(fuelPurchases, (f) => f.purchase_date, fSettlementIds, inWindow);
+  const fReimbursements = filterSettlementLinkedRowsToWindow(reimbursements, (r) => r.reimb_date, fSettlementIds, inWindow);
   const fMaintenance = filterRowsByDateWindow(maintenanceRecords, (m) => m.service_date, window);
   const fTolls = filterRowsByDateWindow(tolls, (t) => t.toll_date, window);
 
-  const comparison = buildTruckComparison(trucks, fSettlements, fLoads, fDeductions, fFuel, fMaintenance, fTolls);
+  const comparison = buildTruckComparison(trucks, fSettlements, fLoads, fDeductions, fFuel, fMaintenance, fTolls, fReimbursements);
   const scopedRow = activeTruckId ? (comparison.rows.find((r) => r.truckId === activeTruckId) ?? null) : null;
 
   if (!window) {
@@ -105,6 +111,7 @@ export function buildPeriodScopedCpm(
     fuelPurchases,
     maintenanceRecords,
     tolls,
+    reimbursements,
     truckScope: activeTruckId,
     manualMilesOverride,
     window,
@@ -123,6 +130,7 @@ export function buildPeriodScopedCpm(
         fuelPurchases,
         maintenanceRecords,
         tolls,
+        reimbursements,
         truckScope: activeTruckId,
         manualMilesOverride,
         window: previousWindow,

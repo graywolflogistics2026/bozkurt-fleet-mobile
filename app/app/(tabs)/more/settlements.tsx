@@ -324,7 +324,8 @@ export default function Settlements() {
       dedQuery.data ?? [],
       fuelQuery.data ?? [],
       maintenanceQuery.data ?? [],
-      tollsQuery.data ?? []
+      tollsQuery.data ?? [],
+      reimbQuery.data ?? []
     );
     const kpi = computeKpis({
       trucks: trucksQuery.data ?? [],
@@ -334,12 +335,13 @@ export default function Settlements() {
       fuelPurchases: primeScope.fuelPurchases,
       maintenanceRecords: primeScope.maintenanceRecords,
       tolls: primeScope.tolls,
+      reimbursements: primeScope.reimbursements,
       truckScope: null,
       manualMilesOverride: null,
       window: { startIso, endIso: new Date().toISOString().slice(0, 10) },
     });
-    return checkPrimeYtdReconciliation({ revenue: kpi.gross, miles: kpi.miles.total, expenses: kpi.expenses.total }, primeYtdSnapshot);
-  }, [primeYtdSnapshot, trucksQuery.data, allRows, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]);
+    return checkPrimeYtdReconciliation({ revenue: kpi.gross, miles: kpi.miles.total, netPay: kpi.bridge.netPay }, primeYtdSnapshot);
+  }, [primeYtdSnapshot, trucksQuery.data, allRows, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);
   const showPrimeYtdBanner = primeYtdMismatches.length > 0 && (isAllTrucks || (trucksQuery.data?.length ?? 0) <= 1);
 
   // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
@@ -560,8 +562,8 @@ export default function Settlements() {
                 {m.field === 'revenue' &&
                   t('settlementsScreen.primeYtdRevenueMismatch', { ours: money(m.ours), prime: money(m.prime) })}
                 {m.field === 'miles' && t('settlementsScreen.primeYtdMilesMismatch', { ours: number(m.ours), prime: number(m.prime) })}
-                {m.field === 'expenses' &&
-                  t('settlementsScreen.primeYtdExpensesMismatch', { ours: money(m.ours), prime: money(m.prime) })}
+                {m.field === 'totalStatement' &&
+                  t('settlementsScreen.primeYtdStatementMismatch', { ours: money(m.ours), prime: money(m.prime) })}
               </MutedText>
             ))}
             {primeYtdSnapshot && (

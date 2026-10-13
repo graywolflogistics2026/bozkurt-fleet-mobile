@@ -124,7 +124,7 @@ describe('MILES READ BUT NOT USED — end-to-end: extraction -> guard -> save ->
 
     // Same shared function Home/Scorecard/the CPM "Why?" breakdown all
     // call — never a screen-local reimplementation.
-    const cpm = calcCanonicalCpm(settlements[0].gross, milesResult.totalMiles, deductions, [], [], []);
+    const cpm = calcCanonicalCpm(settlements[0].gross, milesResult.totalMiles, deductions, [], [], [], []);
     expect(cpm.revenuePerMile).not.toBeNull();
     expect(cpm.costPerMile).not.toBeNull();
     expect(cpm.profitPerMile).not.toBeNull();

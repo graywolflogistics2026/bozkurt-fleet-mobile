@@ -9,6 +9,7 @@ import { useDeductions } from '@/src/data/deductions';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { useDriverPayments } from '@/src/data/driverPayments';
 import { useDrivers } from '@/src/data/drivers';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
@@ -150,6 +151,7 @@ export default function TruckComparison() {
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
+  const reimbursementsQuery = useReimbursements();
   const driverPaymentsQuery = useDriverPayments();
   const driversQuery = useDrivers();
   const [period, setPeriod] = useState<PeriodOption>('thisMonth');
@@ -157,7 +159,16 @@ export default function TruckComparison() {
   const result = useMemo(() => {
     const settlements = filterByPeriod(settlementsQuery.data ?? [], (s) => s.week_ending, period);
     const deductions = filterByPeriod(dedQuery.data ?? [], (d) => d.ded_date, period);
-    const fuel = filterByPeriod(fuelQuery.data ?? [], (f) => f.purchase_date, period);
+    // Settlement-linked fuel/reimbursements follow their settlement's
+    // period, standalone rows their own date (same rule as computeKpis()).
+    const periodSettlementIds = new Set(settlements.map((s) => s.id));
+    const datedInPeriod = <R,>(rows: R[], getDate: (r: R) => string | null) => new Set(filterByPeriod(rows, getDate, period));
+    const fuelInPeriod = datedInPeriod(fuelQuery.data ?? [], (f) => f.purchase_date);
+    const fuel = (fuelQuery.data ?? []).filter((f) => (f.settlement_id ? periodSettlementIds.has(f.settlement_id) : fuelInPeriod.has(f)));
+    const reimbInPeriod = datedInPeriod(reimbursementsQuery.data ?? [], (r) => r.reimb_date);
+    const reimbursements = (reimbursementsQuery.data ?? []).filter((r) =>
+      r.settlement_id ? periodSettlementIds.has(r.settlement_id) : reimbInPeriod.has(r)
+    );
     const maintenance = filterByPeriod(maintenanceQuery.data ?? [], (m) => m.service_date, period);
     const tolls = filterByPeriod(tollsQuery.data ?? [], (tl) => tl.toll_date, period);
     return buildTruckComparison(
@@ -168,6 +179,7 @@ export default function TruckComparison() {
       fuel,
       maintenance,
       tolls,
+      reimbursements,
       driverPaymentsQuery.data ?? [],
       driversQuery.data ?? []
     );
@@ -178,6 +190,7 @@ export default function TruckComparison() {
     dedQuery.data,
     fuelQuery.data,
     maintenanceQuery.data,
+    reimbursementsQuery.data,
     tollsQuery.data,
     driverPaymentsQuery.data,
     driversQuery.data,

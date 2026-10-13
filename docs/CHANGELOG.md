@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- GOLDEN SETTLEMENT (owner decision 2026-10-13). Real Prime week (unit
+  283940, W/E 8/21) showed ~$4,549, correct $2,534.36. Fixed: reimbursements
+  now offset expenses in every profit figure; duplicate-fuel guard per row
+  (fuel only in the fuel list was dropped); settlement-linked fuel/reimb
+  follow their settlement's week; "184.85-" parses negative; import blocks
+  on revenue/reimbursement/net-due mismatches (+ "Save anyway, flagged");
+  real Prime operating-statement layout; Home profit bridge sheet. Golden
+  test + docs/decisions/golden-settlement.md. No SQL. Redeploy ai-import.
+  Ships via eas update.
+
 - DOCUMENT TITLES ON THE LIST (owner decision 2026-09-23, follow-up — "the
   list still shows Document"). Root cause: the list read the right field
   (useDocuments() selects '*'; displayDocumentTitle() showed title first),

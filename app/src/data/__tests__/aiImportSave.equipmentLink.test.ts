@@ -102,14 +102,14 @@ describe('settlement-withheld deduction landing in a durable-goods category', ()
     const deductions = mockClient.__store.deductions ?? [];
     expect(mockClient.__store.equipment ?? []).toHaveLength(1); // confirms the linked row really was created
 
-    const totalWithEquipmentRow = sumCanonicalExpenses(deductions as never[], [], [], []);
+    const totalWithEquipmentRow = sumCanonicalExpenses(deductions as never[], [], [], [], []);
 
     // Deleting the Equipment row (leaving the deduction untouched) must
     // not change the canonical total at all — proving sumCanonicalExpenses()
     // never reads from `equipment`, structurally, not just by absence of a
     // bug today.
     mockClient.__store.equipment = [];
-    const totalWithoutEquipmentRow = sumCanonicalExpenses(deductions as never[], [], [], []);
+    const totalWithoutEquipmentRow = sumCanonicalExpenses(deductions as never[], [], [], [], []);
 
     expect(totalWithEquipmentRow).toBe(totalWithoutEquipmentRow);
     expect(totalWithEquipmentRow).toBe(189.99 + 100); // tools + insurance, each counted exactly once

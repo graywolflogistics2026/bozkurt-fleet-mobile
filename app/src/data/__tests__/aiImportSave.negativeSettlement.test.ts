@@ -147,6 +147,6 @@ describe('negative settlement end-to-end (real statement numbers)', () => {
     // gross 5.16 - deductible 443.56 = -438.4 (true profit is NEVER the
     // same figure as settlement.net here — net includes every withheld
     // row, true profit excludes the three non-expense categories).
-    expect(calcTrueProfit(settlements, deductions)).toBeCloseTo(-438.4, 2);
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBeCloseTo(-438.4, 2);
   });
 });

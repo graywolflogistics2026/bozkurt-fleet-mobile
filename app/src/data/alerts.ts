@@ -9,6 +9,7 @@ import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useTolls } from '@/src/data/tolls';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { useTaxConfig } from '@/src/data/taxConfig';
 import { useTaxYearData } from '@/src/data/taxYearData';
 import { useFleetStats } from '@/src/data/dashboardStats';
@@ -65,6 +66,7 @@ export function useAlertsData() {
   // the entity-type/per-diem-rate nudges.
   const fuelQuery = useFuelPurchases();
   const tollsQuery = useTolls();
+  const reimbursementsQuery = useReimbursements();
   const allMaintenanceQuery = useMaintenanceRecords();
   const taxConfigQuery = useTaxConfig();
   const taxYearDataQuery = useTaxYearData();
@@ -133,9 +135,10 @@ export function useAlertsData() {
         deductionsQuery.data ?? [],
         fuelQuery.data ?? [],
         allMaintenanceQuery.data ?? [],
-        tollsQuery.data ?? []
+        tollsQuery.data ?? [],
+        reimbursementsQuery.data ?? []
       ),
-    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, allMaintenanceQuery.data, tollsQuery.data]
+    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, allMaintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]
   );
   const suggestedWeeklyGoal = trailingAverageNet(weeklyTrend);
 

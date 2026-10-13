@@ -140,7 +140,7 @@ describe('settlement import end-to-end: child rows reach every dependent screen/
     // were silently excluded from true profit, still verified here: if
     // the withheld $200 insurance row were wrongly excluded again, this
     // would read 3925, not 3725).
-    expect(calcTrueProfit(settlements, deductions)).toBe(3725);
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(3725);
   });
 
   test('Cash Flow forecast: settlement-derived spend events reflect the imported settlement, and never double-count settlement-linked fuel', async () => {

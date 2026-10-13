@@ -35,6 +35,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -59,6 +60,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: null,
       window: null,
     });
@@ -78,6 +80,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -93,6 +96,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: { startIso: '2026-08-01', endIso: '2026-08-01' }, // only s1's own week
     });
@@ -114,6 +118,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
         { cost: 18000, truck_id: 'ta', description: 'Engine overhaul', service_type: 'engine', service_date: '2026-08-08' },
       ],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -140,6 +145,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -159,6 +165,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -170,6 +177,7 @@ describe('computeKpis — KPI CONSISTENCY (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       manualMilesOverride: 3000, // an odometer reading larger than the settlement-derived 2000
       window: null,
@@ -213,6 +221,7 @@ describe('computeKpis — NULL-TRUCK EXCLUSION FIX (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: null,
       window: null,
     });
@@ -229,6 +238,7 @@ describe('computeKpis — NULL-TRUCK EXCLUSION FIX (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -252,6 +262,7 @@ describe('computeKpis — NULL-TRUCK EXCLUSION FIX (owner decision)', () => {
       fuelPurchases: [nullTruckFuel],
       maintenanceRecords: [nullTruckMaintenance],
       tolls: [nullTruckToll],
+      reimbursements: [],
       truckScope: null,
       window: null,
     });
@@ -265,6 +276,7 @@ describe('computeKpis — NULL-TRUCK EXCLUSION FIX (owner decision)', () => {
       fuelPurchases: [nullTruckFuel],
       maintenanceRecords: [nullTruckMaintenance],
       tolls: [nullTruckToll],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -294,6 +306,7 @@ describe('computeKpis — NULL-TRUCK EXCLUSION FIX (owner decision)', () => {
       ],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -310,6 +323,7 @@ describe('computeKpis — NULL-TRUCK EXCLUSION FIX (owner decision)', () => {
       fuelPurchases: [],
       maintenanceRecords: [],
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -333,6 +347,7 @@ describe('computeKpis — missing-source guard (owner decision)', () => {
     fuelPurchases: [],
     maintenanceRecords: [],
     tolls: [],
+    reimbursements: [],
     truckScope: 'ta' as string | null,
     window: null,
   };
@@ -369,6 +384,11 @@ describe('computeKpis — missing-source guard (owner decision)', () => {
     expect(() => computeKpis({ ...validArgs, tolls: undefined as any })).toThrow(/tolls.*must be an array/i);
   });
 
+  it('throws when reimbursements is undefined instead of []', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(() => computeKpis({ ...validArgs, reimbursements: undefined as any })).toThrow(/reimbursements.*must be an array/i);
+  });
+
   it('throws when settlements is undefined', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(() => computeKpis({ ...validArgs, settlements: undefined as any })).toThrow(/settlements.*must be an array/i);
@@ -377,5 +397,55 @@ describe('computeKpis — missing-source guard (owner decision)', () => {
   it('throws when a query RESULT OBJECT ({ data: [...] }) is passed instead of the plain array — the exact "wrong shape" case named in the report', () => {
     const wrongShape = { data: deductions, isLoading: false } as unknown as typeof deductions;
     expect(() => computeKpis({ ...validArgs, deductions: wrongShape })).toThrow(/deductions.*must be an array/i);
+  });
+});
+
+// REIMBURSEMENTS OFFSET EXPENSES (golden settlement pass, owner decision
+// 2026-10-13). A reimbursement has no truck_id: a settlement-linked one
+// follows its settlement's truck and week, an unlinked one is a
+// fleet-level row. NULL-TRUCK REGRESSION GUARD (CLAUDE.md "NULL-truck
+// rows"): the unlinked one must appear in EVERY truck's scoped view.
+describe('computeKpis — reimbursements offset expenses, scoped by their settlement', () => {
+  const base = {
+    trucks: [truckA, truckB],
+    settlements,
+    loads: [],
+    deductions,
+    fuelPurchases: [],
+    maintenanceRecords: [],
+    tolls: [],
+    window: null,
+  };
+  const reimbursements = [
+    { amount: 40, settlement_id: 's1', reimb_date: '2026-08-01' }, // truck A
+    { amount: 25, settlement_id: 's3', reimb_date: '2026-08-08' }, // truck B
+    { amount: 10, settlement_id: null, reimb_date: '2026-08-05' }, // fleet-level (manual)
+  ];
+
+  it('All Trucks: every reimbursement reduces expenses (never added to revenue)', () => {
+    const without = computeKpis({ ...base, reimbursements: [], truckScope: null });
+    const withR = computeKpis({ ...base, reimbursements, truckScope: null });
+    expect(withR.gross).toBe(without.gross);
+    expect(withR.reimbursementsTotal).toBe(75);
+    expect(withR.expenses.total).toBe(without.expenses.total - 75);
+    expect(withR.net).toBe(without.net + 75);
+    expect(withR.rpm).toBe(without.rpm);
+    expect(withR.ppm!).toBeCloseTo(withR.rpm! - withR.cpm!, 10);
+  });
+
+  it("truck A's scope: its own settlement's reimbursement + the NULL-truck one, never truck B's", () => {
+    const k = computeKpis({ ...base, reimbursements, truckScope: 'ta' });
+    expect(k.reimbursementsTotal).toBe(50);
+  });
+
+  it("truck B's scope: its own + the NULL-truck one", () => {
+    const k = computeKpis({ ...base, reimbursements, truckScope: 'tb' });
+    expect(k.reimbursementsTotal).toBe(35);
+  });
+
+  it('a settlement-linked reimbursement follows its settlement week, not its own date', () => {
+    const lateDated = [{ amount: 40, settlement_id: 's1', reimb_date: '2026-09-30' }];
+    const k = computeKpis({ ...base, reimbursements: lateDated, truckScope: 'ta', window: { startIso: '2026-07-26', endIso: '2026-08-01' } });
+    expect(k.reimbursementsTotal).toBe(40);
   });
 });

@@ -73,7 +73,13 @@
 import { calcMiles, resolveMilesTotal, type LoadMilesInput } from '@/src/stats/miles';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CpmBucket, type CpmExcludedOneOff } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
-import { sumCanonicalExpenses } from '@/src/stats/trueProfit';
+import {
+  canonicalExpenseBreakdown,
+  filterSettlementLinkedRowsToWindow,
+  reducesTrueProfit,
+  resolveFuelRows,
+  type CanonicalReimbursement,
+} from '@/src/stats/trueProfit';
 import type { ComparisonTruck, ComparisonSettlement, ComparisonDeduction, ComparisonFuel, ComparisonMaintenance, ComparisonToll } from '@/src/stats/truckComparison';
 import { filterRowsByDateWindow, type DateWindow } from '@/src/stats/heroPeriodWindow';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
@@ -88,10 +94,14 @@ export type { DateWindow };
 // resolvable week yet), and forcing that narrower type here would make
 // every real call site's settlement array fail to type-check.
 type KpiSettlement = ComparisonSettlement & { per_diem_days?: number | null };
-type KpiDeduction = ComparisonDeduction & { ded_date?: string | null };
-type KpiFuel = ComparisonFuel & { purchase_date?: string | null };
-type KpiMaintenance = ComparisonMaintenance & { service_date?: string | null };
-type KpiToll = ComparisonToll & { toll_date?: string | null };
+type KpiDeduction = ComparisonDeduction & { ded_date?: string | null; settlement_id?: string | null };
+type KpiFuel = ComparisonFuel & { purchase_date?: string | null; fuel_type?: string | null };
+type KpiMaintenance = ComparisonMaintenance & { service_date?: string | null; settlement_id?: string | null };
+type KpiToll = ComparisonToll & { toll_date?: string | null; settlement_id?: string | null };
+// reimbursements carry no truck_id of their own — a settlement-linked one
+// follows its settlement's truck and week; an unlinked one (a manual
+// warranty credit) is a fleet-level row, matched by date only.
+export type KpiReimbursement = CanonicalReimbursement & { settlement_id?: string | null; reimb_date?: string | null };
 
 export type KpiInputs = {
   trucks: ComparisonTruck[];
@@ -101,6 +111,10 @@ export type KpiInputs = {
   fuelPurchases: KpiFuel[];
   maintenanceRecords: KpiMaintenance[];
   tolls: KpiToll[];
+  // REQUIRED (golden settlement pass, owner decision 2026-10-13) —
+  // reimbursements offset expenses; leaving them out understated profit
+  // by every reimbursed dollar.
+  reimbursements: KpiReimbursement[];
   // null = "All Trucks" scope (fleet-wide aggregate); a real id scopes
   // every figure to that one truck's own rows PLUS every null-truck row
   // (see this module's header comment — never a plain-equality exclusion).
@@ -138,6 +152,33 @@ export type KpiResult = {
   buckets: CpmBucket[];
   excludedTotal: number;
   excludedOneOffs: CpmExcludedOneOff[];
+  reimbursementsTotal: number;
+  bridge: ProfitBridge;
+};
+
+// PROFIT BRIDGE (golden settlement pass, owner decision 2026-10-13) — how
+// "This Week's Profit" follows from the settlements' printed net pay:
+// net pay + every withheld line that is not an expense (advances,
+// escrow/bond) − every expense that never passed through a settlement
+// (out-of-pocket receipts, standalone fuel, maintenance, tolls) + every
+// reimbursement not on a settlement = profit. Built from the SAME
+// filtered rows computeKpis() uses, so it always lands on `net`.
+// `difference` is whatever the saved rows do not explain (e.g. a
+// settlement saved with lines missing) — shown, never hidden. The truck
+// fixed-cost estimate is NOT part of profit (it feeds CPM/PPM only), so
+// it is reported separately as information, never as a bridge line.
+export type ProfitBridgeLine = { description: string; category: string | null; amount: number };
+export type ProfitBridge = {
+  netPay: number;
+  nonExpenseLines: ProfitBridgeLine[];
+  outOfPocketDeductions: number;
+  standaloneFuel: number;
+  maintenance: number;
+  tolls: number;
+  reimbursementsNotOnSettlement: number;
+  difference: number;
+  profit: number;
+  fixedCostEstimateInCpm: number;
 };
 
 // NULL-TRUCK EXCLUSION FIX — see this module's header comment. `null`
@@ -188,6 +229,7 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
   assertArray(inputs.fuelPurchases, 'fuelPurchases');
   assertArray(inputs.maintenanceRecords, 'maintenanceRecords');
   assertArray(inputs.tolls, 'tolls');
+  assertArray(inputs.reimbursements, 'reimbursements');
 
   const { trucks, loads, truckScope, manualMilesOverride, window } = inputs;
 
@@ -197,7 +239,6 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
   // all"), so that helper is only invoked when a real window is given.
   const windowedSettlements = window ? filterRowsByDateWindow(inputs.settlements, (s) => s.week_ending, window) : inputs.settlements;
   const windowedDeductions = window ? filterRowsByDateWindow(inputs.deductions, (d) => d.ded_date, window) : inputs.deductions;
-  const windowedFuel = window ? filterRowsByDateWindow(inputs.fuelPurchases, (f) => f.purchase_date, window) : inputs.fuelPurchases;
   const windowedMaintenance = window
     ? filterRowsByDateWindow(inputs.maintenanceRecords, (m) => m.service_date, window)
     : inputs.maintenanceRecords;
@@ -209,10 +250,27 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
   // PLUS every null-truck row (never a plain-equality exclusion).
   const settlements = windowedSettlements.filter((s) => matchesTruckScope(s.truck_id, truckScope));
   const deductions = windowedDeductions.filter((d) => matchesTruckScope(d.truck_id, truckScope));
-  const fuelPurchases = windowedFuel.filter((f) => matchesTruckScope(f.truck_id, truckScope));
   const maintenanceRecords = windowedMaintenance.filter((m) => matchesTruckScope(m.truck_id, truckScope));
   const tolls = windowedTolls.filter((t) => matchesTruckScope(t.truck_id, truckScope));
   const settlementIds = new Set(settlements.map((s) => s.id));
+  // Settlement-linked fuel/reimbursement rows follow their settlement's
+  // week and truck (trueProfit.ts filterSettlementLinkedRowsToWindow());
+  // standalone rows use their own date and, for fuel, their own truck_id.
+  // With no window (all-time) an undated standalone row still counts.
+  const inWindow = (d: string) => !window || (d >= window.startIso && d <= window.endIso);
+  const undatedPasses = !window;
+  const fuelPurchases = filterSettlementLinkedRowsToWindow(
+    inputs.fuelPurchases,
+    (f) => f.purchase_date ?? (undatedPasses ? '' : null),
+    settlementIds,
+    inWindow
+  ).filter((f) => !!f.settlement_id || matchesTruckScope(f.truck_id, truckScope));
+  const reimbursements = filterSettlementLinkedRowsToWindow(
+    inputs.reimbursements,
+    (r) => r.reimb_date ?? (undatedPasses ? '' : null),
+    settlementIds,
+    inWindow
+  );
   const filteredLoads = loads.filter((l) => l.settlement_id != null && settlementIds.has(l.settlement_id));
 
   const perDiemDays = calcPerDiemDays(
@@ -224,7 +282,8 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
   // scopes; the only difference is which rows already passed the
   // truck-scope filter above.
   const grossRevenue = settlements.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
-  const trueExpenses = sumCanonicalExpenses(deductions, fuelPurchases, maintenanceRecords, tolls);
+  const breakdown = canonicalExpenseBreakdown(deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements);
+  const trueExpenses = breakdown.total;
   const net = grossRevenue - trueExpenses;
 
   // Fixed cost basis: a scoped truck charges only ITS OWN weekly cost ×
@@ -257,8 +316,11 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
     fuelPurchases,
     maintenanceRecords,
     tolls,
+    reimbursements,
     fixedCostBasisTotal
   );
+
+  const bridge = buildProfitBridge(settlements, deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements, net, fixedCostBasisTotal);
 
   return {
     window,
@@ -281,5 +343,56 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
     buckets: cpmResult.buckets,
     excludedTotal: cpmResult.excludedTotal,
     excludedOneOffs: cpmResult.excludedOneOffs,
+    reimbursementsTotal: breakdown.reimbursementsTotal,
+    bridge,
+  };
+}
+
+function buildProfitBridge(
+  settlements: KpiSettlement[],
+  deductions: KpiDeduction[],
+  fuelPurchases: KpiFuel[],
+  maintenanceRecords: KpiMaintenance[],
+  tolls: KpiToll[],
+  reimbursements: KpiReimbursement[],
+  profit: number,
+  fixedCostEstimateInCpm: number
+): ProfitBridge {
+  const netPay = settlements.reduce((sum, s) => sum + Number(s.net ?? 0), 0);
+  // A withheld line already sits inside its settlement's net pay; the ones
+  // that do not reduce profit are added back.
+  const withheld = (d: KpiDeduction) => d.source === 'settlement' && !!d.settlement_id;
+  const nonExpenseLines: ProfitBridgeLine[] = deductions
+    .filter((d) => withheld(d) && !reducesTrueProfit(d) && Number(d.amount ?? 0) !== 0)
+    .map((d) => ({ description: d.description ?? d.category ?? '', category: d.category ?? null, amount: Number(d.amount ?? 0) }));
+  const outOfPocketDeductions = deductions
+    .filter((d) => !withheld(d) && reducesTrueProfit(d))
+    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+  const standaloneFuel = resolveFuelRows(fuelPurchases, deductions)
+    .counted.filter((r) => !r.row.settlement_id)
+    .reduce((sum, r) => sum + r.cost, 0);
+  const maintenance = maintenanceRecords.filter((m) => !m.settlement_id).reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
+  const tollsTotal = tolls.filter((t) => !t.settlement_id).reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  const reimbursementsNotOnSettlement = reimbursements.filter((r) => !r.settlement_id).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+  const explained =
+    netPay +
+    nonExpenseLines.reduce((sum, l) => sum + l.amount, 0) -
+    outOfPocketDeductions -
+    standaloneFuel -
+    maintenance -
+    tollsTotal +
+    reimbursementsNotOnSettlement;
+  const difference = Math.round((profit - explained) * 100) / 100;
+  return {
+    netPay,
+    nonExpenseLines,
+    outOfPocketDeductions,
+    standaloneFuel,
+    maintenance,
+    tolls: tollsTotal,
+    reimbursementsNotOnSettlement,
+    difference: difference === 0 ? 0 : difference,
+    profit,
+    fixedCostEstimateInCpm,
   };
 }

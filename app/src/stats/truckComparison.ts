@@ -65,7 +65,10 @@ export type ComparisonDeduction = {
   description?: string | null;
   truck_id?: string | null;
 };
-export type ComparisonFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null; truck_id?: string | null };
+export type ComparisonFuel = { amount: number | null; discount?: number | null; settlement_id?: string | null; truck_id?: string | null; fuel_type?: string | null; purchase_date?: string | null };
+// A reimbursement has no truck_id — it belongs to its settlement's truck,
+// or to the fleet-level pool when it is not on a settlement.
+export type ComparisonReimbursement = { amount: number | null; settlement_id?: string | null };
 export type ComparisonMaintenance = {
   cost: number | null;
   truck_id?: string | null;
@@ -154,6 +157,7 @@ export function buildTruckComparison(
   fuelPurchases: ComparisonFuel[],
   maintenanceRecords: ComparisonMaintenance[],
   tolls: ComparisonToll[],
+  reimbursements: ComparisonReimbursement[],
   driverPayments: ComparisonDriverPayment[] = [],
   drivers: ComparisonDriver[] = []
 ): TruckComparisonResult {
@@ -168,10 +172,12 @@ export function buildTruckComparison(
   const fleetLevelFuel = fuelPurchases.filter((f) => !f.truck_id);
   const fleetLevelMaintenance = maintenanceRecords.filter((m) => !m.truck_id);
   const fleetLevelTolls = tolls.filter((t) => !t.truck_id);
-  const fleetPool = calcCanonicalCpm(0, 1, fleetLevelDeductions, fleetLevelFuel, fleetLevelMaintenance, fleetLevelTolls, 0);
+  const settlementsById = new Map(settlements.map((s) => [s.id, s]));
+  const reimbursementTruckId = (r: ComparisonReimbursement) => (r.settlement_id ? (settlementsById.get(r.settlement_id)?.truck_id ?? null) : null);
+  const fleetLevelReimbursements = reimbursements.filter((r) => !reimbursementTruckId(r));
+  const fleetPool = calcCanonicalCpm(0, 1, fleetLevelDeductions, fleetLevelFuel, fleetLevelMaintenance, fleetLevelTolls, fleetLevelReimbursements, 0);
   const fleetPoolTotal = fleetPool.buckets.reduce((sum, b) => sum + b.amount, 0);
 
-  const settlementsById = new Map(settlements.map((s) => [s.id, s]));
   const driversById = new Map(drivers.map((d) => [d.id, d]));
   const driverPayByTruck = new Map<string, number>();
   for (const p of driverPayments) {
@@ -203,10 +209,11 @@ export function buildTruckComparison(
     const directFuel = fuelPurchases.filter((f) => f.truck_id === truck.id);
     const directMaintenance = maintenanceRecords.filter((m) => m.truck_id === truck.id);
     const directTolls = tolls.filter((t) => t.truck_id === truck.id);
+    const directReimbursements = reimbursements.filter((r) => reimbursementTruckId(r) === truck.id);
 
     const truckFixedCostTotal = calcTruckCostBasisWeekly(truck, carrierWithholdsLoan).weeklyFixedTotal * truckSettlements.length;
 
-    const direct = calcCanonicalCpm(grossRevenue, milesResult.totalMiles, directDeductions, directFuel, directMaintenance, directTolls, truckFixedCostTotal);
+    const direct = calcCanonicalCpm(grossRevenue, milesResult.totalMiles, directDeductions, directFuel, directMaintenance, directTolls, directReimbursements, truckFixedCostTotal);
     const directTotal = direct.buckets.reduce((sum, b) => sum + b.amount, 0);
     const allocatedExpenses = allocateByMiles(fleetPoolTotal, truckMiles.get(truck.id) ?? 0, realTruckTotalMiles);
     const totalExpenses = directTotal + allocatedExpenses;

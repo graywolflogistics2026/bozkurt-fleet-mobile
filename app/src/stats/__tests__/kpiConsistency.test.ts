@@ -115,7 +115,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       [],
       maintenanceRecords,
       [],
-      'ta',
+      [], 'ta',
       undefined,
       now
     );
@@ -127,6 +127,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -165,6 +166,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: null,
       window: null,
     });
@@ -188,7 +190,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       deductions as unknown as Deduction[],
       [],
       maintenanceRecords,
-      []
+      [], []
     );
     const latestWeek = trend[trend.length - 1];
     expect(latestWeek.weekEnding).toBe('2026-08-08');
@@ -204,6 +206,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: null,
       window: weekWindow,
     });
@@ -229,6 +232,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: null,
       window: null,
     });
@@ -250,6 +254,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: null, // Accountant Package is always fleet-wide (FleetScopeLabel variant="fleetOnly")
       window: { startIso: '2026-01-01', endIso: '2026-12-31' },
     });
@@ -265,7 +270,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
   // `net` for the SAME fleet-wide scope and the SAME 30-day window.
   it('Profit Analysis (buildProfitAnalysis) netIncome matches computeKpis().net for the same fleet-wide 30-day window', () => {
     const now = new Date('2026-08-24T12:00:00Z');
-    const profitAnalysis = buildProfitAnalysis(settlements, [], maintenanceRecords, deductions, windowStartIso(30, now), now, []);
+    const profitAnalysis = buildProfitAnalysis(settlements, [], maintenanceRecords, deductions, [], windowStartIso(30, now), now, []);
 
     const canonical = computeKpis({
       trucks,
@@ -275,6 +280,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: null, // Profit Analysis is always fleet-wide (FleetScopeLabel variant="fleetOnly")
       window: { startIso: '2026-07-25', endIso: '2026-08-24' }, // the same 30-day window windowStartIso(30, now) resolves to
     });
@@ -301,6 +307,7 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });
@@ -336,7 +343,7 @@ describe('DASHBOARD NET PROFIT vs EXPENSES — root-cause fix', () => {
     // This is literally what the OLD calcHeroPeriod() summed over — proves
     // the mechanism that produced the reported bug, not just a claim about
     // it.
-    const bucketedTrend = buildWeeklyTrueProfitTrend([], zeroSettlementDeductions as unknown as Deduction[], [], [], []);
+    const bucketedTrend = buildWeeklyTrueProfitTrend([], zeroSettlementDeductions as unknown as Deduction[], [], [], [], []);
     expect(bucketedTrend).toEqual([]); // zero settlements -> zero buckets, by construction
     const oldMechanismNetProfit = bucketedTrend.reduce((sum, p) => sum + (p.gross - (p.gross - p.net)), 0); // sum over an empty array
     expect(oldMechanismNetProfit).toBe(0);
@@ -363,7 +370,7 @@ describe('DASHBOARD NET PROFIT vs EXPENSES — root-cause fix', () => {
       [],
       [],
       [],
-      null, // "All Trucks" scope
+      [], null, // "All Trucks" scope
       undefined,
       new Date('2026-08-24T12:00:00')
     );
@@ -398,7 +405,7 @@ describe('DASHBOARD NET PROFIT vs EXPENSES — root-cause fix', () => {
       [],
       [],
       [],
-      null,
+      [], null,
       undefined,
       new Date('2026-08-24T12:00:00')
     );
@@ -416,7 +423,7 @@ describe('DASHBOARD NET PROFIT vs EXPENSES — root-cause fix', () => {
     // pass only ADDED `previousKpi`; it never touched how `kpi` itself (or
     // `cpm`/`comparison`/`scopedRow`) is computed, so every existing
     // figure must be unchanged.
-    const dashboard = buildPeriodScopedCpm('yearly', weekEndings, trucks, settlements, [], deductions, [], maintenanceRecords, [], 'ta', undefined, now);
+    const dashboard = buildPeriodScopedCpm('yearly', weekEndings, trucks, settlements, [], deductions, [], maintenanceRecords, [], [], 'ta', undefined, now);
     const scorecard = computeKpis({
       trucks,
       settlements,
@@ -425,6 +432,7 @@ describe('DASHBOARD NET PROFIT vs EXPENSES — root-cause fix', () => {
       fuelPurchases: [],
       maintenanceRecords,
       tolls: [],
+      reimbursements: [],
       truckScope: 'ta',
       window: null,
     });

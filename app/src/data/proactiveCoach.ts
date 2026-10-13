@@ -4,6 +4,7 @@ import { useSettlements } from '@/src/data/settlements';
 import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { useDeductions } from '@/src/data/deductions';
 import { useLoads } from '@/src/data/loads';
 import { useTrucksList } from '@/src/data/trucks';
@@ -55,6 +56,7 @@ export function useProactiveCoach() {
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
+  const reimbursementsQuery = useReimbursements();
   const deductionsQuery = useDeductions();
   const loadsQuery = useLoads();
   const trucksQuery = useTrucksList();
@@ -82,9 +84,10 @@ export function useProactiveCoach() {
         deductionsQuery.data ?? [],
         fuelQuery.data ?? [],
         maintenanceQuery.data ?? [],
-        tollsQuery.data ?? []
+        tollsQuery.data ?? [],
+        reimbursementsQuery.data ?? []
       ),
-    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
+    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]
   );
 
   function rpmFor(s: { gross: number; miles: number } | null): number | null {
@@ -147,10 +150,11 @@ export function useProactiveCoach() {
         fuelPurchases: fuelQuery.data ?? [],
         maintenanceRecords: maintenanceQuery.data ?? [],
         tolls: tollsQuery.data ?? [],
+        reimbursements: reimbursementsQuery.data ?? [],
         truckScope: null,
         window: null,
       }),
-    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data]
+    [trucksQuery.data, settlementsQuery.data, loadsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]
   );
   const latestCpm = latestKpi.cpm;
   const cpmComparisonRpm = trailingAvgRpm ?? latestRpm;

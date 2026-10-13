@@ -1,5 +1,5 @@
 import type { Benchmark } from '@/src/types/db';
-import { canonicalExpenseBreakdown } from '@/src/stats/trueProfit';
+import { canonicalExpenseBreakdown, filterSettlementLinkedRowsToWindow } from '@/src/stats/trueProfit';
 
 // Profit Analysis v1 (PROMPTS.md Session 9a item 11, CLAUDE.md invariant
 // #22 — composed ONLY from the user's own account data, no external
@@ -53,11 +53,21 @@ export type ProfitAnalysisRollup = {
   deductionsCountedTotal: number;
   canonicalFuelExpense: number;
   tollsExpense: number;
+  // Reimbursements offset expenses (golden settlement pass, owner decision
+  // 2026-10-13) — shown as their own "−" line in the reconciliation.
+  reimbursementsTotal: number;
   totalExpenses: number;
 };
 
-type SettlementLike = { week_ending: string; gross: number | null; net: number | null; miles: number | null };
-type FuelLike = { purchase_date: string | null; amount: number | null; discount: number | null };
+type SettlementLike = { id: string; week_ending: string; gross: number | null; net: number | null; miles: number | null };
+type FuelLike = {
+  purchase_date: string | null;
+  amount: number | null;
+  discount: number | null;
+  settlement_id?: string | null;
+  fuel_type?: string | null;
+};
+type ReimbursementLike = { amount: number | null; settlement_id?: string | null; reimb_date?: string | null };
 type MaintenanceLike = { service_date: string | null; cost: number | null };
 type TollLike = { toll_date: string | null; amount: number | null };
 type DeductionLike = {
@@ -66,6 +76,8 @@ type DeductionLike = {
   source?: string | null;
   category?: string | null;
   tax_deductible: boolean | null;
+  settlement_id?: string | null;
+  description?: string | null;
 };
 
 // ONE KPI ENGINE (owner decision, device report: "Profit Analysis shows
@@ -114,6 +126,7 @@ export function buildProfitAnalysis(
   fuelPurchases: FuelLike[],
   maintenanceRecords: MaintenanceLike[],
   deductions: DeductionLike[],
+  reimbursements: ReimbursementLike[],
   startIso: string | null,
   now: Date = new Date(),
   tolls: TollLike[] = []
@@ -130,11 +143,15 @@ export function buildProfitAnalysis(
   const inWindow = settlements.filter((s) => inRange(s.week_ending));
   const revenue = inWindow.reduce((sum, s) => sum + Number(s.gross ?? 0), 0);
   const windowDeductions = deductions.filter((d) => inRange(d.ded_date));
-  const windowFuel = fuelPurchases.filter((f) => inRange(f.purchase_date));
+  // Settlement-linked fuel/reimbursements follow their settlement's week
+  // (same rule as computeKpis()).
+  const inWindowIds = new Set(inWindow.map((s) => s.id));
+  const windowFuel = filterSettlementLinkedRowsToWindow(fuelPurchases, (f) => f.purchase_date, inWindowIds, inRange);
+  const windowReimbursements = filterSettlementLinkedRowsToWindow(reimbursements, (r) => r.reimb_date, inWindowIds, inRange);
   const windowMaintenance = maintenanceRecords.filter((m) => inRange(m.service_date));
   const windowTolls = tolls.filter((t) => inRange(t.toll_date));
 
-  const breakdown = canonicalExpenseBreakdown(windowDeductions, windowFuel, windowMaintenance, windowTolls);
+  const breakdown = canonicalExpenseBreakdown(windowDeductions, windowFuel, windowMaintenance, windowTolls, windowReimbursements);
   const netIncome = revenue - breakdown.total;
   const totalMiles = inWindow.reduce((sum, s) => sum + Number(s.miles ?? 0), 0);
 
@@ -162,6 +179,7 @@ export function buildProfitAnalysis(
     deductionsCountedTotal: breakdown.deductionsTotal,
     canonicalFuelExpense: breakdown.fuelTotal,
     tollsExpense: breakdown.tollsTotal,
+    reimbursementsTotal: breakdown.reimbursementsTotal,
     totalExpenses: breakdown.total,
   };
 }

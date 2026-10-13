@@ -10,6 +10,7 @@ import { useBenchmarks } from '@/src/data/benchmarks';
 import { useTrucksList } from '@/src/data/trucks';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
+import { useReimbursements } from '@/src/data/reimbursements';
 import { useMaintenanceIntervals } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
 import { calcTruckHealth, type HealthOverrides } from '@/src/truck/health';
@@ -59,6 +60,7 @@ export function useAiCoachSummary(): AiCoachSummary {
   // theirs for a multi-truck fleet.
   const allMaintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
+  const reimbursementsQuery = useReimbursements();
 
   const isLoading =
     settlementsQuery.isLoading ||
@@ -76,9 +78,10 @@ export function useAiCoachSummary(): AiCoachSummary {
         deductionsQuery.data ?? [],
         fuelQuery.data ?? [],
         allMaintenanceQuery.data ?? [],
-        tollsQuery.data ?? []
+        tollsQuery.data ?? [],
+        reimbursementsQuery.data ?? []
       ),
-    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, allMaintenanceQuery.data, tollsQuery.data]
+    [settlementsQuery.data, deductionsQuery.data, fuelQuery.data, allMaintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]
   );
   const latestWeek = weeklyTrend[weeklyTrend.length - 1] ?? null;
 
@@ -143,11 +146,12 @@ export function useAiCoachSummary(): AiCoachSummary {
       fuelQuery.data ?? [],
       allMaintenanceQuery.data ?? [],
       deductionsQuery.data ?? [],
+      reimbursementsQuery.data ?? [],
       windowStartIso(30, now),
       now,
       tollsQuery.data ?? []
     );
-  }, [settlementsQuery.data, fuelQuery.data, allMaintenanceQuery.data, deductionsQuery.data, tollsQuery.data]);
+  }, [settlementsQuery.data, fuelQuery.data, allMaintenanceQuery.data, deductionsQuery.data, reimbursementsQuery.data, tollsQuery.data]);
   const fuelBenchmark = useMemo(
     () => (benchmarksQuery.data ?? []).find((b) => b.metric === 'fuel_pct_of_revenue') ?? null,
     [benchmarksQuery.data]

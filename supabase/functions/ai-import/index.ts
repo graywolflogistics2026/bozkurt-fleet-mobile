@@ -320,6 +320,18 @@ const SETTLEMENT_DEDUCTIONS_BEFORE =
 const SETTLEMENT_DEDUCTIONS_AFTER =
   `"deductions":[{"code":"","desc":"","balance":0,"amount":0,"category":"${CATEGORY_ENUM_STRING}","chargebackType":""}]`;
 
+// ---- Approved addition (golden settlement pass, owner decision
+// 2026-10-13): the settlement schema's "operating" object now names the
+// REAL Prime operating-statement lines (WEEKS TOTAL column + the YTD
+// totals the app checks), read from a real 8-page Prime settlement — the
+// old object assumed a weekly "expenses" figure Prime never prints. Kept
+// in sync by hand with app/src/import/types.ts's ExtractedSettlement.
+// operating and app/src/import/primeOperatingStatement.ts. ----
+const OPERATING_SCHEMA_BEFORE =
+  `"operating":{"weekRevenue":0,"weekMiles":0,"weekExpenses":0,"weekNet":0,"ytdRevenue":0,"ytdMiles":0,"ytdExpenses":0,"ytdNet":0,"ltdRevenue":0,"ltdMiles":0,"weeksInService":0}`;
+const OPERATING_SCHEMA_AFTER =
+  `"operating":{"weekMiles":0,"weekRevenueFromPrime":0,"weekExtraPay":0,"weekFuelSurchargeBill":0,"weekReeferFuelSurcharge":0,"weekSafetyIncentive":0,"weekServiceIncentive":0,"weekToll1099Pay":0,"weekTotalRevenue":0,"weekFuelOilTax":0,"weekMiscellaneous":0,"weekTotalVariableCosts":0,"weekTotalFixedCost":0,"weekOtherIncomeAndExpense":0,"weekInterestIncome":0,"weekTotalOperatingExpenses":0,"weekTotalStatement":0,"ytdTotalRevenue":0,"ytdMiles":0,"ytdTotalStatement":0,"weeksInService":0}`;
+
 const APPROVED_ADDITIONS_SUFFIX = `
 APPROVED ADDITION (fuel/IFTA, owner decision 2026-07-03): for docType "fuel", also extract the US state as a 2-letter code (e.g. "TX", "OK") into fuel.state, read from the station's address on the receipt. If the state genuinely cannot be determined, leave fuel.state as "".
 
@@ -436,7 +448,8 @@ function buildExtractionPrompt(
     .replace(CONFIDENCE_MAINTENANCE_BEFORE, CONFIDENCE_MAINTENANCE_AFTER)
     .replace(CONFIDENCE_AMAZON_BEFORE, CONFIDENCE_AMAZON_AFTER)
     .replace(REVENUE_ITEMS_BEFORE, REVENUE_ITEMS_AFTER)
-    .replace(SETTLEMENT_DEDUCTIONS_BEFORE, SETTLEMENT_DEDUCTIONS_AFTER);
+    .replace(SETTLEMENT_DEDUCTIONS_BEFORE, SETTLEMENT_DEDUCTIONS_AFTER)
+    .replace(OPERATING_SCHEMA_BEFORE, OPERATING_SCHEMA_AFTER);
   prompt += APPROVED_ADDITIONS_SUFFIX;
   // DATE HARDENING round 2 (owner decision 2026-07-30): round 1 only
   // caught OBVIOUSLY implausible dates. A carrier-header year/day swap
@@ -532,7 +545,16 @@ function buildExtractionPrompt(
   // gated the identical "ONLY IF confirmed" way, so adding a second
   // carrier's own code map later can never accidentally also trigger
   // Prime-shaped operating-statement expectations against it.
-  prompt += `\nAPPROVED ADDITION (Prime Inc operating statement, carrier-scoped, never applied to any other carrier): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc.") AND the document includes an operating-statement / statement-of-income-and-expense page (commonly prepared by Perryman & Associates), populate settlement.operating from that page's own printed figures: weekRevenue/weekMiles/weekExpenses/weekNet from its WEEKLY column (matching this settlement's own weekEnding), ytdRevenue/ytdMiles/ytdExpenses/ytdNet from its YEAR-TO-DATE column, ltdRevenue/ltdMiles from its LIFE-TO-DATE column if shown, and weeksInService if printed. If the carrier is anything other than Prime Inc, or no such page exists in this document, leave settlement.operating entirely at its zero/empty defaults — do not estimate or reconstruct these figures from anywhere else in the document.\n`;
+  // REAL LAYOUT (golden settlement pass, owner decision 2026-10-13) —
+  // the field list now names Prime's own printed lines; amounts come back
+  // POSITIVE (Prime prints expenses with a trailing minus). The app checks
+  // these at TOTAL level only (app/src/import/primeOperatingStatement.ts).
+  prompt += `\nAPPROVED ADDITION (Prime Inc operating statement, carrier-scoped, never applied to any other carrier): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc.") AND the document includes an OPERATING STATEMENT / "STATEMENT OF INCOME AND EXPENSE" page (commonly prepared by Perryman & Associates; columns WEEKS TOTAL, ACTUAL/MILE, YTD TOTAL, LTD TOTAL), populate settlement.operating from that page's own printed figures. From the WEEKS TOTAL column: weekMiles = MILES; weekRevenueFromPrime = REVENUE FROM PRIME INC.; weekExtraPay = EXTRA PAY; weekFuelSurchargeBill = FUEL SURCG BILL; weekReeferFuelSurcharge = REEF FUEL SURCG; weekSafetyIncentive = SAFETY INC; weekServiceIncentive = SERVICE INC; weekToll1099Pay = TOLL 1099 PAY; weekTotalRevenue = TOTAL REVENUE; weekFuelOilTax = TOTAL FUEL,OIL,TAX; weekMiscellaneous = TOTAL MISCELLANEOUS; weekTotalVariableCosts = TOTAL VARIABLE COSTS; weekTotalFixedCost = TOTAL FIXED COST; weekOtherIncomeAndExpense = TOTAL OTHER INCOME AND EXPENSE; weekInterestIncome = INTEREST INCOME FROM DEPOSIT (the interest Prime paid this week); weekTotalOperatingExpenses = TOTAL OPERATING EXPENSES; weekTotalStatement = TOTAL STATEMENT OF INCOME & EXPENSE. From the YTD TOTAL column: ytdTotalRevenue = TOTAL REVENUE; ytdMiles = MILES; ytdTotalStatement = TOTAL STATEMENT OF INCOME & EXPENSE. weeksInService = WEEKS IN SERVICE from the page header. Return every one of these as a POSITIVE number — this page prints expenses with a trailing minus ("2,899.02-"); drop that minus here. Read only the WEEKS TOTAL column for week* fields, never the ACTUAL/MILE, YTD or LTD columns. A line not printed this week stays 0. If the carrier is anything other than Prime Inc, or no such page exists in this document, leave settlement.operating entirely at its zero/empty defaults — do not estimate or reconstruct these figures from anywhere else in the document.\n`;
+  // TRAILING-MINUS CREDITS (golden settlement pass, owner decision
+  // 2026-10-13, every carrier) — the client also parses "184.85-" as
+  // negative (app/src/import/amount.ts); this asks the model for the
+  // clean number in the first place.
+  prompt += `\nAPPROVED ADDITION (trailing-minus credits, owner decision 2026-10-13, every carrier): settlement statements often print a credit with the minus sign AFTER the number (e.g. "184.85-" on a fuel-discount line). Every settlement amount — deductions[].amount, revenueItems[].amount, reimbursementItems[].amount, and the settlement totals — must be returned as a plain JSON number with the sign in front: a trailing-minus "184.85-" becomes -184.85. Never drop the sign and never return the amount as a string. (Exception: settlement.operating, whose fields are always positive as described above.)\n`;
   return prompt;
 }
 

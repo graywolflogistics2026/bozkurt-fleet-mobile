@@ -153,18 +153,39 @@ export type ExtractedSettlement = {
   // carrier-isolation gate is the settlement's own `carrier` field,
   // checked independently and deterministically after extraction, never
   // trusted from the model's own behavior alone.
+  //
+  // REAL LAYOUT (golden settlement pass, owner decision 2026-10-13 — read
+  // from a real 8-page Prime settlement, pages 5-6, columns WEEKS TOTAL /
+  // ACTUAL-MILE / YTD / LTD): every week* field is the WEEKS TOTAL column,
+  // as a POSITIVE amount (Prime prints expenses with a trailing minus).
+  // src/import/primeOperatingStatement.ts reconciles at TOTAL level only.
   operating?: {
-    weekRevenue?: number;
     weekMiles?: number;
-    weekExpenses?: number;
-    weekNet?: number;
-    ytdRevenue?: number;
+    weekRevenueFromPrime?: number;
+    weekExtraPay?: number;
+    weekFuelSurchargeBill?: number;
+    weekReeferFuelSurcharge?: number;
+    weekSafetyIncentive?: number;
+    weekServiceIncentive?: number;
+    weekToll1099Pay?: number;
+    weekTotalRevenue?: number;
+    weekFuelOilTax?: number;
+    weekMiscellaneous?: number;
+    weekTotalVariableCosts?: number;
+    weekTotalFixedCost?: number;
+    weekOtherIncomeAndExpense?: number;
+    weekInterestIncome?: number;
+    weekTotalOperatingExpenses?: number;
+    weekTotalStatement?: number;
+    ytdTotalRevenue?: number;
     ytdMiles?: number;
-    ytdExpenses?: number;
-    ytdNet?: number;
-    ltdRevenue?: number;
-    ltdMiles?: number;
+    ytdTotalStatement?: number;
     weeksInService?: number;
+    // OLD ASSUMED LAYOUT (before 2026-10-13) — never extracted any more,
+    // read only from settlements imported before then (their stored
+    // parsed_json), for the standing YTD check.
+    ytdRevenue?: number;
+    ytdNet?: number;
   };
 };
 
@@ -334,6 +355,11 @@ export type Extraction = {
   // NEEDS REVIEW convention extends to whole documents, not just line
   // items). Always 'low' for docType 'other' by prompt design.
   confidence?: 'high' | 'low';
+  // Set only by the client when the user saved a settlement whose printed
+  // totals did not add up ("Save anyway, flagged needs-review" —
+  // src/import/settlementReconciliation.ts flagReconciliationOverride()):
+  // the failed checks, kept in documents.parsed_json for the audit trail.
+  reconciliationOverride?: unknown[];
   // AI's best-guess category for an unrecognized-but-clearly-financial
   // document (docType 'other') — never silently guessed into the wrong
   // ledger; shown in the preview and used as the deduction category only

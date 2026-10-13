@@ -76,7 +76,7 @@ describe('calcTrueProfit', () => {
       ded({ id: 'store', amount: 150, source: 'manual', tax_deductible: true }),
     ];
     // 3000 - (500 + 300 + 150) = 2050
-    expect(calcTrueProfit(settlements, deductions)).toBe(2050);
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(2050);
   });
 
   it('never double-counts a withheld chargeback already reflected in settlement.net', () => {
@@ -87,7 +87,7 @@ describe('calcTrueProfit', () => {
     // portion) and ALSO subtracting the withheld row again.
     const settlements = [sett({ gross: 3000, net: 2500 })];
     const deductions = [ded({ id: 'withheld', amount: 500, source: 'settlement', tax_deductible: true })];
-    expect(calcTrueProfit(settlements, deductions)).toBe(2500); // == settlement.net, not 2000
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(2500); // == settlement.net, not 2000
   });
 
   it('excludes a Meal (per diem covered) deduction — non-deductible rows never change profit', () => {
@@ -96,7 +96,7 @@ describe('calcTrueProfit', () => {
       ded({ id: 'fuel', amount: 300, tax_deductible: true }),
       ded({ id: 'meal', amount: 40, category: 'Meals (per diem covered)', tax_deductible: false }),
     ];
-    expect(calcTrueProfit(settlements, deductions)).toBe(2700); // meal excluded entirely
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(2700); // meal excluded entirely
   });
 
   it('excludes an Advance Repayment deduction — never a real expense', () => {
@@ -105,7 +105,7 @@ describe('calcTrueProfit', () => {
       ded({ id: 'fuel', amount: 300, tax_deductible: true }),
       ded({ id: 'advance', amount: 800, category: 'Advance Repayment', tax_deductible: false }),
     ];
-    expect(calcTrueProfit(settlements, deductions)).toBe(2700); // advance repayment excluded entirely
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(2700); // advance repayment excluded entirely
   });
 
   it('excludes an Escrow & Deposits deduction — a refundable deposit, never a real expense (owner decision 2026-08-02)', () => {
@@ -114,7 +114,7 @@ describe('calcTrueProfit', () => {
       ded({ id: 'fuel', amount: 300, tax_deductible: true }),
       ded({ id: 'escrow', amount: 100, source: 'settlement', category: 'Escrow & Deposits', tax_deductible: false }),
     ];
-    expect(calcTrueProfit(settlements, deductions)).toBe(2700); // escrow excluded entirely
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(2700); // escrow excluded entirely
   });
 
   it('a negative-gross-relative settlement still computes correctly, uncapped (never clamped to 0)', () => {
@@ -137,17 +137,17 @@ describe('calcTrueProfit', () => {
     ];
     // 5.16 - 443.56 = -438.4 (only the truly-deductible portion counts —
     // the other 716.95 in withheld rows are excluded non-expenses).
-    expect(calcTrueProfit(settlements, deductions)).toBeCloseTo(-438.4, 2);
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBeCloseTo(-438.4, 2);
   });
 
   it('sums across multiple settlements and deductions', () => {
     const settlements = [sett({ id: 's1', gross: 1000 }), sett({ id: 's2', gross: 2000, week_ending: '2026-07-25' })];
     const deductions = [ded({ amount: 100 }), ded({ amount: 200 })];
-    expect(calcTrueProfit(settlements, deductions)).toBe(2700);
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(2700);
   });
 
   it('is 0 with no settlements and no deductions', () => {
-    expect(calcTrueProfit([], [])).toBe(0);
+    expect(calcTrueProfit([], [], [], [], [], [])).toBe(0);
   });
 });
 
@@ -159,28 +159,34 @@ describe('calcTrueProfit — canonical expense engine (owner decision 2026-08-05
     const maintenance = [{ cost: 300 }];
     const tolls = [{ amount: 50 }];
     // 5000 - 100(ded) - 480(fuel net of discount) - 300(maint) - 50(toll) = 4070
-    expect(calcTrueProfit(settlements, deductions, fuel, maintenance, tolls)).toBe(4070);
+    expect(calcTrueProfit(settlements, deductions, fuel, maintenance, tolls, [])).toBe(4070);
   });
 
-  it('excludes a SETTLEMENT-LINKED fuel purchase (already represented by the settlement\'s own withheld deductions) — no double count', () => {
+  it('excludes a SETTLEMENT-LINKED fuel purchase that a withheld fuel line of the same settlement already covers — no double count', () => {
     const settlements = [sett({ gross: 5000 })];
-    const deductions = [ded({ amount: 100, source: 'settlement', category: 'Fuel & DEF' })];
-    const linkedFuel = [{ amount: 480, discount: 0, settlement_id: 'sett-1' }];
-    // The withheld Fuel & DEF deduction counts (100); the settlement-linked
-    // fuel_purchases row does NOT get added on top of it.
-    expect(calcTrueProfit(settlements, deductions, linkedFuel)).toBe(4900);
+    const deductions = [ded({ amount: 480, source: 'settlement', category: 'Fuel & DEF', settlement_id: 'sett-1', description: 'TRACTOR FUEL' })];
+    const linkedFuel = [{ amount: 480, discount: 0, settlement_id: 'sett-1', fuel_type: 'tractor' }];
+    expect(calcTrueProfit(settlements, deductions, linkedFuel, [], [], [])).toBe(4520);
+  });
+
+  it('PER-ROW GUARD (golden settlement pass): a SETTLEMENT-LINKED fuel row no withheld line covers still counts', () => {
+    const settlements = [sett({ gross: 5000 })];
+    const deductions = [ded({ amount: 100, source: 'settlement', category: 'Fuel & DEF', settlement_id: 'sett-1', description: 'TRACTOR FUEL' })];
+    const linkedFuel = [{ amount: 480, discount: 0, settlement_id: 'sett-1', fuel_type: 'tractor' }];
+    // 100 (the line) + 480 (the fuel row it does not cover).
+    expect(calcTrueProfit(settlements, deductions, linkedFuel, [], [], [])).toBe(4420);
   });
 
   it('a standalone fuel purchase (settlement_id null) with no matching deduction is a real, previously-missed expense', () => {
     const settlements = [sett({ gross: 5000, net: 5000 })];
     const standaloneFuel = [{ amount: 480, discount: 0, settlement_id: null }];
-    expect(calcTrueProfit(settlements, [], standaloneFuel)).toBe(4520);
+    expect(calcTrueProfit(settlements, [], standaloneFuel, [], [], [])).toBe(4520);
   });
 
   it('defaults fuel/maintenance/tolls to empty arrays for backward compatibility', () => {
     const settlements = [sett({ gross: 3000 })];
     const deductions = [ded({ amount: 200 })];
-    expect(calcTrueProfit(settlements, deductions)).toBe(2800);
+    expect(calcTrueProfit(settlements, deductions, [], [], [], [])).toBe(2800);
   });
 });
 
@@ -191,7 +197,7 @@ describe('buildWeeklyTrueProfitTrend', () => {
       ded({ ded_date: '2026-07-15', amount: 300, tax_deductible: true }),
       ded({ ded_date: '2026-07-16', amount: 40, category: 'Meals (per diem covered)', tax_deductible: false }),
     ];
-    const trend = buildWeeklyTrueProfitTrend(settlements, deductions);
+    const trend = buildWeeklyTrueProfitTrend(settlements, deductions, [], [], [], []);
     expect(trend).toEqual([{ weekEnding: '2026-07-18', gross: 3000, net: 2700 }]);
   });
 
@@ -201,7 +207,7 @@ describe('buildWeeklyTrueProfitTrend', () => {
       ded({ ded_date: '2026-07-16', amount: 100 }), // in week 1's window (07-12..07-18)
       ded({ ded_date: '2026-07-23', amount: 200 }), // in week 2's window (07-19..07-25)
     ];
-    const trend = buildWeeklyTrueProfitTrend(settlements, deductions);
+    const trend = buildWeeklyTrueProfitTrend(settlements, deductions, [], [], [], []);
     expect(trend).toEqual([
       { weekEnding: '2026-07-18', gross: 1000, net: 900 },
       { weekEnding: '2026-07-25', gross: 2000, net: 1800 },
@@ -217,18 +223,18 @@ describe('buildWeeklyTrueProfitTrend', () => {
     ];
     const maintenance = [{ service_date: '2026-07-15', cost: 150 }];
     const tolls = [{ toll_date: '2026-07-14', amount: 25 }];
-    const trend = buildWeeklyTrueProfitTrend(settlements, [], fuel, maintenance, tolls);
+    const trend = buildWeeklyTrueProfitTrend(settlements, [], fuel, maintenance, tolls, []);
     // 3000 - 200(fuel, in-window standalone only) - 150(maint) - 25(toll) = 2625
     expect(trend).toEqual([{ weekEnding: '2026-07-18', gross: 3000, net: 2625 }]);
   });
 
   it('sorts ascending by week_ending', () => {
     const settlements = [sett({ week_ending: '2026-07-25', gross: 100 }), sett({ id: 's2', week_ending: '2026-07-18', gross: 200 })];
-    const trend = buildWeeklyTrueProfitTrend(settlements, []);
+    const trend = buildWeeklyTrueProfitTrend(settlements, [], [], [], [], []);
     expect(trend.map((p) => p.weekEnding)).toEqual(['2026-07-18', '2026-07-25']);
   });
 
   it('returns an empty array for no settlements', () => {
-    expect(buildWeeklyTrueProfitTrend([], [])).toEqual([]);
+    expect(buildWeeklyTrueProfitTrend([], [], [], [], [], [])).toEqual([]);
   });
 });
