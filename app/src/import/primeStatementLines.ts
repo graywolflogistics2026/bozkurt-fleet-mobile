@@ -26,7 +26,11 @@ export type StatementReviewReason =
   | 'ot_load_unload_advance'
   | 'out_of_pocket_costs'
   | 'start_up_costs'
-  | 'personal_payment_unmatched';
+  | 'personal_payment_unmatched'
+  // A core self-check could not run: a number it needs was not read.
+  | 'statement_core_missing'
+  // Settlement or statement pages of the PDF were not read.
+  | 'line_items_incomplete';
 
 export type LineTreatment =
   | { kind: 'revenue' }

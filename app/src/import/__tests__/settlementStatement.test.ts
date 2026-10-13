@@ -54,6 +54,9 @@ function primeWeek(extraLines: L[] = [], totals: Record<string, number> = {}, pr
         weekTotalOtherIncomeAndExpense: r(sum('other')),
         weekTotalOperatingExpenses: r(opex),
         weekTotalStatement: r(sum('revenue') + opex),
+        // Prime always prints SETTLEMENT TO OPERATOR — a core self-check
+        // number (owner decision 2026-10-13, amendment 1).
+        settlementToOperator: r(sum('revenue') + opex),
         ...totals,
       },
     },

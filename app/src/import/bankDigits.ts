@@ -5,7 +5,7 @@
 // must never be stored. scrubBankDigits() runs on every extraction before
 // it is saved (documents.parsed_json and every row derived from it):
 // digits that follow a routing/account/ABA label are replaced.
-const BANK_DIGITS_RE = /\b(routing|rtg|aba|account|acct|bank\s+acct)(\s*(?:#|no\.?|number|num)?\s*:?\s*)(\d[\d\s-]{3,}\d)/gi;
+export const BANK_DIGITS_RE = /\b(routing|rtg|aba|account|acct|bank\s+acct)(\s*(?:#|no\.?|number|num)?\s*:?\s*)(\d[\d\s-]{3,}\d)/gi;
 
 export function scrubBankDigitsInText(text: string): string {
   return text.replace(BANK_DIGITS_RE, (_m, label: string, sep: string) => `${label}${sep}[removed]`);

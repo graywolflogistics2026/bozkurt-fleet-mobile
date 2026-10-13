@@ -348,6 +348,14 @@ export type DocType =
   | 'loan_agreement'
   | 'other';
 
+export type ExtractionPageMapEntry = {
+  page: number;
+  kind: string;
+  role: 'content' | 'attachment' | 'stored';
+  status: 'read' | 'failed' | 'unread' | 'pending';
+  cause?: string;
+};
+
 export type Extraction = {
   docType: DocType;
   date?: string;
@@ -369,6 +377,14 @@ export type Extraction = {
   // src/import/settlementReconciliation.ts flagReconciliationOverride()):
   // the failed checks, kept in documents.parsed_json for the audit trail.
   reconciliationOverride?: unknown[];
+  // RESUMABLE IMPORT JOBS (owner decision 2026-10-13): set by ai-import's
+  // page-by-page jobs (supabase/functions/ai-import/jobEngine.ts) — every
+  // page of the PDF with its kind, its role (content / attachment / stored)
+  // and whether it was read; the total page count; and statement totals
+  // two pages read differently (chunking.ts).
+  pageMap?: ExtractionPageMapEntry[];
+  pagesTotal?: number;
+  mergeConflicts?: { path: string; values: number[] }[];
   // AI's best-guess category for an unrecognized-but-clearly-financial
   // document (docType 'other') — never silently guessed into the wrong
   // ledger; shown in the preview and used as the deduction category only

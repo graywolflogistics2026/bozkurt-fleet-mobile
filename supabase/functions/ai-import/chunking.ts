@@ -17,7 +17,7 @@
 // deployment with the RN app's directory); ChunkExtraction below is a
 // minimal, LOCAL shape covering only the fields this module actually
 // reads/writes. Any field this module doesn't know about is preserved
-// unchanged from chunk[0] via the object spread in mergeChunkedExtractions.
+// by mergeChunkedExtractions's generic field-by-field merge.
 
 export type ChunkExtraction = {
   docType?: string;
@@ -79,137 +79,118 @@ export function computeChunkPageRanges(totalPages: number, pagesPerChunk: number
 // model it's seeing only a subset of pages and must leave anything not
 // visible on THESE pages at its normal schema default rather than
 // guessing/reconstructing it (another chunk's own extraction supplies it;
-// see mergeChunkedExtractions()'s "chunk[0] priority" rule below, which
-// relies on this instruction actually being followed).
+// mergeChunkedExtractions() treats a default 0/"" as "not on this
+// page", so a value another page printed always wins).
 export function buildChunkPromptAddendum(range: PageRange, totalPages: number): string {
   return `\n\nIMPORTANT — PARTIAL DOCUMENT: this file contains ONLY pages ${range.start}-${range.end} of a ${totalPages}-page settlement statement (split for processing; you are seeing a subset, not the whole document). Extract whatever sections/line items appear on THESE specific pages using the exact same JSON schema as always. Leave any field that does not appear on these pages at its normal zero/empty default (0, "", or an empty array) — do NOT guess, estimate, or reconstruct a value that isn't visible here, and do NOT repeat a total/summary figure that belongs to a different section of the document. Header/summary fields (weekEnding, printDate, carrier, unit, driverName, grossRevenue, netPay, totalMiles, reimbursements, totalDeductions) usually appear only on the settlement's first page — if that page is not among ${range.start}-${range.end}, leave those fields at their default; a different chunk's own extraction will supply them.`;
 }
 
-function firstNonEmptyString(values: (string | undefined)[]): string | undefined {
-  for (const v of values) if (v) return v;
-  return undefined;
+// A conflict: two pages printed DIFFERENT non-zero values for the same
+// single-valued field (e.g. a statement total read as 1,884.73 on one page
+// and 1,884.37 on the other). The first value is kept; the conflict travels
+// with the merged extraction so the self-check can refuse to trust it.
+export type MergeConflict = { path: string; values: number[] };
+
+// Fields that describe the page split itself, never merged as data.
+const PAGE_META_KEYS = new Set(['pageMap', 'mergeConflicts', 'pagesTotal']);
+
+// Amount-like strings ("1,884.73", "$.37-", "(12.50)") as numbers, for
+// conflict comparison only — the merged value itself is kept as printed.
+function amountOf(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  if (!t) return null;
+  const negative = /^\(.*\)$/.test(t) || /-\s*$/.test(t) || /^-/.test(t);
+  const digits = t.replace(/[()$,\s-]/g, '');
+  if (!/^\d*\.?\d+$/.test(digits)) return null;
+  const n = Number(digits);
+  return Number.isFinite(n) ? (negative ? -n : n) : null;
 }
 
-function concatArrays<T>(arrays: (T[] | undefined)[]): T[] {
-  const out: T[] = [];
-  for (const arr of arrays) if (Array.isArray(arr)) out.push(...arr);
-  return out;
+// A value a page actually printed: a non-zero number or a non-empty string.
+// The schema default (0, "") is what a page returns when the field is not
+// on it, so it never beats a printed value from another page.
+function isMeaningful(v: unknown): boolean {
+  if (typeof v === 'number') return Number.isFinite(v) && v !== 0;
+  if (typeof v === 'string') return v.trim() !== '';
+  return typeof v === 'boolean';
 }
 
-// Header/summary numerics (grossRevenue, totalMiles, ...) use "chunk[0]'s
-// value, full stop" (see mergeChunkedExtractions) rather than this
-// function — a 0 there is very often a legitimate value (e.g. a genuine
-// 0-mile home week) that must never be skipped past in favor of a later
-// chunk's value. This scanner is for LOWER-STAKES numerics that can
-// legitimately live on ANY page (tolls subtotals, the optional
-// "operating" YTD section) — first non-zero across every chunk, falling
-// back to the first merely-defined (possibly 0) value if every chunk is
-// genuinely 0/undefined.
-function firstMeaningfulNumber(values: (number | undefined)[]): number | undefined {
-  for (const v of values) if (v !== undefined && v !== null && v !== 0) return v;
-  for (const v of values) if (v !== undefined && v !== null) return v;
-  return undefined;
-}
-
-function firstTruthyObject<T extends Record<string, unknown>>(objs: (T | undefined)[]): T | undefined {
-  for (const o of objs) {
-    if (o && Object.values(o).some((v) => (Array.isArray(v) ? v.length > 0 : !!v))) return o;
+function mergeValues(values: unknown[], path: string, conflicts: MergeConflict[]): unknown {
+  const defined = values.filter((v) => v !== undefined && v !== null);
+  if (defined.length === 0) return values.find((v) => v !== undefined);
+  // Line-item lists: every page's lines, in page order.
+  if (defined.some(Array.isArray)) {
+    const out: unknown[] = [];
+    for (const v of defined) if (Array.isArray(v)) out.push(...v);
+    return out;
   }
-  return objs.find((o) => o !== undefined);
+  // Nested sections (operating, tolls, assets): merged field by field.
+  if (defined.every((v) => typeof v === 'object')) {
+    const keys: string[] = [];
+    for (const v of defined) for (const k of Object.keys(v as Record<string, unknown>)) if (!keys.includes(k)) keys.push(k);
+    const out: Record<string, unknown> = {};
+    for (const k of keys) {
+      out[k] = mergeValues(defined.map((v) => (v as Record<string, unknown>)[k]), path ? `${path}.${k}` : k, conflicts);
+    }
+    return out;
+  }
+  // Single values: null never beats a number, and a page's default (0 or
+  // "") never beats a value another page printed. A genuine 0 (a home
+  // week's 0 miles) survives because no page printed anything else.
+  const meaningful = defined.filter(isMeaningful);
+  if (meaningful.length === 0) return defined[0];
+  const amounts = meaningful.map(amountOf).filter((n): n is number => n != null);
+  if (amounts.length === meaningful.length && amounts.length > 1) {
+    const distinct = [...new Set(amounts.map((n) => Math.round(n * 100) / 100))];
+    if (distinct.length > 1) conflicts.push({ path, values: distinct });
+  }
+  return meaningful[0];
 }
 
-// Deterministic merge of one settlement extraction per page-chunk (in
-// page order — chunks[0] is always the range starting at page 1) back
-// into a single Extraction-shaped object. Field-by-field rules, chosen so
-// the result is reproducible and never silently drops or duplicates a
-// dollar amount:
-//   - Header/summary SCALARS that are near-universally on page 1
-//     (weekEnding, printDate, carrier, unit, driverName, grossRevenue,
-//     netPay, totalMiles, reimbursements, totalDeductions, loadedMiles):
-//     chunk[0]'s value, unconditionally, for numerics (0 is a legitimate
-//     answer, e.g. a home week — "first non-zero" would wrongly skip past
-//     a correct 0 in favor of a later chunk's erroneous guess); "first
-//     non-empty STRING across all chunks" for text fields, as a safety
-//     net for the rare case the header spans a chunk boundary.
-//   - Line-item ARRAYS (loads, fuel, deductions, maintenance, tolls
-//     items, loans, revenue/reimbursement items): concatenated across
-//     every chunk in page order — safe because chunk page ranges never
-//     overlap, so the same physical line can never appear twice.
-//   - Tolls SUBTOTALS and the optional "operating"/"assets" sections: not
-///    guaranteed to be on page 1, so these scan every chunk for the
-//     first meaningful (non-zero, or non-empty object) value instead of
-//     assuming chunk[0].
-//   - `summary`: every chunk's non-empty summary concatenated (each
-//     chunk only sees part of the document, so its own summary is
-//     necessarily partial) — capped defensively at 2000 chars.
-//   - `confidence`: ALWAYS "low" on a merged (2+ chunk) result,
-//     regardless of what any individual chunk reported — a multi-chunk
-//     merge is inherently more guess-prone than a single coherent read
-//     (a heuristic decides where the header "really" is, array
-//     concatenation assumes clean non-overlapping boundaries, etc.), so
-//     CLAUDE.md's "never silently trust a guess" needs-review machinery
-//     should always see this result before it's saved.
+// Deterministic merge of per-page extractions (in page order; a base
+// extraction, when re-reading pages of a saved document, goes first) into
+// one Extraction-shaped object. Owner decision 2026-10-13 (17-page stall
+// redesign, amendment 5): EVERY field is merged across pages — line-item
+// arrays are joined in page order, single values take the first value a
+// page actually printed (null never beats a number, a default 0/"" never
+// beats a printed value), and two different printed values for the same
+// field are recorded in `mergeConflicts`. This replaces the old rules that
+// took header totals and the deposit from the lowest-numbered page only
+// and the operating statement from the first page that had any of it — a
+// statement printed across two pages lost its second page under those.
+// `summary` joins every page's summary; `confidence` is always "low" for a
+// multi-page merge (the needs-review machinery sees it before it's saved).
 export function mergeChunkedExtractions(chunks: ChunkExtraction[]): ChunkExtraction {
   if (chunks.length === 0) throw new Error('mergeChunkedExtractions: no chunks to merge');
   if (chunks.length === 1) return chunks[0];
 
-  const primary = chunks[0];
+  const conflicts: MergeConflict[] = [];
+  for (const c of chunks) {
+    const prior = c.mergeConflicts;
+    if (Array.isArray(prior)) conflicts.push(...(prior as MergeConflict[]));
+  }
+  const data = chunks.map((c) => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(c)) if (!PAGE_META_KEYS.has(k) && k !== 'summary' && k !== 'confidence') out[k] = v;
+    return out;
+  });
+  const merged = mergeValues(data, '', conflicts) as ChunkExtraction;
   const summary = chunks
     .map((c) => c.summary)
     .filter((s): s is string => !!s)
     .join(' ')
     .slice(0, 2000);
-
-  const merged: ChunkExtraction = {
-    ...primary,
-    date: firstNonEmptyString(chunks.map((c) => c.date)) ?? primary.date,
-    vendor: firstNonEmptyString(chunks.map((c) => c.vendor)) ?? primary.vendor,
-    summary: summary || primary.summary,
-    confidence: 'low',
-    suggestedCategory: firstNonEmptyString(chunks.map((c) => c.suggestedCategory)) ?? primary.suggestedCategory,
-  };
-
-  if (primary.docType === 'settlement') {
-    const settlements = chunks.map((c) => c.settlement).filter((s): s is NonNullable<ChunkExtraction['settlement']> => !!s);
-    const first = settlements[0] ?? {};
-    merged.settlement = {
-      ...first,
-      weekEnding: firstNonEmptyString(settlements.map((s) => s.weekEnding)) ?? first.weekEnding,
-      printDate: firstNonEmptyString(settlements.map((s) => s.printDate)) ?? first.printDate,
-      carrier: firstNonEmptyString(settlements.map((s) => s.carrier)) ?? first.carrier,
-      unit: firstNonEmptyString(settlements.map((s) => s.unit)) ?? first.unit,
-      driverName: firstNonEmptyString(settlements.map((s) => s.driverName)) ?? first.driverName,
-      grossRevenue: first.grossRevenue,
-      reimbursements: first.reimbursements,
-      totalDeductions: first.totalDeductions,
-      netPay: first.netPay,
-      totalMiles: first.totalMiles,
-      loadedMiles: first.loadedMiles,
-      revenueItems: concatArrays(settlements.map((s) => s.revenueItems)),
-      reimbursementItems: concatArrays(settlements.map((s) => s.reimbursementItems)),
-      loads: concatArrays(settlements.map((s) => s.loads)),
-      tractorFuel: concatArrays(settlements.map((s) => s.tractorFuel)),
-      reeferFuel: concatArrays(settlements.map((s) => s.reeferFuel)),
-      deductions: concatArrays(settlements.map((s) => s.deductions)),
-      maintenance: concatArrays(settlements.map((s) => s.maintenance)),
-      tolls: {
-        ezpass: {
-          total: firstMeaningfulNumber(settlements.map((s) => s.tolls?.ezpass?.total)),
-          items: concatArrays(settlements.map((s) => s.tolls?.ezpass?.items)),
-        },
-        drivewyze: {
-          total: firstMeaningfulNumber(settlements.map((s) => s.tolls?.drivewyze?.total)),
-          items: concatArrays(settlements.map((s) => s.tolls?.drivewyze?.items)),
-        },
-      },
-      loans: concatArrays(settlements.map((s) => s.loans)),
-      assets: firstTruthyObject(settlements.map((s) => s.assets)) ?? first.assets,
-      operating: firstTruthyObject(settlements.map((s) => s.operating)) ?? first.operating,
-    };
-  }
-
+  // The first page's docType wins (an attachment page read as part of a
+  // settlement must never turn the whole document into a receipt).
+  merged.docType = chunks.find((c) => !!c.docType)?.docType ?? merged.docType;
+  merged.summary = summary || chunks[0].summary;
+  merged.confidence = 'low';
+  if (conflicts.length > 0) merged.mergeConflicts = conflicts;
   return merged;
 }
+
 
 // GAP-TOLERANT PAGE MERGE (owner decision 2026-08-03, round 4 — "STOP
 // AND SIMPLIFY" + MEASURED EVIDENCE fix. Real per-page Anthropic call

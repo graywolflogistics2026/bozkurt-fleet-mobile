@@ -5,7 +5,7 @@ import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
 import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
-import { isActiveJob, runBatchWithConcurrency, type ImportJob, type ImportJobStatus } from '@/src/import/importJobs';
+import { hasPendingWork, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus } from '@/src/import/importJobs';
 import type { Extraction } from '@/src/import/types';
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
@@ -24,10 +24,22 @@ type ImportJobRow = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  progress?: ImportJobProgress | null;
+  heartbeat_at?: string | null;
+  error_page?: number | null;
+  document_id?: string | null;
 };
 
-const IMPORT_JOB_COLUMNS =
+const IMPORT_JOB_BASE_COLUMNS =
   'id, status, pages_done, pages_total, file_name, media_type, error_message, error_step, created_at, updated_at, completed_at';
+// RESUMABLE IMPORT JOBS (docs/PENDING_SQL.md §78). Before §78 runs these
+// columns don't exist: the select falls back to the base columns.
+const IMPORT_JOB_COLUMNS = `${IMPORT_JOB_BASE_COLUMNS}, progress, heartbeat_at, error_page, document_id`;
+let resumableColumnsMissing = false;
+
+function isUndefinedColumn(error: { code?: string; message?: string } | null): boolean {
+  return !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''));
+}
 
 function mapRow(row: ImportJobRow): ImportJob {
   return {
@@ -42,7 +54,23 @@ function mapRow(row: ImportJobRow): ImportJob {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
+    progress: row.progress ?? null,
+    heartbeatAt: row.heartbeat_at ?? null,
+    errorPage: row.error_page ?? null,
+    documentId: row.document_id ?? null,
   };
+}
+
+async function selectJobs(): Promise<ImportJobRow[]> {
+  if (!resumableColumnsMissing) {
+    const { data, error } = await supabase.from('import_jobs').select(IMPORT_JOB_COLUMNS).order('created_at', { ascending: false });
+    if (!error) return (data ?? []) as ImportJobRow[];
+    if (!isUndefinedColumn(error)) throw error;
+    resumableColumnsMissing = true;
+  }
+  const { data, error } = await supabase.from('import_jobs').select(IMPORT_JOB_BASE_COLUMNS).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ImportJobRow[];
 }
 
 export const IMPORT_JOBS_QUERY_KEY = ['import_jobs'];
@@ -67,18 +95,11 @@ export function useImportJobs() {
   const userId = session?.user.id;
   return useQuery<ImportJob[]>({
     queryKey: IMPORT_JOBS_QUERY_KEY,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('import_jobs')
-        .select(IMPORT_JOB_COLUMNS)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data ?? []).map(mapRow);
-    },
+    queryFn: async () => (await selectJobs()).map(mapRow),
     enabled: !!userId,
     refetchInterval: (query) => {
       const jobs = query.state.data as ImportJob[] | undefined;
-      return (jobs ?? []).some(isActiveJob) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+      return (jobs ?? []).some(hasPendingWork) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
     },
     // Keep polling even while the query "looks" fresh — the whole point
     // is picking up server-side progress the client had no hand in.
@@ -94,9 +115,13 @@ export function useImportJob(jobId: string | null) {
     queryKey: ['import_job', jobId],
     queryFn: async () => {
       if (!jobId) return null;
-      const { data, error } = await supabase.from('import_jobs').select(IMPORT_JOB_COLUMNS).eq('id', jobId).maybeSingle();
+      const { data, error } = await supabase
+        .from('import_jobs')
+        .select(resumableColumnsMissing ? IMPORT_JOB_BASE_COLUMNS : IMPORT_JOB_COLUMNS)
+        .eq('id', jobId)
+        .maybeSingle();
       if (error) throw error;
-      return data ? mapRow(data as ImportJobRow) : null;
+      return data ? mapRow(data as unknown as ImportJobRow) : null;
     },
     enabled: !!jobId,
   });
@@ -287,23 +312,84 @@ export function useStartImportJobsBatch() {
   });
 }
 
-// RETRY (owner decision 2026-08-24, item 5) — reuses the FAILED job's own
-// already-uploaded storage_path server-side; the client never re-reads or
-// re-uploads the file, "never make the user pick it again."
+async function invokeJobMode(body: Record<string, unknown>, fallbackMessage: string): Promise<{ jobId: string }> {
+  const { data, error } = await supabase.functions.invoke('ai-import', { body });
+  if (error) {
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx instanceof Response) {
+      const parsed = await ctx.json().catch(() => null);
+      if (parsed?.error?.message) throw new Error(parsed.error.message as string);
+    }
+    throw new Error(fallbackMessage);
+  }
+  return data as { jobId: string };
+}
+
+// RESUME (owner decision 2026-10-13, replaces 2026-08-24's retry): the SAME
+// job continues from its first page without a stored result — finished
+// pages are never read again and the progress never goes back to 0.
+// `retryFailed` (the user's own "Resume from page N") gives failed pages
+// fresh attempts; the app's automatic restart of an interrupted job passes
+// false. The file is never re-picked or re-uploaded.
+export async function resumeImportJob(jobId: string, retryFailed: boolean): Promise<{ jobId: string }> {
+  return invokeJobMode({ mode: 'resume_job', jobId, retryFailed }, 'Could not resume the import.');
+}
+
 export function useRetryImportJob() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { jobId: string; docHint?: string; locale?: string; customCategories?: string[]; learningRules?: { keyword: string; category: string }[]; carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[] }) => {
-      const { data, error } = await supabase.functions.invoke('ai-import', {
-        body: { mode: 'retry_job', retryJobId: params.jobId, ...params },
-      });
-      if (error) throw new Error(error.message || 'Could not retry the import job.');
-      return data as { jobId: string };
-    },
+    mutationFn: async (params: { jobId: string }) => resumeImportJob(params.jobId, true),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
     },
   });
+}
+
+// "This file has N pages. Read the first 40 now?" — never read silently.
+export function useAnswerImportJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { jobId: string; answer: 'read_first' | 'cancel' }) =>
+      invokeJobMode({ mode: 'answer_job', jobId: params.jobId, answer: params.answer }, 'Could not send your answer.'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+    },
+  });
+}
+
+// "Read the missing pages" / "Read this page" on a saved week: a new job
+// that reads only those pages of the stored PDF; when ready, the week is
+// reviewed and saved again (Save replaces it).
+export function useReadDocumentPages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      documentId: string;
+      pages: number[];
+      locale?: string;
+      customCategories?: string[];
+      learningRules?: { keyword: string; category: string }[];
+      carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
+    }) => invokeJobMode({ mode: 'read_pages', ...params }, 'Could not start reading those pages.'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+    },
+  });
+}
+
+// After Save (privacy, amendment 4): the job's stored extraction is deleted.
+// If attachment pages are still being read, the job keeps only those (the
+// server adds them to the saved week for review when done); otherwise the
+// row is deleted. Before §78 the RPC doesn't exist: plain delete.
+export async function markImportJobSaved(jobId: string, documentId: string | null): Promise<void> {
+  if (documentId) {
+    const { error } = await supabase.rpc('import_job_saved', { p_job_id: jobId, p_document_id: documentId });
+    if (!error) return;
+  }
+  const { error } = await supabase.from('import_jobs').delete().eq('id', jobId);
+  if (!error) return;
+  // Last resort: never leave the extraction behind.
+  await supabase.from('import_jobs').update({ result_json: null }).eq('id', jobId);
 }
 
 // Dismiss a TERMINAL (ready/failed) job from the list — a plain delete;

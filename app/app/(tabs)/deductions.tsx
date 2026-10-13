@@ -11,6 +11,7 @@ import { useDeductions, useDeleteDeduction, useUpdateDeduction } from '@/src/dat
 import { uploadDeductionAttachment } from '@/src/data/deductionAttachment';
 import { useTrucksList } from '@/src/data/trucks';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { IncompleteLineItemsNotice } from '@/src/components/IncompleteLineItemsNotice';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import {
@@ -788,6 +789,7 @@ export default function Deductions() {
           </Pressable>
         </View>
         <FleetScopeLabel />
+        <IncompleteLineItemsNotice />
 
         {needsDescription.length > 0 && (
           <Card style={{ marginBottom: spacing.sm, borderColor: colors.accent, borderWidth: 2 }}>

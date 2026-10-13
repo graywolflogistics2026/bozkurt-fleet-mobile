@@ -20,12 +20,17 @@ const VERIFICATION_COLOR: Record<SettlementVerification, string> = {
   unverified: colors.orange,
 };
 
-export function VerificationBadge({ verification }: { verification: SettlementVerification }) {
+// `incomplete`: settlement or statement pages of the week were not read
+// ("Verified by Prime statement - line items incomplete").
+export function VerificationBadge({ verification, incomplete = false }: { verification: SettlementVerification; incomplete?: boolean }) {
   const { t } = useTranslation();
-  const color = VERIFICATION_COLOR[verification];
+  const color = incomplete && verification === 'verified_prime' ? colors.orange : VERIFICATION_COLOR[verification];
   return (
     <View style={{ alignSelf: 'flex-start', borderColor: color, borderWidth: 1, borderRadius: radii.sm, paddingHorizontal: spacing.xs, marginTop: 2 }}>
-      <Text style={{ color, fontSize: typography.size.xs, fontWeight: '700' }}>{t(`audit.verification.${verification}`)}</Text>
+      <Text style={{ color, fontSize: typography.size.xs, fontWeight: '700' }}>
+        {t(`audit.verification.${verification}`)}
+        {incomplete ? t('audit.verification.lineItemsIncompleteSuffix') : ''}
+      </Text>
     </View>
   );
 }

@@ -42,7 +42,8 @@ import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/
 import { DestinationSummary } from '@/src/components/DestinationSummary';
 import { isSettlementNeedsReview } from '@/src/import/needsReview';
 import { computeSettlementWeekKpi, primeDepositsYtd } from '@/src/stats/settlementWeek';
-import { settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
+import { lineItemsIncomplete, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
+import { WeekPagesSection } from '@/src/components/IncompleteLineItemsNotice';
 import { ShareAuditButton, VerificationBadge } from '@/src/components/ProfitAudit';
 import { useFormatters } from '@/src/i18n/format';
 import {
@@ -658,7 +659,7 @@ export default function Settlements() {
                           breakdown visible at a glance in the list, not just
                           after tapping into the detail sheet. */}
                       <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
-                      <VerificationBadge verification={settlementVerification(x)} />
+                      <VerificationBadge verification={settlementVerification(x)} incomplete={lineItemsIncomplete(x.statement)} />
                       {needsReview && <NeedsReviewChip />}
                       {needsReview && (
                         <MarkReviewedButton onPress={() => handleMarkReviewed(x)} isPending={reviewingId === x.id} />
@@ -697,7 +698,8 @@ export default function Settlements() {
                 </View>
               )}
 
-              <VerificationBadge verification={settlementVerification(selected)} />
+              <VerificationBadge verification={settlementVerification(selected)} incomplete={lineItemsIncomplete(selected.statement)} />
+              <WeekPagesSection settlement={selected} />
               {/* PROFIT IS NEVER THE DEPOSIT (owner decision 2026-10-13, B3):
                   the deposit read from the statement (never computed) and
                   the week's profit, side by side, never the same label. */}

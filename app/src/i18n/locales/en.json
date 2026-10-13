@@ -662,11 +662,12 @@
       "variableCosts": "Fuel + repair + tires + misc = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Variable + out of pocket + fixed + other = TOTAL OPERATING EXPENSES",
       "statementTotal": "Revenue − operating expenses = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = revenue − operating expenses",
       "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
       "grossMatches": "TOTAL REVENUE = settlement gross",
       "milesMatch": "Statement MILES = settlement miles",
-      "requiredTotals": "Revenue, operating expenses and statement totals printed (of 3)"
+      "requiredTotals": "Revenue, operating expenses and statement totals printed (of 3)",
+      "mergeConflict": "The same total was read differently on two pages"
     },
     "primeSection": {
       "revenue": "Revenue",
@@ -677,7 +678,13 @@
       "out_of_pocket": "Out of pocket",
       "fixed": "Fixed",
       "other": "Other"
-    }
+    },
+    "primeCheckCoreMissing": "Statement not verified — a number was not read",
+    "primeCheckCoreMissingBody": "Could not check: {{checks}}. The week will be saved as Unverified, from its line items, and flagged needs-review.",
+    "lineItemsIncompleteTitle": "Line items incomplete",
+    "lineItemsIncompleteBody": "Pages {{pages}} of {{total}} could not be read. If the statement passed its checks, profit comes from the statement; after saving, \"Read the missing pages\" on the week reads just those pages.",
+    "attachmentsStillReading": "{{count}} attachment pages are still being read. You can save now; they'll be offered for review when done.",
+    "unreadPagesBody": "{{count}} pages are kept in the file but not read (pages {{pages}}). After saving you can read any of them from the week's settlement."
   },
   "camera": {
     "permissionNote": "Camera access is needed to photograph receipts and settlement PDFs.",
@@ -2366,7 +2373,9 @@
       "waitingToRetry": "Waiting to retry",
       "ready": "Ready",
       "failed": "Failed",
-      "stranded": "Stuck"
+      "stranded": "Stuck",
+      "interrupted": "Interrupted",
+      "needsDecision": "Needs your answer"
     },
     "waitingToRetryNote": "The AI import service is busy — automatically retrying shortly.",
     "strandedNote": "This import seems stuck and hasn't made progress in a while. Your file is safe — try again.",
@@ -2396,7 +2405,8 @@
       "readyBody": "Tap to review and save.",
       "readyBodyWithDetail": "W/E {{weekEnding}} — {{amount}}. Tap to review and save.",
       "failedTitle": "Import failed",
-      "failedBody": "Tap to see what happened and retry."
+      "failedBody": "Tap to see what happened and retry.",
+      "attachmentsReadyTitle": "Attachments read — review to add them"
     },
     "batchTooManyTitle": "Too many files",
     "batchTooManyMessage": "You can import up to {{max}} files at once — only the first {{max}} were selected.",
@@ -2413,7 +2423,51 @@
     "skipDocument": "Skip",
     "nextDocument": "Next Document",
     "finishReview": "Finish",
-    "reviewAll": "Review All ({{count}})"
+    "reviewAll": "Review All ({{count}})",
+    "pageKind": {
+      "settlement": "settlement",
+      "statement": "operating statement",
+      "toll_bill": "toll bill",
+      "repair_invoice": "repair invoice",
+      "delivery_receipt": "delivery receipt",
+      "fuel_receipt": "fuel receipt",
+      "other": "attachment",
+      "unknown": "document"
+    },
+    "cause": {
+      "timeout": "the AI took longer than {{seconds}} s",
+      "cut_off": "the AI's answer was cut off",
+      "busy": "the AI service was busy",
+      "unreadable": "the AI's answer could not be read",
+      "refused": "the AI declined to read it",
+      "service": "the AI service had an error",
+      "worker_stopped": "the server stopped while reading it"
+    },
+    "failure": {
+      "page": "Page {{page}} of {{total}} ({{kind}}), run {{run}}: {{cause}}."
+    },
+    "progress": {
+      "starting": "Starting · {{elapsed}}",
+      "whole": "Reading all {{total}} pages · {{elapsed}}",
+      "classifying": "Sorting {{total}} pages · {{elapsed}}",
+      "reading": "Reading {{kind}} page {{position}} of {{total}} · {{elapsed}}",
+      "readingWithQueue": "Reading {{kind}} page {{position}} of {{total}} · {{queued}} attachments queued · {{elapsed}}",
+      "attachments": "Ready to review · reading attachments {{done}} of {{total}} · {{elapsed}}",
+      "betweenRuns": "{{done}} of {{total}} pages read · continuing · {{elapsed}}",
+      "waiting": "The AI service is busy — retrying shortly · {{elapsed}}",
+      "question": "This file has {{total}} pages. Read the first {{cap}} now?",
+      "interrupted": "Interrupted at page {{page}}",
+      "interruptedNoPage": "Interrupted",
+      "readyAttachmentsQueued": "Ready to review · {{count}} attachment pages still being read"
+    },
+    "pageCapNote": "Pages after {{cap}} ({{rest}} pages) stay in the file, unread and listed — you can read any of them later.",
+    "readFirst": "Read the first {{cap}}",
+    "dontRead": "Don't read",
+    "interruptedNote": "the pages already read are kept.",
+    "attachmentsStillReading": "{{count}} attachment pages are still being read. You can review and save now; they'll be offered for review when done.",
+    "storedPagesNote": "Kept in the file, not read: pages {{pages}}.",
+    "resumeFromPage": "Resume from page {{page}}",
+    "resume": "Resume"
   },
   "dailyTips": {
     "cardLabel": "Tip of the day",
@@ -2615,7 +2669,8 @@
     "verification": {
       "verified_prime": "Verified by Prime statement",
       "totals_match": "Totals match",
-      "unverified": "Unverified"
+      "unverified": "Unverified",
+      "lineItemsIncompleteSuffix": " - line items incomplete"
     },
     "statusTitle": {
       "counted": "Counted",
@@ -2664,5 +2719,18 @@
       "totals": "Counted {{counted}} − offsets {{offset}} = expenses {{expenses}} (excluded {{excluded}})",
       "profit": "Profit = revenue {{gross}} − expenses {{expenses}} = {{profit}}"
     }
+  },
+  "incompleteWeek": {
+    "title": "This week's line items are incomplete",
+    "weekLine": "Week of {{date}}: pages {{pages}} weren't read.",
+    "readMissing": "Read the missing pages",
+    "startedTitle": "Reading pages",
+    "startedBody": "Reading pages {{pages}}. We'll let you know when they're ready to review.",
+    "failedTitle": "Could not start",
+    "detailTitle": "Line items incomplete",
+    "detailBody": "Pages {{pages}} of {{total}} weren't read, so this week's deductions, fuel, tolls or maintenance rows may be missing some lines.",
+    "unreadBody": "{{count}} pages kept in the file, not read: {{pages}}.",
+    "readThisPage": "Read page {{page}}",
+    "moreUnread": "+ {{count}} more pages"
   }
 }

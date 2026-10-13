@@ -214,6 +214,12 @@ only. Every week carries Verified / Totals match / Unverified. The bank
 deposit is READ from the statement, never computed, and is never labeled
 profit. Full: `docs/decisions/prime-statement-source.md`.
 
+**Import jobs: 150 s, resumable.** Never assume more than the Free-plan
+150 s per Edge Function invocation. Background PDF imports are chains of
+short runs that store each page as it finishes and resume at the first
+unfinished page (`supabase/functions/ai-import/jobEngine.ts`, §78). Full:
+`docs/decisions/settlement-import-chunking.md` ("Resumable jobs").
+
 **Carrier isolation.** A carrier payroll/settlement code ("DH", "BT",
 "AP") means something only at the carrier that issued the statement. Code
 maps (`carrier_code_maps`, global, service_role-written; Prime Inc is the
@@ -1026,6 +1032,9 @@ under each is unchanged original wording.
     is safe either way.
   - §77 settlement statement figures — NOT applied yet (owner runs
     `pending_77.sql`). The client is safe before it runs.
+  - §78 resumable import jobs — NOT applied yet (owner runs
+    `pending_78.sql` BEFORE redeploying ai-import). The client falls back
+    to the old job columns before it runs.
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67.)
 - **Native build**: the owner's device reported "embedded build (no OTA
@@ -1064,7 +1073,8 @@ under each is unchanged original wording.
 - `docs/decisions/usage-limits.md` — AI cost control, usage limits,
   credit packs.
 - `docs/decisions/usage-analytics.md` — privacy-safe analytics (§71).
-- `docs/decisions/settlement-import-chunking.md` — multi-page extraction.
+- `docs/decisions/settlement-import-chunking.md` — multi-page extraction,
+  resumable page-by-page import jobs.
 - `docs/decisions/eas-update-delivery.md` — OTA delivery diagnosis.
 - `docs/decisions/i18n-languages.md` — language picker, AI language.
 - `docs/decisions/ui-conventions.md` — charts, nav registry, build info.

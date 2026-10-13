@@ -59,7 +59,21 @@ export type StatementCheckId =
   | 'directDeposit'
   | 'grossMatches'
   | 'milesMatch'
-  | 'requiredTotals';
+  | 'requiredTotals'
+  // Two pages printed different values for the same statement total
+  // (page-by-page reading, chunking.ts mergeConflicts) — never trusted.
+  | 'mergeConflict';
+
+// CORE SELF-CHECKS (owner decision 2026-10-13, 17-page stall redesign
+// amendment 1): these three can never be skipped. If a number one of them
+// needs was not read, the week is NOT statement-backed (Unverified, line
+// route, needs-review). Only optional checks (miles, escrow, interest) may
+// be skipped when their numbers are missing.
+//   grossMatches         TOTAL REVENUE = the settlement's gross
+//   operatingExpenses    variable + out of pocket + fixed + other = TOTAL OPERATING EXPENSES
+//   settlementToOperator TOTAL REVENUE + TOTAL OPERATING EXPENSES (signed) = SETTLEMENT TO OPERATOR
+export const CORE_STATEMENT_CHECKS = ['grossMatches', 'operatingExpenses', 'settlementToOperator'] as const;
+export type CoreStatementCheck = (typeof CORE_STATEMENT_CHECKS)[number];
 
 export type StatementCheck = { id: StatementCheckId; expected: number; actual: number; passed: boolean };
 
@@ -67,7 +81,12 @@ export type PrimeStatementCheckResult = {
   lines: StatementLine[];
   totals: PrimeStatementTotals;
   checks: StatementCheck[];
+  // Every check that ran passed. A failed check blocks Save (with "Save
+  // anyway, flagged needs-review").
   passed: boolean;
+  // Core checks that could not run because a number they need was not
+  // read. Does not block Save, but the week is not statement-backed.
+  coreMissing: CoreStatementCheck[];
 };
 
 export type DepositSource = 'direct_deposit' | 'settlement_to_operator' | 'net_due';
@@ -98,8 +117,21 @@ export type SettlementStatement = {
   // and the week is never "Verified".
   savedFlagged: boolean;
   // Why this week was flagged needs-review at import (first appearances
-  // of D3/D7 lines, unknown labels, an unmatched personal payment).
+  // of D3/D7 lines, unknown labels, an unmatched personal payment, a core
+  // check that could not run, pages that were not read).
   reviewReasons: { reason: StatementReviewReason; label: string }[];
+  // RESUMABLE IMPORT JOBS (owner decision 2026-10-13): pages of this
+  // week's PDF that were not read. `incomplete` = settlement/statement
+  // pages that failed ("line items incomplete"); `unread` = pages kept in
+  // the stored PDF without being read (attachments past the cap, delivery
+  // receipts, pages past the 40-page cap, attachment pages that failed).
+  pages?: StatementPages | null;
+};
+
+export type StatementPages = {
+  total: number;
+  incomplete: { page: number; kind: string; cause?: string }[];
+  unread: { page: number; kind: string }[];
 };
 
 const DOLLAR_TOLERANCE = 1.0;
@@ -191,17 +223,44 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   if (totals.totalRevenue != null && totals.totalOperatingExpenses != null) {
     add('statementTotal', totals.totalStatement, totals.totalRevenue + totals.totalOperatingExpenses);
   }
-  add('settlementToOperator', totals.settlementToOperator, totals.totalStatement);
+  const revenuePlusExpenses =
+    totals.totalRevenue != null && totals.totalOperatingExpenses != null ? totals.totalRevenue + totals.totalOperatingExpenses : null;
+  add('settlementToOperator', totals.settlementToOperator, totals.totalStatement ?? revenuePlusExpenses);
   add('directDeposit', totals.directDeposit, totals.totalStatement);
   add('grossMatches', totals.totalRevenue, printedTotal(s.grossRevenue));
   add('milesMatch', totals.miles, printedTotal(s.totalMiles), MILES_TOLERANCE);
 
-  // The route needs revenue, total operating expenses and the statement
-  // total actually printed — without them there is nothing to verify.
-  const required = totals.totalRevenue != null && totals.totalOperatingExpenses != null && totals.totalStatement != null;
-  if (!required) checks.push({ id: 'requiredTotals', expected: 3, actual: [totals.totalRevenue, totals.totalOperatingExpenses, totals.totalStatement].filter((v) => v != null).length, passed: false });
+  for (const conflict of coreMergeConflicts(extraction)) {
+    checks.push({ id: 'mergeConflict', expected: round2(conflict.values[0]), actual: round2(conflict.values[1]), passed: false });
+  }
 
-  return { lines, totals, checks, passed: checks.every((c) => c.passed) };
+  // A missing core number no longer blocks Save (it used to, as
+  // 'requiredTotals'): the week is saved on the line route, Unverified and
+  // needs-review (amendment 1).
+  const coreMissing = primeCoreMissing(totals, lines, printedTotal(s.grossRevenue));
+  return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing };
+}
+
+// The core checks (CORE_STATEMENT_CHECKS) that cannot run because a number
+// they need was not read. A block (variable, fixed) counts as read when its
+// printed total or any of its lines was read.
+export function primeCoreMissing(totals: PrimeStatementTotals, lines: StatementLine[], gross: number | null): CoreStatementCheck[] {
+  const has = (section: StatementSection) => lines.some((l) => l.section === section);
+  const variableRead = totals.totalVariableCosts != null || (['fuel_oil_tax', 'repair', 'tires', 'misc'] as StatementSection[]).some(has);
+  const fixedRead = totals.totalFixedCost != null || has('fixed');
+  const missing: CoreStatementCheck[] = [];
+  if (totals.totalRevenue == null || gross == null) missing.push('grossMatches');
+  if (totals.totalOperatingExpenses == null || !variableRead || !fixedRead) missing.push('operatingExpenses');
+  if (totals.settlementToOperator == null || totals.totalRevenue == null || totals.totalOperatingExpenses == null) missing.push('settlementToOperator');
+  return missing;
+}
+
+// Statement totals two pages read differently (chunking.ts mergeConflicts).
+const CORE_CONFLICT_PATH = /^settlement\.(grossRevenue|netPay|totalDeductions|depositAmount|reimbursements|operating\.(week[A-Za-z]+|settlementToOperator|directDeposit))$/;
+function coreMergeConflicts(extraction: Extraction): { path: string; values: number[] }[] {
+  const raw = extraction.mergeConflicts;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((c) => typeof c?.path === 'string' && Array.isArray(c.values) && c.values.length >= 2 && CORE_CONFLICT_PATH.test(c.path));
 }
 
 // Prime's PR (personal payment) reimbursement lines — the R1 offset limit.
@@ -293,20 +352,45 @@ export function statementReviewReasons(
   return reasons;
 }
 
+// Pages that were not read, from the import job's page map
+// (extraction.pageMap, supabase/functions/ai-import/jobEngine.ts).
+export function statementPagesOf(extraction: Extraction): StatementPages | null {
+  const map = extraction.pageMap;
+  if (!Array.isArray(map) || map.length === 0) return null;
+  const incomplete = map
+    .filter((p) => p.role === 'content' && p.status !== 'read')
+    .map((p) => ({ page: p.page, kind: p.kind, ...(p.cause ? { cause: p.cause } : {}) }));
+  const unread = map
+    .filter((p) => p.role === 'stored' || (p.role === 'attachment' && p.status !== 'read'))
+    .map((p) => ({ page: p.page, kind: p.kind }));
+  return { total: extraction.pagesTotal ?? map.length, incomplete, unread };
+}
+
 export function buildSettlementStatement(
   extraction: Extraction,
   options: { savedFlagged: boolean; priorLabelsSeen: Set<string> }
 ): SettlementStatement {
   const prime = buildPrimeStatementCheck(extraction);
   const prTotal = prReimbursementTotal(extraction);
+  const pages = statementPagesOf(extraction);
+  const reviewReasons: SettlementStatement['reviewReasons'] =
+    prime && prime.passed ? statementReviewReasons(prime.lines, prTotal, options.priorLabelsSeen) : [];
+  if (prime && prime.coreMissing.length > 0) reviewReasons.push({ reason: 'statement_core_missing', label: prime.coreMissing.join(', ') });
+  if (pages && pages.incomplete.length > 0) reviewReasons.push({ reason: 'line_items_incomplete', label: pages.incomplete.map((p) => p.page).join(', ') });
   return {
     version: 1,
     source: prime ? 'prime_statement' : 'printed_totals',
     printed: printedTotalsOf(extraction),
     prime: prime ? { ...prime, prReimbursementTotal: round2(prTotal) } : null,
     savedFlagged: options.savedFlagged,
-    reviewReasons: prime && prime.passed ? statementReviewReasons(prime.lines, prTotal, options.priorLabelsSeen) : [],
+    reviewReasons,
+    pages,
   };
+}
+
+// Settlement or statement pages of this week were not read.
+export function lineItemsIncomplete(statement: SettlementStatement | null | undefined): boolean {
+  return (statement?.pages?.incomplete?.length ?? 0) > 0;
 }
 
 // Normalized labels with a non-zero amount on a stored statement — the
@@ -323,7 +407,12 @@ export type SettlementVerification = 'verified_prime' | 'totals_match' | 'unveri
 // The Prime route: a Prime statement page was extracted, its self-check
 // passed, and the week was not saved past a failing check.
 export function isStatementBacked(statement: SettlementStatement | null | undefined): boolean {
-  return !!statement && statement.source === 'prime_statement' && !!statement.prime?.passed && !statement.savedFlagged;
+  if (!statement || statement.source !== 'prime_statement' || !statement.prime?.passed || statement.savedFlagged) return false;
+  // Core checks can never be skipped (amendment 1). Statements saved before
+  // coreMissing existed are re-derived from their stored totals.
+  const coreMissing =
+    statement.prime.coreMissing ?? primeCoreMissing(statement.prime.totals, statement.prime.lines, statement.printed?.grossRevenue ?? null);
+  return coreMissing.length === 0;
 }
 
 // "Totals match": gross, total deductions and net due printed, and

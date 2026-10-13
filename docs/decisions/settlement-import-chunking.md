@@ -3,6 +3,9 @@
 > Multi-page settlement extraction: chunking rounds 1-5 (owner decisions 2026-08-02 to 2026-08-04).
 > Ended with single call as the default, based on measured evidence.
 > Read before touching multi-page import or page caps.
+> **Superseded for background (PDF) imports by "Resumable jobs" at the end
+> of this file (owner decision 2026-10-13).** The rounds below remain the
+> history and still describe the synchronous photo path.
 
 Moved verbatim from CLAUDE.md on 2026-10-13 (original file order).
 
@@ -474,3 +477,59 @@ Moved verbatim from CLAUDE.md on 2026-10-13 (original file order).
   and still passing — it operates purely on the final merged extraction's
   own fields, independent of however many pages/retries/gaps produced it,
   so it needed no changes to keep blocking an incomplete save correctly.
+
+## Resumable jobs — the 17-page stall redesign (owner decisions 2026-10-13)
+
+**Symptom.** A 17-page Prime PDF stalled at "Page 2 of 17" four times. The
+background job (2026-08-24 design) spent 120 s on a whole-document call that
+could not finish, read pages in the leftover seconds, and Supabase stopped
+the worker at its **150 s Free-plan wall clock** (400 s on paid plans; the
+org is Free). Nothing ran after that, so the job was never marked failed;
+every retry reset `pages_done` and started from page 1. The 240 s
+`JOB_HARD_BUDGET_MS` had never been verified.
+
+**Design (approved A–H, decisions B/C/D/G, amendments 1–7, scale add-on).**
+Code: `supabase/functions/ai-import/jobEngine.ts` (pure decision logic,
+Jest-tested), `index.ts` (real Anthropic, pdf-lib, Supabase). SQL: §78.
+
+| Rule | How |
+|---|---|
+| One documented constant | `FREE_PLAN_WALL_CLOCK_MS = 150 s` (env `AI_IMPORT_WALL_CLOCK_MS` only as a plan setting). A model call starts only if elapsed + its timeout + 15 s <= 140 s; the worker exits by 130 s. No call gets more than 100 s. |
+| No doomed whole-document call (B) | Whole document only for <= 8 pages and <= 8 MB, timeout 100 s. If it times out, the page plan continues in a NEW invocation. |
+| A job is a chain of runs | Each run claims a lease (`import_job_claim`, lease = wall clock + 5 s), does what fits, saves, releases, and asks for the next run (mode `continue_job`, service key only). The app restarts a job whose heartbeat is 3 minutes old (backup). |
+| Resume, never restart | Each page's result is written as it finishes (`import_job_put_page`, atomic, never overwrites a finished page). Resume starts at the first page without a result; `pages_done` never goes back. A page left "in flight" by a stopped worker counts one attempt (`worker_stopped`); 2 attempts per page. |
+| Heartbeat | Every page start/finish and every 20 s during a call. No heartbeat for 2 minutes = "Interrupted at page N — Resume from page N" (replaces the 10-minute "Stuck"). |
+| Classification (C), advisory | A cheap call (`AI_IMPORT_CLASSIFY_MODEL`, default claude-haiku-5-5) in windows of at most 20 pages / 8 MB, from page 1, extended only until the statement boundary (TOTAL CASH FLOW) is found. Carrier gate unchanged: a null/unknown carrier never selects the Prime layout. Logged as `ai_import_classify` (cost only). If it fails: physical order. |
+| Prime layout (D) | Pages 1..boundary always read, physical order ("content"; blocks ready). After it: toll bills and repair invoices read last, in the background, max 12 ("attachment"; never block); delivery receipts, other pages and pages past the classified window stay in the stored PDF unread ("stored"), listed with "Read this page". |
+| No boundary | Physical order, one page per call, at most 40 pages; above that the job asks "This file has N pages. Read the first 40 now?" (status `needs_decision`). Unread pages listed. |
+| Hard limits | 10 MB and 150 pages per import, refused at start with a way forward (`checkImportLimits`). |
+| Merge per field (amendment 5) | `mergeChunkedExtractions`: arrays joined in page order; single values take the first printed value (a default 0/"" never beats a printed number); two different printed values are recorded in `mergeConflicts` and fail the statement self-check (`mergeConflict`). The lowest-page and first-page-wins rules are gone. |
+| Core self-checks (amendment 1) | gross = TOTAL REVENUE, operating-expenses chain, revenue + operating expenses = SETTLEMENT TO OPERATOR. A missing core number: not statement-backed (Unverified, line route, needs-review `statement_core_missing`), Save not blocked. Only miles/escrow/interest may be skipped. |
+| Partial save (G) | Statement passed + settlement pages failed: saved from the statement, "Verified by Prime statement - line items incomplete", needs-review `line_items_incomplete`; Deductions/Fuel/Tolls/Maintenance show a notice with "Read the missing pages" (mode `read_pages`, reads only those pages, the result is reviewed and saved again — Save replaces the week). Pages kept unread are in `settlements.statement.pages`. |
+| Privacy (amendment 4) | Bank digits scrubbed at write time on the server (`bankDigits.ts`, parity-tested with the app copy) for page results, result_json, error text; documents.parsed_json scrubbed by the app before insert. After Save the job row is deleted (`import_job_saved`), or keeps only attachment pages still being read. |
+| Allowance | One import counts once (`ai_import` at ready), whatever the page count; failures never count; re-reading pages logs `ai_import_pages` (not counted). Credits for a chained run: `consume_ai_import_credit_for` (service key only). |
+| Memory | The whole file is base64-encoded only for a whole-document call; otherwise one window or one page at a time. Stored pages are never downloaded separately. |
+
+**Scale matrix** (`app/src/import/__tests__/jobEngineScale.test.ts`; times
+and memory are ESTIMATES from assumed per-page durations — settlement 35 s,
+statement 45 s, toll bill 80 s, repair invoice 40 s, classification 4 s +
+1.5 s/page — and a pdf-lib factor of 2x file size; counts follow from code):
+
+| Scenario | Ready to review | All done | Runs | Calls whole/classify/content/attachment | Stored unread | Peak memory |
+|---|---|---|---|---|---|---|
+| 8 pages, whole document | 1:25 | 1:25 | 1 | 1/0/0/0 | 0 | 7 MB |
+| 8 pages, whole document times out | 3:53 | 5:13 | 3 | 1/1/6/2 | 0 | 7 MB |
+| 17 pages, Prime (6 + 11) | 2:26 | 7:08 | 4 | 0/1/6/8 | 3 | 29 MB |
+| 30 pages, Prime | 2:30 | 7:52 | 4 | 0/1/6/10 | 14 | 44 MB |
+| 30 pages, unknown carrier | 9:24 | 9:24 | 6 | 0/1/30/0 | 0 | 8 MB |
+| 60 pages, Prime | 2:30 | 7:52 | 4 | 0/1/6/10 | 44 | 36 MB |
+| 60 pages, Prime, statement on 24-25 | 8:57 | 15:10 | 8 | 0/2/25/12 | 25 | 38 MB |
+| 150 pages, Prime | 2:30 | 7:52 | 4 | 0/1/6/10 | 134 | 32 MB |
+| 150 pages, unknown carrier, read first 40 | 12:25 | 12:25 | 8 | 0/1/40/0 | 110 | 29 MB |
+| 200 pages | refused at start | — | 0 | 0 | — | — |
+
+Not verified here: real Anthropic durations with the new prompts, pdf-lib
+CPU time per run on a 10 MB file against Supabase's per-request CPU limit,
+the self-invoke through the gateway with the service key, and the
+classification model id. The app's 3-minute restart covers a lost
+self-invoke while the app is open.

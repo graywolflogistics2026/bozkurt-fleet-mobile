@@ -667,11 +667,12 @@
       "variableCosts": "ईंधन + मरम्मत + टायर + विविध = TOTAL VARIABLE COSTS",
       "operatingExpenses": "परिवर्तनीय + जेब से + स्थिर + अन्य = TOTAL OPERATING EXPENSES",
       "statementTotal": "राजस्व − परिचालन व्यय = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = revenue − operating expenses",
       "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
       "grossMatches": "TOTAL REVENUE = settlement सकल",
       "milesMatch": "स्टेटमेंट MILES = settlement मील",
-      "requiredTotals": "राजस्व, परिचालन व्यय और स्टेटमेंट योग छपे (3 में से)"
+      "requiredTotals": "राजस्व, परिचालन व्यय और स्टेटमेंट योग छपे (3 में से)",
+      "mergeConflict": "The same total was read differently on two pages"
     },
     "primeSection": {
       "revenue": "राजस्व",
@@ -682,7 +683,13 @@
       "out_of_pocket": "जेब से",
       "fixed": "स्थिर",
       "other": "अन्य"
-    }
+    },
+    "primeCheckCoreMissing": "Statement not verified — a number was not read",
+    "primeCheckCoreMissingBody": "Could not check: {{checks}}. The week will be saved as Unverified, from its line items, and flagged needs-review.",
+    "lineItemsIncompleteTitle": "Line items incomplete",
+    "lineItemsIncompleteBody": "Pages {{pages}} of {{total}} could not be read. If the statement passed its checks, profit comes from the statement; after saving, \"Read the missing pages\" on the week reads just those pages.",
+    "attachmentsStillReading": "{{count}} attachment pages are still being read. You can save now; they'll be offered for review when done.",
+    "unreadPagesBody": "{{count}} pages are kept in the file but not read (pages {{pages}}). After saving you can read any of them from the week's settlement."
   },
   "camera": {
     "permissionNote": "रसीदों और settlement PDF की फोटो लेने के लिए कैमरा एक्सेस आवश्यक है।",
@@ -2309,7 +2316,9 @@
       "waitingToRetry": "पुनः प्रयास की प्रतीक्षा में",
       "ready": "तैयार",
       "failed": "विफल",
-      "stranded": "अटका हुआ"
+      "stranded": "अटका हुआ",
+      "interrupted": "Interrupted",
+      "needsDecision": "Needs your answer"
     },
     "waitingToRetryNote": "AI आयात सेवा व्यस्त है — जल्द ही स्वचालित रूप से पुनः प्रयास किया जा रहा है।",
     "strandedNote": "यह आयात अटका हुआ लगता है और कुछ समय से कोई प्रगति नहीं हुई है। आपकी फ़ाइल सुरक्षित है — पुनः प्रयास करें।",
@@ -2339,7 +2348,8 @@
       "readyBody": "समीक्षा करने और सहेजने के लिए टैप करें।",
       "readyBodyWithDetail": "W/E {{weekEnding}} — {{amount}}। समीक्षा करने और सहेजने के लिए टैप करें।",
       "failedTitle": "आयात विफल",
-      "failedBody": "क्या हुआ यह देखने और पुनः प्रयास करने के लिए टैप करें।"
+      "failedBody": "क्या हुआ यह देखने और पुनः प्रयास करने के लिए टैप करें।",
+      "attachmentsReadyTitle": "Attachments read — review to add them"
     },
     "batchTooManyTitle": "बहुत सारी फ़ाइलें",
     "batchTooManyMessage": "आप एक बार में {{max}} तक फ़ाइलें आयात कर सकते हैं — केवल पहली {{max}} चुनी गईं।",
@@ -2356,7 +2366,51 @@
     "skipDocument": "छोड़ें",
     "nextDocument": "अगला दस्तावेज़",
     "finishReview": "समाप्त",
-    "reviewAll": "सभी की समीक्षा करें ({{count}})"
+    "reviewAll": "सभी की समीक्षा करें ({{count}})",
+    "pageKind": {
+      "settlement": "settlement",
+      "statement": "operating statement",
+      "toll_bill": "toll bill",
+      "repair_invoice": "repair invoice",
+      "delivery_receipt": "delivery receipt",
+      "fuel_receipt": "fuel receipt",
+      "other": "attachment",
+      "unknown": "document"
+    },
+    "cause": {
+      "timeout": "the AI took longer than {{seconds}} s",
+      "cut_off": "the AI's answer was cut off",
+      "busy": "the AI service was busy",
+      "unreadable": "the AI's answer could not be read",
+      "refused": "the AI declined to read it",
+      "service": "the AI service had an error",
+      "worker_stopped": "the server stopped while reading it"
+    },
+    "failure": {
+      "page": "Page {{page}} of {{total}} ({{kind}}), run {{run}}: {{cause}}."
+    },
+    "progress": {
+      "starting": "Starting · {{elapsed}}",
+      "whole": "Reading all {{total}} pages · {{elapsed}}",
+      "classifying": "Sorting {{total}} pages · {{elapsed}}",
+      "reading": "Reading {{kind}} page {{position}} of {{total}} · {{elapsed}}",
+      "readingWithQueue": "Reading {{kind}} page {{position}} of {{total}} · {{queued}} attachments queued · {{elapsed}}",
+      "attachments": "Ready to review · reading attachments {{done}} of {{total}} · {{elapsed}}",
+      "betweenRuns": "{{done}} of {{total}} pages read · continuing · {{elapsed}}",
+      "waiting": "The AI service is busy — retrying shortly · {{elapsed}}",
+      "question": "This file has {{total}} pages. Read the first {{cap}} now?",
+      "interrupted": "Interrupted at page {{page}}",
+      "interruptedNoPage": "Interrupted",
+      "readyAttachmentsQueued": "Ready to review · {{count}} attachment pages still being read"
+    },
+    "pageCapNote": "Pages after {{cap}} ({{rest}} pages) stay in the file, unread and listed — you can read any of them later.",
+    "readFirst": "Read the first {{cap}}",
+    "dontRead": "Don't read",
+    "interruptedNote": "the pages already read are kept.",
+    "attachmentsStillReading": "{{count}} attachment pages are still being read. You can review and save now; they'll be offered for review when done.",
+    "storedPagesNote": "Kept in the file, not read: pages {{pages}}.",
+    "resumeFromPage": "Resume from page {{page}}",
+    "resume": "Resume"
   },
   "fleetScope": {
     "showingAllTrucks": "दिखा रहे हैं: सभी ट्रक",
@@ -2615,7 +2669,8 @@
     "verification": {
       "verified_prime": "Prime स्टेटमेंट से सत्यापित",
       "totals_match": "योग मेल खाते हैं",
-      "unverified": "असत्यापित"
+      "unverified": "असत्यापित",
+      "lineItemsIncompleteSuffix": " - line items incomplete"
     },
     "statusTitle": {
       "counted": "गिना गया",
@@ -2664,5 +2719,18 @@
       "totals": "गिना गया {{counted}} − समायोजन {{offset}} = खर्च {{expenses}} (बाहर {{excluded}})",
       "profit": "लाभ = राजस्व {{gross}} − खर्च {{expenses}} = {{profit}}"
     }
+  },
+  "incompleteWeek": {
+    "title": "This week's line items are incomplete",
+    "weekLine": "Week of {{date}}: pages {{pages}} weren't read.",
+    "readMissing": "Read the missing pages",
+    "startedTitle": "Reading pages",
+    "startedBody": "Reading pages {{pages}}. We'll let you know when they're ready to review.",
+    "failedTitle": "Could not start",
+    "detailTitle": "Line items incomplete",
+    "detailBody": "Pages {{pages}} of {{total}} weren't read, so this week's deductions, fuel, tolls or maintenance rows may be missing some lines.",
+    "unreadBody": "{{count}} pages kept in the file, not read: {{pages}}.",
+    "readThisPage": "Read page {{page}}",
+    "moreUnread": "+ {{count}} more pages"
   }
 }

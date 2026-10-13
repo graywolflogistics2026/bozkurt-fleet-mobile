@@ -662,11 +662,12 @@
       "variableCosts": "الوقود + الإصلاح + الإطارات + المتنوع = TOTAL VARIABLE COSTS",
       "operatingExpenses": "المتغيرة + الشخصية + الثابتة + الأخرى = TOTAL OPERATING EXPENSES",
       "statementTotal": "الإيراد − مصروفات التشغيل = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = الإيرادات − مصروفات التشغيل",
       "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
       "grossMatches": "TOTAL REVENUE = إجمالي settlement",
       "milesMatch": "MILES في الكشف = أميال settlement",
-      "requiredTotals": "مجاميع الإيراد ومصروفات التشغيل والكشف مطبوعة (من 3)"
+      "requiredTotals": "مجاميع الإيراد ومصروفات التشغيل والكشف مطبوعة (من 3)",
+      "mergeConflict": "قُرئ الإجمالي نفسه بشكل مختلف في صفحتين"
     },
     "primeSection": {
       "revenue": "الإيراد",
@@ -677,7 +678,13 @@
       "out_of_pocket": "من الجيب",
       "fixed": "ثابت",
       "other": "أخرى"
-    }
+    },
+    "primeCheckCoreMissing": "الكشف غير موثّق — لم يُقرأ أحد الأرقام",
+    "primeCheckCoreMissingBody": "تعذّر التحقق: {{checks}}. سيُحفظ الأسبوع كـ«غير موثّق» من بنوده ويُعلَّم للمراجعة.",
+    "lineItemsIncompleteTitle": "البنود غير مكتملة",
+    "lineItemsIncompleteBody": "تعذّرت قراءة الصفحات {{pages}} من {{total}}. إذا اجتاز الكشف فحوصه فالربح يأتي من الكشف؛ وبعد الحفظ يقرأ «اقرأ الصفحات الناقصة» في الأسبوع هذه الصفحات فقط.",
+    "attachmentsStillReading": "لا تزال {{count}} صفحات مرفقة قيد القراءة. يمكنك الحفظ الآن؛ وستُعرض عليك للمراجعة عند الانتهاء.",
+    "unreadPagesBody": "{{count}} صفحات محفوظة في الملف ولم تُقرأ (الصفحات {{pages}}). بعد الحفظ يمكنك قراءة أي منها من settlement الأسبوع."
   },
   "camera": {
     "permissionNote": "يلزم الوصول إلى الكاميرا لتصوير الإيصالات وملفات PDF لـ Settlements.",
@@ -2309,7 +2316,9 @@
       "waitingToRetry": "في انتظار إعادة المحاولة",
       "ready": "جاهز",
       "failed": "فشل",
-      "stranded": "عالق"
+      "stranded": "عالق",
+      "interrupted": "متوقفة",
+      "needsDecision": "بحاجة إلى ردك"
     },
     "waitingToRetryNote": "خدمة الاستيراد بالذكاء الاصطناعي مشغولة حاليًا — ستتم إعادة المحاولة تلقائيًا قريبًا.",
     "strandedNote": "يبدو أن هذا الاستيراد عالق ولم يحرز أي تقدم منذ فترة. ملفك آمن — حاول مرة أخرى.",
@@ -2339,7 +2348,8 @@
       "readyBody": "اضغط للمراجعة والحفظ.",
       "readyBodyWithDetail": "الأسبوع المنتهي {{weekEnding}} — {{amount}}. اضغط للمراجعة والحفظ.",
       "failedTitle": "فشل الاستيراد",
-      "failedBody": "اضغط لمعرفة ما حدث وإعادة المحاولة."
+      "failedBody": "اضغط لمعرفة ما حدث وإعادة المحاولة.",
+      "attachmentsReadyTitle": "تمت قراءة المرفقات — راجعها لإضافتها"
     },
     "batchTooManyTitle": "عدد كبير جدًا من الملفات",
     "batchTooManyMessage": "يمكنك استيراد حتى {{max}} ملفات دفعة واحدة — تم اختيار أول {{max}} فقط.",
@@ -2356,7 +2366,51 @@
     "skipDocument": "تخطّي",
     "nextDocument": "المستند التالي",
     "finishReview": "إنهاء",
-    "reviewAll": "مراجعة الكل ({{count}})"
+    "reviewAll": "مراجعة الكل ({{count}})",
+    "pageKind": {
+      "settlement": "settlement",
+      "statement": "كشف التشغيل",
+      "toll_bill": "فاتورة رسوم الطرق",
+      "repair_invoice": "فاتورة إصلاح",
+      "delivery_receipt": "إيصال تسليم",
+      "fuel_receipt": "إيصال وقود",
+      "other": "مرفق",
+      "unknown": "المستند"
+    },
+    "cause": {
+      "timeout": "استغرق الذكاء الاصطناعي أكثر من {{seconds}} ث",
+      "cut_off": "انقطعت إجابة الذكاء الاصطناعي",
+      "busy": "كانت خدمة الذكاء الاصطناعي مشغولة",
+      "unreadable": "تعذّرت قراءة إجابة الذكاء الاصطناعي",
+      "refused": "رفض الذكاء الاصطناعي قراءتها",
+      "service": "حدث خطأ في خدمة الذكاء الاصطناعي",
+      "worker_stopped": "توقف الخادم أثناء قراءتها"
+    },
+    "failure": {
+      "page": "الصفحة {{page}} من {{total}} ({{kind}})، الجولة {{run}}: {{cause}}."
+    },
+    "progress": {
+      "starting": "جارٍ البدء · {{elapsed}}",
+      "whole": "قراءة جميع الصفحات وعددها {{total}} · {{elapsed}}",
+      "classifying": "فرز {{total}} صفحة · {{elapsed}}",
+      "reading": "قراءة صفحة {{kind}} {{position}} من {{total}} · {{elapsed}}",
+      "readingWithQueue": "قراءة صفحة {{kind}} {{position}} من {{total}} · {{queued}} مرفقات في الانتظار · {{elapsed}}",
+      "attachments": "جاهزة للمراجعة · قراءة المرفقات {{done}} من {{total}} · {{elapsed}}",
+      "betweenRuns": "تمت قراءة {{done}} من {{total}} صفحة · جارٍ المتابعة · {{elapsed}}",
+      "waiting": "خدمة الذكاء الاصطناعي مشغولة — ستُعاد المحاولة قريبًا · {{elapsed}}",
+      "question": "يحتوي هذا الملف على {{total}} صفحة. هل تريد قراءة أول {{cap}} الآن؟",
+      "interrupted": "توقفت عند الصفحة {{page}}",
+      "interruptedNoPage": "متوقفة",
+      "readyAttachmentsQueued": "جاهزة للمراجعة · لا تزال {{count}} صفحات مرفقة قيد القراءة"
+    },
+    "pageCapNote": "تبقى الصفحات بعد {{cap}} ({{rest}} صفحة) في الملف دون قراءة ومدرجة — يمكنك قراءة أي منها لاحقًا.",
+    "readFirst": "اقرأ أول {{cap}}",
+    "dontRead": "لا تقرأ",
+    "interruptedNote": "الصفحات المقروءة محفوظة.",
+    "attachmentsStillReading": "لا تزال {{count}} صفحات مرفقة قيد القراءة. يمكنك المراجعة والحفظ الآن؛ وستُعرض عليك للمراجعة عند الانتهاء.",
+    "storedPagesNote": "محفوظة في الملف ولم تُقرأ: الصفحات {{pages}}.",
+    "resumeFromPage": "استئناف من الصفحة {{page}}",
+    "resume": "استئناف"
   },
   "fleetScope": {
     "showingAllTrucks": "عرض: جميع الشاحنات",
@@ -2615,7 +2669,8 @@
     "verification": {
       "verified_prime": "موثّق بكشف Prime",
       "totals_match": "المجاميع متطابقة",
-      "unverified": "غير موثّق"
+      "unverified": "غير موثّق",
+      "lineItemsIncompleteSuffix": " - البنود غير مكتملة"
     },
     "statusTitle": {
       "counted": "محسوب",
@@ -2664,5 +2719,18 @@
       "totals": "المحسوب {{counted}} − المقاصات {{offset}} = المصروفات {{expenses}} (المستبعد {{excluded}})",
       "profit": "الربح = الإيراد {{gross}} − المصروفات {{expenses}} = {{profit}}"
     }
+  },
+  "incompleteWeek": {
+    "title": "بنود هذا الأسبوع غير مكتملة",
+    "weekLine": "أسبوع {{date}}: لم تُقرأ الصفحات {{pages}}.",
+    "readMissing": "اقرأ الصفحات الناقصة",
+    "startedTitle": "جارٍ قراءة الصفحات",
+    "startedBody": "جارٍ قراءة الصفحات {{pages}}. سنُعلمك عندما تصبح جاهزة للمراجعة.",
+    "failedTitle": "تعذّر البدء",
+    "detailTitle": "البنود غير مكتملة",
+    "detailBody": "لم تُقرأ الصفحات {{pages}} من {{total}}، لذا قد تنقص بعض البنود من الخصومات أو الوقود أو رسوم الطرق أو الصيانة لهذا الأسبوع.",
+    "unreadBody": "{{count}} صفحات محفوظة في الملف ولم تُقرأ: {{pages}}.",
+    "readThisPage": "اقرأ الصفحة {{page}}",
+    "moreUnread": "+ {{count}} صفحات أخرى"
   }
 }

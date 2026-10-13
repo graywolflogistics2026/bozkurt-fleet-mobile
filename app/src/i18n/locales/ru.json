@@ -662,11 +662,12 @@
       "variableCosts": "Топливо + ремонт + шины + прочее = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Переменные + личные + постоянные + прочие = TOTAL OPERATING EXPENSES",
       "statementTotal": "Доход − операционные расходы = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = доход − операционные расходы",
       "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
       "grossMatches": "TOTAL REVENUE = валовой доход settlement",
       "milesMatch": "MILES отчёта = мили settlement",
-      "requiredTotals": "Напечатаны итоги дохода, операционных расходов и отчёта (из 3)"
+      "requiredTotals": "Напечатаны итоги дохода, операционных расходов и отчёта (из 3)",
+      "mergeConflict": "Один и тот же итог прочитан по-разному на двух страницах"
     },
     "primeSection": {
       "revenue": "Доход",
@@ -677,7 +678,13 @@
       "out_of_pocket": "Личные расходы",
       "fixed": "Постоянные",
       "other": "Другое"
-    }
+    },
+    "primeCheckCoreMissing": "Отчёт не подтверждён — одно из чисел не прочитано",
+    "primeCheckCoreMissingBody": "Не удалось проверить: {{checks}}. Неделя будет сохранена как «Не подтверждено» по строкам и помечена для проверки.",
+    "lineItemsIncompleteTitle": "Строки неполные",
+    "lineItemsIncompleteBody": "Не удалось прочитать страницы {{pages}} из {{total}}. Если отчёт прошёл проверки, прибыль берётся из отчёта; после сохранения «Прочитать недостающие страницы» на неделе прочитает только их.",
+    "attachmentsStillReading": "Ещё читаются страницы вложений: {{count}}. Можно сохранить сейчас — их предложат к проверке, когда закончим.",
+    "unreadPagesBody": "{{count}} стр. сохранены в файле, но не прочитаны (страницы {{pages}}). После сохранения любую можно прочитать из settlement этой недели."
   },
   "camera": {
     "permissionNote": "Для фотографирования чеков и PDF settlement требуется доступ к камере.",
@@ -2309,7 +2316,9 @@
       "waitingToRetry": "Ожидание повтора",
       "ready": "Готово",
       "failed": "Ошибка",
-      "stranded": "Зависло"
+      "stranded": "Зависло",
+      "interrupted": "Прервано",
+      "needsDecision": "Нужен ваш ответ"
     },
     "waitingToRetryNote": "Сервис импорта с ИИ сейчас занят — автоматический повтор скоро произойдёт.",
     "strandedNote": "Похоже, этот импорт завис и давно не продвигался. Ваш файл в безопасности — попробуйте ещё раз.",
@@ -2339,7 +2348,8 @@
       "readyBody": "Нажмите, чтобы проверить и сохранить.",
       "readyBodyWithDetail": "Неделя {{weekEnding}} — {{amount}}. Нажмите, чтобы проверить и сохранить.",
       "failedTitle": "Импорт не удался",
-      "failedBody": "Нажмите, чтобы узнать, что случилось, и повторить."
+      "failedBody": "Нажмите, чтобы узнать, что случилось, и повторить.",
+      "attachmentsReadyTitle": "Вложения прочитаны — проверьте, чтобы добавить"
     },
     "batchTooManyTitle": "Слишком много файлов",
     "batchTooManyMessage": "Можно импортировать до {{max}} файлов за раз — выбраны только первые {{max}}.",
@@ -2356,7 +2366,51 @@
     "skipDocument": "Пропустить",
     "nextDocument": "Следующий документ",
     "finishReview": "Завершить",
-    "reviewAll": "Проверить все ({{count}})"
+    "reviewAll": "Проверить все ({{count}})",
+    "pageKind": {
+      "settlement": "settlement",
+      "statement": "операционного отчёта",
+      "toll_bill": "счёта за проезд",
+      "repair_invoice": "счёта за ремонт",
+      "delivery_receipt": "накладной о доставке",
+      "fuel_receipt": "чека за топливо",
+      "other": "вложения",
+      "unknown": "документа"
+    },
+    "cause": {
+      "timeout": "ИИ отвечал дольше {{seconds}} с",
+      "cut_off": "ответ ИИ оборвался",
+      "busy": "сервис ИИ был занят",
+      "unreadable": "ответ ИИ не удалось прочитать",
+      "refused": "ИИ отказался её читать",
+      "service": "в сервисе ИИ произошла ошибка",
+      "worker_stopped": "сервер остановился во время чтения"
+    },
+    "failure": {
+      "page": "Страница {{page}} из {{total}} ({{kind}}), запуск {{run}}: {{cause}}."
+    },
+    "progress": {
+      "starting": "Запуск · {{elapsed}}",
+      "whole": "Чтение всех {{total}} страниц · {{elapsed}}",
+      "classifying": "Сортировка {{total}} страниц · {{elapsed}}",
+      "reading": "Чтение страницы {{kind}} {{position}} из {{total}} · {{elapsed}}",
+      "readingWithQueue": "Чтение страницы {{kind}} {{position}} из {{total}} · вложений в очереди: {{queued}} · {{elapsed}}",
+      "attachments": "Готово к проверке · чтение вложений {{done}} из {{total}} · {{elapsed}}",
+      "betweenRuns": "Прочитано страниц: {{done}} из {{total}} · продолжаем · {{elapsed}}",
+      "waiting": "Сервис ИИ занят — скоро повторим · {{elapsed}}",
+      "question": "В этом файле {{total}} страниц. Прочитать первые {{cap}} сейчас?",
+      "interrupted": "Прервано на странице {{page}}",
+      "interruptedNoPage": "Прервано",
+      "readyAttachmentsQueued": "Готово к проверке · ещё читаются страницы вложений: {{count}}"
+    },
+    "pageCapNote": "Страницы после {{cap}}-й ({{rest}} стр.) остаются в файле непрочитанными и перечислены — любую можно прочитать позже.",
+    "readFirst": "Прочитать первые {{cap}}",
+    "dontRead": "Не читать",
+    "interruptedNote": "уже прочитанные страницы сохранены.",
+    "attachmentsStillReading": "Ещё читаются страницы вложений: {{count}}. Можно проверить и сохранить сейчас — их предложат к проверке, когда закончим.",
+    "storedPagesNote": "Сохранены в файле, не прочитаны: страницы {{pages}}.",
+    "resumeFromPage": "Продолжить со страницы {{page}}",
+    "resume": "Продолжить"
   },
   "fleetScope": {
     "showingAllTrucks": "Показано: Все грузовики",
@@ -2615,7 +2669,8 @@
     "verification": {
       "verified_prime": "Подтверждено отчётом Prime",
       "totals_match": "Итоги сходятся",
-      "unverified": "Не проверено"
+      "unverified": "Не проверено",
+      "lineItemsIncompleteSuffix": " - строки неполные"
     },
     "statusTitle": {
       "counted": "Учтено",
@@ -2664,5 +2719,18 @@
       "totals": "Учтено {{counted}} − зачёты {{offset}} = расходы {{expenses}} (исключено {{excluded}})",
       "profit": "Прибыль = доход {{gross}} − расходы {{expenses}} = {{profit}}"
     }
+  },
+  "incompleteWeek": {
+    "title": "Строки этой недели неполные",
+    "weekLine": "Неделя {{date}}: страницы {{pages}} не прочитаны.",
+    "readMissing": "Прочитать недостающие страницы",
+    "startedTitle": "Чтение страниц",
+    "startedBody": "Читаем страницы {{pages}}. Сообщим, когда их можно будет проверить.",
+    "failedTitle": "Не удалось начать",
+    "detailTitle": "Строки неполные",
+    "detailBody": "Страницы {{pages}} из {{total}} не прочитаны, поэтому в удержаниях, топливе, платных дорогах или обслуживании этой недели может не хватать строк.",
+    "unreadBody": "Страниц в файле без чтения: {{count}} ({{pages}}).",
+    "readThisPage": "Прочитать стр. {{page}}",
+    "moreUnread": "+ ещё {{count}} стр."
   }
 }

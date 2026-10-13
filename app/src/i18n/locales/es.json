@@ -662,11 +662,12 @@
       "variableCosts": "Combustible + reparación + llantas + misc. = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Variable + gastos propios + fijo + otros = TOTAL OPERATING EXPENSES",
       "statementTotal": "Ingresos − gastos operativos = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = ingresos − gastos operativos",
       "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
       "grossMatches": "TOTAL REVENUE = bruto del settlement",
       "milesMatch": "MILES del estado = millas del settlement",
-      "requiredTotals": "Totales de ingresos, gastos operativos y del estado impresos (de 3)"
+      "requiredTotals": "Totales de ingresos, gastos operativos y del estado impresos (de 3)",
+      "mergeConflict": "El mismo total se leyó distinto en dos páginas"
     },
     "primeSection": {
       "revenue": "Ingresos",
@@ -677,7 +678,13 @@
       "out_of_pocket": "Gastos propios",
       "fixed": "Fijo",
       "other": "Otros"
-    }
+    },
+    "primeCheckCoreMissing": "Estado no verificado — no se leyó un número",
+    "primeCheckCoreMissingBody": "No se pudo comprobar: {{checks}}. La semana se guardará como No verificada, desde sus líneas, y marcada para revisión.",
+    "lineItemsIncompleteTitle": "Líneas incompletas",
+    "lineItemsIncompleteBody": "No se pudieron leer las páginas {{pages}} de {{total}}. Si el estado pasó sus comprobaciones, la ganancia sale del estado; después de guardar, \"Leer las páginas que faltan\" en la semana lee solo esas páginas.",
+    "attachmentsStillReading": "Aún se leen {{count}} páginas adjuntas. Puedes guardar ahora; se te ofrecerán para revisar cuando terminen.",
+    "unreadPagesBody": "{{count}} páginas se guardan en el archivo sin leer (páginas {{pages}}). Después de guardar puedes leer cualquiera desde el settlement de la semana."
   },
   "camera": {
     "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de settlements.",
@@ -2309,7 +2316,9 @@
       "waitingToRetry": "Esperando para reintentar",
       "ready": "Listo",
       "failed": "Fallido",
-      "stranded": "Atascado"
+      "stranded": "Atascado",
+      "interrupted": "Interrumpida",
+      "needsDecision": "Necesita tu respuesta"
     },
     "waitingToRetryNote": "El servicio de importación con IA está ocupado — se reintentará automáticamente en breve.",
     "strandedNote": "Esta importación parece estar atascada y no ha avanzado en un buen rato. Tu archivo está a salvo — inténtalo de nuevo.",
@@ -2339,7 +2348,8 @@
       "readyBody": "Toca para revisar y guardar.",
       "readyBodyWithDetail": "Semana {{weekEnding}} — {{amount}}. Toca para revisar y guardar.",
       "failedTitle": "Importación fallida",
-      "failedBody": "Toca para ver qué pasó y reintentar."
+      "failedBody": "Toca para ver qué pasó y reintentar.",
+      "attachmentsReadyTitle": "Adjuntos leídos — revisa para añadirlos"
     },
     "batchTooManyTitle": "Demasiados archivos",
     "batchTooManyMessage": "Puedes importar hasta {{max}} archivos a la vez — solo se seleccionaron los primeros {{max}}.",
@@ -2356,7 +2366,51 @@
     "skipDocument": "Omitir",
     "nextDocument": "Siguiente Documento",
     "finishReview": "Finalizar",
-    "reviewAll": "Revisar Todo ({{count}})"
+    "reviewAll": "Revisar Todo ({{count}})",
+    "pageKind": {
+      "settlement": "settlement",
+      "statement": "estado operativo",
+      "toll_bill": "factura de peajes",
+      "repair_invoice": "factura de reparación",
+      "delivery_receipt": "comprobante de entrega",
+      "fuel_receipt": "recibo de combustible",
+      "other": "adjunto",
+      "unknown": "documento"
+    },
+    "cause": {
+      "timeout": "la IA tardó más de {{seconds}} s",
+      "cut_off": "la respuesta de la IA quedó cortada",
+      "busy": "el servicio de IA estaba ocupado",
+      "unreadable": "no se pudo leer la respuesta de la IA",
+      "refused": "la IA se negó a leerla",
+      "service": "el servicio de IA tuvo un error",
+      "worker_stopped": "el servidor se detuvo mientras la leía"
+    },
+    "failure": {
+      "page": "Página {{page}} de {{total}} ({{kind}}), ronda {{run}}: {{cause}}."
+    },
+    "progress": {
+      "starting": "Iniciando · {{elapsed}}",
+      "whole": "Leyendo las {{total}} páginas · {{elapsed}}",
+      "classifying": "Ordenando {{total}} páginas · {{elapsed}}",
+      "reading": "Leyendo página de {{kind}} {{position}} de {{total}} · {{elapsed}}",
+      "readingWithQueue": "Leyendo página de {{kind}} {{position}} de {{total}} · {{queued}} adjuntos en cola · {{elapsed}}",
+      "attachments": "Lista para revisar · leyendo adjuntos {{done}} de {{total}} · {{elapsed}}",
+      "betweenRuns": "{{done}} de {{total}} páginas leídas · continuando · {{elapsed}}",
+      "waiting": "El servicio de IA está ocupado — se reintentará pronto · {{elapsed}}",
+      "question": "Este archivo tiene {{total}} páginas. ¿Leer las primeras {{cap}} ahora?",
+      "interrupted": "Interrumpida en la página {{page}}",
+      "interruptedNoPage": "Interrumpida",
+      "readyAttachmentsQueued": "Lista para revisar · aún se leen {{count}} páginas adjuntas"
+    },
+    "pageCapNote": "Las páginas después de la {{cap}} ({{rest}} páginas) quedan en el archivo, sin leer y listadas; puedes leer cualquiera más tarde.",
+    "readFirst": "Leer las primeras {{cap}}",
+    "dontRead": "No leer",
+    "interruptedNote": "las páginas ya leídas se conservan.",
+    "attachmentsStillReading": "Aún se leen {{count}} páginas adjuntas. Puedes revisar y guardar ahora; se te ofrecerán para revisar cuando terminen.",
+    "storedPagesNote": "Guardadas en el archivo, sin leer: páginas {{pages}}.",
+    "resumeFromPage": "Reanudar desde la página {{page}}",
+    "resume": "Reanudar"
   },
   "fleetScope": {
     "showingAllTrucks": "Mostrando: Todos los Camiones",
@@ -2615,7 +2669,8 @@
     "verification": {
       "verified_prime": "Verificado por el estado de Prime",
       "totals_match": "Los totales cuadran",
-      "unverified": "Sin verificar"
+      "unverified": "Sin verificar",
+      "lineItemsIncompleteSuffix": " - líneas incompletas"
     },
     "statusTitle": {
       "counted": "Contado",
@@ -2664,5 +2719,18 @@
       "totals": "Contado {{counted}} − compensaciones {{offset}} = gastos {{expenses}} (excluido {{excluded}})",
       "profit": "Ganancia = ingresos {{gross}} − gastos {{expenses}} = {{profit}}"
     }
+  },
+  "incompleteWeek": {
+    "title": "Las líneas de esta semana están incompletas",
+    "weekLine": "Semana del {{date}}: no se leyeron las páginas {{pages}}.",
+    "readMissing": "Leer las páginas que faltan",
+    "startedTitle": "Leyendo páginas",
+    "startedBody": "Leyendo las páginas {{pages}}. Te avisaremos cuando estén listas para revisar.",
+    "failedTitle": "No se pudo iniciar",
+    "detailTitle": "Líneas incompletas",
+    "detailBody": "No se leyeron las páginas {{pages}} de {{total}}, así que a las deducciones, combustible, peajes o mantenimiento de esta semana les pueden faltar líneas.",
+    "unreadBody": "{{count}} páginas guardadas en el archivo, sin leer: {{pages}}.",
+    "readThisPage": "Leer página {{page}}",
+    "moreUnread": "+ {{count}} páginas más"
   }
 }

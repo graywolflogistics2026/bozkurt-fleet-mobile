@@ -11,6 +11,17 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- RESUMABLE PAGE-BY-PAGE IMPORT JOBS — 17-page stall redesign (owner
+  decisions 2026-10-13, A-H + B/C/D/G + amendments + scale add-on). Jobs run
+  as a chain of short runs under the 150 s Free-plan wall clock, store each
+  page's result, resume at the first unfinished page, hold a lease, beat a
+  heartbeat ("Interrupted at page N - Resume"); Prime classification +
+  early stop, attachments last (max 12), 40-page cap question, 10 MB / 150
+  page limits; per-field page merge; core self-checks non-skippable; "line
+  items incomplete" + "Read the missing pages". jobEngine.ts, index.ts,
+  chunking.ts, bankDigits.ts. §78. Redeploy ai-import. eas update.
+  docs/decisions/settlement-import-chunking.md ("Resumable jobs").
+
 - PRIME STATEMENT AS SOURCE + SOURCE LABELS + PROFIT IS NEVER THE DEPOSIT
   (owner decisions 2026-10-13, D1-D9, R1-R4, bank-deposit add-on). Prime
   weeks with a self-checked Statement of Income and Expense count from it

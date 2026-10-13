@@ -2,13 +2,19 @@ import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useImportJobs, fetchImportJobResult } from '@/src/data/importJobs';
-import { deriveChipSummary, jobProgressFraction, runOptionalSideEffect } from '@/src/import/importJobs';
+import { useImportJobs, fetchImportJobResult, resumeImportJob } from '@/src/data/importJobs';
+import { deriveChipSummary, jobProgressView, runOptionalSideEffect, shouldAutoResume } from '@/src/import/importJobs';
+import { jobProgressText } from '@/src/components/importJobText';
 import { notifyImportJobDone, hasNotifiedJob } from '@/src/notifications/importJobNotifications';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 const JOBS_ROUTE = '/(tabs)/import/jobs' as Href;
+
+// Jobs this app session already restarted, keyed by job id -> the
+// heartbeat it saw then, so one interruption is resumed once, not on
+// every poll.
+const autoResumed = new Map<string, string>();
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, items 1 + 3) — a small,
 // persistent status pill, always mounted from the tab layout (both the
@@ -42,12 +48,34 @@ export function ImportJobsChip() {
   // fresh query data) and module-level functions, never anything captured
   // from whatever screen originally started the job, so "the screen that
   // started the job is gone" has no effect on this logic at all.
+  // RESUMABLE IMPORT JOBS (owner decision 2026-10-13): the backup restart.
+  // Each run of a job starts the next one itself; if that never happens
+  // (the worker was stopped, the request was lost), a job whose heartbeat
+  // is 3 minutes old is resumed from its first unfinished page. The
+  // server's lease makes this safe even if the job is in fact still
+  // running — the second run simply does nothing.
+  useEffect(() => {
+    const now = new Date().toISOString();
+    for (const job of jobs ?? []) {
+      if (!shouldAutoResume(job, now)) continue;
+      const seen = job.heartbeatAt ?? job.updatedAt;
+      if (autoResumed.get(job.id) === seen) continue;
+      autoResumed.set(job.id, seen);
+      resumeImportJob(job.id, false).catch(() => {
+        // The row keeps saying "Interrupted at page N" with a Resume button.
+      });
+    }
+  }, [jobs]);
+
   useEffect(() => {
     let cancelled = false;
     async function checkAndNotify() {
       for (const job of jobs ?? []) {
         if (job.status !== 'ready' && job.status !== 'failed') continue;
-        const alreadyNotified = await hasNotifiedJob(job.id).catch(() => false);
+        // A week saved while its attachments were still being read gets a
+        // second "ready" (the attachments, for review) — its own id.
+        const notifyId = job.documentId ? `${job.id}:attachments` : job.id;
+        const alreadyNotified = await hasNotifiedJob(notifyId).catch(() => false);
         if (alreadyNotified) continue;
         if (cancelled) return;
         if (job.status === 'ready') {
@@ -58,10 +86,15 @@ export function ImportJobsChip() {
               ? t('importJobs.notification.readyBodyWithDetail', { weekEnding: s.weekEnding, amount: money(s.grossRevenue) })
               : t('importJobs.notification.readyBody');
           if (cancelled) return;
-          await runOptionalSideEffect(() => notifyImportJobDone(job.id, { title: t('importJobs.notification.readyTitle'), body }));
+          await runOptionalSideEffect(() =>
+            notifyImportJobDone(notifyId, {
+              title: t(job.documentId ? 'importJobs.notification.attachmentsReadyTitle' : 'importJobs.notification.readyTitle'),
+              body,
+            })
+          );
         } else {
           await runOptionalSideEffect(() =>
-            notifyImportJobDone(job.id, {
+            notifyImportJobDone(notifyId, {
               title: t('importJobs.notification.failedTitle'),
               body: job.fileName ?? t('importJobs.notification.failedBody'),
             })
@@ -83,13 +116,15 @@ export function ImportJobsChip() {
   if (summary.kind === 'hidden') return null;
 
   const { icon, label, tint } = (() => {
+    if (summary.kind === 'question') {
+      return { icon: '❓', label: jobProgressText(jobProgressView(summary.job, new Date().toISOString()), t), tint: colors.orange };
+    }
     if (summary.kind === 'processing') {
-      const fraction = jobProgressFraction(summary.job);
-      const progressLabel =
-        fraction != null
-          ? t('importJobs.chip.processingWithProgress', { through: summary.job.pagesDone, total: summary.job.pagesTotal })
-          : t('importJobs.chip.processing');
-      return { icon: '⏳', label: progressLabel, tint: colors.accent };
+      // The same words as the jobs list ("Reading settlement page 3 of 6 ·
+      // 12 attachments queued · 1:42", "Interrupted at page 3").
+      const view = jobProgressView(summary.job, new Date().toISOString());
+      const progressLabel = summary.job.progress || view.state === 'interrupted' ? jobProgressText(view, t) : t('importJobs.chip.processing');
+      return { icon: view.state === 'interrupted' ? '⚠️' : '⏳', label: progressLabel, tint: view.state === 'interrupted' ? colors.orange : colors.accent };
     }
     if (summary.kind === 'ready') {
       return {

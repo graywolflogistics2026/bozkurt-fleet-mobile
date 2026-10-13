@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useFuelPurchases, useInsertFuelPurchase, useDeleteFuelPurchase } from '@/src/data/fuelPurchases';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
+import { IncompleteLineItemsNotice } from '@/src/components/IncompleteLineItemsNotice';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
@@ -237,6 +238,7 @@ export default function Fuel() {
           </Pressable>
         </View>
         <FleetScopeLabel />
+        <IncompleteLineItemsNotice />
 
         <Card>
           <MutedText>{t('fuel.totalNetCost')}</MutedText>

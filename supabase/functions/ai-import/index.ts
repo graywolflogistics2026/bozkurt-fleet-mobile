@@ -30,6 +30,7 @@ import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import {
   buildChunkPromptAddendum,
   mergeAllPages,
+  mergeChunkedExtractions,
   runWithConcurrencyLimit,
   triagePageOrder,
   type ChunkExtraction,
@@ -37,6 +38,31 @@ import {
   type PageOutcome,
   type PageRange,
 } from "./chunking.ts";
+import { scrubBankDigits } from "./bankDigits.ts";
+import {
+  CLASSIFY_WINDOW_MAX_BYTES,
+  FREE_PLAN_WALL_CLOCK_MS,
+  HEARTBEAT_EVERY_MS,
+  MAX_RUNS_PER_JOB,
+  UNKNOWN_LAYOUT_PAGE_CAP,
+  checkImportLimits,
+  limitsFor,
+  newImportPlan,
+  newReadPagesPlan,
+  resetFailedPages,
+  runJobStep,
+  type ClassifiedPage,
+  type JobDeps,
+  type JobModel,
+  type JobPlan,
+  type JobStore,
+  type ModelFailure,
+  type ModelOutcome,
+  type PageKind,
+  type PageMapEntry,
+  type PageResult,
+  type UsageCallType,
+} from "./jobEngine.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -116,8 +142,11 @@ const ANTHROPIC_MAX_TOKENS = 16000;
 // regardless of how slow any individual page turns out to be — "more
 // round trips is fine — they are cheap" (owner decision).
 const IMAGE_TIMEOUT_MS = 90_000;
-const SINGLE_CALL_TIMEOUT_MS = 120_000;
-const PAGE_TIMEOUT_MS = 110_000;
+// 17-PAGE STALL REDESIGN (owner decision 2026-10-13): every model call
+// must end by 140 s of a 150 s Free-plan worker (jobEngine.ts limitsFor()),
+// so no single call may be given more than 100 s any more.
+const SINGLE_CALL_TIMEOUT_MS = 100_000;
+const PAGE_TIMEOUT_MS = 100_000;
 // Shorter than PAGE_TIMEOUT_MS on purpose — this is a page's SECOND,
 // last-chance attempt after already timing out once; burning another
 // full 110s risks the platform's own 150s ceiling more than it's worth,
@@ -157,11 +186,11 @@ const BATCH_CONCURRENCY = readBatchConcurrency();
 // the platform would kill the whole invocation regardless of our own
 // AbortController.
 const MIN_USEFUL_BUDGET_MS = 20_000;
-// 5s safety margin under Supabase's VERIFIED 150s ceiling for this
-// invocation's own non-Anthropic overhead (auth, the daily-import-count
-// query, pdf-lib parsing/splitting, JSON merging, response
-// serialization) on top of whatever Anthropic call time was used.
-const HARD_INVOCATION_BUDGET_MS = 145_000;
+// The worker exits by 130 s of the documented 150 s Free-plan wall clock
+// (jobEngine.ts limitsFor(); 17-page stall redesign, owner decision
+// 2026-10-13) — the remaining 20 s cover auth, pdf-lib, merging and the
+// response on top of whatever Anthropic call time was used.
+const HARD_INVOCATION_BUDGET_MS = limitsFor(FREE_PLAN_WALL_CLOCK_MS).exitByMs;
 // Defensive ceiling only — real settlements are nowhere near this long;
 // stops a pathological/corrupt PDF (that still passed the 10MB size
 // guard) from driving an unbounded number of client-side continuation
@@ -651,15 +680,13 @@ const DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS = 30;
 
 // UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A SERVICE-ROLE
 // CLIENT (P1 fix, FULL SYSTEM AUDIT) — renamed from getRateLimitAdminClient()
-// to reflect a second use: runJobInBackground()'s own import_jobs writes
-// now go through this SAME cached service-role client instead of the
-// caller's own JWT-scoped one, so an expiring caller session (a real risk
-// for a background job that can run up to JOB_HARD_BUDGET_MS) can no
-// longer strand a job in "processing" forever by making its own status-
-// update writes start failing mid-flight. Every write via this client
-// MUST explicitly scope by user_id (RLS is bypassed for a service-role
-// client, unlike the per-request JWT-scoped one) — see runJobInBackground()'s
-// own calls below for the added `.eq("user_id", userId)` on each one.
+// to reflect a second use: background import jobs' own import_jobs writes
+// go through this SAME cached service-role client instead of the caller's
+// own JWT-scoped one — a job's later runs have no user session at all
+// (they are started by the previous run, mode 'continue_job'). Every write
+// via this client MUST explicitly scope by id + user_id or lease owner (RLS
+// is bypassed for a service-role client, unlike the per-request
+// JWT-scoped one).
 let cachedServiceRoleAdminClient: ReturnType<typeof createClient> | null | undefined;
 function getServiceRoleAdminClient(): ReturnType<typeof createClient> | null {
   if (cachedServiceRoleAdminClient !== undefined) return cachedServiceRoleAdminClient;
@@ -746,6 +773,7 @@ async function callAnthropicMessages(
   prompt: string,
   timeoutMs: number,
   maxAttempts: number,
+  model?: { model: string; maxTokens: number },
 ): Promise<{ resp: Response } | { errorType: "timeout" | "internal"; message: string }> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
@@ -760,8 +788,8 @@ async function callAnthropicMessages(
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: ANTHROPIC_MODEL,
-          max_tokens: ANTHROPIC_MAX_TOKENS,
+          model: model?.model ?? ANTHROPIC_MODEL,
+          max_tokens: model?.maxTokens ?? ANTHROPIC_MAX_TOKENS,
           messages: [{ role: "user", content: [contentBlock, { type: "text", text: prompt }] }],
         }),
         signal: controller.signal,
@@ -828,6 +856,7 @@ async function extractOnePass(
   prompt: string,
   timeoutMs: number,
   maxAttempts: number,
+  model?: { model: string; maxTokens: number },
 ): Promise<ExtractOneResult> {
   // GLOBAL RATE-LIMIT GATE (owner decision 2026-08-24) — checked BEFORE
   // ever calling Anthropic, on every single call this function makes
@@ -846,7 +875,7 @@ async function extractOnePass(
     };
   }
 
-  const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt, timeoutMs, maxAttempts);
+  const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt, timeoutMs, maxAttempts, model);
   if ("errorType" in callResult) return callResult;
   const anthropicResp = callResult.resp;
 
@@ -1315,342 +1344,482 @@ async function logAiUsage(
 }
 
 // ============================================================================
-// BACKGROUND IMPORT (owner decision 2026-08-24) — docs/PENDING_SQL.md §54.
-// The real fix for "an import feels slow" isn't more speed, it's not
-// making the user watch it happen. Mode 'job'/'retry_job' (handled by
-// handleJobStart() below, branched to right after auth in Deno.serve)
-// creates/reuses one `import_jobs` row and returns {jobId} immediately
-// (202 Accepted) — the actual extraction keeps running in the background
-// via EdgeRuntime.waitUntil(runJobInBackground(...)), a genuine Supabase
-// Edge Runtime capability for continuing work after a response has
-// already been sent (this file's own TIMEOUT/PAGE-BUDGET comment block
-// above has referenced this capability for a while — this is the first
-// pass that actually uses it). This is what makes the job survive
-// navigation and app backgrounding: nothing about its progress depends on
-// the CLIENT's own JS still running — the client just polls/subscribes to
-// `import_jobs` for progress, from any screen, at any time, and can pick
-// up wherever the server currently is even after being fully closed and
-// reopened later.
-// JOB_HARD_BUDGET_MS: a genuine, HONESTLY-FLAGGED best-effort value, not
-// an independently-verified platform ceiling — this file's own prior
-// TIMEOUT/PAGE-BUDGET comment cites "~400s" for waitUntil background work
-// from a documentation lookup that was never actually exercised in this
-// codebase before now (the function had never used waitUntil until this
-// pass). 240s (4 min) is chosen as a conservative, comfortable margin
-// under that unverified figure — realistic settlements (even a dozen
-// pages at the slowest previously-MEASURED per-page time, ~40s, with
-// BATCH_CONCURRENCY=2 halving the effective wall-clock) should finish
-// well inside this budget; a job that's still running when this budget
-// is hit is marked 'failed' with a clear "took too long" reason rather
-// than left stuck in 'processing' forever. Monitor real device job
-// timing (the same INSTRUMENT log lines the synchronous path already
-// uses) and adjust this constant if the platform's real ceiling turns
-// out to be different.
-const JOB_HARD_BUDGET_MS = 240_000;
+// BACKGROUND IMPORT JOBS — RESUMABLE, PAGE BY PAGE (owner decision
+// 2026-10-13, "17-page stall" redesign A-H + amendments + "scale to any
+// page count" add-on; docs/decisions/settlement-import-chunking.md,
+// docs/PENDING_SQL.md §78). Replaces the 2026-08-24 single background run
+// (runJobInBackground, JOB_HARD_BUDGET_MS = 240 s, never verified): that
+// run spent 120 s on a doomed whole-document call, then read pages in the
+// leftover seconds until Supabase stopped the worker at its 150 s Free-plan
+// wall clock, leaving the job at "Page 2 of 17" with no error, and every
+// retry started over from page 1.
+//
+// Now a job is a chain of short invocations ("runs"). The decision logic
+// lives in jobEngine.ts (pure, Jest-tested against a simulated 150 s
+// world); this section gives it the real dependencies:
+//   - a lease on the import_jobs row (import_job_claim RPC) so only one run
+//     at a time owns the job;
+//   - per-page results written atomically (import_job_put_page RPC), bank
+//     digits removed first;
+//   - pdf-lib, loaded once per run from the stored file — the whole file is
+//     base64-encoded only for a whole-document call (at most 8 pages and
+//     8 MB); otherwise one window (classification, at most 20 pages / 8 MB)
+//     or one page at a time;
+//   - the next run is started by calling this function again with mode
+//     'continue_job' and the service key; if that call never arrives, the
+//     app resumes the job once its heartbeat is 3 minutes old.
+// ============================================================================
 
-// The job's own version of "process every page" — reuses every tested
-// extraction primitive (triagePageOrder, runWithConcurrencyLimit,
-// runPageWithRetry) but loops across the WHOLE document in one go rather
-// than handing off between HTTP invocations (extractPagesForInvocation
-// above stays exactly as it was, for the synchronous request/response
-// callers that still need the 150s-per-invocation hand-off protocol).
-// `onPageSettled` fires after EVERY individual page resolves (success or
-// permanently-missing-after-retry) — not just once per wave — so
-// `import_jobs.pages_done` advances smoothly as pages complete, which is
-// what lets a polling client show real, granular progress.
-async function runJobPages(
-  anthropicKey: string,
-  fileBase64: string,
-  totalPages: number,
-  prompt: string,
-  remainingBudgetMs: () => number,
-  onPageSettled: (outcome: PageOutcome) => Promise<void>,
-): Promise<PageOutcome[]> {
-  const triageStartedAt = performance.now();
-  const allRanges: PageRange[] = Array.from({ length: totalPages }, (_, i) => ({ start: i + 1, end: i + 1 }));
-  const pageChunks = await splitPdfIntoChunks(fileBase64, allRanges);
-  const byteSizes: PageByteSize[] = pageChunks.map((b64, i) => ({ page: i + 1, byteSize: b64.length }));
-  const pageBytesCache = new Map<number, string>();
-  pageChunks.forEach((b64, i) => pageBytesCache.set(i + 1, b64));
-  const pageOrder = triagePageOrder(byteSizes);
-  const totalBytes = byteSizes.reduce((sum, p) => sum + p.byteSize, 0);
-  console.log(
-    `[ai-import] INSTRUMENT job triage pages=${byteSizes.length} avgPageBytes=${byteSizes.length > 0 ? Math.round(totalBytes / byteSizes.length) : 0} order=[${pageOrder.join(",")}] triageDurationMs=${Math.round(performance.now() - triageStartedAt)}`
-  );
+// "Free plan wall clock 150 s" (jobEngine.ts) unless the plan setting says
+// otherwise — set AI_IMPORT_WALL_CLOCK_MS=400000 only after moving to a
+// paid plan.
+function readWallClockMs(): number {
+  const raw = Deno.env.get("AI_IMPORT_WALL_CLOCK_MS");
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed >= 60_000 ? parsed : FREE_PLAN_WALL_CLOCK_MS;
+}
+const JOB_LIMITS = limitsFor(readWallClockMs());
 
-  return runWithConcurrencyLimit(pageOrder, BATCH_CONCURRENCY, async (page) => {
-    if (remainingBudgetMs() < MIN_USEFUL_BUDGET_MS) {
-      console.log(`[ai-import] job: skipping page ${page} — job budget nearly exhausted`);
-      const outcome: PageOutcome = { page, missing: true };
-      await onPageSettled(outcome);
-      return outcome;
-    }
-    const outcome = await runPageWithRetry(anthropicKey, fileBase64, totalPages, page, prompt, remainingBudgetMs, pageBytesCache.get(page));
-    await onPageSettled(outcome);
-    return outcome;
-  });
+// The cheap page classifier (decision C). Advisory only: if this model is
+// unavailable the job falls back to physical page order.
+const CLASSIFY_MODEL = Deno.env.get("AI_IMPORT_CLASSIFY_MODEL") || "claude-haiku-5-5";
+const CLASSIFY_MAX_TOKENS = 2000;
+
+type PromptInputs = {
+  docHint?: string;
+  locale?: string;
+  customCategories?: string[];
+  learningRules?: { keyword: string; category: string }[];
+  carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
+};
+
+type StoredPlan = JobPlan & { promptInputs?: PromptInputs };
+
+// Same rule as the app's isPrimeCarrier() (normalizeCarrierKey):
+// uppercase, drop "." and ",", collapse spaces. Null/unknown never matches.
+function isPrimeCarrierName(carrier: string | null | undefined): boolean {
+  if (!carrier) return false;
+  const key = carrier.toUpperCase().replace(/[.,]/g, "").replace(/\s+/g, " ").trim();
+  return key === "PRIME INC";
 }
 
-// The actual background work — SINGLE CALL IS STILL THE DEFAULT (same
-// "try the whole document in one call first" philosophy as the
-// synchronous path), falling back to runJobPages() only on a genuine
-// "too much content for one call" signal (timeout/truncated). Every state
-// transition is written to `import_jobs` as it happens (queued ->
-// processing -> ready|failed).
-//
-// SERVICE-ROLE CLIENT FOR BACKGROUND WORK (P1 fix, FULL SYSTEM AUDIT) —
-// this function used to do EVERY write through `supabase`, the ORIGINAL
-// caller's JWT-scoped client. A background job can run up to
-// JOB_HARD_BUDGET_MS (4 minutes) — long enough for a short-lived session
-// token to expire mid-job — which meant every subsequent status-update
-// write, including the one that marks a job 'failed', could silently start
-// failing, stranding the job in "processing" forever with no error ever
-// recorded. Every `import_jobs` write below now goes through `admin`
-// (service-role, immune to the caller's session expiring) instead —
-// scoped by BOTH `.eq("id", jobId)` AND `.eq("user_id", userId)`, since a
-// service-role client bypasses RLS entirely and this explicit scoping is
-// what preserves the same "only this user's own job" boundary RLS used to
-// enforce automatically. `supabase` (the caller-JWT client) is still used
-// for `logAiUsage()`/`consumeOneCreditIfOverAllowance()` specifically —
-// the latter calls a `security definer` RPC that derives the user
-// EXCLUSIVELY from `auth.uid()`, which has no meaning at all for a
-// service-role connection — both are already best-effort/failure-tolerant
-// (see their own comments), so a stale JWT failing THERE is a much smaller
-// degradation than the whole job silently never completing.
-async function runJobInBackground(
-  supabase: ReturnType<typeof createClient>,
+async function logJobUsage(
   admin: ReturnType<typeof createClient>,
-  jobId: string,
   userId: string,
-  anthropicKey: string,
-  fileBase64: string,
-  mediaType: string,
-  prompt: string,
+  callType: UsageCallType,
+  success: boolean,
+  reason?: string,
 ): Promise<void> {
-  const jobStartedAt = performance.now();
-  function remainingJobBudgetMs(): number {
-    return JOB_HARD_BUDGET_MS - (performance.now() - jobStartedAt);
-  }
-
-  async function markFailed(message: string, step: string): Promise<void> {
-    console.log(`[ai-import] job ${jobId} failed: ${step} — ${message}`);
-    await admin.from("import_jobs").update({
-      status: "failed",
-      error_message: message,
-      error_step: step,
-      updated_at: new Date().toISOString(),
-    }).eq("id", jobId).eq("user_id", userId);
-    await logAiUsage(supabase, userId, false, step, message);
-  }
-
-  // BATCH BACK-PRESSURE (owner decision 2026-08-24) — a background job has
-  // real wall-clock room (JOB_HARD_BUDGET_MS) to actually PAUSE and wait
-  // out a rate limit instead of just failing, unlike the synchronous path
-  // (which has to respond within one HTTP request and simply surfaces
-  // rate_limited for the client's own Retry button). While waiting, the
-  // job's own status flips to 'waiting_to_retry' so the client's jobs
-  // list/chip can show it distinctly rather than looking stuck or failed.
-  const RATE_LIMIT_BACKOFF_SCHEDULE_MS = [15_000, 45_000, 90_000];
-  async function withRateLimitBackoff(attemptOnce: () => Promise<ExtractOneResult>): Promise<ExtractOneResult> {
-    let result = await attemptOnce();
-    for (let retryIndex = 0; "errorType" in result && result.errorType === "rate_limited" && retryIndex < RATE_LIMIT_BACKOFF_SCHEDULE_MS.length; retryIndex++) {
-      const retryAfterMs = ((result.extra?.retryAfterSeconds as number | undefined) ?? 0) * 1000;
-      const waitMs = Math.max(RATE_LIMIT_BACKOFF_SCHEDULE_MS[retryIndex], retryAfterMs);
-      if (remainingJobBudgetMs() < waitMs + MIN_USEFUL_BUDGET_MS) {
-        console.log(`[ai-import] job ${jobId}: rate-limited, not enough job budget left to wait ${waitMs}ms — giving up for now`);
-        break;
-      }
-      console.log(`[ai-import] job ${jobId}: rate-limited — waiting ${waitMs}ms before retry ${retryIndex + 1}/${RATE_LIMIT_BACKOFF_SCHEDULE_MS.length}`);
-      await admin.from("import_jobs").update({
-        status: "waiting_to_retry",
-        error_message: "The AI import service is busy — automatically retrying shortly.",
-        error_step: "rate_limited",
-        updated_at: new Date().toISOString(),
-      }).eq("id", jobId).eq("user_id", userId);
-      await new Promise((r) => setTimeout(r, waitMs));
-      await admin.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
-      result = await attemptOnce();
-    }
-    return result;
-  }
-
   try {
-    await admin.from("import_jobs").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
+    const { error } = await admin.from("ai_usage_log").insert({
+      user_id: userId,
+      call_type: callType,
+      success,
+      failure_reason: reason ? scrubBankDigits(reason).slice(0, 500) : null,
+    });
+    if (error) console.error(`[ai-import] usage log insert failed (${callType}): ${error.message}`);
+  } catch (err) {
+    console.error(`[ai-import] usage log insert threw: ${(err as Error).message}`);
+  }
+}
 
-    const isImage = mediaType.startsWith("image/");
-    const contentBlock = isImage
-      ? { type: "image", source: { type: "base64", media_type: mediaType, data: fileBase64 } }
-      : { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileBase64 } };
+// Same allowance arithmetic as consumeOneCreditIfOverAllowance(), but for a
+// run that has no user session (a continuation run): the counting queries
+// are scoped by user_id explicitly and the credit is taken through the
+// service-role-only consume_ai_import_credit_for() RPC (§78).
+async function consumeCreditForUserIfOverAllowance(admin: ReturnType<typeof createClient>, userId: string): Promise<void> {
+  try {
+    const { data: owner } = await admin.from("profiles").select("plan").eq("user_id", userId).maybeSingle();
+    if (owner?.plan === "owner") return;
+    const [{ data: config }, { count: activeTruckCount }, { count: usedThisMonth }] = await Promise.all([
+      admin.from("ai_usage_config").select("imports_per_truck_per_month, account_ceiling").maybeSingle(),
+      admin.from("trucks").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_active", true),
+      admin
+        .from("ai_usage_log")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("call_type", "ai_import")
+        .eq("success", true)
+        .gte("created_at", monthStartUtcIso()),
+    ]);
+    const perTruck = config?.imports_per_truck_per_month ?? DEFAULT_IMPORTS_PER_TRUCK_PER_MONTH;
+    const ceiling = config?.account_ceiling ?? null;
+    const rawAllowance = Math.max(1, activeTruckCount ?? 1) * perTruck;
+    const allowance = ceiling != null ? Math.min(rawAllowance, ceiling) : rawAllowance;
+    if ((usedThisMonth ?? 0) <= allowance) return;
+    const { error } = await admin.rpc("consume_ai_import_credit_for", { p_user_id: userId });
+    if (error) console.error(`[ai-import] consume_ai_import_credit_for failed for user ${userId}: ${error.message}`);
+  } catch (err) {
+    console.error(`[ai-import] credit consumption threw: ${(err as Error).message}`);
+  }
+}
 
-    let result: ExtractOneResult = await withRateLimitBackoff(() =>
-      isImage
-        ? extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS)
-        : extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS)
-    );
-    console.log(`[ai-import] job ${jobId} single-call result: ${"errorType" in result ? result.errorType : "success"}`);
+// One run's view of the stored file: downloaded once, parsed by pdf-lib at
+// most once, and cut into one page or one window at a time. The whole
+// file is base64-encoded only for a whole-document call.
+class StoredPdf {
+  private doc: PDFDocument | null = null;
+  constructor(readonly bytes: Uint8Array, readonly mediaType: string) {}
 
-    // FALLBACK: only a genuine "too much content for one call" signal
-    // enters the per-page path — a clean 4xx/parse-failure/refusal is not
-    // something splitting into pages can fix (same rule as the
-    // synchronous path above).
-    if (!isImage && "errorType" in result && (result.errorType === "timeout" || result.errorType === "truncated")) {
-      const rawPageCount = await getPdfPageCount(fileBase64);
-      if (rawPageCount !== null && rawPageCount > 1) {
-        const clampedTotal = Math.min(rawPageCount, MAX_TOTAL_PAGES);
-        console.log(`[ai-import] job ${jobId}: single-call failed (${result.errorType}) — falling back to page-by-page, totalPages=${rawPageCount}`);
-        await admin.from("import_jobs").update({ pages_total: clampedTotal, updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
+  private async load(): Promise<PDFDocument> {
+    if (!this.doc) this.doc = await PDFDocument.load(this.bytes, { ignoreEncryption: true });
+    return this.doc;
+  }
 
-        let doneCount = 0;
-        const outcomes = await runJobPages(anthropicKey, fileBase64, clampedTotal, prompt, remainingJobBudgetMs, async () => {
-          doneCount++;
-          await admin.from("import_jobs").update({ pages_done: doneCount, updated_at: new Date().toISOString() }).eq("id", jobId).eq("user_id", userId);
-        });
+  async rangeBase64(start: number, end: number): Promise<string> {
+    const src = await this.load();
+    const out = await PDFDocument.create();
+    const indices: number[] = [];
+    for (let p = start; p <= end; p++) indices.push(p - 1);
+    const copied = await out.copyPages(src, indices);
+    copied.forEach((page) => out.addPage(page));
+    return bytesToBase64(await out.save());
+  }
 
-        const merged = mergeAllPages(outcomes);
-        if (merged) {
-          result = { extraction: merged.extraction };
-          if (merged.missingPages.length > 0) {
-            console.log(`[ai-import] job ${jobId}: completed with missing pages ${JSON.stringify(merged.missingPages)}`);
-          }
-        } else {
-          result = {
-            errorType: "internal",
-            message: "Could not process this document — the AI service was unavailable or timed out even after a retry.",
-          };
-        }
+  wholeBase64(): string {
+    return bytesToBase64(this.bytes);
+  }
+}
+
+async function downloadStoredFile(admin: ReturnType<typeof createClient>, storagePath: string): Promise<Uint8Array | null> {
+  const { data, error } = await admin.storage.from("documents").download(storagePath);
+  if (error || !data) return null;
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+async function countPdfPages(bytes: Uint8Array): Promise<number | null> {
+  try {
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    return doc.getPageCount();
+  } catch {
+    return null;
+  }
+}
+
+const VALID_KINDS = new Set<string>(["settlement", "statement", "toll_bill", "repair_invoice", "delivery_receipt", "fuel_receipt", "other"]);
+
+function buildClassifyPrompt(start: number, end: number, total: number): string {
+  return `This file contains pages ${start}-${end} of a ${total}-page PDF (its first page is page ${start} of the document). Classify every page. Return ONLY raw JSON, no markdown:
+{"carrier":"","pages":[{"page":${start},"kind":"settlement","hasTotalCashFlow":false}]}
+Rules:
+- "page": the page number in the ORIGINAL ${total}-page document (${start} to ${end}).
+- "carrier": the trucking carrier that issued the settlement, exactly as printed (for example "Prime Inc."), or "" if no settlement page is in these pages.
+- "kind": "settlement" = a carrier settlement page (header, revenue, loads, deductions, fuel or reimbursement detail); "statement" = the carrier's operating statement / Statement of Income and Expense (revenue and expense blocks with weekly and year-to-date columns); "toll_bill" = an E-ZPass or other toll bill; "repair_invoice" = a shop repair or parts invoice; "delivery_receipt" = a bill of lading, delivery receipt or proof of delivery; "fuel_receipt" = a fuel receipt; "other" = anything else.
+- "hasTotalCashFlow": true only if the words TOTAL CASH FLOW are printed on that page.
+Return exactly one entry per page, in page order.`;
+}
+
+function parseClassification(raw: unknown, start: number, end: number): { pages: ClassifiedPage[]; carrier: string | null } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as { carrier?: unknown; pages?: unknown };
+  if (!Array.isArray(obj.pages)) return null;
+  const entries = obj.pages
+    .map((p) => p as { page?: unknown; kind?: unknown; hasTotalCashFlow?: unknown })
+    .filter((p) => typeof p.page === "number" && Number.isFinite(p.page as number));
+  // Some replies number the window's pages 1..k instead of start..end.
+  const k = end - start + 1;
+  const relative = start > 1 && entries.length > 0 && entries.every((p) => (p.page as number) >= 1 && (p.page as number) <= k) &&
+    !entries.some((p) => (p.page as number) >= start && (p.page as number) <= end && (p.page as number) > k);
+  const pages: ClassifiedPage[] = entries.map((p) => ({
+    page: relative ? (p.page as number) + start - 1 : (p.page as number),
+    kind: (typeof p.kind === "string" && VALID_KINDS.has(p.kind) ? p.kind : "other") as PageKind,
+    hasTotalCashFlow: p.hasTotalCashFlow === true,
+  }));
+  const carrier = typeof obj.carrier === "string" && obj.carrier.trim() ? obj.carrier.trim() : null;
+  return { pages: pages.filter((p) => p.page >= start && p.page <= end), carrier };
+}
+
+function attachmentHint(kind: PageKind): string {
+  if (kind === "toll_bill" || kind === "repair_invoice") {
+    return `\n\nThis page is an attachment (${kind === "toll_bill" ? "a toll bill" : "a repair invoice"}) stapled to the settlement. Extract only what it shows (a repair invoice into settlement.maintenance, a toll bill into settlement.tolls). Leave every settlement total and the operating statement at their defaults.`;
+  }
+  return "";
+}
+
+type JobRow = {
+  id: string;
+  user_id: string;
+  storage_path: string;
+  media_type: string;
+  page_plan: StoredPlan | null;
+  page_results: Record<string, PageResult> | null;
+  document_id: string | null;
+  created_at: string;
+};
+
+// The real JobDeps for one run of `jobId`. `invocationStartedAt` is when
+// THIS invocation (HTTP request) began — the platform's wall clock counts
+// from there, not from when the step starts.
+function buildJobDeps(
+  admin: ReturnType<typeof createClient>,
+  row: JobRow,
+  pdf: StoredPdf,
+  anthropicKey: string,
+  invocationStartedAt: number,
+): JobDeps {
+  const owner = crypto.randomUUID();
+  const jobId = row.id;
+  const userId = row.user_id;
+  const plan = row.page_plan as StoredPlan;
+  const prompt = buildExtractionPrompt(
+    plan.promptInputs?.docHint,
+    plan.promptInputs?.locale,
+    plan.promptInputs?.customCategories,
+    plan.promptInputs?.learningRules,
+    plan.promptInputs?.carrierCodeMaps,
+  );
+  const isImage = row.media_type.startsWith("image/");
+
+  const store: JobStore = {
+    async claim(o, leaseMs) {
+      const { data, error } = await admin.rpc("import_job_claim", { p_job_id: jobId, p_owner: o, p_lease_seconds: Math.ceil(leaseMs / 1000) });
+      if (error) console.error(`[ai-import] job ${jobId}: claim failed: ${error.message}`);
+      return data === true;
+    },
+    async load() {
+      const { data, error } = await admin.from("import_jobs").select("page_plan, page_results, document_id, created_at").eq("id", jobId).eq("user_id", userId).single();
+      if (error || !data) throw new Error(`could not load job ${jobId}: ${error?.message ?? "no row"}`);
+      return {
+        plan: data.page_plan as StoredPlan,
+        results: (data.page_results ?? {}) as Record<string, PageResult>,
+        documentId: (data.document_id as string | null) ?? null,
+        startedAt: data.created_at as string,
+      };
+    },
+    async savePlan(o, p, fields) {
+      const now = new Date().toISOString();
+      const update: Record<string, unknown> = { page_plan: p, heartbeat_at: now, updated_at: now };
+      if (fields.progress) update.progress = fields.progress;
+      if (fields.status) update.status = fields.status;
+      if (fields.errorMessage !== undefined) update.error_message = fields.errorMessage == null ? null : scrubBankDigits(fields.errorMessage);
+      if (fields.errorStep !== undefined) update.error_step = fields.errorStep;
+      if (fields.errorPage !== undefined) update.error_page = fields.errorPage;
+      if (fields.pagesTotal !== undefined) update.pages_total = fields.pagesTotal;
+      if (fields.completed) update.completed_at = now;
+      if (fields.resultJson !== undefined && !fields.resultOnlyIfUnsaved) update.result_json = fields.resultJson == null ? null : scrubBankDigits(fields.resultJson);
+      const { data, error } = await admin.from("import_jobs").update(update).eq("id", jobId).eq("user_id", userId).eq("lease_owner", o).select("id");
+      if (error) {
+        console.error(`[ai-import] job ${jobId}: save failed: ${error.message}`);
+        return false;
       }
-      // else: genuinely can't chunk (single-page document, or pdf-lib
-      // couldn't determine a page count) — keep the original single-call
-      // error as the final result.
-    }
+      if (fields.resultJson !== undefined && fields.resultOnlyIfUnsaved) {
+        await admin
+          .from("import_jobs")
+          .update({ result_json: fields.resultJson == null ? null : scrubBankDigits(fields.resultJson) })
+          .eq("id", jobId)
+          .eq("user_id", userId)
+          .eq("lease_owner", o)
+          .is("document_id", null);
+      }
+      return (data ?? []).length > 0;
+    },
+    async putPage(o, page, result) {
+      const { data, error } = await admin.rpc("import_job_put_page", { p_job_id: jobId, p_owner: o, p_page: page, p_result: scrubBankDigits(result) });
+      if (error) console.error(`[ai-import] job ${jobId}: put page ${page} failed: ${error.message}`);
+      return data === true;
+    },
+    async release(o) {
+      const { error } = await admin.rpc("import_job_release", { p_job_id: jobId, p_owner: o });
+      if (error) console.error(`[ai-import] job ${jobId}: release failed: ${error.message}`);
+    },
+    async loadBaseDocument(documentId) {
+      const { data } = await admin.from("documents").select("parsed_json").eq("id", documentId).eq("user_id", userId).maybeSingle();
+      return (data?.parsed_json as unknown) ?? null;
+    },
+  };
 
-    if ("errorType" in result) {
-      await markFailed(result.message, result.errorType);
+  async function call(contentBlock: Record<string, unknown>, text: string, timeoutMs: number, model?: { model: string; maxTokens: number }): Promise<ModelOutcome> {
+    const started = performance.now();
+    const r = await extractOnePass(anthropicKey, contentBlock, text, timeoutMs, MAX_ANTHROPIC_ATTEMPTS, model);
+    console.log(`[ai-import] INSTRUMENT job=${jobId} model=${model?.model ?? ANTHROPIC_MODEL} durationMs=${Math.round(performance.now() - started)} status=${"errorType" in r ? r.errorType : "success"}`);
+    if ("errorType" in r) return { errorType: r.errorType as ModelFailure["errorType"], message: r.message, retryAfterSeconds: r.extra?.retryAfterSeconds as number | undefined };
+    return { extraction: r.extraction };
+  }
+
+  const model: JobModel = {
+    wholeDocument(timeoutMs) {
+      const block = isImage
+        ? { type: "image", source: { type: "base64", media_type: row.media_type, data: pdf.wholeBase64() } }
+        : { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.wholeBase64() } };
+      return call(block, prompt, timeoutMs);
+    },
+    async classifyWindow(start, maxEnd, timeoutMs) {
+      // Never more than CLASSIFY_WINDOW_MAX_BYTES in one call: halve the
+      // window until it fits.
+      let end = maxEnd;
+      let data = await pdf.rangeBase64(start, end);
+      while (Math.floor((data.length * 3) / 4) > CLASSIFY_WINDOW_MAX_BYTES && end > start) {
+        end = start + Math.floor((end - start + 1) / 2) - 1;
+        data = await pdf.rangeBase64(start, end);
+      }
+      if (Math.floor((data.length * 3) / 4) > CLASSIFY_WINDOW_MAX_BYTES) {
+        return { errorType: "oversized", message: `Page ${start} alone is larger than ${CLASSIFY_WINDOW_MAX_BYTES / (1024 * 1024)} MB.` };
+      }
+      const r = await call(
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data } },
+        buildClassifyPrompt(start, end, plan.totalPages),
+        timeoutMs,
+        { model: CLASSIFY_MODEL, maxTokens: CLASSIFY_MAX_TOKENS },
+      );
+      if ("errorType" in r) return r;
+      const parsed = parseClassification(r.extraction, start, end);
+      if (!parsed) return { errorType: "parse_failed", message: "The page classification reply could not be read." };
+      return { ...parsed, windowEnd: end };
+    },
+    async readPage(page, kind, timeoutMs) {
+      const data = await pdf.rangeBase64(page, page);
+      const text = prompt + buildChunkPromptAddendum({ start: page, end: page }, plan.totalPages) + attachmentHint(kind);
+      return call({ type: "document", source: { type: "base64", media_type: "application/pdf", data } }, text, timeoutMs);
+    },
+  };
+
+  return {
+    owner,
+    limits: JOB_LIMITS,
+    elapsedMs: () => performance.now() - invocationStartedAt,
+    nowMs: () => Date.now(),
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    store,
+    model,
+    merge(pages, base) {
+      const sorted = [...pages].sort((a, b) => a.page - b.page).map((p) => p.extraction as ChunkExtraction);
+      const all = base ? [base as ChunkExtraction, ...sorted] : sorted;
+      if (all.length === 0) return null;
+      return all.length === 1 ? { ...all[0] } : mergeChunkedExtractions(all);
+    },
+    scrub: scrubBankDigits,
+    isPrimeCarrier: isPrimeCarrierName,
+    logUsage: (callType, success, reason) => logJobUsage(admin, userId, callType, success, reason),
+    consumeCreditIfOverAllowance: () => consumeCreditForUserIfOverAllowance(admin, userId),
+    continueInNewInvocation: () => startNextRun(jobId),
+    startHeartbeat() {
+      const id = setInterval(() => {
+        admin.from("import_jobs").update({ heartbeat_at: new Date().toISOString() }).eq("id", jobId).eq("lease_owner", owner).then(() => {}, () => {});
+      }, HEARTBEAT_EVERY_MS);
+      return () => clearInterval(id);
+    },
+    log: (message) => console.log(`[ai-import] job ${jobId}: ${message}`),
+  };
+}
+
+// Starts the next run of a job: this same function, mode 'continue_job',
+// authorized with the service key (never accepted from a user). Awaited
+// only until that invocation answers 202; if it fails, the app resumes the
+// job once its heartbeat is 3 minutes old.
+async function startNextRun(jobId: string): Promise<void> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) {
+    console.error(`[ai-import] job ${jobId}: cannot start the next run (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing) — the app will resume it`);
+    return;
+  }
+  try {
+    const resp = await fetch(`${url}/functions/v1/ai-import`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, apikey: key, "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "continue_job", jobId }),
+    });
+    await resp.text().catch(() => "");
+    console.log(`[ai-import] job ${jobId}: next run requested, status ${resp.status}`);
+  } catch (err) {
+    console.error(`[ai-import] job ${jobId}: next run request failed: ${(err as Error).message} — the app will resume it`);
+  }
+}
+
+// Runs one step of `jobId` in the background of THIS invocation.
+async function runJobRun(admin: ReturnType<typeof createClient>, jobId: string, invocationStartedAt: number, preloaded?: Uint8Array): Promise<void> {
+  try {
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const { data: row, error } = await admin
+      .from("import_jobs")
+      .select("id, user_id, storage_path, media_type, page_plan, page_results, document_id, created_at")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error || !row) {
+      console.error(`[ai-import] job ${jobId}: not found for a run: ${error?.message ?? "no row"}`);
       return;
     }
-
-    await admin.from("import_jobs").update({
-      status: "ready",
-      result_json: result.extraction,
-      updated_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
-    }).eq("id", jobId).eq("user_id", userId);
-    await logAiUsage(supabase, userId, true, null);
-    await consumeOneCreditIfOverAllowance(supabase, userId);
-    console.log(`[ai-import] job ${jobId} ready`);
+    if (!row.page_plan || !anthropicKey) {
+      console.error(`[ai-import] job ${jobId}: no plan or no ANTHROPIC_API_KEY — nothing to run`);
+      return;
+    }
+    const bytes = preloaded ?? (await downloadStoredFile(admin, row.storage_path as string));
+    if (!bytes) {
+      await admin.from("import_jobs").update({
+        status: "failed",
+        error_message: "Could not read the uploaded file — your file is safe. Resume to try again.",
+        error_step: "internal",
+        updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      return;
+    }
+    const deps = buildJobDeps(admin, row as unknown as JobRow, new StoredPdf(bytes, row.media_type as string), anthropicKey, invocationStartedAt);
+    const result = await runJobStep(deps);
+    console.log(`[ai-import] job ${jobId}: run ended (${result.kind}, ${result.modelCalls} model call(s), ${Math.round(performance.now() - invocationStartedAt)}ms since the invocation started)`);
   } catch (err) {
-    // A thrown error anywhere in this function (a network blip that
-    // wasn't already caught/converted by extractOnePass, a genuinely
-    // unexpected bug) must never leave the job silently stuck in
-    // 'processing' forever — same "never leave things in an ambiguous
-    // state" principle the rest of this codebase already follows.
-    await markFailed(err instanceof Error ? err.message : String(err), "unexpected");
+    console.error(`[ai-import] job ${jobId}: run threw: ${(err as Error).message}`);
   }
 }
 
-// JOB START / RETRY (owner decision 2026-08-24) — branched to from
-// Deno.serve right after auth, before the synchronous path's own
-// fileBase64/mediaType handling (a job request never sends fileBase64 at
-// all). Creates (mode 'job') or resets (mode 'retry_job', REUSING the
-// same job row and its already-uploaded storage_path — "never make the
-// user pick it again") the import_jobs row, runs the SAME daily-limit/
-// usage-limit/ANTHROPIC_API_KEY checks the synchronous path runs on a
-// fresh request, downloads the file from Storage, and kicks off
-// EdgeRuntime.waitUntil(runJobInBackground(...)) before returning
-// {jobId} with 202 Accepted. Every failure path here marks the job row
-// 'failed' with a real reason too — a job the user can SEE failed
-// (with retry available) is far better than an HTTP error that vanishes
-// with no trace of what was attempted.
+function edgeRuntimeAvailable(): boolean {
+  // deno-lint-ignore no-explicit-any
+  return typeof (globalThis as any).EdgeRuntime?.waitUntil === "function";
+}
+
+function runInBackground(work: Promise<void>): void {
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime.waitUntil(work);
+}
+
+function accepted(body: Record<string, unknown>): Response {
+  return new Response(JSON.stringify(body), { status: 202, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+}
+
+type JobRequestBody = PromptInputs & {
+  mode?: string;
+  storagePath?: string;
+  mediaType?: string;
+  fileName?: string;
+  retryJobId?: string;
+  jobId?: string;
+  answer?: "read_first" | "cancel";
+  retryFailed?: boolean;
+  documentId?: string;
+  pages?: number[];
+};
+
+// Mode 'job': create the import_jobs row, check the limits, plan, start
+// run 1. Hard input limits (stated, friendly): MAX_IMPORT_FILE_BYTES and
+// MAX_IMPORT_PAGES.
 async function handleJobStart(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  body: {
-    mode?: "job" | "retry_job";
-    storagePath?: string;
-    mediaType?: string;
-    fileName?: string;
-    retryJobId?: string;
-    docHint?: string;
-    locale?: string;
-    customCategories?: string[];
-    learningRules?: { keyword: string; category: string }[];
-    carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
-  },
+  body: JobRequestBody,
+  invocationStartedAt: number,
 ): Promise<Response> {
-  // UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A CAPABILITY
-  // CHECK (P1 fix, FULL SYSTEM AUDIT) — checked FIRST, before creating or
-  // resetting any import_jobs row: EdgeRuntime is a Supabase Edge Runtime
-  // global, not a standard Deno/TS lib type — if it's ever missing
-  // (a different deployment target, a runtime version without it), the OLD
-  // code called `.waitUntil` on `undefined` and threw synchronously deep
-  // inside this function, which (compounded by the caller's own missing
-  // `await`, fixed separately below) could escape the top-level try/catch
-  // as a raw, unstructured error. Failing fast HERE — before any job row
-  // exists — means there is never a job silently stuck at "queued" with
-  // nothing ever going to process it.
-  // deno-lint-ignore no-explicit-any
-  if (typeof (globalThis as any).EdgeRuntime?.waitUntil !== "function") {
+  if (!edgeRuntimeAvailable()) {
     console.error("[ai-import] EdgeRuntime.waitUntil is not available in this runtime — background import cannot start.");
     return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
   }
+  if (!body.storagePath || !body.mediaType) return errorResponse("bad_request", "storagePath and mediaType are required.", 400);
+  const admin = getServiceRoleAdminClient();
+  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
 
-  const isRetry = body.mode === "retry_job";
-  let jobId: string;
-  let storagePath: string;
-  let mediaType: string;
-
-  if (isRetry) {
-    if (!body.retryJobId) return errorResponse("bad_request", "retryJobId is required.", 400);
-    const { data: existing, error: fetchError } = await supabase
-      .from("import_jobs")
-      .select("id, storage_path, media_type, user_id")
-      .eq("id", body.retryJobId)
-      .maybeSingle();
-    if (fetchError || !existing || existing.user_id !== userId) {
-      return errorResponse("bad_request", "That import job could not be found.", 404);
-    }
-    jobId = existing.id as string;
-    storagePath = existing.storage_path as string;
-    mediaType = existing.media_type as string;
-    await supabase.from("import_jobs").update({
-      status: "queued",
-      pages_done: 0,
-      pages_total: null,
-      result_json: null,
-      error_message: null,
-      error_step: null,
-      updated_at: new Date().toISOString(),
-      completed_at: null,
-    }).eq("id", jobId);
-  } else {
-    if (!body.storagePath || !body.mediaType) {
-      return errorResponse("bad_request", "storagePath and mediaType are required.", 400);
-    }
-    storagePath = body.storagePath;
-    mediaType = body.mediaType;
-    const { data: inserted, error: insertError } = await supabase
-      .from("import_jobs")
-      .insert({ user_id: userId, storage_path: storagePath, media_type: mediaType, file_name: body.fileName ?? null, status: "queued" })
-      .select("id")
-      .single();
-    if (insertError || !inserted) {
-      console.error(`[ai-import] import_jobs insert failed: ${insertError?.message ?? "no row returned"}`);
-      return errorResponse("internal", "Could not start the import job — your data is safe. Please try again.", 500);
-    }
-    jobId = inserted.id as string;
+  const { data: inserted, error: insertError } = await supabase
+    .from("import_jobs")
+    .insert({ user_id: userId, storage_path: body.storagePath, media_type: body.mediaType, file_name: body.fileName ?? null, status: "queued" })
+    .select("id")
+    .single();
+  if (insertError || !inserted) {
+    console.error(`[ai-import] import_jobs insert failed: ${insertError?.message ?? "no row returned"}`);
+    return errorResponse("internal", "Could not start the import job — your data is safe. Please try again.", 500);
   }
-
+  const jobId = inserted.id as string;
   async function failJob(message: string, step: string, status: number): Promise<Response> {
-    await supabase.from("import_jobs").update({
-      status: "failed", error_message: message, error_step: step, updated_at: new Date().toISOString(),
-    }).eq("id", jobId);
+    await supabase.from("import_jobs").update({ status: "failed", error_message: message, error_step: step, updated_at: new Date().toISOString() }).eq("id", jobId);
     return errorResponse(step as ErrorType, message, status);
   }
 
-  // DAILY LIMIT + USAGE LIMIT — the SAME checks a fresh synchronous
-  // request runs; a background job is still a real import and must
-  // respect the same limits, checked BEFORE any Anthropic call/Storage
-  // download.
   const startOfDayUtc = new Date();
   startOfDayUtc.setUTCHours(0, 0, 0, 0);
   const { count, error: countError } = await supabase
@@ -1658,70 +1827,184 @@ async function handleJobStart(
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .gte("imported_at", startOfDayUtc.toISOString());
-  if (countError) {
-    console.error(`[ai-import] job ${jobId}: daily-count check failed: ${countError.message}`);
-    return failJob("Could not check today's import count — your data is safe. Please try again.", "internal", 500);
-  }
-  if ((count ?? 0) >= DAILY_IMPORT_LIMIT) {
-    return failJob(`Daily import limit reached (${DAILY_IMPORT_LIMIT}/day). Try again tomorrow.`, "rate_limited", 429);
-  }
+  if (countError) return failJob("Could not check today's import count — your data is safe. Please try again.", "internal", 500);
+  if ((count ?? 0) >= DAILY_IMPORT_LIMIT) return failJob(`Daily import limit reached (${DAILY_IMPORT_LIMIT}/day). Try again tomorrow.`, "rate_limited", 429);
 
+  // One import counts once against the allowance, whatever its page count;
+  // the count happens only when the job becomes ready (failures never count).
   const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
   if (!usageCheck.allowed) {
     await logAiUsage(supabase, userId, false, "usage_limit_reached");
     return failJob(usageCheck.message, "usage_limit_reached", 429);
   }
-
-  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!anthropicKey) {
+  if (!Deno.env.get("ANTHROPIC_API_KEY")) {
     console.error("[ai-import] ANTHROPIC_API_KEY not set");
     return failJob("AI reading is temporarily unavailable — your data is safe, and you can still add entries manually.", "internal", 500);
   }
 
-  // PDF/FILE SIZE GUARD — re-checked here (belt and suspenders, same
-  // spirit as the synchronous path's own guard) even though the client
-  // already checked before uploading; a client bug/bypass must never be
-  // the only thing standing between an oversized file and this function.
-  const { data: fileData, error: downloadError } = await supabase.storage.from("documents").download(storagePath);
-  if (downloadError || !fileData) return failJob("Could not read the uploaded file — your data is safe. Please try again.", "internal", 500);
-  const fileBytes = new Uint8Array(await fileData.arrayBuffer());
-  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-  if (fileBytes.byteLength > MAX_FILE_SIZE_BYTES) {
-    return failJob("This file is too large — try splitting it or exporting a smaller version.", "oversized", 413);
+  const bytes = await downloadStoredFile(admin, body.storagePath);
+  if (!bytes) return failJob("Could not read the uploaded file — your data is safe. Please try again.", "internal", 500);
+  // Size first: a file over the limit is never parsed at all.
+  const sizeRefusal = checkImportLimits(0, bytes.byteLength);
+  if (sizeRefusal) return failJob(sizeRefusal.message, sizeRefusal.code, 413);
+  const isImage = body.mediaType.startsWith("image/");
+  const totalPages = isImage ? 1 : await countPdfPages(bytes);
+  if (totalPages == null) return failJob("This PDF could not be opened — it may be damaged or password-protected. Try exporting it again.", "invalid_document", 422);
+  const pageRefusal = checkImportLimits(totalPages, bytes.byteLength);
+  if (pageRefusal) return failJob(pageRefusal.message, pageRefusal.code, 413);
+
+  const plan: StoredPlan = {
+    ...newImportPlan(body.mediaType, totalPages, bytes.byteLength),
+    promptInputs: { docHint: body.docHint, locale: body.locale, customCategories: body.customCategories, learningRules: body.learningRules, carrierCodeMaps: body.carrierCodeMaps },
+  };
+  const { error: planError } = await admin
+    .from("import_jobs")
+    .update({ page_plan: plan, page_results: {}, pages_total: totalPages, updated_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .eq("user_id", userId);
+  if (planError) {
+    console.error(`[ai-import] job ${jobId}: plan write failed (is PENDING_SQL §78 applied?): ${planError.message}`);
+    return failJob("The import service is being updated — your file is safe. Please try again in a few minutes.", "internal", 500);
   }
-  const fileBase64 = bytesToBase64(fileBytes);
 
-  const prompt = buildExtractionPrompt(body.docHint, body.locale, body.customCategories, body.learningRules, body.carrierCodeMaps);
+  console.log(`[ai-import] job ${jobId} accepted: ${totalPages} page(s), ${bytes.byteLength} bytes, mediaType=${body.mediaType}`);
+  runInBackground(runJobRun(admin, jobId, invocationStartedAt, bytes));
+  return accepted({ jobId });
+}
 
-  console.log(`[ai-import] job ${jobId} accepted (${isRetry ? "retry" : "new"}), mediaType=${mediaType}, kicking off background processing`);
-  // SERVICE-ROLE CLIENT FOR BACKGROUND WORK (P1 fix, FULL SYSTEM AUDIT) —
-  // runJobInBackground()'s own import_jobs status writes now go through
-  // `admin` (service-role, immune to the CALLER's JWT expiring mid-job)
-  // instead of `supabase` (the caller-JWT-scoped client this function was
-  // called with) — a background job can run up to JOB_HARD_BUDGET_MS
-  // (4 minutes), long enough for a short-lived session token to expire,
-  // which used to mean every subsequent status-update write (including the
-  // one that marks a job 'failed') could start failing silently, stranding
-  // the job in "processing" forever with no way to ever surface an error.
-  // `consume_ai_import_credit()` still needs the ORIGINAL caller-JWT
-  // client specifically (it's `security definer` and derives the user
-  // EXCLUSIVELY from auth.uid() — a service-role call has no JWT/auth.uid()
-  // context at all) — `supabase` is still passed through for that one call
-  // and for the existing best-effort `logAiUsage()`, both already tolerant
-  // of failure (see runJobInBackground()'s own comments) and far less
-  // severe than the job-status-write case if a stale JWT does fail there.
-  // Falls back to the caller's own client (the OLD, pre-fix behavior) only
-  // if SUPABASE_SERVICE_ROLE_KEY isn't configured — degraded reliability,
-  // never a newly-introduced hard failure for an existing deployment.
-  const admin = getServiceRoleAdminClient() ?? supabase;
-  // EdgeRuntime is a Supabase Edge Runtime global (not a standard Deno/TS
-  // lib type, hence the loose reference) — this is what lets processing
-  // continue after the response below is already sent. Capability already
-  // confirmed present at the top of this function.
-  // deno-lint-ignore no-explicit-any
-  (globalThis as any).EdgeRuntime.waitUntil(runJobInBackground(supabase, admin, jobId, userId, anthropicKey, fileBase64, mediaType, prompt));
+// Mode 'resume_job' (and the old 'retry_job'): continue the SAME job from
+// the first page without a stored result — finished pages are never read
+// again and pages_done is never reset. `retryFailed` (the user's own
+// "Resume from page N" tap) gives failed pages fresh attempts; the app's
+// automatic restart of an interrupted job leaves them as they are.
+async function handleJobResume(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  body: JobRequestBody,
+  invocationStartedAt: number,
+): Promise<Response> {
+  const jobId = body.jobId ?? body.retryJobId;
+  if (!jobId) return errorResponse("bad_request", "jobId is required.", 400);
+  if (!edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
+  const admin = getServiceRoleAdminClient();
+  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
+  const { data: job, error } = await supabase
+    .from("import_jobs")
+    .select("id, user_id, status, page_plan, page_results, storage_path, media_type, file_name")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
 
-  return new Response(JSON.stringify({ jobId }), { status: 202, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  const retryFailed = body.retryFailed !== false;
+  let plan = job.page_plan as StoredPlan | null;
+  let results = (job.page_results ?? {}) as Record<string, PageResult>;
+  if (!plan) {
+    // A job started before §78 has no plan: start it as a new import.
+    return handleJobStart(supabase, userId, { ...body, storagePath: job.storage_path as string, mediaType: job.media_type as string, fileName: (job.file_name as string | null) ?? undefined }, invocationStartedAt);
+  }
+  plan = { ...plan };
+  if (retryFailed) {
+    results = resetFailedPages(results);
+    if (plan.phase === "failed") plan.phase = plan.pages.length > 0 ? "pages" : "start";
+    // A user's Resume gets a fresh allowance of runs (the guard is for runaway loops).
+    plan.runs = Math.min(plan.runs, MAX_RUNS_PER_JOB - 10);
+  }
+  const update: Record<string, unknown> = { page_plan: plan, updated_at: new Date().toISOString() };
+  if (retryFailed) {
+    update.page_results = results;
+    update.error_message = null;
+    update.error_step = null;
+    update.error_page = null;
+    if (job.status === "failed") update.status = "queued";
+  }
+  const { error: updateError } = await admin.from("import_jobs").update(update).eq("id", jobId).eq("user_id", userId);
+  if (updateError) return errorResponse("internal", "Could not resume the import — your file is safe. Please try again.", 500);
+  runInBackground(runJobRun(admin, jobId, invocationStartedAt));
+  return accepted({ jobId });
+}
+
+// Mode 'answer_job': the user's answer to "This file has N pages. Read the
+// first 40 now?" — never read silently past the cap.
+async function handleJobAnswer(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  body: JobRequestBody,
+  invocationStartedAt: number,
+): Promise<Response> {
+  if (!body.jobId) return errorResponse("bad_request", "jobId is required.", 400);
+  const admin = getServiceRoleAdminClient();
+  if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe.", 500);
+  const { data: job } = await supabase.from("import_jobs").select("id, user_id, page_plan").eq("id", body.jobId).maybeSingle();
+  if (!job || job.user_id !== userId || !job.page_plan) return errorResponse("bad_request", "That import job could not be found.", 404);
+  const plan = { ...(job.page_plan as StoredPlan) };
+  if (plan.phase !== "awaiting_decision") return accepted({ jobId: job.id });
+  if (body.answer === "cancel") {
+    plan.phase = "failed";
+    await admin.from("import_jobs").update({
+      page_plan: plan,
+      status: "failed",
+      error_step: "cancelled",
+      error_message: `Not read — you chose not to read this ${plan.totalPages}-page file.`,
+      updated_at: new Date().toISOString(),
+    }).eq("id", job.id).eq("user_id", userId);
+    return accepted({ jobId: job.id });
+  }
+  plan.pageCap = { cap: plan.pageCap?.cap ?? 40, answer: "read_first" };
+  plan.phase = "pages";
+  await admin.from("import_jobs").update({ page_plan: plan, status: "queued", updated_at: new Date().toISOString() }).eq("id", job.id).eq("user_id", userId);
+  runInBackground(runJobRun(admin, job.id as string, invocationStartedAt));
+  return accepted({ jobId: job.id });
+}
+
+// Mode 'read_pages': read chosen pages of an already-saved document ("Read
+// the missing pages", "Read this page"). The result is the saved week plus
+// those pages, reviewed and saved like any import (Save replaces the
+// week). Part of the original import: never counts against the allowance
+// again (logged as 'ai_import_pages').
+async function handleReadPages(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  body: JobRequestBody,
+  invocationStartedAt: number,
+): Promise<Response> {
+  if (!body.documentId || !Array.isArray(body.pages) || body.pages.length === 0) return errorResponse("bad_request", "documentId and pages are required.", 400);
+  const admin = getServiceRoleAdminClient();
+  if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe.", 500);
+  const { data: doc } = await supabase.from("documents").select("id, storage_path, filename, parsed_json").eq("id", body.documentId).maybeSingle();
+  if (!doc || !doc.storage_path) return errorResponse("bad_request", "That document's file could not be found.", 404);
+  const bytes = await downloadStoredFile(admin, doc.storage_path as string);
+  if (!bytes) return errorResponse("internal", "Could not read the stored file — your data is safe. Please try again.", 500);
+  const totalPages = await countPdfPages(bytes);
+  if (totalPages == null) return errorResponse("invalid_document", "The stored PDF could not be opened.", 422);
+  const pageMap = ((doc.parsed_json as { pageMap?: PageMapEntry[] } | null)?.pageMap ?? []) as PageMapEntry[];
+  const kindOf = new Map(pageMap.map((p) => [p.page, p.kind]));
+  const requested = body.pages.slice(0, UNKNOWN_LAYOUT_PAGE_CAP).map((page) => ({ page, kind: (kindOf.get(page) ?? "unknown") as PageKind }));
+  const plan: StoredPlan = {
+    ...newReadPagesPlan(totalPages, bytes.byteLength, requested, doc.id as string),
+    promptInputs: { docHint: body.docHint, locale: body.locale, customCategories: body.customCategories, learningRules: body.learningRules, carrierCodeMaps: body.carrierCodeMaps },
+  };
+  if (plan.pages.length === 0) return errorResponse("bad_request", "None of those pages exist in this document.", 400);
+  const { data: inserted, error } = await supabase
+    .from("import_jobs")
+    .insert({ user_id: userId, storage_path: doc.storage_path, media_type: "application/pdf", file_name: doc.filename ?? null, status: "queued", page_plan: plan, page_results: {}, pages_total: totalPages })
+    .select("id")
+    .single();
+  if (error || !inserted) {
+    console.error(`[ai-import] read_pages job insert failed: ${error?.message ?? "no row"}`);
+    return errorResponse("internal", "Could not start reading those pages — your data is safe. Please try again.", 500);
+  }
+  runInBackground(runJobRun(admin, inserted.id as string, invocationStartedAt));
+  return accepted({ jobId: inserted.id });
+}
+
+// Mode 'continue_job': the next run of a chain, requested by the previous
+// run with the service key. Never accepted with a user token.
+async function handleJobContinue(body: JobRequestBody, invocationStartedAt: number): Promise<Response> {
+  if (!body.jobId) return errorResponse("bad_request", "jobId is required.", 400);
+  const admin = getServiceRoleAdminClient();
+  if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now.", 500);
+  runInBackground(runJobRun(admin, body.jobId, invocationStartedAt));
+  return accepted({ jobId: body.jobId });
 }
 
 Deno.serve(async (req: Request) => {
@@ -1760,6 +2043,22 @@ Deno.serve(async (req: Request) => {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return errorResponse("unauthenticated", "Missing Authorization header.", 401);
+  }
+
+  const rawBody = await req.text();
+  // RESUMABLE JOBS (owner decision 2026-10-13): the next run of a job is
+  // requested by the previous run with the service key — the only request
+  // this function accepts without a user session, and only for this mode.
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (serviceKey && authHeader === `Bearer ${serviceKey}`) {
+    let continueBody: { mode?: string; jobId?: string } = {};
+    try {
+      continueBody = JSON.parse(rawBody);
+    } catch {
+      return errorResponse("bad_request", "Request body must be valid JSON.", 400);
+    }
+    if (continueBody.mode !== "continue_job") return errorResponse("bad_request", "Unsupported request.", 400);
+    return await handleJobContinue(continueBody, invocationStartedAt);
   }
 
   const supabase = createClient(
@@ -1810,24 +2109,31 @@ Deno.serve(async (req: Request) => {
     // BACKGROUND IMPORT (owner decision 2026-08-24) — mode 'job' starts a
     // new server-tracked import_jobs row and returns {jobId} immediately
     // (202 Accepted), continuing to process in the background via
-    // EdgeRuntime.waitUntil() — see runJobInBackground()/handleJobStart()
-    // below. Mode 'retry_job' reuses an existing FAILED job's own already-
-    // uploaded storagePath (never asks the client to re-pick/re-upload).
-    // Neither mode sends fileBase64 at all — the file is read from Storage
+    // EdgeRuntime.waitUntil() — see handleJobStart()/runJobRun() above.
+    // No job mode sends fileBase64 — the file is read from Storage
     // server-side via storagePath (a new upload, for 'job') or the job's
-    // own stored path (for 'retry_job').
-    mode?: "job" | "retry_job";
+    // own stored path.
+    // RESUMABLE JOBS (owner decision 2026-10-13): 'resume_job' continues a
+    // job from its first page without a stored result ('retry_job' is the
+    // old name, same behavior); 'answer_job' answers the page-cap question;
+    // 'read_pages' re-reads chosen pages of a saved document.
+    mode?: "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages";
     storagePath?: string;
     fileName?: string;
     retryJobId?: string;
+    jobId?: string;
+    answer?: "read_first" | "cancel";
+    retryFailed?: boolean;
+    documentId?: string;
+    pages?: number[];
   };
   try {
-    body = await req.json();
+    body = JSON.parse(rawBody);
   } catch {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
   }
 
-  if (body.mode === "job" || body.mode === "retry_job") {
+  if (body.mode === "job") {
     // UNAWAITED handleJobStart (P1 fix, FULL SYSTEM AUDIT) — `return
     // handleJobStart(...)` (no `await`) let a REJECTION of that promise
     // escape this try block's own `catch` entirely: a bare `return
@@ -1839,8 +2145,11 @@ Deno.serve(async (req: Request) => {
     // any rejection resolve INSIDE this try block, where the catch below
     // can turn it into the same safe, structured "internal" response
     // every other failure path in this function already returns.
-    return await handleJobStart(supabase, userId, body);
+    return await handleJobStart(supabase, userId, body, invocationStartedAt);
   }
+  if (body.mode === "resume_job" || body.mode === "retry_job") return await handleJobResume(supabase, userId, body, invocationStartedAt);
+  if (body.mode === "answer_job") return await handleJobAnswer(supabase, userId, body, invocationStartedAt);
+  if (body.mode === "read_pages") return await handleReadPages(supabase, userId, body, invocationStartedAt);
 
   const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;
   const orderIndex = body.orderIndex ?? 0;

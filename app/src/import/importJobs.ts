@@ -19,7 +19,31 @@
 // withRateLimitBackoff()) rather than being immediately marked failed. It
 // is an ACTIVE status, not a terminal one — the job is still moving
 // toward completion, just paused.
-export type ImportJobStatus = 'queued' | 'processing' | 'waiting_to_retry' | 'ready' | 'failed';
+// 'paused' (between two server runs of one job) and 'needs_decision' ("This
+// file has N pages. Read the first 40 now?") — RESUMABLE IMPORT JOBS, owner
+// decision 2026-10-13, docs/PENDING_SQL.md §78.
+export type ImportJobStatus = 'queued' | 'processing' | 'paused' | 'waiting_to_retry' | 'needs_decision' | 'ready' | 'failed';
+
+// What the server writes to import_jobs.progress on every page start and
+// finish (supabase/functions/ai-import/jobEngine.ts buildProgress()). Null
+// for a job started before §78.
+export type ImportJobProgress = {
+  phase: 'start' | 'whole' | 'classify' | 'pages' | 'awaiting_decision' | 'done' | 'failed';
+  run: number;
+  totalPages: number;
+  contentTotal: number;
+  contentDone: number;
+  contentFailed: number;
+  current: { page: number; kind: string; role: 'content' | 'attachment' | 'stored'; position: number }[];
+  resumePage: number | null;
+  attachmentsQueued: number;
+  attachmentsDone: number;
+  storedPages: number[];
+  failed: { page: number; kind: string; type: string; run: number; timeoutMs?: number }[];
+  question: { kind: 'page_cap'; totalPages: number; cap: number } | null;
+  startedAt: string;
+  readyAt: string | null;
+};
 
 export type ImportJob = {
   id: string;
@@ -33,10 +57,135 @@ export type ImportJob = {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  // RESUMABLE IMPORT JOBS (§78) — absent/null before §78 runs.
+  progress?: ImportJobProgress | null;
+  heartbeatAt?: string | null;
+  errorPage?: number | null;
+  // Set once the week was saved while attachment pages were still being read.
+  documentId?: string | null;
 };
 
 export function isActiveJob(job: Pick<ImportJob, 'status'>): boolean {
-  return job.status === 'queued' || job.status === 'processing' || job.status === 'waiting_to_retry';
+  return job.status === 'queued' || job.status === 'processing' || job.status === 'paused' || job.status === 'waiting_to_retry';
+}
+
+// ---------------------------------------------------------------------
+// RESUMABLE IMPORT JOBS (owner decision 2026-10-13, 17-page stall
+// redesign): heartbeat, "Interrupted at page N - Resume", progress text.
+// ---------------------------------------------------------------------
+
+// The server updates the job's heartbeat at every page start/finish and
+// every 20 s during a model call. No heartbeat for 2 minutes = the worker
+// was stopped (for example by the platform's 150 s limit): the row says
+// "Interrupted at page N - Resume from page N" instead of "processing".
+export const INTERRUPTED_AFTER_MS = 2 * 60 * 1000;
+// The app resumes an interrupted job by itself after 3 minutes (the
+// server's own next-run request is the normal path; this is the backup).
+export const AUTO_RESUME_AFTER_MS = 3 * 60 * 1000;
+
+function lastSignOfLifeMs(job: Pick<ImportJob, 'heartbeatAt' | 'updatedAt'>): number {
+  const hb = job.heartbeatAt ? new Date(job.heartbeatAt).getTime() : NaN;
+  const up = new Date(job.updatedAt).getTime();
+  return Math.max(Number.isFinite(hb) ? hb : 0, Number.isFinite(up) ? up : 0);
+}
+
+// Work is still expected on this job: an active status, or a ready job
+// whose attachment pages are still being read in the background.
+export function hasPendingWork(job: Pick<ImportJob, 'status' | 'progress'>): boolean {
+  if (isActiveJob(job)) return true;
+  return job.status === 'ready' && (job.progress?.attachmentsQueued ?? 0) > 0;
+}
+
+export function isInterruptedJob(
+  job: Pick<ImportJob, 'status' | 'progress' | 'heartbeatAt' | 'updatedAt'>,
+  nowIso: string,
+  afterMs: number = INTERRUPTED_AFTER_MS
+): boolean {
+  if (!hasPendingWork(job) || job.status === 'waiting_to_retry') return false;
+  return new Date(nowIso).getTime() - lastSignOfLifeMs(job) > afterMs;
+}
+
+export function shouldAutoResume(job: Pick<ImportJob, 'status' | 'progress' | 'heartbeatAt' | 'updatedAt'>, nowIso: string): boolean {
+  return isInterruptedJob(job, nowIso, AUTO_RESUME_AFTER_MS);
+}
+
+// The page a resume starts from: the server's own answer, else the first
+// failed page, else the page that was being read.
+export function resumeFromPage(job: Pick<ImportJob, 'progress' | 'errorPage'>): number | null {
+  const p = job.progress;
+  return p?.resumePage ?? job.errorPage ?? p?.failed[0]?.page ?? p?.current[0]?.page ?? null;
+}
+
+// A structured description of where a job is — the screen turns it into
+// text with t(); kept pure so every state is unit-tested.
+export type JobProgressView =
+  | { state: 'starting'; elapsedSec: number }
+  | { state: 'whole'; totalPages: number; elapsedSec: number }
+  | { state: 'classifying'; totalPages: number; elapsedSec: number }
+  | { state: 'reading'; kind: string; role: 'content' | 'attachment'; position: number; total: number; attachmentsQueued: number; elapsedSec: number }
+  | { state: 'attachments'; done: number; queued: number; elapsedSec: number }
+  | { state: 'between_runs'; contentDone: number; contentTotal: number; attachmentsQueued: number; elapsedSec: number }
+  | { state: 'waiting'; elapsedSec: number }
+  | { state: 'question'; totalPages: number; cap: number }
+  | { state: 'interrupted'; page: number | null }
+  | { state: 'ready'; attachmentsQueued: number; storedPages: number[]; failed: ImportJobProgress['failed'] }
+  | { state: 'failed'; failure: ImportJobProgress['failed'][number] | null; totalPages: number; resumePage: number | null };
+
+export function jobProgressView(job: ImportJob, nowIso: string): JobProgressView {
+  const p = job.progress ?? null;
+  const startedMs = new Date(job.createdAt).getTime();
+  const endMs = p?.readyAt ? new Date(p.readyAt).getTime() : new Date(nowIso).getTime();
+  const elapsedSec = Number.isFinite(startedMs) ? Math.max(0, Math.round((endMs - startedMs) / 1000)) : 0;
+  if (job.status === 'failed') {
+    const failure = p?.failed.find((f) => f.page === job.errorPage) ?? p?.failed[0] ?? null;
+    return { state: 'failed', failure, totalPages: p?.totalPages ?? job.pagesTotal ?? 0, resumePage: resumeFromPage(job) };
+  }
+  if (job.status === 'needs_decision' && p?.question) return { state: 'question', totalPages: p.question.totalPages, cap: p.question.cap };
+  if (isInterruptedJob(job, nowIso)) return { state: 'interrupted', page: resumeFromPage(job) };
+  if (job.status === 'ready') {
+    if ((p?.attachmentsQueued ?? 0) > 0 && p?.current.some((c) => c.role === 'attachment')) {
+      return { state: 'attachments', done: p.attachmentsDone, queued: p.attachmentsQueued, elapsedSec };
+    }
+    return { state: 'ready', attachmentsQueued: p?.attachmentsQueued ?? 0, storedPages: p?.storedPages ?? [], failed: p?.failed ?? [] };
+  }
+  if (job.status === 'waiting_to_retry') return { state: 'waiting', elapsedSec };
+  if (!p) return { state: 'starting', elapsedSec };
+  if (p.phase === 'whole') return { state: 'whole', totalPages: p.totalPages, elapsedSec };
+  if (p.phase === 'classify') return { state: 'classifying', totalPages: p.totalPages, elapsedSec };
+  if (p.phase === 'start') return { state: 'starting', elapsedSec };
+  const reading = p.current.find((c) => c.role !== 'stored');
+  if (reading) {
+    const isAttachment = reading.role === 'attachment';
+    return {
+      state: 'reading',
+      kind: reading.kind,
+      role: isAttachment ? 'attachment' : 'content',
+      position: reading.position,
+      total: isAttachment ? p.attachmentsDone + p.attachmentsQueued : p.contentTotal,
+      attachmentsQueued: p.attachmentsQueued,
+      elapsedSec,
+    };
+  }
+  return { state: 'between_runs', contentDone: p.contentDone, contentTotal: p.contentTotal, attachmentsQueued: p.attachmentsQueued, elapsedSec };
+}
+
+// "7–10, 12" — consecutive pages collapsed into ranges.
+export function formatPageList(pages: number[]): string {
+  const sorted = [...new Set(pages)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const start = sorted[i];
+    let end = start;
+    while (i + 1 < sorted.length && sorted[i + 1] === end + 1) end = sorted[++i];
+    parts.push(end > start ? `${start}–${end}` : String(start));
+  }
+  return parts.join(', ');
+}
+
+export function formatElapsed(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 export function isRetryableJob(job: Pick<ImportJob, 'status'>): boolean {
@@ -90,6 +239,7 @@ export function sortImportJobsForDisplay(jobs: ImportJob[]): ImportJob[] {
 // the row's own presence/status IS the source of truth.
 export type ChipSummary =
   | { kind: 'hidden' }
+  | { kind: 'question'; job: ImportJob }
   | { kind: 'processing'; job: ImportJob; queuedCount: number }
   | { kind: 'ready'; job: ImportJob; readyCount: number }
   | { kind: 'failed'; job: ImportJob; failedCount: number };
@@ -99,13 +249,15 @@ export function deriveChipSummary(jobs: ImportJob[]): ChipSummary {
   // 'processing' chip kind as 'processing' itself — from the user's own
   // perspective both mean "still working on it," just with a different
   // status label/note shown once they open the jobs list.
-  const processing = jobs.filter((j) => j.status === 'processing' || j.status === 'waiting_to_retry');
+  const processing = jobs.filter((j) => j.status === 'processing' || j.status === 'paused' || j.status === 'waiting_to_retry');
   const queued = jobs.filter((j) => j.status === 'queued');
   const ready = jobs.filter((j) => j.status === 'ready');
   const failed = jobs.filter((j) => j.status === 'failed');
+  const question = jobs.find((j) => j.status === 'needs_decision');
 
-  // Priority: something actively running > something ready to review >
-  // something that failed > nothing to show.
+  // Priority: a question waiting for the user > something actively
+  // running > something ready to review > something that failed > nothing.
+  if (question) return { kind: 'question', job: question };
   if (processing.length > 0 || queued.length > 0) {
     const job = processing[0] ?? queued[0];
     return { kind: 'processing', job, queuedCount: queued.length };

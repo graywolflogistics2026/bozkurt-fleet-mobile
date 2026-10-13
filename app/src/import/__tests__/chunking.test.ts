@@ -128,7 +128,7 @@ describe('mergeChunkedExtractions', () => {
     expect(merged.summary).toBe('Header and revenue. Deductions and tolls.');
   });
 
-  it('does not deep-merge the settlement sub-object for a non-settlement docType — chunk[0] wins verbatim', () => {
+  it("a non-settlement document keeps the first page's docType and values (no settlement object appears)", () => {
     const chunk0: ChunkExtraction = { docType: 'fuel', vendor: 'Pilot' };
     const chunk1: ChunkExtraction = { docType: 'fuel', vendor: 'Loves' };
     const merged = mergeChunkedExtractions([chunk0, chunk1]);

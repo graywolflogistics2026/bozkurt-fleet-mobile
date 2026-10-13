@@ -21,12 +21,13 @@ import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiI
 import {
   useStartImportJob,
   useStartImportJobsBatch,
-  useDismissImportJob,
+  markImportJobSaved,
+  IMPORT_JOBS_QUERY_KEY,
   fetchImportJobForReview,
   downloadImportJobFileToLocal,
   type BatchStartResult,
 } from '@/src/data/importJobs';
-import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES } from '@/src/import/importJobs';
+import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES, formatPageList } from '@/src/import/importJobs';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -44,7 +45,7 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
 import { checkSettlementReconciliation, flagReconciliationOverride } from '@/src/import/settlementReconciliation';
-import { buildPrimeStatementCheck } from '@/src/import/settlementStatement';
+import { buildPrimeStatementCheck, statementPagesOf } from '@/src/import/settlementStatement';
 import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
@@ -253,7 +254,6 @@ export default function Import() {
   // list (or a "Review All" tap) route a whole batch of ready jobs through
   // this SAME screen's review flow via ?reviewJobIds=a,b,c.
   const startImportJobsBatch = useStartImportJobsBatch();
-  const dismissImportJob = useDismissImportJob();
   const { reviewJobId, reviewJobIds } = useLocalSearchParams<{ reviewJobId?: string; reviewJobIds?: string }>();
   const profileQuery = useProfile();
   const isOwner = isOwnerAccount(profileQuery.data);
@@ -973,7 +973,15 @@ export default function Import() {
       // pointing at data that's already saved. Best-effort/fire-and-forget
       // — a failure here must never block or fail the save the user just
       // successfully completed.
-      if (currentReviewId) dismissImportJob.mutate(currentReviewId);
+      // RESUMABLE IMPORT JOBS (owner decision 2026-10-13, privacy amendment
+      // 4): the job's stored extraction is deleted once the week is saved —
+      // the whole row, or (attachments still being read) everything but
+      // those pages.
+      if (currentReviewId) {
+        markImportJobSaved(currentReviewId, saved.documentId)
+          .catch(() => {})
+          .finally(() => queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' }));
+      }
 
       const savedDate = getPrimaryExtractionDate(extraction);
       if (savedDate) sessionImportedDatesRef.current.push(savedDate);
@@ -1019,6 +1027,9 @@ export default function Import() {
   // (already-in-memory) deduction array, not worth a useMemo.
   const reconciliation = checkSettlementReconciliation(extraction);
   const primeStatement = extraction ? buildPrimeStatementCheck(extraction) : null;
+  // RESUMABLE IMPORT JOBS: pages of this PDF that were not read.
+  const statementPages = extraction ? statementPagesOf(extraction) : null;
+  const attachmentsStillReading = (extraction?.pageMap ?? []).filter((p) => p.role === 'attachment' && p.status === 'pending').length;
   const saveBlocked = !reconciliation.ok || (!!primeStatement && !primeStatement.passed);
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
   // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
@@ -1166,6 +1177,30 @@ export default function Import() {
               </View>
             )}
 
+            {statementPages && statementPages.incomplete.length > 0 && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lineItemsIncompleteTitle')}</Text>
+                <MutedText>
+                  {t('importScreen.lineItemsIncompleteBody', {
+                    pages: formatPageList(statementPages.incomplete.map((p) => p.page)),
+                    total: statementPages.total,
+                  })}
+                </MutedText>
+              </View>
+            )}
+            {attachmentsStillReading > 0 && (
+              <View style={{ borderColor: colors.accent, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <MutedText>{t('importScreen.attachmentsStillReading', { count: attachmentsStillReading })}</MutedText>
+              </View>
+            )}
+            {statementPages && statementPages.unread.length > 0 && (
+              <View style={{ borderColor: colors.border, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <MutedText>
+                  {t('importScreen.unreadPagesBody', { pages: formatPageList(statementPages.unread.map((p) => p.page)), count: statementPages.unread.length })}
+                </MutedText>
+              </View>
+            )}
+
             {!reconciliation.ok && (
               <View style={{ backgroundColor: 'rgba(239,68,68,0.12)', borderColor: colors.red, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
                 <Text style={{ color: colors.red, fontWeight: '700' }}>{t('importScreen.reconciliationTitle')}</Text>
@@ -1203,9 +1238,25 @@ export default function Import() {
                   marginBottom: spacing.sm,
                 }}
               >
-                <Text style={{ color: primeStatement.passed ? colors.green : colors.red, fontWeight: '700' }}>
-                  {primeStatement.passed ? t('importScreen.primeCheckOk') : t('importScreen.primeCheckFailed')}
+                <Text
+                  style={{
+                    color: !primeStatement.passed ? colors.red : primeStatement.coreMissing.length > 0 ? colors.orange : colors.green,
+                    fontWeight: '700',
+                  }}
+                >
+                  {!primeStatement.passed
+                    ? t('importScreen.primeCheckFailed')
+                    : primeStatement.coreMissing.length > 0
+                      ? t('importScreen.primeCheckCoreMissing')
+                      : t('importScreen.primeCheckOk')}
                 </Text>
+                {primeStatement.coreMissing.length > 0 && (
+                  <MutedText style={{ color: colors.orange }}>
+                    {t('importScreen.primeCheckCoreMissingBody', {
+                      checks: primeStatement.coreMissing.map((id) => t(`importScreen.primeCheck.${id}`)).join('; '),
+                    })}
+                  </MutedText>
+                )}
                 {primeStatement.checks.map((c) => {
                   const fmt = (n: number) =>
                     c.id === 'milesMatch' || c.id === 'requiredTotals' ? formatNumber(n, i18n.language) : money(n, i18n.language);

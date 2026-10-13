@@ -662,11 +662,12 @@
       "variableCosts": "Yakıt + onarım + lastik + çeşitli = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Değişken + cepten + sabit + diğer = TOTAL OPERATING EXPENSES",
       "statementTotal": "Gelir − faaliyet giderleri = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = gelir − faaliyet giderleri",
       "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
       "grossMatches": "TOTAL REVENUE = settlement brütü",
       "milesMatch": "Tablodaki MILES = settlement milleri",
-      "requiredTotals": "Gelir, faaliyet gideri ve tablo toplamları basılı (3 üzerinden)"
+      "requiredTotals": "Gelir, faaliyet gideri ve tablo toplamları basılı (3 üzerinden)",
+      "mergeConflict": "Aynı toplam iki sayfada farklı okundu"
     },
     "primeSection": {
       "revenue": "Gelir",
@@ -677,7 +678,13 @@
       "out_of_pocket": "Cepten",
       "fixed": "Sabit",
       "other": "Diğer"
-    }
+    },
+    "primeCheckCoreMissing": "Tablo doğrulanmadı — bir sayı okunamadı",
+    "primeCheckCoreMissingBody": "Kontrol edilemedi: {{checks}}. Hafta, kalemlerinden Doğrulanmadı olarak kaydedilecek ve incelemeye işaretlenecek.",
+    "lineItemsIncompleteTitle": "Kalemler eksik",
+    "lineItemsIncompleteBody": "{{total}} sayfadan {{pages}} okunamadı. Tablo kontrollerini geçtiyse kâr tablodan gelir; kaydettikten sonra haftadaki \"Eksik sayfaları oku\" yalnızca bu sayfaları okur.",
+    "attachmentsStillReading": "{{count}} ek sayfası hâlâ okunuyor. Şimdi kaydedebilirsiniz; bittiğinde incelemeniz için sunulacak.",
+    "unreadPagesBody": "{{count}} sayfa dosyada tutuluyor ama okunmadı (sayfalar {{pages}}). Kaydettikten sonra haftanın settlement kaydından istediğinizi okuyabilirsiniz."
   },
   "camera": {
     "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
@@ -2309,7 +2316,9 @@
       "waitingToRetry": "Yeniden denenmeyi bekliyor",
       "ready": "Hazır",
       "failed": "Başarısız",
-      "stranded": "Takıldı"
+      "stranded": "Takıldı",
+      "interrupted": "Kesildi",
+      "needsDecision": "Yanıtınız gerekiyor"
     },
     "waitingToRetryNote": "AI içe aktarma hizmeti şu anda meşgul — kısa süre içinde otomatik olarak yeniden denenecek.",
     "strandedNote": "Bu içe aktarma takılmış görünüyor ve bir süredir ilerleme kaydetmedi. Dosyanız güvende — tekrar deneyin.",
@@ -2339,7 +2348,8 @@
       "readyBody": "İncelemek ve kaydetmek için dokunun.",
       "readyBodyWithDetail": "Hafta sonu {{weekEnding}} — {{amount}}. İncelemek ve kaydetmek için dokunun.",
       "failedTitle": "İçe aktarma başarısız",
-      "failedBody": "Ne olduğunu görmek ve yeniden denemek için dokunun."
+      "failedBody": "Ne olduğunu görmek ve yeniden denemek için dokunun.",
+      "attachmentsReadyTitle": "Ekler okundu — eklemek için inceleyin"
     },
     "batchTooManyTitle": "Çok fazla dosya",
     "batchTooManyMessage": "Bir seferde en fazla {{max}} dosya içe aktarabilirsiniz — yalnızca ilk {{max}} dosya seçildi.",
@@ -2356,7 +2366,51 @@
     "skipDocument": "Atla",
     "nextDocument": "Sonraki Belge",
     "finishReview": "Bitir",
-    "reviewAll": "Tümünü İncele ({{count}})"
+    "reviewAll": "Tümünü İncele ({{count}})",
+    "pageKind": {
+      "settlement": "settlement",
+      "statement": "faaliyet tablosu",
+      "toll_bill": "otoyol faturası",
+      "repair_invoice": "onarım faturası",
+      "delivery_receipt": "teslim belgesi",
+      "fuel_receipt": "yakıt fişi",
+      "other": "ek",
+      "unknown": "belge"
+    },
+    "cause": {
+      "timeout": "yapay zekâ {{seconds}} sn'den uzun sürdü",
+      "cut_off": "yapay zekânın yanıtı yarıda kesildi",
+      "busy": "yapay zekâ hizmeti meşguldü",
+      "unreadable": "yapay zekânın yanıtı okunamadı",
+      "refused": "yapay zekâ okumayı reddetti",
+      "service": "yapay zekâ hizmetinde bir hata oluştu",
+      "worker_stopped": "sunucu okurken durdu"
+    },
+    "failure": {
+      "page": "Sayfa {{page}} / {{total}} ({{kind}}), tur {{run}}: {{cause}}."
+    },
+    "progress": {
+      "starting": "Başlıyor · {{elapsed}}",
+      "whole": "{{total}} sayfanın tümü okunuyor · {{elapsed}}",
+      "classifying": "{{total}} sayfa sınıflandırılıyor · {{elapsed}}",
+      "reading": "{{kind}} sayfası {{position}} / {{total}} okunuyor · {{elapsed}}",
+      "readingWithQueue": "{{kind}} sayfası {{position}} / {{total}} okunuyor · sırada {{queued}} ek · {{elapsed}}",
+      "attachments": "İncelemeye hazır · ekler okunuyor {{done}} / {{total}} · {{elapsed}}",
+      "betweenRuns": "{{done}} / {{total}} sayfa okundu · devam ediliyor · {{elapsed}}",
+      "waiting": "Yapay zekâ hizmeti meşgul — birazdan yeniden denenecek · {{elapsed}}",
+      "question": "Bu dosyada {{total}} sayfa var. İlk {{cap}} sayfa şimdi okunsun mu?",
+      "interrupted": "{{page}}. sayfada kesildi",
+      "interruptedNoPage": "Kesildi",
+      "readyAttachmentsQueued": "İncelemeye hazır · {{count}} ek sayfası hâlâ okunuyor"
+    },
+    "pageCapNote": "{{cap}}. sayfadan sonraki sayfalar ({{rest}} sayfa) dosyada okunmadan ve listelenmiş olarak kalır; istediğinizi sonra okuyabilirsiniz.",
+    "readFirst": "İlk {{cap}} sayfayı oku",
+    "dontRead": "Okuma",
+    "interruptedNote": "okunan sayfalar korunur.",
+    "attachmentsStillReading": "{{count}} ek sayfası hâlâ okunuyor. Şimdi inceleyip kaydedebilirsiniz; bittiğinde incelemeniz için sunulacak.",
+    "storedPagesNote": "Dosyada tutulan, okunmayan sayfalar: {{pages}}.",
+    "resumeFromPage": "{{page}}. sayfadan devam et",
+    "resume": "Devam et"
   },
   "fleetScope": {
     "showingAllTrucks": "Gösterilen: Tüm Kamyonlar",
@@ -2615,7 +2669,8 @@
     "verification": {
       "verified_prime": "Prime tablosuyla doğrulandı",
       "totals_match": "Toplamlar tutuyor",
-      "unverified": "Doğrulanmadı"
+      "unverified": "Doğrulanmadı",
+      "lineItemsIncompleteSuffix": " - kalemler eksik"
     },
     "statusTitle": {
       "counted": "Sayıldı",
@@ -2664,5 +2719,18 @@
       "totals": "Sayılan {{counted}} − mahsuplar {{offset}} = giderler {{expenses}} (hariç {{excluded}})",
       "profit": "Kâr = gelir {{gross}} − giderler {{expenses}} = {{profit}}"
     }
+  },
+  "incompleteWeek": {
+    "title": "Bu haftanın kalemleri eksik",
+    "weekLine": "{{date}} haftası: {{pages}} sayfaları okunmadı.",
+    "readMissing": "Eksik sayfaları oku",
+    "startedTitle": "Sayfalar okunuyor",
+    "startedBody": "{{pages}} sayfaları okunuyor. İncelemeye hazır olduğunda size haber vereceğiz.",
+    "failedTitle": "Başlatılamadı",
+    "detailTitle": "Kalemler eksik",
+    "detailBody": "{{total}} sayfadan {{pages}} okunmadı; bu haftanın kesinti, yakıt, otoyol veya bakım satırlarında eksik olabilir.",
+    "unreadBody": "Dosyada tutulan, okunmayan {{count}} sayfa: {{pages}}.",
+    "readThisPage": "{{page}}. sayfayı oku",
+    "moreUnread": "+ {{count}} sayfa daha"
   }
 }
