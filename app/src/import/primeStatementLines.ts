@@ -30,7 +30,10 @@ export type StatementReviewReason =
   // A core self-check could not run: a number it needs was not read.
   | 'statement_core_missing'
   // Settlement or statement pages of the PDF were not read.
-  | 'line_items_incomplete';
+  | 'line_items_incomplete'
+  // Σ load owner revenue + adjustments ≠ REVENUE FROM PRIME INC.
+  // (primeLoads.ts) — the loads were saved with no revenue.
+  | 'loads_revenue_mismatch';
 
 export type LineTreatment =
   | { kind: 'revenue' }
@@ -133,4 +136,22 @@ export function classifyStatementLine(line: Pick<StatementLine, 'section' | 'lab
 // A printed subtotal the AI may have copied into the line list — never a line.
 export function isStatementSubtotalLabel(label: string): boolean {
   return /^TOTAL\b/.test(normalizeStatementLabel(label));
+}
+
+// Rows of the statement page that are NOT dollar lines of any section
+// (owner decision 2026-10-17): MILES (3,316.00 sits inside the revenue
+// block but is miles, never dollars), WEEKS IN SERVICE, the cash-flow rows
+// below TOTAL STATEMENT (PRIOR WEEK BALANCE FORWARD, SETTLEMENT TO
+// OPERATOR) and the escrow balance row (PERF BD/EMGCY FD). The AI may copy
+// them into the line list; they never enter a section sum.
+export type StatementInfoRow = 'miles' | 'balance_forward' | 'settlement_to_operator' | 'weeks_in_service' | 'escrow_balance';
+
+export function statementInfoRow(label: string): StatementInfoRow | null {
+  const l = normalizeStatementLabel(label);
+  if (/^(WEEK(LY)? )?MILES$/.test(l)) return 'miles';
+  if (/\bBALANCE FORWARD\b|\bBAL(ANCE)? F(OR)?WD\b/.test(l)) return 'balance_forward';
+  if (/^SETTLEMENT TO OPERATOR$/.test(l)) return 'settlement_to_operator';
+  if (/^WEEKS IN SERVICE$/.test(l)) return 'weeks_in_service';
+  if (/^PERF (BOND|BD)\b.*\b(EMGCY|EMERGENCY|EMRG) (FD|FUND)$/.test(l)) return 'escrow_balance';
+  return null;
 }

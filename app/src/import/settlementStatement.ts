@@ -1,11 +1,15 @@
 import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { isPrimeCarrier } from './primeOperatingStatement';
+import { trySwapYearAndDay } from './dateGuard';
+import { splitPrimeLoads } from './primeLoads';
 import {
   STATEMENT_SECTIONS,
   classifyStatementLine,
   isStatementSubtotalLabel,
   normalizeStatementLabel,
+  statementInfoRow,
+  type StatementInfoRow,
   type StatementLine,
   type StatementReviewReason,
   type StatementSection,
@@ -41,6 +45,11 @@ export type PrimeStatementTotals = {
   settlementToOperator: number | null;
   directDeposit: number | null;
   miles: number | null;
+  // BALANCE FORWARD (owner decision 2026-10-17), signed as printed: the
+  // prior week's balance with Prime, settled out of this week's cash.
+  // Optional: statements stored before this pass do not carry it.
+  priorWeekBalanceForward?: number | null;
+  totalCashFlow?: number | null;
 };
 
 export type StatementCheckId =
@@ -55,10 +64,14 @@ export type StatementCheckId =
   | 'variableCosts'
   | 'operatingExpenses'
   | 'statementTotal'
+  // TOTAL STATEMENT + PRIOR WEEK BALANCE FORWARD = TOTAL CASH FLOW.
+  | 'totalCashFlow'
   | 'settlementToOperator'
   | 'directDeposit'
   | 'grossMatches'
   | 'milesMatch'
+  // The statement page's week ending = the settlement's week ending.
+  | 'statementWeekEnding'
   | 'requiredTotals'
   // Two pages printed different values for the same statement total
   // (page-by-page reading, chunking.ts mergeConflicts) — never trusted.
@@ -71,11 +84,21 @@ export type StatementCheckId =
 // be skipped when their numbers are missing.
 //   grossMatches         TOTAL REVENUE = the settlement's gross
 //   operatingExpenses    variable + out of pocket + fixed + other = TOTAL OPERATING EXPENSES
-//   settlementToOperator TOTAL REVENUE + TOTAL OPERATING EXPENSES (signed) = SETTLEMENT TO OPERATOR
+//   settlementToOperator TOTAL REVENUE + TOTAL OPERATING EXPENSES (signed)
+//                        + PRIOR WEEK BALANCE FORWARD = SETTLEMENT TO OPERATOR
 export const CORE_STATEMENT_CHECKS = ['grossMatches', 'operatingExpenses', 'settlementToOperator'] as const;
 export type CoreStatementCheck = (typeof CORE_STATEMENT_CHECKS)[number];
 
-export type StatementCheck = { id: StatementCheckId; expected: number; actual: number; passed: boolean };
+// statementWeekEnding compares dates: expected/actual are then YYYYMMDD
+// numbers and expectedText/actualText carry the ISO dates for display.
+export type StatementCheck = {
+  id: StatementCheckId;
+  expected: number;
+  actual: number;
+  passed: boolean;
+  expectedText?: string;
+  actualText?: string;
+};
 
 export type PrimeStatementCheckResult = {
   lines: StatementLine[];
@@ -106,6 +129,13 @@ export type PrintedTotals = {
   // Interest the carrier paid this week (Prime's INTEREST INCOME FROM
   // DEPOSIT line), for the deposit check: net due + interest = deposit.
   interestIncome: number;
+  // BALANCE FORWARD (owner decision 2026-10-17): Prime's PRIOR WEEK
+  // BALANCE FORWARD, signed as printed (negative = the owner owed Prime),
+  // and every interest line signed (income +, INTEREST EXPENSE ON OVER
+  // DRAW −). Deposit identity: net due + balance forward + interest
+  // = deposit. Optional: statements stored before this pass lack them.
+  balanceForward?: number;
+  interestNet?: number;
 };
 
 export type SettlementStatement = {
@@ -137,7 +167,7 @@ export type StatementPages = {
 const DOLLAR_TOLERANCE = 1.0;
 const MILES_TOLERANCE = 1;
 
-const SECTION_TOTAL_KEY: Record<StatementSection, keyof PrimeStatementTotals> = {
+const SECTION_TOTAL_KEY: Record<StatementSection, Exclude<keyof PrimeStatementTotals, 'priorWeekBalanceForward' | 'totalCashFlow'>> = {
   revenue: 'totalRevenue',
   fuel_oil_tax: 'totalFuelOilTax',
   repair: 'totalRepair',
@@ -166,11 +196,20 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   if (!op || rawLines.length === 0) return null;
 
   const lines: StatementLine[] = [];
+  // Non-dollar rows the AI copied into the line list (MILES, PRIOR WEEK
+  // BALANCE FORWARD, ...) never enter a section sum; their value is used
+  // only when the dedicated field was not read.
+  const infoRows: Partial<Record<StatementInfoRow, number>> = {};
   for (const l of rawLines) {
     const section = asSection(l.section);
     const amount = parseAmount(l.amount);
     const label = (l.label ?? '').trim();
     if (!section || !label || !Number.isFinite(amount) || isStatementSubtotalLabel(label)) continue;
+    const info = statementInfoRow(label);
+    if (info) {
+      if (infoRows[info] == null) infoRows[info] = amount;
+      continue;
+    }
     lines.push({ section, label, amount });
   }
   if (lines.length === 0) return null;
@@ -195,8 +234,11 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
     totalStatement: t(op.weekTotalStatement),
     settlementToOperator: t(op.settlementToOperator),
     directDeposit: t(op.directDeposit),
-    miles: t(op.weekMiles),
+    miles: t(op.weekMiles) ?? printedTotal(infoRows.miles),
+    priorWeekBalanceForward: t(op.priorWeekBalanceForward) ?? printedTotal(infoRows.balance_forward),
+    totalCashFlow: t(op.weekTotalCashFlow),
   };
+  if (totals.settlementToOperator == null) totals.settlementToOperator = printedTotal(infoRows.settlement_to_operator);
 
   const checks: StatementCheck[] = [];
   const add = (id: StatementCheckId, expected: number | null, actual: number | null, tolerance = DOLLAR_TOLERANCE) => {
@@ -225,10 +267,19 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   }
   const revenuePlusExpenses =
     totals.totalRevenue != null && totals.totalOperatingExpenses != null ? totals.totalRevenue + totals.totalOperatingExpenses : null;
-  add('settlementToOperator', totals.settlementToOperator, totals.totalStatement ?? revenuePlusExpenses);
-  add('directDeposit', totals.directDeposit, totals.totalStatement);
+  // BALANCE FORWARD (owner decision 2026-10-17): the cash chain is
+  // TOTAL STATEMENT + PRIOR WEEK BALANCE FORWARD = TOTAL CASH FLOW =
+  // SETTLEMENT TO OPERATOR = DIRECT DEPOSIT. No balance forward printed
+  // -> 0, the chain is the old one.
+  const statementTotal = totals.totalStatement ?? revenuePlusExpenses;
+  const cashFlow = statementTotal != null ? statementTotal + (totals.priorWeekBalanceForward ?? 0) : null;
+  add('totalCashFlow', totals.totalCashFlow ?? null, cashFlow);
+  add('settlementToOperator', totals.settlementToOperator, totals.totalCashFlow ?? cashFlow);
+  add('directDeposit', totals.directDeposit, totals.settlementToOperator ?? totals.totalCashFlow ?? cashFlow);
   add('grossMatches', totals.totalRevenue, printedTotal(s.grossRevenue));
   add('milesMatch', totals.miles, printedTotal(s.totalMiles), MILES_TOLERANCE);
+  const weekCheck = statementWeekEndingCheck(op.weekEnding, s.weekEnding);
+  if (weekCheck) checks.push(weekCheck);
 
   for (const conflict of coreMergeConflicts(extraction)) {
     checks.push({ id: 'mergeConflict', expected: round2(conflict.values[0]), actual: round2(conflict.values[1]), passed: false });
@@ -239,6 +290,22 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   // needs-review (amendment 1).
   const coreMissing = primeCoreMissing(totals, lines, printedTotal(s.grossRevenue));
   return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing };
+}
+
+// The statement page's week ending must be the settlement's (owner
+// decision 2026-10-17). Its header prints YY/MM/DD ("26/08/14"); a reading
+// with the year and day swapped (2014-08-26) is the same date read the
+// wrong way round and passes only when the swap lands exactly on the
+// settlement's week ending (dateGuard.ts trySwapYearAndDay). Skipped when
+// either date was not read.
+const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+export function statementWeekEndingCheck(statementWeekEnding: unknown, settlementWeekEnding: unknown): StatementCheck | null {
+  const a = typeof statementWeekEnding === 'string' ? statementWeekEnding.trim() : '';
+  const b = typeof settlementWeekEnding === 'string' ? settlementWeekEnding.trim() : '';
+  if (!ISO_RE.test(a) || !ISO_RE.test(b)) return null;
+  const passed = a === b || trySwapYearAndDay(a) === b;
+  const asNumber = (iso: string) => Number(iso.replace(/-/g, ''));
+  return { id: 'statementWeekEnding', expected: asNumber(a), actual: asNumber(b), passed, expectedText: a, actualText: b };
 }
 
 // The core checks (CORE_STATEMENT_CHECKS) that cannot run because a number
@@ -301,6 +368,30 @@ export function printedInterestIncomeOf(extraction: Extraction): number {
   );
 }
 
+// Prime's PRIOR WEEK BALANCE FORWARD, signed as printed (0 for any other
+// carrier, or when none is printed).
+export function printedBalanceForwardOf(extraction: Extraction): number {
+  const s = extraction.settlement;
+  if (!s || !isPrimeCarrier(s.carrier)) return 0;
+  const direct = printedTotal(s.operating?.priorWeekBalanceForward);
+  if (direct != null) return round2(direct);
+  const row = (s.operating?.lines ?? []).find((l) => !!l.label && statementInfoRow(l.label) === 'balance_forward');
+  const fromRow = row ? parseAmount(row.amount) : NaN;
+  return Number.isFinite(fromRow) ? round2(fromRow) : 0;
+}
+
+// Every interest line on a Prime statement page, signed as printed:
+// INTEREST INCOME FROM DEPOSIT (+) and INTEREST EXPENSE ON OVER DRAW (−).
+export function printedInterestNetOf(extraction: Extraction): number {
+  const s = extraction.settlement;
+  if (!s || !isPrimeCarrier(s.carrier)) return 0;
+  return round2(
+    (s.operating?.lines ?? [])
+      .filter((l) => asSection(l.section) != null && /^INTEREST (INCOME|EXPENSE)\b/.test(normalizeStatementLabel(l.label ?? '')))
+      .reduce((sum, l) => sum + (Number.isFinite(parseAmount(l.amount)) ? parseAmount(l.amount) : 0), 0)
+  );
+}
+
 export function printedTotalsOf(extraction: Extraction): PrintedTotals {
   const s = extraction.settlement ?? {};
   return {
@@ -311,6 +402,8 @@ export function printedTotalsOf(extraction: Extraction): PrintedTotals {
     netDue: printedTotal(s.netPay),
     ...printedDepositOf(extraction),
     interestIncome: printedInterestIncomeOf(extraction),
+    balanceForward: printedBalanceForwardOf(extraction),
+    interestNet: printedInterestNetOf(extraction),
   };
 }
 
@@ -377,6 +470,13 @@ export function buildSettlementStatement(
     prime && prime.passed ? statementReviewReasons(prime.lines, prTotal, options.priorLabelsSeen) : [];
   if (prime && prime.coreMissing.length > 0) reviewReasons.push({ reason: 'statement_core_missing', label: prime.coreMissing.join(', ') });
   if (pages && pages.incomplete.length > 0) reviewReasons.push({ reason: 'line_items_incomplete', label: pages.incomplete.map((p) => p.page).join(', ') });
+  const loads = splitPrimeLoads(extraction);
+  if (loads?.matches === false) {
+    reviewReasons.push({
+      reason: 'loads_revenue_mismatch',
+      label: `${round2(loads.loadRevenue + loads.adjustmentTotal)} vs REVENUE FROM PRIME INC. ${loads.statementRevenue}`,
+    });
+  }
   return {
     version: 1,
     source: prime ? 'prime_statement' : 'printed_totals',

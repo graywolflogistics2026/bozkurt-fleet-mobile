@@ -9,9 +9,10 @@ import { isStatementBacked, type SettlementStatement } from '@/src/import/settle
 //   expenses = − Σ (expense lines, signed as printed) − personal-payment
 //              offset (R1)
 //   profit   = gross − expenses
-//   deposit  = TOTAL STATEMENT (what Prime paid into the bank)
-//   profit   = deposit + every excluded non-expense line added back
-//              (advances, bond, ...) − interest income
+//   deposit  = what Prime paid into the bank = TOTAL STATEMENT + PRIOR
+//              WEEK BALANCE FORWARD (owner decision 2026-10-17)
+//   profit   = deposit − balance forward + every excluded non-expense
+//              line added back (advances, bond, meals) − interest income
 // The week's settlement-linked rows stay as detail but are never counted
 // again (trueProfit.ts splitSettlementLayers()).
 
@@ -53,6 +54,10 @@ export type StatementWeek = {
   // to profit (advances 550.00, bond 100.00, ...). Interest is separate.
   addBacks: { label: string; reason: StatementExcludeReason; amount: number }[];
   interestIncome: number;
+  // PRIOR WEEK BALANCE FORWARD, signed as printed (−1,202.92 = last
+  // week's deficit, recovered out of this deposit). Never revenue or an
+  // expense; the bridge adds −balanceForward back from deposit to profit.
+  balanceForward: number;
 };
 
 export type StatementSettlement = {
@@ -69,6 +74,7 @@ export function statementWeekOf(settlement: StatementSettlement): StatementWeek 
   const ledger: StatementLedgerEntry[] = [];
   const addBacks: StatementWeek['addBacks'] = [];
   let interestIncome = 0;
+  const balanceForward = totals.priorWeekBalanceForward ?? 0;
 
   for (const line of lines) {
     const { treatment } = classifyStatementLine(line);
@@ -116,11 +122,16 @@ export function statementWeekOf(settlement: StatementSettlement): StatementWeek 
     weekEnding: settlement.week_ending ?? null,
     gross: totals.totalRevenue ?? 0,
     // BANK DEPOSIT IS READ, NEVER COMPUTED: the printed deposit line, else
-    // the statement total (what Prime paid out).
-    deposit: st.printed.depositSource && st.printed.depositSource !== 'net_due' && st.printed.deposit != null ? st.printed.deposit : (totals.totalStatement ?? 0),
+    // what Prime paid out (SETTLEMENT TO OPERATOR / TOTAL CASH FLOW, else
+    // TOTAL STATEMENT + balance forward).
+    deposit:
+      st.printed.depositSource && st.printed.depositSource !== 'net_due' && st.printed.deposit != null
+        ? st.printed.deposit
+        : (totals.settlementToOperator ?? totals.totalCashFlow ?? (totals.totalStatement ?? 0) + balanceForward),
     expenses: ledger.reduce((sum, e) => sum + e.contribution, 0),
     ledger,
     addBacks,
     interestIncome,
+    balanceForward,
   };
 }

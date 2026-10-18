@@ -81,3 +81,23 @@ printed totals and its Statement of Income and Expense, is **$2,534.36**.
 TICKETS` code-map row; the generic classifier alone reads any "ADV" as an
 advance repayment. 6. Revenue from OWNER REVENUE, not LOAD/TRIP REVENUE.
 7. Pages 7-8 are attachments. 8. Net due 1,884.36 vs deposit 1,884.73.
+
+## Second golden week — W/E 2026-08-14 (owner decision 2026-10-17)
+
+`app/src/data/__tests__/goldenPrimeSettlement0814.test.ts`, hand-transcribed
+by the owner from the real 17-page PDF (GRWLLG-OY-PrimeInc5.pdf; 1-2
+settlement, 3 accounts, 4 interest + recap, 5-6 statement, 7-17
+attachments). Revenue 7,914.10, real expenses 2,926.36, profit 4,987.74,
+deposit 3,072.57, miles 3,316 (2,739 + 577, deadhead 17.4%), RPM 2.39 /
+cost 0.88 / profit 1.50; fixed 145.77 with FEDERAL HWY TAX +100.00 as a
+credit. What it pins: the prior week balance forward (1,202.92-) in the
+cash chain and the bridge; interest expense 0.59; PRIME POINT-OF-SALE
+62.25 out of profit (D4); a MILES row inside the revenue block is never
+dollars; the mileless "Linehaul 47.34-" (order 4845329) is an adjustment,
+never a load; loads + adjustments = REVENUE FROM PRIME INC. 6,067.70 (on a
+mismatch the loads keep no revenue and the week is needs-review);
+continuity with 8/21 (revenue 19,642.23 + 4,783.75 = 24,425.98; paid to
+operator 6,214.93 + 1,884.73 = 8,099.66; miles 7,819 + 2,327 = 10,146).
+Known, reported, not fixed: on the line route the PO meal line "NORTH STAR
+GRILL, MO" is counted as an expense (codes match description text only),
+so line items read 61.66 above the statement; profit is the statement's.

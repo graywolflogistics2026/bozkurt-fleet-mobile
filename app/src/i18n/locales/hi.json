@@ -345,6 +345,8 @@
       "depositWhy": "Prime के स्टेटमेंट पर छपी जमा राशि — पढ़ी गई, कभी गणना नहीं की गई।",
       "interestIncome": "ब्याज आय",
       "interestIncomeWhy": "Prime द्वारा आपके लिए रखे गए पैसे पर दिया गया ब्याज — जमा के अंदर, व्यावसायिक लाभ नहीं।",
+      "balanceForward": "पिछले सप्ताह का बकाया",
+      "balanceForwardWhy": "Prime के साथ पिछले सप्ताह का बकाया, इस जमा से चुकाया गया — इस सप्ताह का लाभ या खर्च नहीं।",
       "profitEstimate": "लाभ (पंक्तियों से अनुमान)",
       "crossCheck": "पंक्तियाँ Prime के स्टेटमेंट से {{amount}} अलग हैं ({{date}} का सप्ताह)। लाभ Prime के स्टेटमेंट से लिया जाता है।"
     }
@@ -651,7 +653,7 @@
     "backfillOfferBody": "यदि आप पिछले कई महीनों के दस्तावेज़ आयात कर रहे हैं, तो Catch-Up Year पैक (1,000 आयात, 90 दिनों के लिए मान्य) मदद कर सकता है। यदि आप इसे अपने खाते में जोड़वाना चाहते हैं तो सहायता से संपर्क करें।",
     "processingPageProgressWithData": "पृष्ठ {{through}} में से {{total}} · राजस्व और कटौतियां दर्ज की गईं",
     "notTruckSpecific": "ट्रक-विशिष्ट नहीं",
-    "reconciliationDepositMismatch": "शुद्ध देय + ब्याज = {{computed}}, लेकिन स्टेटमेंट पर छपी जमा राशि {{stated}} है।",
+    "reconciliationDepositMismatch": "शुद्ध देय + पिछले सप्ताह का बकाया + ब्याज = {{computed}}, लेकिन स्टेटमेंट पर छपी जमा राशि {{stated}} है।",
     "primeCheckFailed": "🚫 सहेज नहीं सकते — पढ़े गए रूप में Prime का ऑपरेटिंग स्टेटमेंट मेल नहीं खाता",
     "primeCheckNumbers": "छपा {{printed}}, पढ़ा {{read}}",
     "primeLinesTitle": "पढ़ी गई स्टेटमेंट पंक्तियाँ ({{count}}), चिह्न जैसा छपा है",
@@ -667,10 +669,12 @@
       "variableCosts": "ईंधन + मरम्मत + टायर + विविध = TOTAL VARIABLE COSTS",
       "operatingExpenses": "परिवर्तनीय + जेब से + स्थिर + अन्य = TOTAL OPERATING EXPENSES",
       "statementTotal": "राजस्व − परिचालन व्यय = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = revenue − operating expenses",
-      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "totalCashFlow": "TOTAL STATEMENT + पिछले सप्ताह का बकाया = TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT + पिछले सप्ताह का बकाया",
+      "directDeposit": "DIRECT DEPOSIT = SETTLEMENT TO OPERATOR",
       "grossMatches": "TOTAL REVENUE = settlement सकल",
       "milesMatch": "स्टेटमेंट MILES = settlement मील",
+      "statementWeekEnding": "स्टेटमेंट का सप्ताह-अंत = settlement का सप्ताह-अंत",
       "requiredTotals": "राजस्व, परिचालन व्यय और स्टेटमेंट योग छपे (3 में से)",
       "mergeConflict": "The same total was read differently on two pages"
     },

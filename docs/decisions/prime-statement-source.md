@@ -33,6 +33,17 @@ back − interest income.
 Golden week: 4,783.75 − 2,249.39 = 2,534.36; fixed 255.77, variable
 1,993.62; 1,884.73 + 550.00 + 100.00 − 0.37 = 2,534.36.
 
+BALANCE FORWARD (owner decision 2026-10-17): deposit = TOTAL STATEMENT +
+PRIOR WEEK BALANCE FORWARD (signed as printed; "1,202.92-" = the owner
+owed Prime). The balance forward is never revenue or an expense; the
+bridge shows it as its own line ("Prior week balance forward", +1,202.92
+when last week's deficit was recovered). Interest EXPENSE ON OVER DRAW is
+a counted expense. Second golden week (W/E 2026-08-14): 7,914.10 −
+2,926.36 = 4,987.74; 3,072.57 + 1,202.92 + 550.00 + 62.25 + 100.00 =
+4,987.74. Rows that are not dollar lines (MILES, WEEKS IN SERVICE, PRIOR
+WEEK BALANCE FORWARD, SETTLEMENT TO OPERATOR, PERF BD/EMGCY FD) never
+enter a section sum (`statementInfoRow()`).
+
 ## Line table (`app/src/import/primeStatementLines.ts`)
 
 | Class | Lines |
@@ -56,9 +67,16 @@ Golden week: 4,783.75 − 2,249.39 = 2,534.36; fixed 255.77, variable
 
 Each block's lines = its printed total; fuel + repair + tires + misc =
 total variable; variable + out of pocket + fixed + other = total operating
-expenses; revenue + operating expenses = total statement = SETTLEMENT TO
-OPERATOR = DIRECT DEPOSIT; TOTAL REVENUE = settlement gross; MILES =
-settlement miles. Checks run only on printed totals. A flagged save keeps
+expenses; revenue + operating expenses = total statement; total statement
++ prior week balance forward = TOTAL CASH FLOW = SETTLEMENT TO OPERATOR =
+DIRECT DEPOSIT (2026-10-17); TOTAL REVENUE = settlement gross; MILES =
+settlement miles; the statement page's week ending = the settlement's
+(a year/day-swapped reading of "26/08/14" counts as the same date only
+when the swap lands exactly on it). Line route deposit check: net due +
+balance forward + interest (income +, expense −) = printed deposit.
+Page-by-page merging calls two values for a header total a conflict only
+when both came from the same printed label (`settlement.totalLabels`,
+ai-import `chunking.ts`). Checks run only on printed totals. A flagged save keeps
 the figures but profit uses the line route, labeled Unverified. The import
 preview lists every line the AI read with its printed sign and every
 check with its numbers (R3).

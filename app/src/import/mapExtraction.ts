@@ -15,6 +15,7 @@ import { toDateOrNull } from '@/src/import/dateGuard';
 import { parseAmount } from '@/src/import/amount';
 import { clampPerDiemDays, defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
+import { splitPrimeLoads } from './primeLoads';
 import type {
   ComplianceItemInsert,
   ComplianceType,
@@ -187,7 +188,12 @@ export function mapSettlement(
   // pickup_date/delivery_date (docs/PENDING_SQL.md §8) feed the per-diem
   // day-range calc (app/src/tax/perDiem.ts) — load_date stays populated too
   // for existing display code that only reads the single column.
-  const loads: LoadInsert[] = (s.loads ?? []).map((l) => {
+  // PRIME LOADS (owner decision 2026-10-17, primeLoads.ts): a mileless RV
+  // line is an adjustment, never a load; when the loads do not add up to
+  // the statement's REVENUE FROM PRIME INC. they keep no revenue.
+  const primeLoads = splitPrimeLoads(d);
+  const loadRevenueTrusted = primeLoads?.matches !== false;
+  const loads: LoadInsert[] = (primeLoads ? primeLoads.loads : (s.loads ?? [])).map((l) => {
     const pickupDate = toDateOrNull(l.pickupDate) ?? toDateOrNull(l.date) ?? settlementFallbackDate ?? null;
     const deliveryDate = toDateOrNull(l.deliveryDate) ?? toDateOrNull(l.dropDate) ?? pickupDate;
     return {
@@ -202,7 +208,7 @@ export function mapSettlement(
       destination: l.to ?? null,
       loaded_miles: num(l.loadedMiles),
       empty_miles: num(l.emptyMiles),
-      revenue: num(l.revenue),
+      revenue: loadRevenueTrusted ? num(l.revenue) : 0,
     };
   });
 

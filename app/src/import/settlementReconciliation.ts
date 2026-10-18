@@ -1,7 +1,7 @@
 import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { resolveFuelRows } from '@/src/stats/trueProfit';
-import { printedDepositOf, printedInterestIncomeOf } from './settlementStatement';
+import { printedBalanceForwardOf, printedDepositOf, printedInterestNetOf } from './settlementStatement';
 
 // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03,
 // device evidence: an 11-page settlement's continuation import correctly
@@ -32,8 +32,8 @@ export type ReconciliationIssue =
   | { type: 'reimbursementLinesMismatch'; stated: number; summed: number }
   | { type: 'netDueMismatch'; stated: number; computed: number }
   // BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13): the
-  // printed deposit is checked, never replaced — net due + interest income
-  // must equal it within $1.
+  // printed deposit is checked, never replaced — net due + prior week
+  // balance forward + interest must equal it within $1.
   | { type: 'depositMismatch'; stated: number; computed: number }
   | { type: 'zeroNetNonzeroGross'; grossRevenue: number };
 
@@ -111,9 +111,13 @@ export function checkSettlementReconciliation(extraction: Extraction | null | un
     if (differs(netDue, computed)) issues.push({ type: 'netDueMismatch', stated: netDue, computed });
   }
 
+  // BALANCE FORWARD (owner decision 2026-10-17): net due + PRIOR WEEK
+  // BALANCE FORWARD (signed, −1,202.92 when the owner owed Prime) + every
+  // interest line (income +0.37, INTEREST EXPENSE ON OVER DRAW −0.59)
+  // = the printed deposit. 8/14: 4,276.08 − 1,202.92 − 0.59 = 3,072.57.
   const { deposit, depositSource } = printedDepositOf(extraction);
   if (deposit != null && depositSource !== 'net_due' && netDue != null) {
-    const computed = netDue + printedInterestIncomeOf(extraction);
+    const computed = netDue + printedBalanceForwardOf(extraction) + printedInterestNetOf(extraction);
     if (differs(deposit, computed)) issues.push({ type: 'depositMismatch', stated: deposit, computed });
   }
 

@@ -1258,11 +1258,16 @@ export default function Import() {
                   </MutedText>
                 )}
                 {primeStatement.checks.map((c) => {
-                  const fmt = (n: number) =>
-                    c.id === 'milesMatch' || c.id === 'requiredTotals' ? formatNumber(n, i18n.language) : money(n, i18n.language);
+                  const fmt = (n: number, text?: string) =>
+                    text != null
+                      ? text
+                      : c.id === 'milesMatch' || c.id === 'requiredTotals'
+                        ? formatNumber(n, i18n.language)
+                        : money(n, i18n.language);
                   return (
                     <MutedText key={c.id} style={!c.passed ? { color: colors.red, fontWeight: '700' } : undefined}>
-                      {c.passed ? '✓' : '✗'} {t(`importScreen.primeCheck.${c.id}`)} — {t('importScreen.primeCheckNumbers', { printed: fmt(c.expected), read: fmt(c.actual) })}
+                      {c.passed ? '✓' : '✗'} {t(`importScreen.primeCheck.${c.id}`)} —{' '}
+                      {t('importScreen.primeCheckNumbers', { printed: fmt(c.expected, c.expectedText), read: fmt(c.actual, c.actualText) })}
                     </MutedText>
                   );
                 })}

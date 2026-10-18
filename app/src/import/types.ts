@@ -135,6 +135,10 @@ export type ExtractedSettlement = {
   // "DIRECT DEPOSIT TO BANK"), when such a line is printed. The AMOUNT
   // only — never a routing, account or any other bank digits.
   depositAmount?: number | string;
+  // The printed label each header total was read from (e.g. netPay: "NET
+  // AMOUNT DUE UNIT"). Page-by-page merging (ai-import chunking.ts) only
+  // calls two values a conflict when they came from the SAME label.
+  totalLabels?: Partial<Record<'grossRevenue' | 'reimbursements' | 'totalDeductions' | 'netPay' | 'depositAmount', string>>;
   totalMiles?: number;
   loadedMiles?: number;
   revenueItems?: ExtractedRevenueItem[];
@@ -187,9 +191,19 @@ export type ExtractedSettlement = {
     // recap page's "DIRECT DEPOSIT" line.
     settlementToOperator?: number | string;
     directDeposit?: number | string;
+    // BALANCE FORWARD (owner decision 2026-10-17): PRIOR WEEK BALANCE
+    // FORWARD, signed as printed on the statement cash flow / p4 recap
+    // ("1,202.92-" = the owner owed Prime = negative), and TOTAL CASH
+    // FLOW = TOTAL STATEMENT + balance forward = SETTLEMENT TO OPERATOR.
+    priorWeekBalanceForward?: number | string;
+    weekTotalCashFlow?: number | string;
+    // The statement page's own week ending (header printed YY/MM/DD), ISO.
+    weekEnding?: string;
     ytdTotalRevenue?: number;
     ytdMiles?: number;
     ytdTotalStatement?: number;
+    // YTD SETTLEMENT TO OPERATOR — what Prime paid the operator this year.
+    ytdSettlementToOperator?: number;
     weeksInService?: number;
     // OLD LAYOUTS (before this pass) — never extracted any more, read only
     // from older stored parsed_json for the standing YTD check.

@@ -340,6 +340,8 @@
       "depositWhy": "Депозит, напечатанный в отчёте Prime, — прочитан, никогда не вычисляется.",
       "interestIncome": "Процентный доход",
       "interestIncomeWhy": "Проценты, которые Prime начислил на ваши удерживаемые деньги, — внутри депозита, это не прибыль бизнеса.",
+      "balanceForward": "Остаток прошлой недели",
+      "balanceForwardWhy": "Баланс прошлой недели с Prime, погашенный из этого депозита, — не прибыль и не расход этой недели.",
       "profitEstimate": "Прибыль (оценка по строкам)",
       "crossCheck": "Строки расходятся с отчётом Prime на {{amount}} (неделя {{date}}). Прибыль считается по отчёту Prime."
     }
@@ -646,7 +648,7 @@
     "backfillOfferBody": "Если вы импортируете документы за несколько прошлых месяцев, пакет \"Год Наверстывания\" (1000 импортов, действует 90 дней) может помочь. Свяжитесь с поддержкой, если хотите добавить его на аккаунт.",
     "processingPageProgressWithData": "Страница {{through}} из {{total}} · доход и вычеты получены",
     "notTruckSpecific": "Не привязано к грузовику",
-    "reconciliationDepositMismatch": "К выплате + проценты = {{computed}}, но напечатанный в выписке депозит — {{stated}}.",
+    "reconciliationDepositMismatch": "К выплате + остаток прошлой недели + проценты = {{computed}}, но напечатанный в выписке депозит — {{stated}}.",
     "primeCheckFailed": "🚫 Нельзя сохранить — операционный отчёт Prime в прочитанном виде не сходится",
     "primeCheckNumbers": "напечатано {{printed}}, прочитано {{read}}",
     "primeLinesTitle": "Прочитанные строки отчёта ({{count}}), знак как напечатан",
@@ -662,10 +664,12 @@
       "variableCosts": "Топливо + ремонт + шины + прочее = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Переменные + личные + постоянные + прочие = TOTAL OPERATING EXPENSES",
       "statementTotal": "Доход − операционные расходы = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = доход − операционные расходы",
-      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "totalCashFlow": "TOTAL STATEMENT + остаток прошлой недели = TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT + остаток прошлой недели",
+      "directDeposit": "DIRECT DEPOSIT = SETTLEMENT TO OPERATOR",
       "grossMatches": "TOTAL REVENUE = валовой доход settlement",
       "milesMatch": "MILES отчёта = мили settlement",
+      "statementWeekEnding": "Конец недели в отчёте = конец недели settlement",
       "requiredTotals": "Напечатаны итоги дохода, операционных расходов и отчёта (из 3)",
       "mergeConflict": "Один и тот же итог прочитан по-разному на двух страницах"
     },

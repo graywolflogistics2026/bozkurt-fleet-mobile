@@ -340,6 +340,8 @@
       "depositWhy": "The deposit printed on Prime's statement — read, never computed.",
       "interestIncome": "Interest income",
       "interestIncomeWhy": "Interest Prime paid on money it holds for you — inside the deposit, not business profit.",
+      "balanceForward": "Prior week balance forward",
+      "balanceForwardWhy": "Last week's balance with Prime, settled out of this deposit — not this week's profit or expense.",
       "profitEstimate": "Profit (estimate from line items)",
       "crossCheck": "Line items differ from Prime's statement by {{amount}} (week of {{date}}). Profit uses Prime's statement."
     }
@@ -646,7 +648,7 @@
     "backfillOfferBody": "If you're importing several months of past documents, the Catch-Up Year pack (1,000 imports, valid 90 days) may help. Contact support if you'd like one added to your account.",
     "processingPageProgressWithData": "Page {{through}} of {{total}} · revenue and deductions captured",
     "notTruckSpecific": "Not truck-specific",
-    "reconciliationDepositMismatch": "Net due + interest comes to {{computed}}, but the statement's printed deposit is {{stated}}.",
+    "reconciliationDepositMismatch": "Net due + prior week balance forward + interest comes to {{computed}}, but the statement's printed deposit is {{stated}}.",
     "primeCheckFailed": "🚫 Can't save — Prime's operating statement doesn't add up as read",
     "primeCheckNumbers": "printed {{printed}}, read {{read}}",
     "primeLinesTitle": "Statement lines read ({{count}}), sign as printed",
@@ -662,10 +664,12 @@
       "variableCosts": "Fuel + repair + tires + misc = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Variable + out of pocket + fixed + other = TOTAL OPERATING EXPENSES",
       "statementTotal": "Revenue − operating expenses = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = revenue − operating expenses",
-      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "totalCashFlow": "TOTAL STATEMENT + prior week balance forward = TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT + prior week balance forward",
+      "directDeposit": "DIRECT DEPOSIT = SETTLEMENT TO OPERATOR",
       "grossMatches": "TOTAL REVENUE = settlement gross",
       "milesMatch": "Statement MILES = settlement miles",
+      "statementWeekEnding": "Statement week ending = settlement week ending",
       "requiredTotals": "Revenue, operating expenses and statement totals printed (of 3)",
       "mergeConflict": "The same total was read differently on two pages"
     },

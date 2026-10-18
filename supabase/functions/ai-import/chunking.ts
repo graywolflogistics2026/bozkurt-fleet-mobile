@@ -149,6 +149,47 @@ function mergeValues(values: unknown[], path: string, conflicts: MergeConflict[]
   return meaningful[0];
 }
 
+// SAME-LABEL CONFLICTS ONLY (owner decision 2026-10-17, week ending
+// 2026-08-14). Each page names the printed label it read a header total
+// from (settlement.totalLabels, e.g. netPay: "NET AMOUNT DUE UNIT"). Two
+// different values are a conflict only when they came from the SAME label
+// — or when a page did not name its label (unknown stays a conflict, never
+// trusted). Different labels mean one page put a different line into the
+// field (page 3's NET AMOUNT DUE UNIT 4,276.08 read as grossRevenue next to
+// page 1's TOTAL REV 7,914.10): the value whose label is the field's own
+// keeps the field and the conflict is dropped. If no value, or more than
+// one value, carries the field's own label, the conflict stays.
+const OWN_LABEL: Record<string, RegExp> = {
+  grossRevenue: /\bREV(ENUE)?\b/,
+  reimbursements: /\bREIMB/,
+  totalDeductions: /\bDEDUCTION/,
+  netPay: /\bNET\b.*\bDUE\b|\bAMOUNT DUE UNIT\b|\bNET PAY\b/,
+  depositAmount: /\bDIRECT DEPOSIT\b|\bSETTLEMENT GROSS DUE\b/,
+};
+const normLabel = (v: unknown) => (typeof v === 'string' ? v.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim() : '');
+
+function resolveLabeledTotalConflicts(chunks: ChunkExtraction[], merged: ChunkExtraction, conflicts: MergeConflict[]): MergeConflict[] {
+  const settlement = (merged as Record<string, unknown>).settlement as Record<string, unknown> | undefined;
+  return conflicts.filter((conflict) => {
+    const m = /^settlement\.(grossRevenue|reimbursements|totalDeductions|netPay|depositAmount)$/.exec(conflict.path);
+    if (!m || !settlement) return true;
+    const field = m[1];
+    const reads = chunks
+      .map((c) => (c as Record<string, unknown>).settlement as Record<string, unknown> | undefined)
+      .filter((s): s is Record<string, unknown> => !!s && isMeaningful(s[field]) && amountOf(s[field]) != null)
+      .map((s) => ({ value: s[field], amount: amountOf(s[field]) as number, label: normLabel((s.totalLabels as Record<string, unknown> | undefined)?.[field]) }));
+    if (reads.length < 2 || reads.some((r) => !r.label)) return true;
+    if (new Set(reads.map((r) => r.label)).size === 1) return true;
+    const own = reads.filter((r) => OWN_LABEL[field].test(r.label));
+    const ownAmounts = new Set(own.map((r) => Math.round(r.amount * 100) / 100));
+    if (ownAmounts.size !== 1) return true;
+    settlement[field] = own[0].value;
+    const labels = settlement.totalLabels as Record<string, unknown> | undefined;
+    if (labels) labels[field] = own[0].label;
+    return false;
+  });
+}
+
 // Deterministic merge of per-page extractions (in page order; a base
 // extraction, when re-reading pages of a saved document, goes first) into
 // one Extraction-shaped object. Owner decision 2026-10-13 (17-page stall
@@ -177,6 +218,9 @@ export function mergeChunkedExtractions(chunks: ChunkExtraction[]): ChunkExtract
     return out;
   });
   const merged = mergeValues(data, '', conflicts) as ChunkExtraction;
+  const resolved = resolveLabeledTotalConflicts(chunks, merged, conflicts);
+  conflicts.length = 0;
+  conflicts.push(...resolved);
   const summary = chunks
     .map((c) => c.summary)
     .filter((s): s is string => !!s)

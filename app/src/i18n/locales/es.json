@@ -340,6 +340,8 @@
       "depositWhy": "El depósito impreso en el estado de Prime — leído, nunca calculado.",
       "interestIncome": "Ingresos por intereses",
       "interestIncomeWhy": "Intereses que Prime pagó sobre el dinero que guarda para usted — dentro del depósito, no es ganancia del negocio.",
+      "balanceForward": "Saldo de la semana anterior",
+      "balanceForwardWhy": "El saldo de la semana pasada con Prime, liquidado con este depósito — no es ganancia ni gasto de esta semana.",
       "profitEstimate": "Ganancia (estimación a partir de las líneas)",
       "crossCheck": "Las líneas difieren del estado de Prime en {{amount}} (semana del {{date}}). La ganancia usa el estado de Prime."
     }
@@ -646,7 +648,7 @@
     "backfillOfferBody": "Si estás importando varios meses de documentos anteriores, el paquete Año de Recuperación (1,000 importaciones, válido 90 días) puede ayudarte. Contacta a soporte si quieres que se agregue a tu cuenta.",
     "processingPageProgressWithData": "Página {{through}} de {{total}} · ingresos y deducciones capturados",
     "notTruckSpecific": "No específico de un camión",
-    "reconciliationDepositMismatch": "Neto a pagar + intereses da {{computed}}, pero el depósito impreso en el estado de cuenta es {{stated}}.",
+    "reconciliationDepositMismatch": "Neto a pagar + saldo de la semana anterior + intereses da {{computed}}, pero el depósito impreso en el estado de cuenta es {{stated}}.",
     "primeCheckFailed": "🚫 No se puede guardar — el estado operativo de Prime no cuadra tal como se leyó",
     "primeCheckNumbers": "impreso {{printed}}, leído {{read}}",
     "primeLinesTitle": "Líneas del estado leídas ({{count}}), signo tal como está impreso",
@@ -662,10 +664,12 @@
       "variableCosts": "Combustible + reparación + llantas + misc. = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Variable + gastos propios + fijo + otros = TOTAL OPERATING EXPENSES",
       "statementTotal": "Ingresos − gastos operativos = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = ingresos − gastos operativos",
-      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "totalCashFlow": "TOTAL STATEMENT + saldo de la semana anterior = TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT + saldo de la semana anterior",
+      "directDeposit": "DIRECT DEPOSIT = SETTLEMENT TO OPERATOR",
       "grossMatches": "TOTAL REVENUE = bruto del settlement",
       "milesMatch": "MILES del estado = millas del settlement",
+      "statementWeekEnding": "Fin de semana del estado = fin de semana del settlement",
       "requiredTotals": "Totales de ingresos, gastos operativos y del estado impresos (de 3)",
       "mergeConflict": "El mismo total se leyó distinto en dos páginas"
     },

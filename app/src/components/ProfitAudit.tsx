@@ -137,6 +137,15 @@ export function ProfitBridgeView({
   if (Math.abs(bridge.netPay) >= 0.005 || rows.length === 0) {
     rows.push({ key: 'net', label: t('dashboard.profitBridge.netPay'), why: t('dashboard.profitBridge.netPayWhy'), amount: bridge.netPay, sign: rows.length ? '+' : '' });
   }
+  if (Math.abs(bridge.balanceForward) >= 0.005) {
+    rows.push({
+      key: 'balanceForward',
+      label: t('dashboard.profitBridge.balanceForward'),
+      why: t('dashboard.profitBridge.balanceForwardWhy'),
+      amount: Math.abs(bridge.balanceForward),
+      sign: bridge.balanceForward >= 0 ? '+' : '−',
+    });
+  }
   const whyFor = (reason: string) => t(`audit.reason.${reason}`);
   bridge.statementAddBacks.forEach((a, i) =>
     rows.push({ key: `sa-${i}`, label: a.label, why: whyFor(a.reason), amount: Math.abs(a.amount), sign: a.amount >= 0 ? '+' : '−' })

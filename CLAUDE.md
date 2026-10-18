@@ -205,6 +205,8 @@ settlement-linked fuel/reimbursements follow their settlement's week;
 the truck fixed-cost estimate is in CPM/PPM only, never in profit.
 `app/src/data/__tests__/goldenPrimeSettlement.test.ts` asserts the real
 Prime week (profit 2,534.36) on every profit screen — it must stay green.
+Second golden week `goldenPrimeSettlement0814.test.ts` (W/E 8/14, profit
+4,987.74, prior week balance forward 1,202.92-) must stay green too.
 Full: `docs/decisions/golden-settlement.md`.
 
 **Prime statement as source; profit is never the deposit.** A Prime week
@@ -1021,8 +1023,8 @@ under each is unchanged original wording.
 
 ## Current state (2026-10-17)
 
-- **Code**: `main` at d0b2e52 (resumable page-by-page import jobs,
-  2026-10-13), pushed. Ships via `eas update --branch preview`.
+- **Code**: `main` after 4f35a90 (W/E 8/14 balance forward + second golden
+  week, 2026-10-17), pushed. Ships via `eas update --branch preview`.
 - **Database** (`docs/PENDING_SQL.md`, 78 sections): everything is applied
   except:
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).

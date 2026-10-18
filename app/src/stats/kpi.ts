@@ -194,6 +194,11 @@ export type ProfitBridge = {
   statementAddBacks: { label: string; reason: StatementExcludeReason; amount: number; weekEnding: string | null }[];
   // Interest income on statement-backed weeks — its own line (D8).
   interestIncome: number;
+  // BALANCE FORWARD (owner decision 2026-10-17): the prior week's balance
+  // settled out of statement-backed deposits, as the amount it adds back
+  // from deposit to profit (+1,202.92 when last week's deficit was
+  // recovered; negative when Prime paid out a balance it owed you).
+  balanceForward: number;
   outOfPocketDeductions: number;
   standaloneFuel: number;
   maintenance: number;
@@ -437,6 +442,7 @@ function buildProfitBridge(args: {
   const depositStart = layers.statementWeeks.reduce((sum, w) => sum + w.deposit, 0);
   const statementAddBacks = layers.statementWeeks.flatMap((w) => w.addBacks.map((a) => ({ ...a, weekEnding: w.weekEnding })));
   const interestIncome = layers.statementWeeks.reduce((sum, w) => sum + w.interestIncome, 0);
+  const balanceForward = Math.round(layers.statementWeeks.reduce((sum, w) => sum - w.balanceForward, 0) * 100) / 100;
 
   // A withheld line already sits inside its settlement's net pay; the ones
   // that do not reduce profit are added back.
@@ -456,6 +462,7 @@ function buildProfitBridge(args: {
   const explained =
     netPay +
     depositStart +
+    balanceForward +
     nonExpenseLines.reduce((sum, l) => sum + l.amount, 0) +
     statementAddBacks.reduce((sum, a) => sum + a.amount, 0) -
     interestIncome -
@@ -490,6 +497,7 @@ function buildProfitBridge(args: {
     nonExpenseLines,
     statementAddBacks,
     interestIncome,
+    balanceForward: balanceForward === 0 ? 0 : balanceForward,
     outOfPocketDeductions,
     standaloneFuel,
     maintenance,

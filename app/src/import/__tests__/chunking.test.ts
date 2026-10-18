@@ -233,6 +233,53 @@ function pageMissing(page: number): PageOutcome {
 
 // GAP-TOLERANT PAGE MERGE (owner decision 2026-08-03, round 4 — MEASURED
 // EVIDENCE fix: round 3's mergeSequentialPageResults STOPPED THE WHOLE
+// SAME-LABEL CONFLICTS ONLY (owner decision 2026-10-17, week ending
+// 2026-08-14): two pages' values for one header total are a conflict only
+// when they were read from the same printed label.
+describe('mergeChunkedExtractions — same labeled field only', () => {
+  const page = (settlement: Record<string, unknown>): ChunkExtraction => ({ docType: 'settlement', settlement } as ChunkExtraction);
+  const conflicts = (m: ChunkExtraction) => (m.mergeConflicts as { path: string }[] | undefined)?.map((c) => c.path) ?? [];
+
+  it('page 3 NET AMOUNT DUE UNIT read into grossRevenue never conflicts with page 1 TOTAL REV — TOTAL REV keeps the field', () => {
+    const merged = mergeChunkedExtractions([
+      page({ grossRevenue: 4276.08, totalLabels: { grossRevenue: 'NET AMOUNT DUE UNIT' } }),
+      page({ grossRevenue: 7914.1, totalLabels: { grossRevenue: 'TOTAL REV' } }),
+    ]);
+    expect(conflicts(merged)).toEqual([]);
+    expect((merged.settlement as Record<string, unknown>).grossRevenue).toBe(7914.1);
+  });
+
+  it('net due 4,276.08 (p3) and the deposit 3,072.57 (p4) both read into netPay: the net-due label keeps it', () => {
+    const merged = mergeChunkedExtractions([
+      page({ netPay: 4276.08, totalLabels: { netPay: 'GROSS AMOUNT DUE UNIT' } }),
+      page({ netPay: 3072.57, totalLabels: { netPay: 'SETTLEMENT GROSS DUE TO/FROM OWNER' } }),
+    ]);
+    expect(conflicts(merged)).toEqual([]);
+    expect((merged.settlement as Record<string, unknown>).netPay).toBe(4276.08);
+  });
+
+  it('the SAME label read differently on two pages is still a conflict', () => {
+    const merged = mergeChunkedExtractions([
+      page({ depositAmount: 3072.57, totalLabels: { depositAmount: 'DIRECT DEPOSIT' } }),
+      page({ depositAmount: 3027.57, totalLabels: { depositAmount: 'DIRECT DEPOSIT' } }),
+    ]);
+    expect(conflicts(merged)).toEqual(['settlement.depositAmount']);
+  });
+
+  it('a page that did not name its label stays a conflict (unknown is never trusted)', () => {
+    const merged = mergeChunkedExtractions([page({ grossRevenue: 7914.1, totalLabels: { grossRevenue: 'TOTAL REV' } }), page({ grossRevenue: 4276.08 })]);
+    expect(conflicts(merged)).toEqual(['settlement.grossRevenue']);
+  });
+
+  it('different labels, neither the field\'s own: still a conflict', () => {
+    const merged = mergeChunkedExtractions([
+      page({ grossRevenue: 4276.08, totalLabels: { grossRevenue: 'GROSS AMOUNT DUE UNIT' } }),
+      page({ grossRevenue: 3072.57, totalLabels: { grossRevenue: 'DIRECT DEPOSIT' } }),
+    ]);
+    expect(conflicts(merged)).toEqual(['settlement.grossRevenue']);
+  });
+});
+
 // DOCUMENT at the first failed page, which is exactly why a real 11-page
 // settlement's banner read "Imported pages 1-1 of 11" after page 2 hit
 // the old 40s per-page cap. mergeAllPages replaces that with "a failed

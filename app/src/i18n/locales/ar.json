@@ -340,6 +340,8 @@
       "depositWhy": "الإيداع المطبوع في كشف Prime — يُقرأ، ولا يُحسب أبدًا.",
       "interestIncome": "دخل الفائدة",
       "interestIncomeWhy": "فائدة دفعتها Prime على أموال تحتفظ بها لك — ضمن الإيداع، وليست ربحًا تجاريًا.",
+      "balanceForward": "رصيد الأسبوع السابق",
+      "balanceForwardWhy": "رصيد الأسبوع الماضي مع Prime، سُوّي من هذا الإيداع — ليس ربحًا أو مصروفًا لهذا الأسبوع.",
       "profitEstimate": "الربح (تقدير من البنود)",
       "crossCheck": "تختلف البنود عن كشف Prime بمقدار {{amount}} (أسبوع {{date}}). يستخدم الربح كشف Prime."
     }
@@ -646,7 +648,7 @@
     "backfillOfferBody": "إذا كنت تستورد عدة أشهر من المستندات القديمة، قد تساعدك حزمة سنة اللحاق (1000 عملية استيراد، صالحة 90 يومًا). تواصل مع الدعم إذا أردت إضافتها إلى حسابك.",
     "processingPageProgressWithData": "الصفحة {{through}} من {{total}} · تم استلام الإيرادات والخصومات",
     "notTruckSpecific": "غير مرتبط بشاحنة محددة",
-    "reconciliationDepositMismatch": "الصافي المستحق + الفائدة = {{computed}}، لكن الإيداع المطبوع في الكشف هو {{stated}}.",
+    "reconciliationDepositMismatch": "الصافي المستحق + رصيد الأسبوع السابق + الفائدة = {{computed}}، لكن الإيداع المطبوع في الكشف هو {{stated}}.",
     "primeCheckFailed": "🚫 لا يمكن الحفظ — كشف التشغيل من Prime غير متطابق كما قُرئ",
     "primeCheckNumbers": "مطبوع {{printed}}، مقروء {{read}}",
     "primeLinesTitle": "بنود الكشف المقروءة ({{count}})، بالإشارة كما طُبعت",
@@ -662,10 +664,12 @@
       "variableCosts": "الوقود + الإصلاح + الإطارات + المتنوع = TOTAL VARIABLE COSTS",
       "operatingExpenses": "المتغيرة + الشخصية + الثابتة + الأخرى = TOTAL OPERATING EXPENSES",
       "statementTotal": "الإيراد − مصروفات التشغيل = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = الإيرادات − مصروفات التشغيل",
-      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "totalCashFlow": "TOTAL STATEMENT + رصيد الأسبوع السابق = TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT + رصيد الأسبوع السابق",
+      "directDeposit": "DIRECT DEPOSIT = SETTLEMENT TO OPERATOR",
       "grossMatches": "TOTAL REVENUE = إجمالي settlement",
       "milesMatch": "MILES في الكشف = أميال settlement",
+      "statementWeekEnding": "نهاية أسبوع الكشف = نهاية أسبوع settlement",
       "requiredTotals": "مجاميع الإيراد ومصروفات التشغيل والكشف مطبوعة (من 3)",
       "mergeConflict": "قُرئ الإجمالي نفسه بشكل مختلف في صفحتين"
     },

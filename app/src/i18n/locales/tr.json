@@ -340,6 +340,8 @@
       "depositWhy": "Prime tablosunda basılı yatırılan tutar — okunur, asla hesaplanmaz.",
       "interestIncome": "Faiz geliri",
       "interestIncomeWhy": "Prime'ın sizin için tuttuğu paraya ödediği faiz — yatırılan tutarın içinde, işletme kârı değil.",
+      "balanceForward": "Önceki haftadan devreden bakiye",
+      "balanceForwardWhy": "Geçen haftanın Prime ile bakiyesi, bu yatırılan tutardan kapatıldı — bu haftanın kârı veya gideri değil.",
       "profitEstimate": "Kâr (satırlardan tahmin)",
       "crossCheck": "Satırlar Prime tablosundan {{amount}} farklı ({{date}} haftası). Kâr Prime tablosunu kullanır."
     }
@@ -646,7 +648,7 @@
     "backfillOfferBody": "Birkaç aylık geçmiş belgeyi içe aktarıyorsan, Yakalama Yılı paketi (1.000 içe aktarma, 90 gün geçerli) işine yarayabilir. Hesabına eklenmesini istersen destekle iletişime geç.",
     "processingPageProgressWithData": "{{total}} sayfadan {{through}}. sayfa · gelir ve kesintiler alındı",
     "notTruckSpecific": "Belirli bir kamyona özgü değil",
-    "reconciliationDepositMismatch": "Net ödenecek + faiz {{computed}} ediyor, ancak ekstrede basılı yatırılan tutar {{stated}}.",
+    "reconciliationDepositMismatch": "Net ödenecek + önceki haftadan devreden bakiye + faiz {{computed}} ediyor, ancak ekstrede basılı yatırılan tutar {{stated}}.",
     "primeCheckFailed": "🚫 Kaydedilemiyor — Prime'ın faaliyet tablosu okunduğu haliyle tutmuyor",
     "primeCheckNumbers": "basılı {{printed}}, okunan {{read}}",
     "primeLinesTitle": "Okunan tablo satırları ({{count}}), işaret basıldığı gibi",
@@ -662,10 +664,12 @@
       "variableCosts": "Yakıt + onarım + lastik + çeşitli = TOTAL VARIABLE COSTS",
       "operatingExpenses": "Değişken + cepten + sabit + diğer = TOTAL OPERATING EXPENSES",
       "statementTotal": "Gelir − faaliyet giderleri = TOTAL STATEMENT",
-      "settlementToOperator": "SETTLEMENT TO OPERATOR = gelir − faaliyet giderleri",
-      "directDeposit": "DIRECT DEPOSIT = TOTAL STATEMENT",
+      "totalCashFlow": "TOTAL STATEMENT + önceki haftadan devreden bakiye = TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR = TOTAL STATEMENT + önceki haftadan devreden bakiye",
+      "directDeposit": "DIRECT DEPOSIT = SETTLEMENT TO OPERATOR",
       "grossMatches": "TOTAL REVENUE = settlement brütü",
       "milesMatch": "Tablodaki MILES = settlement milleri",
+      "statementWeekEnding": "Tablonun hafta sonu tarihi = settlement hafta sonu tarihi",
       "requiredTotals": "Gelir, faaliyet gideri ve tablo toplamları basılı (3 üzerinden)",
       "mergeConflict": "Aynı toplam iki sayfada farklı okundu"
     },

@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- IMPORT CHECKS BLOCKED A REAL PRIME WEEK — W/E 2026-08-14 (owner decisions
+  2026-10-17, items 1-4). Prior week balance forward in the cash chain,
+  deposit check and bridge; MILES / balance-forward rows never in a dollar
+  sum; statement week ending = settlement week ending; mileless RV line =
+  adjustment, loads check vs REVENUE FROM PRIME INC.; merge conflicts only
+  on the same printed label; prompt: OWNER REVENUE column, revenue trailing
+  minus, net due vs deposit labels, YY/MM/DD. Second golden fixture
+  (profit 4,987.74). Items 5-7 reported, awaiting owner. No SQL. Redeploy
+  ai-import. eas update. docs/decisions/golden-settlement.md.
+
 - RESUMABLE PAGE-BY-PAGE IMPORT JOBS — 17-page stall redesign (owner
   decisions 2026-10-13, A-H + B/C/D/G + amendments + scale add-on). Jobs run
   as a chain of short runs under the 150 s Free-plan wall clock, store each
