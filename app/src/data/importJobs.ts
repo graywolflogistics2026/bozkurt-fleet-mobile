@@ -345,6 +345,25 @@ export function useRetryImportJob() {
   });
 }
 
+// READ AGAIN (owner decision 2026-10-17, item 7): an unsaved, ready job's
+// settlement + statement pages are read again with the current prompt, on
+// the same job; attachments are kept in the file, not read.
+export function useRereadImportJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      jobId: string;
+      locale?: string;
+      customCategories?: string[];
+      learningRules?: { keyword: string; category: string }[];
+      carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
+    }) => invokeJobMode({ mode: 'reread_job', ...params }, 'Could not start reading again.'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+    },
+  });
+}
+
 // "This file has N pages. Read the first 40 now?" — never read silently.
 export function useAnswerImportJob() {
   const queryClient = useQueryClient();

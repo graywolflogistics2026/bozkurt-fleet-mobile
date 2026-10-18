@@ -112,3 +112,45 @@ Unverified (flagged needs-review until marked reviewed; profit captioned
 Σ counted − Σ offset = expenses.total. Used by Home's Expenses explainer
 (R4: same resolver, Revenue − Expenses = Net Profit), the bridge's "Show
 every row" and "Share audit" (plain text via the native share sheet).
+
+## The gate (owner decision 2026-10-17, item 6)
+
+Gate = every check INSIDE the statement (each block's lines = its printed
+total; variable + fixed + other = total operating expenses; revenue −
+expenses = TOTAL STATEMENT; the cash chain TOTAL STATEMENT + balance
+forward = TOTAL CASH FLOW = SETTLEMENT TO OPERATOR = DIRECT DEPOSIT) plus
+the statement week ending = settlement week ending. Every one must have
+been read and must pass (`gateMissing` lists what was not read — never
+skipped). Warn only: miles, TOTAL REVENUE vs the AI's header gross, a
+header total two pages read differently, every line-item total, the
+per-group checks (`primeLineGroups.ts`).
+
+Gate passed: profit from the statement; settlement gross = TOTAL REVENUE;
+deposit = SETTLEMENT TO OPERATOR (`depositSource 'settlement_to_operator'`);
+net due stays the printed page-3 figure; any warning -> amber "line
+details differ by $X" + needs-review (`reviewReasons` statement_warning /
+line_details_differ), Save works, never the line route; loads keep
+revenue only if the loads check passed. Gate failed or no statement: the
+old blocking guard, with "Save as estimate" (flagged, line route,
+Unverified). Stored statements from before the gate keep the old rule
+(`isStatementBacked()` uses `prime.gatePassed` only when present).
+
+Checks run only in the app (import preview + `aiImportSave.ts`); the
+server reads, merges and stores. After an `eas update` a ready job's stored
+reading is re-checked with no re-read; a reading from the older prompt (no
+printed labels / no balance forward field) is shown "Read with an older
+version" with Read again first.
+
+## Review screen (item 7, `reviewVerdict.ts`, `SettlementReview.tsx`)
+
+Green "Verified by Prime's statement. Profit $X, deposited $Y" [Save];
+green "Totals match. Profit estimated from line items. $X" [Save] (no
+statement, printed totals tie — never "Verified"); amber "Saved from the
+statement; line details need a look" [Save] + Details; red "We couldn't
+verify this week" + one sentence [Read again][Save as estimate][Discard].
+Details: every check in plain words, the per-group table, the statement
+lines the AI read, pages not read, the raw AI note, Share audit (every
+line with amounts, checks, groups; bank digits removed). Read again
+(`reread_job`) re-reads only the content pages of an unsaved ready job
+with the current prompt; attachments stay stored ("Read the missing
+pages" after saving).

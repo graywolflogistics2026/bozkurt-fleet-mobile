@@ -33,7 +33,12 @@ export type StatementReviewReason =
   | 'line_items_incomplete'
   // Σ load owner revenue + adjustments ≠ REVENUE FROM PRIME INC.
   // (primeLoads.ts) — the loads were saved with no revenue.
-  | 'loads_revenue_mismatch';
+  | 'loads_revenue_mismatch'
+  // Item 6: the statement passed its gate but a check outside it (miles,
+  // the AI's header gross, a header total read differently on two pages)
+  // or the line details differ — warnings only.
+  | 'statement_warning'
+  | 'line_details_differ';
 
 export type LineTreatment =
   | { kind: 'revenue' }

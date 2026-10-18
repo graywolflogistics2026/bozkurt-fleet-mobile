@@ -332,3 +332,13 @@ Moved verbatim from CLAUDE.md on 2026-10-13 (original file order).
   item 3 above). No new native dependency — pure client-side JS/TS plus
   one Edge Function prompt/schema change — ships via a normal
   `eas update` once the Edge Function above has been redeployed.
+
+## Printed code field (owner decision 2026-10-17, Prime only)
+
+`findCarrierCodeMatch()` takes the line's printed 2-letter code. Prime
+order: (1) a code's full label in the description (kept first so WA
+"ADV FOR WEIGHT TICKETS" stays a scale expense — golden trap 5); (2) the
+printed code ("PO NORTH STAR GRILL, MO" -> Meals); (3) a bare code word
+in the description. Every other carrier: description only, unchanged.
+Codes on the 8/14 and 8/21 golden weeks with no `CARRIER_CODES.md` row
+(generic classifier still decides): MT, MY, SH, SF, ED.

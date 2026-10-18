@@ -57,6 +57,8 @@ function primeWeek(extraLines: L[] = [], totals: Record<string, number> = {}, pr
         // Prime always prints SETTLEMENT TO OPERATOR — a core self-check
         // number (owner decision 2026-10-13, amendment 1).
         settlementToOperator: r(sum('revenue') + opex),
+        // The statement page's own week ending (gate, owner decision 2026-10-17).
+        weekEnding: '2026-08-21',
         ...totals,
       },
     },

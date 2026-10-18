@@ -210,11 +210,13 @@ Second golden week `goldenPrimeSettlement0814.test.ts` (W/E 8/14, profit
 Full: `docs/decisions/golden-settlement.md`.
 
 **Prime statement as source; profit is never the deposit.** A Prime week
-whose Statement of Income and Expense passed its self-check counts from
+whose Statement of Income and Expense passed its GATE (every check inside
+the statement + statement week ending; 2026-10-17) counts from
 that statement (`settlements.statement`, §77); its linked rows are detail
 only. Every week carries Verified / Totals match / Unverified. The bank
 deposit is READ from the statement, never computed, and is never labeled
-profit. Full: `docs/decisions/prime-statement-source.md`.
+profit. Past the gate, line-item mismatches only warn (amber, needs-review).
+Full: `docs/decisions/prime-statement-source.md`.
 
 **Import jobs: 150 s, resumable.** Never assume more than the Free-plan
 150 s per Edge Function invocation. Background PDF imports are chains of

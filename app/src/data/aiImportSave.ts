@@ -23,7 +23,8 @@ import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
-import { buildSettlementStatement, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
+import { buildSettlementStatement, isStatementBacked, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
+import { lineDetailsDifference, reviewInputsOf } from '@/src/import/reviewVerdict';
 import { scrubBankDigits } from '@/src/import/bankDigits';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { buildTitleFromExtraction, cleanTitle, type TitleContext } from '@/src/data/documentTitle';
@@ -317,12 +318,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     settlementStatement = buildSettlementStatement(d, {
       savedFlagged: Array.isArray(d.reconciliationOverride) && d.reconciliationOverride.length > 0,
       priorLabelsSeen: await fetchPriorStatementLabels(userId),
+      lineDetailsDifference: lineDetailsDifference(reviewInputsOf(d)),
     });
     // First appearance of an OT LOAD/UNLOAD ADVANCE, OUT OF POCKET COSTS,
     // START UP line, an unknown label, or an unmatched personal payment:
     // the whole document is flagged needs-review (the existing signal).
     if (settlementStatement.reviewReasons.length > 0) d = { ...d, confidence: 'low' };
     settlementMapping = mapSettlement(d, userId, truckId, driverId);
+    // Item 6 (b) (owner decision 2026-10-17): a week whose statement passed
+    // the gate takes its gross from TOTAL REVENUE, never the AI's header
+    // field (net due stays the printed page-3 figure).
+    if (isStatementBacked(settlementStatement) && settlementStatement.prime?.totals.totalRevenue != null) {
+      settlementMapping.settlement.gross = settlementStatement.prime.totals.totalRevenue;
+    }
     // A week_ending we can't pin down must never silently fall back to an
     // empty-string match key — two different weeks that both failed to
     // extract a date would otherwise collide on '' and replace each other

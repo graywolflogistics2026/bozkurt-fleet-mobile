@@ -552,8 +552,8 @@
     "pagesProcessedTitle": "📄 تم استيراد المستند جزئيًا",
     "pagesProcessedBody": "تم استيراد {{covered}} من {{total}} صفحات. تعذّرت معالجة الصفحة/الصفحات {{missingPages}} — استوردها بشكل منفصل إذا لزم الأمر.",
     "reconciliationTitle": "🚫 يتعذر الحفظ — الأرقام غير متطابقة",
-    "reconciliationDeductionsMismatch": "إجمالي الخصومات المذكور في الكشف ({{stated}}) لا يطابق مبلغ {{summed}} الموجود في بنود الخصم. حاول إعادة استيراد هذا settlement — وإذا ظل غير متطابق، أضف المبالغ الناقصة كخصومات منفصلة من شاشة الخصومات.",
-    "reconciliationZeroNet": "صافي الدفع يظهر {{zero}} رغم أن الإيراد الإجمالي هو {{gross}} — يبدو أن هذا settlement غير مكتمل. حاول إعادة استيراده.",
+    "reconciliationDeductionsMismatch": "مجموع بنود الاستقطاعات {{summed}}، لكن إجمالي الاستقطاعات في الكشف {{stated}}.",
+    "reconciliationZeroNet": "صافي الدفع {{zero}} رغم أن الإيراد الإجمالي {{gross}} — يبدو أن هذا settlement غير مكتمل.",
     "reconciliationRevenueLinesMismatch": "مجموع بنود الإيراد {{summed}}، لكن إجمالي الإيراد في الكشف هو {{stated}}. قد يكون هناك بند ناقص أو قُرئ من العمود الخطأ.",
     "reconciliationReimbursementLinesMismatch": "مجموع بنود التعويض {{summed}}، لكن إجمالي التعويضات في الكشف هو {{stated}}.",
     "reconciliationNetDueMismatch": "الإيراد + التعويضات − الخصومات = {{computed}}، لكن صافي المبلغ المستحق في الكشف هو {{stated}}. ربما فقد رصيد دائن علامة السالب أو هناك بند ناقص.",
@@ -688,7 +688,62 @@
     "lineItemsIncompleteTitle": "البنود غير مكتملة",
     "lineItemsIncompleteBody": "تعذّرت قراءة الصفحات {{pages}} من {{total}}. إذا اجتاز الكشف فحوصه فالربح يأتي من الكشف؛ وبعد الحفظ يقرأ «اقرأ الصفحات الناقصة» في الأسبوع هذه الصفحات فقط.",
     "attachmentsStillReading": "لا تزال {{count}} صفحات مرفقة قيد القراءة. يمكنك الحفظ الآن؛ وستُعرض عليك للمراجعة عند الانتهاء.",
-    "unreadPagesBody": "{{count}} صفحات محفوظة في الملف ولم تُقرأ (الصفحات {{pages}}). بعد الحفظ يمكنك قراءة أي منها من settlement الأسبوع."
+    "unreadPagesBody": "{{count}} صفحات محفوظة في الملف ولم تُقرأ (الصفحات {{pages}}). بعد الحفظ يمكنك قراءة أي منها من settlement الأسبوع.",
+    "verdict": {
+      "verified": "تم التحقق من كشف Prime. الربح {{profit}}، المودَع {{deposit}}",
+      "totalsMatch": "المجاميع متطابقة. الربح مقدَّر من البنود. {{profit}}",
+      "needsLook": "يُحفَظ وفق الكشف؛ تفاصيل البنود تحتاج إلى مراجعة",
+      "needsLookFigures": "الربح {{profit}}، المودَع {{deposit}} — من كشف Prime.",
+      "notVerified": "تعذّر التحقق من هذا الأسبوع",
+      "reason": {
+        "lineDetailsDiffer": "تفاصيل البنود تختلف عن الكشف بمقدار {{amount}}.",
+        "statementWarning": "هذا غير متطابق: {{check}}.",
+        "loadsMismatch": "مجموع الحمولات لا يساوي REVENUE FROM PRIME INC.، لذا تُحفَظ بلا إيراد.",
+        "pagesIncomplete": "تعذّرت قراءة الصفحات {{pages}}.",
+        "statementCheckFailed": "كشف Prime كما قُرئ غير متطابق: {{check}} (المطبوع {{printed}}، المقروء {{read}}).",
+        "statementNotRead": "لم يُقرأ من كشف Prime: {{checks}}.",
+        "totalsNotPrinted": "لم تُقرأ مجاميع الكشف، لذا تعذّر التحقق من أي شيء."
+      },
+      "olderTitle": "قُرئ بإصدار أقدم",
+      "olderBody": "قُرئ هذا المستند قبل آخر تحديث للقارئ. أعد قراءته للحصول على أفضل نتيجة.",
+      "attachmentsSavedNotRead": "{{count}} من صفحات المرفقات محفوظة، لم تُقرأ",
+      "details": "التفاصيل",
+      "hideDetails": "إخفاء التفاصيل",
+      "detailsChecks": "عمليات التحقق",
+      "detailsGroups": "تفاصيل البنود مقابل الكشف",
+      "detailsLines": "بنود الكشف التي قرأها الذكاء الاصطناعي",
+      "detailsPages": "الصفحات",
+      "detailsNote": "ملاحظة الذكاء الاصطناعي",
+      "lineTotalsTie": "مجموع البنود يساوي المجاميع المطبوعة.",
+      "readAgain": "إعادة القراءة",
+      "readAgainStartedTitle": "جارٍ إعادة القراءة",
+      "readAgainStartedBody": "تُعاد قراءة صفحات settlement والكشف فقط. ستراه في عمليات الاستيراد عندما يصبح جاهزًا.",
+      "saveAsEstimate": "حفظ كتقدير"
+    },
+    "gateMissing": {
+      "totalRevenue": "TOTAL REVENUE",
+      "totalOperatingExpenses": "TOTAL OPERATING EXPENSES",
+      "totalStatement": "TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "variableCosts": "بنود التكاليف المتغيرة",
+      "fixedCost": "بنود التكاليف الثابتة",
+      "statementWeekEnding": "نهاية أسبوع الكشف"
+    },
+    "group": {
+      "tractor_fuel": "وقود الجرار",
+      "tractor_def": "DEF الجرار",
+      "reefer_fuel": "وقود reefer (بعد خصم تعويضه)",
+      "tractor_fuel_discount": "خصم وقود الجرار",
+      "reefer_fuel_discount": "خصم وقود reefer",
+      "def_discount": "خصم DEF",
+      "state_fuel_tax": "ضريبة الوقود الولائية (بعد خصم تعويضها)",
+      "repair": "الإصلاح",
+      "advances": "السُّلف",
+      "meals": "الوجبات",
+      "performance_bond": "ضمان الأداء",
+      "total": "جميع البنود (الإجمالي)"
+    },
+    "groupLine": "{{group}}: البنود {{settlement}}، الكشف {{statement}}، الفرق {{difference}}"
   },
   "camera": {
     "permissionNote": "يلزم الوصول إلى الكاميرا لتصوير الإيصالات وملفات PDF لـ Settlements.",
@@ -2736,5 +2791,23 @@
     "unreadBody": "{{count}} صفحات محفوظة في الملف ولم تُقرأ: {{pages}}.",
     "readThisPage": "اقرأ الصفحة {{page}}",
     "moreUnread": "+ {{count}} صفحات أخرى"
+  },
+  "importAudit": {
+    "title": "BOZKA TRUCKING AI — تدقيق الاستيراد (ما قرأه الذكاء الاصطناعي)",
+    "week": "نهاية الأسبوع",
+    "unit": "الوحدة",
+    "totals": "مجاميع الكشف",
+    "revenue": "بنود الإيرادات",
+    "reimbursements": "بنود التعويضات",
+    "deductions": "بنود الاستقطاعات",
+    "fuel": "بنود الوقود",
+    "loads": "الحمولات",
+    "statement": "بنود كشف Prime",
+    "checks": "عمليات التحقق من الكشف",
+    "lineChecks": "عمليات التحقق من البنود",
+    "groups": "تفاصيل البنود مقابل الكشف",
+    "lineDifference": "تفاصيل البنود تختلف عن الكشف بمقدار {{amount}}.",
+    "pages": "الصفحات",
+    "aiNote": "ملاحظة الذكاء الاصطناعي"
   }
 }

@@ -98,7 +98,27 @@ export type StatementCheck = {
   passed: boolean;
   expectedText?: string;
   actualText?: string;
+  // mergeConflict: the field two pages read differently.
+  path?: string;
 };
+
+// THE GATE (owner decision 2026-10-17, item 6). Every check INSIDE the
+// statement — each block's lines = its printed total, variable + fixed +
+// other = TOTAL OPERATING EXPENSES, revenue − expenses = TOTAL STATEMENT,
+// the cash chain to the deposit — plus statement week ending = settlement
+// week ending. All must have run and passed. When the gate passes, profit
+// comes from the statement, the settlement's gross is TOTAL REVENUE and
+// the deposit SETTLEMENT TO OPERATOR; anything else that differs (miles,
+// the AI's header gross, a header total two pages read differently, the
+// line items) only WARNS: amber + needs-review, Save works.
+const WARN_ONLY_CHECKS: StatementCheckId[] = ['milesMatch', 'grossMatches'];
+export function isGateCheck(check: Pick<StatementCheck, 'id' | 'path'>): boolean {
+  if (check.id === 'mergeConflict') return !check.path || check.path.startsWith('settlement.operating.');
+  return !WARN_ONLY_CHECKS.includes(check.id);
+}
+
+// Totals the gate needs read; missing -> the gate fails (never skipped).
+export type GateMissing = 'totalRevenue' | 'totalOperatingExpenses' | 'totalStatement' | 'settlementToOperator' | 'variableCosts' | 'fixedCost' | 'statementWeekEnding';
 
 export type PrimeStatementCheckResult = {
   lines: StatementLine[];
@@ -110,6 +130,12 @@ export type PrimeStatementCheckResult = {
   // Core checks that could not run because a number they need was not
   // read. Does not block Save, but the week is not statement-backed.
   coreMissing: CoreStatementCheck[];
+  // THE GATE (item 6). Optional: statements stored before 2026-10-17 lack
+  // it and keep the old rule (passed + no core missing).
+  gatePassed?: boolean;
+  gateMissing?: GateMissing[];
+  // Failed checks outside the gate — warnings only.
+  warnings?: StatementCheck[];
 };
 
 export type DepositSource = 'direct_deposit' | 'settlement_to_operator' | 'net_due';
@@ -282,14 +308,30 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   if (weekCheck) checks.push(weekCheck);
 
   for (const conflict of coreMergeConflicts(extraction)) {
-    checks.push({ id: 'mergeConflict', expected: round2(conflict.values[0]), actual: round2(conflict.values[1]), passed: false });
+    checks.push({ id: 'mergeConflict', expected: round2(conflict.values[0]), actual: round2(conflict.values[1]), passed: false, path: conflict.path });
   }
 
   // A missing core number no longer blocks Save (it used to, as
   // 'requiredTotals'): the week is saved on the line route, Unverified and
   // needs-review (amendment 1).
   const coreMissing = primeCoreMissing(totals, lines, printedTotal(s.grossRevenue));
-  return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing };
+  const gateMissing = primeGateMissing(totals, lines, weekCheck != null);
+  const gatePassed = gateMissing.length === 0 && checks.filter(isGateCheck).every((c) => c.passed);
+  const warnings = checks.filter((c) => !isGateCheck(c) && !c.passed);
+  return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing, gatePassed, gateMissing, warnings };
+}
+
+export function primeGateMissing(totals: PrimeStatementTotals, lines: StatementLine[], weekEndingRead: boolean): GateMissing[] {
+  const has = (section: StatementSection) => lines.some((l) => l.section === section);
+  const missing: GateMissing[] = [];
+  if (totals.totalRevenue == null) missing.push('totalRevenue');
+  if (totals.totalOperatingExpenses == null) missing.push('totalOperatingExpenses');
+  if (totals.totalStatement == null) missing.push('totalStatement');
+  if (totals.settlementToOperator == null) missing.push('settlementToOperator');
+  if (totals.totalVariableCosts == null && !(['fuel_oil_tax', 'repair', 'tires', 'misc'] as StatementSection[]).some(has)) missing.push('variableCosts');
+  if (totals.totalFixedCost == null && !has('fixed')) missing.push('fixedCost');
+  if (!weekEndingRead) missing.push('statementWeekEnding');
+  return missing;
 }
 
 // The statement page's week ending must be the settlement's (owner
@@ -461,26 +503,52 @@ export function statementPagesOf(extraction: Extraction): StatementPages | null 
 
 export function buildSettlementStatement(
   extraction: Extraction,
-  options: { savedFlagged: boolean; priorLabelsSeen: Set<string> }
+  options: {
+    savedFlagged: boolean;
+    priorLabelsSeen: Set<string>;
+    // Item 6: how far the line details are from the statement (largest
+    // line-item or per-group difference), when the gate passed and they
+    // differ — saved as a needs-review reason, never blocking.
+    lineDetailsDifference?: number | null;
+  }
 ): SettlementStatement {
   const prime = buildPrimeStatementCheck(extraction);
   const prTotal = prReimbursementTotal(extraction);
   const pages = statementPagesOf(extraction);
-  const reviewReasons: SettlementStatement['reviewReasons'] =
-    prime && prime.passed ? statementReviewReasons(prime.lines, prTotal, options.priorLabelsSeen) : [];
-  if (prime && prime.coreMissing.length > 0) reviewReasons.push({ reason: 'statement_core_missing', label: prime.coreMissing.join(', ') });
+  const gatePassed = !!prime?.gatePassed;
+  const reviewReasons: SettlementStatement['reviewReasons'] = gatePassed ? statementReviewReasons(prime!.lines, prTotal, options.priorLabelsSeen) : [];
+  if (prime && !gatePassed && (prime.gateMissing?.length ?? 0) > 0) {
+    reviewReasons.push({ reason: 'statement_core_missing', label: prime.gateMissing!.join(', ') });
+  }
+  if (gatePassed && (prime!.warnings?.length ?? 0) > 0) {
+    reviewReasons.push({ reason: 'statement_warning', label: prime!.warnings!.map((w) => w.id).join(', ') });
+  }
+  if (gatePassed && options.lineDetailsDifference != null && Math.abs(options.lineDetailsDifference) > 0.005) {
+    reviewReasons.push({ reason: 'line_details_differ', label: round2(options.lineDetailsDifference).toFixed(2) });
+  }
   if (pages && pages.incomplete.length > 0) reviewReasons.push({ reason: 'line_items_incomplete', label: pages.incomplete.map((p) => p.page).join(', ') });
   const loads = splitPrimeLoads(extraction);
-  if (loads?.matches === false) {
+  if (loads && loads.matches !== true && (loads.matches === false || gatePassed) && loads.loads.length > 0) {
     reviewReasons.push({
       reason: 'loads_revenue_mismatch',
-      label: `${round2(loads.loadRevenue + loads.adjustmentTotal)} vs REVENUE FROM PRIME INC. ${loads.statementRevenue}`,
+      label: `${round2(loads.loadRevenue + loads.adjustmentTotal)} vs REVENUE FROM PRIME INC. ${loads.statementRevenue ?? '—'}`,
     });
+  }
+  // Item 6 (b): with the gate passed, the week's gross is TOTAL REVENUE
+  // and the deposit SETTLEMENT TO OPERATOR — never the AI's header fields.
+  // Net due stays the printed page-3 figure.
+  const printed = printedTotalsOf(extraction);
+  if (gatePassed && prime) {
+    if (prime.totals.totalRevenue != null) printed.grossRevenue = prime.totals.totalRevenue;
+    if (prime.totals.settlementToOperator != null) {
+      printed.deposit = prime.totals.settlementToOperator;
+      printed.depositSource = 'settlement_to_operator';
+    }
   }
   return {
     version: 1,
     source: prime ? 'prime_statement' : 'printed_totals',
-    printed: printedTotalsOf(extraction),
+    printed,
     prime: prime ? { ...prime, prReimbursementTotal: round2(prTotal) } : null,
     savedFlagged: options.savedFlagged,
     reviewReasons,
@@ -507,7 +575,10 @@ export type SettlementVerification = 'verified_prime' | 'totals_match' | 'unveri
 // The Prime route: a Prime statement page was extracted, its self-check
 // passed, and the week was not saved past a failing check.
 export function isStatementBacked(statement: SettlementStatement | null | undefined): boolean {
-  if (!statement || statement.source !== 'prime_statement' || !statement.prime?.passed || statement.savedFlagged) return false;
+  if (!statement || statement.source !== 'prime_statement' || !statement.prime || statement.savedFlagged) return false;
+  // THE GATE (item 6), when the stored statement carries it.
+  if (statement.prime.gatePassed != null) return statement.prime.gatePassed;
+  if (!statement.prime.passed) return false;
   // Core checks can never be skipped (amendment 1). Statements saved before
   // coreMissing existed are re-derived from their stored totals.
   const coreMissing =
@@ -539,6 +610,6 @@ export function settlementVerification(settlement: { statement?: SettlementState
 // existing needs-review machinery); everything else passes unchanged.
 export function applyPrimeOperatingStatementCheck(extraction: Extraction): Extraction {
   const check = buildPrimeStatementCheck(extraction);
-  if (!check || check.passed) return extraction;
+  if (!check || (check.gatePassed && (check.warnings?.length ?? 0) === 0)) return extraction;
   return { ...extraction, confidence: 'low' };
 }

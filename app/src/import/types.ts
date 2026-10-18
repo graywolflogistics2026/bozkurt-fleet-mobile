@@ -391,6 +391,10 @@ export type Extraction = {
   // src/import/settlementReconciliation.ts flagReconciliationOverride()):
   // the failed checks, kept in documents.parsed_json for the audit trail.
   reconciliationOverride?: unknown[];
+  // Item 6 (owner decision 2026-10-17): the statement gate passed but a
+  // line-item total, a per-group check or a check outside the gate
+  // differs — saved as-is, needs-review; never the line route.
+  reviewWarnings?: unknown[];
   // RESUMABLE IMPORT JOBS (owner decision 2026-10-13): set by ai-import's
   // page-by-page jobs (supabase/functions/ai-import/jobEngine.ts) — every
   // page of the PDF with its kind, its role (content / attachment / stored)

@@ -552,8 +552,8 @@
     "pagesProcessedTitle": "📄 Belge kısmen içe aktarıldı",
     "pagesProcessedBody": "{{total}} sayfadan {{covered}} tanesi içe aktarıldı. {{missingPages}} numaralı sayfa(lar) işlenemedi — gerekirse ayrıca içe aktarın.",
     "reconciliationTitle": "🚫 Kaydedilemiyor — rakamlar tutmuyor",
-    "reconciliationDeductionsMismatch": "Belgedeki toplam kesinti tutarı ({{stated}}) kesinti satırlarından elde edilen {{summed}} tutarıyla eşleşmiyor. Bu settlement'ı yeniden içe aktarmayı deneyin — hâlâ eşleşmiyorsa, eksik tutarları Kesintiler ekranından ayrı kesintiler olarak ekleyin.",
-    "reconciliationZeroNet": "Brüt gelir {{gross}} olmasına rağmen net ödeme {{zero}} gösteriyor — bu settlement tam görünmüyor. Yeniden içe aktarmayı deneyin.",
+    "reconciliationDeductionsMismatch": "Kesinti satırları {{summed}} ediyor, ancak ekstredeki toplam kesinti {{stated}}.",
+    "reconciliationZeroNet": "Brüt gelir {{gross}} olduğu halde net ödeme {{zero}} görünüyor — bu settlement eksik görünüyor.",
     "reconciliationRevenueLinesMismatch": "Gelir satırlarının toplamı {{summed}}, ancak ekstredeki toplam gelir {{stated}}. Bir satır eksik olabilir veya yanlış sütundan okunmuş olabilir.",
     "reconciliationReimbursementLinesMismatch": "Geri ödeme satırlarının toplamı {{summed}}, ancak ekstredeki toplam geri ödeme {{stated}}.",
     "reconciliationNetDueMismatch": "Gelir + geri ödemeler − kesintiler = {{computed}}, ancak ekstredeki net ödenecek tutar {{stated}}. Bir alacak eksi işaretini kaybetmiş veya bir satır eksik olabilir.",
@@ -688,7 +688,62 @@
     "lineItemsIncompleteTitle": "Kalemler eksik",
     "lineItemsIncompleteBody": "{{total}} sayfadan {{pages}} okunamadı. Tablo kontrollerini geçtiyse kâr tablodan gelir; kaydettikten sonra haftadaki \"Eksik sayfaları oku\" yalnızca bu sayfaları okur.",
     "attachmentsStillReading": "{{count}} ek sayfası hâlâ okunuyor. Şimdi kaydedebilirsiniz; bittiğinde incelemeniz için sunulacak.",
-    "unreadPagesBody": "{{count}} sayfa dosyada tutuluyor ama okunmadı (sayfalar {{pages}}). Kaydettikten sonra haftanın settlement kaydından istediğinizi okuyabilirsiniz."
+    "unreadPagesBody": "{{count}} sayfa dosyada tutuluyor ama okunmadı (sayfalar {{pages}}). Kaydettikten sonra haftanın settlement kaydından istediğinizi okuyabilirsiniz.",
+    "verdict": {
+      "verified": "Prime'ın tablosuyla doğrulandı. Kâr {{profit}}, yatırılan {{deposit}}",
+      "totalsMatch": "Toplamlar tutuyor. Kâr satır kalemlerinden tahmin edildi. {{profit}}",
+      "needsLook": "Tabloya göre kaydedilir; satır ayrıntılarına bakılmalı",
+      "needsLookFigures": "Kâr {{profit}}, yatırılan {{deposit}} — Prime'ın tablosundan.",
+      "notVerified": "Bu hafta doğrulanamadı",
+      "reason": {
+        "lineDetailsDiffer": "Satır ayrıntıları tablodan {{amount}} farklı.",
+        "statementWarning": "Bu tutmuyor: {{check}}.",
+        "loadsMismatch": "Yükler REVENUE FROM PRIME INC. tutarını vermiyor; bu yüzden gelirsiz kaydedilir.",
+        "pagesIncomplete": "{{pages}} sayfaları okunamadı.",
+        "statementCheckFailed": "Prime'ın tablosu okunduğu haliyle tutmuyor: {{check}} (basılı {{printed}}, okunan {{read}}).",
+        "statementNotRead": "Prime'ın tablosundan okunamadı: {{checks}}.",
+        "totalsNotPrinted": "Ekstrenin toplamları okunamadı; hiçbir şey kontrol edilemedi."
+      },
+      "olderTitle": "Eski bir sürümle okundu",
+      "olderBody": "Bu belge son okuyucu güncellemesinden önce okundu. En iyi sonuç için yeniden okutun.",
+      "attachmentsSavedNotRead": "{{count}} ek sayfası kaydedildi, okunmadı",
+      "details": "Ayrıntılar",
+      "hideDetails": "Ayrıntıları gizle",
+      "detailsChecks": "Kontroller",
+      "detailsGroups": "Satır ayrıntıları ve tablo",
+      "detailsLines": "Yapay zekânın okuduğu tablo satırları",
+      "detailsPages": "Sayfalar",
+      "detailsNote": "Yapay zekâ notu",
+      "lineTotalsTie": "Satır kalemleri basılı toplamları tutuyor.",
+      "readAgain": "Yeniden oku",
+      "readAgainStartedTitle": "Yeniden okunuyor",
+      "readAgainStartedBody": "Yalnızca settlement ve tablo sayfaları yeniden okunur. Hazır olduğunda içe aktarmalarınızda görünür.",
+      "saveAsEstimate": "Tahmin olarak kaydet"
+    },
+    "gateMissing": {
+      "totalRevenue": "TOTAL REVENUE",
+      "totalOperatingExpenses": "TOTAL OPERATING EXPENSES",
+      "totalStatement": "TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "variableCosts": "değişken maliyet satırları",
+      "fixedCost": "sabit maliyet satırları",
+      "statementWeekEnding": "tablonun hafta sonu tarihi"
+    },
+    "group": {
+      "tractor_fuel": "Çekici yakıtı",
+      "tractor_def": "Çekici DEF",
+      "reefer_fuel": "Reefer yakıtı (geri ödemesi düşülmüş)",
+      "tractor_fuel_discount": "Çekici yakıt indirimi",
+      "reefer_fuel_discount": "Reefer yakıt indirimi",
+      "def_discount": "DEF indirimi",
+      "state_fuel_tax": "Eyalet yakıt vergisi (geri ödemesi düşülmüş)",
+      "repair": "Onarım",
+      "advances": "Avanslar",
+      "meals": "Yemekler",
+      "performance_bond": "Teminat",
+      "total": "Tüm satırlar (toplam)"
+    },
+    "groupLine": "{{group}}: satırlar {{settlement}}, tablo {{statement}}, fark {{difference}}"
   },
   "camera": {
     "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
@@ -2736,5 +2791,23 @@
     "unreadBody": "Dosyada tutulan, okunmayan {{count}} sayfa: {{pages}}.",
     "readThisPage": "{{page}}. sayfayı oku",
     "moreUnread": "+ {{count}} sayfa daha"
+  },
+  "importAudit": {
+    "title": "BOZKA TRUCKING AI — içe aktarma denetimi (yapay zekânın okudukları)",
+    "week": "Hafta sonu",
+    "unit": "ünite",
+    "totals": "Ekstre toplamları",
+    "revenue": "Gelir satırları",
+    "reimbursements": "Geri ödeme satırları",
+    "deductions": "Kesinti satırları",
+    "fuel": "Yakıt satırları",
+    "loads": "Yükler",
+    "statement": "Prime tablo satırları",
+    "checks": "Tablo kontrolleri",
+    "lineChecks": "Satır kalemi kontrolleri",
+    "groups": "Satır ayrıntıları ve tablo",
+    "lineDifference": "Satır ayrıntıları tablodan {{amount}} farklı.",
+    "pages": "Sayfalar",
+    "aiNote": "Yapay zekâ notu"
   }
 }

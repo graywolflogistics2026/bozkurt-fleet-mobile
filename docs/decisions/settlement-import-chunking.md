@@ -533,3 +533,14 @@ CPU time per run on a 10 MB file against Supabase's per-request CPU limit,
 the self-invoke through the gateway with the service key, and the
 classification model id. The app's 3-minute restart covers a lost
 self-invoke while the app is open.
+
+## Read again (owner decision 2026-10-17)
+
+Mode `reread_job` (ai-import `index.ts`, `jobEngine.ts newRereadPlan()`):
+an unsaved, ready PDF job is reset on the same row — page results and the
+stored reading cleared, lease released — and its content pages are read
+again with the caller's current prompt inputs; attachments and every other
+page become `stored`. Kind `read_pages`: never counts against the
+allowance again. A whole-document job (no page roles) re-reads every page.
+Header-total merge conflicts count only when both pages read the same
+printed label (`settlement.totalLabels`).

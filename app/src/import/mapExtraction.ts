@@ -16,6 +16,7 @@ import { parseAmount } from '@/src/import/amount';
 import { clampPerDiemDays, defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { splitPrimeLoads } from './primeLoads';
+import { buildPrimeStatementCheck } from './settlementStatement';
 import type {
   ComplianceItemInsert,
   ComplianceType,
@@ -192,7 +193,10 @@ export function mapSettlement(
   // line is an adjustment, never a load; when the loads do not add up to
   // the statement's REVENUE FROM PRIME INC. they keep no revenue.
   const primeLoads = splitPrimeLoads(d);
-  const loadRevenueTrusted = primeLoads?.matches !== false;
+  // Item 6 (d): when the statement gate passed, loads keep revenue ONLY
+  // if the loads check passed; otherwise only a failed check removes it.
+  const statementGatePassed = !!primeLoads && !!buildPrimeStatementCheck(d)?.gatePassed;
+  const loadRevenueTrusted = statementGatePassed ? primeLoads?.matches === true : primeLoads?.matches !== false;
   const loads: LoadInsert[] = (primeLoads ? primeLoads.loads : (s.loads ?? [])).map((l) => {
     const pickupDate = toDateOrNull(l.pickupDate) ?? toDateOrNull(l.date) ?? settlementFallbackDate ?? null;
     const deliveryDate = toDateOrNull(l.deliveryDate) ?? toDateOrNull(l.dropDate) ?? pickupDate;

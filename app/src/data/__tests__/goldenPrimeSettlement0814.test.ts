@@ -41,6 +41,8 @@ import { checkSettlementReconciliation } from '@/src/import/settlementReconcilia
 import { buildPrimeStatementCheck, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
 import { splitPrimeLoads } from '@/src/import/primeLoads';
 import { readPrimeYtdSnapshotFromParsedJson } from '@/src/import/primeOperatingStatement';
+import { buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
+import { buildReviewVerdict, isOlderReading, isSaveBlocked, lineDetailsDifference, markReviewWarnings, reviewInputsOf } from '@/src/import/reviewVerdict';
 
 // ---------------------------------------------------------------------
 // ANSWER KEY (owner, independently verified)
@@ -424,9 +426,9 @@ describe('golden week 2026-08-14 — Verified by Prime statement, every screen s
     expect(r2(b.profit)).toBe(KEY.profit);
   });
 
-  test('deposit is read: 3,072.57 from the printed DIRECT DEPOSIT, never computed', () => {
-    expect(rows.settlements[0].statement?.printed).toMatchObject({ deposit: KEY.deposit, depositSource: 'direct_deposit', balanceForward: KEY.balanceForward, interestNet: -KEY.interestExpense });
-    expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: KEY.deposit, owedToCarrier: 0, source: 'direct_deposit' });
+  test('deposit is read: 3,072.57 from SETTLEMENT TO OPERATOR (gate passed, item 6), never computed', () => {
+    expect(rows.settlements[0].statement?.printed).toMatchObject({ deposit: KEY.deposit, depositSource: 'settlement_to_operator', balanceForward: KEY.balanceForward, interestNet: -KEY.interestExpense });
+    expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: KEY.deposit, owedToCarrier: 0, source: 'settlement_to_operator' });
   });
 
   test('Home, weekly trend, Profit Analysis, Per-Truck and calcTrueProfit all give 4,987.74', () => {
@@ -448,20 +450,21 @@ describe('golden week 2026-08-14 — Verified by Prime statement, every screen s
     expect(r2(calcTrueProfit(rows.settlements, rows.deductions, rows.fuel, [], [], rows.reimbursements))).toBe(KEY.profit);
   });
 
-  test('line items vs statement: 61.66 apart = the meal line counted as an expense (62.25) − interest only on the statement (0.59)', () => {
+  test('PO fix: the printed code PO makes "NORTH STAR GRILL, MO" a meal on the line route too; lines vs statement differ only by the 0.59 interest', async () => {
     // Prime books the fuel card under WIRE CHARGE and splits the weight
-    // tickets, so lines reconcile at total level only. REPORTED TO THE
-    // OWNER 2026-10-17, NOT FIXED (classification needs approval): Prime
-    // codes match on the description text only (carrierCodes.ts
-    // findCarrierCodeMatch), so the PO line "NORTH STAR GRILL, MO" is not
-    // recognised as a meal on the line route. Profit is unaffected — this
-    // week counts from the statement.
+    // tickets, so lines reconcile at total level only. The interest expense
+    // exists only on the statement: 0.59, under the $1 cross-check tolerance.
+    const meal = rows.deductions.find((d) => d.description === 'NORTH STAR GRILL, MO')!;
+    expect(meal.category).toBe('Meals (per diem covered)');
     const k = weekKpi(rows);
-    expect(k.bridge.crossChecks).toEqual([
-      { settlementId: rows.settlements[0].id, weekEnding: WEEK_ENDING, lineExpenses: expect.closeTo(2988.02, 2), statementExpenses: expect.closeTo(KEY.expenses, 2), difference: r2(62.25 - KEY.interestExpense) },
-    ]);
-    expect(rows.deductions.find((d) => d.description === 'NORTH STAR GRILL, MO')!.category).not.toBe('Meals (per diem covered)');
-    expect(r2(k.net)).toBe(KEY.profit);
+    expect(k.bridge.crossChecks).toEqual([]);
+    // The line route alone (no statement page): 4,987.74 + 0.59 interest
+    // that only the statement carries.
+    const lineRows = await importWeek(golden0814({ operating: undefined }));
+    const line = weekKpi(lineRows);
+    expect(settlementVerification(lineRows.settlements[0])).toBe('totals_match');
+    expect(r2(line.expenses.total)).toBe(r2(KEY.expenses - KEY.interestExpense));
+    expect(r2(line.net)).toBe(r2(KEY.profit + KEY.interestExpense));
   });
 });
 
@@ -614,5 +617,162 @@ describe('continuity with the 8/21 golden week', () => {
     expect(r2(snapshot.revenue + WEEK_0821.revenue)).toBe(YTD_0821.revenue);
     expect(r2(STATEMENT.ytdSettlementToOperator + WEEK_0821.settlementToOperator)).toBe(YTD_0821.paidToOperator);
     expect(snapshot.miles + WEEK_0821.miles).toBe(YTD_0821.miles);
+  });
+});
+
+// =====================================================================
+// ITEM 5 — per-group checks (warnings only)
+// =====================================================================
+describe('per-group checks: settlement lines vs the statement (item 5)', () => {
+  test('every group ties on the real week; the total differs only by the 0.59 interest', () => {
+    const groups = buildPrimeGroupChecks(golden0814())!;
+    expect(groups.map((g) => [g.group, g.settlement, g.statement, g.passed])).toEqual([
+      ['tractor_fuel', 2089.58, 2089.58, true],
+      ['tractor_def', 106.9, 106.9, true],
+      ['reefer_fuel', 387.57, 387.57, true], // 448.59 − reimbursement 61.02
+      ['tractor_fuel_discount', -317.37, -317.37, true],
+      ['reefer_fuel_discount', -60.51, -60.51, true],
+      ['def_discount', -32.68, -32.68, true],
+      ['state_fuel_tax', -126.8, -126.8, true], // 66.32 − reimbursement 193.12
+      ['repair', 652.53, 652.53, true],
+      ['advances', 550, 550, true], // weight-ticket advances left out
+      ['meals', 62.25, 62.25, true],
+      ['performance_bond', 100, 100, true],
+      ['total', 3638.02, 3638.61, true], // 4,100.66 − 462.64 vs TOTAL OPERATING EXPENSES
+    ]);
+    expect(groups.find((g) => g.group === 'total')!.difference).toBe(-0.59);
+  });
+
+  test('a misread tractor fuel line names its group and the difference (constructed: +332.54 on one UF line)', () => {
+    const deductions = DEDUCTIONS.map((d) => (d.code === 'UF' && d.amount === 341.04 ? { ...d, amount: 673.58 } : d));
+    const groups = buildPrimeGroupChecks(golden0814({ deductions }))!;
+    expect(groups.filter((g) => !g.passed).map((g) => [g.group, g.difference])).toEqual([
+      ['tractor_fuel', 332.54],
+      ['total', 331.95],
+    ]);
+  });
+});
+
+// =====================================================================
+// ITEM 6 — the gate
+// =====================================================================
+describe('the gate (item 6): statement checks + week ending decide; line items only warn', () => {
+  // The extraction misread the line items (constructed from the golden
+  // week: one tractor fuel line +332.54 and the TRIP REVENUE column), but
+  // read Prime's statement correctly.
+  const misreadLines = () =>
+    golden0814({
+      deductions: DEDUCTIONS.map((d) => (d.code === 'UF' && d.amount === 341.04 ? { ...d, amount: 673.58 } : d)),
+      revenueItems: REVENUE_ITEMS.map((r) => (r.desc === 'OWNER REVENUE' ? { ...r, amount: TRIP_REVENUE[r.order] } : r)),
+      grossRevenue: 10386.86,
+    });
+
+  test('gate passes -> Save is not blocked, verdict amber "line details differ", profit from the statement', () => {
+    const e = misreadLines();
+    expect(checkSettlementReconciliation(e).ok).toBe(false);
+    expect(buildPrimeStatementCheck(e)!.gatePassed).toBe(true);
+    expect(buildPrimeStatementCheck(e)!.warnings!.map((w) => w.id)).toEqual(['grossMatches']);
+    expect(isSaveBlocked(e)).toBe(false);
+    const verdict = buildReviewVerdict(e, { saveBlocked: false })!;
+    expect(verdict).toMatchObject({ tone: 'amber', kind: 'needs_look', profit: KEY.profit, deposit: KEY.deposit });
+    expect(verdict.kind === 'needs_look' && verdict.reason.kind).toBe('line_details_differ');
+  });
+
+  test('saved: Verified, gross = TOTAL REVENUE (not the header 10,386.86), net due printed, needs-review', async () => {
+    const rows = await importWeek(markReviewWarnings(misreadLines()));
+    const st = rows.settlements[0];
+    expect(settlementVerification(st)).toBe('verified_prime');
+    expect(st.gross).toBe(KEY.revenue);
+    expect(st.net).toBe(KEY.netDue);
+    expect(st.statement?.reviewReasons.map((r) => r.reason)).toEqual(['statement_warning', 'line_details_differ']);
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+    expect(weekKpi(rows).deposits).toBe(KEY.deposit);
+  });
+
+  test('(d) loads keep revenue only if the loads check passes', async () => {
+    const owner = await importWeek(golden0814());
+    expect(owner.loads.map((l) => l.revenue)).toEqual([2900.4, 1763.24, 1451.4]);
+    const trip = await importWeek(golden0814({ loads: LOADS.map((l) => ({ ...l, revenue: TRIP_REVENUE[l.order] })) }));
+    expect(trip.loads.map((l) => l.revenue)).toEqual([0, 0, 0]);
+  });
+
+  test('the difference is the largest line-item or group difference', () => {
+    expect(lineDetailsDifference(reviewInputsOf(golden0814()))).toBeNull();
+    // revenue lines 10,386.86 vs printed 7,914.10
+    expect(lineDetailsDifference(reviewInputsOf(misreadLines()))).toBe(2472.76);
+  });
+
+  test("gate fails (a statement line misread) -> today's guard: Save blocked, verdict red naming the check", () => {
+    const lines = STATEMENT_LINES.map((l) => (l.label === 'TRACTOR FUEL' ? { ...l, amount: -2422.12 } : l));
+    const e = withStatement({ lines });
+    expect(buildPrimeStatementCheck(e)!.gatePassed).toBe(false);
+    expect(isSaveBlocked(e)).toBe(true);
+    expect(buildReviewVerdict(e, { saveBlocked: true })).toMatchObject({
+      tone: 'red',
+      kind: 'not_verified',
+      reason: { kind: 'statement_check_failed', check: { id: 'section_fuel_oil_tax' } },
+    });
+  });
+
+  test('a statement week ending that was not read fails the gate (never skipped)', () => {
+    const e = withStatement({ weekEnding: undefined });
+    expect(buildPrimeStatementCheck(e)!.gatePassed).toBe(false);
+    expect(buildPrimeStatementCheck(e)!.gateMissing).toEqual(['statementWeekEnding']);
+    expect(buildReviewVerdict(e, { saveBlocked: isSaveBlocked(e) })).toMatchObject({
+      tone: 'red',
+      reason: { kind: 'statement_not_read', missing: ['statementWeekEnding'] },
+    });
+  });
+
+  test('a miles mismatch only warns: Verified, amber', () => {
+    const e = golden0814({ totalMiles: 7819 });
+    expect(buildPrimeStatementCheck(e)!.gatePassed).toBe(true);
+    expect(buildReviewVerdict(e, { saveBlocked: false })).toMatchObject({ tone: 'amber', reason: { kind: 'statement_warning', check: { id: 'milesMatch' } } });
+  });
+});
+
+// =====================================================================
+// ITEM 7 — the verdict
+// =====================================================================
+describe('review verdict (item 7)', () => {
+  const CODES = PRIME_CODES.map((c) => ({
+    carrier: c.carrier,
+    code: c.code as string,
+    subCode: c.sub_code as string | null,
+    label: c.label as string,
+    description: null,
+    category: c.category as string | null,
+    isDeductible: c.is_deductible as boolean | null,
+    incomeOrChargeback: null,
+    notes: null,
+  }));
+
+  test("green: Verified by Prime's statement — profit 4,987.74, deposited 3,072.57", () => {
+    expect(buildReviewVerdict(golden0814(), { saveBlocked: false })).toEqual({ tone: 'green', kind: 'verified', profit: KEY.profit, deposit: KEY.deposit });
+  });
+
+  test('no statement, printed totals match: green "Totals match. Profit estimated from line items" — never Verified', () => {
+    // No deposit line either: without the statement the balance forward is
+    // not read, so a printed deposit of 3,072.57 could not tie to net due
+    // 4,276.08 (that week is red — next test's sibling below).
+    const verdict = buildReviewVerdict(golden0814({ operating: undefined, depositAmount: undefined }), { saveBlocked: false, carrierCodes: CODES });
+    expect(verdict).toEqual({ tone: 'green', kind: 'totals_match', profit: r2(KEY.profit + KEY.interestExpense) });
+  });
+
+  test('no statement but a deposit line: the balance forward is unknown, the deposit does not tie -> red', () => {
+    const e = golden0814({ operating: undefined });
+    expect(buildReviewVerdict(e, { saveBlocked: isSaveBlocked(e) })).toMatchObject({ tone: 'red', reason: { kind: 'line_check_failed', issue: { type: 'depositMismatch' } } });
+  });
+
+  test('no statement, a line total that does not add up: red, the line check in one sentence', () => {
+    const e = golden0814({ operating: undefined, totalDeductions: 5306.54 });
+    expect(isSaveBlocked(e)).toBe(true);
+    expect(buildReviewVerdict(e, { saveBlocked: true })).toMatchObject({ tone: 'red', reason: { kind: 'line_check_failed', issue: { type: 'deductionsMismatch' } } });
+  });
+
+  test('a reading from the older prompt (no printed labels / no balance forward field) is "read with an older version"', () => {
+    expect(isOlderReading(golden0814({ totalLabels: { grossRevenue: 'TOTAL REV' } }))).toBe(false);
+    expect(isOlderReading(golden0814())).toBe(true); // no totalLabels
+    expect(isOlderReading(withStatement({ priorWeekBalanceForward: undefined }, { totalLabels: {} }))).toBe(true);
   });
 });

@@ -49,6 +49,7 @@ import {
   limitsFor,
   newImportPlan,
   newReadPagesPlan,
+  newRereadPlan,
   resetFailedPages,
   runJobStep,
   type ClassifiedPage,
@@ -1932,6 +1933,68 @@ async function handleJobResume(
   return accepted({ jobId });
 }
 
+// Mode 'reread_job' (owner decision 2026-10-17, item 7 "Read again"): an
+// unsaved, ready job's CONTENT pages (settlement + statement) are read
+// again with the current prompt, on the SAME job row; attachments are kept
+// in the file, not read (jobEngine.ts newRereadPlan). The stored reading
+// and every page result are cleared first, and the lease is released so a
+// run still reading attachments stops at its next save. Prompt inputs are
+// the caller's current ones (falling back to the job's own).
+async function handleRereadJob(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  body: JobRequestBody,
+  invocationStartedAt: number,
+): Promise<Response> {
+  if (!body.jobId) return errorResponse("bad_request", "jobId is required.", 400);
+  if (!edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
+  const admin = getServiceRoleAdminClient();
+  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
+  const { data: job, error } = await supabase
+    .from("import_jobs")
+    .select("id, user_id, status, page_plan, media_type")
+    .eq("id", body.jobId)
+    .maybeSingle();
+  if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
+  const old = job.page_plan as StoredPlan | null;
+  if (job.status !== "ready" || !old || !String(job.media_type ?? "").includes("pdf")) {
+    return errorResponse("bad_request", "Only a finished PDF import that has not been saved can be read again.", 400);
+  }
+  const plan: StoredPlan = {
+    ...newRereadPlan(old),
+    promptInputs: {
+      docHint: body.docHint ?? old.promptInputs?.docHint,
+      locale: body.locale ?? old.promptInputs?.locale,
+      customCategories: body.customCategories ?? old.promptInputs?.customCategories,
+      learningRules: body.learningRules ?? old.promptInputs?.learningRules,
+      carrierCodeMaps: body.carrierCodeMaps ?? old.promptInputs?.carrierCodeMaps,
+    },
+  };
+  const now = new Date().toISOString();
+  const { error: updateError } = await admin
+    .from("import_jobs")
+    .update({
+      page_plan: plan,
+      page_results: {},
+      result_json: null,
+      progress: null,
+      status: "queued",
+      completed_at: null,
+      error_message: null,
+      error_step: null,
+      error_page: null,
+      lease_owner: null,
+      lease_until: null,
+      updated_at: now,
+    })
+    .eq("id", body.jobId)
+    .eq("user_id", userId)
+    .eq("status", "ready");
+  if (updateError) return errorResponse("internal", "Could not start reading again — your file is safe. Please try again.", 500);
+  runInBackground(runJobRun(admin, body.jobId, invocationStartedAt));
+  return accepted({ jobId: body.jobId });
+}
+
 // Mode 'answer_job': the user's answer to "This file has N pages. Read the
 // first 40 now?" — never read silently past the cap.
 async function handleJobAnswer(
@@ -2126,7 +2189,7 @@ Deno.serve(async (req: Request) => {
     // job from its first page without a stored result ('retry_job' is the
     // old name, same behavior); 'answer_job' answers the page-cap question;
     // 'read_pages' re-reads chosen pages of a saved document.
-    mode?: "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages";
+    mode?: "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job";
     storagePath?: string;
     fileName?: string;
     retryJobId?: string;
@@ -2159,6 +2222,7 @@ Deno.serve(async (req: Request) => {
   if (body.mode === "resume_job" || body.mode === "retry_job") return await handleJobResume(supabase, userId, body, invocationStartedAt);
   if (body.mode === "answer_job") return await handleJobAnswer(supabase, userId, body, invocationStartedAt);
   if (body.mode === "read_pages") return await handleReadPages(supabase, userId, body, invocationStartedAt);
+  if (body.mode === "reread_job") return await handleRereadJob(supabase, userId, body, invocationStartedAt);
 
   const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;
   const orderIndex = body.orderIndex ?? 0;

@@ -552,8 +552,8 @@
     "pagesProcessedTitle": "📄 Documento importado parcialmente",
     "pagesProcessedBody": "Se importaron {{covered}} de {{total}} páginas. La(s) página(s) {{missingPages}} no se pudieron procesar — impórtelas por separado si es necesario.",
     "reconciliationTitle": "🚫 No se puede guardar — las cifras no coinciden",
-    "reconciliationDeductionsMismatch": "El total de deducciones del documento ({{stated}}) no coincide con los {{summed}} capturados en las líneas de deducción. Intente reimportar este settlement — si sigue sin coincidir, agregue los montos faltantes como deducciones independientes desde la pantalla de Deducciones.",
-    "reconciliationZeroNet": "El pago neto muestra {{zero}} aunque los ingresos brutos son {{gross}} — este settlement no parece completo. Intente reimportarlo.",
+    "reconciliationDeductionsMismatch": "Las líneas de deducciones suman {{summed}}, pero el total de deducciones del estado de cuenta es {{stated}}.",
+    "reconciliationZeroNet": "El pago neto muestra {{zero}} aunque los ingresos brutos son {{gross}}: este settlement no parece completo.",
     "reconciliationRevenueLinesMismatch": "Las líneas de ingresos suman {{summed}}, pero el total de ingresos del estado de cuenta es {{stated}}. Puede faltar una línea o haberse leído la columna equivocada.",
     "reconciliationReimbursementLinesMismatch": "Las líneas de reembolso suman {{summed}}, pero el total reembolsado del estado de cuenta es {{stated}}.",
     "reconciliationNetDueMismatch": "Ingresos + reembolsos − deducciones da {{computed}}, pero el monto neto a pagar del estado de cuenta es {{stated}}. Puede que un crédito haya perdido su signo menos o que falte una línea.",
@@ -688,7 +688,62 @@
     "lineItemsIncompleteTitle": "Líneas incompletas",
     "lineItemsIncompleteBody": "No se pudieron leer las páginas {{pages}} de {{total}}. Si el estado pasó sus comprobaciones, la ganancia sale del estado; después de guardar, \"Leer las páginas que faltan\" en la semana lee solo esas páginas.",
     "attachmentsStillReading": "Aún se leen {{count}} páginas adjuntas. Puedes guardar ahora; se te ofrecerán para revisar cuando terminen.",
-    "unreadPagesBody": "{{count}} páginas se guardan en el archivo sin leer (páginas {{pages}}). Después de guardar puedes leer cualquiera desde el settlement de la semana."
+    "unreadPagesBody": "{{count}} páginas se guardan en el archivo sin leer (páginas {{pages}}). Después de guardar puedes leer cualquiera desde el settlement de la semana.",
+    "verdict": {
+      "verified": "Verificado con el estado de cuenta de Prime. Ganancia {{profit}}, depositado {{deposit}}",
+      "totalsMatch": "Los totales coinciden. Ganancia estimada a partir de las líneas. {{profit}}",
+      "needsLook": "Se guarda según el estado de cuenta; revise el detalle de las líneas",
+      "needsLookFigures": "Ganancia {{profit}}, depositado {{deposit}} — según el estado de cuenta de Prime.",
+      "notVerified": "No pudimos verificar esta semana",
+      "reason": {
+        "lineDetailsDiffer": "El detalle de las líneas difiere del estado de cuenta en {{amount}}.",
+        "statementWarning": "Esto no coincide: {{check}}.",
+        "loadsMismatch": "Las cargas no suman REVENUE FROM PRIME INC., así que se guardan sin ingresos.",
+        "pagesIncomplete": "No se pudieron leer las páginas {{pages}}.",
+        "statementCheckFailed": "El estado de cuenta de Prime no cuadra tal como se leyó: {{check}} (impreso {{printed}}, leído {{read}}).",
+        "statementNotRead": "No se leyó del estado de cuenta de Prime: {{checks}}.",
+        "totalsNotPrinted": "No se leyeron los totales del estado de cuenta, así que no se pudo comprobar nada."
+      },
+      "olderTitle": "Leído con una versión anterior",
+      "olderBody": "Este documento se leyó antes de la última actualización del lector. Vuelva a leerlo para obtener el mejor resultado.",
+      "attachmentsSavedNotRead": "{{count}} páginas adjuntas se guardan, sin leer",
+      "details": "Detalles",
+      "hideDetails": "Ocultar detalles",
+      "detailsChecks": "Comprobaciones",
+      "detailsGroups": "Detalle de líneas vs estado de cuenta",
+      "detailsLines": "Líneas del estado de cuenta que leyó la IA",
+      "detailsPages": "Páginas",
+      "detailsNote": "Nota de la IA",
+      "lineTotalsTie": "Las líneas suman los totales impresos.",
+      "readAgain": "Volver a leer",
+      "readAgainStartedTitle": "Leyendo de nuevo",
+      "readAgainStartedBody": "Solo se vuelven a leer las páginas del settlement y del estado de cuenta. Lo verá en sus importaciones cuando esté listo.",
+      "saveAsEstimate": "Guardar como estimación"
+    },
+    "gateMissing": {
+      "totalRevenue": "TOTAL REVENUE",
+      "totalOperatingExpenses": "TOTAL OPERATING EXPENSES",
+      "totalStatement": "TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "variableCosts": "líneas de costos variables",
+      "fixedCost": "líneas de costos fijos",
+      "statementWeekEnding": "el fin de semana del estado de cuenta"
+    },
+    "group": {
+      "tractor_fuel": "Combustible del tractor",
+      "tractor_def": "DEF del tractor",
+      "reefer_fuel": "Combustible del reefer (neto de su reembolso)",
+      "tractor_fuel_discount": "Descuento de combustible del tractor",
+      "reefer_fuel_discount": "Descuento de combustible del reefer",
+      "def_discount": "Descuento de DEF",
+      "state_fuel_tax": "Impuesto estatal al combustible (neto de su reembolso)",
+      "repair": "Reparaciones",
+      "advances": "Anticipos",
+      "meals": "Comidas",
+      "performance_bond": "Fianza de cumplimiento",
+      "total": "Todas las líneas (total)"
+    },
+    "groupLine": "{{group}}: líneas {{settlement}}, estado de cuenta {{statement}}, diferencia {{difference}}"
   },
   "camera": {
     "permissionNote": "Se necesita acceso a la cámara para fotografiar recibos y PDFs de settlements.",
@@ -2736,5 +2791,23 @@
     "unreadBody": "{{count}} páginas guardadas en el archivo, sin leer: {{pages}}.",
     "readThisPage": "Leer página {{page}}",
     "moreUnread": "+ {{count}} páginas más"
+  },
+  "importAudit": {
+    "title": "BOZKA TRUCKING AI — auditoría de importación (lo que leyó la IA)",
+    "week": "Fin de semana",
+    "unit": "unidad",
+    "totals": "Totales del estado de cuenta",
+    "revenue": "Líneas de ingresos",
+    "reimbursements": "Líneas de reembolsos",
+    "deductions": "Líneas de deducciones",
+    "fuel": "Líneas de combustible",
+    "loads": "Cargas",
+    "statement": "Líneas del estado de cuenta de Prime",
+    "checks": "Comprobaciones del estado de cuenta",
+    "lineChecks": "Comprobaciones de líneas",
+    "groups": "Detalle de líneas vs estado de cuenta",
+    "lineDifference": "El detalle de las líneas difiere del estado de cuenta en {{amount}}.",
+    "pages": "Páginas",
+    "aiNote": "Nota de la IA"
   }
 }

@@ -16,12 +16,13 @@ import { useInsertTruck } from '@/src/data/trucks';
 import { useDrivers, useInsertDriver } from '@/src/data/drivers';
 import { useUserCategories } from '@/src/data/userCategories';
 import { useCategoryLearningRules } from '@/src/data/categoryLearningRules';
-import { useCarrierCodeMaps } from '@/src/data/carrierCodeMaps';
+import { useCarrierCodeCategories, useCarrierCodeMaps } from '@/src/data/carrierCodeMaps';
 import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
 import {
   useStartImportJob,
   useStartImportJobsBatch,
   markImportJobSaved,
+  useRereadImportJob,
   IMPORT_JOBS_QUERY_KEY,
   fetchImportJobForReview,
   downloadImportJobFileToLocal,
@@ -46,6 +47,8 @@ import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/du
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
 import { checkSettlementReconciliation, flagReconciliationOverride } from '@/src/import/settlementReconciliation';
 import { buildPrimeStatementCheck, statementPagesOf } from '@/src/import/settlementStatement';
+import { buildReviewVerdict, isOlderReading, isSaveBlocked, markReviewWarnings, reviewInputsOf } from '@/src/import/reviewVerdict';
+import { SettlementReview } from '@/src/components/SettlementReview';
 import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
@@ -237,6 +240,9 @@ export default function Import() {
   // "confirm this carrier before applying" instruction, see
   // buildExtractionPrompt() in supabase/functions/ai-import/index.ts).
   const { data: carrierCodeMaps } = useCarrierCodeMaps();
+  const { data: carrierCodeCategories } = useCarrierCodeCategories();
+  // READ AGAIN (owner decision 2026-10-17, item 7).
+  const rereadImportJob = useRereadImportJob();
   const insertTruck = useInsertTruck();
   const insertDriver = useInsertDriver();
   const queryClient = useQueryClient();
@@ -892,6 +898,43 @@ export default function Import() {
     ]);
   }
 
+  // "Save as estimate" (item 7): when today's guard blocks Save it is the
+  // flagged save (confirmed first); otherwise the week simply saves
+  // Unverified, from its line items.
+  function handleSaveAsEstimate() {
+    if (saveBlocked) handleSaveFlagged();
+    else void handleSave();
+  }
+
+  // READ AGAIN (owner decision 2026-10-17, item 7): a background job is
+  // read again on the server — only its settlement + statement pages, with
+  // the current prompt; a photo is simply read again here.
+  async function handleReadAgain() {
+    if (!currentReviewId) {
+      await handleRetryImport();
+      return;
+    }
+    const jobId = currentReviewId;
+    try {
+      await rereadImportJob.mutateAsync({
+        jobId,
+        locale: i18n.language,
+        customCategories: customCategoryNames,
+        learningRules,
+        carrierCodeMaps,
+      });
+      Alert.alert(t('importScreen.verdict.readAgainStartedTitle'), t('importScreen.verdict.readAgainStartedBody'));
+      if (batchTotal > 0) {
+        advanceBatchReview();
+      } else {
+        setCurrentReviewId(null);
+        reset();
+      }
+    } catch (err) {
+      Alert.alert(t('importScreen.verdict.readAgain'), err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
+    }
+  }
+
   async function handleSave(options: { overrideReconciliation?: boolean } = {}) {
     // Double-tap guard (owner decision 2026-08-02, §34/§37 unique-index
     // audit): synchronous ref check-and-set, closing the gap between a
@@ -915,10 +958,16 @@ export default function Import() {
     // same gate and the same "Save anyway, flagged needs-review" escape.
     const statementCheck = buildPrimeStatementCheck(extraction);
     const failedStatementChecks = statementCheck ? statementCheck.checks.filter((c) => !c.passed) : [];
-    const allOk = reconciliationResult.ok && failedStatementChecks.length === 0;
-    if (!allOk && !options.overrideReconciliation) return;
-    const extractionToSave = allOk
-      ? extraction
+    // THE GATE (owner decision 2026-10-17, item 6): a Prime statement that
+    // passed it never blocks Save — line-item and other non-gate
+    // mismatches only warn (needs-review, kept in parsed_json). Otherwise
+    // today's guard, with its "Save as estimate" (flagged) escape.
+    const blocked = isSaveBlocked(extraction);
+    if (blocked && !options.overrideReconciliation) return;
+    const extractionToSave = !blocked
+      ? statementCheck?.gatePassed
+        ? markReviewWarnings(extraction)
+        : extraction
       : flagReconciliationOverride(extraction, [...reconciliationResult.issues, ...failedStatementChecks]);
     savingRef.current = true;
     // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — the
@@ -1025,12 +1074,17 @@ export default function Import() {
   // Recomputed on every extraction change, not memoized further — this
   // is a handful of arithmetic operations over a settlement's own
   // (already-in-memory) deduction array, not worth a useMemo.
-  const reconciliation = checkSettlementReconciliation(extraction);
-  const primeStatement = extraction ? buildPrimeStatementCheck(extraction) : null;
   // RESUMABLE IMPORT JOBS: pages of this PDF that were not read.
   const statementPages = extraction ? statementPagesOf(extraction) : null;
   const attachmentsStillReading = (extraction?.pageMap ?? []).filter((p) => p.role === 'attachment' && p.status === 'pending').length;
-  const saveBlocked = !reconciliation.ok || (!!primeStatement && !primeStatement.passed);
+  const saveBlocked = isSaveBlocked(extraction);
+  // SIMPLE REVIEW SCREEN (owner decision 2026-10-17, item 7): one verdict,
+  // one reason, one action for a settlement; everything else under Details.
+  const reviewInputs = extraction?.docType === 'settlement' && extraction.settlement ? reviewInputsOf(extraction) : null;
+  const verdict = reviewInputs ? buildReviewVerdict(extraction, { carrierCodes: carrierCodeCategories ?? [], saveBlocked }) : null;
+  const olderReading = isOlderReading(extraction);
+  // Read again needs the PDF's job (content pages only) or the photo itself.
+  const canReadAgain = !!currentReviewId || fileMeta?.mediaType === 'image/jpeg';
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
   // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
   // team_split/trainee drivers get a split-entry field on the settlement
@@ -1177,122 +1231,41 @@ export default function Import() {
               </View>
             )}
 
-            {statementPages && statementPages.incomplete.length > 0 && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lineItemsIncompleteTitle')}</Text>
-                <MutedText>
-                  {t('importScreen.lineItemsIncompleteBody', {
-                    pages: formatPageList(statementPages.incomplete.map((p) => p.page)),
-                    total: statementPages.total,
-                  })}
-                </MutedText>
-              </View>
-            )}
-            {attachmentsStillReading > 0 && (
-              <View style={{ borderColor: colors.accent, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <MutedText>{t('importScreen.attachmentsStillReading', { count: attachmentsStillReading })}</MutedText>
-              </View>
-            )}
-            {statementPages && statementPages.unread.length > 0 && (
-              <View style={{ borderColor: colors.border, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <MutedText>
-                  {t('importScreen.unreadPagesBody', { pages: formatPageList(statementPages.unread.map((p) => p.page)), count: statementPages.unread.length })}
-                </MutedText>
-              </View>
-            )}
-
-            {!reconciliation.ok && (
-              <View style={{ backgroundColor: 'rgba(239,68,68,0.12)', borderColor: colors.red, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.red, fontWeight: '700' }}>{t('importScreen.reconciliationTitle')}</Text>
-                {reconciliation.issues.map((issue, i) => {
-                  const m = (n: number) => money(n, i18n.language);
-                  switch (issue.type) {
-                    case 'deductionsMismatch':
-                      return <MutedText key={i}>{t('importScreen.reconciliationDeductionsMismatch', { stated: m(issue.stated), summed: m(issue.summed) })}</MutedText>;
-                    case 'revenueLinesMismatch':
-                      return <MutedText key={i}>{t('importScreen.reconciliationRevenueLinesMismatch', { stated: m(issue.stated), summed: m(issue.summed) })}</MutedText>;
-                    case 'reimbursementLinesMismatch':
-                      return <MutedText key={i}>{t('importScreen.reconciliationReimbursementLinesMismatch', { stated: m(issue.stated), summed: m(issue.summed) })}</MutedText>;
-                    case 'netDueMismatch':
-                      return <MutedText key={i}>{t('importScreen.reconciliationNetDueMismatch', { stated: m(issue.stated), computed: m(issue.computed) })}</MutedText>;
-                    case 'depositMismatch':
-                      return <MutedText key={i}>{t('importScreen.reconciliationDepositMismatch', { stated: m(issue.stated), computed: m(issue.computed) })}</MutedText>;
-                    case 'zeroNetNonzeroGross':
-                      return <MutedText key={i}>{t('importScreen.reconciliationZeroNet', { zero: m(0), gross: m(issue.grossRevenue) })}</MutedText>;
-                  }
-                })}
-              </View>
-            )}
-
-            {/* PRIME STATEMENT AS SOURCE — R3 (owner decision 2026-10-13):
-                every line the AI read, with its printed sign, and every
-                self-check with its numbers, so the owner can compare with
-                the PDF before saving. A failing check blocks Save. */}
-            {primeStatement && (
-              <View
-                style={{
-                  borderColor: primeStatement.passed ? colors.green : colors.red,
-                  borderWidth: 1,
-                  borderRadius: radii.sm,
-                  padding: spacing.sm,
-                  marginBottom: spacing.sm,
-                }}
-              >
-                <Text
-                  style={{
-                    color: !primeStatement.passed ? colors.red : primeStatement.coreMissing.length > 0 ? colors.orange : colors.green,
-                    fontWeight: '700',
-                  }}
-                >
-                  {!primeStatement.passed
-                    ? t('importScreen.primeCheckFailed')
-                    : primeStatement.coreMissing.length > 0
-                      ? t('importScreen.primeCheckCoreMissing')
-                      : t('importScreen.primeCheckOk')}
-                </Text>
-                {primeStatement.coreMissing.length > 0 && (
-                  <MutedText style={{ color: colors.orange }}>
-                    {t('importScreen.primeCheckCoreMissingBody', {
-                      checks: primeStatement.coreMissing.map((id) => t(`importScreen.primeCheck.${id}`)).join('; '),
+            {verdict && reviewInputs ? (
+              <SettlementReview extraction={extraction} verdict={verdict} inputs={reviewInputs} olderReading={olderReading} />
+            ) : (
+              <>
+              {statementPages && statementPages.incomplete.length > 0 && (
+                <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                  <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lineItemsIncompleteTitle')}</Text>
+                  <MutedText>
+                    {t('importScreen.lineItemsIncompleteBody', {
+                      pages: formatPageList(statementPages.incomplete.map((p) => p.page)),
+                      total: statementPages.total,
                     })}
                   </MutedText>
-                )}
-                {primeStatement.checks.map((c) => {
-                  const fmt = (n: number, text?: string) =>
-                    text != null
-                      ? text
-                      : c.id === 'milesMatch' || c.id === 'requiredTotals'
-                        ? formatNumber(n, i18n.language)
-                        : money(n, i18n.language);
-                  return (
-                    <MutedText key={c.id} style={!c.passed ? { color: colors.red, fontWeight: '700' } : undefined}>
-                      {c.passed ? '✓' : '✗'} {t(`importScreen.primeCheck.${c.id}`)} —{' '}
-                      {t('importScreen.primeCheckNumbers', { printed: fmt(c.expected, c.expectedText), read: fmt(c.actual, c.actualText) })}
-                    </MutedText>
-                  );
-                })}
-                <Text style={{ color: colors.text, fontWeight: '700', marginTop: spacing.sm }}>
-                  {t('importScreen.primeLinesTitle', { count: primeStatement.lines.length })}
-                </Text>
-                {primeStatement.lines.map((l, i) => (
-                  <View key={`${l.section}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <MutedText style={{ flex: 1, marginEnd: spacing.sm }}>
-                      {t(`importScreen.primeSection.${l.section}`)} · {l.label}
-                    </MutedText>
-                    <Text style={{ color: colors.text }}>
-                      {formatNumber(Math.abs(l.amount), i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      {l.amount < 0 ? '-' : ''}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
+                </View>
+              )}
+              {attachmentsStillReading > 0 && (
+                <View style={{ borderColor: colors.accent, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                  <MutedText>{t('importScreen.attachmentsStillReading', { count: attachmentsStillReading })}</MutedText>
+                </View>
+              )}
+              {statementPages && statementPages.unread.length > 0 && (
+                <View style={{ borderColor: colors.border, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                  <MutedText>
+                    {t('importScreen.unreadPagesBody', { pages: formatPageList(statementPages.unread.map((p) => p.page)), count: statementPages.unread.length })}
+                  </MutedText>
+                </View>
+              )}
 
-            {extraction.confidence === 'low' && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lowConfidenceTitle')}</Text>
-                <MutedText>{t('importScreen.lowConfidenceBody')}</MutedText>
-              </View>
+              {extraction.confidence === 'low' && (
+                <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                  <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lowConfidenceTitle')}</Text>
+                  <MutedText>{t('importScreen.lowConfidenceBody')}</MutedText>
+                </View>
+              )}
+              </>
             )}
 
             {extraction.docType === 'government_or_misc_income' && (
@@ -1535,22 +1508,54 @@ export default function Import() {
               </View>
             )}
 
-            <PrimaryButton
-              title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
-              onPress={() => void handleSave()}
-              disabled={
-                (needsTruckPicker && !truckId) ||
-                (needsDriverPicker && !driverId) ||
-                settlementWeekEndingMissing ||
-                saveBlocked
-              }
-            />
-            {saveBlocked && (
+            {/* SIMPLE REVIEW SCREEN (item 7): green/amber -> Save; red ->
+                Read again, Save as estimate, Discard. A reading from an
+                older prompt offers Read again first. */}
+            {verdict && canReadAgain && (verdict.tone === 'red' || olderReading) && (
+              <PrimaryButton
+                title={t('importScreen.verdict.readAgain')}
+                onPress={() => void handleReadAgain()}
+                disabled={rereadImportJob.isPending}
+              />
+            )}
+            {verdict?.tone === 'red' ? (
               <SecondaryButton
-                title={t('importScreen.saveAnywayFlagged')}
-                onPress={handleSaveFlagged}
+                title={t('importScreen.verdict.saveAsEstimate')}
+                onPress={handleSaveAsEstimate}
                 disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing}
               />
+            ) : verdict && olderReading && canReadAgain ? (
+              <SecondaryButton
+                title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
+                onPress={() => void handleSave()}
+                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing || saveBlocked}
+              />
+            ) : verdict ? (
+              <PrimaryButton
+                title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
+                onPress={() => void handleSave()}
+                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing || saveBlocked}
+              />
+            ) : (
+              <>
+                <PrimaryButton
+                  title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
+                  onPress={() => void handleSave()}
+                  disabled={
+                    (needsTruckPicker && !truckId) ||
+                    (needsDriverPicker && !driverId) ||
+                    settlementWeekEndingMissing ||
+                    saveBlocked
+                  }
+                />
+                {saveBlocked && (
+                  <SecondaryButton
+                    title={t('importScreen.saveAnywayFlagged')}
+                    onPress={handleSaveFlagged}
+                    disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing}
+                  />
+                )}
+              </>
             )}
             {/* BATCH REVIEW FLOW — "Discard" doubles as "Skip" while
                 walking a batch: nothing here saves without an explicit tap

@@ -552,8 +552,8 @@
     "pagesProcessedTitle": "📄 Документ импортирован частично",
     "pagesProcessedBody": "Импортировано {{covered}} из {{total}} страниц. Страницы {{missingPages}} не удалось обработать — при необходимости импортируйте их отдельно.",
     "reconciliationTitle": "🚫 Невозможно сохранить — суммы не сходятся",
-    "reconciliationDeductionsMismatch": "Итоговая сумма вычетов в документе ({{stated}}) не совпадает с суммой {{summed}}, полученной из строк вычетов. Попробуйте импортировать это settlement заново — если суммы всё ещё не совпадают, добавьте недостающие суммы отдельными вычетами на экране «Вычеты».",
-    "reconciliationZeroNet": "Чистая выплата показана как {{zero}}, хотя валовой доход составляет {{gross}} — этот settlement выглядит неполным. Попробуйте импортировать его заново.",
+    "reconciliationDeductionsMismatch": "Строки удержаний дают {{summed}}, а итог удержаний в выписке — {{stated}}.",
+    "reconciliationZeroNet": "Чистая выплата {{zero}}, хотя валовой доход {{gross}}, — этот settlement выглядит неполным.",
     "reconciliationRevenueLinesMismatch": "Строки дохода в сумме дают {{summed}}, но общий доход в выписке — {{stated}}. Возможно, строка пропущена или прочитана не из той колонки.",
     "reconciliationReimbursementLinesMismatch": "Строки возмещений в сумме дают {{summed}}, но общая сумма возмещений в выписке — {{stated}}.",
     "reconciliationNetDueMismatch": "Доход + возмещения − удержания = {{computed}}, но чистая сумма к выплате в выписке — {{stated}}. Возможно, у кредита потерялся знак минус или пропущена строка.",
@@ -688,7 +688,62 @@
     "lineItemsIncompleteTitle": "Строки неполные",
     "lineItemsIncompleteBody": "Не удалось прочитать страницы {{pages}} из {{total}}. Если отчёт прошёл проверки, прибыль берётся из отчёта; после сохранения «Прочитать недостающие страницы» на неделе прочитает только их.",
     "attachmentsStillReading": "Ещё читаются страницы вложений: {{count}}. Можно сохранить сейчас — их предложат к проверке, когда закончим.",
-    "unreadPagesBody": "{{count}} стр. сохранены в файле, но не прочитаны (страницы {{pages}}). После сохранения любую можно прочитать из settlement этой недели."
+    "unreadPagesBody": "{{count}} стр. сохранены в файле, но не прочитаны (страницы {{pages}}). После сохранения любую можно прочитать из settlement этой недели.",
+    "verdict": {
+      "verified": "Подтверждено отчётом Prime. Прибыль {{profit}}, зачислено {{deposit}}",
+      "totalsMatch": "Итоги сходятся. Прибыль оценена по строкам. {{profit}}",
+      "needsLook": "Сохраняется по отчёту; проверьте детали строк",
+      "needsLookFigures": "Прибыль {{profit}}, зачислено {{deposit}} — по отчёту Prime.",
+      "notVerified": "Не удалось проверить эту неделю",
+      "reason": {
+        "lineDetailsDiffer": "Детали строк расходятся с отчётом на {{amount}}.",
+        "statementWarning": "Не сходится: {{check}}.",
+        "loadsMismatch": "Грузы не дают в сумме REVENUE FROM PRIME INC., поэтому сохраняются без дохода.",
+        "pagesIncomplete": "Не удалось прочитать страницы {{pages}}.",
+        "statementCheckFailed": "Отчёт Prime в прочитанном виде не сходится: {{check}} (напечатано {{printed}}, прочитано {{read}}).",
+        "statementNotRead": "Не прочитано из отчёта Prime: {{checks}}.",
+        "totalsNotPrinted": "Итоги выписки не прочитаны, поэтому проверить ничего нельзя."
+      },
+      "olderTitle": "Прочитано старой версией",
+      "olderBody": "Документ прочитан до последнего обновления. Прочитайте его снова для лучшего результата.",
+      "attachmentsSavedNotRead": "Страниц вложений: {{count}} — сохранены, не прочитаны",
+      "details": "Подробности",
+      "hideDetails": "Скрыть подробности",
+      "detailsChecks": "Проверки",
+      "detailsGroups": "Строки в сравнении с отчётом",
+      "detailsLines": "Строки отчёта, прочитанные ИИ",
+      "detailsPages": "Страницы",
+      "detailsNote": "Заметка ИИ",
+      "lineTotalsTie": "Строки сходятся с напечатанными итогами.",
+      "readAgain": "Прочитать снова",
+      "readAgainStartedTitle": "Читаем снова",
+      "readAgainStartedBody": "Заново читаются только страницы settlement и отчёта. Результат появится в ваших импортах, когда будет готов.",
+      "saveAsEstimate": "Сохранить как оценку"
+    },
+    "gateMissing": {
+      "totalRevenue": "TOTAL REVENUE",
+      "totalOperatingExpenses": "TOTAL OPERATING EXPENSES",
+      "totalStatement": "TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "variableCosts": "строки переменных расходов",
+      "fixedCost": "строки постоянных расходов",
+      "statementWeekEnding": "конец недели в отчёте"
+    },
+    "group": {
+      "tractor_fuel": "Топливо тягача",
+      "tractor_def": "DEF тягача",
+      "reefer_fuel": "Топливо reefer (за вычетом возмещения)",
+      "tractor_fuel_discount": "Скидка на топливо тягача",
+      "reefer_fuel_discount": "Скидка на топливо reefer",
+      "def_discount": "Скидка на DEF",
+      "state_fuel_tax": "Налог штата на топливо (за вычетом возмещения)",
+      "repair": "Ремонт",
+      "advances": "Авансы",
+      "meals": "Питание",
+      "performance_bond": "Гарантийный депозит",
+      "total": "Все строки (итого)"
+    },
+    "groupLine": "{{group}}: строки {{settlement}}, отчёт {{statement}}, разница {{difference}}"
   },
   "camera": {
     "permissionNote": "Для фотографирования чеков и PDF settlement требуется доступ к камере.",
@@ -2736,5 +2791,23 @@
     "unreadBody": "Страниц в файле без чтения: {{count}} ({{pages}}).",
     "readThisPage": "Прочитать стр. {{page}}",
     "moreUnread": "+ ещё {{count}} стр."
+  },
+  "importAudit": {
+    "title": "BOZKA TRUCKING AI — аудит импорта (что прочитал ИИ)",
+    "week": "Конец недели",
+    "unit": "тягач",
+    "totals": "Итоги выписки",
+    "revenue": "Строки дохода",
+    "reimbursements": "Строки возмещений",
+    "deductions": "Строки удержаний",
+    "fuel": "Строки топлива",
+    "loads": "Грузы",
+    "statement": "Строки отчёта Prime",
+    "checks": "Проверки отчёта",
+    "lineChecks": "Проверки строк",
+    "groups": "Строки в сравнении с отчётом",
+    "lineDifference": "Детали строк расходятся с отчётом на {{amount}}.",
+    "pages": "Страницы",
+    "aiNote": "Заметка ИИ"
   }
 }

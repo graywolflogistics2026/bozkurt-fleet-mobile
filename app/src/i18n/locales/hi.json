@@ -557,8 +557,8 @@
     "pagesProcessedTitle": "📄 आंशिक दस्तावेज़ आयातित",
     "pagesProcessedBody": "{{total}} में से {{covered}} पृष्ठ आयात किए गए। पृष्ठ {{missingPages}} प्रोसेस नहीं किए जा सके — यदि आवश्यक हो तो उन्हें अलग से आयात करें।",
     "reconciliationTitle": "🚫 सहेजा नहीं जा सकता — संख्याएं मेल नहीं खातीं",
-    "reconciliationDeductionsMismatch": "स्टेटमेंट की कुल कटौतियां ({{stated}}) कटौती लाइन आइटम में दर्ज {{summed}} से मेल नहीं खातीं। इस settlement को फिर से आयात करने का प्रयास करें — यदि यह अभी भी मेल नहीं खाता, तो कटौतियां स्क्रीन से गायब राशियों को अलग कटौतियों के रूप में जोड़ें।",
-    "reconciliationZeroNet": "सकल राजस्व {{gross}} होने के बावजूद नेट पे {{zero}} दिखा रहा है — यह settlement पूर्ण नहीं लगता। इसे फिर से आयात करने का प्रयास करें।",
+    "reconciliationDeductionsMismatch": "कटौती लाइनों का योग {{summed}} है, लेकिन स्टेटमेंट की कुल कटौती {{stated}} है।",
+    "reconciliationZeroNet": "सकल राजस्व {{gross}} होने पर भी शुद्ध भुगतान {{zero}} दिखता है — यह settlement पूरा नहीं लगता।",
     "reconciliationRevenueLinesMismatch": "राजस्व पंक्तियों का योग {{summed}} है, लेकिन स्टेटमेंट का कुल राजस्व {{stated}} है। कोई पंक्ति छूट गई हो सकती है या गलत कॉलम से पढ़ी गई हो सकती है।",
     "reconciliationReimbursementLinesMismatch": "प्रतिपूर्ति पंक्तियों का योग {{summed}} है, लेकिन स्टेटमेंट की कुल प्रतिपूर्ति {{stated}} है।",
     "reconciliationNetDueMismatch": "राजस्व + प्रतिपूर्ति − कटौतियाँ = {{computed}}, लेकिन स्टेटमेंट की शुद्ध देय राशि {{stated}} है। किसी क्रेडिट का माइनस चिह्न छूट गया हो सकता है या कोई पंक्ति गायब है।",
@@ -693,7 +693,62 @@
     "lineItemsIncompleteTitle": "Line items incomplete",
     "lineItemsIncompleteBody": "Pages {{pages}} of {{total}} could not be read. If the statement passed its checks, profit comes from the statement; after saving, \"Read the missing pages\" on the week reads just those pages.",
     "attachmentsStillReading": "{{count}} attachment pages are still being read. You can save now; they'll be offered for review when done.",
-    "unreadPagesBody": "{{count}} pages are kept in the file but not read (pages {{pages}}). After saving you can read any of them from the week's settlement."
+    "unreadPagesBody": "{{count}} pages are kept in the file but not read (pages {{pages}}). After saving you can read any of them from the week's settlement.",
+    "verdict": {
+      "verified": "Prime के स्टेटमेंट से सत्यापित। लाभ {{profit}}, जमा {{deposit}}",
+      "totalsMatch": "कुल मेल खाते हैं। लाभ लाइन आइटम से अनुमानित। {{profit}}",
+      "needsLook": "स्टेटमेंट के अनुसार सहेजा जाएगा; लाइन विवरण देखना होगा",
+      "needsLookFigures": "लाभ {{profit}}, जमा {{deposit}} — Prime के स्टेटमेंट से।",
+      "notVerified": "हम इस सप्ताह को सत्यापित नहीं कर सके",
+      "reason": {
+        "lineDetailsDiffer": "लाइन विवरण स्टेटमेंट से {{amount}} अलग हैं।",
+        "statementWarning": "यह मेल नहीं खाता: {{check}}।",
+        "loadsMismatch": "लोड का योग REVENUE FROM PRIME INC. के बराबर नहीं है, इसलिए वे बिना राजस्व के सहेजे जाते हैं।",
+        "pagesIncomplete": "पृष्ठ {{pages}} पढ़े नहीं जा सके।",
+        "statementCheckFailed": "पढ़े गए रूप में Prime का स्टेटमेंट मेल नहीं खाता: {{check}} (छपा {{printed}}, पढ़ा {{read}})।",
+        "statementNotRead": "Prime के स्टेटमेंट से नहीं पढ़ा गया: {{checks}}।",
+        "totalsNotPrinted": "स्टेटमेंट के कुल नहीं पढ़े गए, इसलिए कुछ भी जांचा नहीं जा सका।"
+      },
+      "olderTitle": "पुराने संस्करण से पढ़ा गया",
+      "olderBody": "यह दस्तावेज़ नवीनतम अपडेट से पहले पढ़ा गया था। सर्वोत्तम परिणाम के लिए इसे फिर से पढ़ें।",
+      "attachmentsSavedNotRead": "{{count}} संलग्न पृष्ठ सहेजे गए हैं, पढ़े नहीं गए",
+      "details": "विवरण",
+      "hideDetails": "विवरण छिपाएँ",
+      "detailsChecks": "जांच",
+      "detailsGroups": "लाइन विवरण बनाम स्टेटमेंट",
+      "detailsLines": "AI द्वारा पढ़ी गई स्टेटमेंट लाइनें",
+      "detailsPages": "पृष्ठ",
+      "detailsNote": "AI नोट",
+      "lineTotalsTie": "लाइन आइटम का योग छपे कुल के बराबर है।",
+      "readAgain": "फिर से पढ़ें",
+      "readAgainStartedTitle": "फिर से पढ़ा जा रहा है",
+      "readAgainStartedBody": "केवल settlement और स्टेटमेंट पृष्ठ फिर से पढ़े जाते हैं। तैयार होने पर यह आपके इम्पोर्ट में दिखेगा।",
+      "saveAsEstimate": "अनुमान के रूप में सहेजें"
+    },
+    "gateMissing": {
+      "totalRevenue": "TOTAL REVENUE",
+      "totalOperatingExpenses": "TOTAL OPERATING EXPENSES",
+      "totalStatement": "TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "variableCosts": "परिवर्तनीय लागत लाइनें",
+      "fixedCost": "स्थिर लागत लाइनें",
+      "statementWeekEnding": "स्टेटमेंट का सप्ताह-अंत"
+    },
+    "group": {
+      "tractor_fuel": "ट्रैक्टर ईंधन",
+      "tractor_def": "ट्रैक्टर DEF",
+      "reefer_fuel": "Reefer ईंधन (प्रतिपूर्ति घटाकर)",
+      "tractor_fuel_discount": "ट्रैक्टर ईंधन छूट",
+      "reefer_fuel_discount": "Reefer ईंधन छूट",
+      "def_discount": "DEF छूट",
+      "state_fuel_tax": "राज्य ईंधन कर (प्रतिपूर्ति घटाकर)",
+      "repair": "मरम्मत",
+      "advances": "अग्रिम",
+      "meals": "भोजन",
+      "performance_bond": "परफ़ॉर्मेंस बॉन्ड",
+      "total": "सभी लाइनें (कुल)"
+    },
+    "groupLine": "{{group}}: लाइनें {{settlement}}, स्टेटमेंट {{statement}}, अंतर {{difference}}"
   },
   "camera": {
     "permissionNote": "रसीदों और settlement PDF की फोटो लेने के लिए कैमरा एक्सेस आवश्यक है।",
@@ -2736,5 +2791,23 @@
     "unreadBody": "{{count}} pages kept in the file, not read: {{pages}}.",
     "readThisPage": "Read page {{page}}",
     "moreUnread": "+ {{count}} more pages"
+  },
+  "importAudit": {
+    "title": "BOZKA TRUCKING AI — इम्पोर्ट ऑडिट (AI ने क्या पढ़ा)",
+    "week": "सप्ताह-अंत",
+    "unit": "यूनिट",
+    "totals": "स्टेटमेंट के कुल",
+    "revenue": "राजस्व लाइनें",
+    "reimbursements": "प्रतिपूर्ति लाइनें",
+    "deductions": "कटौती लाइनें",
+    "fuel": "ईंधन लाइनें",
+    "loads": "लोड",
+    "statement": "Prime स्टेटमेंट लाइनें",
+    "checks": "स्टेटमेंट जांच",
+    "lineChecks": "लाइन आइटम जांच",
+    "groups": "लाइन विवरण बनाम स्टेटमेंट",
+    "lineDifference": "लाइन विवरण स्टेटमेंट से {{amount}} अलग हैं।",
+    "pages": "पृष्ठ",
+    "aiNote": "AI नोट"
   }
 }

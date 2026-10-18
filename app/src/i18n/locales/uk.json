@@ -552,8 +552,8 @@
     "pagesProcessedTitle": "📄 Partial document imported",
     "pagesProcessedBody": "Imported {{covered}} of {{total}} pages. Page(s) {{missingPages}} could not be processed — import them separately if needed.",
     "reconciliationTitle": "🚫 Can't save — numbers don't add up",
-    "reconciliationDeductionsMismatch": "The statement's total deductions ({{stated}}) don't match the {{summed}} captured in deduction line items. Try reimporting this settlement — if it still doesn't match, add the missing amounts as separate deductions from the Deductions screen.",
-    "reconciliationZeroNet": "Net pay shows {{zero}} even though gross revenue is {{gross}} — this settlement doesn't look complete. Try reimporting it.",
+    "reconciliationDeductionsMismatch": "The deduction lines add up to {{summed}}, but the statement's total deductions are {{stated}}.",
+    "reconciliationZeroNet": "Net pay shows {{zero}} even though gross revenue is {{gross}} — this settlement doesn't look complete.",
     "reconciliationRevenueLinesMismatch": "The revenue lines add up to {{summed}}, but the statement's total revenue is {{stated}}. A line may be missing or read from the wrong column.",
     "reconciliationReimbursementLinesMismatch": "The reimbursement lines add up to {{summed}}, but the statement's total reimbursed is {{stated}}.",
     "reconciliationNetDueMismatch": "Revenue + reimbursements − deductions comes to {{computed}}, but the statement's net amount due is {{stated}}. A credit may have lost its minus sign, or a line is missing.",
@@ -688,7 +688,62 @@
     "lineItemsIncompleteTitle": "Line items incomplete",
     "lineItemsIncompleteBody": "Pages {{pages}} of {{total}} could not be read. If the statement passed its checks, profit comes from the statement; after saving, \"Read the missing pages\" on the week reads just those pages.",
     "attachmentsStillReading": "{{count}} attachment pages are still being read. You can save now; they'll be offered for review when done.",
-    "unreadPagesBody": "{{count}} pages are kept in the file but not read (pages {{pages}}). After saving you can read any of them from the week's settlement."
+    "unreadPagesBody": "{{count}} pages are kept in the file but not read (pages {{pages}}). After saving you can read any of them from the week's settlement.",
+    "verdict": {
+      "verified": "Verified by Prime's statement. Profit {{profit}}, deposited {{deposit}}",
+      "totalsMatch": "Totals match. Profit estimated from line items. {{profit}}",
+      "needsLook": "Saved from the statement; line details need a look",
+      "needsLookFigures": "Profit {{profit}}, deposited {{deposit}} — from Prime's statement.",
+      "notVerified": "We couldn't verify this week",
+      "reason": {
+        "lineDetailsDiffer": "Line details differ from the statement by {{amount}}.",
+        "statementWarning": "This does not match: {{check}}.",
+        "loadsMismatch": "The loads don't add up to REVENUE FROM PRIME INC., so they are saved without revenue.",
+        "pagesIncomplete": "Pages {{pages}} could not be read.",
+        "statementCheckFailed": "Prime's statement doesn't add up as read: {{check}} (printed {{printed}}, read {{read}}).",
+        "statementNotRead": "Not read from Prime's statement: {{checks}}.",
+        "totalsNotPrinted": "The statement's totals were not read, so nothing could be checked."
+      },
+      "olderTitle": "Read with an older version",
+      "olderBody": "This document was read before the latest reader update. Read it again for the best result.",
+      "attachmentsSavedNotRead": "{{count}} attachment pages are saved, not read",
+      "details": "Details",
+      "hideDetails": "Hide details",
+      "detailsChecks": "Checks",
+      "detailsGroups": "Line details vs statement",
+      "detailsLines": "Statement lines the AI read",
+      "detailsPages": "Pages",
+      "detailsNote": "AI note",
+      "lineTotalsTie": "The line items add up to the printed totals.",
+      "readAgain": "Read again",
+      "readAgainStartedTitle": "Reading again",
+      "readAgainStartedBody": "Only the settlement and statement pages are read again. You'll see it in your imports when it's ready.",
+      "saveAsEstimate": "Save as estimate"
+    },
+    "gateMissing": {
+      "totalRevenue": "TOTAL REVENUE",
+      "totalOperatingExpenses": "TOTAL OPERATING EXPENSES",
+      "totalStatement": "TOTAL STATEMENT",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "variableCosts": "variable cost lines",
+      "fixedCost": "fixed cost lines",
+      "statementWeekEnding": "the statement's week ending"
+    },
+    "group": {
+      "tractor_fuel": "Tractor fuel",
+      "tractor_def": "Tractor DEF",
+      "reefer_fuel": "Reefer fuel (net of its reimbursement)",
+      "tractor_fuel_discount": "Tractor fuel discount",
+      "reefer_fuel_discount": "Reefer fuel discount",
+      "def_discount": "DEF discount",
+      "state_fuel_tax": "State fuel tax (net of its reimbursement)",
+      "repair": "Repair",
+      "advances": "Advances",
+      "meals": "Meals",
+      "performance_bond": "Performance bond",
+      "total": "All lines (total)"
+    },
+    "groupLine": "{{group}}: lines {{settlement}}, statement {{statement}}, differ by {{difference}}"
   },
   "camera": {
     "permissionNote": "Camera access is needed to photograph receipts and settlement PDFs.",
@@ -2736,5 +2791,23 @@
     "unreadBody": "{{count}} pages kept in the file, not read: {{pages}}.",
     "readThisPage": "Read page {{page}}",
     "moreUnread": "+ {{count}} more pages"
+  },
+  "importAudit": {
+    "title": "BOZKA TRUCKING AI — import audit (what the AI read)",
+    "week": "Week ending",
+    "unit": "unit",
+    "totals": "Statement totals",
+    "revenue": "Revenue lines",
+    "reimbursements": "Reimbursement lines",
+    "deductions": "Deduction lines",
+    "fuel": "Fuel lines",
+    "loads": "Loads",
+    "statement": "Prime statement lines",
+    "checks": "Statement checks",
+    "lineChecks": "Line-item checks",
+    "groups": "Line details vs statement",
+    "lineDifference": "Line details differ from the statement by {{amount}}.",
+    "pages": "Pages",
+    "aiNote": "AI note"
   }
 }

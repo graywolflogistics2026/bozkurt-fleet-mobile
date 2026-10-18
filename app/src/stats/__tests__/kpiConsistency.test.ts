@@ -464,7 +464,10 @@ describe('labels — a deposit is never called profit', () => {
     else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walk(v, prefix ? `${prefix}.${k}` : k);
   })(en, '');
 
-  const ALLOWED = new Set(['dashboard.hero.profitNotDeposits']);
+  // The review verdict (owner's own wording, 2026-10-17 item 7) names the
+  // two figures side by side — "Profit $X, deposited $Y" — never one as the
+  // other.
+  const ALLOWED = new Set(['dashboard.hero.profitNotDeposits', 'importScreen.verdict.verified', 'importScreen.verdict.needsLookFigures']);
   const isDepositLabel = (key: string, value: string) =>
     /deposit|netpay|netdue|nettotal|netlabelshort|owedtocarrier/i.test(key.split('.').pop() ?? '') || /\bdeposit(ed)?\b/i.test(value);
 

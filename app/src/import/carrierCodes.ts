@@ -52,14 +52,39 @@ function wordBoundaryRegex(fragment: string): RegExp {
 // DIFFERENT carrier's code can never match. Returns null (never a guess)
 // when `carrierKey` is null, doesn't match any seeded carrier, or no code
 // in that carrier's own map appears in the description.
+//
+// PRINTED CODE FIELD (owner decision 2026-10-17, PRIME ONLY — behind the
+// carrier gate): Prime prints a 2-letter code in its own column ("PO
+// NORTH STAR GRILL, MO" -> code "PO", description "NORTH STAR GRILL, MO"),
+// so the description alone often names no code. For a Prime line the
+// order is: (1) a code's full LABEL printed in the description — kept
+// first because "ADV FOR WEIGHT TICKETS" prints code WA (advance) but is
+// a scale expense by its WEIGHT TICKETS label (golden trap 5); (2) the
+// printed code field; (3) a bare code word in the description. Every
+// other carrier keeps the description-only matching below unchanged.
+const PRIME_CARRIER_KEY = 'PRIME INC';
+
 export function findCarrierCodeMatch(
   carrierKey: string | null,
   description: string | null | undefined,
-  codes: CarrierCode[]
+  codes: CarrierCode[],
+  printedCode?: string | null
 ): CarrierCode | null {
-  if (!carrierKey || !description) return null;
+  if (!carrierKey) return null;
   const carrierCodes = codes.filter((c) => c.carrier === carrierKey);
   if (carrierCodes.length === 0) return null;
+
+  const code = (printedCode ?? '').trim().toUpperCase();
+  if (carrierKey === PRIME_CARRIER_KEY && code) {
+    if (description) {
+      const byLabel = carrierCodes.find((entry) => entry.label && wordBoundaryRegex(entry.label).test(description));
+      if (byLabel) return byLabel;
+    }
+    const byCode = carrierCodes.filter((entry) => entry.code.toUpperCase() === code);
+    const withCategory = byCode.find((entry) => entry.category != null) ?? byCode[0];
+    if (withCategory) return withCategory;
+  }
+  if (!description) return null;
 
   for (const entry of carrierCodes) {
     if (wordBoundaryRegex(entry.code).test(description)) return entry;
@@ -95,14 +120,12 @@ export function classifySettlementLineForCarrier(
 // was found; every other row is returned untouched, left for the
 // caller's own existing fallback chain (classifySettlementLine() ->
 // chargebackType -> raw category string).
-export function applyCarrierCodeCategories<T extends { description?: string | null; category?: string | null; tax_deductible?: boolean }>(
-  rows: T[],
-  carrierKey: string | null,
-  codes: CarrierCode[]
-): T[] {
+export function applyCarrierCodeCategories<
+  T extends { description?: string | null; category?: string | null; tax_deductible?: boolean; code?: string | null },
+>(rows: T[], carrierKey: string | null, codes: CarrierCode[]): T[] {
   if (!carrierKey || codes.length === 0) return rows;
   return rows.map((row) => {
-    const match = findCarrierCodeMatch(carrierKey, row.description, codes);
+    const match = findCarrierCodeMatch(carrierKey, row.description, codes, row.code);
     if (!match || !match.category) return row;
     return {
       ...row,

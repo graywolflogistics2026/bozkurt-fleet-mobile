@@ -158,3 +158,49 @@ describe('buildCarrierCodePromptBlock', () => {
     expect(text).toContain('DEADHEAD');
   });
 });
+
+// PRINTED CODE FIELD (owner decision 2026-10-17, Prime only).
+describe('findCarrierCodeMatch — printed code field (Prime only)', () => {
+  const entry = (carrier: string, code: string, label: string, category: string | null): CarrierCode => ({
+    carrier,
+    code,
+    subCode: null,
+    label,
+    description: null,
+    category,
+    isDeductible: category === 'Meals (per diem covered)' || category === 'Advance Repayment' ? false : true,
+    incomeOrChargeback: 'chargeback',
+    notes: null,
+  });
+  const CODES = [
+    entry('PRIME INC', 'PO', 'POINT OF SALE', 'Meals (per diem covered)'),
+    entry('PRIME INC', 'WA', 'ADVANCE', 'Advance Repayment'),
+    entry('PRIME INC', 'WT', 'WEIGHT TICKETS', 'Tolls & Scales'),
+    entry('PRIME INC', 'UR', 'TRACTOR REPAIR', 'Maintenance & Repairs'),
+    entry('LANDSTAR', 'PO', 'PURCHASE ORDER', 'Misc'),
+  ];
+
+  test('PO "NORTH STAR GRILL, MO" -> Meals by its printed code', () => {
+    expect(findCarrierCodeMatch('PRIME INC', 'NORTH STAR GRILL, MO', CODES, 'PO')?.category).toBe('Meals (per diem covered)');
+    expect(findCarrierCodeMatch('PRIME INC', 'NORTH STAR GRILL, MO', CODES)).toBeNull();
+  });
+
+  test('a label printed in the description still wins: WA "ADV FOR WEIGHT TICKETS" is a scale expense (golden trap 5)', () => {
+    expect(findCarrierCodeMatch('PRIME INC', 'ADV FOR WEIGHT TICKETS', CODES, 'WA')?.code).toBe('WT');
+    expect(findCarrierCodeMatch('PRIME INC', 'ADVANCE GLOVES ETC', CODES, 'WA')?.code).toBe('WA');
+  });
+
+  test('a printed code that is not in the map falls back to the description', () => {
+    expect(findCarrierCodeMatch('PRIME INC', 'Inv 009000-3554243', CODES, 'SH')).toBeNull();
+    expect(findCarrierCodeMatch('PRIME INC', 'Inv 009000-3554243', CODES, 'UR')?.category).toBe('Maintenance & Repairs');
+  });
+
+  test('carrier gate: another carrier never matches on the printed code field', () => {
+    expect(findCarrierCodeMatch('LANDSTAR', 'NORTH STAR GRILL, MO', CODES, 'PO')).toBeNull();
+  });
+
+  test('applyCarrierCodeCategories reads the row code', () => {
+    const [row] = applyCarrierCodeCategories([{ code: 'PO', description: 'NORTH STAR GRILL, MO', category: 'Misc', tax_deductible: true }], 'PRIME INC', CODES);
+    expect(row).toMatchObject({ category: 'Meals (per diem covered)', tax_deductible: false });
+  });
+});

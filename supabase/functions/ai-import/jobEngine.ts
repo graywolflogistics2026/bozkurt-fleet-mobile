@@ -336,6 +336,33 @@ export function newReadPagesPlan(
   };
 }
 
+// READ AGAIN (owner decision 2026-10-17, item 7): an unsaved, ready job is
+// read again with the CURRENT prompt — only its CONTENT pages (settlement
+// + statement); attachments and every other page are kept in the file,
+// not read ("stored": the review offers "Read the missing pages" after
+// saving). A job read as one whole document never classified its pages,
+// so every page is content. Never counts against the allowance again
+// (kind 'read_pages', logged as 'ai_import_pages').
+export function newRereadPlan(old: Pick<JobPlan, 'mediaType' | 'totalPages' | 'fileBytes' | 'pages' | 'layout'>): JobPlan {
+  const content = old.pages.filter((p) => p.role === 'content');
+  const pages: PlanPage[] =
+    content.length > 0
+      ? old.pages.map((p) => ({ page: p.page, kind: p.kind, role: p.role === 'content' ? 'content' : 'stored' }))
+      : Array.from({ length: old.totalPages }, (_, i) => ({ page: i + 1, kind: 'unknown' as PageKind, role: 'content' as PageRole }));
+  return {
+    version: 2,
+    kind: 'read_pages',
+    mediaType: old.mediaType,
+    totalPages: old.totalPages,
+    fileBytes: old.fileBytes,
+    phase: 'pages',
+    runs: 0,
+    pages,
+    baseDocumentId: null,
+    layout: old.layout ?? 'physical',
+  };
+}
+
 export function choosesWholeDocument(plan: Pick<JobPlan, 'mediaType' | 'totalPages' | 'fileBytes'>): boolean {
   if (plan.mediaType.startsWith('image/')) return true;
   return plan.totalPages <= WHOLE_DOC_MAX_PAGES && plan.fileBytes <= WHOLE_DOC_MAX_BYTES;

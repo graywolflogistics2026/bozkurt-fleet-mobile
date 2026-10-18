@@ -42,6 +42,7 @@ import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { buildTruckComparison, type ComparisonTruck } from '@/src/stats/truckComparison';
 import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
 import { buildPrimeStatementCheck, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
+import { buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
 
 // ---------------------------------------------------------------------
 // ANSWER KEY (owner, independently verified)
@@ -200,6 +201,9 @@ const STATEMENT = {
   weekTotalStatement: 1884.73,
   settlementToOperator: 1884.73,
   directDeposit: 1884.73,
+  // The statement page header's week ending. Added 2026-10-17: the gate
+  // (owner decision, item 6) requires it; the new prompt reads it.
+  weekEnding: WEEK_ENDING,
   ytdTotalRevenue: 24425.98,
   ytdMiles: 10146,
   ytdTotalStatement: 8099.66,
@@ -767,11 +771,14 @@ describe('self-check: a misread number never becomes a silently wrong profit', (
 });
 
 describe('BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13)', () => {
-  test('golden deposit 1,884.73 comes from the printed line', async () => {
+  test('golden deposit 1,884.73 comes from the printed line — SETTLEMENT TO OPERATOR once the statement passes its gate (item 6)', async () => {
     const rows = await importGolden(statementExtraction());
     expect(rows.settlements[0].statement?.printed.deposit).toBe(KEY.deposit);
-    expect(rows.settlements[0].statement?.printed.depositSource).toBe('direct_deposit');
-    expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: KEY.deposit, owedToCarrier: 0, source: 'direct_deposit' });
+    expect(rows.settlements[0].statement?.printed.depositSource).toBe('settlement_to_operator');
+    expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: KEY.deposit, owedToCarrier: 0, source: 'settlement_to_operator' });
+    // Line route (no statement page): the printed DIRECT DEPOSIT line.
+    const lineRows = await importGolden(goldenExtraction('both'));
+    expect(settlementDeposit(lineRows.settlements[0])).toEqual({ deposited: KEY.deposit, owedToCarrier: 0, source: 'direct_deposit' });
   });
 
   test('no deposit line printed -> net due 1,884.36, labeled net due', async () => {
@@ -856,5 +863,15 @@ describe('SOURCE LABELS (Part 2) — other carriers', () => {
 
   test('a null carrier alone never selects the Prime route', () => {
     expect(buildPrimeStatementCheck({ ...statementExtraction(), settlement: { ...statementExtraction().settlement!, carrier: undefined } })).toBeNull();
+  });
+});
+
+// PER-GROUP CHECKS (owner decision 2026-10-17, item 5) — warnings only.
+describe('per-group checks on the 8/21 golden week', () => {
+  test('every group ties; the total differs only by the 0.37 interest income', () => {
+    const groups = buildPrimeGroupChecks(statementExtraction())!;
+    expect(groups.filter((g) => !g.passed)).toEqual([]);
+    expect(groups.find((g) => g.group === 'total')!.difference).toBe(0.37);
+    expect(groups.find((g) => g.group === 'advances')).toMatchObject({ settlement: 550, statement: 550 });
   });
 });

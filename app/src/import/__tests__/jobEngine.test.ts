@@ -112,6 +112,8 @@ const PAGE_4 = page({ deductions: [{ code: 'TX', desc: 'TRIP XPRESS', amount: 5 
 const PAGE_5 = page({
   operating: {
     lines: LINES_PAGE_5,
+    // The statement page header's week ending (gate, owner decision 2026-10-17).
+    weekEnding: '2026-08-21',
     weekTotalRevenue: 4783.75,
     weekTotalFuelOilTax: -1953.78,
     weekTotalMiscellaneous: -589.84,
@@ -424,7 +426,7 @@ describe('core self-checks cannot be skipped (amendment 1)', () => {
     const statement = buildSettlementStatement(missing, { savedFlagged: false, priorLabelsSeen: new Set() });
     expect(isStatementBacked(statement)).toBe(false);
     expect(settlementVerification({ statement })).toBe('unverified');
-    expect(statement.reviewReasons).toContainEqual({ reason: 'statement_core_missing', label: 'settlementToOperator' });
+    expect(statement.reviewReasons).toContainEqual({ reason: 'statement_core_missing', label: 'totalStatement, settlementToOperator' });
   });
 
   it('gross not read, or the fixed block not read, are core misses too; miles may be skipped', () => {
@@ -448,12 +450,13 @@ describe('core self-checks cannot be skipped (amendment 1)', () => {
     expect(conflicting.mergeConflicts).toContainEqual({ path: 'settlement.operating.weekTotalOperatingExpenses', values: [-2899.02, -2989.02] });
     const check = buildPrimeStatementCheck(conflicting)!;
     expect(check.passed).toBe(false);
-    expect(check.checks).toContainEqual({ id: 'mergeConflict', expected: -2899.02, actual: -2989.02, passed: false });
+    expect(check.checks).toContainEqual({ id: 'mergeConflict', expected: -2899.02, actual: -2989.02, passed: false, path: 'settlement.operating.weekTotalOperatingExpenses' });
   });
 
   it('statements saved before coreMissing existed are re-derived from their stored totals', () => {
     const statement = buildSettlementStatement(golden, { savedFlagged: false, priorLabelsSeen: new Set() });
-    const legacy = { ...statement, prime: { ...statement.prime!, coreMissing: undefined as unknown as [] } };
+    // Stored before coreMissing AND before the gate (2026-10-17) existed.
+    const legacy = { ...statement, prime: { ...statement.prime!, coreMissing: undefined as unknown as [], gatePassed: undefined, gateMissing: undefined, warnings: undefined } };
     expect(isStatementBacked(legacy)).toBe(true);
     const legacyMissing = { ...legacy, prime: { ...legacy.prime, totals: { ...legacy.prime.totals, settlementToOperator: null } } };
     expect(isStatementBacked(legacyMissing)).toBe(false);

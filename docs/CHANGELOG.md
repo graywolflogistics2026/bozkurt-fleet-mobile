@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- W/E 8/14 FOLLOW-UP — items 5-7 + PO fix (owner decisions 2026-10-17).
+  Per-group checks (primeLineGroups.ts, warnings only); the GATE (every
+  check inside the statement + statement week ending; past it gross =
+  TOTAL REVENUE, deposit = SETTLEMENT TO OPERATOR, line mismatches amber +
+  needs-review, loads keep revenue only if their check passes); simple
+  review screen (reviewVerdict.ts, SettlementReview.tsx, Share audit,
+  older-reading banner, Read again = ai-import `reread_job`); Prime
+  printed-code matching (PO -> Meals). 65 i18n keys x 7. No SQL. Redeploy
+  ai-import. eas update. docs/decisions/prime-statement-source.md.
+
 - IMPORT CHECKS BLOCKED A REAL PRIME WEEK — W/E 2026-08-14 (owner decisions
   2026-10-17, items 1-4). Prior week balance forward in the cash chain,
   deposit check and bridge; MILES / balance-forward rows never in a dollar
