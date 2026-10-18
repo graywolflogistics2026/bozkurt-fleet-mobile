@@ -4506,7 +4506,7 @@ alter table documents
 No RLS changes needed — both columns live on `documents`, which already
 has owner-only row policies.
 
-## 77. SETTLEMENT STATEMENT FIGURES — PRIME STATEMENT AS SOURCE, SOURCE LABELS, READ DEPOSIT (owner decision 2026-10-13) — NOT YET APPLIED
+## 77. SETTLEMENT STATEMENT FIGURES — PRIME STATEMENT AS SOURCE, SOURCE LABELS, READ DEPOSIT (owner decision 2026-10-13) — ✅ APPLIED 2026-10-17
 
 One nullable jsonb column on `settlements`. Every settlement import writes
 the statement's own printed totals (gross, reimbursements, total
@@ -4540,11 +4540,11 @@ from information_schema.columns
 where table_schema = 'public' and table_name = 'settlements' and column_name = 'statement';
 ```
 
-- [ ] 77 run
+- [x] 77 run
 
-Mirror file: `pending_77.sql` (repo root).
+Mirror file `pending_77.sql` removed after the owner confirmed it was run (2026-10-17); its SQL is inlined above.
 
-## 78. RESUMABLE PAGE-BY-PAGE IMPORT JOBS — 17-PAGE STALL REDESIGN (owner decision 2026-10-13) — NOT YET APPLIED
+## 78. RESUMABLE PAGE-BY-PAGE IMPORT JOBS — 17-PAGE STALL REDESIGN (owner decision 2026-10-13) — ✅ APPLIED 2026-10-17
 
 A 17-page Prime PDF stalled at "Page 2 of 17" four times: the background
 job spent 120 s on a whole-document call that could not finish, read pages
@@ -4605,7 +4605,7 @@ create or replace function import_job_claim(p_job_id uuid, p_owner text, p_lease
 returns boolean
 language sql
 set search_path = public
-as $
+as $$
   with claimed as (
     update import_jobs
     set lease_owner = p_owner,
@@ -4617,16 +4617,16 @@ as $
     returning 1
   )
   select exists (select 1 from claimed);
-$;
+$$;
 
 create or replace function import_job_release(p_job_id uuid, p_owner text)
 returns void
 language sql
 set search_path = public
-as $
+as $$
   update import_jobs set lease_owner = null, lease_until = null
   where id = p_job_id and lease_owner = p_owner;
-$;
+$$;
 
 -- 5. One page's result, written atomically by the lease owner only; a page
 --    already 'done' is never overwritten (steps are idempotent per page).
@@ -4634,7 +4634,7 @@ create or replace function import_job_put_page(p_job_id uuid, p_owner text, p_pa
 returns boolean
 language sql
 set search_path = public
-as $
+as $$
   with written as (
     update import_jobs j
     set page_results = coalesce(j.page_results, '{}'::jsonb) || jsonb_build_object(p_page::text, p_result),
@@ -4652,7 +4652,7 @@ as $
     returning 1
   )
   select exists (select 1 from written);
-$;
+$$;
 
 -- 6. Credit consumption for a job run that has no user session (a later
 --    run of a chain). Same body as consume_ai_import_credit() (§59), but
@@ -4663,7 +4663,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_pack_id uuid;
 begin
@@ -4684,7 +4684,7 @@ begin
   update ai_credit_purchases set credits_remaining = credits_remaining - 1 where id = v_pack_id;
   return v_pack_id;
 end;
-$;
+$$;
 
 revoke all on function import_job_claim(uuid, text, integer) from public, anon, authenticated;
 revoke all on function import_job_release(uuid, text) from public, anon, authenticated;
@@ -4705,7 +4705,7 @@ returns text
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $$
 declare
   v_pending integer;
 begin
@@ -4733,7 +4733,7 @@ begin
   where id = p_job_id and user_id = auth.uid();
   return 'attachments_continue';
 end;
-$;
+$$;
 
 revoke all on function import_job_saved(uuid, uuid) from public, anon;
 grant execute on function import_job_saved(uuid, uuid) to authenticated;
@@ -4751,9 +4751,9 @@ where proname in ('import_job_claim', 'import_job_release', 'import_job_put_page
 order by proname;
 ```
 
-- [ ] 78 run
+- [x] 78 run
 
-Mirror file: `pending_78.sql` (repo root).
+Mirror file `pending_78.sql` removed after the owner confirmed it was run (2026-10-17); its full contents are inlined in the SQL blocks above.
 
 ## Also still open (not part of any pass above)
 

@@ -1019,24 +1019,21 @@ under each is unchanged original wording.
   invariant #17; `ScreenErrorBoundary` stays reusable):
   `docs/decisions/retired.md`.
 
-## Current state (2026-10-13)
+## Current state (2026-10-17)
 
-- **Code**: `main` at 947e643 (shared description rule, 2026-09-24),
-  pushed. Ships via `eas update --branch preview`.
-- **Database** (`docs/PENDING_SQL.md`, 76 sections): everything is applied
+- **Code**: `main` at d0b2e52 (resumable page-by-page import jobs,
+  2026-10-13), pushed. Ships via `eas update --branch preview`.
+- **Database** (`docs/PENDING_SQL.md`, 78 sections): everything is applied
   except:
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
   - §72 remove business-balance tracking — status UNCONFIRMED.
     `pending_72.sql` kept; a read-only check query is in §72. The client
     is safe either way.
-  - §77 settlement statement figures — NOT applied yet (owner runs
-    `pending_77.sql`). The client is safe before it runs.
-  - §78 resumable import jobs — NOT applied yet (owner runs
-    `pending_78.sql` BEFORE redeploying ai-import). The client falls back
-    to the old job columns before it runs.
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
-    `pending_67.sql` removed, its SQL inlined in §67.)
+    `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
+    applied and ai-import redeployed — owner confirmed 2026-10-17, their
+    mirror files removed, SQL inlined.)
 - **Native build**: the owner's device reported "embedded build (no OTA
   update)" on 2026-08-28. A new native build (`eas build --profile
   preview`) is NOT yet installed. Until it is, OTA-only fixes may not be
