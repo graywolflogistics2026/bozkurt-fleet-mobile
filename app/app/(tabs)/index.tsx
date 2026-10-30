@@ -54,6 +54,7 @@ import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Seco
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { compareDateOnly } from '@/src/lib/dateOnly';
 
 // DASHBOARD SIMPLIFICATION (owner decision 2026-08-02): Home is now a
 // FIXED, non-customizable layout — the Customize Dashboard feature
@@ -1207,7 +1208,7 @@ export default function Dashboard() {
   const [cpmWhyOpen, setCpmWhyOpen] = useState(false);
 
   const recentLoads = useMemo(() => {
-    return [...scopedLoads].sort((a, b) => new Date(b.load_date ?? 0).getTime() - new Date(a.load_date ?? 0).getTime()).slice(0, 4);
+    return [...scopedLoads].sort((a, b) => compareDateOnly(b.load_date, a.load_date)).slice(0, 4);
   }, [scopedLoads]);
 
   // Best/Worst Lanes (item e) — capped at 3 each for a Home teaser, see

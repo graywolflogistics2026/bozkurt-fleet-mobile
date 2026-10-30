@@ -14,6 +14,8 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Toll } from '@/src/types/db';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 const NETWORKS = ['ezpass', 'drivewyze', 'other'] as const;
 type Network = (typeof NETWORKS)[number];
@@ -107,13 +109,13 @@ export default function Tolls() {
     setNetwork('ezpass');
     setPlaza('');
     setAmount('');
-    setTollDate(new Date().toISOString().slice(0, 10));
+    setTollDate(todayDateOnly());
     setAdding(true);
   }
 
   async function handleSaveAdd() {
     if (!userId) return;
-    const amt = Number(amount) || 0;
+    const amt = numOrNull(amount) || 0;
     setSaving(true);
     try {
       await insertToll.mutateAsync({

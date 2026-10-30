@@ -208,6 +208,11 @@ export type LineItem = {
   category: string;
   amount: number;
   origin: LineItemOrigin;
+  // False for escrow, advance repayment and meals (NON_DEDUCTIBLE_CATEGORIES).
+  // The withheld and combined
+  // scopes still LIST them for reference, but they never count toward
+  // "Deductible Expenses" in any scope (batch 0b.2, 2026-10-30).
+  deductible: boolean;
   isOwnerPaid: boolean;
   // FULL VISUAL PARITY pass (owner decision, v2026.08.05-W chase, item 1
   // "Paid with" column) — only a `deduction`-kind row can carry a payment
@@ -282,6 +287,7 @@ export function buildLineItems(
       category: d.category ?? 'Misc',
       amount,
       origin,
+      deductible: !OUT_OF_POCKET_EXCLUDED_CATEGORIES.has(d.category ?? ''),
       isOwnerPaid: isPersonalPayment(d.payment_method),
       paymentMethod: d.payment_method ?? null,
       vendor: d.store ?? null,
@@ -303,6 +309,7 @@ export function buildLineItems(
       category: 'Fuel & DEF',
       amount,
       origin,
+      deductible: true,
       isOwnerPaid: false,
       paymentMethod: null,
       vendor: null,
@@ -324,6 +331,7 @@ export function buildLineItems(
       category: 'Maintenance & Repairs',
       amount,
       origin,
+      deductible: true,
       isOwnerPaid: false,
       paymentMethod: null,
       vendor: m.vendor ?? null,
@@ -345,6 +353,7 @@ export function buildLineItems(
       category: 'Tolls & Scales',
       amount,
       origin,
+      deductible: true,
       isOwnerPaid: false,
       paymentMethod: null,
       vendor: null,
@@ -364,6 +373,7 @@ export type ScheduleCLineTotal = { category: string; amount: number; scheduleCLi
 export function buildScheduleCTotals(lineItems: LineItem[], userCategories: UserCategory[]): ScheduleCLineTotal[] {
   const buckets = new Map<string, number>();
   for (const item of lineItems) {
+    if (!item.deductible) continue;
     const bucket = resolveScheduleCBucket(item.category, userCategories);
     buckets.set(bucket, (buckets.get(bucket) ?? 0) + item.amount);
   }
@@ -391,8 +401,15 @@ export function groupLineItemsByScheduleCBucket(
 ): GroupedScheduleCCategory[] {
   return totals.map((total) => ({
     ...total,
-    items: lineItems.filter((li) => resolveScheduleCBucket(li.category, userCategories) === total.category),
+    items: lineItems.filter((li) => li.deductible && resolveScheduleCBucket(li.category, userCategories) === total.category),
   }));
+}
+
+// Rows the withheld/combined scopes list for reference but never count
+// as deductible (escrow, advance repayment, meals).
+export function buildNotDeductibleReference(lineItems: LineItem[]): { items: LineItem[]; total: number } {
+  const items = lineItems.filter((li) => !li.deductible);
+  return { items, total: items.reduce((sum, li) => sum + li.amount, 0) };
 }
 
 // MISC CONCENTRATION WARNING (owner decision 2026-08-05, FULL PARITY

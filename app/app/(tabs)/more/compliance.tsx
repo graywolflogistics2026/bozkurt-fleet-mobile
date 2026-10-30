@@ -33,6 +33,8 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { ComplianceAppliesTo, ComplianceItem } from '@/src/types/db';
+import { parseDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 const RECURRENCES: NonNullable<ComplianceItem['recurrence']>[] = ['none', 'annual', 'biennial', 'quarterly'];
 const APPLIES_TO_OPTIONS: ComplianceAppliesTo[] = ['truck', 'trailer', 'driver', 'business'];
@@ -141,7 +143,7 @@ export default function ComplianceTracker() {
   }
 
   const items = useMemo(() => sortByDueDate(itemsQuery.data ?? []), [itemsQuery.data]);
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayIso = useMemo(() => todayDateOnly(), []);
 
   // Local notifications, same "compute on screen mount, dedupe so it
   // doesn't nag daily" pattern as Truck Health (no background task runner
@@ -206,7 +208,7 @@ export default function ComplianceTracker() {
       issue_date: form.issueDate.trim() || null,
       due_date: form.dueDate,
       recurrence: form.recurrence,
-      reminder_lead_days: form.reminderLeadDays.trim() ? Math.max(0, Number(form.reminderLeadDays) || 0) : null,
+      reminder_lead_days: form.reminderLeadDays.trim() ? Math.max(0, numOrNull(form.reminderLeadDays) || 0) : null,
       note: form.note.trim() || null,
       applies_to: form.appliesTo || null,
       truck_id: form.appliesTo === 'truck' || form.appliesTo === 'trailer' ? form.truckId : null,
@@ -464,7 +466,7 @@ export default function ComplianceTracker() {
         ) : (
           <Card>
             {items.map((item, i) => {
-              const { daysUntil, urgency } = calcComplianceStatus(item.due_date, new Date(todayIso), item.reminder_lead_days);
+              const { daysUntil, urgency } = calcComplianceStatus(item.due_date, parseDateOnly(todayIso), item.reminder_lead_days);
               return (
                 <Pressable
                   key={item.id}

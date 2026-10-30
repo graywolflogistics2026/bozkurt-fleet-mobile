@@ -68,9 +68,13 @@ describe('formatMonthLabel (MONTH FILTER OFF-BY-ONE fix, owner decision) — the
       // (the exact device-reported symptom) — the fix's own job is making
       // this discrepancy impossible, confirmed above.
       process.env.TZ = 'Pacific/Honolulu';
-      const oldBuggyLabel = new Date('2026-05-01').toLocaleDateString('en', { month: 'short' });
-      expect(oldBuggyLabel).toBe('Apr');
-      expect(oldBuggyLabel).not.toBe(formatMonthLabel(2026, 5, 'en', { month: 'short' }));
+      // Jest reads the zone once at start (npm run test:zones), so the old
+      // bug only reproduces when the run itself is behind UTC.
+      if (new Date(2026, 4, 1).getTimezoneOffset() > 0) {
+        const oldBuggyLabel = new Date('2026-05-01').toLocaleDateString('en', { month: 'short' });
+        expect(oldBuggyLabel).toBe('Apr');
+        expect(oldBuggyLabel).not.toBe(formatMonthLabel(2026, 5, 'en', { month: 'short' }));
+      }
     } finally {
       process.env.TZ = originalTz;
     }

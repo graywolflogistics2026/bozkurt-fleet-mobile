@@ -2187,6 +2187,7 @@
     "formatDetailedNote": "Cada línea individual bajo su categoría, con proveedor y método de pago — la versión lista para auditoría.",
     "grossIncome": "Ingreso Bruto",
     "reimbursementsSubline": "+ {{amount}} en reembolsos",
+    "notDeductibleReference": "No deducible, solo como referencia: {{amount}} (escrow, pago de anticipos, comidas)",
     "deductibleExpenses": "Gastos Deducibles",
     "reconcilingCaption": "Este total coincide con el desglose por categoría de abajo.",
     "perDiemDeductionLabel": "Deducción de Per Diem",

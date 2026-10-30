@@ -31,6 +31,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { numOrNull } from '@/src/lib/number';
 
 // CASH FLOW MONTHLY VIEW (owner decision, "period tabs" pass) — a wide,
 // fixed lookback/lookahead window for the full-history inputs the Monthly
@@ -561,7 +562,7 @@ export default function CashFlow() {
   async function saveOverride(field: OverrideField) {
     setSavingOverride(true);
     try {
-      const val = overrideDraft ? Number(overrideDraft) : null;
+      const val = overrideDraft ? numOrNull(overrideDraft) : null;
       const column = field === 'income' ? 'cf_income_override' : field === 'fixed' ? 'cf_fixed_override' : 'cf_variable_override';
       await updateProfile.mutateAsync({ [column]: val } as Record<string, number | null>);
       setEditingOverride(null);
@@ -579,7 +580,7 @@ export default function CashFlow() {
     setSavingPeriodicId(itemId);
     try {
       const draft = periodicDrafts[itemId];
-      const val = draft ? Number(draft) : null;
+      const val = draft ? numOrNull(draft) : null;
       const nextMap = { ...(profileQuery.data?.cf_periodic_overrides ?? {}) };
       if (val == null) delete nextMap[itemId];
       else nextMap[itemId] = val;
@@ -610,7 +611,7 @@ export default function CashFlow() {
   async function saveRecurringAmount(category: string) {
     setSavingRecurringCategory(category);
     try {
-      const val = Number(recurringDraft) || 0;
+      const val = numOrNull(recurringDraft) || 0;
       const nextMap = { ...(profileQuery.data?.cf_recurring_charges ?? {}) };
       nextMap[category] = { weeklyAmount: val };
       await updateProfile.mutateAsync({ cf_recurring_charges: nextMap });
@@ -644,7 +645,7 @@ export default function CashFlow() {
 
   async function addRecurringCharge() {
     const category = newRecurringCategory.trim();
-    const val = Number(newRecurringAmount) || 0;
+    const val = numOrNull(newRecurringAmount) || 0;
     if (!category || !val) return;
     setSavingRecurringCategory(category);
     try {

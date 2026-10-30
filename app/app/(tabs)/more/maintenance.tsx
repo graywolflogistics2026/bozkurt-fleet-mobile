@@ -23,6 +23,8 @@ import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, Pr
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { MaintenanceRecord } from '@/src/types/db';
 import i18n from '@/src/i18n';
+import { compareDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -58,7 +60,7 @@ type FormState = {
 
 function emptyForm(): FormState {
   return {
-    date: new Date().toISOString().slice(0, 10),
+    date: todayDateOnly(),
     odometer: '',
     hours: '',
     type: 'general',
@@ -118,7 +120,7 @@ export default function Maintenance() {
   const [aiError, setAiError] = useState<string | null>(null);
 
   const rows = useMemo(
-    () => [...(recordsQuery.data ?? [])].sort((a, b) => new Date(b.service_date ?? 0).getTime() - new Date(a.service_date ?? 0).getTime()),
+    () => [...(recordsQuery.data ?? [])].sort((a, b) => compareDateOnly(b.service_date, a.service_date)),
     [recordsQuery.data]
   );
 
@@ -225,10 +227,10 @@ export default function Maintenance() {
 
   async function handleAdd() {
     if (!userId || !recordTruckId) return;
-    const odometer = Number(addForm.odometer) || 0;
-    const hours = Number(addForm.hours) || 0;
-    const total = Number(addForm.total) || 0;
-    const covered = Number(addForm.covered) || 0;
+    const odometer = numOrNull(addForm.odometer) || 0;
+    const hours = numOrNull(addForm.hours) || 0;
+    const total = numOrNull(addForm.total) || 0;
+    const covered = numOrNull(addForm.covered) || 0;
     if (total <= 0) {
       Alert.alert(t('maintenance.enterTotalTitle'));
       return;
@@ -238,7 +240,7 @@ export default function Maintenance() {
       await insertRecord.mutateAsync({
         user_id: userId,
         truck_id: recordTruckId,
-        service_date: addForm.date || new Date().toISOString().slice(0, 10),
+        service_date: addForm.date || todayDateOnly(),
         service_type: addForm.type,
         description: addForm.description || null,
         odometer: odometer || null,
@@ -268,7 +270,7 @@ export default function Maintenance() {
   function openEdit(rec: MaintenanceRecord) {
     setEditing(rec);
     setEditForm({
-      date: rec.service_date ?? new Date().toISOString().slice(0, 10),
+      date: rec.service_date ?? todayDateOnly(),
       odometer: rec.odometer != null ? String(rec.odometer) : '',
       hours: rec.engine_hours != null ? String(rec.engine_hours) : '',
       type: (rec.service_type as MaintenanceType) ?? 'general',
@@ -282,10 +284,10 @@ export default function Maintenance() {
 
   async function handleSaveEdit() {
     if (!editing) return;
-    const odometer = Number(editForm.odometer) || 0;
-    const hours = Number(editForm.hours) || 0;
-    const total = Number(editForm.total) || 0;
-    const covered = Number(editForm.covered) || 0;
+    const odometer = numOrNull(editForm.odometer) || 0;
+    const hours = numOrNull(editForm.hours) || 0;
+    const total = numOrNull(editForm.total) || 0;
+    const covered = numOrNull(editForm.covered) || 0;
     setSaving(true);
     try {
       await updateRecord.mutateAsync({

@@ -14,7 +14,7 @@ import {
   COMMON_QUARTERLY_CATEGORIES,
 } from '@/src/alerts/periodicCoachNudges';
 
-const NOW = new Date('2026-08-24T12:00:00Z'); // Q3 2026
+const NOW = new Date(2026, 7, 24, 12); // Q3 2026
 
 describe('detectNoReceiptRecently', () => {
   test('no deductions at all — null (empty-state, not a nudge)', () => {

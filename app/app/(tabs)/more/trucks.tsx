@@ -16,6 +16,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import type { LoanInsert, Truck } from '@/src/types/db';
+import { numOrNull } from '@/src/lib/number';
 
 type FormState = {
   unit_number: string;
@@ -153,33 +154,33 @@ export default function Trucks() {
     return {
       unit_number: form.unit_number || null,
       vin: form.vin || null,
-      year: form.year ? Number(form.year) || null : null,
+      year: form.year ? numOrNull(form.year) || null : null,
       make: form.make || null,
       model: form.model || null,
       engine: form.engine || null,
-      current_odometer: form.current_odometer ? Number(form.current_odometer) || null : null,
-      purchase_price: form.financing.purchase_price ? Number(form.financing.purchase_price) || null : null,
+      current_odometer: form.current_odometer ? numOrNull(form.current_odometer) || null : null,
+      purchase_price: form.financing.purchase_price ? numOrNull(form.financing.purchase_price) || null : null,
       purchase_date: form.financing.purchase_date || null,
       financing: form.financing.financing || null,
       loan_id: form.financing.financing === 'loan' ? form.financing.loan_id : null,
       trailer_unit_number: form.trailer_unit_number || null,
-      trailer_purchase_price: form.trailerFinancing.purchase_price ? Number(form.trailerFinancing.purchase_price) || null : null,
+      trailer_purchase_price: form.trailerFinancing.purchase_price ? numOrNull(form.trailerFinancing.purchase_price) || null : null,
       trailer_purchase_date: form.trailerFinancing.purchase_date || null,
       trailer_financing: form.trailerFinancing.financing || null,
       trailer_loan_id: form.trailerFinancing.financing === 'loan' ? form.trailerFinancing.loan_id : null,
       cost_basis_ownership_mode: form.costBasisOwnershipMode || null,
-      cost_basis_loan_monthly_payment: form.costBasisLoanMonthlyPayment ? Number(form.costBasisLoanMonthlyPayment) || null : null,
-      cost_basis_paid_spread_months: form.costBasisPaidSpreadMonths ? Number(form.costBasisPaidSpreadMonths) || null : null,
-      cost_basis_warranty_cost: form.costBasisWarrantyCost ? Number(form.costBasisWarrantyCost) || null : null,
-      cost_basis_warranty_term_months: form.costBasisWarrantyTermMonths ? Number(form.costBasisWarrantyTermMonths) || null : null,
+      cost_basis_loan_monthly_payment: form.costBasisLoanMonthlyPayment ? numOrNull(form.costBasisLoanMonthlyPayment) || null : null,
+      cost_basis_paid_spread_months: form.costBasisPaidSpreadMonths ? numOrNull(form.costBasisPaidSpreadMonths) || null : null,
+      cost_basis_warranty_cost: form.costBasisWarrantyCost ? numOrNull(form.costBasisWarrantyCost) || null : null,
+      cost_basis_warranty_term_months: form.costBasisWarrantyTermMonths ? numOrNull(form.costBasisWarrantyTermMonths) || null : null,
       depreciation_method: form.depreciationMethod || null,
-      depreciation_year_placed_in_service: form.depreciationYearPlacedInService ? Number(form.depreciationYearPlacedInService) || null : null,
-      depreciation_spread_years: form.depreciationSpreadYears ? Number(form.depreciationSpreadYears) || null : null,
+      depreciation_year_placed_in_service: form.depreciationYearPlacedInService ? numOrNull(form.depreciationYearPlacedInService) || null : null,
+      depreciation_spread_years: form.depreciationSpreadYears ? numOrNull(form.depreciationSpreadYears) || null : null,
       trailer_depreciation_method: form.trailerDepreciationMethod || null,
       trailer_depreciation_year_placed_in_service: form.trailerDepreciationYearPlacedInService
-        ? Number(form.trailerDepreciationYearPlacedInService) || null
+        ? numOrNull(form.trailerDepreciationYearPlacedInService) || null
         : null,
-      trailer_depreciation_spread_years: form.trailerDepreciationSpreadYears ? Number(form.trailerDepreciationSpreadYears) || null : null,
+      trailer_depreciation_spread_years: form.trailerDepreciationSpreadYears ? numOrNull(form.trailerDepreciationSpreadYears) || null : null,
     };
   }
 

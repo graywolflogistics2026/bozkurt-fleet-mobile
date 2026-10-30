@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { isDateOnly, parseDateOnly } from '@/src/lib/dateOnly';
 
 // Locale-aware formatting (owner decision 2026-07-10, PRODUCT DECISION,
 // CLAUDE.md invariant): dates, currency, and number formatting follow the
@@ -18,8 +19,15 @@ export function formatNumber(n: number, locale: string, options?: Intl.NumberFor
   return n.toLocaleString(locale, options);
 }
 
+// A date-only string ("2026-08-14") is a calendar day: it is read as LOCAL
+// midnight (src/lib/dateOnly.ts), never as UTC midnight, so it shows the
+// same day in every time zone (batch 0b.1, 2026-10-30).
+function toDisplayDate(d: string | number | Date): Date {
+  return isDateOnly(d) ? parseDateOnly(d) : new Date(d);
+}
+
 export function formatDate(d: string | number | Date, locale: string, options?: Intl.DateTimeFormatOptions): string {
-  return new Date(d).toLocaleDateString(locale, options);
+  return toDisplayDate(d).toLocaleDateString(locale, options);
 }
 
 // MONTH FILTER OFF-BY-ONE (owner decision, device report) — root cause:
@@ -54,7 +62,7 @@ export function formatMonthLabel(year: number, month1Based: number, locale: stri
 }
 
 export function formatDateTime(d: string | number | Date, locale: string, options?: Intl.DateTimeFormatOptions): string {
-  return new Date(d).toLocaleString(locale, options);
+  return toDisplayDate(d).toLocaleString(locale, options);
 }
 
 export function useFormatters() {

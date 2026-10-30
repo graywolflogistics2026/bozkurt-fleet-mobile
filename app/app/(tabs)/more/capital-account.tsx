@@ -37,6 +37,8 @@ import {
 import { useFormatters } from '@/src/i18n/format';
 import { colors, spacing, typography } from '@/src/theme';
 import type { CapitalTransaction } from '@/src/types/db';
+import { compareDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24, item 3
 // "every row editable"): EVERY row (draw or contribution, linked or
@@ -125,7 +127,7 @@ export default function CapitalAccount() {
   const updateManualTx = useUpdateManualCapitalTransaction();
   const updateTx = useUpdateCapitalTransaction();
 
-  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const todayIso = () => todayDateOnly();
 
   const [drawModalOpen, setDrawModalOpen] = useState(false);
   const [drawDate, setDrawDate] = useState(todayIso());
@@ -173,7 +175,7 @@ export default function CapitalAccount() {
 
   const rows = txQuery.data ?? [];
   const history = useMemo(
-    () => [...rows].sort((a, b) => new Date(b.tx_date).getTime() - new Date(a.tx_date).getTime()),
+    () => [...rows].sort((a, b) => compareDateOnly(b.tx_date, a.tx_date)),
     [rows]
   );
   const contributionBreakdown = useMemo(
@@ -216,7 +218,7 @@ export default function CapitalAccount() {
   const contributionDateError = dateValidationMessage(validateCapitalTransactionDate(contributionDate));
 
   async function handleRecordDraw() {
-    const amount = Number(drawAmount) || 0;
+    const amount = numOrNull(drawAmount) || 0;
     if (amount <= 0 || !userId || drawDateError) return;
     if (savingRef.current) return;
     savingRef.current = true;
@@ -266,7 +268,7 @@ export default function CapitalAccount() {
   }
 
   async function handleRecordContribution() {
-    const amount = Number(contributionAmount) || 0;
+    const amount = numOrNull(contributionAmount) || 0;
     if (amount <= 0 || !userId || contributionDateError) return;
     if (savingRef.current) return;
     savingRef.current = true;
@@ -332,7 +334,7 @@ export default function CapitalAccount() {
 
   async function handleSaveEdit() {
     if (!editingTx || !userId || editDateError) return;
-    const amount = Number(editAmount) || 0;
+    const amount = numOrNull(editAmount) || 0;
     if (!isEditingLinked && amount <= 0) return;
     if (savingRef.current) return;
     savingRef.current = true;

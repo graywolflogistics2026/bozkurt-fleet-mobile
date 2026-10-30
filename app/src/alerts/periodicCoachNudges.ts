@@ -1,3 +1,4 @@
+import { dateOnlyFromParts, daysBetweenDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 // AI COACH — PERIODIC NUDGES (owner decision 2026-08-24, NEXT PASS item
 // E2): a second, disjoint family of nudge topics from item D2's missing-
 // data nudges — conversational, AI-Coach-voiced observations rather than
@@ -51,16 +52,14 @@ export function detectNoReceiptRecently(deductions: { ded_date: string | null }[
   const dates = deductions.map((d) => d.ded_date).filter((d): d is string => !!d);
   if (dates.length === 0) return null;
   const latest = dates.reduce((max, d) => (d > max ? d : max), dates[0]);
-  const daysSince = Math.floor((now.getTime() - new Date(`${latest}T00:00:00`).getTime()) / 86400000);
+  const daysSince = daysBetweenDateOnly(latest, todayDateOnly(now));
   return daysSince >= NO_RECEIPT_DAYS ? { topic: 'noReceiptRecently', detail: { days: daysSince } } : null;
 }
 
 function currentQuarterBounds(now: Date): { start: string; end: string } {
-  const quarterIndex = Math.floor(now.getUTCMonth() / 3);
-  const startMonth = quarterIndex * 3;
-  const start = new Date(Date.UTC(now.getUTCFullYear(), startMonth, 1));
-  const end = new Date(Date.UTC(now.getUTCFullYear(), startMonth + 3, 0));
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  const year = now.getFullYear();
+  const startMonth = Math.floor(now.getMonth() / 3) * 3;
+  return { start: dateOnlyFromParts(year, startMonth + 1, 1), end: dateOnlyFromParts(year, startMonth + 4, 0) };
 }
 
 // Phrased as a QUESTION by the i18n copy itself (alerts.coachNudges.

@@ -1,3 +1,4 @@
+import { isDateOnly, monthKeyOf, todayDateOnly } from '@/src/lib/dateOnly';
 // BETA FEEDBACK ROUND (owner decision 2026-07-31, device tester report):
 // every long chronological list (Settlements, Reimbursements, Deductions,
 // Fuel, Tolls, Loads, Other Income, Documents, ...) gets collapsible
@@ -18,8 +19,7 @@ export const UNKNOWN_MONTH_KEY = 'unknown';
 
 function monthKeyFor(dateStr: string | null | undefined): string {
   if (!dateStr) return UNKNOWN_MONTH_KEY;
-  const d = new Date(`${dateStr}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return UNKNOWN_MONTH_KEY;
+  if (!isDateOnly(dateStr.slice(0, 10))) return UNKNOWN_MONTH_KEY;
   return dateStr.slice(0, 7);
 }
 
@@ -53,5 +53,5 @@ export function groupByMonth<T>(
 }
 
 export function currentMonthKey(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 7);
+  return monthKeyOf(todayDateOnly(now));
 }

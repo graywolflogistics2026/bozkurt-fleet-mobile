@@ -1,4 +1,5 @@
 import type { Deduction } from '@/src/types/db';
+import { addMonthsDateOnly } from '@/src/lib/dateOnly';
 
 // Asset Register (PROMPTS.md Session 9a) — legacy's own ASSETS2/localStorage
 // list (legacy/index.html:1092) is superseded here: rather than a second,
@@ -26,9 +27,7 @@ export type AssetRow = {
 };
 
 function addMonths(dateStr: string, months: number): string {
-  const d = new Date(dateStr + 'T00:00:00Z');
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return addMonthsDateOnly(dateStr, months);
 }
 
 function warrantyExpiration(x: Deduction): string | null {

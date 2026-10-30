@@ -2,7 +2,7 @@ import { buildMonthlyCashFlowOverview, findTightestMonthIndex, findBestMonthInde
 import { EMPTY_CASH_FLOW_OVERRIDES, type CashFlowOverrides } from '../cashFlowForecast';
 import type { CashFlowClassification, SpendEvent } from '../cashFlowClassification';
 
-const TODAY = new Date('2026-08-15T12:00:00Z'); // current month = Aug 2026
+const TODAY = new Date(2026, 7, 15, 12); // current month = Aug 2026
 
 function classification(overrides: Partial<CashFlowClassification> = {}): CashFlowClassification {
   return {

@@ -256,6 +256,14 @@ points: `entityHooks.ts` `applyFilters()`, `loadsScope.ts`
 reintroduced once already — every new scoped filter needs a NULL-truck
 test. Full: `docs/decisions/null-truck-exclusion.md`.
 
+**Dates and numbers from text.** A stored date-only value (`YYYY-MM-DD`)
+is a local calendar day: parse/format/bucket it only through
+`app/src/lib/dateOnly.ts` (never `new Date(str)` or
+`toISOString().slice(0, 10)`). Every number read from text (AI output,
+statements, backups, form inputs) goes through `app/src/lib/number.ts`
+`num`/`numOrNull` (never `Number(text)`/`parseFloat`). Both have source
+checks. Full: `docs/decisions/master-plan-2026-10.md` (batch 0b).
+
 **Shared description rule.** One module, `app/src/lib/descriptionText.ts`,
 for every deduction description / expense note written or shown. Text
 counts only if it has a letter or digit (blank, spaces, "/", "-", ":",

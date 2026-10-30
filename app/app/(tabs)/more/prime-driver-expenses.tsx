@@ -46,6 +46,8 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -68,7 +70,7 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function parseIsoParts(iso: string | null | undefined): { y: number; m: number; d: number } {
@@ -206,8 +208,8 @@ export default function PrimeDriverExpensesScreen() {
   const [editingDays, setEditingDays] = useState(false);
   const [daysInput, setDaysInput] = useState('');
   async function handleSaveDaysOverride() {
-    const n = Number(daysInput);
-    if (!Number.isFinite(n) || n < 0) return;
+    const n = numOrNull(daysInput);
+    if (n == null || n < 0) return;
     await updateProfile.mutateAsync({ prime_driver_days_override: { ...daysOverrideMap, [daysOverrideKey(year, month)]: n } });
     setEditingDays(false);
   }
@@ -468,7 +470,7 @@ export default function PrimeDriverExpensesScreen() {
 
   async function handleSaveAdd() {
     if (!userId || !addCategory) return;
-    const amount = Number(addAmount) || 0;
+    const amount = numOrNull(addAmount) || 0;
     setAddSaving(true);
     try {
       const inserted = await insertExpense.mutateAsync({
@@ -536,7 +538,7 @@ export default function PrimeDriverExpensesScreen() {
       } else {
         await updateExpense.mutateAsync({
           id: editingRow.id,
-          values: { exp_date: newDate, amount: Number(editAmount) || 0, category: editCategory, note: realText(editNote) },
+          values: { exp_date: newDate, amount: numOrNull(editAmount) || 0, category: editCategory, note: realText(editNote) },
         });
         await invalidateFinancialData(queryClient, { entities: ['prime_driver_expenses'] });
       }

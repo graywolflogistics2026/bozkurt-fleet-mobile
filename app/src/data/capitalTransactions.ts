@@ -3,6 +3,7 @@ import { createEntityHooks } from '@/src/data/entityHooks';
 import { supabase } from '@/src/lib/supabase';
 import { calcReimbursementStatus, type ReimbursementStatus } from '@/src/stats/capitalAccount';
 import type { CapitalTransaction, CapitalTransactionInsert, CapitalTransactionUpdate } from '@/src/types/db';
+import { todayDateOnly } from '@/src/lib/dateOnly';
 
 const hooks = createEntityHooks<CapitalTransaction, CapitalTransactionInsert, CapitalTransactionUpdate>('capital_transactions');
 export const useCapitalTransactions = hooks.useEntityList;
@@ -107,7 +108,7 @@ export function useReimburseMyself() {
         p_user_id: values.userId,
         p_tx_type: 'draw',
         p_amount: values.amount,
-        p_tx_date: new Date().toISOString().slice(0, 10),
+        p_tx_date: todayDateOnly(),
         p_note: values.note,
         p_linked_deduction_id: values.deductionId,
       });

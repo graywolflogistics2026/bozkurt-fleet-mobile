@@ -20,6 +20,7 @@ import type { CashFlowClassification, SpendEvent } from '@/src/stats/cashFlowCla
 import { onePerStatementWeek } from '@/src/stats/heldByCarrier';
 import type { PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
 import type { CashFlowOverrides } from '@/src/stats/cashFlowForecast';
+import { addDaysDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 export type MonthStatus = 'actual' | 'current' | 'projected';
 
@@ -132,19 +133,19 @@ function computeMonth(
   // 'current' — actual-to-date (month start through today) blended with
   // a projected remainder (tomorrow through month end). Never guesses at
   // days that haven't happened, never stales out days that already have.
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = todayDateOnly(today);
   const actualIncome = sumSettlementsNet(allSettlements, startIso, todayIso);
   const actualBuckets = sumEventsByBucket(allEvents, startIso, todayIso, variableCategories);
   const actualPeriodic = sumPeriodic(periodicItems, startIso, todayIso, overrides);
 
-  const remainingDays = Math.max(0, daysInMonth(year, month) - today.getUTCDate());
+  const remainingDays = Math.max(0, daysInMonth(year, month) - today.getDate());
   const remainderWeeks = remainingDays / 7;
   const projIncome = weeklyIncome * remainderWeeks;
   const projFixed = weeklyFixed * remainderWeeks;
   const projVariable = weeklyVariable * remainderWeeks;
   let remainderPeriodic = { total: 0, items: [] as PeriodicForecastItem[] };
   if (remainingDays > 0) {
-    const remainderStartIso = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
+    const remainderStartIso = addDaysDateOnly(todayIso, 1);
     remainderPeriodic = sumPeriodic(periodicItems, remainderStartIso, endIso, overrides);
   }
 
@@ -174,8 +175,8 @@ export function buildMonthlyCashFlowOverview(input: {
   today?: Date;
 }): CashFlowMonthProjection[] {
   const today = input.today ?? new Date();
-  const currentYear = today.getUTCFullYear();
-  const currentMonth = today.getUTCMonth() + 1;
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
   const variableCategories = new Set(input.classification.variable.map((v) => v.category));
 
   function statusFor(y: number, m: number): MonthStatus {

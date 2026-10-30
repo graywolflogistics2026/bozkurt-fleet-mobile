@@ -1,3 +1,4 @@
+import { monthKeyOf, todayDateOnly } from '@/src/lib/dateOnly';
 // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
 // FIVE ADDITIONS pass, PART 5). Pure, testable math only — the actual
 // server-side enforcement lives in supabase/functions/ai-import/index.ts
@@ -181,7 +182,7 @@ export function planBatchImportCapacity(
 export const BACKFILL_DETECTION_THRESHOLD = 3;
 
 export function detectBackfillSession(importedDocDates: string[], now: Date = new Date()): boolean {
-  const monthStart = monthStartUtc(now);
-  const pastMonthCount = importedDocDates.filter((d) => new Date(`${d}T00:00:00Z`) < monthStart).length;
+  const thisMonth = monthKeyOf(todayDateOnly(now));
+  const pastMonthCount = importedDocDates.filter((d) => monthKeyOf(d) < thisMonth).length;
   return pastMonthCount >= BACKFILL_DETECTION_THRESHOLD;
 }

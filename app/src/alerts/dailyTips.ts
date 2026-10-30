@@ -45,6 +45,7 @@
 // shows the original anchor again, never wherever the user last browsed
 // to.
 import type { NudgeState, NudgeStateEntry } from '@/src/alerts/nudgeFrequency';
+import { toDateOnly } from '@/src/lib/dateOnly';
 
 export type DailyTipCategory = 'setup' | 'money' | 'discovery' | 'knowledge';
 
@@ -681,11 +682,11 @@ export function selectDailyTip(
 // daily pick, never whatever the user last manually browsed to (that
 // browsing is session-only UI state, intentionally not itself sticky).
 export function findTodaysAnchorTip(state: NudgeState<DailyTipTopic>, now: Date = new Date()): DailyTipTopic | null {
-  const today = now.toISOString().slice(0, 10);
+  const today = toDateOnly(now);
   let best: { topic: DailyTipTopic; at: number } | null = null;
   for (const [topic, entry] of Object.entries(state) as [DailyTipTopic, NudgeStateEntry | undefined][]) {
     if (!entry?.lastShownAt || entry.silencedAt) continue;
-    if (entry.lastShownAt.slice(0, 10) !== today) continue;
+    if (toDateOnly(new Date(entry.lastShownAt)) !== today) continue;
     const at = new Date(entry.lastShownAt).getTime();
     if (!best || at < best.at) best = { topic, at };
   }

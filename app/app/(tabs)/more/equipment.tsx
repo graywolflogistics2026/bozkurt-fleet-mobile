@@ -12,6 +12,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import type { Equipment, LoanInsert } from '@/src/types/db';
+import { numOrNull } from '@/src/lib/number';
 
 // ASSET PURCHASE & FINANCING (owner decision 2026-07-30, PRODUCT
 // DECISION) — "unlimited other equipment" beyond trucks/trailers
@@ -70,7 +71,7 @@ export default function EquipmentScreen() {
       name: form.name.trim(),
       category: form.category || null,
       notes: form.notes || null,
-      purchase_price: form.financing.purchase_price ? Number(form.financing.purchase_price) || null : null,
+      purchase_price: form.financing.purchase_price ? numOrNull(form.financing.purchase_price) || null : null,
       purchase_date: form.financing.purchase_date || null,
       financing: form.financing.financing || null,
       loan_id: form.financing.financing === 'loan' ? form.financing.loan_id : null,

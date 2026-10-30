@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { MutedText, Field, PrimaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { LoanInsert, LoanRow } from '@/src/types/db';
+import { numOrNull } from '@/src/lib/number';
 
 // ASSET PURCHASE & FINANCING (owner decision 2026-07-30, PRODUCT
 // DECISION) — shared purchase price/date + cash-or-loan financing block,
@@ -46,10 +47,10 @@ export function AssetFinancingFields({ value, onChange, loans, onCreateLoan }: P
       const created = await onCreateLoan({
         name: newLoan.lender || null,
         lender: newLoan.lender || null,
-        original_amount: newLoan.amount ? Number(newLoan.amount) || null : null,
-        balance: newLoan.amount ? Number(newLoan.amount) || null : null,
-        apr: newLoan.apr ? Number(newLoan.apr) || null : null,
-        payment: newLoan.payment ? Number(newLoan.payment) || null : null,
+        original_amount: newLoan.amount ? numOrNull(newLoan.amount) || null : null,
+        balance: newLoan.amount ? numOrNull(newLoan.amount) || null : null,
+        apr: newLoan.apr ? numOrNull(newLoan.apr) || null : null,
+        payment: newLoan.payment ? numOrNull(newLoan.payment) || null : null,
         frequency: newLoan.frequency || null,
       });
       onChange({ ...value, loan_id: created.id });

@@ -1,6 +1,7 @@
 import { isOwnerRole, type ProfileRole } from '@/src/alerts/roleFilter';
 import type { ComplianceType } from '@/src/compliance/status';
 import { isDeductionNeedsReview } from '@/src/import/needsReview';
+import { daysBetweenDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 // MISSING-DATA NUDGES (owner decision 2026-08-24, NEXT PASS item D2;
 // extended 2026-08-24 FIVE ADDITIONS pass item 1 — "UNLOCK" NUDGES) — pure
@@ -42,7 +43,7 @@ export function detectNoRecentSettlement(
 ): NudgeCandidate | null {
   if (settlements.length === 0) return null;
   const latestWeekEnding = settlements.reduce((max, s) => (s.week_ending > max ? s.week_ending : max), settlements[0].week_ending);
-  const daysSince = Math.floor((now.getTime() - new Date(`${latestWeekEnding}T00:00:00`).getTime()) / 86400000);
+  const daysSince = daysBetweenDateOnly(latestWeekEnding, todayDateOnly(now));
   return daysSince >= NO_RECENT_SETTLEMENT_DAYS ? { topic: 'noRecentSettlement', detail: { days: daysSince } } : null;
 }
 

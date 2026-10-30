@@ -31,6 +31,7 @@ import type {
   TollInsert,
   TruckInsert,
 } from '@/src/types/db';
+import { num as sharedNum } from '@/src/lib/number';
 
 export type LegacyImportEntityResult = { label: string; inserted: number; skipped: number; failed: number; firstError: string | null };
 export type LegacyImportResult = {
@@ -61,10 +62,9 @@ const STEPS = [
   'Running consistency checks',
 ] as const;
 
-function num(v: unknown, fallback = 0): number {
-  const n = typeof v === 'string' ? parseFloat(v) : (v as number);
-  return Number.isFinite(n) ? (n as number) : fallback;
-}
+// The ONE shared parser (src/lib/number.ts, batch 0b.4): "1,145.00" in a
+// backup used to read as 1.
+const num = sharedNum;
 
 function errorMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);

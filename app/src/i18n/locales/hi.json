@@ -2187,6 +2187,7 @@
     "formatDetailedNote": "इसकी श्रेणी के तहत हर लाइन आइटम, विक्रेता और भुगतान विधि के साथ — ऑडिट के लिए तैयार संस्करण।",
     "grossIncome": "सकल आय",
     "reimbursementsSubline": "+ {{amount}} प्रतिपूर्तियां",
+    "notDeductibleReference": "कटौती योग्य नहीं, केवल संदर्भ के लिए: {{amount}} (escrow, अग्रिम चुकौती, भोजन)",
     "deductibleExpenses": "कटौती योग्य व्यय",
     "reconcilingCaption": "यह कुल नीचे दी गई श्रेणी विवरण से मेल खाता है।",
     "perDiemDeductionLabel": "Per Diem कटौती",

@@ -12,7 +12,6 @@ import {
 } from '@/src/import/category';
 import { isPersonalPayment, normalizePaymentMethod } from '@/src/import/paymentMethods';
 import { toDateOrNull } from '@/src/import/dateGuard';
-import { parseAmount } from '@/src/import/amount';
 import { clampPerDiemDays, defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { splitPrimeLoads } from './primeLoads';
@@ -38,14 +37,14 @@ import type {
   ExtractedToll,
   FinancialDocKind,
 } from '@/src/import/types';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { num as sharedNum, numOrNull as sharedNumOrNull } from '@/src/lib/number';
 
 // parseAmount() (src/import/amount.ts) reads a trailing-minus credit
 // ("184.85-") as negative — golden settlement pass, owner decision
 // 2026-10-13. Every other input parses exactly as before.
-function num(v: unknown, fallback = 0): number {
-  const n = parseAmount(v);
-  return Number.isFinite(n) ? n : fallback;
-}
+// Both now come from the ONE shared parser (src/lib/number.ts, batch 0b.4).
+const num = sharedNum;
 
 // IMPORT SAVE BUG FIX (owner decision 2026-08-05, device report) — the
 // `number | null` counterpart to num()'s `number` (which always has a
@@ -55,11 +54,7 @@ function num(v: unknown, fallback = 0): number {
 // 'N/A'/anything non-numeric must become NULL, never a 0 that would
 // falsely claim "we know this is zero" — same "never guess" spirit as
 // toDateOrNull() below.
-export function numOrNull(v: unknown): number | null {
-  if (v === null || v === undefined) return null;
-  const n = parseAmount(v);
-  return Number.isFinite(n) ? n : null;
-}
+export const numOrNull = sharedNumOrNull;
 
 // ---------- settlement (legacy saveImport() settlement branch, legacy/index.html:2510-2527) ----------
 // Returns rows WITHOUT settlement_id/document_id set — the caller (impure
@@ -633,7 +628,7 @@ export function mapDriverPayment(d: Extraction, userId: string, driverId: string
     user_id: userId,
     driver_id: driverId,
     settlement_id: null,
-    date: toDateOrNull(d.date) ?? new Date().toISOString().slice(0, 10),
+    date: toDateOrNull(d.date) ?? todayDateOnly(),
     gross_pay: num(p.amount ?? d.totalAmount),
     notes: p.notes || p.method || null,
   };

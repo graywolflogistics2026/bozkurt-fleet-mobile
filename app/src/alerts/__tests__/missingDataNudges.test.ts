@@ -14,7 +14,7 @@ import {
 } from '@/src/alerts/missingDataNudges';
 import { isComplianceTypeVisibleForRole } from '@/src/alerts/roleFilter';
 
-const NOW = new Date('2026-08-24T12:00:00Z');
+const NOW = new Date(2026, 7, 24, 12); // local noon (batch 0b.1: days are local)
 
 describe('detectNoRecentSettlement', () => {
   test('no settlements at all — null (empty-state, not a nudge)', () => {

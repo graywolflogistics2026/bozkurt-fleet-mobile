@@ -361,3 +361,35 @@ describe('buildCashFlowForecastFromData — end to end on a realistic dataset', 
     expect(result.weeklyFixed).toBeGreaterThan(0); // the literal reported symptom, fixed
   });
 });
+
+// Batch 0b.3 (2026-10-30): the 30-day forecast's weekly income counted a
+// week twice when the same statement was saved with and without a truck.
+describe('forecast income counts each statement once (0b.3)', () => {
+  // The two golden Prime weeks' printed deposits: W/E 8/14 3,072.57 and
+  // W/E 8/21 1,884.73 (4,957.30 together).
+  const golden = [
+    { week_ending: '2026-08-14', net: 3072.57, miles: 3316, carrier: 'Prime Inc', truck_id: 'truck-1' },
+    { week_ending: '2026-08-21', net: 1884.73, miles: 2327, carrier: 'Prime Inc', truck_id: 'truck-1' },
+  ];
+  const { trailingWeeklyNetIncomeAverage, trailingWeeklyMilesAverage } = jest.requireActual('@/src/stats/cashFlowForecast');
+
+  it('two golden weeks average 2,478.65 a week', () => {
+    const avg = trailingWeeklyNetIncomeAverage(golden);
+    expect(avg.weeksFound).toBe(2);
+    expect(Math.round(avg.total * 100) / 100).toBe(4957.3);
+    expect(Math.round(avg.average * 100) / 100).toBe(2478.65);
+  });
+
+  it('the same week saved with and without a truck is one statement', () => {
+    const doubled = [...golden, { ...golden[1], truck_id: null }];
+    const avg = trailingWeeklyNetIncomeAverage(doubled);
+    expect(Math.round(avg.total * 100) / 100).toBe(4957.3);
+    expect(Math.round(avg.average * 100) / 100).toBe(2478.65);
+    expect(trailingWeeklyMilesAverage(doubled).total).toBe(3316 + 2327);
+  });
+
+  it('two different trucks settling the same week still both count', () => {
+    const twoTrucks = [...golden, { ...golden[1], truck_id: 'truck-2', net: 1500 }];
+    expect(Math.round(trailingWeeklyNetIncomeAverage(twoTrucks).total * 100) / 100).toBe(4957.3 + 1500);
+  });
+});

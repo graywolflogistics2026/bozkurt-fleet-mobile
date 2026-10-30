@@ -12,6 +12,7 @@ import { HEALTH_CATEGORIES, HEALTH_CATEGORY_ICON, type HealthCategory } from '@/
 import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Profile } from '@/src/types/db';
+import { numOrNull } from '@/src/lib/number';
 
 // lease_operator (owner decision 2026-07-13, device feedback round 2):
 // leases a truck from another operator/carrier rather than owning it —
@@ -184,10 +185,10 @@ export default function Onboarding() {
     if (!userId) return;
     const values = {
       unit_number: unitNumber.trim() || null,
-      year: truckYear.trim() ? Number(truckYear) || null : null,
+      year: truckYear.trim() ? numOrNull(truckYear) || null : null,
       make: truckMake.trim() || null,
       model: truckModel.trim() || null,
-      current_odometer: odometer.trim() ? Number(odometer) || null : null,
+      current_odometer: odometer.trim() ? numOrNull(odometer) || null : null,
     };
     // No truck info entered at all and none created yet — nothing to save,
     // subsequent steps just show their own "no truck yet" empty state.
@@ -211,7 +212,7 @@ export default function Onboarding() {
     const values = {
       trailer_unit_number: trailerUnit.trim() || null,
       trailer_vin: trailerVin.trim() || null,
-      trailer_year: trailerYear.trim() ? Number(trailerYear) || null : null,
+      trailer_year: trailerYear.trim() ? numOrNull(trailerYear) || null : null,
       trailer_make: trailerMake.trim() || null,
       trailer_model: trailerModel.trim() || null,
     };
@@ -225,14 +226,14 @@ export default function Onboarding() {
     const changed = intervals.filter((iv) => {
       const draft = intervalDrafts[iv.id];
       if (!draft) return false;
-      const numericValue = Number(draft.value) || 0;
+      const numericValue = numOrNull(draft.value) || 0;
       const valueChanged = iv.tracking_mode === 'hours' ? numericValue !== iv.interval_hours : numericValue !== iv.interval_miles;
       return valueChanged || draft.enabled !== iv.enabled;
     });
     await Promise.all(
       changed.map((iv) => {
         const draft = intervalDrafts[iv.id];
-        const numericValue = Number(draft.value) || 0;
+        const numericValue = numOrNull(draft.value) || 0;
         return updateInterval.mutateAsync({
           id: iv.id,
           values: iv.tracking_mode === 'hours' ? { interval_hours: numericValue, enabled: draft.enabled } : { interval_miles: numericValue, enabled: draft.enabled },
@@ -242,7 +243,7 @@ export default function Onboarding() {
   }
 
   async function saveTaxYear() {
-    await updateTaxConfig.mutateAsync({ tax_year: Number(taxYear) || new Date().getFullYear() });
+    await updateTaxConfig.mutateAsync({ tax_year: numOrNull(taxYear) || new Date().getFullYear() });
   }
 
   const STEP_ACTIONS = [saveCompanyName, saveHomeState, saveDotMc, saveRole, saveTruckInfo, saveTrailerInfo, saveMaintenanceSchedule, saveTaxYear];

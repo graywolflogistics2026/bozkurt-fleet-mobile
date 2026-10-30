@@ -1,3 +1,4 @@
+import { toDateOnly } from '@/src/lib/dateOnly';
 // FREQUENCY DISCIPLINE (owner decision 2026-08-24, NEXT PASS item D3, also
 // reused by item E2's periodic AI Coach nudges with a longer cooldown): at
 // most one nudge per topic per cooldown window (7 days for D's missing-
@@ -28,7 +29,7 @@ const SIGNUP_GRACE_MS = 24 * 60 * 60 * 1000;
 export const MAX_NUDGES_PER_DAY = 2;
 
 function isSameCalendarDay(a: Date, b: Date): boolean {
-  return a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
+  return toDateOnly(a) === toDateOnly(b);
 }
 
 // Deterministic given the same inputs (no I/O) — the ONE function under

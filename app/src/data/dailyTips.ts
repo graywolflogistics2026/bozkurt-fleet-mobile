@@ -40,6 +40,7 @@ import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { calcMiles } from '@/src/stats/miles';
 import { nextQuarterlyDeadline } from '@/src/tax/quarterly';
 import type { NudgeState } from '@/src/alerts/nudgeFrequency';
+import { yearOf } from '@/src/lib/dateOnly';
 
 // A stable, shared empty-object reference — `profileQuery.data?.nudge_state
 // ?? {}` would otherwise allocate a NEW `{}` on every render whenever
@@ -139,7 +140,7 @@ export function useDailyTip() {
     const distinctWeeks = new Set(settlements.map((s) => s.week_ending)).size;
 
     const currentYear = now.getFullYear();
-    const settlementsThisYear = settlements.filter((s) => new Date(`${s.week_ending}T00:00:00`).getFullYear() === currentYear);
+    const settlementsThisYear = settlements.filter((s) => yearOf(s.week_ending) === currentYear);
     const perDiemDaysYtd = calcPerDiemDays(settlementsThisYear.map((s) => ({ week_ending: s.week_ending, per_diem_days: s.per_diem_days })));
 
     const trucksWithoutCostBasisCount = trucks.filter((t) => t.cost_basis_ownership_mode === null).length;
@@ -147,7 +148,7 @@ export function useDailyTip() {
     const currentTaxYear = now.getFullYear();
     const depreciationPreviewTotal = trucks.reduce((sum, t) => {
       if (t.cost_basis_ownership_mode === 'lease' || t.depreciation_method || !t.purchase_price) return sum;
-      const yearPlacedInService = t.purchase_date ? new Date(t.purchase_date).getFullYear() : currentTaxYear;
+      const yearPlacedInService = t.purchase_date ? yearOf(t.purchase_date) : currentTaxYear;
       const preview = calcCurrentYearDepreciation(
         { purchasePrice: t.purchase_price, ownershipMode: 'paid', method: 'full', yearPlacedInService, spreadYears: null },
         'tractor',

@@ -356,7 +356,7 @@ describe('DAILY_TIP_VARIANT_COUNT', () => {
 // called (simulating repeated re-renders) or how the underlying candidate
 // data changes in between.
 describe('findTodaysAnchorTip — sticky daily pick (bug fix item 1)', () => {
-  const TODAY = new Date('2026-05-10T14:00:00Z');
+  const TODAY = new Date(2026, 4, 10, 14); // local 2 pm (batch 0b.1: days are local)
 
   test('reconstructs the topic shown today, and does so identically across many repeated calls (simulating re-renders/data refreshes)', () => {
     const state: NudgeState<DailyTipTopic> = {

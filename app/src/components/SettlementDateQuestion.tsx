@@ -5,6 +5,7 @@ import { MutedText, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { useFormatters } from '@/src/i18n/format';
 import { localDay, type SettlementDateCheck } from '@/src/import/printedDates';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { todayDateOnly } from '@/src/lib/dateOnly';
 
 // PRINTED DATES (owner decision 2026-10-29, A3): when the date gate fails,
 // Save is blocked and the preview asks ONE plain question — "The statement
@@ -44,7 +45,7 @@ export function SettlementDateQuestion({
         {reading && <PrimaryButton title={t('importScreen.dateQuestion.yes')} onPress={() => onConfirm(reading)} />}
         <SecondaryButton title={t('importScreen.dateQuestion.pick')} onPress={() => setPicking((p) => !p)} />
       </View>
-      {picking && <DayPicker initial={reading ?? new Date().toISOString().slice(0, 10)} onPick={onConfirm} />}
+      {picking && <DayPicker initial={reading ?? todayDateOnly()} onPick={onConfirm} />}
     </View>
   );
 }

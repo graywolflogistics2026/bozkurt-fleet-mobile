@@ -23,6 +23,8 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { MaintenanceInterval } from '@/src/types/db';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 function statusColor(status: HealthResult['status']): string {
   if (status === 'overdue') return colors.red;
@@ -243,7 +245,7 @@ export default function TruckHealth() {
       for (const iv of intervalsQuery.data) {
         const draft = intervalDrafts[iv.id];
         if (!draft) continue;
-        const numericValue = Number(draft.value) || 0;
+        const numericValue = numOrNull(draft.value) || 0;
         const valueChanged = iv.tracking_mode === 'hours' ? numericValue !== iv.interval_hours : numericValue !== iv.interval_miles;
         const enabledChanged = draft.enabled !== iv.enabled;
         if (!valueChanged && !enabledChanged) continue;
@@ -268,7 +270,7 @@ export default function TruckHealth() {
     if (!truck) return;
     setSavingOdometer(true);
     try {
-      await updateTruck.mutateAsync({ id: truck.id, values: { current_odometer: Number(odometerDraft) || 0 } });
+      await updateTruck.mutateAsync({ id: truck.id, values: { current_odometer: numOrNull(odometerDraft) || 0 } });
       setEditingOdometer(false);
     } finally {
       setSavingOdometer(false);
@@ -287,7 +289,7 @@ export default function TruckHealth() {
   // expenses the same way any other maintenance_records row does.
   function openMarkDone(result: HealthResult) {
     setMarkingDone(result);
-    setMarkDoneDate(new Date().toISOString().slice(0, 10));
+    setMarkDoneDate(todayDateOnly());
     setMarkDoneReading(String(result.trackingMode === 'hours' ? truck?.apu_hours ?? 0 : truck?.current_odometer ?? 0));
     setMarkDoneCost('0');
     setMarkDoneNote('');
@@ -300,14 +302,14 @@ export default function TruckHealth() {
   async function handleConfirmMarkDone() {
     if (!markingDone || !truck || !userId) return;
     const isHours = markingDone.trackingMode === 'hours';
-    const reading = Number(markDoneReading) || 0;
+    const reading = numOrNull(markDoneReading) || 0;
     const cost = Number(markDoneCost) || 0;
     setMarkDoneSaving(true);
     try {
       await insertMaintenanceRecord.mutateAsync({
         user_id: userId,
         truck_id: truck.id,
-        service_date: markDoneDate || new Date().toISOString().slice(0, 10),
+        service_date: markDoneDate || todayDateOnly(),
         service_type: markingDone.category,
         odometer: isHours ? null : reading || null,
         engine_hours: isHours ? reading || null : null,

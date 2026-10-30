@@ -26,6 +26,7 @@ import {
 } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { HouseholdIncome, HouseholdMember } from '@/src/types/db';
+import { numOrNull } from '@/src/lib/number';
 
 const FILING_STATUSES: FilingStatus[] = ['single', 'mfj', 'hoh'];
 const ENTITY_TYPES: EntityType[] = ['sole_prop', 'smllc', 'multi_member_llc', 'scorp'];
@@ -152,7 +153,7 @@ export default function TaxEstimator() {
   const isScorp = draft?.entityType === 'scorp';
   const scorpPreview = useMemo(() => {
     if (!tax || isScorp) return null;
-    const salary = Number(reasonableSalary) || 0;
+    const salary = numOrNull(reasonableSalary) || 0;
     return calcScorpSavingsPreview(tax.estimate.netProfit, salary, tax.taxYearData.se_tax);
   }, [tax, isScorp, reasonableSalary]);
 
@@ -170,7 +171,7 @@ export default function TaxEstimator() {
   async function handleSaveIncome() {
     const userId = tax?.taxConfig.user_id;
     if (!userId || !tax) return;
-    const amount = Number(incomeAmount) || 0;
+    const amount = numOrNull(incomeAmount) || 0;
     setIncomeSaving(true);
     try {
       const member = await insertMember.mutateAsync({ user_id: userId, name: incomeName || t('taxEstimator.household.unnamed'), relation: incomeRelation });
@@ -180,7 +181,7 @@ export default function TaxEstimator() {
         tax_year: tax.resolvedYear,
         income_type: incomeType,
         annual_amount: amount,
-        federal_withheld: Number(incomeWithheld) || 0,
+        federal_withheld: numOrNull(incomeWithheld) || 0,
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['household_members'], refetchType: 'all' }),
@@ -227,11 +228,11 @@ export default function TaxEstimator() {
         state: draft.state.trim().toUpperCase() || 'TX',
         include_state_tax: draft.includeStateTax,
         entity_type: draft.entityType,
-        ownership_pct: draft.entityType === 'multi_member_llc' ? Number(draft.ownershipPct) || 100 : null,
-        scorp_salary: draft.entityType === 'scorp' ? Number(draft.scorpSalary) || 0 : null,
+        ownership_pct: draft.entityType === 'multi_member_llc' ? numOrNull(draft.ownershipPct) || 100 : null,
+        scorp_salary: draft.entityType === 'scorp' ? numOrNull(draft.scorpSalary) || 0 : null,
         scorp_payroll_tax_handled: draft.entityType === 'scorp' ? draft.scorpPayrollTaxHandled : false,
-        sep_contribution: Number(draft.sepContribution) || 0,
-        health_insurance_premiums: Number(draft.healthInsurancePremiums) || 0,
+        sep_contribution: numOrNull(draft.sepContribution) || 0,
+        health_insurance_premiums: numOrNull(draft.healthInsurancePremiums) || 0,
       });
       await invalidateFinancialData(queryClient);
       Alert.alert(t('taxEstimator.savedTitle'));

@@ -1,4 +1,5 @@
 import { toDateOrNull } from '@/src/import/dateGuard';
+import { todayDateOnly } from '@/src/lib/dateOnly';
 
 export type CapitalAccountSummary = {
   effectiveContribution: number;
@@ -320,7 +321,7 @@ export function validateCapitalTransactionDate(
 ): CapitalTransactionDateValidation {
   const parsed = toDateOrNull(dateStr);
   if (!parsed) return { valid: false, reason: 'invalid' };
-  const todayIso = now.toISOString().slice(0, 10);
+  const todayIso = todayDateOnly(now);
   if (parsed > todayIso) return { valid: false, reason: 'future' };
   if (Number(parsed.slice(0, 4)) < MIN_CAPITAL_TX_YEAR) return { valid: false, reason: 'tooOld' };
   return { valid: true };

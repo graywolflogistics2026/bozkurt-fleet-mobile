@@ -16,6 +16,7 @@
 import { HERO_PERIODS, type HeroPeriod } from '@/src/stats/heroPeriod';
 import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
 import { calcWeekOverWeekChange, type WeekOverWeekChange } from '@/src/stats/heroStats';
+import { addDaysDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 export type DateWindow = { startIso: string; endIso: string };
 
@@ -38,10 +39,8 @@ export function resolveHeroPeriodDateWindow(period: HeroPeriod, sortedWeekEnding
   }
   const days = PERIOD_DAYS[period];
   if (days == null) return null;
-  const end = new Date(now);
-  const start = new Date(now);
-  start.setDate(start.getDate() - days);
-  return { startIso: start.toISOString().slice(0, 10), endIso: end.toISOString().slice(0, 10) };
+  const endIso = todayDateOnly(now);
+  return { startIso: addDaysDateOnly(endIso, -days), endIso };
 }
 
 // The one shared row filter every period-scoped CPM input uses — numerator
@@ -76,16 +75,11 @@ export function resolvePreviousHeroPeriodDateWindow(period: HeroPeriod, sortedWe
   }
   const days = PERIOD_DAYS[period];
   if (days == null) return null;
-  const currentStart = new Date(now);
-  currentStart.setDate(currentStart.getDate() - days);
+  const currentStartIso = addDaysDateOnly(todayDateOnly(now), -days);
   // Ends the day BEFORE the current window's own start, so the two
   // windows never overlap on a shared boundary day (filterRowsByDateWindow
   // is inclusive on both ends).
-  const prevEnd = new Date(currentStart);
-  prevEnd.setDate(prevEnd.getDate() - 1);
-  const prevStart = new Date(currentStart);
-  prevStart.setDate(prevStart.getDate() - days);
-  return { startIso: prevStart.toISOString().slice(0, 10), endIso: prevEnd.toISOString().slice(0, 10) };
+  return { startIso: addDaysDateOnly(currentStartIso, -days), endIso: addDaysDateOnly(currentStartIso, -1) };
 }
 
 type TrioSettlementRow = { week_ending: string | null; gross: number | null };

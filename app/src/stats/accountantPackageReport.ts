@@ -36,6 +36,9 @@ export type AccountantReportStrings = {
   // when there are no reimbursements this period — the sub-line is
   // omitted entirely, never shown as "+ $0").
   reimbursementsSubline?: string;
+  // "Not deductible, listed for reference: $X" (escrow, advance
+  // repayment, meals) — withheld/combined scopes only (batch 0b.2).
+  notDeductibleReference?: string;
   deductibleExpenses: string;
   reconcilingCaption: string;
   perDiemTitle: string;
@@ -274,6 +277,7 @@ export function buildAccountantReportHtml(
               : ''
           }
           <tr class="total expenses-row"><td>${esc(strings.deductibleExpenses)}</td><td class="amt">${fmt.money(totalExpenses)}</td></tr>
+          ${strings.notDeductibleReference ? `<tr><td colspan="2" class="caption">${esc(strings.notDeductibleReference)}</td></tr>` : ""}
         </table>
         <div class="caption">${esc(strings.reconcilingCaption)}</div>
 

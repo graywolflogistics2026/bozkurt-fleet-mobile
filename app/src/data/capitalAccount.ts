@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/context/AuthContext';
 import { calcCapitalAccount } from '@/src/stats/capitalAccount';
+import { compareDateOnly } from '@/src/lib/dateOnly';
 
 export type CapitalAccountSummaryResult = {
   effectiveContribution: number;
@@ -40,7 +41,7 @@ export function useCapitalAccountSummary() {
       const totalContributions = contributions.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
       const totalDraws = draws.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
       const latest = [...contributions].sort(
-        (a, b) => new Date(b.tx_date).getTime() - new Date(a.tx_date).getTime()
+        (a, b) => compareDateOnly(b.tx_date, a.tx_date)
       )[0];
 
       const summary = calcCapitalAccount(Number(profile?.initial_capital ?? 0), totalContributions, totalDraws);

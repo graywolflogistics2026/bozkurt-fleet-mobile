@@ -16,6 +16,7 @@ import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { BRAND_NAME } from '@/src/brand';
 import i18n from '@/src/i18n';
+import { numOrNull } from '@/src/lib/number';
 
 // CEO Mode — Daily/Weekly Briefing v1 (PROMPTS.md Session 9b item 10,
 // CLAUDE.md invariant #22 — composed ONLY from this account's own data,
@@ -92,7 +93,7 @@ export default function CeoMode() {
   const unresolvedOtherDocs = useMemo(() => (documentsQuery.data ?? []).filter((d) => d.doc_type === 'other').length, [documentsQuery.data]);
 
   async function handleSaveGoal() {
-    const value = Number(goalInput);
+    const value = numOrNull(goalInput);
     if (!value || value <= 0) return;
     setGoalSaving(true);
     try {

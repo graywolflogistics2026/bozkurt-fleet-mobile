@@ -13,6 +13,8 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { CompensationType, Driver } from '@/src/types/db';
+import { compareDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 const COMPENSATION_TYPES: CompensationType[] = ['w2_employee', '1099_contractor', 'team_split', 'trainee'];
 const PAY_TYPES = ['per_mile', 'percent', 'flat'] as const;
@@ -72,19 +74,19 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
   const paymentsQuery = useDriverPayments({ driver_id: driver.id });
   const insertPayment = useInsertDriverPayment();
 
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(todayDateOnly());
   const [grossPay, setGrossPay] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
   const payments = useMemo(
-    () => [...(paymentsQuery.data ?? [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    () => [...(paymentsQuery.data ?? [])].sort((a, b) => compareDateOnly(b.date, a.date)),
     [paymentsQuery.data]
   );
 
   async function handleAdd() {
     if (!userId) return;
-    const gross = Number(grossPay) || 0;
+    const gross = numOrNull(grossPay) || 0;
     if (gross <= 0) {
       Alert.alert(t('drivers.enterAmountTitle'));
       return;
@@ -182,7 +184,7 @@ export default function Drivers() {
       license: form.license || null,
       compensation_type: form.compensation_type,
       pay_type: form.pay_type,
-      pay_rate: form.pay_rate ? Number(form.pay_rate) || null : null,
+      pay_rate: form.pay_rate ? numOrNull(form.pay_rate) || null : null,
       default_truck_id: form.default_truck_id,
     };
   }

@@ -2,7 +2,9 @@ import { buildProfitAnalysis, compareToBenchmark, windowStartIso } from '@/src/s
 import { resolveHeroPeriodDateWindow } from '@/src/stats/heroPeriodWindow';
 import type { Benchmark } from '@/src/types/db';
 
-const NOW = new Date('2026-06-30T00:00:00Z');
+// Local noon on 6/30: the same calendar day in every zone (batch 0b.1 —
+// windows start from the LOCAL today, src/lib/dateOnly.ts).
+const NOW = new Date(2026, 5, 30, 12);
 
 function benchmark(overrides: Partial<Benchmark>): Benchmark {
   return {
@@ -55,18 +57,23 @@ describe('windowStartIso', () => {
       const dstNow = new Date('2026-03-20T23:30:00.000Z');
       const dstHeroWindow = resolveHeroPeriodDateWindow('1M', [], dstNow)!;
       expect(windowStartIso(30, dstNow)).toBe(dstHeroWindow.startIso);
-      expect(windowStartIso(30, dstNow)).toBe('2026-02-19');
+      // 23:30 UTC on 3/20 is 6:30 pm on 3/20 in Chicago: 30 days before the
+      // local 3/20 is 2/18 (batch 0b.1); east of UTC it is already 3/21.
+      expect(windowStartIso(30, dstNow)).toBe(dstNow.getDate() === 21 ? '2026-02-19' : '2026-02-18');
 
-      // Reproduces the OLD buggy implementation (setUTCDate) directly to
-      // prove this test would have caught the original divergence, not
-      // just asserted behavior the fix already guarantees.
-      const oldBuggyImpl = (days: number, n: Date) => {
+      // The previous implementation (local setDate, then the UTC day via
+      // toISOString) answered 2/19 — the evening-in-Chicago UTC-day bug.
+      const previousImpl = (days: number, n: Date) => {
         const d = new Date(n);
-        d.setUTCDate(d.getUTCDate() - days);
+        d.setDate(d.getDate() - days);
         return d.toISOString().slice(0, 10);
       };
-      expect(oldBuggyImpl(30, dstNow)).toBe('2026-02-18');
-      expect(oldBuggyImpl(30, dstNow)).not.toBe(windowStartIso(30, dstNow));
+      // Jest reads the zone once at start (npm run test:zones), so this part
+      // only applies when the run itself is in a US zone.
+      if (new Date(2026, 2, 20).getTimezoneOffset() >= 240) {
+        expect(previousImpl(30, dstNow)).toBe('2026-02-19');
+        expect(previousImpl(30, dstNow)).not.toBe(windowStartIso(30, dstNow));
+      }
     } finally {
       process.env.TZ = originalTz;
     }

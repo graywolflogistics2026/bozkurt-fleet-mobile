@@ -12,7 +12,7 @@ function complianceItem(overrides: Partial<ComplianceItem> & Pick<ComplianceItem
   };
 }
 
-const TODAY = new Date('2026-08-15T12:00:00Z');
+const TODAY = new Date(2026, 7, 15, 12); // local noon (batch 0b.1)
 
 describe('buildPeriodicForecastItems — a renewal inside the window lands in the right week', () => {
   it('includes a due date within the next 30 days', () => {

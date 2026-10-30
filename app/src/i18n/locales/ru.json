@@ -2187,6 +2187,7 @@
     "formatDetailedNote": "Каждая отдельная запись в своей категории, с поставщиком и способом оплаты — версия, готовая для аудита.",
     "grossIncome": "Валовой Доход",
     "reimbursementsSubline": "+ {{amount}} возмещений",
+    "notDeductibleReference": "Не вычитается, только для справки: {{amount}} (escrow, погашение авансов, питание)",
     "deductibleExpenses": "Вычитаемые Расходы",
     "reconcilingCaption": "Этот итог совпадает с разбивкой по категориям ниже.",
     "perDiemDeductionLabel": "Вычет Per Diem",

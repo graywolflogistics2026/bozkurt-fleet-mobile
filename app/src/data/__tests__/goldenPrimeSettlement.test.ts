@@ -881,3 +881,35 @@ describe('per-group checks on the 8/21 golden week', () => {
     expect(groups.find((g) => g.group === 'advances')).toMatchObject({ settlement: 550, statement: 550 });
   });
 });
+
+// Batch 0b.2 (2026-10-30): the withheld/combined Accountant Package scopes
+// listed escrow, advance repayment and meals inside "Deductible Expenses".
+// They stay listed for reference and never count as deductible.
+describe('accountant package — withheld lines are never deductible (0b.2)', () => {
+  it('golden W/E 8/21: escrow, advances and meals are reference only, in every scope', async () => {
+    const { buildLineItems, buildScheduleCTotals, buildNotDeductibleReference, groupLineItemsByScheduleCBucket } = await import('@/src/stats/accountantPackage');
+    const { NON_DEDUCTIBLE_CATEGORIES } = await import('@/src/import/category');
+    const rows = await importGolden(goldenExtraction('both'));
+    const nonDeductible = new Set<string>(NON_DEDUCTIBLE_CATEGORIES);
+    for (const scope of ['outOfPocket', 'withheld', 'combined'] as const) {
+      const items = buildLineItems(rows.deductions, rows.fuel, [], [], 2026, 8, scope);
+      const totals = buildScheduleCTotals(items, []);
+      const deductible = totals.reduce((sum, c) => sum + c.amount, 0);
+      const reference = buildNotDeductibleReference(items);
+      expect(totals.some((c) => nonDeductible.has(c.category))).toBe(false);
+      expect(groupLineItemsByScheduleCBucket(items, totals, []).flatMap((g) => g.items).every((li) => li.deductible)).toBe(true);
+      // Every listed row lands in exactly one of the two totals.
+      expect(r2(deductible + reference.total)).toBe(r2(items.reduce((sum, li) => sum + li.amount, 0)));
+      if (scope !== 'outOfPocket') {
+        const escrow = rows.deductions.filter((d) => d.source === 'settlement' && d.category === 'Escrow & Deposits');
+        expect(escrow.length).toBeGreaterThan(0);
+        expect(reference.items.map((li) => li.id)).toEqual(expect.arrayContaining(escrow.map((d) => d.id)));
+        // Before the fix the deductible total was 5,335.73.
+        expect(r2(deductible)).toBe(4685.73);
+        expect(r2(reference.total)).toBe(650);
+      } else {
+        expect(reference.total).toBe(0);
+      }
+    }
+  });
+});

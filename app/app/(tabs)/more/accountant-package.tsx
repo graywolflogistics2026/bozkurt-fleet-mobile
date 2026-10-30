@@ -29,6 +29,7 @@ import {
   buildScheduleCTotals,
   checkMiscConcentration,
   buildLumperFees,
+  buildNotDeductibleReference,
   buildPerDiemBlock,
   buildCapitalAssets,
   buildOwnersEquity,
@@ -258,6 +259,7 @@ export default function AccountantPackage() {
   // follow-up item H.1) — informational only, never blocks anything.
   const miscWarning = useMemo(() => checkMiscConcentration(scheduleCTotals), [scheduleCTotals]);
   const lumperFees = useMemo(() => buildLumperFees(lineItems), [lineItems]);
+  const notDeductible = useMemo(() => buildNotDeductibleReference(lineItems), [lineItems]);
   const lumperTotal = lumperFees.reduce((sum, i) => sum + i.amount, 0);
   // Shared by BOTH the on-screen category table and the exported HTML —
   // the two can never disagree about how rows are grouped (see this
@@ -448,7 +450,7 @@ export default function AccountantPackage() {
   // builder itself is a plain, framework-free function, same "pure
   // function, caller owns i18n via t()" convention as every other
   // presentation module in this app).
-  function buildBaseReportStrings(): Omit<AccountantReportStrings, 'reimbursementsSubline' | 'implausibleDateWarning' | 'miscConcentrationWarning'> {
+  function buildBaseReportStrings(): Omit<AccountantReportStrings, 'reimbursementsSubline' | 'implausibleDateWarning' | 'miscConcentrationWarning' | 'notDeductibleReference'> {
     return {
       grossIncome: t('accountantPackage.grossIncome'),
       deductibleExpenses: t('accountantPackage.deductibleExpenses'),
@@ -498,6 +500,7 @@ export default function AccountantPackage() {
     const total = totals.reduce((sum, c) => sum + c.amount, 0);
     const miscWarningForExport = checkMiscConcentration(totals);
     const lumpers = buildLumperFees(items);
+    const notDeductibleForExport = buildNotDeductibleReference(items).total;
     const lumperTotalForExport = lumpers.reduce((sum, i) => sum + i.amount, 0);
     const grouped = groupLineItemsByScheduleCBucket(items, totals, userCategoriesQuery.data ?? []);
     const perDiemForExport =
@@ -531,6 +534,8 @@ export default function AccountantPackage() {
       ...buildBaseReportStrings(),
       reimbursementsSubline:
         reimbursementsForExport > 0 ? t('accountantPackage.reimbursementsSubline', { amount: money(reimbursementsForExport) }) : undefined,
+      notDeductibleReference:
+        notDeductibleForExport > 0 ? t('accountantPackage.notDeductibleReference', { amount: money(notDeductibleForExport) }) : undefined,
       implausibleDateWarning:
         implausibleDates.length > 0 ? t('accountantPackage.implausibleDateWarning', { count: implausibleDates.length }) : undefined,
       miscConcentrationWarning: miscWarningForExport
@@ -700,6 +705,9 @@ export default function AccountantPackage() {
               <View style={[styles.rowBorder, styles.tintedRow, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.totalRowBg }]}>
                 <Row label={t('accountantPackage.deductibleExpenses')} value={money(totalExpenses)} bold />
               </View>
+              {notDeductible.total > 0 && (
+                <MutedText>{t('accountantPackage.notDeductibleReference', { amount: money(notDeductible.total) })}</MutedText>
+              )}
               <MutedText>{t('accountantPackage.reconcilingCaption')}</MutedText>
               {perDiemBlock && (
                 <View style={styles.rowBorder}>

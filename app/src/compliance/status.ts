@@ -1,4 +1,5 @@
 import type { ComplianceItem } from '@/src/types/db';
+import { daysBetweenDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 export type ComplianceType = ComplianceItem['type'];
 export type Recurrence = NonNullable<ComplianceItem['recurrence']>;
@@ -75,10 +76,7 @@ export function calcComplianceStatus(
   now: Date = new Date(),
   reminderLeadDays?: number | null
 ): ComplianceStatusResult {
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(`${dueDate}T00:00:00`);
-  const daysUntil = Math.round((due.getTime() - today.getTime()) / 86400000);
+  const daysUntil = daysBetweenDateOnly(todayDateOnly(now), dueDate);
   const threshold = reminderLeadDays ?? DUE_SOON_THRESHOLD_DAYS;
   const urgency: ComplianceUrgency = daysUntil < 0 ? 'overdue' : daysUntil <= threshold ? 'due_soon' : 'ok';
   return { daysUntil, urgency };

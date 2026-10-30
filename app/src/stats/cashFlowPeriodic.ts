@@ -8,6 +8,7 @@
 // the forecast entirely even though its date is sitting right there in
 // Documents & Renewals).
 import type { ComplianceItem, DocumentRow } from '@/src/types/db';
+import { addDaysDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 // Only these four compliance types are genuinely periodic BILLS with a
 // real cash-flow impact on a predictable date — CLAUDE.md invariant #4's
@@ -58,8 +59,8 @@ export function buildPeriodicForecastItems(
   today: Date,
   windowDays = 30
 ): PeriodicForecastItem[] {
-  const todayIso = today.toISOString().slice(0, 10);
-  const endIso = new Date(today.getTime() + windowDays * 86400000).toISOString().slice(0, 10);
+  const todayIso = todayDateOnly(today);
+  const endIso = addDaysDateOnly(todayIso, windowDays);
 
   return complianceItems
     .filter((c) => PERIODIC_TYPES.includes(c.type) && c.due_date >= todayIso && c.due_date <= endIso)

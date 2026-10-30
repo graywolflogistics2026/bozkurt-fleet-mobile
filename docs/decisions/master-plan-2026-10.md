@@ -351,9 +351,53 @@ Start now with the protocol, then batch 0b.
 | Batch | Status | Commit |
 |---|---|---|
 | 0 (printed dates, held by carrier, one deposit per statement) | Done before this plan | 5bd080d |
-| 0b | In progress | — |
+| 0b | Done (see the batch 0b notes below) | (this commit) |
 | A | Not started | — |
 | B | Not started | — |
 | C | Not started | — |
 | D | Not started | — |
 | E | Not started | — |
+
+## Batch 0b notes (2026-10-30)
+
+- **0b.1 dates.** Causes: `formatDate()` did `new Date("2026-08-14")` (UTC
+  midnight -> 8/13 west of UTC, `app/src/i18n/format.ts:22`); "today" and
+  every rolling window came from `toISOString().slice(0, 10)` (the UTC day:
+  tomorrow after 7 pm in Chicago — `periodFilter.ts:34`,
+  `heroPeriodWindow.ts:44,88`, `profitAnalysis.ts:118,154`,
+  `cashFlowForecast.ts:150-151,276-283,351`, `cashFlowMonthly.ts:135-147,
+  177-178`, `cashFlowPeriodic.ts:61-62`, `monthGroups.ts` `currentMonthKey`,
+  every screen's default date); `weekStartFromEnding()` (noon local ->
+  toISOString, wrong in Auckland); purchase year via
+  `new Date(purchase_date).getFullYear()` (Jan 1 -> previous year in the
+  US, `data/alerts.ts:121`, `data/dailyTips.ts:150`); compliance status
+  given `new Date(todayIso)` (UTC midnight). All now use
+  `app/src/lib/dateOnly.ts`. Month buckets come from the string itself, so
+  no row changes month. Proof: `src/lib/__tests__/dateOnly.test.ts`
+  (7/31 vs 8/1, golden weeks 8/14 and 8/21, windows, reminders) and
+  `npm run test:zones` (whole suite in Chicago, UTC, Auckland).
+- **0b.2 accountant package.** `buildLineItems()` dropped escrow /
+  advance repayment / meals only in the out-of-pocket scope
+  (`app/src/stats/accountantPackage.ts:276`), and `buildScheduleCTotals()`
+  summed every listed row into "Deductible Expenses". Withheld and combined
+  now list those rows for reference only (`LineItem.deductible`,
+  `buildNotDeductibleReference()`, a reference line on screen and in the
+  PDF/Excel). Golden 8/21 withheld: 5,335.73 -> 4,685.73 (escrow 100,
+  advances 500 + 50). Golden 8/14 withheld: 4,100.66 -> 3,388.41 (escrow
+  100, meals 62.25, advances 550). Out-of-pocket unchanged.
+- **0b.3 forecast.** `trailingWeeklyAverage()` sums every row per
+  `week_ending` (`cashFlowClassification.ts:271`), so a week saved with
+  and without a truck doubled that week's income and miles. The income and
+  miles averages now take `onePerStatementWeek()` first.
+- **0b.4 numbers.** `parseAmount()` used `parseFloat` ("3,212.19" -> 3,
+  `app/src/import/amount.ts:18-19`); forms used `Number(text)` ("1,200" ->
+  NaN -> saved as 0 or null, e.g. a truck purchase price "85,000").
+  `app/src/lib/number.ts` is now the one parser (import mapper, legacy
+  backup, all forms). ai-import has no parser of its own: no redeploy.
+- **Tests changed with 0b.1.** Ten older tests fixed "now" as a UTC instant
+  (`new Date('2026-08-24T12:00:00Z')`) and expected the UTC calendar day;
+  they now use a local clock (`new Date(2026, 7, 24, 12)`). Two tests that
+  reproduced the old UTC bug by switching `process.env.TZ` inside Jest (which
+  has no effect after start) now run that part only when the run is behind
+  UTC. `profitAnalysis.test.ts` DST case: 30 days before the local 3/20 is
+  2/18 (the old code answered 2/19, the UTC day).

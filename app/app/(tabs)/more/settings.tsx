@@ -31,6 +31,7 @@ import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
 import { SUPPORT_EMAIL } from '@/src/brand';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { formatDate } from '@/src/i18n/format';
+import { numOrNull } from '@/src/lib/number';
 
 const ENTITY_TYPES: EntityType[] = ['sole_prop', 'smllc', 'multi_member_llc', 'scorp'];
 const DELETE_CONFIRM_WORD = 'DELETE';
@@ -223,14 +224,14 @@ export default function Settings() {
     setSavingBusiness(true);
     try {
       const state = homeState.trim().toUpperCase() || 'TX';
-      const weeklyGoalValue = Number(weeklyGoalInput);
+      const weeklyGoalValue = numOrNull(weeklyGoalInput);
       await Promise.all([
         updateProfile.mutateAsync({
           company_name: companyName.trim() || null,
           dot_number: dotNumber.trim() || null,
           mc_number: mcNumber.trim() || null,
           home_state: state,
-          weekly_goal: weeklyGoalInput.trim() && weeklyGoalValue > 0 ? weeklyGoalValue : null,
+          weekly_goal: weeklyGoalValue != null && weeklyGoalValue > 0 ? weeklyGoalValue : null,
         }),
         updateTaxConfig.mutateAsync({ state, entity_type: entityType }),
       ]);

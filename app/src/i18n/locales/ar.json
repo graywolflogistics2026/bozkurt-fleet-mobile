@@ -2187,6 +2187,7 @@
     "formatDetailedNote": "كل بند فردي ضمن فئته، مع المورّد وطريقة الدفع — النسخة الجاهزة للتدقيق.",
     "grossIncome": "الدخل الإجمالي",
     "reimbursementsSubline": "+ {{amount}} مبالغ مستردة",
+    "notDeductibleReference": "غير قابل للخصم، مدرج للمرجع فقط: {{amount}} (escrow، سداد السلف، الوجبات)",
     "deductibleExpenses": "المصروفات القابلة للخصم",
     "reconcilingCaption": "يتطابق هذا الإجمالي مع التفصيل حسب الفئة أدناه.",
     "perDiemDeductionLabel": "خصم Per Diem",

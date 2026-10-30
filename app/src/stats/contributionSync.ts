@@ -1,3 +1,4 @@
+import { todayDateOnly } from '@/src/lib/dateOnly';
 // Verbatim port of legacy syncContributionForDeduction()
 // (legacy/index.html:1025-1033): given a deduction's current
 // payment/amount and whatever contribution is already linked to it (if
@@ -31,7 +32,7 @@ export function planContributionSync(params: PlanContributionSyncParams): Contri
 
   if (shouldHaveContribution) {
     const note = `${(description ?? 'Deduction').split(' — ')[0]} — paid personally (${paymentMethod ?? ''})`;
-    const txDate = date ?? new Date().toISOString().slice(0, 10);
+    const txDate = date ?? todayDateOnly();
     if (existingContributionId) {
       return { action: 'update', id: existingContributionId, amount, note, date: txDate };
     }

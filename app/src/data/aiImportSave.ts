@@ -45,6 +45,7 @@ import {
   type SaveExtractionPartialState,
   type SaveExtractionStep,
 } from '@/src/data/saveExtractionError';
+import { todayDateOnly } from '@/src/lib/dateOnly';
 
 // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
 // follow-up item G) — best-effort read, never blocks a save. Returns []
@@ -353,7 +354,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // answered the question for exactly this date (Yes, or a picked
     // date). Nothing before 2020 is ever saved.
     const weekEnding = settlementMapping.settlement.week_ending;
-    const dateCheck = checkSettlementDates(settlementDateInputsOf(d), params.importDate ?? new Date().toISOString().slice(0, 10));
+    const dateCheck = checkSettlementDates(settlementDateInputsOf(d), params.importDate ?? todayDateOnly());
     if (!isDateGateSatisfied(dateCheck, weekEnding, d.settlement?.dateConfirmed)) {
       throw new SaveExtractionError(
         'validation',
@@ -890,7 +891,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
           // column, reproducing Postgres's "invalid input syntax for
           // type date: \"\"". toDateOrNull() normalizes '' to null first
           // so the real fallback actually fires.
-          tx_date: toDateOrNull(d.date) ?? new Date().toISOString().slice(0, 10),
+          tx_date: toDateOrNull(d.date) ?? todayDateOnly(),
           note: contributionNote,
           linked_deduction_id: savedDed.id,
         });

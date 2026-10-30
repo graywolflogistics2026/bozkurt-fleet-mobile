@@ -11,6 +11,17 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- MASTER PLAN BATCH 0b (owner decisions 2026-10-30, docs/decisions/
+  master-plan-2026-10.md). 0b.1 `src/lib/dateOnly.ts`: date-only values are
+  local calendar days everywhere (formatDate, period windows, month keys,
+  reminders, quarterly, compliance, Cash Flow, week start); no
+  `toISOString().slice(0,10)` / `new Date(dateOnly)` left (source check);
+  `npm run test:zones` runs Jest in Chicago/UTC/Auckland. 0b.2 Accountant
+  Package: escrow/advance repayment/meals listed for reference, never in
+  Deductible Expenses (withheld/combined). 0b.3 forecast income/miles count
+  one per statement. 0b.4 `src/lib/number.ts` num/numOrNull shared by import,
+  legacy backup and every form. No SQL, no redeploy; eas update.
+
 - DATES (definitive) + ESCROW / HELD / DEPOSIT (owner decisions 2026-10-29).
   ai-import returns dates as printed (settlementDateRaw/printDateRaw/
   statementWeekEndingRaw) + pdfCreationDate; printedDates.ts parses them

@@ -1,4 +1,5 @@
 import type { Deduction, Load, Settlement } from '@/src/types/db';
+import { addDaysDateOnly } from '@/src/lib/dateOnly';
 
 // Weekly net/gross trend (legacy rWeeklyTrend(), legacy/index.html:1434) —
 // sorted ascending by week_ending so a chart/sparkline reads left-to-right
@@ -16,9 +17,7 @@ export function buildWeeklyTrend(settlements: Settlement[]): WeeklyPoint[] {
 // at (and including) week_ending, matching the typical carrier pay-period
 // convention. Exported so cpmTrend.ts doesn't reimplement it.
 export function weekStartFromEnding(weekEnding: string): string {
-  const d = new Date(`${weekEnding}T12:00:00`);
-  d.setDate(d.getDate() - 6);
-  return d.toISOString().slice(0, 10);
+  return addDaysDateOnly(weekEnding, -6);
 }
 
 // Weekly revenue-vs-expenses trend (Dashboard Zone 1 hero chart, device

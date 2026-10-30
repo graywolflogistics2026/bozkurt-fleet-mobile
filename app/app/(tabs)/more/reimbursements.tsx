@@ -10,6 +10,8 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import type { Reimbursement } from '@/src/types/db';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 // legacy rReimb(): warranty credits from maintenance imports are tagged
 // "Warranty — <description>"; anything mentioning fuel is fuel-related —
@@ -84,13 +86,13 @@ export default function Reimbursements() {
     setDescription('');
     setReference('');
     setAmount('');
-    setReimbDate(new Date().toISOString().slice(0, 10));
+    setReimbDate(todayDateOnly());
     setAdding(true);
   }
 
   async function handleSaveAdd() {
     if (!userId) return;
-    const amt = Number(amount) || 0;
+    const amt = numOrNull(amount) || 0;
     setSaving(true);
     try {
       await insertReimbursement.mutateAsync({

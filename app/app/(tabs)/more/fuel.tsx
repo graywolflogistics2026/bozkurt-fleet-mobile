@@ -14,6 +14,8 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { FuelPurchase } from '@/src/types/db';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 type FuelType = 'tractor' | 'reefer';
 const FUEL_TYPES: FuelType[] = ['tractor', 'reefer'];
@@ -122,7 +124,7 @@ export default function Fuel() {
     setGallons('');
     setAmount('');
     setDiscount('');
-    setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setPurchaseDate(todayDateOnly());
     setAdding(true);
   }
 
@@ -140,9 +142,9 @@ export default function Fuel() {
         fuel_type: fuelType,
         location: location || null,
         state: state ? state.toUpperCase() : null,
-        gallons: gallons ? Number(gallons) : null,
-        amount: amount ? Number(amount) : null,
-        discount: Number(discount) || 0,
+        gallons: gallons ? numOrNull(gallons) : null,
+        amount: amount ? numOrNull(amount) : null,
+        discount: numOrNull(discount) || 0,
         purchase_date: purchaseDate || null,
       });
       await invalidateFinancialData(queryClient, { entities: ['fuel_purchases'] });

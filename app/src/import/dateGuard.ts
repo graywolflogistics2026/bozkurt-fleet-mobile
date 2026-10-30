@@ -106,7 +106,7 @@ export function isImplausibleDate(dateStr: string | null | undefined, now: Date 
   const d = parseIsoDate(dateStr);
   if (!d) return false; // not a plain YYYY-MM-DD string — not this function's concern
   const year = d.getUTCFullYear();
-  const nextYear = now.getUTCFullYear() + 1;
+  const nextYear = now.getFullYear() + 1;
   return year < 2020 || year > nextYear;
 }
 

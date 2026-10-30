@@ -63,6 +63,8 @@ import {
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Settlement } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 const CHART_HEIGHT = 100;
 
@@ -200,7 +202,7 @@ export default function Settlements() {
 
   async function handleSavePerDiem() {
     if (!selected) return;
-    const days = clampPerDiemDays(Number(perDiemDraft) || 0);
+    const days = clampPerDiemDays(numOrNull(perDiemDraft) || 0);
     setSavingPerDiem(true);
     try {
       const updated = await updateSettlement.mutateAsync({ id: selected.id, values: { per_diem_days: days } });
@@ -215,7 +217,7 @@ export default function Settlements() {
 
   async function handleSaveMiles() {
     if (!selected) return;
-    const miles = Math.max(0, Number(milesDraft) || 0);
+    const miles = Math.max(0, numOrNull(milesDraft) || 0);
     setSavingMiles(true);
     try {
       const updated = await updateSettlement.mutateAsync({ id: selected.id, values: { miles } });
@@ -383,7 +385,7 @@ export default function Settlements() {
       reimbursements: primeScope.reimbursements,
       truckScope: null,
       manualMilesOverride: null,
-      window: { startIso, endIso: new Date().toISOString().slice(0, 10) },
+      window: { startIso, endIso: todayDateOnly() },
     });
     return checkPrimeYtdReconciliation({ revenue: kpi.gross, miles: kpi.miles.total }, primeYtdSnapshot);
   }, [primeYtdSnapshot, trucksQuery.data, allRows, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);

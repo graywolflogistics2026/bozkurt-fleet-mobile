@@ -9,6 +9,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 import type { CreditCardRow } from '@/src/types/db';
+import { numOrNull } from '@/src/lib/number';
 
 function CardRow({ x, onEdit, onDelete }: { x: CreditCardRow; onEdit: () => void; onDelete: () => void }) {
   const { t } = useTranslation();
@@ -120,10 +121,10 @@ export default function CreditCards() {
       user_id: userIdValue,
       name: form.name || null,
       last_four: form.lastFour || null,
-      credit_limit: form.creditLimit ? Number(form.creditLimit) : null,
-      balance: form.balance ? Number(form.balance) : null,
-      apr: form.apr ? Number(form.apr) : null,
-      due_day: form.dueDay ? Number(form.dueDay) : null,
+      credit_limit: form.creditLimit ? numOrNull(form.creditLimit) : null,
+      balance: form.balance ? numOrNull(form.balance) : null,
+      apr: form.apr ? numOrNull(form.apr) : null,
+      due_day: form.dueDay ? numOrNull(form.dueDay) : null,
     };
   }
 

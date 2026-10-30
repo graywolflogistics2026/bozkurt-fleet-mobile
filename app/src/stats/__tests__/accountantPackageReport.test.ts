@@ -28,6 +28,7 @@ function lineItem(overrides: Partial<LineItem>): LineItem {
     category: 'Truck Parts',
     amount: 100,
     origin: 'import',
+    deductible: true,
     isOwnerPaid: false,
     paymentMethod: null,
     vendor: null,

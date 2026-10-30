@@ -830,3 +830,22 @@ describe('printed dates (owner decision 2026-10-29): a 2014 or 2021 date never r
     expect((await importWeek(confirmed26)).settlements.map((s) => s.week_ending)).toEqual(['2026-08-14']);
   });
 });
+
+// Batch 0b.2 (2026-10-30): escrow / advance repayment / meals are listed
+// for reference in the withheld and combined scopes, never deductible.
+describe('accountant package — withheld lines are never deductible (0b.2)', () => {
+  it('golden W/E 8/14', async () => {
+    const { buildLineItems, buildScheduleCTotals, buildNotDeductibleReference } = await import('@/src/stats/accountantPackage');
+    const rows = await importWeek(golden0814());
+    for (const scope of ['withheld', 'combined'] as const) {
+      const items = buildLineItems(rows.deductions, rows.fuel, [], [], 2026, 8, scope);
+      const deductible = buildScheduleCTotals(items, []).reduce((sum, c) => sum + c.amount, 0);
+      const reference = buildNotDeductibleReference(items);
+      expect(reference.items.every((li) => ['Escrow & Deposits', 'Advance Repayment', 'Meals (per diem covered)'].includes(li.category))).toBe(true);
+      expect(reference.items.some((li) => li.category === 'Escrow & Deposits')).toBe(true);
+      // Before the fix the deductible total was 4,100.66.
+      expect(r2(deductible)).toBe(3388.41);
+      expect(r2(reference.total)).toBe(712.25);
+    }
+  });
+});

@@ -10,6 +10,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { LoanRow } from '@/src/types/db';
+import { numOrNull } from '@/src/lib/number';
 
 const FREQUENCIES = ['weekly', 'biweekly', 'monthly'] as const;
 type Frequency = (typeof FREQUENCIES)[number];
@@ -181,11 +182,11 @@ export default function LoanCenter() {
       user_id: userIdValue,
       name: form.name || null,
       lender: form.lender || null,
-      original_amount: form.originalAmount ? Number(form.originalAmount) : null,
-      balance: form.balance ? Number(form.balance) : null,
-      payment: form.payment ? Number(form.payment) : null,
+      original_amount: form.originalAmount ? numOrNull(form.originalAmount) : null,
+      balance: form.balance ? numOrNull(form.balance) : null,
+      payment: form.payment ? numOrNull(form.payment) : null,
       frequency: form.frequency,
-      apr: form.apr ? Number(form.apr) : null,
+      apr: form.apr ? numOrNull(form.apr) : null,
       next_due: form.nextDue || null,
     };
   }

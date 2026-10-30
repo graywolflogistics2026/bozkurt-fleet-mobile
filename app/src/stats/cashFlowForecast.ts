@@ -14,6 +14,7 @@ import { settlementDeposit, type SettlementStatement } from '@/src/import/settle
 // independently of it, so a later import that changes the underlying
 // averages can never silently discard a manual correction.
 import { reducesTrueProfit } from '@/src/stats/trueProfit';
+import { onePerStatementWeek } from '@/src/stats/heldByCarrier';
 import {
   classifyCashFlowSpending,
   trailingWeeklyAverage,
@@ -39,6 +40,7 @@ export {
   type ExcludedOneOff,
   type SpendEvent,
 } from '@/src/stats/cashFlowClassification';
+import { addDaysDateOnly, daysBetweenDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 export { buildPeriodicForecastItems, buildPeriodicItemsInRange, buildDocumentAmountLookup, type PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
 
 // CLASSIFICATION WINDOW — 12 weeks (spec's own "last 8-12 weeks"). Longer
@@ -130,11 +132,13 @@ export function buildSpendEvents(
 export function trailingWeeklyNetIncomeAverage(settlements: SettlementLike[], weeks = INCOME_WINDOW_WEEKS): { average: number; weeksFound: number; total: number } {
   // CASH IN (owner decision 2026-10-13): the week's deposit as READ from the
   // statement (else net due); an owed-to-carrier week counts as 0.
-  return trailingWeeklyAverage(settlements, (s) => s.week_ending, (s) => settlementDeposit(s).deposited, weeks);
+  // ONE PER STATEMENT (batch 0b.3, 2026-10-30): the same week saved with
+  // and without a truck is one statement, never two weeks of income.
+  return trailingWeeklyAverage(onePerStatementWeek(settlements), (s) => s.week_ending, (s) => settlementDeposit(s).deposited, weeks);
 }
 
 export function trailingWeeklyMilesAverage(settlements: SettlementLike[], weeks = INCOME_WINDOW_WEEKS): { average: number; weeksFound: number; total: number } {
-  return trailingWeeklyAverage(settlements, (s) => s.week_ending, (s) => Number(s.miles ?? 0), weeks);
+  return trailingWeeklyAverage(onePerStatementWeek(settlements), (s) => s.week_ending, (s) => Number(s.miles ?? 0), weeks);
 }
 
 // "plus recorded upcoming reimbursements" (spec item 2) — any
@@ -147,14 +151,14 @@ export function upcomingReimbursementsByWeek(
   today: Date,
   windowDays = FORECAST_WEEKS * 7
 ): Map<number, number> {
-  const todayIso = today.toISOString().slice(0, 10);
-  const endIso = new Date(today.getTime() + windowDays * 86400000).toISOString().slice(0, 10);
+  const todayIso = todayDateOnly(today);
+  const endIso = addDaysDateOnly(todayIso, windowDays);
   const byWeekIndex = new Map<number, number>();
   for (const r of reimbursements) {
     if (!r.reimb_date || r.reimb_date < todayIso || r.reimb_date > endIso) continue;
     const amount = Number(r.amount ?? 0);
     if (!amount) continue;
-    const daysOut = Math.floor((new Date(`${r.reimb_date}T00:00:00Z`).getTime() - new Date(`${todayIso}T00:00:00Z`).getTime()) / 86400000);
+    const daysOut = daysBetweenDateOnly(todayIso, r.reimb_date);
     const weekIndex = Math.min(FORECAST_WEEKS - 1, Math.floor(daysOut / 7));
     byWeekIndex.set(weekIndex, (byWeekIndex.get(weekIndex) ?? 0) + amount);
   }
@@ -273,14 +277,12 @@ export function buildCashFlowForecast(
   const weeklyFixed = overrides.fixedWeekly ?? mergedFixedTotal;
   const weeklyVariable = overrides.variableWeekly ?? computedVariable;
 
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = todayDateOnly(today);
   const weeks: CashFlowWeekProjection[] = [];
 
   for (let i = 0; i < FORECAST_WEEKS; i++) {
-    const start = new Date(today.getTime() + i * 7 * 86400000);
-    const end = new Date(today.getTime() + (i * 7 + 6) * 86400000);
-    const startIso = start.toISOString().slice(0, 10);
-    const endIso = end.toISOString().slice(0, 10);
+    const startIso = addDaysDateOnly(todayIso, i * 7);
+    const endIso = addDaysDateOnly(todayIso, i * 7 + 6);
 
     const weekPeriodicItems = periodicItems.filter((p) => p.dueDate >= startIso && p.dueDate <= endIso);
     const periodicTotal = weekPeriodicItems.reduce((sum, p) => sum + (overrides.periodicAmounts[p.id] ?? p.amount ?? 0), 0);
@@ -347,8 +349,7 @@ export function buildCashFlowForecastFromData(input: {
   today?: Date;
 }): CashFlowForecastResult {
   const today = input.today ?? new Date();
-  const windowStart = new Date(today.getTime() - CLASSIFICATION_WINDOW_WEEKS * 7 * 86400000);
-  const windowStartIso = windowStart.toISOString().slice(0, 10);
+  const windowStartIso = addDaysDateOnly(todayDateOnly(today), -CLASSIFICATION_WINDOW_WEEKS * 7);
 
   const events = buildSpendEvents(input.deductions, input.fuelPurchases, input.maintenanceRecords, input.tolls, windowStartIso);
   const windowedSettlements = input.settlements.filter((s) => (s.week_ending ?? '') >= windowStartIso);

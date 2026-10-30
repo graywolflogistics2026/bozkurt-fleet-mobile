@@ -22,6 +22,8 @@ import { useFormatters } from '@/src/i18n/format';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -186,7 +188,7 @@ export default function AssetRegister() {
     }
   }, [queryClient]);
 
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayIso = useMemo(() => todayDateOnly(), []);
   const currentMonthKey = useMemo(() => todayIso.slice(0, 7), [todayIso]);
   const assets = useMemo(() => buildAssetRegister(dedQuery.data ?? [], todayIso), [dedQuery.data, todayIso]);
   const active = useMemo(() => activeWarranties(assets), [assets]);
@@ -232,7 +234,7 @@ export default function AssetRegister() {
 
   async function handleSaveAdd() {
     if (!userId) return;
-    const amount = Number(addForm.cost) || 0;
+    const amount = numOrNull(addForm.cost) || 0;
     const personal = isPersonalPayment(addForm.payment);
 
     // CLAUDE.md invariant #2: same personal-payment confirmation gate as
@@ -252,7 +254,7 @@ export default function AssetRegister() {
         payment_method: addForm.payment,
         amount,
         ded_date: addForm.date || null,
-        warranty_years: addForm.warrantyYears.trim() ? Number(addForm.warrantyYears) : null,
+        warranty_years: addForm.warrantyYears.trim() ? numOrNull(addForm.warrantyYears) : null,
         tags: buildTags(addForm.notes, addForm.businessUsePct),
         source: 'manual',
       });
@@ -300,7 +302,7 @@ export default function AssetRegister() {
 
   async function handleSaveEdit() {
     if (!editing || !userId) return;
-    const amount = Number(editForm.cost) || 0;
+    const amount = numOrNull(editForm.cost) || 0;
     const personal = isPersonalPayment(editForm.payment);
 
     setEditSaving(true);
@@ -332,7 +334,7 @@ export default function AssetRegister() {
           payment_method: editForm.payment,
           amount,
           ded_date: editForm.date || null,
-          warranty_years: editForm.warrantyYears.trim() ? Number(editForm.warrantyYears) : null,
+          warranty_years: editForm.warrantyYears.trim() ? numOrNull(editForm.warrantyYears) : null,
           tags: buildTags(editForm.notes, editForm.businessUsePct),
         },
       });

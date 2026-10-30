@@ -1,7 +1,7 @@
 import { selectNudgesToShow, recordNudgesShown, silenceNudgeTopic, unsilenceNudgeTopic, MAX_NUDGES_PER_DAY, type NudgeState } from '@/src/alerts/nudgeFrequency';
 import type { NudgeCandidate, NudgeTopic } from '@/src/alerts/missingDataNudges';
 
-const NOW = new Date('2026-08-24T12:00:00Z');
+const NOW = new Date(2026, 7, 24, 12); // local noon (batch 0b.1)
 
 function candidate(topic: NudgeCandidate['topic']): NudgeCandidate {
   return { topic, detail: {} };

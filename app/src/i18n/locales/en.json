@@ -2244,6 +2244,7 @@
     "formatDetailedNote": "Every line item under its category, with vendor and payment method — the audit-ready version.",
     "grossIncome": "Gross Income",
     "reimbursementsSubline": "+ {{amount}} reimbursements",
+    "notDeductibleReference": "Not deductible, listed for reference only: {{amount}} (escrow, advance repayment, meals)",
     "deductibleExpenses": "Deductible Expenses",
     "reconcilingCaption": "This total reconciles with the category breakdown below.",
     "perDiemDeductionLabel": "Per Diem Deduction",

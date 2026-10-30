@@ -6,17 +6,16 @@
 // as a string. This is the ONE parser the settlement mapper and the
 // import checks share, so a saved row and the check that approved it can
 // never read the same text differently. Anything else keeps the previous
-// behavior exactly (a plain number, or `parseFloat` of a string).
-// A leading dot is allowed: Prime prints amounts under $1 as ".37".
-const TRAILING_MINUS_RE = /^\s*(\d[\d.,]*|\.\d+)\s*-\s*$/;
+// behavior exactly.
+// 2026-10-30 (batch 0b.4): it now delegates to the ONE shared parser,
+// src/lib/number.ts — "3,212.19" used to read as 3 (parseFloat stops at
+// the comma); thousands separators, parentheses and a leading $ now read
+// correctly, and text that is not a number is NaN, never a partial read.
+import { numOrNull } from '@/src/lib/number';
 
 // NaN when the value is not numeric — callers decide the fallback.
 export function parseAmount(v: unknown): number {
-  if (typeof v === 'number') return v;
-  if (typeof v !== 'string') return NaN;
-  const trailing = v.match(TRAILING_MINUS_RE);
-  if (trailing) return -parseFloat(trailing[1]);
-  return parseFloat(v);
+  return numOrNull(v) ?? NaN;
 }
 
 // A printed total for a check: null when the statement did not print it

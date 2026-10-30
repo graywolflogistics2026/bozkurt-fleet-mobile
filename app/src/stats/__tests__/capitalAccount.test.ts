@@ -267,7 +267,7 @@ describe('buildCapitalFlowRows', () => {
 // CAPITAL ACCOUNT — THREE UI FIXES (owner decision 2026-08-24). Item 1:
 // "no future dates beyond today, no obviously wrong years."
 describe('validateCapitalTransactionDate', () => {
-  const now = new Date('2026-08-24T12:00:00Z');
+  const now = new Date(2026, 7, 24, 12); // local noon (batch 0b.1)
 
   it('accepts a plain past date', () => {
     expect(validateCapitalTransactionDate('2026-03-15', now)).toEqual({ valid: true });

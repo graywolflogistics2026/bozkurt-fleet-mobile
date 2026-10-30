@@ -2187,6 +2187,7 @@
     "formatDetailedNote": "Her kalem kendi kategorisi altında, tedarikçi ve ödeme yöntemiyle birlikte — denetime hazır sürüm.",
     "grossIncome": "Brüt Gelir",
     "reimbursementsSubline": "+ {{amount}} geri ödeme",
+    "notDeductibleReference": "Vergiden düşülmez, yalnızca bilgi için: {{amount}} (escrow, avans geri ödemesi, yemek)",
     "deductibleExpenses": "İndirilebilir Giderler",
     "reconcilingCaption": "Bu toplam aşağıdaki kategori dökümüyle eşleşir.",
     "perDiemDeductionLabel": "Per Diem Kesintisi",

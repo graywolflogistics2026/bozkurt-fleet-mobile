@@ -14,6 +14,7 @@ import {
 import { buildReferralShareMessage } from '@/src/referral/shareMessage';
 import { shareViaSystemSheet } from '@/src/referral/referralShare';
 import { buildAuthRedirectUrl } from '@/src/auth/deepLinkRedirect';
+import { todayDateOnly } from '@/src/lib/dateOnly';
 
 // REFERRAL NUDGE — DATA WIRING (owner decision, Part 2 of the AI Coach
 // daily-tips request: "surface at the RIGHT moments... Share button right
@@ -53,7 +54,7 @@ export function useReferralNudge(metGoalThisWeek: boolean) {
   const recordedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selected || !profileQuery.data) return;
-    const key = `${selected.topic}:${new Date().toISOString().slice(0, 10)}`;
+    const key = `${selected.topic}:${todayDateOnly()}`;
     if (recordedKeyRef.current === key) return;
     recordedKeyRef.current = key;
     const nextState = recordNudgesShown(nudgeState, [selected.topic], new Date());

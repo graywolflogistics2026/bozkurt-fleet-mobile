@@ -28,6 +28,7 @@ import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { BRAND_NAME } from '@/src/brand';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { numOrNull } from '@/src/lib/number';
 
 function gradeColor(grade: ScorecardGrade): string {
   if (grade === 'excellent' || grade === 'good') return colors.green;
@@ -169,12 +170,12 @@ export default function Scorecard() {
 
   async function handleSaveOverride() {
     if (!activeTruck) return;
-    const value = Number(overrideDraft);
+    const value = numOrNull(overrideDraft);
     setSavingOverride(true);
     try {
       await updateTruck.mutateAsync({
         id: activeTruck.id,
-        values: { manual_total_miles_override: Number.isFinite(value) && value > 0 ? value : null },
+        values: { manual_total_miles_override: value != null && value > 0 ? value : null },
       });
       await refreshTrucks();
       await invalidateFinancialData(queryClient, { entities: ['trucks'] });
@@ -198,7 +199,7 @@ export default function Scorecard() {
 
   async function handleSaveMissingMiles(settlementId: string) {
     const draft = missingMilesDrafts[settlementId];
-    const miles = Math.max(0, Number(draft) || 0);
+    const miles = Math.max(0, numOrNull(draft) || 0);
     setSavingMissingMilesId(settlementId);
     try {
       await updateSettlement.mutateAsync({ id: settlementId, values: { miles } });

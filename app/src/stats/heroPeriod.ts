@@ -1,4 +1,5 @@
 import type { WeeklyRevenueExpensePoint } from '@/src/stats/cashFlowTrend';
+import { addDaysDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 // UX MEGA-PASS item G (owner decision 2026-07-31): the Hero Card gets
 // period tabs driving its number/delta/chart all together, instead of
@@ -59,12 +60,8 @@ export function calcHeroChartPoints(points: WeeklyRevenueExpensePoint[], period:
   }
 
   const days = PERIOD_DAYS[period] as number;
-  const windowEnd = new Date(now);
-  const windowStart = new Date(now);
-  windowStart.setDate(windowStart.getDate() - days);
+  const windowEnd = todayDateOnly(now);
+  const windowStart = addDaysDateOnly(windowEnd, -days);
 
-  return points.filter((p) => {
-    const d = new Date(`${p.weekEnding}T12:00:00`);
-    return d >= windowStart && d < windowEnd;
-  });
+  return points.filter((p) => p.weekEnding >= windowStart && p.weekEnding <= windowEnd);
 }

@@ -1,4 +1,5 @@
 import type { TaxYearData } from '@/src/types/db';
+import { daysBetweenDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 export type QuarterlyDeadlineStatus = {
   label: string;
@@ -17,14 +18,13 @@ export function nextQuarterlyDeadline(
   deadlines: TaxYearData['quarterly_deadlines'],
   now: Date = new Date()
 ): QuarterlyDeadlineStatus | null {
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
+  const today = todayDateOnly(now);
 
-  const next = deadlines.find(([, date]) => new Date(`${date}T00:00:00`) >= today);
+  const next = deadlines.find(([, date]) => date >= today);
   if (!next) return null;
 
   const [label, date] = next;
-  const daysUntil = Math.ceil((new Date(`${date}T00:00:00`).getTime() - today.getTime()) / 86400000);
+  const daysUntil = daysBetweenDateOnly(today, date);
   const urgency: QuarterlyDeadlineStatus['urgency'] = daysUntil <= 14 ? 'urgent' : daysUntil <= 30 ? 'warn' : 'normal';
 
   return { label, date, daysUntil, urgency, isPast: false };
@@ -38,11 +38,10 @@ export function allQuarterlyDeadlines(
   deadlines: TaxYearData['quarterly_deadlines'],
   now: Date = new Date()
 ): QuarterlyDeadlineStatus[] {
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
+  const today = todayDateOnly(now);
 
   return deadlines.map(([label, date]) => {
-    const daysUntil = Math.ceil((new Date(`${date}T00:00:00`).getTime() - today.getTime()) / 86400000);
+    const daysUntil = daysBetweenDateOnly(today, date);
     const isPast = daysUntil < 0;
     const urgency: QuarterlyDeadlineStatus['urgency'] = isPast ? 'normal' : daysUntil <= 14 ? 'urgent' : daysUntil <= 30 ? 'warn' : 'normal';
     return { label, date, daysUntil, urgency, isPast };

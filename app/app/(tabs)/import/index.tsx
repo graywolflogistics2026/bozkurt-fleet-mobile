@@ -67,6 +67,8 @@ import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, E
 import { formatMoney, formatNumber } from '@/src/i18n/format';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { colors, radii, spacing, typography } from '@/src/theme';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
 
@@ -616,7 +618,7 @@ export default function Import() {
     // A date the owner typed or picked always wins.
     if (!s || !s.settlementDateRaw || isPrimeCarrier(s.carrier) || s.dateConfirmed?.by === 'user') return;
     const remembered = rememberedDateFormat(s.carrier, savedSettlementsQuery.data ?? []);
-    const check = checkSettlementDates(settlementDateInputsOf(extraction!), new Date().toISOString().slice(0, 10), remembered);
+    const check = checkSettlementDates(settlementDateInputsOf(extraction!), todayDateOnly(), remembered);
     if (!check.weekEnding || check.issues.includes('ambiguous') || check.weekEnding === s.weekEnding) return;
     const viaMemory = remembered != null && check.format === remembered;
     setExtraction({
@@ -1017,7 +1019,7 @@ export default function Import() {
         userId,
         truckId: truckId === NOT_TRUCK_SPECIFIC ? null : truckId,
         driverId,
-        driverShareAmount: showsDriverSplitInput ? Number(driverShareAmount) || null : null,
+        driverShareAmount: showsDriverSplitInput ? numOrNull(driverShareAmount) || null : null,
         fileUri: fileMeta.uri,
         fileExt: fileMeta.ext,
         mediaType: fileMeta.mediaType,
@@ -1099,7 +1101,7 @@ export default function Import() {
     extraction?.docType === 'settlement' ? rememberedDateFormat(extraction.settlement?.carrier, savedSettlementsQuery.data ?? []) : null;
   const dateCheck =
     extraction?.docType === 'settlement' && extraction.settlement
-      ? checkSettlementDates(settlementDateInputsOf(extraction), new Date().toISOString().slice(0, 10), rememberedFormat)
+      ? checkSettlementDates(settlementDateInputsOf(extraction), todayDateOnly(), rememberedFormat)
       : null;
   const dateGateBlocked = !!dateCheck && !isDateGateSatisfied(dateCheck, extraction?.settlement?.weekEnding, extraction?.settlement?.dateConfirmed);
   const settlementDateBlocked = settlementWeekEndingMissing || dateGateBlocked;

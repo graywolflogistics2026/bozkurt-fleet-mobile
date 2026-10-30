@@ -1,6 +1,7 @@
 import type { Benchmark } from '@/src/types/db';
 import { filterSettlementLinkedRowsToWindow, layeredExpenseBreakdown, layeredGross } from '@/src/stats/trueProfit';
 import type { SettlementStatement } from '@/src/import/settlementStatement';
+import { addDaysDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
 // Profit Analysis v1 (PROMPTS.md Session 9a item 11, CLAUDE.md invariant
 // #22 — composed ONLY from the user's own account data, no external
@@ -113,9 +114,7 @@ type DeductionLike = {
 // already matched computeKpis()'s `net` exactly — the window boundary was
 // the only real divergence.
 export function windowStartIso(windowDays: number, now: Date = new Date()): string {
-  const d = new Date(now);
-  d.setDate(d.getDate() - windowDays);
-  return d.toISOString().slice(0, 10);
+  return addDaysDateOnly(todayDateOnly(now), -windowDays);
 }
 
 // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31, extended 2026-08-05
@@ -151,7 +150,7 @@ export function buildProfitAnalysis(
   // filtering rules structurally identical rather than merely usually
   // agreeing. `startIso === null` means no lower bound at all (the 'all'
   // period) — mirrors src/stats/periodFilter.ts's own periodStartIso('all').
-  const end = now.toISOString().slice(0, 10);
+  const end = todayDateOnly(now);
   const inRange = (d: string | null | undefined) => !!d && (startIso == null || d >= startIso) && d <= end;
 
   const inWindow = settlements.filter((s) => inRange(s.week_ending));

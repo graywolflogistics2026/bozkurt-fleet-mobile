@@ -53,6 +53,8 @@ import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Deduction } from '@/src/types/db';
+import { todayDateOnly } from '@/src/lib/dateOnly';
+import { numOrNull } from '@/src/lib/number';
 
 const CHART_HEIGHT = 100;
 
@@ -519,7 +521,7 @@ export default function Deductions() {
 
   async function handleSaveEdit() {
     if (!editing || !userId) return;
-    const amount = Number(editAmount) || 0;
+    const amount = numOrNull(editAmount) || 0;
     const personal = isPersonalPayment(editPayment);
 
     setSaving(true);
@@ -604,7 +606,7 @@ export default function Deductions() {
     setAddCategory('Misc');
     setAddPayment(PAYMENT_METHODS[0]);
     setAddAmount('');
-    setAddDate(new Date().toISOString().slice(0, 10));
+    setAddDate(todayDateOnly());
     setAddTaxDeductible(true);
     setAddAttachmentDocumentId(null);
     setAddAttachmentFilename(null);
@@ -659,7 +661,7 @@ export default function Deductions() {
 
   async function handleSaveAdd() {
     if (!userId) return;
-    const amount = Number(addAmount) || 0;
+    const amount = numOrNull(addAmount) || 0;
     const personal = isPersonalPayment(addPayment);
 
     // CLAUDE.md invariant #2: a personal-payment purchase only creates a

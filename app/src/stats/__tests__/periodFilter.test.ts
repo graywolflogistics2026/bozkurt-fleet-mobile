@@ -1,6 +1,6 @@
 import { periodStartIso, filterByPeriod, bucketGranularityFor } from '../periodFilter';
 
-const NOW = new Date('2026-08-24T12:00:00Z');
+const NOW = new Date(2026, 7, 24, 12); // local noon (batch 0b.1)
 
 describe('periodStartIso', () => {
   it('"all" has no lower bound', () => {

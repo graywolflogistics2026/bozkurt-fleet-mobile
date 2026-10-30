@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { calcGoalProgress, calcGoalStreak, suggestGoalAdjustment } from '@/src/stats/goalProgress';
 import { buildPeriodicCoachNudgeCandidates, type CoachNudgeCandidate, type CoachNudgeTopic } from '@/src/alerts/periodicCoachNudges';
 import { selectNudgesToShow, recordNudgesShown, ONE_MONTH_MS, type NudgeState } from '@/src/alerts/nudgeFrequency';
+import { yearOf } from '@/src/lib/dateOnly';
 
 // AI COACH — PROACTIVE, PERIODIC COACHING (owner decision 2026-08-24, NEXT
 // PASS item E). Reuses the SAME profiles.nudge_state column D3 already
@@ -306,8 +307,8 @@ export function useProactiveCoach() {
   // of whether a fresh AI generation is running/pending/cached.
   const weeklyReviewInputs = useMemo<WeeklyReviewInputs | null>(() => {
     if (!latestSettlement || !latestWeekTrend) return null;
-    const ytdYear = new Date(`${latestSettlement.week_ending}T00:00:00`).getFullYear();
-    const ytdTrend = weeklyTrend.filter((w) => new Date(`${w.weekEnding}T00:00:00`).getFullYear() === ytdYear);
+    const ytdYear = yearOf(latestSettlement.week_ending);
+    const ytdTrend = weeklyTrend.filter((w) => yearOf(w.weekEnding) === ytdYear);
     const ytdProfitAfter = ytdTrend.reduce((sum, w) => sum + w.net, 0);
     const ytdProfitBefore = ytdProfitAfter - latestWeekTrend.net;
     // KPI CONSISTENCY (owner decision, device report: "AI Coach says 'YTD
@@ -318,7 +319,7 @@ export function useProactiveCoach() {
     // this hook's own established always-fleet-wide design) — never a
     // week count (a week can hold 2+ settlements in a multi-truck fleet).
     const settlementCountYtd = sortedSettlements.filter(
-      (s) => new Date(`${s.week_ending}T00:00:00`).getFullYear() === ytdYear
+      (s) => yearOf(s.week_ending) === ytdYear
     ).length;
     const biggestChargebacks = (deductionsQuery.data ?? [])
       .filter((d) => d.source === 'settlement' && d.ded_date === latestSettlement.week_ending)

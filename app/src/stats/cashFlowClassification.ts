@@ -1,3 +1,4 @@
+import { isDateOnly } from '@/src/lib/dateOnly';
 // CASH FLOW FORECAST — BUILT FROM THE USER'S OWN DATA (owner decision,
 // binding). The 30-day forecast used to require the user to manually type
 // a weekly budget for every line, with an empty screen until they did —
@@ -118,9 +119,9 @@ export function requiredOccurrencesFor(weeksObserved: number): number {
 // consistently week over week.
 export function isoWeekKey(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null;
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return null;
-  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  if (!isDateOnly(dateStr.slice(0, 10))) return null;
+  const [y, m, day] = dateStr.slice(0, 10).split('-').map(Number);
+  const target = new Date(Date.UTC(y, m - 1, day));
   // ISO 8601: Thursday of this week determines the week-year; day 0 = Sunday -> 7.
   const dayNum = (target.getUTCDay() + 6) % 7;
   target.setUTCDate(target.getUTCDate() - dayNum + 3);

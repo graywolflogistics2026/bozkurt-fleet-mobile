@@ -12,8 +12,8 @@
 // is asked once and the confirmed format is remembered per carrier.
 import { isPrimeCarrier } from './primeOperatingStatement';
 import { normalizeCarrierKey } from './carrierCodes';
+import { addDaysDateOnly, addMonthsDateOnly, daysBetweenDateOnly, parseDateOnly, weekdayOf } from '@/src/lib/dateOnly';
 
-const DAY_MS = 86_400_000;
 
 export type DateFormat = 'YMD' | 'MDY' | 'DMY';
 
@@ -34,23 +34,14 @@ function parts(raw: string | null | undefined): { n: number[]; digits: number[] 
   return { n: pieces.map(Number), digits: pieces.map((p) => p.length) };
 }
 
-export const toUtc = (isoDate: string) => Date.parse(`${isoDate}T00:00:00Z`);
-export const daysBetween = (from: string, to: string) => Math.round((toUtc(to) - toUtc(from)) / DAY_MS);
-export const addDaysIso = (isoDate: string, days: number) => new Date(toUtc(isoDate) + days * DAY_MS).toISOString().slice(0, 10);
-export const isFriday = (isoDate: string) => new Date(toUtc(isoDate)).getUTCDay() === 5;
-// A calendar day for display: built from LOCAL components, so a US device
-// shows Aug 14 for 2026-08-14 (new Date('2026-08-14') is UTC midnight and
-// renders as Aug 13 west of UTC).
-export function localDay(isoDate: string): Date {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
+export const daysBetween = (from: string, to: string) => daysBetweenDateOnly(from, to);
+export const addDaysIso = (isoDate: string, days: number) => addDaysDateOnly(isoDate, days);
+export const isFriday = (isoDate: string) => weekdayOf(isoDate) === 5;
+// A calendar day for display (local midnight) — the shared
+// src/lib/dateOnly.ts parser; kept under this name for its callers.
+export const localDay = parseDateOnly;
 
-function addMonthsIso(isoDate: string, months: number): string {
-  const d = new Date(toUtc(isoDate));
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
+const addMonthsIso = addMonthsDateOnly;
 
 // One printed date read in one digit order. Null when the text is not
 // three numbers or that order is not a real calendar date.

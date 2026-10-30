@@ -1,3 +1,4 @@
+import { addDaysDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 // DEDUCTIONS & SETTLEMENTS — TOTALS + CHARTS (owner decision, "period
 // tabs" pass) — the ONE shared period-window definition both the
 // Deductions screen and the Settlements screen drive their totals bar,
@@ -29,9 +30,7 @@ export function periodStartIso(period: PeriodOption, now: Date = new Date()): st
   if (period === 'all') return null;
   if (period === 'thisMonth') return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`;
   if (period === 'ytd') return `${now.getFullYear()}-01-01`;
-  const d = new Date(now);
-  d.setDate(d.getDate() - ROLLING_3M_DAYS);
-  return d.toISOString().slice(0, 10);
+  return addDaysDateOnly(todayDateOnly(now), -ROLLING_3M_DAYS);
 }
 
 export function filterByPeriod<T>(rows: T[], getDate: (row: T) => string | null | undefined, period: PeriodOption, now: Date = new Date()): T[] {
