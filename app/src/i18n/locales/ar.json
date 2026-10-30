@@ -414,7 +414,8 @@
       "allDone": "كل المصروفات لها وصف.",
       "useSuggestion": "استخدم “{{text}}”",
       "placeholder": "اكتب وصفًا"
-    }
+    },
+    "accountantChip": "المحاسب: {{category}}"
   },
   "capitalAccount": {
     "title": "حساب رأس المال",
@@ -1073,7 +1074,18 @@
     "depreciationYearPlacedInServiceLabel": "سنة بدء الخدمة",
     "depreciationSpreadYearsLabel": "على كم سنة يُوزَّع؟",
     "depreciationAskNote": "سيظهر الإهلاك كـ 0 دولار في مقدّر الضرائب حتى تحدد طريقة أو ينصحك محاسبك.",
-    "trailerDepreciationTitle": "اختيار إهلاك المقطورة (ضريبي)"
+    "trailerDepreciationTitle": "اختيار إهلاك المقطورة (ضريبي)",
+    "nicknameLabel": "اسم مستعار (اختياري)",
+    "plateLabel": "لوحة الترخيص (اختياري)",
+    "assignedDriversLabel": "السائق(ون) المعيّن(ون)",
+    "edit": "تعديل",
+    "plateLine": "اللوحة {{plate}}",
+    "driversLine": "السائق: {{names}}",
+    "pendingColumnsTitle": "تم الحفظ — باستثناء الاسم المستعار واللوحة",
+    "pendingColumnsBody": "تم حفظ كل شيء آخر. سيُحفظ الاسم المستعار واللوحة بعد تشغيل تحديث قاعدة البيانات (PENDING_SQL §79).",
+    "lastTruckArchiveTitle": "هذه آخر شاحنة نشطة لديك",
+    "lastTruckArchiveBody": "أضف شاحنة أخرى أو استعدها أولاً. يحتاج التطبيق إلى شاحنة نشطة واحدة. لا يزال بإمكانك حذف هذه نهائياً.",
+    "lastTruckDeleteNote": "هذه شاحنتك الوحيدة. بعد حذفها، أضف شاحنة مجدداً قبل استيراد settlements."
   },
   "equipmentScreen": {
     "title": "المعدات",
@@ -1149,7 +1161,21 @@
       "per_mile": "لكل ميل",
       "percent": "نسبة مئوية",
       "flat": "ثابت"
-    }
+    },
+    "edit": "تعديل",
+    "remove": "إزالة",
+    "restore": "استعادة",
+    "formerTag": "(سائق سابق)",
+    "removeConfirmTitle": "إزالة {{name}}؟",
+    "removeConfirmBody": "تُحفظ كل settlements والشحنات ومشتريات الوقود والخصومات والمدفوعات التي تذكر هذا السائق. يخرج السائق من القوائم ومن شاحنته المعيّنة ويظهر كسائق سابق. يمكنك استعادته في أي وقت.",
+    "removeExplain": "موصى به: يحتفظ بكل السجل ويعرض هذا السائق كسائق سابق.",
+    "restoreExplain": "هذا سائق سابق. الاستعادة تجعله قابلاً للاختيار مجدداً.",
+    "deleteExplain": "الحذف النهائي ممكن فقط لسائق ليس له أي سجل.",
+    "deletePermanently": "حذف نهائي",
+    "deleteConfirmTitle": "حذف {{name}} نهائياً؟",
+    "deleteConfirmBody": "لا توجد سجلات لهذا السائق. سيُمحى ولا يمكن التراجع.",
+    "hasHistoryTitle": "لهذا السائق سجل",
+    "hasHistoryBody": "{{count}} سجل(ات) تذكر هذا السائق (settlements أو شحنات أو وقود أو خصومات أو مدفوعات أو امتثال). استخدم «إزالة» بدلاً من ذلك — يحتفظ بكل السجلات."
   },
   "docTypes": {
     "settlement": {
@@ -2850,5 +2876,56 @@
     "note": "تصحيح التاريخ ينقل نهاية الأسبوع فقط؛ تبقى كل المبالغ كما هي.",
     "conflictTitle": "لا يمكن تغيير هذا التاريخ",
     "conflictBody": "لديك بالفعل أسبوع منتهٍ في {{date}} لهذه الشاحنة."
+  },
+  "categorySync": {
+    "offerTitle": "تحديث الخصومات أيضًا؟",
+    "offerBody": "هل تريد أيضًا تعيين فئة الخصومات إلى {{category}}؟",
+    "yes": "نعم، عيّنها",
+    "no": "ليس الآن",
+    "doneTitle": "تم تحديث فئة الخصومات",
+    "doneBody": "أصبحت {{category}}. الإجماليات والربح والضريبة لا تتغير.",
+    "undo": "تراجع",
+    "ok": "حسنًا",
+    "cardTitle": "فئات غير متطابقة ({{count}})",
+    "cardBody": "لهذه المصروفات فئة محاسب لكنها لا تزال Misc أو Other في الخصومات. لا شيء يتغير حتى تضغط تطبيق.",
+    "rowLine": "{{from}} → {{to}} (المحاسب: {{accountant}})",
+    "apply": "تطبيق",
+    "applyAll": "تطبيق الكل"
+  },
+  "documentDelete": {
+    "openButton": "حذف…",
+    "title": "حذف هذا المستند؟",
+    "wholeSettlement": "سيؤدي هذا إلى حذف settlement بالكامل للأسبوع المنتهي في {{week}} وكل ما فيه.",
+    "attachedTag": "(مرفق)",
+    "nothingLinked": "لا توجد سجلات مرتبطة بهذا الملف.",
+    "loansKept": "{{count}} قرض/قروض من هذا settlement تبقى في مركز القروض (القرض التزام قائم).",
+    "profitEffect": "ربح الأسبوع المنتهي في {{week}}: {{before}} ← {{after}}",
+    "irreversible": "لا يمكن التراجع عن هذا.",
+    "typeWeek": "للتأكيد، اكتب تاريخ نهاية الأسبوع: {{week}}",
+    "deleteAll": "حذف الملف وكل ما يرتبط به",
+    "deleteFileOnly": "حذف الملف فقط والاحتفاظ بالسجلات",
+    "goneTitle": "محذوف بالفعل",
+    "goneBody": "لم يعد هذا المستند في حسابك. لم يتغير شيء.",
+    "doneTitle": "تم الحذف",
+    "fileRetryBody": "تم حذف السجلات. تعذّر حذف الملف المخزّن الآن؛ سيحاول التطبيق مرة أخرى لاحقاً.",
+    "failedTitle": "تعذّر الحذف",
+    "tables": {
+      "settlements": "Settlement",
+      "loads": "الشحنات",
+      "fuel_purchases": "مشتريات الوقود",
+      "reimbursements": "التعويضات",
+      "tolls": "رسوم الطرق",
+      "deductions": "الخصومات",
+      "maintenance_records": "سجلات الصيانة",
+      "capital_transactions": "مساهمات رأس المال",
+      "equipment": "المعدات",
+      "driver_payments": "مدفوعات السائقين",
+      "import_jobs": "مهام الاستيراد",
+      "prime_driver_expenses": "مصروفات For Prime Inc Drivers",
+      "misc_income": "دخل آخر",
+      "household_income": "دخل الأسرة",
+      "compliance_items": "عناصر الامتثال",
+      "bank_statements": "كشوف الحسابات البنكية"
+    }
   }
 }

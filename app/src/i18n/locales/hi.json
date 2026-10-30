@@ -419,7 +419,8 @@
       "allDone": "हर खर्च का विवरण है।",
       "useSuggestion": "“{{text}}” इस्तेमाल करें",
       "placeholder": "विवरण लिखें"
-    }
+    },
+    "accountantChip": "अकाउंटेंट: {{category}}"
   },
   "capitalAccount": {
     "title": "कैपिटल अकाउंट",
@@ -1078,7 +1079,18 @@
     "depreciationYearPlacedInServiceLabel": "सेवा में रखे जाने का वर्ष",
     "depreciationSpreadYearsLabel": "कितने वर्षों में फैलाएं?",
     "depreciationAskNote": "जब तक आप कोई तरीका सेट नहीं करते या आपका CPA आपको सलाह नहीं देता, तब तक आपके कर अनुमानक में मूल्यह्रास $0 दिखाई देगा।",
-    "trailerDepreciationTitle": "ट्रेलर मूल्यह्रास चुनाव (कर)"
+    "trailerDepreciationTitle": "ट्रेलर मूल्यह्रास चुनाव (कर)",
+    "nicknameLabel": "उपनाम (वैकल्पिक)",
+    "plateLabel": "लाइसेंस प्लेट (वैकल्पिक)",
+    "assignedDriversLabel": "नियुक्त ड्राइवर",
+    "edit": "संपादित करें",
+    "plateLine": "प्लेट {{plate}}",
+    "driversLine": "ड्राइवर: {{names}}",
+    "pendingColumnsTitle": "सहेजा गया — उपनाम और प्लेट को छोड़कर",
+    "pendingColumnsBody": "बाकी सब सहेज लिया गया। उपनाम और प्लेट डेटाबेस अपडेट (PENDING_SQL §79) चलने के बाद सहेजे जाएंगे।",
+    "lastTruckArchiveTitle": "यह आपका आखिरी सक्रिय ट्रक है",
+    "lastTruckArchiveBody": "पहले कोई दूसरा ट्रक जोड़ें या पुनर्स्थापित करें। ऐप को एक सक्रिय ट्रक चाहिए। आप इसे अब भी स्थायी रूप से हटा सकते हैं।",
+    "lastTruckDeleteNote": "यह आपका एकमात्र ट्रक है। इसे हटाने के बाद settlements आयात करने से पहले फिर से एक ट्रक जोड़ें।"
   },
   "equipmentScreen": {
     "title": "उपकरण",
@@ -1154,7 +1166,21 @@
       "per_mile": "प्रति मील",
       "percent": "प्रतिशत",
       "flat": "फ्लैट"
-    }
+    },
+    "edit": "संपादित करें",
+    "remove": "हटाएं",
+    "restore": "पुनर्स्थापित करें",
+    "formerTag": "(पूर्व ड्राइवर)",
+    "removeConfirmTitle": "{{name}} को हटाएं?",
+    "removeConfirmBody": "इस ड्राइवर के नाम वाले सभी settlements, लोड, ईंधन खरीद, कटौतियां और भुगतान रखे जाते हैं। ड्राइवर चयन सूचियों और अपने ट्रक से हट जाता है और पूर्व ड्राइवर के रूप में दिखता है। आप कभी भी पुनर्स्थापित कर सकते हैं।",
+    "removeExplain": "अनुशंसित: पूरा इतिहास रखता है और इस ड्राइवर को पूर्व ड्राइवर के रूप में दिखाता है।",
+    "restoreExplain": "यह एक पूर्व ड्राइवर है। पुनर्स्थापित करने से वे फिर से चुने जा सकेंगे।",
+    "deleteExplain": "स्थायी रूप से हटाना केवल बिना किसी इतिहास वाले ड्राइवर के लिए संभव है।",
+    "deletePermanently": "स्थायी रूप से हटाएं",
+    "deleteConfirmTitle": "{{name}} को स्थायी रूप से हटाएं?",
+    "deleteConfirmBody": "इस ड्राइवर का कोई रिकॉर्ड नहीं है। ड्राइवर मिटा दिया जाएगा — इसे वापस नहीं किया जा सकता।",
+    "hasHistoryTitle": "इस ड्राइवर का इतिहास है",
+    "hasHistoryBody": "{{count}} रिकॉर्ड में इस ड्राइवर का नाम है (settlements, लोड, ईंधन, कटौतियां, भुगतान या अनुपालन)। इसके बजाय हटाएं का उपयोग करें — यह हर रिकॉर्ड रखता है।"
   },
   "docTypes": {
     "settlement": {
@@ -2850,5 +2876,56 @@
     "note": "तारीख ठीक करने से सिर्फ़ हफ़्ते की अंतिम तारीख बदलती है; सभी रकमें वही रहती हैं।",
     "conflictTitle": "यह तारीख नहीं बदली जा सकती",
     "conflictBody": "इस ट्रक के लिए {{date}} को समाप्त हफ़्ता पहले से मौजूद है।"
+  },
+  "categorySync": {
+    "offerTitle": "कटौतियाँ भी अपडेट करें?",
+    "offerBody": "कटौतियों की श्रेणी भी {{category}} कर दें?",
+    "yes": "हाँ, कर दें",
+    "no": "अभी नहीं",
+    "doneTitle": "कटौतियों की श्रेणी अपडेट हुई",
+    "doneBody": "अब {{category}}। कुल, मुनाफ़ा और टैक्स नहीं बदलते।",
+    "undo": "पूर्ववत करें",
+    "ok": "ठीक है",
+    "cardTitle": "मेल न खाती श्रेणियाँ ({{count}})",
+    "cardBody": "इन खर्चों की अकाउंटेंट श्रेणी है, पर कटौतियों में ये अभी भी Misc या Other हैं। लागू करें दबाने तक कुछ नहीं बदलता।",
+    "rowLine": "{{from}} → {{to}} (अकाउंटेंट: {{accountant}})",
+    "apply": "लागू करें",
+    "applyAll": "सब लागू करें"
+  },
+  "documentDelete": {
+    "openButton": "हटाएं…",
+    "title": "यह दस्तावेज़ हटाएं?",
+    "wholeSettlement": "इससे {{week}} को समाप्त सप्ताह का पूरा settlement और उसमें सब कुछ हट जाएगा।",
+    "attachedTag": "(संलग्न)",
+    "nothingLinked": "इस फ़ाइल से कोई रिकॉर्ड जुड़ा नहीं है।",
+    "loansKept": "इस settlement के {{count}} ऋण Loan Center में रहते हैं (ऋण एक चालू दायित्व है)।",
+    "profitEffect": "{{week}} को समाप्त सप्ताह का लाभ: {{before}} → {{after}}",
+    "irreversible": "इसे वापस नहीं किया जा सकता।",
+    "typeWeek": "पुष्टि के लिए सप्ताह की समाप्ति तिथि लिखें: {{week}}",
+    "deleteAll": "फ़ाइल और जुड़ा सब कुछ हटाएं",
+    "deleteFileOnly": "केवल फ़ाइल हटाएं, रिकॉर्ड रखें",
+    "goneTitle": "पहले ही हटाया जा चुका",
+    "goneBody": "यह दस्तावेज़ अब आपके खाते में नहीं है। कुछ नहीं बदला।",
+    "doneTitle": "हटाया गया",
+    "fileRetryBody": "रिकॉर्ड हटा दिए गए। सहेजी गई फ़ाइल अभी नहीं हटाई जा सकी; ऐप अगली बार फिर कोशिश करेगा।",
+    "failedTitle": "हटाया नहीं जा सका",
+    "tables": {
+      "settlements": "Settlement",
+      "loads": "लोड",
+      "fuel_purchases": "ईंधन खरीद",
+      "reimbursements": "प्रतिपूर्ति",
+      "tolls": "टोल",
+      "deductions": "कटौतियां",
+      "maintenance_records": "रखरखाव रिकॉर्ड",
+      "capital_transactions": "पूंजी योगदान",
+      "equipment": "उपकरण",
+      "driver_payments": "ड्राइवर भुगतान",
+      "import_jobs": "आयात कार्य",
+      "prime_driver_expenses": "For Prime Inc Drivers खर्च",
+      "misc_income": "अन्य आय",
+      "household_income": "घरेलू आय",
+      "compliance_items": "अनुपालन आइटम",
+      "bank_statements": "बैंक स्टेटमेंट"
+    }
   }
 }

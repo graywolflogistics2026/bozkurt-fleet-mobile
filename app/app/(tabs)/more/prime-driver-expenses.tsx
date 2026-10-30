@@ -48,6 +48,7 @@ import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButt
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { todayDateOnly } from '@/src/lib/dateOnly';
 import { numOrNull } from '@/src/lib/number';
+import { offerCanonicalCategorySync } from '@/src/lib/offerCanonicalCategorySync';
 
 function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return (
@@ -281,6 +282,13 @@ export default function PrimeDriverExpensesScreen() {
   // across ALL months (not just the selected one) on every visit until a
   // category is picked. Picking writes ONLY accountant_category — the
   // Deductions screen's own category is never touched.
+  // CATEGORY SYNC (batch A item 1): writes ONLY deductions.category, after
+  // the owner says yes (offerCanonicalCategorySync).
+  async function setDeductionCategory(id: string, category: string | null) {
+    await updateDeduction.mutateAsync({ id, values: { category } });
+    await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+  }
+
   const needsCategoryRows = useMemo(() => findRowsNeedingAccountantCategory(deductionsQuery.data ?? []), [deductionsQuery.data]);
   const [assigningRow, setAssigningRow] = useState<(typeof needsCategoryRows)[number] | null>(null);
   const [assignSaving, setAssignSaving] = useState(false);
@@ -290,6 +298,7 @@ export default function PrimeDriverExpensesScreen() {
     try {
       await updateDeduction.mutateAsync({ id: assigningRow.id, values: { accountant_category: category } });
       await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+      offerCanonicalCategorySync(assigningRow, category, setDeductionCategory);
       setAssigningRow(null);
     } catch (err) {
       Alert.alert(t('deductions.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
@@ -535,6 +544,8 @@ export default function PrimeDriverExpensesScreen() {
           },
         });
         await invalidateFinancialData(queryClient, { entities: ['deductions'] });
+        const dedRow = (deductionsQuery.data ?? []).find((d) => d.id === editingRow.id);
+        if (dedRow) offerCanonicalCategorySync(dedRow, editCategory, setDeductionCategory);
       } else {
         await updateExpense.mutateAsync({
           id: editingRow.id,

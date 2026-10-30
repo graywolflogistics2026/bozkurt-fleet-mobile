@@ -31,6 +31,7 @@ import { useDocumentTitleContext } from '@/src/data/useDocumentTitleContext';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
 import { DestinationSummary } from '@/src/components/DestinationSummary';
+import { DocumentDeleteSheet } from '@/src/components/DocumentDeleteSheet';
 import { isDocumentNeedsReview } from '@/src/import/needsReview';
 import { normalizePaymentMethod, type PaymentMethod } from '@/src/import/paymentMethods';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
@@ -99,6 +100,8 @@ export default function DocumentsArchive() {
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  // Batch A item 7 (2026-10-30): the document whose delete sheet is open.
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
   // DOCUMENT TITLES (owner decision 2026-09-23, docs/PENDING_SQL.md §76).
   const titleContext = useDocumentTitleContext();
@@ -260,6 +263,12 @@ export default function DocumentsArchive() {
     setSelected(null);
     setSignedUrl(null);
     setUrlError(null);
+  }
+
+  // Close the viewer first; two React Native Modals cannot swap in one render.
+  function openDeleteSheet(documentId: string) {
+    closeViewer();
+    setTimeout(() => setDeletingDocId(documentId), 400);
   }
 
   async function handleOpen() {
@@ -515,11 +524,14 @@ export default function DocumentsArchive() {
                 onChangeDeductionCategory={handleChangeDeductionCategory}
               />
 
+              <SecondaryButton title={`🗑️ ${t('documentDelete.openButton')}`} onPress={() => openDeleteSheet(selected.id)} />
               <SecondaryButton title={t('common.cancel')} onPress={closeViewer} />
             </>
           );
         })()}
       </ModalSheet>
+
+      <DocumentDeleteSheet documentId={deletingDocId} onClose={() => setDeletingDocId(null)} onDeleted={() => setDeletingDocId(null)} />
 
       {/* NEEDS A TITLE — review queue. Accept the suggestion with one tap,
           or type your own. A document leaves the list once it has a title. */}

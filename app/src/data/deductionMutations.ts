@@ -1,4 +1,5 @@
 import { supabase } from '@/src/lib/supabase';
+import { DOCUMENT_REFERENCES, isMissingTableError } from '@/src/data/documentReferences';
 import type { ContributionSyncPlan } from '@/src/stats/contributionSync';
 import type { Deduction } from '@/src/types/db';
 
@@ -188,16 +189,14 @@ export async function insertDeductionWithContributionSync(params: {
 // storage_path is a broken "View Document" link the user would hit
 // immediately.
 export async function cleanupOrphanedDocument(documentId: string): Promise<void> {
-  const [dedResult, settResult, maintResult] = await Promise.all([
-    supabase.from('deductions').select('id', { count: 'exact', head: true }).eq('document_id', documentId),
-    supabase.from('settlements').select('id', { count: 'exact', head: true }).eq('document_id', documentId),
-    supabase.from('maintenance_records').select('id', { count: 'exact', head: true }).eq('document_id', documentId),
-  ]);
-  if (dedResult.error) throw dedResult.error;
-  if (settResult.error) throw settResult.error;
-  if (maintResult.error) throw maintResult.error;
+  // Batch A item 7 (2026-10-30): every table that can point at a document,
+  // not just settlements/deductions/maintenance_records.
+  const results = await Promise.all(
+    DOCUMENT_REFERENCES.map((ref) => supabase.from(ref.table).select('id', { count: 'exact', head: true }).eq(ref.column, documentId))
+  );
+  for (const result of results) if (result.error && !isMissingTableError(result.error)) throw result.error;
 
-  const stillReferenced = (dedResult.count ?? 0) > 0 || (settResult.count ?? 0) > 0 || (maintResult.count ?? 0) > 0;
+  const stillReferenced = results.some((result) => !result.error && (result.count ?? 0) > 0);
   if (stillReferenced) return;
 
   const { data: doc, error: fetchError } = await supabase.from('documents').select('storage_path').eq('id', documentId).maybeSingle();

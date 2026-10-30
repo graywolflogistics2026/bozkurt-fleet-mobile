@@ -1041,12 +1041,16 @@ under each is unchanged original wording.
   invariant #17; `ScreenErrorBoundary` stays reusable):
   `docs/decisions/retired.md`.
 
-## Current state (2026-10-29)
+## Current state (2026-10-30)
 
-- **Code**: `main` after the 2026-10-29 printed-dates + held-by-carrier commit
-  (on top of 9b1723a), pushed. Ships via `eas update --branch preview`.
-- **Database** (`docs/PENDING_SQL.md`, 78 sections): everything is applied
+- **Code**: `main` after master plan batch A (on top of 95f9207, batch 0b),
+  pushed. Ships via `eas update --branch preview`. Plan progress:
+  `docs/decisions/master-plan-2026-10.md`.
+- **Database** (`docs/PENDING_SQL.md`, 80 sections): everything is applied
   except:
+  - §79 truck nickname + plate, §80 document delete functions — NOT YET
+    APPLIED (batch A). `pending_79.sql`, `pending_80.sql` at the root.
+    The client is safe before either runs.
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
   - §72 remove business-balance tracking — status UNCONFIRMED.

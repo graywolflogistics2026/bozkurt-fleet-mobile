@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { IncompleteLineItemsNotice } from '@/src/components/IncompleteLineItemsNotice';
 import { useTrucksList, useUpdateTruck } from '@/src/data/trucks';
+import { selectableTrucks } from '@/src/data/fleetEdit';
 import { useMaintenanceRecords, useInsertMaintenanceRecord, useUpdateMaintenanceRecord, useDeleteMaintenanceRecord } from '@/src/data/maintenanceRecords';
 import { useReimbursements } from '@/src/data/reimbursements';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
@@ -492,11 +493,11 @@ export default function Maintenance() {
         {/* MULTI-TRUCK MODEL (owner decision) — only shown when the global
             scope is "All Trucks" (activeTruckId null, 2+ trucks); a
             specific-truck scope (or an n<=1 account) has nothing to ask. */}
-        {!activeTruckId && (trucksQuery.data?.length ?? 0) > 1 && (
+        {!activeTruckId && selectableTrucks(trucksQuery.data ?? [], addFormTruckId).length > 1 && (
           <View style={{ marginBottom: spacing.sm }}>
             <MutedText>{t('maintenance.whichTruck')}</MutedText>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {(trucksQuery.data ?? []).map((tr) => (
+              {selectableTrucks(trucksQuery.data ?? [], addFormTruckId).map((tr) => (
                 <Pill
                   key={tr.id}
                   label={t('common.unit', { unit: tr.unit_number ?? tr.id })}

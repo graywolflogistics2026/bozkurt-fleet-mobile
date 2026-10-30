@@ -4755,6 +4755,84 @@ order by proname;
 
 Mirror file `pending_78.sql` removed after the owner confirmed it was run (2026-10-17); its full contents are inlined in the SQL blocks above.
 
+## 79. TRUCK NICKNAME + LICENSE PLATE (owner decision 2026-10-30, master plan batch A item 2) — NOT YET APPLIED
+
+**Why**: Edit truck now has nickname and plate fields. Two new nullable
+`trucks` columns, nothing dropped or altered. No RLS change:
+`trucks_owner_all` (FOR ALL) already covers them — the "nothing happens"
+bug was swallowed client errors, not RLS (see CHANGELOG batch A).
+
+**Safe before it runs**: `app/src/data/fleetEdit.ts` retries a truck
+save without `nickname`/`plate` when PostgREST says the column does not
+exist (PGRST204) and tells the owner those two fields will save after
+this SQL runs. Not a `profiles` column, not a new table.
+
+```sql
+alter table trucks add column if not exists nickname text;
+alter table trucks add column if not exists plate text;
+```
+
+Read-only check (two rows, data_type text):
+
+```sql
+select column_name, data_type, is_nullable
+from information_schema.columns
+where table_schema = 'public' and table_name = 'trucks' and column_name in ('nickname', 'plate')
+order by column_name;
+```
+
+- [ ] 79 run
+
+Mirror file: `pending_79.sql` (repo root).
+
+## 80. DELETE A DOCUMENT AND EVERYTHING LINKED (owner decision 2026-10-30, master plan batch A item 7) — NOT YET APPLIED
+
+**Why**: Documents had no delete. A plain delete of a settlement document
+would fail anyway: `settlements.document_id` has no ON DELETE rule. This
+section does NOT change that column (STOP rule: no altering existing
+columns) — the function deletes or un-links the settlement itself first.
+
+**What**: three functions, no table/column/constraint change.
+- `document_linked_rows(doc, uid)` — internal (execute revoked from the
+  app roles): every row a delete touches, kind `derived` (created by the
+  import: settlement + children, their contributions/equipment, the
+  driver's settlement share, the import job), `attached` (records that
+  only carry the file), `kept` (loans — a standing obligation, §70 Part B).
+- `preview_document_delete(doc)` — read-only: counts, dollars and ids by
+  table, plus the settlement(s). `{status:'not_found'}` for a missing or
+  another user's document.
+- `delete_document_cascade(doc, mode)` — `'all'` or `'file_only'`; one
+  transaction, scoped to `auth.uid()`, idempotent (second call =
+  `not_found`). Reuses the existing paths: settlement children by the FK
+  cascades (§61/§64), the §70 balance trigger, contributions/equipment by
+  the `linked_deduction_id` cascades (§60/§62/§73). Returns the storage
+  path; the app removes the file after the commit and queues a failed
+  removal for retry.
+
+**Safe before it runs**: the Documents delete button reports "needs a
+database update (§80)" and deletes nothing. No Edge Function change.
+
+The full SQL is `pending_80.sql` (repo root); it is inlined here when the
+section is marked applied (PENDING_SQL rule 3).
+
+Read-only check (three rows, all `prosecdef = true`; `can_app_call` false
+for `document_linked_rows`, true for the other two):
+
+```sql
+select p.proname,
+       p.prosecdef,
+       has_function_privilege('authenticated', p.oid, 'execute') as can_app_call
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in ('document_linked_rows', 'preview_document_delete', 'delete_document_cascade')
+order by p.proname;
+```
+
+- [ ] 80 run
+
+Mirror file: `pending_80.sql` (repo root).
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

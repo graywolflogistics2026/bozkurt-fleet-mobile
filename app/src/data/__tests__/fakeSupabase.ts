@@ -84,9 +84,27 @@ const CASCADE_RULES: Array<{ table: string; column: string; parent: string }> = 
 const SET_NULL_RULES: Array<{ table: string; column: string; parent: string }> = [
   { table: 'loans', column: 'settlement_id', parent: 'settlements' },
   { table: 'driver_payments', column: 'settlement_id', parent: 'settlements' },
+  // Batch A item 2 (2026-10-30): the two `on delete set null` FKs to trucks
+  // (docs/SCHEMA.sql drivers.default_truck_id; PENDING_SQL §55b
+  // compliance_items.truck_id).
+  { table: 'drivers', column: 'default_truck_id', parent: 'trucks' },
+  { table: 'compliance_items', column: 'truck_id', parent: 'trucks' },
 ];
 
-export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { failures?: FakeSupabaseFailure[] } = {}) {
+// Tables whose rows the §80 'all' mode deletes because the document is
+// attached to them (pending_80.sql, same order).
+const DOC_ATTACHED_TABLES: ReadonlyArray<readonly [string, string]> = [
+  ['deductions', 'document_id'],
+  ['maintenance_records', 'document_id'],
+  ['prime_driver_expenses', 'document_id'],
+  ['misc_income', 'document_id'],
+  ['household_income', 'document_id'],
+  ['compliance_items', 'source_document_id'],
+  ['bank_statements', 'document_id'],
+  ['import_jobs', 'document_id'],
+];
+
+export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { failures?: FakeSupabaseFailure[]; authUserId?: string } = {}) {
   const store: FakeSupabaseStore = {};
   for (const [table, rows] of Object.entries(seed)) store[table] = rows.map((r) => ({ ...r }));
   let idCounter = 1;
@@ -147,6 +165,39 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
     if (!match) return null;
     match.remaining -= 1;
     return match.error;
+  }
+
+  // Mirror of pending_80.sql document_linked_rows(): every row a document
+  // delete touches, with its kind (derived | attached | kept).
+  function documentLinkedRows(docId: string, uid: string) {
+    const out: Array<{ tbl: string; row_id: unknown; amount: unknown; kind: string }> = [];
+    const mine = (t: string) => (store[t] ?? []).filter((r) => r.user_id === uid);
+    const sett = new Set(mine('settlements').filter((s) => s.document_id === docId).map((s) => s.id));
+    const ded = new Map<unknown, string>();
+    for (const s of mine('settlements')) if (sett.has(s.id)) out.push({ tbl: 'settlements', row_id: s.id, amount: s.gross, kind: 'derived' });
+    for (const [t, amt] of [['loads', 'revenue'], ['fuel_purchases', 'amount'], ['reimbursements', 'amount'], ['tolls', 'amount']] as const)
+      for (const r of mine(t)) if (sett.has(r.settlement_id)) out.push({ tbl: t, row_id: r.id, amount: r[amt], kind: 'derived' });
+    for (const d of mine('deductions'))
+      if (sett.has(d.settlement_id) || d.document_id === docId) {
+        const kind = sett.has(d.settlement_id) ? 'derived' : 'attached';
+        ded.set(d.id, kind);
+        out.push({ tbl: 'deductions', row_id: d.id, amount: d.amount, kind });
+      }
+    for (const m of mine('maintenance_records'))
+      if (sett.has(m.settlement_id) || m.document_id === docId)
+        out.push({ tbl: 'maintenance_records', row_id: m.id, amount: m.cost, kind: sett.has(m.settlement_id) ? 'derived' : 'attached' });
+    for (const c of mine('capital_transactions'))
+      if (ded.has(c.linked_deduction_id)) out.push({ tbl: 'capital_transactions', row_id: c.id, amount: c.amount, kind: ded.get(c.linked_deduction_id)! });
+    for (const e of mine('equipment'))
+      if (ded.has(e.linked_deduction_id)) out.push({ tbl: 'equipment', row_id: e.id, amount: e.purchase_price, kind: ded.get(e.linked_deduction_id)! });
+    for (const p of mine('driver_payments')) if (sett.has(p.settlement_id)) out.push({ tbl: 'driver_payments', row_id: p.id, amount: p.gross_pay, kind: 'derived' });
+    for (const j of mine('import_jobs')) if (j.document_id === docId) out.push({ tbl: 'import_jobs', row_id: j.id, amount: null, kind: 'derived' });
+    for (const [t, column] of DOC_ATTACHED_TABLES) {
+      if (t === 'deductions' || t === 'maintenance_records' || t === 'import_jobs') continue;
+      for (const r of mine(t)) if (r[column] === docId) out.push({ tbl: t, row_id: r.id, amount: r.amount ?? r.annual_amount ?? null, kind: 'attached' });
+    }
+    for (const l of mine('loans')) if (sett.has(l.settlement_id)) out.push({ tbl: 'loans', row_id: l.id, amount: l.balance, kind: 'kept' });
+    return out;
   }
 
   function from(table: string) {
@@ -493,6 +544,73 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
       return { data: row, error: null };
     }
 
+    // §80 (batch A item 7, 2026-10-30) — preview_document_delete /
+    // delete_document_cascade, mirroring pending_80.sql's contract:
+    // auth.uid()-scoped, 'not_found' for another user's or a gone document,
+    // all-or-nothing (the store is restored if any step fails). Like every
+    // RPC fake here it proves the client flow, not the PL/pgSQL body.
+    if (fnName === 'preview_document_delete' || fnName === 'delete_document_cascade') {
+      const p = params as { p_doc_id: string; p_mode?: string };
+      const uid = options.authUserId ?? null;
+      if (!uid) return { data: null, error: { message: 'Not signed in', code: '42501' } };
+      const doc = (store.documents ?? []).find((d) => d.id === p.p_doc_id && d.user_id === uid);
+      if (!doc) return { data: { status: 'not_found' }, error: null };
+      const rows = documentLinkedRows(p.p_doc_id, uid);
+      const settlements = (store.settlements ?? []).filter((s) => s.document_id === p.p_doc_id && s.user_id === uid);
+      if (fnName === 'preview_document_delete') {
+        const groups = new Map<string, { table: string; kind: string; count: number; amount: number; ids: unknown[] }>();
+        for (const r of rows) {
+          const key = `${r.tbl}|${r.kind}`;
+          const g = groups.get(key) ?? { table: r.tbl, kind: r.kind, count: 0, amount: 0, ids: [] };
+          g.count += 1;
+          g.amount += Number(r.amount ?? 0);
+          g.ids.push(r.row_id);
+          groups.set(key, g);
+        }
+        return {
+          data: {
+            status: 'ok',
+            document: {
+              id: doc.id,
+              filename: doc.filename ?? null,
+              doc_type: doc.doc_type ?? null,
+              doc_date: doc.doc_date ?? null,
+              amount: doc.amount ?? null,
+              storage_path: doc.storage_path ?? null,
+            },
+            settlements: settlements.map((s) => ({ id: s.id, week_ending: s.week_ending, gross: s.gross ?? null, net: s.net ?? null, truck_id: s.truck_id ?? null })),
+            tables: [...groups.values()],
+          },
+          error: null,
+        };
+      }
+      if (p.p_mode !== 'all' && p.p_mode !== 'file_only') return { data: null, error: { message: `Unknown delete mode: ${p.p_mode}`, code: '22023' } };
+      const snapshot = JSON.stringify(store);
+      const deleted: Record<string, number> = {};
+      if (p.p_mode === 'all') for (const r of rows) if (r.kind !== 'kept') deleted[r.tbl] = (deleted[r.tbl] ?? 0) + 1;
+      const run = async (q: PromiseLike<{ error: FakeSupabaseError | null }>) => {
+        const { error } = await q;
+        if (error) throw error;
+      };
+      try {
+        const settIds = settlements.map((s) => s.id);
+        if (p.p_mode === 'all') {
+          await run(from('driver_payments').delete().eq('user_id', uid).in('settlement_id', settIds));
+          await run(from('settlements').delete().eq('user_id', uid).eq('document_id', p.p_doc_id));
+          for (const [table, column] of DOC_ATTACHED_TABLES) await run(from(table).delete().eq('user_id', uid).eq(column, p.p_doc_id));
+        } else {
+          await run(from('settlements').update({ document_id: null }).eq('user_id', uid).eq('document_id', p.p_doc_id));
+        }
+        await run(from('documents').delete().eq('user_id', uid).eq('id', p.p_doc_id));
+      } catch (error) {
+        const restored = JSON.parse(snapshot) as FakeSupabaseStore;
+        for (const key of Object.keys(store)) delete store[key];
+        Object.assign(store, restored);
+        return { data: null, error: error as FakeSupabaseError };
+      }
+      return { data: { status: 'deleted', mode: p.p_mode, storage_path: doc.storage_path ?? null, deleted }, error: null };
+    }
+
     return { data: null, error: { message: `fakeSupabase: unknown RPC "${fnName}"` } };
   }
 
@@ -512,6 +630,9 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
           // __removedStoragePaths so a test can assert exactly which
           // paths got removed without needing a real Storage backend.
           remove: async (paths: string[]) => {
+            // Batch A item 7: failures: [{ table: 'storage', mode: 'delete', ... }]
+            const injected = takeFailure('storage', 'delete');
+            if (injected) return { data: null, error: injected };
             removedStoragePaths.push(...paths);
             return { data: paths.map((p) => ({ name: p })), error: null };
           },

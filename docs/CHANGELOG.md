@@ -11,6 +11,20 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- MASTER PLAN BATCH A (owner decisions 2026-10-30, docs/decisions/
+  master-plan-2026-10.md). Item 1: accountant -> canonical map
+  (categoryMapping.ts), one "Also set Deductions category?" offer with Undo
+  only when Deductions says Misc/Other/empty, "Accountant: X" chip,
+  "Categories out of sync" card; isolation test: totals/profit/CPM/tax input
+  identical. Item 2: trucks.tsx/drivers.tsx swallowed errors (no try/catch)
+  and a delete sheet opened while the edit sheet closed; fleetEdit.ts row-
+  count-checked writes, nickname/plate (§79), assigned drivers, last-truck
+  rule, archived trucks hidden from 4 pickers, driver Remove = former driver,
+  delete only without history. Item 7: Documents delete sheet (counts, $,
+  week profit A -> B, all / file only, type the week ending), §80 functions,
+  file removed after commit with retry queue, orphan checks see all 9
+  document references. PENDING_SQL §79, §80; no redeploy; eas update.
+
 - MASTER PLAN BATCH 0b (owner decisions 2026-10-30, docs/decisions/
   master-plan-2026-10.md). 0b.1 `src/lib/dateOnly.ts`: date-only values are
   local calendar days everywhere (formatDate, period windows, month keys,

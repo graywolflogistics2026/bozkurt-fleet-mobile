@@ -414,7 +414,8 @@
       "allDone": "Todos los gastos tienen descripción.",
       "useSuggestion": "Usar “{{text}}”",
       "placeholder": "Escribe una descripción"
-    }
+    },
+    "accountantChip": "Contador: {{category}}"
   },
   "capitalAccount": {
     "title": "Cuenta de Capital",
@@ -1073,7 +1074,18 @@
     "depreciationYearPlacedInServiceLabel": "Año de puesta en servicio",
     "depreciationSpreadYearsLabel": "¿En cuántos años distribuir?",
     "depreciationAskNote": "La depreciación se mostrará como $0 en su Estimador de Impuestos hasta que configure un método o su contador lo asesore.",
-    "trailerDepreciationTitle": "Elección de Depreciación del Remolque (impuestos)"
+    "trailerDepreciationTitle": "Elección de Depreciación del Remolque (impuestos)",
+    "nicknameLabel": "Apodo (opcional)",
+    "plateLabel": "Placa (opcional)",
+    "assignedDriversLabel": "Conductor(es) asignado(s)",
+    "edit": "Editar",
+    "plateLine": "Placa {{plate}}",
+    "driversLine": "Conductor: {{names}}",
+    "pendingColumnsTitle": "Guardado, excepto apodo y placa",
+    "pendingColumnsBody": "Todo lo demás se guardó. El apodo y la placa se guardarán después de ejecutar la actualización de la base de datos (PENDING_SQL §79).",
+    "lastTruckArchiveTitle": "Este es tu último camión activo",
+    "lastTruckArchiveBody": "Primero agrega o restaura otro camión. La app necesita un camión activo. Aún puedes eliminar este de forma permanente.",
+    "lastTruckDeleteNote": "Este es tu único camión. Después de eliminarlo, agrega un camión de nuevo antes de importar settlements."
   },
   "equipmentScreen": {
     "title": "Equipo",
@@ -1149,7 +1161,21 @@
       "per_mile": "Por Milla",
       "percent": "Porcentaje",
       "flat": "Fijo"
-    }
+    },
+    "edit": "Editar",
+    "remove": "Quitar",
+    "restore": "Restaurar",
+    "formerTag": "(Exconductor)",
+    "removeConfirmTitle": "¿Quitar a {{name}}?",
+    "removeConfirmBody": "Se conservan todos los settlements, cargas, compras de combustible, deducciones y pagos que nombran a este conductor. El conductor sale de las listas y de su camión asignado, y aparece como exconductor. Puedes restaurarlo cuando quieras.",
+    "removeExplain": "Recomendado: conserva todo el historial y muestra a este conductor como exconductor.",
+    "restoreExplain": "Este es un exconductor. Restaurarlo lo hace seleccionable otra vez.",
+    "deleteExplain": "La eliminación permanente solo es posible para un conductor sin ningún historial.",
+    "deletePermanently": "Eliminar permanentemente",
+    "deleteConfirmTitle": "¿Eliminar a {{name}} permanentemente?",
+    "deleteConfirmBody": "Este conductor no tiene registros. Se borrará y no se puede deshacer.",
+    "hasHistoryTitle": "Este conductor tiene historial",
+    "hasHistoryBody": "{{count}} registro(s) nombran a este conductor (settlements, cargas, combustible, deducciones, pagos o cumplimiento). Usa Quitar: conserva todos los registros."
   },
   "docTypes": {
     "settlement": {
@@ -2850,5 +2876,56 @@
     "note": "Corregir una fecha solo mueve el fin de semana; todos los montos quedan igual.",
     "conflictTitle": "No se puede cambiar esta fecha",
     "conflictBody": "Ya tienes una semana que termina el {{date}} para este camión."
+  },
+  "categorySync": {
+    "offerTitle": "¿Actualizar también Deducciones?",
+    "offerBody": "¿Poner también la categoría de Deducciones en {{category}}?",
+    "yes": "Sí, cambiarla",
+    "no": "Ahora no",
+    "doneTitle": "Categoría de Deducciones actualizada",
+    "doneBody": "Ahora es {{category}}. Los totales, la ganancia y los impuestos no cambian.",
+    "undo": "Deshacer",
+    "ok": "OK",
+    "cardTitle": "Categorías sin sincronizar ({{count}})",
+    "cardBody": "Estos gastos tienen una categoría de contador pero siguen como Misc u Other en Deducciones. Nada cambia hasta que toques Aplicar.",
+    "rowLine": "{{from}} → {{to}} (Contador: {{accountant}})",
+    "apply": "Aplicar",
+    "applyAll": "Aplicar todo"
+  },
+  "documentDelete": {
+    "openButton": "Eliminar…",
+    "title": "¿Eliminar este documento?",
+    "wholeSettlement": "Esto elimina el settlement COMPLETO de la semana que termina el {{week}} y todo lo que contiene.",
+    "attachedTag": "(adjunto)",
+    "nothingLinked": "Ningún registro está vinculado a este archivo.",
+    "loansKept": "{{count}} préstamo(s) de este settlement se quedan en el Centro de Préstamos (un préstamo es una obligación vigente).",
+    "profitEffect": "Ganancia de la semana que termina el {{week}}: {{before}} → {{after}}",
+    "irreversible": "Esto no se puede deshacer.",
+    "typeWeek": "Para confirmar, escribe el fin de semana: {{week}}",
+    "deleteAll": "Eliminar archivo y todo lo vinculado",
+    "deleteFileOnly": "Eliminar solo el archivo, conservar los registros",
+    "goneTitle": "Ya eliminado",
+    "goneBody": "Este documento ya no está en tu cuenta. No se cambió nada.",
+    "doneTitle": "Eliminado",
+    "fileRetryBody": "Los registros se eliminaron. El archivo guardado no se pudo quitar ahora; la app lo intentará de nuevo la próxima vez.",
+    "failedTitle": "No se pudo eliminar",
+    "tables": {
+      "settlements": "Settlement",
+      "loads": "Cargas",
+      "fuel_purchases": "Compras de combustible",
+      "reimbursements": "Reembolsos",
+      "tolls": "Peajes",
+      "deductions": "Deducciones",
+      "maintenance_records": "Registros de mantenimiento",
+      "capital_transactions": "Aportes de capital",
+      "equipment": "Equipo",
+      "driver_payments": "Pagos a conductores",
+      "import_jobs": "Trabajos de importación",
+      "prime_driver_expenses": "Gastos de For Prime Inc Drivers",
+      "misc_income": "Otros ingresos",
+      "household_income": "Ingresos del hogar",
+      "compliance_items": "Elementos de cumplimiento",
+      "bank_statements": "Estados de cuenta bancarios"
+    }
   }
 }

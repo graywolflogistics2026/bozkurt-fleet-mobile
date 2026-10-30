@@ -7,6 +7,7 @@ import type { TFunction } from 'i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useTrucksList, useUpdateTruck } from '@/src/data/trucks';
+import { selectableTrucks } from '@/src/data/fleetEdit';
 import { useMaintenanceRecords, useInsertMaintenanceRecord } from '@/src/data/maintenanceRecords';
 import { useMaintenanceIntervals, useUpdateMaintenanceInterval } from '@/src/data/maintenanceIntervals';
 import { useTruckHealthConfig } from '@/src/data/truckHealthConfig';
@@ -360,7 +361,7 @@ export default function TruckHealth() {
           <Card>
             <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.sm }}>{t('truckHealth.whichTruckTitle')}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {(trucksQuery.data ?? []).map((tr) => (
+              {selectableTrucks(trucksQuery.data ?? [], scopedTruckId).map((tr) => (
                 <Pressable
                   key={tr.id}
                   onPress={() => setScopedTruckId(tr.id)}

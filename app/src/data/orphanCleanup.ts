@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/lib/supabase';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
+import { DOCUMENT_REFERENCES, isMissingTableError } from '@/src/data/documentReferences';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { findDuplicateLoanGroups, type LoanDuplicateGroup, type LoanMatchCandidate } from '@/src/import/loanMatch';
 import { EQUIPMENT_TYPE_CATEGORIES } from '@/src/import/category';
@@ -94,17 +95,22 @@ async function fetchOrphanSummary(userId: string): Promise<OrphanSummary> {
   if (equipDedRes.error) throw equipDedRes.error;
   if (equipRes.error) throw equipRes.error;
 
-  // A document is orphaned once NOTHING references it via document_id —
-  // same 3-table check cleanupOrphanedDocument() itself uses (settlements/
-  // deductions/maintenance_records), computed here as one set difference
-  // instead of a per-row round trip.
-  const maintRefsRes = await supabase.from('maintenance_records').select('document_id').eq('user_id', userId).not('document_id', 'is', null);
-  if (maintRefsRes.error) throw maintRefsRes.error;
-  const referencedDocIds = new Set<string>([
-    ...(settlementsRes.data ?? []).map((r) => r.document_id as string),
-    ...(dedRes.data ?? []).map((r) => r.document_id as string),
-    ...(maintRefsRes.data ?? []).map((r) => r.document_id as string),
-  ]);
+  // A document is orphaned once NOTHING references it — the same full
+  // DOCUMENT_REFERENCES list cleanupOrphanedDocument() checks (batch A item
+  // 7, 2026-10-30: this used to check only 3 of the 9 tables), computed
+  // here as one set difference instead of a per-row round trip.
+  const refResults = await Promise.all(
+    DOCUMENT_REFERENCES.map((ref) => supabase.from(ref.table).select(ref.column).eq('user_id', userId).not(ref.column, 'is', null))
+  );
+  const referencedDocIds = new Set<string>();
+  refResults.forEach((res, i) => {
+    if (res.error) {
+      if (isMissingTableError(res.error)) return;
+      throw res.error;
+    }
+    const column = DOCUMENT_REFERENCES[i].column;
+    for (const row of (res.data ?? []) as unknown as Record<string, unknown>[]) referencedDocIds.add(String(row[column]));
+  });
   const documents = (documentsRes.data ?? []).filter((d) => !referencedDocIds.has(d.id));
 
   const duplicateLoanGroups = findDuplicateLoanGroups((allLoansRes.data ?? []) as DuplicateLoanRow[])

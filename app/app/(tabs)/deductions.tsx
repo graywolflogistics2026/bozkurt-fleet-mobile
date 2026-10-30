@@ -10,6 +10,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useDeductions, useDeleteDeduction, useUpdateDeduction } from '@/src/data/deductions';
 import { uploadDeductionAttachment } from '@/src/data/deductionAttachment';
 import { useTrucksList } from '@/src/data/trucks';
+import { selectableTrucks } from '@/src/data/fleetEdit';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { IncompleteLineItemsNotice } from '@/src/components/IncompleteLineItemsNotice';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
@@ -50,6 +51,7 @@ import { useFormatters } from '@/src/i18n/format';
 import { describeDeduction, ensureDescription, findDeductionsNeedingDescription, hasRealText, resolveDescription } from '@/src/lib/descriptionText';
 import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
+import { CategorySyncCard } from '@/src/components/CategorySyncCard';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Deduction } from '@/src/types/db';
@@ -164,6 +166,11 @@ function DedRow({
         {x.tax_deductible === false && (
           <Text style={{ color: colors.muted, fontSize: typography.size.xs, marginTop: 2, fontWeight: '700' }}>
             {t('deductions.nonDeductibleTag')}
+          </Text>
+        )}
+        {!!x.accountant_category && (
+          <Text style={{ color: colors.accent, fontSize: typography.size.xs, marginTop: 2, fontWeight: '700' }}>
+            {t('deductions.accountantChip', { category: x.accountant_category })}
           </Text>
         )}
         {needsReview && <NeedsReviewChip />}
@@ -793,6 +800,8 @@ export default function Deductions() {
         <FleetScopeLabel />
         <IncompleteLineItemsNotice />
 
+        <CategorySyncCard deductions={allRows} />
+
         {needsDescription.length > 0 && (
           <Card style={{ marginBottom: spacing.sm, borderColor: colors.accent, borderWidth: 2 }}>
             <Text style={{ color: colors.text, fontWeight: '700' }}>
@@ -989,12 +998,12 @@ export default function Deductions() {
             are legitimately fleet-level, so this is presented as a plain
             choice, never framed as something "missing." Only shown for a
             multi-truck account. */}
-        {editing && (trucksQuery.data?.length ?? 0) > 1 && (
+        {editing && selectableTrucks(trucksQuery.data ?? [], editing.truck_id).length > 1 && (
           <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
             <MutedText>{t('deductions.truckLabel')}</MutedText>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               <Pill label={t('fleetScope.fleetWideOption')} selected={!editing.truck_id} onPress={() => handleAssignTruck(null)} />
-              {(trucksQuery.data ?? []).map((tr) => (
+              {selectableTrucks(trucksQuery.data ?? [], editing.truck_id).map((tr) => (
                 <Pill
                   key={tr.id}
                   label={t('common.unit', { unit: tr.unit_number ?? tr.id })}

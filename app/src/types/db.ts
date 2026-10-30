@@ -11,6 +11,9 @@ export type Truck = {
   id: string;
   user_id: string;
   unit_number: string | null;
+  // docs/PENDING_SQL.md §79 (2026-10-30). Optional: absent until that SQL runs.
+  nickname?: string | null;
+  plate?: string | null;
   vin: string | null;
   year: number | null;
   make: string | null;

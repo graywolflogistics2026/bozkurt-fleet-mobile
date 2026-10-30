@@ -134,8 +134,12 @@ export async function deleteTruckCompletely(truckId: string): Promise<TruckDelet
   // makes this legal at all (previously this failed with a foreign-key
   // violation the instant any settlement/fuel/maintenance/deduction/toll
   // row still pointed at this truck).
-  const { error: deleteError } = await supabase.from('trucks').delete().eq('id', truckId);
+  const { data: deletedRows, error: deleteError } = await supabase.from('trucks').delete().eq('id', truckId).select('id');
   if (deleteError) throw deleteError;
+  // Batch A item 2 (2026-10-30): a delete that matched zero rows (already
+  // gone, or not this account) returns no error — say so instead of
+  // reporting success.
+  if (!deletedRows || deletedRows.length === 0) throw new Error('No truck was deleted — it may already be gone, or it is not on this account.');
 
   // BEST-EFFORT, run only after the atomic delete above has already
   // succeeded — reuses the EXISTING cleanupOrphanedDocument() (same

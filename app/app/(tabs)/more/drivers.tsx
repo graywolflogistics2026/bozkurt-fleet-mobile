@@ -4,7 +4,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { useDrivers, useInsertDriver, useUpdateDriver } from '@/src/data/drivers';
+import { useDrivers, useInsertDriver } from '@/src/data/drivers';
+import {
+  REMOVE_DRIVER_VALUES,
+  RESTORE_DRIVER_VALUES,
+  deleteDriverWithoutHistory,
+  driverHistoryTotal,
+  fetchDriverHistory,
+  updateRowTolerant,
+} from '@/src/data/fleetEdit';
 import { useDriverPayments, useInsertDriverPayment } from '@/src/data/driverPayments';
 import { useTaxYearData } from '@/src/data/taxYearData';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -162,7 +170,6 @@ export default function Drivers() {
   const { trucks } = useActiveTruck();
   const driversQuery = useDrivers();
   const insertDriver = useInsertDriver();
-  const updateDriver = useUpdateDriver();
   const taxYearDataQuery = useTaxYearData();
   const employerFicaRate = taxYearDataQuery.data?.data.se_tax.employer_fica;
 
@@ -217,7 +224,7 @@ export default function Drivers() {
     if (!editing) return;
     setSaving(true);
     try {
-      await updateDriver.mutateAsync({ id: editing.id, values: formToValues(editForm) });
+      await updateRowTolerant('drivers', editing.id, formToValues(editForm));
       await invalidateFinancialData(queryClient, { entities: ['drivers'] });
       setEditing(null);
     } catch (err) {
@@ -227,11 +234,74 @@ export default function Drivers() {
     }
   }
 
-  // "active" toggle is the retire equivalent — no delete from the UI,
-  // drivers can have settlement/payment history (PROMPTS.md Session 8).
-  async function handleToggleActive(d: Driver) {
-    await updateDriver.mutateAsync({ id: d.id, values: { active: !d.active } });
-    await invalidateFinancialData(queryClient, { entities: ['drivers'] });
+  function showError(err: unknown) {
+    Alert.alert(t('drivers.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+  }
+
+  // REMOVE = former driver (batch A item 2, 2026-10-30): every settlement,
+  // load, fuel row, deduction and payment that names the driver stays; the
+  // driver leaves the pickers and the assigned truck. Restore brings them
+  // back. This used to be a Deactivate toggle with no try/catch, so a
+  // failed write was silent.
+  function handleRemove(d: Driver) {
+    Alert.alert(t('drivers.removeConfirmTitle', { name: d.name }), t('drivers.removeConfirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('drivers.remove'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await updateRowTolerant('drivers', d.id, { ...REMOVE_DRIVER_VALUES });
+            await invalidateFinancialData(queryClient, { entities: ['drivers'] });
+            setEditing(null);
+          } catch (err) {
+            showError(err);
+          }
+        },
+      },
+    ]);
+  }
+
+  async function handleRestore(d: Driver) {
+    try {
+      await updateRowTolerant('drivers', d.id, { ...RESTORE_DRIVER_VALUES });
+      await invalidateFinancialData(queryClient, { entities: ['drivers'] });
+      setEditing(null);
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  // A permanent delete only for a driver with no history at all; with
+  // history (settlements, payments, ...) Remove is the only choice, so no
+  // payroll record is ever cascade-deleted.
+  async function handleDelete(d: Driver) {
+    try {
+      const history = await fetchDriverHistory(d.id);
+      const total = driverHistoryTotal(history);
+      if (total > 0) {
+        Alert.alert(t('drivers.hasHistoryTitle'), t('drivers.hasHistoryBody', { count: total }));
+        return;
+      }
+      Alert.alert(t('drivers.deleteConfirmTitle', { name: d.name }), t('drivers.deleteConfirmBody'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('drivers.deletePermanently'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDriverWithoutHistory(d.id);
+              await invalidateFinancialData(queryClient, { entities: ['drivers'] });
+              setEditing(null);
+            } catch (err) {
+              showError(err);
+            }
+          },
+        },
+      ]);
+    } catch (err) {
+      showError(err);
+    }
   }
 
   function renderForm(form: FormState, setForm: (f: FormState) => void) {
@@ -299,13 +369,17 @@ export default function Drivers() {
                 <Pressable onPress={() => openEdit(d)}>
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
                     {d.name}
-                    {!d.active ? ` ${t('drivers.inactiveTag')}` : ''}
+                    {!d.active ? ` ${t('drivers.formerTag')}` : ''}
                   </Text>
                   <MutedText>{t(`drivers.compensationTypes.${d.compensation_type}`)}</MutedText>
                 </Pressable>
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
                   <SecondaryButton title={t('drivers.payments')} onPress={() => setPaymentsFor(d)} />
-                  <SecondaryButton title={d.active ? t('drivers.deactivate') : t('drivers.reactivate')} onPress={() => handleToggleActive(d)} />
+                  <SecondaryButton title={t('drivers.edit')} onPress={() => openEdit(d)} />
+                  <SecondaryButton
+                    title={d.active ? t('drivers.remove') : t('drivers.restore')}
+                    onPress={() => (d.active ? handleRemove(d) : handleRestore(d))}
+                  />
                 </View>
               </View>
             ))}
@@ -331,6 +405,17 @@ export default function Drivers() {
         {renderForm(editForm, setEditForm)}
         <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
+        {editing && (
+          <View style={{ marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+            <MutedText style={{ marginBottom: spacing.xs }}>{editing.active ? t('drivers.removeExplain') : t('drivers.restoreExplain')}</MutedText>
+            <SecondaryButton
+              title={editing.active ? t('drivers.remove') : t('drivers.restore')}
+              onPress={() => (editing.active ? handleRemove(editing) : handleRestore(editing))}
+            />
+            <MutedText style={{ marginTop: spacing.md, marginBottom: spacing.xs, color: colors.red }}>{t('drivers.deleteExplain')}</MutedText>
+            <SecondaryButton title={`🗑️ ${t('drivers.deletePermanently')}`} onPress={() => handleDelete(editing)} />
+          </View>
+        )}
       </ModalSheet>
 
       {paymentsFor && <DriverPaymentsSheet driver={paymentsFor} employerFicaRate={employerFicaRate} onClose={() => setPaymentsFor(null)} />}

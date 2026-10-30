@@ -414,7 +414,8 @@
       "allDone": "Tüm giderlerin açıklaması var.",
       "useSuggestion": "“{{text}}” kullan",
       "placeholder": "Bir açıklama yazın"
-    }
+    },
+    "accountantChip": "Muhasebeci: {{category}}"
   },
   "capitalAccount": {
     "title": "Sermaye Hesabı",
@@ -1073,7 +1074,18 @@
     "depreciationYearPlacedInServiceLabel": "Hizmete alınma yılı",
     "depreciationSpreadYearsLabel": "Kaç yıla yayılsın?",
     "depreciationAskNote": "Bir yöntem belirleyene veya muhasebeciniz sizi yönlendirene kadar Vergi Tahmincinizde amortisman 0 $ olarak görünecektir.",
-    "trailerDepreciationTitle": "Römork Amortisman Seçimi (vergi)"
+    "trailerDepreciationTitle": "Römork Amortisman Seçimi (vergi)",
+    "nicknameLabel": "Takma ad (isteğe bağlı)",
+    "plateLabel": "Plaka (isteğe bağlı)",
+    "assignedDriversLabel": "Atanmış sürücü(ler)",
+    "edit": "Düzenle",
+    "plateLine": "Plaka {{plate}}",
+    "driversLine": "Sürücü: {{names}}",
+    "pendingColumnsTitle": "Kaydedildi — takma ad ve plaka hariç",
+    "pendingColumnsBody": "Geri kalan her şey kaydedildi. Takma ad ve plaka, veritabanı güncellemesi (PENDING_SQL §79) çalıştırıldıktan sonra kaydedilecek.",
+    "lastTruckArchiveTitle": "Bu son aktif kamyonunuz",
+    "lastTruckArchiveBody": "Önce başka bir kamyon ekleyin veya geri getirin. Uygulamanın bir aktif kamyona ihtiyacı var. Bu kamyonu yine de kalıcı olarak silebilirsiniz.",
+    "lastTruckDeleteNote": "Bu tek kamyonunuz. Sildikten sonra settlement içe aktarmadan önce yeniden bir kamyon ekleyin."
   },
   "equipmentScreen": {
     "title": "Ekipman",
@@ -1149,7 +1161,21 @@
       "per_mile": "Mil Başına",
       "percent": "Yüzde",
       "flat": "Sabit"
-    }
+    },
+    "edit": "Düzenle",
+    "remove": "Kaldır",
+    "restore": "Geri getir",
+    "formerTag": "(Eski sürücü)",
+    "removeConfirmTitle": "{{name}} kaldırılsın mı?",
+    "removeConfirmBody": "Bu sürücünün adının geçtiği her settlement, yük, yakıt alımı, kesinti ve ödeme saklanır. Sürücü seçim listelerinden ve atandığı kamyondan çıkar, eski sürücü olarak görünür. İstediğiniz zaman geri getirebilirsiniz.",
+    "removeExplain": "Önerilen: tüm geçmişi korur ve bu sürücüyü eski sürücü olarak gösterir.",
+    "restoreExplain": "Bu bir eski sürücü. Geri getirmek onu yeniden seçilebilir yapar.",
+    "deleteExplain": "Kalıcı silme yalnızca hiç geçmişi olmayan bir sürücü için mümkündür.",
+    "deletePermanently": "Kalıcı olarak sil",
+    "deleteConfirmTitle": "{{name}} kalıcı olarak silinsin mi?",
+    "deleteConfirmBody": "Bu sürücünün hiç kaydı yok. Sürücü silinir — geri alınamaz.",
+    "hasHistoryTitle": "Bu sürücünün geçmişi var",
+    "hasHistoryBody": "{{count}} kayıtta bu sürücünün adı geçiyor (settlement, yük, yakıt, kesinti, ödeme veya uyumluluk). Bunun yerine Kaldır'ı kullanın — her kaydı korur."
   },
   "docTypes": {
     "settlement": {
@@ -2850,5 +2876,56 @@
     "note": "Tarihi düzeltmek yalnızca hafta sonu tarihini değiştirir; tüm tutarlar aynı kalır.",
     "conflictTitle": "Bu tarih değiştirilemiyor",
     "conflictBody": "Bu kamyon için zaten {{date}} tarihinde biten bir haftanız var."
+  },
+  "categorySync": {
+    "offerTitle": "Giderler de güncellensin mi?",
+    "offerBody": "Giderler kategorisi de {{category}} yapılsın mı?",
+    "yes": "Evet, yap",
+    "no": "Şimdi değil",
+    "doneTitle": "Giderler kategorisi güncellendi",
+    "doneBody": "Artık {{category}}. Toplamlar, kâr ve vergi değişmez.",
+    "undo": "Geri al",
+    "ok": "Tamam",
+    "cardTitle": "Uyuşmayan kategoriler ({{count}})",
+    "cardBody": "Bu giderlerin muhasebeci kategorisi var ama Giderler'de hâlâ Misc veya Other. Uygula'ya basana kadar hiçbir şey değişmez.",
+    "rowLine": "{{from}} → {{to}} (Muhasebeci: {{accountant}})",
+    "apply": "Uygula",
+    "applyAll": "Hepsini uygula"
+  },
+  "documentDelete": {
+    "openButton": "Sil…",
+    "title": "Bu belge silinsin mi?",
+    "wholeSettlement": "Bu işlem, {{week}} tarihinde biten haftanın settlement'ını TAMAMEN ve içindeki her şeyi siler.",
+    "attachedTag": "(ekli)",
+    "nothingLinked": "Bu dosyaya bağlı kayıt yok.",
+    "loansKept": "Bu settlement'tan gelen {{count}} kredi Kredi Merkezi'nde kalır (kredi süren bir borçtur).",
+    "profitEffect": "{{week}} tarihinde biten haftanın kârı: {{before}} → {{after}}",
+    "irreversible": "Bu işlem geri alınamaz.",
+    "typeWeek": "Onaylamak için hafta bitiş tarihini yazın: {{week}}",
+    "deleteAll": "Dosyayı ve bağlı her şeyi sil",
+    "deleteFileOnly": "Yalnızca dosyayı sil, kayıtları koru",
+    "goneTitle": "Zaten silinmiş",
+    "goneBody": "Bu belge artık hesabınızda değil. Hiçbir şey değişmedi.",
+    "doneTitle": "Silindi",
+    "fileRetryBody": "Kayıtlar silindi. Saklanan dosya şu anda kaldırılamadı; uygulama bir dahaki sefere yeniden deneyecek.",
+    "failedTitle": "Silinemedi",
+    "tables": {
+      "settlements": "Settlement",
+      "loads": "Yükler",
+      "fuel_purchases": "Yakıt alımları",
+      "reimbursements": "Geri ödemeler",
+      "tolls": "Geçiş ücretleri",
+      "deductions": "Kesintiler",
+      "maintenance_records": "Bakım kayıtları",
+      "capital_transactions": "Sermaye katkıları",
+      "equipment": "Ekipman",
+      "driver_payments": "Sürücü ödemeleri",
+      "import_jobs": "İçe aktarma işleri",
+      "prime_driver_expenses": "For Prime Inc Drivers giderleri",
+      "misc_income": "Diğer gelir",
+      "household_income": "Hane geliri",
+      "compliance_items": "Uyumluluk kalemleri",
+      "bank_statements": "Banka ekstreleri"
+    }
   }
 }

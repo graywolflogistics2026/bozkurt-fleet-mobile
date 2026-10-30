@@ -6,7 +6,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { useTrucksList, useInsertTruck, useUpdateTruck } from '@/src/data/trucks';
+import { useTrucksList } from '@/src/data/trucks';
+import { useDrivers } from '@/src/data/drivers';
+import {
+  OPTIONAL_TRUCK_COLUMNS,
+  applyDriverAssignment,
+  canArchiveTruck,
+  insertTruckTolerant,
+  isLastTruck,
+  planDriverAssignment,
+  truckLabel,
+  updateRowTolerant,
+} from '@/src/data/fleetEdit';
 import { useLoanRows, useInsertLoanRow } from '@/src/data/loans';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { fetchTruckDeletionImpact, deleteTruckCompletely, type TruckDeletionImpact } from '@/src/data/truckDeletion';
@@ -20,6 +31,11 @@ import { numOrNull } from '@/src/lib/number';
 
 type FormState = {
   unit_number: string;
+  // Batch A item 2 (2026-10-30): nickname, plate (docs/PENDING_SQL.md §79)
+  // and the drivers assigned to this truck (drivers.default_truck_id).
+  nickname: string;
+  plate: string;
+  driverIds: string[];
   vin: string;
   year: string;
   make: string;
@@ -55,6 +71,9 @@ type FormState = {
 function emptyForm(): FormState {
   return {
     unit_number: '',
+    nickname: '',
+    plate: '',
+    driverIds: [],
     vin: '',
     year: '',
     make: '',
@@ -78,9 +97,12 @@ function emptyForm(): FormState {
   };
 }
 
-function truckToForm(t: Truck): FormState {
+function truckToForm(t: Truck, assignedDriverIds: string[]): FormState {
   return {
     unit_number: t.unit_number ?? '',
+    nickname: t.nickname ?? '',
+    plate: t.plate ?? '',
+    driverIds: assignedDriverIds,
     vin: t.vin ?? '',
     year: t.year != null ? String(t.year) : '',
     make: t.make ?? '',
@@ -123,8 +145,9 @@ export default function Trucks() {
   const queryClient = useQueryClient();
   const { refreshTrucks } = useActiveTruck();
   const trucksQuery = useTrucksList();
-  const insertTruck = useInsertTruck();
-  const updateTruck = useUpdateTruck();
+  const driversQuery = useDrivers();
+  const drivers = driversQuery.data ?? [];
+  const pickableDrivers = drivers.filter((d) => d.active);
   const loansQuery = useLoanRows();
   const insertLoan = useInsertLoanRow();
   const loans = loansQuery.data ?? [];
@@ -153,6 +176,8 @@ export default function Trucks() {
   function formToValues(form: FormState) {
     return {
       unit_number: form.unit_number || null,
+      nickname: form.nickname.trim() || null,
+      plate: form.plate.trim() || null,
       vin: form.vin || null,
       year: form.year ? numOrNull(form.year) || null : null,
       make: form.make || null,
@@ -201,11 +226,13 @@ export default function Trucks() {
       // trigger (CLAUDE.md invariant #4) — same path as the legacy-backup
       // importer's ensureTruck() and the import-preview "+ New Truck"
       // inline-create.
-      await insertTruck.mutateAsync({ user_id: userId, ...formToValues(addForm) });
+      const created = await insertTruckTolerant({ user_id: userId, ...formToValues(addForm) });
+      await applyDriverAssignment(planDriverAssignment(drivers, created.id, addForm.driverIds));
       await refreshTrucks();
-      await invalidateFinancialData(queryClient, { entities: ['trucks'] });
+      await invalidateFinancialData(queryClient, { entities: ['trucks', 'drivers'] });
       setAddForm(emptyForm());
       setShowAddForm(false);
+      warnSkipped(created.skippedColumns);
     } catch (err) {
       Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
     } finally {
@@ -215,14 +242,25 @@ export default function Trucks() {
 
   function openEdit(tr: Truck) {
     setEditing(tr);
-    setEditForm(truckToForm(tr));
+    setEditForm(truckToForm(tr, drivers.filter((d) => d.default_truck_id === tr.id).map((d) => d.id)));
+  }
+
+  function showError(err: unknown) {
+    Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+  }
+
+  // Nickname/plate are saved only after docs/PENDING_SQL.md §79 runs; say
+  // so instead of dropping them silently.
+  function warnSkipped(columns: string[]) {
+    if (columns.length > 0) Alert.alert(t('trucks.pendingColumnsTitle'), t('trucks.pendingColumnsBody'));
   }
 
   async function handleSaveEdit() {
     if (!editing) return;
     setSaving(true);
     try {
-      await updateTruck.mutateAsync({ id: editing.id, values: formToValues(editForm) });
+      const result = await updateRowTolerant('trucks', editing.id, formToValues(editForm), OPTIONAL_TRUCK_COLUMNS);
+      await applyDriverAssignment(planDriverAssignment(drivers, editing.id, editForm.driverIds));
       await refreshTrucks();
       // ONE REFRESH PATH (owner decision 2026-08-05, FULL PARITY follow-up
       // item A) — a truck's cost basis (purchase_price/financing/loan_id)
@@ -230,16 +268,23 @@ export default function Trucks() {
       // above only refetches ActiveTruckContext's own narrower state, it
       // never touches react-query's cache for Scorecard/CEO Mode/Profit
       // Analysis's own already-fetched 'trucks'/'loans' queries.
-      await invalidateFinancialData(queryClient, { entities: ['trucks'] });
+      await invalidateFinancialData(queryClient, { entities: ['trucks', 'drivers'] });
       setEditing(null);
+      warnSkipped(result.skippedColumns);
     } catch (err) {
-      Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+      showError(err);
     } finally {
       setSaving(false);
     }
   }
 
   function handleRetire(tr: Truck) {
+    // Last-truck rule: the last active truck cannot be archived (every
+    // per-truck screen needs one). Delete is still possible.
+    if (!canArchiveTruck(trucks, tr.id)) {
+      Alert.alert(t('trucks.lastTruckArchiveTitle'), t('trucks.lastTruckArchiveBody'));
+      return;
+    }
     Alert.alert(t('trucks.retireConfirmTitle'), t('trucks.retireConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
@@ -249,21 +294,28 @@ export default function Trucks() {
           try {
             // Never delete — a retired truck keeps every settlement/fuel/
             // maintenance record it ever had (CLAUDE.md invariant #7).
-            await updateTruck.mutateAsync({ id: tr.id, values: { is_active: false } });
+            await updateRowTolerant('trucks', tr.id, { is_active: false });
             await refreshTrucks();
             await invalidateFinancialData(queryClient, { entities: ['trucks'] });
+            setEditing(null);
           } catch (err) {
-            Alert.alert(t('trucks.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+            showError(err);
           }
         },
       },
     ]);
   }
 
+  // Used to have no try/catch, so a failed write did nothing visible.
   async function handleReactivate(tr: Truck) {
-    await updateTruck.mutateAsync({ id: tr.id, values: { is_active: true } });
-    await refreshTrucks();
-    await invalidateFinancialData(queryClient, { entities: ['trucks'] });
+    try {
+      await updateRowTolerant('trucks', tr.id, { is_active: true });
+      await refreshTrucks();
+      await invalidateFinancialData(queryClient, { entities: ['trucks'] });
+      setEditing(null);
+    } catch (err) {
+      showError(err);
+    }
   }
 
   // DELETE A TRUCK — a real, permanent delete (docs/PENDING_SQL.md §64),
@@ -273,7 +325,11 @@ export default function Trucks() {
   // button, same "type to confirm" friction Settings' own Delete Account
   // flow already established.
   async function handleOpenDeleteConfirm(tr: Truck) {
+    // Two React Native Modals cannot swap in one render: the delete sheet
+    // opened while the edit sheet was still closing and never showed. Close
+    // the edit sheet first, open the delete sheet once it is gone.
     setEditing(null);
+    await new Promise((resolve) => setTimeout(resolve, 400));
     setDeletingTruck(tr);
     setDeleteImpact(null);
     setImpactError(null);
@@ -332,6 +388,7 @@ export default function Trucks() {
       // Data's own invalidation call already uses.
       await invalidateFinancialData(queryClient);
       setDeletingTruck(null);
+      setDeleteConfirmText('');
       if (result.documentCleanupFailures.length > 0) {
         Alert.alert(t('trucks.deleteDoneTitle'), t('trucks.deleteDonePartialCleanupBody', { count: result.documentCleanupFailures.length }));
       }
@@ -347,6 +404,38 @@ export default function Trucks() {
       <>
         <MutedText>{t('trucks.unitLabel')}</MutedText>
         <Field value={form.unit_number} onChangeText={(v) => setForm({ ...form, unit_number: v })} />
+        <MutedText>{t('trucks.nicknameLabel')}</MutedText>
+        <Field value={form.nickname} onChangeText={(v) => setForm({ ...form, nickname: v })} />
+        <MutedText>{t('trucks.plateLabel')}</MutedText>
+        <Field value={form.plate} autoCapitalize="characters" onChangeText={(v) => setForm({ ...form, plate: v })} />
+        {pickableDrivers.length > 0 && (
+          <>
+            <MutedText>{t('trucks.assignedDriversLabel')}</MutedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.xs }}>
+              {pickableDrivers.map((d) => {
+                const on = form.driverIds.includes(d.id);
+                return (
+                  <Pressable
+                    key={d.id}
+                    onPress={() =>
+                      setForm({ ...form, driverIds: on ? form.driverIds.filter((x) => x !== d.id) : [...form.driverIds, d.id] })
+                    }
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: on ? colors.accent : colors.border,
+                      backgroundColor: on ? colors.accent : colors.card2,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{d.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        )}
         <MutedText>{t('trucks.vinLabel')}</MutedText>
         <Field value={form.vin} onChangeText={(v) => setForm({ ...form, vin: v })} />
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -569,19 +658,33 @@ export default function Trucks() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.text, fontWeight: '700' }}>
-                      {t('common.unit', { unit: tr.unit_number ?? tr.id })}
+                      {t('common.unit', { unit: truckLabel(tr) })}
                       {!tr.is_active ? ` ${t('trucks.retiredTag')}` : ''}
                     </Text>
                     <MutedText>
                       {[tr.year, tr.make, tr.model].filter(Boolean).join(' ') || '—'}
                     </MutedText>
+                    {tr.plate ? <MutedText>{t('trucks.plateLine', { plate: tr.plate })}</MutedText> : null}
+                    {drivers.some((d) => d.default_truck_id === tr.id) && (
+                      <MutedText>
+                        {t('trucks.driversLine', {
+                          names: drivers
+                            .filter((d) => d.default_truck_id === tr.id)
+                            .map((d) => d.name)
+                            .join(', '),
+                        })}
+                      </MutedText>
+                    )}
                     {tr.current_odometer != null && <MutedText>{number(tr.current_odometer)} {t('truckHealth.milesUnit')}</MutedText>}
                   </View>
-                  {tr.is_active ? (
-                    <SecondaryButton title={t('trucks.retire')} onPress={() => handleRetire(tr)} />
-                  ) : (
-                    <SecondaryButton title={t('trucks.reactivate')} onPress={() => handleReactivate(tr)} />
-                  )}
+                  <View style={{ gap: spacing.xs }}>
+                    <SecondaryButton title={t('trucks.edit')} onPress={() => openEdit(tr)} />
+                    {tr.is_active ? (
+                      <SecondaryButton title={t('trucks.retire')} onPress={() => handleRetire(tr)} />
+                    ) : (
+                      <SecondaryButton title={t('trucks.reactivate')} onPress={() => handleReactivate(tr)} />
+                    )}
+                  </View>
                 </View>
               </Pressable>
             ))}
@@ -682,6 +785,9 @@ export default function Trucks() {
             </View>
 
             <MutedText style={{ marginBottom: spacing.sm }}>{t('trucks.deleteBalanceNote')}</MutedText>
+            {deletingTruck && isLastTruck(trucks, deletingTruck.id) && (
+              <MutedText style={{ marginBottom: spacing.sm, color: colors.orange }}>{t('trucks.lastTruckDeleteNote')}</MutedText>
+            )}
 
             <SecondaryButton
               title={`⬇️ ${t('trucks.exportFirstButton')}`}

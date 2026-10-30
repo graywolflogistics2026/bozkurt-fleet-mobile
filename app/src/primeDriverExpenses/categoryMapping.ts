@@ -378,3 +378,63 @@ export function diagnoseLumperDeductions(
   }
   return results;
 }
+
+// CATEGORY SYNC, accountant -> canonical (owner decision 2026-10-30, master
+// plan batch A item 1, mapping given by the owner). Used only to OFFER a
+// Deductions category when a row's own canonical category says nothing
+// (Misc, Other or empty) — never applied silently, never over a specific
+// canonical category, and a Deductions change never rewrites the
+// accountant category. 'Laundry/Showers' has no canonical home (null);
+// 'Misc' maps to 'Misc', which is never offered (nothing more specific).
+export const ACCOUNTANT_TO_CANONICAL_CATEGORY: Record<PrimeDriverExpenseCategory, string | null> = {
+  Lumpers: 'Lumper Fees',
+  'Cash Tolls/Parking Fees': 'Tolls & Scales',
+  Scales: 'Tolls & Scales',
+  'Equipment/Operating Supplies': 'Truck Supplies & Equipment',
+  'Safety/Weather Gear': 'Safety Gear & Workwear',
+  'Cash Fuel': 'Fuel & DEF',
+  'Oil & Additives': 'Fuel Additives',
+  'Truck & Trailer Wash': 'Truck Wash & Detailing',
+  Repairs: 'Maintenance & Repairs',
+  Communication: 'Utilities & Subscriptions',
+  Advertising: 'Advertising',
+  'Office Supplies': 'Office & Admin',
+  Lodging: 'Parking & Lodging',
+  'Laundry/Showers': null,
+  'Bank/ATM Fees': 'Bank & Merchant Fees',
+  Misc: 'Misc',
+};
+
+const UNSPECIFIC_CANONICAL = new Set(['', 'Misc', 'Other']);
+
+export function isUnspecificCanonicalCategory(category: string | null | undefined): boolean {
+  return UNSPECIFIC_CANONICAL.has((category ?? '').trim());
+}
+
+// The Deductions category to offer for this row, or null when there is
+// nothing to offer (the row already has a specific category, the
+// accountant category has no canonical home, or it maps to Misc).
+export function canonicalSyncTarget(row: { category: string | null; accountant_category: string | null }): string | null {
+  if (!isUnspecificCanonicalCategory(row.category)) return null;
+  const accountant = row.accountant_category;
+  if (!accountant || !(accountant in ACCOUNTANT_TO_CANONICAL_CATEGORY)) return null;
+  const target = ACCOUNTANT_TO_CANONICAL_CATEGORY[accountant as PrimeDriverExpenseCategory];
+  if (!target || isUnspecificCanonicalCategory(target)) return null;
+  return target;
+}
+
+export type CategoryOutOfSync = { id: string; from: string | null; to: string; accountantCategory: string };
+
+// "Categories out of sync (N)": rows that carry an accountant category but
+// whose Deductions category is still Misc/Other/empty. A preview only —
+// nothing here writes.
+export function findCategoriesOutOfSync(
+  rows: { id: string; category: string | null; accountant_category: string | null }[]
+): CategoryOutOfSync[] {
+  const out: CategoryOutOfSync[] = [];
+  for (const row of rows) {
+    const to = canonicalSyncTarget(row);
+    if (to) out.push({ id: row.id, from: row.category, to, accountantCategory: row.accountant_category as string });
+  }
+  return out;
+}

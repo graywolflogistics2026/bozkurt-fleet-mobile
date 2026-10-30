@@ -414,7 +414,8 @@
       "allDone": "Every expense has a description.",
       "useSuggestion": "Use “{{text}}”",
       "placeholder": "Type a description"
-    }
+    },
+    "accountantChip": "Accountant: {{category}}"
   },
   "capitalAccount": {
     "title": "Capital Account",
@@ -1073,7 +1074,18 @@
     "depreciationYearPlacedInServiceLabel": "Year placed in service",
     "depreciationSpreadYearsLabel": "Spread over how many years?",
     "depreciationAskNote": "Depreciation will show as $0 in your Tax Estimator until you set a method or your CPA advises you.",
-    "trailerDepreciationTitle": "Trailer Depreciation Election (tax)"
+    "trailerDepreciationTitle": "Trailer Depreciation Election (tax)",
+    "nicknameLabel": "Nickname (optional)",
+    "plateLabel": "License plate (optional)",
+    "assignedDriversLabel": "Assigned driver(s)",
+    "edit": "Edit",
+    "plateLine": "Plate {{plate}}",
+    "driversLine": "Driver: {{names}}",
+    "pendingColumnsTitle": "Saved — except nickname and plate",
+    "pendingColumnsBody": "Everything else was saved. Nickname and plate will save after the database update (PENDING_SQL §79) is run.",
+    "lastTruckArchiveTitle": "This is your last active truck",
+    "lastTruckArchiveBody": "Add or restore another truck first. The app needs one active truck. You can still delete this one permanently.",
+    "lastTruckDeleteNote": "This is your only truck. After deleting it, add a truck again before importing settlements."
   },
   "equipmentScreen": {
     "title": "Equipment",
@@ -1149,7 +1161,21 @@
       "per_mile": "Per Mile",
       "percent": "Percent",
       "flat": "Flat"
-    }
+    },
+    "edit": "Edit",
+    "remove": "Remove",
+    "restore": "Restore",
+    "formerTag": "(Former driver)",
+    "removeConfirmTitle": "Remove {{name}}?",
+    "removeConfirmBody": "Every settlement, load, fuel purchase, deduction and payment that names this driver is kept. The driver leaves the pickers and their assigned truck, and shows as a former driver. You can restore them anytime.",
+    "removeExplain": "Recommended: keeps all history and shows this driver as a former driver.",
+    "restoreExplain": "This is a former driver. Restoring makes them selectable again.",
+    "deleteExplain": "Permanent delete is only possible for a driver with no history at all.",
+    "deletePermanently": "Delete permanently",
+    "deleteConfirmTitle": "Delete {{name}} permanently?",
+    "deleteConfirmBody": "This driver has no records. The driver is erased — there is no undo.",
+    "hasHistoryTitle": "This driver has history",
+    "hasHistoryBody": "{{count}} record(s) name this driver (settlements, loads, fuel, deductions, payments or compliance items). Use Remove instead — it keeps every record."
   },
   "loads": {
     "title": "Loads",
@@ -2850,5 +2876,56 @@
     "note": "Fixing a date moves only the week ending; every amount stays the same.",
     "conflictTitle": "Can't change this date",
     "conflictBody": "You already have a week ending {{date}} for this truck."
+  },
+  "categorySync": {
+    "offerTitle": "Also update Deductions?",
+    "offerBody": "Also set Deductions category to {{category}}?",
+    "yes": "Yes, set it",
+    "no": "Not now",
+    "doneTitle": "Deductions category updated",
+    "doneBody": "Now {{category}}. Totals, profit and tax stay the same.",
+    "undo": "Undo",
+    "ok": "OK",
+    "cardTitle": "Categories out of sync ({{count}})",
+    "cardBody": "These expenses have an accountant category but are still Misc or Other in Deductions. Nothing changes until you tap Apply.",
+    "rowLine": "{{from}} → {{to}} (Accountant: {{accountant}})",
+    "apply": "Apply",
+    "applyAll": "Apply all"
+  },
+  "documentDelete": {
+    "openButton": "Delete…",
+    "title": "Delete this document?",
+    "wholeSettlement": "This deletes the WHOLE settlement for week ending {{week}} and everything in it.",
+    "attachedTag": "(attached)",
+    "nothingLinked": "No records are linked to this file.",
+    "loansKept": "{{count}} loan(s) from this settlement stay in Loan Center (a loan is a standing obligation).",
+    "profitEffect": "Profit for week ending {{week}}: {{before}} → {{after}}",
+    "irreversible": "This cannot be undone.",
+    "typeWeek": "To confirm, type the week ending: {{week}}",
+    "deleteAll": "Delete file and everything linked",
+    "deleteFileOnly": "Delete file only, keep the records",
+    "goneTitle": "Already deleted",
+    "goneBody": "This document is no longer on your account. Nothing was changed.",
+    "doneTitle": "Deleted",
+    "fileRetryBody": "The records are deleted. The stored file could not be removed right now; the app will try again next time.",
+    "failedTitle": "Could not delete",
+    "tables": {
+      "settlements": "Settlement",
+      "loads": "Loads",
+      "fuel_purchases": "Fuel purchases",
+      "reimbursements": "Reimbursements",
+      "tolls": "Tolls",
+      "deductions": "Deductions",
+      "maintenance_records": "Maintenance records",
+      "capital_transactions": "Capital contributions",
+      "equipment": "Equipment",
+      "driver_payments": "Driver payments",
+      "import_jobs": "Import jobs",
+      "prime_driver_expenses": "For Prime Inc Drivers expenses",
+      "misc_income": "Other income",
+      "household_income": "Household income",
+      "compliance_items": "Compliance items",
+      "bank_statements": "Bank statements"
+    }
   }
 }

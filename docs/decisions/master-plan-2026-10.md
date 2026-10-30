@@ -351,8 +351,8 @@ Start now with the protocol, then batch 0b.
 | Batch | Status | Commit |
 |---|---|---|
 | 0 (printed dates, held by carrier, one deposit per statement) | Done before this plan | 5bd080d |
-| 0b | Done (see the batch 0b notes below) | (this commit) |
-| A | Not started | — |
+| 0b | Done (see the batch 0b notes below) | 95f9207 |
+| A | Done: items 1, 2, 7 (PENDING_SQL §79, §80 to run) | (this commit) |
 | B | Not started | — |
 | C | Not started | — |
 | D | Not started | — |

@@ -12,6 +12,7 @@ import {
   useDeleteComplianceItem,
 } from '@/src/data/complianceItems';
 import { useTrucksList } from '@/src/data/trucks';
+import { selectableTrucks } from '@/src/data/fleetEdit';
 import { useDrivers } from '@/src/data/drivers';
 import { uploadComplianceAttachment } from '@/src/data/complianceAttachment';
 import {
@@ -384,12 +385,12 @@ export default function ComplianceTracker() {
           ))}
         </View>
 
-        {(form.appliesTo === 'truck' || form.appliesTo === 'trailer') && (trucksQuery.data ?? []).length > 0 && (
+        {(form.appliesTo === 'truck' || form.appliesTo === 'trailer') && selectableTrucks(trucksQuery.data ?? [], form.truckId).length > 0 && (
           <>
             <MutedText>{t('compliance.truckLabel')}</MutedText>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               <Pill label={t('compliance.pickerNone')} selected={!form.truckId} onPress={() => setForm({ ...form, truckId: null })} />
-              {(trucksQuery.data ?? []).map((tr) => (
+              {selectableTrucks(trucksQuery.data ?? [], form.truckId).map((tr) => (
                 <Pill
                   key={tr.id}
                   label={tr.unit_number || tr.id}
