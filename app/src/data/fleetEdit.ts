@@ -15,7 +15,8 @@ import type { Driver, Truck } from '@/src/types/db';
 //   Until that SQL runs, a save that includes them retries without them
 //   (CLAUDE.md PENDING_SQL rule 2: an unknown-column write must not crash).
 
-export const OPTIONAL_TRUCK_COLUMNS = ['nickname', 'plate'] as const;
+// §79 nickname/plate, §81 purchase tax treatment + purchase document.
+export const OPTIONAL_TRUCK_COLUMNS = ['nickname', 'plate', 'purchase_tax_treatment', 'purchase_document_id'] as const;
 
 type WriteError = { message: string; code?: string };
 

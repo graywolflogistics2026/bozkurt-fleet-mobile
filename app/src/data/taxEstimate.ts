@@ -10,7 +10,7 @@ import { calcTaxEstimate } from '@/src/tax/calcTaxEstimate';
 import { calcPerDiemDeduction } from '@/src/tax/perDiem';
 import { sumHouseholdIncome } from '@/src/tax/household';
 import { calcContractLaborYtd, sumDeductibleDriverPayroll, type ContractLaborYtd } from '@/src/tax/driverPayroll';
-import { sumFleetDepreciation } from '@/src/tax/depreciation';
+import { sumFleetVehicleTax, vehicleDeductionExceedsIncome } from '@/src/tax/vehiclePurchase';
 import type { TaxConfig, TaxYearData } from '@/src/types/db';
 import type { TaxEstimateResult } from '@/src/tax/types';
 
@@ -33,7 +33,39 @@ export type TaxEstimateBundle = {
   depreciationTotal: number;
   depreciationRequiresCpaNote: boolean;
   netProfitBeforeDepreciation: number;
+  // VEHICLE PURCHASE (batch B, 2026-10-30, src/tax/vehiclePurchase.ts):
+  // the part of depreciationTotal from a truck's "deduct in the purchase
+  // year" choice; the same estimate without that purchase deduction (Home's
+  // weekly reserve shows both, never lowered silently); warnings.
+  vehiclePurchaseDeduction: number;
+  vehicleDeductionMissingDate: boolean;
+  vehicleDeductionExceedsIncome: boolean;
+  estimateWithoutVehicleDeduction: TaxEstimateResult;
 };
+
+// The same calcTaxEstimate() call the bundle makes, for another net profit
+// (the Trucks screen's "effect on your estimate" preview). Not a second
+// formula — the one engine with one input changed.
+export function estimateForNetProfit(
+  bundle: Pick<TaxEstimateBundle, 'taxYearData' | 'taxConfig' | 'householdIncome'>,
+  netProfit: number
+): TaxEstimateResult {
+  const taxConfig = bundle.taxConfig;
+  return calcTaxEstimate({
+    taxYearData: bundle.taxYearData,
+    filingStatus: taxConfig.filing_status,
+    state: taxConfig.state,
+    includeStateTax: taxConfig.include_state_tax,
+    entityType: taxConfig.entity_type,
+    scorpSalary: taxConfig.scorp_salary,
+    scorpPayrollTaxHandled: taxConfig.scorp_payroll_tax_handled,
+    ownershipPct: taxConfig.ownership_pct ?? undefined,
+    netProfit,
+    spouseIncome: bundle.householdIncome,
+    sepContribution: taxConfig.sep_contribution,
+    healthInsurancePremiums: taxConfig.health_insurance_premiums,
+  });
+}
 
 // Combines Session 4's tax_year_data hook + tax_config + fleet-wide stats
 // into the full estimate. Tax filing is per-person, not per-truck (unlike
@@ -68,27 +100,21 @@ export function useTaxEstimate() {
     // team_split/trainee shares) reduces net profit the same way any other
     // out-of-pocket business expense does.
     const driverPayrollExpense = sumDeductibleDriverPayroll(driverPayments);
-    const { total: depreciationTotal, anyRequiresCpaNote: depreciationRequiresCpaNote } = sumFleetDepreciation(
-      trucksQuery.data ?? [],
-      resolvedYear
-    );
+    // Identical to the old sumFleetDepreciation() for every truck without a
+    // saved purchase_tax_treatment (vehiclePurchase.test.ts proves it).
+    const vehicleTax = sumFleetVehicleTax(trucksQuery.data ?? [], resolvedYear);
+    const depreciationTotal = vehicleTax.total;
+    const depreciationRequiresCpaNote = vehicleTax.anyRequiresCpaNote;
     const netProfitBeforeDepreciation = stats.netRevenue - stats.outOfPocketDeductions - perDiemDeduction - driverPayrollExpense;
     const netProfit = netProfitBeforeDepreciation - depreciationTotal;
 
-    const estimate = calcTaxEstimate({
-      taxYearData,
-      filingStatus: taxConfig.filing_status,
-      state: taxConfig.state,
-      includeStateTax: taxConfig.include_state_tax,
-      entityType: taxConfig.entity_type,
-      scorpSalary: taxConfig.scorp_salary,
-      scorpPayrollTaxHandled: taxConfig.scorp_payroll_tax_handled,
-      ownershipPct: taxConfig.ownership_pct ?? undefined,
-      netProfit,
-      spouseIncome: householdIncome,
-      sepContribution: taxConfig.sep_contribution,
-      healthInsurancePremiums: taxConfig.health_insurance_premiums,
-    });
+    const estimate = estimateForNetProfit({ taxYearData, taxConfig, householdIncome }, netProfit);
+    // Only the owner's purchase-year deduction is taken back out; an older
+    // depreciation election keeps applying exactly as before.
+    const estimateWithoutVehicleDeduction =
+      vehicleTax.purchaseDeductionTotal === 0
+        ? estimate
+        : estimateForNetProfit({ taxYearData, taxConfig, householdIncome }, netProfit + vehicleTax.purchaseDeductionTotal);
 
     const contractLaborYtd = calcContractLaborYtd(driverPayments, drivers, resolvedYear, taxYearData.nec_1099);
 
@@ -107,6 +133,10 @@ export function useTaxEstimate() {
       depreciationTotal,
       depreciationRequiresCpaNote,
       netProfitBeforeDepreciation,
+      vehiclePurchaseDeduction: vehicleTax.purchaseDeductionTotal,
+      vehicleDeductionMissingDate: vehicleTax.anyMissingDateOrPrice,
+      vehicleDeductionExceedsIncome: vehicleDeductionExceedsIncome(vehicleTax.purchaseDeductionTotal, netProfitBeforeDepreciation),
+      estimateWithoutVehicleDeduction,
     };
   }, [
     taxYearDataQuery.data,

@@ -14,6 +14,7 @@ import { useTolls, useDeleteToll } from '@/src/data/tolls';
 import { useReimbursements } from '@/src/data/reimbursements';
 import { useTrucksList } from '@/src/data/trucks';
 import { useEquipment } from '@/src/data/equipment';
+import { useDocuments } from '@/src/data/documents';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useCapitalTransactions } from '@/src/data/capitalTransactions';
 import { useUserCategories } from '@/src/data/userCategories';
@@ -275,9 +276,15 @@ export default function AccountantPackage() {
     return buildPerDiemBlock(settlementsQuery.data ?? [], year, month, taxYearDataQuery.data.data.per_diem);
   }, [settlementsQuery.data, year, month, taxYearDataQuery.data]);
 
+  // Batch B (2026-10-30): the purchase document's name on a truck's row.
+  const documentsQuery = useDocuments();
+  const documentNames = useMemo(
+    () => new Map((documentsQuery.data ?? []).map((d) => [d.id, d.title || d.filename || d.doc_type || d.id])),
+    [documentsQuery.data]
+  );
   const capitalAssets = useMemo(
-    () => buildCapitalAssets(trucksQuery.data ?? [], equipmentQuery.data ?? []),
-    [trucksQuery.data, equipmentQuery.data]
+    () => buildCapitalAssets(trucksQuery.data ?? [], equipmentQuery.data ?? [], documentNames),
+    [trucksQuery.data, equipmentQuery.data, documentNames]
   );
 
   const ownersEquity = useMemo(
@@ -472,6 +479,14 @@ export default function AccountantPackage() {
       noCapitalAssets: t('accountantPackage.noCapitalAssets'),
       financingCash: t('accountantPackage.financingCash'),
       financingLoan: t('accountantPackage.financingLoan'),
+      treatmentLabels: {
+        deduct_purchase_year: t('vehicleTax.capitalTreatment.deduct_purchase_year'),
+        no_deduction: t('vehicleTax.capitalTreatment.no_deduction'),
+        preparer_decides: t('vehicleTax.capitalTreatment.preparer_decides'),
+        election: t('vehicleTax.capitalTreatment.election'),
+      },
+      openItemTag: t('vehicleTax.openItemTag'),
+      documentLabel: t('vehicleTax.documentLabel'),
       ownersEquityTitle: t('accountantPackage.ownersEquityTitle'),
       cashContributedLabel: t('accountantPackage.cashContributedLabel'),
       cashContributedNote: t('accountantPackage.cashContributedNote'),
@@ -829,6 +844,13 @@ export default function AccountantPackage() {
                       label={`${a.name}${a.date ? ` — ${date(a.date)}` : ''} (${a.financing === 'loan' ? t('accountantPackage.financingLoan') : t('accountantPackage.financingCash')})`}
                       value={money(a.price)}
                     />
+                    {a.treatment && (
+                      <MutedText style={a.openItem ? { color: colors.orange } : undefined}>
+                        {t(`vehicleTax.capitalTreatment.${a.treatment}`)}
+                        {a.documentName ? ` · ${t('vehicleTax.documentLabel')}: ${a.documentName}` : ''}
+                        {a.openItem ? ` · ${t('vehicleTax.openItemTag')}` : ''}
+                      </MutedText>
+                    )}
                   </View>
                 ))
               )}

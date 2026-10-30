@@ -4833,6 +4833,60 @@ order by p.proname;
 
 Mirror file: `pending_80.sql` (repo root).
 
+## 81. TRUCK PURCHASE TAX TREATMENT + PURCHASE DOCUMENT (owner decision 2026-10-30, master plan batch B) — NOT YET APPLIED
+
+**Why**: the truck's tax choice used to live only in `depreciation_method`
+(full/macrs/spread/ask): "full" stayed $0 without a separately typed
+"year placed in service" (the purchase date was ignored), "ask" is $0 by
+design, "don't deduct" did not exist, and there was no place for the
+purchase document. Two new nullable columns, nothing dropped or altered
+(`depreciation_method` and its check constraint are untouched — a truck
+with no `purchase_tax_treatment` keeps its older election exactly).
+`purchase_document_id` is `on delete set null`, so deleting the document
+(§80) clears the link and never fails. Not a new table, not a `profiles`
+column. No RLS change (`trucks_owner_all` covers new columns).
+
+**Safe before it runs**: `app/src/data/fleetEdit.ts` retries a truck save
+without the two columns (PGRST204) and tells the owner they save after
+this SQL; orphan checks treat the missing column as "no reference".
+
+```sql
+alter table trucks add column if not exists purchase_tax_treatment text;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'trucks_purchase_tax_treatment_check'
+      and conrelid = 'public.trucks'::regclass
+  ) then
+    alter table trucks add constraint trucks_purchase_tax_treatment_check
+      check (purchase_tax_treatment is null
+             or purchase_tax_treatment in ('deduct_purchase_year', 'no_deduction', 'preparer_decides'));
+  end if;
+end $$;
+
+alter table trucks add column if not exists purchase_document_id uuid references documents on delete set null;
+```
+
+Read-only check (two column rows, then one constraint row):
+
+```sql
+select column_name, data_type, is_nullable
+from information_schema.columns
+where table_schema = 'public' and table_name = 'trucks'
+  and column_name in ('purchase_tax_treatment', 'purchase_document_id')
+order by column_name;
+
+select conname from pg_constraint
+where conrelid = 'public.trucks'::regclass
+  and conname = 'trucks_purchase_tax_treatment_check';
+```
+
+- [ ] 81 run
+
+Mirror file: `pending_81.sql` (repo root).
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

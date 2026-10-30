@@ -305,7 +305,8 @@
       "title": "Vergiler",
       "weeklyReserve": "Haftalık Vergi Rezervi",
       "nextQuarterly": "Sonraki Üç Aylık Ödeme",
-      "yearlyEstimate": "Tahmini Yıllık Vergi"
+      "yearlyEstimate": "Tahmini Yıllık Vergi",
+      "withPurchaseDeduction": "Kamyon alım indirimiyle {{amount}}"
     },
     "perTruckThisWeek": {
       "title": "Bu Hafta Kamyon Başına"
@@ -1081,8 +1082,8 @@
     "edit": "Düzenle",
     "plateLine": "Plaka {{plate}}",
     "driversLine": "Sürücü: {{names}}",
-    "pendingColumnsTitle": "Kaydedildi — takma ad ve plaka hariç",
-    "pendingColumnsBody": "Geri kalan her şey kaydedildi. Takma ad ve plaka, veritabanı güncellemesi (PENDING_SQL §79) çalıştırıldıktan sonra kaydedilecek.",
+    "pendingColumnsTitle": "Kaydedildi — birkaç yeni alan hariç",
+    "pendingColumnsBody": "Geri kalan her şey kaydedildi. Takma ad, plaka, vergi tercihi ve satın alma belgesi veritabanı güncellemeleri (PENDING_SQL §79 ve §81) çalıştırıldıktan sonra kaydedilir.",
     "lastTruckArchiveTitle": "Bu son aktif kamyonunuz",
     "lastTruckArchiveBody": "Önce başka bir kamyon ekleyin veya geri getirin. Uygulamanın bir aktif kamyona ihtiyacı var. Bu kamyonu yine de kalıcı olarak silebilirsiniz.",
     "lastTruckDeleteNote": "Bu tek kamyonunuz. Sildikten sonra settlement içe aktarmadan önce yeniden bir kamyon ekleyin."
@@ -2927,5 +2928,38 @@
       "compliance_items": "Uyumluluk kalemleri",
       "bank_statements": "Banka ekstreleri"
     }
+  },
+  "vehicleTax": {
+    "title": "Satın alma — vergi tercihi",
+    "capitalNote": "Satın alma fiyatı sermayedir, işletme gideri değildir: haftalık kâra veya RPM/CPM/PPM'e asla girmez (yalnızca yukarıdaki kamyon maliyet tahmini kullanır).",
+    "treatment": {
+      "deduct_purchase_year": "Alım yılında düş",
+      "no_deduction": "Düşme",
+      "preparer_decides": "Vergi uzmanım karar versin"
+    },
+    "treatmentHelp": {
+      "deduct_purchase_year": "Fiyat, alım tarihinin yılı için tahmini vergilendirilebilir geliri düşürür. Yalnızca tahmindir — gerçek uygulamaya vergi uzmanınız karar verir.",
+      "no_deduction": "Vergi tahminine etkisi yok.",
+      "preparer_decides": "Vergi tahminine etkisi yok. Muhasebeci Paketi bu kamyonu vergi uzmanınız için açık bir kalem olarak listeler."
+    },
+    "olderElection": "Yukarıdaki seçeneklerden birini seçene kadar eski amortisman tercihi ({{method}}) geçerlidir.",
+    "needDateAndPrice": "Yukarıya alım tarihini ve fiyatını ekleyin — bunlar olmadan indirim tahmin edilemez.",
+    "effectLine": "{{year}} tahmini vergi: şu an ~{{before}} → bu seçimle ~{{after}}",
+    "exceedsIncome": "Alım indirimi tahmini gelirden büyük — tahmin işletme zararı gösteriyor. Vergi uzmanınıza danışın.",
+    "documentLabel": "Satın alma belgesi",
+    "noDocument": "Yok",
+    "chooseDocument": "Seç",
+    "removeDocument": "Kaldır",
+    "noDocumentsYet": "Henüz belge yok — önce satın alma belgesini içe aktarın.",
+    "documentMissing": "(belge silindi)",
+    "estimatorRow": "Kamyon alım indirimi (tahmin)",
+    "estimatorNote": "Kamyon alımı, Kamyonlar ekranındaki seçiminizle alım yılında düşüldü. Yalnızca tahmindir — gerçek uygulamaya vergi uzmanınız karar verir.",
+    "capitalTreatment": {
+      "deduct_purchase_year": "Uygulama: alım yılında düş",
+      "no_deduction": "Uygulama: düşülmedi",
+      "preparer_decides": "Uygulama: uzman karar verir",
+      "election": "Uygulama: amortisman tercihi"
+    },
+    "openItemTag": "AÇIK KALEM"
   }
 }

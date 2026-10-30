@@ -311,7 +311,8 @@
       "title": "Taxes",
       "weeklyReserve": "Weekly Tax Reserve",
       "nextQuarterly": "Next Quarterly Payment",
-      "yearlyEstimate": "Estimated Yearly Tax"
+      "yearlyEstimate": "Estimated Yearly Tax",
+      "withPurchaseDeduction": "{{amount}} with the truck purchase deduction"
     },
     "profitBridge": {
       "title": "How this profit adds up",
@@ -1081,8 +1082,8 @@
     "edit": "Edit",
     "plateLine": "Plate {{plate}}",
     "driversLine": "Driver: {{names}}",
-    "pendingColumnsTitle": "Saved — except nickname and plate",
-    "pendingColumnsBody": "Everything else was saved. Nickname and plate will save after the database update (PENDING_SQL §79) is run.",
+    "pendingColumnsTitle": "Saved — except a few new fields",
+    "pendingColumnsBody": "Everything else was saved. Nickname, plate, tax treatment and purchase document save after the database updates (PENDING_SQL §79 and §81) are run.",
     "lastTruckArchiveTitle": "This is your last active truck",
     "lastTruckArchiveBody": "Add or restore another truck first. The app needs one active truck. You can still delete this one permanently.",
     "lastTruckDeleteNote": "This is your only truck. After deleting it, add a truck again before importing settlements."
@@ -2927,5 +2928,38 @@
       "compliance_items": "Compliance items",
       "bank_statements": "Bank statements"
     }
+  },
+  "vehicleTax": {
+    "title": "Purchase — tax treatment",
+    "capitalNote": "The purchase price is capital, not an operating expense: it never enters weekly profit or RPM/CPM/PPM (only the truck cost-basis estimate above uses it).",
+    "treatment": {
+      "deduct_purchase_year": "Deduct in the purchase year",
+      "no_deduction": "Don't deduct",
+      "preparer_decides": "My tax professional decides"
+    },
+    "treatmentHelp": {
+      "deduct_purchase_year": "The price lowers the estimated taxable income for the purchase-date year. Estimate only — your tax professional decides the actual treatment.",
+      "no_deduction": "No effect on the tax estimate.",
+      "preparer_decides": "No effect on the tax estimate. The Accountant Package lists this truck as an open item for your tax professional."
+    },
+    "olderElection": "An older depreciation election ({{method}}) applies until you pick one of the choices above.",
+    "needDateAndPrice": "Add the purchase date and price above — without them the purchase deduction can't be estimated.",
+    "effectLine": "Estimated {{year}} tax: ~{{before}} now → ~{{after}} with this choice",
+    "exceedsIncome": "The purchase deduction is larger than the estimated income — the estimate shows a business loss. Ask your tax professional.",
+    "documentLabel": "Purchase document",
+    "noDocument": "None",
+    "chooseDocument": "Choose",
+    "removeDocument": "Remove",
+    "noDocumentsYet": "No documents yet — import the purchase document first.",
+    "documentMissing": "(document deleted)",
+    "estimatorRow": "Truck purchase deduction (estimate)",
+    "estimatorNote": "Truck purchase deducted in the purchase year by your choice on the Trucks screen. Estimate only — your tax professional decides the actual treatment.",
+    "capitalTreatment": {
+      "deduct_purchase_year": "Treatment: deduct in the purchase year",
+      "no_deduction": "Treatment: not deducted",
+      "preparer_decides": "Treatment: preparer decides",
+      "election": "Treatment: depreciation election"
+    },
+    "openItemTag": "OPEN ITEM"
   }
 }

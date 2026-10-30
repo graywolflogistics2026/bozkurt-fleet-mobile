@@ -778,7 +778,20 @@ function HomeTaxStrip({ taxQuery }: { taxQuery: ReturnType<typeof useTaxEstimate
       <ScreenTitle>{t('dashboard.taxStrip.title')}</ScreenTitle>
       {!isAllTrucks && trucks.length > 1 && <MutedText style={{ marginBottom: spacing.xs }}>{t('fleetScope.fleetWideAlways')}</MutedText>}
       <View style={styles.compactRow}>
-        <CompactStatTile label={t('dashboard.taxStrip.weeklyReserve')} value={moneyRounded(estimate.weeklyTaxReserve)} onPress={goToTax} />
+        {/* Batch B (2026-10-30): a truck's "deduct in the purchase year"
+            choice never lowers the reserve silently — the main figure is
+            without it, the line under it shows the reserve with it. */}
+        {taxQuery.data.vehiclePurchaseDeduction > 0 ? (
+          <CompactStatTile
+            label={t('dashboard.taxStrip.weeklyReserve')}
+            value={moneyRounded(taxQuery.data.estimateWithoutVehicleDeduction.weeklyTaxReserve)}
+            subtext={t('dashboard.taxStrip.withPurchaseDeduction', { amount: moneyRounded(estimate.weeklyTaxReserve) })}
+            subtextColor={colors.orange}
+            onPress={goToTax}
+          />
+        ) : (
+          <CompactStatTile label={t('dashboard.taxStrip.weeklyReserve')} value={moneyRounded(estimate.weeklyTaxReserve)} onPress={goToTax} />
+        )}
         <CompactStatTile
           label={t('dashboard.taxStrip.nextQuarterly')}
           value={moneyRounded(estimate.quarterlyPayment)}

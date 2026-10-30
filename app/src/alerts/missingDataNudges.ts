@@ -85,12 +85,13 @@ export function detectTruckCostBasisNotSet(
 // deduction) from the purchase price already on file — a real, non-
 // fabricated number, never shown unless the caller actually computed it.
 export function detectDepreciationNotSet(
-  trucks: { cost_basis_ownership_mode: string | null; depreciation_method: string | null }[],
+  trucks: { cost_basis_ownership_mode: string | null; depreciation_method: string | null; purchase_tax_treatment?: string | null }[],
   role: ProfileRole,
   previewTotal?: number | null
 ): NudgeCandidate | null {
   if (!isOwnerRole(role)) return null;
-  const count = trucks.filter((t) => t.cost_basis_ownership_mode !== 'lease' && t.depreciation_method === null).length;
+  // A saved purchase tax treatment (batch B, §81) is a decision too.
+  const count = trucks.filter((t) => t.cost_basis_ownership_mode !== 'lease' && t.depreciation_method === null && !t.purchase_tax_treatment).length;
   if (count === 0) return null;
   const detail: Record<string, number> = { count };
   if (previewTotal != null && previewTotal > 0) detail.previewTotal = Math.round(previewTotal);

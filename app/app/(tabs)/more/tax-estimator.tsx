@@ -421,7 +421,16 @@ export default function TaxEstimator() {
               {tax.depreciationTotal > 0 && (
                 <>
                   <Row label={t('taxEstimator.netProfitBeforeDepreciation')} value={money(tax.netProfitBeforeDepreciation)} />
-                  <Row label={t('taxEstimator.depreciation')} value={`- ${money(tax.depreciationTotal)}`} valueColor={colors.red} />
+                  {tax.depreciationTotal - tax.vehiclePurchaseDeduction > 0 && (
+                    <Row
+                      label={t('taxEstimator.depreciation')}
+                      value={`- ${money(tax.depreciationTotal - tax.vehiclePurchaseDeduction)}`}
+                      valueColor={colors.red}
+                    />
+                  )}
+                  {tax.vehiclePurchaseDeduction > 0 && (
+                    <Row label={t('vehicleTax.estimatorRow')} value={`- ${money(tax.vehiclePurchaseDeduction)}`} valueColor={colors.red} />
+                  )}
                 </>
               )}
               <Row label={t('taxEstimator.netProfit')} value={money(tax.estimate.netProfit)} />
@@ -449,6 +458,9 @@ export default function TaxEstimator() {
               <Row label={t('taxEstimator.totalTax')} value={money(tax.estimate.totalTax)} valueColor={colors.red} bold />
               <Row label={t('taxEstimator.effectiveRate')} value={tax.estimate.effectiveRate != null ? `${tax.estimate.effectiveRate.toFixed(1)}%` : '—'} />
             </Card>
+            {tax.vehiclePurchaseDeduction > 0 && <MutedText style={{ color: colors.orange }}>{t('vehicleTax.estimatorNote')}</MutedText>}
+            {tax.vehicleDeductionExceedsIncome && <MutedText style={{ color: colors.orange }}>{t('vehicleTax.exceedsIncome')}</MutedText>}
+            {tax.vehicleDeductionMissingDate && <MutedText style={{ color: colors.orange }}>{t('vehicleTax.needDateAndPrice')}</MutedText>}
             {tax.depreciationRequiresCpaNote && (
               <MutedText style={{ color: colors.orange }}>{t('taxEstimator.depreciationCpaNote')}</MutedText>
             )}

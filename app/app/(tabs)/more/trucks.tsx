@@ -19,6 +19,9 @@ import {
   updateRowTolerant,
 } from '@/src/data/fleetEdit';
 import { useLoanRows, useInsertLoanRow } from '@/src/data/loans';
+import { useDocuments } from '@/src/data/documents';
+import { estimateForNetProfit, useTaxEstimate } from '@/src/data/taxEstimate';
+import { VEHICLE_TAX_TREATMENTS, previewVehicleChoice, type VehicleTaxTreatment } from '@/src/tax/vehiclePurchase';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { fetchTruckDeletionImpact, deleteTruckCompletely, type TruckDeletionImpact } from '@/src/data/truckDeletion';
 import { fetchTruckExportData } from '@/src/data/truckExport';
@@ -66,6 +69,11 @@ type FormState = {
   trailerDepreciationMethod: 'full' | 'macrs' | 'spread' | 'ask' | '';
   trailerDepreciationYearPlacedInService: string;
   trailerDepreciationSpreadYears: string;
+  // VEHICLE PURCHASE AND TAX TREATMENT (batch B, 2026-10-30, §81,
+  // src/tax/vehiclePurchase.ts). '' = an existing truck with an older
+  // depreciation election and no choice saved yet (the election applies).
+  purchaseTaxTreatment: VehicleTaxTreatment | '';
+  purchaseDocumentId: string | null;
 };
 
 function emptyForm(): FormState {
@@ -94,6 +102,8 @@ function emptyForm(): FormState {
     trailerDepreciationMethod: '',
     trailerDepreciationYearPlacedInService: '',
     trailerDepreciationSpreadYears: '',
+    purchaseTaxTreatment: 'preparer_decides',
+    purchaseDocumentId: null,
   };
 }
 
@@ -134,6 +144,9 @@ function truckToForm(t: Truck, assignedDriverIds: string[]): FormState {
     trailerDepreciationYearPlacedInService:
       t.trailer_depreciation_year_placed_in_service != null ? String(t.trailer_depreciation_year_placed_in_service) : '',
     trailerDepreciationSpreadYears: t.trailer_depreciation_spread_years != null ? String(t.trailer_depreciation_spread_years) : '',
+    purchaseTaxTreatment:
+      t.purchase_tax_treatment ?? (t.depreciation_method && t.depreciation_method !== 'ask' ? '' : 'preparer_decides'),
+    purchaseDocumentId: t.purchase_document_id ?? null,
   };
 }
 
@@ -151,6 +164,10 @@ export default function Trucks() {
   const loansQuery = useLoanRows();
   const insertLoan = useInsertLoanRow();
   const loans = loansQuery.data ?? [];
+  const documentsQuery = useDocuments();
+  const documents = documentsQuery.data ?? [];
+  const taxEstimate = useTaxEstimate().data;
+  const [docPickerOpen, setDocPickerOpen] = useState(false);
 
   const [showRetired, setShowRetired] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -206,7 +223,29 @@ export default function Trucks() {
         ? numOrNull(form.trailerDepreciationYearPlacedInService) || null
         : null,
       trailer_depreciation_spread_years: form.trailerDepreciationSpreadYears ? numOrNull(form.trailerDepreciationSpreadYears) || null : null,
+      purchase_tax_treatment: form.purchaseTaxTreatment || null,
+      purchase_document_id: form.purchaseDocumentId,
     };
+  }
+
+  // The live "effect on your estimate" line: the one tax engine with this
+  // form's values in place of the saved truck (previewVehicleChoice).
+  function vehicleEffect(form: FormState, truckId: string | undefined) {
+    if (!taxEstimate) return null;
+    const values = formToValues(form);
+    return previewVehicleChoice(
+      trucks,
+      { ...values, id: truckId, purchase_tax_treatment: values.purchase_tax_treatment as VehicleTaxTreatment | null },
+      taxEstimate.resolvedYear,
+      taxEstimate.netProfitBeforeDepreciation,
+      (netProfit) => estimateForNetProfit(taxEstimate, netProfit)
+    );
+  }
+
+  function documentName(id: string | null): string | null {
+    if (!id) return null;
+    const d = documents.find((x) => x.id === id);
+    return d ? d.title || d.filename || d.id : t('vehicleTax.documentMissing');
   }
 
   async function createLoan(fields: Omit<LoanInsert, 'user_id'>) {
@@ -399,7 +438,8 @@ export default function Trucks() {
     }
   }
 
-  function renderForm(form: FormState, setForm: (f: FormState) => void) {
+  function renderForm(form: FormState, setForm: (f: FormState) => void, truckId?: string) {
+    const effect = vehicleEffect(form, truckId);
     return (
       <>
         <MutedText>{t('trucks.unitLabel')}</MutedText>
@@ -532,13 +572,88 @@ export default function Trucks() {
           placeholder="0"
         />
 
-        <Text style={styles.sectionTitle}>{t('trucks.depreciationTitle')}</Text>
-        <MutedText>{t('trucks.depreciationNote')}</MutedText>
+        <Text style={styles.sectionTitle}>{t('vehicleTax.title')}</Text>
+        <MutedText>{t('vehicleTax.capitalNote')}</MutedText>
         {form.costBasisOwnershipMode === 'lease' ? (
           <MutedText style={{ marginTop: spacing.xs }}>{t('trucks.depreciationSkippedLease')}</MutedText>
         ) : (
           <>
-            {!form.depreciationMethod && <MutedText style={{ color: colors.orange }}>{t('trucks.depreciationNotSet')}</MutedText>}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs }}>
+              {[...VEHICLE_TAX_TREATMENTS].reverse().map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setForm({ ...form, purchaseTaxTreatment: option })}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: form.purchaseTaxTreatment === option ? colors.accent : colors.border,
+                    backgroundColor: form.purchaseTaxTreatment === option ? colors.accent : colors.card2,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: '600' }}>{t(`vehicleTax.treatment.${option}`)}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {form.purchaseTaxTreatment === '' && (
+              <MutedText style={{ color: colors.orange }}>
+                {t('vehicleTax.olderElection', { method: t(`trucks.depreciationMethod.${form.depreciationMethod || 'ask'}`) })}
+              </MutedText>
+            )}
+            {form.purchaseTaxTreatment !== '' && <MutedText>{t(`vehicleTax.treatmentHelp.${form.purchaseTaxTreatment}`)}</MutedText>}
+            {form.purchaseTaxTreatment === 'deduct_purchase_year' && (!form.financing.purchase_date || !form.financing.purchase_price) && (
+              <MutedText style={{ color: colors.orange }}>{t('vehicleTax.needDateAndPrice')}</MutedText>
+            )}
+            {effect && (
+              <MutedText style={{ marginTop: spacing.xs, color: colors.text }}>
+                {t('vehicleTax.effectLine', {
+                  before: money(effect.before.totalTax),
+                  after: money(effect.after.totalTax),
+                  year: taxEstimate?.resolvedYear ?? '',
+                })}
+              </MutedText>
+            )}
+            {effect?.exceedsIncome && <MutedText style={{ color: colors.orange }}>{t('vehicleTax.exceedsIncome')}</MutedText>}
+
+            <MutedText style={{ marginTop: spacing.sm }}>{t('vehicleTax.documentLabel')}</MutedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
+              <Text style={{ color: colors.text, flexShrink: 1 }}>{documentName(form.purchaseDocumentId) ?? t('vehicleTax.noDocument')}</Text>
+              <SecondaryButton title={t('vehicleTax.chooseDocument')} onPress={() => setDocPickerOpen(!docPickerOpen)} />
+              {form.purchaseDocumentId && (
+                <SecondaryButton title={t('vehicleTax.removeDocument')} onPress={() => setForm({ ...form, purchaseDocumentId: null })} />
+              )}
+            </View>
+            {docPickerOpen && (
+              <View style={{ marginTop: spacing.xs, gap: spacing.xs }}>
+                {documents.length === 0 && <MutedText>{t('vehicleTax.noDocumentsYet')}</MutedText>}
+                {documents.slice(0, 30).map((d) => (
+                  <Pressable
+                    key={d.id}
+                    onPress={() => {
+                      setForm({ ...form, purchaseDocumentId: d.id });
+                      setDocPickerOpen(false);
+                    }}
+                    style={{
+                      padding: 8,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: form.purchaseDocumentId === d.id ? colors.accent : colors.border,
+                      backgroundColor: colors.card2,
+                    }}
+                  >
+                    <Text style={{ color: colors.text }}>{d.title || d.filename || d.id}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {form.purchaseTaxTreatment === '' && form.costBasisOwnershipMode !== 'lease' && (
+          <>
+            <Text style={styles.sectionTitle}>{t('trucks.depreciationTitle')}</Text>
+            <MutedText>{t('trucks.depreciationNote')}</MutedText>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs }}>
               {(['full', 'macrs', 'spread', 'ask'] as const).map((option) => (
                 <Pressable
@@ -707,7 +822,7 @@ export default function Trucks() {
 
       <ModalSheet visible={!!editing} onClose={() => setEditing(null)}>
         <SheetTitle>{t('trucks.editTruck')}</SheetTitle>
-        {renderForm(editForm, setEditForm)}
+        {renderForm(editForm, setEditForm, editing?.id)}
         <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
 

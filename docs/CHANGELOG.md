@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- MASTER PLAN BATCH B (owner decision 2026-10-30): vehicle purchase and tax
+  treatment. Trace: the choice lived in depreciation_method; "full" stayed $0
+  without a typed placed-in-service year (purchase date ignored), "ask" $0 by
+  design, no "don't deduct", no document field. New trucks.purchase_tax_
+  treatment + purchase_document_id (§81, additive); src/tax/vehiclePurchase.ts:
+  deduct = price in the purchase-date year (estimate, warns past income),
+  no-deduct / preparer-decides = no effect; trucks without a choice keep their
+  old election (test proves identical). Home reserve shows without + with;
+  Accountant Package lists treatment, document, OPEN ITEM. KPIs unchanged.
+
 - MASTER PLAN BATCH A (owner decisions 2026-10-30, docs/decisions/
   master-plan-2026-10.md). Item 1: accountant -> canonical map
   (categoryMapping.ts), one "Also set Deductions category?" offer with Undo

@@ -14,6 +14,7 @@ import { buildAssetRegister, buildAssetCategoryBreakdown, type AssetCategoryBrea
 import type { Deduction, Equipment, FuelPurchase, MaintenanceRecord, LoanRow, CreditCardRow, Toll, Truck, UserCategory } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
 import type { TaxYearData } from '@/src/types/db';
+import { capitalTreatmentLabel, isOpenCapitalItem, type CapitalTreatmentLabel } from '@/src/tax/vehiclePurchase';
 
 export type CategoryTotal = { category: string; amount: number };
 
@@ -504,13 +505,28 @@ export type CapitalAssetRow = {
   date: string | null;
   price: number;
   financing: 'cash' | 'loan' | null;
+  // Batch B (2026-10-30, src/tax/vehiclePurchase.ts): trucks only — the
+  // tax treatment, whether it is still an open item for the preparer, and
+  // the purchase document's name.
+  treatment?: CapitalTreatmentLabel;
+  openItem?: boolean;
+  documentName?: string | null;
 };
 
-export function buildCapitalAssets(trucks: Truck[], equipment: Equipment[]): CapitalAssetRow[] {
+export function buildCapitalAssets(trucks: Truck[], equipment: Equipment[], documentNames?: ReadonlyMap<string, string>): CapitalAssetRow[] {
   const rows: CapitalAssetRow[] = [];
   for (const t of trucks) {
     if (t.purchase_price) {
-      rows.push({ type: 'truck', name: t.unit_number || 'Truck', date: t.purchase_date, price: Number(t.purchase_price), financing: t.financing });
+      rows.push({
+        type: 'truck',
+        name: t.unit_number || 'Truck',
+        date: t.purchase_date,
+        price: Number(t.purchase_price),
+        financing: t.financing,
+        treatment: capitalTreatmentLabel(t),
+        openItem: isOpenCapitalItem(t),
+        documentName: t.purchase_document_id ? (documentNames?.get(t.purchase_document_id) ?? null) : null,
+      });
     }
     if (t.trailer_purchase_price) {
       rows.push({

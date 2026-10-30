@@ -352,8 +352,8 @@ Start now with the protocol, then batch 0b.
 |---|---|---|
 | 0 (printed dates, held by carrier, one deposit per statement) | Done before this plan | 5bd080d |
 | 0b | Done (see the batch 0b notes below) | 95f9207 |
-| A | Done: items 1, 2, 7 (PENDING_SQL §79, §80 to run) | (this commit) |
-| B | Not started | — |
+| A | Done: items 1, 2, 7 (PENDING_SQL §79, §80 to run) | 875f4d2 |
+| B | Done: vehicle purchase tax treatment (PENDING_SQL §81 to run) | (this commit) |
 | C | Not started | — |
 | D | Not started | — |
 | E | Not started | — |

@@ -1,5 +1,6 @@
 import { ACCOUNTANT_EXPORT_COLORS } from '@/src/stats/accountantPackageColors';
 import type { LineItem, PerDiemBlock, MiscConcentrationWarning, CapitalAssetRow, OwnersEquitySummary, GroupedScheduleCCategory, AccountantScope } from '@/src/stats/accountantPackage';
+import type { CapitalTreatmentLabel } from '@/src/tax/vehiclePurchase';
 import type { CapitalFlowRow, CapitalFlowType } from '@/src/stats/capitalAccount';
 
 // FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase) — the
@@ -65,6 +66,11 @@ export type AccountantReportStrings = {
   noCapitalAssets: string;
   financingCash: string;
   financingLoan: string;
+  // Batch B (2026-10-30): a truck's tax treatment, open-item tag and
+  // purchase document. Optional so older callers still render.
+  treatmentLabels?: Record<CapitalTreatmentLabel, string>;
+  openItemTag?: string;
+  documentLabel?: string;
   ownersEquityTitle: string;
   cashContributedLabel: string;
   cashContributedNote: string;
@@ -234,7 +240,7 @@ export function buildAccountantReportHtml(
   const assetRows = capitalAssets
     .map(
       (a) =>
-        `<tr><td colspan="2">${esc(a.type)} — ${esc(a.name)}${a.date ? ` (${esc(fmt.date(a.date))})` : ''} (${a.financing === 'loan' ? esc(strings.financingLoan) : esc(strings.financingCash)})</td><td class="amt">${fmt.money(a.price)}</td></tr>`
+        `<tr><td colspan="2">${esc(a.type)} — ${esc(a.name)}${a.date ? ` (${esc(fmt.date(a.date))})` : ''} (${a.financing === 'loan' ? esc(strings.financingLoan) : esc(strings.financingCash)})${capitalAssetDetail(a, strings)}</td><td class="amt">${fmt.money(a.price)}</td></tr>`
     )
     .join('');
 
@@ -353,4 +359,16 @@ export function buildAccountantReportHtml(
       </body>
     </html>
   `;
+}
+
+// Batch B (2026-10-30): " · treatment: preparer decides · document: X [open item]".
+export function capitalAssetDetail(
+  a: Pick<CapitalAssetRow, 'treatment' | 'openItem' | 'documentName'>,
+  strings: Pick<AccountantReportStrings, 'treatmentLabels' | 'openItemTag' | 'documentLabel'>
+): string {
+  const parts: string[] = [];
+  if (a.treatment && strings.treatmentLabels) parts.push(esc(strings.treatmentLabels[a.treatment]));
+  if (a.documentName && strings.documentLabel) parts.push(`${esc(strings.documentLabel)}: ${esc(a.documentName)}`);
+  const tag = a.openItem && strings.openItemTag ? ` <span class="chip">${esc(strings.openItemTag)}</span>` : '';
+  return parts.length > 0 || tag ? ` · ${parts.join(' · ')}${tag}` : '';
 }

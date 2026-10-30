@@ -1043,14 +1043,16 @@ under each is unchanged original wording.
 
 ## Current state (2026-10-30)
 
-- **Code**: `main` after master plan batch A (on top of 95f9207, batch 0b),
+- **Code**: `main` after master plan batch B (on top of 875f4d2, batch A),
   pushed. Ships via `eas update --branch preview`. Plan progress:
   `docs/decisions/master-plan-2026-10.md`.
-- **Database** (`docs/PENDING_SQL.md`, 80 sections): everything is applied
+- **Database** (`docs/PENDING_SQL.md`, 81 sections): everything is applied
   except:
   - §79 truck nickname + plate, §80 document delete functions — NOT YET
     APPLIED (batch A). `pending_79.sql`, `pending_80.sql` at the root.
     The client is safe before either runs.
+  - §81 truck purchase tax treatment + purchase document — NOT YET APPLIED
+    (batch B). `pending_81.sql` at the root; client safe before it runs.
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
   - §72 remove business-balance tracking — status UNCONFIRMED.

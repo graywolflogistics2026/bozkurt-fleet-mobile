@@ -117,7 +117,7 @@ export function useAlertsData() {
   const currentTaxYear = new Date().getFullYear();
   const depreciationPreviewTotal = useMemo(() => {
     return (trucksListQuery.data ?? []).reduce((sum, t) => {
-      if (t.cost_basis_ownership_mode === 'lease' || t.depreciation_method) return sum;
+      if (t.cost_basis_ownership_mode === 'lease' || t.depreciation_method || t.purchase_tax_treatment) return sum;
       if (!t.purchase_price) return sum;
       const yearPlacedInService = t.purchase_date ? yearOf(t.purchase_date) : currentTaxYear;
       const preview = calcCurrentYearDepreciation(

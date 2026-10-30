@@ -144,10 +144,10 @@ export function useDailyTip() {
     const perDiemDaysYtd = calcPerDiemDays(settlementsThisYear.map((s) => ({ week_ending: s.week_ending, per_diem_days: s.per_diem_days })));
 
     const trucksWithoutCostBasisCount = trucks.filter((t) => t.cost_basis_ownership_mode === null).length;
-    const trucksWithoutDepreciationCount = trucks.filter((t) => t.cost_basis_ownership_mode !== 'lease' && t.depreciation_method === null).length;
+    const trucksWithoutDepreciationCount = trucks.filter((t) => t.cost_basis_ownership_mode !== 'lease' && t.depreciation_method === null && !t.purchase_tax_treatment).length;
     const currentTaxYear = now.getFullYear();
     const depreciationPreviewTotal = trucks.reduce((sum, t) => {
-      if (t.cost_basis_ownership_mode === 'lease' || t.depreciation_method || !t.purchase_price) return sum;
+      if (t.cost_basis_ownership_mode === 'lease' || t.depreciation_method || t.purchase_tax_treatment || !t.purchase_price) return sum;
       const yearPlacedInService = t.purchase_date ? yearOf(t.purchase_date) : currentTaxYear;
       const preview = calcCurrentYearDepreciation(
         { purchasePrice: t.purchase_price, ownershipMode: 'paid', method: 'full', yearPlacedInService, spreadYears: null },

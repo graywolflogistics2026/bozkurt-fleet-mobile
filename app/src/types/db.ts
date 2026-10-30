@@ -68,6 +68,10 @@ export type Truck = {
   trailer_depreciation_method: 'full' | 'macrs' | 'spread' | 'ask' | null;
   trailer_depreciation_year_placed_in_service: number | null;
   trailer_depreciation_spread_years: number | null;
+  // docs/PENDING_SQL.md §81 (2026-10-30, batch B) — see
+  // app/src/tax/vehiclePurchase.ts. Optional: absent until that SQL runs.
+  purchase_tax_treatment?: 'deduct_purchase_year' | 'no_deduction' | 'preparer_decides' | null;
+  purchase_document_id?: string | null;
   created_at: string;
   updated_at: string;
 };

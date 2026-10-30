@@ -305,7 +305,8 @@
       "title": "Impuestos",
       "weeklyReserve": "Reserva Fiscal Semanal",
       "nextQuarterly": "Próximo Pago Trimestral",
-      "yearlyEstimate": "Impuesto Anual Estimado"
+      "yearlyEstimate": "Impuesto Anual Estimado",
+      "withPurchaseDeduction": "{{amount}} con la deducción por compra del camión"
     },
     "perTruckThisWeek": {
       "title": "Por Camión Esta Semana"
@@ -1081,8 +1082,8 @@
     "edit": "Editar",
     "plateLine": "Placa {{plate}}",
     "driversLine": "Conductor: {{names}}",
-    "pendingColumnsTitle": "Guardado, excepto apodo y placa",
-    "pendingColumnsBody": "Todo lo demás se guardó. El apodo y la placa se guardarán después de ejecutar la actualización de la base de datos (PENDING_SQL §79).",
+    "pendingColumnsTitle": "Guardado — excepto algunos campos nuevos",
+    "pendingColumnsBody": "Todo lo demás se guardó. El apodo, la placa, el tratamiento fiscal y el documento de compra se guardarán después de ejecutar las actualizaciones de la base de datos (PENDING_SQL §79 y §81).",
     "lastTruckArchiveTitle": "Este es tu último camión activo",
     "lastTruckArchiveBody": "Primero agrega o restaura otro camión. La app necesita un camión activo. Aún puedes eliminar este de forma permanente.",
     "lastTruckDeleteNote": "Este es tu único camión. Después de eliminarlo, agrega un camión de nuevo antes de importar settlements."
@@ -2927,5 +2928,38 @@
       "compliance_items": "Elementos de cumplimiento",
       "bank_statements": "Estados de cuenta bancarios"
     }
+  },
+  "vehicleTax": {
+    "title": "Compra — tratamiento fiscal",
+    "capitalNote": "El precio de compra es capital, no un gasto operativo: nunca entra en la ganancia semanal ni en RPM/CPM/PPM (solo lo usa la estimación de costo base del camión de arriba).",
+    "treatment": {
+      "deduct_purchase_year": "Deducir en el año de compra",
+      "no_deduction": "No deducir",
+      "preparer_decides": "Decide mi profesional de impuestos"
+    },
+    "treatmentHelp": {
+      "deduct_purchase_year": "El precio reduce el ingreso gravable estimado del año de la fecha de compra. Solo es una estimación — su profesional de impuestos decide el tratamiento real.",
+      "no_deduction": "Sin efecto en la estimación de impuestos.",
+      "preparer_decides": "Sin efecto en la estimación de impuestos. El Paquete para el Contador muestra este camión como un asunto pendiente para su profesional de impuestos."
+    },
+    "olderElection": "Se aplica una elección de depreciación anterior ({{method}}) hasta que elija una de las opciones de arriba.",
+    "needDateAndPrice": "Agregue arriba la fecha y el precio de compra — sin ellos no se puede estimar la deducción.",
+    "effectLine": "Impuesto estimado {{year}}: ~{{before}} ahora → ~{{after}} con esta opción",
+    "exceedsIncome": "La deducción por compra es mayor que el ingreso estimado — la estimación muestra una pérdida del negocio. Consulte a su profesional de impuestos.",
+    "documentLabel": "Documento de compra",
+    "noDocument": "Ninguno",
+    "chooseDocument": "Elegir",
+    "removeDocument": "Quitar",
+    "noDocumentsYet": "Aún no hay documentos — primero importe el documento de compra.",
+    "documentMissing": "(documento eliminado)",
+    "estimatorRow": "Deducción por compra del camión (estimación)",
+    "estimatorNote": "Compra del camión deducida en el año de compra según su elección en la pantalla Camiones. Solo es una estimación — su profesional de impuestos decide el tratamiento real.",
+    "capitalTreatment": {
+      "deduct_purchase_year": "Tratamiento: deducir en el año de compra",
+      "no_deduction": "Tratamiento: no deducido",
+      "preparer_decides": "Tratamiento: decide el preparador",
+      "election": "Tratamiento: elección de depreciación"
+    },
+    "openItemTag": "PENDIENTE"
   }
 }
