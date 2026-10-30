@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { heldAtMonthEnd } from '@/src/stats/heldByCarrier';
+import { HeldByCarrierCard } from '@/src/components/HeldByCarrierCard';
 import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -530,6 +532,12 @@ export default function CashFlow() {
     [monthlyYear, currentYearNow, monthlyOverview, monthlySharedInput]
   );
   const thisMonthEntry = thisMonthMonths.find((m) => m.month === currentMonthNow);
+  // HELD BY CARRIER AT MONTH END (owner decision 2026-10-29): the printed
+  // balance of the last settlement inside this month.
+  const heldThisMonth = useMemo(
+    () => heldAtMonthEnd(settlementsQuery.data ?? [], null, currentYearNow, currentMonthNow, deductionsQuery.data ?? []),
+    [settlementsQuery.data, deductionsQuery.data, currentYearNow, currentMonthNow]
+  );
 
   const weakestMonthIdx = findTightestMonthIndex(monthlyOverview);
   const bestMonthIdx = findBestMonthIndex(monthlyOverview);
@@ -973,6 +981,7 @@ export default function CashFlow() {
                 <>
                   <Text style={styles.sectionTitle}>{t('cashFlowScreen.periodThisMonth')}</Text>
                   <MonthCard m={thisMonthEntry} expanded onToggle={() => {}} isWeakest={false} isBest={false} />
+                  {heldThisMonth.status !== 'not_printed' && <HeldByCarrierCard held={heldThisMonth} label={t('heldByCarrier.monthEndLabel')} />}
                 </>
               ) : null)}
 

@@ -11,6 +11,17 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- DATES (definitive) + ESCROW / HELD / DEPOSIT (owner decisions 2026-10-29).
+  ai-import returns dates as printed (settlementDateRaw/printDateRaw/
+  statementWeekEndingRaw) + pdfCreationDate; printedDates.ts parses them
+  (Prime YY/MM/DD, line MMDD from the week ending), date gate blocks Save
+  with a one-line question; swap tolerance removed; "Needs a date check" on
+  Settlements. calcEscrowBalance removed -> heldByCarrier (printed PERF
+  BD/EMGCY FD, as of the newest week; primeEscrow.ts checks); deposits one
+  per statement; Prime YTD vs YTD SETTLEMENT TO OPERATOR. 38 i18n keys x 7.
+  No SQL (§77 jsonb). Redeploy ai-import. eas update.
+  docs/decisions/printed-dates-and-held.md.
+
 - W/E 8/14 FOLLOW-UP — items 5-7 + PO fix (owner decisions 2026-10-17).
   Per-group checks (primeLineGroups.ts, warnings only); the GATE (every
   check inside the statement + statement week ending; past it gross =

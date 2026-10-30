@@ -29,6 +29,7 @@ const USER_ID = 'user-1';
 
 async function importDoc(extraction: Extraction) {
   return saveExtraction({
+    importDate: '2026-10-29',
     extraction,
     userId: USER_ID,
     truckId: null,
@@ -64,6 +65,7 @@ describe('settlement lines (the AI template defaults "desc":"")', () => {
       settlement: {
         carrier: 'PRIME INC',
         weekEnding: '2026-07-17',
+        settlementDateRaw: '26/07/17',
         grossRevenue: 1000,
         netPay: 500,
         totalMiles: 445,

@@ -49,6 +49,10 @@ import { checkSettlementReconciliation, flagReconciliationOverride } from '@/src
 import { buildPrimeStatementCheck, statementPagesOf } from '@/src/import/settlementStatement';
 import { buildReviewVerdict, isOlderReading, isSaveBlocked, markReviewWarnings, reviewInputsOf } from '@/src/import/reviewVerdict';
 import { SettlementReview } from '@/src/components/SettlementReview';
+import { SettlementDateQuestion } from '@/src/components/SettlementDateQuestion';
+import { checkSettlementDates, isDateGateSatisfied, rememberedDateFormat, settlementDateInputsOf } from '@/src/import/printedDates';
+import { useSettlements } from '@/src/data/settlements';
+import { isPrimeCarrier } from '@/src/import/primeOperatingStatement';
 import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
@@ -269,6 +273,8 @@ export default function Import() {
   const [phase, setPhase] = useState<Phase>('pick');
   const [workingLabel, setWorkingLabel] = useState('');
   const [extraction, setExtraction] = useState<Extraction | null>(null);
+  // PRINTED DATES (A5): saved settlements, for a carrier's remembered date format.
+  const savedSettlementsQuery = useSettlements();
   const [fileMeta, setFileMeta] = useState<{ uri: string; ext: string; mediaType: string; name?: string } | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
   const [existingSettlementWeek, setExistingSettlementWeek] = useState<{ id: string } | null>(null);
@@ -602,6 +608,22 @@ export default function Import() {
     }
   }
   useEffect(() => () => clearStillWorkingTimer(), []);
+  // PRINTED DATES (A5): another carrier's printed date read one way only, or
+  // the way this carrier was confirmed before, replaces the model's date —
+  // asked once, never again.
+  useEffect(() => {
+    const s = extraction?.docType === 'settlement' ? extraction.settlement : undefined;
+    // A date the owner typed or picked always wins.
+    if (!s || !s.settlementDateRaw || isPrimeCarrier(s.carrier) || s.dateConfirmed?.by === 'user') return;
+    const remembered = rememberedDateFormat(s.carrier, savedSettlementsQuery.data ?? []);
+    const check = checkSettlementDates(settlementDateInputsOf(extraction!), new Date().toISOString().slice(0, 10), remembered);
+    if (!check.weekEnding || check.issues.includes('ambiguous') || check.weekEnding === s.weekEnding) return;
+    const viaMemory = remembered != null && check.format === remembered;
+    setExtraction({
+      ...extraction!,
+      settlement: { ...s, weekEnding: check.weekEnding, dateConfirmed: viaMemory ? { weekEnding: check.weekEnding, by: 'remembered_format', format: remembered } : s.dateConfirmed },
+    });
+  }, [extraction, savedSettlementsQuery.data]);
 
   function handleAiError(err: AiImportError) {
     // A usage-limit block isn't a service failure — never counts toward
@@ -948,6 +970,7 @@ export default function Import() {
     if (needsTruckPicker && !truckId) return;
     if (needsDriverPicker && !driverId) return;
     if (isSettlementWeekEndingMissing(extraction)) return;
+    if (settlementDateBlocked) return;
     // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03) —
     // same check the Save button's `disabled` prop already renders; this
     // is defense in depth against any path that could reach handleSave()
@@ -1069,6 +1092,24 @@ export default function Import() {
 
   const hasDuplicate = !!duplicates && (duplicates.byContent.length > 0 || duplicates.byFilename.length > 0);
   const settlementWeekEndingMissing = extraction ? isSettlementWeekEndingMissing(extraction) : false;
+  // PRINTED DATES (owner decision 2026-10-29): the app's own reading of the
+  // printed settlement date, through the plausibility gate. Any failure
+  // blocks Save until the owner answers the one-line question.
+  const rememberedFormat =
+    extraction?.docType === 'settlement' ? rememberedDateFormat(extraction.settlement?.carrier, savedSettlementsQuery.data ?? []) : null;
+  const dateCheck =
+    extraction?.docType === 'settlement' && extraction.settlement
+      ? checkSettlementDates(settlementDateInputsOf(extraction), new Date().toISOString().slice(0, 10), rememberedFormat)
+      : null;
+  const dateGateBlocked = !!dateCheck && !isDateGateSatisfied(dateCheck, extraction?.settlement?.weekEnding, extraction?.settlement?.dateConfirmed);
+  const settlementDateBlocked = settlementWeekEndingMissing || dateGateBlocked;
+  function confirmWeekEnding(weekEnding: string) {
+    if (!extraction?.settlement) return;
+    setExtraction({
+      ...extraction,
+      settlement: { ...extraction.settlement, weekEnding, dateConfirmed: { weekEnding, by: 'user', format: weekEnding === dateCheck?.weekEnding ? dateCheck.format : null } },
+    });
+  }
   // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03) —
   // see src/import/settlementReconciliation.ts for the full reasoning.
   // Recomputed on every extraction change, not memoized further — this
@@ -1300,6 +1341,7 @@ export default function Import() {
                 style={{ marginBottom: spacing.xs }}
               />
               {settlementWeekEndingMissing && <ErrorText>{t('importScreen.weekEndingRequired')}</ErrorText>}
+              {dateCheck && dateGateBlocked && !settlementWeekEndingMissing && <SettlementDateQuestion check={dateCheck} onConfirm={confirmWeekEnding} />}
               {extraction.docType === 'settlement' && (
                 <View style={{ marginTop: spacing.xs, marginBottom: spacing.xs }}>
                   <MutedText>{t('importScreen.perDiemDaysLabel')}</MutedText>
@@ -1522,19 +1564,19 @@ export default function Import() {
               <SecondaryButton
                 title={t('importScreen.verdict.saveAsEstimate')}
                 onPress={handleSaveAsEstimate}
-                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing}
+                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked}
               />
             ) : verdict && olderReading && canReadAgain ? (
               <SecondaryButton
                 title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
                 onPress={() => void handleSave()}
-                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing || saveBlocked}
+                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked || saveBlocked}
               />
             ) : verdict ? (
               <PrimaryButton
                 title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
                 onPress={() => void handleSave()}
-                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing || saveBlocked}
+                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked || saveBlocked}
               />
             ) : (
               <>
@@ -1544,7 +1586,7 @@ export default function Import() {
                   disabled={
                     (needsTruckPicker && !truckId) ||
                     (needsDriverPicker && !driverId) ||
-                    settlementWeekEndingMissing ||
+                    settlementDateBlocked ||
                     saveBlocked
                   }
                 />
@@ -1552,7 +1594,7 @@ export default function Import() {
                   <SecondaryButton
                     title={t('importScreen.saveAnywayFlagged')}
                     onPress={handleSaveFlagged}
-                    disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementWeekEndingMissing}
+                    disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked}
                   />
                 )}
               </>

@@ -1,4 +1,6 @@
 import type { Extraction } from '@/src/import/types';
+import { isPrimeCarrier } from '@/src/import/primeOperatingStatement';
+import { lineDateFromWeekEnding, parsePrimePrintDate, parsePrimeSettlementDate } from '@/src/import/printedDates';
 
 // DATE HARDENING round 2 (owner decision 2026-07-30): carrier settlement
 // headers commonly print dates as YY/MM/DD (26/07/24 = 2026-07-24), while
@@ -192,6 +194,33 @@ export function sanitizeExtractionDates(extraction: Extraction, now: Date = new 
   const fix = (v: string | null | undefined): string | undefined => correctImplausibleDate(v, now) ?? undefined;
 
   const s = extraction.settlement;
+  // PRINTED DATES (owner decision 2026-10-29): a Prime settlement read
+  // with its printed date text is parsed here, YY/MM/DD — the model's own
+  // date is ignored — and every line date (MMDD, no year) takes its year
+  // from that week ending. printedDates.ts's gate then checks it.
+  const primeWeekEnding = s && isPrimeCarrier(s.carrier) ? parsePrimeSettlementDate(s.settlementDateRaw) : null;
+  if (s && primeWeekEnding) {
+    const line = (v: string | null | undefined): string | undefined => (v ? (lineDateFromWeekEnding(v, primeWeekEnding) ?? undefined) : undefined);
+    return {
+      ...extraction,
+      date: fix(extraction.date),
+      settlement: {
+        ...s,
+        weekEnding: primeWeekEnding,
+        printDate: parsePrimePrintDate(s.printDateRaw) ?? undefined,
+        loads: s.loads?.map((l) => ({ ...l, pickupDate: line(l.pickupDate), deliveryDate: line(l.deliveryDate), date: line(l.date), dropDate: line(l.dropDate) })),
+        tractorFuel: s.tractorFuel?.map((f) => ({ ...f, date: line(f.date) })),
+        reeferFuel: s.reeferFuel?.map((f) => ({ ...f, date: line(f.date) })),
+        tolls: s.tolls
+          ? {
+              ezpass: s.tolls.ezpass ? { ...s.tolls.ezpass, items: s.tolls.ezpass.items?.map((t) => ({ ...t, date: line(t.date) })) } : undefined,
+              drivewyze: s.tolls.drivewyze ? { ...s.tolls.drivewyze, items: s.tolls.drivewyze.items?.map((t) => ({ ...t, date: line(t.date) })) } : undefined,
+            }
+          : s.tolls,
+      },
+      compliance: extraction.compliance ? { ...extraction.compliance, issueDate: fix(extraction.compliance.issueDate) } : extraction.compliance,
+    };
+  }
   const settlement = s
     ? {
         ...s,
@@ -255,7 +284,9 @@ export function getPrimaryExtractionDate(extraction: Extraction): string {
 
 export function withPrimaryExtractionDate(extraction: Extraction, newDate: string): Extraction {
   if (extraction.docType === 'settlement' && extraction.settlement) {
-    return { ...extraction, settlement: { ...extraction.settlement, weekEnding: newDate } };
+    // A date the owner typed is their answer to the date question
+    // (printedDates.ts isDateGateSatisfied).
+    return { ...extraction, settlement: { ...extraction.settlement, weekEnding: newDate, dateConfirmed: newDate ? { weekEnding: newDate, by: 'user' } : null } };
   }
   return { ...extraction, date: newDate };
 }

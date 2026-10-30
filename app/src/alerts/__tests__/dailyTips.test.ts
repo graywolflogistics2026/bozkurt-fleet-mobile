@@ -186,7 +186,7 @@ describe('selectDailyTip — rotation engine', () => {
       loansCount: 0,
       deadheadPct: null,
       perDiemDaysYtd: 0,
-      escrowDeductionsCount: 0,
+      heldByCarrier: null,
       advanceRepaymentDeductionsCount: 0,
     });
     // A real, non-empty pool of evergreen getting-started candidates

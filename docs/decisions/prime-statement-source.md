@@ -70,9 +70,10 @@ total variable; variable + out of pocket + fixed + other = total operating
 expenses; revenue + operating expenses = total statement; total statement
 + prior week balance forward = TOTAL CASH FLOW = SETTLEMENT TO OPERATOR =
 DIRECT DEPOSIT (2026-10-17); TOTAL REVENUE = settlement gross; MILES =
-settlement miles; the statement page's week ending = the settlement's
-(a year/day-swapped reading of "26/08/14" counts as the same date only
-when the swap lands exactly on it). Line route deposit check: net due +
+settlement miles; the statement page's week ending = the settlement's,
+exactly (2026-10-29: the year/day-swap tolerance is removed; the app
+parses the printed YY/MM/DD text itself —
+docs/decisions/printed-dates-and-held.md). Line route deposit check: net due +
 balance forward + interest (income +, expense −) = printed deposit.
 Page-by-page merging calls two values for a header total a conflict only
 when both came from the same printed label (`settlement.totalLabels`,

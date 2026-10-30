@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/src/context/AuthContext';
+import { heldByCarrier } from '@/src/stats/heldByCarrier';
+import { isPrimeCarrier } from '@/src/import/primeOperatingStatement';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
@@ -161,7 +163,13 @@ export function useDailyTip() {
     const activeTruckId = activeTruck?.id ?? null;
     const activeTruckMaintenanceRecordsCount = activeTruckId ? maintenance.filter((m) => m.truck_id === activeTruckId).length : maintenance.length;
 
-    const escrowDeductionsCount = deductions.filter((d) => d.category === 'Escrow & Deposits').length;
+    // The real printed balance with its as-of date (fleet), never a count.
+    const held = heldByCarrier(settlements, null, { deductions });
+    const heldAccount = held.status === 'printed' && held.accounts.length === 1 ? held.accounts[0] : null;
+    const heldForTip =
+      held.status === 'printed' && held.total != null && held.asOf
+        ? { amount: held.total, asOf: held.asOf, carrier: heldAccount && !isPrimeCarrier(heldAccount.carrier) ? (heldAccount.carrier ?? '') : 'Prime' }
+        : null;
     const advanceRepaymentDeductionsCount = deductions.filter((d) => d.category === 'Advance Repayment').length;
 
     return {
@@ -201,7 +209,7 @@ export function useDailyTip() {
       loansCount: loansQuery.data?.length ?? 0,
       deadheadPct: miles.deadheadPct,
       perDiemDaysYtd,
-      escrowDeductionsCount,
+      heldByCarrier: heldForTip,
       advanceRepaymentDeductionsCount,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

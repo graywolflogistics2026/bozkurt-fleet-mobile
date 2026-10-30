@@ -743,7 +743,18 @@
       "performance_bond": "Performance bond",
       "total": "All lines (total)"
     },
-    "groupLine": "{{group}}: lines {{settlement}}, statement {{statement}}, differ by {{difference}}"
+    "groupLine": "{{group}}: lines {{settlement}}, statement {{statement}}, differ by {{difference}}",
+    "dateQuestion": {
+      "printed": "The statement prints {{printed}}. I read it as {{reading}}. Correct?",
+      "noPrinted": "I read the week ending as {{reading}}. Correct?",
+      "noReading": "I couldn't read the week ending. Pick the date printed on the statement.",
+      "yes": "Yes",
+      "pick": "Pick another date",
+      "year": "Year",
+      "month": "Month",
+      "day": "Day",
+      "useThis": "Use this date"
+    }
   },
   "camera": {
     "permissionNote": "Camera access is needed to photograph receipts and settlement PDFs.",
@@ -1272,8 +1283,6 @@
     "grossLabelShort": "Gross",
     "netLabelShort": "Net",
     "oweCarrier": "You owe the carrier this week",
-    "escrowHeldLabel": "Escrow & Deposits Held",
-    "escrowHeldNote": "Refundable deposits the carrier is currently holding (performance bond, tire fund, etc.) — not counted as an expense.",
     "primeYtdMismatchTitle": "Worth checking against Prime's own statement",
     "primeYtdRevenueMismatch": "Your year-to-date revenue here is {{ours}}; Prime's own statement says {{prime}} — worth checking.",
     "primeYtdMilesMismatch": "Your year-to-date miles here are {{ours}}; Prime's own statement says {{prime}} — worth checking.",
@@ -1301,7 +1310,10 @@
     "netDueLabel": "Net due",
     "depositedLabel": "Deposited",
     "profitThisWeekLabel": "Profit from this week",
-    "primeYtdDepositsInfo": "Prime's YTD says {{prime}}; your imported weeks add up to {{ours}} (as of {{date}})."
+    "primeYtdDepositsInfo": "Prime's YTD says {{prime}}; your imported weeks add up to {{ours}}",
+    "primeYtdDepositsEarlier": "({{amount}} is earlier weeks not imported)",
+    "primeYtdDepositsMatch": "(they match)",
+    "primeYtdDepositsMore": "({{amount}} more than Prime's YTD; a week may be imported twice)"
   },
   "reimbursements": {
     "title": "Reimbursements",
@@ -2700,9 +2712,9 @@
       "v2": "Maintenance & Repairs and Major Repairs & Overhauls are two different categories on purpose — the dollar threshold is what tells them apart."
     },
     "tipEscrowRefundable": {
-      "v0": "An escrow or performance bond a carrier holds is refundable — it's your money on deposit, not a real business expense.",
-      "v1": "Ever wonder why an escrow deduction doesn't count against your profit? That money is still yours, just held back for now.",
-      "v2": "Escrow & Deposits is excluded from true profit and CPM on purpose — it never actually left the business as a cost."
+      "v0": "{{carrier}} holds {{amount}} of yours, as of {{date}}. That escrow is refundable, not a business expense.",
+      "v1": "The {{amount}} {{carrier}} holds (as of {{date}}) is still your money, just held back for now.",
+      "v2": "Escrow ({{amount}} held by {{carrier}} as of {{date}}) never counts against profit or CPM. It never left the business."
     },
     "tipAdvanceRepayments": {
       "v0": "An advance repayment is you paying back money you already received — it's not a new expense, just returning cash already counted as income.",
@@ -2809,5 +2821,33 @@
     "lineDifference": "Line details differ from the statement by {{amount}}.",
     "pages": "Pages",
     "aiNote": "AI note"
+  },
+  "heldByCarrier": {
+    "label": "Held by carrier",
+    "printedOne": "{{carrier}} holds {{amount}} of yours, as of {{date}}",
+    "printedMany": "Your carriers hold {{amount}} of yours (newest statement {{date}})",
+    "estimateOne": "{{carrier}}: about {{amount}}, an estimate from imported weeks (no held balance printed yet)",
+    "estimateMany": "About {{amount}} in total, including an estimate from imported weeks",
+    "notPrinted": "Held by carrier: not printed yet",
+    "unverified": "The held balance on week ending {{dates}} didn't check out, so it isn't used.",
+    "note": "Refundable money the carrier holds for you (performance bond, emergency fund). Not an expense.",
+    "yourCarrier": "Your carrier",
+    "monthEndLabel": "Held by carrier at month end",
+    "yearEndLabel": "Held by carrier at year end"
+  },
+  "dateCheck": {
+    "title": "Needs a date check ({{count}})",
+    "row": "Week ending {{date}}: {{reasons}}",
+    "reason": {
+      "before_2025": "before 2025",
+      "future": "in the future",
+      "not_friday": "a Prime week not on a Friday",
+      "differs_from_printed": "differs from the date printed on the statement"
+    },
+    "fixTo": "Change to {{date}}",
+    "pick": "Pick a date",
+    "note": "Fixing a date moves only the week ending; every amount stays the same.",
+    "conflictTitle": "Can't change this date",
+    "conflictBody": "You already have a week ending {{date}} for this truck."
   }
 }

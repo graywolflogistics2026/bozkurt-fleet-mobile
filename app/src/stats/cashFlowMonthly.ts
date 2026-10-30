@@ -17,6 +17,7 @@ import { settlementDeposit, type SettlementStatement } from '@/src/import/settle
 // total across months anymore) — each month just reports its own
 // income/fixed/variable/periodic/net for that month alone.
 import type { CashFlowClassification, SpendEvent } from '@/src/stats/cashFlowClassification';
+import { onePerStatementWeek } from '@/src/stats/heldByCarrier';
 import type { PeriodicForecastItem } from '@/src/stats/cashFlowPeriodic';
 import type { CashFlowOverrides } from '@/src/stats/cashFlowForecast';
 
@@ -34,7 +35,7 @@ export type CashFlowMonthProjection = {
   net: number;
 };
 
-type SettlementNetLike = { week_ending: string | null; net: number | null; statement?: SettlementStatement | null };
+type SettlementNetLike = { week_ending: string | null; net: number | null; carrier?: string | null; statement?: SettlementStatement | null };
 
 function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -54,7 +55,7 @@ function monthIndex(year: number, month: number): number {
 // deposit as READ from the statement (else its net due); an owed-to-carrier
 // week adds 0 — the same per-week figure as Home's "Deposited to your bank".
 function sumSettlementsNet(settlements: SettlementNetLike[], startIso: string, endIso: string): number {
-  return settlements
+  return onePerStatementWeek(settlements)
     .filter((s) => s.week_ending && s.week_ending >= startIso && s.week_ending <= endIso)
     .reduce((sum, s) => sum + settlementDeposit(s).deposited, 0);
 }

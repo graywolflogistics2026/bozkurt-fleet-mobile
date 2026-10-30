@@ -218,6 +218,16 @@ deposit is READ from the statement, never computed, and is never labeled
 profit. Past the gate, line-item mismatches only warn (amber, needs-review).
 Full: `docs/decisions/prime-statement-source.md`.
 
+**Printed dates; held by carrier (2026-10-29).** The model never
+interprets a date: ai-import returns dates as printed and
+`app/src/import/printedDates.ts` parses them (Prime: YY/MM/DD settlement
+and statement dates, M/D/YY print date, MMDD lines take the week ending's
+year). Any gate failure blocks Save until the owner answers the one-line
+question; nothing before 2020 is saved. What a carrier holds is its
+PRINTED balance as of the newest statement (`heldByCarrier()`), never a
+sum of escrow deductions; deposits count one per statement. Full:
+`docs/decisions/printed-dates-and-held.md`.
+
 **Import jobs: 150 s, resumable.** Never assume more than the Free-plan
 150 s per Edge Function invocation. Background PDF imports are chains of
 short runs that store each page as it finishes and resume at the first
@@ -1023,10 +1033,10 @@ under each is unchanged original wording.
   invariant #17; `ScreenErrorBoundary` stays reusable):
   `docs/decisions/retired.md`.
 
-## Current state (2026-10-17)
+## Current state (2026-10-29)
 
-- **Code**: `main` after 4f35a90 (W/E 8/14 balance forward + second golden
-  week, 2026-10-17), pushed. Ships via `eas update --branch preview`.
+- **Code**: `main` after the 2026-10-29 printed-dates + held-by-carrier commit
+  (on top of 9b1723a), pushed. Ships via `eas update --branch preview`.
 - **Database** (`docs/PENDING_SQL.md`, 78 sections): everything is applied
   except:
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
@@ -1076,6 +1086,8 @@ under each is unchanged original wording.
 - `docs/decisions/usage-analytics.md` — privacy-safe analytics (§71).
 - `docs/decisions/settlement-import-chunking.md` — multi-page extraction,
   resumable page-by-page import jobs.
+- `docs/decisions/printed-dates-and-held.md` — printed dates, date gate,
+  held by carrier, one deposit per statement.
 - `docs/decisions/eas-update-delivery.md` — OTA delivery diagnosis.
 - `docs/decisions/i18n-languages.md` — language picker, AI language.
 - `docs/decisions/ui-conventions.md` — charts, nav registry, build info.

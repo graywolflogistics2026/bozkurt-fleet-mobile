@@ -19,7 +19,10 @@ import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
 import { useDocuments } from '@/src/data/documents';
 import { useTrucksList } from '@/src/data/trucks';
-import { calcEscrowBalance } from '@/src/stats/escrowBalance';
+import { heldByCarrier } from '@/src/stats/heldByCarrier';
+import { HeldByCarrierCard } from '@/src/components/HeldByCarrierCard';
+import { DateCheckList } from '@/src/components/DateCheckList';
+import { findSavedWeeksNeedingDateCheck } from '@/src/import/printedDates';
 import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
 import { buildSettlementsTotalsBar } from '@/src/stats/settlementsSummary';
 import { PERIOD_OPTIONS, filterByPeriod, periodStartIso, type PeriodOption } from '@/src/stats/periodFilter';
@@ -294,14 +297,37 @@ export default function Settlements() {
     [settlementReimbursements]
   );
 
-  // ESCROW & DEPOSITS running balance (owner decision 2026-08-02): what
-  // the carrier currently HOLDS — a performance bond/escrow reserve/tire
-  // fund/emergency fund/maintenance reserve is a refundable deposit, not
-  // an expense, so it's tracked separately from the totals bar's own
-  // withheld-deduction handling (which still includes it, since it
-  // genuinely was withheld from pay — just never counted against true
-  // profit/tax deductions).
-  const escrowBalance = useMemo(() => calcEscrowBalance(dedQuery.data ?? []), [dedQuery.data]);
+  // NEEDS A DATE CHECK (owner decision 2026-10-29, A6): saved weeks before
+  // 2025, in the future, a Prime week not on a Friday, or a week_ending that
+  // differs from the printed statement date stored in the §77 jsonb.
+  const dateCheckItems = useMemo(() => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return findSavedWeeksNeedingDateCheck(allRows, today);
+  }, [allRows]);
+  async function fixWeekEnding(id: string, weekEnding: string) {
+    const row = allRows.find((s) => s.id === id);
+    // The replace key is (week_ending, truck): never move a week onto one
+    // already saved for the same truck.
+    if (row && allRows.some((s) => s.id !== id && s.week_ending === weekEnding && s.truck_id === row.truck_id)) {
+      Alert.alert(t('dateCheck.conflictTitle'), t('dateCheck.conflictBody', { date: weekEnding }));
+      return;
+    }
+    try {
+      await updateSettlement.mutateAsync({ id, values: { week_ending: weekEnding } });
+      await invalidateFinancialData(queryClient, { entities: ['settlements'] });
+    } catch (err) {
+      Alert.alert(t('dateCheck.conflictTitle'), err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // HELD BY CARRIER (owner decision 2026-10-29): the printed held balance
+  // of each carrier account's latest statement, "as of" its week — never
+  // a sum of weekly escrow deductions (heldByCarrier.ts).
+  const held = useMemo(
+    () => heldByCarrier(allRows, isAllTrucks ? null : activeTruckId, { deductions: dedQuery.data ?? [] }),
+    [allRows, isAllTrucks, activeTruckId, dedQuery.data]
+  );
 
   // USE PRIME'S OPERATING STATEMENT AS THE VERIFICATION SOURCE OF TRUTH
   // (owner decision, 2026-08-28) — the standing YTD reconciliation
@@ -363,12 +389,15 @@ export default function Settlements() {
   }, [primeYtdSnapshot, trucksQuery.data, allRows, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);
   const showPrimeYtdBanner = primeYtdMismatches.length > 0 && (isAllTrucks || (trucksQuery.data?.length ?? 0) <= 1);
   // BANK DEPOSIT add-on, item 6 (owner decision 2026-10-13) — informational
-  // only, never a warning, never blocking: Prime's printed YTD statement
-  // total vs the deposits read from the imported Prime weeks, so a missing
-  // or duplicate week is visible.
+  // only, never a warning, never blocking: Prime's printed YTD SETTLEMENT
+  // TO OPERATOR (B5, 2026-10-29 — not TOTAL STATEMENT, which is before the
+  // balance forward) vs the deposits read from the imported Prime weeks,
+  // one per statement; the gap is the earlier weeks not imported.
   const primeDepositYtd = useMemo(() => {
-    if (!primeYtdSnapshot || !primeYtdSnapshot.totalStatement) return null;
-    return { prime: primeYtdSnapshot.totalStatement, ours: primeDepositsYtd(allRows, primeYtdSnapshot.asOfWeekEnding).total };
+    if (!primeYtdSnapshot || !primeYtdSnapshot.settlementToOperator) return null;
+    const prime = primeYtdSnapshot.settlementToOperator;
+    const ours = primeDepositsYtd(allRows, primeYtdSnapshot.asOfWeekEnding).total;
+    return { prime, ours, gap: Math.round((prime - ours) * 100) / 100 };
   }, [primeYtdSnapshot, allRows]);
 
   // PAYMENT + DESTINATION SUMMARY (owner decision 2026-08-24, device
@@ -565,13 +594,9 @@ export default function Settlements() {
           )}
         </Card>
 
-        {escrowBalance > 0 && (
-          <Card>
-            <MutedText>{t('settlementsScreen.escrowHeldLabel')}</MutedText>
-            <Text style={styles.statValue}>{money(escrowBalance)}</Text>
-            <MutedText>{t('settlementsScreen.escrowHeldNote')}</MutedText>
-          </Card>
-        )}
+        <DateCheckList items={dateCheckItems} onFix={fixWeekEnding} />
+
+        {held.status !== 'not_printed' && <HeldByCarrierCard held={held} />}
 
         {/* PRIME OPERATING STATEMENT — STANDING YTD CHECK (owner decision,
             2026-08-28, item 3). Carrier-isolated by construction — see
@@ -602,11 +627,12 @@ export default function Settlements() {
         {primeDepositYtd && primeYtdSnapshot && (
           <Card>
             <MutedText>
-              {t('settlementsScreen.primeYtdDepositsInfo', {
-                prime: money(primeDepositYtd.prime),
-                ours: money(primeDepositYtd.ours),
-                date: date(primeYtdSnapshot.asOfWeekEnding),
-              })}
+              {t('settlementsScreen.primeYtdDepositsInfo', { prime: money(primeDepositYtd.prime), ours: money(primeDepositYtd.ours) })}{' '}
+              {Math.abs(primeDepositYtd.gap) < 0.01
+                ? t('settlementsScreen.primeYtdDepositsMatch')
+                : primeDepositYtd.gap > 0
+                  ? t('settlementsScreen.primeYtdDepositsEarlier', { amount: number(primeDepositYtd.gap, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })
+                  : t('settlementsScreen.primeYtdDepositsMore', { amount: money(-primeDepositYtd.gap) })}
             </MutedText>
           </Card>
         )}

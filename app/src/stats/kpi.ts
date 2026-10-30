@@ -71,6 +71,7 @@
 // branches through one shared code path, so "All Trucks" and "a specific
 // truck" can never diverge in how they treat a null-truck row.
 import { calcMiles, resolveMilesTotal, type LoadMilesInput } from '@/src/stats/miles';
+import { onePerStatementWeek } from '@/src/stats/heldByCarrier';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CpmBucket, type CpmExcludedOneOff } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import {
@@ -368,7 +369,8 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
   // DEPOSITED (owner decision 2026-10-13) — a sum of each week's PRINTED
   // deposit (else net due); an owed-to-carrier week adds 0. Never a
   // running balance.
-  const weekDeposits = settlements.map((s) => ({ s, d: settlementDeposit(s) }));
+  // One per statement: the same week saved twice counts once (B5, 2026-10-29).
+  const weekDeposits = onePerStatementWeek(settlements).map((s) => ({ s, d: settlementDeposit(s) }));
   const deposits = weekDeposits.reduce((sum, x) => sum + x.d.deposited, 0);
   const owedToCarrier = weekDeposits.reduce((sum, x) => sum + x.d.owedToCarrier, 0);
 

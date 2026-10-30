@@ -40,6 +40,8 @@ function primeSettlement(weekEnding: string, lumpers: Lumper[], extra: Partial<N
     settlement: {
       carrier: 'PRIME INC',
       weekEnding,
+      // As printed: YY/MM/DD (printedDates.ts).
+      settlementDateRaw: `${weekEnding.slice(2, 4)}/${weekEnding.slice(5, 7)}/${weekEnding.slice(8, 10)}`,
       grossRevenue: 1000,
       netPay: 500,
       totalMiles: 445,
@@ -55,6 +57,7 @@ function primeSettlement(weekEnding: string, lumpers: Lumper[], extra: Partial<N
 
 async function importSettlement(extraction: Extraction, truckId: string | null = null) {
   await saveExtraction({
+    importDate: '2026-10-29',
     extraction,
     userId: USER_ID,
     truckId,

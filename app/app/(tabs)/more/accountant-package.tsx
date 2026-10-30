@@ -49,6 +49,8 @@ import { resolveScheduleCBucket } from '@/src/stats/profitLoss';
 import { findImplausibleDates } from '@/src/import/dateGuard';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { useFormatters } from '@/src/i18n/format';
+import { heldAtMonthEnd, heldByCarrier } from '@/src/stats/heldByCarrier';
+import { HeldByCarrierCard } from '@/src/components/HeldByCarrierCard';
 import {
   Screen,
   ScreenTitle,
@@ -280,6 +282,16 @@ export default function AccountantPackage() {
     () => buildOwnersEquity(contributionsQuery.data ?? [], lineItems),
     [contributionsQuery.data, lineItems]
   );
+
+  // HELD BY CARRIER AT MONTH END (owner decision 2026-10-29): the printed
+  // balance of the last settlement inside the selected month (or year).
+  const heldAtPeriodEnd = useMemo(() => {
+    const settlements = settlementsQuery.data ?? [];
+    const deductions = deductionsQuery.data ?? [];
+    return month != null
+      ? heldAtMonthEnd(settlements, null, year, month, deductions)
+      : heldByCarrier(settlements, null, { window: { startIso: `${year}-01-01`, endIso: `${year}-12-31` }, deductions });
+  }, [settlementsQuery.data, deductionsQuery.data, year, month]);
 
   const grossIncome = useMemo(() => {
     const inWindow = (settlementsQuery.data ?? []).filter((s) => {
@@ -705,6 +717,11 @@ export default function AccountantPackage() {
                 </View>
               )}
             </Card>
+
+            <HeldByCarrierCard
+              held={heldAtPeriodEnd}
+              label={t(month != null ? 'heldByCarrier.monthEndLabel' : 'heldByCarrier.yearEndLabel')}
+            />
 
             {perDiemBlock && (
               <>

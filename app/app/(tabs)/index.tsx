@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { localDay } from '@/src/import/printedDates';
 import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -566,7 +567,7 @@ function AiCoachSection({
 function DailyTipCard({ dailyTip }: { dailyTip: ReturnType<typeof useDailyTip> }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { money, number } = useFormatters();
+  const { money, number, date } = useFormatters();
   const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
   const pct = (n: number) => number(n, { style: 'percent', maximumFractionDigits: 1 });
   if (!dailyTip.tip) return null;
@@ -576,7 +577,7 @@ function DailyTipCard({ dailyTip }: { dailyTip: ReturnType<typeof useDailyTip> }
         <Text style={{ fontSize: 16 }}>{DAILY_TIP_ICON[dailyTip.tip.topic]}</Text>
         <View style={{ flex: 1 }}>
           <MutedText style={{ fontSize: typography.size.xs, marginBottom: 2 }}>{t('dailyTips.cardLabel')}</MutedText>
-          <Text style={{ color: colors.text }}>{dailyTipText(dailyTip.tip, dailyTip.variant, t, moneyRounded, pct)}</Text>
+          <Text style={{ color: colors.text }}>{dailyTipText(dailyTip.tip, dailyTip.variant, t, moneyRounded, pct, (iso) => date(localDay(iso)))}</Text>
           <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs, flexWrap: 'wrap', alignItems: 'center' }}>
             <Pressable onPress={() => router.push(DAILY_TIP_ROUTE[dailyTip.tip!.topic] as Href)} hitSlop={8}>
               <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>{t('dailyTips.actionButton')}</Text>

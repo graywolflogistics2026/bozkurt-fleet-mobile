@@ -378,8 +378,11 @@ export function detectTipRepairVsCapitalImprovement(accountAgeDays: number): Dai
   return accountAgeDays >= 14 ? { topic: 'tipRepairVsCapitalImprovement', detail: {} } : null;
 }
 
-export function detectTipEscrowRefundable(escrowDeductionsCount: number): DailyTipCandidate | null {
-  return escrowDeductionsCount > 0 ? { topic: 'tipEscrowRefundable', detail: {} } : null;
+// HELD BY CARRIER (owner decision 2026-10-29): the tip quotes the real
+// printed balance and its as-of date (heldByCarrier.ts), never a count of
+// escrow deductions; no printed balance, no tip.
+export function detectTipEscrowRefundable(held: { amount: number; asOf: string; carrier: string } | null): DailyTipCandidate | null {
+  return held && held.amount > 0 ? { topic: 'tipEscrowRefundable', detail: { held: held.amount, asOf: held.asOf, carrier: held.carrier } } : null;
 }
 
 export function detectTipAdvanceRepayments(advanceRepaymentDeductionsCount: number): DailyTipCandidate | null {
@@ -435,7 +438,7 @@ export type DailyTipBuilderInput = {
   loansCount?: number;
   deadheadPct?: number | null;
   perDiemDaysYtd?: number;
-  escrowDeductionsCount?: number;
+  heldByCarrier?: { amount: number; asOf: string; carrier: string } | null;
   advanceRepaymentDeductionsCount?: number;
 };
 
@@ -487,7 +490,7 @@ export function buildDailyTipCandidates(input: DailyTipBuilderInput): DailyTipCa
   if (input.deadheadPct !== undefined) candidates.push(detectTipDeadheadBenchmark(input.deadheadPct));
   if (input.perDiemDaysYtd !== undefined) candidates.push(detectTipPerDiemVsMeals(input.perDiemDaysYtd));
   if (input.accountAgeDays !== undefined) candidates.push(detectTipRepairVsCapitalImprovement(input.accountAgeDays));
-  if (input.escrowDeductionsCount !== undefined) candidates.push(detectTipEscrowRefundable(input.escrowDeductionsCount));
+  if (input.heldByCarrier !== undefined) candidates.push(detectTipEscrowRefundable(input.heldByCarrier));
   if (input.advanceRepaymentDeductionsCount !== undefined) candidates.push(detectTipAdvanceRepayments(input.advanceRepaymentDeductionsCount));
   if (input.quarterlyDeadlineDaysUntil !== undefined) candidates.push(detectTipQuarterlyDeadlines(input.quarterlyDeadlineDaysUntil));
   if (input.accountAgeDays !== undefined) candidates.push(detectTipSettings(input.accountAgeDays));
@@ -716,8 +719,16 @@ export function dismissDailyTip(state: NudgeState<DailyTipTopic>, topic: DailyTi
 // convention. `count`/`days` are only included when actually present —
 // i18next auto-applies plural-suffix resolution to any key called with a
 // `count` param, even one that was never meant to pluralize.
-export function dailyTipParams(c: DailyTipCandidate, money: (amount: number) => string, pct: (fraction: number) => string): Record<string, string | number> {
+export function dailyTipParams(
+  c: DailyTipCandidate,
+  money: (amount: number) => string,
+  pct: (fraction: number) => string,
+  date: (iso: string) => string = (iso) => iso
+): Record<string, string | number> {
   const params: Record<string, string | number> = {};
+  if (typeof c.detail.held === 'number') params.amount = money(c.detail.held);
+  if (typeof c.detail.asOf === 'string') params.date = date(c.detail.asOf);
+  if (typeof c.detail.carrier === 'string') params.carrier = c.detail.carrier;
   if (typeof c.detail.count === 'number') params.count = c.detail.count;
   if (typeof c.detail.days === 'number') params.days = c.detail.days;
   if (typeof c.detail.pct === 'number') params.pct = pct(c.detail.pct / 100);
@@ -732,7 +743,8 @@ export function dailyTipText(
   variantIndex: number,
   t: (key: string, opts?: Record<string, unknown>) => string,
   money: (amount: number) => string,
-  pct: (fraction: number) => string
+  pct: (fraction: number) => string,
+  date?: (iso: string) => string
 ): string {
-  return t(`dailyTips.${c.topic}.v${variantIndex}`, dailyTipParams(c, money, pct));
+  return t(`dailyTips.${c.topic}.v${variantIndex}`, dailyTipParams(c, money, pct, date));
 }

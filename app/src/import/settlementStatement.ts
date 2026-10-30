@@ -1,7 +1,8 @@
 import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { isPrimeCarrier } from './primeOperatingStatement';
-import { trySwapYearAndDay } from './dateGuard';
+import { parsePrimeSettlementDate, pdfCreationDateIso, type DateFormat } from './printedDates';
+import { readPrimeEscrow } from './primeEscrow';
 import { splitPrimeLoads } from './primeLoads';
 import {
   STATEMENT_SECTIONS,
@@ -182,6 +183,25 @@ export type SettlementStatement = {
   // the stored PDF without being read (attachments past the cap, delivery
   // receipts, pages past the 40-page cap, attachment pages that failed).
   pages?: StatementPages | null;
+  // PRINTED DATES (owner decision 2026-10-29): the date texts as printed,
+  // the statement week ending parsed YY/MM/DD (the "Needs a date check"
+  // list compares week_ending with it), and the confirmed format for a
+  // carrier whose dates were ambiguous (remembered for the next import).
+  dates?: StatementDates | null;
+  // The unit printed on the statement (one carrier account per unit).
+  unit?: string | null;
+  // HELD BY CARRIER (owner decision 2026-10-29, primeEscrow.ts).
+  escrow?: import('./primeEscrow').PrimeEscrow | null;
+};
+
+export type StatementDates = {
+  settlementDateRaw: string | null;
+  printDateRaw: string | null;
+  statementWeekEndingRaw: string | null;
+  printedWeekEnding: string | null;
+  pdfCreationDate: string | null;
+  format: DateFormat | null;
+  confirmedBy: 'user' | 'remembered_format' | null;
 };
 
 export type StatementPages = {
@@ -304,7 +324,10 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   add('directDeposit', totals.directDeposit, totals.settlementToOperator ?? totals.totalCashFlow ?? cashFlow);
   add('grossMatches', totals.totalRevenue, printedTotal(s.grossRevenue));
   add('milesMatch', totals.miles, printedTotal(s.totalMiles), MILES_TOLERANCE);
-  const weekCheck = statementWeekEndingCheck(op.weekEnding, s.weekEnding);
+  // The printed text, parsed YY/MM/DD, when it was read; else the older
+  // reading's ISO date.
+  const statementWeek = s.statementWeekEndingRaw?.trim() ? parsePrimeSettlementDate(s.statementWeekEndingRaw) : op.weekEnding;
+  const weekCheck = statementWeekEndingCheck(statementWeek, s.weekEnding);
   if (weekCheck) checks.push(weekCheck);
 
   for (const conflict of coreMergeConflicts(extraction)) {
@@ -335,17 +358,16 @@ export function primeGateMissing(totals: PrimeStatementTotals, lines: StatementL
 }
 
 // The statement page's week ending must be the settlement's (owner
-// decision 2026-10-17). Its header prints YY/MM/DD ("26/08/14"); a reading
-// with the year and day swapped (2014-08-26) is the same date read the
-// wrong way round and passes only when the swap lands exactly on the
-// settlement's week ending (dateGuard.ts trySwapYearAndDay). Skipped when
-// either date was not read.
+// decision 2026-10-17), EXACTLY (2026-10-29: the year/day-swapped
+// tolerance added on 10-17 hid the DD/MM/YY misread and is removed — the
+// app now parses the printed YY/MM/DD text itself, printedDates.ts).
+// Skipped when either date was not read.
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 export function statementWeekEndingCheck(statementWeekEnding: unknown, settlementWeekEnding: unknown): StatementCheck | null {
   const a = typeof statementWeekEnding === 'string' ? statementWeekEnding.trim() : '';
   const b = typeof settlementWeekEnding === 'string' ? settlementWeekEnding.trim() : '';
   if (!ISO_RE.test(a) || !ISO_RE.test(b)) return null;
-  const passed = a === b || trySwapYearAndDay(a) === b;
+  const passed = a === b;
   const asNumber = (iso: string) => Number(iso.replace(/-/g, ''));
   return { id: 'statementWeekEnding', expected: asNumber(a), actual: asNumber(b), passed, expectedText: a, actualText: b };
 }
@@ -553,7 +575,30 @@ export function buildSettlementStatement(
     savedFlagged: options.savedFlagged,
     reviewReasons,
     pages,
+    unit: extraction.settlement?.unit?.trim() || null,
+    dates: statementDatesOf(extraction),
+    escrow: readPrimeEscrow(extraction),
   };
+}
+
+// What the statement printed for its dates, as stored in the §77 jsonb.
+export function statementDatesOf(extraction: Extraction): StatementDates | null {
+  const s = extraction.settlement;
+  if (!s) return null;
+  const raw = (v: string | undefined) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const prime = isPrimeCarrier(s.carrier);
+  const statementRaw = raw(s.statementWeekEndingRaw);
+  const confirmed = s.dateConfirmed && s.dateConfirmed.weekEnding === s.weekEnding ? s.dateConfirmed : null;
+  const dates: StatementDates = {
+    settlementDateRaw: raw(s.settlementDateRaw),
+    printDateRaw: raw(s.printDateRaw),
+    statementWeekEndingRaw: statementRaw,
+    printedWeekEnding: prime ? (statementRaw ? parsePrimeSettlementDate(statementRaw) : parsePrimeSettlementDate(s.settlementDateRaw)) : null,
+    pdfCreationDate: pdfCreationDateIso(extraction.pdfCreationDate),
+    format: prime && raw(s.settlementDateRaw) ? 'YMD' : (confirmed?.format ?? null),
+    confirmedBy: confirmed?.by ?? null,
+  };
+  return Object.values(dates).some((v) => v != null) ? dates : null;
 }
 
 // Settlement or statement pages of this week were not read.

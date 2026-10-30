@@ -112,6 +112,16 @@ export type ExtractedSettlement = {
   // reading of the ambiguous "SETTLEMENTS DATE:" (weekEnding, commonly
   // YY/MM/DD) is correct (dateGuard.ts resolveWeekEndingWithAnchor()).
   printDate?: string;
+  // PRINTED DATES (owner decision 2026-10-29): each date exactly as
+  // printed, as text — the app parses them (src/import/printedDates.ts);
+  // the model never interprets a date. Prime: SETTLEMENT DATE and the
+  // statement WEEK ENDING are YY/MM/DD ("26/08/14"), the print DATE M/D/YY.
+  settlementDateRaw?: string;
+  printDateRaw?: string;
+  statementWeekEndingRaw?: string;
+  // The owner's answer to the date question on the import preview (Yes,
+  // or a picked date) — Save checks it is for exactly this weekEnding.
+  dateConfirmed?: import("./printedDates").DateConfirmation | null;
   // PER DIEM INTELLIGENCE (owner decision 2026-07-30): smart-defaulted
   // client-side from totalMiles (src/tax/perDiem.ts
   // defaultPerDiemDaysForMiles()) once the extraction is received — the AI
@@ -205,6 +215,15 @@ export type ExtractedSettlement = {
     // YTD SETTLEMENT TO OPERATOR — what Prime paid the operator this year.
     ytdSettlementToOperator?: number;
     weeksInService?: number;
+    // HELD BY CARRIER (owner decision 2026-10-29), each as printed:
+    // the balance sheet's PERF BD/EMGCY FD (YTD TOTAL column); page 3's
+    // PERFORMANCE BOND/EMER FUND PAID account (prior balance, this week,
+    // balance); the interest page's annual rate in percent (3.83).
+    perfBondEmergencyFundYtd?: number | string;
+    escrowPriorBalance?: number | string;
+    escrowThisWeek?: number | string;
+    escrowBalance?: number | string;
+    escrowInterestRatePct?: number | string;
     // OLD LAYOUTS (before this pass) — never extracted any more, read only
     // from older stored parsed_json for the standing YTD check.
     ytdRevenue?: number;
@@ -402,6 +421,9 @@ export type Extraction = {
   // two pages read differently (chunking.ts).
   pageMap?: ExtractionPageMapEntry[];
   pagesTotal?: number;
+  // The PDF's own CreationDate (Info dictionary), YYYY-MM-DD, set by
+  // ai-import — a cross-check for the printed dates (printedDates.ts).
+  pdfCreationDate?: string;
   mergeConflicts?: { path: string; values: number[] }[];
   // AI's best-guess category for an unrecognized-but-clearly-financial
   // document (docType 'other') — never silently guessed into the wrong

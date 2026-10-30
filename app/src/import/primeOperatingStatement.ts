@@ -48,6 +48,9 @@ export type PrimeYtdSnapshot = {
   revenue: number;
   miles: number;
   totalStatement: number;
+  // YTD SETTLEMENT TO OPERATOR — what Prime paid out this year, the
+  // figure "Deposited" is compared with (0 when not printed).
+  settlementToOperator: number;
   asOfWeekEnding: string;
 };
 
@@ -111,9 +114,10 @@ export function readPrimeYtdSnapshotFromParsedJson(
   const revenue = printedTotal(op['ytdTotalRevenue']) ?? printedTotal(op['ytdRevenue']) ?? 0;
   const miles = printedTotal(op['ytdMiles']) ?? 0;
   const totalStatement = printedTotal(op['ytdTotalStatement']) ?? printedTotal(op['ytdNet']) ?? 0;
-  if (!revenue && !miles && !totalStatement) return null;
+  const settlementToOperator = printedTotal(op['ytdSettlementToOperator']) ?? 0;
+  if (!revenue && !miles && !totalStatement && !settlementToOperator) return null;
 
-  return { revenue, miles, totalStatement, asOfWeekEnding: weekEnding };
+  return { revenue, miles, totalStatement, settlementToOperator, asOfWeekEnding: weekEnding };
 }
 
 // ACCOUNTING MODEL — TWO LAYERS, NEVER CONFLATED (owner decision,

@@ -21,6 +21,7 @@ import { buildLinkedEquipmentInsert } from '@/src/import/equipmentLink';
 import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
+import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf } from '@/src/import/printedDates';
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
 import { buildSettlementStatement, isStatementBacked, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
@@ -141,6 +142,8 @@ export async function findExistingSettlement(
 
 export type SaveExtractionParams = {
   extraction: Extraction;
+  // The import date for the printed-date gate (YYYY-MM-DD); default today.
+  importDate?: string;
   userId: string;
   truckId: string | null;
   // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION):
@@ -342,6 +345,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       throw new SaveExtractionError(
         'validation',
         new Error('This settlement has no week-ending date. Please set the document date before saving.'),
+        partial
+      );
+    }
+    // PRINTED DATES (owner decision 2026-10-29): a date that fails the
+    // plausibility gate is never saved silently — only when the owner
+    // answered the question for exactly this date (Yes, or a picked
+    // date). Nothing before 2020 is ever saved.
+    const weekEnding = settlementMapping.settlement.week_ending;
+    const dateCheck = checkSettlementDates(settlementDateInputsOf(d), params.importDate ?? new Date().toISOString().slice(0, 10));
+    if (!isDateGateSatisfied(dateCheck, weekEnding, d.settlement?.dateConfirmed)) {
+      throw new SaveExtractionError(
+        'validation',
+        new Error(`Please confirm the week ending date (${weekEnding}) before saving.`),
         partial
       );
     }

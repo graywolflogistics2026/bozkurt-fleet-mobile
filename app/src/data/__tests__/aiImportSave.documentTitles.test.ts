@@ -49,6 +49,7 @@ const ctx: TitleContext = {
 
 async function importDoc(extraction: Extraction, withContext = true) {
   return saveExtraction({
+    importDate: '2026-10-29',
     extraction,
     userId: USER_ID,
     truckId: null,
@@ -106,7 +107,7 @@ describe('1. a newly imported document gets a specific title, not "Document"', (
   test('a Prime settlement is titled by carrier and week ending', async () => {
     await importDoc({
       docType: 'settlement',
-      settlement: { carrier: 'PRIME INC', weekEnding: '2026-07-17', grossRevenue: 1000, netPay: 500, totalMiles: 445 },
+      settlement: { carrier: 'PRIME INC', weekEnding: '2026-07-17', settlementDateRaw: '26/07/17', grossRevenue: 1000, netPay: 500, totalMiles: 445 },
     });
     expect(docs()[0].title).toBe('Prime Inc Settlement — W/E 7/17');
   });

@@ -289,6 +289,8 @@ export type JobDeps = {
   merge(pages: { page: number; extraction: unknown }[], base: unknown | null): unknown | null;
   scrub<T>(value: T): T;
   isPrimeCarrier(carrier: string | null | undefined): boolean;
+  // The stored PDF's own CreationDate (pdfInfo.ts), YYYY-MM-DD, or null.
+  pdfCreationDate?: string | null;
   logUsage(callType: UsageCallType, success: boolean, reason?: string): Promise<void>;
   consumeCreditIfOverAllowance(): Promise<void>;
   // Starts the next invocation of this job (fire, then this one exits).
@@ -865,6 +867,7 @@ export async function runJobStep(d: JobDeps): Promise<StepResult> {
     if (!merged) return null;
     merged.pageMap = buildPageMap(plan, results);
     merged.pagesTotal = plan.totalPages;
+    if (d.pdfCreationDate) merged.pdfCreationDate = d.pdfCreationDate;
     return d.scrub(merged);
   }
 

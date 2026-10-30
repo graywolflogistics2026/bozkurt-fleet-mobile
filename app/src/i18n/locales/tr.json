@@ -743,7 +743,18 @@
       "performance_bond": "Teminat",
       "total": "Tüm satırlar (toplam)"
     },
-    "groupLine": "{{group}}: satırlar {{settlement}}, tablo {{statement}}, fark {{difference}}"
+    "groupLine": "{{group}}: satırlar {{settlement}}, tablo {{statement}}, fark {{difference}}",
+    "dateQuestion": {
+      "printed": "Hesap özetinde {{printed}} yazıyor. Bunu {{reading}} olarak okudum. Doğru mu?",
+      "noPrinted": "Hafta sonu tarihini {{reading}} olarak okudum. Doğru mu?",
+      "noReading": "Hafta sonu tarihini okuyamadım. Hesap özetinde basılı tarihi seçin.",
+      "yes": "Evet",
+      "pick": "Başka bir tarih seç",
+      "year": "Yıl",
+      "month": "Ay",
+      "day": "Gün",
+      "useThis": "Bu tarihi kullan"
+    }
   },
   "camera": {
     "permissionNote": "Makbuzları ve settlement PDF'lerini fotoğraflamak için kamera erişimi gerekir.",
@@ -1272,8 +1283,6 @@
     "grossLabelShort": "Brüt",
     "netLabelShort": "Net",
     "oweCarrier": "Bu hafta taşıyıcıya borçlusunuz",
-    "escrowHeldLabel": "Escrow'da Tutulan Depozitolar",
-    "escrowHeldNote": "Taşıyıcının şu anda escrow'da tuttuğu iade edilebilir depozitolar (performans teminatı, lastik fonu vb.) — gider olarak sayılmaz.",
     "primeYtdMismatchTitle": "Prime'ın kendi ekstresiyle karşılaştırmaya değer",
     "primeYtdRevenueMismatch": "Buradaki yıl başından bugüne gelirin {{ours}}; Prime'ın kendi ekstresi {{prime}} diyor — kontrol etmeye değer.",
     "primeYtdMilesMismatch": "Buradaki yıl başından bugüne mil sayın {{ours}}; Prime'ın kendi ekstresi {{prime}} diyor — kontrol etmeye değer.",
@@ -1301,7 +1310,10 @@
     "netDueLabel": "Net ödenecek",
     "depositedLabel": "Yatırılan",
     "profitThisWeekLabel": "Bu haftanın kârı",
-    "primeYtdDepositsInfo": "Prime'ın yılbaşından beri tutarı {{prime}}; içe aktardığınız haftaların toplamı {{ours}} ({{date}} itibarıyla)."
+    "primeYtdDepositsInfo": "Prime'ın yılbaşından beri toplamı {{prime}}; içe aktardığınız haftaların toplamı {{ours}}",
+    "primeYtdDepositsEarlier": "({{amount}} içe aktarılmamış önceki haftalar)",
+    "primeYtdDepositsMatch": "(eşleşiyor)",
+    "primeYtdDepositsMore": "(Prime'ın yılbaşından beri toplamından {{amount}} fazla; bir hafta iki kez içe aktarılmış olabilir)"
   },
   "reimbursements": {
     "title": "Geri Ödemeler",
@@ -2700,9 +2712,9 @@
       "v2": "Bakım & Onarım ile Büyük Onarımlar kasıtlı olarak iki farklı kategoridir — onları ayıran şey dolar eşiğidir."
     },
     "tipEscrowRefundable": {
-      "v0": "Bir taşıyıcının tuttuğu escrow ya da performans teminatı iade edilebilir — bu depozitteki paranızdır, gerçek bir işletme gideri değil.",
-      "v1": "Bir escrow kesintisinin neden kârınızdan düşülmediğini merak ediyor musunuz? O para hâlâ sizin, sadece şimdilik tutuluyor.",
-      "v2": "Escrow & Depozitolar kasıtlı olarak gerçek kâr ve CPM'den hariç tutulur — o para işletmeden gerçekte hiç maliyet olarak çıkmadı."
+      "v0": "{{carrier}} sizin {{amount}} tutarınızı tutuyor, {{date}} itibarıyla. Bu escrow iade edilebilir, işletme gideri değildir.",
+      "v1": "{{carrier}}'ın tuttuğu {{amount}} ({{date}} itibarıyla) hâlâ sizin paranız, sadece şimdilik tutuluyor.",
+      "v2": "Escrow ({{date}} itibarıyla {{carrier}} tarafından tutulan {{amount}}) kârdan veya CPM’den asla düşülmez. İşletmeden hiç çıkmadı."
     },
     "tipAdvanceRepayments": {
       "v0": "Avans geri ödemesi, zaten aldığınız parayı geri vermenizdir — yeni bir gider değil, zaten gelir olarak sayılmış nakdi iade etmektir.",
@@ -2809,5 +2821,33 @@
     "lineDifference": "Satır ayrıntıları tablodan {{amount}} farklı.",
     "pages": "Sayfalar",
     "aiNote": "Yapay zekâ notu"
+  },
+  "heldByCarrier": {
+    "label": "Taşıyıcı firmanın tuttuğu",
+    "printedOne": "{{carrier}} sizin {{amount}} tutarınızı tutuyor, {{date}} itibarıyla",
+    "printedMany": "Taşıyıcı firmalarınız sizin {{amount}} tutarınızı tutuyor (en yeni hesap özeti {{date}})",
+    "estimateOne": "{{carrier}}: yaklaşık {{amount}}, içe aktarılan haftalardan tahmin (henüz basılı bir tutulan bakiye yok)",
+    "estimateMany": "Toplam yaklaşık {{amount}}, içe aktarılan haftalardan bir tahmin dahil",
+    "notPrinted": "Taşıyıcı firmanın tuttuğu: henüz basılmadı",
+    "unverified": "{{dates}} tarihinde biten haftanın tutulan bakiyesi tutmadı, bu yüzden kullanılmıyor.",
+    "note": "Taşıyıcı firmanın sizin için tuttuğu iade edilebilir para (performans teminatı, acil durum fonu). Gider değildir.",
+    "yourCarrier": "Taşıyıcı firmanız",
+    "monthEndLabel": "Ay sonunda taşıyıcı firmanın tuttuğu",
+    "yearEndLabel": "Yıl sonunda taşıyıcı firmanın tuttuğu"
+  },
+  "dateCheck": {
+    "title": "Tarih kontrolü gerekiyor ({{count}})",
+    "row": "{{date}} tarihinde biten hafta: {{reasons}}",
+    "reason": {
+      "before_2025": "2025'ten önce",
+      "future": "gelecekte",
+      "not_friday": "cuma günü bitmeyen bir Prime haftası",
+      "differs_from_printed": "hesap özetinde basılı tarihten farklı"
+    },
+    "fixTo": "{{date}} olarak değiştir",
+    "pick": "Bir tarih seç",
+    "note": "Tarihi düzeltmek yalnızca hafta sonu tarihini değiştirir; tüm tutarlar aynı kalır.",
+    "conflictTitle": "Bu tarih değiştirilemiyor",
+    "conflictBody": "Bu kamyon için zaten {{date}} tarihinde biten bir haftanız var."
   }
 }

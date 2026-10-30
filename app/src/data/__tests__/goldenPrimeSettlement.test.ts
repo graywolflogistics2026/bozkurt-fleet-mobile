@@ -224,6 +224,11 @@ function goldenExtraction(shape: Shape, overrides: Partial<NonNullable<Extractio
     settlement: {
       weekEnding: WEEK_ENDING,
       printDate: '2026-08-20',
+      // Printed on the real PDF: SETTLEMENT DATE 26/08/21, print DATE
+      // 8/20/26, statement WEEK ENDING 26/08/21.
+      settlementDateRaw: '26/08/21',
+      printDateRaw: '8/20/26',
+      statementWeekEndingRaw: '26/08/21',
       carrier: 'PRIME INC.',
       unit: '283940',
       grossRevenue: KEY.revenue,
@@ -296,6 +301,7 @@ async function importGolden(extraction: Extraction): Promise<Rows> {
     carrier_code_maps: PRIME_CODES,
   });
   await saveExtraction({
+    importDate: '2026-10-29',
     extraction,
     userId: USER_ID,
     truckId: TRUCK_ID,

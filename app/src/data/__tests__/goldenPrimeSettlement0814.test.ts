@@ -40,6 +40,7 @@ import { buildTruckComparison, type ComparisonTruck } from '@/src/stats/truckCom
 import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
 import { buildPrimeStatementCheck, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
 import { splitPrimeLoads } from '@/src/import/primeLoads';
+import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { readPrimeYtdSnapshotFromParsedJson } from '@/src/import/primeOperatingStatement';
 import { buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
 import { buildReviewVerdict, isOlderReading, isSaveBlocked, lineDetailsDifference, markReviewWarnings, reviewInputsOf } from '@/src/import/reviewVerdict';
@@ -236,6 +237,11 @@ function golden0814(overrides: Partial<Settlement0814> = {}): Extraction {
     confidence: 'high',
     settlement: {
       weekEnding: WEEK_ENDING,
+      // Printed on the real PDF: SETTLEMENT DATE 26/08/14, print DATE
+      // 8/13/26, statement WEEK ENDING 26/08/14; CreationDate 2026-08-13.
+      settlementDateRaw: '26/08/14',
+      printDateRaw: '8/13/26',
+      statementWeekEndingRaw: '26/08/14',
       carrier: 'PRIME INC.',
       unit: '283940',
       grossRevenue: KEY.revenue,
@@ -304,6 +310,7 @@ async function importWeek(extraction: Extraction): Promise<Rows> {
     carrier_code_maps: PRIME_CODES,
   });
   await saveExtraction({
+    importDate: '2026-10-29',
     extraction,
     userId: USER_ID,
     truckId: TRUCK_ID,
@@ -544,9 +551,12 @@ describe('a deliberately misread number still blocks Save', () => {
     ]);
   });
 
-  test('the statement week ending must be the settlement week ending; "26/08/14" read as 2014-08-26 is the same week', () => {
-    expect(failedChecks(withStatement({ weekEnding: '2026-08-21' }))).toEqual(['statementWeekEnding']);
-    expect(failedChecks(withStatement({ weekEnding: '2014-08-26' }))).toEqual([]);
+  test('the statement week ending must be EXACTLY the settlement week ending (2026-10-29: the year/day-swap tolerance is removed)', () => {
+    expect(failedChecks(withStatement({}, { statementWeekEndingRaw: '26/08/21' }))).toEqual(['statementWeekEnding']);
+    // An older reading (no printed text) that stored "26/08/14" as
+    // 2014-08-26 no longer passes as "the same week".
+    expect(failedChecks(withStatement({ weekEnding: '2014-08-26' }, { statementWeekEndingRaw: undefined }))).toEqual(['statementWeekEnding']);
+    expect(failedChecks(withStatement({ weekEnding: '2026-08-14' }, { statementWeekEndingRaw: undefined }))).toEqual([]);
   });
 });
 
@@ -715,7 +725,7 @@ describe('the gate (item 6): statement checks + week ending decide; line items o
   });
 
   test('a statement week ending that was not read fails the gate (never skipped)', () => {
-    const e = withStatement({ weekEnding: undefined });
+    const e = withStatement({ weekEnding: undefined }, { statementWeekEndingRaw: undefined });
     expect(buildPrimeStatementCheck(e)!.gatePassed).toBe(false);
     expect(buildPrimeStatementCheck(e)!.gateMissing).toEqual(['statementWeekEnding']);
     expect(buildReviewVerdict(e, { saveBlocked: isSaveBlocked(e) })).toMatchObject({
@@ -774,5 +784,49 @@ describe('review verdict (item 7)', () => {
     expect(isOlderReading(golden0814({ totalLabels: { grossRevenue: 'TOTAL REV' } }))).toBe(false);
     expect(isOlderReading(golden0814())).toBe(true); // no totalLabels
     expect(isOlderReading(withStatement({ priorWeekBalanceForward: undefined }, { totalLabels: {} }))).toBe(true);
+  });
+});
+
+// =====================================================================
+describe('printed dates (owner decision 2026-10-29): a 2014 or 2021 date never reaches the database', () => {
+  test('the real week saves with week_ending 2026-08-14 and records what was printed', async () => {
+    const rows = await importWeek(golden0814());
+    expect(rows.settlements[0].week_ending).toBe('2026-08-14');
+    expect(rows.settlements[0].statement?.dates).toMatchObject({
+      settlementDateRaw: '26/08/14',
+      printDateRaw: '8/13/26',
+      statementWeekEndingRaw: '26/08/14',
+      printedWeekEnding: '2026-08-14',
+      format: 'YMD',
+    });
+  });
+
+  test('the model read "26/08/14" as 2014-08-26: the app parses the printed text and saves 2026-08-14', async () => {
+    const misread = golden0814({ weekEnding: '2014-08-26', operating: { ...STATEMENT, weekEnding: '2014-08-26' } });
+    const rows = await importWeek(sanitizeExtractionDates(misread, new Date('2026-10-29T12:00:00Z')));
+    expect(rows.settlements.map((s) => s.week_ending)).toEqual(['2026-08-14']);
+  });
+
+  test.each(['2014-08-26', '2021-08-26'])('an unconfirmed %s is refused before anything is written', async (bad) => {
+    const older = golden0814({ weekEnding: bad, settlementDateRaw: undefined, printDateRaw: undefined, statementWeekEndingRaw: undefined });
+    await expect(importWeek(older)).rejects.toThrow(/confirm the week ending/);
+    expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
+    expect((mockClient.__store as Record<string, unknown[]>).documents ?? []).toEqual([]);
+  });
+
+  test('a 2014 date is refused even when "confirmed"; a confirmed 2026 date of an older reading saves', async () => {
+    const confirmed14 = golden0814({
+      weekEnding: '2014-08-26',
+      settlementDateRaw: undefined,
+      dateConfirmed: { weekEnding: '2014-08-26', by: 'user' },
+    });
+    await expect(importWeek(confirmed14)).rejects.toThrow(/confirm the week ending/);
+    const confirmed26 = golden0814({
+      settlementDateRaw: undefined,
+      printDateRaw: undefined,
+      statementWeekEndingRaw: undefined,
+      dateConfirmed: { weekEnding: '2026-08-14', by: 'user' },
+    });
+    expect((await importWeek(confirmed26)).settlements.map((s) => s.week_ending)).toEqual(['2026-08-14']);
   });
 });

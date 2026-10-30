@@ -13,7 +13,8 @@ import { computeKpis } from '@/src/stats/kpi';
 // file covers the carrier gate, the standing YTD check and the Prime
 // sub-ledger filter.
 
-const YTD_OPERATING = { ytdTotalRevenue: 24425.98, ytdMiles: 10146, ytdTotalStatement: 8099.66, weeksInService: 5 };
+// W/E 8/21 YTD column: YTD SETTLEMENT TO OPERATOR 8,099.66.
+const YTD_OPERATING = { ytdTotalRevenue: 24425.98, ytdMiles: 10146, ytdTotalStatement: 8099.66, ytdSettlementToOperator: 8099.66, weeksInService: 5 };
 
 describe('isPrimeCarrier', () => {
   test('matches Prime Inc in any real-world spelling', () => {
@@ -35,7 +36,7 @@ describe('isPrimeCarrier', () => {
 });
 
 describe('checkPrimeYtdReconciliation — standing YTD check (revenue, miles)', () => {
-  const primeYtd: PrimeYtdSnapshot = { revenue: 24425.98, miles: 10146, totalStatement: 8099.66, asOfWeekEnding: '2026-08-21' };
+  const primeYtd: PrimeYtdSnapshot = { revenue: 24425.98, miles: 10146, totalStatement: 8099.66, settlementToOperator: 8099.66, asOfWeekEnding: '2026-08-21' };
 
   test('agrees within tolerance — no mismatch', () => {
     expect(checkPrimeYtdReconciliation({ revenue: 24425.98, miles: 10146 }, primeYtd)).toEqual([]);
@@ -64,6 +65,7 @@ describe('readPrimeYtdSnapshotFromParsedJson', () => {
       revenue: 24425.98,
       miles: 10146,
       totalStatement: 8099.66,
+      settlementToOperator: 8099.66,
       asOfWeekEnding: '2026-08-21',
     });
   });
@@ -74,6 +76,7 @@ describe('readPrimeYtdSnapshotFromParsedJson', () => {
       revenue: 19642.23,
       miles: 7819,
       totalStatement: 6214.93,
+      settlementToOperator: 0,
       asOfWeekEnding: '2026-08-14',
     });
   });
@@ -142,7 +145,7 @@ describe('filterToPrimeSettlementSubledger — LAYER 1 isolation', () => {
   });
 
   test('a non-Prime settlement on the same account never makes the YTD check flag a mismatch', () => {
-    const primeYtd: PrimeYtdSnapshot = { revenue: 4783.75, miles: 2327, totalStatement: 1884.73, asOfWeekEnding: '2026-08-21' };
+    const primeYtd: PrimeYtdSnapshot = { revenue: 4783.75, miles: 2327, totalStatement: 1884.73, settlementToOperator: 1884.73, asOfWeekEnding: '2026-08-21' };
     const rows = [
       { id: 'sett-prime-1', carrier: 'Prime Inc', truck_id: null, week_ending: '2026-08-21', gross: 4783.75, net: 1884.36, miles: 2327 },
       { id: 'sett-other-1', carrier: 'Landstar', truck_id: null, week_ending: '2026-08-14', gross: 3000, net: 2000, miles: 1500 },
