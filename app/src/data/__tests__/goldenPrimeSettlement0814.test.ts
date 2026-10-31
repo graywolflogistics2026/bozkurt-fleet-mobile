@@ -43,7 +43,8 @@ import { splitPrimeLoads } from '@/src/import/primeLoads';
 import { sanitizeExtractionDates } from '@/src/import/dateGuard';
 import { readPrimeYtdSnapshotFromParsedJson } from '@/src/import/primeOperatingStatement';
 import { buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
-import { buildReviewVerdict, isOlderReading, isSaveBlocked, lineDetailsDifference, markReviewWarnings, reviewInputsOf } from '@/src/import/reviewVerdict';
+import { buildReviewVerdict, isOlderReading, isSaveBlocked, lineDetailsDifference, markReviewWarnings, reviewInputsOf, saveGateFailures } from '@/src/import/reviewVerdict';
+import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
 
 // ---------------------------------------------------------------------
 // ANSWER KEY (owner, independently verified)
@@ -467,7 +468,7 @@ describe('golden week 2026-08-14 — Verified by Prime statement, every screen s
     expect(k.bridge.crossChecks).toEqual([]);
     // The line route alone (no statement page): 4,987.74 + 0.59 interest
     // that only the statement carries.
-    const lineRows = await importWeek(golden0814({ operating: undefined }));
+    const lineRows = await importWeek(golden0814({ operating: undefined, depositAmount: undefined }));
     const line = weekKpi(lineRows);
     expect(settlementVerification(lineRows.settlements[0])).toBe('totals_match');
     expect(r2(line.expenses.total)).toBe(r2(KEY.expenses - KEY.interestExpense));
@@ -878,7 +879,7 @@ describe('batch C item 5 — the Verified week raises only what truly needs a lo
   });
 
   it('without the statement page (printed totals match) a low-confidence read is the one item', async () => {
-    const s = (await importWeek(golden0814({ operating: undefined }))).settlements[0];
+    const s = (await importWeek(golden0814({ operating: undefined, depositAmount: undefined }))).settlements[0];
     expect(settlementVerification(s)).toBe('totals_match');
     expect(buildWeekCheckItems(s, ctx).map((i) => i.kind)).toEqual(['low_confidence']);
   });
@@ -986,5 +987,49 @@ describe('batch C item 6 — Home miles: one source, identical on every screen',
       without.ppm,
       without.miles.total,
     ]);
+  });
+});
+
+// ONE GATE ON EVERY SAVE PATH (owner decision 2026-10-30, before batch D)
+// — see the 8/21 file for the path list. The balance-forward chain is part
+// of the gate this week exercises.
+describe('every save path: same gate, same label, same profit (8/14)', () => {
+  const PATHS = {
+    live: (e: Extraction) => sanitizeExtraction(e),
+    backgroundJob: (e: Extraction) => sanitizeExtraction(JSON.parse(JSON.stringify(e)) as Extraction),
+  };
+  const paths = Object.keys(PATHS) as (keyof typeof PATHS)[];
+
+  test.each(paths)('%s: Verified by Prime statement, profit 4,987.74, miles 3,316', async (path) => {
+    const rows = await importWeek(PATHS[path](golden0814({ totalMiles: 0 })));
+    expect(settlementVerification(rows.settlements[0])).toBe('verified_prime');
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+    expect(rows.settlements[0].miles).toBe(KEY.miles);
+  });
+
+  test.each(paths)('%s: a misread balance forward breaks the cash chain and is refused', async (path) => {
+    const e = PATHS[path](withStatement({ priorWeekBalanceForward: -1220.92 }));
+    expect(e.confidence).toBe('low');
+    expect(saveGateFailures(e).length).toBeGreaterThan(0);
+    await expect(importWeek(e)).rejects.toThrow(/did not pass its checks/);
+    expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
+  });
+
+  test.each(paths)('%s: a misread section total is refused, the failing checks named', async (path) => {
+    const e = PATHS[path](withStatement({ weekTotalOperatingExpenses: -3683.61 }));
+    const failing = saveGateFailures(e);
+    expect(failing).toEqual(expect.arrayContaining(['operatingExpenses']));
+    await expect(importWeek(e)).rejects.toThrow(`did not pass its checks (${failing.join(', ')})`);
+  });
+
+  test.each(paths)('%s: an unconfirmed 2021 date is refused', async (path) => {
+    const e = PATHS[path](golden0814({ weekEnding: '2021-08-26', settlementDateRaw: undefined, printDateRaw: undefined, statementWeekEndingRaw: undefined }));
+    await expect(importWeek(e)).rejects.toThrow(/confirm the week ending/);
+  });
+
+  test('the preview and the save agree: isSaveBlocked is exactly "the save would refuse"', () => {
+    for (const e of [golden0814(), withStatement({ priorWeekBalanceForward: -1220.92 }), withStatement({ weekTotalOperatingExpenses: -3683.61 })]) {
+      expect(isSaveBlocked(e)).toBe(saveGateFailures(e).length > 0);
+    }
   });
 });

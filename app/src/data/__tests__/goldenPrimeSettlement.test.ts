@@ -43,6 +43,8 @@ import { buildTruckComparison, type ComparisonTruck } from '@/src/stats/truckCom
 import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
 import { buildPrimeStatementCheck, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
 import { buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
+import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
+import { isSaveBlocked, saveGateFailures } from '@/src/import/reviewVerdict';
 
 // ---------------------------------------------------------------------
 // ANSWER KEY (owner, independently verified)
@@ -915,5 +917,47 @@ describe('accountant package — withheld lines are never deductible (0b.2)', ()
         expect(reference.total).toBe(0);
       }
     }
+  });
+});
+
+// ONE GATE ON EVERY SAVE PATH (owner decision 2026-10-30, before batch D).
+// A week reaches saveExtraction() either from a live read (aiImportCall.ts)
+// or from a background job's stored result_json (importJobs.ts — jobs list,
+// Review All, retry, resume, read again). Both now run sanitizeExtraction(),
+// and saveExtraction() itself refuses a week the preview's gate blocks.
+describe('every save path: same gate, same label, same profit (8/21)', () => {
+  const PATHS = {
+    live: (e: Extraction) => sanitizeExtraction(e),
+    backgroundJob: (e: Extraction) => sanitizeExtraction(JSON.parse(JSON.stringify(e)) as Extraction),
+  };
+  const misread = () => statementExtraction({
+    operating: { ...STATEMENT, lines: STATEMENT_LINES.map((l) => (l.label === 'TRACTOR FUEL' ? { ...l, amount: -1979.82 } : l)) },
+  });
+
+  test.each(Object.keys(PATHS) as (keyof typeof PATHS)[])('%s: Verified by Prime statement, profit 2,534.36', async (path) => {
+    const rows = await importGolden(PATHS[path](statementExtraction()));
+    expect(settlementVerification(rows.settlements[0])).toBe('verified_prime');
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+  });
+
+  test.each(Object.keys(PATHS) as (keyof typeof PATHS)[])('%s: a misread number is refused before anything is written, the failing check named', async (path) => {
+    const e = PATHS[path](misread());
+    expect(e.confidence).toBe('low');
+    expect(isSaveBlocked(e)).toBe(true);
+    expect(saveGateFailures(e)).toEqual(['section_fuel_oil_tax']);
+    await expect(importGolden(e)).rejects.toThrow(/did not pass its checks \(section_fuel_oil_tax\)/);
+    expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
+    expect((mockClient.__store as Record<string, unknown[]>).documents ?? []).toEqual([]);
+  });
+
+  test.each(Object.keys(PATHS) as (keyof typeof PATHS)[])('%s: an unconfirmed 2014 date is refused', async (path) => {
+    const e = PATHS[path](statementExtraction({ weekEnding: '2014-08-26', settlementDateRaw: undefined, printDateRaw: undefined, printDate: undefined, statementWeekEndingRaw: undefined }));
+    await expect(importGolden(e)).rejects.toThrow(/confirm the week ending/);
+    expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
+  });
+
+  test('"Save anyway, flagged" (only offered in the preview) still saves, never Verified', async () => {
+    const rows = await importGolden({ ...PATHS.backgroundJob(misread()), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] });
+    expect(settlementVerification(rows.settlements[0])).toBe('unverified');
   });
 });

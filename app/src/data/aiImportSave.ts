@@ -25,7 +25,7 @@ import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf } fro
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
 import { buildSettlementStatement, isStatementBacked, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
-import { lineDetailsDifference, reviewInputsOf } from '@/src/import/reviewVerdict';
+import { lineDetailsDifference, reviewInputsOf, saveGateFailures } from '@/src/import/reviewVerdict';
 import { scrubBankDigits } from '@/src/import/bankDigits';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { buildTitleFromExtraction, cleanTitle, type TitleContext } from '@/src/data/documentTitle';
@@ -378,6 +378,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       throw new SaveExtractionError(
         'validation',
         new Error(`Please confirm the week ending date (${weekEnding}) before saving.`),
+        partial
+      );
+    }
+    // THE SAME GATE THE PREVIEW USES (owner decision 2026-10-30, before
+    // batch D): self-check, balance-forward chain, line totals — whatever
+    // path reached this save (live read, background job, Review All, retry,
+    // resume, read again). A failing week is refused unless the owner chose
+    // "Save anyway, flagged" in the preview (reconciliationOverride).
+    const gateFailures = saveGateFailures(d);
+    if (gateFailures.length > 0 && !(Array.isArray(d.reconciliationOverride) && d.reconciliationOverride.length > 0)) {
+      throw new SaveExtractionError(
+        'validation',
+        new Error(`This settlement did not pass its checks (${gateFailures.join(', ')}). Open it in the import preview to review it.`),
         partial
       );
     }

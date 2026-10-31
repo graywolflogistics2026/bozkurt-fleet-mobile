@@ -3,8 +3,7 @@ import { File, Paths } from 'expo-file-system';
 import { supabase } from '@/src/lib/supabase';
 import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
-import { sanitizeExtractionDates } from '@/src/import/dateGuard';
-import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
+import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
 import { hasPendingWork, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus } from '@/src/import/importJobs';
 import type { Extraction } from '@/src/import/types';
 
@@ -128,7 +127,9 @@ export function useImportJob(jobId: string | null) {
 }
 
 // Fetches the raw result_json for a 'ready' job and sanitizes it exactly
-// like a live extraction (DATE HARDENING/MILES TRAP — see aiImportCall.ts)
+// like a live extraction (dates, miles AND the Prime statement check —
+// src/import/sanitizeExtraction.ts; the statement check was missing here
+// until 2026-10-30)
 // so "Review now" behaves identically to a synchronous import's own
 // result, regardless of which path produced it.
 export async function fetchImportJobResult(jobId: string): Promise<Extraction | null> {
@@ -136,7 +137,7 @@ export async function fetchImportJobResult(jobId: string): Promise<Extraction | 
   if (error) throw error;
   const raw = data?.result_json as Extraction | undefined;
   if (!raw) return null;
-  return sanitizeExtractionMiles(sanitizeExtractionDates(raw));
+  return sanitizeExtraction(raw);
 }
 
 // "Review now" (owner decision 2026-08-24, item 3) — same sanitized
@@ -154,7 +155,7 @@ export async function fetchImportJobForReview(
   if (!data || data.status !== 'ready' || !data.result_json) return null;
   const raw = data.result_json as Extraction;
   return {
-    extraction: sanitizeExtractionMiles(sanitizeExtractionDates(raw)),
+    extraction: sanitizeExtraction(raw),
     fileName: (data.file_name as string | null) ?? undefined,
     storagePath: data.storage_path as string,
     mediaType: data.media_type as string,

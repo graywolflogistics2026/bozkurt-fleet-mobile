@@ -1,18 +1,10 @@
 import { supabase } from '@/src/lib/supabase';
-import { sanitizeExtractionDates } from '@/src/import/dateGuard';
-import { sanitizeExtractionMiles } from '@/src/import/milesGuard';
-import { applyPrimeOperatingStatementCheck } from '@/src/import/settlementStatement';
+import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
 import type { Extraction } from '@/src/import/types';
 
-// Composes every sanitize-guard in the established order (dates first,
-// then miles, then the Prime operating-statement cross-check last, since
-// it reads the ALREADY-corrected totalMiles/grossRevenue the miles guard
-// may have just fixed) — one function so the two call sites below (the
-// terminal result and the in-progress partial preview) can never drift
-// out of sync about which guards run or in what order.
-function sanitizeExtraction(extraction: Extraction): Extraction {
-  return applyPrimeOperatingStatementCheck(sanitizeExtractionMiles(sanitizeExtractionDates(extraction)));
-}
+// Every guard (dates, miles, Prime statement check) — the one shared
+// composition in src/import/sanitizeExtraction.ts, also used for
+// background job results (src/data/importJobs.ts).
 
 // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
 // FIVE ADDITIONS pass, PART 5) — `used`/`allowance` are only ever present

@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- ONE SAVE GATE ON EVERY PATH (owner decision 2026-10-30, before batch D).
+  Background job results (importJobs.ts fetchImportJobResult/
+  fetchImportJobForReview: jobs list, Review All, retry, resume, read again)
+  ran dates + miles only, skipping applyPrimeOperatingStatementCheck — now
+  src/import/sanitizeExtraction.ts for both paths. saveExtraction() runs
+  saveGateFailures() (reviewVerdict.ts, the preview gate: self-check,
+  balance-forward chain, line totals) after the date gate and refuses a
+  failing week unless reconciliationOverride ("Save anyway, flagged", preview
+  only). Every-path tests on both golden weeks. No SQL, no redeploy.
+
 - MASTER PLAN BATCH C (owner decision 2026-10-30): review and certify, Home
   miles. Root cause of "mileage missing" on Verified Prime weeks: gross came
   from the statement (aiImportSave.ts) but miles only from the AI's totalMiles,

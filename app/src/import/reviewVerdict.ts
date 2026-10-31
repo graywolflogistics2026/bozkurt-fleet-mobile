@@ -161,10 +161,23 @@ export function buildReviewVerdict(
 // Whether Save is blocked — the gate when a Prime statement passed it,
 // else today's guard (owner decision 2026-10-17, item 6).
 export function isSaveBlocked(extraction: Extraction | null | undefined): boolean {
-  if (!extraction) return false;
+  return saveGateFailures(extraction).length > 0;
+}
+
+// The checks that block Save, by name (reconciliation issue type or
+// statement check id; 'statement_incomplete' when the statement's gate
+// fields were not all read) — empty when Save is allowed. ONE gate for
+// every save path (owner decision 2026-10-30, before batch D): the preview
+// renders it, and saveExtraction() refuses a blocked week unless the owner
+// chose "Save anyway, flagged" in the preview (reconciliationOverride).
+export function saveGateFailures(extraction: Extraction | null | undefined): string[] {
+  if (!extraction) return [];
   const check = buildPrimeStatementCheck(extraction);
-  if (check?.gatePassed) return false;
-  return !checkSettlementReconciliation(extraction).ok || (!!check && !check.passed);
+  if (check?.gatePassed) return [];
+  const issues: string[] = checkSettlementReconciliation(extraction).issues.map((i) => i.type);
+  if (!check || check.passed) return issues;
+  const failed: string[] = check.checks.filter((c) => !c.passed).map((c) => c.id);
+  return [...issues, ...(failed.length > 0 ? failed : ['statement_incomplete'])];
 }
 
 // The extraction Save writes when the gate passed but something only

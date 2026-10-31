@@ -372,8 +372,11 @@ Start now with the protocol, then batch 0b.
   statement's reviewReasons (stored but shown nowhere before), the date check,
   "miles missing", the deadhead-pay flag. A Verified week skips the AI-header
   comparisons (milesMatch, grossMatches) and the multi-page low confidence.
-- Known, not changed here: background import jobs (`importJobs.ts`) skip the
-  Prime statement confidence check that live imports run (`aiImportCall.ts`).
+- Fixed 2026-10-30 (before batch D): background import jobs (`importJobs.ts`)
+  skipped the Prime statement check that live imports run. Both read paths
+  now call `src/import/sanitizeExtraction.ts`, and `saveExtraction()` refuses
+  any week that fails `saveGateFailures()` (the preview gate) unless the
+  owner chose "Save anyway, flagged" in the preview.
 
 ## Batch 0b notes (2026-10-30)
 
