@@ -2961,5 +2961,68 @@
       "election": "Tratamiento: elección de depreciación"
     },
     "openItemTag": "PENDIENTE"
+  },
+  "weekReview": {
+    "title": "Revisar esta semana",
+    "openCard": "Revisar esta semana",
+    "thingsToCheck": "Cosas por revisar ({{count}})",
+    "nothingToCheck": "Nada que revisar.",
+    "looksRight": "Está bien",
+    "certify": "Certificar",
+    "certifyTitle": "Certificar esta semana",
+    "certifyBlocked": "Primero marque cada punto como \"Está bien\".",
+    "certifiedOn": "Certificado por usted el {{date}}",
+    "needsDb": "Esto necesita la actualización de la base de datos (PENDING_SQL §82).",
+    "saveFailedTitle": "No se pudo guardar",
+    "chipToCheck": "Por revisar: {{count}}",
+    "chipReady": "Listo para certificar",
+    "chipCertified": "✓ Certificado",
+    "exportTitle": "Semanas que usted certificó",
+    "exportWeek": "Semana que termina el {{week}}",
+    "item": {
+      "date": "La fecha de fin de semana puede estar mal — revise la lista de fechas en esta pantalla.",
+      "miles_missing": "No se leyeron millas para esta semana — ingréselas abajo.",
+      "unverified": "Los totales no se pudieron comprobar contra el estado de cuenta.",
+      "low_confidence": "La IA no estaba segura de este documento — compárelo con su original.",
+      "deadhead_pay_without_miles": "Una línea de pago de deadhead no muestra millas — no se contó como millas vacías."
+    },
+    "reason": {
+      "unknown_line": "Una línea del estado de cuenta que la app aún no conoce",
+      "ot_load_unload_advance": "Primera línea de adelanto OT de carga/descarga",
+      "out_of_pocket_costs": "Primera línea de gastos de su bolsillo",
+      "start_up_costs": "Primera línea de costos de inicio",
+      "personal_payment_unmatched": "Una línea de pago personal sin gasto correspondiente",
+      "statement_core_missing": "No se pudo leer un total del estado de cuenta",
+      "line_items_incomplete": "Algunas páginas no se leyeron",
+      "loads_revenue_mismatch": "Los ingresos de las cargas no cuadran con el estado de cuenta",
+      "statement_warning": "Una comprobación del estado de cuenta difiere (solo aviso)",
+      "line_details_differ": "Los detalles de las líneas difieren del estado de cuenta en"
+    }
+  },
+  "milesWeeks": {
+    "title": "Millas por semana",
+    "all": "Todo",
+    "total": "Millas totales",
+    "loaded": "Cargadas",
+    "empty": "Vacías / deadhead",
+    "deadheadPct": "% deadhead",
+    "withoutBreakdown": "{{count}} semanas sin desglose cargadas/vacías",
+    "editHint": "Toque una semana para corregir sus millas cargadas y vacías.",
+    "weekOf": "Semana que termina el {{date}}",
+    "noWeeks": "No hay semanas en este período.",
+    "noBreakdown": "Sin desglose cargadas/vacías para esta semana",
+    "source": {
+      "loads": "De las líneas de carga",
+      "statement": "Impreso en el estado de cuenta",
+      "derived": "Calculado: total − cargadas",
+      "manual": "Ingresado por usted"
+    },
+    "manualNote": "Sus números se conservan cuando esta semana se importa de nuevo.",
+    "invalidTitle": "Revise los números",
+    "invalid": {
+      "missing": "Ingrese millas cargadas y vacías.",
+      "negative": "Las millas no pueden ser negativas."
+    },
+    "saveFailedTitle": "No se pudo guardar"
   }
 }

@@ -1648,6 +1648,16 @@ export default function Import() {
               </MutedText>
             )}
             {result.storagePath && <MutedText>{t('importScreen.savedToPath', { path: result.storagePath })}</MutedText>}
+            {/* Batch C item 5: the week's ONE review card (things to check +
+                Certify) instead of a scatter of warnings. */}
+            {result.settlementId && (
+              <PrimaryButton
+                title={t('weekReview.openCard')}
+                onPress={() =>
+                  router.push({ pathname: '/(tabs)/more/settlements', params: { openId: result.settlementId } } as unknown as Href)
+                }
+              />
+            )}
             {/* UX MEGA-PASS item D: three explicit choices instead of one
                 "import another" — View Record reopens the just-saved
                 document (with its own "linked records" jump to the

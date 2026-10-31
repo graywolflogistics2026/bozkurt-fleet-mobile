@@ -2961,5 +2961,68 @@
       "election": "المعاملة: اختيار الإهلاك"
     },
     "openItemTag": "بند مفتوح"
+  },
+  "weekReview": {
+    "title": "مراجعة هذا الأسبوع",
+    "openCard": "مراجعة هذا الأسبوع",
+    "thingsToCheck": "أمور للتحقق ({{count}})",
+    "nothingToCheck": "لا شيء للتحقق.",
+    "looksRight": "يبدو صحيحًا",
+    "certify": "تصديق",
+    "certifyTitle": "تصديق هذا الأسبوع",
+    "certifyBlocked": "علّم كل بند \"يبدو صحيحًا\" أولًا.",
+    "certifiedOn": "صدّقته في {{date}}",
+    "needsDb": "يتطلب هذا تحديث قاعدة البيانات (PENDING_SQL §82).",
+    "saveFailedTitle": "تعذّر الحفظ",
+    "chipToCheck": "للتحقق: {{count}}",
+    "chipReady": "جاهز للتصديق",
+    "chipCertified": "✓ مُصدَّق",
+    "exportTitle": "الأسابيع التي صدّقتها",
+    "exportWeek": "الأسبوع المنتهي في {{week}}",
+    "item": {
+      "date": "قد يكون تاريخ نهاية الأسبوع خاطئًا — راجع قائمة التواريخ في هذه الشاشة.",
+      "miles_missing": "لم تُقرأ أميال لهذا الأسبوع — أدخلها أدناه.",
+      "unverified": "تعذّر التحقق من الإجماليات مقابل الكشف.",
+      "low_confidence": "لم يكن الذكاء الاصطناعي متأكدًا من هذا المستند — قارنه بالأصل.",
+      "deadhead_pay_without_miles": "سطر دفع deadhead بلا أميال — لم يُحسب كأميال فارغة."
+    },
+    "reason": {
+      "unknown_line": "سطر في الكشف لا يعرفه التطبيق بعد",
+      "ot_load_unload_advance": "أول سطر سلفة OT للتحميل/التفريغ",
+      "out_of_pocket_costs": "أول سطر تكاليف من جيبك",
+      "start_up_costs": "أول سطر تكاليف بدء",
+      "personal_payment_unmatched": "سطر دفعة شخصية بلا مصروف مطابق",
+      "statement_core_missing": "تعذّرت قراءة أحد إجماليات الكشف",
+      "line_items_incomplete": "لم تُقرأ بعض الصفحات",
+      "loads_revenue_mismatch": "إيراد الحمولات لا يطابق الكشف",
+      "statement_warning": "أحد فحوص الكشف مختلف (تحذير فقط)",
+      "line_details_differ": "تفاصيل الأسطر تختلف عن الكشف بمقدار"
+    }
+  },
+  "milesWeeks": {
+    "title": "الأميال لكل أسبوع",
+    "all": "الكل",
+    "total": "إجمالي الأميال",
+    "loaded": "محمّلة",
+    "empty": "فارغة / deadhead",
+    "deadheadPct": "% deadhead",
+    "withoutBreakdown": "{{count}} أسابيع بلا تفصيل محمّلة/فارغة",
+    "editHint": "اضغط على أسبوع لتصحيح الأميال المحمّلة والفارغة.",
+    "weekOf": "الأسبوع المنتهي في {{date}}",
+    "noWeeks": "لا أسابيع في هذه الفترة.",
+    "noBreakdown": "لا تفصيل محمّلة/فارغة لهذا الأسبوع",
+    "source": {
+      "loads": "من أسطر الحمولات",
+      "statement": "مطبوع في الكشف",
+      "derived": "محسوب: الإجمالي − المحمّلة",
+      "manual": "أدخلتها أنت"
+    },
+    "manualNote": "تُحفظ أرقامك عند استيراد هذا الأسبوع مرة أخرى.",
+    "invalidTitle": "تحقق من الأرقام",
+    "invalid": {
+      "missing": "أدخل الأميال المحمّلة والفارغة.",
+      "negative": "لا يمكن أن تكون الأميال سالبة."
+    },
+    "saveFailedTitle": "تعذّر الحفظ"
   }
 }

@@ -808,7 +808,7 @@ function HomeTaxStrip({ taxQuery }: { taxQuery: ReturnType<typeof useTaxEstimate
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
+  const { money: moneyFmt, number: numberFmt } = useFormatters();
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const money2 = (n: number) => moneyFmt(n, { maximumFractionDigits: 2 });
   const { session, profile, signOut } = useAuth();
@@ -1321,6 +1321,43 @@ export default function Dashboard() {
             onPress={() => setCpmWhyOpen(true)}
           />
         </View>
+        {/* MILES (batch C item 6): total / loaded / empty-deadhead / deadhead %,
+            the same computeKpis() result as the trio above. Any tile opens
+            the per-week list for this exact period and scope. */}
+        {periodScopedCpm.kpi && (
+          <>
+            <View style={styles.compactRow}>
+              {(
+                [
+                  ['milesWeeks.total', numberFmt(periodScopedCpm.kpi.miles.total)],
+                  ['milesWeeks.loaded', numberFmt(periodScopedCpm.kpi.miles.loaded)],
+                  ['milesWeeks.empty', numberFmt(periodScopedCpm.kpi.miles.empty)],
+                  [
+                    'milesWeeks.deadheadPct',
+                    periodScopedCpm.kpi.miles.deadheadPct != null ? `${(periodScopedCpm.kpi.miles.deadheadPct * 100).toFixed(1)}%` : '—',
+                  ],
+                ] as const
+              ).map(([label, value]) => (
+                <CompactStatTile
+                  key={label}
+                  label={t(label)}
+                  value={value}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(tabs)/more/miles-weeks',
+                      params: { period: heroPeriod, startIso: heroWindow?.startIso ?? '', endIso: heroWindow?.endIso ?? '' },
+                    } as unknown as Href)
+                  }
+                />
+              ))}
+            </View>
+            {periodScopedCpm.kpi.miles.weeksWithoutBreakdown > 0 && (
+              <MutedText style={{ color: colors.orange, marginTop: -spacing.xs, marginBottom: spacing.sm }} numberOfLines={2}>
+                {t('milesWeeks.withoutBreakdown', { count: periodScopedCpm.kpi.miles.weeksWithoutBreakdown })}
+              </MutedText>
+            )}
+          </>
+        )}
         {/* SANITY GUARDS (requirement 3) — "no data at all in this window"
             (e.g. "This Week" before any settlement has ever been
             imported) and "settlements exist but have no recorded miles"

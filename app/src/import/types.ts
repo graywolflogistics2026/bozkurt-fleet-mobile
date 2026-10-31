@@ -151,6 +151,11 @@ export type ExtractedSettlement = {
   totalLabels?: Partial<Record<'grossRevenue' | 'reimbursements' | 'totalDeductions' | 'netPay' | 'depositAmount', string>>;
   totalMiles?: number;
   loadedMiles?: number;
+  // Batch C item 6 (2026-10-30, ai-import): every printed WEEKLY miles
+  // total with its exact label ("LOADED MILES", "DEADHEAD", "TOTAL
+  // MILES"); a deadhead pay line without miles has miles null. Read by
+  // src/import/milesSplit.ts for carriers other than Prime.
+  milesLines?: { label?: string | null; miles?: number | string | null }[];
   revenueItems?: ExtractedRevenueItem[];
   reimbursementItems?: ExtractedReimbursementItem[];
   loads?: ExtractedLoad[];

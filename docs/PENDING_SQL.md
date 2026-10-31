@@ -5087,6 +5087,60 @@ where conrelid = 'public.trucks'::regclass
 
 Mirror file `pending_81.sql` removed after the owner confirmed it was run (2026-10-30); its SQL is inlined above.
 
+## 82. WEEK REVIEW + CERTIFY, LOADED / EMPTY MILES PER WEEK (owner decision 2026-10-30, master plan batch C items 5, 6) — NOT YET APPLIED
+
+**Why**: (item 5) one "Review this week" card with "Looks right" per item
+and a single Certify; the certification records when, the text version
+and the app version, and any later edit of that week clears it. The
+existing `documents.reviewed_at` is reused (Certify marks the week's
+document reviewed); `settlements` had no review columns. (item 6) the
+week's loaded / empty split for Home's Miles card — until now only
+`loads.loaded_miles/empty_miles` existed, so another carrier's printed
+"deadhead" total had nowhere to go and a manual correction could not
+survive a re-import (re-import deletes and re-inserts the loads).
+
+**What**: nine nullable `settlements` columns (`loaded_miles`,
+`empty_miles`, `miles_split_source` loads/statement/derived/manual,
+`miles_split_label`, `miles_split_flag`, `review_acknowledged text[]`,
+`certified_at`, `certification_text_version`, `certification_app_version`),
+two check constraints on the new columns only, and two trigger functions:
+`settlements_clear_certification` (before update on settlements: any
+change to a column other than the four review columns and `updated_at`
+clears them) and `settlement_child_clears_certification` (after
+insert/update/delete on loads, fuel_purchases, deductions, reimbursements,
+maintenance_records, tolls, driver_payments: clears the linked week's).
+Nothing dropped or altered; no existing column changes. Not a new table,
+not a `profiles` column. RLS unchanged (`settlements` policies cover new
+columns; the triggers run as the caller).
+
+**Safe before it runs**: the split write in `aiImportSave.ts` and the
+Certify / "Looks right" / miles edit writes are separate, non-fatal
+updates; Certify and the miles edit say the database update (§82) is
+needed. Home's Miles card falls back to the loads' own columns.
+
+**Edge Function**: redeploy `ai-import` (new `settlement.milesLines`
+prompt addition — additive, works before or after this SQL).
+
+The full SQL is `pending_82.sql` (repo root); it is inlined here when the
+section is marked applied (PENDING_SQL rule 3).
+
+Read-only check (9 column rows, then 8 trigger rows):
+
+```sql
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'settlements'
+  and column_name in ('loaded_miles','empty_miles','miles_split_source','miles_split_label','miles_split_flag',
+                      'review_acknowledged','certified_at','certification_text_version','certification_app_version')
+order by column_name;
+
+select event_object_table, trigger_name from information_schema.triggers
+where trigger_name like '%certification%' group by 1, 2 order by 1;
+```
+
+- [ ] 82 run
+
+Mirror file: `pending_82.sql` (repo root).
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

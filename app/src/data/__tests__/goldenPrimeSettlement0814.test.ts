@@ -849,3 +849,142 @@ describe('accountant package — withheld lines are never deductible (0b.2)', ()
     }
   });
 });
+
+// BATCH C (owner decision 2026-10-30): review this week + certify, miles.
+import { buildWeekCheckItems, weekReviewState, CERTIFICATION_TEXT_VERSION } from '@/src/import/weekReview';
+import { acknowledgeWeekItem, certifyWeek, saveManualMilesSplit } from '@/src/data/weekReviewMutations';
+
+describe('batch C item 5 — the Verified week raises only what truly needs a look', () => {
+  const ctx = { documentLowConfidence: true, today: '2026-10-30' };
+
+  it('golden W/E 8/14: nothing to check (the multi-page "low confidence" alone is not an item), ready to certify', async () => {
+    const s = (await importWeek(golden0814())).settlements[0];
+    expect(settlementVerification(s)).toBe('verified_prime');
+    expect(buildWeekCheckItems(s, ctx)).toEqual([]);
+    expect(weekReviewState(s, ctx).canCertify).toBe(true);
+  });
+
+  it('root cause fixed: the AI left totalMiles 0 -> the statement MILES (3,316) is saved, 7 per diem days, no "miles missing"', async () => {
+    const s = (await importWeek(golden0814({ totalMiles: 0 }))).settlements[0];
+    expect(s.miles).toBe(KEY.miles);
+    expect(s.per_diem_days).toBe(7);
+    expect(buildWeekCheckItems(s, ctx).map((i) => i.kind)).not.toContain('miles_missing');
+  });
+
+  it('an AI header miles that differs (a lifetime figure) is not an item on a Verified week; the statement figure is saved', async () => {
+    const s = (await importWeek(golden0814({ totalMiles: 412345 }))).settlements[0];
+    expect(s.miles).toBe(KEY.miles);
+    expect(buildWeekCheckItems(s, ctx)).toEqual([]);
+  });
+
+  it('without the statement page (printed totals match) a low-confidence read is the one item', async () => {
+    const s = (await importWeek(golden0814({ operating: undefined }))).settlements[0];
+    expect(settlementVerification(s)).toBe('totals_match');
+    expect(buildWeekCheckItems(s, ctx).map((i) => i.kind)).toEqual(['low_confidence']);
+  });
+
+  it('an Unverified week raises "unverified" once — never a second item for the same low-confidence read', () => {
+    const s = { id: 's1', week_ending: '2026-08-14', carrier: 'Acme', gross: 5000, miles: 2000, statement: null };
+    expect(buildWeekCheckItems(s, ctx).map((i) => i.kind)).toEqual(['unverified']);
+    expect(buildWeekCheckItems({ ...s, miles: 0 }, ctx).map((i) => i.kind)).toEqual(['miles_missing', 'unverified']);
+  });
+});
+
+describe('batch C item 5 — certify, re-certify, and no certification survives an edit', () => {
+  const certified = () => (mockClient.__store as Record<string, Settlement[]>).settlements[0];
+
+  it('Certify records time, text version and app version, and marks the document reviewed', async () => {
+    const s = (await importWeek(golden0814())).settlements[0];
+    await certifyWeek({ id: s.id, document_id: s.document_id }, '1.0.0+abc1234', '2026-10-30T15:00:00.000Z');
+    expect(certified()).toMatchObject({
+      certified_at: '2026-10-30T15:00:00.000Z',
+      certification_text_version: CERTIFICATION_TEXT_VERSION,
+      certification_app_version: '1.0.0+abc1234',
+    });
+    const doc = (mockClient.__store as Record<string, { id: string; reviewed_at?: string }[]>).documents.find((d) => d.id === s.document_id);
+    expect(doc?.reviewed_at).toBe('2026-10-30T15:00:00.000Z');
+  });
+
+  it('every kind of later edit clears it; re-certify works each time', async () => {
+    const s = (await importWeek(golden0814())).settlements[0];
+    const certify = () => certifyWeek({ id: s.id, document_id: null }, '1.0.0', '2026-10-30T15:00:00.000Z');
+    const client = mockClient;
+
+    // (1) an edit of the week's own row
+    await certify();
+    await client.from('settlements').update({ per_diem_days: 6 }).eq('id', s.id);
+    expect(certified().certified_at).toBeNull();
+
+    // (2) a row added to the week
+    await certify();
+    expect(certified().certified_at).toBe('2026-10-30T15:00:00.000Z');
+    await client.from('deductions').insert({ user_id: USER_ID, settlement_id: s.id, amount: 10, ded_date: WEEK_ENDING });
+    expect(certified().certified_at).toBeNull();
+
+    // (3) a row of the week deleted
+    await certify();
+    const anyLoad = (client.__store as Record<string, { id: string; settlement_id: string }[]>).loads.find((l) => l.settlement_id === s.id)!;
+    await client.from('loads').delete().eq('id', anyLoad.id);
+    expect(certified().certified_at).toBeNull();
+
+    // (4) a manual loaded/empty correction is an edit too
+    await certify();
+    await saveManualMilesSplit(s.id, 2700, 616);
+    expect(certified().certified_at).toBeNull();
+
+    // (5) a "Looks right" mark is not an edit and survives certifying
+    await acknowledgeWeekItem({ id: s.id, review_acknowledged: null }, 'unverified');
+    await certify();
+    expect(certified().review_acknowledged).toEqual(['unverified']);
+    expect(certified().certified_at).toBe('2026-10-30T15:00:00.000Z');
+  });
+
+  it('a re-import clears the certification but keeps the manual loaded/empty split', async () => {
+    const s = (await importWeek(golden0814())).settlements[0];
+    await saveManualMilesSplit(s.id, 2700, 616);
+    await certifyWeek({ id: s.id, document_id: null }, '1.0.0', '2026-10-30T15:00:00.000Z');
+    await saveExtraction({
+      importDate: '2026-10-30',
+      extraction: golden0814(),
+      userId: USER_ID,
+      truckId: TRUCK_ID,
+      driverId: null,
+      driverShareAmount: null,
+      fileUri: null,
+      fileExt: 'pdf',
+      mediaType: 'application/pdf',
+      createContribution: false,
+    });
+    expect(certified()).toMatchObject({ certified_at: null, loaded_miles: 2700, empty_miles: 616, miles_split_source: 'manual' });
+  });
+});
+
+describe('batch C item 6 — Home miles: one source, identical on every screen', () => {
+  it('golden W/E 8/14: 2,739 / 577 / 3,316 = 17.4%, stored split, KPI = per-week list, fleet = truck scope', async () => {
+    const rows = await importWeek(golden0814());
+    expect(rows.settlements[0]).toMatchObject({ loaded_miles: 2739, empty_miles: 577, miles_split_source: 'loads', miles_split_label: 'EMPTY' });
+    const kpi = weekKpi(rows);
+    expect([kpi.miles.loaded, kpi.miles.empty, kpi.miles.total]).toEqual([2739, 577, 3316]);
+    expect(Math.round(kpi.miles.deadheadPct! * 1000) / 10).toBe(17.4);
+    expect(kpi.miles.weeksWithoutBreakdown).toBe(0);
+    expect(kpi.miles.weeks).toHaveLength(1);
+    expect(kpi.miles.weeks[0]).toMatchObject({ loadedMiles: 2739, emptyMiles: 577, totalMiles: 3316 });
+    expect(weekKpi(rows, null).miles).toEqual(kpi.miles);
+  });
+
+  it('profit, CPM, RPM and PPM are unchanged by the stored split', async () => {
+    const rows = await importWeek(golden0814());
+    const withSplit = weekKpi(rows);
+    const without = weekKpi({
+      ...rows,
+      settlements: rows.settlements.map((x) => ({ ...x, loaded_miles: null, empty_miles: null, miles_split_source: null, miles_split_label: null })),
+    });
+    expect([withSplit.net, withSplit.cpm, withSplit.rpm, withSplit.ppm, withSplit.miles.total]).toEqual([
+      without.net,
+      without.cpm,
+      without.rpm,
+      without.ppm,
+      without.miles.total,
+    ]);
+  });
+});

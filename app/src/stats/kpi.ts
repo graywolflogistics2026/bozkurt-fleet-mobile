@@ -70,7 +70,7 @@
 // untouched here). computeKpis() now filters+computes directly for both
 // branches through one shared code path, so "All Trucks" and "a specific
 // truck" can never diverge in how they treat a null-truck row.
-import { calcMiles, resolveMilesTotal, type LoadMilesInput } from '@/src/stats/miles';
+import { calcMiles, resolveMilesTotal, type LoadMilesInput, type WeekMiles } from '@/src/stats/miles';
 import { onePerStatementWeek } from '@/src/stats/heldByCarrier';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CpmBucket, type CpmExcludedOneOff } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
@@ -147,7 +147,15 @@ export type KpiResult = {
   // design; see this module's header comment for why both are real,
   // legitimately different figures.
   expenses: { total: number; fixed: number; variable: number };
-  miles: { total: number; loaded: number; empty: number; deadheadPct: number | null };
+  miles: {
+    total: number;
+    loaded: number;
+    empty: number;
+    deadheadPct: number | null;
+    // Batch C item 6: the per-week list behind Home's Miles card.
+    weeksWithoutBreakdown: number;
+    weeks: WeekMiles[];
+  };
   // null only when there are no miles in this window/scope (avoids a
   // divide-by-zero) — callers must show a "no data" state, never a $0.
   rpm: number | null;
@@ -402,6 +410,8 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
       loaded: milesResult.loadedMiles,
       empty: milesResult.emptyMiles,
       deadheadPct: milesResult.deadheadPct,
+      weeksWithoutBreakdown: milesResult.weeksWithoutBreakdown,
+      weeks: milesResult.weeks,
     },
     rpm: cpmResult.revenuePerMile,
     cpm: cpmResult.costPerMile,

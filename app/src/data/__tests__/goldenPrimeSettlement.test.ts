@@ -397,6 +397,10 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
     expectAnswerKey(weekKpi(rows, NO_COST_BASIS, null));
     expect(weekKpi(rows).miles.loaded).toBe(KEY.loadedMiles);
     expect(weekKpi(rows).miles.empty).toBe(KEY.emptyMiles);
+    // Batch C item 6: Home's Miles tiles — 2,081 / 246 / 2,327 = 10.6%.
+    expect(weekKpi(rows).miles.total).toBe(KEY.miles);
+    expect(Math.round(weekKpi(rows).miles.deadheadPct! * 1000) / 10).toBe(10.6);
+    expect(weekKpi(rows).miles.weeksWithoutBreakdown).toBe(0);
   });
 
   test('computeKpis() all-time (Scorecard / AI Coach window: null) — same numbers', () => {

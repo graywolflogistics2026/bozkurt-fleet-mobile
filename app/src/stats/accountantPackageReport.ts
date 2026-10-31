@@ -113,6 +113,11 @@ export type AccountantReportInput = {
   groupedCategories: GroupedScheduleCCategory[];
   capitalAssets: CapitalAssetRow[];
   ownersEquity: OwnersEquitySummary;
+  // Batch C item 5: "Certified by you on <date>" lines for the weeks in
+  // this period the owner certified, plus the certification text itself.
+  certifiedWeekLines?: string[];
+  certificationText?: string;
+  certifiedWeeksTitle?: string;
 };
 
 // FILE NAMING (spec item 4, "…-july-2026-out-of-pocket-detailed.pdf")
@@ -352,6 +357,14 @@ export function buildAccountantReportHtml(
                <table>
                  ${ownersEquityRows || `<tr><td colspan="3">${esc(strings.ownersEquityNoRows)}</td></tr>`}
                </table>`
+            : ''
+        }
+
+        ${
+          input.certifiedWeekLines && input.certifiedWeekLines.length > 0
+            ? `<h2>${esc(input.certifiedWeeksTitle ?? '')}</h2>
+               <p>${input.certifiedWeekLines.map(esc).join('<br/>')}</p>
+               <p class="muted">${esc(input.certificationText ?? '')}</p>`
             : ''
         }
 

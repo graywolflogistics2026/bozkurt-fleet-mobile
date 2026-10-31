@@ -15,6 +15,12 @@ export type SettlementMilesInput = {
   truck_id?: string | null;
   week_ending: string | null;
   miles: number | null;
+  // Batch C item 6 (§82): the week's stored loaded / empty split
+  // (src/import/milesSplit.ts). Absent or null -> the loads' own columns.
+  loaded_miles?: number | null;
+  empty_miles?: number | null;
+  miles_split_source?: string | null;
+  miles_split_label?: string | null;
 };
 
 export type LoadMilesInput = {
@@ -32,6 +38,13 @@ export type WeekMiles = {
   statementMiles: number;
   loadsLoadedMiles: number;
   loadsEmptyMiles: number;
+  // Batch C item 6: the week's split as shown everywhere — the stored
+  // settlement split when present, else the loads' columns when any load
+  // carries miles, else null ("without breakdown", never 0).
+  loadedMiles: number | null;
+  emptyMiles: number | null;
+  splitSource: 'loads' | 'statement' | 'derived' | 'manual' | null;
+  splitLabel: string | null;
   // Reconciliation rule (spec item B.1): total = MAX(the settlement's own
   // printed total, the sum of that week's loads' loaded+empty) — never
   // the SUM of both, which would double-count whichever figure is more
@@ -54,16 +67,19 @@ export type CalcMilesResult = {
   // sum above and counted here so the UI can surface "N duplicate
   // settlement weeks ignored" and let the user delete them.
   duplicateWeeksIgnored: number;
+  // Weeks with no loaded/empty split at all (batch C item 6).
+  weeksWithoutBreakdown: number;
   weeks: WeekMiles[];
 };
 
 export function calcMiles(settlements: SettlementMilesInput[], loads: LoadMilesInput[]): CalcMilesResult {
-  const loadsBySettlement = new Map<string, { loaded: number; empty: number }>();
+  const loadsBySettlement = new Map<string, { loaded: number; empty: number; any: boolean }>();
   for (const l of loads) {
     if (!l.settlement_id) continue;
-    const cur = loadsBySettlement.get(l.settlement_id) ?? { loaded: 0, empty: 0 };
+    const cur = loadsBySettlement.get(l.settlement_id) ?? { loaded: 0, empty: 0, any: false };
     cur.loaded += Number(l.loaded_miles ?? 0);
     cur.empty += Number(l.empty_miles ?? 0);
+    if (l.loaded_miles != null || l.empty_miles != null) cur.any = true;
     loadsBySettlement.set(l.settlement_id, cur);
   }
 
@@ -73,9 +89,13 @@ export function calcMiles(settlements: SettlementMilesInput[], loads: LoadMilesI
   for (const s of settlements) {
     if (!s.week_ending) continue;
     const key = `${s.truck_id ?? 'none'}|${s.week_ending}`;
-    const loadsAgg = loadsBySettlement.get(s.id) ?? { loaded: 0, empty: 0 };
+    const loadsAgg = loadsBySettlement.get(s.id) ?? { loaded: 0, empty: 0, any: false };
     const statementMiles = Number(s.miles ?? 0);
-    const loadsSum = loadsAgg.loaded + loadsAgg.empty;
+    const stored = s.loaded_miles != null && s.empty_miles != null;
+    const loadsHaveSplit = loadsAgg.any && loadsAgg.loaded + loadsAgg.empty > 0;
+    const loadedMiles = stored ? Number(s.loaded_miles) : loadsHaveSplit ? loadsAgg.loaded : null;
+    const emptyMiles = stored ? Number(s.empty_miles) : loadsHaveSplit ? loadsAgg.empty : null;
+    const splitSum = (loadedMiles ?? 0) + (emptyMiles ?? 0);
     const candidate: WeekMiles = {
       settlementId: s.id,
       truckId: s.truck_id ?? null,
@@ -83,7 +103,11 @@ export function calcMiles(settlements: SettlementMilesInput[], loads: LoadMilesI
       statementMiles,
       loadsLoadedMiles: loadsAgg.loaded,
       loadsEmptyMiles: loadsAgg.empty,
-      totalMiles: Math.max(statementMiles, loadsSum),
+      loadedMiles,
+      emptyMiles,
+      splitSource: stored ? ((s.miles_split_source as WeekMiles['splitSource']) ?? 'statement') : loadsHaveSplit ? 'loads' : null,
+      splitLabel: stored ? s.miles_split_label ?? null : null,
+      totalMiles: Math.max(statementMiles, splitSum),
     };
 
     const existing = weeksByKey.get(key);
@@ -99,15 +123,20 @@ export function calcMiles(settlements: SettlementMilesInput[], loads: LoadMilesI
 
   const weeks = [...weeksByKey.values()];
   const totalMiles = weeks.reduce((sum, w) => sum + w.totalMiles, 0);
-  const loadedMiles = weeks.reduce((sum, w) => sum + w.loadsLoadedMiles, 0);
-  const emptyMiles = weeks.reduce((sum, w) => sum + w.loadsEmptyMiles, 0);
+  const withSplit = weeks.filter((w) => w.loadedMiles != null && w.emptyMiles != null);
+  const loadedMiles = withSplit.reduce((sum, w) => sum + (w.loadedMiles ?? 0), 0);
+  const emptyMiles = withSplit.reduce((sum, w) => sum + (w.emptyMiles ?? 0), 0);
+  // Deadhead % over the weeks that HAVE a split — a week without one must
+  // not dilute it (its miles are unknown, not empty-free).
+  const splitTotal = withSplit.reduce((sum, w) => sum + w.totalMiles, 0);
 
   return {
     totalMiles,
     loadedMiles,
     emptyMiles,
-    deadheadPct: totalMiles > 0 ? emptyMiles / totalMiles : null,
+    deadheadPct: splitTotal > 0 ? emptyMiles / splitTotal : null,
     duplicateWeeksIgnored,
+    weeksWithoutBreakdown: weeks.length - withSplit.length,
     weeks: weeks.sort((a, b) => b.weekEnding.localeCompare(a.weekEnding)),
   };
 }

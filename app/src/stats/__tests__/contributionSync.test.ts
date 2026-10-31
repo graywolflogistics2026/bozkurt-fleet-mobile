@@ -1,4 +1,5 @@
 import { planContributionSync } from '@/src/stats/contributionSync';
+import { todayDateOnly } from '@/src/lib/dateOnly';
 
 describe('planContributionSync', () => {
   it('creates a new contribution when personal-paid, positive amount, and no existing link', () => {
@@ -95,7 +96,8 @@ describe('planContributionSync', () => {
     });
     expect(plan.action).toBe('create');
     if (plan.action === 'create') {
-      expect(plan.date).toBe(new Date().toISOString().slice(0, 10));
+      // The local calendar day (src/lib/dateOnly.ts), not the UTC one.
+      expect(plan.date).toBe(todayDateOnly());
     }
   });
 });

@@ -7,6 +7,8 @@
 // with actual code paths instead of hand-waving about what the code
 // "should" do.
 
+import { CLEARED_CERTIFICATION, WEEK_CHILD_TABLES, clearsCertification } from '@/src/import/weekReview';
+
 type Row = Record<string, unknown>;
 
 export type FakeSupabaseStore = Record<string, Row[]>;
@@ -92,7 +94,7 @@ const SET_NULL_RULES: Array<{ table: string; column: string; parent: string }> =
 ];
 
 // Tables whose rows the §80 'all' mode deletes because the document is
-// attached to them (pending_80.sql, same order).
+// attached to them (PENDING_SQL §80, same order).
 const DOC_ATTACHED_TABLES: ReadonlyArray<readonly [string, string]> = [
   ['deductions', 'document_id'],
   ['maintenance_records', 'document_id'],
@@ -167,7 +169,7 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
     return match.error;
   }
 
-  // Mirror of pending_80.sql document_linked_rows(): every row a document
+  // Mirror of PENDING_SQL §80 document_linked_rows(): every row a document
   // delete touches, with its kind (derived | attached | kept).
   function documentLinkedRows(docId: string, uid: string) {
     const out: Array<{ tbl: string; row_id: unknown; amount: unknown; kind: string }> = [];
@@ -200,6 +202,15 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
     return out;
   }
 
+  // §82 triggers (pending_82.sql): an edit of a week, or of a row linked to
+  // it by settlement_id, clears its certification and "Looks right" marks.
+  function clearWeekCertification(ids: unknown[]) {
+    for (const s of store.settlements ?? []) {
+      if (ids.includes(s.id) && (s.certified_at != null || s.review_acknowledged != null)) Object.assign(s, CLEARED_CERTIFICATION);
+    }
+  }
+  const isWeekChild = (t: string) => WEEK_CHILD_TABLES.includes(t);
+
   function from(table: string) {
     if (!store[table]) store[table] = [];
     const filters: Array<(row: Row) => boolean> = [];
@@ -213,11 +224,17 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
         const rowsToInsert = Array.isArray(payload) ? payload : [payload as Row];
         const inserted = rowsToInsert.map((r) => ({ id: r.id ?? `${table}-${idCounter++}`, ...r }));
         store[table] = [...tableRows, ...inserted];
+        if (isWeekChild(table)) clearWeekCertification(inserted.map((r) => (r as Row).settlement_id));
         return inserted;
       }
       if (mode === 'update') {
         const matched = tableRows.filter((row) => filters.every((f) => f(row)));
-        matched.forEach((row) => Object.assign(row, payload));
+        matched.forEach((row) => {
+          const before = { ...row };
+          Object.assign(row, payload);
+          if (table === 'settlements' && clearsCertification(before, row)) Object.assign(row, CLEARED_CERTIFICATION);
+          if (isWeekChild(table)) clearWeekCertification([before.settlement_id, row.settlement_id]);
+        });
         return matched;
       }
       if (mode === 'delete') {
@@ -228,6 +245,7 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
           else remaining.push(row);
         }
         store[table] = remaining;
+        if (isWeekChild(table)) clearWeekCertification(deleted.map((r) => r.settlement_id));
         // A DIRECT delete on settlements (not one reached via cascade,
         // which is handled inside cascadeDelete() itself) — same trigger,
         // same effect, regardless of which path removed the row.
@@ -545,7 +563,7 @@ export function createFakeSupabase(seed: FakeSupabaseStore = {}, options: { fail
     }
 
     // §80 (batch A item 7, 2026-10-30) — preview_document_delete /
-    // delete_document_cascade, mirroring pending_80.sql's contract:
+    // delete_document_cascade, mirroring PENDING_SQL §80's contract:
     // auth.uid()-scoped, 'not_found' for another user's or a gone document,
     // all-or-nothing (the store is restored if any step fails). Like every
     // RPC fake here it proves the client flow, not the PL/pgSQL body.

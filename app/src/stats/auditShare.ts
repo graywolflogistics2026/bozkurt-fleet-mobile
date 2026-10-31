@@ -1,5 +1,6 @@
 import type { KpiResult } from '@/src/stats/kpi';
 import { ledgerTotals } from '@/src/stats/auditLedger';
+import { CERTIFICATION_TEXT } from '@/src/import/weekReview';
 import { settlementDeposit, settlementVerification, type SettlementStatement } from '@/src/import/settlementStatement';
 
 // "SHARE AUDIT" (owner decision 2026-10-13, Part 2 A3): plain text for the
@@ -15,9 +16,17 @@ export type AuditSettlement = {
   gross: number | null;
   net: number | null;
   statement?: SettlementStatement | null;
+  // Batch C item 5 (§82).
+  certified_at?: string | null;
 };
 
-export function buildAuditText(args: { kpi: KpiResult; settlements: AuditSettlement[]; t: T; money: (n: number) => string }): string {
+export function buildAuditText(args: {
+  kpi: KpiResult;
+  settlements: AuditSettlement[];
+  t: T;
+  money: (n: number) => string;
+  dateTime?: (iso: string) => string;
+}): string {
   const { kpi, settlements, t, money } = args;
   const out: string[] = [t('audit.share.heading')];
 
@@ -46,6 +55,10 @@ export function buildAuditText(args: { kpi: KpiResult; settlements: AuditSettlem
         ? t('audit.share.owed', { amount: money(dep.owedToCarrier) })
         : t(dep.source === 'net_due' ? 'audit.share.netDueOnly' : 'audit.share.deposited', { amount: money(dep.deposited) })
     );
+    if (s.certified_at) {
+      out.push(t('weekReview.certifiedOn', { date: args.dateTime ? args.dateTime(s.certified_at) : s.certified_at }));
+      out.push(CERTIFICATION_TEXT);
+    }
   }
 
   out.push('');

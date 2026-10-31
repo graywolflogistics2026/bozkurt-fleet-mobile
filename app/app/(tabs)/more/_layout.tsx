@@ -26,6 +26,7 @@ export default function MoreLayout() {
       <Stack.Screen name="bank-statements" options={{ title: t('nav.bankStatements') }} />
       <Stack.Screen name="loads" options={{ title: t('nav.loads') }} />
       <Stack.Screen name="settlements" options={{ title: t('nav.settlements') }} />
+      <Stack.Screen name="miles-weeks" options={{ title: t('milesWeeks.title') }} />
       <Stack.Screen name="reimbursements" options={{ title: t('nav.reimbursements') }} />
       <Stack.Screen name="other-income" options={{ title: t('nav.otherIncome') }} />
       <Stack.Screen name="fuel" options={{ title: t('nav.fuel') }} />

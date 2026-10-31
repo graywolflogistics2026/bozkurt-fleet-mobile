@@ -218,6 +218,18 @@ export type Settlement = {
   // Prime week, its self-checked Statement of Income and Expense. Optional:
   // absent until §77 runs and on every week imported before it.
   statement?: SettlementStatement | null;
+  // Batch C (docs/PENDING_SQL.md §82): the week's loaded/empty split
+  // (src/import/milesSplit.ts) and its review / certification. Optional:
+  // absent until §82 runs.
+  loaded_miles?: number | null;
+  empty_miles?: number | null;
+  miles_split_source?: 'loads' | 'statement' | 'derived' | 'manual' | null;
+  miles_split_label?: string | null;
+  miles_split_flag?: 'deadhead_pay_without_miles' | null;
+  review_acknowledged?: string[] | null;
+  certified_at?: string | null;
+  certification_text_version?: string | null;
+  certification_app_version?: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -11,6 +11,17 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- MASTER PLAN BATCH C (owner decision 2026-10-30): review and certify, Home
+  miles. Root cause of "mileage missing" on Verified Prime weeks: gross came
+  from the statement (aiImportSave.ts) but miles only from the AI's totalMiles,
+  which page-by-page reads leave 0 (MILES row goes to operating.weekMiles) —
+  now the statement MILES is saved too. One "Review this week" card
+  (src/import/weekReview.ts): items, "Looks right", Certify (DRAFT text,
+  attorney review pending), cleared by any edit (§82 triggers). Loaded/empty
+  split per week on settlements (src/import/milesSplit.ts; Prime = RV lines,
+  others = generic reader over ai-import milesLines), Home Miles tiles, Miles
+  per week screen with manual edits that survive re-imports. §82; ai-import.
+
 - MASTER PLAN BATCH B (owner decision 2026-10-30): vehicle purchase and tax
   treatment. Trace: the choice lived in depreciation_method; "full" stayed $0
   without a typed placed-in-service year (purchase date ignored), "ask" $0 by

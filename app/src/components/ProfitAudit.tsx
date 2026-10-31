@@ -94,13 +94,13 @@ export function LedgerList({
 
 export function ShareAuditButton({ kpi, settlements }: { kpi: KpiResult; settlements: AuditSettlement[] }) {
   const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
+  const { money: moneyFmt, dateTime } = useFormatters();
   const money = (n: number) => moneyFmt(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
     <SecondaryButton
       title={t('audit.shareAudit')}
       onPress={() => {
-        void Share.share({ message: buildAuditText({ kpi, settlements, t: (k, o) => t(k, o), money }) });
+        void Share.share({ message: buildAuditText({ kpi, settlements, t: (k, o) => t(k, o), money, dateTime }) });
       }}
     />
   );

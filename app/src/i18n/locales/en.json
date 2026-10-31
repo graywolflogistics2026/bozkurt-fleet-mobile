@@ -2961,5 +2961,68 @@
       "election": "Treatment: depreciation election"
     },
     "openItemTag": "OPEN ITEM"
+  },
+  "weekReview": {
+    "title": "Review this week",
+    "openCard": "Review this week",
+    "thingsToCheck": "Things to check ({{count}})",
+    "nothingToCheck": "Nothing to check.",
+    "looksRight": "Looks right",
+    "certify": "Certify",
+    "certifyTitle": "Certify this week",
+    "certifyBlocked": "Mark every item \"Looks right\" first.",
+    "certifiedOn": "Certified by you on {{date}}",
+    "needsDb": "This needs the database update (PENDING_SQL §82).",
+    "saveFailedTitle": "Couldn't save",
+    "chipToCheck": "To check: {{count}}",
+    "chipReady": "Ready to certify",
+    "chipCertified": "✓ Certified",
+    "exportTitle": "Weeks you certified",
+    "exportWeek": "Week ending {{week}}",
+    "item": {
+      "date": "The week-ending date may be wrong — check the date list on this screen.",
+      "miles_missing": "No miles were read for this week — enter them below.",
+      "unverified": "The totals could not be checked against the statement.",
+      "low_confidence": "The AI was unsure about this document — compare it with your original.",
+      "deadhead_pay_without_miles": "A deadhead pay line printed no miles — it was not counted as empty miles."
+    },
+    "reason": {
+      "unknown_line": "A statement line the app does not know yet",
+      "ot_load_unload_advance": "First OT load/unload advance line",
+      "out_of_pocket_costs": "First out-of-pocket costs line",
+      "start_up_costs": "First start-up costs line",
+      "personal_payment_unmatched": "A personal payment line with no matching expense",
+      "statement_core_missing": "A statement total could not be read",
+      "line_items_incomplete": "Some pages were not read",
+      "loads_revenue_mismatch": "Load revenue does not add up to the statement",
+      "statement_warning": "A statement check differs (warning only)",
+      "line_details_differ": "Line details differ from the statement by"
+    }
+  },
+  "milesWeeks": {
+    "title": "Miles per week",
+    "all": "All",
+    "total": "Total miles",
+    "loaded": "Loaded",
+    "empty": "Empty / deadhead",
+    "deadheadPct": "Deadhead %",
+    "withoutBreakdown": "{{count}} weeks without a loaded/empty breakdown",
+    "editHint": "Tap a week to correct its loaded and empty miles.",
+    "weekOf": "Week ending {{date}}",
+    "noWeeks": "No weeks in this period.",
+    "noBreakdown": "No loaded/empty breakdown for this week",
+    "source": {
+      "loads": "From the load lines",
+      "statement": "Printed on the statement",
+      "derived": "Derived: total − loaded",
+      "manual": "Entered by you"
+    },
+    "manualNote": "Your numbers are kept when this week is imported again.",
+    "invalidTitle": "Check the numbers",
+    "invalid": {
+      "missing": "Enter both loaded and empty miles.",
+      "negative": "Miles can't be negative."
+    },
+    "saveFailedTitle": "Couldn't save"
   }
 }

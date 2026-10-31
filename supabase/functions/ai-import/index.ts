@@ -607,6 +607,11 @@ function buildExtractionPrompt(
   // carrier) — page-by-page merging (chunking.ts) only treats two values as
   // a conflict when they came from the same printed label.
   prompt += `\nAPPROVED ADDITION (printed labels of the settlement totals, owner decision 2026-10-17, every carrier): settlement.totalLabels names the printed label text each settlement total on THIS page was read from, exactly as printed (e.g. {"grossRevenue":"TOTAL REV","netPay":"NET AMOUNT DUE UNIT","depositAmount":"DIRECT DEPOSIT"}); leave a label "" when that total is not on this page.\n`;
+  // LOADED / EMPTY MILES, EVERY CARRIER (owner decision 2026-10-30, master
+  // plan batch C item 6): the printed weekly miles totals with their own
+  // labels, read by app/src/import/milesSplit.ts. Additive: no existing
+  // field changes meaning.
+  prompt += `\nAPPROVED ADDITION (weekly miles lines, every carrier, owner decision 2026-10-30): settlement.milesLines lists every WEEKLY miles TOTAL printed on THIS page, each with its exact printed label, e.g. [{"label":"LOADED MILES","miles":2081},{"label":"DEADHEAD","miles":246},{"label":"TOTAL MILES","miles":2327}]. Copy the label exactly as printed (carriers say "EMPTY", "DEADHEAD", "DH", "UNLOADED", "BOBTAIL", "OUT OF ROUTE" — never rename one into another). Only this week's totals: never per-load lines, never lifetime/YTD/QTD/odometer figures. A deadhead PAY line that prints a dollar amount but no miles is listed with "miles": null. Leave milesLines [] when the page prints no weekly miles total.\n`;
   // PRIME SETTLEMENT PAGES (owner decision 2026-10-17, week ending
   // 2026-08-14: the app read revenue 10,386.86 for a printed 7,914.10 —
   // the TRIP REVENUE column instead of OWNER REVENUE, plus "47.34-" read as

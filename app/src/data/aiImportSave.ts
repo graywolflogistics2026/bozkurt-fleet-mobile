@@ -46,6 +46,8 @@ import {
   type SaveExtractionStep,
 } from '@/src/data/saveExtractionError';
 import { todayDateOnly } from '@/src/lib/dateOnly';
+import { milesSplitUpdate, readMilesSplit, type StoredMilesSplit } from '@/src/import/milesSplit';
+import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 
 // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
 // follow-up item G) — best-effort read, never blocks a save. Returns []
@@ -184,6 +186,9 @@ export type SaveExtractionResult = {
   // week or a replace of an existing one — null/false for every non-
   // settlement docType.
   settlementWeekEnding: string | null;
+  // Batch C item 5: the saved week, so the Saved screen can open its
+  // "Review this week" card. Null for every non-settlement docType.
+  settlementId: string | null;
   isSettlementReimport: boolean;
   // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — rows that failed to
   // save even after the per-row fallback (insertBatchResilient), so the
@@ -334,6 +339,20 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // field (net due stays the printed page-3 figure).
     if (isStatementBacked(settlementStatement) && settlementStatement.prime?.totals.totalRevenue != null) {
       settlementMapping.settlement.gross = settlementStatement.prime.totals.totalRevenue;
+    }
+    // Batch C item 5 (2026-10-30): the same week takes its miles from the
+    // statement's printed MILES row. Before this, settlements.miles came
+    // only from the AI's totalMiles, which a page-by-page read often leaves
+    // 0 (the MILES row is routed to operating.weekMiles) — so a Verified
+    // week showed "mileage missing" and a 0-day per diem. A printed figure
+    // only ever replaces, never a missing one (null never beats a number).
+    const statementMiles = isStatementBacked(settlementStatement) ? settlementStatement.prime?.totals.miles ?? null : null;
+    if (statementMiles != null && statementMiles > 0) {
+      const before = Number(settlementMapping.settlement.miles ?? 0);
+      settlementMapping.settlement.miles = statementMiles;
+      if (before <= 0 && Number(settlementMapping.settlement.per_diem_days ?? 0) === defaultPerDiemDaysForMiles(0)) {
+        settlementMapping.settlement.per_diem_days = defaultPerDiemDaysForMiles(statementMiles);
+      }
     }
     // A week_ending we can't pin down must never silently fall back to an
     // empty-string match key — two different weeks that both failed to
@@ -505,6 +524,22 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       } catch {
         // Column missing (§77 not run yet) — line route, Unverified.
       }
+    }
+
+    // LOADED / EMPTY SPLIT (batch C item 6, §82) — also a separate,
+    // non-fatal write. A manual split survives a re-import; a missing
+    // reading never replaces a stored one (src/import/milesSplit.ts).
+    try {
+      const split = readMilesSplit({ carrier: d.settlement?.carrier, loads: d.settlement?.loads, milesLines: d.settlement?.milesLines });
+      let existingSplit: Partial<StoredMilesSplit> | null = null;
+      if (isReimport) {
+        const { data: prev } = await supabase.from('settlements').select('miles_split_source').eq('id', settlementId).maybeSingle();
+        existingSplit = (prev as Partial<StoredMilesSplit> | null) ?? null;
+      }
+      const update = milesSplitUpdate(split, existingSplit);
+      if (update) await supabase.from('settlements').update(update).eq('id', settlementId);
+    } catch {
+      // Columns missing (§82 not run yet) — Home falls back to the loads.
     }
 
     // RE-IMPORT ORDERING (pre-launch hardening, owner decision 2026-08-02):
@@ -990,5 +1025,5 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // (see mapExtraction.ts's mapGenericDeduction comment; universal AI
   // capture, owner decision 2026-07-10 — v1.x backlog, PROMPTS.md).
 
-  return { documentId, storagePath, contributionTotal, settlementWeekEnding, isSettlementReimport, skippedRows };
+  return { documentId, storagePath, contributionTotal, settlementWeekEnding, settlementId: partial.settlementId ?? null, isSettlementReimport, skippedRows };
 }

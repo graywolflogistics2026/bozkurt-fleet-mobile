@@ -1,6 +1,6 @@
 // Batch A item 7 (2026-10-30): delete a document and everything linked.
 // Runs the real documentDelete.ts against fakeSupabase.ts, whose §80 RPC
-// fake mirrors pending_80.sql (scoped to the caller, all-or-nothing) and
+// fake mirrors PENDING_SQL §80 (scoped to the caller, all-or-nothing) and
 // whose FK rules mirror the documented cascades. Honest boundary: this
 // proves the client flow and the deletion SHAPE; the PL/pgSQL body itself
 // runs only on the live database (§80's check query).

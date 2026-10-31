@@ -43,7 +43,8 @@ import { findLinkedRecords, type LinkedRecordRef } from '@/src/data/documentsFil
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
 import { DestinationSummary } from '@/src/components/DestinationSummary';
-import { isSettlementNeedsReview } from '@/src/import/needsReview';
+import { isDocumentNeedsReview, isSettlementNeedsReview } from '@/src/import/needsReview';
+import { WeekReviewCard, WeekReviewChip } from '@/src/components/WeekReviewCard';
 import { computeSettlementWeekKpi, primeDepositsYtd } from '@/src/stats/settlementWeek';
 import { lineItemsIncomplete, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
 import { WeekPagesSection } from '@/src/components/IncompleteLineItemsNotice';
@@ -243,6 +244,10 @@ export default function Settlements() {
     () => new Map((documentsQuery.data ?? []).map((d) => [d.id, d])),
     [documentsQuery.data]
   );
+  const docLowConfidence = (s: Settlement) => {
+    const doc = s.document_id ? documentsById.get(s.document_id) : undefined;
+    return !!doc && isDocumentNeedsReview(doc);
+  };
 
   const allRows = useMemo(() => {
     const list = settlementsQuery.data ?? [];
@@ -670,9 +675,7 @@ export default function Settlements() {
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <View>
                       <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
-                      <MutedText style={!x.miles ? { color: colors.orange, fontWeight: '700' } : undefined}>
-                        {!x.miles ? `⚠️ ${t('settlementsScreen.milesMissing')}` : `${number(x.miles)} mi`}
-                      </MutedText>
+                      <MutedText>{x.miles ? `${number(x.miles)} mi` : '— mi'}</MutedText>
                       {/* MULTI-TRUCK MODEL (owner decision) — unit number
                           visible on every row, only shown when it's
                           actually informative (viewing "All Trucks" with
@@ -688,10 +691,7 @@ export default function Settlements() {
                           after tapping into the detail sheet. */}
                       <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
                       <VerificationBadge verification={settlementVerification(x)} incomplete={lineItemsIncomplete(x.statement)} />
-                      {needsReview && <NeedsReviewChip />}
-                      {needsReview && (
-                        <MarkReviewedButton onPress={() => handleMarkReviewed(x)} isPending={reviewingId === x.id} />
-                      )}
+                      <WeekReviewChip settlement={x} documentLowConfidence={docLowConfidence(x)} />
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02):
@@ -719,12 +719,17 @@ export default function Settlements() {
         {selected && (
             <>
               <SheetTitle>{t('settlementsScreen.weekOf', { date: date(selected.week_ending) })}</SheetTitle>
-              {isSettlementNeedsReview(selected, documentsById) && (
-                <View style={{ marginBottom: spacing.xs }}>
-                  <NeedsReviewChip />
-                  <MarkReviewedButton onPress={() => handleMarkReviewed(selected)} isPending={reviewingId === selected.id} />
-                </View>
-              )}
+              {/* Batch C item 5: ONE "Review this week" card replaces the
+                  scattered needs-review / miles-missing warnings. */}
+              <WeekReviewCard
+                settlement={selected}
+                documentId={selected.document_id}
+                documentLowConfidence={docLowConfidence(selected)}
+                onChanged={async (patch) => {
+                  setSelected({ ...selected, ...patch } as Settlement);
+                  await invalidateFinancialData(queryClient, { entities: ['settlements', 'documents'] });
+                }}
+              />
 
               <VerificationBadge verification={settlementVerification(selected)} incomplete={lineItemsIncomplete(selected.statement)} />
               <WeekPagesSection settlement={selected} />
@@ -774,9 +779,7 @@ export default function Settlements() {
               </View>
 
               <View style={{ marginBottom: spacing.sm }}>
-                <MutedText style={!selected.miles ? { color: colors.orange, fontWeight: '700' } : undefined}>
-                  {!selected.miles ? `⚠️ ${t('settlementsScreen.milesEditLabelMissing')}` : t('settlementsScreen.milesEditLabel')}
-                </MutedText>
+                <MutedText>{t('settlementsScreen.milesEditLabel')}</MutedText>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                   <View style={{ width: 100 }}>
                     <Field keyboardType="numeric" value={milesDraft} onChangeText={setMilesDraft} placeholder="0" />

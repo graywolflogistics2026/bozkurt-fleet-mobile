@@ -15,6 +15,7 @@ import { useReimbursements } from '@/src/data/reimbursements';
 import { useTrucksList } from '@/src/data/trucks';
 import { useEquipment } from '@/src/data/equipment';
 import { useDocuments } from '@/src/data/documents';
+import { CERTIFICATION_TEXT } from '@/src/import/weekReview';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useCapitalTransactions } from '@/src/data/capitalTransactions';
 import { useUserCategories } from '@/src/data/userCategories';
@@ -154,7 +155,7 @@ function convertLineItemToDeductionInsert(item: LineItem, userId: string, newCat
 // one of the three surfaces (screen/PDF/Excel) reads from.
 export default function AccountantPackage() {
   const { t } = useTranslation();
-  const { money, date, monthLabel } = useFormatters();
+  const { money, date, dateTime, monthLabel } = useFormatters();
   const queryClient = useQueryClient();
   const { session, profile } = useAuth();
   const userId = session?.user.id;
@@ -506,6 +507,16 @@ export default function AccountantPackage() {
     };
   }
 
+  // Batch C item 5: the period's certified weeks, as printed lines.
+  function certifiedWeeksFor(scopeYear: number, scopeMonth: number | null) {
+    const prefix = scopeMonth == null ? `${scopeYear}-` : `${scopeYear}-${String(scopeMonth).padStart(2, '0')}-`;
+    const lines = (settlementsQuery.data ?? [])
+      .filter((s) => s.certified_at && (s.week_ending ?? '').startsWith(prefix))
+      .sort((a, b) => a.week_ending.localeCompare(b.week_ending))
+      .map((s) => `${t('weekReview.exportWeek', { week: date(s.week_ending) })} — ${t('weekReview.certifiedOn', { date: dateTime(s.certified_at!) })}`);
+    return { certifiedWeekLines: lines, certificationText: CERTIFICATION_TEXT, certifiedWeeksTitle: t('weekReview.exportTitle') };
+  }
+
   function buildReportInput(scopeYear: number, scopeMonth: number | null): { input: AccountantReportInput; strings: AccountantReportStrings } {
     const items =
       scopeMonth === month && scopeYear === year
@@ -571,6 +582,7 @@ export default function AccountantPackage() {
       groupedCategories: grouped,
       capitalAssets,
       ownersEquity,
+      ...certifiedWeeksFor(scopeYear, scopeMonth),
     };
 
     return { input, strings };

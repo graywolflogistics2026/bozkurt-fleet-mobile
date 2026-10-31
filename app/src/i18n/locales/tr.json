@@ -2961,5 +2961,68 @@
       "election": "Uygulama: amortisman tercihi"
     },
     "openItemTag": "AÇIK KALEM"
+  },
+  "weekReview": {
+    "title": "Bu haftayı gözden geçir",
+    "openCard": "Bu haftayı gözden geçir",
+    "thingsToCheck": "Kontrol edilecekler ({{count}})",
+    "nothingToCheck": "Kontrol edilecek bir şey yok.",
+    "looksRight": "Doğru görünüyor",
+    "certify": "Onayla",
+    "certifyTitle": "Bu haftayı onayla",
+    "certifyBlocked": "Önce her maddeyi \"Doğru görünüyor\" olarak işaretleyin.",
+    "certifiedOn": "{{date}} tarihinde sizin tarafınızdan onaylandı",
+    "needsDb": "Bunun için veritabanı güncellemesi gerekiyor (PENDING_SQL §82).",
+    "saveFailedTitle": "Kaydedilemedi",
+    "chipToCheck": "Kontrol: {{count}}",
+    "chipReady": "Onaya hazır",
+    "chipCertified": "✓ Onaylandı",
+    "exportTitle": "Onayladığınız haftalar",
+    "exportWeek": "{{week}} ile biten hafta",
+    "item": {
+      "date": "Hafta sonu tarihi yanlış olabilir — bu ekrandaki tarih listesini kontrol edin.",
+      "miles_missing": "Bu hafta için mil okunamadı — aşağıya girin.",
+      "unverified": "Toplamlar ekstreyle karşılaştırılamadı.",
+      "low_confidence": "Yapay zekâ bu belgeden emin değildi — aslıyla karşılaştırın.",
+      "deadhead_pay_without_miles": "Bir deadhead ödeme satırında mil yok — boş mil olarak sayılmadı."
+    },
+    "reason": {
+      "unknown_line": "Uygulamanın henüz tanımadığı bir ekstre satırı",
+      "ot_load_unload_advance": "İlk OT yükleme/boşaltma avans satırı",
+      "out_of_pocket_costs": "İlk cepten ödenen masraf satırı",
+      "start_up_costs": "İlk başlangıç masrafı satırı",
+      "personal_payment_unmatched": "Eşleşen gideri olmayan kişisel ödeme satırı",
+      "statement_core_missing": "Bir ekstre toplamı okunamadı",
+      "line_items_incomplete": "Bazı sayfalar okunamadı",
+      "loads_revenue_mismatch": "Yük gelirleri ekstreyle tutmuyor",
+      "statement_warning": "Bir ekstre kontrolü farklı (yalnızca uyarı)",
+      "line_details_differ": "Satır ayrıntıları ekstreden şu kadar farklı"
+    }
+  },
+  "milesWeeks": {
+    "title": "Haftalık mil",
+    "all": "Tümü",
+    "total": "Toplam mil",
+    "loaded": "Yüklü",
+    "empty": "Boş / deadhead",
+    "deadheadPct": "% deadhead",
+    "withoutBreakdown": "Yüklü/boş ayrımı olmayan {{count}} hafta",
+    "editHint": "Yüklü ve boş milleri düzeltmek için bir haftaya dokunun.",
+    "weekOf": "{{date}} ile biten hafta",
+    "noWeeks": "Bu dönemde hafta yok.",
+    "noBreakdown": "Bu hafta için yüklü/boş ayrımı yok",
+    "source": {
+      "loads": "Yük satırlarından",
+      "statement": "Ekstrede yazıyor",
+      "derived": "Hesaplandı: toplam − yüklü",
+      "manual": "Sizin girdiğiniz"
+    },
+    "manualNote": "Bu hafta tekrar içe aktarıldığında sayılarınız korunur.",
+    "invalidTitle": "Sayıları kontrol edin",
+    "invalid": {
+      "missing": "Hem yüklü hem boş milleri girin.",
+      "negative": "Mil negatif olamaz."
+    },
+    "saveFailedTitle": "Kaydedilemedi"
   }
 }

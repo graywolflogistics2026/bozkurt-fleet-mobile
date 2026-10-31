@@ -1043,11 +1043,14 @@ under each is unchanged original wording.
 
 ## Current state (2026-10-30)
 
-- **Code**: `main` after master plan batch B (on top of 875f4d2, batch A),
+- **Code**: `main` after master plan batch C (on top of 651dec6, batch B),
   pushed. Ships via `eas update --branch preview`. Plan progress:
   `docs/decisions/master-plan-2026-10.md`.
-- **Database** (`docs/PENDING_SQL.md`, 81 sections): everything is applied
+- **Database** (`docs/PENDING_SQL.md`, 82 sections): everything is applied
   except:
+  - §82 week review/certify + loaded/empty miles — NOT YET APPLIED (batch C).
+    `pending_82.sql` at the root; client safe before it runs. Redeploy
+    ai-import (milesLines prompt addition).
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
   - §72 remove business-balance tracking — status UNCONFIRMED.

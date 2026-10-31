@@ -353,10 +353,27 @@ Start now with the protocol, then batch 0b.
 | 0 (printed dates, held by carrier, one deposit per statement) | Done before this plan | 5bd080d |
 | 0b | Done (see the batch 0b notes below) | 95f9207 |
 | A | Done: items 1, 2, 7 (PENDING_SQL §79, §80 to run) | 875f4d2 |
-| B | Done: vehicle purchase tax treatment (PENDING_SQL §81 to run) | (this commit) |
-| C | Not started | — |
+| B | Done: vehicle purchase tax treatment (PENDING_SQL §81 applied 2026-10-30) | 651dec6 |
+| C | Done: items 5, 6 (PENDING_SQL §82 to run, redeploy ai-import) | (this commit) |
 | D | Not started | — |
 | E | Not started | — |
+
+## Batch C notes (2026-10-30)
+
+- CERTIFICATION TEXT IS A DRAFT. The wording in
+  `app/src/import/weekReview.ts` (`CERTIFICATION_TEXT`, version
+  `draft-2026-10-30`) must be reviewed by the owner's attorney before public
+  launch. It is shown in English in every locale, like the Terms of Use, until
+  then. Change the text -> bump `CERTIFICATION_TEXT_VERSION`; every
+  certification records the version it was given under.
+- Trace of the warnings a week could raise (all now folded into one card on
+  the week, a single chip on the Settlements list): document low confidence
+  (set on every multi-page read by ai-import chunking.ts), Unverified, the
+  statement's reviewReasons (stored but shown nowhere before), the date check,
+  "miles missing", the deadhead-pay flag. A Verified week skips the AI-header
+  comparisons (milesMatch, grossMatches) and the multi-page low confidence.
+- Known, not changed here: background import jobs (`importJobs.ts`) skip the
+  Prime statement confidence check that live imports run (`aiImportCall.ts`).
 
 ## Batch 0b notes (2026-10-30)
 
