@@ -1048,11 +1048,6 @@ under each is unchanged original wording.
   `docs/decisions/master-plan-2026-10.md`.
 - **Database** (`docs/PENDING_SQL.md`, 81 sections): everything is applied
   except:
-  - §79 truck nickname + plate, §80 document delete functions — NOT YET
-    APPLIED (batch A). `pending_79.sql`, `pending_80.sql` at the root.
-    The client is safe before either runs.
-  - §81 truck purchase tax treatment + purchase document — NOT YET APPLIED
-    (batch B). `pending_81.sql` at the root; client safe before it runs.
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
   - §72 remove business-balance tracking — status UNCONFIRMED.
@@ -1061,7 +1056,8 @@ under each is unchanged original wording.
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
     applied and ai-import redeployed — owner confirmed 2026-10-17, their
-    mirror files removed, SQL inlined.)
+    mirror files removed, SQL inlined. §79, §80, §81 applied — owner
+    confirmed 2026-10-30, mirror files removed, SQL inlined.)
 - **Native build**: the owner's device reported "embedded build (no OTA
   update)" on 2026-08-28. A new native build (`eas build --profile
   preview`) is NOT yet installed. Until it is, OTA-only fixes may not be
