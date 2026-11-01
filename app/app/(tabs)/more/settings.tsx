@@ -22,6 +22,7 @@ import { invalidateFinancialData, removeFinancialDataFromCache } from '@/src/dat
 import type { EntityType } from '@/src/tax/types';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
 import { EstimateAcknowledgmentText } from '@/src/components/EstimateBanner';
+import { DiagnosticsSection } from '@/src/components/DiagnosticsSection';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { ENABLED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
@@ -601,6 +602,10 @@ export default function Settings() {
           <SecondaryButton title={t('settings.contactSupportButton')} onPress={handleContactSupport} />
           <SecondaryButton title={t('settings.reportProblemButton')} onPress={handleReportProblem} />
         </Card>
+
+        {/* SYSTEM CHECK + SEND REPORT (statement reading plan step A). */}
+        <Text style={styles.sectionTitle}>{t('diagnostics.title')}</Text>
+        <DiagnosticsSection />
 
         <Text style={[styles.sectionTitle, { color: colors.red }]}>{t('settings.dangerZoneTitle')}</Text>
         <Card>

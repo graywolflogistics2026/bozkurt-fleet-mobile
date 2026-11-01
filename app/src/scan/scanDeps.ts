@@ -18,6 +18,12 @@ function loadScanner(): ScannerModule | null {
   }
 }
 
+// Settings > Diagnostics (statement reading plan step A): is the native
+// scanner module in this build? Same lazy, never-throwing check.
+export function scannerModulePresent(): boolean {
+  return loadScanner() !== null;
+}
+
 async function normalizeImage(uri: string, opts: { quality: number; maxLongEdge: number }) {
   const first = await manipulateAsync(uri, [], { compress: opts.quality, format: SaveFormat.JPEG });
   const long = Math.max(first.width, first.height);

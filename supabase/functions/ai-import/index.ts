@@ -38,7 +38,7 @@ import {
   type PageOutcome,
   type PageRange,
 } from "./chunking.ts";
-import { scrubBankDigits } from "./bankDigits.ts";
+import { scrubBankDigits, scrubBankDigitsInText } from "./bankDigits.ts";
 import { pdfCreationDateOf } from "./pdfInfo.ts";
 import {
   CLASSIFY_WINDOW_MAX_BYTES,
@@ -70,6 +70,21 @@ import {
   type PageResult,
   type UsageCallType,
 } from "./jobEngine.ts";
+
+import {
+  assembleDiagnoseReport,
+  columnErrorMeansMissing,
+  DIAGNOSE_MODELS,
+  DIAGNOSE_PROBE_ARG,
+  planInfo,
+  REQUIRED_COLUMNS,
+  REQUIRED_RPCS,
+  rpcProbePresent,
+  runModelCheck,
+  summarizeJobs,
+  type FetchLike,
+  type JobRowForDiagnose,
+} from "./diagnose.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -1917,6 +1932,90 @@ async function handleJobStart(
 // again and pages_done is never reset. `retryFailed` (the user's own
 // "Resume from page N" tap) gives failed pages fresh attempts; the app's
 // automatic restart of an interrupted job leaves them as they are.
+// SYSTEM CHECK (statement reading plan step A, owner 2026-10-31): mode
+// "diagnose". Booleans, names and counts only — never a secret value, an
+// amount, a file name or bank digits (diagnose.ts). Reads nothing from any
+// document, uses no import credit, and changes no data: tables are probed
+// with zero-row selects, database functions with an argument name no
+// function has (never executed), storage with a one-item list of the
+// caller's own folder, and job rows are the caller's own.
+async function handleDiagnose(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<Response> {
+  const admin = getServiceRoleAdminClient();
+  const probe = admin ?? supabase;
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+
+  const missingColumns: string[] = [];
+  for (const { table, columns } of REQUIRED_COLUMNS) {
+    const { error } = await probe.from(table).select(columns.join(",")).limit(0);
+    if (!error) continue;
+    for (const col of columns) {
+      const { error: colErr } = await probe.from(table).select(col).limit(0);
+      if (colErr && columnErrorMeansMissing(colErr)) missingColumns.push(`${table}.${col}`);
+    }
+  }
+  const missingFunctions: string[] = [];
+  for (const name of REQUIRED_RPCS) {
+    const { error } = await probe.rpc(name, DIAGNOSE_PROBE_ARG);
+    if (!rpcProbePresent(name, error)) missingFunctions.push(name);
+  }
+
+  let storageReachable = false;
+  try {
+    const { error } = await supabase.storage.from("documents").list(userId, { limit: 1 });
+    storageReachable = !error;
+  } catch {
+    storageReachable = false;
+  }
+
+  let jobRows: JobRowForDiagnose[] = [];
+  const fullCols = "status, created_at, updated_at, error_step, error_page, pages_done, pages_total, page_results, progress";
+  const { data: jobsData, error: jobsErr } = await supabase
+    .from("import_jobs")
+    .select(fullCols)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (!jobsErr) {
+    jobRows = (jobsData ?? []) as JobRowForDiagnose[];
+  } else {
+    const { data } = await supabase
+      .from("import_jobs")
+      .select("status, created_at, updated_at, error_step")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    jobRows = (data ?? []) as JobRowForDiagnose[];
+  }
+
+  const fetcher: FetchLike = (url, init) => fetch(url, init);
+  const models = anthropicKey
+    ? await Promise.all(DIAGNOSE_MODELS.map((m) => runModelCheck(m, anthropicKey, fetcher, scrubBankDigitsInText)))
+    : [];
+  for (const m of models) {
+    console.log(`[ai-import] diagnose model ${m.model}: ${m.outcome} status=${m.httpStatus} ${m.latencyMs}ms in=${m.inputTokens} out=${m.outputTokens}`);
+  }
+
+  const secrets = [anthropicKey, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? ""];
+  const report = assembleDiagnoseReport(
+    {
+      deploymentId: Deno.env.get("DENO_DEPLOYMENT_ID") ?? null,
+      plan: planInfo(JOB_PLAN_TIER, JOB_LIMITS),
+      anthropicKeyPresent: anthropicKey.length > 0,
+      storageReachable,
+      schema: { ok: missingColumns.length === 0 && missingFunctions.length === 0, missingColumns, missingFunctions },
+      jobs: summarizeJobs(jobRows, Date.now()),
+      models,
+      checkedAt: new Date().toISOString(),
+    },
+    secrets,
+    scrubBankDigitsInText,
+  );
+  return new Response(JSON.stringify(report), { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+}
+
 async function handleJobResume(
   supabase: ReturnType<typeof createClient>,
   userId: string,
@@ -2238,7 +2337,7 @@ Deno.serve(async (req: Request) => {
     // job from its first page without a stored result ('retry_job' is the
     // old name, same behavior); 'answer_job' answers the page-cap question;
     // 'read_pages' re-reads chosen pages of a saved document.
-    mode?: "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job";
+    mode?: "diagnose" | "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job";
     storagePath?: string;
     fileName?: string;
     retryJobId?: string;
@@ -2254,6 +2353,7 @@ Deno.serve(async (req: Request) => {
     return errorResponse("bad_request", "Request body must be valid JSON.", 400);
   }
 
+  if (body.mode === "diagnose") return await handleDiagnose(supabase, userId);
   if (body.mode === "job") {
     // UNAWAITED handleJobStart (P1 fix, FULL SYSTEM AUDIT) — `return
     // handleJobStart(...)` (no `await`) let a REJECTION of that promise

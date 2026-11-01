@@ -133,6 +133,7 @@ PDF).
 
 ## Progress
 
-- [ ] Step A: system check, live model check, send report
+- [x] Step A: system check, live model check, send report (2026-10-31;
+  needs ai-import redeploy + eas update; results from the tablet pending)
 - [ ] Step B: statement pages first, page by page, structured output
 - [ ] Step C: dual read and model profiles

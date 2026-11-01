@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- STATEMENT READING step A (owner 2026-10-31): system check + Send report.
+  ai-import mode "diagnose" (supabase/functions/ai-import/diagnose.ts):
+  server build id, plan + budget, schema §77-§83 (missing names), AI key
+  present, storage, import_jobs counts 24 h + last errors (codes only),
+  live check of opus-5-5/fable-5-1/sonnet-5-5/haiku-5-5 (json_schema
+  output, adaptive thinking, effort). Settings > Diagnostics
+  (DiagnosticsSection, src/lib/systemReport.ts) + Share report. No import
+  logic changed. No SQL. Redeploy ai-import; eas update.
 - IMPORT RELIABILITY change 1 (owner decision 2026-10-31): ready-to-review dead end.
   Cause: an automatic re-read (index.tsx autoReread -> reread_job clears
   result_json, status queued) was followed by the cached 'ready' list row
