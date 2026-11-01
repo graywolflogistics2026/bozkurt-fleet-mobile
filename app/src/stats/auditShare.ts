@@ -1,3 +1,5 @@
+import { BRAND_NAME } from '@/src/brand';
+import { estimateNoticeStrings, estimateNoticeTextFooter, estimateNoticeTextHeader } from '@/src/legal/estimateNotice';
 import type { KpiResult } from '@/src/stats/kpi';
 import { ledgerTotals } from '@/src/stats/auditLedger';
 import { CERTIFICATION_TEXT } from '@/src/import/weekReview';
@@ -28,7 +30,9 @@ export function buildAuditText(args: {
   dateTime?: (iso: string) => string;
 }): string {
   const { kpi, settlements, t, money } = args;
-  const out: string[] = [t('audit.share.heading')];
+  // Batch D item 10: the estimate notice opens and closes every share text.
+  const notice = estimateNoticeStrings(t, BRAND_NAME);
+  const out: string[] = [...estimateNoticeTextHeader(notice), t('audit.share.heading')];
 
   for (const s of settlements) {
     const p = s.statement?.printed;
@@ -79,5 +83,6 @@ export function buildAuditText(args: {
     })
   );
   out.push(t('audit.share.profit', { gross: money(kpi.gross), expenses: money(kpi.expenses.total), profit: money(kpi.net) }));
+  out.push(...estimateNoticeTextFooter(notice));
   return out.join('\n');
 }

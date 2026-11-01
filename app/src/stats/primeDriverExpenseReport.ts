@@ -1,4 +1,5 @@
 import type { PrimeDriverExpenseMonth } from '@/src/stats/primeDriverExpenses';
+import { ESTIMATE_NOTICE_CSS, estimateBannerHtml, estimateFooterHtml, type EstimateNoticeStrings } from '@/src/legal/estimateNotice';
 
 // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER — EXPORT (owner
 // decision 2026-09-17). A SEPARATE, standalone report builder from
@@ -18,6 +19,8 @@ export type PrimeDriverExpenseReportStrings = {
   grandTotalLabel: string;
   noEntriesLabel: string;
   disclaimer: string;
+  // Batch D item 10: full banner on page 1, one-line footer on every page.
+  estimateNotice: EstimateNoticeStrings;
 };
 
 export type PrimeDriverExpenseReportFormatters = {
@@ -82,9 +85,11 @@ export function buildPrimeDriverExpenseReportHtml(
           td.cat-name { font-size: 14px; }
           .total-row td { font-weight: 700; font-size: 15px; border-top: 2px solid #333; }
           .muted { color: #666; font-size: 11px; margin-top: 16px; }
+          ${ESTIMATE_NOTICE_CSS}
         </style>
       </head>
       <body>
+        ${estimateBannerHtml(strings.estimateNotice)}
         <h1>${esc(headerLine)}</h1>
         <h2>${esc(strings.categoryTableTitle)}</h2>
         <table>${sectionsHtml}</table>
@@ -93,6 +98,7 @@ export function buildPrimeDriverExpenseReportHtml(
           <tr class="total-row"><td>${esc(strings.grandTotalLabel)}</td><td class="amt">${fmt.money(monthData.grandTotal)}</td></tr>
         </table>
         <p class="muted">${esc(strings.disclaimer)}</p>
+        ${estimateFooterHtml(strings.estimateNotice)}
       </body>
     </html>
   `;

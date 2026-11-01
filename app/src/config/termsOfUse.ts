@@ -2,13 +2,18 @@
 // Bump TOS_VERSION whenever the accepted text changes; the app re-prompts
 // every user whose stored profiles.tos_version doesn't match (CLAUDE.md
 // invariant #8, PROMPTS.md Session 3).
-import { SUPPORT_EMAIL } from '@/src/brand';
+import { BRAND_NAME, SUPPORT_EMAIL } from '@/src/brand';
 
-export const TOS_VERSION = 'draft-2026-07-04';
+// draft-2026-10-31: added "Before you start - estimates only" (batch D item
+// 10); bumping this re-shows the acknowledgment gate to every user.
+export const TOS_VERSION = 'draft-2026-10-31';
 
 export const TOS_TITLE = 'Terms of Use';
 
 export const TOS_BODY = `DRAFT — ATTORNEY REVIEW REQUIRED. This is a working draft, not a final legal document.
+
+Before you start — ESTIMATES ONLY - NOT TAX ADVICE.
+${BRAND_NAME} is a record-keeping and estimating tool, not a tax preparer, accountant or law firm. Numbers are AI-generated estimates from your documents and can be wrong. Confirm everything with a licensed tax professional before you file or pay. Your acknowledgment (date and text version) is recorded with your account.
 
 1. Estimates only — not professional advice
 This app calculates ESTIMATES of tax liability, quarterly payments, per diem deductions, S-Corp savings, and related figures. These are estimates for planning purposes only — not tax, legal, financial, or accounting advice, and not a substitute for a qualified CPA, tax attorney, enrolled agent, or payroll provider. No figure shown may be relied on as a final or filed amount. You are solely responsible for verifying every figure and for all filing, payment, and entity-election decisions.

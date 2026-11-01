@@ -1041,13 +1041,16 @@ under each is unchanged original wording.
   invariant #17; `ScreenErrorBoundary` stays reusable):
   `docs/decisions/retired.md`.
 
-## Current state (2026-10-30)
+## Current state (2026-10-31)
 
-- **Code**: `main` after master plan batch C (on top of 651dec6, batch B),
-  pushed. Ships via `eas update --branch preview`. Plan progress:
+- **Code**: `main` after master plan batch D (profit explainer, estimates-
+  only notice + acknowledgment gate), pushed. Ships via `eas update --branch preview`. Plan progress:
   `docs/decisions/master-plan-2026-10.md`.
-- **Database** (`docs/PENDING_SQL.md`, 82 sections): everything is applied
+- **Database** (`docs/PENDING_SQL.md`, 83 sections): everything is applied
   except:
+  - §83 profit explainer "possible duplicate: keep" (`duplicate_kept_at`) —
+    NOT YET APPLIED (batch D). `pending_83.sql` at the root; client safe
+    before it runs (Keep shows "needs the database update").
   - §82 week review/certify + loaded/empty miles — NOT YET APPLIED (batch C).
     `pending_82.sql` at the root; client safe before it runs. Redeploy
     ai-import (milesLines prompt addition).
@@ -1102,6 +1105,8 @@ under each is unchanged original wording.
 - `docs/decisions/printed-dates-and-held.md` — printed dates, date gate,
   held by carrier, one deposit per statement.
 - `docs/decisions/eas-update-delivery.md` — OTA delivery diagnosis.
+- `docs/decisions/estimate-notice.md` — estimates-only banner, exports,
+  acknowledgment gate (DRAFT, attorney list).
 - `docs/decisions/i18n-languages.md` — language picker, AI language.
 - `docs/decisions/ui-conventions.md` — charts, nav registry, build info.
 - `docs/decisions/retired.md` — retired features and screens.

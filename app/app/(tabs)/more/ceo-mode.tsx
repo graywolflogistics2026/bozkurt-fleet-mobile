@@ -10,6 +10,7 @@ import { RECOMMENDATION_ICON, recommendationText, recommendationRoute } from '@/
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, Field, PrimaryButton, ErrorText } from '@/src/components/ui';
+import { EstimateStrip } from '@/src/components/EstimateBanner';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { ShareCardModal } from '@/src/components/shareCard/ShareCardModal';
@@ -293,6 +294,7 @@ export default function CeoMode() {
                     <>
                       <Text style={{ color: colors.text, marginTop: spacing.sm, lineHeight: 20 }}>{briefing}</Text>
                       <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
+                      <EstimateStrip />
                     </>
                   )}
                   {error && <MutedText style={{ color: colors.red, marginTop: spacing.sm }}>{error}</MutedText>}
@@ -347,6 +349,7 @@ export default function CeoMode() {
               />
               <PrimaryButton title={t('ceoMode.chatSend')} onPress={handleSendChat} loading={chatSending} disabled={!chatInput.trim()} />
               <MutedText style={{ marginTop: spacing.xs }}>{t('profitAnalysis.aiFooter')}</MutedText>
+              <EstimateStrip />
             </Card>
             <LegalFootnote />
           </>

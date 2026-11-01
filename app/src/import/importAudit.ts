@@ -1,3 +1,5 @@
+import { BRAND_NAME } from '@/src/brand';
+import { estimateNoticeStrings, estimateNoticeTextFooter, estimateNoticeTextHeader } from '@/src/legal/estimateNotice';
 import type { Extraction } from './types';
 import { parseAmount } from './amount';
 import { scrubBankDigits, scrubBankDigitsInText } from './bankDigits';
@@ -28,6 +30,9 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
     out.push(`== ${t(`importAudit.${key}`)}${count != null ? ` (${count})` : ''}`);
   };
 
+  // Batch D item 10: the estimate notice opens and closes every share text.
+  const notice = estimateNoticeStrings(t, BRAND_NAME);
+  out.push(...estimateNoticeTextHeader(notice));
   out.push(t('importAudit.title'));
   out.push(
     `${t('importAudit.week')}: ${txt(s.weekEnding) || '—'} · ${txt(s.carrier) || '—'} · ${t('importAudit.unit')} ${txt(s.unit) || '—'}`
@@ -92,5 +97,6 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
     section('aiNote');
     out.push(txt(e.summary));
   }
+  out.push(...estimateNoticeTextFooter(notice));
   return scrubBankDigitsInText(out.join('\n'));
 }

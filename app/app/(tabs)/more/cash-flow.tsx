@@ -30,6 +30,7 @@ import { buildPolylinePoints, buildAreaPoints } from '@/src/stats/chartHelpers';
 import { useFormatters } from '@/src/i18n/format';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { numOrNull } from '@/src/lib/number';
 
@@ -698,6 +699,7 @@ export default function CashFlow() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('cashFlowScreen.title')}</ScreenTitle>
+        <EstimateBanner note={t('estimate.forecastNote')} />
         <FleetScopeLabel variant="fleetOnly" />
 
         {loading ? (

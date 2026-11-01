@@ -21,6 +21,7 @@ import { fetchAllUserData } from '@/src/data/exportAllData';
 import { invalidateFinancialData, removeFinancialDataFromCache } from '@/src/data/queryInvalidation';
 import type { EntityType } from '@/src/tax/types';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { EstimateAcknowledgmentText } from '@/src/components/EstimateBanner';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { ENABLED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
@@ -575,6 +576,8 @@ export default function Settings() {
 
         <Text style={styles.sectionTitle}>{t('settings.legalTitle')}</Text>
         <Card>
+          <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>{t('estimate.ack.title')}</Text>
+          <EstimateAcknowledgmentText textColor={colors.text} />
           <MutedText>
             {t('settings.tosAccepted', {
               date: profile?.tos_accepted_at ? formatDate(profile.tos_accepted_at, i18n.language) : '—',

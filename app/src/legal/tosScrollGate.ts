@@ -27,3 +27,10 @@ export function isScrollGateSatisfied(params: { scrolledToEnd: boolean; containe
   if (params.containerHeight <= 0 || params.contentHeight <= 0) return false;
   return params.contentHeight <= params.containerHeight;
 }
+
+// ESTIMATES ONLY acknowledgment (owner decision 2026-10-30, batch D item
+// 10): Continue needs BOTH the scroll gate and the required "I understand"
+// checkbox. There is no skip path.
+export function canAcceptTos(params: { understood: boolean; scrollGateSatisfied: boolean }): boolean {
+  return params.understood && params.scrollGateSatisfied;
+}

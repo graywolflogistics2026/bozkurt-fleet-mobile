@@ -44,6 +44,8 @@ import { checkSettlementReconciliation } from '@/src/import/settlementReconcilia
 import { buildPrimeStatementCheck, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
 import { buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
+import { resolveHeroPeriodDateWindow } from '@/src/stats/heroPeriodWindow';
+import { truckHomeProfits } from '@/src/stats/truckHomeProfit';
 import { isSaveBlocked, saveGateFailures } from '@/src/import/reviewVerdict';
 
 // ---------------------------------------------------------------------
@@ -959,5 +961,125 @@ describe('every save path: same gate, same label, same profit (8/21)', () => {
   test('"Save anyway, flagged" (only offered in the preview) still saves, never Verified', async () => {
     const rows = await importGolden({ ...PATHS.backgroundJob(misread()), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] });
     expect(settlementVerification(rows.settlements[0])).toBe('unverified');
+  });
+});
+
+// =====================================================================
+// PROFIT EXPLAINER (owner decision 2026-10-30, batch D item 8): settlements
+// profit − your own expenses = profit, to the cent, on every period.
+describe('profit explainer — golden 8/21 with $100 + $50 of own expenses', () => {
+  const own = (id: string, amount: number, category: string, ded_date: string, truck_id: string | null = null) =>
+    ({ id, user_id: USER_ID, amount, category, description: `${category} receipt`, ded_date, source: 'manual', settlement_id: null, truck_id, tax_deductible: true }) as unknown as Deduction;
+  let rows: Rows;
+  beforeAll(async () => {
+    rows = await importGolden(statementExtraction());
+    rows = {
+      ...rows,
+      deductions: [
+        ...rows.deductions,
+        own('own-100', 100, 'Supplies', '2026-08-18', TRUCK_ID),
+        own('own-50', 50, 'Truck Supplies & Equipment', '2026-08-19'),
+        own('own-meal', 24.5, 'Meals (per diem covered)', '2026-08-19'),
+      ],
+    };
+  });
+  const kpiFor = (window: { startIso: string; endIso: string } | null, truckScope: string | null = TRUCK_ID) =>
+    computeKpis({
+      trucks: [NO_COST_BASIS],
+      settlements: rows.settlements,
+      loads: rows.loads,
+      deductions: rows.deductions,
+      fuelPurchases: rows.fuel,
+      maintenanceRecords: [],
+      tolls: [],
+      reimbursements: rows.reimbursements,
+      truckScope,
+      window,
+    });
+
+  test('the week: settlements 2,534.36 (Verified), own 150.00 (2 items), profit 2,384.36, nothing unexplained', () => {
+    const k = kpiFor({ startIso: WEEK_START, endIso: WEEK_ENDING });
+    const e = k.explanation!;
+    expect(e.settlementsProfit).toBe(2534.36);
+    expect(e.settlementsLabel).toBe('verified_prime');
+    expect(e.ownExpenses.total).toBe(150);
+    expect(e.ownExpenses.count).toBe(2);
+    expect(e.profit).toBe(2384.36);
+    expect(r2(k.net)).toBe(2384.36);
+    expect(e.residual).toBe(0);
+    expect(e.case).toBe('ownExpenses');
+    expect(e.tone).toBe('info');
+  });
+
+  test('the meal is listed as not counted, with its reason', () => {
+    const e = kpiFor({ startIso: WEEK_START, endIso: WEEK_ENDING }).explanation!;
+    expect(e.notCounted.map((r) => [r.rowId, r.reason])).toEqual([['own-meal', 'meals_per_diem']]);
+    expect(e.ownExpenses.rows.map((r) => r.rowId).sort()).toEqual(['own-100', 'own-50']);
+  });
+
+  test.each(['1M', '3M', 'yearly', 'all'] as const)('%s, truck and fleet scope: the same three numbers', (period) => {
+    const window = period === 'all' ? null : resolveHeroPeriodDateWindow(period, [WEEK_ENDING], NOW);
+    for (const scope of [TRUCK_ID, null]) {
+      const e = kpiFor(window, scope).explanation!;
+      expect([e.settlementsProfit, e.ownExpenses.total, e.ownExpenses.count, e.profit, e.residual]).toEqual([2534.36, 150, 2, 2384.36, 0]);
+    }
+  });
+
+  test('without own expenses the Verified week reads "matches Prime" (no warning)', async () => {
+    const plain = await importGolden(statementExtraction());
+    const e = weekKpi(plain).explanation!;
+    expect([e.case, e.tone, e.residual, e.ownExpenses.count]).toEqual(['primeMatch', 'info', 0, 0]);
+  });
+
+  test('an own expense never raises a Prime mismatch', () => {
+    const k = kpiFor({ startIso: WEEK_START, endIso: WEEK_ENDING });
+    expect(k.bridge.crossChecks).toEqual([]);
+    expect(k.explanation!.mismatchWeeks).toBe(0);
+  });
+
+  test('a possible duplicate of a withheld line is flagged, never dropped; "keep" silences it', () => {
+    const withheld = rows.deductions.find((d) => d.source === 'settlement' && d.settlement_id && Number(d.amount) > 0 && /fuel/i.test(d.category ?? ''))!;
+    const twin = { ...own('own-twin', Number(withheld.amount), 'Fuel & DEF', withheld.ded_date!), description: 'pump receipt' } as Deduction;
+    const withTwin = { ...rows, deductions: [...rows.deductions, twin] };
+    const k = computeKpis({ ...kpiInputs(withTwin), window: { startIso: WEEK_START, endIso: WEEK_ENDING } });
+    const e = k.explanation!;
+    expect(e.possibleDuplicates.map((d) => [d.own.rowId, d.withheld.id])).toEqual([['own-twin', withheld.id]]);
+    // Still counted (flag only) and still explained.
+    expect(e.ownExpenses.rows.map((r) => r.rowId)).toContain('own-twin');
+    expect(e.residual).toBe(0);
+    const kept = { ...withTwin, deductions: withTwin.deductions.map((d) => (d.id === 'own-twin' ? ({ ...d, duplicate_kept_at: '2026-10-31T00:00:00Z' } as Deduction) : d)) };
+    expect(computeKpis({ ...kpiInputs(kept), window: { startIso: WEEK_START, endIso: WEEK_ENDING } }).explanation!.possibleDuplicates).toEqual([]);
+  });
+
+  function kpiInputs(r: Rows) {
+    return {
+      trucks: [NO_COST_BASIS],
+      settlements: r.settlements,
+      loads: r.loads,
+      deductions: r.deductions,
+      fuelPurchases: r.fuel,
+      maintenanceRecords: [],
+      tolls: [],
+      reimbursements: r.reimbursements,
+      truckScope: TRUCK_ID,
+    };
+  }
+});
+
+describe('Per-Truck Profitability "Profit" = Home for the same truck and period (batch D item 8)', () => {
+  test('golden 8/21 + $150 own: per-truck Profit 2,384.36 = Home (buildPeriodScopedCpm) on every hero period', async () => {
+    const base = await importGolden(statementExtraction());
+    const deductions = [
+      ...base.deductions,
+      { id: 'own-100', user_id: USER_ID, amount: 100, category: 'Supplies', description: 'x', ded_date: '2026-08-18', source: 'manual', settlement_id: null, truck_id: TRUCK_ID, tax_deductible: true } as unknown as Deduction,
+      { id: 'own-50', user_id: USER_ID, amount: 50, category: 'Supplies', description: 'y', ded_date: '2026-08-19', source: 'manual', settlement_id: null, truck_id: null, tax_deductible: true } as unknown as Deduction,
+    ];
+    const inputs = { trucks: [NO_COST_BASIS], settlements: base.settlements, loads: base.loads, deductions, fuelPurchases: base.fuel, maintenanceRecords: [], tolls: [], reimbursements: base.reimbursements };
+    for (const period of ['thisWeek', '1M', '3M', 'yearly'] as const) {
+      const home = buildPeriodScopedCpm(period, [WEEK_ENDING], [NO_COST_BASIS], base.settlements, base.loads, deductions, base.fuel, [], [], base.reimbursements, TRUCK_ID, null, NOW);
+      const perTruck = truckHomeProfits(inputs, [TRUCK_ID], home.window).get(TRUCK_ID)!;
+      expect(r2(perTruck)).toBe(2384.36);
+      expect(perTruck).toBe(home.kpi!.net);
+    }
   });
 });

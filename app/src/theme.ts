@@ -47,3 +47,13 @@ export const typography = {
     xl: 20,
   },
 } as const;
+
+// ESTIMATE NOTICE (owner decision 2026-10-30, batch D item 10). The app is
+// dark-only today, but the "ESTIMATES ONLY - NOT TAX ADVICE" banner carries
+// its own light AND dark tokens so it stays readable if the OS (or a future
+// light theme) asks for light. Every text/background pair is >= 4.5:1
+// (src/legal/__tests__/estimateNotice.test.ts checks the WCAG ratio).
+export const estimateBannerTokens = {
+  dark: { bg: '#2b1d00', border: '#f59e0b', headline: '#ffd27a', body: '#fff3d6', icon: '#f59e0b' },
+  light: { bg: '#fff4d6', border: '#b45309', headline: '#7a2e00', body: '#3a2300', icon: '#b45309' },
+} as const;

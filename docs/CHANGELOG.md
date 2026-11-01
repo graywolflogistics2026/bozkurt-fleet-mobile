@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- BATCH D (owner decision 2026-10-30, done 2026-10-31). Item 8 profit
+  explainer: settlements profit − own expenses = profit, residual 0.00 checked
+  (src/stats/profitExplainer.ts, components/ProfitExplainer.tsx; Home caption +
+  bridge sheet, Settlements banner + detail, AI review line, accountant notes;
+  possible-duplicate Keep/Remove, §83; Per-Truck "Profit" + "After truck cost
+  estimate"). Item 10: EstimateBanner/EstimateStrip, export banner + per-page
+  footer, "Before you start" gate (TOS_VERSION draft-2026-10-31), Settings →
+  Legal. docs/decisions/estimate-notice.md. SQL §83; no redeploy; eas update.
 - ONE SAVE GATE ON EVERY PATH (owner decision 2026-10-30, before batch D).
   Background job results (importJobs.ts fetchImportJobResult/
   fetchImportJobForReview: jobs list, Review All, retry, resume, read again)

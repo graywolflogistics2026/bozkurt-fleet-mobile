@@ -15,6 +15,7 @@ import { useDrivers } from '@/src/data/drivers';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { buildTruckComparison, type TruckComparisonRow } from '@/src/stats/truckComparison';
 import { PERIOD_OPTIONS, filterByPeriod, type PeriodOption } from '@/src/stats/periodFilter';
+import { periodWindow, truckHomeProfits } from '@/src/stats/truckHomeProfit';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, TappableCard } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -59,6 +60,7 @@ function StatCell({ label, value, valueColor }: { label: string; value: string; 
 
 function TruckRowCard({
   row,
+  homeProfit,
   rank,
   isBest,
   isWorst,
@@ -66,6 +68,7 @@ function TruckRowCard({
   onPress,
 }: {
   row: TruckComparisonRow;
+  homeProfit: number | null;
   rank: number;
   isBest: boolean;
   isWorst: boolean;
@@ -102,8 +105,13 @@ function TruckRowCard({
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         <StatCell label={t('truckComparison.revenue')} value={moneyR(row.grossRevenue)} valueColor={colors.green} />
         <StatCell label={t('truckComparison.expenses')} value={moneyR(row.totalExpenses)} valueColor={colors.red} />
+        {/* Batch D item 8: "Profit" = Home's figure for this truck and
+            period; "After truck cost estimate" = this screen's ranking. */}
+        {homeProfit != null && (
+          <StatCell label={t('truckComparison.profitHome')} value={moneyR(homeProfit)} valueColor={homeProfit >= 0 ? colors.green : colors.red} />
+        )}
         <StatCell
-          label={t('truckComparison.netProfit')}
+          label={t('truckComparison.afterTruckCost')}
           value={moneyR(row.netProfit)}
           valueColor={row.netProfit >= 0 ? colors.green : colors.red}
         />
@@ -197,6 +205,25 @@ export default function TruckComparison() {
     period,
   ]);
 
+  const homeProfits = useMemo(
+    () =>
+      truckHomeProfits(
+        {
+          trucks: trucksQuery.data ?? [],
+          settlements: settlementsQuery.data ?? [],
+          loads: loadsQuery.data ?? [],
+          deductions: dedQuery.data ?? [],
+          fuelPurchases: fuelQuery.data ?? [],
+          maintenanceRecords: maintenanceQuery.data ?? [],
+          tolls: tollsQuery.data ?? [],
+          reimbursements: reimbursementsQuery.data ?? [],
+        },
+        result.rows.map((r) => r.truckId).filter((id): id is string => !!id),
+        periodWindow(period)
+      ),
+    [result, trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data, period]
+  );
+
   const hasDriverData = (driverPaymentsQuery.data ?? []).length > 0;
   const isLoading = trucksQuery.isLoading || settlementsQuery.isLoading;
 
@@ -205,6 +232,7 @@ export default function TruckComparison() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScreenTitle>{t('truckComparison.title')}</ScreenTitle>
         <MutedText style={{ marginBottom: spacing.sm }}>{t('truckComparison.subtitle')}</MutedText>
+        <MutedText style={{ marginBottom: spacing.sm }}>{t('truckComparison.rankedBy')}</MutedText>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {PERIOD_OPTIONS.map((p) => (
@@ -225,6 +253,7 @@ export default function TruckComparison() {
             <TruckRowCard
               key={row.truckId}
               row={row}
+              homeProfit={row.truckId ? (homeProfits.get(row.truckId) ?? null) : null}
               rank={i + 1}
               isBest={result.rows.length > 1 && row.truckId === result.bestTruckId}
               isWorst={result.rows.length > 1 && row.truckId === result.worstTruckId}

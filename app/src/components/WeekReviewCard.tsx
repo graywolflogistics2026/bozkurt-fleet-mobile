@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Card, MutedText, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, spacing, typography } from '@/src/theme';
 import { getBuildInfo } from '@/src/lib/buildInfo';
@@ -95,6 +96,7 @@ export function WeekReviewCard({
   return (
     <Card style={{ marginBottom: spacing.sm }}>
       <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('weekReview.title')}</Text>
+      <EstimateBanner />
       {state.certified ? (
         <>
           <MutedText style={{ color: colors.green, fontWeight: '700', marginTop: spacing.xs }}>

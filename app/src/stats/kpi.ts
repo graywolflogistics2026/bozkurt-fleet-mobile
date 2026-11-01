@@ -90,6 +90,7 @@ import { settlementDeposit, settlementVerification, type SettlementStatement, ty
 import type { ComparisonTruck, ComparisonSettlement, ComparisonDeduction, ComparisonFuel, ComparisonMaintenance, ComparisonToll } from '@/src/stats/truckComparison';
 import { filterRowsByDateWindow, type DateWindow } from '@/src/stats/heroPeriodWindow';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
+import { buildProfitExplanation, type ProfitExplanation, type WithheldLine } from '@/src/stats/profitExplainer';
 
 export type { DateWindow };
 
@@ -101,10 +102,13 @@ export type { DateWindow };
 // resolvable week yet), and forcing that narrower type here would make
 // every real call site's settlement array fail to type-check.
 type KpiSettlement = ComparisonSettlement & { per_diem_days?: number | null; statement?: SettlementStatement | null };
-type KpiDeduction = ComparisonDeduction & { ded_date?: string | null; settlement_id?: string | null };
-type KpiFuel = ComparisonFuel & { purchase_date?: string | null; fuel_type?: string | null };
-type KpiMaintenance = ComparisonMaintenance & { service_date?: string | null; settlement_id?: string | null };
-type KpiToll = ComparisonToll & { toll_date?: string | null; settlement_id?: string | null };
+// duplicate_kept_at (PENDING_SQL §83): the owner answered "keep" to the
+// profit explainer's possible-duplicate flag for this own row.
+type KeptFlag = { id?: string; duplicate_kept_at?: string | null };
+type KpiDeduction = ComparisonDeduction & KeptFlag & { ded_date?: string | null; settlement_id?: string | null };
+type KpiFuel = ComparisonFuel & KeptFlag & { purchase_date?: string | null; fuel_type?: string | null; location?: string | null };
+type KpiMaintenance = ComparisonMaintenance & KeptFlag & { service_date?: string | null; settlement_id?: string | null };
+type KpiToll = ComparisonToll & KeptFlag & { toll_date?: string | null; settlement_id?: string | null };
 // reimbursements carry no truck_id of their own — a settlement-linked one
 // follows its settlement's truck and week; an unlinked one (a manual
 // warranty credit) is a fleet-level row, matched by date only.
@@ -178,6 +182,10 @@ export type KpiResult = {
   // AUDIT LEDGER: every row behind expenses.total, with its status/reason.
   ledger: LedgerRow[];
   bridge: ProfitBridge;
+  // Batch D item 8: settlements profit − own expenses = profit, with the
+  // residual check (src/stats/profitExplainer.ts). null only inside the
+  // explainer's own settlements-only computation.
+  explanation: ProfitExplanation | null;
 };
 
 // PROFIT BRIDGE (golden settlement pass, owner decision 2026-10-13) — how
@@ -264,7 +272,7 @@ function assertArray(value: unknown, name: string): asserts value is unknown[] {
   }
 }
 
-export function computeKpis(inputs: KpiInputs): KpiResult {
+export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = {}): KpiResult {
   assertArray(inputs.trucks, 'trucks');
   assertArray(inputs.settlements, 'settlements');
   assertArray(inputs.loads, 'loads');
@@ -399,6 +407,8 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
     fixedCostEstimateInCpm: fixedCostBasisTotal,
   });
 
+  const explanation = options.explain === false ? null : explainProfit(inputs, settlements, net, ledger, bridge.crossChecks.length);
+
   return {
     window,
     isAllTrucks: !truckScope,
@@ -428,7 +438,68 @@ export function computeKpis(inputs: KpiInputs): KpiResult {
     owedToCarrier,
     ledger,
     bridge,
+    explanation,
   };
+}
+
+// Layer A is computed independently — computeKpis() over the settlement-
+// linked rows only — so A − B − C = 0 is a real check, not a tautology.
+function explainProfit(inputs: KpiInputs, settlements: KpiSettlement[], profit: number, ledger: LedgerRow[], mismatchWeeks: number): ProfitExplanation {
+  const linked = <R extends { settlement_id?: string | null }>(rows: R[]) => rows.filter((r) => !!r.settlement_id);
+  const settlementsOnly = computeKpis(
+    {
+      ...inputs,
+      deductions: linked(inputs.deductions),
+      fuelPurchases: linked(inputs.fuelPurchases),
+      maintenanceRecords: linked(inputs.maintenanceRecords),
+      tolls: linked(inputs.tolls),
+      reimbursements: linked(inputs.reimbursements),
+    },
+    { explain: false }
+  );
+  const inScope = (truckId: string | null | undefined) => matchesTruckScope(truckId, inputs.truckScope);
+  const withheld: WithheldLine[] = [
+    ...inputs.deductions
+      .filter((d) => d.source === 'settlement' && !!d.settlement_id && inScope(d.truck_id) && !!d.id)
+      .map((d) => ({
+        table: 'deductions' as const,
+        id: d.id as string,
+        date: d.ded_date ?? null,
+        amount: Number(d.amount ?? 0),
+        category: d.category ?? null,
+        label: d.description ?? d.category ?? '',
+        settlementId: d.settlement_id ?? null,
+      })),
+    ...inputs.fuelPurchases
+      .filter((f) => !!f.settlement_id && !!f.id)
+      .map((f) => ({
+        table: 'fuel_purchases' as const,
+        id: f.id as string,
+        date: f.purchase_date ?? null,
+        amount: Number(f.amount ?? 0),
+        category: 'Fuel & DEF',
+        label: f.location ?? '',
+        settlementId: f.settlement_id ?? null,
+      })),
+  ];
+  const keptKeys = new Set<string>();
+  const addKept = (table: string, rows: (KeptFlag & { id?: string })[]) =>
+    rows.forEach((r) => {
+      if (r.duplicate_kept_at && r.id) keptKeys.add(`${table}:${r.id}`);
+    });
+  addKept('deductions', inputs.deductions);
+  addKept('fuel_purchases', inputs.fuelPurchases);
+  addKept('maintenance_records', inputs.maintenanceRecords);
+  addKept('tolls', inputs.tolls);
+  return buildProfitExplanation({
+    settlementsProfit: settlementsOnly.net,
+    labels: settlements.map((s) => settlementVerification(s)),
+    ledger,
+    profit,
+    mismatchWeeks,
+    withheld,
+    keptKeys,
+  });
 }
 
 function buildProfitBridge(args: {

@@ -29,6 +29,7 @@ import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
 import { matchesTruckScope } from '@/src/stats/kpi';
 import { LedgerList, ProfitBridgeView, hasExcludedTruckExtras } from '@/src/components/ProfitAudit';
+import { ProfitExplainerCard, ProfitExplainerLine } from '@/src/components/ProfitExplainer';
 import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
 import { resolveHeroPeriodDateWindow, filterRowsByDateWindow } from '@/src/stats/heroPeriodWindow';
 import { FleetScopeSelectorStrip } from '@/src/components/FleetScopeSelectorStrip';
@@ -51,6 +52,7 @@ import { useReferralNudge } from '@/src/data/referralNudge';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
 import { useReferralSyncOnce } from '@/src/data/referral';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { EstimateStrip } from '@/src/components/EstimateBanner';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -468,6 +470,12 @@ function AiCoachSection({
             <Text style={{ color: colors.text, lineHeight: 20 }}>{proactive.weeklyReviewFallback}</Text>
           </View>
         )}
+        {(!!proactive.weeklyReview || !!proactive.weeklyReviewFallback) && (
+          <>
+            <ProfitExplainerLine explanation={proactive.weeklyReviewExplanation} when="week" />
+            <EstimateStrip />
+          </>
+        )}
         {/* AI COACH — FIX STALE CACHE (owner decision): explicit empty
             state once there's genuinely nothing to review (no settlement
             ever imported, or every one deleted) — never silently blank,
@@ -776,6 +784,7 @@ function HomeTaxStrip({ taxQuery }: { taxQuery: ReturnType<typeof useTaxEstimate
   return (
     <>
       <ScreenTitle>{t('dashboard.taxStrip.title')}</ScreenTitle>
+      <EstimateStrip />
       {!isAllTrucks && trucks.length > 1 && <MutedText style={{ marginBottom: spacing.xs }}>{t('fleetScope.fleetWideAlways')}</MutedText>}
       <View style={styles.compactRow}>
         {/* Batch B (2026-10-30): a truck's "deduct in the purchase year"
@@ -1259,6 +1268,16 @@ export default function Dashboard() {
           owedToCarrier={periodScopedCpm.kpi?.owedToCarrier ?? 0}
         />
 
+        {/* PROFIT EXPLAINER caption (batch D item 8): settlements profit −
+            your own expenses = profit; hidden when there is nothing to add. */}
+        {periodScopedCpm.kpi?.explanation?.case !== 'none' && (
+          <ProfitExplainerLine
+            explanation={periodScopedCpm.kpi?.explanation}
+            when={heroPeriod === 'thisWeek' ? 'thisWeek' : heroPeriod === 'lastWeek' ? 'lastWeek' : 'period'}
+            onPress={() => setProfitBridgeOpen(true)}
+          />
+        )}
+
         {/* ITEM 0 (owner decision, CPM/PPM BROKEN AGAIN follow-up): this
             trio now describes the SAME `heroPeriod` window as the Hero
             Card above it and the per-mile trio below it — Revenue/
@@ -1437,7 +1456,14 @@ export default function Dashboard() {
       <ModalSheet visible={profitBridgeOpen} onClose={() => setProfitBridgeOpen(false)}>
         <SheetTitle>{t('dashboard.profitBridge.title')}</SheetTitle>
         {periodScopedCpm.kpi ? (
-          <ProfitBridgeView kpi={periodScopedCpm.kpi} settlements={heroWindowSettlements} truckExtrasNeedCostBasis={truckExtrasNeedCostBasis} />
+          <>
+            <ProfitExplainerCard
+              explanation={periodScopedCpm.kpi.explanation}
+              when={heroPeriod === 'thisWeek' ? 'thisWeek' : heroPeriod === 'lastWeek' ? 'lastWeek' : 'period'}
+              onNavigate={() => setProfitBridgeOpen(false)}
+            />
+            <ProfitBridgeView kpi={periodScopedCpm.kpi} settlements={heroWindowSettlements} truckExtrasNeedCostBasis={truckExtrasNeedCostBasis} />
+          </>
         ) : (
           <MutedText>{t('dashboard.profitBridge.empty')}</MutedText>
         )}

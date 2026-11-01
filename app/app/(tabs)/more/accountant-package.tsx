@@ -16,6 +16,9 @@ import { useTrucksList } from '@/src/data/trucks';
 import { useEquipment } from '@/src/data/equipment';
 import { useDocuments } from '@/src/data/documents';
 import { CERTIFICATION_TEXT } from '@/src/import/weekReview';
+import { computeKpis } from '@/src/stats/kpi';
+import { explanationSentence } from '@/src/stats/profitExplainerText';
+import { addDaysDateOnly, addMonthsDateOnly, dateOnlyFromParts } from '@/src/lib/dateOnly';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useCapitalTransactions } from '@/src/data/capitalTransactions';
 import { useUserCategories } from '@/src/data/userCategories';
@@ -65,6 +68,9 @@ import {
   ModalSheet,
   SheetTitle,
 } from '@/src/components/ui';
+import { EstimateBanner } from '@/src/components/EstimateBanner';
+import { estimateNoticeStrings } from '@/src/legal/estimateNotice';
+import { BRAND_NAME } from '@/src/brand';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { DeductionInsert } from '@/src/types/db';
 
@@ -504,6 +510,7 @@ export default function AccountantPackage() {
       footerNonDeductibleNote: t('accountantPackage.footerNonDeductibleNote'),
       footerOwnerPaidNote: t('accountantPackage.footerOwnerPaidNote'),
       disclaimer: t('common.legalFootnote'),
+      estimateNotice: estimateNoticeStrings((k, o) => t(k, o) as string, BRAND_NAME),
     };
   }
 
@@ -515,6 +522,27 @@ export default function AccountantPackage() {
       .sort((a, b) => a.week_ending.localeCompare(b.week_ending))
       .map((s) => `${t('weekReview.exportWeek', { week: date(s.week_ending) })} — ${t('weekReview.certifiedOn', { date: dateTime(s.certified_at!) })}`);
     return { certifiedWeekLines: lines, certificationText: CERTIFICATION_TEXT, certifiedWeeksTitle: t('weekReview.exportTitle') };
+  }
+
+  // Batch D item 8: the profit explainer for the report period, fleet-wide
+  // (computeKpis(), the same figures as every screen).
+  function profitNoteFor(scopeYear: number, scopeMonth: number | null) {
+    const startIso = dateOnlyFromParts(scopeYear, scopeMonth ?? 1, 1);
+    const endIso = addDaysDateOnly(addMonthsDateOnly(startIso, scopeMonth == null ? 12 : 1), -1);
+    const explanation = computeKpis({
+      trucks: trucksQuery.data ?? [],
+      settlements: settlementsQuery.data ?? [],
+      loads: [],
+      deductions: deductionsQuery.data ?? [],
+      fuelPurchases: fuelQuery.data ?? [],
+      maintenanceRecords: maintenanceQuery.data ?? [],
+      tolls: tollsQuery.data ?? [],
+      reimbursements: reimbursementsQuery.data ?? [],
+      truckScope: null,
+      window: { startIso, endIso },
+    }).explanation;
+    const line = explanation ? explanationSentence(explanation, (k, o) => t(k, o) as string, money, 'period') : null;
+    return line ? { profitNoteTitle: t('profitExplainer.title'), profitNoteLine: `${line} ${t('profitExplainer.depositLine')}` } : {};
   }
 
   function buildReportInput(scopeYear: number, scopeMonth: number | null): { input: AccountantReportInput; strings: AccountantReportStrings } {
@@ -582,6 +610,7 @@ export default function AccountantPackage() {
       groupedCategories: grouped,
       capitalAssets,
       ownersEquity,
+      ...profitNoteFor(scopeYear, scopeMonth),
       ...certifiedWeeksFor(scopeYear, scopeMonth),
     };
 
@@ -679,6 +708,7 @@ export default function AccountantPackage() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         <ScreenTitle>{headerLine}</ScreenTitle>
+        <EstimateBanner />
         <FleetScopeLabel variant="fleetOnly" />
         <MutedText>{t('accountantPackage.subtitle')}</MutedText>
 

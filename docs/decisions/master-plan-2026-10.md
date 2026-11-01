@@ -354,9 +354,25 @@ Start now with the protocol, then batch 0b.
 | 0b | Done (see the batch 0b notes below) | 95f9207 |
 | A | Done: items 1, 2, 7 (PENDING_SQL §79, §80 to run) | 875f4d2 |
 | B | Done: vehicle purchase tax treatment (PENDING_SQL §81 applied 2026-10-30) | 651dec6 |
-| C | Done: items 5, 6 (PENDING_SQL §82 to run, redeploy ai-import) | (this commit) |
-| D | Not started | — |
+| C | Done: items 5, 6 (PENDING_SQL §82 to run, redeploy ai-import) | e331821 (+ 62fc2b5 one save gate) |
+| D | Done: items 8, 10 (PENDING_SQL §83 to run; no redeploy) | (this commit) |
 | E | Not started | — |
+
+## Batch D notes (2026-10-31)
+
+- Item 8 PROFIT EXPLAINER: `app/src/stats/profitExplainer.ts` (pure) +
+  `computeKpis().explanation`. A = computeKpis over settlement-linked rows only
+  (internal `explain:false`), B = ledger rows with no settlement link
+  (counted/offset; excluded ones listed as not counted), C = canonical
+  profit; residual must be 0.00 (golden 8/21: 2,534.36 − 150.00 = 2,384.36 on
+  week/1M/3M/yearly/all, per truck and fleet; kpiConsistency checks the
+  residual on Dashboard and Scorecard). No canonical formula changed.
+  Possible duplicate (±1¢, ≤3 days, same category group) -> Keep (§83) or
+  Remove. Per-Truck Profitability: "Profit" (= Home) + "After truck cost
+  estimate" (rank).
+- Item 10 ESTIMATES ONLY: docs/decisions/estimate-notice.md (DRAFT text,
+  places, gate, attorney list). Gate reuses `tos_accepted_at`/`tos_version`;
+  `TOS_VERSION` bumped to `draft-2026-10-31` so every user acknowledges once.
 
 ## Batch C notes (2026-10-30)
 

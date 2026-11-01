@@ -28,6 +28,7 @@ import { fetchTruckExportData } from '@/src/data/truckExport';
 import { AssetFinancingFields, emptyAssetFinancing, type AssetFinancingValue } from '@/src/components/AssetFinancingFields';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { colors, spacing, typography } from '@/src/theme';
 import type { LoanInsert, Truck } from '@/src/types/db';
 import { numOrNull } from '@/src/lib/number';
@@ -573,6 +574,7 @@ export default function Trucks() {
         />
 
         <Text style={styles.sectionTitle}>{t('vehicleTax.title')}</Text>
+        <EstimateBanner />
         <MutedText>{t('vehicleTax.capitalNote')}</MutedText>
         {form.costBasisOwnershipMode === 'lease' ? (
           <MutedText style={{ marginTop: spacing.xs }}>{t('trucks.depreciationSkippedLease')}</MutedText>

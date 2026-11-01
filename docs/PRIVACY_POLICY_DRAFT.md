@@ -17,6 +17,8 @@ truck/driver information, and the documents (photos/PDFs) you upload for
 AI-assisted extraction. This data is stored in Supabase (our database and
 file storage provider).
 
+**Estimates-only acknowledgment (added 2026-10-31, draft):** the App gives estimates only; we record the date you acknowledged this and the version of the text you saw (`profiles.tos_accepted_at`, `profiles.tos_version`).
+
 ## 2. We do not collect or track your location
 
 **We do not collect or track your location.** This app never requests

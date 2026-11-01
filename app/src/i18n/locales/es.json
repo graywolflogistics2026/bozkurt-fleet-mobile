@@ -2536,7 +2536,10 @@
     "unassignedBody": "{{count}} Settlement por un total de {{amount}} no tienen camión asignado, por lo que no se incluyen en los números de ningún camión arriba.",
     "unassignedFixLink": "Asignar camiones en Settlements →",
     "fleetTotalsTitle": "Totales de la Flota",
-    "allocationNote": "Los costos a nivel de flota (seguro, honorarios contables, permisos y otros cargos sin camión específico) se asignan a cada camión según su parte del total de millas de la flota — una asignación, no un costo directo."
+    "allocationNote": "Los costos a nivel de flota (seguro, honorarios contables, permisos y otros cargos sin camión específico) se asignan a cada camión según su parte del total de millas de la flota — una asignación, no un costo directo.",
+    "profitHome": "Ganancia (como en Inicio)",
+    "afterTruckCost": "Tras el costo estimado del camión",
+    "rankedBy": "Ordenado por la ganancia tras el costo estimado del camión."
   },
   "dataCleanup": {
     "title": "Limpieza de Datos",
@@ -3024,5 +3027,71 @@
       "negative": "Las millas no pueden ser negativas."
     },
     "saveFailedTitle": "No se pudo guardar"
+  },
+  "profitExplainer": {
+    "title": "De dónde sale tu ganancia",
+    "sentence_one": "Según tus settlements, tu ganancia es {{settlements}}. Agregaste {{own}} de gastos propios (1 partida) {{when}}, así que tu ganancia es {{profit}}.",
+    "sentence_other": "Según tus settlements, tu ganancia es {{settlements}}. Agregaste {{own}} de gastos propios ({{count}} partidas) {{when}}, así que tu ganancia es {{profit}}.",
+    "when": {
+      "thisWeek": "esta semana",
+      "lastWeek": "la semana pasada",
+      "week": "esa semana",
+      "period": "en este período"
+    },
+    "primeMatch": "Tu ganancia de {{profit}} sale directamente de tus settlements y coincide con el estado de cuenta impreso del transportista.",
+    "fromSettlements": "Tu ganancia de {{profit}} sale directamente de tus settlements.",
+    "mismatch_one": "En 1 semana las partidas no coinciden con el estado de cuenta impreso del transportista. La ganancia usa el estado impreso; conviene revisarlo.",
+    "mismatch_other": "En {{count}} semanas las partidas no coinciden con el estado de cuenta impreso del transportista. La ganancia usa el estado impreso; conviene revisarlo.",
+    "unexplained": "Diferencia sin explicar de {{amount}}: conviene revisarlo.",
+    "depositLine": "El depósito bancario sigue siendo la cifra del transportista.",
+    "settlements": "Ganancia según tus settlements",
+    "label": {
+      "verified_prime": "Verificado",
+      "totals_match": "Los totales coinciden",
+      "unverified": "Sin verificar"
+    },
+    "own": "Tus gastos propios",
+    "ownCount_one": "1 partida",
+    "ownCount_other": "{{count}} partidas",
+    "showRows": "Ver partidas",
+    "hideRows": "Ocultar partidas",
+    "result": "Tu ganancia",
+    "notCountedTitle": "No contado, y por qué",
+    "reason": {
+      "meals_per_diem": "comidas, cubiertas por el per diem",
+      "advance": "devolución de anticipo",
+      "escrow": "escrow, tu dinero retenido",
+      "non_deductible": "no deducible",
+      "duplicate_fuel": "ya está en un settlement"
+    },
+    "duplicateTitle": "Posible duplicado",
+    "duplicateBody": "{{amount}} el {{date}} parece una línea que tu transportista ya retuvo ({{label}}). ¿Lo conservas o lo eliminas?",
+    "keep": "Conservar",
+    "remove": "Eliminar",
+    "removeConfirmTitle": "¿Eliminar este gasto?",
+    "removeConfirmBody": "{{label}} — {{amount}}. Solo se elimina tu propio registro; la línea del settlement se queda.",
+    "removeFailed": "No se pudo eliminar",
+    "keepFailed": "No se pudo guardar",
+    "needsDb": "Esto necesita la actualización de base de datos PENDING_SQL §83."
+  },
+  "estimate": {
+    "headline": "SOLO ESTIMACIONES - NO ES ASESORÍA FISCAL.",
+    "body": "{{brand}} es una herramienta para llevar registros y hacer estimaciones, no un preparador de impuestos, contador ni bufete de abogados. Los números son estimaciones generadas por IA a partir de sus documentos y pueden estar equivocados. Confirme todo con un profesional de impuestos con licencia antes de declarar o pagar.",
+    "strip": "SOLO ESTIMACIONES - NO ES ASESORÍA FISCAL",
+    "stripHint": "Abre el aviso completo",
+    "preparedBy": "Preparado por el propietario con estimaciones generadas por IA. No revisado por un CPA.",
+    "footer": "SOLO ESTIMACIONES - NO ES ASESORÍA FISCAL. Confírmelo con un profesional de impuestos con licencia.",
+    "primeNote": "Ayuda para llevar registros. No es un documento contable ni fiscal.",
+    "forecastNote": "Pronóstico. Solo una estimación.",
+    "ack": {
+      "title": "Antes de empezar",
+      "bullet1": "Cada número en esta app es una estimación.",
+      "bullet2": "No es asesoría fiscal, legal ni contable.",
+      "bullet3": "Confirme todo con un profesional de impuestos con licencia antes de declarar o pagar.",
+      "checkbox": "Entiendo",
+      "continue": "Continuar",
+      "checkFirst": "Marque \"Entiendo\" y desplácese hasta el final de los Términos para continuar.",
+      "acceptedOn": "Aceptó este aviso el {{date}} (versión {{version}})."
+    }
   }
 }

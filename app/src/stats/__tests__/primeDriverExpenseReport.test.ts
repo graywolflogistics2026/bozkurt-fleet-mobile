@@ -1,4 +1,5 @@
 import { buildPrimeDriverExpenseReportHtml, buildPrimeDriverExpenseReportFilename } from '@/src/stats/primeDriverExpenseReport';
+import { localeNotice } from '@/src/legal/__tests__/localeNotice';
 import { buildPrimeDriverExpenseMonth, type PrimeDriverExpenseRow } from '@/src/stats/primeDriverExpenses';
 
 const strings = {
@@ -7,6 +8,7 @@ const strings = {
   grandTotalLabel: 'Grand Total',
   noEntriesLabel: 'No entries this month.',
   disclaimer: 'This tool is provided to help organize your own records. Not tax advice — consult a qualified CPA.',
+  estimateNotice: localeNotice(undefined, 'Record-keeping aid. Not an accounting or tax document.'),
 };
 const fmt = { money: (n: number) => `$${n.toFixed(2)}`, date: (iso: string) => iso };
 

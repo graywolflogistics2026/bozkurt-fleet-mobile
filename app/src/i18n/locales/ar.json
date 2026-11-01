@@ -2536,7 +2536,10 @@
     "unassignedBody": "{{count}} Settlement بإجمالي {{amount}} ليس لها شاحنة محددة، لذا لا تُدرج ضمن أرقام أي شاحنة أعلاه.",
     "unassignedFixLink": "تعيين الشاحنات في Settlements ←",
     "fleetTotalsTitle": "إجماليات الأسطول",
-    "allocationNote": "تُخصَّص التكاليف على مستوى الأسطول (التأمين، أتعاب المحاسبة، التصاريح، ورسوم أخرى بلا شاحنة محددة) لكل شاحنة حسب حصتها من إجمالي أميال الأسطول — هذا تخصيص، وليس تكلفة مباشرة."
+    "allocationNote": "تُخصَّص التكاليف على مستوى الأسطول (التأمين، أتعاب المحاسبة، التصاريح، ورسوم أخرى بلا شاحنة محددة) لكل شاحنة حسب حصتها من إجمالي أميال الأسطول — هذا تخصيص، وليس تكلفة مباشرة.",
+    "profitHome": "Profit (as on Home)",
+    "afterTruckCost": "After truck cost estimate",
+    "rankedBy": "Ranked by profit after the truck cost estimate."
   },
   "dataCleanup": {
     "title": "تنظيف البيانات",
@@ -3024,5 +3027,71 @@
       "negative": "لا يمكن أن تكون الأميال سالبة."
     },
     "saveFailedTitle": "تعذّر الحفظ"
+  },
+  "profitExplainer": {
+    "title": "Where your profit comes from",
+    "sentence_one": "Your settlements show {{settlements}} profit. You added {{own}} of your own expenses (1 item) {{when}}, so your profit is {{profit}}.",
+    "sentence_other": "Your settlements show {{settlements}} profit. You added {{own}} of your own expenses ({{count}} items) {{when}}, so your profit is {{profit}}.",
+    "when": {
+      "thisWeek": "this week",
+      "lastWeek": "last week",
+      "week": "that week",
+      "period": "in this period"
+    },
+    "primeMatch": "Your profit of {{profit}} comes straight from your settlements and matches the carrier's printed statement.",
+    "fromSettlements": "Your profit of {{profit}} comes straight from your settlements.",
+    "mismatch_one": "On 1 week the line items differ from the carrier's printed statement. Profit uses the printed statement; this needs a look.",
+    "mismatch_other": "On {{count}} weeks the line items differ from the carrier's printed statement. Profit uses the printed statement; this needs a look.",
+    "unexplained": "Unexplained difference {{amount}} — this needs a look.",
+    "depositLine": "The bank deposit stays the carrier's figure.",
+    "settlements": "Profit per your settlements",
+    "label": {
+      "verified_prime": "Verified",
+      "totals_match": "Totals match",
+      "unverified": "Unverified"
+    },
+    "own": "Your own expenses",
+    "ownCount_one": "1 item",
+    "ownCount_other": "{{count}} items",
+    "showRows": "Show items",
+    "hideRows": "Hide items",
+    "result": "Your profit",
+    "notCountedTitle": "Not counted, and why",
+    "reason": {
+      "meals_per_diem": "meals, covered by per diem",
+      "advance": "advance repayment",
+      "escrow": "escrow, your money held",
+      "non_deductible": "not deductible",
+      "duplicate_fuel": "already on a settlement"
+    },
+    "duplicateTitle": "Possible duplicate",
+    "duplicateBody": "{{amount}} on {{date}} looks like a line your carrier already withheld ({{label}}). Keep it or remove it?",
+    "keep": "Keep",
+    "remove": "Remove",
+    "removeConfirmTitle": "Remove this expense?",
+    "removeConfirmBody": "{{label}} — {{amount}}. Only your own entry is deleted; the settlement line stays.",
+    "removeFailed": "Could not remove",
+    "keepFailed": "Could not save",
+    "needsDb": "This needs the database update PENDING_SQL §83."
+  },
+  "estimate": {
+    "headline": "ESTIMATES ONLY - NOT TAX ADVICE.",
+    "body": "{{brand}} is a record-keeping and estimating tool, not a tax preparer, accountant or law firm. Numbers are AI-generated estimates from your documents and can be wrong. Confirm everything with a licensed tax professional before you file or pay.",
+    "strip": "ESTIMATES ONLY - NOT TAX ADVICE",
+    "stripHint": "Opens the full notice",
+    "preparedBy": "Prepared by the owner with AI-generated estimates. Not reviewed by a CPA.",
+    "footer": "ESTIMATES ONLY - NOT TAX ADVICE. Confirm with a licensed tax professional.",
+    "primeNote": "Record-keeping aid. Not an accounting or tax document.",
+    "forecastNote": "Forecast. Estimate only.",
+    "ack": {
+      "title": "Before you start",
+      "bullet1": "Every number in this app is an estimate.",
+      "bullet2": "It is not tax, legal or accounting advice.",
+      "bullet3": "Confirm everything with a licensed tax professional before you file or pay.",
+      "checkbox": "I understand",
+      "continue": "Continue",
+      "checkFirst": "Tick \"I understand\" and scroll to the end of the Terms to continue.",
+      "acceptedOn": "You accepted this notice on {{date}} (version {{version}})."
+    }
   }
 }

@@ -1,4 +1,5 @@
 import { ACCOUNTANT_EXPORT_COLORS } from '@/src/stats/accountantPackageColors';
+import { ESTIMATE_NOTICE_CSS, estimateBannerHtml, estimateFooterHtml, type EstimateNoticeStrings } from '@/src/legal/estimateNotice';
 import type { LineItem, PerDiemBlock, MiscConcentrationWarning, CapitalAssetRow, OwnersEquitySummary, GroupedScheduleCCategory, AccountantScope } from '@/src/stats/accountantPackage';
 import type { CapitalTreatmentLabel } from '@/src/tax/vehiclePurchase';
 import type { CapitalFlowRow, CapitalFlowType } from '@/src/stats/capitalAccount';
@@ -89,6 +90,8 @@ export type AccountantReportStrings = {
   footerNonDeductibleNote: string;
   footerOwnerPaidNote: string;
   disclaimer: string;
+  // Batch D item 10: full banner on page 1, one-line footer on every page.
+  estimateNotice: EstimateNoticeStrings;
 };
 
 export type AccountantReportFormatters = {
@@ -115,6 +118,9 @@ export type AccountantReportInput = {
   ownersEquity: OwnersEquitySummary;
   // Batch C item 5: "Certified by you on <date>" lines for the weeks in
   // this period the owner certified, plus the certification text itself.
+  // Batch D item 8: the profit explainer's sentence for the report period.
+  profitNoteTitle?: string;
+  profitNoteLine?: string;
   certifiedWeekLines?: string[];
   certificationText?: string;
   certifiedWeeksTitle?: string;
@@ -275,9 +281,11 @@ export function buildAccountantReportHtml(
           .assets-header { background: ${C.capitalAssetsHeaderBg}; padding: 6px 8px; font-weight: 700; }
           tr.flow-in { background: ${C.contributionsInBg}; }
           tr.flow-out { background: ${C.drawsOutBg}; }
+          ${ESTIMATE_NOTICE_CSS}
         </style>
       </head>
       <body>
+        ${estimateBannerHtml(strings.estimateNotice)}
         <h1>${esc(headerLine)}</h1>
 
         <table>
@@ -360,6 +368,8 @@ export function buildAccountantReportHtml(
             : ''
         }
 
+        ${input.profitNoteLine ? `<h2>${esc(input.profitNoteTitle ?? '')}</h2><p>${esc(input.profitNoteLine)}</p>` : ''}
+
         ${
           input.certifiedWeekLines && input.certifiedWeekLines.length > 0
             ? `<h2>${esc(input.certifiedWeeksTitle ?? '')}</h2>
@@ -369,6 +379,7 @@ export function buildAccountantReportHtml(
         }
 
         <p class="muted">${esc(strings.footerMealsNote)}<br/>${esc(strings.footerNonDeductibleNote)}<br/>${esc(strings.footerOwnerPaidNote)}<br/>${esc(strings.disclaimer)}</p>
+        ${estimateFooterHtml(strings.estimateNotice)}
       </body>
     </html>
   `;

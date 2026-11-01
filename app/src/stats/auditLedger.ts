@@ -11,8 +11,13 @@ import type { LedgerReason, StatementWeek } from '@/src/stats/statementRoute';
 export type LedgerStatus = 'counted' | 'offset' | 'excluded';
 export type LedgerSource = 'prime_statement' | 'settlement' | 'manual';
 
+export type LedgerTable = 'statement' | 'deductions' | 'fuel_purchases' | 'maintenance_records' | 'tolls' | 'reimbursements';
+
 export type LedgerRow = {
   key: string;
+  // Batch D item 8: the row behind the line, so a screen can open it.
+  table: LedgerTable;
+  rowId: string | null;
   source: LedgerSource;
   settlementId: string | null;
   // The underlying deductions row id, when there is one (the explainer's
@@ -57,6 +62,8 @@ export function buildAuditLedger(
       if (e.status === 'revenue') return;
       rows.push({
         key: `st-${week.settlementId}-${i}`,
+        table: 'statement',
+        rowId: null,
         source: 'prime_statement',
         settlementId: week.settlementId,
         deductionId: null,
@@ -74,6 +81,8 @@ export function buildAuditLedger(
     const amount = Number(d.amount ?? 0);
     const base = {
       key: `ded-${d.id ?? i}`,
+      table: 'deductions' as const,
+      rowId: d.id ?? null,
       source: sourceOf(d.settlement_id),
       settlementId: d.settlement_id ?? null,
       deductionId: d.id ?? null,
@@ -90,6 +99,8 @@ export function buildAuditLedger(
   fuel.counted.forEach(({ row, cost }, i) =>
     rows.push({
       key: `fuel-${row.id ?? i}`,
+      table: 'fuel_purchases',
+      rowId: row.id ?? null,
       source: sourceOf(row.settlement_id),
       settlementId: row.settlement_id ?? null,
       deductionId: null,
@@ -104,6 +115,8 @@ export function buildAuditLedger(
   fuel.skippedAsDuplicate.forEach((row, i) =>
     rows.push({
       key: `fuel-dup-${row.id ?? i}`,
+      table: 'fuel_purchases',
+      rowId: row.id ?? null,
       source: sourceOf(row.settlement_id),
       settlementId: row.settlement_id ?? null,
       deductionId: null,
@@ -119,6 +132,8 @@ export function buildAuditLedger(
   maintenanceRecords.forEach((m, i) =>
     rows.push({
       key: `maint-${m.id ?? i}`,
+      table: 'maintenance_records',
+      rowId: m.id ?? null,
       source: sourceOf(m.settlement_id),
       settlementId: m.settlement_id ?? null,
       deductionId: null,
@@ -133,6 +148,8 @@ export function buildAuditLedger(
   tolls.forEach((t, i) =>
     rows.push({
       key: `toll-${t.id ?? i}`,
+      table: 'tolls',
+      rowId: t.id ?? null,
       source: sourceOf(t.settlement_id),
       settlementId: t.settlement_id ?? null,
       deductionId: null,
@@ -147,6 +164,8 @@ export function buildAuditLedger(
   reimbursements.forEach((r, i) =>
     rows.push({
       key: `reimb-${r.id ?? i}`,
+      table: 'reimbursements',
+      rowId: r.id ?? null,
       source: sourceOf(r.settlement_id),
       settlementId: r.settlement_id ?? null,
       deductionId: null,

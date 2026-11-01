@@ -157,6 +157,20 @@ describe('KPI CONSISTENCY — cross-screen guard (one fixed dataset, every scree
     expect(scorecard.net).toBeCloseTo(grossA - trueExpensesA, 6);
   });
 
+  // PROFIT EXPLAINER (batch D item 8): settlements profit − own expenses −
+  // profit is 0.00 on every screen's figure, both scopes, every window.
+  it('profit explainer: A − B − C = 0.00 for Dashboard and Scorecard, truck and fleet scope', () => {
+    for (const truckScope of ['ta', null]) {
+      const dashboard = buildPeriodScopedCpm('yearly', weekEndings, trucks, settlements, [], deductions, [], maintenanceRecords, [], [], truckScope, undefined, now);
+      const scorecard = computeKpis({ trucks, settlements, loads: [], deductions, fuelPurchases: [], maintenanceRecords, tolls: [], reimbursements: [], truckScope, window: null });
+      for (const k of [dashboard.kpi!, scorecard]) {
+        expect(k.explanation!.residual).toBe(0);
+        expect(k.explanation!.profit).toBe(Math.round(k.net * 100) / 100);
+      }
+      expect(dashboard.kpi!.explanation!.settlementsProfit).toBeCloseTo(scorecard.explanation!.settlementsProfit, 2);
+    }
+  });
+
   it('"All Trucks" scope: both major one-offs (a deduction AND a maintenance_records row) are excluded from the fleet-wide CPM', () => {
     const fleetWide = computeKpis({
       trucks,

@@ -37,6 +37,8 @@ amount. You are solely responsible for verifying every figure, and for all
 decisions about tax filings, quarterly estimated payments, entity
 elections (including any S-Corp election), and payroll compliance.
 
+**Acknowledgment (added 2026-10-31, draft):** the App gives estimates only; before first use (and again whenever this text version changes) every user must tick "I understand" on a "Before you start" screen, and the acceptance date and text version are recorded with the account. See docs/decisions/estimate-notice.md.
+
 ### 2. No professional relationship
 
 Use of the App does not create an accountant-client, attorney-client,

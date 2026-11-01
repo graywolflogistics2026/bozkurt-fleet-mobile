@@ -3,6 +3,7 @@ import { ACCOUNTANT_EXPORT_COLORS } from '../accountantPackageColors';
 import { buildLineItems, buildScheduleCTotals, groupLineItemsByScheduleCBucket } from '../accountantPackage';
 import type { LineItem, GroupedScheduleCCategory, OwnersEquitySummary } from '../accountantPackage';
 import { formatMonthLabel } from '@/src/i18n/format';
+import { localeNotice } from '@/src/legal/__tests__/localeNotice';
 
 // FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase) — the
 // PDF and Excel exports share this EXACT same generated HTML (the screen
@@ -98,6 +99,7 @@ const baseStrings: AccountantReportStrings = {
   footerNonDeductibleNote: 'Advances/escrow non-deductible.',
   footerOwnerPaidNote: 'Owner paid = contributions.',
   disclaimer: 'Estimates only.',
+  estimateNotice: localeNotice(),
 };
 
 function baseInput(overrides: Partial<AccountantReportInput> = {}): AccountantReportInput {

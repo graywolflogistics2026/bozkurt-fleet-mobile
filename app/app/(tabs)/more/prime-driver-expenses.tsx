@@ -45,6 +45,9 @@ import { buildPrimeDriverExpenseReportHtml, buildPrimeDriverExpenseReportFilenam
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, LegalFootnote, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { EstimateBanner } from '@/src/components/EstimateBanner';
+import { estimateNoticeStrings } from '@/src/legal/estimateNotice';
+import { BRAND_NAME } from '@/src/brand';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { todayDateOnly } from '@/src/lib/dateOnly';
 import { numOrNull } from '@/src/lib/number';
@@ -616,6 +619,7 @@ export default function PrimeDriverExpensesScreen() {
       grandTotalLabel: t('primeDriverExpenses.grandTotal'),
       noEntriesLabel: t('primeDriverExpenses.noEntries'),
       disclaimer: t('primeDriverExpenses.disclaimer'),
+      estimateNotice: estimateNoticeStrings((k, o) => t(k, o) as string, BRAND_NAME, t('estimate.primeNote')),
     };
   }
 
@@ -676,6 +680,7 @@ export default function PrimeDriverExpensesScreen() {
             (invariant #8) but rendered via the SAME shared LegalFootnote
             component, which already accepted custom children before this
             pass. */}
+        <EstimateBanner note={t('estimate.primeNote')} />
         <LegalFootnote>{t('primeDriverExpenses.disclaimer')}</LegalFootnote>
 
         <Text style={styles.sectionTitle}>{t('primeDriverExpenses.yearLabel')}</Text>

@@ -2536,7 +2536,10 @@
     "unassignedBody": "{{amount}} toplamındaki {{count}} Settlement'ın kamyonu ayarlanmamış, bu yüzden yukarıdaki hiçbir kamyonun rakamlarına dahil değiller.",
     "unassignedFixLink": "Kamyonları Settlements ekranında atayın →",
     "fleetTotalsTitle": "Filo Toplamları",
-    "allocationNote": "Filo geneli maliyetler (sigorta, muhasebe ücretleri, izinler ve belirli bir kamyonu olmayan diğer masraflar), her kamyona toplam filo mil payına göre dağıtılır — bu bir tahsis işlemidir, doğrudan bir maliyet değildir."
+    "allocationNote": "Filo geneli maliyetler (sigorta, muhasebe ücretleri, izinler ve belirli bir kamyonu olmayan diğer masraflar), her kamyona toplam filo mil payına göre dağıtılır — bu bir tahsis işlemidir, doğrudan bir maliyet değildir.",
+    "profitHome": "Kâr (Ana sayfadaki gibi)",
+    "afterTruckCost": "Tahmini kamyon maliyetinden sonra",
+    "rankedBy": "Tahmini kamyon maliyetinden sonraki kâra göre sıralanır."
   },
   "dataCleanup": {
     "title": "Veri Temizliği",
@@ -3024,5 +3027,71 @@
       "negative": "Mil negatif olamaz."
     },
     "saveFailedTitle": "Kaydedilemedi"
+  },
+  "profitExplainer": {
+    "title": "Kârın nereden geliyor",
+    "sentence_one": "Settlement'larına göre kârın {{settlements}}. {{when}} kendi eklediğin {{own}} gider var (1 kalem), o yüzden kârın {{profit}}.",
+    "sentence_other": "Settlement'larına göre kârın {{settlements}}. {{when}} kendi eklediğin {{own}} gider var ({{count}} kalem), o yüzden kârın {{profit}}.",
+    "when": {
+      "thisWeek": "Bu hafta",
+      "lastWeek": "Geçen hafta",
+      "week": "O hafta",
+      "period": "Bu dönemde"
+    },
+    "primeMatch": "{{profit}} kârın doğrudan settlement'larından geliyor ve taşıyıcının basılı ekstresiyle uyuşuyor.",
+    "fromSettlements": "{{profit}} kârın doğrudan settlement'larından geliyor.",
+    "mismatch_one": "1 haftada kalemler taşıyıcının basılı ekstresiyle uyuşmuyor. Kâr basılı ekstreden alınıyor; buna bir bakmak gerek.",
+    "mismatch_other": "{{count}} haftada kalemler taşıyıcının basılı ekstresiyle uyuşmuyor. Kâr basılı ekstreden alınıyor; buna bir bakmak gerek.",
+    "unexplained": "Açıklanamayan fark {{amount}} — buna bir bakmak gerek.",
+    "depositLine": "Banka yatırımı taşıyıcının rakamı olarak kalır.",
+    "settlements": "Settlement'larına göre kâr",
+    "label": {
+      "verified_prime": "Doğrulandı",
+      "totals_match": "Toplamlar uyuşuyor",
+      "unverified": "Doğrulanmadı"
+    },
+    "own": "Kendi giderlerin",
+    "ownCount_one": "1 kalem",
+    "ownCount_other": "{{count}} kalem",
+    "showRows": "Kalemleri göster",
+    "hideRows": "Kalemleri gizle",
+    "result": "Kârın",
+    "notCountedTitle": "Sayılmayanlar ve nedeni",
+    "reason": {
+      "meals_per_diem": "yemek, per diem kapsamında",
+      "advance": "avans geri ödemesi",
+      "escrow": "escrow, tutulan kendi paran",
+      "non_deductible": "indirilemez",
+      "duplicate_fuel": "zaten bir settlement'ta var"
+    },
+    "duplicateTitle": "Olası mükerrer kayıt",
+    "duplicateBody": "{{date}} tarihli {{amount}}, taşıyıcının zaten kestiği bir satıra benziyor ({{label}}). Tutulsun mu, silinsin mi?",
+    "keep": "Tut",
+    "remove": "Sil",
+    "removeConfirmTitle": "Bu gider silinsin mi?",
+    "removeConfirmBody": "{{label}} — {{amount}}. Yalnızca kendi kaydın silinir; settlement satırı kalır.",
+    "removeFailed": "Silinemedi",
+    "keepFailed": "Kaydedilemedi",
+    "needsDb": "Bunun için PENDING_SQL §83 veritabanı güncellemesi gerekiyor."
+  },
+  "estimate": {
+    "headline": "SADECE TAHMİNDİR - VERGİ TAVSİYESİ DEĞİLDİR.",
+    "body": "{{brand}} bir kayıt tutma ve tahmin aracıdır; vergi beyannamesi hazırlayıcısı, muhasebeci veya hukuk bürosu değildir. Rakamlar belgelerinden yapay zekâ ile üretilmiş tahminlerdir ve yanlış olabilir. Beyan vermeden veya ödeme yapmadan önce her şeyi lisanslı bir vergi uzmanıyla doğrula.",
+    "strip": "SADECE TAHMİNDİR - VERGİ TAVSİYESİ DEĞİLDİR",
+    "stripHint": "Tam metni açar",
+    "preparedBy": "Sahibi tarafından yapay zekâ tahminleriyle hazırlanmıştır. Bir CPA tarafından incelenmemiştir.",
+    "footer": "SADECE TAHMİNDİR - VERGİ TAVSİYESİ DEĞİLDİR. Lisanslı bir vergi uzmanıyla doğrula.",
+    "primeNote": "Kayıt tutma yardımcısıdır. Muhasebe veya vergi belgesi değildir.",
+    "forecastNote": "Öngörü. Sadece tahmindir.",
+    "ack": {
+      "title": "Başlamadan önce",
+      "bullet1": "Bu uygulamadaki her rakam bir tahmindir.",
+      "bullet2": "Vergi, hukuk veya muhasebe tavsiyesi değildir.",
+      "bullet3": "Beyan vermeden veya ödeme yapmadan önce her şeyi lisanslı bir vergi uzmanıyla doğrula.",
+      "checkbox": "Anladım",
+      "continue": "Devam",
+      "checkFirst": "Devam etmek için \"Anladım\" kutusunu işaretle ve Koşulları sonuna kadar kaydır.",
+      "acceptedOn": "Bu bildirimi {{date}} tarihinde kabul ettin (sürüm {{version}})."
+    }
   }
 }

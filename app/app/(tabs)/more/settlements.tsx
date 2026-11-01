@@ -45,6 +45,7 @@ import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/
 import { DestinationSummary } from '@/src/components/DestinationSummary';
 import { isDocumentNeedsReview, isSettlementNeedsReview } from '@/src/import/needsReview';
 import { WeekReviewCard, WeekReviewChip } from '@/src/components/WeekReviewCard';
+import { ProfitExplainerCard, ProfitExplainerLine } from '@/src/components/ProfitExplainer';
 import { computeSettlementWeekKpi, primeDepositsYtd } from '@/src/stats/settlementWeek';
 import { lineItemsIncomplete, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
 import { WeekPagesSection } from '@/src/components/IncompleteLineItemsNotice';
@@ -257,6 +258,23 @@ export default function Settlements() {
   // period-filtered first, then needs-review, matching the pre-existing
   // filter order on the Deductions screen.
   const periodRows = useMemo(() => filterByPeriod(allRows, (s) => s.week_ending, period), [allRows, period]);
+  // PROFIT EXPLAINER banner (batch D item 8): the list's period and the
+  // active truck scope, computeKpis() as everywhere else.
+  const periodExplanation = useMemo(() => {
+    const startIso = periodStartIso(period);
+    return computeKpis({
+      trucks: trucksQuery.data ?? [],
+      settlements: settlementsQuery.data ?? [],
+      loads: loadsQuery.data ?? [],
+      deductions: dedQuery.data ?? [],
+      fuelPurchases: fuelQuery.data ?? [],
+      maintenanceRecords: maintenanceQuery.data ?? [],
+      tolls: tollsQuery.data ?? [],
+      reimbursements: reimbQuery.data ?? [],
+      truckScope: isAllTrucks ? null : activeTruckId,
+      window: startIso ? { startIso, endIso: '9999-12-31' } : null,
+    }).explanation;
+  }, [period, isAllTrucks, activeTruckId, trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);
   const rows = useMemo(
     () => (needsReviewOnly ? periodRows.filter((s) => isSettlementNeedsReview(s, documentsById)) : periodRows),
     [periodRows, needsReviewOnly, documentsById]
@@ -601,6 +619,12 @@ export default function Settlements() {
           )}
         </Card>
 
+        {periodExplanation && periodExplanation.case !== 'none' && periodExplanation.case !== 'primeMatch' && (
+          <Card style={{ borderColor: periodExplanation.tone === 'warning' ? colors.orange : colors.border, borderWidth: 1 }}>
+            <ProfitExplainerLine explanation={periodExplanation} when="period" />
+          </Card>
+        )}
+
         <DateCheckList items={dateCheckItems} onFix={fixWeekEnding} />
 
         {held.status !== 'not_printed' && <HeldByCarrierCard held={held} />}
@@ -761,6 +785,7 @@ export default function Settlements() {
                   </View>
                 </View>
               )}
+              {selectedWeekKpi && <ProfitExplainerCard explanation={selectedWeekKpi.explanation} when="thisWeek" onNavigate={() => setSelected(null)} />}
               {selectedWeekKpi && <ShareAuditButton kpi={selectedWeekKpi} settlements={[selected]} />}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
                 <View>

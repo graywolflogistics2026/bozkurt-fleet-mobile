@@ -24,6 +24,7 @@ import {
   PrimaryButton,
   SecondaryButton,
 } from '@/src/components/ui';
+import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { HouseholdIncome, HouseholdMember } from '@/src/types/db';
 import { numOrNull } from '@/src/lib/number';
@@ -252,8 +253,8 @@ export default function TaxEstimator() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <ScreenTitle>{t('taxEstimator.title')}</ScreenTitle>
+        <EstimateBanner />
         <FleetScopeLabel variant="fleetOnly" />
-        <LegalFootnote />
 
         {loading ? (
           <Card>

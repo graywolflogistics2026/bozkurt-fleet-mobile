@@ -5141,6 +5141,43 @@ where trigger_name like '%certification%' group by 1, 2 order by 1;
 
 Mirror file: `pending_82.sql` (repo root).
 
+## 83. PROFIT EXPLAINER — "POSSIBLE DUPLICATE: KEEP" (owner decision 2026-10-30, master plan batch D item 8) — NOT YET APPLIED
+
+**Why**: the profit explainer flags an own expense (no settlement link)
+that looks like a settlement-withheld line — same amount, within about 3
+days, similar category — as "possible duplicate: keep / remove". It is
+flagged, never dropped. "Remove" deletes the own row through the normal
+delete path; "keep" must be remembered so the flag does not come back.
+
+**What**: one nullable `duplicate_kept_at timestamptz` column on
+`deductions`, `fuel_purchases`, `maintenance_records` and `tolls`. Nothing
+dropped or altered; no existing column changes. Not a new table, not a
+`profiles` column. RLS unchanged. A kept row only has no settlement link,
+so §82's certification triggers are not affected.
+
+**Safe before it runs**: the flag still shows; "Keep" says the database
+update (§83) is needed and changes nothing. No calculation reads the
+column — it only hides the flag.
+
+```sql
+alter table deductions add column if not exists duplicate_kept_at timestamptz;
+alter table fuel_purchases add column if not exists duplicate_kept_at timestamptz;
+alter table maintenance_records add column if not exists duplicate_kept_at timestamptz;
+alter table tolls add column if not exists duplicate_kept_at timestamptz;
+```
+
+Read-only check (four rows, one per table):
+
+```sql
+select table_name, column_name, data_type from information_schema.columns
+where table_schema = 'public' and column_name = 'duplicate_kept_at'
+order by table_name;
+```
+
+- [ ] 83 run
+
+Mirror file: `pending_83.sql` (repo root).
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

@@ -31,6 +31,7 @@ import { calcGoalProgress, calcGoalStreak, suggestGoalAdjustment } from '@/src/s
 import { buildPeriodicCoachNudgeCandidates, type CoachNudgeCandidate, type CoachNudgeTopic } from '@/src/alerts/periodicCoachNudges';
 import { selectNudgesToShow, recordNudgesShown, ONE_MONTH_MS, type NudgeState } from '@/src/alerts/nudgeFrequency';
 import { yearOf } from '@/src/lib/dateOnly';
+import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
 
 // AI COACH — PROACTIVE, PERIODIC COACHING (owner decision 2026-08-24, NEXT
 // PASS item E). Reuses the SAME profiles.nudge_state column D3 already
@@ -158,6 +159,23 @@ export function useProactiveCoach() {
     [trucksQuery.data, settlementsQuery.data, loadsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]
   );
   const latestCpm = latestKpi.cpm;
+  // PROFIT EXPLAINER (batch D item 8) for the reviewed week, fleet-wide like
+  // the rest of the coach: settlements profit − own expenses = profit.
+  const weeklyReviewExplanation = useMemo(() => {
+    if (!latestSettlement?.week_ending) return null;
+    return computeKpis({
+      trucks: trucksQuery.data ?? [],
+      settlements: settlementsQuery.data ?? [],
+      loads: loadsQuery.data ?? [],
+      deductions: deductionsQuery.data ?? [],
+      fuelPurchases: fuelQuery.data ?? [],
+      maintenanceRecords: maintenanceQuery.data ?? [],
+      tolls: tollsQuery.data ?? [],
+      reimbursements: reimbursementsQuery.data ?? [],
+      truckScope: null,
+      window: { startIso: weekStartFromEnding(latestSettlement.week_ending), endIso: latestSettlement.week_ending },
+    }).explanation;
+  }, [latestSettlement, trucksQuery.data, settlementsQuery.data, loadsQuery.data, deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data]);
   const cpmComparisonRpm = trailingAvgRpm ?? latestRpm;
 
   const quarterlyDeadline = taxQuery.data ? nextQuarterlyDeadline(taxQuery.data.taxYearData.quarterly_deadlines) : null;
@@ -484,6 +502,7 @@ export function useProactiveCoach() {
     // correctly localized regardless of ai-advisor's own deploy/locale
     // state. The UI shows this whenever `weeklyReview` above is null.
     weeklyReviewFallback,
+    weeklyReviewExplanation,
     // AI COACH — FIX STALE CACHE (owner decision) — true once loading has
     // settled and there is genuinely no settlement to review (never
     // imported one, or every one was deleted). The screen's own job is to

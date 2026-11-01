@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { NativeScrollEvent, NativeSyntheticEvent, ScrollView, Text, View } from 'react-native';
+import { NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { TOS_BODY, TOS_TITLE } from '@/src/config/termsOfUse';
-import { isScrolledNearBottom, isScrollGateSatisfied } from '@/src/legal/tosScrollGate';
+import { canAcceptTos, isScrolledNearBottom, isScrollGateSatisfied } from '@/src/legal/tosScrollGate';
+import { EstimateAcknowledgmentText } from '@/src/components/EstimateBanner';
 import { PrimaryButton, ErrorText, MutedText } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 
@@ -28,8 +29,11 @@ export default function Tos() {
   const [contentHeight, setContentHeight] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Batch D item 10: required "I understand" checkbox (never pre-ticked).
+  const [understood, setUnderstood] = useState(false);
 
   const gateSatisfied = isScrollGateSatisfied({ scrolledToEnd, containerHeight, contentHeight });
+  const canContinue = canAcceptTos({ understood, scrollGateSatisfied: gateSatisfied });
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
@@ -57,7 +61,7 @@ export default function Tos() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.lg }}>
       <Text style={{ color: colors.text, fontSize: typography.size.xl, fontWeight: '700', marginBottom: spacing.sm }}>
-        {TOS_TITLE}
+        {t('estimate.ack.title')}
       </Text>
       <ScrollView
         style={{
@@ -74,11 +78,35 @@ export default function Tos() {
         onLayout={(e) => setContainerHeight(e.nativeEvent.layout.height)}
         onContentSizeChange={(_w, h) => setContentHeight(h)}
       >
+        <EstimateAcknowledgmentText textColor={colors.text} />
+        <Text style={{ color: colors.text, fontSize: typography.size.lg, fontWeight: '700', marginTop: spacing.lg, marginBottom: spacing.xs }}>{TOS_TITLE}</Text>
         <Text style={{ color: colors.text, fontSize: typography.size.sm, lineHeight: 20 }}>{TOS_BODY}</Text>
       </ScrollView>
-      {!gateSatisfied && <MutedText style={{ marginBottom: spacing.xs }}>{t('tos.scrollHint')}</MutedText>}
+      <Pressable
+        onPress={() => setUnderstood((v) => !v)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: understood }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm }}
+      >
+        <View
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: understood ? colors.accent : colors.text,
+            backgroundColor: understood ? colors.accent : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {understood && <Text style={{ color: colors.text, fontWeight: '900' }}>✓</Text>}
+        </View>
+        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{t('estimate.ack.checkbox')}</Text>
+      </Pressable>
+      {!canContinue && <MutedText style={{ marginBottom: spacing.xs }}>{gateSatisfied ? t('estimate.ack.checkFirst') : t('tos.scrollHint')}</MutedText>}
       <ErrorText>{error}</ErrorText>
-      <PrimaryButton title={t('tos.accept')} onPress={onAccept} loading={loading} disabled={!gateSatisfied} />
+      <PrimaryButton title={t('estimate.ack.continue')} onPress={onAccept} loading={loading} disabled={!canContinue} />
       <Text
         onPress={() => signOut()}
         style={{ color: colors.muted, marginTop: spacing.md, textAlign: 'center', fontSize: typography.size.sm }}
