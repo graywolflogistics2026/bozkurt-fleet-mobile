@@ -1048,12 +1048,6 @@ under each is unchanged original wording.
   `docs/decisions/master-plan-2026-10.md`.
 - **Database** (`docs/PENDING_SQL.md`, 83 sections): everything is applied
   except:
-  - §83 profit explainer "possible duplicate: keep" (`duplicate_kept_at`) —
-    NOT YET APPLIED (batch D). `pending_83.sql` at the root; client safe
-    before it runs (Keep shows "needs the database update").
-  - §82 week review/certify + loaded/empty miles — NOT YET APPLIED (batch C).
-    `pending_82.sql` at the root; client safe before it runs. Redeploy
-    ai-import (milesLines prompt addition).
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
   - §72 remove business-balance tracking — status UNCONFIRMED.
@@ -1063,7 +1057,10 @@ under each is unchanged original wording.
     `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
     applied and ai-import redeployed — owner confirmed 2026-10-17, their
     mirror files removed, SQL inlined. §79, §80, §81 applied — owner
-    confirmed 2026-10-30, mirror files removed, SQL inlined.)
+    confirmed 2026-10-30, mirror files removed, SQL inlined. §82 and §83
+    applied — owner confirmed 2026-10-31, mirror files removed, SQL
+    inlined; the batch C ai-import redeploy (milesLines) is not tracked
+    here.)
 - **Native build**: the owner's device reported "embedded build (no OTA
   update)" on 2026-08-28. A new native build (`eas build --profile
   preview`) is NOT yet installed. Until it is, OTA-only fixes may not be

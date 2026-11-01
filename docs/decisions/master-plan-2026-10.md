@@ -354,8 +354,8 @@ Start now with the protocol, then batch 0b.
 | 0b | Done (see the batch 0b notes below) | 95f9207 |
 | A | Done: items 1, 2, 7 (PENDING_SQL §79, §80 to run) | 875f4d2 |
 | B | Done: vehicle purchase tax treatment (PENDING_SQL §81 applied 2026-10-30) | 651dec6 |
-| C | Done: items 5, 6 (PENDING_SQL §82 to run, redeploy ai-import) | e331821 (+ 62fc2b5 one save gate) |
-| D | Done: items 8, 10 (PENDING_SQL §83 to run; no redeploy) | (this commit) |
+| C | Done: items 5, 6 (PENDING_SQL §82 applied 2026-10-31; redeploy ai-import) | e331821 (+ 62fc2b5 one save gate) |
+| D | Done: items 8, 10 (PENDING_SQL §83 applied 2026-10-31; no redeploy) | 5ac99cd |
 | E | Not started | — |
 
 ## Batch D notes (2026-10-31)
