@@ -226,5 +226,20 @@ reads agree AND the arithmetic chains pass (step C item 1).
   needs ai-import redeploy + eas update; results from the tablet pending)
 - [ ] Step B: statement pages first, page by page, structured output
   (models per the 2026-11-01 full Opus 5.5 decision; also make the
-  Diagnostics Fable line "Not used" and add the AI_IMPORT_ALLOW_FABLE test)
+  Diagnostics Fable line "Not used" and add the AI_IMPORT_ALLOW_FABLE test).
+  Shipped as separate changes (CLAUDE.md working rule 9), each followed by
+  one real-PDF tablet import:
+  - [x] B1 (2026-11-01): Prime never one whole-document call; one page per
+    call, one page at a time. Killed-worker and misread-deposit tests pass.
+  - [ ] B2: models by env (all Opus), adaptive thinking + effort, 5 Opus
+    retries on busy/5xx/429, no silent switch (AI_IMPORT_FALLBACK_MODEL),
+    AI_IMPORT_ALLOW_FABLE hard switch + test, Diagnostics Fable "Not used",
+    cost log (needs SQL: ai_usage_log columns).
+  - [ ] B3: structured output (json_schema) for every extraction call; 3
+    parse/schema retries; max_tokens retry with more room; refusal = failed
+    page; scrubbed raw reply of failed pages kept (needs SQL). Schema
+    design table first (working rule 2).
+  - [ ] B4: headline pages first (p1, p3, p4, p5-6); line rows read after
+    the card is ready, never gate; only reconciling rows stored.
+  - [ ] B5: clean failure screen + progress line text (app, eas update).
 - [ ] Step C: dual read and model profiles (all Opus, per 2026-11-01)

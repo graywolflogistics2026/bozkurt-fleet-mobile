@@ -129,7 +129,10 @@ export const UNKNOWN_LAYOUT_PAGE_CAP = 40;
 export const MAX_IMPORT_PAGES = 150;
 export const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_PAGE_ATTEMPTS = 2;
-export const PAGE_CONCURRENCY = 2;
+// ONE PAGE AT A TIME (statement reading plan step B1, owner 2026-10-31):
+// a worker stopped by the platform re-reads at most the one page that was
+// in flight. Speed does not matter; reliability does.
+export const PAGE_CONCURRENCY = 1;
 export const RATE_LIMIT_MAX_WAIT_MS = 60_000;
 // Runaway guard only: a 150-page Prime file needs about 10 runs.
 export const MAX_RUNS_PER_JOB = 40;
@@ -405,8 +408,18 @@ export function newRereadPlan(old: Pick<JobPlan, 'mediaType' | 'totalPages' | 'f
   };
 }
 
+// NO WHOLE-DOCUMENT CALL FOR PRIME (statement reading plan step B1, owner
+// 2026-10-31): one call over a whole small PDF could save a misread
+// deposit, because nothing compared it page by page. Now every multi-page
+// PDF is classified first. A Prime document (any size) is read one page
+// per call. Only a NON-Prime PDF small enough still gets one call
+// (smallEnoughForWholeDocument); a photo or a one-page PDF is always one
+// call (there is nothing to split).
 export function choosesWholeDocument(plan: Pick<JobPlan, 'mediaType' | 'totalPages' | 'fileBytes'>): boolean {
-  if (plan.mediaType.startsWith('image/')) return true;
+  return plan.mediaType.startsWith('image/') || plan.totalPages <= 1;
+}
+
+export function smallEnoughForWholeDocument(plan: Pick<JobPlan, 'mediaType' | 'totalPages' | 'fileBytes'>): boolean {
   return plan.totalPages <= WHOLE_DOC_MAX_PAGES && plan.fileBytes <= WHOLE_DOC_MAX_BYTES;
 }
 
@@ -718,6 +731,11 @@ export async function runJobStep(d: JobDeps): Promise<StepResult> {
     if (c.isPrime && c.boundary != null) {
       plan.layout = 'prime_statement';
       plan.pages = primePagePlan(plan.totalPages, c.pages, c.boundary);
+    } else if (!c.isPrime && !plan.wholeDocument && smallEnoughForWholeDocument(plan)) {
+      // Not Prime (or the classification failed) and small: one call, as
+      // before. Never again after a whole-document call already failed.
+      plan.phase = 'whole';
+      return;
     } else {
       plan.layout = 'physical';
       plan.pages = physicalPagePlan(plan.totalPages, c.pages);

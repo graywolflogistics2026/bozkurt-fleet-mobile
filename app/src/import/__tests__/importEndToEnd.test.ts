@@ -139,8 +139,8 @@ describe('8/21 golden week: server job engine -> app gate -> certify', () => {
     expect(step).toBe('certify');
   });
 
-  // FAILS on the engine before change 2 (one page per call + dual read).
-  it.failing('17 pages with a killed worker: resumes without redoing finished pages, then the same card', async () => {
+  // Failed before step B1 (two pages at a time); passes since B1.
+  it('17 pages with a killed worker: resumes without redoing finished pages, then the same card', async () => {
     const sim = await engine(doc0821(attachmentMix(11)), { killAt: [{ invocation: 2, afterMs: 20_000 }] });
     expect(sim.invocations[1].killed).toBe(true);
     expect(sim.row.status).toBe('ready');
@@ -178,7 +178,7 @@ describe('8/14 golden week (MILES row, balance forward 1,202.92-)', () => {
     expect(step).toBe('certify');
   });
 
-  // FAILS on the engine before change 2 (one page per call + dual read).
+  // Step C (dual read). Still fails: one read per page until then.
   it.failing('two reads of the statement page disagree on the deposit: a third read decides, the agreed number wins', async () => {
     const sim = await engine(doc0814({ 6: { readings: [PAGE6_MISREAD, PAGES_0814[5], PAGES_0814[5]] } }));
     expect(sim.row.status).toBe('ready');
@@ -213,8 +213,9 @@ describe('8/14 golden week (MILES row, balance forward 1,202.92-)', () => {
     expect(st[0].certified_at).toBe('2026-10-31T12:00:00.000Z');
   });
 
-  // FAILS on the engine before change 2 (one page per call + dual read).
-  it.failing('a reading that fails the gate stores nothing at all', async () => {
+  // Failed before step B1 (an 8-page Prime PDF was one whole-document
+  // call, so the misread page never reached the gate); passes since B1.
+  it('a reading that fails the gate stores nothing at all', async () => {
     const sim = await engine(doc0814({ 6: { readings: [PAGE6_MISREAD] } }));
     const reading = sanitizeExtraction(sim.row.resultJson as Extraction);
     mockClient = createFakeSupabase({ profiles: [{ user_id: 'user-1', business_balance: 0 }] });

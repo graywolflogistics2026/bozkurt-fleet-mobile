@@ -153,23 +153,36 @@ describe('the 17-page Prime PDF (6 content pages + 11 attachments) — the stall
 });
 
 describe('whole document (<= 8 pages) and its timeout', () => {
-  it('a normal 8-page week is one call', async () => {
+  // Step B1 (owner 2026-10-31): a Prime PDF of any size is never one
+  // whole-document call — it is classified, then read one page per call.
+  it('an 8-page PRIME week is classified, then read one page per call — never one whole-document call', async () => {
     const doc = primeDoc(6, []);
     doc.wholeDocMs = 85_000;
     const sim = await simulateImport(doc);
-    expect(sim.modelCalls).toMatchObject({ whole: 1, classify: 0, content: 0 });
-    expect(sim.invocations).toHaveLength(1);
+    expect(sim.modelCalls.whole).toBe(0);
+    expect(sim.modelCalls.classify).toBe(1);
+    expect([...sim.pageCalls.keys()].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(sim.row.status).toBe('ready');
+    expect(sim.violations).toEqual([]);
+  });
+
+  it('a small NON-Prime PDF is still one whole-document call (after classification)', async () => {
+    const doc = unknownCarrierDoc(6);
+    doc.wholeDocMs = 85_000;
+    const sim = await simulateImport(doc);
+    expect(sim.modelCalls).toMatchObject({ whole: 1, classify: 1, content: 0 });
     expect(sim.row.status).toBe('ready');
   });
 
   it('a whole-document timeout continues the page plan in a NEW invocation, never in the leftover seconds', async () => {
-    const doc = primeDoc(6, []);
+    const doc = unknownCarrierDoc(6);
     doc.wholeDocMs = 130_000;
     const sim = await simulateImport(doc);
     expect(sim.modelCalls.whole).toBe(1);
-    expect(sim.invocations[0].result?.kind).toBe('continued');
-    expect(sim.invocations[0].result?.modelCalls).toBe(1);
-    expect(sim.modelCalls.classify).toBe(1);
+    // classification, then the whole call; the page plan runs in a new invocation
+    const first = sim.invocations.findIndex((i) => i.result?.kind === 'continued');
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(sim.modelCalls.classify).toBe(2);
     expect(sim.row.status).toBe('ready');
     expect(sim.violations).toEqual([]);
   });
@@ -182,9 +195,9 @@ describe('resume: a killed worker never redoes a finished page', () => {
     expect(sim.row.status).toBe('ready');
     const doneOnce = [...sim.pageCalls.entries()].filter(([, n]) => n === 1).map(([p]) => p);
     const twice = [...sim.pageCalls.entries()].filter(([, n]) => n > 1).map(([p]) => p);
-    // Only the page(s) in flight when the worker was stopped were read again.
-    expect(twice.length).toBeGreaterThan(0);
-    expect(twice.length).toBeLessThanOrEqual(2);
+    // Only the ONE page in flight when the worker was stopped was read
+    // again (one page at a time, step B1).
+    expect(twice.length).toBe(1);
     expect(doneOnce.length).toBeGreaterThan(5);
     // The stopped page counted one attempt ('worker_stopped'), then succeeded.
     for (const p of twice) expect(sim.row.results[String(p)].status).toBe('done');

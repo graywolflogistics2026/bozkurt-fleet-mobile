@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- STATEMENT READING step B1 (owner 2026-11-01): no whole-document call
+  for Prime. jobEngine.ts: every multi-page PDF is classified first; Prime
+  (any size) -> one page per call; non-Prime <= 8 pages / 8 MB -> one call
+  as before; PAGE_CONCURRENCY 2 -> 1 (a stopped worker re-reads at most one
+  page). Two e2e it.failing tests now pass (killed worker; misread deposit
+  stores nothing). Models unchanged. No SQL. Redeploy ai-import. No eas update.
 - MODEL DECISION (owner 2026-11-01): full Opus 5.5 for every extraction
   role (statement/lines/attachments env settings, effort medium/low/low);
   Fable not used (AI_IMPORT_ALLOW_FABLE=false hard switch); no silent
