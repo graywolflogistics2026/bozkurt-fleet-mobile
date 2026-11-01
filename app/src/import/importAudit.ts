@@ -4,7 +4,8 @@ import type { Extraction } from './types';
 import { parseAmount } from './amount';
 import { scrubBankDigits, scrubBankDigitsInText } from './bankDigits';
 import type { ReviewInputs } from './reviewVerdict';
-import { lineDetailsDifference } from './reviewVerdict';
+import { lineDetailsDifference, reviewInputsOf } from './reviewVerdict';
+import { GATE_FAIL_REASON_KEY } from './settlementGate';
 
 // SHARE AUDIT ON THE IMPORT PREVIEW (owner decision 2026-10-17, item 5):
 // every line the AI read WITH its amount, every check result and every
@@ -99,4 +100,22 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
   }
   out.push(...estimateNoticeTextFooter(notice));
   return scrubBankDigitsInText(out.join('\n'));
+}
+
+// SIMPLE IMPORT FLOW (batch D2 2.1): the report shared from COULD NOT READ
+// — the one-line reason, then the existing audit text (bank digits removed;
+// nothing of the owner's beyond what the audit already carries). No
+// reading at all: the reason line only.
+export function couldNotReadReport(
+  extraction: Extraction | null,
+  reason: import('./settlementGate').GateFailReason | 'job_failed',
+  t: T
+): string {
+  const reasonKey = reason === 'job_failed' ? 'importFlow.reason.jobFailed' : GATE_FAIL_REASON_KEY[reason];
+  const head = `${t('importFlow.couldNotReadTitle')}
+${t(reasonKey)}`;
+  if (!extraction || extraction.docType !== 'settlement') return scrubBankDigitsInText(head);
+  return scrubBankDigitsInText(`${head}
+
+${buildImportAuditText(extraction, reviewInputsOf(extraction), t)}`);
 }

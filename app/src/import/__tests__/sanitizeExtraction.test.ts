@@ -17,6 +17,7 @@ describe('sanitizeExtraction is the only composition of the read guards', () => 
 
   it('saveExtraction() runs the same save gate the preview renders', () => {
     const src = read('src/data/aiImportSave.ts');
-    expect(src).toMatch(/const gateFailures = saveGateFailures\(d\);/);
+    expect(src).toMatch(/const gate = evaluateSettlementGate\(d, /);
+    expect(src).not.toMatch(/reconciliationOverride\.length/);
   });
 });

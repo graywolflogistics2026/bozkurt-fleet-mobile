@@ -216,10 +216,20 @@ Full: `docs/decisions/golden-settlement.md`.
 whose Statement of Income and Expense passed its GATE (every check inside
 the statement + statement week ending; 2026-10-17) counts from
 that statement (`settlements.statement`, §77); its linked rows are detail
-only. Every week carries Verified / Totals match / Unverified. The bank
-deposit is READ from the statement, never computed, and is never labeled
-profit. Past the gate, line-item mismatches only warn (amber, needs-review).
+only. The bank deposit and the amount owed to the carrier are READ from
+the statement, never computed, and never labeled profit.
 Full: `docs/decisions/prime-statement-source.md`.
+
+**Simple import flow (batch D2, 2026-10-31).** A settlement shows only
+READING / CHECK AND CERTIFY / COULD NOT READ. ONE pass/fail gate
+(`app/src/import/settlementGate.ts` `evaluateSettlementGate()`), used by
+the card AND `saveExtraction()`; no override, no "Save anyway". A fail
+re-reads automatically up to 2 times, then COULD NOT READ (nothing saved).
+Line details that disagree with the passed statement: the week saves
+without line rows (`statement.linesNotSaved`). Certify and add is one step;
+certify is the LAST write. The only week status is "Certified on <date>" /
+"Not certified [Certify]" — no Verified/Unverified labels, no review
+lists. Full: `docs/decisions/simple-import-flow.md`.
 
 **Printed dates; held by carrier (2026-10-29).** The model never
 interprets a date: ai-import returns dates as printed and
@@ -1046,7 +1056,9 @@ under each is unchanged original wording.
 
 ## Current state (2026-10-31)
 
-- **Code**: `main` after master plan batch D (profit explainer, estimates-
+- **Code**: `main` after batch D2 (owed-to-carrier read from the latest
+  statement; simple import flow + certify). Before it: batch E (scanner),
+  batch D (profit explainer, estimates-
   only notice + acknowledgment gate), pushed. Ships via `eas update --branch preview`. Plan progress:
   `docs/decisions/master-plan-2026-10.md`.
 - **Database** (`docs/PENDING_SQL.md`, 83 sections): everything is applied

@@ -160,7 +160,9 @@
       },
       "profitNotDeposits": "लाभ, जमा नहीं",
       "depositedToBank": "आपके बैंक में जमा: {{amount}}",
-      "owedToCarrier": "कैरियर का बकाया: {{amount}}"
+      "owedToCarrier": "{{date}} तक {{amount}} बकाया",
+      "owedSheetTitle": "कैरियर का बकाया",
+      "owedSheetBody": "Prime इसे आपके अगले settlements से काट लेगा। यह कोई बिल नहीं है।"
     },
     "overview": {
       "expenses": "व्यय"
@@ -3102,5 +3104,61 @@
     "pagesDroppedTitle": "पेज सीमा",
     "pagesDroppedBody_one": "केवल पहले {{max}} पेज रखे गए; {{count}} और पेज छूट गया। उसे अलग से स्कैन करें।",
     "pagesDroppedBody_other": "केवल पहले {{max}} पेज रखे गए; {{count}} और पेज छूट गए। उन्हें अलग से स्कैन करें।"
+  },
+  "importFlow": {
+    "reading": "आपका स्टेटमेंट पढ़ा जा रहा है। ऐप खुला रखें। 17 पेज के लिए आमतौर पर 2-4 मिनट लगते हैं।",
+    "readingShort": "आपका स्टेटमेंट पढ़ा जा रहा है…",
+    "statusReading": "पढ़ा जा रहा है",
+    "statusReady": "जाँच के लिए तैयार",
+    "statusFailed": "पढ़ा नहीं जा सका",
+    "chipCouldNotRead": "एक स्टेटमेंट पढ़ा नहीं जा सका",
+    "checkAndCertify": "जाँचें और प्रमाणित करें",
+    "certifyTitle": "इन आँकड़ों को अपने स्टेटमेंट से मिलाएँ",
+    "certifySubtitle": "जमा राशि को अपने बैंक ऐप से मिलाएँ।",
+    "weekEnding": "सप्ताह समाप्ति",
+    "revenue": "राजस्व",
+    "netDue": "शुद्ध देय",
+    "deposited": "आपके बैंक में जमा",
+    "owedToCarrier": "कैरियर का बकाया",
+    "miles": "मील",
+    "milesSplit": "{{total}} ({{loaded}} लोडेड / {{empty}} खाली)",
+    "perDiemDays": "Per diem दिन (0-7)",
+    "estimatedProfit": "अनुमानित लाभ",
+    "linesWillNotBeSaved": "पंक्तियों का विवरण आपके स्टेटमेंट से मेल नहीं खाया। सप्ताह स्टेटमेंट से जोड़ा जाता है; पंक्तियों का विवरण सहेजा नहीं जाता।",
+    "certifyAndAdd": "प्रमाणित करें और मेरी किताबों में जोड़ें",
+    "certifyLine": "मैंने इन आँकड़ों को अपने स्टेटमेंट से मिलाया है। AI द्वारा बनाए गए अनुमान, कर सलाह नहीं।",
+    "showDetails": "विवरण दिखाएँ",
+    "hideDetails": "विवरण छिपाएँ",
+    "couldNotReadTitle": "हम इस स्टेटमेंट को भरोसेमंद तरीके से नहीं पढ़ सके। कुछ भी सहेजा नहीं गया।",
+    "uploadAgain": "फिर से अपलोड करें",
+    "sendReport": "रिपोर्ट भेजें",
+    "reason": {
+      "statementNotRead": "हमें Prime का Statement of Income and Expense नहीं मिला, या उसके सभी टोटल नहीं पढ़ सके।",
+      "statementCheckFailed": "स्टेटमेंट के अपने टोटल हमारे पढ़े अनुसार मेल नहीं खाए।",
+      "grossDiffers": "पहले पेज का राजस्व स्टेटमेंट के TOTAL REVENUE से मेल नहीं खाता।",
+      "netDueDiffers": "राजस्व + प्रतिपूर्ति − कटौतियाँ, पढ़े गए शुद्ध देय के बराबर नहीं है।",
+      "depositDiffers": "जमा राशि शुद्ध देय + पिछले सप्ताह की शेष राशि से मेल नहीं खाती।",
+      "dateMismatch": "स्टेटमेंट पर छपी तारीखें आपस में मेल नहीं खातीं।",
+      "dateUnreadable": "हम सप्ताह समाप्ति की तारीख नहीं पढ़ सके।",
+      "missingFields": "हम राजस्व या शुद्ध देय नहीं पढ़ सके।",
+      "totalsNotPrinted": "यह स्टेटमेंट अपने टोटल नहीं छापता, इसलिए हम इसकी जाँच नहीं कर सकते। कृपया हमें रिपोर्ट भेजें।",
+      "totalsDiffer": "छपे हुए टोटल हमारे पढ़े अनुसार मेल नहीं खाते।",
+      "linesDiffer": "हमारी पढ़ी पंक्तियाँ छपे टोटल के बराबर नहीं होतीं।",
+      "jobFailed": "फ़ाइल पढ़ी नहीं जा सकी।"
+    },
+    "certifiedAdded": "प्रमाणित और जोड़ा गया: {{date}} को समाप्त सप्ताह।",
+    "linesNotSaved": "पंक्तियों का विवरण सहेजा नहीं गया क्योंकि वह आपके स्टेटमेंट से मेल नहीं खाया।",
+    "tryReadingAgain": "फिर से पढ़ने की कोशिश करें",
+    "attachmentsLine": "अटैचमेंट: {{saved}} सहेजे गए, {{read}} पढ़े गए",
+    "read": "पढ़ें",
+    "readAgainStartedTitle": "फिर से पढ़ा जा रहा है",
+    "readAgainStartedBody": "पूरा होने पर, जाँचने वाले आँकड़े इम्पोर्ट सूची से खुलेंगे।",
+    "viewWeek": "यह सप्ताह देखें"
+  },
+  "certify": {
+    "certifiedOn": "{{date}} को प्रमाणित",
+    "notCertified": "प्रमाणित नहीं",
+    "certify": "प्रमाणित करें",
+    "certified": "प्रमाणित"
   }
 }

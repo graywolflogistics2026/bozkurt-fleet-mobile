@@ -192,6 +192,9 @@ export type SettlementStatement = {
   unit?: string | null;
   // HELD BY CARRIER (owner decision 2026-10-29, primeEscrow.ts).
   escrow?: import('./primeEscrow').PrimeEscrow | null;
+  // SIMPLE IMPORT FLOW (batch D2 2.2): the statement passed the gate but
+  // its line details did not reconcile, so no line rows were stored.
+  linesNotSaved?: boolean;
 };
 
 export type StatementDates = {

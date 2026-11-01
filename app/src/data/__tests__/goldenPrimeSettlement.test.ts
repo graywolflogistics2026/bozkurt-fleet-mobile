@@ -15,6 +15,8 @@
 //   Profit Analysis (+ AI Coach rollup)          -> buildProfitAnalysis()
 //   Per-Truck Profitability, Home per-truck card -> buildTruckComparison()
 //   Profit bridge sheet                          -> computeKpis().bridge
+import { evaluateSettlementGate } from '@/src/import/settlementGate';
+import { owedToCarrier, printedTotalCashFlow } from '@/src/stats/owedToCarrier';
 import type { Extraction, ExtractedFuel, ExtractedSettlementDeduction } from '@/src/import/types';
 import type { Deduction, FuelPurchase, Load, Reimbursement, Settlement } from '@/src/types/db';
 
@@ -203,6 +205,8 @@ const STATEMENT = {
   weekTotalOtherIncomeAndExpense: -99.63,
   weekTotalOperatingExpenses: -2899.02,
   weekTotalStatement: 1884.73,
+  // TOTAL CASH FLOW as printed (added 2026-10-31, batch D2 owed check).
+  weekTotalCashFlow: 1884.73,
   settlementToOperator: 1884.73,
   directDeposit: 1884.73,
   // The statement page header's week ending. Added 2026-10-17: the gate
@@ -746,6 +750,12 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('statement route, fuel s
     // R4: Revenue − Expenses = Net Profit on the same card.
     expect(r2(home.kpi!.gross - home.kpi!.expenses.total)).toBe(KEY.profit);
   });
+
+  test('D2: owed to carrier is READ — TOTAL CASH FLOW 1,884.73 > 0, so Home shows nothing', () => {
+    expect(printedTotalCashFlow(rows.settlements[0])).toBe(1884.73);
+    expect(owedToCarrier(rows.settlements, TRUCK_ID)).toEqual({ total: 0, asOf: null, accounts: [] });
+    expect(owedToCarrier(rows.settlements, null).total).toBe(0);
+  });
 });
 
 describe('statement route and line route agree on the golden week', () => {
@@ -774,13 +784,10 @@ describe('self-check: a misread number never becomes a silently wrong profit', (
     expect(check.checks.filter((c) => !c.passed).map((c) => c.id)).toEqual(['operatingExpenses', 'statementTotal']);
   });
 
-  test('"Save anyway, flagged needs-review": profit falls back to the line route and the week is never Verified', async () => {
+  test('D2: there is no "Save anyway" — an old override on the reading is ignored and nothing is saved', async () => {
     const flagged = { ...statementExtraction({ operating: misread() }), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] };
-    const rows = await importGolden(flagged);
-    expect(rows.settlements[0].statement?.savedFlagged).toBe(true);
-    expect(settlementVerification(rows.settlements[0])).toBe('unverified');
-    expect(r2(weekKpi(rows).net)).toBe(KEY.profit); // from the line items, labeled an estimate
-    expect(weekKpi(rows).bridge.estimateFromLineItems).toBe(true);
+    await expect(importGolden(flagged)).rejects.toThrow(/did not pass its checks \(section_fuel_oil_tax\)\. Nothing was saved/);
+    expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
   });
 });
 
@@ -823,7 +830,8 @@ describe('BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13)', () 
     expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: 0, owedToCarrier: 250, source: 'owed_to_carrier' });
     const k = weekKpi(rows);
     expect(k.deposits).toBe(0);
-    expect(k.owedToCarrier).toBe(250);
+    // Batch D2: no KPI sums owed weeks any more (owedToCarrier.ts reads it).
+    expect('owedToCarrier' in k).toBe(false);
   });
 
   test('no code path stores the routing number', async () => {
@@ -863,9 +871,9 @@ describe('SOURCE LABELS (Part 2) — other carriers', () => {
     expect(settlementVerification(rows.settlements[0])).toBe('totals_match');
   });
 
-  test('one without printed totals -> "Unverified"', async () => {
-    const rows = await importGolden(otherCarrier({ totalDeductions: undefined, netPay: 2100 }));
-    expect(settlementVerification(rows.settlements[0])).toBe('unverified');
+  test('D2: one without printed totals is refused ("send report"), nothing saved', async () => {
+    await expect(importGolden(otherCarrier({ totalDeductions: undefined, netPay: 2100 }))).rejects.toThrow(/totals_not_printed/);
+    expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
   });
 
   test('Prime rules never touch it — even a Prime-shaped statement page is ignored', async () => {
@@ -958,9 +966,9 @@ describe('every save path: same gate, same label, same profit (8/21)', () => {
     expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
   });
 
-  test('"Save anyway, flagged" (only offered in the preview) still saves, never Verified', async () => {
-    const rows = await importGolden({ ...PATHS.backgroundJob(misread()), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] });
-    expect(settlementVerification(rows.settlements[0])).toBe('unverified');
+  test('D2: no override path on any save path — an old "Save anyway" flag is refused like any misread', async () => {
+    await expect(importGolden({ ...PATHS.backgroundJob(misread()), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] })).rejects.toThrow(/did not pass its checks/);
+    expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
   });
 });
 
@@ -1081,5 +1089,42 @@ describe('Per-Truck Profitability "Profit" = Home for the same truck and period 
       expect(r2(perTruck)).toBe(2384.36);
       expect(perTruck).toBe(home.kpi!.net);
     }
+  });
+});
+
+// =====================================================================
+// SIMPLE IMPORT FLOW (owner decision 2026-10-31, batch D2 2.5): the 8/21
+// golden week passes the one gate and shows its printed headline numbers.
+describe('batch D2 — the one gate on the 8/21 golden week', () => {
+  const gateOf = (e: Extraction) => evaluateSettlementGate(e, { importDate: '2026-10-29', carrierCodes: PRIME_CODES as never })!;
+
+  test('with the statement page: revenue 4,783.75, net due 1,884.36, deposited 1,884.73, miles 2,327 (2,081 / 246), profit 2,534.36', () => {
+    const gate = gateOf(statementExtraction());
+    expect(gate).toMatchObject({ status: 'pass', lineDetails: 'match' });
+    if (gate.status !== 'pass') return;
+    expect(gate.headline).toMatchObject({
+      weekEnding: WEEK_ENDING,
+      revenue: KEY.revenue,
+      netDue: KEY.netDue,
+      deposited: KEY.deposit,
+      owedToCarrier: 0,
+      miles: KEY.miles,
+      loadedMiles: KEY.loadedMiles,
+      emptyMiles: KEY.emptyMiles,
+      estimatedProfit: KEY.profit,
+      source: 'prime_statement',
+    });
+  });
+
+  test('a Prime reading with only the settlement pages (no statement page) is checked on its printed totals, profit from the lines', () => {
+    const gate = gateOf(goldenExtraction('both'));
+    expect(gate).toMatchObject({ status: 'pass', lineDetails: 'match' });
+    if (gate.status !== 'pass') return;
+    expect(gate.headline).toMatchObject({ revenue: KEY.revenue, netDue: KEY.netDue, estimatedProfit: KEY.profit, source: 'printed_totals' });
+  });
+
+  test('no calculation changed: the saved week still gives profit 2,534.36', async () => {
+    const rows = await importGolden(statementExtraction());
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
   });
 });

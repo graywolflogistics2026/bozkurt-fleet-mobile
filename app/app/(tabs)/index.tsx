@@ -52,6 +52,7 @@ import { useReferralNudge } from '@/src/data/referralNudge';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
 import { useReferralSyncOnce } from '@/src/data/referral';
 import { Screen, ScreenTitle, Card, TappableCard, MutedText, LegalFootnote, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { owedToCarrier, type OwedToCarrier } from '@/src/stats/owedToCarrier';
 import { EstimateStrip } from '@/src/components/EstimateBanner';
 import { useAnimatedNumber } from '@/src/components/AnimatedNumber';
 import { useFormatters } from '@/src/i18n/format';
@@ -233,7 +234,7 @@ function HeroCard({
   profitScore,
   onPress,
   deposited,
-  owedToCarrier,
+  owed,
 }: {
   period: HeroPeriod;
   onPeriodChange: (p: HeroPeriod) => void;
@@ -244,13 +245,17 @@ function HeroCard({
   profitScore: number | null;
   onPress: () => void;
   // PROFIT IS NEVER THE DEPOSIT (owner decision 2026-10-13, B1): the same
-  // window's printed deposits (else net due), and any owed-to-carrier
-  // weeks — shown under the profit, never as profit.
+  // window's printed deposits (else net due) — shown under the profit,
+  // never as profit.
   deposited: number;
-  owedToCarrier: number;
+  // OWED TO CARRIER (batch D2): READ from each account's latest Prime
+  // statement (TOTAL CASH FLOW < 0), not tied to the period, shown only
+  // when > 0 with "as of <week ending>".
+  owed: OwedToCarrier;
 }) {
   const { t } = useTranslation();
-  const { money: moneyFmt } = useFormatters();
+  const { money: moneyFmt, date: dateFmt } = useFormatters();
+  const [owedOpen, setOwedOpen] = useState(false);
   const money = (n: number) => moneyFmt(n, { maximumFractionDigits: 0 });
   const animatedNetProfit = useAnimatedNumber(weekNetProfit);
   const isWeekPeriod = period === 'thisWeek' || period === 'lastWeek';
@@ -266,10 +271,12 @@ function HeroCard({
           <Text style={[styles.heroScoreLabel, { marginTop: spacing.xs }]}>
             {t('dashboard.hero.depositedToBank', { amount: moneyFmt(deposited, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
           </Text>
-          {owedToCarrier > 0 && (
-            <Text style={[styles.heroScoreLabel, { color: colors.red }]}>
-              {t('dashboard.hero.owedToCarrier', { amount: moneyFmt(owedToCarrier, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
-            </Text>
+          {owed.total > 0 && owed.asOf && (
+            <Pressable onPress={() => setOwedOpen(true)} accessibilityRole="button" hitSlop={6}>
+              <Text style={[styles.heroScoreLabel, { color: colors.red, textDecorationLine: 'underline' }]}>
+                {t('dashboard.hero.owedToCarrier', { amount: moneyFmt(owed.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), date: dateFmt(owed.asOf) })}
+              </Text>
+            </Pressable>
           )}
           <HeroChange change={netProfitChange} deltaAmount={netProfitDeltaAmount} goodDirection="up" isWeekPeriod={isWeekPeriod} />
         {profitScore != null && (
@@ -286,6 +293,14 @@ function HeroCard({
           <HeroAreaChart points={chartPoints} />
         </LinearGradient>
       </Pressable>
+      <ModalSheet visible={owedOpen} onClose={() => setOwedOpen(false)}>
+        <SheetTitle>{t('dashboard.hero.owedSheetTitle')}</SheetTitle>
+        <Text style={{ color: colors.text, fontSize: typography.size.lg, fontWeight: '700', marginBottom: spacing.sm }}>
+          {owed.asOf ? t('dashboard.hero.owedToCarrier', { amount: moneyFmt(owed.total, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), date: dateFmt(owed.asOf) }) : ''}
+        </Text>
+        <Text style={{ color: colors.text, lineHeight: 20, marginBottom: spacing.md }}>{t('dashboard.hero.owedSheetBody')}</Text>
+        <SecondaryButton title={t('common.close')} onPress={() => setOwedOpen(false)} />
+      </ModalSheet>
     </View>
   );
 }
@@ -870,6 +885,8 @@ export default function Dashboard() {
   useReferralSyncOnce();
   const loadsQuery = useLoads();
   const settlementsQuery = useSettlements();
+  // OWED TO CARRIER (batch D2): read from each account's latest statement.
+  const owed = useMemo(() => owedToCarrier(settlementsQuery.data ?? [], activeTruck?.id ?? null), [settlementsQuery.data, activeTruck]);
   const dedQuery = useDeductions();
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
@@ -1265,7 +1282,7 @@ export default function Dashboard() {
           profitScore={profitScore}
           onPress={() => setProfitBridgeOpen(true)}
           deposited={periodScopedCpm.kpi?.deposits ?? 0}
-          owedToCarrier={periodScopedCpm.kpi?.owedToCarrier ?? 0}
+          owed={owed}
         />
 
         {/* PROFIT EXPLAINER caption (batch D item 8): settlements profit −

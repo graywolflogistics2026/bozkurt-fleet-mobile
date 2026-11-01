@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useImportJobs, fetchImportJobResult, resumeImportJob } from '@/src/data/importJobs';
-import { deriveChipSummary, jobProgressView, runOptionalSideEffect, shouldAutoResume } from '@/src/import/importJobs';
-import { jobProgressText } from '@/src/components/importJobText';
+import { useQueryClient } from '@tanstack/react-query';
+import { useImportJobs, fetchImportJobResult, resumeImportJob, answerImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
+import { deriveChipSummary, runOptionalSideEffect, shouldAutoResume, silentAttachmentStep } from '@/src/import/importJobs';
+import { supabase } from '@/src/lib/supabase';
 import { notifyImportJobDone, hasNotifiedJob } from '@/src/notifications/importJobNotifications';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -15,6 +16,9 @@ const JOBS_ROUTE = '/(tabs)/import/jobs' as Href;
 // heartbeat it saw then, so one interruption is resumed once, not on
 // every poll.
 const autoResumed = new Map<string, string>();
+// Jobs this session already handled silently (batch D2): page-cap
+// questions answered, post-save attachment jobs stored or dropped.
+const handledSilently = new Set<string>();
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, items 1 + 3) — a small,
 // persistent status pill, always mounted from the tab layout (both the
@@ -28,8 +32,41 @@ export function ImportJobsChip() {
   const { t } = useTranslation();
   const router = useRouter();
   const { money } = useFormatters();
-  const { data: jobs } = useImportJobs();
-  const summary = deriveChipSummary(jobs ?? []);
+  const queryClient = useQueryClient();
+  const { data: allJobs } = useImportJobs();
+  // Post-save attachment jobs are handled silently below — never shown.
+  const jobs = useMemo(() => (allJobs ?? []).filter((j) => silentAttachmentStep(j) == null), [allJobs]);
+  const summary = deriveChipSummary(jobs);
+
+  // SIMPLE IMPORT FLOW (batch D2 2.1/2.4): nothing waits on the owner.
+  // A page-cap question is answered "read the first pages"; a week's
+  // attachment readings are stored on its document (no re-save, so the
+  // certification stays) and a failed attachment run is dropped quietly.
+  useEffect(() => {
+    for (const job of allJobs ?? []) {
+      if (handledSilently.has(job.id)) continue;
+      if (job.status === 'needs_decision') {
+        handledSilently.add(job.id);
+        answerImportJob(job.id, 'read_first').catch(() => handledSilently.delete(job.id));
+        continue;
+      }
+      const step = silentAttachmentStep(job);
+      if (step !== 'store' && step !== 'drop') continue;
+      handledSilently.add(job.id);
+      (async () => {
+        if (step === 'store') {
+          const result = await fetchImportJobResult(job.id);
+          if (result) {
+            const { error } = await supabase.from('documents').update({ parsed_json: result }).eq('id', job.documentId!);
+            if (error) throw error;
+          }
+        }
+        await supabase.from('import_jobs').delete().eq('id', job.id);
+        await queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+        await queryClient.invalidateQueries({ queryKey: ['documents'] });
+      })().catch(() => handledSilently.delete(job.id));
+    }
+  }, [allJobs, queryClient]);
 
   // BACKGROUND IMPORT CRASH FIX (owner decision 2026-08-24, hard rule): a
   // job's completion (the chip/list reflecting 'ready'/'failed') is driven
@@ -72,9 +109,7 @@ export function ImportJobsChip() {
     async function checkAndNotify() {
       for (const job of jobs ?? []) {
         if (job.status !== 'ready' && job.status !== 'failed') continue;
-        // A week saved while its attachments were still being read gets a
-        // second "ready" (the attachments, for review) — its own id.
-        const notifyId = job.documentId ? `${job.id}:attachments` : job.id;
+        const notifyId = job.id;
         const alreadyNotified = await hasNotifiedJob(notifyId).catch(() => false);
         if (alreadyNotified) continue;
         if (cancelled) return;
@@ -88,7 +123,7 @@ export function ImportJobsChip() {
           if (cancelled) return;
           await runOptionalSideEffect(() =>
             notifyImportJobDone(notifyId, {
-              title: t(job.documentId ? 'importJobs.notification.attachmentsReadyTitle' : 'importJobs.notification.readyTitle'),
+              title: t('importJobs.notification.readyTitle'),
               body,
             })
           );
@@ -116,15 +151,10 @@ export function ImportJobsChip() {
   if (summary.kind === 'hidden') return null;
 
   const { icon, label, tint } = (() => {
-    if (summary.kind === 'question') {
-      return { icon: '❓', label: jobProgressText(jobProgressView(summary.job, new Date().toISOString()), t), tint: colors.orange };
-    }
-    if (summary.kind === 'processing') {
-      // The same words as the jobs list ("Reading settlement page 3 of 6 ·
-      // 12 attachments queued · 1:42", "Interrupted at page 3").
-      const view = jobProgressView(summary.job, new Date().toISOString());
-      const progressLabel = summary.job.progress || view.state === 'interrupted' ? jobProgressText(view, t) : t('importJobs.chip.processing');
-      return { icon: view.state === 'interrupted' ? '⚠️' : '⏳', label: progressLabel, tint: view.state === 'interrupted' ? colors.orange : colors.accent };
+    // Batch D2 2.1: one reading line — no page, step, pause or
+    // interruption wording (a question is answered automatically).
+    if (summary.kind === 'question' || summary.kind === 'processing') {
+      return { icon: '⏳', label: t('importFlow.readingShort'), tint: colors.accent };
     }
     if (summary.kind === 'ready') {
       return {
@@ -135,7 +165,7 @@ export function ImportJobsChip() {
     }
     return {
       icon: '⚠️',
-      label: summary.failedCount > 1 ? t('importJobs.chip.failedMultiple', { count: summary.failedCount }) : t('importJobs.chip.failed'),
+      label: t('importFlow.chipCouldNotRead'),
       tint: colors.red,
     };
   })();

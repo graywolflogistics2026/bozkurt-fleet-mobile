@@ -4,36 +4,17 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { MutedText, SecondaryButton } from '@/src/components/ui';
 import { useFormatters } from '@/src/i18n/format';
-import { colors, radii, spacing, typography } from '@/src/theme';
+import { colors, spacing, typography } from '@/src/theme';
 import type { KpiResult } from '@/src/stats/kpi';
 import { ledgerTotals, type LedgerRow, type LedgerStatus } from '@/src/stats/auditLedger';
 import { buildAuditText, type AuditSettlement } from '@/src/stats/auditShare';
-import type { SettlementVerification } from '@/src/import/settlementStatement';
 
 // PRIME STATEMENT AS SOURCE + SOURCE LABELS + PROFIT IS NEVER THE DEPOSIT
 // (owner decision 2026-10-13, docs/decisions/prime-statement-source.md).
 // Shared by Home (bridge + Expenses explainer) and the Settlements detail.
 
-const VERIFICATION_COLOR: Record<SettlementVerification, string> = {
-  verified_prime: colors.green,
-  totals_match: colors.accent,
-  unverified: colors.orange,
-};
-
-// `incomplete`: settlement or statement pages of the week were not read
-// ("Verified by Prime statement - line items incomplete").
-export function VerificationBadge({ verification, incomplete = false }: { verification: SettlementVerification; incomplete?: boolean }) {
-  const { t } = useTranslation();
-  const color = incomplete && verification === 'verified_prime' ? colors.orange : VERIFICATION_COLOR[verification];
-  return (
-    <View style={{ alignSelf: 'flex-start', borderColor: color, borderWidth: 1, borderRadius: radii.sm, paddingHorizontal: spacing.xs, marginTop: 2 }}>
-      <Text style={{ color, fontSize: typography.size.xs, fontWeight: '700' }}>
-        {t(`audit.verification.${verification}`)}
-        {incomplete ? t('audit.verification.lineItemsIncompleteSuffix') : ''}
-      </Text>
-    </View>
-  );
-}
+// Batch D2 2.3: no Verified / Totals match / Unverified badge anywhere —
+// the only week status is "Certified on <date>" (WeekReviewCard.tsx).
 
 const STATUS_ORDER: LedgerStatus[] = ['counted', 'offset', 'excluded'];
 
@@ -195,7 +176,6 @@ export function ProfitBridgeView({
           {bridge.weeks.map((w) => (
             <View key={w.settlementId} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <MutedText>{w.weekEnding ? t('settlementsScreen.weekOf', { date: date(w.weekEnding) }) : '—'}</MutedText>
-              <VerificationBadge verification={w.verification} />
             </View>
           ))}
         </View>

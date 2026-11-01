@@ -366,6 +366,10 @@ export function useRereadImportJob() {
 }
 
 // "This file has N pages. Read the first 40 now?" — never read silently.
+export async function answerImportJob(jobId: string, answer: 'read_first' | 'cancel'): Promise<{ jobId: string }> {
+  return invokeJobMode({ mode: 'answer_job', jobId, answer }, 'Could not send your answer.');
+}
+
 export function useAnswerImportJob() {
   const queryClient = useQueryClient();
   return useMutation({

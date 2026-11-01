@@ -21,8 +21,6 @@ import { useDocuments } from '@/src/data/documents';
 import { useTrucksList } from '@/src/data/trucks';
 import { heldByCarrier } from '@/src/stats/heldByCarrier';
 import { HeldByCarrierCard } from '@/src/components/HeldByCarrierCard';
-import { DateCheckList } from '@/src/components/DateCheckList';
-import { findSavedWeeksNeedingDateCheck } from '@/src/import/printedDates';
 import { buildWeeklyTrend } from '@/src/stats/cashFlowTrend';
 import { buildSettlementsTotalsBar } from '@/src/stats/settlementsSummary';
 import { PERIOD_OPTIONS, filterByPeriod, periodStartIso, type PeriodOption } from '@/src/stats/periodFilter';
@@ -35,21 +33,19 @@ import {
 import { buildPolylinePoints } from '@/src/stats/chartHelpers';
 import { useSessionState } from '@/src/lib/useSessionState';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
-import { useMarkDocumentReviewed } from '@/src/data/needsReviewMutations';
 import { cleanupOrphanedDocument } from '@/src/data/deductionMutations';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
 import { buildLinkedRecordHref } from '@/src/navigation/linkedRecordRoute';
 import { findLinkedRecords, type LinkedRecordRef } from '@/src/data/documentsFilter';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
-import { needsReviewRowStyle, NeedsReviewChip, MarkReviewedButton } from '@/src/components/NeedsReviewBadge';
 import { DestinationSummary } from '@/src/components/DestinationSummary';
-import { isDocumentNeedsReview, isSettlementNeedsReview } from '@/src/import/needsReview';
-import { WeekReviewCard, WeekReviewChip } from '@/src/components/WeekReviewCard';
+import { CertifiedChip, WeekCertification } from '@/src/components/WeekReviewCard';
+import { headlineFromSettlement } from '@/src/import/settlementGate';
 import { ProfitExplainerCard, ProfitExplainerLine } from '@/src/components/ProfitExplainer';
 import { computeSettlementWeekKpi, primeDepositsYtd } from '@/src/stats/settlementWeek';
-import { lineItemsIncomplete, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
-import { WeekPagesSection } from '@/src/components/IncompleteLineItemsNotice';
-import { ShareAuditButton, VerificationBadge } from '@/src/components/ProfitAudit';
+import { settlementDeposit } from '@/src/import/settlementStatement';
+import { WeekQuietLines } from '@/src/components/IncompleteLineItemsNotice';
+import { ShareAuditButton } from '@/src/components/ProfitAudit';
 import { useFormatters } from '@/src/i18n/format';
 import {
   Screen,
@@ -157,9 +153,6 @@ export default function Settlements() {
   // otherwise-invisible column visible at a glance.
   const trucksQuery = useTrucksList();
   const trucksById = useMemo(() => new Map((trucksQuery.data ?? []).map((tr) => [tr.id, tr])), [trucksQuery.data]);
-  const markDocumentReviewed = useMarkDocumentReviewed();
-  const [markingAllReviewed, setMarkingAllReviewed] = useState(false);
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [savingPayment, setSavingPayment] = useState(false);
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -179,9 +172,6 @@ export default function Settlements() {
       reimbursements: reimbQuery.data ?? [],
     });
   }, [selected, trucksQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);
-  // BETA FEEDBACK ROUND 2: "Needs review only" filter, same treatment as
-  // Deductions/Documents/Transactions.
-  const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   // TOTALS + CHARTS (owner decision, "period tabs" pass) — remembered for
   // the session, same module-level-Map pattern as Deductions' own period
   // tabs / useMonthCollapse.ts's month-group collapse state.
@@ -245,10 +235,6 @@ export default function Settlements() {
     () => new Map((documentsQuery.data ?? []).map((d) => [d.id, d])),
     [documentsQuery.data]
   );
-  const docLowConfidence = (s: Settlement) => {
-    const doc = s.document_id ? documentsById.get(s.document_id) : undefined;
-    return !!doc && isDocumentNeedsReview(doc);
-  };
 
   const allRows = useMemo(() => {
     const list = settlementsQuery.data ?? [];
@@ -275,10 +261,9 @@ export default function Settlements() {
       window: startIso ? { startIso, endIso: '9999-12-31' } : null,
     }).explanation;
   }, [period, isAllTrucks, activeTruckId, trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbQuery.data]);
-  const rows = useMemo(
-    () => (needsReviewOnly ? periodRows.filter((s) => isSettlementNeedsReview(s, documentsById)) : periodRows),
-    [periodRows, needsReviewOnly, documentsById]
-  );
+  // Batch D2 2.3: no needs-review filter — the only week status is
+  // "Certified on <date>" / "Not certified".
+  const rows = periodRows;
   const totalsBar = useMemo(() => buildSettlementsTotalsBar(rows), [rows]);
   // buildWeeklyTrend() sorts its own copy ascending internally, so `rows`'
   // own descending list order (for display) doesn't matter here.
@@ -321,30 +306,6 @@ export default function Settlements() {
     () => settlementReimbursements.reduce((sum, x) => sum + Number(x.amount ?? 0), 0),
     [settlementReimbursements]
   );
-
-  // NEEDS A DATE CHECK (owner decision 2026-10-29, A6): saved weeks before
-  // 2025, in the future, a Prime week not on a Friday, or a week_ending that
-  // differs from the printed statement date stored in the §77 jsonb.
-  const dateCheckItems = useMemo(() => {
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    return findSavedWeeksNeedingDateCheck(allRows, today);
-  }, [allRows]);
-  async function fixWeekEnding(id: string, weekEnding: string) {
-    const row = allRows.find((s) => s.id === id);
-    // The replace key is (week_ending, truck): never move a week onto one
-    // already saved for the same truck.
-    if (row && allRows.some((s) => s.id !== id && s.week_ending === weekEnding && s.truck_id === row.truck_id)) {
-      Alert.alert(t('dateCheck.conflictTitle'), t('dateCheck.conflictBody', { date: weekEnding }));
-      return;
-    }
-    try {
-      await updateSettlement.mutateAsync({ id, values: { week_ending: weekEnding } });
-      await invalidateFinancialData(queryClient, { entities: ['settlements'] });
-    } catch (err) {
-      Alert.alert(t('dateCheck.conflictTitle'), err instanceof Error ? err.message : String(err));
-    }
-  }
 
   // HELD BY CARRIER (owner decision 2026-10-29): the printed held balance
   // of each carrier account's latest statement, "as of" its week — never
@@ -479,39 +440,6 @@ export default function Settlements() {
     }
   }
 
-  // NEEDS REVIEW WON'T CLEAR — THE FIX (owner decision 2026-08-24, device
-  // testing round): a settlement's own "needs review" status comes from
-  // its LINKED DOCUMENT (needsReview.ts's isSettlementNeedsReview) — so
-  // marking it reviewed marks that document reviewed.
-  async function handleMarkReviewed(x: Settlement) {
-    if (!x.document_id) return;
-    setReviewingId(x.id);
-    try {
-      await markDocumentReviewed.mutateAsync(x.document_id);
-      await invalidateFinancialData(queryClient, { entities: ['documents'] });
-    } catch (err) {
-      Alert.alert(t('settlementsScreen.deleteFailedTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
-    } finally {
-      setReviewingId(null);
-    }
-  }
-
-  // Bulk "Mark all reviewed" (item 1) — operates on whatever's currently
-  // filtered into `rows`, deduping by document_id in case two settlements
-  // somehow shared one (they never do in practice, but this stays correct
-  // either way instead of double-marking the same document).
-  async function handleMarkAllReviewed() {
-    const documentIds = [...new Set(rows.filter((s) => isSettlementNeedsReview(s, documentsById)).map((s) => s.document_id).filter((id): id is string => !!id))];
-    if (documentIds.length === 0) return;
-    setMarkingAllReviewed(true);
-    try {
-      await Promise.allSettled(documentIds.map((id) => markDocumentReviewed.mutateAsync(id)));
-      await invalidateFinancialData(queryClient, { entities: ['documents'] });
-    } finally {
-      setMarkingAllReviewed(false);
-    }
-  }
-
   function handleDelete(x: Settlement) {
     Alert.alert(t('settlementsScreen.deleteConfirmTitle'), t('settlementsScreen.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -625,8 +553,6 @@ export default function Settlements() {
           </Card>
         )}
 
-        <DateCheckList items={dateCheckItems} onFix={fixWeekEnding} />
-
         {held.status !== 'not_printed' && <HeldByCarrierCard held={held} />}
 
         {/* PRIME OPERATING STATEMENT — STANDING YTD CHECK (owner decision,
@@ -668,21 +594,6 @@ export default function Settlements() {
           </Card>
         )}
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
-          <Pill
-            label={t('needsReview.filterOnly')}
-            selected={needsReviewOnly}
-            onPress={() => setNeedsReviewOnly((v) => !v)}
-          />
-          {needsReviewOnly && rows.length > 0 && (
-            <Pressable onPress={handleMarkAllReviewed} disabled={markingAllReviewed} hitSlop={8} style={{ marginStart: spacing.sm }}>
-              <Text style={{ color: colors.accent, fontSize: typography.size.sm, fontWeight: '700' }}>
-                {markingAllReviewed ? t('needsReview.markingAll') : t('needsReview.markAllReviewed')}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-
         <MonthGroupedList
           screenKey="settlements"
           rows={rows}
@@ -693,9 +604,8 @@ export default function Settlements() {
           emptyLabel={t('settlementsScreen.empty')}
           renderRows={(monthRows) =>
             monthRows.map((x) => {
-              const needsReview = isSettlementNeedsReview(x, documentsById);
               return (
-                <TappableCard key={x.id} onPress={() => setSelected(x)} style={needsReviewRowStyle(needsReview)}>
+                <TappableCard key={x.id} onPress={() => setSelected(x)}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <View>
                       <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
@@ -714,8 +624,7 @@ export default function Settlements() {
                           breakdown visible at a glance in the list, not just
                           after tapping into the detail sheet. */}
                       <MutedText>{t('settlementsScreen.perDiemDaysCount', { count: x.per_diem_days ?? 0 })}</MutedText>
-                      <VerificationBadge verification={settlementVerification(x)} incomplete={lineItemsIncomplete(x.statement)} />
-                      <WeekReviewChip settlement={x} documentLowConfidence={docLowConfidence(x)} />
+                      <CertifiedChip settlement={x} />
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       {/* NEGATIVE SETTLEMENTS (owner decision 2026-08-02):
@@ -743,20 +652,19 @@ export default function Settlements() {
         {selected && (
             <>
               <SheetTitle>{t('settlementsScreen.weekOf', { date: date(selected.week_ending) })}</SheetTitle>
-              {/* Batch C item 5: ONE "Review this week" card replaces the
-                  scattered needs-review / miles-missing warnings. */}
-              <WeekReviewCard
+              {/* Batch D2 2.3: the ONLY week status — Certified on <date>, or
+                  a quiet "Not certified [Certify]" that opens the headline card
+                  from the stored numbers. */}
+              <WeekCertification
                 settlement={selected}
                 documentId={selected.document_id}
-                documentLowConfidence={docLowConfidence(selected)}
+                headline={headlineFromSettlement(selected, selectedWeekKpi?.net ?? 0)}
                 onChanged={async (patch) => {
                   setSelected({ ...selected, ...patch } as Settlement);
                   await invalidateFinancialData(queryClient, { entities: ['settlements', 'documents'] });
                 }}
               />
-
-              <VerificationBadge verification={settlementVerification(selected)} incomplete={lineItemsIncomplete(selected.statement)} />
-              <WeekPagesSection settlement={selected} />
+              <WeekQuietLines settlement={selected} parsedJson={selected.document_id ? documentsById.get(selected.document_id)?.parsed_json : null} />
               {/* PROFIT IS NEVER THE DEPOSIT (owner decision 2026-10-13, B3):
                   the deposit read from the statement (never computed) and
                   the week's profit, side by side, never the same label. */}

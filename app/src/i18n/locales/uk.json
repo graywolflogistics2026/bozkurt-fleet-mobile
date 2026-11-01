@@ -155,7 +155,9 @@
       },
       "profitNotDeposits": "Profit, not deposits",
       "depositedToBank": "Deposited to your bank: {{amount}}",
-      "owedToCarrier": "Owed to carrier: {{amount}}"
+      "owedToCarrier": "Owed {{amount}} as of {{date}}",
+      "owedSheetTitle": "Owed to carrier",
+      "owedSheetBody": "Prime keeps this from your next settlements. It is not a bill."
     },
     "overview": {
       "expenses": "Expenses"
@@ -3102,5 +3104,61 @@
     "pagesDroppedTitle": "Page limit",
     "pagesDroppedBody_one": "Only the first {{max}} pages were kept; {{count}} more page was left out. Scan it separately.",
     "pagesDroppedBody_other": "Only the first {{max}} pages were kept; {{count}} more pages were left out. Scan them separately."
+  },
+  "importFlow": {
+    "reading": "Reading your statement. Keep the app open. Usually 2-4 minutes for 17 pages.",
+    "readingShort": "Reading your statement…",
+    "statusReading": "Reading",
+    "statusReady": "Ready to check",
+    "statusFailed": "Could not read",
+    "chipCouldNotRead": "A statement could not be read",
+    "checkAndCertify": "Check and certify",
+    "certifyTitle": "Check these numbers against your statement",
+    "certifySubtitle": "Compare the deposit with your bank app.",
+    "weekEnding": "Week ending",
+    "revenue": "Revenue",
+    "netDue": "Net due",
+    "deposited": "Deposited to your bank",
+    "owedToCarrier": "Owed to carrier",
+    "miles": "Miles",
+    "milesSplit": "{{total}} ({{loaded}} loaded / {{empty}} empty)",
+    "perDiemDays": "Per diem days (0-7)",
+    "estimatedProfit": "Estimated profit",
+    "linesWillNotBeSaved": "The line details did not match your statement. The week is added from the statement; the line details are not saved.",
+    "certifyAndAdd": "Certify and add to my books",
+    "certifyLine": "I checked these numbers against my statement. AI-generated estimates, not tax advice.",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "couldNotReadTitle": "We couldn't read this statement reliably. Nothing was saved.",
+    "uploadAgain": "Upload again",
+    "sendReport": "Send report",
+    "reason": {
+      "statementNotRead": "We could not find Prime's Statement of Income and Expense, or could not read all of its totals.",
+      "statementCheckFailed": "The statement's own totals did not add up the way we read them.",
+      "grossDiffers": "The revenue on the first page does not match the statement's TOTAL REVENUE.",
+      "netDueDiffers": "Revenue plus reimbursements minus deductions does not equal the net due we read.",
+      "depositDiffers": "The deposit does not match the net due plus the balance forward.",
+      "dateMismatch": "The dates printed on the statement do not agree with each other.",
+      "dateUnreadable": "We could not read the week ending date.",
+      "missingFields": "We could not read the revenue or the net due.",
+      "totalsNotPrinted": "This statement does not print its totals, so we cannot check it. Please send us a report.",
+      "totalsDiffer": "The printed totals do not add up the way we read them.",
+      "linesDiffer": "The lines we read do not add up to the printed totals.",
+      "jobFailed": "The file could not be read."
+    },
+    "certifiedAdded": "Certified and added: week ending {{date}}.",
+    "linesNotSaved": "Line details were not saved because they did not match your statement.",
+    "tryReadingAgain": "Try reading them again",
+    "attachmentsLine": "Attachments: {{saved}} saved, {{read}} read",
+    "read": "Read",
+    "readAgainStartedTitle": "Reading again",
+    "readAgainStartedBody": "When it is done, the numbers to check open from the import list.",
+    "viewWeek": "View this week"
+  },
+  "certify": {
+    "certifiedOn": "Certified on {{date}}",
+    "notCertified": "Not certified",
+    "certify": "Certify",
+    "certified": "Certified"
   }
 }

@@ -6,6 +6,8 @@
 // aiImportSave.settlement.test.ts.
 import type { DocType, Extraction } from '@/src/import/types';
 
+jest.mock('@/src/import/settlementGate', () => require('./gatePassMock').gatePassMock());
+
 let mockClient: ReturnType<typeof import('./fakeSupabase').createFakeSupabase>;
 
 jest.mock('@/src/lib/supabase', () => ({

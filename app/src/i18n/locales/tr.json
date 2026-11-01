@@ -155,7 +155,9 @@
       },
       "profitNotDeposits": "Kâr, yatırılan para değil",
       "depositedToBank": "Bankanıza yatırılan: {{amount}}",
-      "owedToCarrier": "Taşıyıcıya borç: {{amount}}"
+      "owedToCarrier": "{{date}} itibarıyla borç {{amount}}",
+      "owedSheetTitle": "Taşıyıcıya borç",
+      "owedSheetBody": "Prime bunu sonraki settlement'larından keser. Bu bir fatura değildir."
     },
     "overview": {
       "expenses": "Giderler"
@@ -3102,5 +3104,61 @@
     "pagesDroppedTitle": "Sayfa sınırı",
     "pagesDroppedBody_one": "Yalnızca ilk {{max}} sayfa alındı; {{count}} sayfa dışarıda kaldı. Onu ayrıca tara.",
     "pagesDroppedBody_other": "Yalnızca ilk {{max}} sayfa alındı; {{count}} sayfa dışarıda kaldı. Onları ayrıca tara."
+  },
+  "importFlow": {
+    "reading": "Ekstreniz okunuyor. Uygulamayı açık tutun. 17 sayfa için genellikle 2-4 dakika sürer.",
+    "readingShort": "Ekstreniz okunuyor…",
+    "statusReading": "Okunuyor",
+    "statusReady": "Kontrole hazır",
+    "statusFailed": "Okunamadı",
+    "chipCouldNotRead": "Bir ekstre okunamadı",
+    "checkAndCertify": "Kontrol et ve onayla",
+    "certifyTitle": "Bu rakamları ekstrenizle karşılaştırın",
+    "certifySubtitle": "Yatan tutarı banka uygulamanızla karşılaştırın.",
+    "weekEnding": "Hafta sonu tarihi",
+    "revenue": "Gelir",
+    "netDue": "Net ödenecek",
+    "deposited": "Bankanıza yatan",
+    "owedToCarrier": "Taşıyıcıya borç",
+    "miles": "Mil",
+    "milesSplit": "{{total}} ({{loaded}} yüklü / {{empty}} boş)",
+    "perDiemDays": "Per diem günleri (0-7)",
+    "estimatedProfit": "Tahmini kâr",
+    "linesWillNotBeSaved": "Satır ayrıntıları ekstrenizle uyuşmadı. Hafta ekstreden eklenir; satır ayrıntıları kaydedilmez.",
+    "certifyAndAdd": "Onayla ve defterime ekle",
+    "certifyLine": "Bu rakamları ekstremle karşılaştırdım. Yapay zekâ tarafından üretilmiş tahminlerdir, vergi tavsiyesi değildir.",
+    "showDetails": "Ayrıntıları göster",
+    "hideDetails": "Ayrıntıları gizle",
+    "couldNotReadTitle": "Bu ekstreyi güvenilir şekilde okuyamadık. Hiçbir şey kaydedilmedi.",
+    "uploadAgain": "Tekrar yükle",
+    "sendReport": "Rapor gönder",
+    "reason": {
+      "statementNotRead": "Prime'ın Statement of Income and Expense sayfasını bulamadık veya tüm toplamlarını okuyamadık.",
+      "statementCheckFailed": "Ekstrenin kendi toplamları okuduğumuz şekilde tutmadı.",
+      "grossDiffers": "İlk sayfadaki gelir, ekstredeki TOTAL REVENUE ile uyuşmuyor.",
+      "netDueDiffers": "Gelir artı geri ödemeler eksi kesintiler, okuduğumuz net ödenecek tutara eşit değil.",
+      "depositDiffers": "Yatan tutar, net ödenecek artı önceki haftadan devreden bakiye ile uyuşmuyor.",
+      "dateMismatch": "Ekstrede basılı tarihler birbiriyle uyuşmuyor.",
+      "dateUnreadable": "Hafta sonu tarihini okuyamadık.",
+      "missingFields": "Geliri veya net ödenecek tutarı okuyamadık.",
+      "totalsNotPrinted": "Bu ekstre toplamlarını basmıyor, bu yüzden kontrol edemiyoruz. Lütfen bize bir rapor gönderin.",
+      "totalsDiffer": "Basılı toplamlar okuduğumuz şekilde tutmuyor.",
+      "linesDiffer": "Okuduğumuz satırlar basılı toplamları tutmuyor.",
+      "jobFailed": "Dosya okunamadı."
+    },
+    "certifiedAdded": "Onaylandı ve eklendi: {{date}} ile biten hafta.",
+    "linesNotSaved": "Satır ayrıntıları ekstrenizle uyuşmadığı için kaydedilmedi.",
+    "tryReadingAgain": "Tekrar okumayı dene",
+    "attachmentsLine": "Ekler: {{saved}} kaydedildi, {{read}} okundu",
+    "read": "Oku",
+    "readAgainStartedTitle": "Tekrar okunuyor",
+    "readAgainStartedBody": "Bittiğinde kontrol edilecek rakamlar içe aktarma listesinden açılır.",
+    "viewWeek": "Bu haftayı aç"
+  },
+  "certify": {
+    "certifiedOn": "{{date}} tarihinde onaylandı",
+    "notCertified": "Onaylanmadı",
+    "certify": "Onayla",
+    "certified": "Onaylandı"
   }
 }

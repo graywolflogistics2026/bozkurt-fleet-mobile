@@ -6,6 +6,8 @@ import * as path from 'path';
 import type { Extraction } from '@/src/import/types';
 import type { DocumentRow } from '@/src/types/db';
 
+jest.mock('@/src/import/settlementGate', () => require('./gatePassMock').gatePassMock());
+
 let mockClient: ReturnType<typeof import('./fakeSupabase').createFakeSupabase>;
 
 jest.mock('@/src/lib/supabase', () => ({

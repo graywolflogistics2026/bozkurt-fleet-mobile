@@ -11,6 +11,15 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- BATCH D2 (owner decision 2026-10-31, done 2026-10-31). Part 1: owed to
+  carrier is READ from each truck's newest TOTAL CASH FLOW
+  (src/stats/owedToCarrier.ts), no longer summed over weeks. Part 2: one
+  gate (src/import/settlementGate.ts) for card + saveExtraction; three
+  states, 2 automatic re-reads, COULD NOT READ + Send report; line mismatch
+  saves without line rows; Certify and add (certify last write); removed
+  Verified labels, Save anyway, Review All, Things to check, line-items /
+  pages / date-check / duplicate banners; silent attachment reads (cap 12).
+  No SQL, no redeploy; eas update. docs/decisions/simple-import-flow.md.
 - BATCH E (owner decision 2026-10-30, done 2026-10-31). Automatic document
   scanner: react-native-document-scanner-plugin (ML Kit / VisionKit) +
   pdf-lib. src/scan/ (scanCore pure + tests, scanDeps, scanDocument

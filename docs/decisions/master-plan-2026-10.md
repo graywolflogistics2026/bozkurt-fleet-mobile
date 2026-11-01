@@ -356,7 +356,15 @@ Start now with the protocol, then batch 0b.
 | B | Done: vehicle purchase tax treatment (PENDING_SQL §81 applied 2026-10-30) | 651dec6 |
 | C | Done: items 5, 6 (PENDING_SQL §82 applied 2026-10-31; redeploy ai-import) | e331821 (+ 62fc2b5 one save gate) |
 | D | Done: items 8, 10 (PENDING_SQL §83 applied 2026-10-31; no redeploy) | 5ac99cd |
-| E | Done: automatic document scanner (native build, version 1.1.0; no SQL, no redeploy) | (this commit) |
+| E | Done: automatic document scanner (native build, version 1.1.0; no SQL, no redeploy) | fc3c917 |
+| D2 | Done: owed to carrier (read), simple import flow + certify (no SQL, no redeploy; eas update) | (this commit) |
+
+## Batch D2 notes (2026-10-31)
+
+- Part 1: Home's owed line summed `settlementDeposit().owedToCarrier` over
+  every week in the window (old `kpi.ts` owed sum); now
+  `app/src/stats/owedToCarrier.ts` reads the newest statement per truck.
+- Part 2: docs/decisions/simple-import-flow.md.
 
 ## Batch E notes (2026-10-31)
 

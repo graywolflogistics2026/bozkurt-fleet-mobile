@@ -4,7 +4,6 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { IncompleteLineItemsNotice } from '@/src/components/IncompleteLineItemsNotice';
 import { useTrucksList, useUpdateTruck } from '@/src/data/trucks';
 import { selectableTrucks } from '@/src/data/fleetEdit';
 import { useMaintenanceRecords, useInsertMaintenanceRecord, useUpdateMaintenanceRecord, useDeleteMaintenanceRecord } from '@/src/data/maintenanceRecords';
@@ -401,7 +400,6 @@ export default function Maintenance() {
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         <ScreenTitle>{t('maintenance.title')}</ScreenTitle>
         <FleetScopeLabel />
-        <IncompleteLineItemsNotice />
 
         <Card>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>

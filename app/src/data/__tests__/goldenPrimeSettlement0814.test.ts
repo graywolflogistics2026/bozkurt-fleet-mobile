@@ -12,6 +12,9 @@
 // deposit 3,072.57. Where the transcription gave only a code and an amount,
 // the description is that code's printed label (docs/CARRIER_CODES.md).
 // None of these numbers may change without a fresh hand check.
+import { evaluateSettlementGate, nextImportStep, pickBetterReading } from '@/src/import/settlementGate';
+import { couldNotReadReport } from '@/src/import/importAudit';
+import { owedToCarrier, printedTotalCashFlow } from '@/src/stats/owedToCarrier';
 import type { Extraction, ExtractedSettlementDeduction } from '@/src/import/types';
 import type { Deduction, FuelPurchase, Load, Reimbursement, Settlement } from '@/src/types/db';
 
@@ -434,6 +437,11 @@ describe('golden week 2026-08-14 — Verified by Prime statement, every screen s
     expect(r2(b.profit)).toBe(KEY.profit);
   });
 
+  test('D2: owed to carrier is READ — TOTAL CASH FLOW 3,072.57 > 0 (the -1,202.92 balance forward is recovered), so nothing shows', () => {
+    expect(printedTotalCashFlow(rows.settlements[0])).toBe(3072.57);
+    expect(owedToCarrier(rows.settlements, null)).toEqual({ total: 0, asOf: null, accounts: [] });
+  });
+
   test('deposit is read: 3,072.57 from SETTLEMENT TO OPERATOR (gate passed, item 6), never computed', () => {
     expect(rows.settlements[0].statement?.printed).toMatchObject({ deposit: KEY.deposit, depositSource: 'settlement_to_operator', balanceForward: KEY.balanceForward, interestNet: -KEY.interestExpense });
     expect(settlementDeposit(rows.settlements[0])).toEqual({ deposited: KEY.deposit, owedToCarrier: 0, source: 'settlement_to_operator' });
@@ -608,10 +616,13 @@ describe('revenue column and loads (items 3-4)', () => {
     const e = golden0814({ loads: tripRevenueLoads });
     expect(splitPrimeLoads(e)!.matches).toBe(false);
     const rows = await importWeek(e);
-    expect(rows.loads.map((l) => l.revenue)).toEqual([0, 0, 0]);
+    // D2 2.2: line details that do not reconcile are not stored at all.
+    expect(rows.loads).toEqual([]);
+    expect(rows.deductions).toEqual([]);
+    expect(rows.fuel).toEqual([]);
+    expect(rows.settlements[0].statement?.linesNotSaved).toBe(true);
     expect(rows.settlements[0].statement?.reviewReasons.map((r) => r.reason)).toEqual(['loads_revenue_mismatch']);
     expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
-    expect(weekKpi(rows).miles.loaded).toBe(KEY.loadedMiles);
   });
 });
 
@@ -689,22 +700,16 @@ describe('the gate (item 6): statement checks + week ending decide; line items o
     expect(verdict.kind === 'needs_look' && verdict.reason.kind).toBe('line_details_differ');
   });
 
-  test('saved: Verified, gross = TOTAL REVENUE (not the header 10,386.86), net due printed, needs-review', async () => {
-    const rows = await importWeek(markReviewWarnings(misreadLines()));
-    const st = rows.settlements[0];
-    expect(settlementVerification(st)).toBe('verified_prime');
-    expect(st.gross).toBe(KEY.revenue);
-    expect(st.net).toBe(KEY.netDue);
-    expect(st.statement?.reviewReasons.map((r) => r.reason)).toEqual(['statement_warning', 'line_details_differ']);
-    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
-    expect(weekKpi(rows).deposits).toBe(KEY.deposit);
+  test('D2: the header gross 10,386.86 is not TOTAL REVENUE 7,914.10 -> refused (TOTAL REVENUE = gross is part of the gate)', async () => {
+    await expect(importWeek(markReviewWarnings(misreadLines()))).rejects.toThrow(/grossMatches/);
   });
 
   test('(d) loads keep revenue only if the loads check passes', async () => {
     const owner = await importWeek(golden0814());
     expect(owner.loads.map((l) => l.revenue)).toEqual([2900.4, 1763.24, 1451.4]);
     const trip = await importWeek(golden0814({ loads: LOADS.map((l) => ({ ...l, revenue: TRIP_REVENUE[l.order] })) }));
-    expect(trip.loads.map((l) => l.revenue)).toEqual([0, 0, 0]);
+    // D2 2.2: a loads mismatch means the line rows are not stored.
+    expect(trip.loads).toEqual([]);
   });
 
   test('the difference is the largest line-item or group difference', () => {
@@ -1031,5 +1036,102 @@ describe('every save path: same gate, same label, same profit (8/14)', () => {
     for (const e of [golden0814(), withStatement({ priorWeekBalanceForward: -1220.92 }), withStatement({ weekTotalOperatingExpenses: -3683.61 })]) {
       expect(isSaveBlocked(e)).toBe(saveGateFailures(e).length > 0);
     }
+  });
+});
+
+// =====================================================================
+// SIMPLE IMPORT FLOW (owner decision 2026-10-31, batch D2 2.2/2.5): ONE
+// pass/fail gate for the card and for saveExtraction(), no override.
+describe('batch D2 — the one gate on the 8/14 golden week', () => {
+  const gateOf = (e: Extraction) => evaluateSettlementGate(e, { importDate: '2026-10-29', carrierCodes: [] })!;
+
+  test('passes with the printed headline numbers: revenue 7,914.10, net due 4,276.08, deposited 3,072.57, miles 3,316 (2,739 / 577), profit 4,987.74', () => {
+    const gate = gateOf(golden0814());
+    expect(gate.status).toBe('pass');
+    if (gate.status !== 'pass') return;
+    expect(gate.lineDetails).toBe('match');
+    expect(gate.headline).toMatchObject({
+      weekEnding: WEEK_ENDING,
+      revenue: KEY.revenue,
+      netDue: KEY.netDue,
+      deposited: KEY.deposit,
+      owedToCarrier: 0,
+      miles: KEY.miles,
+      loadedMiles: KEY.loadedMiles,
+      emptyMiles: KEY.emptyMiles,
+      perDiemDays: 7,
+      estimatedProfit: KEY.profit,
+      source: 'prime_statement',
+    });
+    expect(nextImportStep(gate, 0)).toBe('certify');
+  });
+
+  test('a deliberately misread number fails, is re-read automatically twice, then COULD NOT READ — and nothing is stored', async () => {
+    const e = withStatement({ directDeposit: 3027.57 });
+    const gate = gateOf(e);
+    expect(gate).toMatchObject({ status: 'fail', reason: 'statement_check_failed', failures: ['directDeposit'] });
+    expect([0, 1, 2].map((n) => nextImportStep(gate, n))).toEqual(['reread', 'reread', 'could_not_read']);
+    await expect(importWeek(e)).rejects.toThrow(/did not pass its checks \(directDeposit\)\. Nothing was saved/);
+    const store = mockClient.__store as Record<string, unknown[]>;
+    for (const table of ['settlements', 'documents', 'loads', 'deductions', 'fuel_purchases']) expect(store[table] ?? []).toEqual([]);
+  });
+
+  test('a date failure: statement WEEK ENDING printed as another week -> fail (re-read, then could not read)', () => {
+    const gate = gateOf(golden0814({ statementWeekEndingRaw: '26/08/07' }));
+    expect(gate).toMatchObject({ status: 'fail', reason: 'date_mismatch' });
+  });
+
+  test('line details that do not reconcile: re-read twice, then saved WITHOUT the line rows; profit and deposit stay the statement\'s', async () => {
+    const e = golden0814({ deductions: DEDUCTIONS.map((d) => (d.code === 'UF' && d.amount === 341.04 ? { ...d, amount: 673.58 } : d)) });
+    const gate = gateOf(e);
+    expect(gate).toMatchObject({ status: 'pass', lineDetails: 'mismatch' });
+    expect([0, 1, 2].map((n) => nextImportStep(gate, n))).toEqual(['reread', 'reread', 'certify']);
+    const rows = await importWeek(e);
+    expect(rows.deductions).toEqual([]);
+    expect(rows.fuel).toEqual([]);
+    expect(rows.loads).toEqual([]);
+    expect(rows.reimbursements).toEqual([]);
+    expect(rows.settlements[0].statement?.linesNotSaved).toBe(true);
+    expect(rows.settlements[0].gross).toBe(KEY.revenue);
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+    expect(weekKpi(rows).deposits).toBe(KEY.deposit);
+  });
+
+  test('a re-read that comes back worse never replaces the better reading', () => {
+    const good = { reading: golden0814(), gate: gateOf(golden0814()) };
+    const bad = { reading: withStatement({ directDeposit: 3027.57 }), gate: gateOf(withStatement({ directDeposit: 3027.57 })) };
+    expect(pickBetterReading(good, bad)).toBe(good);
+    expect(pickBetterReading(bad, good)).toBe(good);
+  });
+
+  test('"Certify and add" is one step: saved, then certified_at + text version + app version as the LAST write', async () => {
+    mockClient = createFakeSupabase({ profiles: [{ user_id: USER_ID, business_balance: 0 }], carrier_code_maps: PRIME_CODES });
+    const saved = await saveExtraction({
+      importDate: '2026-10-29',
+      extraction: golden0814(),
+      userId: USER_ID,
+      truckId: TRUCK_ID,
+      driverId: null,
+      driverShareAmount: null,
+      fileUri: null,
+      fileExt: 'pdf',
+      mediaType: 'application/pdf',
+      createContribution: false,
+      certify: { appVersion: '1.1.0', nowIso: '2026-10-31T12:00:00.000Z' },
+    });
+    expect(saved.certified).toBe(true);
+    expect(saved.linesNotSaved).toBe(false);
+    const st = (mockClient.__store as Record<string, Settlement[]>).settlements[0] as Settlement & { certification_text_version?: string; certification_app_version?: string };
+    expect(st.certified_at).toBe('2026-10-31T12:00:00.000Z');
+    expect(st.certification_text_version).toBe(CERTIFICATION_TEXT_VERSION);
+    expect(st.certification_app_version).toBe('1.1.0');
+  });
+
+  test('the COULD NOT READ report carries the audit text with no bank digits', () => {
+    const t = (k: string) => k;
+    const e = golden0814({ summary: 'Direct deposit to routing 021000021 account 123456789012' } as never);
+    const report = couldNotReadReport({ ...e, summary: 'Direct deposit to routing 021000021 account 123456789012' }, 'statement_check_failed', t);
+    expect(report).toContain('importFlow.couldNotReadTitle');
+    expect(report).not.toMatch(/021000021|123456789012/);
   });
 });

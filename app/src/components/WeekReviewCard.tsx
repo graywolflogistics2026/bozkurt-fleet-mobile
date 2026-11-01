@@ -1,140 +1,113 @@
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Card, MutedText, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { HeadlineRows } from '@/src/components/SettlementImportCards';
 import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, spacing, typography } from '@/src/theme';
 import { getBuildInfo } from '@/src/lib/buildInfo';
-import {
-  CERTIFICATION_TEXT,
-  acknowledgeUpdate,
-  certifyUpdate,
-  weekReviewState,
-  type WeekCheckItem,
-  type WeekReviewSettlement,
-} from '@/src/import/weekReview';
-import { acknowledgeWeekItem, certifyWeek, WeekReviewNotInstalledError } from '@/src/data/weekReviewMutations';
-import { todayDateOnly } from '@/src/lib/dateOnly';
+import { certifyUpdate } from '@/src/import/weekReview';
+import type { GateHeadline } from '@/src/import/settlementGate';
+import { certifyWeek, WeekReviewNotInstalledError } from '@/src/data/weekReviewMutations';
 
-// REVIEW THIS WEEK + CERTIFY (batch C item 5): the ONE card that replaces
-// the week's scattered warnings (src/import/weekReview.ts).
+// CERTIFIED STATUS (owner decision 2026-10-31, batch D2 2.3): the ONLY
+// status a settlement week shows anywhere — "Certified on <date>", or a
+// quiet "Not certified [Certify]" on a week saved earlier. Certify opens the
+// same headline card as the import, built from the stored numbers. The
+// earlier "Things to check (N)" list and its "Looks right" marks are gone
+// from the screen (the data stays: review_acknowledged, statement reasons).
 
 export function appVersionLabel(): string {
   const info = getBuildInfo();
   return info.updateIdShort ? `${info.version}+${info.updateIdShort}` : info.version;
 }
 
-export function WeekReviewChip({ settlement, documentLowConfidence }: { settlement: WeekReviewSettlement; documentLowConfidence: boolean }) {
+type CertifiableWeek = { id: string; certified_at?: string | null };
+
+export function CertifiedChip({ settlement }: { settlement: CertifiableWeek }) {
   const { t } = useTranslation();
-  const state = weekReviewState(settlement, { documentLowConfidence, today: todayDateOnly() });
-  const [label, color] = state.certified
-    ? [t('weekReview.chipCertified'), colors.green]
-    : state.open.length > 0
-      ? [t('weekReview.chipToCheck', { count: state.open.length }), colors.orange]
-      : [t('weekReview.chipReady'), colors.muted];
-  return <Text style={{ color, fontSize: typography.size.xs, fontWeight: '700', marginTop: 2 }}>{label}</Text>;
-}
-
-export function WeekReviewCard({
-  settlement,
-  documentId,
-  documentLowConfidence,
-  onChanged,
-}: {
-  settlement: WeekReviewSettlement;
-  documentId: string | null;
-  documentLowConfidence: boolean;
-  onChanged: (patch: Partial<WeekReviewSettlement>) => void | Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const { dateTime } = useFormatters();
-  const [busy, setBusy] = useState<string | null>(null);
-  const state = weekReviewState(settlement, { documentLowConfidence, today: todayDateOnly() });
-
-  function fail(err: unknown) {
-    Alert.alert(
-      t('weekReview.saveFailedTitle'),
-      err instanceof WeekReviewNotInstalledError ? t('weekReview.needsDb') : err instanceof Error ? err.message : t('common.tryAgain')
-    );
-  }
-
-  async function looksRight(item: WeekCheckItem) {
-    setBusy(item.id);
-    try {
-      await acknowledgeWeekItem(settlement, item.id);
-      await onChanged(acknowledgeUpdate(settlement, item.id));
-    } catch (err) {
-      fail(err);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  function certify() {
-    Alert.alert(t('weekReview.certifyTitle'), CERTIFICATION_TEXT, [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('weekReview.certify'),
-        onPress: async () => {
-          setBusy('certify');
-          const now = new Date().toISOString();
-          const version = appVersionLabel();
-          try {
-            await certifyWeek({ id: settlement.id, document_id: documentId }, version, now);
-            await onChanged(certifyUpdate(now, version));
-          } catch (err) {
-            fail(err);
-          } finally {
-            setBusy(null);
-          }
-        },
-      },
-    ]);
-  }
-
-  return (
-    <Card style={{ marginBottom: spacing.sm }}>
-      <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('weekReview.title')}</Text>
-      <EstimateBanner />
-      {state.certified ? (
-        <>
-          <MutedText style={{ color: colors.green, fontWeight: '700', marginTop: spacing.xs }}>
-            {t('weekReview.certifiedOn', { date: dateTime(settlement.certified_at!) })}
-          </MutedText>
-          <MutedText style={{ marginTop: spacing.xs }}>{CERTIFICATION_TEXT}</MutedText>
-        </>
-      ) : (
-        <>
-          <MutedText style={{ marginTop: spacing.xs }}>
-            {state.items.length === 0 ? t('weekReview.nothingToCheck') : t('weekReview.thingsToCheck', { count: state.open.length })}
-          </MutedText>
-          {state.items.map((item) => {
-            const done = !state.open.includes(item);
-            return (
-              <View key={item.id} style={{ marginTop: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                <Text style={{ color: done ? colors.muted : colors.orange, flex: 1 }}>
-                  {done ? '✓ ' : '• '}
-                  {itemText(item, t)}
-                </Text>
-                {!done && <SecondaryButton title={t('weekReview.looksRight')} onPress={() => looksRight(item)} loading={busy === item.id} />}
-              </View>
-            );
-          })}
-          <View style={{ marginTop: spacing.sm }}>
-            <PrimaryButton title={t('weekReview.certify')} onPress={certify} loading={busy === 'certify'} disabled={!state.canCertify} />
-            {!state.canCertify && <MutedText style={{ marginTop: 2 }}>{t('weekReview.certifyBlocked')}</MutedText>}
-          </View>
-        </>
-      )}
-    </Card>
+  const { date } = useFormatters();
+  return settlement.certified_at ? (
+    <Text style={{ color: colors.green, fontSize: typography.size.xs, fontWeight: '700', marginTop: 2 }}>
+      {t('certify.certifiedOn', { date: date(settlement.certified_at) })}
+    </Text>
+  ) : (
+    <Text style={{ color: colors.muted, fontSize: typography.size.xs, marginTop: 2 }}>{t('certify.notCertified')}</Text>
   );
 }
 
-function itemText(item: WeekCheckItem, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  if (item.kind === 'statement_reason') {
-    const base = t(`weekReview.reason.${item.reason}`);
-    return item.detail ? `${base} (${item.detail})` : base;
+export function WeekCertification({
+  settlement,
+  documentId,
+  headline,
+  onChanged,
+}: {
+  settlement: CertifiableWeek;
+  documentId: string | null;
+  headline: GateHeadline;
+  onChanged: (patch: ReturnType<typeof certifyUpdate>) => void | Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const { date, money } = useFormatters();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function certify() {
+    setBusy(true);
+    const now = new Date().toISOString();
+    const version = appVersionLabel();
+    try {
+      await certifyWeek({ id: settlement.id, document_id: documentId }, version, now);
+      await onChanged(certifyUpdate(now, version));
+      setOpen(false);
+    } catch (err) {
+      Alert.alert(
+        t('weekReview.saveFailedTitle'),
+        err instanceof WeekReviewNotInstalledError ? t('weekReview.needsDb') : err instanceof Error ? err.message : t('common.tryAgain')
+      );
+    } finally {
+      setBusy(false);
+    }
   }
-  return t(`weekReview.item.${item.kind}`);
+
+  if (settlement.certified_at) {
+    return (
+      <MutedText style={{ color: colors.green, fontWeight: '700', marginVertical: spacing.xs }}>
+        {t('certify.certifiedOn', { date: date(settlement.certified_at) })}
+      </MutedText>
+    );
+  }
+
+  if (!open) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: spacing.xs }}>
+        <MutedText>{t('certify.notCertified')} </MutedText>
+        <Pressable onPress={() => setOpen(true)} hitSlop={8} accessibilityRole="button">
+          <Text style={{ color: colors.accent, fontWeight: '700' }}>{t('certify.certify')}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <Card style={{ marginVertical: spacing.sm }}>
+      <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md, marginBottom: spacing.xs }}>{t('importFlow.certifyTitle')}</Text>
+      <HeadlineRows headline={headline} />
+      <EstimateBanner />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+        <MutedText>{t('importFlow.perDiemDays')}</MutedText>
+        <Text style={{ color: colors.text, fontWeight: '600' }}>{headline.perDiemDays}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+        <MutedText>{t('importFlow.estimatedProfit')}</MutedText>
+        <Text style={{ color: colors.text, fontWeight: '600' }}>~{money(headline.estimatedProfit, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+      </View>
+      <View style={{ marginTop: spacing.sm }}>
+        <PrimaryButton title={t('certify.certify')} onPress={() => void certify()} loading={busy} />
+        <MutedText style={{ fontSize: typography.size.xs, marginTop: spacing.xs, marginBottom: spacing.sm }}>{t('importFlow.certifyLine')}</MutedText>
+        <SecondaryButton title={t('common.cancel')} onPress={() => setOpen(false)} />
+      </View>
+    </Card>
+  );
 }

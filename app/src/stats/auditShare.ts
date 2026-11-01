@@ -3,7 +3,7 @@ import { estimateNoticeStrings, estimateNoticeTextFooter, estimateNoticeTextHead
 import type { KpiResult } from '@/src/stats/kpi';
 import { ledgerTotals } from '@/src/stats/auditLedger';
 import { CERTIFICATION_TEXT } from '@/src/import/weekReview';
-import { settlementDeposit, settlementVerification, type SettlementStatement } from '@/src/import/settlementStatement';
+import { settlementDeposit, type SettlementStatement } from '@/src/import/settlementStatement';
 
 // "SHARE AUDIT" (owner decision 2026-10-13, Part 2 A3): plain text for the
 // native share sheet — carrier name, printed totals, every ledger row — so
@@ -42,7 +42,8 @@ export function buildAuditText(args: {
       t('audit.share.week', {
         date: s.week_ending ?? '—',
         carrier: s.carrier || t('audit.share.unknownCarrier'),
-        label: t(`audit.verification.${settlementVerification(s)}`),
+        // Batch D2 2.3: the only week status is certified / not certified.
+        label: t(s.certified_at ? 'certify.certified' : 'certify.notCertified'),
       })
     );
     const fmt = (n: number | null | undefined) => (n == null ? t('audit.share.notPrinted') : money(n));

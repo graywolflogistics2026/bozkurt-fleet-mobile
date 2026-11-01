@@ -397,3 +397,23 @@ export function jobProgressFraction(job: Pick<ImportJob, 'pagesDone' | 'pagesTot
   if (!job.pagesTotal || job.pagesTotal <= 0) return null;
   return Math.min(1, Math.max(0, job.pagesDone / job.pagesTotal));
 }
+
+// SIMPLE IMPORT FLOW (batch D2 2.4): after "Certify and add", a week's
+// attachment pages keep being read in the background (cap 12). That job
+// (document_id set by import_job_saved) is never reviewed and never
+// re-saves the week — re-saving would clear its certification. Its
+// readings are stored on the week's document (parsed_json, the audit
+// trail) and the job row goes; a failure is dropped without a warning.
+export function silentAttachmentStep(job: Pick<ImportJob, 'status' | 'documentId'>): 'store' | 'drop' | 'wait' | null {
+  if (!job.documentId) return null;
+  if (job.status === 'ready') return 'store';
+  if (job.status === 'failed') return 'drop';
+  return 'wait';
+}
+
+// What the owner sees for a job (batch D2 2.1): three states only.
+export function simpleJobState(job: Pick<ImportJob, 'status'>): 'reading' | 'ready' | 'failed' {
+  if (job.status === 'ready') return 'ready';
+  if (job.status === 'failed') return 'failed';
+  return 'reading';
+}

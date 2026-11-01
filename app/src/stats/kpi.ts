@@ -175,10 +175,10 @@ export type KpiResult = {
   // Statement-backed Prime weeks' expenses (already inside expenses.total).
   statementExpenses: number;
   // DEPOSITED (owner decision 2026-10-13): Σ each week's printed deposit
-  // (else net due); owed-to-carrier weeks add 0 here and their amount to
-  // owedToCarrier. Cash, never profit.
+  // (else net due); owed-to-carrier weeks add 0. Cash, never profit. What
+  // is owed to the carrier is READ from the latest statement instead
+  // (src/stats/owedToCarrier.ts, batch D2) — never a sum of weeks.
   deposits: number;
-  owedToCarrier: number;
   // AUDIT LEDGER: every row behind expenses.total, with its status/reason.
   ledger: LedgerRow[];
   bridge: ProfitBridge;
@@ -388,7 +388,6 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
   // One per statement: the same week saved twice counts once (B5, 2026-10-29).
   const weekDeposits = onePerStatementWeek(settlements).map((s) => ({ s, d: settlementDeposit(s) }));
   const deposits = weekDeposits.reduce((sum, x) => sum + x.d.deposited, 0);
-  const owedToCarrier = weekDeposits.reduce((sum, x) => sum + x.d.owedToCarrier, 0);
 
   const ledger = buildAuditLedger(
     layers.statementWeeks,
@@ -435,7 +434,6 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
     reimbursementsTotal: lineBreakdown.reimbursementsTotal,
     statementExpenses,
     deposits,
-    owedToCarrier,
     ledger,
     bridge,
     explanation,

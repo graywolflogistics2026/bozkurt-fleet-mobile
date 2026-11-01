@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTolls, useInsertToll, useDeleteToll } from '@/src/data/tolls';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
-import { IncompleteLineItemsNotice } from '@/src/components/IncompleteLineItemsNotice';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
@@ -171,7 +170,6 @@ export default function Tolls() {
           </Pressable>
         </View>
         <FleetScopeLabel />
-        <IncompleteLineItemsNotice />
 
         <Card>
           <View style={styles.statRow}>

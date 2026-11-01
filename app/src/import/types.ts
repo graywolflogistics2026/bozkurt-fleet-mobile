@@ -415,6 +415,9 @@ export type Extraction = {
   // src/import/settlementReconciliation.ts flagReconciliationOverride()):
   // the failed checks, kept in documents.parsed_json for the audit trail.
   reconciliationOverride?: unknown[];
+  // SIMPLE IMPORT FLOW (batch D2): the one gate's result at save time
+  // (src/import/settlementGate.ts withGateAudit()), for audit only.
+  settlementGate?: Record<string, unknown>;
   // Item 6 (owner decision 2026-10-17): the statement gate passed but a
   // line-item total, a per-group check or a check outside the gate
   // differs — saved as-is, needs-review; never the line route.

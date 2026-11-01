@@ -10,7 +10,7 @@ import { useDocuments } from '@/src/data/documents';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, TappableCard, MutedText } from '@/src/components/ui';
 import { needsReviewRowStyle, NeedsReviewChip } from '@/src/components/NeedsReviewBadge';
-import { isDeductionNeedsReview, isSettlementNeedsReview } from '@/src/import/needsReview';
+import { isDeductionNeedsReview } from '@/src/import/needsReview';
 import { isNegativeTransactionRow } from '@/src/stats/transactionDisplay';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -67,7 +67,9 @@ export default function Transactions() {
       type: 'income',
       label: t('transactions.settlementLabel', { date: date(s.week_ending) }),
       amount: s.net,
-      needsReview: isSettlementNeedsReview(s, documentsById),
+      // Batch D2 2.3: a settlement week shows no review flag (its only
+      // status is Certified / Not certified, on the Settlements screen).
+      needsReview: false,
     }));
     const expenses: TransactionRow[] = (deductionsQuery.data ?? []).map((d) => ({
       id: d.id,

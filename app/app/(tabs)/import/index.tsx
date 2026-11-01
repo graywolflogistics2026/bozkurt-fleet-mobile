@@ -23,12 +23,15 @@ import {
   useStartImportJobsBatch,
   markImportJobSaved,
   useRereadImportJob,
+  useImportJobs,
+  useDismissImportJob,
+  resumeImportJob,
   IMPORT_JOBS_QUERY_KEY,
   fetchImportJobForReview,
   downloadImportJobFileToLocal,
   type BatchStartResult,
 } from '@/src/data/importJobs';
-import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES, formatPageList } from '@/src/import/importJobs';
+import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES } from '@/src/import/importJobs';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -37,23 +40,29 @@ import { useAiUsageDisplay } from '@/src/data/aiUsageDisplay';
 import { useProfile } from '@/src/data/profile';
 import { useUsageTracking } from '@/src/data/usageTracking';
 import { isOwnerAccount } from '@/src/entitlement/hasFullAccess';
-import { fetchExistingDocsForDuplicateCheck, findExistingSettlement, saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
+import { saveExtraction, type SaveExtractionResult } from '@/src/data/aiImportSave';
 import { isSaveExtractionError, buildErrorReport } from '@/src/data/saveExtractionError';
 import { useDocumentTitleContext } from '@/src/data/useDocumentTitleContext';
 import { groupStepForDisplay, type DisplayStepGroup } from '@/src/import/errorStepGroups';
 import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
-import { checkDuplicateImport, type DuplicateCheckResult } from '@/src/import/duplicateCheck';
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
-import { checkSettlementReconciliation, flagReconciliationOverride } from '@/src/import/settlementReconciliation';
-import { buildPrimeStatementCheck, statementPagesOf } from '@/src/import/settlementStatement';
-import { buildReviewVerdict, isOlderReading, isSaveBlocked, markReviewWarnings, reviewInputsOf } from '@/src/import/reviewVerdict';
-import { SettlementReview } from '@/src/components/SettlementReview';
+import { CertifyCard, CouldNotReadCard, ReadingCard } from '@/src/components/SettlementImportCards';
+import { appVersionLabel } from '@/src/components/WeekReviewCard';
+import {
+  evaluateSettlementGate,
+  nextImportStep,
+  pickBetterReading,
+  withGateAudit,
+  MAX_AUTO_REREADS,
+  type GateFailReason,
+  type SettlementGateResult,
+} from '@/src/import/settlementGate';
 import { SettlementDateQuestion } from '@/src/components/SettlementDateQuestion';
 import { checkSettlementDates, isDateGateSatisfied, rememberedDateFormat, settlementDateInputsOf } from '@/src/import/printedDates';
 import { useSettlements } from '@/src/data/settlements';
 import { isPrimeCarrier } from '@/src/import/primeOperatingStatement';
-import { applyDefaultPerDiemDays, withPerDiemDays } from '@/src/tax/perDiem';
+import { applyDefaultPerDiemDays, defaultPerDiemDaysForMiles, withPerDiemDays } from '@/src/tax/perDiem';
 import { resolveTruckMatch } from '@/src/import/truckMatch';
 import { resolveDriverMatch } from '@/src/import/driverMatch';
 import { isPersonalPayment, normalizePaymentMethod, withPaymentMethod, PAYMENT_METHODS } from '@/src/import/paymentMethods';
@@ -65,13 +74,20 @@ import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
 import { captureDocument, explainCapture } from '@/src/scan/scanDocument';
-import { formatMoney, formatNumber } from '@/src/i18n/format';
+import { formatDate, formatMoney } from '@/src/i18n/format';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { todayDateOnly } from '@/src/lib/dateOnly';
-import { numOrNull } from '@/src/lib/number';
+import { num, numOrNull } from '@/src/lib/number';
 
-type Phase = 'pick' | 'working' | 'preview' | 'saving' | 'done' | 'error';
+type Phase = 'pick' | 'working' | 'reading' | 'preview' | 'could_not_read' | 'saving' | 'done' | 'error';
+
+// SIMPLE IMPORT FLOW (batch D2 2.1): automatic re-reads per reading (a
+// background job's id, or 'photo:<uri>'), and the best reading so far — a
+// re-read that comes back worse never replaces a better one. In memory:
+// an app restart allows at most 2 more re-reads, never an endless loop.
+const autoRereads = new Map<string, number>();
+const bestReadings = new Map<string, { reading: Extraction; gate: SettlementGateResult | null }>();
 
 // PDF/FILE SIZE GUARD (pre-launch hardening, owner decision 2026-08-02):
 // reject an oversized file before ever base64-encoding/uploading it —
@@ -250,6 +266,8 @@ export default function Import() {
   const { data: carrierCodeCategories } = useCarrierCodeCategories();
   // READ AGAIN (owner decision 2026-10-17, item 7).
   const rereadImportJob = useRereadImportJob();
+  const dismissImportJob = useDismissImportJob();
+  const jobsQuery = useImportJobs();
   const insertTruck = useInsertTruck();
   const insertDriver = useInsertDriver();
   const queryClient = useQueryClient();
@@ -279,8 +297,12 @@ export default function Import() {
   // PRINTED DATES (A5): saved settlements, for a carrier's remembered date format.
   const savedSettlementsQuery = useSettlements();
   const [fileMeta, setFileMeta] = useState<{ uri: string; ext: string; mediaType: string; name?: string } | null>(null);
-  const [duplicates, setDuplicates] = useState<DuplicateCheckResult | null>(null);
-  const [existingSettlementWeek, setExistingSettlementWeek] = useState<{ id: string } | null>(null);
+  // SIMPLE IMPORT FLOW (batch D2): the background job this screen follows
+  // while READING, and why COULD NOT READ is shown.
+  const [followJobId, setFollowJobId] = useState<string | null>(null);
+  const [couldNotRead, setCouldNotRead] = useState<GateFailReason | 'job_failed' | null>(null);
+  const readingKeyRef = useRef<string | null>(null);
+  const lastPhotoRef = useRef<{ uri: string; prepared: boolean } | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
   const [needsTruckPicker, setNeedsTruckPicker] = useState(false);
   const [driverId, setDriverId] = useState<string | null>(null);
@@ -301,7 +323,7 @@ export default function Import() {
   // page no longer means later pages were lost too). Shown as a plain
   // banner on the preview screen so the user knows exactly what was and
   // wasn't imported, rather than a silently incomplete-looking result.
-  const [pagesProcessedNote, setPagesProcessedNote] = useState<{ total: number; missingPages: number[] } | null>(null);
+  const [, setPagesProcessedNote] = useState<{ total: number; missingPages: number[] } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device
   // feedback: "settlement imports failing frequently"): instead of one
@@ -510,8 +532,8 @@ export default function Import() {
     setPhase('pick');
     setExtraction(null);
     setFileMeta(null);
-    setDuplicates(null);
-    setExistingSettlementWeek(null);
+    setFollowJobId(null);
+    setCouldNotRead(null);
     setTruckId(null);
     setNeedsTruckPicker(false);
     setDriverId(null);
@@ -531,32 +553,6 @@ export default function Import() {
     setCopied(false);
     setResult(null);
   }
-
-  // DUPLICATE-WEEK UX (owner decision 2026-07-30, blocks-beta fix): before
-  // the user ever taps Save, tell them plainly when the settlement's
-  // corrected week_ending (+ matched truck) already has a settlement on
-  // file, so a replace is never a surprise. Re-checks whenever the date
-  // field is edited or the truck picker resolves, using the exact same
-  // findExistingSettlement() match key saveExtraction() itself uses — the
-  // banner and the actual replace decision can never disagree.
-  const settlementPrimaryDate = extraction?.docType === 'settlement' ? getPrimaryExtractionDate(extraction) : null;
-  useEffect(() => {
-    if (!userId || !settlementPrimaryDate) {
-      setExistingSettlementWeek(null);
-      return;
-    }
-    let cancelled = false;
-    findExistingSettlement(userId, settlementPrimaryDate, truckId)
-      .then((row) => {
-        if (!cancelled) setExistingSettlementWeek(row);
-      })
-      .catch(() => {
-        if (!cancelled) setExistingSettlementWeek(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, settlementPrimaryDate, truckId]);
 
   // Payroll auto-routing (owner decision 2026-07-09, PRODUCT DECISION): a
   // newly created truck/driver is picked immediately and, for trucks, the
@@ -674,8 +670,7 @@ export default function Import() {
     if (!userId) return;
     aiFailureTracker.recordSuccess();
     setPagesProcessedNote(pagesProcessed ?? null);
-    const existingDocs = await fetchExistingDocsForDuplicateCheck(userId);
-    setDuplicates(checkDuplicateImport(d, fname, existingDocs));
+    void fname;
 
     const extractedUnit = d.settlement?.unit ?? d.maintenance?.unit;
     const truckMatch = resolveTruckMatch(extractedUnit, trucks);
@@ -698,14 +693,117 @@ export default function Import() {
     // BEFORE the preview ever renders — editable from there on, same
     // "compute once, then it's the user's value" pattern as the week-
     // ending date field.
-    setExtraction(applyDefaultPerDiemDays(d));
+    let reading = applyDefaultPerDiemDays(d);
+    if (reading.docType === 'settlement' && reading.settlement) {
+      // SIMPLE IMPORT FLOW (batch D2 2.1/2.2): the ONE gate decides — the
+      // card, an automatic re-read (up to 2), or COULD NOT READ.
+      const key = currentReviewId ?? readingKeyRef.current ?? 'photo';
+      const best = pickBetterReading(bestReadings.get(key), { reading, gate: settlementGateOf(reading) });
+      bestReadings.set(key, best);
+      reading = best.reading;
+      const gate = best.gate;
+      // Per diem from the statement's printed miles when the AI header had none.
+      if (gate && gate.status !== 'fail' && gate.headline.miles && num(reading.settlement?.totalMiles) <= 0 && (reading.settlement?.perDiemDays ?? 0) === defaultPerDiemDaysForMiles(0)) {
+        reading = withPerDiemDays(reading, defaultPerDiemDaysForMiles(gate.headline.miles));
+      }
+      const step = nextImportStep(gate, autoRereads.get(key) ?? 0);
+      if (step === 'reread') {
+        autoRereads.set(key, (autoRereads.get(key) ?? 0) + 1);
+        await autoReread(key);
+        return;
+      }
+      setExtraction(reading);
+      if (step === 'could_not_read' && gate?.status === 'fail') {
+        setCouldNotRead(gate.reason);
+        setPhase('could_not_read');
+        return;
+      }
+      setPhase('preview');
+      return;
+    }
+    setExtraction(reading);
     setPhase('preview');
   }
 
+  function settlementGateOf(e: Extraction): SettlementGateResult | null {
+    return evaluateSettlementGate(e, { importDate: todayDateOnly(), carrierCodes: carrierCodeCategories ?? [] });
+  }
+
+  // An automatic re-read (never shown as a step): a background job is read
+  // again on the server (content pages only) and followed while READING;
+  // a photo is read again here.
+  async function autoReread(key: string) {
+    if (currentReviewId && key === currentReviewId) {
+      const jobId = currentReviewId;
+      setPhase('reading');
+      try {
+        await rereadImportJob.mutateAsync({ jobId, locale: i18n.language, customCategories: customCategoryNames, learningRules, carrierCodeMaps });
+        setExtraction(null);
+        setCurrentReviewId(null);
+        setFollowJobId(jobId);
+      } catch {
+        showBestOrFail(key, 'job_failed');
+      }
+      return;
+    }
+    const photo = lastPhotoRef.current;
+    if (photo) {
+      await processImage(photo.uri, photo.prepared, true);
+      return;
+    }
+    showBestOrFail(key, 'job_failed');
+  }
+
+  // After the re-reads: the best reading's card, else COULD NOT READ.
+  function showBestOrFail(key: string, fallback: GateFailReason | 'job_failed') {
+    const best = bestReadings.get(key);
+    if (best && best.gate && best.gate.status !== 'fail') {
+      setExtraction(best.reading);
+      setPhase('preview');
+      return;
+    }
+    setExtraction(best?.reading ?? null);
+    setCouldNotRead(best?.gate?.status === 'fail' ? best.gate.reason : fallback);
+    setPhase('could_not_read');
+  }
+
+  // READING (batch D2 2.1): follow the background job until it is ready —
+  // a page-cap question is answered and an interruption resumed by
+  // ImportJobsChip (always mounted); a failed run is retried here
+  // (counted as a re-read). Nothing about pages or steps is shown.
+  useEffect(() => {
+    if (!followJobId) return;
+    const job = (jobsQuery.data ?? []).find((j) => j.id === followJobId);
+    if (!job) return;
+    if (job.status === 'ready') {
+      setFollowJobId(null);
+      setCurrentReviewId(job.id);
+      return;
+    }
+    if (job.status === 'failed') {
+      const done = autoRereads.get(job.id) ?? 0;
+      if (done < MAX_AUTO_REREADS) {
+        autoRereads.set(job.id, done + 1);
+        resumeImportJob(job.id, true)
+          .then(() => queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' }))
+          .catch(() => showBestOrFail(job.id, 'job_failed'));
+      } else {
+        setFollowJobId(null);
+        readingKeyRef.current = job.id;
+        showBestOrFail(job.id, 'job_failed');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followJobId, jobsQuery.data]);
+
   // `prepared` = already a scanner JPEG (85%, long edge <= 2,200 px, batch
   // E) — not re-compressed a second time.
-  async function processImage(uri: string, prepared = false) {
-    setPhase('working');
+  async function processImage(uri: string, prepared = false, isReread = false) {
+    if (!isReread) {
+      readingKeyRef.current = `photo:${uri}`;
+      lastPhotoRef.current = { uri, prepared };
+    }
+    setPhase(isReread ? 'reading' : 'working');
     setWorkingLabel(t('importScreen.compressingPhoto'));
     try {
       const compressed = prepared
@@ -774,7 +872,7 @@ export default function Import() {
     setPhase('working');
     setWorkingLabel(t('importJobs.uploading'));
     try {
-      await startImportJob.mutateAsync({
+      const started = await startImportJob.mutateAsync({
         fileUri: uri,
         mediaType,
         fileName,
@@ -783,8 +881,10 @@ export default function Import() {
         learningRules,
         carrierCodeMaps,
       });
-      reset();
-      Alert.alert(t('importJobs.startedTitle'), t('importJobs.startedBody'));
+      // SIMPLE IMPORT FLOW (batch D2 2.1): one READING line, then the card.
+      readingKeyRef.current = started.jobId;
+      setFollowJobId(started.jobId);
+      setPhase('reading');
       return true;
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
@@ -948,87 +1048,20 @@ export default function Import() {
     await startBackgroundJob(fileMeta.uri, fileMeta.mediaType, fileMeta.name ?? 'document.pdf');
   }
 
-  // "Save anyway, flagged needs-review" (owner decision 2026-10-13) — the
-  // escape from the reconciliation block, confirmed first.
-  function handleSaveFlagged() {
-    Alert.alert(t('importScreen.saveAnywayFlaggedConfirmTitle'), t('importScreen.saveAnywayFlaggedConfirmBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('importScreen.saveAnywayFlagged'), onPress: () => void handleSave({ overrideReconciliation: true }) },
-    ]);
-  }
-
-  // "Save as estimate" (item 7): when today's guard blocks Save it is the
-  // flagged save (confirmed first); otherwise the week simply saves
-  // Unverified, from its line items.
-  function handleSaveAsEstimate() {
-    if (saveBlocked) handleSaveFlagged();
-    else void handleSave();
-  }
-
-  // READ AGAIN (owner decision 2026-10-17, item 7): a background job is
-  // read again on the server — only its settlement + statement pages, with
-  // the current prompt; a photo is simply read again here.
-  async function handleReadAgain() {
-    if (!currentReviewId) {
-      await handleRetryImport();
-      return;
-    }
-    const jobId = currentReviewId;
-    try {
-      await rereadImportJob.mutateAsync({
-        jobId,
-        locale: i18n.language,
-        customCategories: customCategoryNames,
-        learningRules,
-        carrierCodeMaps,
-      });
-      Alert.alert(t('importScreen.verdict.readAgainStartedTitle'), t('importScreen.verdict.readAgainStartedBody'));
-      if (batchTotal > 0) {
-        advanceBatchReview();
-      } else {
-        setCurrentReviewId(null);
-        reset();
-      }
-    } catch (err) {
-      Alert.alert(t('importScreen.verdict.readAgain'), err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
-    }
-  }
-
-  async function handleSave(options: { overrideReconciliation?: boolean } = {}) {
+  async function handleSave() {
     // Double-tap guard (owner decision 2026-08-02, §34/§37 unique-index
-    // audit): synchronous ref check-and-set, closing the gap between a
-    // fast double-tap and React re-rendering the Save button away once
-    // phase becomes 'saving'. A second concurrent call to handleSave()
-    // for the SAME settlement week could otherwise race past
-    // findExistingSettlement()'s insert-vs-update check and hit the
-    // settlements table's partial unique index on INSERT.
+    // audit): synchronous ref check-and-set.
     if (savingRef.current) return;
     if (!extraction || !fileMeta || !userId) return;
     if (needsTruckPicker && !truckId) return;
     if (needsDriverPicker && !driverId) return;
-    if (isSettlementWeekEndingMissing(extraction)) return;
-    if (settlementDateBlocked) return;
-    // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03) —
-    // same check the Save button's `disabled` prop already renders; this
-    // is defense in depth against any path that could reach handleSave()
-    // without going through that button (e.g. a stale re-render racing a
-    // state update), same spirit as the double-tap guard above.
-    const reconciliationResult = checkSettlementReconciliation(extraction);
-    // The Prime statement self-check (owner decision 2026-10-13) joins the
-    // same gate and the same "Save anyway, flagged needs-review" escape.
-    const statementCheck = buildPrimeStatementCheck(extraction);
-    const failedStatementChecks = statementCheck ? statementCheck.checks.filter((c) => !c.passed) : [];
-    // THE GATE (owner decision 2026-10-17, item 6): a Prime statement that
-    // passed it never blocks Save — line-item and other non-gate
-    // mismatches only warn (needs-review, kept in parsed_json). Otherwise
-    // today's guard, with its "Save as estimate" (flagged) escape.
-    const blocked = isSaveBlocked(extraction);
-    if (blocked && !options.overrideReconciliation) return;
-    const extractionToSave = !blocked
-      ? statementCheck?.gatePassed
-        ? markReviewWarnings(extraction)
-        : extraction
-      : flagReconciliationOverride(extraction, [...reconciliationResult.issues, ...failedStatementChecks]);
+    const isSettlement = extraction.docType === 'settlement';
+    if (!isSettlement && settlementDateBlocked) return;
+    // ONE GATE (batch D2 2.2): the same evaluateSettlementGate() the card
+    // renders and saveExtraction() enforces; no override path.
+    const gate = isSettlement ? settlementGateOf(extraction) : null;
+    if (isSettlement && gate?.status !== 'pass') return;
+    const extractionToSave = gate ? withGateAudit(extraction, gate) : extraction;
     savingRef.current = true;
     // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — the
     // single most decision-relevant started/completed pair in the app:
@@ -1061,6 +1094,8 @@ export default function Import() {
         createContribution,
         categoryOverride: extraction.docType === 'other' ? categoryOverride : null,
         titleContext,
+        // CERTIFY AND ADD (batch D2 2.4): one atomic step for a settlement.
+        certify: isSettlement ? { appVersion: appVersionLabel() } : null,
       });
       setResult(saved);
       setPhase('done');
@@ -1127,7 +1162,6 @@ export default function Import() {
     }
   }
 
-  const hasDuplicate = !!duplicates && (duplicates.byContent.length > 0 || duplicates.byFilename.length > 0);
   const settlementWeekEndingMissing = extraction ? isSettlementWeekEndingMissing(extraction) : false;
   // PRINTED DATES (owner decision 2026-10-29): the app's own reading of the
   // printed settlement date, through the plausibility gate. Any failure
@@ -1147,22 +1181,26 @@ export default function Import() {
       settlement: { ...extraction.settlement, weekEnding, dateConfirmed: { weekEnding, by: 'user', format: weekEnding === dateCheck?.weekEnding ? dateCheck.format : null } },
     });
   }
-  // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03) —
-  // see src/import/settlementReconciliation.ts for the full reasoning.
-  // Recomputed on every extraction change, not memoized further — this
-  // is a handful of arithmetic operations over a settlement's own
-  // (already-in-memory) deduction array, not worth a useMemo.
-  // RESUMABLE IMPORT JOBS: pages of this PDF that were not read.
-  const statementPages = extraction ? statementPagesOf(extraction) : null;
-  const attachmentsStillReading = (extraction?.pageMap ?? []).filter((p) => p.role === 'attachment' && p.status === 'pending').length;
-  const saveBlocked = isSaveBlocked(extraction);
-  // SIMPLE REVIEW SCREEN (owner decision 2026-10-17, item 7): one verdict,
-  // one reason, one action for a settlement; everything else under Details.
-  const reviewInputs = extraction?.docType === 'settlement' && extraction.settlement ? reviewInputsOf(extraction) : null;
-  const verdict = reviewInputs ? buildReviewVerdict(extraction, { carrierCodes: carrierCodeCategories ?? [], saveBlocked }) : null;
-  const olderReading = isOlderReading(extraction);
-  // Read again needs the PDF's job (content pages only) or the photo itself.
-  const canReadAgain = !!currentReviewId || fileMeta?.mediaType === 'image/jpeg';
+  // SIMPLE IMPORT FLOW (batch D2): the settlement card's gate result.
+  const settlementGate = extraction?.docType === 'settlement' ? settlementGateOf(extraction) : null;
+  // Discard / Upload again: nothing is saved, so the job goes too.
+  function discardReading() {
+    const keyJob = readingKeyRef.current && !readingKeyRef.current.startsWith('photo:') ? readingKeyRef.current : null;
+    const jobId = currentReviewId ?? followJobId ?? keyJob;
+    if (jobId) {
+      dismissImportJob.mutate(jobId);
+      autoRereads.delete(jobId);
+      bestReadings.delete(jobId);
+    }
+    if (readingKeyRef.current) {
+      autoRereads.delete(readingKeyRef.current);
+      bestReadings.delete(readingKeyRef.current);
+    }
+    readingKeyRef.current = null;
+    lastPhotoRef.current = null;
+    setCurrentReviewId(null);
+    reset();
+  }
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
   // Driver compensation types (owner decision 2026-07-10, PRODUCT DECISION):
   // team_split/trainee drivers get a split-entry field on the settlement
@@ -1188,257 +1226,11 @@ export default function Import() {
     setExtraction(remapExtractionToSimpleType(extraction, target));
   }
 
-  return (
-    <Screen>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <ScreenTitle>{t('importScreen.title')}</ScreenTitle>
-
-        <ServiceStatusBanner />
-
-        {/* BATCH REVIEW FLOW (owner decision) — visible across every phase
-            while walking through a multi-document batch, so the user
-            always knows where they are without returning to the queue. */}
-        {batchTotal > 0 && (
-          <MutedText style={{ marginBottom: spacing.xs }}>
-            {t('importJobs.batchReviewProgress', { position: batchPosition, total: batchTotal })}
-          </MutedText>
-        )}
-
-        {phase === 'pick' && (
-          <Card>
-            <MutedText>{t('importScreen.pickPrompt')}</MutedText>
-            <PrimaryButton title={`📄 ${t('scan.scanDocument')}`} onPress={handleScan} />
-            <SecondaryButton title={`📷 ${t('scan.plainPhoto')}`} onPress={() => router.push('/(tabs)/import/camera')} />
-            <SecondaryButton title={t('importScreen.chooseFromGallery')} onPress={pickFromGallery} />
-            <SecondaryButton title={t('importScreen.choosePdf')} onPress={pickPdf} />
-            {/* FIRST-RUN TUTORIAL replay (owner decision 2026-08-05, FULL
-                PARITY follow-up item I) — "See how" from the empty state. */}
-            <Pressable onPress={() => router.push('/tutorial?replay=true' as Href)} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'center' }}>
-              <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>
-                {t('tutorial.seeHowLink')}
-              </Text>
-            </Pressable>
-          </Card>
-        )}
-
-        {phase === 'working' && (
-          <Card>
-            <ActivityIndicator color={colors.accent} size="large" />
-            <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{workingLabel}</Text>
-          </Card>
-        )}
-
-        {phase === 'preview' && extraction && meta && (
-          <Card>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
-              <Text style={{ fontSize: 28, marginEnd: spacing.sm }}>{meta.icon}</Text>
-              <View>
-                <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.lg }}>{meta.label}</Text>
-                <MutedText>{t('importScreen.goesTo', { route: meta.route })}</MutedText>
-              </View>
-            </View>
-
-            {/* DOCUMENT TYPE CONFIRMATION AT REVIEW (owner decision) —
-                prefilled with the AI's own classification (collapsed into
-                one of these 7 buckets), always overridable before Save.
-                Everything below this block (duplicate check, settlement-
-                replace banner, reconciliation guard, date/category
-                fields) already reads from `extraction`, so it reflows
-                live the instant a different type is picked. */}
-            <View style={{ marginBottom: spacing.sm }}>
-              <MutedText>
-                {t('importScreen.typeSelectorLabel')}
-                {extraction.confidence != null && (
-                  <Text style={{ color: extraction.confidence === 'low' ? colors.orange : colors.muted }}>
-                    {'  '}
-                    {t(extraction.confidence === 'low' ? 'importScreen.aiConfidenceLow' : 'importScreen.aiConfidenceHigh')}
-                  </Text>
-                )}
-              </MutedText>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs }}>
-                {SIMPLE_DOC_TYPES.map((simple) => (
-                  <Pill
-                    key={simple}
-                    label={t(`importScreen.simpleDocType.${simple}`)}
-                    selected={selectedSimpleType === simple}
-                    onPress={() => handleTypeChange(simple)}
-                  />
-                ))}
-              </View>
-              {(selectedSimpleType === 'toll' || selectedSimpleType === 'bank_statement') && (
-                <MutedText style={{ marginTop: spacing.xs, fontSize: typography.size.xs }}>
-                  {t('importScreen.simpleDocTypeArchiveNote')}
-                </MutedText>
-              )}
-            </View>
-
-            {hasDuplicate && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.possibleDuplicateTitle')}</Text>
-                {duplicates!.byContent.length > 0 && (
-                  <MutedText>
-                    {t('importScreen.duplicateByContent', {
-                      label: meta?.label ?? t('docTypes.other.label'),
-                      date: extraction.date,
-                      amount: money(extraction.totalAmount, i18n.language),
-                    })}
-                  </MutedText>
-                )}
-                {duplicates!.byFilename.length > 0 && <MutedText>{t('importScreen.duplicateByFilename')}</MutedText>}
-              </View>
-            )}
-
-            {extraction.docType === 'settlement' && existingSettlementWeek && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.settlementReplaceTitle')}</Text>
-                <MutedText>
-                  {t('importScreen.settlementReplaceBody', { date: settlementPrimaryDate ?? '' })}
-                </MutedText>
-              </View>
-            )}
-
-            {pagesProcessedNote && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.pagesProcessedTitle')}</Text>
-                <MutedText>
-                  {t('importScreen.pagesProcessedBody', {
-                    covered: pagesProcessedNote.total - pagesProcessedNote.missingPages.length,
-                    total: pagesProcessedNote.total,
-                    missingPages: pagesProcessedNote.missingPages.join(', '),
-                  })}
-                </MutedText>
-              </View>
-            )}
-
-            {verdict && reviewInputs ? (
-              <SettlementReview extraction={extraction} verdict={verdict} inputs={reviewInputs} olderReading={olderReading} />
-            ) : (
-              <>
-              {statementPages && statementPages.incomplete.length > 0 && (
-                <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                  <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lineItemsIncompleteTitle')}</Text>
-                  <MutedText>
-                    {t('importScreen.lineItemsIncompleteBody', {
-                      pages: formatPageList(statementPages.incomplete.map((p) => p.page)),
-                      total: statementPages.total,
-                    })}
-                  </MutedText>
-                </View>
-              )}
-              {attachmentsStillReading > 0 && (
-                <View style={{ borderColor: colors.accent, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                  <MutedText>{t('importScreen.attachmentsStillReading', { count: attachmentsStillReading })}</MutedText>
-                </View>
-              )}
-              {statementPages && statementPages.unread.length > 0 && (
-                <View style={{ borderColor: colors.border, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                  <MutedText>
-                    {t('importScreen.unreadPagesBody', { pages: formatPageList(statementPages.unread.map((p) => p.page)), count: statementPages.unread.length })}
-                  </MutedText>
-                </View>
-              )}
-
-              {extraction.confidence === 'low' && (
-                <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                  <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lowConfidenceTitle')}</Text>
-                  <MutedText>{t('importScreen.lowConfidenceBody')}</MutedText>
-                </View>
-              )}
-              </>
-            )}
-
-            {extraction.docType === 'government_or_misc_income' && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.miscIncomeNoteTitle')}</Text>
-                <MutedText>{t('importScreen.miscIncomeNoteBody')}</MutedText>
-              </View>
-            )}
-
-            {(extraction.docType === 'store' || extraction.docType === 'amazon') && extraction.taxDeductible === false && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.mealsNoteTitle')}</Text>
-                <MutedText>{t('importScreen.mealsNoteBody')}</MutedText>
-              </View>
-            )}
-
-            {isOlderThanMonths(getPrimaryExtractionDate(extraction), 6) && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.dateConfirmTitle')}</Text>
-                <MutedText>{t('importScreen.dateConfirmBody')}</MutedText>
-              </View>
-            )}
-
-            <View style={{ marginBottom: spacing.sm }}>
-              <Text style={{ color: extraction.docType === 'settlement' ? colors.orange : colors.muted, fontWeight: extraction.docType === 'settlement' ? '700' : '400' }}>
-                {extraction.docType === 'settlement' ? t('importScreen.weekEndingLabel') : t('importScreen.documentDateLabel')}
-              </Text>
-              <Field
-                value={getPrimaryExtractionDate(extraction)}
-                onChangeText={(v) => setExtraction(withPrimaryExtractionDate(extraction, v))}
-                placeholder="YYYY-MM-DD"
-                style={{ marginBottom: spacing.xs }}
-              />
-              {settlementWeekEndingMissing && <ErrorText>{t('importScreen.weekEndingRequired')}</ErrorText>}
-              {dateCheck && dateGateBlocked && !settlementWeekEndingMissing && <SettlementDateQuestion check={dateCheck} onConfirm={confirmWeekEnding} />}
-              {extraction.docType === 'settlement' && (
-                <View style={{ marginTop: spacing.xs, marginBottom: spacing.xs }}>
-                  <MutedText>{t('importScreen.perDiemDaysLabel')}</MutedText>
-                  <Field
-                    keyboardType="numeric"
-                    value={String(extraction.settlement?.perDiemDays ?? 0)}
-                    onChangeText={(v) => setExtraction(withPerDiemDays(extraction, Number(v) || 0))}
-                    placeholder="0-7"
-                  />
-                  <MutedText>{t('importScreen.perDiemDaysHint')}</MutedText>
-                </View>
-              )}
-              <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
-              <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount, i18n.language) })}</MutedText>
-              <MutedText>
-                {t('importScreen.deductibleLabel', {
-                  value: extraction.taxDeductible ? t('importScreen.deductibleYes') : t('importScreen.deductibleNo'),
-                })}
-              </MutedText>
-              {extraction.summary ? <MutedText>{extraction.summary}</MutedText> : null}
-            </View>
-
-            {buildPreviewLines(extraction, t, i18n.language).map((line, i) => (
-              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <MutedText>{line.label}</MutedText>
-                <Text style={{ color: line.color ?? colors.text, fontWeight: '600' }}>{line.value}</Text>
-              </View>
-            ))}
-
-            {(extraction.docType === 'amazon' || extraction.docType === 'store') && (
-              <View style={{ marginTop: spacing.sm }}>
-                <MutedText>{t('importScreen.previewLabels.paymentMethod')}</MutedText>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs }}>
-                  {PAYMENT_METHODS.map((pm) => (
-                    <Pill
-                      key={pm}
-                      label={pm}
-                      selected={normalizePaymentMethod(extraction.purchase?.paymentMethod) === pm}
-                      onPress={() => setExtraction(withPaymentMethod(extraction, pm))}
-                    />
-                  ))}
-                </View>
-                {isPersonalPayment(normalizePaymentMethod(extraction.purchase?.paymentMethod)) && (
-                  <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
-                    {t('deductions.personalPaymentNote')}
-                  </MutedText>
-                )}
-              </View>
-            )}
-
-            {extraction.docType === 'other' && (
-              <View style={{ marginTop: spacing.sm }}>
-                <MutedText>{t('importScreen.previewLabels.suggestedCategory')}</MutedText>
-                <View style={{ marginTop: spacing.xs }}>
-                  <CategoryPicker kind="expense" value={categoryOverride} onChange={setCategoryOverride} />
-                </View>
-              </View>
-            )}
-
+  // Truck / driver pickers and the team-driver split: shown only when the
+  // unit or driver did not match (or a team driver needs a share).
+  function renderPickers() {
+    return (
+      <>
             {needsTruckPicker && (
               <View style={{ marginTop: spacing.md }}>
                 <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>
@@ -1587,60 +1379,225 @@ export default function Import() {
                 />
               </View>
             )}
+      </>
+    );
+  }
 
-            {/* SIMPLE REVIEW SCREEN (item 7): green/amber -> Save; red ->
-                Read again, Save as estimate, Discard. A reading from an
-                older prompt offers Read again first. */}
-            {verdict && canReadAgain && (verdict.tone === 'red' || olderReading) && (
-              <PrimaryButton
-                title={t('importScreen.verdict.readAgain')}
-                onPress={() => void handleReadAgain()}
-                disabled={rereadImportJob.isPending}
-              />
-            )}
-            {verdict?.tone === 'red' ? (
-              <SecondaryButton
-                title={t('importScreen.verdict.saveAsEstimate')}
-                onPress={handleSaveAsEstimate}
-                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked}
-              />
-            ) : verdict && olderReading && canReadAgain ? (
-              <SecondaryButton
-                title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
-                onPress={() => void handleSave()}
-                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked || saveBlocked}
-              />
-            ) : verdict ? (
-              <PrimaryButton
-                title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
-                onPress={() => void handleSave()}
-                disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked || saveBlocked}
-              />
-            ) : (
-              <>
-                <PrimaryButton
-                  title={hasDuplicate ? t('importScreen.saveAnyway') : t('importScreen.save')}
-                  onPress={() => void handleSave()}
-                  disabled={
-                    (needsTruckPicker && !truckId) ||
-                    (needsDriverPicker && !driverId) ||
-                    settlementDateBlocked ||
-                    saveBlocked
-                  }
-                />
-                {saveBlocked && (
-                  <SecondaryButton
-                    title={t('importScreen.saveAnywayFlagged')}
-                    onPress={handleSaveFlagged}
-                    disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked}
-                  />
+  return (
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <ScreenTitle>{t('importScreen.title')}</ScreenTitle>
+
+        <ServiceStatusBanner />
+
+        {/* BATCH REVIEW FLOW (owner decision) — visible across every phase
+            while walking through a multi-document batch, so the user
+            always knows where they are without returning to the queue. */}
+        {batchTotal > 0 && (
+          <MutedText style={{ marginBottom: spacing.xs }}>
+            {t('importJobs.batchReviewProgress', { position: batchPosition, total: batchTotal })}
+          </MutedText>
+        )}
+
+        {phase === 'pick' && (
+          <Card>
+            <MutedText>{t('importScreen.pickPrompt')}</MutedText>
+            <PrimaryButton title={`📄 ${t('scan.scanDocument')}`} onPress={handleScan} />
+            <SecondaryButton title={`📷 ${t('scan.plainPhoto')}`} onPress={() => router.push('/(tabs)/import/camera')} />
+            <SecondaryButton title={t('importScreen.chooseFromGallery')} onPress={pickFromGallery} />
+            <SecondaryButton title={t('importScreen.choosePdf')} onPress={pickPdf} />
+            {/* FIRST-RUN TUTORIAL replay (owner decision 2026-08-05, FULL
+                PARITY follow-up item I) — "See how" from the empty state. */}
+            <Pressable onPress={() => router.push('/tutorial?replay=true' as Href)} hitSlop={8} style={{ marginTop: spacing.sm, alignSelf: 'center' }}>
+              <Text style={{ color: colors.accent, fontWeight: '600', fontSize: typography.size.sm }}>
+                {t('tutorial.seeHowLink')}
+              </Text>
+            </Pressable>
+          </Card>
+        )}
+
+        {phase === 'working' && (
+          <Card>
+            <ActivityIndicator color={colors.accent} size="large" />
+            <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{workingLabel}</Text>
+          </Card>
+        )}
+
+        {phase === 'reading' && <ReadingCard />}
+
+        {(phase === 'could_not_read' || (phase === 'preview' && settlementGate?.status === 'fail')) && (
+          <CouldNotReadCard
+            extraction={extraction}
+            reason={couldNotRead ?? (settlementGate?.status === 'fail' ? settlementGate.reason : 'job_failed')}
+            onUploadAgain={discardReading}
+          />
+        )}
+
+        {phase === 'preview' && extraction && settlementGate && settlementGate.status !== 'fail' && (
+          <CertifyCard
+            extraction={extraction}
+            gate={settlementGate}
+            perDiemDays={extraction.settlement?.perDiemDays ?? settlementGate.headline.perDiemDays}
+            onPerDiemChange={(days) => setExtraction(withPerDiemDays(extraction, days))}
+            onConfirmDate={confirmWeekEnding}
+            onCertify={() => void handleSave()}
+            onDiscard={discardReading}
+            certifyDisabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId)}
+          >
+            {renderPickers()}
+          </CertifyCard>
+        )}
+
+        {phase === 'preview' && extraction && meta && !settlementGate && (
+          <Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+              <Text style={{ fontSize: 28, marginEnd: spacing.sm }}>{meta.icon}</Text>
+              <View>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.lg }}>{meta.label}</Text>
+                <MutedText>{t('importScreen.goesTo', { route: meta.route })}</MutedText>
+              </View>
+            </View>
+
+            {/* DOCUMENT TYPE CONFIRMATION AT REVIEW (owner decision) —
+                prefilled with the AI's own classification (collapsed into
+                one of these 7 buckets), always overridable before Save.
+                Everything below this block (duplicate check, settlement-
+                replace banner, reconciliation guard, date/category
+                fields) already reads from `extraction`, so it reflows
+                live the instant a different type is picked. */}
+            <View style={{ marginBottom: spacing.sm }}>
+              <MutedText>
+                {t('importScreen.typeSelectorLabel')}
+                {extraction.confidence != null && (
+                  <Text style={{ color: extraction.confidence === 'low' ? colors.orange : colors.muted }}>
+                    {'  '}
+                    {t(extraction.confidence === 'low' ? 'importScreen.aiConfidenceLow' : 'importScreen.aiConfidenceHigh')}
+                  </Text>
                 )}
-              </>
+              </MutedText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs }}>
+                {SIMPLE_DOC_TYPES.map((simple) => (
+                  <Pill
+                    key={simple}
+                    label={t(`importScreen.simpleDocType.${simple}`)}
+                    selected={selectedSimpleType === simple}
+                    onPress={() => handleTypeChange(simple)}
+                  />
+                ))}
+              </View>
+              {(selectedSimpleType === 'toll' || selectedSimpleType === 'bank_statement') && (
+                <MutedText style={{ marginTop: spacing.xs, fontSize: typography.size.xs }}>
+                  {t('importScreen.simpleDocTypeArchiveNote')}
+                </MutedText>
+              )}
+            </View>
+
+            {extraction.confidence === 'low' && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.lowConfidenceTitle')}</Text>
+                <MutedText>{t('importScreen.lowConfidenceBody')}</MutedText>
+              </View>
             )}
-            {/* BATCH REVIEW FLOW — "Discard" doubles as "Skip" while
-                walking a batch: nothing here saves without an explicit tap
-                on Save above, per spec item 3; skipping just moves to the
-                next queued document instead of resetting to 'pick'. */}
+
+            {extraction.docType === 'government_or_misc_income' && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.miscIncomeNoteTitle')}</Text>
+                <MutedText>{t('importScreen.miscIncomeNoteBody')}</MutedText>
+              </View>
+            )}
+
+            {(extraction.docType === 'store' || extraction.docType === 'amazon') && extraction.taxDeductible === false && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.mealsNoteTitle')}</Text>
+                <MutedText>{t('importScreen.mealsNoteBody')}</MutedText>
+              </View>
+            )}
+
+            {isOlderThanMonths(getPrimaryExtractionDate(extraction), 6) && (
+              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
+                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.dateConfirmTitle')}</Text>
+                <MutedText>{t('importScreen.dateConfirmBody')}</MutedText>
+              </View>
+            )}
+
+            <View style={{ marginBottom: spacing.sm }}>
+              <Text style={{ color: extraction.docType === 'settlement' ? colors.orange : colors.muted, fontWeight: extraction.docType === 'settlement' ? '700' : '400' }}>
+                {extraction.docType === 'settlement' ? t('importScreen.weekEndingLabel') : t('importScreen.documentDateLabel')}
+              </Text>
+              <Field
+                value={getPrimaryExtractionDate(extraction)}
+                onChangeText={(v) => setExtraction(withPrimaryExtractionDate(extraction, v))}
+                placeholder="YYYY-MM-DD"
+                style={{ marginBottom: spacing.xs }}
+              />
+              {settlementWeekEndingMissing && <ErrorText>{t('importScreen.weekEndingRequired')}</ErrorText>}
+              {dateCheck && dateGateBlocked && !settlementWeekEndingMissing && <SettlementDateQuestion check={dateCheck} onConfirm={confirmWeekEnding} />}
+              {extraction.docType === 'settlement' && (
+                <View style={{ marginTop: spacing.xs, marginBottom: spacing.xs }}>
+                  <MutedText>{t('importScreen.perDiemDaysLabel')}</MutedText>
+                  <Field
+                    keyboardType="numeric"
+                    value={String(extraction.settlement?.perDiemDays ?? 0)}
+                    onChangeText={(v) => setExtraction(withPerDiemDays(extraction, Number(v) || 0))}
+                    placeholder="0-7"
+                  />
+                  <MutedText>{t('importScreen.perDiemDaysHint')}</MutedText>
+                </View>
+              )}
+              <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
+              <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount, i18n.language) })}</MutedText>
+              <MutedText>
+                {t('importScreen.deductibleLabel', {
+                  value: extraction.taxDeductible ? t('importScreen.deductibleYes') : t('importScreen.deductibleNo'),
+                })}
+              </MutedText>
+              {extraction.summary ? <MutedText>{extraction.summary}</MutedText> : null}
+            </View>
+
+            {buildPreviewLines(extraction, t, i18n.language).map((line, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <MutedText>{line.label}</MutedText>
+                <Text style={{ color: line.color ?? colors.text, fontWeight: '600' }}>{line.value}</Text>
+              </View>
+            ))}
+
+            {(extraction.docType === 'amazon' || extraction.docType === 'store') && (
+              <View style={{ marginTop: spacing.sm }}>
+                <MutedText>{t('importScreen.previewLabels.paymentMethod')}</MutedText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs }}>
+                  {PAYMENT_METHODS.map((pm) => (
+                    <Pill
+                      key={pm}
+                      label={pm}
+                      selected={normalizePaymentMethod(extraction.purchase?.paymentMethod) === pm}
+                      onPress={() => setExtraction(withPaymentMethod(extraction, pm))}
+                    />
+                  ))}
+                </View>
+                {isPersonalPayment(normalizePaymentMethod(extraction.purchase?.paymentMethod)) && (
+                  <MutedText style={{ color: colors.orange, marginTop: spacing.xs }}>
+                    {t('deductions.personalPaymentNote')}
+                  </MutedText>
+                )}
+              </View>
+            )}
+
+            {extraction.docType === 'other' && (
+              <View style={{ marginTop: spacing.sm }}>
+                <MutedText>{t('importScreen.previewLabels.suggestedCategory')}</MutedText>
+                <View style={{ marginTop: spacing.xs }}>
+                  <CategoryPicker kind="expense" value={categoryOverride} onChange={setCategoryOverride} />
+                </View>
+              </View>
+            )}
+
+            {renderPickers()}
+
+            <PrimaryButton
+              title={t('importScreen.save')}
+              onPress={() => void handleSave()}
+              disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked}
+            />
             <SecondaryButton
               title={batchTotal > 0 ? t('importJobs.skipDocument') : t('importScreen.discard')}
               onPress={batchTotal > 0 ? advanceBatchReview : reset}
@@ -1673,22 +1630,21 @@ export default function Import() {
             )}
             {result.settlementWeekEnding && (
               <MutedText>
-                {result.isSettlementReimport
-                  ? t('importScreen.savedSettlementReplaced', { date: result.settlementWeekEnding })
+                {result.certified
+                  ? t('importFlow.certifiedAdded', { date: formatDate(result.settlementWeekEnding, i18n.language) })
                   : t('importScreen.savedSettlementNew', { date: result.settlementWeekEnding })}
               </MutedText>
             )}
+            {result.linesNotSaved && <MutedText>{t('importFlow.linesNotSaved')}</MutedText>}
             {result.contributionTotal > 0 && (
               <MutedText>
                 {t('importScreen.contributionAdded', { amount: money(result.contributionTotal, i18n.language) })}
               </MutedText>
             )}
             {result.storagePath && <MutedText>{t('importScreen.savedToPath', { path: result.storagePath })}</MutedText>}
-            {/* Batch C item 5: the week's ONE review card (things to check +
-                Certify) instead of a scatter of warnings. */}
             {result.settlementId && (
               <PrimaryButton
-                title={t('weekReview.openCard')}
+                title={t('importFlow.viewWeek')}
                 onPress={() =>
                   router.push({ pathname: '/(tabs)/more/settlements', params: { openId: result.settlementId } } as unknown as Href)
                 }

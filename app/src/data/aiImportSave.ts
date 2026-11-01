@@ -25,7 +25,10 @@ import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf } fro
 import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
 import { buildSettlementStatement, isStatementBacked, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
-import { lineDetailsDifference, reviewInputsOf, saveGateFailures } from '@/src/import/reviewVerdict';
+import { lineDetailsDifference, reviewInputsOf } from '@/src/import/reviewVerdict';
+import { evaluateSettlementGate } from '@/src/import/settlementGate';
+import { certifyUpdate } from '@/src/import/weekReview';
+import { buildMarkDocumentReviewedUpdate } from '@/src/import/needsReview';
 import { scrubBankDigits } from '@/src/import/bankDigits';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { buildTitleFromExtraction, cleanTitle, type TitleContext } from '@/src/data/documentTitle';
@@ -167,6 +170,11 @@ export type SaveExtractionParams = {
   // caller has already confirmed it with the user (once per receipt) —
   // declining still saves the deduction, just with no linked contribution.
   createContribution: boolean;
+  // CERTIFY AND ADD (batch D2 2.4): one atomic step — after every row of
+  // the week is saved, the week is certified (certified_at + text version
+  // + app version) as the LAST write, so the §82 child triggers cannot
+  // clear it. Null/undefined: saved, not certified.
+  certify?: { appVersion: string; nowIso?: string } | null;
   // DOCUMENT TITLES (owner decision 2026-09-23): the caller's i18n labels,
   // used to build a specific title when the AI didn't return one.
   titleContext?: TitleContext;
@@ -196,6 +204,11 @@ export type SaveExtractionResult = {
   // why instead of a silently-incomplete-looking success. Empty for the
   // common case (nothing skipped).
   skippedRows: SkippedImportRow[];
+  // Batch D2 2.2: the statement passed but its line details did not
+  // reconcile, so no load/fuel/deduction/... rows were stored.
+  linesNotSaved: boolean;
+  // Batch D2 2.4: the certification write succeeded.
+  certified: boolean;
 };
 
 // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device feedback:
@@ -323,9 +336,12 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // the statement's printed totals and, for Prime, its self-checked
   // Statement of Income and Expense — saved to settlements.statement (§77).
   let settlementStatement: SettlementStatement | null = null;
+  let linesNotSaved = false;
   if (d.docType === 'settlement' && d.settlement) {
     settlementStatement = buildSettlementStatement(d, {
-      savedFlagged: Array.isArray(d.reconciliationOverride) && d.reconciliationOverride.length > 0,
+      // Batch D2: no override path any more — a week is saved only when
+      // it passed the gate, so it is never "saved flagged".
+      savedFlagged: false,
       priorLabelsSeen: await fetchPriorStatementLabels(userId),
       lineDetailsDifference: lineDetailsDifference(reviewInputsOf(d)),
     });
@@ -381,18 +397,32 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         partial
       );
     }
-    // THE SAME GATE THE PREVIEW USES (owner decision 2026-10-30, before
-    // batch D): self-check, balance-forward chain, line totals — whatever
-    // path reached this save (live read, background job, Review All, retry,
-    // resume, read again). A failing week is refused unless the owner chose
-    // "Save anyway, flagged" in the preview (reconciliationOverride).
-    const gateFailures = saveGateFailures(d);
-    if (gateFailures.length > 0 && !(Array.isArray(d.reconciliationOverride) && d.reconciliationOverride.length > 0)) {
+    // ONE PASS/FAIL GATE (batch D2 2.2, src/import/settlementGate.ts) — the
+    // same function the import card renders, on every path. No override:
+    // a failing week is never saved.
+    const gate = evaluateSettlementGate(d, { importDate: params.importDate ?? todayDateOnly() });
+    if (!gate || gate.status === 'fail') {
       throw new SaveExtractionError(
         'validation',
-        new Error(`This settlement did not pass its checks (${gateFailures.join(', ')}). Open it in the import preview to review it.`),
+        new Error(`This settlement did not pass its checks (${gate?.status === 'fail' ? gate.failures.join(', ') : 'not a settlement'}). Nothing was saved.`),
         partial
       );
+    }
+    if (gate.status === 'needs_date') {
+      throw new SaveExtractionError('validation', new Error(`Please confirm the week ending date (${weekEnding}) before saving.`), partial);
+    }
+    // Statement passed, line details did not reconcile: save the week and
+    // its headline numbers (profit stays the statement's) but never the
+    // mismatching line rows — no wrong deduction, fuel or load rows.
+    if (gate.lineDetails === 'mismatch') {
+      settlementMapping.loads = [];
+      settlementMapping.fuel = [];
+      settlementMapping.deductions = [];
+      settlementMapping.maintenance = [];
+      settlementMapping.reimbursements = [];
+      settlementMapping.tolls = [];
+      settlementStatement = { ...settlementStatement, linesNotSaved: true };
+      linesNotSaved = true;
     }
   }
   if (d.docType === 'driver_payment' && !driverId) {
@@ -1038,5 +1068,30 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // (see mapExtraction.ts's mapGenericDeduction comment; universal AI
   // capture, owner decision 2026-07-10 — v1.x backlog, PROMPTS.md).
 
-  return { documentId, storagePath, contributionTotal, settlementWeekEnding, settlementId: partial.settlementId ?? null, isSettlementReimport, skippedRows };
+  // CERTIFY AND ADD (batch D2 2.4): the LAST write — only the review
+  // columns change, so the §82 triggers keep it. A failure here leaves the
+  // week saved and "Not certified" (the owner can certify it later).
+  let certified = false;
+  if (params.certify && partial.settlementId) {
+    const nowIso = params.certify.nowIso ?? new Date().toISOString();
+    try {
+      const { data, error } = await supabase.from('settlements').update(certifyUpdate(nowIso, params.certify.appVersion)).eq('id', partial.settlementId).select('id');
+      certified = !error && (data?.length ?? 0) > 0;
+      if (certified) await supabase.from('documents').update(buildMarkDocumentReviewedUpdate(nowIso)).eq('id', documentId);
+    } catch {
+      certified = false;
+    }
+  }
+
+  return {
+    documentId,
+    storagePath,
+    contributionTotal,
+    settlementWeekEnding,
+    settlementId: partial.settlementId ?? null,
+    isSettlementReimport,
+    skippedRows,
+    linesNotSaved,
+    certified,
+  };
 }

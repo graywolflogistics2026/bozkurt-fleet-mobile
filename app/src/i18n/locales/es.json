@@ -155,7 +155,9 @@
       },
       "profitNotDeposits": "Ganancia, no depósitos",
       "depositedToBank": "Depositado en su banco: {{amount}}",
-      "owedToCarrier": "Debe al transportista: {{amount}}"
+      "owedToCarrier": "Debe {{amount}} al {{date}}",
+      "owedSheetTitle": "Adeudado al transportista",
+      "owedSheetBody": "Prime lo descuenta de sus próximos settlements. No es una factura."
     },
     "overview": {
       "expenses": "Gastos"
@@ -3102,5 +3104,61 @@
     "pagesDroppedTitle": "Límite de páginas",
     "pagesDroppedBody_one": "Solo se guardaron las primeras {{max}} páginas; quedó fuera {{count}} página más. Escanéela por separado.",
     "pagesDroppedBody_other": "Solo se guardaron las primeras {{max}} páginas; quedaron fuera {{count}} páginas más. Escanéelas por separado."
+  },
+  "importFlow": {
+    "reading": "Leyendo su estado de cuenta. Mantenga la app abierta. Suele tardar 2-4 minutos para 17 páginas.",
+    "readingShort": "Leyendo su estado de cuenta…",
+    "statusReading": "Leyendo",
+    "statusReady": "Listo para revisar",
+    "statusFailed": "No se pudo leer",
+    "chipCouldNotRead": "No se pudo leer un estado de cuenta",
+    "checkAndCertify": "Revisar y certificar",
+    "certifyTitle": "Compare estas cifras con su estado de cuenta",
+    "certifySubtitle": "Compare el depósito con la app de su banco.",
+    "weekEnding": "Semana que termina",
+    "revenue": "Ingresos",
+    "netDue": "Neto a pagar",
+    "deposited": "Depositado en su banco",
+    "owedToCarrier": "Adeudado al transportista",
+    "miles": "Millas",
+    "milesSplit": "{{total}} ({{loaded}} cargadas / {{empty}} vacías)",
+    "perDiemDays": "Días de per diem (0-7)",
+    "estimatedProfit": "Ganancia estimada",
+    "linesWillNotBeSaved": "Los detalles de las líneas no coincidieron con su estado de cuenta. La semana se agrega desde el estado de cuenta; los detalles de las líneas no se guardan.",
+    "certifyAndAdd": "Certificar y agregar a mis libros",
+    "certifyLine": "Revisé estas cifras contra mi estado de cuenta. Estimaciones generadas por IA, no son asesoría fiscal.",
+    "showDetails": "Mostrar detalles",
+    "hideDetails": "Ocultar detalles",
+    "couldNotReadTitle": "No pudimos leer este estado de cuenta de forma confiable. No se guardó nada.",
+    "uploadAgain": "Subir de nuevo",
+    "sendReport": "Enviar informe",
+    "reason": {
+      "statementNotRead": "No encontramos el Statement of Income and Expense de Prime, o no pudimos leer todos sus totales.",
+      "statementCheckFailed": "Los totales del propio estado de cuenta no cuadraron según nuestra lectura.",
+      "grossDiffers": "Los ingresos de la primera página no coinciden con el TOTAL REVENUE del estado de cuenta.",
+      "netDueDiffers": "Ingresos más reembolsos menos deducciones no es igual al neto a pagar que leímos.",
+      "depositDiffers": "El depósito no coincide con el neto a pagar más el saldo anterior.",
+      "dateMismatch": "Las fechas impresas en el estado de cuenta no coinciden entre sí.",
+      "dateUnreadable": "No pudimos leer la fecha de fin de semana.",
+      "missingFields": "No pudimos leer los ingresos o el neto a pagar.",
+      "totalsNotPrinted": "Este estado de cuenta no imprime sus totales, así que no podemos verificarlo. Envíenos un informe.",
+      "totalsDiffer": "Los totales impresos no cuadran según nuestra lectura.",
+      "linesDiffer": "Las líneas que leímos no suman los totales impresos.",
+      "jobFailed": "No se pudo leer el archivo."
+    },
+    "certifiedAdded": "Certificado y agregado: semana que termina el {{date}}.",
+    "linesNotSaved": "Los detalles de las líneas no se guardaron porque no coincidieron con su estado de cuenta.",
+    "tryReadingAgain": "Intentar leerlos de nuevo",
+    "attachmentsLine": "Adjuntos: {{saved}} guardados, {{read}} leídos",
+    "read": "Leer",
+    "readAgainStartedTitle": "Leyendo de nuevo",
+    "readAgainStartedBody": "Cuando termine, las cifras a revisar se abren desde la lista de importaciones.",
+    "viewWeek": "Ver esta semana"
+  },
+  "certify": {
+    "certifiedOn": "Certificado el {{date}}",
+    "notCertified": "No certificado",
+    "certify": "Certificar",
+    "certified": "Certificado"
   }
 }
