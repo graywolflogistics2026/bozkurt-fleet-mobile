@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- MODEL DECISION (owner 2026-11-01): full Opus 5.5 for every extraction
+  role (statement/lines/attachments env settings, effort medium/low/low);
+  Fable not used (AI_IMPORT_ALLOW_FABLE=false hard switch); no silent
+  model switch (5 Opus retries, AI_IMPORT_FALLBACK_MODEL only if set);
+  all profiles Opus. Docs only:
+  docs/decisions/statement-reading-2026-10.md. Code in steps B and C.
 - STATEMENT READING step A (owner 2026-10-31): system check + Send report.
   ai-import mode "diagnose" (supabase/functions/ai-import/diagnose.ts):
   server build id, plan + budget, schema §77-§83 (missing names), AI key

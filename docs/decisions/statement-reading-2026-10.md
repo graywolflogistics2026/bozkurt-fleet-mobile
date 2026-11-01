@@ -3,6 +3,12 @@
 Saved verbatim so "continue the statement reading plan" resumes after a
 /clear. Progress is tracked at the end of this file.
 
+> **SUPERSEDED IN PART (owner, 2026-11-01): FULL OPUS 5.5.** Every model
+> choice in the verbatim plan below (step B item 3, step C items 1-2, and
+> any earlier Fable addendum) is replaced by the section "Owner decision
+> 2026-11-01: full Opus 5.5" further down. Where the two disagree, that
+> section wins. Everything else in the plan still binds.
+
 ```
 STATEMENT READING, THREE STEPS (A, B, C), ONE PASTE. Goal: a statement
 imports reliably and correctly, or fails cleanly. Speed and cost do not
@@ -131,9 +137,94 @@ PDF).
    unavailable; 5 locales; no calculation changes.
 ```
 
+## Owner decision 2026-11-01: full Opus 5.5
+
+Supersedes the earlier Fable addendum and every model section of the plan
+above (step B item 3, step C items 1-2). Docs only on 2026-11-01; the code
+follows in steps B and C.
+
+**1. One model for every extraction role.** Statement pages, line pages
+and attachments all use `claude-opus-5-5`.
+
+| Env setting (Supabase secret) | Default | Effort default | Effort env |
+|---|---|---|---|
+| `AI_IMPORT_MODEL_STATEMENT` | `claude-opus-5-5` | medium | `AI_IMPORT_EFFORT_STATEMENT` |
+| `AI_IMPORT_MODEL_LINES` | `claude-opus-5-5` | low | `AI_IMPORT_EFFORT_LINES` |
+| `AI_IMPORT_MODEL_ATTACHMENTS` | `claude-opus-5-5` | low | `AI_IMPORT_EFFORT_ATTACHMENTS` |
+
+- Every call uses adaptive thinking (`thinking: {type: "adaptive"}`),
+  `output_config.effort`, and `output_config.format` json_schema.
+- `max_tokens` is sized generously because it covers thinking plus the
+  reply. A `max_tokens` stop is retried with more room or a split, as in
+  step B item 2.
+- Haiku and Sonnet no longer have an extraction role. They appear only if
+  the owner sets one of the env settings above.
+
+**2. Fable is not used and not offered.**
+- `claude-fable-5-1` is removed from every profile and every default.
+- `AI_IMPORT_ALLOW_FABLE` is a hard switch. It is false by default, and
+  anything other than exactly `true` counts as false.
+- While it is false, no code path may call a model whose id starts with
+  `claude-fable`. That includes the env model settings and
+  `AI_IMPORT_FALLBACK_MODEL`: a Fable id there is refused and logged,
+  never called. A test asserts this.
+- The Diagnostics live model check skips Fable. Its line reads "Not used
+  (30-day retention model)" and is never red.
+- Code owed: step A's `DIAGNOSE_MODELS` (`diagnose.ts`) still makes a live
+  Fable call; this changes in step B.
+
+**3. No silent model switch.**
+- On overloaded (529), other 5xx, or rate-limit (429) errors, Opus is
+  retried with backoff: up to 5 attempts over about 2 minutes, always
+  inside the plan-aware budget (`limitsForPlan()`; a retry never starts
+  past the exit-by point).
+- If every attempt fails, that page is failed and the clean failure
+  screen appears ("We couldn't read this statement reliably. Nothing was
+  saved.").
+- `AI_IMPORT_FALLBACK_MODEL` is unset by default. A different model is
+  used only when the owner sets it. Every use is logged (ai_usage_log and
+  the function log) and named in the Send report.
+- This replaces step B item 3's automatic opus -> sonnet fallback chain.
+
+**4. Profiles (step C, `AI_IMPORT_PROFILE`), all Opus.**
+
+| Profile | Reads per headline/statement page | Effort |
+|---|---|---|
+| `balanced` (default) | two reads with different prompt and field orders; a third read only when they disagree | the env defaults above |
+| `economy` | one read; a second read only when a gate fails | the env defaults above |
+| `max` | same as balanced | high |
+
+The dual read compares every number. A number is accepted only when two
+reads agree AND the arithmetic chains pass (step C item 1).
+
+**5. Cost log per import.**
+- Each import logs model, input and output tokens, effort, and a dollar
+  estimate in `ai_usage_log`.
+- After the owner's first real imports, report the measured cost of one
+  8-page and one 17-page import. The owner's estimate, with attachments on
+  Opus, is about $1.6 and $2.6.
+
+**6. Privacy.**
+- Opus 5.5 is not a Covered Model. Do NOT enable 30-day retention in the
+  Anthropic workspace (that setting was only needed for Fable).
+- For the attorney to confirm before the consent text and the Privacy
+  Policy line are final:
+  1. The retention period Anthropic states for `claude-opus-5-5` under
+     "Model-specific data retention requirements", and whether the
+     workspace default applies to it unchanged.
+  2. That the Privacy Policy line describing how long settlement pages
+     sent to the AI provider are kept matches that period. Draft:
+     docs/TERMS_OF_USE_DRAFT.md and the Settings > Legal privacy policy.
+  3. That the in-app consent text for AI reading names the provider and
+     states that same period.
+  4. That keeping `AI_IMPORT_ALLOW_FABLE=false` means no document is ever
+     sent to a model with a different (30-day) retention requirement.
+
 ## Progress
 
 - [x] Step A: system check, live model check, send report (2026-10-31;
   needs ai-import redeploy + eas update; results from the tablet pending)
 - [ ] Step B: statement pages first, page by page, structured output
-- [ ] Step C: dual read and model profiles
+  (models per the 2026-11-01 full Opus 5.5 decision; also make the
+  Diagnostics Fable line "Not used" and add the AI_IMPORT_ALLOW_FABLE test)
+- [ ] Step C: dual read and model profiles (all Opus, per 2026-11-01)
