@@ -3093,5 +3093,14 @@
       "checkFirst": "Devam etmek için \"Anladım\" kutusunu işaretle ve Koşulları sonuna kadar kaydır.",
       "acceptedOn": "Bu bildirimi {{date}} tarihinde kabul ettin (sürüm {{version}})."
     }
+  },
+  "scan": {
+    "scanDocument": "Belge tara",
+    "plainPhoto": "Normal fotoğraf",
+    "tooLargeTitle": "Tarama çok büyük",
+    "tooLargeBody": "Sıkıştırmaya rağmen bu tarama 10 MB'tan büyük. Bir seferde daha az sayfa tara.",
+    "pagesDroppedTitle": "Sayfa sınırı",
+    "pagesDroppedBody_one": "Yalnızca ilk {{max}} sayfa alındı; {{count}} sayfa dışarıda kaldı. Onu ayrıca tara.",
+    "pagesDroppedBody_other": "Yalnızca ilk {{max}} sayfa alındı; {{count}} sayfa dışarıda kaldı. Onları ayrıca tara."
   }
 }

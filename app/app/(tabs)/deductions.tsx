@@ -53,6 +53,7 @@ import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { CategorySyncCard } from '@/src/components/CategorySyncCard';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { captureDocument, explainCapture, takePlainPhoto } from '@/src/scan/scanDocument';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Deduction } from '@/src/types/db';
 import { todayDateOnly } from '@/src/lib/dateOnly';
@@ -625,16 +626,30 @@ export default function Deductions() {
   }
 
   // DEDUCTIONS MANUAL ENTRY — ATTACH A RECEIPT (owner decision) — three
-  // actions mirroring compliance.tsx's own attachment flow, plus a camera
-  // capture option (expo-image-picker's launchCameraAsync — already a
-  // dependency, no new native module). Each uploads immediately on pick.
+  // actions mirroring compliance.tsx's own attachment flow, plus camera
+  // capture (now the shared src/scan/scanDocument.ts helper). Each uploads
+  // immediately on pick.
+  // AUTOMATIC DOCUMENT SCANNER (batch E): "Scan document" opens the
+  // on-device scanner (falls back to the plain camera when it cannot run);
+  // "Plain photo" is the old camera. Scan temp files are deleted after the
+  // upload.
   async function handleAttachTakePhoto() {
     if (!userId) return;
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) return;
-    const picked = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
-    if (picked.canceled || !picked.assets?.[0]) return;
-    await saveAddAttachment(picked.assets[0].uri, picked.assets[0].fileName || `photo-${Date.now()}.jpg`, picked.assets[0].mimeType || 'image/jpeg');
+    const result = await captureDocument({ baseName: 'receipt' });
+    explainCapture(result, (k, o) => t(k, o) as string);
+    if (result.status !== 'ready') return;
+    try {
+      await saveAddAttachment(result.doc.uri, result.doc.name, result.doc.mediaType);
+    } finally {
+      result.doc.cleanup();
+    }
+  }
+
+  async function handleAttachPlainPhoto() {
+    if (!userId) return;
+    const photo = await takePlainPhoto();
+    if (!photo) return;
+    await saveAddAttachment(photo.uri, photo.name, photo.mediaType);
   }
 
   async function handleAttachChooseFromLibrary() {
@@ -1176,7 +1191,8 @@ export default function Deductions() {
           <MutedText style={{ color: colors.green }}>✓ {addAttachmentFilename}</MutedText>
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            <SecondaryButton title={`📷 ${t('deductions.attachTakePhoto')}`} onPress={handleAttachTakePhoto} loading={attaching} />
+            <SecondaryButton title={`📄 ${t('scan.scanDocument')}`} onPress={handleAttachTakePhoto} loading={attaching} />
+            <SecondaryButton title={`📷 ${t('scan.plainPhoto')}`} onPress={handleAttachPlainPhoto} loading={attaching} />
             <SecondaryButton title={`🖼️ ${t('deductions.attachChooseFromLibrary')}`} onPress={handleAttachChooseFromLibrary} loading={attaching} />
             <SecondaryButton title={`📄 ${t('deductions.attachImportFile')}`} onPress={handleAttachImportFile} loading={attaching} />
           </View>

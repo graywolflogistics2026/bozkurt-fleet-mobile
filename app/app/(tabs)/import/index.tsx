@@ -64,6 +64,7 @@ import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
+import { captureDocument, explainCapture } from '@/src/scan/scanDocument';
 import { formatMoney, formatNumber } from '@/src/i18n/format';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -324,6 +325,8 @@ export default function Import() {
   // saveExtraction() concurrently — the second attempt racing the first
   // insert-vs-update decision and hitting the settlements unique index.
   const savingRef = useRef(false);
+  // Batch E: cleanup for the current scan's temp files (see reset()).
+  const scanCleanupRef = useRef<(() => void) | null>(null);
   const [result, setResult] = useState<SaveExtractionResult | null>(null);
   // BATCH REVIEW FLOW (owner decision, "3 documents ready to review ->
   // Next/Skip without returning to the queue between each" pass) —
@@ -501,6 +504,9 @@ export default function Import() {
   }, [currentReviewId, userId]);
 
   function reset() {
+    // Batch E: a scan's temp files go once the import is done or dropped.
+    scanCleanupRef.current?.();
+    scanCleanupRef.current = null;
     setPhase('pick');
     setExtraction(null);
     setFileMeta(null);
@@ -696,14 +702,18 @@ export default function Import() {
     setPhase('preview');
   }
 
-  async function processImage(uri: string) {
+  // `prepared` = already a scanner JPEG (85%, long edge <= 2,200 px, batch
+  // E) — not re-compressed a second time.
+  async function processImage(uri: string, prepared = false) {
     setPhase('working');
     setWorkingLabel(t('importScreen.compressingPhoto'));
     try {
-      const compressed = await manipulateAsync(uri, [{ resize: { width: 1600 } }], {
-        compress: 0.8,
-        format: SaveFormat.JPEG,
-      });
+      const compressed = prepared
+        ? { uri }
+        : await manipulateAsync(uri, [{ resize: { width: 1600 } }], {
+            compress: 0.8,
+            format: SaveFormat.JPEG,
+          });
       const compressedSize = new File(compressed.uri).size;
       if (compressedSize > MAX_FILE_SIZE_BYTES) {
         setErrorMessage(t('importScreen.fileTooLargeMessage'));
@@ -760,7 +770,7 @@ export default function Import() {
   // always a single, fast Anthropic call (never chunked/continued), so
   // there's no "perceived slowness" problem to fix there, and the existing
   // synchronous callAiImport() flow stays exactly as it was.
-  async function startBackgroundJob(uri: string, mediaType: string, fileName: string) {
+  async function startBackgroundJob(uri: string, mediaType: string, fileName: string): Promise<boolean> {
     setPhase('working');
     setWorkingLabel(t('importJobs.uploading'));
     try {
@@ -775,6 +785,7 @@ export default function Import() {
       });
       reset();
       Alert.alert(t('importJobs.startedTitle'), t('importJobs.startedBody'));
+      return true;
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : t('importScreen.couldNotProcessFile'));
       setErrorStepGroup(null);
@@ -782,6 +793,30 @@ export default function Import() {
       setErrorIsDuplicateRace(false);
       setErrorReport(buildLocalErrorReport('Starting the background import', err));
       setPhase('error');
+      return false;
+    }
+  }
+
+  // AUTOMATIC DOCUMENT SCANNER (batch E). One page -> the photo import;
+  // 2-10 pages -> one PDF built on the device -> the resumable background
+  // import. Scanner unavailable (old build, no Google Play services,
+  // denied, failed) -> the existing camera screen. Cancel -> nothing.
+  async function handleScan() {
+    const result = await captureDocument({ fallback: 'none', baseName: 'import' });
+    if (result.status === 'unavailable') {
+      router.push('/(tabs)/import/camera');
+      return;
+    }
+    explainCapture(result, (k, o) => t(k, o) as string);
+    if (result.status !== 'ready') return;
+    const doc = result.doc;
+    scanCleanupRef.current?.();
+    scanCleanupRef.current = doc.cleanup;
+    if (doc.mediaType === 'application/pdf') {
+      setFileMeta({ uri: doc.uri, ext: 'pdf', mediaType: 'application/pdf', name: doc.name });
+      await startBackgroundJob(doc.uri, 'application/pdf', doc.name);
+    } else {
+      await processImage(doc.uri, true);
     }
   }
 
@@ -1172,7 +1207,8 @@ export default function Import() {
         {phase === 'pick' && (
           <Card>
             <MutedText>{t('importScreen.pickPrompt')}</MutedText>
-            <PrimaryButton title={t('importScreen.takePhoto')} onPress={() => router.push('/(tabs)/import/camera')} />
+            <PrimaryButton title={`📄 ${t('scan.scanDocument')}`} onPress={handleScan} />
+            <SecondaryButton title={`📷 ${t('scan.plainPhoto')}`} onPress={() => router.push('/(tabs)/import/camera')} />
             <SecondaryButton title={t('importScreen.chooseFromGallery')} onPress={pickFromGallery} />
             <SecondaryButton title={t('importScreen.choosePdf')} onPress={pickPdf} />
             {/* FIRST-RUN TUTORIAL replay (owner decision 2026-08-05, FULL

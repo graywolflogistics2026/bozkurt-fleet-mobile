@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- BATCH E (owner decision 2026-10-30, done 2026-10-31). Automatic document
+  scanner: react-native-document-scanner-plugin (ML Kit / VisionKit) +
+  pdf-lib. src/scan/ (scanCore pure + tests, scanDeps, scanDocument
+  captureDocument()); Import, Deductions receipt, For Prime Inc Drivers.
+  JPEG 85% / 2,200 px, max 10 pages -> one PDF -> resumable import, 10 MB
+  compression ladder, plain-camera fallback, temp cleanup. app.config.js:
+  plugin, camera text, version 1.1.0 (versionCode 2). No SQL, no redeploy;
+  NEEDS eas build. docs/decisions/document-scanner.md.
 - BATCH D (owner decision 2026-10-30, done 2026-10-31). Item 8 profit
   explainer: settlements profit − own expenses = profit, residual 0.00 checked
   (src/stats/profitExplainer.ts, components/ProfitExplainer.tsx; Home caption +

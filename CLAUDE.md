@@ -105,8 +105,11 @@ Secrets, dashboard alternative and JWT notes: `docs/DEPLOY_FUNCTIONS.md`
 
 EAS Update facts (confirmed from config, 2026-08-28):
 - `runtimeVersion: { policy: 'appVersion' }` in `app/app.config.js`;
-  `version` is `1.0.0` and has never been bumped. An update only reaches a
-  build with the same runtime version.
+  `version` is `1.1.0` (bumped from 1.0.0 on 2026-10-31 for the batch E
+  document scanner, a NATIVE module — that change needs `eas build`, not
+  `eas update`; 1.0.0 binaries no longer receive new updates). An update
+  only reaches a build with the same runtime version.
+  Full: `docs/decisions/document-scanner.md`.
 - `app/eas.json` channels: `development`, `preview`, `production`. Builds
   made with `--profile preview` listen on channel `preview`; publish with
   `--branch preview`. The channel->branch mapping lives on Expo's servers
@@ -1061,7 +1064,9 @@ under each is unchanged original wording.
     applied — owner confirmed 2026-10-31, mirror files removed, SQL
     inlined; the batch C ai-import redeploy (milesLines) is not tracked
     here.)
-- **Native build**: the owner's device reported "embedded build (no OTA
+- **Native build**: batch E (document scanner, version 1.1.0) needs
+  `eas build --profile preview --platform android`; OTA updates published
+  after it only reach 1.1.0 builds. Earlier: the owner's device reported "embedded build (no OTA
   update)" on 2026-08-28. A new native build (`eas build --profile
   preview`) is NOT yet installed. Until it is, OTA-only fixes may not be
   on that device; the build adds the channel/runtime footer and the
@@ -1102,6 +1107,8 @@ under each is unchanged original wording.
 - `docs/decisions/printed-dates-and-held.md` — printed dates, date gate,
   held by carrier, one deposit per statement.
 - `docs/decisions/eas-update-delivery.md` — OTA delivery diagnosis.
+- `docs/decisions/document-scanner.md` — on-device document scanner,
+  library check, multi-page PDF, privacy/store notes.
 - `docs/decisions/estimate-notice.md` — estimates-only banner, exports,
   acknowledgment gate (DRAFT, attorney list).
 - `docs/decisions/i18n-languages.md` — language picker, AI language.

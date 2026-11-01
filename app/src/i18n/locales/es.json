@@ -3093,5 +3093,14 @@
       "checkFirst": "Marque \"Entiendo\" y desplácese hasta el final de los Términos para continuar.",
       "acceptedOn": "Aceptó este aviso el {{date}} (versión {{version}})."
     }
+  },
+  "scan": {
+    "scanDocument": "Escanear documento",
+    "plainPhoto": "Foto normal",
+    "tooLargeTitle": "Escaneo demasiado grande",
+    "tooLargeBody": "Incluso comprimido, este escaneo pesa más de 10 MB. Escanee menos páginas a la vez.",
+    "pagesDroppedTitle": "Límite de páginas",
+    "pagesDroppedBody_one": "Solo se guardaron las primeras {{max}} páginas; quedó fuera {{count}} página más. Escanéela por separado.",
+    "pagesDroppedBody_other": "Solo se guardaron las primeras {{max}} páginas; quedaron fuera {{count}} páginas más. Escanéelas por separado."
   }
 }

@@ -21,6 +21,7 @@ module.exports = {
     '<rootDir>/src/auth/**/*.test.ts',
     '<rootDir>/src/data/__tests__/*.test.ts',
     '<rootDir>/src/legal/**/*.test.ts',
+    '<rootDir>/src/scan/**/*.test.ts',
     '<rootDir>/src/components/**/*.test.ts',
     '<rootDir>/src/onboarding/**/*.test.ts',
     '<rootDir>/src/alerts/**/*.test.ts',

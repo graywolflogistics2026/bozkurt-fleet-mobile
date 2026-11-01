@@ -1584,6 +1584,8 @@ Session 10's scope, not blocking the Part 1 beta build):**
       description, keywords) and screenshots for both App Store Connect
       and Google Play Console.
       Store-label line (draft, attorney): docs/decisions/estimate-notice.md
+      Scanner line + Data Safety / App Privacy checks:
+      docs/decisions/document-scanner.md.
       ("estimates only; the acknowledgment is recorded").
 - [ ] Final brand/name decision after a trademark search (working name
       "BOZKA AI" / "BOZKA TRUCKING AI" not yet cleared).

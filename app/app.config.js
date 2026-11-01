@@ -13,14 +13,17 @@ module.exports = {
   expo: {
     name: 'BOZKA TRUCKING AI',
     slug: 'bozkurt-fleet-os',
-    version: '1.0.0',
+    // 1.1.0 (batch E, 2026-10-31): the native document scanner module. With
+    // runtimeVersion policy 'appVersion', JS published for 1.1.0 never
+    // reaches a 1.0.0 binary that lacks the module. Needs `eas build`.
+    version: '1.1.0',
     orientation: 'portrait',
     icon: './assets/images/icon.png',
     scheme: 'bozkurtfleetos',
     userInterfaceStyle: 'dark',
     ios: {
       bundleIdentifier: 'com.bozkurtfleetos.app',
-      buildNumber: '1',
+      buildNumber: '2',
       supportsTablet: true,
       infoPlist: {
         LSApplicationQueriesSchemes: ['instagram', 'fb', 'twitter', 'linkedin', 'tiktok', 'snssdk1233', 'driverpulse'],
@@ -28,7 +31,7 @@ module.exports = {
     },
     android: {
       package: 'com.bozkurtfleetos.app',
-      versionCode: 1,
+      versionCode: 2,
       adaptiveIcon: {
         // APP ICON + SPLASH (owner decision 2026-08-27): was the default
         // Expo template's light-blue placeholder (#E6F4FE) — replaced with
@@ -62,13 +65,21 @@ module.exports = {
       [
         'expo-camera',
         {
-          cameraPermission: 'BOZKA TRUCKING AI uses your camera to photograph settlements, receipts, and maintenance invoices for AI-assisted import.',
+          cameraPermission: 'We use the camera to scan your receipts and statements.',
         },
       ],
       [
         'expo-image-picker',
         {
           photosPermission: 'BOZKA TRUCKING AI accesses your photo library so you can import a saved photo of a settlement, receipt, or invoice.',
+        },
+      ],
+      // AUTOMATIC DOCUMENT SCANNER (batch E): Google ML Kit Document Scanner
+      // on Android, Apple VisionKit on iOS — runs on the device.
+      [
+        'react-native-document-scanner-plugin',
+        {
+          cameraPermission: 'We use the camera to scan your receipts and statements.',
         },
       ],
       'expo-localization',

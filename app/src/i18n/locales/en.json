@@ -3093,5 +3093,14 @@
       "checkFirst": "Tick \"I understand\" and scroll to the end of the Terms to continue.",
       "acceptedOn": "You accepted this notice on {{date}} (version {{version}})."
     }
+  },
+  "scan": {
+    "scanDocument": "Scan document",
+    "plainPhoto": "Plain photo",
+    "tooLargeTitle": "Scan too large",
+    "tooLargeBody": "Even after compressing, this scan is over 10 MB. Scan fewer pages at a time.",
+    "pagesDroppedTitle": "Page limit",
+    "pagesDroppedBody_one": "Only the first {{max}} pages were kept; {{count}} more page was left out. Scan it separately.",
+    "pagesDroppedBody_other": "Only the first {{max}} pages were kept; {{count}} more pages were left out. Scan them separately."
   }
 }

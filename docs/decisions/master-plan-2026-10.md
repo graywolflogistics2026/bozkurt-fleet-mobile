@@ -356,7 +356,14 @@ Start now with the protocol, then batch 0b.
 | B | Done: vehicle purchase tax treatment (PENDING_SQL §81 applied 2026-10-30) | 651dec6 |
 | C | Done: items 5, 6 (PENDING_SQL §82 applied 2026-10-31; redeploy ai-import) | e331821 (+ 62fc2b5 one save gate) |
 | D | Done: items 8, 10 (PENDING_SQL §83 applied 2026-10-31; no redeploy) | 5ac99cd |
-| E | Not started | — |
+| E | Done: automatic document scanner (native build, version 1.1.0; no SQL, no redeploy) | (this commit) |
+
+## Batch E notes (2026-10-31)
+
+- docs/decisions/document-scanner.md (library check, helper, PDF merge,
+  privacy, EAS). One helper `captureDocument()`; the three screens that had
+  a camera button use it. Maintenance, tolls, equipment, vehicle purchase
+  and Documents had no photo button and still come in through Import.
 
 ## Batch D notes (2026-10-31)
 

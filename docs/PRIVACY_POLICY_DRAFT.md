@@ -53,6 +53,8 @@ explanation needed, and nothing else about the app changes when you do.
 
 ## 5. Third-party processing
 
+**On-device document scanning (added 2026-10-31, draft):** On-device document scanning (Google ML Kit Document Scanner on Android, Apple VisionKit on iOS); images stay on the device until you import. See docs/decisions/document-scanner.md.
+
 Documents you photograph or upload are sent to Anthropic's API for
 AI-assisted data extraction (reading amounts, dates, categories, etc. off
 the document). Anthropic processes this content to return the extracted
