@@ -200,7 +200,7 @@ describe('five enabled locales', () => {
   });
 
   test('en wording as specified (DRAFT certification line, attorney review)', () => {
-    expect(en.importFlow.reading).toBe('Reading your statement. Keep the app open. Usually 2-4 minutes for 17 pages.');
+    expect(en.importFlow.reading).toBe('Reading your statement. This can take several minutes. Keep the app open.');
     expect(en.importFlow.couldNotReadTitle).toBe("We couldn't read this statement reliably. Nothing was saved.");
     expect(en.importFlow.certifyAndAdd).toBe('Certify and add to my books');
     expect(en.importFlow.certifyLine).toBe('I checked these numbers against my statement. AI-generated estimates, not tax advice.');

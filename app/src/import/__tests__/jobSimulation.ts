@@ -58,7 +58,10 @@ export type PageSpec = {
   extraction?: unknown;
   // 'always_timeout': every read times out; 'parse_failed': every read
   // returns an unreadable reply; 'timeout_once': the first read times out.
-  fail?: 'always_timeout' | 'parse_failed' | 'timeout_once';
+  fail?: 'always_timeout' | 'parse_failed' | 'timeout_once' | 'parse_failed_once';
+  // The n-th read of this page returns readings[n] (the last one repeats):
+  // a model that reads a number differently from one call to the next.
+  readings?: unknown[];
 };
 
 export type DocSpec = {
@@ -343,7 +346,9 @@ export async function simulateImport(doc: DocSpec, opts: SimOptions = {}): Promi
               timeoutsSeen.set(page, seenTimeouts + 1);
               return { errorType: 'timeout', message: `timed out on page ${page}` };
             }
-            if (spec.fail === 'parse_failed') return { errorType: 'parse_failed', message: 'unreadable reply' };
+            const n = pageCalls.get(page)! - 1;
+            if (spec.fail === 'parse_failed' || (spec.fail === 'parse_failed_once' && n === 0)) return { errorType: 'parse_failed', message: 'unreadable reply' };
+            if (spec.readings && spec.readings.length > 0) return { extraction: spec.readings[Math.min(n, spec.readings.length - 1)] };
             return { extraction: defaultExtraction(spec, page, doc.carrier) };
           });
         },

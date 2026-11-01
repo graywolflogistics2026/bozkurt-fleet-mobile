@@ -192,8 +192,43 @@ export function isRetryableJob(job: Pick<ImportJob, 'status'>): boolean {
   return job.status === 'failed';
 }
 
-export function isReviewableJob(job: Pick<ImportJob, 'status'>): boolean {
-  return job.status === 'ready';
+// READY TO REVIEW — ONE RULE (owner decision 2026-10-31, import
+// reliability item 1). The chip, the notification, the jobs-list button,
+// the import screen's follow effect and the fetch all decide "ready" here.
+// Ready = the server finished the content pages and stored the merged
+// reading (status 'ready', written together with result_json by
+// jobEngine.ts finalizeReady); attachments and line pages never gate it.
+// THE DEAD END THIS FIXES: after an automatic re-read the server clears
+// result_json and sets the job back to 'queued', but the cached jobs list
+// still says 'ready' until its refetch lands; the screen used to open that
+// stale row, the fetch found no result and showed "This import isn't
+// ready to review yet" with no way forward. A job a re-read was requested
+// for is ready only once it completed AFTER that request.
+const rereadRequestedAt = new Map<string, string>();
+
+export function markRereadRequested(jobId: string, atIso: string = new Date().toISOString()): void {
+  rereadRequestedAt.set(jobId, atIso);
+}
+
+export function clearRereadRequested(jobId: string): void {
+  rereadRequestedAt.delete(jobId);
+}
+
+export type ReadinessInput = Pick<ImportJob, 'status'> & Partial<Pick<ImportJob, 'id' | 'completedAt' | 'updatedAt'>>;
+
+export function isReadyToReview(
+  job: ReadinessInput,
+  opts: { notBefore?: string | null } = {}
+): boolean {
+  if (job.status !== 'ready') return false;
+  const notBefore = opts.notBefore ?? (job.id ? rereadRequestedAt.get(job.id) : undefined) ?? null;
+  if (!notBefore) return true;
+  const finished = job.completedAt ?? job.updatedAt ?? null;
+  return !!finished && new Date(finished).getTime() >= new Date(notBefore).getTime();
+}
+
+export function isReviewableJob(job: ReadinessInput): boolean {
+  return isReadyToReview(job);
 }
 
 // UNAWAITED handleJobStart + EdgeRuntime.waitUntil WITHOUT A CAPABILITY
@@ -251,7 +286,7 @@ export function deriveChipSummary(jobs: ImportJob[]): ChipSummary {
   // status label/note shown once they open the jobs list.
   const processing = jobs.filter((j) => j.status === 'processing' || j.status === 'paused' || j.status === 'waiting_to_retry');
   const queued = jobs.filter((j) => j.status === 'queued');
-  const ready = jobs.filter((j) => j.status === 'ready');
+  const ready = jobs.filter((j) => isReadyToReview(j));
   const failed = jobs.filter((j) => j.status === 'failed');
   const question = jobs.find((j) => j.status === 'needs_decision');
 
@@ -412,8 +447,8 @@ export function silentAttachmentStep(job: Pick<ImportJob, 'status' | 'documentId
 }
 
 // What the owner sees for a job (batch D2 2.1): three states only.
-export function simpleJobState(job: Pick<ImportJob, 'status'>): 'reading' | 'ready' | 'failed' {
-  if (job.status === 'ready') return 'ready';
+export function simpleJobState(job: ReadinessInput): 'reading' | 'ready' | 'failed' {
+  if (isReadyToReview(job)) return 'ready';
   if (job.status === 'failed') return 'failed';
   return 'reading';
 }

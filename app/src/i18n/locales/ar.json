@@ -3106,7 +3106,7 @@
     "pagesDroppedBody_other": "Only the first {{max}} pages were kept; {{count}} more pages were left out. Scan them separately."
   },
   "importFlow": {
-    "reading": "Reading your statement. Keep the app open. Usually 2-4 minutes for 17 pages.",
+    "reading": "Reading your statement. This can take several minutes. Keep the app open.",
     "readingShort": "Reading your statement…",
     "statusReading": "Reading",
     "statusReady": "Ready to check",
@@ -3144,7 +3144,8 @@
       "totalsNotPrinted": "This statement does not print its totals, so we cannot check it. Please send us a report.",
       "totalsDiffer": "The printed totals do not add up the way we read them.",
       "linesDiffer": "The lines we read do not add up to the printed totals.",
-      "jobFailed": "The file could not be read."
+      "jobFailed": "The file could not be read.",
+      "notFinished": "The reading did not finish. Tap Read again to read the same file once more."
     },
     "certifiedAdded": "Certified and added: week ending {{date}}.",
     "linesNotSaved": "Line details were not saved because they did not match your statement.",
@@ -3153,7 +3154,8 @@
     "read": "Read",
     "readAgainStartedTitle": "Reading again",
     "readAgainStartedBody": "When it is done, the numbers to check open from the import list.",
-    "viewWeek": "View this week"
+    "viewWeek": "View this week",
+    "readAgain": "Read again"
   },
   "certify": {
     "certifiedOn": "Certified on {{date}}",

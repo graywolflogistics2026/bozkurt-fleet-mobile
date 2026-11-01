@@ -108,10 +108,10 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
 // reading at all: the reason line only.
 export function couldNotReadReport(
   extraction: Extraction | null,
-  reason: import('./settlementGate').GateFailReason | 'job_failed',
+  reason: import('./settlementGate').GateFailReason | 'job_failed' | 'not_finished',
   t: T
 ): string {
-  const reasonKey = reason === 'job_failed' ? 'importFlow.reason.jobFailed' : GATE_FAIL_REASON_KEY[reason];
+  const reasonKey = reason === 'job_failed' ? 'importFlow.reason.jobFailed' : reason === 'not_finished' ? 'importFlow.reason.notFinished' : GATE_FAIL_REASON_KEY[reason];
   const head = `${t('importFlow.couldNotReadTitle')}
 ${t(reasonKey)}`;
   if (!extraction || extraction.docType !== 'settlement') return scrubBankDigitsInText(head);

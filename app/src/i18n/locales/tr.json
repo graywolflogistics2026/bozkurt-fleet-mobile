@@ -3106,7 +3106,7 @@
     "pagesDroppedBody_other": "Yalnızca ilk {{max}} sayfa alındı; {{count}} sayfa dışarıda kaldı. Onları ayrıca tara."
   },
   "importFlow": {
-    "reading": "Ekstreniz okunuyor. Uygulamayı açık tutun. 17 sayfa için genellikle 2-4 dakika sürer.",
+    "reading": "Ekstreniz okunuyor. Bu birkaç dakika sürebilir. Uygulamayı açık tutun.",
     "readingShort": "Ekstreniz okunuyor…",
     "statusReading": "Okunuyor",
     "statusReady": "Kontrole hazır",
@@ -3144,7 +3144,8 @@
       "totalsNotPrinted": "Bu ekstre toplamlarını basmıyor, bu yüzden kontrol edemiyoruz. Lütfen bize bir rapor gönderin.",
       "totalsDiffer": "Basılı toplamlar okuduğumuz şekilde tutmuyor.",
       "linesDiffer": "Okuduğumuz satırlar basılı toplamları tutmuyor.",
-      "jobFailed": "Dosya okunamadı."
+      "jobFailed": "Dosya okunamadı.",
+      "notFinished": "Okuma tamamlanmadı. Aynı dosyayı bir kez daha okumak için Yeniden oku'ya dokunun."
     },
     "certifiedAdded": "Onaylandı ve eklendi: {{date}} ile biten hafta.",
     "linesNotSaved": "Satır ayrıntıları ekstrenizle uyuşmadığı için kaydedilmedi.",
@@ -3153,7 +3154,8 @@
     "read": "Oku",
     "readAgainStartedTitle": "Tekrar okunuyor",
     "readAgainStartedBody": "Bittiğinde kontrol edilecek rakamlar içe aktarma listesinden açılır.",
-    "viewWeek": "Bu haftayı aç"
+    "viewWeek": "Bu haftayı aç",
+    "readAgain": "Yeniden oku"
   },
   "certify": {
     "certifiedOn": "{{date}} tarihinde onaylandı",

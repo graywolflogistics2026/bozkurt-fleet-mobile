@@ -212,7 +212,9 @@ export function nextImportStep(gate: SettlementGateResult | null, rereadsDone: n
   if (!gate) return 'certify';
   const canReread = rereadsDone < MAX_AUTO_REREADS;
   if (gate.status === 'fail') return canReread ? 'reread' : 'could_not_read';
-  if (gate.lineDetails === 'mismatch' && canReread) return 'reread';
+  // Line details never gate anything (import reliability item 2): a week
+  // whose statement passed goes to Certify; differing line rows are not
+  // stored and the week shows the quiet 'Line details were not saved' line.
   return 'certify';
 }
 

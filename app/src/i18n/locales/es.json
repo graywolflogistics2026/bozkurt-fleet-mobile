@@ -3106,7 +3106,7 @@
     "pagesDroppedBody_other": "Solo se guardaron las primeras {{max}} páginas; quedaron fuera {{count}} páginas más. Escanéelas por separado."
   },
   "importFlow": {
-    "reading": "Leyendo su estado de cuenta. Mantenga la app abierta. Suele tardar 2-4 minutos para 17 páginas.",
+    "reading": "Leyendo su estado de cuenta. Esto puede tardar varios minutos. Mantenga la app abierta.",
     "readingShort": "Leyendo su estado de cuenta…",
     "statusReading": "Leyendo",
     "statusReady": "Listo para revisar",
@@ -3144,7 +3144,8 @@
       "totalsNotPrinted": "Este estado de cuenta no imprime sus totales, así que no podemos verificarlo. Envíenos un informe.",
       "totalsDiffer": "Los totales impresos no cuadran según nuestra lectura.",
       "linesDiffer": "Las líneas que leímos no suman los totales impresos.",
-      "jobFailed": "No se pudo leer el archivo."
+      "jobFailed": "No se pudo leer el archivo.",
+      "notFinished": "La lectura no terminó. Toque Leer de nuevo para leer el mismo archivo otra vez."
     },
     "certifiedAdded": "Certificado y agregado: semana que termina el {{date}}.",
     "linesNotSaved": "Los detalles de las líneas no se guardaron porque no coincidieron con su estado de cuenta.",
@@ -3153,7 +3154,8 @@
     "read": "Leer",
     "readAgainStartedTitle": "Leyendo de nuevo",
     "readAgainStartedBody": "Cuando termine, las cifras a revisar se abren desde la lista de importaciones.",
-    "viewWeek": "Ver esta semana"
+    "viewWeek": "Ver esta semana",
+    "readAgain": "Leer de nuevo"
   },
   "certify": {
     "certifiedOn": "Certificado el {{date}}",

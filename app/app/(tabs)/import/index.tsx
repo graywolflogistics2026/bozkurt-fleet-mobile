@@ -27,11 +27,11 @@ import {
   useDismissImportJob,
   resumeImportJob,
   IMPORT_JOBS_QUERY_KEY,
-  fetchImportJobForReview,
+  loadJobForReview,
   downloadImportJobFileToLocal,
   type BatchStartResult,
 } from '@/src/data/importJobs';
-import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES } from '@/src/import/importJobs';
+import { clearRereadRequested, isReadyToReview, nextBatchReviewStep, MAX_BATCH_IMPORT_FILES } from '@/src/import/importJobs';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -87,6 +87,11 @@ type Phase = 'pick' | 'working' | 'reading' | 'preview' | 'could_not_read' | 'sa
 // re-read that comes back worse never replaces a better one. In memory:
 // an app restart allows at most 2 more re-reads, never an endless loop.
 const autoRereads = new Map<string, number>();
+// READY TO REVIEW (import reliability item 1): a ready job whose stored
+// reading is not there yet is FINISHING — retried up to 3 times (2 s, 4 s,
+// 8 s), then the owner gets Read again. Never a dead end.
+const FINISHING_RETRY_DELAYS_MS = [2_000, 4_000, 8_000];
+const finishingTries = new Map<string, number>();
 const bestReadings = new Map<string, { reading: Extraction; gate: SettlementGateResult | null }>();
 
 // PDF/FILE SIZE GUARD (pre-launch hardening, owner decision 2026-08-02):
@@ -300,7 +305,9 @@ export default function Import() {
   // SIMPLE IMPORT FLOW (batch D2): the background job this screen follows
   // while READING, and why COULD NOT READ is shown.
   const [followJobId, setFollowJobId] = useState<string | null>(null);
-  const [couldNotRead, setCouldNotRead] = useState<GateFailReason | 'job_failed' | null>(null);
+  const [couldNotRead, setCouldNotRead] = useState<GateFailReason | 'job_failed' | 'not_finished' | null>(null);
+  // Bumped to run the review load again (a finishing retry).
+  const [reviewLoadTick, setReviewLoadTick] = useState(0);
   const readingKeyRef = useRef<string | null>(null);
   const lastPhotoRef = useRef<{ uri: string; prepared: boolean } | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -478,20 +485,34 @@ export default function Import() {
     if (!currentReviewId || !userId) return;
     let cancelled = false;
     (async () => {
-      setPhase('working');
-      setWorkingLabel(t('common.loading'));
+      setPhase('reading');
       try {
-        const job = await fetchImportJobForReview(currentReviewId);
+        const loaded = await loadJobForReview(currentReviewId);
         if (cancelled) return;
-        if (!job) {
-          setErrorMessage(t('importJobs.reviewNotReady'));
-          setErrorStepGroup(null);
-          setErrorHasPartialSave(false);
-          setErrorIsDuplicateRace(false);
-          setErrorReport(null);
-          setPhase('error');
+        if (loaded.state === 'finishing') {
+          const tries = finishingTries.get(currentReviewId) ?? 0;
+          if (tries < FINISHING_RETRY_DELAYS_MS.length) {
+            finishingTries.set(currentReviewId, tries + 1);
+            setTimeout(() => {
+              if (!cancelled) setReviewLoadTick((n) => n + 1);
+            }, FINISHING_RETRY_DELAYS_MS[tries]);
+            return;
+          }
+          finishingTries.delete(currentReviewId);
+          readingKeyRef.current = currentReviewId;
+          setCouldNotRead('not_finished');
+          setPhase('could_not_read');
           return;
         }
+        if (loaded.state !== 'ready') {
+          finishingTries.delete(currentReviewId);
+          readingKeyRef.current = currentReviewId;
+          setCouldNotRead('job_failed');
+          setPhase('could_not_read');
+          return;
+        }
+        finishingTries.delete(currentReviewId);
+        const job = loaded;
         // CRITICAL: handleSave() requires fileMeta to be set (it's how
         // Save knows what to re-upload to the final storage path) — the
         // ORIGINAL local file from whatever session started this job may
@@ -523,7 +544,7 @@ export default function Import() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentReviewId, userId]);
+  }, [currentReviewId, userId, reviewLoadTick]);
 
   function reset() {
     // Batch E: a scan's temp files go once the import is done or dropped.
@@ -775,8 +796,11 @@ export default function Import() {
     if (!followJobId) return;
     const job = (jobsQuery.data ?? []).find((j) => j.id === followJobId);
     if (!job) return;
-    if (job.status === 'ready') {
+    // The one rule (src/import/importJobs.ts isReadyToReview): a list row
+    // still saying 'ready' from before a re-read was requested is not ready.
+    if (isReadyToReview(job)) {
       setFollowJobId(null);
+      clearRereadRequested(job.id);
       setCurrentReviewId(job.id);
       return;
     }
@@ -1184,6 +1208,22 @@ export default function Import() {
   // SIMPLE IMPORT FLOW (batch D2): the settlement card's gate result.
   const settlementGate = extraction?.docType === 'settlement' ? settlementGateOf(extraction) : null;
   // Discard / Upload again: nothing is saved, so the job goes too.
+  // "Read again" (import reliability item 1): never a dead end — the same
+  // job is read again on the server and followed while READING.
+  async function readJobAgain(jobId: string) {
+    setCouldNotRead(null);
+    setPhase('reading');
+    try {
+      await rereadImportJob.mutateAsync({ jobId, locale: i18n.language, customCategories: customCategoryNames, learningRules, carrierCodeMaps });
+      setExtraction(null);
+      setCurrentReviewId(null);
+      setFollowJobId(jobId);
+    } catch {
+      setCouldNotRead('job_failed');
+      setPhase('could_not_read');
+    }
+  }
+
   function discardReading() {
     const keyJob = readingKeyRef.current && !readingKeyRef.current.startsWith('photo:') ? readingKeyRef.current : null;
     const jobId = currentReviewId ?? followJobId ?? keyJob;
@@ -1430,6 +1470,7 @@ export default function Import() {
             extraction={extraction}
             reason={couldNotRead ?? (settlementGate?.status === 'fail' ? settlementGate.reason : 'job_failed')}
             onUploadAgain={discardReading}
+            onReadAgain={readingKeyRef.current && !readingKeyRef.current.startsWith('photo') ? () => void readJobAgain(readingKeyRef.current!) : undefined}
           />
         )}
 

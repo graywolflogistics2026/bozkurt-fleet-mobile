@@ -4,7 +4,7 @@ import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useImportJobs, fetchImportJobResult, resumeImportJob, answerImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
-import { deriveChipSummary, runOptionalSideEffect, shouldAutoResume, silentAttachmentStep } from '@/src/import/importJobs';
+import { deriveChipSummary, isReadyToReview, runOptionalSideEffect, shouldAutoResume, silentAttachmentStep } from '@/src/import/importJobs';
 import { supabase } from '@/src/lib/supabase';
 import { notifyImportJobDone, hasNotifiedJob } from '@/src/notifications/importJobNotifications';
 import { useFormatters } from '@/src/i18n/format';
@@ -108,12 +108,12 @@ export function ImportJobsChip() {
     let cancelled = false;
     async function checkAndNotify() {
       for (const job of jobs ?? []) {
-        if (job.status !== 'ready' && job.status !== 'failed') continue;
+        if (!isReadyToReview(job) && job.status !== 'failed') continue;
         const notifyId = job.id;
         const alreadyNotified = await hasNotifiedJob(notifyId).catch(() => false);
         if (alreadyNotified) continue;
         if (cancelled) return;
-        if (job.status === 'ready') {
+        if (isReadyToReview(job)) {
           const result = await fetchImportJobResult(job.id).catch(() => null);
           const s = result?.settlement;
           const body =

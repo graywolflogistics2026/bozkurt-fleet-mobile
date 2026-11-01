@@ -4,7 +4,7 @@ import { supabase } from '@/src/lib/supabase';
 import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
-import { hasPendingWork, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus } from '@/src/import/importJobs';
+import { hasPendingWork, markRereadRequested, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus } from '@/src/import/importJobs';
 import type { Extraction } from '@/src/import/types';
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
@@ -147,19 +147,40 @@ export async function fetchImportJobResult(jobId: string): Promise<Extraction | 
 // storagePath/mediaType for downloadImportJobFileToLocal() below (Save
 // itself still needs a LOCAL file to re-upload to its own final,
 // category-organized storage path).
-export async function fetchImportJobForReview(
-  jobId: string
-): Promise<{ extraction: Extraction; fileName: string | undefined; storagePath: string; mediaType: string } | null> {
-  const { data, error } = await supabase.from('import_jobs').select('result_json, file_name, status, storage_path, media_type').eq('id', jobId).maybeSingle();
+// READY TO REVIEW — the fetch side of the one rule (owner decision
+// 2026-10-31, import reliability item 1). Never a dead end: a row that is
+// not finished yet, or 'ready' without its stored reading (or with an older
+// reading shape that has no docType), is FINISHING — the screen keeps the
+// reading card, retries up to 3 times, then offers Read again. It used to
+// return null here and the screen showed "This import isn't ready to
+// review yet" with nothing to tap.
+export type JobReviewLoad =
+  | { state: 'ready'; extraction: Extraction; fileName: string | undefined; storagePath: string; mediaType: string }
+  | { state: 'finishing' }
+  | { state: 'failed'; message: string | null }
+  | { state: 'missing' };
+
+export async function loadJobForReview(jobId: string): Promise<JobReviewLoad> {
+  const { data, error } = await supabase.from('import_jobs').select('result_json, file_name, status, storage_path, media_type, error_message').eq('id', jobId).maybeSingle();
   if (error) throw error;
-  if (!data || data.status !== 'ready' || !data.result_json) return null;
-  const raw = data.result_json as Extraction;
+  if (!data) return { state: 'missing' };
+  if (data.status === 'failed') return { state: 'failed', message: (data.error_message as string | null) ?? null };
+  const raw = data.result_json as Extraction | null;
+  if (data.status !== 'ready' || !raw || typeof raw !== 'object' || !raw.docType) return { state: 'finishing' };
   return {
+    state: 'ready',
     extraction: sanitizeExtraction(raw),
     fileName: (data.file_name as string | null) ?? undefined,
     storagePath: data.storage_path as string,
     mediaType: data.media_type as string,
   };
+}
+
+export async function fetchImportJobForReview(
+  jobId: string
+): Promise<{ extraction: Extraction; fileName: string | undefined; storagePath: string; mediaType: string } | null> {
+  const r = await loadJobForReview(jobId);
+  return r.state === 'ready' ? { extraction: r.extraction, fileName: r.fileName, storagePath: r.storagePath, mediaType: r.mediaType } : null;
 }
 
 // CRITICAL for "Review now" to actually be able to Save: saveExtraction()
@@ -358,7 +379,12 @@ export function useRereadImportJob() {
       customCategories?: string[];
       learningRules?: { keyword: string; category: string }[];
       carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
-    }) => invokeJobMode({ mode: 'reread_job', ...params }, 'Could not start reading again.'),
+    }) => {
+      // The one readiness rule ignores this job's cached 'ready' row until it
+      // completes again (src/import/importJobs.ts isReadyToReview).
+      markRereadRequested(params.jobId);
+      return invokeJobMode({ mode: 'reread_job', ...params }, 'Could not start reading again.');
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
     },

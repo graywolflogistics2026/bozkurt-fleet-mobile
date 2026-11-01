@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- IMPORT RELIABILITY change 1 (owner decision 2026-10-31): ready-to-review dead end.
+  Cause: an automatic re-read (index.tsx autoReread -> reread_job clears
+  result_json, status queued) was followed by the cached 'ready' list row
+  (index.tsx follow effect), so fetchImportJobForReview returned null
+  (data/importJobs.ts:155) -> "isn't ready to review yet". Fix: one rule
+  isReadyToReview() + re-read registry; loadJobForReview() finishing ->
+  3 retries -> Read again; line mismatch never re-reads. e2e test
+  importEndToEnd.test.ts (real engine + app gate + certify). App only; eas update.
 - PLAN-AWARE IMPORT BUDGET (owner decision 2026-10-31, Supabase Pro). jobEngine.ts:
   planTierFrom/limitsForPlan (Free 150 s exit 130 s default; secret
   AI_IMPORT_SUPABASE_PLAN=pro -> exit 300 s of 400 s), leaseIsStale (resume

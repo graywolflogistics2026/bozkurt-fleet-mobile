@@ -25,7 +25,13 @@ written). No override.
   (`totals_not_printed`) and add up within $1 (`totals_differ`); lines must
   match them (`lines_differ`); deposit must match; ambiguous date -> asked.
 - Fail -> automatic re-read (max 2, `MAX_AUTO_REREADS`), best reading kept
-  (`pickBetterReading`), then COULD NOT READ.
+  (`pickBetterReading`), then COULD NOT READ. Line details that differ
+  NEVER trigger a re-read (2026-10-31): Certify at once, lines not stored.
+- Ready to review (2026-10-31): `isReadyToReview()` is the one rule; a job
+  with a re-read requested is ready only once it completed after that
+  request (the cached list row said 'ready' while the server had already
+  cleared the reading). `loadJobForReview()`: ready / finishing / failed /
+  missing; finishing retries 3 times (2, 4, 8 s), then Read again.
 - Prime statement passed but line details disagree (loads, deductions,
   incomplete content pages): the week saves from the statement WITHOUT line
   rows, `statement.linesNotSaved = true`; detail shows "Line details were

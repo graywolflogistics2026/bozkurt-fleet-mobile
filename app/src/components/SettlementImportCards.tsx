@@ -138,19 +138,23 @@ export function CouldNotReadCard({
   extraction,
   reason,
   onUploadAgain,
+  onReadAgain,
 }: {
   extraction: Extraction | null;
-  reason: GateFailReason | 'job_failed';
+  reason: GateFailReason | 'job_failed' | 'not_finished';
   onUploadAgain: () => void;
+  // A background job can be read again on the server (never a dead end).
+  onReadAgain?: () => void;
 }) {
   const { t } = useTranslation();
   return (
     <Card>
       <View style={{ backgroundColor: 'rgba(239,68,68,0.10)', borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
         <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('importFlow.couldNotReadTitle')}</Text>
-        <MutedText style={{ marginTop: spacing.xs }}>{t(reason === 'job_failed' ? 'importFlow.reason.jobFailed' : GATE_FAIL_REASON_KEY[reason])}</MutedText>
+        <MutedText style={{ marginTop: spacing.xs }}>{t(reason === 'job_failed' ? 'importFlow.reason.jobFailed' : reason === 'not_finished' ? 'importFlow.reason.notFinished' : GATE_FAIL_REASON_KEY[reason])}</MutedText>
       </View>
-      <PrimaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} />
+      {onReadAgain && <PrimaryButton title={t('importFlow.readAgain')} onPress={onReadAgain} />}
+      {onReadAgain ? <SecondaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} /> : <PrimaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} />}
       <SecondaryButton
         title={t('importFlow.sendReport')}
         onPress={() => {

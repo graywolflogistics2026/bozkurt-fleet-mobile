@@ -197,6 +197,10 @@ Supabase SQL Editor. `docs/PENDING_SQL.md` is the permanent log.
    tablet, confirm the Settings version line shows a build or update that
    contains the fix. "Embedded build" means OTA updates are not reaching
    the device, and the symptom may come from old code.
+9. **Ship ONE change at a time** (owner, 2026-10-31). After each change,
+   one real-PDF import on the tablet before the next change ships. A task
+   with several changes ships them as separate commits, in order, each
+   with its own ship list and its own rollback (`git revert <sha>`).
 
 ## Core rules promoted from dated entries
 
@@ -241,6 +245,12 @@ that statement (`settlements.statement`, §77); its linked rows are detail
 only. The bank deposit and the amount owed to the carrier are READ from
 the statement, never computed, and never labeled profit.
 Full: `docs/decisions/prime-statement-source.md`.
+
+**Ready to review: one rule (2026-10-31).** `isReadyToReview()`
+(`app/src/import/importJobs.ts`) decides for the chip, notification, jobs
+button, follow effect and fetch; a re-read job is ready only after it
+completes again. `loadJobForReview()` never dead-ends (finishing -> 3
+retries -> Read again). Line details never trigger a re-read.
 
 **Simple import flow (batch D2, 2026-10-31).** A settlement shows only
 READING / CHECK AND CERTIFY / COULD NOT READ. ONE pass/fail gate
