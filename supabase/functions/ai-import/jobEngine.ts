@@ -40,11 +40,30 @@
 // Limits (one documented constant; everything else derives from it)
 // ---------------------------------------------------------------------
 
-// Supabase Edge Functions: a worker may run 150 s on the Free plan (400 s
-// on paid plans) — supabase.com/docs/guides/functions/limits. The owner's
-// org is on Free; index.ts reads AI_IMPORT_WALL_CLOCK_MS only as an
-// explicit plan setting and otherwise uses this.
+// Supabase Edge Functions: a worker may run 150 s on the Free plan and 400 s
+// on paid plans (Pro and up) — supabase.com/docs/guides/functions/limits.
+// PLAN-AWARE BUDGET (owner decision 2026-10-31): the default is ALWAYS the
+// Free value; only the secret AI_IMPORT_SUPABASE_PLAN=pro switches a
+// background job worker to the paid budget. The secret names a PLAN, never
+// a number of seconds, so no setting can make the worker assume more than
+// the documented limit minus the safety margin below.
 export const FREE_PLAN_WALL_CLOCK_MS = 150_000;
+export const PAID_PLAN_WALL_CLOCK_MS = 400_000;
+// On a paid plan the worker starts nothing new after 300 s (100 s margin to
+// the documented 400 s) and every model call ends by 310 s (90 s margin).
+export const PAID_PLAN_EXIT_BY_MS = 300_000;
+export const PLAN_SECRET_NAME = 'AI_IMPORT_SUPABASE_PLAN';
+// Free: worker exits by wall clock - 20 s, calls end by wall clock - 10 s.
+export const MIN_EXIT_MARGIN_MS = 20_000;
+export const MIN_CALL_END_MARGIN_MS = 10_000;
+
+export type SupabasePlanTier = 'free' | 'paid';
+
+// Unset, empty or anything unrecognised -> Free (never a guess upward).
+export function planTierFrom(raw: string | null | undefined): SupabasePlanTier {
+  const v = (raw ?? '').trim().toLowerCase();
+  return v === 'pro' || v === 'paid' || v === 'team' || v === 'enterprise' ? 'paid' : 'free';
+}
 
 export type StepLimits = {
   wallClockMs: number;
@@ -58,6 +77,27 @@ export type StepLimits = {
 
 export function limitsFor(wallClockMs: number = FREE_PLAN_WALL_CLOCK_MS): StepLimits {
   return { wallClockMs, callEndLimitMs: wallClockMs - 10_000, startMarginMs: 15_000, exitByMs: wallClockMs - 20_000 };
+}
+
+// The job worker's limits for a plan. wallClockMs is always the
+// DOCUMENTED platform limit (the lease below must outlive it); the budget
+// the worker actually uses is exitByMs / callEndLimitMs.
+export function limitsForPlan(tier: SupabasePlanTier): StepLimits {
+  if (tier === 'paid') {
+    return { wallClockMs: PAID_PLAN_WALL_CLOCK_MS, callEndLimitMs: PAID_PLAN_EXIT_BY_MS + 10_000, startMarginMs: 15_000, exitByMs: PAID_PLAN_EXIT_BY_MS };
+  }
+  return limitsFor(FREE_PLAN_WALL_CLOCK_MS);
+}
+
+// STALE LEASE (needed once a lease can outlive the app's 3-minute backup
+// restart, i.e. on a paid plan: lease 405 s > 180 s). A live worker writes
+// its heartbeat at least every 20 s; no heartbeat for 2 minutes means the
+// worker was stopped, so a RESUME may release its lease. Safe even if the
+// old worker were somehow alive: every job write requires lease_owner =
+// that worker, so it loses the job at its next write.
+export const STALE_LEASE_AFTER_MS = 120_000;
+export function leaseIsStale(heartbeatAtMs: number | null, nowMs: number): boolean {
+  return heartbeatAtMs == null || nowMs - heartbeatAtMs >= STALE_LEASE_AFTER_MS;
 }
 
 // The lease outlives the longest possible invocation, so a stopped

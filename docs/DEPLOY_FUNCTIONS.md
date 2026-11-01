@@ -22,6 +22,19 @@ set anywhere client-side.
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 ```
 
+### Optional: `AI_IMPORT_SUPABASE_PLAN` (ai-import only, 2026-10-31)
+
+Only on a paid Supabase plan (Pro or higher). Value `pro` gives background
+import jobs about 300 s per run instead of 130 s (documented limit 400 s).
+Unset or any other value = Free budget. Dashboard: Edge Functions -> Manage
+secrets -> Name `AI_IMPORT_SUPABASE_PLAN`, Value `pro`. CLI (repo root):
+```
+supabase secrets set AI_IMPORT_SUPABASE_PLAN=pro --project-ref mbzonnoglreoeqihzfce
+supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce
+```
+Unset it BEFORE moving back to Free. `AI_IMPORT_WALL_CLOCK_MS` is no longer
+read; unset it if it exists.
+
 `SUPABASE_URL` and `SUPABASE_ANON_KEY` do NOT need to be set manually —
 Supabase injects both automatically into every Edge Function's environment
 at runtime.

@@ -103,6 +103,28 @@ supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce
 Secrets, dashboard alternative and JWT notes: `docs/DEPLOY_FUNCTIONS.md`
 (same steps for all five functions).
 
+Import time budget (plan-aware, 2026-10-31; the org is on Supabase Pro).
+Default = Free (150 s, worker exits by 130 s). The secret
+`AI_IMPORT_SUPABASE_PLAN=pro` gives background import jobs about 300 s
+(exit by 300 s, calls end by 310 s, of the documented 400 s). It names a
+plan, never seconds; unset/unknown = Free. A secret is read at cold start,
+so set it, then redeploy ai-import:
+```powershell
+cd "C:\Users\Latitude 5520\Downloads\bozkurt-fleet-mobile-starter\bozkurt-fleet-mobile"
+supabase secrets set AI_IMPORT_SUPABASE_PLAN=pro --project-ref mbzonnoglreoeqihzfce
+```
+```powershell
+cd "C:\Users\Latitude 5520\Downloads\bozkurt-fleet-mobile-starter\bozkurt-fleet-mobile"
+supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce
+```
+Back to Free (before any downgrade), then redeploy:
+```powershell
+cd "C:\Users\Latitude 5520\Downloads\bozkurt-fleet-mobile-starter\bozkurt-fleet-mobile"
+supabase secrets unset AI_IMPORT_SUPABASE_PLAN --project-ref mbzonnoglreoeqihzfce
+```
+The direct (non-job) path always stays on the Free budget (the app waits
+at most 240 s). `AI_IMPORT_WALL_CLOCK_MS` is no longer read.
+
 EAS Update facts (confirmed from config, 2026-08-28):
 - `runtimeVersion: { policy: 'appVersion' }` in `app/app.config.js`;
   `version` is `1.1.0` (bumped from 1.0.0 on 2026-10-31 for the batch E
@@ -241,8 +263,10 @@ PRINTED balance as of the newest statement (`heldByCarrier()`), never a
 sum of escrow deductions; deposits count one per statement. Full:
 `docs/decisions/printed-dates-and-held.md`.
 
-**Import jobs: 150 s, resumable.** Never assume more than the Free-plan
-150 s per Edge Function invocation. Background PDF imports are chains of
+**Import jobs: plan-aware budget, resumable.** Never assume more than the
+documented limit minus the margin: Free by default (150 s, exit by 130 s);
+only `AI_IMPORT_SUPABASE_PLAN=pro` allows exit by 300 s of 400 s
+(`limitsForPlan()`). Background PDF imports are chains of
 short runs that store each page as it finishes and resume at the first
 unfinished page (`supabase/functions/ai-import/jobEngine.ts`, §78). Full:
 `docs/decisions/settlement-import-chunking.md` ("Resumable jobs").

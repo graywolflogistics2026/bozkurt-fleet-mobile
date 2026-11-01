@@ -1,6 +1,7 @@
 // A simulated Supabase Edge Function world for the resumable import job
 // engine (supabase/functions/ai-import/jobEngine.ts): a virtual clock, a
-// platform that stops any worker at its 150 s wall clock (Free plan), a
+// platform that stops any worker at its documented wall clock (150 s Free
+// by default, 400 s with `plan: 'paid'`), a
 // fake import_jobs row with the same lease / per-page / "never overwrite a
 // finished page" rules as the §78 SQL functions, and a fake model whose
 // per-page durations are ESTIMATES (see PAGE_READ_MS below) — not
@@ -9,7 +10,9 @@
 import {
   CLASSIFY_WINDOW_MAX_BYTES,
   FREE_PLAN_WALL_CLOCK_MS,
+  leaseIsStale,
   limitsFor,
+  limitsForPlan,
   newImportPlan,
   runJobStep,
   type ClassifiedPage,
@@ -21,6 +24,7 @@ import {
   type PageKind,
   type PageResult,
   type StepResult,
+  type SupabasePlanTier,
   type UsageCallType,
 } from '../../../../supabase/functions/ai-import/jobEngine';
 import { mergeChunkedExtractions, type ChunkExtraction } from '../../../../supabase/functions/ai-import/chunking';
@@ -66,6 +70,10 @@ export type DocSpec = {
 };
 
 export type SimOptions = {
+  // A Supabase plan: the platform stops a worker at the plan's DOCUMENTED
+  // wall clock (150 s Free, 400 s paid) and the worker uses that plan's
+  // budget (jobEngine.ts limitsForPlan). Takes precedence over wallClockMs.
+  plan?: SupabasePlanTier;
   wallClockMs?: number;
   // Stop a given invocation at this many ms after it started (a platform
   // stop earlier than the wall clock, e.g. memory or CPU).
@@ -164,8 +172,9 @@ export function mergePages(pages: { page: number; extraction: unknown }[], base:
 }
 
 export async function simulateImport(doc: DocSpec, opts: SimOptions = {}): Promise<SimResult> {
-  const wallClockMs = opts.wallClockMs ?? FREE_PLAN_WALL_CLOCK_MS;
-  const limits = limitsFor(wallClockMs);
+  const limits = opts.plan ? limitsForPlan(opts.plan) : limitsFor(opts.wallClockMs ?? FREE_PLAN_WALL_CLOCK_MS);
+  // The platform kill: always the documented wall clock, never the budget.
+  const wallClockMs = limits.wallClockMs;
   const clock = new VirtualClock();
   const fileBytes = doc.pages.reduce((s, p) => s + p.bytes, 0);
   const row: FakeRow = {
@@ -191,6 +200,10 @@ export async function simulateImport(doc: DocSpec, opts: SimOptions = {}): Promi
   const timeoutsSeen = new Map<number, number>();
   const invocations: InvocationLog[] = [];
   const queue: number[] = [0];
+  // The app's backup restarts ('resume_job'): before running, the server
+  // releases a lease whose heartbeat is 2 minutes old (index.ts
+  // handleJobResume, jobEngine.ts leaseIsStale).
+  const resumes: number[] = [];
   if (opts.doubleStart) queue.push(0);
   let readyAtMs: number | null = null;
   let peakMemoryBytes = 0;
@@ -386,11 +399,20 @@ export async function simulateImport(doc: DocSpec, opts: SimOptions = {}): Promi
       queue.shift();
       startInvocation();
     }
+    resumes.sort((a, b) => a - b);
+    while (resumes.length > 0 && resumes[0] <= clock.now) {
+      resumes.shift();
+      if (row.leaseUntil != null && row.leaseUntil > clock.now && leaseIsStale(row.heartbeatAt, clock.now)) {
+        row.leaseOwner = null;
+        row.leaseUntil = null;
+      }
+      startInvocation();
+    }
     await flush();
     await flush();
     for (const [id, r] of [...running]) if (r.done) running.delete(id);
 
-    if (running.size === 0 && queue.length === 0) {
+    if (running.size === 0 && queue.length === 0 && resumes.length === 0) {
       const pendingWork =
         ['queued', 'processing', 'paused', 'waiting_to_retry'].includes(row.status) ||
         (row.status === 'ready' && row.plan.phase !== 'done' && row.plan.pages.some((p) => p.role === 'attachment' && !['done', 'failed'].includes(row.results[String(p.page)]?.status ?? '')));
@@ -408,7 +430,7 @@ export async function simulateImport(doc: DocSpec, opts: SimOptions = {}): Promi
       }
       if (pendingWork) {
         // The app's backup restart, once the heartbeat is old enough.
-        queue.push(Math.max(clock.now, row.heartbeatAt + (opts.autoResumeAfterMs ?? 180_000)));
+        resumes.push(Math.max(clock.now, row.heartbeatAt + (opts.autoResumeAfterMs ?? 180_000)));
         continue;
       }
       break;
@@ -417,7 +439,7 @@ export async function simulateImport(doc: DocSpec, opts: SimOptions = {}): Promi
     // Kill workers that reach their stop time.
     const nextKill = Math.min(...[...running.values()].map((r) => r.killAtMs), Number.POSITIVE_INFINITY);
     const nextTimer = clock.nextAt() ?? Number.POSITIVE_INFINITY;
-    const nextQueued = queue.length > 0 ? Math.min(...queue) : Number.POSITIVE_INFINITY;
+    const nextQueued = queue.length + resumes.length > 0 ? Math.min(...queue, ...resumes) : Number.POSITIVE_INFINITY;
     const next = Math.min(nextKill, nextTimer, nextQueued);
     if (!Number.isFinite(next)) break;
     if (next > maxSimMs) break;

@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- PLAN-AWARE IMPORT BUDGET (owner decision 2026-10-31, Supabase Pro). jobEngine.ts:
+  planTierFrom/limitsForPlan (Free 150 s exit 130 s default; secret
+  AI_IMPORT_SUPABASE_PLAN=pro -> exit 300 s of 400 s), leaseIsStale (resume
+  releases a lease with a 2-min-old heartbeat; Pro lease 405 s > app 3-min
+  restart). index.ts: JOB_LIMITS from the plan; direct path stays Free (app
+  waits 240 s); AI_IMPORT_WALL_CLOCK_MS no longer read. Simulator `plan`
+  option; jobEnginePlan.test.ts at both limits. No SQL; redeploy ai-import
+  after setting the secret; no app update needed.
 - BATCH D2 (owner decision 2026-10-31, done 2026-10-31). Part 1: owed to
   carrier is READ from each truck's newest TOTAL CASH FLOW
   (src/stats/owedToCarrier.ts), no longer summed over weeks. Part 2: one

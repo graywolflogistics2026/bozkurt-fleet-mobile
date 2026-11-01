@@ -45,9 +45,14 @@ import {
   FREE_PLAN_WALL_CLOCK_MS,
   HEARTBEAT_EVERY_MS,
   MAX_RUNS_PER_JOB,
+  PLAN_SECRET_NAME,
+  STALE_LEASE_AFTER_MS,
   UNKNOWN_LAYOUT_PAGE_CAP,
   checkImportLimits,
+  leaseIsStale,
   limitsFor,
+  limitsForPlan,
+  planTierFrom,
   newImportPlan,
   newReadPagesPlan,
   newRereadPlan,
@@ -192,6 +197,11 @@ const MIN_USEFUL_BUDGET_MS = 20_000;
 // (jobEngine.ts limitsFor(); 17-page stall redesign, owner decision
 // 2026-10-13) — the remaining 20 s cover auth, pdf-lib, merging and the
 // response on top of whatever Anthropic call time was used.
+// PLAN-AWARE BUDGET (owner decision 2026-10-31): this DIRECT path stays on
+// the Free budget even on a paid plan — the app waits for its reply
+// synchronously and gives up after 240 s (app/src/data/aiImportCall.ts
+// PDF_CLIENT_TIMEOUT_MS). Only background jobs (JOB_LIMITS below) use the
+// plan setting.
 const HARD_INVOCATION_BUDGET_MS = limitsFor(FREE_PLAN_WALL_CLOCK_MS).exitByMs;
 // Defensive ceiling only — real settlements are nowhere near this long;
 // stops a pathological/corrupt PDF (that still passed the 10MB size
@@ -1390,15 +1400,17 @@ async function logAiUsage(
 //     app resumes the job once its heartbeat is 3 minutes old.
 // ============================================================================
 
-// "Free plan wall clock 150 s" (jobEngine.ts) unless the plan setting says
-// otherwise — set AI_IMPORT_WALL_CLOCK_MS=400000 only after moving to a
-// paid plan.
-function readWallClockMs(): number {
-  const raw = Deno.env.get("AI_IMPORT_WALL_CLOCK_MS");
-  const parsed = raw ? parseInt(raw, 10) : NaN;
-  return Number.isFinite(parsed) && parsed >= 60_000 ? parsed : FREE_PLAN_WALL_CLOCK_MS;
+// PLAN-AWARE BUDGET (owner decision 2026-10-31): Free limits (exit by
+// 130 s of 150 s) unless the secret AI_IMPORT_SUPABASE_PLAN is "pro" (or
+// paid/team/enterprise) — then exit by 300 s of the documented 400 s
+// (jobEngine.ts limitsForPlan()). The old AI_IMPORT_WALL_CLOCK_MS (a raw
+// number with no upper bound) is no longer read.
+const JOB_PLAN_TIER = planTierFrom(Deno.env.get(PLAN_SECRET_NAME));
+const JOB_LIMITS = limitsForPlan(JOB_PLAN_TIER);
+console.log(`[ai-import] job budget: plan=${JOB_PLAN_TIER} exitBy=${JOB_LIMITS.exitByMs}ms callEnd=${JOB_LIMITS.callEndLimitMs}ms documentedWallClock=${JOB_LIMITS.wallClockMs}ms`);
+if (Deno.env.get("AI_IMPORT_WALL_CLOCK_MS")) {
+  console.warn(`[ai-import] AI_IMPORT_WALL_CLOCK_MS is set but ignored — use ${PLAN_SECRET_NAME}=pro instead, and unset it.`);
 }
-const JOB_LIMITS = limitsFor(readWallClockMs());
 
 // The cheap page classifier (decision C). Advisory only: if this model is
 // unavailable the job falls back to physical page order.
@@ -1918,7 +1930,7 @@ async function handleJobResume(
   if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
   const { data: job, error } = await supabase
     .from("import_jobs")
-    .select("id, user_id, status, page_plan, page_results, storage_path, media_type, file_name")
+    .select("id, user_id, status, page_plan, page_results, storage_path, media_type, file_name, heartbeat_at, lease_until")
     .eq("id", jobId)
     .maybeSingle();
   if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
@@ -1947,6 +1959,25 @@ async function handleJobResume(
   }
   const { error: updateError } = await admin.from("import_jobs").update(update).eq("id", jobId).eq("user_id", userId);
   if (updateError) return errorResponse("internal", "Could not resume the import — your file is safe. Please try again.", 500);
+  // STALE LEASE (jobEngine.ts leaseIsStale): on a paid plan a stopped
+  // worker's lease (405 s) outlives the app's 3-minute backup restart, so a
+  // resume would otherwise do nothing. No heartbeat for 2 minutes = that
+  // worker is gone: release its lease. The write itself re-checks the
+  // heartbeat age, so a worker that just wrote one keeps its lease.
+  const nowMs = Date.now();
+  const heartbeatMs = job.heartbeat_at ? new Date(job.heartbeat_at as string).getTime() : NaN;
+  const leaseHeld = job.lease_until != null && new Date(job.lease_until as string).getTime() > nowMs;
+  if (leaseHeld && leaseIsStale(Number.isFinite(heartbeatMs) ? heartbeatMs : null, nowMs)) {
+    const cutoffIso = new Date(nowMs - STALE_LEASE_AFTER_MS).toISOString();
+    const { error: releaseError } = await admin
+      .from("import_jobs")
+      .update({ lease_owner: null, lease_until: null })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .or(`heartbeat_at.is.null,heartbeat_at.lt.${cutoffIso}`);
+    if (releaseError) console.error(`[ai-import] job ${jobId}: stale lease release failed: ${releaseError.message}`);
+    else console.log(`[ai-import] job ${jobId}: released a stale lease on resume (last heartbeat ${job.heartbeat_at ?? "never"})`);
+  }
   runInBackground(runJobRun(admin, jobId, invocationStartedAt));
   return accepted({ jobId });
 }
