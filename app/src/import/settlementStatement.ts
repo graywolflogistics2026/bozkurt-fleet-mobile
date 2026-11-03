@@ -155,6 +155,8 @@ export type PrimeStatementCheckResult = {
   gateMissing?: GateMissing[];
   // Failed checks outside the gate — warnings only.
   warnings?: StatementCheck[];
+  // TOTAL CASH FLOW < 0: the owner owes the carrier (owner 2026-11-03).
+  negativeWeek?: boolean;
 };
 
 export type DepositSource = 'direct_deposit' | 'settlement_to_operator' | 'net_due';
@@ -373,8 +375,15 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   const statementTotal = totals.totalStatement ?? revenuePlusExpenses;
   const cashFlow = statementTotal != null ? statementTotal + (totals.priorWeekBalanceForward ?? 0) : null;
   add('totalCashFlow', totals.totalCashFlow ?? null, cashFlow);
-  add('settlementToOperator', totals.settlementToOperator, totals.totalCashFlow ?? cashFlow);
-  add('directDeposit', totals.directDeposit, totals.settlementToOperator ?? totals.totalCashFlow ?? cashFlow);
+  // NEGATIVE WEEK (owner decision 2026-11-03): TOTAL CASH FLOW below 0 means
+  // the owner owes Prime; SETTLEMENT TO OPERATOR is printed 0 or blank and
+  // no payout line is printed. Owed to carrier = −TOTAL CASH FLOW,
+  // deposited = 0. Checks on lines that were not printed are skipped (add()
+  // skips a null); a printed one must still tie.
+  const cashFlowValue = totals.totalCashFlow ?? cashFlow;
+  const negativeWeek = cashFlowValue != null && cashFlowValue < 0;
+  add('settlementToOperator', totals.settlementToOperator, cashFlowValue);
+  add('directDeposit', totals.directDeposit, totals.settlementToOperator ?? cashFlowValue);
   add('grossMatches', totals.totalRevenue, printedTotal(s.grossRevenue));
   add('milesMatch', totals.miles, printedTotal(s.totalMiles), MILES_TOLERANCE);
   // The printed text, parsed YY/MM/DD, when it was read; else the older
@@ -400,11 +409,11 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   // A missing core number no longer blocks Save (it used to, as
   // 'requiredTotals'): the week is saved on the line route, Unverified and
   // needs-review (amendment 1).
-  const coreMissing = primeCoreMissing(totals, lines, printedTotal(s.grossRevenue));
-  const gateMissing = primeGateMissing(totals, lines, weekCheck != null);
+  const coreMissing = primeCoreMissing(totals, lines, printedTotal(s.grossRevenue), negativeWeek);
+  const gateMissing = primeGateMissing(totals, lines, weekCheck != null, negativeWeek);
   const gatePassed = gateMissing.length === 0 && checks.filter(isGateCheck).every((c) => c.passed);
   const warnings = checks.filter((c) => !isGateCheck(c) && !c.passed);
-  return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing, gatePassed, gateMissing, warnings };
+  return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing, gatePassed, gateMissing, warnings, ...(negativeWeek ? { negativeWeek } : {}) };
 }
 
 // PRIOR WEEK BALANCE FORWARD by absolute value, signed from the statement's
@@ -418,13 +427,14 @@ export function signedBalanceForward(bf: number | null, totalCashFlow: number | 
   return Math.abs(Math.abs(diff) - Math.abs(bf)) < 0.01 ? round2(diff) : bf;
 }
 
-export function primeGateMissing(totals: PrimeStatementTotals, lines: StatementLine[], weekEndingRead: boolean): GateMissing[] {
+export function primeGateMissing(totals: PrimeStatementTotals, lines: StatementLine[], weekEndingRead: boolean, negativeWeek = false): GateMissing[] {
   const has = (section: StatementSection) => lines.some((l) => l.section === section);
   const missing: GateMissing[] = [];
   if (totals.totalRevenue == null) missing.push('totalRevenue');
   if (totals.totalOperatingExpenses == null) missing.push('totalOperatingExpenses');
   if (totals.totalStatement == null) missing.push('totalStatement');
-  if (totals.settlementToOperator == null) missing.push('settlementToOperator');
+  // A negative week prints no SETTLEMENT TO OPERATOR: TOTAL CASH FLOW ends the chain.
+  if (totals.settlementToOperator == null && !negativeWeek) missing.push('settlementToOperator');
   if (totals.totalVariableCosts == null && !(['fuel_oil_tax', 'repair', 'tires', 'misc'] as StatementSection[]).some(has)) missing.push('variableCosts');
   if (totals.totalFixedCost == null && !has('fixed')) missing.push('fixedCost');
   if (!weekEndingRead) missing.push('statementWeekEnding');
@@ -449,14 +459,14 @@ export function statementWeekEndingCheck(statementWeekEnding: unknown, settlemen
 // The core checks (CORE_STATEMENT_CHECKS) that cannot run because a number
 // they need was not read. A block (variable, fixed) counts as read when its
 // printed total or any of its lines was read.
-export function primeCoreMissing(totals: PrimeStatementTotals, lines: StatementLine[], gross: number | null): CoreStatementCheck[] {
+export function primeCoreMissing(totals: PrimeStatementTotals, lines: StatementLine[], gross: number | null, negativeWeek = false): CoreStatementCheck[] {
   const has = (section: StatementSection) => lines.some((l) => l.section === section);
   const variableRead = totals.totalVariableCosts != null || (['fuel_oil_tax', 'repair', 'tires', 'misc'] as StatementSection[]).some(has);
   const fixedRead = totals.totalFixedCost != null || has('fixed');
   const missing: CoreStatementCheck[] = [];
   if (totals.totalRevenue == null || gross == null) missing.push('grossMatches');
   if (totals.totalOperatingExpenses == null || !variableRead || !fixedRead) missing.push('operatingExpenses');
-  if (totals.settlementToOperator == null || totals.totalRevenue == null || totals.totalOperatingExpenses == null) missing.push('settlementToOperator');
+  if ((totals.settlementToOperator == null && !negativeWeek) || totals.totalRevenue == null || totals.totalOperatingExpenses == null) missing.push('settlementToOperator');
   return missing;
 }
 
@@ -650,6 +660,11 @@ export function buildSettlementStatement(
     if (prime.totals.totalRevenue != null) printed.grossRevenue = prime.totals.totalRevenue;
     if (prime.totals.settlementToOperator != null) {
       printed.deposit = prime.totals.settlementToOperator;
+      printed.depositSource = 'settlement_to_operator';
+    } else if (prime.negativeWeek && prime.totals.totalCashFlow != null) {
+      // Negative week: the deposit is TOTAL CASH FLOW (< 0), which
+      // settlementDeposit() turns into owed to carrier, deposited 0.
+      printed.deposit = prime.totals.totalCashFlow;
       printed.depositSource = 'settlement_to_operator';
     }
   }
