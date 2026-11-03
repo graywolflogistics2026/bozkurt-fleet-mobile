@@ -190,7 +190,9 @@ describe('job summary', () => {
         finalState: null,
         failingChecks: [],
         // DIAGNOSTICS JOB DETAIL (2026-11-03): which page and why.
-        pageErrors: [{ page: 6, type: 'unreadable', role: null, kind: null }],
+        pageErrors: [{ page: 6, type: 'unreadable', role: null, kind: null, detail: null, attempts: null }],
+        weekEnding: null,
+        failingDetails: [],
       },
     ]);
     expect(s.lastJobs).toHaveLength(3);
