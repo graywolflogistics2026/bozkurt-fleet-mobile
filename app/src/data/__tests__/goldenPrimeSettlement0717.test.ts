@@ -32,6 +32,9 @@ import { buildTruckComparison, type ComparisonTruck } from '@/src/stats/truckCom
 import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
 import { buildPrimeStatementCheck, isGateCheck, settlementDeposit } from '@/src/import/settlementStatement';
 import { nonReimbursementCredits } from '@/src/import/settlementLineClass';
+import { labeledStatementTotals, totalFieldOfLabel } from '@/src/import/statementTotalLabels';
+import type { StatementLine } from '@/src/import/primeStatementLines';
+import { mergeChunkedExtractions, type ChunkExtraction } from '../../../../supabase/functions/ai-import/chunking';
 import { KEY, USER_ID, TRUCK_ID, WEEK_ENDING, STATEMENT, STATEMENT_LINES, REIMBURSEMENT_ITEMS, PAGE_MAP, golden0717 } from './golden0717Fixture';
 
 const WEEK_START = '2026-07-11';
@@ -251,5 +254,110 @@ describe('template variations pass; a misread printed total still blocks', () =>
   test('a misread payout blocks (card 371.42 vs SETTLEMENT TO OPERATOR 317.42)', () => {
     const e = withStatement({ directDeposit: 371.42 }, { depositAmount: 371.42 });
     expect(gateOf(e).status).toBe('fail');
+  });
+});
+
+// =====================================================================
+// IMPORT LOOP + MISCELLANEOUS TOTAL (owner 2026-11-03). Page 4 prints the
+// sub-line "MISCELLANEOUS 6.50-" (NQ navigation); the real "TOTAL
+// MISCELLANEOUS 10.68" is on page 5. The model put -6.50 into
+// weekTotalMiscellaneous and -609.87 into weekTotalVariableCosts; the page
+// merge kept page 4's values. Totals now come only from TOTAL lines.
+const TOTALS_P4 = [
+  { label: 'TOTAL FREIGHT REVENUE', amount: 696.96 },
+  { label: 'TOTAL OTHER REVENUE', amount: 388.55 },
+  { label: 'TOTAL REVENUE', amount: 1085.51 },
+  { label: 'TOTAL FUEL,OIL,TAX', amount: -323.15 },
+  { label: 'TOTAL EQUIPMENT REPAIR', amount: -280.22 },
+];
+const TOTALS_P5 = [
+  { label: 'TOTAL MISCELLANEOUS', amount: 10.68 },
+  { label: 'TOTAL VARIABLE COSTS', amount: -592.69 },
+  { label: 'TOTAL FIXED COST', amount: -75.4 },
+  { label: 'TOTAL OTHER INCOME & EXPENSE', amount: -100 },
+  { label: 'TOTAL OPERATING EXPENSES', amount: -768.09 },
+  { label: 'TOTAL STATEMENT OF INCOME & EXPENSE', amount: 317.42 },
+];
+const MISC_SPLIT = STATEMENT_LINES.findIndex((l) => l.label === 'MISCELLANEOUS') + 1;
+
+function twoPageReading(totalsP5 = TOTALS_P5): Extraction {
+  const base = golden0717();
+  const s = base.settlement!;
+  const page4 = {
+    ...base,
+    settlement: {
+      ...s,
+      operating: {
+        ...STATEMENT,
+        lines: STATEMENT_LINES.slice(0, MISC_SPLIT),
+        totalLines: TOTALS_P4,
+        // The misread: the sub-line copied into the block total.
+        weekTotalMiscellaneous: -6.5,
+        weekTotalVariableCosts: -609.87,
+        weekTotalFixedCost: 0,
+        weekTotalOtherIncomeAndExpense: 0,
+        weekTotalOperatingExpenses: 0,
+        weekTotalStatement: 0,
+      },
+    },
+  };
+  const page5 = {
+    docType: 'settlement',
+    settlement: {
+      operating: {
+        lines: STATEMENT_LINES.slice(MISC_SPLIT),
+        totalLines: totalsP5,
+        weekTotalMiscellaneous: 10.68,
+        weekTotalVariableCosts: -592.69,
+        weekTotalFixedCost: -75.4,
+        weekTotalOtherIncomeAndExpense: -100,
+        weekTotalOperatingExpenses: -768.09,
+        weekTotalStatement: 317.42,
+      },
+    },
+  };
+  const merged = mergeChunkedExtractions([page4 as unknown as ChunkExtraction, page5 as unknown as ChunkExtraction]);
+  return { ...(merged as unknown as Extraction), pageMap: PAGE_MAP.map((p) => ({ ...p })), pagesTotal: 8 } as Extraction;
+}
+
+describe('07/17: MISCELLANEOUS 6.50- on page 4, TOTAL MISCELLANEOUS 10.68 on page 5', () => {
+  test('a non-TOTAL label never fills a block total', () => {
+    expect(totalFieldOfLabel('MISCELLANEOUS')).toBeNull();
+    expect(totalFieldOfLabel('TOTAL MISCELLANEOUS')).toBe('weekTotalMiscellaneous');
+    expect(totalFieldOfLabel('TOTAL FUEL,OIL,TAX')).toBe('weekTotalFuelOilTax');
+    expect(totalFieldOfLabel('TOTAL STATEMENT OF INCOME & EXPENSE')).toBe('weekTotalStatement');
+  });
+
+  test('the merged two-page reading passes in ONE read: misc +10.68, variable -592.69, profit -293.62', async () => {
+    const e = twoPageReading();
+    // The page merge still kept page 4's misread in the field ...
+    expect((e.settlement!.operating as Record<string, unknown>).weekTotalMiscellaneous).toBe(-6.5);
+    // ... but the totals come from the TOTAL lines of both pages.
+    const t = labeledStatementTotals(e.settlement!.operating as never, []).values;
+    expect(t.weekTotalMiscellaneous).toBe(10.68);
+    expect(t.weekTotalVariableCosts).toBe(-592.69);
+    // The block spans pages: every misc line counts (sum 10.68).
+    const misc = (e.settlement!.operating!.lines as { section: string; amount: number }[]).filter((l) => l.section === 'misc');
+    expect(r2(misc.reduce((a, l) => a + l.amount, 0))).toBe(10.68);
+    expect(r2(-323.15 - 280.22 + 10.68)).toBe(-592.69);
+    expect(gateFailures(e)).toEqual([]);
+    const gate = gateOf(e);
+    expect(gate.status).toBe('pass');
+    const rows = await importWeek(e);
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+    expect(KEY.profit).toBe(-293.62);
+  });
+
+  test('a missing TOTAL label skips its check instead of failing it', () => {
+    const e = twoPageReading(TOTALS_P5.filter((l) => l.label !== 'TOTAL VARIABLE COSTS'));
+    expect(labeledStatementTotals(e.settlement!.operating as never, []).values.weekTotalVariableCosts).toBeNull();
+    expect(gateOf(e).status).toBe('pass');
+  });
+
+  test('an older reading without TOTAL lines: a total that is a copy of the MISCELLANEOUS line is dropped', () => {
+    const e = withStatement({ weekTotalMiscellaneous: -6.5 });
+    const lines = (e.settlement!.operating!.lines as StatementLine[]);
+    expect(labeledStatementTotals(e.settlement!.operating as never, lines).values.weekTotalMiscellaneous).toBeNull();
+    expect(gateFailures(e)).not.toContain('miscellaneous');
   });
 });

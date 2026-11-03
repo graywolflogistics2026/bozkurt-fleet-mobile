@@ -4,6 +4,7 @@ import { isPrimeCarrier } from './primeOperatingStatement';
 import { parsePrimeSettlementDate, pdfCreationDateIso, type DateFormat } from './printedDates';
 import { readPrimeEscrow } from './primeEscrow';
 import { splitPrimeLoads } from './primeLoads';
+import { labeledStatementTotals, STATEMENT_TOTAL_FIELDS } from './statementTotalLabels';
 import {
   STATEMENT_SECTIONS,
   classifyStatementLine,
@@ -302,25 +303,29 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   // for a subtotal only when it was actually printed — the schema default
   // is 0 too, so 0 means "not printed" here (null never fails a check).
   const t = (v: unknown) => printedTotal(v);
+  // Block totals ONLY from their printed "TOTAL ..." label (owner decision
+  // 2026-11-03, statementTotalLabels.ts): never from a regular line.
+  const labeledAll = labeledStatementTotals(op, lines);
+  const labeled = labeledAll.values;
   const totals: PrimeStatementTotals = {
-    totalFreightRevenue: t(op.weekTotalFreightRevenue),
-    totalOtherRevenue: t(op.weekTotalOtherRevenue),
-    totalRevenue: t(op.weekTotalRevenue),
-    totalFuelOilTax: t(op.weekTotalFuelOilTax),
-    totalRepair: t(op.weekTotalRepair),
-    totalTires: t(op.weekTotalTires),
-    totalMiscellaneous: t(op.weekTotalMiscellaneous),
-    totalVariableCosts: t(op.weekTotalVariableCosts),
-    totalOutOfPocket: t(op.weekTotalOutOfPocket),
-    totalFixedCost: t(op.weekTotalFixedCost),
-    totalOtherIncomeAndExpense: t(op.weekTotalOtherIncomeAndExpense),
-    totalOperatingExpenses: t(op.weekTotalOperatingExpenses),
-    totalStatement: t(op.weekTotalStatement),
+    totalFreightRevenue: labeled.weekTotalFreightRevenue,
+    totalOtherRevenue: labeled.weekTotalOtherRevenue,
+    totalRevenue: labeled.weekTotalRevenue,
+    totalFuelOilTax: labeled.weekTotalFuelOilTax,
+    totalRepair: labeled.weekTotalRepair,
+    totalTires: labeled.weekTotalTires,
+    totalMiscellaneous: labeled.weekTotalMiscellaneous,
+    totalVariableCosts: labeled.weekTotalVariableCosts,
+    totalOutOfPocket: labeled.weekTotalOutOfPocket,
+    totalFixedCost: labeled.weekTotalFixedCost,
+    totalOtherIncomeAndExpense: labeled.weekTotalOtherIncomeAndExpense,
+    totalOperatingExpenses: labeled.weekTotalOperatingExpenses,
+    totalStatement: labeled.weekTotalStatement,
     settlementToOperator: t(op.settlementToOperator),
     directDeposit: t(op.directDeposit),
     miles: t(op.weekMiles) ?? printedTotal(infoRows.miles),
     priorWeekBalanceForward: t(op.priorWeekBalanceForward) ?? printedTotal(infoRows.balance_forward),
-    totalCashFlow: t(op.weekTotalCashFlow),
+    totalCashFlow: labeled.weekTotalCashFlow,
   };
   if (totals.settlementToOperator == null) totals.settlementToOperator = printedTotal(infoRows.settlement_to_operator);
 
@@ -378,8 +383,18 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   const weekCheck = statementWeekEndingCheck(statementWeek, s.weekEnding);
   if (weekCheck) checks.push(weekCheck);
 
+  // A week total two pages filled differently: when the TOTAL lines were
+  // read, the field comes from its own TOTAL label only, so the field-level
+  // conflict says nothing (07/17: page 1 put the MISCELLANEOUS line 6.50-
+  // into the misc total, page 2 the real TOTAL MISCELLANEOUS 10.68). The
+  // same TOTAL label printed with two values is still a conflict.
+  const byLabelPaths = new Set(labeledAll.byLabel ? STATEMENT_TOTAL_FIELDS.map((f) => `settlement.operating.${f}`) : []);
   for (const conflict of coreMergeConflicts(extraction)) {
+    if (byLabelPaths.has(conflict.path)) continue;
     checks.push({ id: 'mergeConflict', expected: round2(conflict.values[0]), actual: round2(conflict.values[1]), passed: false, path: conflict.path });
+  }
+  for (const conflict of labeledAll.conflicts) {
+    checks.push({ id: 'mergeConflict', expected: conflict.values[0], actual: conflict.values[1], passed: false, path: `settlement.operating.${conflict.field}` });
   }
 
   // A missing core number no longer blocks Save (it used to, as

@@ -191,6 +191,10 @@ export type ExtractedSettlement = {
   // and src/import/primeStatementLines.ts classifies each line.
   operating?: {
     lines?: { section?: string; label?: string; amount?: number | string }[];
+    // Every printed "TOTAL ..." line, exactly as printed and signed, from
+    // every page the statement spans (owner 2026-11-03): the ONLY source of
+    // the weekTotal* block totals (statementTotalLabels.ts).
+    totalLines?: { label?: string; amount?: number | string }[];
     weekMiles?: number;
     weekTotalFreightRevenue?: number | string;
     weekTotalOtherRevenue?: number | string;

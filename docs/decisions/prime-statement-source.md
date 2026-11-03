@@ -170,6 +170,21 @@ ignores a stored `prReimbursementTotal`, so weeks saved before this rule
 change too. Golden week 3: `goldenPrimeSettlement0717.test.ts` (profit
 −293.62).
 
+## Block totals come only from TOTAL lines (owner decision 2026-11-03)
+
+Week 07/17 looped: the reading put the sub-line "MISCELLANEOUS 6.50-" (NQ
+navigation, page 4) into weekTotalMiscellaneous; the real "TOTAL
+MISCELLANEOUS 10.68" is on page 5, and the page merge kept page 4's value.
+Rule: a block total is ONLY a line whose printed label starts with "TOTAL".
+The reading lists every printed TOTAL line in `operating.totalLines` (every
+page; the merge joins the lists); `labeledStatementTotals()`
+(`app/src/import/statementTotalLabels.ts`) maps label -> field and is the
+only source of the weekTotal* values in buildPrimeStatementCheck. A field
+with no TOTAL line is null (check skipped, never failed). Totals keep their
+printed sign. A reading without totalLines (before this rule) keeps its
+fields, except a misc/tires/out-of-pocket total equal to the block's own
+same-named line when the block sum differs.
+
 ## Review screen (item 7, `reviewVerdict.ts`, `SettlementReview.tsx`)
 
 Green "Verified by Prime's statement. Profit $X, deposited $Y" [Save];

@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- BLOCK TOTALS BY LABEL (owner 2026-11-03, week 07/17 loop): a block total
+  comes ONLY from a printed line whose label starts with TOTAL
+  (`operating.totalLines`, schema + Prime prompt; `statementTotalLabels.ts`,
+  used by buildPrimeStatementCheck). "MISCELLANEOUS 6.50-" is a regular line;
+  blocks span pages; totals keep their sign (+10.68). A missing TOTAL label
+  skips its check. Older readings: a total copied from the same-named line
+  is dropped. No SQL; redeploy ai-import; eas update.
 - PR = OWNER MONEY IN (owner 2026-11-03, on 5cb1df0): every PR line is a
   PERSONAL credit, no text exception, no PR offset (statementRoute ignores
   stored prReimbursementTotal; personal_payment_unmatched no longer raised).
