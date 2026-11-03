@@ -360,6 +360,9 @@ export type JobLine = {
   // The week ending the job's pages read (YYYY-MM-DD), and the details.
   weekEnding?: string | null;
   failingDetails?: FailingDetailLine[];
+  // Why the job read pages again (last 3 triggers: the failing check, or
+  // "line_details: FUEL block (...): STATE FUEL TAX missing · page 5").
+  rereadReasons?: string[];
 };
 
 const CODE_RE = /^[a-z0-9_:-]{1,40}$/i;
@@ -453,7 +456,11 @@ export function jobLine(row: JobRowForDiagnose): JobLine {
       if (Number.isInteger(page) && page >= 1 && !pageErrors.has(page)) pageErrors.set(page, { page, type: code ?? 'unknown_cause', role: null, kind: codeOrNull(pf.kind) });
     }
   }
-  const review = row.review && typeof row.review === 'object' ? (row.review as { final?: { state?: unknown; failures?: unknown; details?: unknown } | null }) : null;
+  const review = row.review && typeof row.review === 'object' ? (row.review as { final?: { state?: unknown; failures?: unknown; details?: unknown } | null; triggers?: unknown }) : null;
+  const rereadReasons = (Array.isArray(review?.triggers) ? (review!.triggers as { reason?: unknown }[]) : [])
+    .slice(-3)
+    .map((tr) => (typeof tr?.reason === 'string' ? tr.reason.replace(/[^A-Za-z0-9 .,:;()/·_+-]/g, '').slice(0, 200) : ''))
+    .filter(Boolean);
   const final = review?.final && typeof review.final === 'object' ? review.final : null;
   const checks = new Set<string>();
   const failingDetails: FailingDetailLine[] = [];
@@ -485,6 +492,7 @@ export function jobLine(row: JobRowForDiagnose): JobLine {
     pageErrors: [...pageErrors.values()].sort((a, b) => a.page - b.page),
     weekEnding: weekEndingOf(results),
     failingDetails,
+    rereadReasons,
   };
 }
 

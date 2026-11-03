@@ -1869,6 +1869,7 @@ type JobRequestBody = PromptInputs & {
     failures?: unknown[];
     details?: { check?: unknown; printed?: unknown; read?: unknown }[];
     pages?: number[];
+    lineReread?: { pages?: unknown; reason?: unknown } | null;
   };
 };
 
@@ -2172,12 +2173,14 @@ async function startJobReread(
   admin: NonNullable<ReturnType<typeof getServiceRoleAdminClient>>,
   userId: string,
   body: JobRequestBody,
-  job: { id: unknown; page_results: unknown },
+  job: { id: unknown; page_results: unknown; result_json?: unknown },
   old: StoredPlan,
   targetPages: number[] | null,
   reason: string,
   review: JobReview,
   invocationStartedAt: number,
+  // LINE-DETAILS RE-READ: keep the saveable reading to restore it.
+  keepForRollback = false,
 ): Promise<Response> {
   const jobId = job.id as string;
   const rereadPlan = newRereadPlan(old);
@@ -2191,6 +2194,7 @@ async function startJobReread(
     ...rereadPlan,
     review,
     rereads: [...(old.rereads ?? []), { at: new Date().toISOString(), reason, pages: readPages }],
+    rollback: keepForRollback ? { readNo: review.reads - 1, resultJson: job.result_json ?? null, pageResults: job.page_results ?? null } : null,
     promptInputs: {
       docHint: body.docHint ?? old.promptInputs?.docHint,
       locale: body.locale ?? old.promptInputs?.locale,
@@ -2241,7 +2245,7 @@ async function handleJobVerdict(
   if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
   const { data: job, error } = await supabase
     .from("import_jobs")
-    .select("id, user_id, status, page_plan, page_results, media_type")
+    .select("id, user_id, status, page_plan, page_results, media_type, result_json")
     .eq("id", body.jobId)
     .maybeSingle();
   if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
@@ -2261,6 +2265,13 @@ async function handleJobVerdict(
           .map((d) => ({ check: String(d.check), printed: typeof d.printed === "number" ? d.printed : String(d.printed ?? ""), read: typeof d.read === "number" ? d.read : String(d.read ?? "") }))
       : [],
     pages: Array.isArray(v.pages) ? v.pages.filter((p) => Number.isInteger(p) && p >= 1 && p <= old.totalPages) : null,
+    lineReread:
+      v.lineReread && Array.isArray(v.lineReread.pages)
+        ? {
+            pages: (v.lineReread.pages as unknown[]).filter((p): p is number => Number.isInteger(p) && (p as number) >= 1 && (p as number) <= old.totalPages),
+            reason: typeof v.lineReread.reason === "string" ? v.lineReread.reason.slice(0, 200) : "line_details",
+          }
+        : null,
   };
   const rereadable = !!edgeRuntimeAvailable() && String(job.media_type ?? "").includes("pdf");
   const decision = decideJobVerdict(reviewOf(old), verdict, { nowIso: new Date().toISOString(), rereadable });
@@ -2270,7 +2281,25 @@ async function handleJobVerdict(
   );
   if (decision.action === "ignored") return json({ jobId: job.id, action: "ignored", review: decision.review });
   if (decision.action === "reread") {
-    return await startJobReread(admin, userId, body, job, old, decision.pages, decision.reason, decision.review, invocationStartedAt);
+    return await startJobReread(admin, userId, body, job, old, decision.pages, decision.reason, decision.review, invocationStartedAt, !!decision.keepForRollback);
+  }
+  if (decision.action === "rollback") {
+    // The line-details re-read came back worse: restore the saveable
+    // reading kept before it (its result and its page results).
+    const kept = old.rollback;
+    if (!kept || !kept.resultJson) {
+      const failedReview = { ...decision.review, final: { ...decision.review.final!, state: "failed_final" as const, reason: "line_reread_lost" } };
+      await admin.from("import_jobs").update({ page_plan: { ...old, review: failedReview }, updated_at: new Date().toISOString() }).eq("id", job.id).eq("user_id", userId).eq("status", "ready");
+      return json({ jobId: job.id, action: "final", review: failedReview });
+    }
+    const { error: rollbackError } = await admin
+      .from("import_jobs")
+      .update({ page_plan: { ...old, review: decision.review, rollback: null }, result_json: kept.resultJson, page_results: kept.pageResults, updated_at: new Date().toISOString() })
+      .eq("id", job.id)
+      .eq("user_id", userId)
+      .eq("status", "ready");
+    if (rollbackError) return errorResponse("internal", "Could not record the check — your file is safe. Please try again.", 500);
+    return json({ jobId: job.id, action: "final", review: decision.review });
   }
   const { error: updateError } = await admin
     .from("import_jobs")

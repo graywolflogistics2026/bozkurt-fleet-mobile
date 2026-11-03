@@ -193,6 +193,7 @@ describe('job summary', () => {
         pageErrors: [{ page: 6, type: 'unreadable', role: null, kind: null, detail: null, attempts: null }],
         weekEnding: null,
         failingDetails: [],
+        rereadReasons: [],
       },
     ]);
     expect(s.lastJobs).toHaveLength(3);

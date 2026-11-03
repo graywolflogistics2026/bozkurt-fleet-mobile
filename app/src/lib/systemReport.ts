@@ -93,6 +93,7 @@ export function jobLineText(j: JobLine, t: Translate): string {
     const pages = (d.pages ?? []).map((p) => `p${p.page} ${p.value}${p.label ? ` "${p.label}"` : ''}`).join('; ');
     parts.push(`${d.check}: ${d.printed ?? '—'} / ${d.read ?? '—'}${pages ? ` (${pages})` : ''}`);
   }
+  for (const r of j.rereadReasons ?? []) parts.push(`re-read: ${r}`);
   if (j.pageErrors && j.pageErrors.length > 0) {
     parts.push(
       j.pageErrors

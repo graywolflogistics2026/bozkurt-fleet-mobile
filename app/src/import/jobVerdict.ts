@@ -6,6 +6,7 @@
 // decides a re-read; it renders only for a FINAL job.
 import type { CarrierCode } from './carrierCodes';
 import { evaluateSettlementGate, rereadRequestFor } from './settlementGate';
+import { blockDiagnosisLine, diagnosePrimeBlocks } from './primeStatementTemplate';
 import type { Extraction } from './types';
 import type { JobReviewState } from './importJobs';
 
@@ -16,6 +17,9 @@ export type JobVerdict = {
   failures?: string[];
   details?: { check: string; printed: number | string; read: number | string }[];
   pages?: number[] | null;
+  // PRIORITY OF EVIDENCE (owner 2026-11-03): a saveable week whose block
+  // lines do not add up — its block pages are read ONCE more first.
+  lineReread?: { pages: number[]; reason: string } | null;
 };
 
 export function verdictOfReading(
@@ -27,7 +31,17 @@ export function verdictOfReading(
   if (!extraction || extraction.docType !== 'settlement' || !extraction.settlement) return { readNo, status: 'pass' };
   const gate = evaluateSettlementGate(extraction, options);
   // needs_date passes: the card asks the one date question.
-  if (!gate || gate.status !== 'fail') return { readNo, status: 'pass' };
+  if (!gate) return { readNo, status: 'pass' };
+  if (gate.status !== 'fail') {
+    if (gate.lineDetails !== 'mismatch') return { readNo, status: 'pass' };
+    // Line details differ: name the blocks (template) and read their pages
+    // once more; the job keeps this reading if that comes back worse.
+    const blocks = diagnosePrimeBlocks(extraction);
+    const pages = [...new Set(blocks.flatMap((b) => b.pages))].sort((a, b) => a - b);
+    const details = blocks.map((b) => ({ check: `block_${b.section}`, printed: b.printed ?? 'not read', read: b.read }));
+    if (pages.length === 0) return { readNo, status: 'pass', ...(details.length > 0 ? { details } : {}) };
+    return { readNo, status: 'pass', details, lineReread: { pages, reason: blocks.map(blockDiagnosisLine).join(' · ').slice(0, 190) } };
+  }
   const request = rereadRequestFor(gate, extraction);
   return {
     readNo,

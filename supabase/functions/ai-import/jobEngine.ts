@@ -233,6 +233,10 @@ export type JobPlan = {
   baseDocumentId?: string | null;
   // IMPORT GATE FIX 1.3: each re-read of this job and why.
   rereads?: RereadLogEntry[];
+  // LINE-DETAILS RE-READ (owner 2026-11-03): the saveable reading kept
+  // while its block pages are read once more; restored if that re-read
+  // comes back worse.
+  rollback?: { readNo: number; resultJson: unknown; pageResults: unknown } | null;
   // RE-READ RULES (owner 2026-11-03): the job's read count, every re-read
   // trigger and the FINAL verdict, persisted on the job row.
   review?: JobReview | null;
@@ -274,7 +278,8 @@ export type JobFinal = {
   failures?: string[];
   details?: VerdictDetail[];
 };
-export type JobReview = { reads: number; final: JobFinal | null; triggers: ReadTrigger[] };
+// lineReread: the read after which the one line-details re-read started.
+export type JobReview = { reads: number; final: JobFinal | null; triggers: ReadTrigger[]; lineReread?: { fromRead: number } | null };
 export type JobVerdictInput = {
   readNo: number;
   status: 'pass' | 'fail';
@@ -282,10 +287,17 @@ export type JobVerdictInput = {
   failures?: string[];
   details?: VerdictDetail[];
   pages?: number[] | null;
+  // A PASSING reading whose block lines do not add up (priority of
+  // evidence, owner 2026-11-03): its block pages, read once more first.
+  lineReread?: { pages: number[]; reason: string } | null;
 };
 export type VerdictDecision =
   | { action: 'final'; review: JobReview }
-  | { action: 'reread'; review: JobReview; pages: number[] | null; reason: string }
+  // keepForRollback: keep the current (saveable) reading until the re-read
+  // has its own verdict.
+  | { action: 'reread'; review: JobReview; pages: number[] | null; reason: string; keepForRollback?: boolean }
+  // The line-details re-read came back worse: the kept reading is restored.
+  | { action: 'rollback'; review: JobReview }
   | { action: 'ignored'; review: JobReview };
 
 export function reviewOf(plan: Pick<JobPlan, 'review'> | null | undefined): JobReview {
@@ -294,6 +306,7 @@ export function reviewOf(plan: Pick<JobPlan, 'review'> | null | undefined): JobR
     reads: Number.isInteger(r?.reads) && (r!.reads as number) >= 1 ? (r!.reads as number) : 1,
     final: r?.final ?? null,
     triggers: Array.isArray(r?.triggers) ? r!.triggers : [],
+    lineReread: r?.lineReread ?? null,
   };
 }
 
@@ -313,7 +326,22 @@ export function decideJobVerdict(
   const review: JobReview = { ...current, triggers: [...current.triggers] };
   if (review.final || v.readNo !== review.reads) return { action: 'ignored', review };
   if (v.status === 'pass') {
-    return { action: 'final', review: { ...review, final: { state: 'ready_final', at: opts.nowIso, reason: 'pass' } } };
+    const lr = v.lineReread;
+    if (lr && Array.isArray(lr.pages) && lr.pages.length > 0 && !review.lineReread && review.reads < MAX_READS_PER_JOB && opts.rereadable) {
+      const reason = `line_details: ${lr.reason}`.slice(0, 200);
+      review.triggers.push({ at: opts.nowIso, readNo: review.reads, check: 'line_details', printed: null, value: null, reason, pages: lr.pages, signature: `line_details:${review.reads}` });
+      review.lineReread = { fromRead: review.reads };
+      review.reads += 1;
+      return { action: 'reread', review, pages: lr.pages, reason, keepForRollback: true };
+    }
+    // A pass keeps its line-details warnings (Diagnostics).
+    const details = (v.details ?? []).length > 0 ? { details: v.details } : {};
+    return { action: 'final', review: { ...review, final: { state: 'ready_final', at: opts.nowIso, reason: 'pass', ...details } } };
+  }
+  // The one line-details re-read made a saveable week fail: the reading
+  // from before it is restored and the week stays saveable.
+  if (review.lineReread && review.lineReread.fromRead === review.reads - 1) {
+    return { action: 'rollback', review: { ...review, final: { state: 'ready_final', at: opts.nowIso, reason: 'line_reread_worse', gateReason: v.reason, failures: v.failures ?? [], details: v.details ?? [] } } };
   }
   const signature = verdictSignature(v);
   const failed = (reason: string): VerdictDecision => ({
