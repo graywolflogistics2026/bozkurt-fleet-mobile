@@ -12,6 +12,8 @@ import { reviewInputsOf } from '@/src/import/reviewVerdict';
 import { couldNotReadReport } from '@/src/import/importAudit';
 import { ensureReasonLines, failDetailLine } from '@/src/import/jobFailure';
 import type { Extraction } from '@/src/import/types';
+import { profitLinesToAsk, type ProfitLineQuestion } from '@/src/import/primeStatementTemplate';
+import { numOrNull } from '@/src/lib/number';
 
 // SIMPLE IMPORT FLOW (owner decision 2026-10-31, batch D2 2.1): a
 // settlement shows exactly one of three states — READING, CHECK AND
@@ -86,6 +88,7 @@ export function CertifyCard({
   onCertify,
   onDiscard,
   certifyDisabled,
+  onTypeProfitLines,
   children,
 }: {
   extraction: Extraction;
@@ -96,6 +99,8 @@ export function CertifyCard({
   onCertify: () => void;
   onDiscard: () => void;
   certifyDisabled: boolean;
+  // The owner typed the profit lines the reading missed.
+  onTypeProfitLines?: (answers: { label: string; amount: number }[]) => void;
   // Truck / driver pickers, only when the unit or driver did not match.
   children?: ReactNode;
 }) {
@@ -103,6 +108,7 @@ export function CertifyCard({
   const { money } = useFormatters();
   const [showDetails, setShowDetails] = useState(false);
   const m = (n: number) => money(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const profitQuestions = onTypeProfitLines ? profitLinesToAsk(extraction) : [];
   return (
     <Card>
       <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.lg, marginBottom: spacing.xs }}>{t('importFlow.certifyTitle')}</Text>
@@ -128,10 +134,12 @@ export function CertifyCard({
         </View>
       )}
 
+      {profitQuestions.length > 0 && onTypeProfitLines && <ProfitLineQuestions questions={profitQuestions} onApply={onTypeProfitLines} />}
+
       {children}
 
       <View style={{ marginTop: spacing.md }}>
-        <PrimaryButton title={t('importFlow.certifyAndAdd')} onPress={onCertify} disabled={certifyDisabled || gate.status === 'needs_date'} />
+        <PrimaryButton title={t('importFlow.certifyAndAdd')} onPress={onCertify} disabled={certifyDisabled || gate.status === 'needs_date' || profitQuestions.length > 0} />
         <MutedText style={{ fontSize: typography.size.xs, marginTop: spacing.xs, marginBottom: spacing.sm }}>{t('importFlow.certifyLine')}</MutedText>
         <SecondaryButton title={t('importScreen.discard')} onPress={onDiscard} />
       </View>
@@ -141,6 +149,41 @@ export function CertifyCard({
       </Pressable>
       {showDetails && <ReviewDetails extraction={extraction} inputs={reviewInputsOf(extraction)} money={m} />}
     </Card>
+  );
+}
+
+// PROFIT FROM TOTALS NEEDS ONLY A FEW LINES (owner decision 2026-11-03):
+// a profit line the reading missed is typed here — one field per line,
+// the printed label shown; 0 = not printed this week. Certify waits for it.
+function ProfitLineQuestions({ questions, onApply }: { questions: ProfitLineQuestion[]; onApply: (answers: { label: string; amount: number }[]) => void }) {
+  const { t } = useTranslation();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const parsed = questions.map((q) => ({ label: q.label, amount: numOrNull(values[q.label] ?? '') }));
+  const complete = parsed.every((a) => a.amount != null);
+  return (
+    <View style={{ marginTop: spacing.sm, padding: spacing.sm, borderRadius: radii.md, borderWidth: 1, borderColor: colors.orange }}>
+      <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('importFlow.profitLinesTitle')}</Text>
+      <MutedText style={{ marginBottom: spacing.sm }}>{t('importFlow.profitLinesBody')}</MutedText>
+      {questions.map((q) => (
+        <View key={q.label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
+          <Text style={{ color: colors.text, flex: 1, marginEnd: spacing.sm }}>{q.printed}</Text>
+          <Field
+            keyboardType="decimal-pad"
+            value={values[q.label] ?? ''}
+            onChangeText={(v) => setValues((prev) => ({ ...prev, [q.label]: v }))}
+            placeholder="0.00"
+            style={{ width: 110, textAlign: 'right', marginBottom: 0 }}
+          />
+        </View>
+      ))}
+      <View style={{ marginTop: spacing.sm }}>
+        <SecondaryButton
+          title={t('importFlow.profitLinesApply')}
+          disabled={!complete}
+          onPress={() => onApply(parsed.map((a) => ({ label: a.label, amount: a.amount ?? 0 })))}
+        />
+      </View>
+    </View>
   );
 }
 

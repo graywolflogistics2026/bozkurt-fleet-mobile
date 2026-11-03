@@ -174,3 +174,58 @@ export function blockDiagnosisLine(d: BlockDiagnosis): string {
   const amounts = d.printed != null ? `printed ${d.printed.toFixed(2)}, read ${d.read.toFixed(2)}` : `gap ${d.difference.toFixed(2)}`;
   return `${d.name} block (${amounts}): ${parts.join('; ') || 'lines differ'}${d.pages.length > 0 ? ` · page ${d.pages.join(', ')}` : ''}`;
 }
+
+// PROFIT FROM TOTALS NEEDS ONLY A FEW LINES (owner decision 2026-11-03):
+// profit = TOTAL STATEMENT with these lines taken back out, by label. Each
+// is printed with its usual sign (−1 = a charge with a trailing minus,
+// +1 = a credit). When one of them may sit unread inside a block that does
+// not add up, the review card asks the owner to type it (one field, the
+// printed label shown) instead of failing the week.
+export const PROFIT_LINES: { section: StatementSection; label: string; printed: string; sign: 1 | -1 }[] = [
+  { section: 'misc', label: 'ADVANCES', printed: 'ADVANCES', sign: -1 },
+  { section: 'misc', label: 'PRIME POINT OF SALE', printed: 'PRIME POINT-OF-SALE', sign: -1 },
+  { section: 'misc', label: 'OPERATOR TRK EXTRAS', printed: 'OPERATOR TRK EXTRAS', sign: -1 },
+  { section: 'misc', label: 'PERSONAL PYMNT RCV', printed: 'PERSONAL PYMNT RCV', sign: 1 },
+  { section: 'other', label: 'ACCRUAL PERFORMANCE BOND', printed: 'ACCRUAL PERFORMANCE BOND', sign: -1 },
+  { section: 'other', label: 'INTEREST INCOME FROM DEPOSIT', printed: 'INTEREST INCOME FROM DEPOSIT', sign: 1 },
+];
+
+export type ProfitLineQuestion = (typeof PROFIT_LINES)[number];
+
+// The profit lines to ask for: not read, in a block that does not add up.
+export function profitLinesToAsk(extraction: Extraction | null | undefined, priorLabelsSeen: Set<string> = new Set()): ProfitLineQuestion[] {
+  const blocks = diagnosePrimeBlocks(extraction, priorLabelsSeen);
+  const answered = new Set(extraction?.settlement?.operating?.typedNotPrinted ?? []);
+  // Template labels are unique across blocks, so "missing in a block that
+  // does not add up" is enough (a whole-block gap names several blocks).
+  return PROFIT_LINES.filter((p) => !answered.has(p.label) && blocks.some((b) => b.missing.includes(p.label)));
+}
+
+// The owner's typed amounts become statement lines of their block (signed
+// as Prime prints them, flagged typed). 0 = "not printed this week": no
+// line (never a $0 row), the label is remembered so it is not asked again.
+export function withTypedStatementLines(extraction: Extraction, answers: { label: string; amount: number }[]): Extraction {
+  const s = extraction.settlement;
+  if (!s?.operating) return extraction;
+  const typed: { section: string; label: string; amount: number; typed: true }[] = [];
+  const notPrinted: string[] = [];
+  for (const a of answers) {
+    const q = PROFIT_LINES.find((p) => p.label === a.label);
+    if (!q || !Number.isFinite(a.amount)) continue;
+    const amount = Math.round(q.sign * Math.abs(a.amount) * 100) / 100;
+    if (amount === 0) notPrinted.push(q.label);
+    else typed.push({ section: q.section, label: q.printed, amount, typed: true });
+  }
+  if (typed.length === 0 && notPrinted.length === 0) return extraction;
+  return {
+    ...extraction,
+    settlement: {
+      ...s,
+      operating: {
+        ...s.operating,
+        lines: [...(s.operating.lines ?? []), ...typed],
+        typedNotPrinted: [...(s.operating.typedNotPrinted ?? []), ...notPrinted],
+      },
+    },
+  };
+}

@@ -190,7 +190,11 @@ export type ExtractedSettlement = {
   // minus = negative). src/import/settlementStatement.ts self-checks them
   // and src/import/primeStatementLines.ts classifies each line.
   operating?: {
-    lines?: { section?: string; label?: string; amount?: number | string }[];
+    // `typed` = the owner typed this amount on the review card (a profit
+    // line the reading missed, primeStatementTemplate.ts PROFIT_LINES).
+    lines?: { section?: string; label?: string; amount?: number | string; page?: number; typed?: boolean }[];
+    // Profit lines the owner answered "not printed this week" (0).
+    typedNotPrinted?: string[];
     // Every printed "TOTAL ..." line, exactly as printed and signed, from
     // every page the statement spans (owner 2026-11-03): the ONLY source of
     // the weekTotal* block totals (statementTotalLabels.ts).

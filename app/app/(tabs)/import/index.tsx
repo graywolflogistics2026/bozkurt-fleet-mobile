@@ -66,6 +66,7 @@ import {
   type GateFailReason,
   type SettlementGateResult,
 } from '@/src/import/settlementGate';
+import { withTypedStatementLines } from '@/src/import/primeStatementTemplate';
 import { SettlementDateQuestion } from '@/src/components/SettlementDateQuestion';
 import { checkSettlementDates, isDateGateSatisfied, rememberedDateFormat, settlementDateInputsOf } from '@/src/import/printedDates';
 import { useSettlements } from '@/src/data/settlements';
@@ -1598,6 +1599,7 @@ export default function Import() {
             onCertify={() => void handleSave()}
             onDiscard={discardReading}
             certifyDisabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId)}
+            onTypeProfitLines={(answers) => setExtraction(withTypedStatementLines(extraction, answers))}
           >
             {renderPickers()}
             <LineClassQuestions

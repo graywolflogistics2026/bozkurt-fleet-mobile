@@ -56,3 +56,17 @@ operatingExpenses) is a line-details warning: the week is saveable from
 the printed totals, profit ties to TOTAL OPERATING EXPENSES through one
 "lines not read" row (`statementRoute.ts`), and the line rows are not
 stored. The subtotal blocks only when the printed totals do not tie.
+
+## Profit lines the owner types (same day)
+
+Profit from the printed totals needs only these lines, by label
+(`PROFIT_LINES`): ADVANCES, PRIME POINT-OF-SALE, OPERATOR TRK EXTRAS,
+PERSONAL PYMNT RCV, ACCRUAL PERFORMANCE BOND, INTEREST INCOME FROM DEPOSIT.
+When one of them is missing from a block that does not add up
+(`profitLinesToAsk()`), the certify card shows one field per line with the
+printed label instead of failing the week; Certify waits until they are
+answered. A typed amount becomes a statement line of its block, signed as
+Prime prints it and flagged `typed` (`withTypedStatementLines()`); 0 means
+"not printed this week" — no $0 row, the label goes to
+`operating.typedNotPrinted` so it is not asked again. The gate and profit
+then recompute from the edited reading.
