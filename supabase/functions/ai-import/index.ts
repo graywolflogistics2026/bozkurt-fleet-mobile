@@ -56,6 +56,7 @@ import {
   newImportPlan,
   newReadPagesPlan,
   newRereadPlan,
+  rereadKeptResults,
   resetFailedPages,
   runJobStep,
   type ClassifiedPage,
@@ -386,7 +387,7 @@ const SETTLEMENT_DEDUCTIONS_AFTER =
 const OPERATING_SCHEMA_BEFORE =
   `"operating":{"weekRevenue":0,"weekMiles":0,"weekExpenses":0,"weekNet":0,"ytdRevenue":0,"ytdMiles":0,"ytdExpenses":0,"ytdNet":0,"ltdRevenue":0,"ltdMiles":0,"weeksInService":0}`;
 const OPERATING_SCHEMA_AFTER =
-  `"operating":{"lines":[{"section":"","label":"","amount":0}],"weekMiles":0,"weekTotalFreightRevenue":0,"weekTotalOtherRevenue":0,"weekTotalRevenue":0,"weekTotalFuelOilTax":0,"weekTotalRepair":0,"weekTotalTires":0,"weekTotalMiscellaneous":0,"weekTotalVariableCosts":0,"weekTotalOutOfPocket":0,"weekTotalFixedCost":0,"weekTotalOtherIncomeAndExpense":0,"weekTotalOperatingExpenses":0,"weekTotalStatement":0,"priorWeekBalanceForward":0,"weekTotalCashFlow":0,"settlementToOperator":0,"directDeposit":0,"weekEnding":"","ytdTotalRevenue":0,"ytdMiles":0,"ytdTotalStatement":0,"ytdSettlementToOperator":0,"weeksInService":0,"perfBondEmergencyFundYtd":0,"escrowPriorBalance":0,"escrowThisWeek":0,"escrowBalance":0,"escrowInterestRatePct":0}`;
+  `"operating":{"lines":[{"section":"","label":"","amount":0}],"weekMiles":0,"weekTotalFreightRevenue":0,"weekTotalOtherRevenue":0,"weekTotalRevenue":0,"weekTotalFuelOilTax":0,"weekTotalRepair":0,"weekTotalTires":0,"weekTotalMiscellaneous":0,"weekTotalVariableCosts":0,"weekTotalOutOfPocket":0,"weekTotalFixedCost":0,"weekTotalOtherIncomeAndExpense":0,"weekTotalOperatingExpenses":0,"weekTotalStatement":0,"priorWeekBalanceForward":0,"weekTotalCashFlow":0,"settlementToOperator":0,"directDeposit":0,"payoutMethod":"","weekEnding":"","ytdTotalRevenue":0,"ytdMiles":0,"ytdTotalStatement":0,"ytdSettlementToOperator":0,"weeksInService":0,"perfBondEmergencyFundYtd":0,"escrowPriorBalance":0,"escrowThisWeek":0,"escrowBalance":0,"escrowInterestRatePct":0}`;
 
 // ---- Approved addition (owner decision 2026-10-13): reimbursement lines
 // carry their own printed code (Prime "PR" = personal-payment
@@ -395,7 +396,7 @@ const OPERATING_SCHEMA_AFTER =
 const REIMBURSEMENT_ITEMS_BEFORE = `"reimbursementItems":[{"desc":"","ref":"","amount":0}]`;
 const REIMBURSEMENT_ITEMS_AFTER = `"reimbursementItems":[{"code":"","desc":"","ref":"","amount":0}]`;
 const DEPOSIT_SCHEMA_BEFORE = `"netPay":0,`;
-const DEPOSIT_SCHEMA_AFTER = `"netPay":0,"depositAmount":0,"totalLabels":{"grossRevenue":"","reimbursements":"","totalDeductions":"","netPay":"","depositAmount":""},`;
+const DEPOSIT_SCHEMA_AFTER = `"netPay":0,"depositAmount":0,"payoutMethod":"","totalLabels":{"grossRevenue":"","reimbursements":"","totalDeductions":"","netPay":"","depositAmount":""},`;
 
 const APPROVED_ADDITIONS_SUFFIX = `
 APPROVED ADDITION (fuel/IFTA, owner decision 2026-07-03): for docType "fuel", also extract the US state as a 2-letter code (e.g. "TX", "OK") into fuel.state, read from the station's address on the receipt. If the state genuinely cannot be determined, leave fuel.state as "".
@@ -620,9 +621,9 @@ function buildExtractionPrompt(
   // the WEEKS column with its printed sign, plus every printed subtotal;
   // the app self-checks them (app/src/import/settlementStatement.ts) and
   // classifies each line (app/src/import/primeStatementLines.ts).
-  prompt += `\nAPPROVED ADDITION (Prime Inc operating statement, carrier-scoped, never applied to any other carrier): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc.") AND the document includes an OPERATING STATEMENT / "STATEMENT OF INCOME AND EXPENSE" page (commonly prepared by Perryman & Associates; columns WEEKS TOTAL, ACTUAL/MILE, YTD TOTAL, LTD TOTAL), populate settlement.operating from that page. settlement.operating.lines = EVERY individual line that has a value in the WEEKS TOTAL column, in page order, each as {"section","label","amount"}: section is one of "revenue" (FREIGHT REVENUE and OTHER REVENUE lines, e.g. REVENUE FROM PRIME INC., EXTRA PAY, FUEL SURCG BILL, OUTSIDE LUMPER 1099 PAY, TOLL 1099 PAY), "fuel_oil_tax" (FUEL,OIL,TAX lines incl. the discount lines), "repair" (EQUIPMENT REPAIR AND MAINT. lines), "tires", "misc" (MISCELLANEOUS lines, e.g. TOLLS, LUMPERS, ADVANCES, WEIGHT TICKETS, QUALCOMM COST, WIRE CHARGE, TRIP XPRESS CHG, PERSONAL PYMNT RCV, OPERATOR TRK EXTRAS), "out_of_pocket", "fixed" (FIXED COST lines), "other" (OTHER INCOME AND EXPENSE lines, e.g. ACCRUAL PERFORMANCE BOND, INTEREST INCOME FROM DEPOSIT, INTEREST EXPENSE ON OVER DRAW, START UP & EXCESS MILEAGE COST); label is the line's text exactly as printed; amount is the WEEKS TOTAL figure WITH ITS PRINTED SIGN — a trailing minus ("1,997.82-") is negative (-1997.82), no minus is positive. Never put a "TOTAL ..." subtotal line in lines and never a line from the ACTUAL/MILE, YTD or LTD columns; skip lines that are blank in the WEEKS TOTAL column. The MILES row (e.g. 3,316.00, printed inside the revenue block), WEEKS IN SERVICE, PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR and PERF BD/EMGCY FD are NOT dollar lines of any section — never put them in lines; they go only in their own fields below. Then the printed subtotals from the WEEKS TOTAL column, each WITH ITS PRINTED SIGN: weekMiles = MILES; weekTotalFreightRevenue = TOTAL FREIGHT REVENUE; weekTotalOtherRevenue = TOTAL OTHER REVENUE; weekTotalRevenue = TOTAL REVENUE; weekTotalFuelOilTax = TOTAL FUEL,OIL,TAX; weekTotalRepair = TOTAL EQUIPMENT REPAIR AND MAINT.; weekTotalTires = TOTAL TIRES; weekTotalMiscellaneous = TOTAL MISCELLANEOUS; weekTotalVariableCosts = TOTAL VARIABLE COSTS; weekTotalOutOfPocket = TOTAL OUT OF POCKET COSTS; weekTotalFixedCost = TOTAL FIXED COST; weekTotalOtherIncomeAndExpense = TOTAL OTHER INCOME AND EXPENSE; weekTotalOperatingExpenses = TOTAL OPERATING EXPENSES; weekTotalStatement = TOTAL STATEMENT OF INCOME & EXPENSE. priorWeekBalanceForward = PRIOR WEEK BALANCE FORWARD below TOTAL STATEMENT (the same figure as the interest/recap page's BALANCE FORWARD), WITH ITS PRINTED SIGN as printed there: "1,202.92-" = -1202.92 (the operator owed Prime last week); the accounts page prints the same balance without a sign — never take the sign from that page; 0 when no balance forward is printed. weekTotalCashFlow = TOTAL CASH FLOW (TOTAL STATEMENT + PRIOR WEEK BALANCE FORWARD). settlementToOperator = the balance-sheet page's SETTLEMENT TO OPERATOR (WEEKS TOTAL column); directDeposit = the settlement recap's DIRECT DEPOSIT TO BANK amount. weekEnding = the week ending printed in this statement page's own header as YYYY-MM-DD; its header prints dates as YY/MM/DD ("26/08/14" = 2026-08-14, never 2014-08-26), and it is the same week as settlement.weekEnding. From the YTD TOTAL column: ytdTotalRevenue = TOTAL REVENUE, ytdMiles = MILES, ytdTotalStatement = TOTAL STATEMENT OF INCOME & EXPENSE, ytdSettlementToOperator = SETTLEMENT TO OPERATOR; weeksInService = WEEKS IN SERVICE from the page header. HELD BY CARRIER (owner decision 2026-10-29), each figure exactly as printed, 0 when not printed: perfBondEmergencyFundYtd = the balance sheet's PERF BD/EMGCY FD row, YTD TOTAL column (the bond/emergency fund Prime holds, e.g. 500.00); escrowPriorBalance, escrowThisWeek and escrowBalance = the accounts page's PERFORMANCE BOND/EMER FUND PAID account: its prior/beginning balance, this week's amount and its ending balance (e.g. 400.00, 100.00, 500.00), unsigned as printed there; escrowInterestRatePct = the annual interest rate printed on the interest page for the deposit/overdraw interest, in percent as printed (3.83 for 3.83%). A subtotal not printed this week stays 0. If the carrier is anything other than Prime Inc, or no such page exists in this document, leave settlement.operating entirely at its zero/empty defaults — do not estimate or reconstruct these figures from anywhere else in the document.\n`;
+  prompt += `\nAPPROVED ADDITION (Prime Inc operating statement, carrier-scoped, never applied to any other carrier): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc.") AND the document includes an OPERATING STATEMENT / "STATEMENT OF INCOME AND EXPENSE" page (commonly prepared by Perryman & Associates; columns WEEKS TOTAL, ACTUAL/MILE, YTD TOTAL, LTD TOTAL), populate settlement.operating from that page. settlement.operating.lines = EVERY individual line that has a value in the WEEKS TOTAL column, in page order, each as {"section","label","amount"}: section is one of "revenue" (FREIGHT REVENUE and OTHER REVENUE lines, e.g. REVENUE FROM PRIME INC., EXTRA PAY, FUEL SURCG BILL, OUTSIDE LUMPER 1099 PAY, TOLL 1099 PAY), "fuel_oil_tax" (FUEL,OIL,TAX lines incl. the discount lines), "repair" (EQUIPMENT REPAIR AND MAINT. lines), "tires", "misc" (MISCELLANEOUS lines, e.g. TOLLS, LUMPERS, ADVANCES, WEIGHT TICKETS, QUALCOMM COST, WIRE CHARGE, TRIP XPRESS CHG, PERSONAL PYMNT RCV, OPERATOR TRK EXTRAS), "out_of_pocket", "fixed" (FIXED COST lines), "other" (OTHER INCOME AND EXPENSE lines, e.g. ACCRUAL PERFORMANCE BOND, INTEREST INCOME FROM DEPOSIT, INTEREST EXPENSE ON OVER DRAW, START UP & EXCESS MILEAGE COST); label is the line's text exactly as printed; amount is the WEEKS TOTAL figure WITH ITS PRINTED SIGN — a trailing minus ("1,997.82-") is negative (-1997.82), no minus is positive. Never put a "TOTAL ..." subtotal line in lines and never a line from the ACTUAL/MILE, YTD or LTD columns; skip lines that are blank in the WEEKS TOTAL column. The MILES row (e.g. 3,316.00, printed inside the revenue block), WEEKS IN SERVICE, PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR and PERF BD/EMGCY FD are NOT dollar lines of any section — never put them in lines; they go only in their own fields below. Then the printed subtotals from the WEEKS TOTAL column, each WITH ITS PRINTED SIGN: weekMiles = MILES; weekTotalFreightRevenue = TOTAL FREIGHT REVENUE; weekTotalOtherRevenue = TOTAL OTHER REVENUE; weekTotalRevenue = TOTAL REVENUE; weekTotalFuelOilTax = TOTAL FUEL,OIL,TAX; weekTotalRepair = TOTAL EQUIPMENT REPAIR AND MAINT.; weekTotalTires = TOTAL TIRES; weekTotalMiscellaneous = TOTAL MISCELLANEOUS; weekTotalVariableCosts = TOTAL VARIABLE COSTS; weekTotalOutOfPocket = TOTAL OUT OF POCKET COSTS; weekTotalFixedCost = TOTAL FIXED COST; weekTotalOtherIncomeAndExpense = TOTAL OTHER INCOME AND EXPENSE; weekTotalOperatingExpenses = TOTAL OPERATING EXPENSES; weekTotalStatement = TOTAL STATEMENT OF INCOME & EXPENSE. priorWeekBalanceForward = PRIOR WEEK BALANCE FORWARD below TOTAL STATEMENT (the same figure as the interest/recap page's BALANCE FORWARD), WITH ITS PRINTED SIGN as printed there: "1,202.92-" = -1202.92 (the operator owed Prime last week); the accounts page prints the same balance without a sign — never take the sign from that page; 0 when no balance forward is printed. weekTotalCashFlow = TOTAL CASH FLOW (TOTAL STATEMENT + PRIOR WEEK BALANCE FORWARD); some statements have NO cash-flow section and end at TOTAL STATEMENT OF INCOME & EXPENSE — then priorWeekBalanceForward and weekTotalCashFlow stay 0. settlementToOperator = the balance-sheet page's SETTLEMENT TO OPERATOR (WEEKS TOTAL column); directDeposit = the settlement recap's payout line to the owner under WHATEVER label Prime printed (DIRECT DEPOSIT TO BANK, AMOUNT LOADED ON CARD, or any other line saying what was paid to the owner) — never require the words DIRECT DEPOSIT; payoutMethod = "bank" when that line pays a bank account, "card" when it is loaded on a card, "other" for any other payout label, "" when no payout line is printed. Locate every section (accounts, interest, recap, statement, balance sheet) by its printed header, never by its page number: the same section can be on a different page from one statement to the next. weekEnding = the week ending printed in this statement page's own header as YYYY-MM-DD; its header prints dates as YY/MM/DD ("26/08/14" = 2026-08-14, never 2014-08-26), and it is the same week as settlement.weekEnding. From the YTD TOTAL column: ytdTotalRevenue = TOTAL REVENUE, ytdMiles = MILES, ytdTotalStatement = TOTAL STATEMENT OF INCOME & EXPENSE, ytdSettlementToOperator = SETTLEMENT TO OPERATOR; weeksInService = WEEKS IN SERVICE from the page header. HELD BY CARRIER (owner decision 2026-10-29), each figure exactly as printed, 0 when not printed: perfBondEmergencyFundYtd = the balance sheet's PERF BD/EMGCY FD row, YTD TOTAL column (the bond/emergency fund Prime holds, e.g. 500.00); escrowPriorBalance, escrowThisWeek and escrowBalance = the accounts page's PERFORMANCE BOND/EMER FUND PAID account: its prior/beginning balance, this week's amount and its ending balance (e.g. 400.00, 100.00, 500.00), unsigned as printed there; escrowInterestRatePct = the annual interest rate printed on the interest page for the deposit/overdraw interest, in percent as printed (3.83 for 3.83%). A subtotal not printed this week stays 0. If the carrier is anything other than Prime Inc, or no such page exists in this document, leave settlement.operating entirely at its zero/empty defaults — do not estimate or reconstruct these figures from anywhere else in the document.\n`;
   // BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13).
-  prompt += `\nAPPROVED ADDITION (deposit amount, every carrier, owner decision 2026-10-13): settlement.depositAmount = the dollar amount the statement says was deposited or paid to the driver's bank (e.g. "DIRECT DEPOSIT TO BANK ..."), when such a line is printed; leave it 0 when no deposit line is printed — never compute it. Copy the AMOUNT only: never copy a routing number, account number or any other bank digits into ANY field, including summary and descriptions. reimbursementItems[].code = the line's own printed 2-letter code (e.g. "PR", "RF", "WI") when one is printed at the start of the line, else "".\n`;
+  prompt += `\nAPPROVED ADDITION (deposit amount, every carrier, owner decision 2026-10-13): settlement.depositAmount = the dollar amount the statement says was paid out to the driver/owner (e.g. "DIRECT DEPOSIT TO BANK ...", "AMOUNT LOADED ON CARD ...", or any other paid-to-owner line), when such a line is printed; leave it 0 when no payout line is printed — never compute it. settlement.payoutMethod = "bank", "card" or "other" for that line ("" when none is printed). Copy the AMOUNT only: never copy a routing number, account number or any other bank digits into ANY field, including summary and descriptions. reimbursementItems[].code = the line's own printed 2-letter code (e.g. "PR", "RF", "WI") when one is printed at the start of the line, else "".\n`;
   // TRAILING-MINUS CREDITS (golden settlement pass, owner decision
   // 2026-10-13, every carrier) — the client also parses "184.85-" as
   // negative (app/src/import/amount.ts); this asks the model for the
@@ -641,7 +642,7 @@ function buildExtractionPrompt(
   // 2026-08-14: the app read revenue 10,386.86 for a printed 7,914.10 —
   // the TRIP REVENUE column instead of OWNER REVENUE, plus "47.34-" read as
   // +47.34). Carrier-scoped exactly like the operating-statement block.
-  prompt += `\nAPPROVED ADDITION (Prime Inc settlement pages, carrier-scoped, never applied to any other carrier, owner decision 2026-10-17): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc."): (1) Load revenue is the OWNER REVENUE column — never the LOAD REVENUE or TRIP REVENUE column (on a percentage load TRIP REVENUE 4,028.34 at .720 is OWNER REVENUE 2,900.40; use 2,900.40). Every RV line's revenueItems[].amount and loads[].revenue = its OWNER REVENUE figure. (2) The trailing minus applies to revenue lines too: "Linehaul 47.34-" is -47.34. (3) An RV line with no miles (e.g. a "Linehaul" adjustment with no LOAD MILES/LOADED/EMPTY) is a revenue adjustment: put it in revenueItems with its signed amount, never in loads. loads = only the RV lines that print miles, with loadedMiles = LOADED and emptyMiles = EMPTY. (4) grossRevenue = the revenue section's TOTAL REV (also the recap's revenue figure). The accounts page's GROSS AMOUNT DUE UNIT and NET AMOUNT DUE UNIT are the NET amount due (netPay), never grossRevenue. The recap's SETTLEMENT GROSS DUE TO/FROM OWNER and DIRECT DEPOSIT are the deposit (depositAmount), never grossRevenue or netPay. (5) Prime prints statement header dates as YY/MM/DD: "SETTLEMENTS DATE: 26/08/14" is 2026-08-14 (never 2014-08-26).\n`;
+  prompt += `\nAPPROVED ADDITION (Prime Inc settlement pages, carrier-scoped, never applied to any other carrier, owner decision 2026-10-17): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc."): (1) Load revenue is the OWNER REVENUE column — never the LOAD REVENUE or TRIP REVENUE column (on a percentage load TRIP REVENUE 4,028.34 at .720 is OWNER REVENUE 2,900.40; use 2,900.40). Every RV line's revenueItems[].amount and loads[].revenue = its OWNER REVENUE figure. (2) The trailing minus applies to revenue lines too: "Linehaul 47.34-" is -47.34. (3) An RV line with no miles (e.g. a "Linehaul" adjustment with no LOAD MILES/LOADED/EMPTY) is a revenue adjustment: put it in revenueItems with its signed amount, never in loads. loads = only the RV lines that print miles, with loadedMiles = LOADED and emptyMiles = EMPTY. (4) grossRevenue = the revenue section's TOTAL REV (also the recap's revenue figure). The accounts page's GROSS AMOUNT DUE UNIT and NET AMOUNT DUE UNIT are the NET amount due (netPay), never grossRevenue. The recap's SETTLEMENT GROSS DUE TO/FROM OWNER and its payout line (DIRECT DEPOSIT, AMOUNT LOADED ON CARD, or any other paid-to-owner label) are the deposit (depositAmount), never grossRevenue or netPay. reimbursements = the printed TOTAL REIMBURSED exactly as printed — the reimbursement section can also hold lines that are not reimbursements (PR PERSONAL PAYMNT = the owner's own money in, WA ADVANCE = an advance taken); list every one of them in reimbursementItems with its printed code and keep reimbursements = TOTAL REIMBURSED; totalDeductions = TOTAL DEDUCTIONS FROM TRUCK; netPay = NET AMOUNT DUE UNIT. A printed 0 is a real value, not "missing": EMPTY 0 miles is emptyMiles 0. (5) Prime prints statement header dates as YY/MM/DD: "SETTLEMENTS DATE: 26/08/14" is 2026-08-14 (never 2014-08-26).\n`;
   return prompt;
 }
 
@@ -1554,12 +1555,13 @@ const VALID_KINDS = new Set<string>(["settlement", "statement", "toll_bill", "re
 
 function buildClassifyPrompt(start: number, end: number, total: number): string {
   return `This file contains pages ${start}-${end} of a ${total}-page PDF (its first page is page ${start} of the document). Classify every page. Return ONLY raw JSON, no markdown:
-{"carrier":"","pages":[{"page":${start},"kind":"settlement","hasTotalCashFlow":false}]}
+{"carrier":"","pages":[{"page":${start},"kind":"settlement","hasTotalCashFlow":false,"hasStatementTotal":false}]}
 Rules:
 - "page": the page number in the ORIGINAL ${total}-page document (${start} to ${end}).
 - "carrier": the trucking carrier that issued the settlement, exactly as printed (for example "Prime Inc."), or "" if no settlement page is in these pages.
 - "kind": "settlement" = a carrier settlement page (header, revenue, loads, deductions, fuel or reimbursement detail); "statement" = the carrier's operating statement / Statement of Income and Expense (revenue and expense blocks with weekly and year-to-date columns); "toll_bill" = an E-ZPass or other toll bill; "repair_invoice" = a shop repair or parts invoice; "delivery_receipt" = a bill of lading, delivery receipt or proof of delivery; "fuel_receipt" = a fuel receipt; "other" = anything else.
 - "hasTotalCashFlow": true only if the words TOTAL CASH FLOW are printed on that page.
+- "hasStatementTotal": true only if the words TOTAL STATEMENT OF INCOME & EXPENSE (or TOTAL STATEMENT OF INCOME AND EXPENSE) are printed on that page.
 Return exactly one entry per page, in page order.`;
 }
 
@@ -1568,7 +1570,7 @@ function parseClassification(raw: unknown, start: number, end: number): { pages:
   const obj = raw as { carrier?: unknown; pages?: unknown };
   if (!Array.isArray(obj.pages)) return null;
   const entries = obj.pages
-    .map((p) => p as { page?: unknown; kind?: unknown; hasTotalCashFlow?: unknown })
+    .map((p) => p as { page?: unknown; kind?: unknown; hasTotalCashFlow?: unknown; hasStatementTotal?: unknown })
     .filter((p) => typeof p.page === "number" && Number.isFinite(p.page as number));
   // Some replies number the window's pages 1..k instead of start..end.
   const k = end - start + 1;
@@ -1578,6 +1580,7 @@ function parseClassification(raw: unknown, start: number, end: number): { pages:
     page: relative ? (p.page as number) + start - 1 : (p.page as number),
     kind: (typeof p.kind === "string" && VALID_KINDS.has(p.kind) ? p.kind : "other") as PageKind,
     hasTotalCashFlow: p.hasTotalCashFlow === true,
+    hasStatementTotal: p.hasStatementTotal === true,
   }));
   const carrier = typeof obj.carrier === "string" && obj.carrier.trim() ? obj.carrier.trim() : null;
   return { pages: pages.filter((p) => p.page >= start && p.page <= end), carrier };
@@ -1841,6 +1844,8 @@ type JobRequestBody = PromptInputs & {
   retryFailed?: boolean;
   documentId?: string;
   pages?: number[];
+  // reread_job (IMPORT GATE FIX 1.3): why the app reads again (logged).
+  reason?: string;
 };
 
 // Mode 'job': create the import_jobs row, check the limits, plan, start
@@ -2100,7 +2105,7 @@ async function handleRereadJob(
   if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
   const { data: job, error } = await supabase
     .from("import_jobs")
-    .select("id, user_id, status, page_plan, media_type")
+    .select("id, user_id, status, page_plan, page_results, media_type")
     .eq("id", body.jobId)
     .maybeSingle();
   if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
@@ -2108,8 +2113,18 @@ async function handleRereadJob(
   if (job.status !== "ready" || !old || !String(job.media_type ?? "").includes("pdf")) {
     return errorResponse("bad_request", "Only a finished PDF import that has not been saved can be read again.", 400);
   }
+  // IMPORT GATE FIX 1.3: only the pages that feed the failing check are read
+  // again; the other content pages keep their finished results. No list =
+  // every content page (the manual "Read again").
+  const targetPages = Array.isArray(body.pages) ? body.pages.filter((p) => Number.isInteger(p) && p >= 1 && p <= old.totalPages) : null;
+  const rereadPlan = newRereadPlan(old);
+  const keptResults = rereadKeptResults(rereadPlan, job.page_results as Record<string, PageResult> | null, targetPages);
+  const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 200) : "read_again";
+  const readPages = targetPages && targetPages.length > 0 ? targetPages : null;
+  console.log(`[ai-import] reread_job ${body.jobId}: reason=${reason} pages=${readPages ? readPages.join(",") : "all content"} kept=${Object.keys(keptResults).join(",") || "none"}`);
   const plan: StoredPlan = {
-    ...newRereadPlan(old),
+    ...rereadPlan,
+    rereads: [...(old.rereads ?? []), { at: new Date().toISOString(), reason, pages: readPages }],
     promptInputs: {
       docHint: body.docHint ?? old.promptInputs?.docHint,
       locale: body.locale ?? old.promptInputs?.locale,
@@ -2123,7 +2138,7 @@ async function handleRereadJob(
     .from("import_jobs")
     .update({
       page_plan: plan,
-      page_results: {},
+      page_results: keptResults,
       result_json: null,
       progress: null,
       status: "queued",

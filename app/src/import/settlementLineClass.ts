@@ -15,8 +15,10 @@
 // Every row also gets its DIRECTION as printed (R1).
 import { findCarrierCodeMatch, type CarrierCode } from '@/src/import/carrierCodes';
 import { applyLearnedCategories, normalizeKeyword, type LearningRule } from '@/src/import/categoryLearning';
+import { isPersonalPaymentText } from '@/src/import/settlementStatement';
 import {
   asEconomicClass,
+  classIsOutOfProfit,
   directionOfAmount,
   LEASE_PAYMENT_CATEGORY,
   resolveLineClass,
@@ -114,6 +116,42 @@ export function previewLineQuestions(
     const line = rows.find((r) => normalizeKeyword(r.code || r.description || '') === keyword);
     out.push({ kind: 'unknown_code', code: q.code, keyword, description: q.description, category: line?.category ?? null });
   }
+  return out;
+}
+
+// IMPORT GATE FIX 2.4 (owner 2026-11-03): Prime's reimbursement section can
+// hold lines that are not reimbursements — PR "PERSONAL PAYMNT" (the owner's
+// own money in) and WA "ADVANCE" (an advance taken) next to a real RF reefer
+// reimbursement. Class from the code, direction from the document (these
+// are credits): a line whose credit class is out of profit (repayment,
+// personal, fund, capital, memo, interest income) is NOT a reimbursement
+// and never offsets an expense — it is kept as a credit line with its
+// class. A code with no class (or an expense code credited back, like RF)
+// stays a reimbursement, as today. Carrier isolation: only a carrier with a
+// seeded code map. Returns the indexes of `items` that are not
+// reimbursements, with their class.
+export type NonReimbursementCredit = { index: number; economicClass: ResolvedClass; category: string | null };
+
+export function nonReimbursementCredits(
+  items: { code?: string | null; desc?: string | null; amount?: number | string | null }[],
+  carrierKey: string | null,
+  codes: CarrierCode[]
+): NonReimbursementCredit[] {
+  if (!carrierKey || !codes.some((c) => c.carrier === carrierKey)) return [];
+  const out: NonReimbursementCredit[] = [];
+  items.forEach((item, index) => {
+    const code = (item.code ?? '').trim().toUpperCase() || null;
+    // PR is not in the code map: the owner's personal payment by its text.
+    if (code === 'PR' && isPersonalPaymentText(item.desc)) {
+      out.push({ index, economicClass: 'PERSONAL', category: null });
+      return;
+    }
+    const match = findCarrierCodeMatch(carrierKey, item.desc ?? null, codes, code);
+    const mapClass = asEconomicClass(match?.economicClass);
+    if (!match || !mapClass) return;
+    const r = resolveLineClass({ mapClass, classWhenCharge: asEconomicClass(match.classWhenCharge), direction: 'credit', ownership: null, code });
+    if (r.cls && classIsOutOfProfit(r.cls)) out.push({ index, economicClass: r.cls, category: match.category ?? null });
+  });
   return out;
 }
 

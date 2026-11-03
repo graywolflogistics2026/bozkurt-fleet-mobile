@@ -145,6 +145,9 @@ export type ExtractedSettlement = {
   // "DIRECT DEPOSIT TO BANK"), when such a line is printed. The AMOUNT
   // only — never a routing, account or any other bank digits.
   depositAmount?: number | string;
+  // IMPORT GATE FIX 2.1: how the week was paid out (the recap payout line
+  // under any label): "bank" | "card" | "other"; "" when not printed.
+  payoutMethod?: string;
   // The printed label each header total was read from (e.g. netPay: "NET
   // AMOUNT DUE UNIT"). Page-by-page merging (ai-import chunking.ts) only
   // calls two values a conflict when they came from the SAME label.
@@ -206,6 +209,8 @@ export type ExtractedSettlement = {
     // recap page's "DIRECT DEPOSIT" line.
     settlementToOperator?: number | string;
     directDeposit?: number | string;
+    // IMPORT GATE FIX 2.1: "bank" | "card" | "other" for the recap payout line.
+    payoutMethod?: string;
     // BALANCE FORWARD (owner decision 2026-10-17): PRIOR WEEK BALANCE
     // FORWARD, signed as printed on the statement cash flow / p4 recap
     // ("1,202.92-" = the owner owed Prime = negative), and TOTAL CASH

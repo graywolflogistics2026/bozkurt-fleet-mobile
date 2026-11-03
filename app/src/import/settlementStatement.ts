@@ -112,7 +112,24 @@ export type StatementCheck = {
 // the deposit SETTLEMENT TO OPERATOR; anything else that differs (miles,
 // the AI's header gross, a header total two pages read differently, the
 // line items) only WARNS: amber + needs-review, Save works.
-const WARN_ONLY_CHECKS: StatementCheckId[] = ['milesMatch', 'grossMatches'];
+//
+// IMPORT GATE FIX (owner 2026-11-03, part 1.1): every identity that blocks
+// uses PRINTED totals only. A check that adds up line items (a block's
+// lines = its printed total, the revenue lines = TOTAL REVENUE) never
+// blocks: it only marks the line details as differing ("line details
+// differ by $X"), and profit still ties to the printed block totals
+// (statementRoute.ts adds the unread remainder of each block).
+export const LINE_SUM_CHECKS: StatementCheckId[] = [
+  'revenueLines',
+  'section_fuel_oil_tax',
+  'section_repair',
+  'section_tires',
+  'section_misc',
+  'section_out_of_pocket',
+  'section_fixed',
+  'section_other',
+];
+const WARN_ONLY_CHECKS: StatementCheckId[] = ['milesMatch', 'grossMatches', ...LINE_SUM_CHECKS];
 export function isGateCheck(check: Pick<StatementCheck, 'id' | 'path'>): boolean {
   if (check.id === 'mergeConflict') return !check.path || check.path.startsWith('settlement.operating.');
   return !WARN_ONLY_CHECKS.includes(check.id);
@@ -141,6 +158,22 @@ export type PrimeStatementCheckResult = {
 
 export type DepositSource = 'direct_deposit' | 'settlement_to_operator' | 'net_due';
 
+// IMPORT GATE FIX part 2.1: how Prime paid the week out, from the recap's
+// payout line under whatever label it printed (DIRECT DEPOSIT TO BANK =
+// bank, AMOUNT LOADED ON CARD = card, anything else = other).
+export type PayoutMethod = 'bank' | 'card' | 'other';
+export function asPayoutMethod(v: unknown): PayoutMethod | null {
+  return v === 'bank' || v === 'card' || v === 'other' ? v : null;
+}
+// From the printed label when the reading carries it.
+export function payoutMethodOfLabel(label: string | null | undefined): PayoutMethod | null {
+  const l = (label ?? '').toUpperCase();
+  if (!l.trim()) return null;
+  if (/\bCARD\b/.test(l)) return 'card';
+  if (/\bBANK\b|DIRECT DEPOSIT|\bACH\b/.test(l)) return 'bank';
+  return 'other';
+}
+
 export type PrintedTotals = {
   grossRevenue: number | null;
   reimbursements: number | null;
@@ -153,6 +186,8 @@ export type PrintedTotals = {
   // printed — an amount only, never any bank digits.
   deposit: number | null;
   depositSource: DepositSource | null;
+  // Part 2.1: bank / card / other — null when not printed or not read.
+  payoutMethod?: PayoutMethod | null;
   // Interest the carrier paid this week (Prime's INTEREST INCOME FROM
   // DEPOSIT line), for the deposit check: net due + interest = deposit.
   interestIncome: number;
@@ -296,21 +331,31 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   };
   const sectionSum = (section: StatementSection) => lines.filter((l) => l.section === section).reduce((sum, l) => sum + l.amount, 0);
   const hasLines = (section: StatementSection) => lines.some((l) => l.section === section);
-  // A block's value for the chain checks: its printed total, else the sum
-  // of its lines, else 0 when the block printed nothing at all.
-  const block = (section: StatementSection) => totals[SECTION_TOTAL_KEY[section]] ?? (hasLines(section) ? sectionSum(section) : 0);
+  // A block's value for the chain checks: its PRINTED total, else 0 when
+  // the block printed nothing at all. A block that has lines but whose
+  // total was not read is unknown (null): the chain check that needs it is
+  // skipped, never run on summed lines (part 1.1: summed lines never block;
+  // part 2.2: a missing printed line skips its check, never fails it).
+  const block = (section: StatementSection): number | null => totals[SECTION_TOTAL_KEY[section]] ?? (hasLines(section) ? null : 0);
+  const sumBlocks = (...sections: StatementSection[]): number | null => {
+    let total = 0;
+    for (const section of sections) {
+      const v = block(section);
+      if (v == null) return null;
+      total += v;
+    }
+    return total;
+  };
 
   add('revenueLines', totals.totalRevenue, hasLines('revenue') ? sectionSum('revenue') : null);
   for (const section of STATEMENT_SECTIONS.filter((x) => x !== 'revenue')) {
     add(`section_${section}` as StatementCheckId, totals[SECTION_TOTAL_KEY[section]], hasLines(section) ? sectionSum(section) : null);
   }
-  const variable = block('fuel_oil_tax') + block('repair') + block('tires') + block('misc');
+  const variable = sumBlocks('fuel_oil_tax', 'repair', 'tires', 'misc');
   add('variableCosts', totals.totalVariableCosts, variable);
-  add(
-    'operatingExpenses',
-    totals.totalOperatingExpenses,
-    (totals.totalVariableCosts ?? variable) + block('out_of_pocket') + block('fixed') + block('other')
-  );
+  const variableForChain = totals.totalVariableCosts ?? variable;
+  const rest = sumBlocks('out_of_pocket', 'fixed', 'other');
+  add('operatingExpenses', totals.totalOperatingExpenses, variableForChain != null && rest != null ? variableForChain + rest : null);
   if (totals.totalRevenue != null && totals.totalOperatingExpenses != null) {
     add('statementTotal', totals.totalStatement, totals.totalRevenue + totals.totalOperatingExpenses);
   }
@@ -397,11 +442,18 @@ function coreMergeConflicts(extraction: Extraction): { path: string; values: num
   return raw.filter((c) => typeof c?.path === 'string' && Array.isArray(c.values) && c.values.length >= 2 && CORE_CONFLICT_PATH.test(c.path));
 }
 
-// Prime's PR (personal payment) reimbursement lines — the R1 offset limit.
+// Prime's PR reimbursement lines — the R1 offset limit. IMPORT GATE FIX
+// part 2.4 (owner 2026-11-03): a PR line that IS the owner's own personal
+// payment ("PERSONAL PAYMNT", the owner sending money to Prime) is owner
+// money in (PERSONAL credit), never an offset; any other PR line (e.g. the
+// 8/21 week's "WIE14MB LD" 1.00) keeps the R1 offset.
+export function isPersonalPaymentText(desc: string | null | undefined): boolean {
+  return /\bPERSONAL\s*P(A)?Y?M(N)?(E)?N?T|\bPERS(ONAL)?\s*PMT\b/i.test(desc ?? '');
+}
 export function prReimbursementTotal(extraction: Extraction): number {
   const items = extraction.settlement?.reimbursementItems ?? [];
   return sumAmounts(
-    items.filter((r) => (r.code ?? '').trim().toUpperCase() === 'PR' || (r.ref ?? '').trim().toUpperCase() === 'PR'),
+    items.filter((r) => ((r.code ?? '').trim().toUpperCase() === 'PR' || (r.ref ?? '').trim().toUpperCase() === 'PR') && !isPersonalPaymentText(r.desc)),
     (r) => r.amount
   );
 }
@@ -417,6 +469,14 @@ export function printedDepositOf(extraction: Extraction): { deposit: number | nu
   if (toOperator != null) return { deposit: toOperator, depositSource: 'settlement_to_operator' };
   const netDue = printedTotal(s.netPay);
   return netDue != null ? { deposit: netDue, depositSource: 'net_due' } : { deposit: null, depositSource: null };
+}
+
+// Part 2.1: the payout method as read (operating.payoutMethod or
+// settlement.payoutMethod), else from the printed deposit label.
+export function printedPayoutMethodOf(extraction: Extraction): PayoutMethod | null {
+  const s = extraction.settlement;
+  if (!s) return null;
+  return asPayoutMethod(s.operating?.payoutMethod) ?? asPayoutMethod(s.payoutMethod) ?? payoutMethodOfLabel(s.totalLabels?.depositAmount);
 }
 
 // Interest income printed on a Prime statement page (0 for any other
@@ -468,6 +528,7 @@ export function printedTotalsOf(extraction: Extraction): PrintedTotals {
     totalDeductions: printedTotal(s.totalDeductions),
     netDue: printedTotal(s.netPay),
     ...printedDepositOf(extraction),
+    payoutMethod: printedPayoutMethodOf(extraction),
     interestIncome: printedInterestIncomeOf(extraction),
     balanceForward: printedBalanceForwardOf(extraction),
     interestNet: printedInterestNetOf(extraction),

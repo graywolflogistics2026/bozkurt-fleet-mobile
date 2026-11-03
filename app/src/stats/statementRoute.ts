@@ -25,6 +25,9 @@ export type LedgerReason =
   | 'pr_offset'
   | 'duplicate_fuel'
   | 'non_deductible'
+  // IMPORT GATE FIX 1.1: the part of a block's PRINTED total its read
+  // lines do not explain — counted, so profit ties to the printed totals.
+  | 'line_residual'
   | StatementExcludeReason;
 
 export type StatementLedgerEntry = {
@@ -66,6 +69,26 @@ export type StatementSettlement = {
   week_ending?: string | null;
   statement?: SettlementStatement | null;
 };
+
+const RESIDUAL_SECTIONS: Exclude<StatementSection, 'revenue'>[] = ['fuel_oil_tax', 'repair', 'tires', 'misc', 'out_of_pocket', 'fixed', 'other'];
+const SECTION_PRINTED_LABEL: Record<(typeof RESIDUAL_SECTIONS)[number], string> = {
+  fuel_oil_tax: 'TOTAL FUEL,OIL,TAX',
+  repair: 'TOTAL EQUIPMENT REPAIR AND MAINT.',
+  tires: 'TOTAL TIRES',
+  misc: 'TOTAL MISCELLANEOUS',
+  out_of_pocket: 'TOTAL OUT OF POCKET COSTS',
+  fixed: 'TOTAL FIXED COST',
+  other: 'TOTAL OTHER INCOME AND EXPENSE',
+};
+const SECTION_TOTALS = {
+  fuel_oil_tax: 'totalFuelOilTax',
+  repair: 'totalRepair',
+  tires: 'totalTires',
+  misc: 'totalMiscellaneous',
+  out_of_pocket: 'totalOutOfPocket',
+  fixed: 'totalFixedCost',
+  other: 'totalOtherIncomeAndExpense',
+} as const;
 
 export function statementWeekOf(settlement: StatementSettlement): StatementWeek | null {
   const st = settlement.statement;
@@ -114,6 +137,30 @@ export function statementWeekOf(settlement: StatementSettlement): StatementWeek 
         addBacks.push({ label: line.label, reason: 'owner_money_in', amount: -remainder });
       }
     }
+  }
+
+  // IMPORT GATE FIX 1.1 (owner 2026-11-03): summed lines never block, so a
+  // block whose read lines differ from its PRINTED total keeps the printed
+  // total: the difference is one counted line (profit = the statement's
+  // printed figures). Only blocks with a printed total; revenue is TOTAL
+  // REVENUE already.
+  for (const section of RESIDUAL_SECTIONS) {
+    const printedTotal = totals[SECTION_TOTALS[section]];
+    if (printedTotal == null) continue;
+    const linesSum = lines.filter((l) => l.section === section).reduce((sum, l) => sum + l.amount, 0);
+    const residual = Math.round((printedTotal - linesSum) * 100) / 100;
+    if (Math.abs(residual) < 0.005) continue;
+    ledger.push({
+      label: `${SECTION_PRINTED_LABEL[section]} (lines not read)`,
+      section,
+      printed: residual,
+      status: residual > 0 ? 'offset' : 'counted',
+      contribution: -residual,
+      category: 'Misc',
+      costType: section === 'fixed' ? 'fixed' : 'variable',
+      reason: 'line_residual',
+      cpmOneOff: false,
+    });
   }
 
   return {

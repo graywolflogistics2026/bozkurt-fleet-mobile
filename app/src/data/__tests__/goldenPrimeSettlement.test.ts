@@ -784,9 +784,22 @@ describe('self-check: a misread number never becomes a silently wrong profit', (
     expect(check.checks.filter((c) => !c.passed).map((c) => c.id)).toEqual(['operatingExpenses', 'statementTotal']);
   });
 
-  test('D2: there is no "Save anyway" — an old override on the reading is ignored and nothing is saved', async () => {
-    const flagged = { ...statementExtraction({ operating: misread() }), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] };
-    await expect(importGolden(flagged)).rejects.toThrow(/did not pass its checks \(section_fuel_oil_tax\)\. Nothing was saved/);
+  // IMPORT GATE FIX 1.1 (owner 2026-11-03): a misread statement LINE is a
+  // line detail, never a block. The week saves from the PRINTED totals, its
+  // line rows are not stored, and profit stays 2,534.36 (the block keeps its
+  // printed total).
+  test('a misread statement line saves from the printed totals: profit unchanged, line rows not stored', async () => {
+    const rows = await importGolden(statementExtraction({ operating: misread() }));
+    expect(rows.settlements).toHaveLength(1);
+    expect(rows.settlements[0].statement?.linesNotSaved).toBe(true);
+    expect(rows.deductions).toEqual([]);
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+    expect(settlementDeposit(rows.settlements[0]).deposited).toBe(KEY.deposit);
+  });
+
+  test('D2: there is no "Save anyway" — a misread PRINTED total is refused, an old override is ignored, nothing is saved', async () => {
+    const flagged = { ...statementExtraction({ operating: { ...STATEMENT, weekTotalOperatingExpenses: -2989.02 } }), reconciliationOverride: [{ id: 'operatingExpenses' }] };
+    await expect(importGolden(flagged)).rejects.toThrow(/did not pass its checks \(operatingExpenses, statementTotal\)\. Nothing was saved/);
     expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
   });
 });
@@ -940,9 +953,9 @@ describe('every save path: same gate, same label, same profit (8/21)', () => {
     live: (e: Extraction) => sanitizeExtraction(e),
     backgroundJob: (e: Extraction) => sanitizeExtraction(JSON.parse(JSON.stringify(e)) as Extraction),
   };
-  const misread = () => statementExtraction({
-    operating: { ...STATEMENT, lines: STATEMENT_LINES.map((l) => (l.label === 'TRACTOR FUEL' ? { ...l, amount: -1979.82 } : l)) },
-  });
+  // A misread PRINTED total (IMPORT GATE FIX 1.1: a misread line no longer
+  // blocks; a printed total that does not tie still does).
+  const misread = () => statementExtraction({ operating: { ...STATEMENT, weekTotalOperatingExpenses: -2989.02 } });
 
   test.each(Object.keys(PATHS) as (keyof typeof PATHS)[])('%s: Verified by Prime statement, profit 2,534.36', async (path) => {
     const rows = await importGolden(PATHS[path](statementExtraction()));
@@ -954,8 +967,8 @@ describe('every save path: same gate, same label, same profit (8/21)', () => {
     const e = PATHS[path](misread());
     expect(e.confidence).toBe('low');
     expect(isSaveBlocked(e)).toBe(true);
-    expect(saveGateFailures(e)).toEqual(['section_fuel_oil_tax']);
-    await expect(importGolden(e)).rejects.toThrow(/did not pass its checks \(section_fuel_oil_tax\)/);
+    expect(saveGateFailures(e)).toEqual(['operatingExpenses', 'statementTotal']);
+    await expect(importGolden(e)).rejects.toThrow(/did not pass its checks \(operatingExpenses, statementTotal\)/);
     expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
     expect((mockClient.__store as Record<string, unknown[]>).documents ?? []).toEqual([]);
   });
@@ -967,7 +980,7 @@ describe('every save path: same gate, same label, same profit (8/21)', () => {
   });
 
   test('D2: no override path on any save path — an old "Save anyway" flag is refused like any misread', async () => {
-    await expect(importGolden({ ...PATHS.backgroundJob(misread()), reconciliationOverride: [{ id: 'section_fuel_oil_tax' }] })).rejects.toThrow(/did not pass its checks/);
+    await expect(importGolden({ ...PATHS.backgroundJob(misread()), reconciliationOverride: [{ id: 'operatingExpenses' }] })).rejects.toThrow(/did not pass its checks/);
     expect((mockClient.__store as Record<string, unknown[]>).settlements ?? []).toEqual([]);
   });
 });

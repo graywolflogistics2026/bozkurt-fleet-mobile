@@ -2806,7 +2806,8 @@
       "meals_per_diem": "وجبة — يغطيها per diem بالفعل",
       "truck_extras": "إضافات الشاحنة — تُتابع في أساس تكلفة الشاحنة",
       "owner_money_in": "أموال المالك — ليست دخلًا ولا مصروفًا",
-      "interest_income": "دخل الفائدة — ليس ربحًا تجاريًا"
+      "interest_income": "دخل الفائدة — ليس ربحًا تجاريًا",
+      "line_residual": "Statement total not explained by the lines read — counted as printed"
     },
     "empty": "لا توجد بنود في هذه الفترة.",
     "showEveryRow": "عرض كل البنود",
@@ -3158,7 +3159,24 @@
     "readAgainStartedTitle": "Reading again",
     "readAgainStartedBody": "When it is done, the numbers to check open from the import list.",
     "viewWeek": "View this week",
-    "readAgain": "Read again"
+    "readAgain": "Read again",
+    "failDetail": "{{check}}: printed {{printed}}, read {{read}}",
+    "checkName": {
+      "variableCosts": "TOTAL VARIABLE COSTS",
+      "operatingExpenses": "TOTAL OPERATING EXPENSES",
+      "statementTotal": "TOTAL STATEMENT OF INCOME & EXPENSE",
+      "totalCashFlow": "TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "directDeposit": "Payout (recap)",
+      "statementWeekEnding": "Statement week ending",
+      "grossMatches": "TOTAL REVENUE",
+      "netDueMismatch": "NET AMOUNT DUE UNIT",
+      "netDue": "Net due",
+      "depositMismatch": "Payout (recap)",
+      "deductionsMismatch": "TOTAL DEDUCTIONS",
+      "revenueLinesMismatch": "TOTAL REVENUE",
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+    }
   },
   "certify": {
     "certifiedOn": "Certified on {{date}}",

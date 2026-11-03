@@ -55,7 +55,10 @@ const GROUPS: GroupDef[] = [
   { group: 'def_discount', codes: ['ED'], statementLabels: ['DEF DISCOUNT'] },
   { group: 'state_fuel_tax', codes: ['SF'], reimbursement: { codes: ['SF'], desc: /\bFUEL TAX\b/i }, statementLabels: ['STATE FUEL TAX'] },
   { group: 'repair', codes: ['UR', 'SH'], statementLabels: ['UNIT REPAIR EXPENSE', 'RO PARTS REPAIR'] },
-  { group: 'advances', codes: ['WA'], excludeDesc: /\bWEIGHT\s+TICKETS?\b/i, statementLabels: ['ADVANCES'] },
+  // WA advances TAKEN are printed in the reimbursement section (07/17:
+  // 3,999.00 + 460.59); the statement's ADVANCES nets them against the
+  // weekly repayment (550.00 − 4,459.59 = +3,909.59 credit).
+  { group: 'advances', codes: ['WA'], excludeDesc: /\bWEIGHT\s+TICKETS?\b/i, reimbursement: { codes: ['WA'], desc: /\bADVANCE\b/i }, statementLabels: ['ADVANCES'] },
   { group: 'meals', codes: ['PO'], statementLabels: ['PRIME POINT OF SALE'] },
   { group: 'performance_bond', codes: ['PB'], statementLabels: ['ACCRUAL PERFORMANCE BOND'] },
 ];

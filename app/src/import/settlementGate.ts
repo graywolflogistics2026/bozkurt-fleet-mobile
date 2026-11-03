@@ -1,6 +1,7 @@
 import type { Extraction } from './types';
 import { checkSettlementReconciliation } from './settlementReconciliation';
 import {
+  LINE_SUM_CHECKS,
   buildPrimeStatementCheck,
   buildSettlementStatement,
   printedTotalsMatch,
@@ -15,6 +16,8 @@ import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf, type
 import { lineDetailsDifference, lineRouteProfit } from './reviewVerdict';
 import { readMilesSplit } from './milesSplit';
 import type { CarrierCode } from './carrierCodes';
+import type { ReconciliationIssue } from './settlementReconciliation';
+import type { StatementCheck } from './settlementStatement';
 import { statementWeekOf } from '@/src/stats/statementRoute';
 import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import { num } from '@/src/lib/number';
@@ -70,9 +73,15 @@ export type GateHeadline = {
   source: 'prime_statement' | 'printed_totals';
 };
 
+// IMPORT GATE FIX 1.2 (owner 2026-11-03): the failing check and its two
+// numbers: what the statement PRINTED, and what the other printed figures
+// add up to (or the other printed reading). Amounts or dates only, never
+// any bank digits.
+export type GateFailDetail = { check: string; printed: number | string; read: number | string };
+
 export type SettlementGateResult =
   | { status: 'pass'; headline: GateHeadline; lineDetails: 'match' | 'mismatch'; lineDifference: number | null }
-  | { status: 'fail'; reason: GateFailReason; failures: string[] }
+  | { status: 'fail'; reason: GateFailReason; failures: string[]; details?: GateFailDetail[] }
   | { status: 'needs_date'; headline: GateHeadline; lineDetails: 'match' | 'mismatch'; lineDifference: number | null; dateCheck: SettlementDateCheck };
 
 const PREVIEW_ID = 'gate-preview';
@@ -82,8 +91,26 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 // re-read, then fail. Everything else is only unusual and is asked.
 const PRIME_MISREAD_DATE_ISSUES: DateIssue[] = ['unreadable', 'print_gap', 'statement_week_differs', 'pdf_created_far'];
 
-function fail(reason: GateFailReason, failures: string[] = []): SettlementGateResult {
-  return { status: 'fail', reason, failures: failures.length > 0 ? failures : [reason] };
+function fail(reason: GateFailReason, failures: string[] = [], details: GateFailDetail[] = []): SettlementGateResult {
+  return { status: 'fail', reason, failures: failures.length > 0 ? failures : [reason], ...(details.length > 0 ? { details } : {}) };
+}
+
+function checkDetail(c: StatementCheck): GateFailDetail {
+  const check = c.id === 'mergeConflict' && c.path ? c.path : c.id;
+  return { check, printed: c.expectedText ?? c.expected, read: c.actualText ?? c.actual };
+}
+
+function issueDetail(i: ReconciliationIssue): GateFailDetail | null {
+  if (i.type === 'netDueMismatch' || i.type === 'depositMismatch') return { check: i.type, printed: r2(i.stated), read: r2(i.computed) };
+  if (i.type === 'zeroNetNonzeroGross') return null;
+  return { check: i.type, printed: r2(i.stated), read: r2(i.summed) };
+}
+
+function detailsOf(issues: ReconciliationIssue[], types: string[]): GateFailDetail[] {
+  return issues
+    .filter((i) => types.includes(i.type))
+    .map(issueDetail)
+    .filter((d): d is GateFailDetail => d != null);
 }
 
 function milesOf(extraction: Extraction, statementMiles: number | null) {
@@ -116,13 +143,19 @@ export function evaluateSettlementGate(
   if (prime && !check && pagesRead != null && pagesRead.incomplete.length > 0) return fail('statement_not_read');
   if (check) {
     if (!check.gatePassed) {
-      const failed = check.checks.filter((c) => !c.passed && c.id !== 'milesMatch' && c.id !== 'grossMatches').map((c) => c.id);
-      if (failed.includes('statementWeekEnding')) return fail('date_mismatch', failed);
-      return failed.length > 0 ? fail('statement_check_failed', failed) : fail('statement_not_read', (check.gateMissing ?? []).map(String));
+      // Only printed-total identities can fail the gate (part 1.1).
+      const failedChecks = check.checks.filter(
+        (c) => !c.passed && c.id !== 'milesMatch' && c.id !== 'grossMatches' && !LINE_SUM_CHECKS.includes(c.id)
+      );
+      const failed = failedChecks.map((c) => c.id);
+      const details = failedChecks.map(checkDetail);
+      if (failed.includes('statementWeekEnding')) return fail('date_mismatch', failed, details);
+      return failed.length > 0 ? fail('statement_check_failed', failed, details) : fail('statement_not_read', (check.gateMissing ?? []).map(String));
     }
-    if (check.checks.some((c) => c.id === 'grossMatches' && !c.passed)) return fail('gross_differs', ['grossMatches']);
-    if (issueTypes.includes('netDueMismatch')) return fail('net_due_differs', ['netDueMismatch']);
-    if (issueTypes.includes('depositMismatch')) return fail('deposit_differs', ['depositMismatch']);
+    const grossCheck = check.checks.find((c) => c.id === 'grossMatches' && !c.passed);
+    if (grossCheck) return fail('gross_differs', ['grossMatches'], [checkDetail(grossCheck)]);
+    if (issueTypes.includes('netDueMismatch')) return fail('net_due_differs', ['netDueMismatch'], detailsOf(issues, ['netDueMismatch']));
+    if (issueTypes.includes('depositMismatch')) return fail('deposit_differs', ['depositMismatch'], detailsOf(issues, ['depositMismatch']));
     if (issueTypes.includes('zeroNetNonzeroGross')) return fail('missing_fields', ['netDue']);
     if (!dateOk && dateCheck.issues.some((i) => PRIME_MISREAD_DATE_ISSUES.includes(i))) {
       return fail(dateCheck.issues.includes('unreadable') ? 'date_unreadable' : 'date_mismatch', dateCheck.issues);
@@ -133,7 +166,12 @@ export function evaluateSettlementGate(
     if (!week) return fail('statement_not_read');
     const deposit = settlementDeposit({ statement });
     const groups = buildPrimeGroupChecks(extraction);
-    const difference = lineDetailsDifference({ issues, groups });
+    // Statement lines that do not add up to their PRINTED block total are
+    // line details too (part 1.1): never a block, only the quiet note.
+    const lineSumDiffs = check.checks.filter((c) => LINE_SUM_CHECKS.includes(c.id) && !c.passed).map((c) => r2(c.expected - c.actual));
+    const issueDifference = lineDetailsDifference({ issues, groups });
+    const allDiffs = [...lineSumDiffs, ...(issueDifference != null ? [issueDifference] : [])];
+    const difference = allDiffs.length > 0 ? allDiffs.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a)) : null;
     const loads = splitPrimeLoads(extraction);
     const pages = statementPagesOf(extraction);
     const mismatch =
@@ -159,10 +197,18 @@ export function evaluateSettlementGate(
   if (printed.grossRevenue == null && printed.totalDeductions == null && printed.netDue == null) return fail('totals_not_printed');
   if (printed.grossRevenue == null || printed.netDue == null || issueTypes.includes('zeroNetNonzeroGross')) return fail('missing_fields');
   if (printed.totalDeductions == null) return fail('totals_not_printed');
-  if (!printedTotalsMatch(printed) || issueTypes.includes('netDueMismatch')) return fail('totals_differ', issueTypes);
-  if (issueTypes.includes('depositMismatch')) return fail('deposit_differs', ['depositMismatch']);
+  if (!printedTotalsMatch(printed) || issueTypes.includes('netDueMismatch')) {
+    const reimbursements = printed.reimbursements ?? printed.reimbursementLines ?? 0;
+    return fail('totals_differ', issueTypes, [
+      { check: 'netDue', printed: printed.netDue, read: r2(printed.grossRevenue + reimbursements - printed.totalDeductions) },
+    ]);
+  }
+  if (issueTypes.includes('depositMismatch')) return fail('deposit_differs', ['depositMismatch'], detailsOf(issues, ['depositMismatch']));
+  // Other carriers (and a Prime week read without its statement page):
+  // profit comes from these line items (the line route), so they must add
+  // up here. The Prime statement gate above never blocks on summed lines.
   const lineIssues = issueTypes.filter((t) => t === 'deductionsMismatch' || t === 'revenueLinesMismatch' || t === 'reimbursementLinesMismatch');
-  if (lineIssues.length > 0) return fail('lines_differ', lineIssues);
+  if (lineIssues.length > 0) return fail('lines_differ', lineIssues, detailsOf(issues, lineIssues));
   if (dateCheck.issues.includes('unreadable') && !dateOk) return fail('date_unreadable', dateCheck.issues);
 
   const deposit = settlementDeposit({ statement: { printed } as never });
@@ -198,6 +244,44 @@ export const GATE_FAIL_REASON_KEY: Record<GateFailReason, string> = {
 
 // Automatic re-reads before COULD NOT READ is shown (spec 2.1).
 export const MAX_AUTO_REREADS = 2;
+
+// IMPORT GATE FIX 1.3 (owner 2026-11-03): an automatic re-read costs money,
+// so only the pages that feed the failing check are read again. Pages are
+// found by the KIND each one was classified as, never by page number:
+//   statement-only checks      -> the statement pages;
+//   payout, dates, gross       -> statement + settlement-side pages;
+//   net due, totals, lines     -> the settlement-side pages;
+//   a content page not read    -> that page.
+// pages null = the pages cannot be told apart: every content page is read
+// again (the behaviour before this fix). `reason` is logged with the re-read.
+export type RereadRequest = { pages: number[] | null; reason: string };
+
+const STATEMENT_ONLY_CHECKS = new Set(['variableCosts', 'operatingExpenses', 'statementTotal', 'totalCashFlow', 'settlementToOperator']);
+
+export function rereadRequestFor(gate: SettlementGateResult | null, extraction: Extraction | null | undefined): RereadRequest | null {
+  if (!gate || gate.status !== 'fail') return null;
+  const reason = `${gate.reason}: ${gate.failures.join(', ')}`;
+  const map = Array.isArray(extraction?.pageMap) ? extraction!.pageMap! : [];
+  const content = map.filter((p) => p.role === 'content');
+  const statementPages = content.filter((p) => p.kind === 'statement').map((p) => p.page);
+  const settlementSide = content.filter((p) => p.kind !== 'statement').map((p) => p.page);
+  const unread = content.filter((p) => p.status !== 'read').map((p) => p.page);
+  let pages: number[];
+  let needsStatementPages = true;
+  if (gate.reason === 'statement_not_read') pages = unread.length > 0 ? unread : statementPages;
+  else if (gate.reason === 'statement_check_failed') {
+    pages = gate.failures.every((f) => STATEMENT_ONLY_CHECKS.has(f)) ? statementPages : [...statementPages, ...settlementSide];
+  } else if (gate.reason === 'gross_differs' || gate.reason === 'deposit_differs' || gate.reason === 'date_mismatch' || gate.reason === 'date_unreadable') {
+    pages = [...statementPages, ...settlementSide];
+  } else {
+    pages = settlementSide;
+    needsStatementPages = false;
+  }
+  if (unread.length > 0 && gate.reason !== 'statement_not_read') pages = [...pages, ...unread];
+  const unique = [...new Set(pages)].sort((a, b) => a - b);
+  if (unique.length === 0 || (needsStatementPages && statementPages.length === 0)) return { pages: null, reason };
+  return { pages: unique, reason };
+}
 
 // What the import screen does with a reading (spec 2.1/2.2):
 //   pass + lines match  -> the CHECK AND CERTIFY card;
@@ -238,7 +322,7 @@ export function pickBetterReading<T>(previous: { reading: T; gate: SettlementGat
 export function withGateAudit(extraction: Extraction, gate: SettlementGateResult): Extraction {
   const audit =
     gate.status === 'fail'
-      ? { status: gate.status, reason: gate.reason, failures: gate.failures }
+      ? { status: gate.status, reason: gate.reason, failures: gate.failures, ...(gate.details ? { details: gate.details } : {}) }
       : { status: gate.status, lineDetails: gate.lineDetails, lineDifference: gate.lineDifference };
   return { ...extraction, settlementGate: audit };
 }

@@ -142,6 +142,25 @@ reading is re-checked with no re-read; a reading from the older prompt (no
 printed labels / no balance forward field) is shown "Read with an older
 version" with Read again first.
 
+AMENDED 2026-11-03 (IMPORT GATE FIX, owner "JUST FIX"): the gate uses
+PRINTED totals only. "Each block's lines = its printed total" and TOTAL
+REVENUE's lines are now `LINE_SUM_CHECKS` (`settlementStatement.ts`): warn
+only, they produce the "line details differ" note, the line rows are not
+stored, and `statementRoute.ts` adds a `line_residual` ledger entry per block
+so profit equals the printed block totals. The chain checks use the printed
+block totals; a block or line that is not printed skips its check, never
+fails it. No cash-flow section (07/17): balance forward 0, TOTAL STATEMENT =
+SETTLEMENT TO OPERATOR = payout. The payout is the recap's payout line under
+any label (DIRECT DEPOSIT TO BANK, AMOUNT LOADED ON CARD, ...), stored as
+`payoutMethod` bank/card/other. A failed gate names the check with printed
+vs read (`GateFailDetail`); the automatic re-read reads only the pages that
+feed it (`rereadRequestFor`), logged in `plan.rereads` with its reason.
+R1 amendment: a PR line whose text is a personal payment ("PERSONAL
+PAYMNT") is owner money in, never part of the PR offset; WA advances and PR
+personal payments printed in the reimbursement section are saved as credit
+lines with their class (out of profit), never as reimbursements. Golden
+week 3: `goldenPrimeSettlement0717.test.ts` (profit −293.62).
+
 ## Review screen (item 7, `reviewVerdict.ts`, `SettlementReview.tsx`)
 
 Green "Verified by Prime's statement. Profit $X, deposited $Y" [Save];

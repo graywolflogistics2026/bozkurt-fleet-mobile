@@ -501,16 +501,48 @@ describe('the gate (item 6): statement checks + week ending decide; line items o
     expect(lineDetailsDifference(reviewInputsOf(misreadLines()))).toBe(2472.76);
   });
 
-  test("gate fails (a statement line misread) -> today's guard: Save blocked, verdict red naming the check", () => {
-    const lines = STATEMENT_LINES.map((l) => (l.label === 'TRACTOR FUEL' ? { ...l, amount: -2422.12 } : l));
-    const e = withStatement({ lines });
-    expect(buildPrimeStatementCheck(e)!.gatePassed).toBe(false);
-    expect(isSaveBlocked(e)).toBe(true);
-    expect(buildReviewVerdict(e, { saveBlocked: true })).toMatchObject({
-      tone: 'red',
-      kind: 'not_verified',
-      reason: { kind: 'statement_check_failed', check: { id: 'section_fuel_oil_tax' } },
+  // IMPORT GATE FIX 1.4 (owner 2026-11-03): the REAL misread of this week —
+  // the statement's TRACTOR FUEL read as 2,422.12 (printed 2,089.58) and the
+  // settlement deductions summing to 5,306.54 (printed 4,100.66). Every
+  // PRINTED total still ties, so the week passes: the headline numbers are
+  // saved from the printed totals, the line rows are skipped with the quiet
+  // note, and profit stays 4,987.74. (The owner gave the two sums, not the
+  // misread lines: the deduction difference is put on one tractor-fuel line.)
+  const realMisread = () =>
+    golden0814({
+      deductions: DEDUCTIONS.map((d) => (d.code === 'UF' && d.amount === 341.04 ? { ...d, amount: Math.round((341.04 + 5306.54 - 4100.66) * 100) / 100 } : d)),
+      operating: { ...STATEMENT, lines: STATEMENT_LINES.map((l) => (l.label === 'TRACTOR FUEL' ? { ...l, amount: -2422.12 } : l)) },
     });
+
+  test('the real 8/14 misread: deductions sum 5,306.54, tractor fuel 2,422.12', () => {
+    const e = realMisread();
+    const recon = checkSettlementReconciliation(e).issues.find((i) => i.type === 'deductionsMismatch');
+    expect(recon && 'summed' in recon && r2(recon.summed)).toBe(5306.54);
+    expect(buildPrimeStatementCheck(e)!.gatePassed).toBe(true);
+    expect(isSaveBlocked(e)).toBe(false);
+    const gate = evaluateSettlementGate(e, { importDate: '2026-10-29' });
+    expect(gate).toMatchObject({ status: 'pass', lineDetails: 'mismatch', headline: { revenue: KEY.revenue, netDue: KEY.netDue, deposited: KEY.deposit, estimatedProfit: KEY.profit } });
+  });
+
+  test('the real 8/14 misread saves the headline numbers, skips the line rows, profit 4,987.74', async () => {
+    const rows = await importWeek(realMisread());
+    expect(rows.settlements).toHaveLength(1);
+    expect(rows.settlements[0].gross).toBe(KEY.revenue);
+    expect(rows.settlements[0].statement?.linesNotSaved).toBe(true);
+    expect(rows.deductions).toEqual([]);
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+    expect(settlementDeposit(rows.settlements[0])).toMatchObject({ deposited: KEY.deposit });
+  });
+
+  test('a misread PRINTED total still blocks and names its two numbers', () => {
+    const e = withStatement({ weekTotalStatement: 4375.49 });
+    expect(isSaveBlocked(e)).toBe(true);
+    const gate = evaluateSettlementGate(e, { importDate: '2026-10-29' });
+    expect(gate).toMatchObject({ status: 'fail', reason: 'statement_check_failed', failures: ['statementTotal', 'totalCashFlow'] });
+    expect(gate?.status === 'fail' && gate.details).toEqual([
+      { check: 'statementTotal', printed: 4375.49, read: 4275.49 },
+      { check: 'totalCashFlow', printed: 3072.57, read: 3172.57 },
+    ]);
   });
 
   test('a statement week ending that was not read fails the gate (never skipped)', () => {

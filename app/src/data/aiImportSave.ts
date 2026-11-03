@@ -24,7 +24,7 @@ import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf } from '@/src/import/printedDates';
 import { matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
 import { normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
-import { classifySettlementLines } from '@/src/import/settlementLineClass';
+import { classifySettlementLines, nonReimbursementCredits } from '@/src/import/settlementLineClass';
 import { asTruckOwnership, type TruckOwnership } from '@/src/import/lineClass';
 import { missingColumnIn } from '@/src/data/fleetEdit';
 import { buildSettlementStatement, isStatementBacked, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
@@ -563,6 +563,37 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // owner's remembered answer. Every row stores its printed direction.
     const truckOwnership = await fetchTruckOwnership(truckId);
     mapping.deductions = classifySettlementLines(mapping.deductions, carrierKey, carrierCodeMaps, learningRules, truckOwnership).rows;
+    // IMPORT GATE FIX 2.4 (owner 2026-11-03): a reimbursement-section line
+    // whose code class is out of profit (PR personal payment, WA advance
+    // taken) is not a reimbursement: it is kept as a credit line with its
+    // class, so it never offsets an expense. mapSettlement() maps
+    // reimbursementItems 1:1 in order, so the indexes line up.
+    const credits = nonReimbursementCredits(d.settlement.reimbursementItems ?? [], carrierKey, carrierCodeMaps);
+    if (credits.length > 0 && mapping.reimbursements.length === (d.settlement.reimbursementItems ?? []).length) {
+      const moved = new Set(credits.map((c) => c.index));
+      for (const c of credits) {
+        const r = mapping.reimbursements[c.index];
+        const item = (d.settlement.reimbursementItems ?? [])[c.index];
+        mapping.deductions.push({
+          user_id: userId,
+          truck_id: truckId,
+          settlement_id: null,
+          driver_id: driverId,
+          ded_date: r.reimb_date ?? null,
+          code: item?.code?.trim() || null,
+          description: r.description ?? null,
+          // A credit, signed as printed: money in, never an expense.
+          amount: -Math.abs(Number(r.amount ?? 0)),
+          category: c.category,
+          payment_method: 'Settlement Withheld',
+          source: 'settlement',
+          tax_deductible: false,
+          economic_class: c.economicClass,
+          direction: 'credit',
+        });
+      }
+      mapping.reimbursements = mapping.reimbursements.filter((_, i) => !moved.has(i));
+    }
 
     // Web v2026.07.09-A re-import-replace: importing the same
     // (week_ending, truck) again REPLACES that week's batch-tagged rows

@@ -109,11 +109,13 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
 export function couldNotReadReport(
   extraction: Extraction | null,
   reason: import('./settlementGate').GateFailReason | 'job_failed' | 'not_finished',
-  t: T
+  t: T,
+  // IMPORT GATE FIX 1.2: the failing check with its two numbers, already
+  // formatted by the caller (amounts or dates only, never bank digits).
+  detailLines: string[] = []
 ): string {
   const reasonKey = reason === 'job_failed' ? 'importFlow.reason.jobFailed' : reason === 'not_finished' ? 'importFlow.reason.notFinished' : GATE_FAIL_REASON_KEY[reason];
-  const head = `${t('importFlow.couldNotReadTitle')}
-${t(reasonKey)}`;
+  const head = [t('importFlow.couldNotReadTitle'), t(reasonKey), ...detailLines].join('\n');
   if (!extraction || extraction.docType !== 'settlement') return scrubBankDigitsInText(head);
   return scrubBankDigitsInText(`${head}
 

@@ -56,6 +56,7 @@ import { appVersionLabel } from '@/src/components/WeekReviewCard';
 import {
   evaluateSettlementGate,
   nextImportStep,
+  rereadRequestFor,
   pickBetterReading,
   withGateAudit,
   MAX_AUTO_REREADS,
@@ -734,7 +735,7 @@ export default function Import() {
       const step = nextImportStep(gate, autoRereads.get(key) ?? 0);
       if (step === 'reread') {
         autoRereads.set(key, (autoRereads.get(key) ?? 0) + 1);
-        await autoReread(key);
+        await autoReread(key, rereadRequestFor(gate, reading));
         return;
       }
       setExtraction(reading);
@@ -757,12 +758,20 @@ export default function Import() {
   // An automatic re-read (never shown as a step): a background job is read
   // again on the server (content pages only) and followed while READING;
   // a photo is read again here.
-  async function autoReread(key: string) {
+  async function autoReread(key: string, request: { pages: number[] | null; reason: string } | null = null) {
     if (currentReviewId && key === currentReviewId) {
       const jobId = currentReviewId;
       setPhase('reading');
       try {
-        await rereadImportJob.mutateAsync({ jobId, locale: i18n.language, customCategories: customCategoryNames, learningRules, carrierCodeMaps });
+        await rereadImportJob.mutateAsync({
+          jobId,
+          locale: i18n.language,
+          customCategories: customCategoryNames,
+          learningRules,
+          carrierCodeMaps,
+          pages: request?.pages ?? null,
+          reason: request?.reason,
+        });
         setExtraction(null);
         setCurrentReviewId(null);
         setFollowJobId(jobId);
@@ -1488,6 +1497,7 @@ export default function Import() {
         {(phase === 'could_not_read' || (phase === 'preview' && settlementGate?.status === 'fail')) && (
           <CouldNotReadCard
             extraction={extraction}
+            details={settlementGate?.status === 'fail' ? settlementGate.details : undefined}
             reason={couldNotRead ?? (settlementGate?.status === 'fail' ? settlementGate.reason : 'job_failed')}
             onUploadAgain={discardReading}
             onReadAgain={readingKeyRef.current && !readingKeyRef.current.startsWith('photo') ? () => void readJobAgain(readingKeyRef.current!) : undefined}

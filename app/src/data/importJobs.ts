@@ -379,6 +379,10 @@ export function useRereadImportJob() {
       customCategories?: string[];
       learningRules?: { keyword: string; category: string }[];
       carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
+      // IMPORT GATE FIX 1.3: only these content pages are read again (null
+      // or absent = every content page), and why (logged on the server).
+      pages?: number[] | null;
+      reason?: string;
     }) => {
       // The one readiness rule ignores this job's cached 'ready' row until it
       // completes again (src/import/importJobs.ts isReadyToReview).

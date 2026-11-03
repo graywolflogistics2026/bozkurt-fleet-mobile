@@ -3,6 +3,7 @@ import { checkSettlementReconciliation, type ReconciliationIssue } from './settl
 import {
   buildPrimeStatementCheck,
   buildSettlementStatement,
+  isGateCheck,
   printedTotalsMatch,
   printedTotalsOf,
   statementPagesOf,
@@ -144,7 +145,9 @@ export function buildReviewVerdict(
   }
 
   if (check) {
-    const failed = check.checks.find((c) => !c.passed && c.id !== 'milesMatch' && c.id !== 'grossMatches');
+    // IMPORT GATE FIX 1.1: only a printed-total identity is named as the
+    // failing check (a line sum never blocks).
+    const failed = check.checks.find((c) => !c.passed && isGateCheck(c));
     if (failed) return { tone: 'red', kind: 'not_verified', reason: { kind: 'statement_check_failed', check: failed } };
     return { tone: 'red', kind: 'not_verified', reason: { kind: 'statement_not_read', missing: check.gateMissing ?? [] } };
   }
@@ -176,7 +179,7 @@ export function saveGateFailures(extraction: Extraction | null | undefined): str
   if (check?.gatePassed) return [];
   const issues: string[] = checkSettlementReconciliation(extraction).issues.map((i) => i.type);
   if (!check || check.passed) return issues;
-  const failed: string[] = check.checks.filter((c) => !c.passed).map((c) => c.id);
+  const failed: string[] = check.checks.filter((c) => !c.passed && isGateCheck(c)).map((c) => c.id);
   return [...issues, ...(failed.length > 0 ? failed : ['statement_incomplete'])];
 }
 

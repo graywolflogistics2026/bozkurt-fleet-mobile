@@ -2806,7 +2806,8 @@
       "meals_per_diem": "Yemek — zaten per diem kapsamında",
       "truck_extras": "Kamyon ekstraları — Kamyon Maliyet Tabanında izlenir",
       "owner_money_in": "Sahibin koyduğu para — gelir veya gider değil",
-      "interest_income": "Faiz geliri — işletme kârı değil"
+      "interest_income": "Faiz geliri — işletme kârı değil",
+      "line_residual": "Okunan satırların açıklamadığı tablo toplamı — basıldığı gibi sayıldı"
     },
     "empty": "Bu dönemde satır yok.",
     "showEveryRow": "Tüm satırları göster",
@@ -3158,7 +3159,24 @@
     "readAgainStartedTitle": "Tekrar okunuyor",
     "readAgainStartedBody": "Bittiğinde kontrol edilecek rakamlar içe aktarma listesinden açılır.",
     "viewWeek": "Bu haftayı aç",
-    "readAgain": "Yeniden oku"
+    "readAgain": "Yeniden oku",
+    "failDetail": "{{check}}: basılı {{printed}}, okunan {{read}}",
+    "checkName": {
+      "variableCosts": "TOTAL VARIABLE COSTS",
+      "operatingExpenses": "TOTAL OPERATING EXPENSES",
+      "statementTotal": "TOTAL STATEMENT OF INCOME & EXPENSE",
+      "totalCashFlow": "TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "directDeposit": "Payout (recap)",
+      "statementWeekEnding": "Statement week ending",
+      "grossMatches": "TOTAL REVENUE",
+      "netDueMismatch": "NET AMOUNT DUE UNIT",
+      "netDue": "Net due",
+      "depositMismatch": "Payout (recap)",
+      "deductionsMismatch": "TOTAL DEDUCTIONS",
+      "revenueLinesMismatch": "TOTAL REVENUE",
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+    }
   },
   "certify": {
     "certifiedOn": "{{date}} tarihinde onaylandı",

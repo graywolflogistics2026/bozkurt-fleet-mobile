@@ -197,7 +197,9 @@ export type PageResult = {
   inFlight?: boolean;
 };
 
-export type ClassifiedPage = { page: number; kind: PageKind; hasTotalCashFlow: boolean };
+// hasStatementTotal (IMPORT GATE FIX 2.2): TOTAL STATEMENT OF INCOME &
+// EXPENSE is printed on the page (optional: older plans lack it).
+export type ClassifiedPage = { page: number; kind: PageKind; hasTotalCashFlow: boolean; hasStatementTotal?: boolean };
 
 export type JobPhase = 'start' | 'whole' | 'classify' | 'pages' | 'awaiting_decision' | 'done' | 'failed';
 
@@ -225,6 +227,8 @@ export type JobPlan = {
   readyAt?: string | null;
   retryAt?: number | null;
   baseDocumentId?: string | null;
+  // IMPORT GATE FIX 1.3: each re-read of this job and why.
+  rereads?: RereadLogEntry[];
 };
 
 export type PageMapEntry = {
@@ -408,6 +412,30 @@ export function newRereadPlan(old: Pick<JobPlan, 'mediaType' | 'totalPages' | 'f
   };
 }
 
+// IMPORT GATE FIX 1.3 (owner 2026-11-03): a targeted re-read. Only the
+// listed content pages are read again; every other content page keeps its
+// finished result (an automatic re-read costs money). `pages` null or empty
+// = every content page (the full "Read again"). Pages that are not content
+// in the new plan are never kept (they are not part of the reading).
+export function rereadKeptResults(
+  newPlan: Pick<JobPlan, 'pages'>,
+  oldResults: Record<string, PageResult> | null | undefined,
+  pages: number[] | null | undefined,
+): Record<string, PageResult> {
+  if (!pages || pages.length === 0 || !oldResults) return {};
+  const reread = new Set(pages);
+  const kept: Record<string, PageResult> = {};
+  for (const p of newPlan.pages) {
+    if (p.role !== 'content' || reread.has(p.page)) continue;
+    const r = oldResults[String(p.page)];
+    if (r?.status === 'done') kept[String(p.page)] = { ...r, inFlight: false };
+  }
+  return kept;
+}
+
+// Every re-read is logged on the job with its reason (part 1.3).
+export type RereadLogEntry = { at: string; reason: string; pages: number[] | null };
+
 // NO WHOLE-DOCUMENT CALL FOR PRIME (statement reading plan step B1, owner
 // 2026-10-31): one call over a whole small PDF could save a misread
 // deposit, because nothing compared it page by page. Now every multi-page
@@ -435,6 +463,14 @@ export function statementBoundary(pages: ClassifiedPage[], windowEnd: number, to
   // printed TOTAL CASH FLOW or a non-statement page follows it.
   const followedByOther = pages.some((p) => p.page > last && p.kind !== 'statement');
   if (hasTcf || followedByOther || windowEnd >= totalPages) return last;
+  // IMPORT GATE FIX 2.2 (owner 2026-11-03): a statement with no cash-flow
+  // section ends at TOTAL STATEMENT OF INCOME & EXPENSE. Once the page after
+  // it has been classified without TOTAL CASH FLOW, nothing more follows.
+  const totalPage = pages.filter((p) => p.hasStatementTotal).map((p) => p.page);
+  if (totalPage.length > 0) {
+    const at = Math.max(...totalPage);
+    if (pages.some((p) => p.page > at && !p.hasTotalCashFlow)) return last;
+  }
   return null;
 }
 

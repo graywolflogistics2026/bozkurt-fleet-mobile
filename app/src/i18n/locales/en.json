@@ -2806,7 +2806,8 @@
       "meals_per_diem": "Meal — already covered by per diem",
       "truck_extras": "Truck extras — tracked in Truck Cost Basis",
       "owner_money_in": "Owner money in — not income or an expense",
-      "interest_income": "Interest income — not business profit"
+      "interest_income": "Interest income — not business profit",
+      "line_residual": "Statement total not explained by the lines read — counted as printed"
     },
     "empty": "No rows in this period.",
     "showEveryRow": "Show every row",
@@ -3158,7 +3159,24 @@
     "readAgainStartedTitle": "Reading again",
     "readAgainStartedBody": "When it is done, the numbers to check open from the import list.",
     "viewWeek": "View this week",
-    "readAgain": "Read again"
+    "readAgain": "Read again",
+    "failDetail": "{{check}}: printed {{printed}}, read {{read}}",
+    "checkName": {
+      "variableCosts": "TOTAL VARIABLE COSTS",
+      "operatingExpenses": "TOTAL OPERATING EXPENSES",
+      "statementTotal": "TOTAL STATEMENT OF INCOME & EXPENSE",
+      "totalCashFlow": "TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "directDeposit": "Payout (recap)",
+      "statementWeekEnding": "Statement week ending",
+      "grossMatches": "TOTAL REVENUE",
+      "netDueMismatch": "NET AMOUNT DUE UNIT",
+      "netDue": "Net due",
+      "depositMismatch": "Payout (recap)",
+      "deductionsMismatch": "TOTAL DEDUCTIONS",
+      "revenueLinesMismatch": "TOTAL REVENUE",
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+    }
   },
   "certify": {
     "certifiedOn": "Certified on {{date}}",

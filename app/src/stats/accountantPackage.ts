@@ -284,6 +284,9 @@ export function buildLineItems(
     // R4 (owner 2026-11-03): a PERSONAL line never appears among business
     // expenses; it has its own section (buildPersonalSettlementItems()).
     if (d.economic_class === 'PERSONAL') continue;
+    // IMPORT GATE FIX 2.4: an out-of-profit CREDIT (an advance taken, owner
+    // money in) is neither an expense nor a reference item.
+    if (d.direction === 'credit' && classIsOutOfProfit(d.economic_class)) continue;
     items.push({
       id: d.id,
       kind: 'deduction',
@@ -428,7 +431,9 @@ export function buildPersonalSettlementItems(
   for (const d of deductions) {
     if (d.economic_class !== 'PERSONAL' || d.source !== 'settlement') continue;
     const amount = Number(d.amount ?? 0);
-    if (!amount || !inAccountantPeriod(d.ded_date, year, month)) continue;
+    // Items PAID through the settlement only (a charge); owner money in
+    // (a PERSONAL credit) is not a personal expense.
+    if (!(amount > 0) || !inAccountantPeriod(d.ded_date, year, month)) continue;
     if (!d.ded_date) continue;
     items.push({ id: d.id, date: d.ded_date, description: d.description || d.category || 'Personal item', amount });
   }

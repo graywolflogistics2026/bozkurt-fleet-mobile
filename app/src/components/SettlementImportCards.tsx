@@ -7,7 +7,7 @@ import { ReviewDetails } from '@/src/components/SettlementReview';
 import { SettlementDateQuestion } from '@/src/components/SettlementDateQuestion';
 import { useFormatters } from '@/src/i18n/format';
 import { colors, radii, spacing, typography } from '@/src/theme';
-import { GATE_FAIL_REASON_KEY, type GateFailReason, type GateHeadline, type SettlementGateResult } from '@/src/import/settlementGate';
+import { GATE_FAIL_REASON_KEY, type GateFailDetail, type GateFailReason, type GateHeadline, type SettlementGateResult } from '@/src/import/settlementGate';
 import { reviewInputsOf } from '@/src/import/reviewVerdict';
 import { couldNotReadReport } from '@/src/import/importAudit';
 import type { Extraction } from '@/src/import/types';
@@ -139,26 +139,39 @@ export function CouldNotReadCard({
   reason,
   onUploadAgain,
   onReadAgain,
+  details,
 }: {
   extraction: Extraction | null;
   reason: GateFailReason | 'job_failed' | 'not_finished';
+  // IMPORT GATE FIX 1.2: the failing check and its two numbers.
+  details?: GateFailDetail[];
   onUploadAgain: () => void;
   // A background job can be read again on the server (never a dead end).
   onReadAgain?: () => void;
 }) {
   const { t } = useTranslation();
+  const { money } = useFormatters();
+  const value = (v: number | string) => (typeof v === 'number' ? money(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v);
+  const detailLines = (details ?? []).map((d) =>
+    t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) })
+  );
   return (
     <Card>
       <View style={{ backgroundColor: 'rgba(239,68,68,0.10)', borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
         <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('importFlow.couldNotReadTitle')}</Text>
         <MutedText style={{ marginTop: spacing.xs }}>{t(reason === 'job_failed' ? 'importFlow.reason.jobFailed' : reason === 'not_finished' ? 'importFlow.reason.notFinished' : GATE_FAIL_REASON_KEY[reason])}</MutedText>
+        {detailLines.map((line) => (
+          <MutedText key={line} style={{ marginTop: spacing.xs, color: colors.text }}>
+            {line}
+          </MutedText>
+        ))}
       </View>
       {onReadAgain && <PrimaryButton title={t('importFlow.readAgain')} onPress={onReadAgain} />}
       {onReadAgain ? <SecondaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} /> : <PrimaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} />}
       <SecondaryButton
         title={t('importFlow.sendReport')}
         onPress={() => {
-          void Share.share({ message: couldNotReadReport(extraction, reason, (k, o) => t(k, o) as string) });
+          void Share.share({ message: couldNotReadReport(extraction, reason, (k, o) => t(k, o) as string, detailLines) });
         }}
       />
     </Card>

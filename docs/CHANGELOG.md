@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- IMPORT GATE FIX (owner 2026-11-03): the gate blocks only on PRINTED
+  totals; statement line sums (revenueLines, section_*) are LINE_SUM_CHECKS =
+  the quiet "line details" note (rows not stored), and a line_residual ledger
+  entry keeps profit = printed totals. Fail card names the check + printed vs
+  read. Re-reads target the failing pages (rereadRequestFor, reread_job
+  keeps other pages, logged with reason). Payout under any label +
+  payoutMethod (bank/card/other); optional cash-flow section; PR personal
+  payment + WA advances in the reimbursement section saved as credit lines
+  out of profit; advances group nets WA reimbursements. Third golden week
+  07/17 (profit −293.62). No SQL. Redeploy ai-import; eas update.
 - PRIME CODE CLASSES parts 2-3 (owner 2026-11-03): runtime. lineClass.ts +
   settlementLineClass.ts (class from the map, direction from the sign, NP by
   trucks.ownership, IH by direction, PC as a charge = PERSONAL, ASK asked

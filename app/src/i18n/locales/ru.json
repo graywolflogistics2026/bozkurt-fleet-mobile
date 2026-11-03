@@ -2806,7 +2806,8 @@
       "meals_per_diem": "Питание — уже покрыто per diem",
       "truck_extras": "Доп. оборудование грузовика — учитывается в Базе стоимости грузовика",
       "owner_money_in": "Деньги владельца — не доход и не расход",
-      "interest_income": "Процентный доход — не прибыль бизнеса"
+      "interest_income": "Процентный доход — не прибыль бизнеса",
+      "line_residual": "Часть итога отчёта, не объяснённая прочитанными строками — учтена как напечатано"
     },
     "empty": "В этом периоде нет строк.",
     "showEveryRow": "Показать все строки",
@@ -3158,7 +3159,24 @@
     "readAgainStartedTitle": "Читаем снова",
     "readAgainStartedBody": "Когда закончим, цифры для проверки откроются из списка импорта.",
     "viewWeek": "Открыть эту неделю",
-    "readAgain": "Прочитать снова"
+    "readAgain": "Прочитать снова",
+    "failDetail": "{{check}}: напечатано {{printed}}, прочитано {{read}}",
+    "checkName": {
+      "variableCosts": "TOTAL VARIABLE COSTS",
+      "operatingExpenses": "TOTAL OPERATING EXPENSES",
+      "statementTotal": "TOTAL STATEMENT OF INCOME & EXPENSE",
+      "totalCashFlow": "TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "directDeposit": "Payout (recap)",
+      "statementWeekEnding": "Statement week ending",
+      "grossMatches": "TOTAL REVENUE",
+      "netDueMismatch": "NET AMOUNT DUE UNIT",
+      "netDue": "Net due",
+      "depositMismatch": "Payout (recap)",
+      "deductionsMismatch": "TOTAL DEDUCTIONS",
+      "revenueLinesMismatch": "TOTAL REVENUE",
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+    }
   },
   "certify": {
     "certifiedOn": "Подтверждено {{date}}",

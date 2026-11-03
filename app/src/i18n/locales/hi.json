@@ -2806,7 +2806,8 @@
       "meals_per_diem": "भोजन — per diem में पहले से शामिल",
       "truck_extras": "ट्रक एक्स्ट्रा — ट्रक लागत आधार में ट्रैक किए जाते हैं",
       "owner_money_in": "मालिक का पैसा — न आय न खर्च",
-      "interest_income": "ब्याज आय — व्यावसायिक लाभ नहीं"
+      "interest_income": "ब्याज आय — व्यावसायिक लाभ नहीं",
+      "line_residual": "पढ़ी गई लाइनों से न समझाया गया स्टेटमेंट टोटल — छपे अनुसार गिना गया"
     },
     "empty": "इस अवधि में कोई पंक्ति नहीं।",
     "showEveryRow": "हर पंक्ति दिखाएँ",
@@ -3158,7 +3159,24 @@
     "readAgainStartedTitle": "फिर से पढ़ा जा रहा है",
     "readAgainStartedBody": "पूरा होने पर, जाँचने वाले आँकड़े इम्पोर्ट सूची से खुलेंगे।",
     "viewWeek": "यह सप्ताह देखें",
-    "readAgain": "फिर से पढ़ें"
+    "readAgain": "फिर से पढ़ें",
+    "failDetail": "{{check}}: छपा {{printed}}, पढ़ा गया {{read}}",
+    "checkName": {
+      "variableCosts": "TOTAL VARIABLE COSTS",
+      "operatingExpenses": "TOTAL OPERATING EXPENSES",
+      "statementTotal": "TOTAL STATEMENT OF INCOME & EXPENSE",
+      "totalCashFlow": "TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "directDeposit": "Payout (recap)",
+      "statementWeekEnding": "Statement week ending",
+      "grossMatches": "TOTAL REVENUE",
+      "netDueMismatch": "NET AMOUNT DUE UNIT",
+      "netDue": "Net due",
+      "depositMismatch": "Payout (recap)",
+      "deductionsMismatch": "TOTAL DEDUCTIONS",
+      "revenueLinesMismatch": "TOTAL REVENUE",
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+    }
   },
   "certify": {
     "certifiedOn": "{{date}} को प्रमाणित",

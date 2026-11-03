@@ -2806,7 +2806,8 @@
       "meals_per_diem": "Comida — ya cubierta por el per diem",
       "truck_extras": "Extras del camión — registrados en el Costo Base del Camión",
       "owner_money_in": "Dinero del dueño — no es ingreso ni gasto",
-      "interest_income": "Ingresos por intereses — no es ganancia del negocio"
+      "interest_income": "Ingresos por intereses — no es ganancia del negocio",
+      "line_residual": "Total del estado no explicado por las líneas leídas — contado como impreso"
     },
     "empty": "No hay filas en este período.",
     "showEveryRow": "Mostrar todas las filas",
@@ -3158,7 +3159,24 @@
     "readAgainStartedTitle": "Leyendo de nuevo",
     "readAgainStartedBody": "Cuando termine, las cifras a revisar se abren desde la lista de importaciones.",
     "viewWeek": "Ver esta semana",
-    "readAgain": "Leer de nuevo"
+    "readAgain": "Leer de nuevo",
+    "failDetail": "{{check}}: impreso {{printed}}, leído {{read}}",
+    "checkName": {
+      "variableCosts": "TOTAL VARIABLE COSTS",
+      "operatingExpenses": "TOTAL OPERATING EXPENSES",
+      "statementTotal": "TOTAL STATEMENT OF INCOME & EXPENSE",
+      "totalCashFlow": "TOTAL CASH FLOW",
+      "settlementToOperator": "SETTLEMENT TO OPERATOR",
+      "directDeposit": "Payout (recap)",
+      "statementWeekEnding": "Statement week ending",
+      "grossMatches": "TOTAL REVENUE",
+      "netDueMismatch": "NET AMOUNT DUE UNIT",
+      "netDue": "Net due",
+      "depositMismatch": "Payout (recap)",
+      "deductionsMismatch": "TOTAL DEDUCTIONS",
+      "revenueLinesMismatch": "TOTAL REVENUE",
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+    }
   },
   "certify": {
     "certifiedOn": "Certificado el {{date}}",
