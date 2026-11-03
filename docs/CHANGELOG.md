@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- STRUCTURED OUTPUT ON EVERY CALL (R4/B3, owner 2026-11-03): every model call
+  sends output_config.format json_schema, derived from the prompt's own JSON
+  templates (outputSchema.ts; settlement shape for every job page, the
+  classification reply, any printed docType for direct reads). A 400 that
+  refuses the schema retries once without it (log SCHEMA_REJECTED). A drift
+  test rebuilds the prompt from index.ts and fails on any asked-for field the
+  schema lacks (found and fixed: milesLines). 3 attempts, backoff 800/1600 ms.
+  A failed page keeps its scrubbed reply text (page_results error.rawReply,
+  max 2000 chars; no SQL). R2 blank columns are now "" (schema has no null).
+  Redeploy ai-import; eas update not needed for this item.
 - STATEMENT COLUMNS (R2, owner 2026-11-03): the model returns every statement
   line, TOTAL line and recap row (MILES, PRIOR WEEK BALANCE FORWARD,
   SETTLEMENT TO OPERATOR, PERF BD/EMGCY FD, payout line) as {label, weeks,

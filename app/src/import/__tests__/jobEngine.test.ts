@@ -311,6 +311,11 @@ describe('partial save', () => {
   it('p3 "unreadable" keeps the exact cause: parse_failed after 2 tries (owner 2026-11-03)', async () => {
     const sim = await simulateImport(goldenDoc(ELEVEN_ATTACHMENTS, { 3: { fail: 'parse_failed' } }));
     expect(sim.row.results['3']).toMatchObject({ status: 'failed', attempts: 2, error: { type: 'unreadable', detail: 'parse_failed' } });
+    // R4 (2026-11-03): the reply text of the failed page is kept, scrubbed.
+    const raw = (sim.row.results['3'] as { error?: { rawReply?: string } }).error?.rawReply ?? '';
+    expect(raw).toContain('netPay');
+    expect(raw).not.toContain('111000025');
+    expect(raw).not.toContain('12345678901');
     expect((sim.row.progress as { failed: unknown[] }).failed).toContainEqual(expect.objectContaining({ page: 3, type: 'unreadable', detail: 'parse_failed', attempts: 2 }));
   });
 

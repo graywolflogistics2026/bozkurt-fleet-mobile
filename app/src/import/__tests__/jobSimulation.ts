@@ -347,7 +347,7 @@ export async function simulateImport(doc: DocSpec, opts: SimOptions = {}): Promi
               return { errorType: 'timeout', message: `timed out on page ${page}` };
             }
             const n = pageCalls.get(page)! - 1;
-            if (spec.fail === 'parse_failed' || (spec.fail === 'parse_failed_once' && n === 0)) return { errorType: 'parse_failed', message: 'unreadable reply' };
+            if (spec.fail === 'parse_failed' || (spec.fail === 'parse_failed_once' && n === 0)) return { errorType: 'parse_failed', message: 'unreadable reply', rawReply: '{"settlement":{"netPay":1884.73,"note":"DIRECT DEPOSIT routing 111000025 acct 12345678901"' };
             if (spec.readings && spec.readings.length > 0) return { extraction: spec.readings[Math.min(n, spec.readings.length - 1)] };
             return { extraction: defaultExtraction(spec, page, doc.carrier) };
           });

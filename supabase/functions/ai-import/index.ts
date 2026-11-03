@@ -41,6 +41,7 @@ import {
   type PageRange,
 } from "./chunking.ts";
 import { scrubBankDigits, scrubBankDigitsInText } from "./bankDigits.ts";
+import { extractionOutputSchema, FAILED_REPLY_MAX_CHARS, isSchemaRejection, replyOutputSchema, type JsonSchema } from "./outputSchema.ts";
 import { pdfCreationDateOf } from "./pdfInfo.ts";
 import {
   CLASSIFY_WINDOW_MAX_BYTES,
@@ -243,8 +244,11 @@ const MAX_TOTAL_PAGES = 60;
 // (bad request/auth/billing, which retrying can't fix) and, as of this
 // pass, never for a timeout/AbortError either (see callAnthropicMessages
 // below — that used to retry too, silently doubling the wait).
-const MAX_ANTHROPIC_ATTEMPTS = 2;
+// R4 (owner decision 2026-11-03): 3 attempts, backoff doubling from 800 ms
+// (800, 1600) — still only for a transient failure, never a timeout.
+const MAX_ANTHROPIC_ATTEMPTS = 3;
 const RETRY_BACKOFF_MS = 800;
+const backoffMs = (attempt: number) => RETRY_BACKOFF_MS * 2 ** (attempt - 1);
 
 // ============================================================================
 // Extraction prompt — ported VERBATIM from legacy/index.html's handleFile()
@@ -400,7 +404,7 @@ const SETTLEMENT_DEDUCTIONS_AFTER =
 const OPERATING_SCHEMA_BEFORE =
   `"operating":{"weekRevenue":0,"weekMiles":0,"weekExpenses":0,"weekNet":0,"ytdRevenue":0,"ytdMiles":0,"ytdExpenses":0,"ytdNet":0,"ltdRevenue":0,"ltdMiles":0,"weeksInService":0}`;
 const OPERATING_SCHEMA_AFTER =
-  `"operating":{"lines":[{"section":"","label":"","weeks":null,"ytd":null,"ltd":null}],"totalLines":[{"label":"","weeks":null,"ytd":null,"ltd":null}],"recapLines":[{"label":"","weeks":null,"ytd":null,"ltd":null}],"payoutMethod":"","weekEnding":"","weekEndingRaw":"","weeksInService":0,"escrowPriorBalance":0,"escrowThisWeek":0,"escrowBalance":0,"escrowInterestRatePct":0}`;
+  `"operating":{"lines":[{"section":"","label":"","weeks":"","ytd":"","ltd":""}],"totalLines":[{"label":"","weeks":"","ytd":"","ltd":""}],"recapLines":[{"label":"","weeks":"","ytd":"","ltd":""}],"payoutMethod":"","weekEnding":"","weekEndingRaw":"","weeksInService":0,"escrowPriorBalance":0,"escrowThisWeek":0,"escrowBalance":0,"escrowInterestRatePct":0}`;
 
 // ---- Approved addition (owner decision 2026-10-13): reimbursement lines
 // carry their own printed code (Prime "PR" = personal-payment
@@ -409,7 +413,7 @@ const OPERATING_SCHEMA_AFTER =
 const REIMBURSEMENT_ITEMS_BEFORE = `"reimbursementItems":[{"desc":"","ref":"","amount":0}]`;
 const REIMBURSEMENT_ITEMS_AFTER = `"reimbursementItems":[{"code":"","desc":"","ref":"","amount":0}]`;
 const DEPOSIT_SCHEMA_BEFORE = `"netPay":0,`;
-const DEPOSIT_SCHEMA_AFTER = `"netPay":0,"depositAmount":0,"payoutMethod":"","totalLabels":{"grossRevenue":"","reimbursements":"","totalDeductions":"","netPay":"","depositAmount":""},"settlementTotalLines":[{"label":"","amount":0}],`;
+const DEPOSIT_SCHEMA_AFTER = `"netPay":0,"depositAmount":0,"payoutMethod":"","totalLabels":{"grossRevenue":"","reimbursements":"","totalDeductions":"","netPay":"","depositAmount":""},"settlementTotalLines":[{"label":"","amount":0}],"milesLines":[{"label":"","miles":0}],`;
 
 const APPROVED_ADDITIONS_SUFFIX = `
 APPROVED ADDITION (fuel/IFTA, owner decision 2026-07-03): for docType "fuel", also extract the US state as a 2-letter code (e.g. "TX", "OK") into fuel.state, read from the station's address on the receipt. If the state genuinely cannot be determined, leave fuel.state as "".
@@ -634,7 +638,7 @@ function buildExtractionPrompt(
   // the WEEKS column with its printed sign, plus every printed subtotal;
   // the app self-checks them (app/src/import/settlementStatement.ts) and
   // classifies each line (app/src/import/primeStatementLines.ts).
-  prompt += `\nAPPROVED ADDITION (Prime Inc operating statement, carrier-scoped, never applied to any other carrier; COLUMNS, owner decision 2026-11-03): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc.") AND the document includes an OPERATING STATEMENT / "STATEMENT OF INCOME AND EXPENSE" page (commonly prepared by Perryman & Associates; columns WEEKS TOTAL, ACTUAL/MILE, YTD TOTAL, LTD TOTAL), populate settlement.operating from that page. COLUMNS: every row below is read as {"label","weeks","ytd","ltd"}: label = the row's text exactly as printed; weeks = the figure in the WEEKS TOTAL column, ytd = the figure in the YTD TOTAL column, ltd = the figure in the LTD TOTAL column, each copied as printed, as text, WITH its sign (a trailing minus stays: "1,997.82-"), or null when that column is BLANK on that row. Take each figure from the column it is printed under, by its position below the column header: never move a figure into another column, never fill a blank WEEKS TOTAL cell with the YTD or LTD figure, and never read the ACTUAL/MILE column. A row printed with a single amount and no columns (a recap or balance-sheet page) puts that amount in weeks and null in ytd and ltd. settlement.operating.lines = EVERY individual line of the statement, in page order, each as {"section","label","weeks","ytd","ltd"}: section is one of "revenue" (FREIGHT REVENUE and OTHER REVENUE lines, e.g. REVENUE FROM PRIME INC., EXTRA PAY, FUEL SURCG BILL, OUTSIDE LUMPER 1099 PAY, TOLL 1099 PAY), "fuel_oil_tax" (FUEL,OIL,TAX lines incl. the discount lines), "repair" (EQUIPMENT REPAIR AND MAINT. lines), "tires", "misc" (MISCELLANEOUS lines, e.g. TOLLS, LUMPERS, ADVANCES, WEIGHT TICKETS, QUALCOMM COST, WIRE CHARGE, TRIP XPRESS CHG, PERSONAL PYMNT RCV, OPERATOR TRK EXTRAS), "out_of_pocket", "fixed" (FIXED COST lines), "other" (OTHER INCOME AND EXPENSE lines, e.g. ACCRUAL PERFORMANCE BOND, INTEREST INCOME FROM DEPOSIT, INTEREST EXPENSE ON OVER DRAW, START UP & EXCESS MILEAGE COST). Never put a "TOTAL ..." subtotal line in lines. The MILES row (e.g. 3,316.00, printed inside the revenue block), WEEKS IN SERVICE, PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR and PERF BD/EMGCY FD are NOT dollar lines of any section — never put them in lines. settlement.operating.totalLines = EVERY printed line whose printed label STARTS WITH the word TOTAL (TOTAL FREIGHT REVENUE, TOTAL OTHER REVENUE, TOTAL REVENUE, TOTAL FUEL,OIL,TAX, TOTAL EQUIPMENT REPAIR AND MAINT., TOTAL TIRES, TOTAL MISCELLANEOUS, TOTAL VARIABLE COSTS, TOTAL OUT OF POCKET COSTS, TOTAL FIXED COST, TOTAL OTHER INCOME AND EXPENSE, TOTAL OPERATING EXPENSES, TOTAL STATEMENT OF INCOME & EXPENSE, TOTAL CASH FLOW), each as {"label","weeks","ytd","ltd"}. A BLOCK TOTAL IS ONLY A LINE WHOSE LABEL STARTS WITH "TOTAL": a line labeled just "MISCELLANEOUS" inside the MISCELLANEOUS block (for example "MISCELLANEOUS 6.50-", a navigation charge) is a REGULAR line of that block — it goes in lines with section "misc", never in totalLines. A block can continue on the next page: its lines can be on one page and its TOTAL line on the next; read both. A block total keeps its printed sign and can be positive (TOTAL MISCELLANEOUS 10.68 when ADVANCES and PERSONAL PYMNT RCV credits exceed the charges). settlement.operating.recapLines = the other labeled amount rows, each as {"label","weeks","ytd","ltd"}: MILES; PRIOR WEEK BALANCE FORWARD below TOTAL STATEMENT, WITH ITS PRINTED SIGN as printed there ("1,202.92-" = the operator owed Prime last week; the accounts page prints the same balance without a sign — never take the sign from that page); SETTLEMENT TO OPERATOR from the balance-sheet page; PERF BD/EMGCY FD from the balance sheet; and the recap's payout line under WHATEVER label Prime printed (DIRECT DEPOSIT TO BANK, AMOUNT LOADED ON CARD, SETTLEMENT GROSS DUE TO/FROM OWNER, ...) — never require the words DIRECT DEPOSIT. NET AMOUNT DUE UNIT is the NET DUE (settlement.netPay), printed BEFORE interest and the balance forward: it is NEVER a recapLines row. Do not fill any single-number subtotal, payout, balance-forward, miles or YTD field of settlement.operating — the app takes every one of them from these labeled rows. NEGATIVE WEEK: TOTAL STATEMENT OF INCOME & EXPENSE and TOTAL CASH FLOW can be negative (a trailing minus, "812.40-") — keep the sign; when TOTAL CASH FLOW is negative the owner owes Prime: SETTLEMENT TO OPERATOR is printed as 0 or blank (weeks null when blank) and no payout line is printed — never copy TOTAL CASH FLOW, its absolute value or NET AMOUNT DUE UNIT into a payout row. payoutMethod = "bank" when the payout line pays a bank account, "card" when it is loaded on a card, "other" for any other payout label, "" when no payout line is printed. Some statements have NO cash-flow section and end at TOTAL STATEMENT OF INCOME & EXPENSE. Locate every section (accounts, interest, recap, statement, balance sheet) by its printed header, never by its page number: the same section can be on a different page from one statement to the next. weekEndingRaw = the WEEK ENDING printed in this statement page's own header, copied EXACTLY AS PRINTED, as text, character for character (e.g. "26/08/21") — never converted, reordered or completed; weekEnding stays "" (the app reads the printed text itself). weeksInService = WEEKS IN SERVICE from the page header. HELD BY CARRIER (owner decision 2026-10-29), each figure exactly as printed, 0 when not printed: escrowPriorBalance, escrowThisWeek and escrowBalance = the accounts page's PERFORMANCE BOND/EMER FUND PAID account: its prior/beginning balance, this week's amount and its ending balance (e.g. 400.00, 100.00, 500.00), unsigned as printed there; escrowInterestRatePct = the annual interest rate printed on the interest page for the deposit/overdraw interest, in percent as printed (3.83 for 3.83%). If the carrier is anything other than Prime Inc, or no such page exists in this document, leave settlement.operating entirely at its zero/empty defaults — do not estimate or reconstruct these figures from anywhere else in the document.\n`;
+  prompt += `\nAPPROVED ADDITION (Prime Inc operating statement, carrier-scoped, never applied to any other carrier; COLUMNS, owner decision 2026-11-03): If — and ONLY if — this document's own letterhead/header confirms the carrier is "Prime Inc" (or "PRIME INC", "Prime, Inc.") AND the document includes an OPERATING STATEMENT / "STATEMENT OF INCOME AND EXPENSE" page (commonly prepared by Perryman & Associates; columns WEEKS TOTAL, ACTUAL/MILE, YTD TOTAL, LTD TOTAL), populate settlement.operating from that page. COLUMNS: every row below is read as {"label","weeks","ytd","ltd"}: label = the row's text exactly as printed; weeks = the figure in the WEEKS TOTAL column, ytd = the figure in the YTD TOTAL column, ltd = the figure in the LTD TOTAL column, each copied as printed, as text, WITH its sign (a trailing minus stays: "1,997.82-"), or "" when that column is BLANK on that row. Take each figure from the column it is printed under, by its position below the column header: never move a figure into another column, never fill a blank WEEKS TOTAL cell with the YTD or LTD figure, and never read the ACTUAL/MILE column. A row printed with a single amount and no columns (a recap or balance-sheet page) puts that amount in weeks and "" in ytd and ltd. settlement.operating.lines = EVERY individual line of the statement, in page order, each as {"section","label","weeks","ytd","ltd"}: section is one of "revenue" (FREIGHT REVENUE and OTHER REVENUE lines, e.g. REVENUE FROM PRIME INC., EXTRA PAY, FUEL SURCG BILL, OUTSIDE LUMPER 1099 PAY, TOLL 1099 PAY), "fuel_oil_tax" (FUEL,OIL,TAX lines incl. the discount lines), "repair" (EQUIPMENT REPAIR AND MAINT. lines), "tires", "misc" (MISCELLANEOUS lines, e.g. TOLLS, LUMPERS, ADVANCES, WEIGHT TICKETS, QUALCOMM COST, WIRE CHARGE, TRIP XPRESS CHG, PERSONAL PYMNT RCV, OPERATOR TRK EXTRAS), "out_of_pocket", "fixed" (FIXED COST lines), "other" (OTHER INCOME AND EXPENSE lines, e.g. ACCRUAL PERFORMANCE BOND, INTEREST INCOME FROM DEPOSIT, INTEREST EXPENSE ON OVER DRAW, START UP & EXCESS MILEAGE COST). Never put a "TOTAL ..." subtotal line in lines. The MILES row (e.g. 3,316.00, printed inside the revenue block), WEEKS IN SERVICE, PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR and PERF BD/EMGCY FD are NOT dollar lines of any section — never put them in lines. settlement.operating.totalLines = EVERY printed line whose printed label STARTS WITH the word TOTAL (TOTAL FREIGHT REVENUE, TOTAL OTHER REVENUE, TOTAL REVENUE, TOTAL FUEL,OIL,TAX, TOTAL EQUIPMENT REPAIR AND MAINT., TOTAL TIRES, TOTAL MISCELLANEOUS, TOTAL VARIABLE COSTS, TOTAL OUT OF POCKET COSTS, TOTAL FIXED COST, TOTAL OTHER INCOME AND EXPENSE, TOTAL OPERATING EXPENSES, TOTAL STATEMENT OF INCOME & EXPENSE, TOTAL CASH FLOW), each as {"label","weeks","ytd","ltd"}. A BLOCK TOTAL IS ONLY A LINE WHOSE LABEL STARTS WITH "TOTAL": a line labeled just "MISCELLANEOUS" inside the MISCELLANEOUS block (for example "MISCELLANEOUS 6.50-", a navigation charge) is a REGULAR line of that block — it goes in lines with section "misc", never in totalLines. A block can continue on the next page: its lines can be on one page and its TOTAL line on the next; read both. A block total keeps its printed sign and can be positive (TOTAL MISCELLANEOUS 10.68 when ADVANCES and PERSONAL PYMNT RCV credits exceed the charges). settlement.operating.recapLines = the other labeled amount rows, each as {"label","weeks","ytd","ltd"}: MILES; PRIOR WEEK BALANCE FORWARD below TOTAL STATEMENT, WITH ITS PRINTED SIGN as printed there ("1,202.92-" = the operator owed Prime last week; the accounts page prints the same balance without a sign — never take the sign from that page); SETTLEMENT TO OPERATOR from the balance-sheet page; PERF BD/EMGCY FD from the balance sheet; and the recap's payout line under WHATEVER label Prime printed (DIRECT DEPOSIT TO BANK, AMOUNT LOADED ON CARD, SETTLEMENT GROSS DUE TO/FROM OWNER, ...) — never require the words DIRECT DEPOSIT. NET AMOUNT DUE UNIT is the NET DUE (settlement.netPay), printed BEFORE interest and the balance forward: it is NEVER a recapLines row. Do not fill any single-number subtotal, payout, balance-forward, miles or YTD field of settlement.operating — the app takes every one of them from these labeled rows. NEGATIVE WEEK: TOTAL STATEMENT OF INCOME & EXPENSE and TOTAL CASH FLOW can be negative (a trailing minus, "812.40-") — keep the sign; when TOTAL CASH FLOW is negative the owner owes Prime: SETTLEMENT TO OPERATOR is printed as 0 or blank (weeks "" when blank) and no payout line is printed — never copy TOTAL CASH FLOW, its absolute value or NET AMOUNT DUE UNIT into a payout row. payoutMethod = "bank" when the payout line pays a bank account, "card" when it is loaded on a card, "other" for any other payout label, "" when no payout line is printed. Some statements have NO cash-flow section and end at TOTAL STATEMENT OF INCOME & EXPENSE. Locate every section (accounts, interest, recap, statement, balance sheet) by its printed header, never by its page number: the same section can be on a different page from one statement to the next. weekEndingRaw = the WEEK ENDING printed in this statement page's own header, copied EXACTLY AS PRINTED, as text, character for character (e.g. "26/08/21") — never converted, reordered or completed; weekEnding stays "" (the app reads the printed text itself). weeksInService = WEEKS IN SERVICE from the page header. HELD BY CARRIER (owner decision 2026-10-29), each figure exactly as printed, 0 when not printed: escrowPriorBalance, escrowThisWeek and escrowBalance = the accounts page's PERFORMANCE BOND/EMER FUND PAID account: its prior/beginning balance, this week's amount and its ending balance (e.g. 400.00, 100.00, 500.00), unsigned as printed there; escrowInterestRatePct = the annual interest rate printed on the interest page for the deposit/overdraw interest, in percent as printed (3.83 for 3.83%). If the carrier is anything other than Prime Inc, or no such page exists in this document, leave settlement.operating entirely at its zero/empty defaults — do not estimate or reconstruct these figures from anywhere else in the document.\n`;
   // BANK DEPOSIT IS READ, NEVER COMPUTED (owner decision 2026-10-13).
   prompt += `\nAPPROVED ADDITION (deposit amount, every carrier, owner decision 2026-10-13): settlement.depositAmount = the dollar amount the statement says was paid out to the driver/owner (e.g. "DIRECT DEPOSIT TO BANK ...", "AMOUNT LOADED ON CARD ...", or any other paid-to-owner line), when such a line is printed; leave it 0 when no payout line is printed — never compute it. settlement.payoutMethod = "bank", "card" or "other" for that line ("" when none is printed). Copy the AMOUNT only: never copy a routing number, account number or any other bank digits into ANY field, including summary and descriptions. reimbursementItems[].code = the line's own printed 2-letter code (e.g. "PR", "RF", "WI") when one is printed at the start of the line, else "".\n`;
   // TRAILING-MINUS CREDITS (golden settlement pass, owner decision
@@ -837,7 +841,13 @@ async function callAnthropicMessages(
   timeoutMs: number,
   maxAttempts: number,
   model?: { model: string; maxTokens: number },
+  schema?: JsonSchema | null,
 ): Promise<{ resp: Response } | { errorType: "timeout" | "internal"; message: string }> {
+  // STRUCTURED OUTPUT (R4, owner decision 2026-11-03): every call sends
+  // output_config.format json_schema (outputSchema.ts). A 400 that refuses
+  // the schema itself is retried once without it, so a schema problem can
+  // never stop an import (logged as SCHEMA_REJECTED).
+  let useSchema = !!schema;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -854,10 +864,20 @@ async function callAnthropicMessages(
           model: model?.model ?? ANTHROPIC_MODEL,
           max_tokens: model?.maxTokens ?? ANTHROPIC_MAX_TOKENS,
           messages: [{ role: "user", content: [contentBlock, { type: "text", text: prompt }] }],
+          ...(useSchema && schema ? { output_config: { format: { type: "json_schema", schema } } } : {}),
         }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
+      if (useSchema && resp.status === 400) {
+        const bodyText = await resp.clone().text().catch(() => "");
+        if (isSchemaRejection(resp.status, bodyText)) {
+          console.warn(`[ai-import] SCHEMA_REJECTED: retrying without output_config: ${bodyText.slice(0, 300)}`);
+          useSchema = false;
+          attempt--;
+          continue;
+        }
+      }
       // MEASURED TIMING (owner decision 2026-08-03, item 6 of the "still
       // failing" bug report): there is no way to make a real Anthropic
       // API call from a dev sandbox to measure actual latency — this logs
@@ -869,7 +889,7 @@ async function callAnthropicMessages(
       // never on a 4xx (bad request/auth/billing/Anthropic's own rate
       // limit), which a retry cannot fix.
       if (!resp.ok && resp.status >= 500 && attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+        await new Promise((r) => setTimeout(r, backoffMs(attempt)));
         continue;
       }
       return { resp };
@@ -890,7 +910,7 @@ async function callAnthropicMessages(
         };
       }
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+        await new Promise((r) => setTimeout(r, backoffMs(attempt)));
         continue;
       }
       console.error(`[ai-import] Anthropic call failed after ${maxAttempts} attempt(s): ${(err as Error).message}`);
@@ -920,6 +940,10 @@ async function extractOnePass(
   timeoutMs: number,
   maxAttempts: number,
   model?: { model: string; maxTokens: number },
+  // R4: the reply schema. undefined = any docType the prompt prints
+  // (outputSchema.ts extractionOutputSchema); a caller that knows the shape
+  // passes it (a settlement page, the classification reply).
+  schema?: JsonSchema | null,
 ): Promise<ExtractOneResult> {
   // GLOBAL RATE-LIMIT GATE (owner decision 2026-08-24) — checked BEFORE
   // ever calling Anthropic, on every single call this function makes
@@ -938,7 +962,8 @@ async function extractOnePass(
     };
   }
 
-  const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt, timeoutMs, maxAttempts, model);
+  const replySchema = schema === undefined ? extractionOutputSchema(prompt, null) : schema;
+  const callResult = await callAnthropicMessages(anthropicKey, contentBlock, prompt, timeoutMs, maxAttempts, model, replySchema);
   if ("errorType" in callResult) return callResult;
   const anthropicResp = callResult.resp;
 
@@ -1024,7 +1049,7 @@ async function extractOnePass(
     return {
       errorType: "parse_failed",
       message: "Could not parse a JSON extraction from the model's response.",
-      extra: { raw: raw.slice(0, 2000) },
+      extra: { raw: raw.slice(0, FAILED_REPLY_MAX_CHARS) },
     };
   }
 
@@ -1703,11 +1728,20 @@ function buildJobDeps(
     },
   };
 
-  async function call(contentBlock: Record<string, unknown>, text: string, timeoutMs: number, model?: { model: string; maxTokens: number }): Promise<ModelOutcome> {
+  async function call(
+    contentBlock: Record<string, unknown>,
+    text: string,
+    timeoutMs: number,
+    model?: { model: string; maxTokens: number },
+    schema?: JsonSchema | null,
+  ): Promise<ModelOutcome> {
     const started = performance.now();
-    const r = await extractOnePass(anthropicKey, contentBlock, text, timeoutMs, MAX_ANTHROPIC_ATTEMPTS, model);
+    const r = await extractOnePass(anthropicKey, contentBlock, text, timeoutMs, MAX_ANTHROPIC_ATTEMPTS, model, schema);
     console.log(`[ai-import] INSTRUMENT job=${jobId} model=${model?.model ?? ANTHROPIC_MODEL} durationMs=${Math.round(performance.now() - started)} status=${"errorType" in r ? r.errorType : "success"}`);
-    if ("errorType" in r) return { errorType: r.errorType as ModelFailure["errorType"], message: r.message, retryAfterSeconds: r.extra?.retryAfterSeconds as number | undefined };
+    if ("errorType" in r) {
+      const rawReply = typeof r.extra?.raw === "string" && r.extra.raw ? (r.extra.raw as string) : undefined;
+      return { errorType: r.errorType as ModelFailure["errorType"], message: r.message, retryAfterSeconds: r.extra?.retryAfterSeconds as number | undefined, ...(rawReply ? { rawReply } : {}) };
+    }
     return { extraction: r.extraction };
   }
 
@@ -1730,11 +1764,13 @@ function buildJobDeps(
       if (Math.floor((data.length * 3) / 4) > CLASSIFY_WINDOW_MAX_BYTES) {
         return { errorType: "oversized", message: `Page ${start} alone is larger than ${CLASSIFY_WINDOW_MAX_BYTES / (1024 * 1024)} MB.` };
       }
+      const classifyText = buildClassifyPrompt(start, end, plan.totalPages);
       const r = await call(
         { type: "document", source: { type: "base64", media_type: "application/pdf", data } },
-        buildClassifyPrompt(start, end, plan.totalPages),
+        classifyText,
         timeoutMs,
         { model: CLASSIFY_MODEL, maxTokens: CLASSIFY_MAX_TOKENS },
+        replyOutputSchema(classifyText, '{"carrier":'),
       );
       if ("errorType" in r) return r;
       const parsed = parseClassification(r.extraction, start, end);
@@ -1744,7 +1780,9 @@ function buildJobDeps(
     async readPage(page, kind, timeoutMs) {
       const data = await pdf.rangeBase64(page, page);
       const text = prompt + buildChunkPromptAddendum({ start: page, end: page }, plan.totalPages) + attachmentHint(kind);
-      return call({ type: "document", source: { type: "base64", media_type: "application/pdf", data } }, text, timeoutMs);
+      // Every page of a settlement PDF (content or stapled attachment) is
+      // read into the settlement shape.
+      return call({ type: "document", source: { type: "base64", media_type: "application/pdf", data } }, text, timeoutMs, undefined, extractionOutputSchema(text, "settlement"));
     },
   };
 

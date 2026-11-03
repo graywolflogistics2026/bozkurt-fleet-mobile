@@ -192,7 +192,9 @@ export type PageResult = {
   // behind the cause — parse_failed (the reply ended normally but held no
   // valid JSON), oversized, bad_request, truncated (max_tokens),
   // model_refusal, timeout — so a report names it, never just "unreadable".
-  error?: { type: PageErrorType; message: string; timeoutMs?: number; detail?: ModelErrorType };
+  // rawReply (R4, 2026-11-03): the scrubbed reply text (at most 2000
+  // characters) of the last failed attempt, when the model answered.
+  error?: { type: PageErrorType; message: string; timeoutMs?: number; detail?: ModelErrorType; rawReply?: string };
   finishedAt?: string;
   // Set while a model call for this page is running. A page still marked
   // in flight when a later run starts was cut off by a stopped worker: that
@@ -457,7 +459,12 @@ export type ModelErrorType =
   | 'internal'
   | 'bad_request'
   | 'oversized';
-export type ModelFailure = { errorType: ModelErrorType; message: string; retryAfterSeconds?: number };
+// rawReply (R4, 2026-11-03): the model's own reply text when it could not
+// be used (parse_failed), kept scrubbed on the page for Diagnostics. Same
+// limit as outputSchema.ts FAILED_REPLY_MAX_CHARS (pure modules import
+// nothing).
+const FAILED_REPLY_MAX_CHARS = 2000;
+export type ModelFailure = { errorType: ModelErrorType; message: string; retryAfterSeconds?: number; rawReply?: string };
 export type ModelOutcome = { extraction: unknown } | ModelFailure;
 export type ClassifyOutcome = { pages: ClassifiedPage[]; carrier: string | null; windowEnd: number } | ModelFailure;
 
@@ -1138,7 +1145,13 @@ export async function runJobStep(d: JobDeps): Promise<StepResult> {
         kind: p.kind,
         attempts,
         run: plan.runs,
-        error: { type: pageErrorType(r.errorType), message: d.scrub(r.message), timeoutMs: r.errorType === 'timeout' ? timeoutMs : undefined, detail: r.errorType },
+        error: {
+          type: pageErrorType(r.errorType),
+          message: d.scrub(r.message),
+          timeoutMs: r.errorType === 'timeout' ? timeoutMs : undefined,
+          detail: r.errorType,
+          ...(r.rawReply ? { rawReply: String(d.scrub(r.rawReply.slice(0, FAILED_REPLY_MAX_CHARS))) } : {}),
+        },
       };
     }
     if (!(await d.store.putPage(d.owner, p.page, next))) throw new LeaseLost();
