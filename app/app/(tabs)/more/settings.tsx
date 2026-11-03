@@ -27,7 +27,8 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { ENABLED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '@/src/i18n/config';
 import { setAppLocale, resetAppLocaleToDevice } from '@/src/i18n';
 import { getBuildInfo, formatBuildInfoLine } from '@/src/lib/buildInfo';
-import { checkForUpdateNow, downloadAndApplyUpdate, type CheckForUpdateResult } from '@/src/lib/checkForUpdate';
+import { checkForUpdateNow, restartToApplyUpdate, type CheckForUpdateResult } from '@/src/lib/checkForUpdate';
+import { UpdateSlots } from '@/src/components/UpdateStatus';
 import { isOwnerGrantedPlan, isOwnerAccount } from '@/src/entitlement/hasFullAccess';
 import { buildSupportMailtoUrl } from '@/src/lib/supportEmail';
 import { SUPPORT_EMAIL } from '@/src/brand';
@@ -143,7 +144,7 @@ export default function Settings() {
   }
   async function handleApplyUpdate() {
     setApplyUpdateLoading(true);
-    const result = await downloadAndApplyUpdate();
+    const result = await restartToApplyUpdate();
     // A success reloads the JS context (reloadAsync()) before this line
     // would ever run in practice — this only fires on a genuine failure.
     if (!result.success) {
@@ -668,7 +669,7 @@ export default function Settings() {
                   color:
                     checkUpdateResult.status === 'error'
                       ? colors.red
-                      : checkUpdateResult.status === 'update-available'
+                      : checkUpdateResult.status === 'update-available' || checkUpdateResult.status === 'downloaded'
                         ? colors.green
                         : checkUpdateResult.status === 'disabled'
                           ? colors.orange
@@ -679,20 +680,24 @@ export default function Settings() {
               >
                 {checkUpdateResult.status === 'error'
                   ? t('settings.checkForUpdateError')
-                  : checkUpdateResult.status === 'update-available'
+                  : checkUpdateResult.status === 'downloaded'
+                    ? t('settings.checkForUpdateDownloaded')
+                    : checkUpdateResult.status === 'update-available'
                     ? t('settings.checkForUpdateAvailable')
                     : checkUpdateResult.status === 'disabled'
                       ? t('settings.checkForUpdateDisabled')
                       : t('settings.checkForUpdateUpToDate')}
               </Text>
               <MutedText style={{ marginTop: 2, fontSize: typography.size.xs }}>{checkUpdateResult.message}</MutedText>
-              {checkUpdateResult.status === 'update-available' && (
+              {checkUpdateResult.status === 'downloaded' && (
                 <View style={{ marginTop: spacing.sm }}>
-                  <PrimaryButton title={t('settings.applyUpdateButton')} onPress={handleApplyUpdate} loading={applyUpdateLoading} />
+                  <PrimaryButton title={t('settings.restartNow')} onPress={handleApplyUpdate} loading={applyUpdateLoading} />
                 </View>
               )}
             </View>
           )}
+          {/* Running vs downloaded, each with id and date (UPDATE VISIBILITY FIX). */}
+          {checkUpdateResult && <UpdateSlots />}
         </Card>
 
         {/* RUNTIME VISIBILITY (owner decision 2026-07-30): "which JS is

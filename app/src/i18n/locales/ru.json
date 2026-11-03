@@ -882,6 +882,13 @@
     "checkForUpdateUpToDate": "У вас последняя версия",
     "applyUpdateButton": "Скачать и перезапустить",
     "applyUpdateFailedTitle": "Не удалось применить обновление",
+    "checkForUpdateDownloaded": "Обновление загружено",
+    "restartNow": "Перезапустить",
+    "later": "Позже",
+    "updateRunning": "Работает: {{update}}",
+    "updateDownloaded": "Загружено: {{update}}",
+    "updateNoneDownloaded": "нет",
+    "updatePendingLine": "Загружено новое обновление; перезапустите приложение, чтобы применить его.",
     "weeklyGoalLabel": "Недельная Цель по Прибыли",
     "weeklyGoalSuggestedNote": "Рекомендуется: {{amount}}, на основе последних 4 недель",
     "aiUsageTitle": "Использование ИИ",
@@ -3224,7 +3231,8 @@
     "running": "Проверяем… (до минуты)",
     "shareReport": "Поделиться отчётом",
     "serverNotUpdated": "На сервере импорта ещё нет проверки системы. Разверните ai-import заново и запустите проверку снова.",
-    "checkFailed": "Проверка не завершилась ({{code}}). Попробуйте ещё раз."
+    "checkFailed": "Проверка не завершилась ({{code}}). Попробуйте ещё раз.",
+    "apiErrors": "Не удалось прочитать"
   },
   "truckOwnership": {
     "label": "Владение грузовиком",

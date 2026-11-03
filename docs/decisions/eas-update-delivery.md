@@ -212,3 +212,30 @@ Moved verbatim from CLAUDE.md on 2026-10-13 (original file order).
   Ships via a normal `eas update` for every device that's already
   receiving them; needs a native rebuild for the one that isn't, per the
   circularity note above.
+
+## Update visibility fix (owner decision 2026-11-03)
+
+OTA delivery worked (build eabb0ee1: channel preview, runtime 1.1.0; the
+Diagnostics screen itself arrived by OTA), but Settings showed "vunknown ·
+embedded build (no OTA update) · channel: none · runtime: unknown". Those
+are exactly the FALLBACK values of `getBuildInfo()`: one try wrapped every
+read, and `Constants.expoConfig` can throw (expo-constants `getManifest()`
+throws ERR_CONSTANTS_MANIFEST_UNAVAILABLE in a standalone build with no
+manifest, `node_modules/expo-constants/build/Constants.js`), so one throw
+hid every real value. Now:
+- `app/src/lib/buildInfo.ts` reads every value on its own guard and names
+  any API that threw. Version/build come from expo-application (lazy
+  require, it throws at import when the native module is missing), then
+  Constants.expoConfig. Update id/date/channel/runtime/isEmbeddedLaunch
+  come from expo-updates. The commit comes from `extra.gitCommitHash`,
+  which app.config.js now stamps at `eas update` time too (`git rev-parse
+  HEAD`), else from the running update's manifest.
+- A null value prints the API name ("Updates.channel=null"), never
+  "unknown". "Embedded build" only when isEmbeddedLaunch AND no updateId.
+- Check for Update downloads a found update and offers Restart now; it
+  then shows the RUNNING update and the newest DOWNLOADED one (id + date,
+  `UpdateStatus.tsx`, expo-updates `useUpdates()`). ON_LOAD is kept; once
+  a launch has downloaded an update, a line "A new update was downloaded;
+  restart the app to apply" shows over the tabs.
+- `updatesConfigGuard.test.ts` fails if a build profile in eas.json has no
+  channel or app.config loses the runtimeVersion policy.

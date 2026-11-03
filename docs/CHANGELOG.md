@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- UPDATE VISIBILITY FIX (owner 2026-11-03): Settings footer + Diagnostics
+  read every value on its own guard (one throwing Constants.expoConfig used
+  to drop all of them to vunknown/embedded/none). Version from
+  expo-application, update/channel/runtime from expo-updates, commit stamped
+  at eas update time too. Null prints the API name. Check for Update
+  downloads + Restart now, shows running vs downloaded; a pending-update line
+  over the tabs. Guard test for eas.json channels + runtimeVersion policy.
+  No SQL, no redeploy; eas update.
 - RE-READ RULES (owner 2026-11-03, week 07/17 loop): the JOB decides a
   re-read before it is final (jobVerdictRunner.ts -> ai-import job_verdict
   -> jobEngine decideJobVerdict; page_plan.review, no SQL). Max 3 reads per

@@ -1,51 +1,83 @@
 // Pure half of buildInfo.ts (RUNTIME VISIBILITY, owner decision
 // 2026-07-30) — deliberately has ZERO imports of expo-constants/
-// expo-updates, so it's unit-testable in a plain Node environment and
-// safely importable from anywhere (including ScreenErrorBoundary, the
-// last line of defense) without adding a new native-module dependency to
-// worry about.
+// expo-updates/expo-application, so it's unit-testable in a plain Node
+// environment and safely importable from anywhere (including
+// ScreenErrorBoundary, the last line of defense).
+//
+// UPDATE VISIBILITY FIX (owner decision 2026-11-03): the device showed
+// "vunknown · embedded build (no OTA update) · channel none · runtime
+// unknown" while it was running an OTA update on channel preview, runtime
+// 1.1.0. Every field had fallen back at once because ONE read threw
+// (Constants.expoConfig -> getManifest() throws
+// ERR_CONSTANTS_MANIFEST_UNAVAILABLE in a standalone build without a
+// manifest) inside a single try. Now every value is read on its own; a
+// value an API returned as null is printed as that API's name
+// ("Updates.channel=null"), never "unknown"; "embedded build" only when
+// Updates.isEmbeddedLaunch is true AND Updates.updateId is null.
 export type BuildInfo = {
+  // The display version: Application.nativeApplicationVersion, else
+  // Constants.expoConfig.version, else the API name with "=null".
   version: string;
+  // Application.nativeBuildVersion (Android versionCode).
+  buildVersion?: string | null;
   updateId: string | null;
   updateIdShort: string | null;
+  // Updates.createdAt as an ISO string.
+  updateCreatedAt?: string | null;
   channel: string | null;
   runtimeVersion: string | null;
   gitCommitHash: string | null;
   gitCommitHashShort: string | null;
   isEmbeddedLaunch: boolean;
+  // API names whose read threw (shown so a throw is never invisible).
+  errors?: string[];
 };
+
+export const NULL_NAMES = {
+  version: 'Application.nativeApplicationVersion=null',
+  updateId: 'Updates.updateId=null',
+  channel: 'Updates.channel=null',
+  runtimeVersion: 'Updates.runtimeVersion=null',
+  gitCommitHash: 'extra.gitCommitHash=null',
+} as const;
 
 export function shorten(id: string | null | undefined, length = 8): string | null {
   return id ? id.slice(0, length) : null;
 }
 
-// One-line summary — used identically in Settings' footer and
-// ScreenErrorBoundary's crash screen so the two can never disagree about
-// the format.
-//
-// CHANNEL + RUNTIME VERSION (owner decision, device report: "vunknown ·
-// embedded build (no OTA update)" — no EAS update has ever reached this
-// device, and the prior line format gave no way to tell WHY). `channel`
-// (`expo-updates`' own `Updates.channel`, already captured by
-// getBuildInfo() but never actually rendered until now) is the single
-// most decisive signal: `null` here means THIS BUILD has no EAS Update
-// channel baked in at all (per expo-updates' own docs, this is always
-// null for Expo Go and a development-client build) — such a build can
-// NEVER receive an OTA update regardless of what's published to any
-// branch, no channel/branch-mapping investigation needed. A non-null
-// channel that still never receives updates instead points at a
-// channel/branch mismatch or a runtimeVersion mismatch (`runtimeVersion`,
-// also `expo-updates`' own value — compare it directly against
-// `eas update:view <id>`'s own reported runtime version for whatever was
-// last published; a mismatch there is exactly what makes an update
-// "compatible" or not for a given build, independent of channel).
-// Segments after `commit` are appended only when present — never a blank
-// placeholder — matching this function's own pre-existing convention.
+// "embedded build" only when expo-updates says the embedded bundle launched
+// AND there is no update id.
+export function isEmbeddedBuild(info: Pick<BuildInfo, 'isEmbeddedLaunch' | 'updateId' | 'updateIdShort'>): boolean {
+  return info.isEmbeddedLaunch && !info.updateId && !info.updateIdShort;
+}
+
+// "2026-11-03 14:05" (UTC) — a stable, locale-free stamp for reports. Takes
+// a full timestamp (Updates.createdAt), never a date-only value.
+export function stamp(at: string | null | undefined): string | null {
+  if (!at) return null;
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 16).replace('T', ' ');
+}
+
+// The update segment: the running update's id and date, "embedded build",
+// or the API name that returned null.
+export function updateText(info: BuildInfo): string {
+  if (info.updateIdShort) {
+    const at = stamp(info.updateCreatedAt);
+    return at ? `update ${info.updateIdShort} (${at} UTC)` : `update ${info.updateIdShort}`;
+  }
+  return isEmbeddedBuild(info) ? 'embedded build (no OTA update)' : `update ${NULL_NAMES.updateId}`;
+}
+
+// One-line summary — used identically in Settings' footer, the crash
+// screen and every Send report, so they can never disagree.
 export function formatBuildInfoLine(info: BuildInfo): string {
-  const parts = [`v${info.version}`];
-  parts.push(info.updateIdShort ? `update ${info.updateIdShort}` : 'embedded build (no OTA update)');
-  if (info.gitCommitHashShort) parts.push(`commit ${info.gitCommitHashShort}`);
-  parts.push(`channel ${info.channel ?? 'none'}`);
-  parts.push(`runtime ${info.runtimeVersion ?? 'unknown'}`);
+  const parts = [info.buildVersion ? `v${info.version} (build ${info.buildVersion})` : `v${info.version}`];
+  parts.push(updateText(info));
+  parts.push(`commit ${info.gitCommitHashShort ?? NULL_NAMES.gitCommitHash}`);
+  parts.push(`channel ${info.channel ?? NULL_NAMES.channel}`);
+  parts.push(`runtime ${info.runtimeVersion ?? NULL_NAMES.runtimeVersion}`);
+  if (info.errors && info.errors.length > 0) parts.push(`threw: ${info.errors.join(', ')}`);
   return parts.join(' · ');
 }

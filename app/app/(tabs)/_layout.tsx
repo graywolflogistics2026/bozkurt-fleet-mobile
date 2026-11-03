@@ -10,6 +10,7 @@ import { MenuSheet } from '@/src/components/MenuSheet';
 import { WideSidebar } from '@/src/components/WideSidebar';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
 import { ImportJobsChip } from '@/src/components/ImportJobsChip';
+import { PendingUpdateBanner } from '@/src/components/UpdateStatus';
 import { useAuth } from '@/src/context/AuthContext';
 import { useAlertsData } from '@/src/data/alerts';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -284,6 +285,7 @@ export default function TabsLayout() {
           status is visible (and its "ready" notification fires) no matter
           where the user navigates to. */}
       <ImportJobsChip />
+      <PendingUpdateBanner />
     </>
   );
 
@@ -294,6 +296,7 @@ export default function TabsLayout() {
       <WideSidebar />
       <View style={{ flex: 1 }}>{tabs}</View>
       <ImportJobsChip />
+      <PendingUpdateBanner />
     </View>
   );
 }

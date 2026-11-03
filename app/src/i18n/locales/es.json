@@ -882,6 +882,13 @@
     "checkForUpdateUpToDate": "Estás actualizado",
     "applyUpdateButton": "Descargar y Reiniciar",
     "applyUpdateFailedTitle": "No se pudo aplicar la actualización",
+    "checkForUpdateDownloaded": "Actualización descargada",
+    "restartNow": "Reiniciar ahora",
+    "later": "Más tarde",
+    "updateRunning": "En uso: {{update}}",
+    "updateDownloaded": "Descargada: {{update}}",
+    "updateNoneDownloaded": "ninguna",
+    "updatePendingLine": "Se descargó una nueva actualización; reinicie la app para aplicarla.",
     "weeklyGoalLabel": "Meta Semanal de Ganancias",
     "weeklyGoalSuggestedNote": "Sugerido: {{amount}}, según tus últimas 4 semanas",
     "aiUsageTitle": "Uso de IA",
@@ -3224,7 +3231,8 @@
     "running": "Revisando… (hasta un minuto)",
     "shareReport": "Compartir informe",
     "serverNotUpdated": "El servidor de importación aún no tiene la revisión del sistema. Vuelva a desplegar ai-import y ejecute la revisión otra vez.",
-    "checkFailed": "La revisión no terminó ({{code}}). Inténtelo de nuevo."
+    "checkFailed": "La revisión no terminó ({{code}}). Inténtelo de nuevo.",
+    "apiErrors": "No se pudo leer"
   },
   "truckOwnership": {
     "label": "Propiedad del camión",

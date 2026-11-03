@@ -282,7 +282,7 @@ describe('Share report text', () => {
       updatedAt: '2026-10-31T00:00:00Z',
       completedAt: null,
     }));
-    const sections = buildReportSections({ ...CLIENT, isEmbeddedLaunch: true, scannerPresent: false }, null, jobs, enT);
+    const sections = buildReportSections({ ...CLIENT, isEmbeddedLaunch: true, updateId: null, updateIdShort: null, scannerPresent: false }, null, jobs, enT);
     const text = formatReportText(sections, 'r', 'now');
     expect(text).toContain('🔴 Update: embedded build (no OTA update)');
     expect(text).toContain('🔴 Document scanner: no');

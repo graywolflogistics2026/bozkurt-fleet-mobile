@@ -1,61 +1,84 @@
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
-import { shorten, type BuildInfo } from '@/src/lib/buildInfoFormat';
+import { NULL_NAMES, shorten, type BuildInfo } from '@/src/lib/buildInfoFormat';
 
 export type { BuildInfo } from '@/src/lib/buildInfoFormat';
 export { formatBuildInfoLine } from '@/src/lib/buildInfoFormat';
 
-// RUNTIME VISIBILITY (owner decision 2026-07-30): "which JS is on this
-// device" should never be a guess — surfaced in Settings' footer AND on
-// ScreenErrorBoundary's crash screen, both reading from this one module.
-// `updateId` is EAS Update's own artifact id for the currently-running JS
-// bundle — the single most reliable "which bundle actually loaded"
-// signal, stamped by the update pipeline itself. `gitCommitHash` comes
-// from app.config.js's build-time injection of
-// EAS_BUILD_GIT_COMMIT_HASH (an env var EAS Build sets automatically on
-// every cloud build; null for a local dev-client run).
+// RUNTIME VISIBILITY (owner decision 2026-07-30; UPDATE VISIBILITY FIX
+// 2026-11-03): "which JS is on this device" should never be a guess. Read
+// by Settings' footer, Diagnostics, the crash screen and every report.
 //
-// Deliberately defensive: expo-constants/expo-updates are stable,
-// always-linked core Expo modules (unlike the reanimated/gesture-handler
-// stack behind the Customize Dashboard crash-on-mount bug), but this
-// function is called from ScreenErrorBoundary — the LAST line of
-// defense — so it must never itself become a new way to throw. Every
-// field falls back to a safe placeholder instead of propagating an
-// exception.
-const FALLBACK: BuildInfo = {
-  version: 'unknown',
-  updateId: null,
-  updateIdShort: null,
-  channel: null,
-  runtimeVersion: null,
-  gitCommitHash: null,
-  gitCommitHashShort: null,
-  isEmbeddedLaunch: true,
-};
+// Every value is read on its OWN guard. Before 2026-11-03 one try wrapped
+// them all, and Constants.expoConfig — whose getter throws
+// ERR_CONSTANTS_MANIFEST_UNAVAILABLE in a standalone build that has no
+// manifest — dropped every field to "unknown / embedded / none" at once,
+// on a device that was running an OTA update. A read that throws is named
+// in `errors`; it never hides the other values.
+//
+// Sources:
+// - version / build: expo-application (nativeApplicationVersion /
+//   nativeBuildVersion), required lazily — its module throws at import if
+//   the native module is missing, so a static import could crash the app;
+//   then Constants.expoConfig.version.
+// - update: expo-updates (updateId, createdAt, channel, runtimeVersion,
+//   isEmbeddedLaunch).
+// - commit: app.config.js `extra.gitCommitHash` (EAS_BUILD_GIT_COMMIT_HASH
+//   on a build; `git rev-parse HEAD` at `eas update` time), read from
+//   Constants.expoConfig, else from the running update's own manifest.
+
+type ApplicationModule = { nativeApplicationVersion: string | null; nativeBuildVersion: string | null };
+
+function read<T>(name: string, errors: string[], fn: () => T): T | null {
+  try {
+    const v = fn();
+    return v === undefined ? null : v;
+  } catch {
+    errors.push(name);
+    return null;
+  }
+}
+
+function application(errors: string[]): ApplicationModule | null {
+  return read('expo-application', errors, () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-application') as ApplicationModule;
+  });
+}
+
+function text(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() !== '' ? v : null;
+}
 
 export function getBuildInfo(): BuildInfo {
-  try {
-    const version = Constants.expoConfig?.version ?? 'unknown';
-    const gitCommitHash = (Constants.expoConfig?.extra?.gitCommitHash as string | null | undefined) ?? null;
-    const updateId = Updates.updateId ?? null;
-    return {
-      version,
-      updateId,
-      updateIdShort: shorten(updateId),
-      channel: Updates.channel ?? null,
-      // RUNTIME VERSION VISIBILITY (owner decision, device report: "vunknown
-      // · embedded build" — see buildInfoFormat.ts's own header comment on
-      // formatBuildInfoLine() for the full reasoning). Updates.runtimeVersion
-      // is expo-updates' own value for the CURRENTLY RUNNING binary — compare
-      // it directly against whatever `eas update:view` reports for the
-      // update you expect to be live; a mismatch is exactly what makes an
-      // OTA update incompatible with this build regardless of channel.
-      runtimeVersion: Updates.runtimeVersion ?? null,
-      gitCommitHash,
-      gitCommitHashShort: shorten(gitCommitHash, 7),
-      isEmbeddedLaunch: Updates.isEmbeddedLaunch,
-    };
-  } catch {
-    return FALLBACK;
-  }
+  const errors: string[] = [];
+  const app = application(errors);
+  const nativeVersion = text(read('Application.nativeApplicationVersion', errors, () => app?.nativeApplicationVersion));
+  const buildVersion = text(read('Application.nativeBuildVersion', errors, () => app?.nativeBuildVersion));
+  const expoConfig = read('Constants.expoConfig', errors, () => Constants.expoConfig);
+  const configVersion = text(expoConfig?.version);
+  const updateId = text(read('Updates.updateId', errors, () => Updates.updateId));
+  const createdAt = read('Updates.createdAt', errors, () => Updates.createdAt);
+  const manifestCommit = read('Updates.manifest', errors, () => {
+    const m = Updates.manifest as { extra?: { expoClient?: { extra?: { gitCommitHash?: unknown } } } } | null | undefined;
+    return m?.extra?.expoClient?.extra?.gitCommitHash;
+  });
+  const gitCommitHash = text(expoConfig?.extra?.gitCommitHash) ?? text(manifestCommit);
+  const isEmbeddedLaunch = read('Updates.isEmbeddedLaunch', errors, () => Updates.isEmbeddedLaunch) === true;
+  return {
+    version: nativeVersion ?? configVersion ?? NULL_NAMES.version,
+    buildVersion,
+    updateId,
+    updateIdShort: shorten(updateId),
+    updateCreatedAt: createdAt instanceof Date && !Number.isNaN(createdAt.getTime()) ? createdAt.toISOString() : null,
+    channel: text(read('Updates.channel', errors, () => Updates.channel)),
+    // Updates.runtimeVersion is expo-updates' own value for the running
+    // binary — compare it against `eas update:list` for the update you
+    // expect; a mismatch makes an update incompatible regardless of channel.
+    runtimeVersion: text(read('Updates.runtimeVersion', errors, () => Updates.runtimeVersion)),
+    gitCommitHash,
+    gitCommitHashShort: shorten(gitCommitHash, 7),
+    isEmbeddedLaunch,
+    errors,
+  };
 }

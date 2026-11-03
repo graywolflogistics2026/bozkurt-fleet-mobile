@@ -9,6 +9,22 @@
 // simply won't have this env var set — buildInfo.ts treats that as
 // "unknown," never throws. Everything else below is copied verbatim from
 // the app.json this replaces.
+//
+// UPDATE VISIBILITY FIX (owner 2026-11-03): `eas update` runs this file on
+// the owner's PC, where EAS_BUILD_GIT_COMMIT_HASH is not set, so the commit
+// is also read from git there and stamped into the update's own manifest
+// (extra.gitCommitHash). Null only when neither exists.
+function gitCommitHash() {
+  if (process.env.EAS_BUILD_GIT_COMMIT_HASH) return process.env.EAS_BUILD_GIT_COMMIT_HASH;
+  try {
+    const out = require('child_process').execSync('git rev-parse HEAD', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] });
+    const hash = String(out).trim();
+    return /^[0-9a-f]{7,40}$/.test(hash) ? hash : null;
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   expo: {
     name: 'BOZKA TRUCKING AI',
@@ -93,7 +109,7 @@ module.exports = {
       eas: {
         projectId: '965930e3-3b95-438a-81a5-f1a0c7136754',
       },
-      gitCommitHash: process.env.EAS_BUILD_GIT_COMMIT_HASH || null,
+      gitCommitHash: gitCommitHash(),
     },
     runtimeVersion: {
       policy: 'appVersion',

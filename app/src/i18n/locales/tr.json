@@ -882,6 +882,13 @@
     "checkForUpdateUpToDate": "Güncelsiniz",
     "applyUpdateButton": "İndir ve Yeniden Başlat",
     "applyUpdateFailedTitle": "Güncelleme uygulanamadı",
+    "checkForUpdateDownloaded": "Güncelleme indirildi",
+    "restartNow": "Şimdi yeniden başlat",
+    "later": "Sonra",
+    "updateRunning": "Çalışan: {{update}}",
+    "updateDownloaded": "İndirilen: {{update}}",
+    "updateNoneDownloaded": "yok",
+    "updatePendingLine": "Yeni bir güncelleme indirildi; uygulamak için uygulamayı yeniden başlatın.",
     "weeklyGoalLabel": "Haftalık Kâr Hedefi",
     "weeklyGoalSuggestedNote": "Önerilen: {{amount}}, son 4 haftana göre",
     "aiUsageTitle": "AI Kullanımı",
@@ -3224,7 +3231,8 @@
     "running": "Kontrol ediliyor… (bir dakikaya kadar)",
     "shareReport": "Raporu paylaş",
     "serverNotUpdated": "İçe aktarma sunucusunda sistem kontrolü henüz yok. ai-import’u yeniden yükleyin, sonra kontrolü tekrar çalıştırın.",
-    "checkFailed": "Kontrol tamamlanmadı ({{code}}). Tekrar deneyin."
+    "checkFailed": "Kontrol tamamlanmadı ({{code}}). Tekrar deneyin.",
+    "apiErrors": "Okunamadı"
   },
   "truckOwnership": {
     "label": "Kamyon sahipliği",

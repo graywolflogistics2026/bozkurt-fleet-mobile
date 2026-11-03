@@ -882,6 +882,13 @@
     "checkForUpdateUpToDate": "You're up to date",
     "applyUpdateButton": "Download & Restart",
     "applyUpdateFailedTitle": "Could not apply update",
+    "checkForUpdateDownloaded": "Update downloaded",
+    "restartNow": "Restart now",
+    "later": "Later",
+    "updateRunning": "Running: {{update}}",
+    "updateDownloaded": "Downloaded: {{update}}",
+    "updateNoneDownloaded": "none",
+    "updatePendingLine": "A new update was downloaded; restart the app to apply.",
     "weeklyGoalLabel": "Weekly Profit Goal",
     "weeklyGoalSuggestedNote": "Suggested: {{amount}}, based on your last 4 weeks",
     "aiUsageTitle": "AI Usage",
@@ -3224,7 +3231,8 @@
     "running": "Checking… (up to a minute)",
     "shareReport": "Share report",
     "serverNotUpdated": "The import server does not have the system check yet. Redeploy ai-import, then run the check again.",
-    "checkFailed": "The check did not finish ({{code}}). Try again."
+    "checkFailed": "The check did not finish ({{code}}). Try again.",
+    "apiErrors": "Could not read"
   },
   "truckOwnership": {
     "label": "Truck ownership",

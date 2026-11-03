@@ -887,6 +887,13 @@
     "checkForUpdateUpToDate": "आप नवीनतम संस्करण पर हैं",
     "applyUpdateButton": "डाउनलोड करें और पुनः आरंभ करें",
     "applyUpdateFailedTitle": "अपडेट लागू नहीं हो सका",
+    "checkForUpdateDownloaded": "अपडेट डाउनलोड हुआ",
+    "restartNow": "अभी रीस्टार्ट करें",
+    "later": "बाद में",
+    "updateRunning": "चल रहा है: {{update}}",
+    "updateDownloaded": "डाउनलोड हुआ: {{update}}",
+    "updateNoneDownloaded": "कोई नहीं",
+    "updatePendingLine": "एक नया अपडेट डाउनलोड हुआ है; लागू करने के लिए ऐप रीस्टार्ट करें।",
     "weeklyGoalLabel": "साप्ताहिक लाभ लक्ष्य",
     "weeklyGoalSuggestedNote": "सुझाया गया: {{amount}}, आपके पिछले 4 सप्ताहों के आधार पर",
     "aiUsageTitle": "AI उपयोग",
@@ -3224,7 +3231,8 @@
     "running": "जाँच हो रही है… (एक मिनट तक)",
     "shareReport": "रिपोर्ट साझा करें",
     "serverNotUpdated": "इम्पोर्ट सर्वर में अभी सिस्टम जाँच नहीं है। ai-import फिर से डिप्लॉय करें, फिर जाँच दोबारा चलाएँ।",
-    "checkFailed": "जाँच पूरी नहीं हुई ({{code}})। फिर से कोशिश करें।"
+    "checkFailed": "जाँच पूरी नहीं हुई ({{code}})। फिर से कोशिश करें।",
+    "apiErrors": "पढ़ा नहीं जा सका"
   },
   "truckOwnership": {
     "label": "ट्रक का स्वामित्व",

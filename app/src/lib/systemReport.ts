@@ -11,7 +11,7 @@
 // runs the bank-digit scrubber over the finished text as a last guard.
 import type { DiagnoseReport, JobLine, ModelCheckResult } from '../../../supabase/functions/ai-import/diagnose';
 import { scrubBankDigitsInText } from '@/src/import/bankDigits';
-import type { BuildInfo } from '@/src/lib/buildInfoFormat';
+import { isEmbeddedBuild, NULL_NAMES, stamp, type BuildInfo } from '@/src/lib/buildInfoFormat';
 import type { ImportJob } from '@/src/import/importJobs';
 
 export type { DiagnoseReport, JobLine, ModelCheckResult };
@@ -33,17 +33,29 @@ export function clientSection(info: ClientInfo, t: Translate): ReportSection {
   return {
     title: t('diagnostics.appTitle'),
     lines: [
-      { ok: info.version !== 'unknown', label: t('diagnostics.appVersion'), value: info.version },
-      { ok: !!info.runtimeVersion, label: t('diagnostics.runtime'), value: info.runtimeVersion ?? '—' },
+      // UPDATE VISIBILITY FIX (owner 2026-11-03): a null value prints the
+      // API that returned it, never "unknown"; "embedded build" only when
+      // isEmbeddedLaunch AND no update id (buildInfoFormat.ts).
       {
-        ok: !info.isEmbeddedLaunch,
-        label: t('diagnostics.update'),
-        value: info.isEmbeddedLaunch ? t('diagnostics.embeddedBuild') : (info.updateIdShort ?? '—'),
+        ok: info.version !== NULL_NAMES.version,
+        label: t('diagnostics.appVersion'),
+        value: info.buildVersion ? `${info.version} (build ${info.buildVersion})` : info.version,
       },
-      { ok: !!info.channel, label: t('diagnostics.channel'), value: info.channel ?? '—' },
+      { ok: !!info.runtimeVersion, label: t('diagnostics.runtime'), value: info.runtimeVersion ?? NULL_NAMES.runtimeVersion },
+      {
+        ok: !!info.updateIdShort,
+        label: t('diagnostics.update'),
+        value: info.updateIdShort
+          ? [info.updateIdShort, stamp(info.updateCreatedAt)].filter(Boolean).join(' · ')
+          : isEmbeddedBuild(info)
+            ? t('diagnostics.embeddedBuild')
+            : NULL_NAMES.updateId,
+      },
+      { ok: !!info.channel, label: t('diagnostics.channel'), value: info.channel ?? NULL_NAMES.channel },
       { ok: info.scannerPresent, label: t('diagnostics.scanner'), value: info.scannerPresent ? t('diagnostics.yes') : t('diagnostics.no') },
-      { ok: null, label: t('diagnostics.buildStamp'), value: info.gitCommitHashShort ?? '—' },
+      { ok: null, label: t('diagnostics.buildStamp'), value: info.gitCommitHashShort ?? NULL_NAMES.gitCommitHash },
       { ok: null, label: t('diagnostics.platform'), value: info.platform },
+      ...(info.errors && info.errors.length > 0 ? [{ ok: false, label: t('diagnostics.apiErrors'), value: info.errors.join(', ') }] : []),
     ],
   };
 }

@@ -139,6 +139,11 @@ EAS Update facts (confirmed from config, 2026-08-28):
 - A build made before `updates.url`/`runtimeVersion` existed can never
   receive OTA updates — it needs a rebuild. Dev-client/Expo Go builds have
   channel `null` and never receive OTA updates.
+- **An OTA update DOWNLOADS on launch and APPLIES on the NEXT launch.**
+  After every `eas update`, close and reopen the app on the device TWICE
+  (or use Settings > Check for Update > Restart now) before testing
+  anything; Settings shows which update is running and which is only
+  downloaded (owner, 2026-11-03).
 - expo-updates checks on COLD START, not resume. Settings' footer shows
   version, update id, channel and runtime (`app/src/lib/buildInfo*.ts`);
   Settings has a manual "Check for update now" button. Both reach a device

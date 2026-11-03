@@ -882,6 +882,13 @@
     "checkForUpdateUpToDate": "أنت محدَّث بالكامل",
     "applyUpdateButton": "تنزيل وإعادة التشغيل",
     "applyUpdateFailedTitle": "تعذر تطبيق التحديث",
+    "checkForUpdateDownloaded": "Update downloaded",
+    "restartNow": "Restart now",
+    "later": "Later",
+    "updateRunning": "Running: {{update}}",
+    "updateDownloaded": "Downloaded: {{update}}",
+    "updateNoneDownloaded": "none",
+    "updatePendingLine": "A new update was downloaded; restart the app to apply.",
     "weeklyGoalLabel": "هدف الربح الأسبوعي",
     "weeklyGoalSuggestedNote": "مقترح: {{amount}}، بناءً على آخر 4 أسابيع",
     "aiUsageTitle": "استخدام الذكاء الاصطناعي",
@@ -3224,7 +3231,8 @@
     "running": "Checking… (up to a minute)",
     "shareReport": "Share report",
     "serverNotUpdated": "The import server does not have the system check yet. Redeploy ai-import, then run the check again.",
-    "checkFailed": "The check did not finish ({{code}}). Try again."
+    "checkFailed": "The check did not finish ({{code}}). Try again.",
+    "apiErrors": "Could not read"
   },
   "truckOwnership": {
     "label": "Truck ownership",
