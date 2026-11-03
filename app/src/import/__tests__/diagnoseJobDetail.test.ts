@@ -84,7 +84,9 @@ describe('server build stamp', () => {
     expect(AI_IMPORT_GIT_HASH).toBe('not-stamped');
     const script = fs.readFileSync(path.resolve(__dirname, '../../../../scripts/deploy-ai-import.ps1'), 'utf8');
     expect(script).toContain('git rev-parse --short HEAD');
-    expect(script).toContain('supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce');
+    expect(script).toContain('npx supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce');
+    // Every CLI call goes through npx (no global supabase on the owner's machine).
+    expect(script.split(/\r?\n/).filter((l) => /^\s*supabase /.test(l))).toEqual([]);
     expect(script).toMatch(/finally\s*\{\s*\[System\.IO\.File\]::WriteAllText\(\$stampFile, \$original\)/);
   });
 });

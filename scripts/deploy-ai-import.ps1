@@ -22,8 +22,9 @@ export const AI_IMPORT_GIT_HASH = '$hash';
 export const AI_IMPORT_DEPLOYED_AT = '$at';
 "@
   [System.IO.File]::WriteAllText($stampFile, $stamped)
-  supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce
-  if ($LASTEXITCODE -ne 0) { throw "supabase functions deploy failed (exit $LASTEXITCODE)" }
+  # The Supabase CLI runs as "npx supabase" on the owner's machine (no global install).
+  npx supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce
+  if ($LASTEXITCODE -ne 0) { throw "npx supabase functions deploy failed (exit $LASTEXITCODE)" }
   Write-Host "Deployed ai-import at commit $hash ($at UTC)"
 }
 finally {
