@@ -213,6 +213,10 @@ export type ExtractedSettlement = {
     // recap page's "DIRECT DEPOSIT" line.
     settlementToOperator?: number | string;
     directDeposit?: number | string;
+    // The printed labels those two amounts came from (owner 2026-11-03):
+    // the page merge never lets NET AMOUNT DUE UNIT fill either field.
+    settlementToOperatorLabel?: string;
+    directDepositLabel?: string;
     // IMPORT GATE FIX 2.1: "bank" | "card" | "other" for the recap payout line.
     payoutMethod?: string;
     // BALANCE FORWARD (owner decision 2026-10-17): PRIOR WEEK BALANCE

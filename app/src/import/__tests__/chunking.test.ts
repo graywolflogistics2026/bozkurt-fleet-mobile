@@ -280,6 +280,67 @@ describe('mergeChunkedExtractions — same labeled field only', () => {
   });
 });
 
+// PAYOUT FIELDS AND BALANCE FORWARD (owner decision 2026-11-03): the 8-page
+// (08/21) and 17-page statements failed mergeConflict because p3's NET
+// AMOUNT DUE UNIT and p4's payout met in operating.directDeposit.
+describe('mergeChunkedExtractions — payout fields and balance forward', () => {
+  const page = (settlement: Record<string, unknown>): ChunkExtraction => ({ docType: 'settlement', settlement } as ChunkExtraction);
+  const conflicts = (m: ChunkExtraction) => (m.mergeConflicts as { path: string }[] | undefined)?.map((c) => c.path) ?? [];
+  const op = (m: ChunkExtraction) => (m.settlement as { operating: Record<string, unknown> }).operating;
+
+  it('08/21: p3 NET AMOUNT DUE UNIT 1,884.36 and p4 SETTLEMENT GROSS DUE TO/FROM OWNER 1,884.73 — no conflict, deposited 1,884.73', () => {
+    const merged = mergeChunkedExtractions([
+      page({ netPay: 1884.36, operating: { directDeposit: 1884.36, directDepositLabel: 'NET AMOUNT DUE UNIT' } }),
+      page({ operating: { directDeposit: 1884.73, directDepositLabel: 'SETTLEMENT GROSS DUE TO/FROM OWNER', settlementToOperator: 1884.73 } }),
+    ]);
+    expect(conflicts(merged)).toEqual([]);
+    expect(op(merged).directDeposit).toBe(1884.73);
+    expect((merged.settlement as Record<string, unknown>).netPay).toBe(1884.36);
+  });
+
+  it('08/14 unlabeled: the payout read equal to the net due 4,276.08 is dropped, 3,072.57 stays', () => {
+    const merged = mergeChunkedExtractions([
+      page({ netPay: 4276.08, operating: { directDeposit: 4276.08 } }),
+      page({ operating: { directDeposit: 3072.57 } }),
+    ]);
+    expect(conflicts(merged)).toEqual([]);
+    expect(op(merged).directDeposit).toBe(3072.57);
+  });
+
+  it('only a NET AMOUNT DUE read: the payout field is left unprinted, never the net due', () => {
+    const merged = mergeChunkedExtractions([
+      page({ netPay: 1884.36, operating: { directDeposit: 1884.36, directDepositLabel: 'NET AMOUNT DUE UNIT' } }),
+      page({ operating: { weekTotalStatement: 1884.73 } }),
+    ]);
+    expect(op(merged).directDeposit).toBe(0);
+  });
+
+  it('the SAME payout label with two values is still a conflict', () => {
+    const merged = mergeChunkedExtractions([
+      page({ operating: { settlementToOperator: 3072.57, settlementToOperatorLabel: 'SETTLEMENT TO OPERATOR' } }),
+      page({ operating: { settlementToOperator: 3027.57, settlementToOperatorLabel: 'SETTLEMENT TO OPERATOR' } }),
+    ]);
+    expect(conflicts(merged)).toEqual(['settlement.operating.settlementToOperator']);
+  });
+
+  it('balance forward "1,202.92" (p3) and "1,202.92-" (p4): one value, signed from TOTAL CASH FLOW − TOTAL STATEMENT', () => {
+    const merged = mergeChunkedExtractions([
+      page({ operating: { priorWeekBalanceForward: 1202.92 } }),
+      page({ operating: { priorWeekBalanceForward: -1202.92, weekTotalStatement: 4275.49, weekTotalCashFlow: 3072.57 } }),
+    ]);
+    expect(conflicts(merged)).toEqual([]);
+    expect(op(merged).priorWeekBalanceForward).toBe(-1202.92);
+  });
+
+  it('balance forward signed from the page that printed TOTAL CASH FLOW when TOTAL STATEMENT was not read', () => {
+    const merged = mergeChunkedExtractions([
+      page({ operating: { priorWeekBalanceForward: 1202.92 } }),
+      page({ operating: { priorWeekBalanceForward: -1202.92, weekTotalCashFlow: 3072.57 } }),
+    ]);
+    expect(op(merged).priorWeekBalanceForward).toBe(-1202.92);
+  });
+});
+
 // DOCUMENT at the first failed page, which is exactly why a real 11-page
 // settlement's banner read "Imported pages 1-1 of 11" after page 2 hit
 // the old 40s per-page cap. mergeAllPages replaces that with "a failed

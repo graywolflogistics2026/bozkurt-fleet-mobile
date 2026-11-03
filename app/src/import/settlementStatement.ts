@@ -324,7 +324,7 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
     settlementToOperator: t(op.settlementToOperator),
     directDeposit: t(op.directDeposit),
     miles: t(op.weekMiles) ?? printedTotal(infoRows.miles),
-    priorWeekBalanceForward: t(op.priorWeekBalanceForward) ?? printedTotal(infoRows.balance_forward),
+    priorWeekBalanceForward: signedBalanceForward(t(op.priorWeekBalanceForward) ?? printedTotal(infoRows.balance_forward), labeled.weekTotalCashFlow, labeled.weekTotalStatement),
     totalCashFlow: labeled.weekTotalCashFlow,
   };
   if (totals.settlementToOperator == null) totals.settlementToOperator = printedTotal(infoRows.settlement_to_operator);
@@ -405,6 +405,17 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   const gatePassed = gateMissing.length === 0 && checks.filter(isGateCheck).every((c) => c.passed);
   const warnings = checks.filter((c) => !isGateCheck(c) && !c.passed);
   return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing, gatePassed, gateMissing, warnings };
+}
+
+// PRIOR WEEK BALANCE FORWARD by absolute value, signed from the statement's
+// cash-flow lines (owner decision 2026-11-03): the accounts page prints
+// "1,202.92", the statement "1,202.92-". When TOTAL CASH FLOW and TOTAL
+// STATEMENT were both printed and differ by the balance forward's absolute
+// value, the sign is TOTAL CASH FLOW − TOTAL STATEMENT's.
+export function signedBalanceForward(bf: number | null, totalCashFlow: number | null, totalStatement: number | null): number | null {
+  if (bf == null || totalCashFlow == null || totalStatement == null) return bf;
+  const diff = totalCashFlow - totalStatement;
+  return Math.abs(Math.abs(diff) - Math.abs(bf)) < 0.01 ? round2(diff) : bf;
 }
 
 export function primeGateMissing(totals: PrimeStatementTotals, lines: StatementLine[], weekEndingRead: boolean): GateMissing[] {
@@ -511,7 +522,8 @@ export function printedInterestIncomeOf(extraction: Extraction): number {
 export function printedBalanceForwardOf(extraction: Extraction): number {
   const s = extraction.settlement;
   if (!s || !isPrimeCarrier(s.carrier)) return 0;
-  const direct = printedTotal(s.operating?.priorWeekBalanceForward);
+  const labeled = s.operating ? labeledStatementTotals(s.operating, []).values : null;
+  const direct = signedBalanceForward(printedTotal(s.operating?.priorWeekBalanceForward), labeled?.weekTotalCashFlow ?? null, labeled?.weekTotalStatement ?? null);
   if (direct != null) return round2(direct);
   const row = (s.operating?.lines ?? []).find((l) => !!l.label && statementInfoRow(l.label) === 'balance_forward');
   const fromRow = row ? parseAmount(row.amount) : NaN;

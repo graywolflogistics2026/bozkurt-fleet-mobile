@@ -318,9 +318,11 @@ describe('balance forward (owner decision 2026-10-17)', () => {
 
 // =====================================================================
 describe('a deliberately misread number still blocks Save', () => {
-  test('the balance forward read unsigned from page 3 (+1,202.92) breaks the cash chain', () => {
-    expect(failedChecks(withStatement({ priorWeekBalanceForward: 1202.92 }))).toEqual(['totalCashFlow']);
-    expect(checkSettlementReconciliation(withStatement({ priorWeekBalanceForward: 1202.92 })).issues.map((i) => i.type)).toEqual(['depositMismatch']);
+  test('the balance forward read unsigned from page 3 (+1,202.92) takes its sign from TOTAL CASH FLOW − TOTAL STATEMENT (owner 2026-11-03)', () => {
+    expect(failedChecks(withStatement({ priorWeekBalanceForward: 1202.92 }))).toEqual([]);
+    expect(checkSettlementReconciliation(withStatement({ priorWeekBalanceForward: 1202.92 })).issues.map((i) => i.type)).toEqual([]);
+    // A different absolute value is never re-signed: the chain still breaks.
+    expect(failedChecks(withStatement({ priorWeekBalanceForward: 1220.92 }))).toEqual(['totalCashFlow']);
     // TOTAL CASH FLOW not read either: SETTLEMENT TO OPERATOR catches it.
     expect(failedChecks(withStatement({ priorWeekBalanceForward: 1202.92, weekTotalCashFlow: undefined }))).toEqual(['settlementToOperator']);
   });

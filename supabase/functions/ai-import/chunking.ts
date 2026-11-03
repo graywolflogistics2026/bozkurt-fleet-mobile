@@ -190,6 +190,114 @@ function resolveLabeledTotalConflicts(chunks: ChunkExtraction[], merged: ChunkEx
   });
 }
 
+// PAYOUT FIELDS AND BALANCE FORWARD (owner decision 2026-11-03, weeks
+// ending 08/21 and 08/14, "mergeConflict" on the 8- and 17-page statements).
+// Prime prints NET AMOUNT DUE UNIT on the recap page (= net due, before
+// interest and the balance forward) and SETTLEMENT GROSS DUE TO/FROM OWNER /
+// the payout line (= deposited). The old prompt let "any other line saying
+// what was paid to the owner" fill operating.directDeposit, so page 3's net
+// due 1,884.36 and page 4's 1,884.73 met in the same field and the merge
+// called it a conflict (on 07/17 the two are equal, so it passed).
+//   * A payout field (directDeposit, settlementToOperator) never takes a
+//     NET AMOUNT DUE read (its label says so, or — unlabeled — it equals the
+//     net due while another page printed a different payout).
+//   * A conflict exists only between IDENTICAL printed labels; two
+//     different payout labels that agree are one value.
+//   * PRIOR WEEK BALANCE FORWARD: the accounts page prints it unsigned
+//     ("1,202.92"), the statement signed ("1,202.92-"). Values are compared
+//     by absolute value; the sign comes from the statement's cash-flow
+//     lines (TOTAL CASH FLOW − TOTAL STATEMENT), else from the page that
+//     printed TOTAL CASH FLOW.
+const NET_DUE_LABEL = /\bNET\b.*\bDUE\b|\bAMOUNT DUE UNIT\b/;
+const PAYOUT_FIELDS = ['directDeposit', 'settlementToOperator'] as const;
+const r2c = (n: number) => Math.round(n * 100) / 100;
+
+type OperatingRead = { page: number; value: unknown; amount: number; label: string; op: Record<string, unknown> };
+
+function operatingOf(c: ChunkExtraction): Record<string, unknown> | null {
+  const s = (c as Record<string, unknown>).settlement as Record<string, unknown> | undefined;
+  const op = s?.operating;
+  return op && typeof op === 'object' ? (op as Record<string, unknown>) : null;
+}
+
+function operatingReads(chunks: ChunkExtraction[], field: string): OperatingRead[] {
+  const out: OperatingRead[] = [];
+  chunks.forEach((c, i) => {
+    const op = operatingOf(c);
+    if (!op || !isMeaningful(op[field])) return;
+    const amount = amountOf(op[field]);
+    if (amount == null) return;
+    out.push({ page: i, value: op[field], amount, label: normLabel(op[`${field}Label`]), op });
+  });
+  return out;
+}
+
+function printedTotalLine(op: Record<string, unknown> | undefined, re: RegExp): number | null {
+  const lines = Array.isArray(op?.totalLines) ? (op!.totalLines as { label?: unknown; amount?: unknown }[]) : [];
+  for (const l of lines) {
+    const a = amountOf(l?.amount);
+    if (re.test(normLabel(l?.label)) && a != null && a !== 0) return a;
+  }
+  return null;
+}
+
+export function resolveOperatingConflicts(chunks: ChunkExtraction[], merged: ChunkExtraction, conflicts: MergeConflict[]): MergeConflict[] {
+  const settlement = (merged as Record<string, unknown>).settlement as Record<string, unknown> | undefined;
+  const op = settlement?.operating as Record<string, unknown> | undefined;
+  if (!settlement || !op || typeof op !== 'object') return conflicts;
+  let out = conflicts;
+  const netDue = amountOf(settlement.netPay);
+
+  for (const field of PAYOUT_FIELDS) {
+    const path = `settlement.operating.${field}`;
+    const all = operatingReads(chunks, field);
+    if (all.length === 0) continue;
+    const differs = (a: number, b: number) => Math.abs(a - b) >= 0.005;
+    let reads = all.filter((r) => !NET_DUE_LABEL.test(r.label));
+    if (netDue != null && reads.some((r) => differs(r.amount, netDue))) {
+      reads = reads.filter((r) => r.label || differs(r.amount, netDue));
+    }
+    out = out.filter((c) => c.path !== path);
+    if (reads.length === 0) {
+      // Only net-due reads: the payout was not printed on any page.
+      op[field] = 0;
+      continue;
+    }
+    op[field] = reads[0].value;
+    if (reads[0].label) op[`${field}Label`] = reads[0].label;
+    const amounts = [...new Set(reads.map((r) => r2c(r.amount)))];
+    if (amounts.length < 2) continue;
+    // Same printed label, two values: a real misread.
+    const byLabel = new Map<string, Set<number>>();
+    for (const r of reads) byLabel.set(r.label, (byLabel.get(r.label) ?? new Set()).add(r2c(r.amount)));
+    const sameLabel = [...byLabel.entries()].find(([label, v]) => label && v.size > 1);
+    // Unlabeled reads are never trusted; two different payout labels that
+    // disagree still name the same deposit, so they stay a conflict too.
+    if (sameLabel || reads.some((r) => !r.label) || byLabel.size > 1) out = [...out, { path, values: sameLabel ? [...sameLabel[1]] : amounts }];
+  }
+
+  // Balance forward by absolute value, signed from the cash-flow lines.
+  const bfPath = 'settlement.operating.priorWeekBalanceForward';
+  const bf = operatingReads(chunks, 'priorWeekBalanceForward');
+  if (bf.length > 0) {
+    const abs = [...new Set(bf.map((r) => r2c(Math.abs(r.amount))))];
+    if (abs.length === 1) {
+      out = out.filter((c) => c.path !== bfPath);
+      const tcf = amountOf(op.weekTotalCashFlow) || printedTotalLine(op, /^TOTAL CASH FLOW$/);
+      const ts = amountOf(op.weekTotalStatement) || printedTotalLine(op, /^TOTAL STATEMENT\b/);
+      let signed: number | null = null;
+      if (tcf && ts && Math.abs(Math.abs(tcf - ts) - abs[0]) < 0.01) signed = r2c(tcf - ts);
+      if (signed == null) {
+        const fromCashFlowPage = bf.find((r) => isMeaningful(r.op.weekTotalCashFlow) || printedTotalLine(r.op, /^TOTAL CASH FLOW$/) != null);
+        if (fromCashFlowPage) signed = r2c(fromCashFlowPage.amount);
+      }
+      if (signed != null) op.priorWeekBalanceForward = signed;
+      else if (new Set(bf.map((r) => r2c(r.amount))).size > 1) out = [...out, { path: bfPath, values: [...new Set(bf.map((r) => r2c(r.amount)))] }];
+    }
+  }
+  return out;
+}
+
 // Deterministic merge of per-page extractions (in page order; a base
 // extraction, when re-reading pages of a saved document, goes first) into
 // one Extraction-shaped object. Owner decision 2026-10-13 (17-page stall
@@ -218,7 +326,7 @@ export function mergeChunkedExtractions(chunks: ChunkExtraction[]): ChunkExtract
     return out;
   });
   const merged = mergeValues(data, '', conflicts) as ChunkExtraction;
-  const resolved = resolveLabeledTotalConflicts(chunks, merged, conflicts);
+  const resolved = resolveOperatingConflicts(chunks, merged, resolveLabeledTotalConflicts(chunks, merged, conflicts));
   conflicts.length = 0;
   conflicts.push(...resolved);
   const summary = chunks
