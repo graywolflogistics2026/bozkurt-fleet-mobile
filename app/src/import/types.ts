@@ -195,13 +195,19 @@ export type ExtractedSettlement = {
   operating?: {
     // `typed` = the owner typed this amount on the review card (a profit
     // line the reading missed, primeStatementTemplate.ts PROFIT_LINES).
-    lines?: { section?: string; label?: string; amount?: number | string; page?: number; typed?: boolean }[];
+    // R2 (2026-11-03): amount = the WEEKS column; weeks/ytd/ltd = the three
+    // printed columns (null = blank), set by ai-import normalizeStatementColumns.
+    lines?: { section?: string; label?: string; amount?: number | string; page?: number; typed?: boolean; weeks?: number | null; ytd?: number | null; ltd?: number | null }[];
     // Profit lines the owner answered "not printed this week" (0).
     typedNotPrinted?: string[];
     // Every printed "TOTAL ..." line, exactly as printed and signed, from
     // every page the statement spans (owner 2026-11-03): the ONLY source of
     // the weekTotal* block totals (statementTotalLabels.ts).
-    totalLines?: { label?: string; amount?: number | string }[];
+    totalLines?: { label?: string; amount?: number | string; weeks?: number | null; ytd?: number | null; ltd?: number | null }[];
+    // R2: MILES, PRIOR WEEK BALANCE FORWARD, SETTLEMENT TO OPERATOR, PERF
+    // BD/EMGCY FD and the payout line as labeled rows; the payout, balance
+    // forward, miles and YTD fields below come only from these.
+    recapLines?: { label?: string; weeks?: number | null; ytd?: number | null; ltd?: number | null; page?: number }[];
     weekMiles?: number;
     weekTotalFreightRevenue?: number | string;
     weekTotalOtherRevenue?: number | string;

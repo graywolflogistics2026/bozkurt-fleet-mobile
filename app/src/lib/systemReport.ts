@@ -14,12 +14,14 @@
 // runs the bank-digit scrubber over the finished text as a last guard.
 import type { DiagnoseReport, JobLine, ModelCheckResult } from '../../../supabase/functions/ai-import/diagnose';
 import { scrubBankDigitsInText } from '@/src/import/bankDigits';
+import type { latestYtdContinuity } from '@/src/import/ytdContinuity';
 import { isEmbeddedBuild, NULL_NAMES, stamp, type BuildInfo } from '@/src/lib/buildInfoFormat';
 import { finalStateOf, type ImportJob } from '@/src/import/importJobs';
 
 export type { DiagnoseReport, JobLine, ModelCheckResult };
 
 // ok: true = green, false = red, null = information only.
+export type YtdContinuityResult = NonNullable<ReturnType<typeof latestYtdContinuity>>;
 export type ReportLine = { ok: boolean | null; label: string; value: string };
 export type ReportSection = { title: string; lines: ReportLine[] };
 
@@ -216,15 +218,31 @@ export function lastJobsSection(lines: JobLine[], t: Translate): ReportSection {
   };
 }
 
+// R2 YTD CONTINUITY (2026-11-03): information only — never a failure
+// marker, no amounts (the report is shared), one line per TOTAL label.
+export function ytdContinuitySection(c: YtdContinuityResult | null, t: Translate): ReportSection {
+  const title = t('diagnostics.ytdTitle');
+  if (!c || c.rows.length === 0) return { title, lines: [{ ok: null, label: title, value: t('diagnostics.ytdNone') }] };
+  return {
+    title,
+    lines: [
+      { ok: null, label: t('diagnostics.ytdWeeks'), value: `${c.prevWeek} → ${c.week}` },
+      ...c.rows.map((r) => ({ ok: null, label: r.label, value: r.ok ? t('diagnostics.ytdTies') : t('diagnostics.ytdDiffers') })),
+    ],
+  };
+}
+
 export function buildReportSections(
   client: ClientInfo,
   server: DiagnoseReport | null,
   clientJobs: ImportJob[],
   t: Translate,
+  ytd: YtdContinuityResult | null = null,
 ): ReportSection[] {
   const sections = [clientSection(client, t)];
   if (server) sections.push(...serverSections(server, t));
   const jobLines = server ? withAppVerdicts(server.jobs.lastJobs, clientJobs) : clientJobs.slice(0, 5).map(clientJobToLine);
+  sections.push(ytdContinuitySection(ytd, t));
   sections.push(lastJobsSection(jobLines, t));
   return sections;
 }

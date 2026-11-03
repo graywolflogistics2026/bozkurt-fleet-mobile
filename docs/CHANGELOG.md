@@ -11,6 +11,15 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- STATEMENT COLUMNS (R2, owner 2026-11-03): the model returns every statement
+  line, TOTAL line and recap row (MILES, PRIOR WEEK BALANCE FORWARD,
+  SETTLEMENT TO OPERATOR, PERF BD/EMGCY FD, payout line) as {label, weeks,
+  ytd, ltd}, blank = null, and no single-number subtotal/payout/YTD fields.
+  ai-import normalizeStatementColumns (chunking.ts, at the one parse point)
+  turns it into the app's shape: amount = WEEKS, null WEEKS dropped, the
+  internal weekTotal*/payout fields only from labeled rows. YTD continuity
+  (ytdContinuity.ts, statement.ytd jsonb) is a Diagnostics line, info only.
+  Redeploy ai-import; eas update. No SQL.
 - SETTLEMENT TOTALS FROM TOTAL LABELS ONLY (R3, owner 2026-11-03, Prime
   only): each page lists its TOTAL-type lines in settlement.settlementTotalLines
   (TOTAL REV, TOTAL REIMBURSED, TOTAL DEDUCTIONS FROM TRUCK, GROSS/NET AMOUNT

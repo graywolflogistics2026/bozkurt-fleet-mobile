@@ -1,6 +1,7 @@
 import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { isPrimeCarrier } from './primeOperatingStatement';
+import { statementYtdRows } from './ytdContinuity';
 import { parsePrimeSettlementDate, pdfCreationDateIso, statementWeekRawOf, type DateFormat } from './printedDates';
 import { readPrimeEscrow } from './primeEscrow';
 import { splitPrimeLoads } from './primeLoads';
@@ -234,6 +235,9 @@ export type SettlementStatement = {
   unit?: string | null;
   // HELD BY CARRIER (owner decision 2026-10-29, primeEscrow.ts).
   escrow?: import('./primeEscrow').PrimeEscrow | null;
+  // R2 YTD CONTINUITY (2026-11-03): each TOTAL/recap row's WEEKS and YTD,
+  // for the informational Diagnostics line (ytdContinuity.ts). Optional.
+  ytd?: import('./ytdContinuity').YtdRow[] | null;
   // SIMPLE IMPORT FLOW (batch D2 2.2): the statement passed the gate but
   // its line details did not reconcile, so no line rows were stored.
   linesNotSaved?: boolean;
@@ -713,6 +717,7 @@ export function buildSettlementStatement(
     unit: extraction.settlement?.unit?.trim() || null,
     dates: statementDatesOf(extraction),
     escrow: readPrimeEscrow(extraction),
+    ytd: prime ? statementYtdRows(extraction) : null,
   };
 }
 

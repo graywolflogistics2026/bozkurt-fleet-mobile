@@ -3264,7 +3264,12 @@
     "shareReport": "Raporu paylaş",
     "serverNotUpdated": "İçe aktarma sunucusunda sistem kontrolü henüz yok. ai-import’u yeniden yükleyin, sonra kontrolü tekrar çalıştırın.",
     "checkFailed": "Kontrol tamamlanmadı ({{code}}). Tekrar deneyin.",
-    "apiErrors": "Okunamadı"
+    "apiErrors": "Okunamadı",
+    "ytdTitle": "YTD sürekliliği (yalnızca bilgi)",
+    "ytdWeeks": "Karşılaştırılan haftalar",
+    "ytdTies": "tutuyor (önceki YTD + bu haftanın WEEKS değeri)",
+    "ytdDiffers": "tutmuyor",
+    "ytdNone": "YTD sütunlu iki kayıtlı hafta henüz yok."
   },
   "truckOwnership": {
     "label": "Kamyon sahipliği",

@@ -3264,7 +3264,12 @@
     "shareReport": "Compartir informe",
     "serverNotUpdated": "El servidor de importación aún no tiene la revisión del sistema. Vuelva a desplegar ai-import y ejecute la revisión otra vez.",
     "checkFailed": "La revisión no terminó ({{code}}). Inténtelo de nuevo.",
-    "apiErrors": "No se pudo leer"
+    "apiErrors": "No se pudo leer",
+    "ytdTitle": "Continuidad YTD (solo información)",
+    "ytdWeeks": "Semanas comparadas",
+    "ytdTies": "cuadra (YTD anterior + WEEKS de esta semana)",
+    "ytdDiffers": "no cuadra",
+    "ytdNone": "Aún no hay dos semanas guardadas con columnas YTD."
   },
   "truckOwnership": {
     "label": "Propiedad del camión",

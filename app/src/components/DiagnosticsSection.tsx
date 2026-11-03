@@ -6,6 +6,8 @@ import { colors, spacing, typography } from '@/src/theme';
 import { getBuildInfo } from '@/src/lib/buildInfo';
 import { scannerModulePresent } from '@/src/scan/scanDeps';
 import { useImportJobs } from '@/src/data/importJobs';
+import { useSettlements } from '@/src/data/settlements';
+import { latestYtdContinuity } from '@/src/import/ytdContinuity';
 import { callDiagnose } from '@/src/data/diagnoseCall';
 import {
   buildReportSections,
@@ -25,6 +27,8 @@ import {
 export function DiagnosticsSection() {
   const { t } = useTranslation();
   const jobs = useImportJobs();
+  const settlements = useSettlements();
+  const ytd = useMemo(() => latestYtdContinuity(settlements.data ?? []), [settlements.data]);
   const [server, setServer] = useState<DiagnoseReport | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -34,8 +38,8 @@ export function DiagnosticsSection() {
     [],
   );
   const sections = useMemo(
-    () => buildReportSections(client, server, jobs.data ?? [], (k, o) => t(k, o) as string),
-    [client, server, jobs.data, t],
+    () => buildReportSections(client, server, jobs.data ?? [], (k, o) => t(k, o) as string, ytd),
+    [client, server, jobs.data, t, ytd],
   );
 
   async function runCheck() {

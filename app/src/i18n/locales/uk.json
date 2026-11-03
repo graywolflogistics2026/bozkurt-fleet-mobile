@@ -3264,7 +3264,12 @@
     "shareReport": "Share report",
     "serverNotUpdated": "The import server does not have the system check yet. Redeploy ai-import, then run the check again.",
     "checkFailed": "The check did not finish ({{code}}). Try again.",
-    "apiErrors": "Could not read"
+    "apiErrors": "Could not read",
+    "ytdTitle": "YTD continuity (information only)",
+    "ytdWeeks": "Weeks compared",
+    "ytdTies": "ties (last YTD + this WEEKS)",
+    "ytdDiffers": "differs",
+    "ytdNone": "No two saved weeks with YTD columns yet."
   },
   "truckOwnership": {
     "label": "Truck ownership",
