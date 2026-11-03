@@ -31,6 +31,7 @@ import {
   buildChunkPromptAddendum,
   mergeAllPages,
   mergeChunkedExtractions,
+  tagStatementLinePages,
   runWithConcurrencyLimit,
   triagePageOrder,
   type ChunkExtraction,
@@ -1750,7 +1751,10 @@ function buildJobDeps(
     store,
     model,
     merge(pages, base) {
-      const sorted = [...pages].sort((a, b) => a.page - b.page).map((p) => p.extraction as ChunkExtraction);
+      // Each statement line keeps the page it was printed on (owner
+      // 2026-11-03): a block that does not add up names the page to read
+      // again (app/src/import/primeStatementTemplate.ts).
+      const sorted = [...pages].sort((a, b) => a.page - b.page).map((p) => tagStatementLinePages(p.extraction, p.page) as ChunkExtraction);
       const all = base ? [base as ChunkExtraction, ...sorted] : sorted;
       if (all.length === 0) return null;
       return all.length === 1 ? { ...all[0] } : mergeChunkedExtractions(all);

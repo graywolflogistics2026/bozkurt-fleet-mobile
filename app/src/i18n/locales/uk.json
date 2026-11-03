@@ -2864,7 +2864,8 @@
     "groups": "Line details vs statement",
     "lineDifference": "Line details differ from the statement by {{amount}}.",
     "pages": "Pages",
-    "aiNote": "AI note"
+    "aiNote": "AI note",
+    "blocks": "Statement blocks that do not add up"
   },
   "heldByCarrier": {
     "label": "Held by carrier",

@@ -2864,7 +2864,8 @@
     "groups": "Satır ayrıntıları ve tablo",
     "lineDifference": "Satır ayrıntıları tablodan {{amount}} farklı.",
     "pages": "Sayfalar",
-    "aiNote": "Yapay zekâ notu"
+    "aiNote": "Yapay zekâ notu",
+    "blocks": "Tutmayan ekstre blokları"
   },
   "heldByCarrier": {
     "label": "Taşıyıcı firmanın tuttuğu",

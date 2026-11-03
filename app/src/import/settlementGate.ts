@@ -16,6 +16,7 @@ import { isPrimeCarrier } from './primeOperatingStatement';
 import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf, type DateIssue, type SettlementDateCheck } from './printedDates';
 import { lineDetailsDifference, lineRouteProfit } from './reviewVerdict';
 import { readMilesSplit } from './milesSplit';
+import { blockDiagnosisLine, diagnosePrimeBlocks } from './primeStatementTemplate';
 import type { CarrierCode } from './carrierCodes';
 import type { ReconciliationIssue } from './settlementReconciliation';
 import type { StatementCheck } from './settlementStatement';
@@ -292,6 +293,15 @@ export function rereadRequestFor(gate: SettlementGateResult | null, extraction: 
   if (gate.reason === 'page_not_read') return { pages: unread.length > 0 ? unread : null, reason };
   if (gate.reason === 'statement_not_read') pages = unread.length > 0 ? unread : statementPages;
   else if (gate.reason === 'statement_check_failed') {
+    // MISSING-LINE DETECTION (owner 2026-11-03): a block that does not add
+    // up names its missing template labels and the page(s) it is printed
+    // on; only those pages are read again.
+    const blocks = diagnosePrimeBlocks(extraction);
+    const blockPages = [...new Set(blocks.flatMap((b) => b.pages))];
+    if (blockPages.length > 0 && gate.failures.every((f) => STATEMENT_ONLY_CHECKS.has(f) || f.startsWith('section_'))) {
+      const blockReason = `${reason} · ${blocks.map(blockDiagnosisLine).join(' · ')}`.slice(0, 200);
+      return { pages: [...new Set([...blockPages, ...unread])].sort((a, b) => a - b), reason: blockReason };
+    }
     pages = gate.failures.every((f) => STATEMENT_ONLY_CHECKS.has(f)) ? statementPages : [...statementPages, ...settlementSide];
   } else if (gate.reason === 'gross_differs' || gate.reason === 'deposit_differs' || gate.reason === 'date_mismatch' || gate.reason === 'date_unreadable') {
     pages = [...statementPages, ...settlementSide];

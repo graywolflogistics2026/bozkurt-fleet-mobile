@@ -2864,7 +2864,8 @@
     "groups": "Detalle de líneas vs estado de cuenta",
     "lineDifference": "El detalle de las líneas difiere del estado de cuenta en {{amount}}.",
     "pages": "Páginas",
-    "aiNote": "Nota de la IA"
+    "aiNote": "Nota de la IA",
+    "blocks": "Bloques del estado de cuenta que no cuadran"
   },
   "heldByCarrier": {
     "label": "Retenido por la empresa transportista",

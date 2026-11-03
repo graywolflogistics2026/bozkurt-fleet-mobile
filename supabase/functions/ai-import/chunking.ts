@@ -190,6 +190,20 @@ function resolveLabeledTotalConflicts(chunks: ChunkExtraction[], merged: ChunkEx
   });
 }
 
+// Each statement line and TOTAL line keeps the page it was read from
+// (owner decision 2026-11-03, missing-line detection): a block that does
+// not add up names the page to read again. A line that already has a page
+// (a saved base document) keeps it.
+export function tagStatementLinePages(extraction: unknown, page: number): unknown {
+  const e = extraction as Record<string, unknown> | null;
+  const s = e?.settlement as Record<string, unknown> | undefined;
+  const op = s?.operating as Record<string, unknown> | undefined;
+  if (!e || !s || !op || typeof op !== 'object') return extraction;
+  const tag = (list: unknown) =>
+    Array.isArray(list) ? list.map((l) => (l && typeof l === 'object' && !Number.isInteger((l as Record<string, unknown>).page) ? { ...(l as object), page } : l)) : list;
+  return { ...e, settlement: { ...s, operating: { ...op, lines: tag(op.lines), totalLines: tag(op.totalLines) } } };
+}
+
 // PAYOUT FIELDS AND BALANCE FORWARD (owner decision 2026-11-03, weeks
 // ending 08/21 and 08/14, "mergeConflict" on the 8- and 17-page statements).
 // Prime prints NET AMOUNT DUE UNIT on the recap page (= net due, before

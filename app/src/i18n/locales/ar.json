@@ -2864,7 +2864,8 @@
     "groups": "تفاصيل البنود مقابل الكشف",
     "lineDifference": "تفاصيل البنود تختلف عن الكشف بمقدار {{amount}}.",
     "pages": "الصفحات",
-    "aiNote": "ملاحظة الذكاء الاصطناعي"
+    "aiNote": "ملاحظة الذكاء الاصطناعي",
+    "blocks": "Statement blocks that do not add up"
   },
   "heldByCarrier": {
     "label": "محتجز لدى شركة النقل",

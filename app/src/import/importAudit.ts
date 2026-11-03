@@ -1,4 +1,5 @@
 import { BRAND_NAME } from '@/src/brand';
+import { blockDiagnosisLine, diagnosePrimeBlocks } from './primeStatementTemplate';
 import { estimateNoticeStrings, estimateNoticeTextFooter, estimateNoticeTextHeader } from '@/src/legal/estimateNotice';
 import type { Extraction } from './types';
 import { parseAmount } from './amount';
@@ -77,6 +78,13 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
       out.push(`${c.passed ? '✓' : '✗'} ${t(`importScreen.primeCheck.${c.id}`)}: ${c.expectedText ?? c.expected.toFixed(2)} / ${c.actualText ?? c.actual.toFixed(2)}`);
     }
   }
+  // MISSING-LINE DETECTION (owner 2026-11-03): each Prime block that does
+  // not add up, with the template labels missing or read twice and its page.
+  const blocks = diagnosePrimeBlocks(e);
+  if (blocks.length > 0) {
+    section('blocks', blocks.length);
+    for (const b of blocks) out.push(`✗ ${blockDiagnosisLine(b)}`);
+  }
   section('lineChecks', inputs.issues.length);
   for (const issue of inputs.issues) out.push(`✗ ${issue.type} ${JSON.stringify({ ...issue, type: undefined })}`);
   if (inputs.groups) {
@@ -92,7 +100,10 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
 
   if ((e.pageMap?.length ?? 0) > 0) {
     section('pages', e.pageMap!.length);
-    for (const p of e.pageMap ?? []) out.push(`p${p.page} ${p.kind} ${p.role} ${p.status}${p.cause ? ` (${p.cause})` : ''}`);
+    for (const p of e.pageMap ?? []) {
+      const cause = [p.cause, p.detail && p.detail !== p.cause ? p.detail : null, p.attempts ? `${p.attempts} tries` : null].filter(Boolean).join(', ');
+      out.push(`p${p.page} ${p.kind} ${p.role} ${p.status}${cause ? ` (${cause})` : ''}`);
+    }
   }
   if (txt(e.summary)) {
     section('aiNote');
