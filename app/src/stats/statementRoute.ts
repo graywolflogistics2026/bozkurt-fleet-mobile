@@ -159,6 +159,28 @@ export function statementWeekOf(settlement: StatementSettlement): StatementWeek 
     });
   }
 
+  // PROFIT FROM TOTALS (owner decision 2026-11-03, week ending 07/24): a
+  // block can be missing entirely (no lines, no TOTAL line), so the blocks
+  // above do not add up to TOTAL VARIABLE COSTS / TOTAL OPERATING EXPENSES.
+  // The printed subtotal wins: the gap is one counted line, so expenses
+  // always tie to TOTAL OPERATING EXPENSES and profit = TOTAL STATEMENT
+  // with only the excluded lines (advances, bond, PR, interest...) added
+  // back by label.
+  const blockValue = (section: (typeof RESIDUAL_SECTIONS)[number]) =>
+    totals[SECTION_TOTALS[section]] ?? lines.filter((l) => l.section === section).reduce((sum, l) => sum + l.amount, 0);
+  const pushGap = (label: string, section: StatementSection, gap: number) => {
+    const residual = Math.round(gap * 100) / 100;
+    if (Math.abs(residual) < 0.005) return;
+    ledger.push({ label, section, printed: residual, status: residual > 0 ? 'offset' : 'counted', contribution: -residual, category: 'Misc', costType: 'variable', reason: 'line_residual', cpmOneOff: false });
+  };
+  const variableBlocks = (['fuel_oil_tax', 'repair', 'tires', 'misc'] as const).reduce((sum, s) => sum + blockValue(s), 0);
+  if (totals.totalVariableCosts != null) pushGap('TOTAL VARIABLE COSTS (lines not read)', 'misc', totals.totalVariableCosts - variableBlocks);
+  if (totals.totalOperatingExpenses != null) {
+    const variable = totals.totalVariableCosts ?? variableBlocks;
+    const rest = (['out_of_pocket', 'fixed', 'other'] as const).reduce((sum, s) => sum + blockValue(s), 0);
+    pushGap('TOTAL OPERATING EXPENSES (lines not read)', 'other', totals.totalOperatingExpenses - (variable + rest));
+  }
+
   return {
     settlementId: settlement.id,
     truckId: settlement.truck_id ?? null,

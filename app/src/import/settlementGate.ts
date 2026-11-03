@@ -2,6 +2,7 @@ import type { Extraction } from './types';
 import { checkSettlementReconciliation } from './settlementReconciliation';
 import {
   LINE_SUM_CHECKS,
+  SUBTOTAL_CHECKS,
   buildPrimeStatementCheck,
   buildSettlementStatement,
   printedTotalsMatch,
@@ -186,7 +187,10 @@ export function evaluateSettlementGate(
     const groups = buildPrimeGroupChecks(extraction);
     // Statement lines that do not add up to their PRINTED block total are
     // line details too (part 1.1): never a block, only the quiet note.
-    const lineSumDiffs = check.checks.filter((c) => LINE_SUM_CHECKS.includes(c.id) && !c.passed).map((c) => r2(c.expected - c.actual));
+    // A block subtotal that did not tie while the printed totals did
+    // (priority of evidence, owner 2026-11-03) is a line-details note too.
+    const softFailed = (id: StatementCheck['id']) => LINE_SUM_CHECKS.includes(id) || (!!check.printedTotalsTie && SUBTOTAL_CHECKS.includes(id));
+    const lineSumDiffs = check.checks.filter((c) => softFailed(c.id) && !c.passed).map((c) => r2(c.expected - c.actual));
     const issueDifference = lineDetailsDifference({ issues, groups });
     const allDiffs = [...lineSumDiffs, ...(issueDifference != null ? [issueDifference] : [])];
     const difference = allDiffs.length > 0 ? allDiffs.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a)) : null;

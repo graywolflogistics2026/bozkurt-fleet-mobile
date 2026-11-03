@@ -131,6 +131,8 @@ export const LINE_SUM_CHECKS: StatementCheckId[] = [
   'section_other',
 ];
 const WARN_ONLY_CHECKS: StatementCheckId[] = ['milesMatch', 'grossMatches', ...LINE_SUM_CHECKS];
+// Block subtotal identities: warnings only when the printed totals tie.
+export const SUBTOTAL_CHECKS: StatementCheckId[] = ['variableCosts', 'operatingExpenses'];
 export function isGateCheck(check: Pick<StatementCheck, 'id' | 'path'>): boolean {
   if (check.id === 'mergeConflict') return !check.path || check.path.startsWith('settlement.operating.');
   return !WARN_ONLY_CHECKS.includes(check.id);
@@ -157,6 +159,8 @@ export type PrimeStatementCheckResult = {
   warnings?: StatementCheck[];
   // TOTAL CASH FLOW < 0: the owner owes the carrier (owner 2026-11-03).
   negativeWeek?: boolean;
+  // The printed totals tie among themselves (priority of evidence).
+  printedTotalsTie?: boolean;
 };
 
 export type DepositSource = 'direct_deposit' | 'settlement_to_operator' | 'net_due';
@@ -410,10 +414,36 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   // 'requiredTotals'): the week is saved on the line route, Unverified and
   // needs-review (amendment 1).
   const coreMissing = primeCoreMissing(totals, lines, printedTotal(s.grossRevenue), negativeWeek);
-  const gateMissing = primeGateMissing(totals, lines, weekCheck != null, negativeWeek);
-  const gatePassed = gateMissing.length === 0 && checks.filter(isGateCheck).every((c) => c.passed);
-  const warnings = checks.filter((c) => !isGateCheck(c) && !c.passed);
-  return { lines, totals, checks, passed: checks.every((c) => c.passed), coreMissing, gatePassed, gateMissing, warnings, ...(negativeWeek ? { negativeWeek } : {}) };
+  // PRIORITY OF EVIDENCE (owner decision 2026-11-03, week ending 07/24):
+  // when the PRINTED totals tie among themselves — TOTAL REVENUE + TOTAL
+  // OPERATING EXPENSES = TOTAL STATEMENT, and TOTAL STATEMENT + balance
+  // forward = TOTAL CASH FLOW = SETTLEMENT TO OPERATOR = the payout where
+  // printed — the headline comes from them and the week is saveable. A
+  // block subtotal check (TOTAL VARIABLE COSTS = Σ block totals, TOTAL
+  // OPERATING EXPENSES = variable + out of pocket + fixed + other) is then
+  // only a line-details warning (07/24: a whole block was not read, its
+  // lines AND its TOTAL line, so the variable blocks summed 323.15 short of
+  // the printed −5,096.21). It blocks only when the printed totals do NOT
+  // tie.
+  const ran = (id: StatementCheckId) => checks.find((c) => c.id === id);
+  const chainFailed = (['statementTotal', 'totalCashFlow', 'settlementToOperator', 'directDeposit'] as StatementCheckId[]).some((id) => ran(id) && !ran(id)!.passed);
+  const printedTotalsTie = !!ran('statementTotal')?.passed && !!(ran('totalCashFlow')?.passed || ran('settlementToOperator')?.passed) && !chainFailed;
+  const blocking = (c: StatementCheck) => isGateCheck(c) && !(printedTotalsTie && SUBTOTAL_CHECKS.includes(c.id));
+  const gateMissing = primeGateMissing(totals, lines, weekCheck != null, negativeWeek).filter((m) => !(printedTotalsTie && (m === 'variableCosts' || m === 'fixedCost')));
+  const gatePassed = gateMissing.length === 0 && checks.filter(blocking).every((c) => c.passed);
+  const warnings = checks.filter((c) => !blocking(c) && !c.passed);
+  return {
+    lines,
+    totals,
+    checks,
+    passed: checks.every((c) => c.passed),
+    coreMissing,
+    gatePassed,
+    gateMissing,
+    warnings,
+    printedTotalsTie,
+    ...(negativeWeek ? { negativeWeek } : {}),
+  };
 }
 
 // PRIOR WEEK BALANCE FORWARD by absolute value, signed from the statement's
