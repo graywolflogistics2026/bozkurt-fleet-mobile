@@ -11,6 +11,11 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- PRIME CODE CLASSES part 1 (owner 2026-11-03, R1-R4, D1-D11): approved
+  table in docs/decisions/prime-code-classes.md (200 classed, 13 ASK);
+  CARRIER_CODES.md Class column; PENDING_SQL §84 + pending_84.sql
+  (economic_class + class_when_charge, trucks.ownership, deductions
+  economic_class + direction, category_learning_rules.economic_class).
 - PRIME CODE MAP AUDIT (owner 2026-11-03), report only: docs/decisions/
   prime-code-classes.md. Markdown = seed = migration (213 rows: 205 + 8
   bridges), no differences; 5 rows to verify; search results; proposed

@@ -1,10 +1,8 @@
-# Prime code map: audit and economic classes (DRAFT, owner approval pending)
+# Prime code map: audit and economic classes (APPROVED 2026-11-03)
 
 Owner request 2026-11-03 ("PRIME CODE MAP AUDIT AND CLASSES", part of the
 B0 addendum). Items 1-3 only: audit, search, proposed `economic_class`.
-**Nothing is written to the database or the runtime yet.** The PENDING_SQL
-section, the `docs/CARRIER_CODES.md` class column and the runtime change
-(item 4) follow only after the owner answers the ASK rows below.
+The owner answered on 2026-11-03 (R1-R4, D1-D11, below). SQL: docs/PENDING_SQL.md §84.
 
 ## 1. Audit: markdown vs seed SQL vs what the importer loads
 
@@ -68,92 +66,100 @@ Only rows that are in the list. Nothing is invented.
 | Any "fund" | EF, NT, NU, IH (the only labels or descriptions with "fund") |
 | Any "accrual" | **No code.** |
 
-## 3. Proposed `economic_class` (approval needed)
+## 3. Owner decisions (2026-11-03)
 
-The classes are REVENUE, REIMBURSEMENT, EXPENSE_VARIABLE, EXPENSE_FIXED,
-WAGES, INTEREST_EXPENSE, REPAYMENT, REFUNDABLE_FUND, PERSONAL,
-INTEREST_INCOME and INFORMATIONAL. Each class is derived from the
-existing category, deductibility and label:
+**R1. Class from the map, DIRECTION from the document.** A charge-column
+line is money out, a credit-column line is money in; every saved line
+stores its direction (`deductions.direction`).
+- A REFUNDABLE_FUND code as a charge is a contribution (held balance up);
+  as a credit it is the fund paid back (held balance down, never income).
+- A discount or reimbursement code is always a credit that offsets the
+  matching expense. The one exception is PC: printed as a charge it is
+  PERSONAL (`class_when_charge`).
 
-- Per-mile, per-event or per-use costs are EXPENSE_VARIABLE.
-- Weekly or annual costs (insurance premiums, rentals, permits, the
-  statement fee) are EXPENSE_FIXED.
-- Credits that pay back a cost are REIMBURSEMENT.
-- Advance paybacks are REPAYMENT.
-- Escrow-type holds are REFUNDABLE_FUND.
-- Balance moves are INFORMATIONAL.
+**R2. Insurance.** Insurance on the PERSON (health, dental, vision, life,
+disability, hospital or critical-illness, supplemental) is PERSONAL.
+Insurance on the TRUCK or the BUSINESS (physical damage,
+bobtail/deadhead, occupational accident, truck GAP, workers' comp) is
+EXPENSE_FIXED.
 
-**ASK** = left null until the owner answers. Proposed counts:
+**R3. CAPITAL** = purchases that go to Truck Cost Basis or the Asset
+Register. These are excluded from profit. The weekly ADVANCE repayments
+stay REPAYMENT.
+
+**R4. PERSONAL lines withheld on a settlement** appear in the Accountant
+Package as their own section, "Personal items paid through your
+settlement", with the note "may be deductible on your personal return -
+your tax professional decides". They never appear in business expenses.
+
+**D1-D11** are applied row by row in the table below. Classes that the
+runtime still resolves:
+- **TRUCK_PAYMENT** (NP, FN): by `trucks.ownership`. Leased gives
+  EXPENSE_FIXED, category Lease & Rent, note "lease payment - tax
+  treatment: your tax professional decides". Financed gives REPAYMENT.
+  Owned-cash or unknown is asked once on the review card ("Is this truck
+  leased from Prime, financed, or paid for?") and the answer is stored on
+  the truck. FN is the credit direction of this family and is flagged for
+  the tax professional.
+- **INTEREST** (IH): a credit is INTEREST_INCOME (out of profit, shown as a
+  bridge line); a charge is INTEREST_EXPENSE.
+
+### Final counts
 
 | Class | Rows |
 |---|---|
 | EXPENSE_VARIABLE | 60 |
 | REVENUE | 44 |
-| ASK | 43 |
-| EXPENSE_FIXED | 21 |
+| PERSONAL | 26 |
+| EXPENSE_FIXED | 20 |
+| ASK | 13 |
+| REPAYMENT | 13 |
 | REIMBURSEMENT | 11 |
-| INFORMATIONAL | 9 |
-| REPAYMENT | 8 |
-| PERSONAL | 7 |
-| REFUNDABLE_FUND | 5 |
-| WAGES | 4 |
+| INFORMATIONAL | 10 |
+| REFUNDABLE_FUND | 6 |
+| WAGES | 5 |
+| TRUCK_PAYMENT | 2 |
+| INTEREST | 1 |
 | INTEREST_INCOME | 1 |
+| CAPITAL | 1 |
 | **Total** | 213 |
 
-No row is proposed as INTEREST_EXPENSE yet: the two candidates (IH, IP)
-are ASK.
+13 rows stay null (ASK) and follow the unknown-line policy: AG, BF/ADJ 98, BS, BW, CW, CY, FL/FINE 01, HL, ID, OE/PART 03, OT/LMPR 01, PA/PLTS 01, TP.
 
-### The questions behind the 43 ASK rows (grouped)
+### Not in the code list (nothing seeded, nothing invented)
 
-1. **Health, dental, life and gap insurance (20 rows):** H1-H8, HI, HL,
-   LI, DI, G1-G4, ID, IE, IO, IS. These are seeded as "Insurance—Health",
-   deductible. They are personal coverage rather than an operating cost
-   of the truck. Should they be PERSONAL, or EXPENSE_FIXED? Work comp and
-   occupational accident coverage (OA, OW, LW) are proposed as
-   EXPENSE_FIXED and are not part of this question.
-2. **Interest on the funds (IH):** is it interest charged to you
-   (INTEREST_EXPENSE) or interest paid to you on E-Fund/PB/tire fund?
-3. **Note principal and interest (IP):** is it one class, or split
-   between INTEREST_EXPENSE and REPAYMENT?
-4. **401k loan payment (AL):** PERSONAL or REPAYMENT?
-5. **Wage-tax and work-comp "bonus" rows (BS, BW):** are they a credit to
-   you (REIMBURSEMENT) or a charge (WAGES)?
-6. **Co-driver guarantee (GO, GP):** GO as WAGES? GP as INFORMATIONAL?
-7. **Fuel discounts (RD, UD):** REIMBURSEMENT (they lower fuel cost) or
-   REVENUE?
-8. **Lease-end and forgiven amounts:**
-   - CY lease completion payout: REVENUE or REFUNDABLE_FUND?
-   - FN forgiven payment: REVENUE or REIMBURSEMENT?
-   - NU prior tire fund: REFUNDABLE_FUND or an expense?
-9. **Others, one each:**
-   - AG agent fee add-back: REVENUE or REIMBURSEMENT?
-   - FL fines: PERSONAL, or EXPENSE_VARIABLE kept non-deductible?
-   - OE other equipment: EXPENSE_VARIABLE or PERSONAL?
-   - OT overtime paid to a shipper or receiver: REIMBURSEMENT or EXPENSE_VARIABLE?
-   - PA pallets: EXPENSE_VARIABLE or REIMBURSEMENT?
-   - TP tarp: EXPENSE_VARIABLE, or is it tarp pay (REVENUE)?
-   - TS training school: REPAYMENT or an expense?
-   - EXTEND WR PURCH: EXPENSE_FIXED or EXPENSE_VARIABLE?
-10. **Flagged rows (BF ADJ 98, CW, IB):** need checking against Prime's
-    original list.
+- **ED** (named in D7 as a fuel discount): there is no ED row in the 205-code
+  list. RD and UD are the fuel discounts that exist.
+- **OPERATOR TRK EXTRAS** (named in R3/D9): not a settlement code. It is an
+  operating-statement line, already excluded and tracked in Truck Cost
+  Basis (prime-statement-source.md, D6). No code-map row was added.
+- **D1/D2** (named in D10 "if they are payments"): their descriptions say
+  driveline REPAIRS deducted from the lease completion incentive, not
+  payments, so they stay EXPENSE_VARIABLE.
+- No truck purchase line exists in the list (R3).
+
+### Rows for the owner's manual check against Prime's original list
+
+BF/ADJ 98, CW, IA, IB, ID, ML, TP: the classes above follow the decisions,
+but the labels and code letters themselves are not guessed.
 
 ### Full table (213 rows)
 
-| # | Code | Sub | Label | Current category | Deductible | Type | Proposed class | Why / question |
+| # | Code | Sub | Label | Current category | Deductible | Type | Class | Why |
 |---|---|---|---|---|---|---|---|---|
-| 1 | AL | MISC 50 | 401K LOAN PAYMT | Advance Repayment | No | chargeback | **ASK** | Repaying a loan against the owner's own 401k: PERSONAL or REPAYMENT? |
+| 1 | AL | MISC 50 | 401K LOAN PAYMT | Advance Repayment | No | chargeback | **PERSONAL** | D4: 401k loan repayment |
 | 2 | AD | OIL 03 | ADDITIVES | Fuel Additives | Yes | chargeback | **EXPENSE_VARIABLE** | fuel additives |
 | 3 | AF |  | AGENT FEE | Dispatch & Factoring Fees | Yes | chargeback | **EXPENSE_VARIABLE** | per-load broker fee |
-| 4 | AG |  | AGT FEE GUR RFD | (generic) | — | income | **ASK** | agent fee added back to keep the 80-cent guarantee: REVENUE or REIMBURSEMENT (offsets AF)? |
+| 4 | AG |  | AGT FEE GUR RFD | (generic) | — | income | **ASK** | D9: ASK |
 | 5 | AP |  | APU RENTAL PYMT | Lease & Rent | Yes | chargeback | **EXPENSE_FIXED** | weekly APU rental |
 | 6 | AS | MISC 16 | ACCOUNTING SERVICE | Legal & Professional Services | Yes | chargeback | **EXPENSE_FIXED** | weekly accounting service |
 | 7 | BC | BASC 01 | BASS COUNTRY CAFE | Meals (per diem covered) | No | chargeback | **PERSONAL** | food at the cafe; meals are covered by per diem, not a business line |
 | 8 | BF | MISC 07 | BALFWD TRANSFER | (generic) | — | — | **INFORMATIONAL** | balance transfer between payroll sides |
 | 9 | BF | ADJ 98 | BALANCE PASSMORE | (generic) | — | — | **ASK** | FLAGGED: source scan unclear, "BALANCE PASSMORE" |
 | 10 | BL |  | BONUS LAYOVER | (generic) | — | income | **REVENUE** | layover bonus |
-| 11 | BS |  | BONUS TX REIMB | Wages & Payroll Taxes (W-2) | Yes | chargeback | **ASK** | reimburses extra taxes an operator paid; seeded as a W-2 wages CHARGEBACK. Credit (REIMBURSEMENT) or charge (WAGES)? |
+| 11 | BS |  | BONUS TX REIMB | Wages & Payroll Taxes (W-2) | Yes | chargeback | **ASK** | D5: ASK at runtime |
 | 12 | BT |  | BTDH INSURANCE | Insurance—Truck | Yes | chargeback | **EXPENSE_FIXED** | bobtail/deadhead insurance premium |
-| 13 | BW |  | BONUS WC REIMB | Wages & Payroll Taxes (W-2) | Yes | chargeback | **ASK** | reimburses extra work comp; same question as BS |
+| 13 | BW |  | BONUS WC REIMB | Wages & Payroll Taxes (W-2) | Yes | chargeback | **ASK** | D5: ASK at runtime |
 | 14 | CB | ADV 05 | CABCARD | ELD & Communications | Yes | chargeback | **EXPENSE_VARIABLE** | loading money to the cab card (phone/e-mail) |
 | 15 | CC | CRGO 01 | CARGO CLAIMS | Insurance—Truck | Yes | chargeback | **EXPENSE_VARIABLE** | cargo claim cost (per event) |
 | 16 | CD |  | CLAIMS DOWNTIME | (generic) | — | income | **REVENUE** | downtime pay |
@@ -164,7 +170,7 @@ are ASK.
 | 21 | CS | STOR 01 | COMPANY STORE | Truck Supplies & Equipment | Yes | chargeback | **EXPENSE_VARIABLE** | company store purchases |
 | 22 | CT |  | CARTAGE | Dispatch & Factoring Fees | Yes | chargeback | **EXPENSE_VARIABLE** | outside cartage/storage |
 | 23 | CW |  | CARRYOV'R WARNTY | (generic) | — | — | **ASK** | FLAGGED: carry-over warranty on previously leased trucks; treatment unclear |
-| 24 | CY |  | LCI PAYOUT | (generic) | — | income | **ASK** | lease completion payout: REVENUE, or return of a held amount (REFUNDABLE_FUND)? |
+| 24 | CY |  | LCI PAYOUT | (generic) | — | income | **ASK** | D8: ASK |
 | 25 | D1 |  | DRVLINE <= $500 | Maintenance & Repairs | Yes | chargeback | **EXPENSE_VARIABLE** | driveline repair |
 | 26 | D2 |  | DRVLINE > $500 | Maintenance & Repairs | Yes | chargeback | **EXPENSE_VARIABLE** | driveline repair |
 | 27 | D3 |  | DRVLINE > $500 | (generic) | — | income | **REIMBURSEMENT** | Prime covers 50% of a driveline repair (offsets the repair) |
@@ -176,7 +182,7 @@ are ASK.
 | 33 | DF |  | WG/DF FICA DRV | Wages & Payroll Taxes (W-2) | Yes | chargeback | **WAGES** | FICA for a driver |
 | 34 | DG |  | DRUMMING | (generic) | — | income | **REVENUE** | accessorial pay |
 | 35 | DH | SEE DETAIL | DEADHEAD | (generic) | — | income | **REVENUE** | deadhead pay |
-| 36 | DI |  | DENTAL INSURANCE | Insurance—Health | Yes | chargeback | **ASK** | dental insurance: see the health-insurance question |
+| 36 | DI |  | DENTAL INSURANCE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: dental |
 | 37 | DJ | STOP | JOB SITE DELVRY | (generic) | — | income | **REVENUE** | job site delivery pay |
 | 38 | DL |  | TRANSIT DELAY | (generic) | — | income | **REVENUE** | delay pay |
 | 39 | DM | MOTL 02 | DRIVER MOTEL | Parking & Lodging | Yes | chargeback | **EXPENSE_VARIABLE** | motel |
@@ -189,7 +195,7 @@ are ASK.
 | 46 | DY | DRYC 01 | DRY CLEANING | Misc | No | chargeback | **PERSONAL** | dry cleaning |
 | 47 | EA |  | BAD APPT | (generic) | — | income | **REVENUE** | bad appointment pay |
 | 48 | EB |  | OTHER LAYOVER | (generic) | — | income | **REVENUE** | layover pay |
-| 49 | EF |  | EMERGENCY FUND | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | emergency fund contribution or withdrawal |
+| 49 | EF |  | EMERGENCY FUND | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | D8 |
 | 50 | EM |  | EMPTY MILES | (generic) | — | income | **REVENUE** | empty-mile pay |
 | 51 | EP | XPAY | EXTRA PAY | (generic) | — | income | **REVENUE** | extra pay |
 | 52 | EQ |  | EQUILIZATION PAY | (generic) | — | income | **REVENUE** | equalization pay |
@@ -201,50 +207,50 @@ are ASK.
 | 58 | FC | MISC 15 | FUEL CARD CHG | Bank & Merchant Fees | Yes | chargeback | **EXPENSE_FIXED** | $1.00 weekly fuel card fee |
 | 59 | FE |  | FLATBED EQUIMT | Truck Supplies & Equipment | Yes | chargeback | **EXPENSE_VARIABLE** | flatbed equipment |
 | 60 | FG |  | FUEL SURCG GUAR | (generic) | — | income | **REVENUE** | fuel surcharge guarantee |
-| 61 | FL | FINE 01 | FINES | Misc | No | chargeback | **ASK** | fines: PERSONAL (non-deductible) or EXPENSE_VARIABLE kept non-deductible? |
+| 61 | FL | FINE 01 | FINES | Misc | No | chargeback | **ASK** | D9: ASK |
 | 62 | FJ |  | FUEL ADJUSTMENT | (generic) | — | income | **REVENUE** | fuel adjustment billed to the customer |
-| 63 | FN |  | FORGIVEN PAYMNT | (generic) | — | income | **ASK** | forgiven truck payment: REVENUE, or REIMBURSEMENT offsetting the truck payment? |
+| 63 | FN |  | FORGIVEN PAYMNT | (generic) | — | income | **TRUCK_PAYMENT** | D8/D10: credit direction of the truck-payment family; flagged for the tax professional |
 | 64 | FR |  | REEFER FUEL SURCG | (generic) | — | income | **REVENUE** | reefer fuel surcharge |
 | 65 | FS |  | FUEL REVENUE | (generic) | — | income | **REVENUE** | fuel revenue |
 | 66 | FX | PHON 03 | TANKER FAX REIMB | (generic) | — | income | **REIMBURSEMENT** | fax cost reimbursed |
-| 67 | G1 | AHC 91 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **ASK** | gap health insurance: see the health-insurance question |
-| 68 | G2 | AHC 92 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **ASK** | gap health insurance: see the health-insurance question |
-| 69 | G3 | AHC 93 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **ASK** | gap health insurance: see the health-insurance question |
-| 70 | G4 | AHC 94 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **ASK** | gap health insurance: see the health-insurance question |
+| 67 | G1 | AHC 91 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: "interim insurance" for the associate (health gap cover, not truck GAP) |
+| 68 | G2 | AHC 92 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 69 | G3 | AHC 93 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 70 | G4 | AHC 94 | GAP INSURANCE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
 | 71 | GA | GARN 31 | GARNISHMENT | Misc | No | chargeback | **PERSONAL** | child support / garnishment |
 | 72 | GF | GARN 99 | CH SUPP/GAR FEE | Misc | No | chargeback | **PERSONAL** | garnishment fee |
-| 73 | GO | GUARO | WKLY GUAR OP SH | (generic) | — | chargeback | **ASK** | co-driver weekly guarantee charged to the operator: WAGES? (no category today) |
-| 74 | GP | GUARO | WKLY GUAR PR SH | (generic) | — | income | **ASK** | co-driver weekly guarantee kept as Prime expense: INFORMATIONAL? |
+| 73 | GO | GUARO | WKLY GUAR OP SH | (generic) | — | chargeback | **WAGES** | D6: pays the co-driver's guarantee, cost charged to the operator |
+| 74 | GP | GUARO | WKLY GUAR PR SH | (generic) | — | income | **INFORMATIONAL** | D6: co-driver guarantee that stays a Prime expense (memo line) |
 | 75 | GR | REPR 04 | GLASS RACK REPAIR | Maintenance & Repairs | Yes | chargeback | **EXPENSE_VARIABLE** | repair |
 | 76 | GU |  | GUARANTY ADVANCE | Advance Repayment | No | chargeback | **REPAYMENT** | guarantee advance settled |
-| 77 | H1 | SEE DETAIL | HLTH INS SINGLE | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 78 | H2 | SEE DETAIL | HLTH INS AS/SPO | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 79 | H3 | SEE DETAIL | HLTH INS AS + CHILD | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 80 | H4 | SEE DETAIL | HLTH INS FAMILY | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 81 | H5 | SEE DETAIL | LC HL INS AS/SP | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 82 | H6 | SEE DETAIL | LC HL INS AS/CH | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 83 | H7 | SEE DETAIL | LC HL INS FAMILY | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 84 | H8 | SEE DETAIL | LC HL INS SINGLE | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
+| 77 | H1 | SEE DETAIL | HLTH INS SINGLE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: health insurance on the person |
+| 78 | H2 | SEE DETAIL | HLTH INS AS/SPO | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 79 | H3 | SEE DETAIL | HLTH INS AS + CHILD | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 80 | H4 | SEE DETAIL | HLTH INS FAMILY | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 81 | H5 | SEE DETAIL | LC HL INS AS/SP | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 82 | H6 | SEE DETAIL | LC HL INS AS/CH | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 83 | H7 | SEE DETAIL | LC HL INS FAMILY | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
+| 84 | H8 | SEE DETAIL | LC HL INS SINGLE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2 |
 | 85 | HC | WASH 03 | HEEL CHARGE | Truck Wash & Detailing | Yes | chargeback | **EXPENSE_VARIABLE** | tank clean-out |
 | 86 | HH |  | HOSE HOOK/UNHK | (generic) | — | income | **REVENUE** | accessorial pay |
-| 87 | HI |  | HEALTH INSURANCE | Insurance—Health | Yes | chargeback | **ASK** | health insurance: see the health-insurance question |
-| 88 | HL |  | HEALTH LIFE | Insurance—Health | Yes | chargeback | **ASK** | life insurance: see the health-insurance question |
+| 87 | HI |  | HEALTH INSURANCE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: health insurance |
+| 88 | HL |  | HEALTH LIFE | Insurance—Health | Yes | chargeback | **ASK** | R2 unclear: "life insurance on drivers, leasor's portion" may be an employee benefit the business pays |
 | 89 | HT |  | HIGHWAY TOLLS | Tolls & Scales | Yes | chargeback | **EXPENSE_VARIABLE** | tolls |
 | 90 | IA | AWRD 02 | INSPECTION AWRD | (generic) | — | income | **REVENUE** | inspection award (in the garbled IA/IB/ID area; verify the letter) |
-| 91 | IB | AWRD 03 | TUITION REIMB | (generic) | — | income | **ASK** | FLAGGED: code letter unclear; tuition reimbursement = REIMBURSEMENT or REVENUE? |
-| 92 | ID |  | PASSMO DENTAL | Insurance—Health | Yes | chargeback | **ASK** | FLAGGED: row merged with an adjacent cell; dental premium, see the health-insurance question |
-| 93 | IE |  | PASSMO HLTH INS | Insurance—Health | Yes | chargeback | **ASK** | Passmore health premium: see the health-insurance question |
-| 94 | IH |  | INTEREST EXPENSE | Bank & Merchant Fees | Yes | chargeback | **ASK** | "Interest on E-Fund, PB & tire fund less any previous week's negative balance": interest CHARGED (INTEREST_EXPENSE) or interest EARNED on the funds? |
+| 91 | IB | AWRD 03 | TUITION REIMB | (generic) | — | income | **REPAYMENT** | D10: credit of the training-school family (reduces the training balance); flagged for the tax professional; code letter to verify |
+| 92 | ID |  | PASSMO DENTAL | Insurance—Health | Yes | chargeback | **ASK** | flagged row (merged cell): owner checks against Prime's list |
+| 93 | IE |  | PASSMO HLTH INS | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: health premium |
+| 94 | IH |  | INTEREST EXPENSE | Bank & Merchant Fees | Yes | chargeback | **INTEREST** | D2: direction decides — credit = INTEREST_INCOME (out of profit, bridge line), charge = INTEREST_EXPENSE |
 | 95 | II |  | INTEREST INCOME | (generic) | — | income | **INTEREST_INCOME** | interest income |
 | 96 | IM | FDEX 02 | IMAGE TRIPS | ELD & Communications | Yes | chargeback | **EXPENSE_VARIABLE** | truck-stop scanning |
-| 97 | IO |  | PASSMO AFTX INS | Insurance—Health | Yes | chargeback | **ASK** | Passmore after-tax health premium: see the health-insurance question |
-| 98 | IP |  | INT/PRIN-NOTES | Truck/Trailer Payments | Yes | chargeback | **ASK** | note principal AND interest in one line: INTEREST_EXPENSE, REPAYMENT, or split? |
-| 99 | IS |  | PASSMO SUPL INS | Insurance—Health | Yes | chargeback | **ASK** | Passmore supplemental premium: see the health-insurance question |
+| 97 | IO |  | PASSMO AFTX INS | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: after-tax health premium |
+| 98 | IP |  | INT/PRIN-NOTES | Truck/Trailer Payments | Yes | chargeback | **REPAYMENT** | D3: interest portion not separated on the statement |
+| 99 | IS |  | PASSMO SUPL INS | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: supplemental premium |
 | 100 | LA |  | LH-FUEL SRCHG ADJ | (generic) | — | income | **REVENUE** | linehaul / fuel surcharge adjustment |
 | 101 | LC | MISC 21 | LIABILITY CLAIM | Insurance—Truck | Yes | chargeback | **EXPENSE_VARIABLE** | liability claim (per event) |
 | 102 | LD | LOAD | DRIVER LOAD | (generic) | — | income | **REVENUE** | load pay |
 | 103 | LF |  | FED HWY TAX | Permits, Licenses & Road Taxes | Yes | chargeback | **EXPENSE_FIXED** | Federal Highway Use Tax (annual) |
-| 104 | LI | SEE DETAIL | LIFE INSURANCE | Insurance—Health | Yes | chargeback | **ASK** | life insurance: see the health-insurance question |
+| 104 | LI | SEE DETAIL | LIFE INSURANCE | Insurance—Health | Yes | chargeback | **PERSONAL** | R2: life insurance on the person |
 | 105 | LL | PART 03 | LOAD LOCKS | Truck Supplies & Equipment | Yes | chargeback | **EXPENSE_VARIABLE** | load locks |
 | 106 | LM | LMPR | OUTSIDE LUMPER | Lumper Fees | Yes | chargeback | **EXPENSE_VARIABLE** | lumper |
 | 107 | LO | LAYOV | LAYOVER PAY | (generic) | — | income | **REVENUE** | layover pay |
@@ -255,11 +261,11 @@ are ASK.
 | 112 | LU | LOAD | LD/UNLD TRLR | (generic) | — | income | **REVENUE** | load/unload pay |
 | 113 | LW |  | LTD WORK COMP | Insurance—Health | Yes | chargeback | **EXPENSE_FIXED** | work comp coverage (business insurance, seeded under health) |
 | 114 | MB | MISC 17 | MAIL BOX | Office & Admin | Yes | chargeback | **EXPENSE_FIXED** | weekly mail box |
-| 115 | MC | MISC 06 | MERRY CHRISTMAS | (generic) | — | income | **REVENUE** | Christmas bonus |
-| 116 | MD | MISC 04 | MAIL BX DEPOSIT | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | $10 mailbox key deposit |
+| 115 | MC | MISC 06 | MERRY CHRISTMAS | (generic) | — | income | **REVENUE** | D9: bonus |
+| 116 | MD | MISC 04 | MAIL BX DEPOSIT | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | D8: description says deposit ($10 key deposit) |
 | 117 | ME | MISC 04 | MISC EXPENSES | Misc | Yes | chargeback | **EXPENSE_VARIABLE** | misc expenses |
 | 118 | MF | MISC 18 | MARKET FEE | Permits, Licenses & Road Taxes | Yes | chargeback | **EXPENSE_VARIABLE** | market entry fee |
-| 119 | MG |  | MILEAGE CHARGE | Truck/Trailer Payments | Yes | chargeback | **EXPENSE_VARIABLE** | per-mile charge, part of the lease payment |
+| 119 | MG |  | MILEAGE CHARGE | Truck/Trailer Payments | Yes | chargeback | **EXPENSE_VARIABLE** | D10 |
 | 120 | MI |  | MILES INCENTIVE | (generic) | — | income | **REVENUE** | miles incentive |
 | 121 | ML | PU/DRP | LODED TL | (generic) | — | income | **REVENUE** | local delivery pay (label prints "LODED TL") |
 | 122 | MO | MOTL 01 | MOTEL | Parking & Lodging | Yes | chargeback | **EXPENSE_VARIABLE** | motel |
@@ -267,27 +273,27 @@ are ASK.
 | 124 | MR | REPR 01 | HUB RECALL | (generic) | — | income | **REIMBURSEMENT** | credit for a hub repair (offsets the repair) |
 | 125 | NB |  | NEGATIVE BAL PY | (generic) | — | — | **INFORMATIONAL** | negative balance set into payments |
 | 126 | NC |  | NPI CLEARING | (generic) | — | — | **INFORMATIONAL** | Prime clearing account |
-| 127 | NP |  | TRUCK PAYMENT | Truck/Trailer Payments | Yes | chargeback | **EXPENSE_FIXED** | lease truck payment |
-| 128 | NT |  | CUR TIRE FUND | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | current tire fund (per mile) |
-| 129 | NU |  | PRI TIRE FUND | Escrow & Deposits | No | chargeback | **ASK** | prior tire fund "based on used tread of previously leased vehicles": REFUNDABLE_FUND or EXPENSE? |
-| 130 | NX |  | EXCESS MILES | Truck/Trailer Payments | Yes | chargeback | **EXPENSE_VARIABLE** | excess miles charge (lease) |
+| 127 | NP |  | TRUCK PAYMENT | Truck/Trailer Payments | Yes | chargeback | **TRUCK_PAYMENT** | D10: leased -> EXPENSE_FIXED (Lease & Rent); financed -> REPAYMENT; unknown -> asked once |
+| 128 | NT |  | CUR TIRE FUND | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | D8: tire fund contribution |
+| 129 | NU |  | PRI TIRE FUND | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | D8: tire fund movement; as a credit = held balance down, no profit effect |
+| 130 | NX |  | EXCESS MILES | Truck/Trailer Payments | Yes | chargeback | **EXPENSE_VARIABLE** | D10 |
 | 131 | OA |  | OPER WORK COMP | Insurance—Health | Yes | chargeback | **EXPENSE_FIXED** | operator work comp insurance |
 | 132 | OC |  | O/O CLOSING B/FWD | (generic) | — | — | **INFORMATIONAL** | owner operator closing balance forward |
-| 133 | OE | PART 03 | OTHER EQUIPMENT | Truck Supplies & Equipment | Yes | chargeback | **ASK** | added options such as refrigerators: EXPENSE_VARIABLE or PERSONAL? |
+| 133 | OE | PART 03 | OTHER EQUIPMENT | Truck Supplies & Equipment | Yes | chargeback | **ASK** | D9: ASK |
 | 134 | OF |  | O/O FED HWY TAX | Permits, Licenses & Road Taxes | Yes | chargeback | **EXPENSE_FIXED** | owner Federal Highway Use Tax |
 | 135 | OS |  | OPER STMT COST | Legal & Professional Services | Yes | chargeback | **EXPENSE_FIXED** | operating statement cost |
-| 136 | OT | LMPR 01 | OVERTIME LD/ULD | (generic) | — | income | **ASK** | money paid to a shipper/receiver to work overtime: REIMBURSEMENT (income line) or EXPENSE_VARIABLE? |
+| 136 | OT | LMPR 01 | OVERTIME LD/ULD | (generic) | — | income | **ASK** | D9: ASK |
 | 137 | OW |  | OWNER OCCUP ACC | Insurance—Health | Yes | chargeback | **EXPENSE_FIXED** | occupational accident insurance |
-| 138 | PA | PLTS 01 | PALLETS | Truck Supplies & Equipment | Yes | chargeback | **ASK** | "pallet purchases or reimbursements": EXPENSE_VARIABLE or REIMBURSEMENT? |
-| 139 | PB |  | P/B ADJUSTMENT | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | performance bond |
-| 140 | PC | MISC 01 | PETTY CASH REIM | (generic) | — | income | **REIMBURSEMENT** | petty cash reimbursement |
+| 138 | PA | PLTS 01 | PALLETS | Truck Supplies & Equipment | Yes | chargeback | **ASK** | D9: ASK |
+| 139 | PB |  | P/B ADJUSTMENT | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | D8 |
+| 140 | PC | MISC 01 | PETTY CASH REIM | (generic) | — | income | **REIMBURSEMENT** (as a charge: PERSONAL) | D9: credit = reimbursement; as a CHARGE = PERSONAL (class_when_charge) |
 | 141 | PD |  | PHY DAM INS PYM | Insurance—Truck | Yes | chargeback | **EXPENSE_FIXED** | physical damage premium |
 | 142 | PF |  | PAYROLL FEE | Wages & Payroll Taxes (W-2) | Yes | chargeback | **WAGES** | payroll fee (company driver) |
 | 143 | PG |  | PUMPING | (generic) | — | income | **REVENUE** | pumping pay |
 | 144 | PH | PHON 01 | PHONE CALLS | ELD & Communications | Yes | chargeback | **EXPENSE_VARIABLE** | phone calls |
 | 145 | PI |  | PASSENGER INSURANCE | Insurance—Truck | Yes | chargeback | **EXPENSE_FIXED** | passenger insurance |
 | 146 | PM | PRMT 01 | PERMITS | Permits, Licenses & Road Taxes | Yes | chargeback | **EXPENSE_FIXED** | permits |
-| 147 | PN |  | TRK PYMNT REIMB | (generic) | — | income | **REIMBURSEMENT** | truck payment reimbursed (offsets NP) |
+| 147 | PN |  | TRK PYMNT REIMB | (generic) | — | income | **REPAYMENT** | D10 |
 | 148 | PO | PPOS 01 | POINT OF SALE | Meals (per diem covered) | No | chargeback | **PERSONAL** | grill purchase; meals are covered by per diem |
 | 149 | PS | STOP | PICKUP/STOP PAY | (generic) | — | income | **REVENUE** | stop pay |
 | 150 | PT |  | PHY DAM CHG TRL | Insurance—Truck | Yes | chargeback | **EXPENSE_VARIABLE** | trailer damage deductible (per event) |
@@ -299,21 +305,21 @@ are ASK.
 | 156 | QU |  | QUALCOMM UNIT | ELD & Communications | Yes | chargeback | **EXPENSE_FIXED** | Qualcomm unit |
 | 157 | RB | REFRL | REFERRAL BONUS | (generic) | — | income | **REVENUE** | referral bonus |
 | 158 | RC |  | RECONCILE | (generic) | — | income | **REVENUE** | revenue guarantee reconcile |
-| 159 | RD |  | REEF FUEL DSCNT | (generic) | — | income | **ASK** | reefer fuel discount: REIMBURSEMENT (offsets fuel) or REVENUE? |
+| 159 | RD |  | REEF FUEL DSCNT | (generic) | — | income | **REIMBURSEMENT** | D7: reefer fuel discount offsets fuel, never revenue |
 | 160 | RF | FUEL 02 | REEFER FUEL | Fuel & DEF | Yes | chargeback | **EXPENSE_VARIABLE** | reefer fuel |
 | 161 | RH |  | PRE H LINEHAUL | (generic) | — | income | **REVENUE** | linehaul adjustment |
-| 162 | RN | RETN | START RIGHT PAY | (generic) | — | income | **REVENUE** | new driver guarantee |
+| 162 | RN | RETN | START RIGHT PAY | (generic) | — | income | **REVENUE** | D9 |
 | 163 | RO | OIL 02 | REEFER OIL | Fuel & DEF | Yes | chargeback | **EXPENSE_VARIABLE** | reefer oil |
-| 164 | TN |  | TRK PYM-CONTEST | (generic) | — | income | **REIMBURSEMENT** | truck payment reimbursed by a contest (offsets NP) |
+| 164 | TN |  | TRK PYM-CONTEST | (generic) | — | income | **REPAYMENT** | D10 |
 | 165 | TO | TOLL 01 | TOLLS | Tolls & Scales | Yes | chargeback | **EXPENSE_VARIABLE** | tolls |
 | 166 | TO |  | TOLLS | Tolls & Scales | Yes | chargeback | **EXPENSE_VARIABLE** | tolls |
-| 167 | TP |  | TARP | Truck Supplies & Equipment | Yes | chargeback | **ASK** | "Tarp and untarp loads" seeded as a CHARGEBACK supply: EXPENSE_VARIABLE, or is this tarp PAY (REVENUE)? |
+| 167 | TP |  | TARP | Truck Supplies & Equipment | Yes | chargeback | **ASK** | D9: ASK (also flagged) |
 | 168 | TR | REPR 02 | TRAILER REPAIR | Maintenance & Repairs | Yes | chargeback | **EXPENSE_VARIABLE** | trailer repair |
-| 169 | TS | MISC 48 | TRAINING SCHOOL | Training & Education | Yes | chargeback | **ASK** | training school balance of a company driver: REPAYMENT or EXPENSE? |
+| 169 | TS | MISC 48 | TRAINING SCHOOL | Training & Education | Yes | chargeback | **REPAYMENT** | D9: tuition owed to the carrier (tax note) |
 | 170 | TT | TIRE 02 | TRAILER TIRE | Tires | Yes | chargeback | **EXPENSE_VARIABLE** | tires |
 | 171 | TW | WASH 05 | TRAILER WASH | Truck Wash & Detailing | Yes | chargeback | **EXPENSE_VARIABLE** | trailer wash |
 | 172 | TX | FDEX 01 | TRIP XPRESS CHG | Bank & Merchant Fees | Yes | chargeback | **EXPENSE_VARIABLE** | TripPak / courier |
-| 173 | UD |  | TRAC FUEL DSCNT | (generic) | — | income | **ASK** | tractor fuel discount: same question as RD |
+| 173 | UD |  | TRAC FUEL DSCNT | (generic) | — | income | **REIMBURSEMENT** | D7: tractor fuel discount offsets fuel, never revenue |
 | 174 | UE | FUEL 03 | TRACTOR DEF | Fuel & DEF | Yes | chargeback | **EXPENSE_VARIABLE** | DEF |
 | 175 | UF | FUEL 01 | TRACTOR FUEL | Fuel & DEF | Yes | chargeback | **EXPENSE_VARIABLE** | tractor fuel |
 | 176 | UL |  | UNIT TIRE LABOR | Tires | Yes | chargeback | **EXPENSE_VARIABLE** | tire labor |
@@ -337,7 +343,7 @@ are ASK.
 | 194 | WO | MISC 13 | WO OPER BAL FWD | (generic) | — | — | **INFORMATIONAL** | write-off of a leaving operator's balance |
 | 195 | WP | ADV 01 | WIRE PAYCHECK | Bank & Merchant Fees | Yes | chargeback | **EXPENSE_VARIABLE** | Comcheck paycheck fee |
 | 196 | WR |  | WARRANTY | (generic) | — | income | **REIMBURSEMENT** | warranty money back |
-| 197 | WS | PART 06 | DR WEIGHRTE DEP | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | Weighrite deposit |
+| 197 | WS | PART 06 | DR WEIGHRTE DEP | Escrow & Deposits | No | chargeback | **REFUNDABLE_FUND** | D8: description says deposit (Weighrite) |
 | 198 | WT | WGT 01 | WEIGHT TICKETS | Tolls & Scales | Yes | chargeback | **EXPENSE_VARIABLE** | scale tickets |
 | 199 | XL | RPLAB | DRIVER REPAIR LBR | (generic) | — | income | **REVENUE** | pay for driver repair labor |
 | 200 | XP | PART 07 | DRVR REPR PARTS | (generic) | — | income | **REIMBURSEMENT** | trailer parts the driver paid reimbursed |
@@ -346,7 +352,7 @@ are ASK.
 | 203 | YS |  | SAFTY INCV SOLO | (generic) | — | income | **REVENUE** | safety incentive |
 | 204 | YT |  | SAFTY INCV TEAM | (generic) | — | income | **REVENUE** | safety incentive |
 | 205 | YW | YARDW | YARD WORK W/C | (generic) | — | income | **REVENUE** | yard work pay |
-| 206 | EXTEND WR PURCH |  | Extended Warranty Purchase | Warranty & Service Contracts | Yes | chargeback | **ASK** | extended warranty purchase: EXPENSE_FIXED or EXPENSE_VARIABLE? |
+| 206 | EXTEND WR PURCH |  | Extended Warranty Purchase | Warranty & Service Contracts | Yes | chargeback | **CAPITAL** | D9/R3: goes to Truck Cost Basis |
 | 207 | ACCOUNTING SERV |  | Accounting Service (abbreviated) | Legal & Professional Services | Yes | chargeback | **EXPENSE_FIXED** | same as AS |
 | 208 | EZ FAST LN |  | EZ Fast Lane Toll | Tolls & Scales | Yes | chargeback | **EXPENSE_VARIABLE** | same as EZ |
 | 209 | WIRE CHARGE |  | Wire Charge | Bank & Merchant Fees | Yes | chargeback | **EXPENSE_VARIABLE** | bank wire fee |
@@ -354,19 +360,3 @@ are ASK.
 | 211 | TRIP XPRESS |  | Trip Xpress Charge | Bank & Merchant Fees | Yes | chargeback | **EXPENSE_VARIABLE** | same as TX |
 | 212 | STATEMENT PREPARATION |  | Statement Preparation Fee | Legal & Professional Services | Yes | chargeback | **EXPENSE_FIXED** | same as OS |
 | 213 | POINT-OF-SALE |  | Point of Sale Purchase (hyphenated) | Meals (per diem covered) | No | chargeback | **PERSONAL** | same as PO |
-
-## What follows after approval (not done yet)
-
-- PENDING_SQL §84: `alter table carrier_code_maps add column if not
-  exists economic_class text check (...)`, then one `update` per approved
-  row. ASK rows stay null. The read-only check counts rows per class and
-  lists the nulls.
-- `docs/CARRIER_CODES.md` gets a Class column.
-- Runtime (item 4):
-  - A Prime line whose code is in the map takes its class and category
-    from the map, never from the text classifier.
-  - An unknown code, or a code with a null class, asks once on the review
-    card. The answer is remembered per carrier and user, and the owner can
-    promote it into the map; a promoted code is appended to
-    `docs/CARRIER_CODES.md`.
-  - Tests per item 5.
