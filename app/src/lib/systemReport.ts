@@ -104,9 +104,12 @@ export function serverSections(r: DiagnoseReport, t: Translate): ReportSection[]
       {
         ok: r.schema.ok,
         label: t('diagnostics.database'),
-        value: r.schema.ok
-          ? t('diagnostics.ok')
-          : t('diagnostics.missing', { names: [...r.schema.missingColumns, ...r.schema.missingFunctions].join(', ') }),
+        value:
+          (r.schema.ok
+            ? t('diagnostics.ok')
+            : t('diagnostics.missing', { names: [...r.schema.missingColumns, ...r.schema.missingFunctions].join(', ') })) +
+          // Which way the functions were checked (pg_proc since §85).
+          (r.schema.functionsCheckedBy ? ` (${r.schema.functionsCheckedBy})` : ''),
       },
     ],
   };

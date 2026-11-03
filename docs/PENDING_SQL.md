@@ -5561,6 +5561,62 @@ from information_schema.columns where table_schema = 'public';
 
 Mirror file `pending_84.sql` removed after the owner confirmed it was run (2026-11-03).
 
+## 85. DIAGNOSTICS: DATABASE FUNCTIONS FROM pg_proc (owner decision 2026-11-03) — NOT YET APPLIED
+
+Settings > Diagnostics listed 8 database functions as "missing" that exist:
+the old check probed each through PostgREST and read its hint text, and
+PostgREST gives no hint for them. This adds one read-only function that
+asks the catalog: for the names passed in, it returns those with NO row in
+`pg_proc` for schema `public`. It reads only function names, no user data,
+and changes nothing. ai-import (mode "diagnose") calls it first; until this
+runs, that call errors and the old probe is used (the Database line then
+ends in "(probe)"; after this runs, "(pg_proc)").
+
+Client before this runs: nothing changes; the report says "(probe)". Not a
+user-data table, no `profiles` column: no deletion order, invalidation or
+export entry. Redeploy ai-import (any order relative to this SQL).
+
+```sql
+-- §85 DIAGNOSTICS: database functions from pg_proc (owner decision 2026-11-03)
+-- Idempotent. Read-only: returns function NAMES only.
+create or replace function public.diagnose_missing_functions(p_names text[])
+returns text[]
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select coalesce(array_agg(n order by n), '{}'::text[])
+  from unnest(p_names) as n
+  where not exists (
+    select 1
+    from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace ns on ns.oid = p.pronamespace
+    where ns.nspname = 'public' and p.proname = n
+  );
+$$;
+
+revoke all on function public.diagnose_missing_functions(text[]) from public;
+grant execute on function public.diagnose_missing_functions(text[]) to authenticated, service_role;
+
+-- PostgREST picks up the new function.
+notify pgrst, 'reload schema';
+```
+
+Verification (read-only). Expect an empty array `{}`, which means all 8
+exist:
+
+```sql
+select public.diagnose_missing_functions(array[
+  'import_job_claim','import_job_release','import_job_put_page','import_job_saved',
+  'consume_ai_import_credit_for','document_linked_rows','preview_document_delete','delete_document_cascade'
+]);
+```
+
+Mirror file: `pending_85.sql` (repo root).
+
+- [ ] 85 run
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —

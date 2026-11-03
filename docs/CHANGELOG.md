@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- DIAGNOSTICS DB CHECK BY pg_proc (owner 2026-11-03): the 8 "missing"
+  functions exist; the PostgREST hint probe could not see them. ai-import
+  diagnose now asks `public.diagnose_missing_functions()` (§85, read-only,
+  names only) and falls back to the probe until §85 runs; the Database
+  line ends in "(pg_proc)" or "(probe)". No "faible" exists in the repo
+  (labels are the model ids); a test guards it. §85 SQL; redeploy
+  ai-import; eas update.
 - UPDATE VISIBILITY FIX (owner 2026-11-03): Settings footer + Diagnostics
   read every value on its own guard (one throwing Constants.expoConfig used
   to drop all of them to vunknown/embedded/none). Version from

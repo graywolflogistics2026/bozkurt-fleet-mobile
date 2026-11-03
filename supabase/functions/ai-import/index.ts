@@ -83,6 +83,8 @@ import {
   columnErrorMeansMissing,
   DIAGNOSE_MODELS,
   DIAGNOSE_PROBE_ARG,
+  missingFromPgProc,
+  PG_PROC_RPC,
   planInfo,
   REQUIRED_COLUMNS,
   REQUIRED_RPCS,
@@ -90,6 +92,7 @@ import {
   runModelCheck,
   summarizeJobs,
   type FetchLike,
+  type FunctionsCheckedBy,
   type JobRowForDiagnose,
 } from "./diagnose.ts";
 
@@ -1976,11 +1979,21 @@ async function handleDiagnose(
       if (colErr && columnErrorMeansMissing(colErr)) missingColumns.push(`${table}.${col}`);
     }
   }
+  // pg_proc first (PENDING_SQL §85); the old probe only until §85 runs.
   const missingFunctions: string[] = [];
-  for (const name of REQUIRED_RPCS) {
-    const { error } = await probe.rpc(name, DIAGNOSE_PROBE_ARG);
-    if (!rpcProbePresent(name, error)) missingFunctions.push(name);
+  let functionsCheckedBy: FunctionsCheckedBy = "pg_proc";
+  const pg = await probe.rpc(PG_PROC_RPC, { p_names: REQUIRED_RPCS });
+  const fromPgProc = missingFromPgProc(pg.data, pg.error);
+  if (fromPgProc) {
+    missingFunctions.push(...fromPgProc);
+  } else {
+    functionsCheckedBy = "probe";
+    for (const name of REQUIRED_RPCS) {
+      const { error } = await probe.rpc(name, DIAGNOSE_PROBE_ARG);
+      if (!rpcProbePresent(name, error)) missingFunctions.push(name);
+    }
   }
+  console.log(`[ai-import] diagnose functions by ${functionsCheckedBy}: missing=${missingFunctions.join(",") || "none"}`);
 
   let storageReachable = false;
   try {
@@ -2025,7 +2038,7 @@ async function handleDiagnose(
       plan: planInfo(JOB_PLAN_TIER, JOB_LIMITS),
       anthropicKeyPresent: anthropicKey.length > 0,
       storageReachable,
-      schema: { ok: missingColumns.length === 0 && missingFunctions.length === 0, missingColumns, missingFunctions },
+      schema: { ok: missingColumns.length === 0 && missingFunctions.length === 0, missingColumns, missingFunctions, functionsCheckedBy },
       jobs: summarizeJobs(jobRows, Date.now()),
       models,
       checkedAt: new Date().toISOString(),

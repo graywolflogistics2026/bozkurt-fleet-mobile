@@ -69,6 +69,23 @@ export const REQUIRED_RPCS: string[] = [
 ];
 export const DIAGNOSE_PROBE_ARG = { diagnose_probe_never_a_real_arg: true };
 
+// DATABASE CHECK BY pg_proc (owner decision 2026-11-03): the probe above
+// reported all 8 functions "missing" although they exist (PostgREST gives
+// no "Perhaps you meant" hint for them). The check now asks the catalog
+// itself: public.diagnose_missing_functions(p_names text[]) (PENDING_SQL
+// §85) returns the names with no row in pg_proc for schema public. Until
+// §85 runs, that call errors and the old probe is used (labeled "probe").
+export const PG_PROC_RPC = 'diagnose_missing_functions';
+export type FunctionsCheckedBy = 'pg_proc' | 'probe';
+
+// The pg_proc answer, or null when it cannot be used (fall back to the
+// probe). Only names that were asked for are kept.
+export function missingFromPgProc(data: unknown, error: unknown, asked: string[] = REQUIRED_RPCS): string[] | null {
+  if (error || !Array.isArray(data)) return null;
+  const set = new Set(asked);
+  return data.filter((n): n is string => typeof n === 'string' && set.has(n)).sort();
+}
+
 export function rpcProbePresent(
   name: string,
   err: { code?: string | null; message?: string | null; hint?: string | null; details?: string | null } | null,
@@ -381,7 +398,7 @@ export type DiagnoseReport = {
   plan: PlanInfo;
   anthropicKeyPresent: boolean;
   storageReachable: boolean;
-  schema: { ok: boolean; missingColumns: string[]; missingFunctions: string[] };
+  schema: { ok: boolean; missingColumns: string[]; missingFunctions: string[]; functionsCheckedBy?: FunctionsCheckedBy };
   jobs: JobSummary;
   models: ModelCheckResult[];
   checkedAt: string;
