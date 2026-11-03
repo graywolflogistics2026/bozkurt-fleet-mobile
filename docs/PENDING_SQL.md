@@ -5274,7 +5274,7 @@ order by table_name;
 
 Mirror file `pending_83.sql` removed after the owner confirmed it was run (2026-10-31).
 
-## 84. PRIME CODE CLASSES + DIRECTION + TRUCK OWNERSHIP (owner decision 2026-11-03, decisions R1-R4, D1-D11) — NOT YET APPLIED
+## 84. PRIME CODE CLASSES + DIRECTION + TRUCK OWNERSHIP (owner decision 2026-11-03, decisions R1-R4, D1-D11) — ✅ APPLIED 2026-11-03
 
 Design and the full row-by-row table: `docs/decisions/prime-code-classes.md`.
 Adds `economic_class` (and `class_when_charge`, used by PC only) to
@@ -5557,9 +5557,9 @@ from information_schema.columns where table_schema = 'public';
 -- Expect 1, 1, 1, 1.
 ```
 
-- [ ] 84 run
+- [x] 84 run (owner verified 2026-11-03: trucks_ownership, deductions_direction, deductions_class, rules_class = 1, 1, 1, 1)
 
-Mirror file: `pending_84.sql` (repo root).
+Mirror file `pending_84.sql` removed after the owner confirmed it was run (2026-11-03).
 
 ## Also still open (not part of any pass above)
 

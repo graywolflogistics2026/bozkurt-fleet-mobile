@@ -1100,8 +1100,6 @@ under each is unchanged original wording.
   except:
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
-  - §84 Prime code classes + direction + truck ownership — NOT YET
-    applied (owner 2026-11-03). `pending_84.sql` kept.
   - §72 remove business-balance tracking — status UNCONFIRMED.
     `pending_72.sql` kept; a read-only check query is in §72. The client
     is safe either way.
@@ -1112,7 +1110,8 @@ under each is unchanged original wording.
     confirmed 2026-10-30, mirror files removed, SQL inlined. §82 and §83
     applied — owner confirmed 2026-10-31, mirror files removed, SQL
     inlined; the batch C ai-import redeploy (milesLines) is not tracked
-    here.)
+    here. §84 applied — owner verified 2026-11-03, `pending_84.sql`
+    removed, SQL inlined.)
 - **Native build**: batch E (document scanner, version 1.1.0) needs
   `eas build --profile preview --platform android`; OTA updates published
   after it only reach 1.1.0 builds. Earlier: the owner's device reported "embedded build (no OTA
