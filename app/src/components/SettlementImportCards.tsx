@@ -10,6 +10,7 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { GATE_FAIL_REASON_KEY, type GateFailDetail, type GateFailReason, type GateHeadline, type SettlementGateResult } from '@/src/import/settlementGate';
 import { reviewInputsOf } from '@/src/import/reviewVerdict';
 import { couldNotReadReport } from '@/src/import/importAudit';
+import { ensureReasonLines } from '@/src/import/jobFailure';
 import type { Extraction } from '@/src/import/types';
 
 // SIMPLE IMPORT FLOW (owner decision 2026-10-31, batch D2 2.1): a
@@ -19,11 +20,15 @@ import type { Extraction } from '@/src/import/types';
 
 // RE-READ RULES (owner 2026-11-03): a re-read in progress says which
 // check sent it back, e.g. "Reading again (2 of 3): Variable costs".
-export function ReadingCard({ again }: { again?: { n: number; max: number; check: string } | null } = {}) {
+// "Finishing up" (owner 2026-11-03): the reading is done and its verdict is
+// still being recorded — never shown as a failure.
+export function ReadingCard({ again, finishing }: { again?: { n: number; max: number; check: string } | null; finishing?: boolean } = {}) {
   const { t } = useTranslation();
   const label = again
-    ? t("importFlow.readingAgain", { n: again.n, max: again.max, check: t(`importFlow.checkName.${again.check}`, { defaultValue: again.check }) })
-    : t("importFlow.reading");
+    ? t('importFlow.readingAgain', { n: again.n, max: again.max, check: t(`importFlow.checkName.${again.check}`, { defaultValue: again.check }) })
+    : finishing
+      ? t('importFlow.finishingUpBody')
+      : t('importFlow.reading');
   return (
     <Card>
       <ActivityIndicator color={colors.accent} size="large" />
@@ -147,6 +152,7 @@ export function CouldNotReadCard({
   details,
   stopped,
   triggerLines,
+  reasonLines,
 }: {
   extraction: Extraction | null;
   reason: GateFailReason | 'job_failed' | 'not_finished';
@@ -157,15 +163,26 @@ export function CouldNotReadCard({
   onReadAgain?: () => void;
   // RE-READ RULES: why the job stopped reading (same values twice, or the
   // 3-read cap), and the last re-read triggers for the Send report.
-  stopped?: "same_values" | "read_cap" | null;
+  stopped?: 'same_values' | 'read_cap' | 'not_rereadable' | null;
   triggerLines?: string[];
+  // NEVER GENERIC (owner 2026-11-03): the job's own reason lines (page +
+  // cause, server answer missing, ...) when there is no failing check.
+  reasonLines?: string[];
 }) {
   const { t } = useTranslation();
   const { money } = useFormatters();
   const value = (v: number | string) => (typeof v === 'number' ? money(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v);
-  const detailLines = (details ?? []).map((d) =>
-    t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) })
+  const detailLines = ensureReasonLines(
+    [
+      ...(details ?? []).map((d) =>
+        t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) })
+      ),
+      ...(reasonLines ?? []),
+    ],
+    (k, o) => t(k, o) as string,
+    reason === 'not_finished' ? 'result_json' : 'reason'
   );
+  const stopKey = stopped === 'same_values' ? 'importFlow.stoppedSameValues' : stopped === 'read_cap' ? 'importFlow.stoppedReadCap' : stopped === 'not_rereadable' ? 'importFlow.stoppedNotRereadable' : null;
   return (
     <Card>
       <View style={{ backgroundColor: 'rgba(239,68,68,0.10)', borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
@@ -176,7 +193,7 @@ export function CouldNotReadCard({
             {line}
           </MutedText>
         ))}
-        {stopped && <MutedText style={{ marginTop: spacing.xs }}>{t(stopped === "same_values" ? "importFlow.stoppedSameValues" : "importFlow.stoppedReadCap")}</MutedText>}
+        {stopKey && <MutedText style={{ marginTop: spacing.xs }}>{t(stopKey)}</MutedText>}
       </View>
       {onReadAgain && <PrimaryButton title={t('importFlow.readAgain')} onPress={onReadAgain} />}
       {onReadAgain ? <SecondaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} /> : <PrimaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} />}

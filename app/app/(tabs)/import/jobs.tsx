@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
 import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useImportJobs, useDismissImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
-import { silentAttachmentStep, simpleJobState, sortImportJobsForDisplay, type ImportJob } from '@/src/import/importJobs';
+import { silentAttachmentStep, sortImportJobsForDisplay, type ImportJob } from '@/src/import/importJobs';
+import { jobFailureInfo, jobFailureLines, jobFailureReport, jobRowState } from '@/src/import/jobFailure';
+import { triggerReportLines } from '@/src/import/jobVerdict';
+import { verdictProblemOf } from '@/src/data/jobVerdictRunner';
+import { formatBuildInfoLine, getBuildInfo } from '@/src/lib/buildInfo';
+import { scrubBankDigitsInText } from '@/src/import/bankDigits';
+import { useFormatters } from '@/src/i18n/format';
 import { Screen, Card, MutedText, SecondaryButton, PrimaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
 
@@ -21,9 +27,24 @@ import { colors, spacing, typography } from '@/src/theme';
 
 function JobRow({ job, onReview, onDismiss }: { job: ImportJob; onReview: (job: ImportJob) => void; onDismiss: (job: ImportJob) => void }) {
   const { t } = useTranslation();
-  const state = simpleJobState(job);
+  const { money } = useFormatters();
+  // NEVER A GENERIC FAILURE (owner 2026-11-03): a failed row always says
+  // why (check + numbers, page + cause, or the missing server field) and
+  // has Send report; a ready job without its verdict is "Finishing up".
+  const state = jobRowState(job);
   const [label, color] =
-    state === 'ready' ? [t('importFlow.statusReady'), colors.green] : state === 'failed' ? [t('importFlow.statusFailed'), colors.red] : [t('importFlow.statusReading'), colors.accent];
+    state === 'ready'
+      ? [t('importFlow.statusReady'), colors.green]
+      : state === 'failed'
+        ? [t('importFlow.statusFailed'), colors.red]
+        : [state === 'finishing' ? t('importFlow.finishingUp') : t('importFlow.statusReading'), colors.accent];
+  const value = (v: number | string) => (typeof v === 'number' ? money(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v);
+  const reasonLines = state === 'failed' ? jobFailureLines(jobFailureInfo(job), (k, o) => t(k, o) as string, value, job.errorStep) : [];
+  const problem = state === 'finishing' ? verdictProblemOf(job.id) : null;
+  function sendReport() {
+    const text = jobFailureReport(job, t('importFlow.couldNotReadTitle'), reasonLines, triggerReportLines(job.review?.triggers), formatBuildInfoLine(getBuildInfo()));
+    void Share.share({ message: scrubBankDigitsInText(text) }).catch(() => undefined);
+  }
 
   return (
     <Card style={{ marginBottom: spacing.sm }}>
@@ -34,19 +55,30 @@ function JobRow({ job, onReview, onDismiss }: { job: ImportJob; onReview: (job: 
         <Text style={{ color, fontWeight: '700', fontSize: typography.size.xs }}>{label}</Text>
       </View>
 
-      {state === 'reading' && (
+      {(state === 'reading' || state === 'finishing') && (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
           <ActivityIndicator size="small" color={colors.accent} style={{ marginEnd: spacing.xs }} />
-          <MutedText style={{ flex: 1 }}>{t('importFlow.reading')}</MutedText>
+          <MutedText style={{ flex: 1 }}>{state === 'finishing' ? t('importFlow.finishingUpBody') : t('importFlow.reading')}</MutedText>
         </View>
       )}
+      {problem && <MutedText style={{ marginBottom: spacing.xs, fontSize: typography.size.xs }}>{t('importFlow.finishingProblem', { problem })}</MutedText>}
 
-      {state === 'failed' && <MutedText style={{ marginBottom: spacing.xs }}>{t('importFlow.couldNotReadTitle')}</MutedText>}
+      {state === 'failed' && (
+        <View style={{ marginBottom: spacing.xs }}>
+          <MutedText>{t('importFlow.couldNotReadTitle')}</MutedText>
+          {reasonLines.map((line) => (
+            <Text key={line} style={{ color: colors.text, fontSize: typography.size.xs, marginTop: 2 }}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      )}
 
       <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
         {state === 'ready' && <PrimaryButton title={t('importFlow.checkAndCertify')} onPress={() => onReview(job)} />}
         {state === 'failed' && <PrimaryButton title={t('importFlow.uploadAgain')} onPress={() => onDismiss(job)} />}
-        {state !== 'reading' && <SecondaryButton title={t('common.dismiss')} onPress={() => onDismiss(job)} />}
+        {state === 'failed' && <SecondaryButton title={t('importFlow.sendReport')} onPress={sendReport} />}
+        {state !== 'reading' && state !== 'finishing' && <SecondaryButton title={t('common.dismiss')} onPress={() => onDismiss(job)} />}
       </View>
     </Card>
   );
@@ -82,7 +114,7 @@ export default function ImportJobsScreen() {
   // Nothing of a job is saved until "Certify and add", so dismissing (or
   // "Upload again" on a failed one) only removes the reading.
   function handleDismiss(job: ImportJob) {
-    if (job.status === 'failed') {
+    if (jobRowState(job) === 'failed') {
       dismissJob.mutate(job.id);
       router.push('/(tabs)/import' as Href);
       return;

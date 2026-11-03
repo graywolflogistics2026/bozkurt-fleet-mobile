@@ -33,6 +33,7 @@ import {
 } from '@/src/data/importJobs';
 import { clearRereadRequested, isFinishedSinceReread, isReadyToReview, jobReviewStep, nextBatchReviewStep, readingAgainOf, readsOf, MAX_BATCH_IMPORT_FILES, MAX_READS_PER_JOB, type JobReviewState } from '@/src/import/importJobs';
 import { triggerReportLines } from '@/src/import/jobVerdict';
+import { jobFailureInfo, jobFailureLines, jobRowState } from '@/src/import/jobFailure';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -316,6 +317,8 @@ export default function Import() {
   // verdict and re-read triggers (for COULD NOT READ and its Send report).
   const [jobReview, setJobReview] = useState<JobReviewState | null>(null);
   const [readingAgain, setReadingAgain] = useState<{ n: number; max: number; check: string } | null>(null);
+  // "Finishing up": the followed job finished reading, verdict not recorded yet.
+  const [finishingUp, setFinishingUp] = useState(false);
   const [couldNotRead, setCouldNotRead] = useState<GateFailReason | 'job_failed' | 'not_finished' | null>(null);
   // Bumped to run the review load again (a finishing retry).
   const [reviewLoadTick, setReviewLoadTick] = useState(0);
@@ -846,6 +849,7 @@ export default function Import() {
     // reading or reading again stays on READING ("Reading again (2 of 3)").
     const step = jobReviewStep(job);
     setReadingAgain(readingAgainOf(job));
+    setFinishingUp(jobRowState(job) === 'finishing');
     setJobReview(job.review ?? null);
     // isReadyToReview also drops a stale cached row from before a re-read.
     if (isReadyToReview(job) || (step === 'could_not_read' && isFinishedSinceReread(job))) {
@@ -1278,6 +1282,16 @@ export default function Import() {
   // Discard / Upload again: nothing is saved, so the job goes too.
   // "Read again" (import reliability item 1): never a dead end — the same
   // job is read again on the server and followed while READING.
+  function currentJobReasonLines(): string[] | undefined {
+    const key = readingKeyRef.current;
+    if (!key || key.startsWith('photo')) return undefined;
+    const job = (jobsQuery.data ?? []).find((j) => j.id === key);
+    if (!job) return [t('importFlow.serverAnswerMissing', { field: 'import_jobs row' })];
+    const info = jobFailureInfo(job);
+    if (couldNotRead === 'not_finished' && info.pages.length === 0) return [t('importFlow.serverAnswerMissing', { field: 'result_json' })];
+    return jobFailureLines(info, (k, o) => t(k, o) as string, undefined, job.errorStep);
+  }
+
   async function readJobAgain(jobId: string) {
     setCouldNotRead(null);
     setJobReview(null);
@@ -1534,7 +1548,7 @@ export default function Import() {
           </Card>
         )}
 
-        {phase === 'reading' && <ReadingCard again={readingAgain} />}
+        {phase === 'reading' && <ReadingCard again={readingAgain} finishing={finishingUp} />}
 
         {(phase === 'could_not_read' || (phase === 'preview' && settlementGate?.status === 'fail')) && (
           <CouldNotReadCard
@@ -1544,8 +1558,11 @@ export default function Import() {
             onUploadAgain={discardReading}
             // A job read 3 times can only be uploaded again (the server refuses too).
             onReadAgain={readingKeyRef.current && !readingKeyRef.current.startsWith('photo') && readsOf({ review: jobReview }) < MAX_READS_PER_JOB ? () => void readJobAgain(readingKeyRef.current!) : undefined}
-            stopped={jobReview?.final?.reason === 'same_values' || jobReview?.final?.reason === 'read_cap' ? jobReview.final.reason : null}
+            stopped={jobReview?.final?.reason === 'same_values' || jobReview?.final?.reason === 'read_cap' || jobReview?.final?.reason === 'not_rereadable' ? jobReview.final.reason : null}
             triggerLines={triggerReportLines(jobReview?.triggers)}
+            // NEVER GENERIC (owner 2026-11-03): with no failing check, the
+            // job's own reason — page + cause, or the missing server field.
+            reasonLines={settlementGate?.status === 'fail' || (jobReview?.final?.details?.length ?? 0) > 0 ? undefined : currentJobReasonLines()}
           />
         )}
 

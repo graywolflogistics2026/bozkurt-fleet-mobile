@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- NEVER A GENERIC FAILURE (owner 2026-11-03): ready jobs showed "We couldn't
+  read this statement" with only Upload again / Dismiss. Cause: the jobs list
+  row (jobs.tsx) printed a fixed line for state failed, and the verdict
+  runner turned ANY job_verdict error into a local failed_final with no
+  reason. Now: jobFailure.ts gives every failure its reason (check + printed
+  vs read, page + cause, or server answer missing: <field>) + Send report;
+  a ready job without a verdict is Finishing up and the call is retried
+  (5/15/30/60 s). No SQL; eas update (redeploy ai-import if not done).
 - DIAGNOSTICS DB CHECK BY pg_proc (owner 2026-11-03): the 8 "missing"
   functions exist; the PostgREST hint probe could not see them. ai-import
   diagnose now asks `public.diagnose_missing_functions()` (§85, read-only,

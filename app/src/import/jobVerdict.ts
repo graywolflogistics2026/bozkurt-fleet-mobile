@@ -7,6 +7,7 @@
 import type { CarrierCode } from './carrierCodes';
 import { evaluateSettlementGate, rereadRequestFor } from './settlementGate';
 import type { Extraction } from './types';
+import type { JobReviewState } from './importJobs';
 
 export type JobVerdict = {
   readNo: number;
@@ -44,4 +45,26 @@ export function triggerReportLines(
   limit = 3
 ): string[] {
   return (triggers ?? []).slice(-limit).map((tr) => `Re-read after read ${tr.readNo}: ${tr.check} printed ${tr.printed ?? '-'}, read ${tr.value ?? '-'} (${tr.reason})`);
+}
+
+export type VerdictResponse = { jobId: string; action: 'final' | 'reread' | 'ignored'; review?: JobReviewState };
+
+// A server answer the app cannot use, named by what is missing or wrong.
+export class VerdictAnswerError extends Error {
+  constructor(public readonly field: string) {
+    super(`server answer missing: ${field}`);
+  }
+}
+
+export function parseVerdictResponse(data: unknown): VerdictResponse {
+  if (!data || typeof data !== 'object') throw new VerdictAnswerError('body');
+  const action = (data as { action?: unknown }).action;
+  if (action !== 'final' && action !== 'reread' && action !== 'ignored') throw new VerdictAnswerError('action');
+  return data as VerdictResponse;
+}
+
+// Retry delays for a verdict call that did not get a usable answer.
+export const VERDICT_RETRY_MS = [5_000, 15_000, 30_000, 60_000];
+export function verdictRetryDelay(attempt: number): number {
+  return VERDICT_RETRY_MS[Math.min(Math.max(attempt, 0), VERDICT_RETRY_MS.length - 1)];
 }

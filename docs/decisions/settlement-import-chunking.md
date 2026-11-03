@@ -567,3 +567,21 @@ remount — 3 reads billed. Now:
   `failed_final` job shows COULD NOT READ with the job's check and numbers;
   a re-read shows "Reading again (2 of 3): <check>". The Send report adds
   the last 3 triggers. Photos (no job) keep the in-screen re-reads.
+
+## Never a generic failure (owner decision 2026-11-03)
+
+Ready jobs showed the jobs-list row "We couldn't read this statement…" with
+only Upload again / Dismiss. Two causes: the row printed one fixed sentence
+for every failed state, and `useJobVerdictRunner` turned ANY error from the
+`job_verdict` call (an ai-import without the mode answers bad_request; a
+network error; an answer without `action`) into a LOCAL `failed_final`
+with no reason. Now:
+- `app/src/import/jobFailure.ts` is the one source of failure lines: the
+  failing check with printed vs read, "Page N could not be read: <cause>"
+  from the job's page failures, or "Server answer missing: <field>"; never
+  empty. The jobs row, the COULD NOT READ card and every Send report use
+  it; every failure screen has Send report.
+- A ready job without a final verdict is "Finishing up" (`jobRowState`).
+  An error never decides a failure: the verdict call is retried (5 s, 15 s,
+  30 s, then every 60 s) and the last problem is shown on the row. Only a
+  PASSING reading may go to the card when the server cannot take verdicts.
