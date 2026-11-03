@@ -22,8 +22,11 @@ import type { ExistingDocSummary } from '@/src/import/duplicateCheck';
 import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf } from '@/src/import/printedDates';
-import { applyLearnedCategories, matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
-import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
+import { matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
+import { normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
+import { classifySettlementLines } from '@/src/import/settlementLineClass';
+import { asTruckOwnership, type TruckOwnership } from '@/src/import/lineClass';
+import { missingColumnIn } from '@/src/data/fleetEdit';
 import { buildSettlementStatement, isStatementBacked, labelsSeenOn, type SettlementStatement } from '@/src/import/settlementStatement';
 import { lineDetailsDifference, reviewInputsOf } from '@/src/import/reviewVerdict';
 import { evaluateSettlementGate } from '@/src/import/settlementGate';
@@ -60,11 +63,28 @@ import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 // import.
 async function fetchLearningRules(userId: string): Promise<LearningRule[]> {
   try {
+    // economic_class (§84) first; before §84 runs that select fails and the
+    // rules load without it (no remembered class answers yet).
+    const withClass = await supabase.from('category_learning_rules').select('keyword, category, carrier, economic_class').eq('user_id', userId);
+    if (!withClass.error && withClass.data) return withClass.data as LearningRule[];
     const { data, error } = await supabase.from('category_learning_rules').select('keyword, category, carrier').eq('user_id', userId);
     if (error || !data) return [];
     return data as LearningRule[];
   } catch {
     return [];
+  }
+}
+
+// §84: the truck's ownership decides the truck-payment family (D10).
+// Absent column / no truck = null (asked once on the review card).
+async function fetchTruckOwnership(truckId: string | null): Promise<TruckOwnership | null> {
+  if (!truckId) return null;
+  try {
+    const { data, error } = await supabase.from('trucks').select('ownership').eq('id', truckId).maybeSingle();
+    if (error || !data) return null;
+    return asTruckOwnership((data as { ownership?: unknown }).ownership);
+  } catch {
+    return null;
   }
 }
 
@@ -89,11 +109,15 @@ async function fetchPriorStatementLabels(userId: string): Promise<Set<string>> {
   }
 }
 
+const CODE_MAP_COLUMNS = 'carrier, code, sub_code, label, description, category, is_deductible, income_or_chargeback, notes';
+
 async function fetchCarrierCodeMaps(): Promise<CarrierCode[]> {
   try {
-    const { data, error } = await supabase
-      .from('carrier_code_maps')
-      .select('carrier, code, sub_code, label, description, category, is_deductible, income_or_chargeback, notes');
+    // economic_class + class_when_charge (§84) first; before §84 runs that
+    // select fails and the map loads without classes (today's behaviour).
+    let res = await supabase.from('carrier_code_maps').select(`${CODE_MAP_COLUMNS}, economic_class, class_when_charge`);
+    if (res.error) res = await supabase.from('carrier_code_maps').select(CODE_MAP_COLUMNS);
+    const { data, error } = res;
     if (error || !data) return [];
     return data.map((r) => ({
       carrier: r.carrier as string,
@@ -105,6 +129,8 @@ async function fetchCarrierCodeMaps(): Promise<CarrierCode[]> {
       isDeductible: (r.is_deductible as boolean | null) ?? null,
       incomeOrChargeback: (r.income_or_chargeback as 'income' | 'chargeback' | null) ?? null,
       notes: (r.notes as string | null) ?? null,
+      economicClass: ((r as { economic_class?: string | null }).economic_class as string | null) ?? null,
+      classWhenCharge: ((r as { class_when_charge?: string | null }).class_when_charge as string | null) ?? null,
     }));
   } catch {
     return [];
@@ -244,6 +270,14 @@ export type SkippedImportRow = { table: string; description: string; reason: str
 // Equipment row can be created afterward) now get it back via `.select()`.
 // Every existing caller already ignored the return value, so this is a
 // backward-compatible widening, not a breaking change.
+// docs/PENDING_SQL.md §84 columns on deductions.
+export const OPTIONAL_DEDUCTION_COLUMNS = ['economic_class', 'direction'] as const;
+function withoutOptionalDeductionColumns<T extends Record<string, unknown>>(row: T): T {
+  const copy: Record<string, unknown> = { ...row };
+  for (const c of OPTIONAL_DEDUCTION_COLUMNS) delete copy[c];
+  return copy as T;
+}
+
 async function insertBatchResilient<T extends Record<string, unknown>>(
   table: ResilientInsertTable,
   rows: T[],
@@ -254,7 +288,13 @@ async function insertBatchResilient<T extends Record<string, unknown>>(
   skipped: SkippedImportRow[]
 ): Promise<(T & { id: string })[]> {
   if (rows.length === 0) return [];
-  const { data, error } = await supabase.from(table).insert(rows as never[]).select();
+  let { data, error } = await supabase.from(table).insert(rows as never[]).select();
+  // §84 columns (economic_class, direction) before that SQL has run: the
+  // write is retried without them — a missing column must never skip a row.
+  if (error && table === 'deductions' && missingColumnIn(error, OPTIONAL_DEDUCTION_COLUMNS)) {
+    rows = rows.map((r) => withoutOptionalDeductionColumns(r));
+    ({ data, error } = await supabase.from(table).insert(rows as never[]).select());
+  }
   if (!error) return (data ?? []) as (T & { id: string })[];
 
   let anyFailed = false;
@@ -516,8 +556,13 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // carrier-agnostic) and the user's own learned corrections below,
     // which still get the final say (a user's explicit, repeated
     // correction always wins over any automatic classification).
-    mapping.deductions = applyCarrierCodeCategories(mapping.deductions, carrierKey, carrierCodeMaps);
-    mapping.deductions = applyLearnedCategories(mapping.deductions, learningRules, carrierKey);
+    // PRIME CODE CLASSES (owner 2026-11-03): a code in the map with a
+    // class resolves from the map only (category, deductibility, class);
+    // anything else keeps today's category chain (carrier code category,
+    // then the owner's learned category) and its class comes from the
+    // owner's remembered answer. Every row stores its printed direction.
+    const truckOwnership = await fetchTruckOwnership(truckId);
+    mapping.deductions = classifySettlementLines(mapping.deductions, carrierKey, carrierCodeMaps, learningRules, truckOwnership).rows;
 
     // Web v2026.07.09-A re-import-replace: importing the same
     // (week_ending, truck) again REPLACES that week's batch-tagged rows

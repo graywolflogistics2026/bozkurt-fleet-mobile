@@ -20,6 +20,10 @@ export type CarrierCode = {
   isDeductible: boolean | null; // null = not an expense line at all
   incomeOrChargeback: 'income' | 'chargeback' | null;
   notes: string | null;
+  // docs/PENDING_SQL.md §84: the code's economic class and, for a credit
+  // code printed as a charge, its class then (PC). Absent before §84.
+  economicClass?: string | null;
+  classWhenCharge?: string | null;
 };
 
 // Normalizes a carrier's raw, freely-typed name (as extracted from a

@@ -1,3 +1,4 @@
+import { classIsOutOfProfit } from '@/src/import/lineClass';
 import type { Deduction, Settlement } from '@/src/types/db';
 import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
 import { statementWeekOf, type StatementSettlement, type StatementWeek } from '@/src/stats/statementRoute';
@@ -72,8 +73,14 @@ export function reducesTrueProfit(d: {
   source?: string | null;
   category?: string | null;
   tax_deductible: boolean | null;
+  economic_class?: string | null;
 }): boolean {
   if (TRUE_PROFIT_EXCLUDED_CATEGORIES.has(d.category ?? '')) return false;
+  // PRIME CODE CLASSES (owner 2026-11-03, docs/decisions/prime-code-classes.md):
+  // a line whose class is a repayment, a refundable fund (either direction),
+  // personal, capital, informational or interest income never changes
+  // profit. A line with no class keeps the category rule above.
+  if (classIsOutOfProfit(d.economic_class)) return false;
   if (d.source === 'settlement') return true;
   return isDeductibleExpense(d);
 }
@@ -124,6 +131,8 @@ type CanonicalMaintenance = { cost: number | null };
 type CanonicalToll = { amount: number | null };
 export type CanonicalDeduction = {
   amount: number | null;
+  economic_class?: string | null;
+  direction?: 'charge' | 'credit' | null;
   source?: string | null;
   category?: string | null;
   tax_deductible: boolean | null;

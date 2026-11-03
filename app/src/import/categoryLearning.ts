@@ -51,7 +51,9 @@ export function normalizeKeyword(text: string | null | undefined, maxTokens = DE
 // correcting a settlement-withheld line from a document whose carrier was
 // known) is restricted to that carrier alone, same isolation rule
 // carrierCodes.ts's findCarrierCodeMatch() already enforces.
-export type LearningRule = { keyword: string; category: string; carrier?: string | null };
+// economic_class (docs/PENDING_SQL.md §84): the owner's answer for an
+// unknown or unclassed carrier code, remembered per carrier and user.
+export type LearningRule = { keyword: string; category: string; carrier?: string | null; economic_class?: string | null };
 
 // Classic edit-distance — used only as a typo/OCR-tolerance fallback
 // AFTER an exact/substring match has already failed (the common case, a

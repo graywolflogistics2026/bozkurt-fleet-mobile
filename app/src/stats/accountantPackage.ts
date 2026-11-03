@@ -14,6 +14,7 @@ import { buildAssetRegister, buildAssetCategoryBreakdown, type AssetCategoryBrea
 import type { Deduction, Equipment, FuelPurchase, MaintenanceRecord, LoanRow, CreditCardRow, Toll, Truck, UserCategory } from '@/src/types/db';
 import type { ExtractedRevenueItem } from '@/src/import/types';
 import type { TaxYearData } from '@/src/types/db';
+import { classIsOutOfProfit } from '@/src/import/lineClass';
 import { capitalTreatmentLabel, isOpenCapitalItem, type CapitalTreatmentLabel } from '@/src/tax/vehiclePurchase';
 
 export type CategoryTotal = { category: string; amount: number };
@@ -280,6 +281,9 @@ export function buildLineItems(
     // TOO MUCH NOISE (see this function's own header comment above) —
     // out-of-pocket only, never withheld/combined.
     if (scope === 'outOfPocket' && OUT_OF_POCKET_EXCLUDED_CATEGORIES.has(d.category ?? '')) continue;
+    // R4 (owner 2026-11-03): a PERSONAL line never appears among business
+    // expenses; it has its own section (buildPersonalSettlementItems()).
+    if (d.economic_class === 'PERSONAL') continue;
     items.push({
       id: d.id,
       kind: 'deduction',
@@ -288,7 +292,9 @@ export function buildLineItems(
       category: d.category ?? 'Misc',
       amount,
       origin,
-      deductible: !OUT_OF_POCKET_EXCLUDED_CATEGORIES.has(d.category ?? ''),
+      // Out-of-profit classes (repayment, fund, capital, memo) are not
+      // business expenses either (prime-code-classes.md).
+      deductible: !OUT_OF_POCKET_EXCLUDED_CATEGORIES.has(d.category ?? '') && !classIsOutOfProfit(d.economic_class),
       isOwnerPaid: isPersonalPayment(d.payment_method),
       paymentMethod: d.payment_method ?? null,
       vendor: d.store ?? null,
@@ -408,6 +414,28 @@ export function groupLineItemsByScheduleCBucket(
 
 // Rows the withheld/combined scopes list for reference but never count
 // as deductible (escrow, advance repayment, meals).
+// R4 (owner decision 2026-11-03, docs/decisions/prime-code-classes.md):
+// PERSONAL lines withheld on a settlement (health/life insurance on the
+// person, 401k loan, ...) get their own Accountant Package section,
+// "Personal items paid through your settlement" — never business expenses.
+export type PersonalSettlementItem = { id: string; date: string; description: string; amount: number };
+export function buildPersonalSettlementItems(
+  deductions: Deduction[],
+  year: number,
+  month: number | null
+): { items: PersonalSettlementItem[]; total: number } {
+  const items: PersonalSettlementItem[] = [];
+  for (const d of deductions) {
+    if (d.economic_class !== 'PERSONAL' || d.source !== 'settlement') continue;
+    const amount = Number(d.amount ?? 0);
+    if (!amount || !inAccountantPeriod(d.ded_date, year, month)) continue;
+    if (!d.ded_date) continue;
+    items.push({ id: d.id, date: d.ded_date, description: d.description || d.category || 'Personal item', amount });
+  }
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  return { items, total: items.reduce((sum, i) => sum + i.amount, 0) };
+}
+
 export function buildNotDeductibleReference(lineItems: LineItem[]): { items: LineItem[]; total: number } {
   const items = lineItems.filter((li) => !li.deductible);
   return { items, total: items.reduce((sum, li) => sum + li.amount, 0) };

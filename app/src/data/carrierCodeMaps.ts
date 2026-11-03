@@ -46,11 +46,16 @@ export function useCarrierCodeCategories() {
   return useQuery<CarrierCode[]>({
     queryKey: ['carrier_code_maps', 'categories'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('carrier_code_maps')
-        .select('carrier, code, sub_code, label, description, category, is_deductible, income_or_chargeback, notes');
+      const base = 'carrier, code, sub_code, label, description, category, is_deductible, income_or_chargeback, notes';
+      // economic_class + class_when_charge (§84) first; before §84 runs that
+      // select fails, so retry without them (no class, today's behaviour).
+      let res = await supabase.from('carrier_code_maps').select(`${base}, economic_class, class_when_charge`);
+      if (res.error) res = await supabase.from('carrier_code_maps').select(base);
+      const { data, error } = res;
       if (error) throw error;
       return (data ?? []).map((r) => ({
+        economicClass: ((r as { economic_class?: string | null }).economic_class as string | null) ?? null,
+        classWhenCharge: ((r as { class_when_charge?: string | null }).class_when_charge as string | null) ?? null,
         carrier: r.carrier as string,
         code: r.code as string,
         subCode: (r.sub_code as string | null) ?? null,

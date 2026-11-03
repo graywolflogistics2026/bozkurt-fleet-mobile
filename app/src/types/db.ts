@@ -14,6 +14,9 @@ export type Truck = {
   // docs/PENDING_SQL.md §79 (2026-10-30). Optional: absent until that SQL runs.
   nickname?: string | null;
   plate?: string | null;
+  // docs/PENDING_SQL.md §84 (2026-11-03): decides the truck-payment family
+  // (leased = rent, financed = loan repayment). Optional, null = not asked yet.
+  ownership?: 'owned_cash' | 'financed' | 'leased' | null;
   vin: string | null;
   year: number | null;
   make: string | null;
@@ -321,6 +324,11 @@ export type Deduction = {
   // non-null when source !== 'settlement' — see
   // app/src/primeDriverExpenses/categoryMapping.ts's own header comment.
   accountant_category: string | null;
+  // docs/PENDING_SQL.md §84 (2026-11-03). Optional: absent until that SQL
+  // runs. economic_class: the line's class (src/import/lineClass.ts),
+  // null = no class (today's category behaviour). direction: as printed.
+  economic_class?: string | null;
+  direction?: 'charge' | 'credit' | null;
   created_at: string;
   updated_at: string;
 };
