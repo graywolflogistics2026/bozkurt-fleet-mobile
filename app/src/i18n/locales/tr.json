@@ -2263,7 +2263,10 @@
     "exportPdfMonth": "Ayı PDF Olarak Dışa Aktar",
     "exportPdfYear": "Yılı PDF Olarak Dışa Aktar",
     "exportExcelMonth": "Ayı Excel Olarak Dışa Aktar",
-    "exportExcelYear": "Yılı Excel Olarak Dışa Aktar"
+    "exportExcelYear": "Yılı Excel Olarak Dışa Aktar",
+    "personalSettlementTitle": "Settlement üzerinden ödenen kişisel kalemler",
+    "personalSettlementLine": "Settlement üzerinden ödenen kişisel kalemler: {{amount}}",
+    "personalSettlementNote": "Kişisel beyannamenizde indirilebilir olabilir - kararı vergi uzmanınız verir."
   },
   "primeDriverExpenses": {
     "title": "Prime Inc Sürücüleri İçin",
@@ -3201,5 +3204,26 @@
     "shareReport": "Raporu paylaş",
     "serverNotUpdated": "İçe aktarma sunucusunda sistem kontrolü henüz yok. ai-import’u yeniden yükleyin, sonra kontrolü tekrar çalıştırın.",
     "checkFailed": "Kontrol tamamlanmadı ({{code}}). Tekrar deneyin."
+  },
+  "truckOwnership": {
+    "label": "Kamyon sahipliği",
+    "leased": "Taşıyıcıdan kiralık",
+    "financed": "Kredili",
+    "owned_cash": "Ödenmiş"
+  },
+  "lineClass": {
+    "title": "Birkaç kısa soru",
+    "truckQuestion": "Bu kamyon Prime'dan kiralık mı, kredili mi, yoksa ödenmiş mi?",
+    "codeQuestion": "Bu satır nedir? {{line}}",
+    "optionalNote": "Bir kez sorulur. Cevabınız bu taşıyıcı için hatırlanır. Atlayabilirsiniz: satır eskisi gibi kaydedilir.",
+    "saveFailedTitle": "Cevabınız kaydedilemedi",
+    "needsDb": "Bu cevap veritabanı güncellemesi (§84) çalıştıktan sonra kaydedilebilir.",
+    "choice": {
+      "EXPENSE_VARIABLE": "İş gideri",
+      "PERSONAL": "Kişisel",
+      "REPAYMENT": "Kredi veya avans geri ödemesi",
+      "REFUNDABLE_FUND": "Depozito veya fon (iade edilir)",
+      "REIMBURSEMENT": "İndirim veya geri ödeme"
+    }
   }
 }

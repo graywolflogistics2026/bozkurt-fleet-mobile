@@ -1,7 +1,7 @@
 // PRIME CODE CLASSES runtime (owner decisions 2026-11-03, R1-R4, D1-D11;
 // docs/decisions/prime-code-classes.md, PENDING_SQL §84).
 import { resolveLineClass, directionOfAmount, classIsOutOfProfit } from '@/src/import/lineClass';
-import { classifySettlementLines } from '@/src/import/settlementLineClass';
+import { classifySettlementLines, previewLineQuestions } from '@/src/import/settlementLineClass';
 import type { CarrierCode } from '@/src/import/carrierCodes';
 import type { LearningRule } from '@/src/import/categoryLearning';
 import { reducesTrueProfit, sumCanonicalExpenses } from '@/src/stats/trueProfit';
@@ -155,5 +155,23 @@ describe('Accountant Package: PERSONAL withheld lines (R4)', () => {
     const repay = { ...base, id: 'r', amount: 500, category: 'Truck/Trailer Payments', economic_class: 'REPAYMENT' } as Deduction;
     const [item] = buildLineItems([repay], [], [], [], 2026, null, 'combined');
     expect(item.deductible).toBe(false);
+  });
+});
+
+describe('review card questions (asked once)', () => {
+  const lines = [
+    { code: 'NP', desc: 'truck payment', amount: 900 },
+    { code: 'NP', desc: 'truck payment', amount: 900 },
+    { code: 'CY', desc: 'cy line', amount: 10 },
+    { code: 'CY', desc: 'cy line', amount: 12 },
+  ];
+  it('one ownership question and one question per unclassed code', () => {
+    const qs = previewLineQuestions(lines, 'PRIME INC', CODES, [], null);
+    expect(qs.map((q) => q.kind)).toEqual(['truck_ownership', 'unknown_code']);
+  });
+  it('nothing is asked once answered, and never for another carrier', () => {
+    const rules: LearningRule[] = [{ keyword: 'cy', category: 'Misc', carrier: 'PRIME INC', economic_class: 'PERSONAL' }];
+    expect(previewLineQuestions(lines, 'PRIME INC', CODES, rules, 'financed')).toEqual([]);
+    expect(previewLineQuestions(lines, 'OTHER CARRIER', CODES, [], null)).toEqual([]);
   });
 });

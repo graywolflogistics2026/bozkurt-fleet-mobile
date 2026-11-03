@@ -83,3 +83,40 @@ export function classifySettlementLines<T extends Row>(
   });
   return { rows: out, questions };
 }
+
+// The review card's one-time questions for an extracted settlement (before
+// Save): the truck's ownership when a truck-payment code is printed and the
+// truck has none, and each unclassed code once. Same rules as Save.
+export type ReviewLineQuestion =
+  | { kind: 'truck_ownership' }
+  | { kind: 'unknown_code'; code: string | null; keyword: string; description: string | null; category: string | null };
+
+export function previewLineQuestions(
+  lines: { code?: string | null; desc?: string | null; amount?: number | null; category?: string | null }[],
+  carrierKey: string | null,
+  codes: CarrierCode[],
+  rules: LearningRule[],
+  ownership: TruckOwnership | null
+): ReviewLineQuestion[] {
+  const rows = lines.map((l) => ({ code: l.code ?? null, description: l.desc ?? null, amount: l.amount ?? null, category: l.category ?? null }));
+  const { questions } = classifySettlementLines(rows, carrierKey, codes, rules, ownership);
+  const out: ReviewLineQuestion[] = [];
+  const seen = new Set<string>();
+  for (const q of questions) {
+    if (q.kind === 'truck_ownership') {
+      if (!seen.has('#truck')) out.push({ kind: 'truck_ownership' });
+      seen.add('#truck');
+      continue;
+    }
+    const keyword = normalizeKeyword(q.code || q.description || '');
+    if (!keyword || seen.has(keyword)) continue;
+    seen.add(keyword);
+    const line = rows.find((r) => normalizeKeyword(r.code || r.description || '') === keyword);
+    out.push({ kind: 'unknown_code', code: q.code, keyword, description: q.description, category: line?.category ?? null });
+  }
+  return out;
+}
+
+// The answers the review card offers for an unclassed code (owner D11): the
+// few classes a driver can tell from the line itself.
+export const REVIEW_CLASS_CHOICES: ResolvedClass[] = ['EXPENSE_VARIABLE', 'PERSONAL', 'REPAYMENT', 'REFUNDABLE_FUND', 'REIMBURSEMENT'];

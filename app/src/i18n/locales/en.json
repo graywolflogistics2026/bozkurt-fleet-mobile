@@ -2323,7 +2323,10 @@
     "exportPdfMonth": "Export Month as PDF",
     "exportPdfYear": "Export Year as PDF",
     "exportExcelMonth": "Export Month as Excel",
-    "exportExcelYear": "Export Year as Excel"
+    "exportExcelYear": "Export Year as Excel",
+    "personalSettlementTitle": "Personal items paid through your settlement",
+    "personalSettlementLine": "Personal items paid through your settlement: {{amount}}",
+    "personalSettlementNote": "May be deductible on your personal return - your tax professional decides."
   },
   "primeDriverExpenses": {
     "title": "For Prime Inc Drivers",
@@ -3201,5 +3204,26 @@
     "shareReport": "Share report",
     "serverNotUpdated": "The import server does not have the system check yet. Redeploy ai-import, then run the check again.",
     "checkFailed": "The check did not finish ({{code}}). Try again."
+  },
+  "truckOwnership": {
+    "label": "Truck ownership",
+    "leased": "Leased from carrier",
+    "financed": "Financed (loan)",
+    "owned_cash": "Paid for"
+  },
+  "lineClass": {
+    "title": "A few quick questions",
+    "truckQuestion": "Is this truck leased from Prime, financed, or paid for?",
+    "codeQuestion": "What is this line? {{line}}",
+    "optionalNote": "Asked once. Your answer is remembered for this carrier. You can skip it: the line saves as before.",
+    "saveFailedTitle": "Could not save your answer",
+    "needsDb": "This answer can be saved after the database update (§84) runs.",
+    "choice": {
+      "EXPENSE_VARIABLE": "Business expense",
+      "PERSONAL": "Personal",
+      "REPAYMENT": "Loan or advance repayment",
+      "REFUNDABLE_FUND": "Deposit or fund (refundable)",
+      "REIMBURSEMENT": "Discount or reimbursement"
+    }
   }
 }

@@ -35,6 +35,7 @@ import {
   checkMiscConcentration,
   buildLumperFees,
   buildNotDeductibleReference,
+  buildPersonalSettlementItems,
   buildPerDiemBlock,
   buildCapitalAssets,
   buildOwnersEquity,
@@ -268,6 +269,8 @@ export default function AccountantPackage() {
   const miscWarning = useMemo(() => checkMiscConcentration(scheduleCTotals), [scheduleCTotals]);
   const lumperFees = useMemo(() => buildLumperFees(lineItems), [lineItems]);
   const notDeductible = useMemo(() => buildNotDeductibleReference(lineItems), [lineItems]);
+  // R4 (owner 2026-11-03): personal items withheld on a settlement, own section.
+  const personalItems = useMemo(() => buildPersonalSettlementItems(deductionsQuery.data ?? [], year, month), [deductionsQuery.data, year, month]);
   const lumperTotal = lumperFees.reduce((sum, i) => sum + i.amount, 0);
   // Shared by BOTH the on-screen category table and the exported HTML —
   // the two can never disagree about how rows are grouped (see this
@@ -555,6 +558,7 @@ export default function AccountantPackage() {
     const miscWarningForExport = checkMiscConcentration(totals);
     const lumpers = buildLumperFees(items);
     const notDeductibleForExport = buildNotDeductibleReference(items).total;
+    const personalForExport = buildPersonalSettlementItems(deductionsQuery.data ?? [], scopeYear, scopeMonth).total;
     const lumperTotalForExport = lumpers.reduce((sum, i) => sum + i.amount, 0);
     const grouped = groupLineItemsByScheduleCBucket(items, totals, userCategoriesQuery.data ?? []);
     const perDiemForExport =
@@ -590,6 +594,8 @@ export default function AccountantPackage() {
         reimbursementsForExport > 0 ? t('accountantPackage.reimbursementsSubline', { amount: money(reimbursementsForExport) }) : undefined,
       notDeductibleReference:
         notDeductibleForExport > 0 ? t('accountantPackage.notDeductibleReference', { amount: money(notDeductibleForExport) }) : undefined,
+      personalSettlementLine: personalForExport > 0 ? t('accountantPackage.personalSettlementLine', { amount: money(personalForExport) }) : undefined,
+      personalSettlementNote: personalForExport > 0 ? t('accountantPackage.personalSettlementNote') : undefined,
       implausibleDateWarning:
         implausibleDates.length > 0 ? t('accountantPackage.implausibleDateWarning', { count: implausibleDates.length }) : undefined,
       miscConcentrationWarning: miscWarningForExport
@@ -766,6 +772,15 @@ export default function AccountantPackage() {
                 <MutedText>{t('accountantPackage.notDeductibleReference', { amount: money(notDeductible.total) })}</MutedText>
               )}
               <MutedText>{t('accountantPackage.reconcilingCaption')}</MutedText>
+              {personalItems.items.length > 0 && (
+                <View style={styles.rowBorder}>
+                  <Row label={t('accountantPackage.personalSettlementTitle')} value={money(personalItems.total)} bold />
+                  <MutedText>{t('accountantPackage.personalSettlementNote')}</MutedText>
+                  {personalItems.items.map((p) => (
+                    <Row key={p.id} label={`${p.date} · ${p.description}`} value={money(p.amount)} />
+                  ))}
+                </View>
+              )}
               {perDiemBlock && (
                 <View style={styles.rowBorder}>
                   {/* PER DIEM YTD BUG FIX — this compact summary row must

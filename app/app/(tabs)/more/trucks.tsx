@@ -32,6 +32,8 @@ import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { colors, spacing, typography } from '@/src/theme';
 import type { LoanInsert, Truck } from '@/src/types/db';
 import { numOrNull } from '@/src/lib/number';
+import { TruckOwnershipPicker } from '@/src/components/TruckOwnershipPicker';
+import { asTruckOwnership, type TruckOwnership } from '@/src/import/lineClass';
 
 type FormState = {
   unit_number: string;
@@ -39,6 +41,8 @@ type FormState = {
   // and the drivers assigned to this truck (drivers.default_truck_id).
   nickname: string;
   plate: string;
+  // §84 (owner D10 2026-11-03): leased / financed / paid for.
+  ownership: TruckOwnership | null;
   driverIds: string[];
   vin: string;
   year: string;
@@ -82,6 +86,7 @@ function emptyForm(): FormState {
     unit_number: '',
     nickname: '',
     plate: '',
+    ownership: null,
     driverIds: [],
     vin: '',
     year: '',
@@ -113,6 +118,7 @@ function truckToForm(t: Truck, assignedDriverIds: string[]): FormState {
     unit_number: t.unit_number ?? '',
     nickname: t.nickname ?? '',
     plate: t.plate ?? '',
+    ownership: asTruckOwnership(t.ownership),
     driverIds: assignedDriverIds,
     vin: t.vin ?? '',
     year: t.year != null ? String(t.year) : '',
@@ -196,6 +202,7 @@ export default function Trucks() {
       unit_number: form.unit_number || null,
       nickname: form.nickname.trim() || null,
       plate: form.plate.trim() || null,
+      ownership: form.ownership,
       vin: form.vin || null,
       year: form.year ? numOrNull(form.year) || null : null,
       make: form.make || null,
@@ -449,6 +456,8 @@ export default function Trucks() {
         <Field value={form.nickname} onChangeText={(v) => setForm({ ...form, nickname: v })} />
         <MutedText>{t('trucks.plateLabel')}</MutedText>
         <Field value={form.plate} autoCapitalize="characters" onChangeText={(v) => setForm({ ...form, plate: v })} />
+        <MutedText>{t('truckOwnership.label')}</MutedText>
+        <TruckOwnershipPicker value={form.ownership} onChange={(v) => setForm({ ...form, ownership: v })} />
         {pickableDrivers.length > 0 && (
           <>
             <MutedText>{t('trucks.assignedDriversLabel')}</MutedText>

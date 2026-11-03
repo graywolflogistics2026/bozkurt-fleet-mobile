@@ -2263,7 +2263,10 @@
     "exportPdfMonth": "Exportar Mes como PDF",
     "exportPdfYear": "Exportar Año como PDF",
     "exportExcelMonth": "Exportar Mes como Excel",
-    "exportExcelYear": "Exportar Año como Excel"
+    "exportExcelYear": "Exportar Año como Excel",
+    "personalSettlementTitle": "Gastos personales pagados con su settlement",
+    "personalSettlementLine": "Gastos personales pagados con su settlement: {{amount}}",
+    "personalSettlementNote": "Puede ser deducible en su declaración personal - lo decide su profesional de impuestos."
   },
   "primeDriverExpenses": {
     "title": "Para Conductores de Prime Inc",
@@ -3201,5 +3204,26 @@
     "shareReport": "Compartir informe",
     "serverNotUpdated": "El servidor de importación aún no tiene la revisión del sistema. Vuelva a desplegar ai-import y ejecute la revisión otra vez.",
     "checkFailed": "La revisión no terminó ({{code}}). Inténtelo de nuevo."
+  },
+  "truckOwnership": {
+    "label": "Propiedad del camión",
+    "leased": "Arrendado al transportista",
+    "financed": "Financiado (préstamo)",
+    "owned_cash": "Pagado"
+  },
+  "lineClass": {
+    "title": "Unas preguntas rápidas",
+    "truckQuestion": "¿Este camión es arrendado a Prime, financiado o pagado?",
+    "codeQuestion": "¿Qué es esta línea? {{line}}",
+    "optionalNote": "Se pregunta una vez. Su respuesta se recuerda para este transportista. Puede omitirla: la línea se guarda como antes.",
+    "saveFailedTitle": "No se pudo guardar su respuesta",
+    "needsDb": "Esta respuesta se podrá guardar después de la actualización de la base de datos (§84).",
+    "choice": {
+      "EXPENSE_VARIABLE": "Gasto del negocio",
+      "PERSONAL": "Personal",
+      "REPAYMENT": "Pago de préstamo o anticipo",
+      "REFUNDABLE_FUND": "Depósito o fondo (reembolsable)",
+      "REIMBURSEMENT": "Descuento o reembolso"
+    }
   }
 }

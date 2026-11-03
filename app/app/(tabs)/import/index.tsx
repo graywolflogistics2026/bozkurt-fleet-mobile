@@ -48,6 +48,10 @@ import { buildAndUploadBackupSnapshot } from '@/src/data/backupSnapshot';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { getPrimaryExtractionDate, isOlderThanMonths, isSettlementWeekEndingMissing, withPrimaryExtractionDate } from '@/src/import/dateGuard';
 import { CertifyCard, CouldNotReadCard, ReadingCard } from '@/src/components/SettlementImportCards';
+import { LineClassQuestions } from '@/src/components/LineClassQuestions';
+import { previewLineQuestions } from '@/src/import/settlementLineClass';
+import { normalizeCarrierKey as carrierKeyOf } from '@/src/import/carrierCodes';
+import { rememberLineClass, saveTruckOwnership, useTruckOwnership } from '@/src/data/lineClassAnswers';
 import { appVersionLabel } from '@/src/components/WeekReviewCard';
 import {
   evaluateSettlementGate,
@@ -1207,6 +1211,22 @@ export default function Import() {
   }
   // SIMPLE IMPORT FLOW (batch D2): the settlement card's gate result.
   const settlementGate = extraction?.docType === 'settlement' ? settlementGateOf(extraction) : null;
+  // PRIME CODE CLASSES (owner D10/D11 2026-11-03): the review card asks
+  // once for the truck's ownership (truck payment) and for each unclassed
+  // carrier code; the answers are stored and used by Save.
+  const lineCarrierKey = extraction?.docType === 'settlement' ? carrierKeyOf(extraction.settlement?.carrier) : null;
+  const lineTruck = truckId && truckId !== NOT_TRUCK_SPECIFIC ? trucks.find((tr) => tr.id === truckId) ?? null : null;
+  const lineTruckOwnership = useTruckOwnership(lineTruck?.id ?? null);
+  const lineQuestions =
+    extraction?.docType === 'settlement' && lineCarrierKey
+      ? previewLineQuestions(
+          extraction.settlement?.deductions ?? [],
+          lineCarrierKey,
+          carrierCodeCategories ?? [],
+          (learningRulesData ?? []).map((r) => ({ keyword: r.keyword, category: r.category, carrier: r.carrier, economic_class: r.economic_class ?? null })),
+          lineTruckOwnership.data ?? null
+        ).filter((q) => q.kind !== 'truck_ownership' || lineTruck != null)
+      : [];
   // Discard / Upload again: nothing is saved, so the job goes too.
   // "Read again" (import reliability item 1): never a dead end — the same
   // job is read again on the server and followed while READING.
@@ -1486,6 +1506,19 @@ export default function Import() {
             certifyDisabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId)}
           >
             {renderPickers()}
+            <LineClassQuestions
+              questions={lineQuestions}
+              onOwnership={async (v) => {
+                if (!lineTruck) return;
+                await saveTruckOwnership(lineTruck.id, v);
+                await queryClient.invalidateQueries({ queryKey: ['trucks', 'ownership', lineTruck.id] });
+              }}
+              onClass={async (q, cls) => {
+                if (!userId || !lineCarrierKey) return;
+                await rememberLineClass({ userId, carrier: lineCarrierKey, keyword: q.keyword, category: q.category, economicClass: cls });
+                await queryClient.invalidateQueries({ queryKey: ['category_learning_rules'] });
+              }}
+            />
           </CertifyCard>
         )}
 

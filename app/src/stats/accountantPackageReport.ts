@@ -41,6 +41,10 @@ export type AccountantReportStrings = {
   // "Not deductible, listed for reference: $X" (escrow, advance
   // repayment, meals) — withheld/combined scopes only (batch 0b.2).
   notDeductibleReference?: string;
+  // R4 (owner 2026-11-03): "Personal items paid through your settlement: $X"
+  // plus its note — undefined when there are none. Never a business expense.
+  personalSettlementLine?: string;
+  personalSettlementNote?: string;
   deductibleExpenses: string;
   reconcilingCaption: string;
   perDiemTitle: string;
@@ -297,6 +301,7 @@ export function buildAccountantReportHtml(
           }
           <tr class="total expenses-row"><td>${esc(strings.deductibleExpenses)}</td><td class="amt">${fmt.money(totalExpenses)}</td></tr>
           ${strings.notDeductibleReference ? `<tr><td colspan="2" class="caption">${esc(strings.notDeductibleReference)}</td></tr>` : ""}
+          ${strings.personalSettlementLine ? `<tr><td colspan="2" class="caption">${esc(strings.personalSettlementLine)}${strings.personalSettlementNote ? ` — ${esc(strings.personalSettlementNote)}` : ""}</td></tr>` : ""}
         </table>
         <div class="caption">${esc(strings.reconcilingCaption)}</div>
 

@@ -2263,7 +2263,10 @@
     "exportPdfMonth": "Экспорт Месяца в PDF",
     "exportPdfYear": "Экспорт Года в PDF",
     "exportExcelMonth": "Экспорт Месяца в Excel",
-    "exportExcelYear": "Экспорт Года в Excel"
+    "exportExcelYear": "Экспорт Года в Excel",
+    "personalSettlementTitle": "Личные расходы, оплаченные через settlement",
+    "personalSettlementLine": "Личные расходы, оплаченные через settlement: {{amount}}",
+    "personalSettlementNote": "Может вычитаться в личной декларации - решает ваш налоговый специалист."
   },
   "primeDriverExpenses": {
     "title": "Для водителей Prime Inc",
@@ -3201,5 +3204,26 @@
     "shareReport": "Поделиться отчётом",
     "serverNotUpdated": "На сервере импорта ещё нет проверки системы. Разверните ai-import заново и запустите проверку снова.",
     "checkFailed": "Проверка не завершилась ({{code}}). Попробуйте ещё раз."
+  },
+  "truckOwnership": {
+    "label": "Владение грузовиком",
+    "leased": "В аренде у перевозчика",
+    "financed": "В кредите",
+    "owned_cash": "Оплачен"
+  },
+  "lineClass": {
+    "title": "Несколько быстрых вопросов",
+    "truckQuestion": "Этот грузовик в аренде у Prime, в кредите или оплачен?",
+    "codeQuestion": "Что это за строка? {{line}}",
+    "optionalNote": "Спрашиваем один раз. Ответ запоминается для этого перевозчика. Можно пропустить: строка сохранится как раньше.",
+    "saveFailedTitle": "Не удалось сохранить ответ",
+    "needsDb": "Этот ответ можно будет сохранить после обновления базы данных (§84).",
+    "choice": {
+      "EXPENSE_VARIABLE": "Расход бизнеса",
+      "PERSONAL": "Личное",
+      "REPAYMENT": "Погашение кредита или аванса",
+      "REFUNDABLE_FUND": "Депозит или фонд (возвратный)",
+      "REIMBURSEMENT": "Скидка или возмещение"
+    }
   }
 }

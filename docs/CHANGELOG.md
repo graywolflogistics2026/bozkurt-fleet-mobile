@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- PRIME CODE CLASSES parts 2-3 (owner 2026-11-03): runtime. lineClass.ts +
+  settlementLineClass.ts (class from the map, direction from the sign, NP by
+  trucks.ownership, IH by direction, PC as a charge = PERSONAL, ASK asked
+  once); aiImportSave stores economic_class + direction (tolerant before
+  §84); reducesTrueProfit drops out-of-profit classes; Accountant Package
+  "Personal items paid through your settlement" section (screen + export).
+  UI: truck ownership picker (Trucks add/edit), review-card questions
+  (LineClassQuestions). Tests: lineClass.test.ts. eas update; no redeploy.
 - PRIME CODE CLASSES part 1 (owner 2026-11-03, R1-R4, D1-D11): approved
   table in docs/decisions/prime-code-classes.md (200 classed, 13 ASK);
   CARRIER_CODES.md Class column; PENDING_SQL §84 + pending_84.sql

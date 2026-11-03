@@ -577,6 +577,8 @@ export type CategoryLearningRule = {
   // that existed before this column); a real value scopes the rule to
   // that one carrier only. See app/src/import/categoryLearning.ts.
   carrier: string | null;
+  // docs/PENDING_SQL.md §84: the owner's class answer for this carrier code.
+  economic_class?: string | null;
   created_at: string;
   updated_at: string;
 };

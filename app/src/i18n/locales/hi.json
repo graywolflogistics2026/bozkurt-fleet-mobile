@@ -2263,7 +2263,10 @@
     "exportPdfMonth": "महीना PDF के रूप में एक्सपोर्ट करें",
     "exportPdfYear": "वर्ष PDF के रूप में एक्सपोर्ट करें",
     "exportExcelMonth": "महीना Excel के रूप में एक्सपोर्ट करें",
-    "exportExcelYear": "वर्ष Excel के रूप में एक्सपोर्ट करें"
+    "exportExcelYear": "वर्ष Excel के रूप में एक्सपोर्ट करें",
+    "personalSettlementTitle": "आपके settlement से चुकाई गई निजी चीज़ें",
+    "personalSettlementLine": "आपके settlement से चुकाई गई निजी चीज़ें: {{amount}}",
+    "personalSettlementNote": "आपके निजी रिटर्न में कटौती योग्य हो सकती है - फ़ैसला आपका टैक्स पेशेवर करेगा।"
   },
   "primeDriverExpenses": {
     "title": "Prime Inc ड्राइवरों के लिए",
@@ -3201,5 +3204,26 @@
     "shareReport": "रिपोर्ट साझा करें",
     "serverNotUpdated": "इम्पोर्ट सर्वर में अभी सिस्टम जाँच नहीं है। ai-import फिर से डिप्लॉय करें, फिर जाँच दोबारा चलाएँ।",
     "checkFailed": "जाँच पूरी नहीं हुई ({{code}})। फिर से कोशिश करें।"
+  },
+  "truckOwnership": {
+    "label": "ट्रक का स्वामित्व",
+    "leased": "कैरियर से लीज़ पर",
+    "financed": "लोन पर",
+    "owned_cash": "पूरा भुगतान किया"
+  },
+  "lineClass": {
+    "title": "कुछ छोटे सवाल",
+    "truckQuestion": "क्या यह ट्रक Prime से लीज़ पर है, लोन पर है, या पूरा भुगतान किया हुआ है?",
+    "codeQuestion": "यह लाइन क्या है? {{line}}",
+    "optionalNote": "एक बार पूछा जाता है। आपका जवाब इस कैरियर के लिए याद रखा जाता है। आप छोड़ सकते हैं: लाइन पहले की तरह सेव होगी।",
+    "saveFailedTitle": "आपका जवाब सेव नहीं हो सका",
+    "needsDb": "यह जवाब डेटाबेस अपडेट (§84) चलने के बाद सेव किया जा सकता है।",
+    "choice": {
+      "EXPENSE_VARIABLE": "व्यापार खर्च",
+      "PERSONAL": "निजी",
+      "REPAYMENT": "लोन या एडवांस की वापसी",
+      "REFUNDABLE_FUND": "जमा या फंड (वापसी योग्य)",
+      "REIMBURSEMENT": "छूट या प्रतिपूर्ति"
+    }
   }
 }
