@@ -3,6 +3,14 @@
 Saved verbatim so "continue the statement reading plan" resumes after a
 /clear. Progress is tracked at the end of this file.
 
+> **MODEL MIX (owner, 2026-11-03) SUPERSEDES THE 2026-11-01 "FULL OPUS 5.5"
+> MODEL CHOICES.** Statement pages `claude-opus-5-5` (effort medium), line
+> pages `claude-sonnet-5-5` (effort low), attachments and classification
+> `claude-haiku-5-5`. Fable stays off (`AI_IMPORT_ALLOW_FABLE` hard
+> switch, unchanged). Everything else in the 2026-11-01 section (no silent
+> model switch, Opus retries, cost log, privacy questions) still binds. See
+> "Owner decision 2026-11-03" below.
+>
 > **SUPERSEDED IN PART (owner, 2026-11-01): FULL OPUS 5.5.** Every model
 > choice in the verbatim plan below (step B item 3, step C items 1-2, and
 > any earlier Fable addendum) is replaced by the section "Owner decision
@@ -220,6 +228,48 @@ reads agree AND the arithmetic chains pass (step C item 1).
   4. That keeping `AI_IMPORT_ALLOW_FABLE=false` means no document is ever
      sent to a model with a different (30-day) retention requirement.
 
+## Owner decision 2026-11-03: model mix, step B with five device findings
+
+From the Diagnostics report of 2026-11-03 11:01 (server 4b5eb2f). Approved
+order, one commit per item, each with its own revert: R5, R1, R3, R2,
+R4/B3, B2, B4/B5, PLUS.
+
+| Env setting | Default | Effort |
+|---|---|---|
+| `AI_IMPORT_MODEL_STATEMENT` | `claude-opus-5-5` | medium |
+| `AI_IMPORT_MODEL_LINES` | `claude-sonnet-5-5` | low |
+| `AI_IMPORT_MODEL_ATTACHMENTS` (and classification) | `claude-haiku-5-5` | low |
+
+Root causes and the approved design (working rule 2, approved 2026-11-03):
+- **R1 dates**: every date is returned as PRINTED TEXT
+  (`settlementDateRaw`, `printDateRaw`, `statementWeekEndingRaw`); the
+  model never returns YYYY-MM-DD (`settlement.weekEnding`, `printDate`,
+  `operating.weekEnding` go). The app parses with the Batch 0 rules (Prime
+  YY/MM/DD); merge conflicts compare the raw strings (spaces removed).
+- **R2 column slip**: every statement line and TOTAL line is
+  `{label, weeks, ytd, ltd}` (+ `section` on lines), each nullable,
+  blank = null, trailing minus = negative. The app uses WEEKS only; a null
+  WEEKS is not counted (never 0). `weekTotal*` scalars go; SETTLEMENT TO
+  OPERATOR and the payout become labeled lines. YTD continuity (ytd_this =
+  ytd_prev + weeks, consecutive weeks) is informational, shown in
+  Diagnostics, never in the gate.
+- **R3 partial pages**: settlement section totals come only from printed
+  TOTAL labels (`settlementTotalLines: [{label, amount}]`: TOTAL REV, TOTAL
+  REIMBURSED, TOTAL DEDUCTIONS FROM TRUCK, GROSS/NET AMOUNT DUE UNIT, the
+  recap lines); the app maps label -> field. A page with no TOTAL line
+  contributes no total; a merge never fills a total from a non-TOTAL value.
+- **R4 parse_failed**: `output_config.format` json_schema on every call, 3
+  retries with backoff, scrubbed raw reply of a failed page kept in
+  `page_results` (no SQL).
+- **R5 verdict none**: a job never waits silently for a verdict (see
+  Progress).
+- **PLUS**: "Re-check with current rules" on every failed job: the gate
+  re-runs on the stored extraction, no model call (free); a stored
+  extraction in an older schema offers "Read again" instead.
+- **Cost log**: `ai_usage_log` columns per role (model, effort, tokens,
+  cache tokens, dollar estimate) in a PENDING_SQL section with a read-only
+  check query.
+
 ## Progress
 
 - [x] Step A: system check, live model check, send report (2026-10-31;
@@ -242,4 +292,5 @@ reads agree AND the arithmetic chains pass (step C item 1).
   - [ ] B4: headline pages first (p1, p3, p4, p5-6); line rows read after
     the card is ready, never gate; only reconciling rows stored.
   - [ ] B5: clean failure screen + progress line text (app, eas update).
+- [ ] 2026-11-03 items: [x] R5  [ ] R1  [ ] R3  [ ] R2  [ ] R4/B3  [ ] B2 (model mix above)  [ ] B4/B5  [ ] PLUS
 - [ ] Step C: dual read and model profiles (all Opus, per 2026-11-01)
