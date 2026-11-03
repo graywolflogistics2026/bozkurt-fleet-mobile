@@ -252,6 +252,9 @@ Full: `docs/decisions/prime-statement-source.md`.
 button, follow effect and fetch; a re-read job is ready only after it
 completes again. `loadJobForReview()` never dead-ends (finishing -> 3
 retries -> Read again). Line details never trigger a re-read.
+Since 2026-11-03 the JOB decides re-reads (ai-import `job_verdict`, max 3
+reads, same values twice = stop); the card renders only for a final job.
+Full: `docs/decisions/settlement-import-chunking.md` ("Re-read rules").
 
 **Simple import flow (batch D2, 2026-10-31).** A settlement shows only
 READING / CHECK AND CERTIFY / COULD NOT READ. ONE pass/fail gate

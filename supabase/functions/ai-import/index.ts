@@ -57,6 +57,12 @@ import {
   newReadPagesPlan,
   newRereadPlan,
   rereadKeptResults,
+  decideJobVerdict,
+  manualReread,
+  reviewOf,
+  MAX_READS_PER_JOB,
+  type JobReview,
+  type JobVerdictInput,
   resetFailedPages,
   runJobStep,
   type ClassifiedPage,
@@ -1846,6 +1852,15 @@ type JobRequestBody = PromptInputs & {
   pages?: number[];
   // reread_job (IMPORT GATE FIX 1.3): why the app reads again (logged).
   reason?: string;
+  // job_verdict (RE-READ RULES 2026-11-03): the one gate's result on read N.
+  verdict?: {
+    readNo?: number;
+    status?: string;
+    reason?: string;
+    failures?: unknown[];
+    details?: { check?: unknown; printed?: unknown; read?: unknown }[];
+    pages?: number[];
+  };
 };
 
 // Mode 'job': create the import_jobs row, check the limits, plan, start
@@ -2113,17 +2128,42 @@ async function handleRereadJob(
   if (job.status !== "ready" || !old || !String(job.media_type ?? "").includes("pdf")) {
     return errorResponse("bad_request", "Only a finished PDF import that has not been saved can be read again.", 400);
   }
-  // IMPORT GATE FIX 1.3: only the pages that feed the failing check are read
-  // again; the other content pages keep their finished results. No list =
-  // every content page (the manual "Read again").
+  // RE-READ RULES (owner 2026-11-03): the owner's own Read again is capped
+  // like every automatic one (MAX_READS_PER_JOB reads per job).
   const targetPages = Array.isArray(body.pages) ? body.pages.filter((p) => Number.isInteger(p) && p >= 1 && p <= old.totalPages) : null;
+  const review = manualReread(reviewOf(old), new Date().toISOString(), targetPages && targetPages.length > 0 ? targetPages : null);
+  if (!review) {
+    return errorResponse("bad_request", `This file was already read ${MAX_READS_PER_JOB} times. Upload it again to start a new import.`, 400);
+  }
+  const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 200) : "read_again";
+  return await startJobReread(admin, userId, body, job, old, targetPages, reason, review, invocationStartedAt);
+}
+
+// Starts a re-read of a ready job: only the listed content pages (IMPORT
+// GATE FIX 1.3; none = every content page), the others keep their finished
+// results. The review (read count + triggers) goes on the row with it.
+async function startJobReread(
+  admin: NonNullable<ReturnType<typeof getServiceRoleAdminClient>>,
+  userId: string,
+  body: JobRequestBody,
+  job: { id: unknown; page_results: unknown },
+  old: StoredPlan,
+  targetPages: number[] | null,
+  reason: string,
+  review: JobReview,
+  invocationStartedAt: number,
+): Promise<Response> {
+  const jobId = job.id as string;
   const rereadPlan = newRereadPlan(old);
   const keptResults = rereadKeptResults(rereadPlan, job.page_results as Record<string, PageResult> | null, targetPages);
-  const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 200) : "read_again";
   const readPages = targetPages && targetPages.length > 0 ? targetPages : null;
-  console.log(`[ai-import] reread_job ${body.jobId}: reason=${reason} pages=${readPages ? readPages.join(",") : "all content"} kept=${Object.keys(keptResults).join(",") || "none"}`);
+  const trigger = review.triggers[review.triggers.length - 1];
+  console.log(
+    `[ai-import] reread ${jobId}: read ${review.reads} of ${MAX_READS_PER_JOB}; reason=${reason}; check=${trigger?.check ?? "-"} printed=${trigger?.printed ?? "-"} read=${trigger?.value ?? "-"}; pages=${readPages ? readPages.join(",") : "all content"} kept=${Object.keys(keptResults).join(",") || "none"}`,
+  );
   const plan: StoredPlan = {
     ...rereadPlan,
+    review,
     rereads: [...(old.rereads ?? []), { at: new Date().toISOString(), reason, pages: readPages }],
     promptInputs: {
       docHint: body.docHint ?? old.promptInputs?.docHint,
@@ -2150,12 +2190,70 @@ async function handleRereadJob(
       lease_until: null,
       updated_at: now,
     })
-    .eq("id", body.jobId)
+    .eq("id", jobId)
     .eq("user_id", userId)
     .eq("status", "ready");
   if (updateError) return errorResponse("internal", "Could not start reading again — your file is safe. Please try again.", 500);
-  runInBackground(runJobRun(admin, body.jobId, invocationStartedAt));
-  return accepted({ jobId: body.jobId });
+  runInBackground(runJobRun(admin, jobId, invocationStartedAt));
+  return new Response(JSON.stringify({ jobId, action: "reread", review }), { status: 202, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+}
+
+// Mode 'job_verdict' (RE-READ RULES, owner 2026-11-03): the app ran the one
+// gate on this job's finished reading (read number `readNo`) and posts the
+// result. The job decides here, before it is final: pass -> ready_final;
+// fail -> a re-read of the failing pages, unless the cap is reached, the
+// values are the same as the read before, or the file cannot be read again
+// -> failed_final. A verdict for an older read or a final job is ignored.
+async function handleJobVerdict(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  body: JobRequestBody,
+  invocationStartedAt: number,
+): Promise<Response> {
+  if (!body.jobId || !body.verdict) return errorResponse("bad_request", "jobId and verdict are required.", 400);
+  const admin = getServiceRoleAdminClient();
+  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
+  const { data: job, error } = await supabase
+    .from("import_jobs")
+    .select("id, user_id, status, page_plan, page_results, media_type")
+    .eq("id", body.jobId)
+    .maybeSingle();
+  if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
+  const old = job.page_plan as StoredPlan | null;
+  const json = (payload: unknown, status = 200) => new Response(JSON.stringify(payload), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  if (job.status !== "ready" || !old) return json({ jobId: job.id, action: "ignored", review: reviewOf(old) });
+  const v = body.verdict;
+  const verdict: JobVerdictInput = {
+    readNo: Number(v.readNo),
+    status: v.status === "pass" ? "pass" : "fail",
+    reason: typeof v.reason === "string" ? v.reason.slice(0, 80) : undefined,
+    failures: Array.isArray(v.failures) ? v.failures.filter((f): f is string => typeof f === "string").slice(0, 20) : [],
+    details: Array.isArray(v.details)
+      ? v.details
+          .filter((d) => d && typeof d.check === "string")
+          .slice(0, 10)
+          .map((d) => ({ check: String(d.check), printed: typeof d.printed === "number" ? d.printed : String(d.printed ?? ""), read: typeof d.read === "number" ? d.read : String(d.read ?? "") }))
+      : [],
+    pages: Array.isArray(v.pages) ? v.pages.filter((p) => Number.isInteger(p) && p >= 1 && p <= old.totalPages) : null,
+  };
+  const rereadable = !!edgeRuntimeAvailable() && String(job.media_type ?? "").includes("pdf");
+  const decision = decideJobVerdict(reviewOf(old), verdict, { nowIso: new Date().toISOString(), rereadable });
+  const last = decision.review.triggers[decision.review.triggers.length - 1];
+  console.log(
+    `[ai-import] job_verdict ${job.id}: read ${verdict.readNo} ${verdict.status} -> ${decision.action}${decision.action === "final" ? ` (${decision.review.final?.state}: ${decision.review.final?.reason})` : ""}${decision.action === "reread" ? `; check=${last?.check} printed=${last?.printed} read=${last?.value}` : ""}`,
+  );
+  if (decision.action === "ignored") return json({ jobId: job.id, action: "ignored", review: decision.review });
+  if (decision.action === "reread") {
+    return await startJobReread(admin, userId, body, job, old, decision.pages, decision.reason, decision.review, invocationStartedAt);
+  }
+  const { error: updateError } = await admin
+    .from("import_jobs")
+    .update({ page_plan: { ...old, review: decision.review }, updated_at: new Date().toISOString() })
+    .eq("id", job.id)
+    .eq("user_id", userId)
+    .eq("status", "ready");
+  if (updateError) return errorResponse("internal", "Could not record the check — your file is safe. Please try again.", 500);
+  return json({ jobId: job.id, action: "final", review: decision.review });
 }
 
 // Mode 'answer_job': the user's answer to "This file has N pages. Read the
@@ -2352,7 +2450,7 @@ Deno.serve(async (req: Request) => {
     // job from its first page without a stored result ('retry_job' is the
     // old name, same behavior); 'answer_job' answers the page-cap question;
     // 'read_pages' re-reads chosen pages of a saved document.
-    mode?: "diagnose" | "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job";
+    mode?: "diagnose" | "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job" | "job_verdict";
     storagePath?: string;
     fileName?: string;
     retryJobId?: string;
@@ -2387,6 +2485,7 @@ Deno.serve(async (req: Request) => {
   if (body.mode === "answer_job") return await handleJobAnswer(supabase, userId, body, invocationStartedAt);
   if (body.mode === "read_pages") return await handleReadPages(supabase, userId, body, invocationStartedAt);
   if (body.mode === "reread_job") return await handleRereadJob(supabase, userId, body, invocationStartedAt);
+  if (body.mode === "job_verdict") return await handleJobVerdict(supabase, userId, body as JobRequestBody, invocationStartedAt);
 
   const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;
   const orderIndex = body.orderIndex ?? 0;

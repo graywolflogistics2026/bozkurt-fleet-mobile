@@ -1,0 +1,47 @@
+// RE-READ RULES (owner decision 2026-11-03, 07/17 import loop). The job
+// layer (src/data/jobVerdictRunner.ts, mounted with ImportJobsChip) runs the
+// ONE gate (settlementGate.ts) on a finished job's reading and posts this to
+// the job (ai-import mode 'job_verdict'), which decides pass / re-read /
+// final failure and persists it on the job row. The review card never
+// decides a re-read; it renders only for a FINAL job.
+import type { CarrierCode } from './carrierCodes';
+import { evaluateSettlementGate, rereadRequestFor } from './settlementGate';
+import type { Extraction } from './types';
+
+export type JobVerdict = {
+  readNo: number;
+  status: 'pass' | 'fail';
+  reason?: string;
+  failures?: string[];
+  details?: { check: string; printed: number | string; read: number | string }[];
+  pages?: number[] | null;
+};
+
+export function verdictOfReading(
+  extraction: Extraction | null | undefined,
+  readNo: number,
+  options: { importDate: string; carrierCodes?: CarrierCode[] }
+): JobVerdict {
+  // Not a settlement (receipt, fuel, ...): nothing to gate.
+  if (!extraction || extraction.docType !== 'settlement' || !extraction.settlement) return { readNo, status: 'pass' };
+  const gate = evaluateSettlementGate(extraction, options);
+  // needs_date passes: the card asks the one date question.
+  if (!gate || gate.status !== 'fail') return { readNo, status: 'pass' };
+  const request = rereadRequestFor(gate, extraction);
+  return {
+    readNo,
+    status: 'fail',
+    reason: gate.reason,
+    failures: gate.failures,
+    details: gate.details ?? [],
+    pages: request?.pages ?? null,
+  };
+}
+
+// The last re-read triggers, one line each, for the Send report.
+export function triggerReportLines(
+  triggers: { readNo: number; check: string; printed: number | string | null; value: number | string | null; reason: string }[] | null | undefined,
+  limit = 3
+): string[] {
+  return (triggers ?? []).slice(-limit).map((tr) => `Re-read after read ${tr.readNo}: ${tr.check} printed ${tr.printed ?? '-'}, read ${tr.value ?? '-'} (${tr.reason})`);
+}

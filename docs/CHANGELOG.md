@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- RE-READ RULES (owner 2026-11-03, week 07/17 loop): the JOB decides a
+  re-read before it is final (jobVerdictRunner.ts -> ai-import job_verdict
+  -> jobEngine decideJobVerdict; page_plan.review, no SQL). Max 3 reads per
+  job; same failing values twice stop at once (COULD NOT READ with the check
+  and both numbers); the card renders only for ready_final; a re-read shows
+  "Reading again (n of 3): <check>"; Send report lists the last 3 triggers.
+  Auto-resume and the jobs list never start a read. Redeploy ai-import
+  BEFORE eas update.
 - BLOCK TOTALS BY LABEL (owner 2026-11-03, week 07/17 loop): a block total
   comes ONLY from a printed line whose label starts with TOTAL
   (`operating.totalLines`, schema + Prime prompt; `statementTotalLabels.ts`,

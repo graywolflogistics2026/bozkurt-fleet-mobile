@@ -3111,6 +3111,9 @@
   },
   "importFlow": {
     "reading": "Leyendo su estado de cuenta. Esto puede tardar varios minutos. Mantenga la app abierta.",
+    "readingAgain": "Leyendo de nuevo ({{n}} de {{max}}): {{check}}",
+    "stoppedSameValues": "La nueva lectura dio los mismos números, así que se detuvo. Suba el archivo de nuevo o envíe un informe.",
+    "stoppedReadCap": "Este archivo se leyó 3 veces. Súbalo de nuevo o envíe un informe.",
     "readingShort": "Leyendo su estado de cuenta…",
     "statusReading": "Leyendo",
     "statusReady": "Listo para revisar",

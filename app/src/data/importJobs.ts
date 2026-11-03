@@ -4,7 +4,7 @@ import { supabase } from '@/src/lib/supabase';
 import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
-import { hasPendingWork, markRereadRequested, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus } from '@/src/import/importJobs';
+import { hasPendingWork, isAwaitingVerdict, jobReviewStep, markRereadRequested, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus, type JobReviewState } from '@/src/import/importJobs';
 import type { Extraction } from '@/src/import/types';
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
@@ -27,13 +27,15 @@ type ImportJobRow = {
   heartbeat_at?: string | null;
   error_page?: number | null;
   document_id?: string | null;
+  // page_plan->review (RE-READ RULES 2026-11-03); absent with base columns.
+  review?: JobReviewState | null;
 };
 
 const IMPORT_JOB_BASE_COLUMNS =
   'id, status, pages_done, pages_total, file_name, media_type, error_message, error_step, created_at, updated_at, completed_at';
 // RESUMABLE IMPORT JOBS (docs/PENDING_SQL.md §78). Before §78 runs these
 // columns don't exist: the select falls back to the base columns.
-const IMPORT_JOB_COLUMNS = `${IMPORT_JOB_BASE_COLUMNS}, progress, heartbeat_at, error_page, document_id`;
+const IMPORT_JOB_COLUMNS = `${IMPORT_JOB_BASE_COLUMNS}, progress, heartbeat_at, error_page, document_id, review:page_plan->review`;
 let resumableColumnsMissing = false;
 
 function isUndefinedColumn(error: { code?: string; message?: string } | null): boolean {
@@ -57,6 +59,8 @@ function mapRow(row: ImportJobRow): ImportJob {
     heartbeatAt: row.heartbeat_at ?? null,
     errorPage: row.error_page ?? null,
     documentId: row.document_id ?? null,
+    // undefined only when the base columns were selected (no page_plan).
+    review: 'review' in row ? (row.review ?? null) : undefined,
   };
 }
 
@@ -98,7 +102,7 @@ export function useImportJobs() {
     enabled: !!userId,
     refetchInterval: (query) => {
       const jobs = query.state.data as ImportJob[] | undefined;
-      return (jobs ?? []).some(hasPendingWork) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+      return (jobs ?? []).some((j) => hasPendingWork(j) || isAwaitingVerdict(j)) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
     },
     // Keep polling even while the query "looks" fresh — the whole point
     // is picking up server-side progress the client had no hand in.
@@ -158,15 +162,26 @@ export type JobReviewLoad =
   | { state: 'ready'; extraction: Extraction; fileName: string | undefined; storagePath: string; mediaType: string }
   | { state: 'finishing' }
   | { state: 'failed'; message: string | null }
-  | { state: 'missing' };
+  | { state: 'missing' }
+  // RE-READ RULES (owner 2026-11-03): finished but its verdict is not
+  // decided yet (the job layer decides; the card waits), or FINAL failed.
+  | { state: 'checking'; review: JobReviewState | null }
+  | { state: 'could_not_read'; extraction: Extraction | null; review: JobReviewState };
 
 export async function loadJobForReview(jobId: string): Promise<JobReviewLoad> {
-  const { data, error } = await supabase.from('import_jobs').select('result_json, file_name, status, storage_path, media_type, error_message').eq('id', jobId).maybeSingle();
+  const base = 'result_json, file_name, status, storage_path, media_type, error_message';
+  let res = await supabase.from('import_jobs').select(`${base}, review:page_plan->review`).eq('id', jobId).maybeSingle();
+  if (res.error && isUndefinedColumn(res.error)) res = (await supabase.from('import_jobs').select(base).eq('id', jobId).maybeSingle()) as typeof res;
+  const { data, error } = res;
   if (error) throw error;
   if (!data) return { state: 'missing' };
   if (data.status === 'failed') return { state: 'failed', message: (data.error_message as string | null) ?? null };
   const raw = data.result_json as Extraction | null;
   if (data.status !== 'ready' || !raw || typeof raw !== 'object' || !raw.docType) return { state: 'finishing' };
+  const review = 'review' in data ? ((data as { review?: JobReviewState | null }).review ?? null) : undefined;
+  const step = jobReviewStep({ id: jobId, status: 'ready', review });
+  if (step === 'checking') return { state: 'checking', review: review ?? null };
+  if (step === 'could_not_read') return { state: 'could_not_read', extraction: sanitizeExtraction(raw), review: review ?? {} };
   return {
     state: 'ready',
     extraction: sanitizeExtraction(raw),

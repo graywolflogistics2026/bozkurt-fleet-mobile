@@ -4,6 +4,7 @@ import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useImportJobs, fetchImportJobResult, resumeImportJob, answerImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
+import { useJobVerdictRunner } from '@/src/data/jobVerdictRunner';
 import { deriveChipSummary, isReadyToReview, runOptionalSideEffect, shouldAutoResume, silentAttachmentStep } from '@/src/import/importJobs';
 import { supabase } from '@/src/lib/supabase';
 import { notifyImportJobDone, hasNotifiedJob } from '@/src/notifications/importJobNotifications';
@@ -34,6 +35,9 @@ export function ImportJobsChip() {
   const { money } = useFormatters();
   const queryClient = useQueryClient();
   const { data: allJobs } = useImportJobs();
+  // RE-READ RULES (owner 2026-11-03): the job layer decides every finished
+  // reading's verdict here — never the review card.
+  useJobVerdictRunner();
   // Post-save attachment jobs are handled silently below — never shown.
   const jobs = useMemo(() => (allJobs ?? []).filter((j) => silentAttachmentStep(j) == null), [allJobs]);
   const summary = deriveChipSummary(jobs);

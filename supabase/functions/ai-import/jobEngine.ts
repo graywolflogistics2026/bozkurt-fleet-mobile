@@ -229,7 +229,124 @@ export type JobPlan = {
   baseDocumentId?: string | null;
   // IMPORT GATE FIX 1.3: each re-read of this job and why.
   rereads?: RereadLogEntry[];
+  // RE-READ RULES (owner 2026-11-03): the job's read count, every re-read
+  // trigger and the FINAL verdict, persisted on the job row.
+  review?: JobReview | null;
 };
+
+// ---------------------------------------------------------------------
+// RE-READ RULES (owner decision 2026-11-03, 07/17 import loop). A re-read is
+// decided INSIDE the job, before the job is final — never from the review
+// card. The app runs the one gate (settlementGate.ts) on a finished reading
+// and posts the result (mode 'job_verdict'); this decides, persists and
+// starts the re-read. Hard cap MAX_READS_PER_JOB reads per job. A re-read
+// whose failing check comes back with the SAME values as the read before
+// stops at once (the reading is deterministic, the rule is wrong) with the
+// failure screen. A verdict for an older read, or for a job already final,
+// is ignored — opening the jobs list or the app's 3-minute restart can
+// never start a read.
+// ---------------------------------------------------------------------
+export const MAX_READS_PER_JOB = 3;
+
+export type VerdictDetail = { check: string; printed: number | string; read: number | string };
+export type ReadTrigger = {
+  at: string;
+  // The read whose result triggered this re-read (1 = the first read).
+  readNo: number;
+  check: string;
+  printed: number | string | null;
+  value: number | string | null;
+  reason: string;
+  pages: number[] | null;
+  signature: string;
+};
+export type JobFinal = {
+  state: 'ready_final' | 'failed_final';
+  at: string;
+  // pass | same_values | read_cap | not_rereadable
+  reason: string;
+  // The gate's own fail reason (settlementGate.ts GateFailReason).
+  gateReason?: string;
+  failures?: string[];
+  details?: VerdictDetail[];
+};
+export type JobReview = { reads: number; final: JobFinal | null; triggers: ReadTrigger[] };
+export type JobVerdictInput = {
+  readNo: number;
+  status: 'pass' | 'fail';
+  reason?: string;
+  failures?: string[];
+  details?: VerdictDetail[];
+  pages?: number[] | null;
+};
+export type VerdictDecision =
+  | { action: 'final'; review: JobReview }
+  | { action: 'reread'; review: JobReview; pages: number[] | null; reason: string }
+  | { action: 'ignored'; review: JobReview };
+
+export function reviewOf(plan: Pick<JobPlan, 'review'> | null | undefined): JobReview {
+  const r = plan?.review;
+  return {
+    reads: Number.isInteger(r?.reads) && (r!.reads as number) >= 1 ? (r!.reads as number) : 1,
+    final: r?.final ?? null,
+    triggers: Array.isArray(r?.triggers) ? r!.triggers : [],
+  };
+}
+
+// The failing values, order-independent: two reads with the same signature
+// read the same numbers.
+export function verdictSignature(v: Pick<JobVerdictInput, 'reason' | 'failures' | 'details'>): string {
+  const details = [...(v.details ?? [])].map((d) => `${d.check}=${d.printed}/${d.read}`).sort();
+  const failures = [...(v.failures ?? [])].sort();
+  return `${v.reason ?? ''}|${failures.join(',')}|${details.join(',')}`;
+}
+
+export function decideJobVerdict(
+  current: JobReview,
+  v: JobVerdictInput,
+  opts: { nowIso: string; rereadable: boolean }
+): VerdictDecision {
+  const review: JobReview = { ...current, triggers: [...current.triggers] };
+  if (review.final || v.readNo !== review.reads) return { action: 'ignored', review };
+  if (v.status === 'pass') {
+    return { action: 'final', review: { ...review, final: { state: 'ready_final', at: opts.nowIso, reason: 'pass' } } };
+  }
+  const signature = verdictSignature(v);
+  const failed = (reason: string): VerdictDecision => ({
+    action: 'final',
+    review: { ...review, final: { state: 'failed_final', at: opts.nowIso, reason, gateReason: v.reason, failures: v.failures ?? [], details: v.details ?? [] } },
+  });
+  const last = review.triggers[review.triggers.length - 1];
+  if (last && last.signature === signature) return failed('same_values');
+  if (review.reads >= MAX_READS_PER_JOB) return failed('read_cap');
+  if (!opts.rereadable) return failed('not_rereadable');
+  const first = v.details?.[0];
+  const reason = `${v.reason ?? 'fail'}: ${(v.failures ?? []).join(', ')}`.slice(0, 200);
+  const pages = Array.isArray(v.pages) && v.pages.length > 0 ? v.pages : null;
+  review.triggers.push({
+    at: opts.nowIso,
+    readNo: review.reads,
+    check: first?.check ?? v.failures?.[0] ?? v.reason ?? 'fail',
+    printed: first?.printed ?? null,
+    value: first?.read ?? null,
+    reason,
+    pages,
+    signature,
+  });
+  review.reads += 1;
+  return { action: 'reread', review, pages, reason };
+}
+
+// The owner's own "Read again" on a job: allowed under the cap only, and
+// logged like every other trigger.
+export function manualReread(current: JobReview, nowIso: string, pages: number[] | null): JobReview | null {
+  if (current.reads >= MAX_READS_PER_JOB) return null;
+  return {
+    reads: current.reads + 1,
+    final: null,
+    triggers: [...current.triggers, { at: nowIso, readNo: current.reads, check: 'read_again', printed: null, value: null, reason: 'read_again', pages, signature: `read_again:${current.reads}` }],
+  };
+}
 
 export type PageMapEntry = {
   page: number;

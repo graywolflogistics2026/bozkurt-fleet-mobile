@@ -3111,6 +3111,9 @@
   },
   "importFlow": {
     "reading": "Reading your statement. This can take several minutes. Keep the app open.",
+    "readingAgain": "Reading again ({{n}} of {{max}}): {{check}}",
+    "stoppedSameValues": "Reading again gave the same numbers, so it stopped. Upload the file again or send a report.",
+    "stoppedReadCap": "This file was read 3 times. Upload it again or send a report.",
     "readingShort": "Reading your statement…",
     "statusReading": "Reading",
     "statusReady": "Ready to check",

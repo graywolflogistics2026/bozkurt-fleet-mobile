@@ -3111,6 +3111,9 @@
   },
   "importFlow": {
     "reading": "Ekstreniz okunuyor. Bu birkaç dakika sürebilir. Uygulamayı açık tutun.",
+    "readingAgain": "Yeniden okunuyor ({{n}} / {{max}}): {{check}}",
+    "stoppedSameValues": "Yeniden okuma aynı rakamları verdi, bu yüzden durduruldu. Dosyayı tekrar yükleyin veya rapor gönderin.",
+    "stoppedReadCap": "Bu dosya 3 kez okundu. Tekrar yükleyin veya rapor gönderin.",
     "readingShort": "Ekstreniz okunuyor…",
     "statusReading": "Okunuyor",
     "statusReady": "Kontrole hazır",

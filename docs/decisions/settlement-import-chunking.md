@@ -544,3 +544,26 @@ page become `stored`. Kind `read_pages`: never counts against the
 allowance again. A whole-document job (no page roles) re-reads every page.
 Header-total merge conflicts count only when both pages read the same
 printed label (`settlement.totalLabels`).
+
+## Re-read rules: the job decides (owner decision 2026-11-03)
+
+Week 07/17 looped: the review card ran the gate, asked for a re-read, the
+re-read returned the same values, and the in-memory counter reset on every
+remount — 3 reads billed. Now:
+- A finished reading is `ready` but NOT final until its verdict lands.
+  `useJobVerdictRunner()` (`app/src/data/jobVerdictRunner.ts`, mounted with
+  ImportJobsChip) runs the ONE gate (`jobVerdict.ts verdictOfReading`) and
+  posts it to ai-import mode `job_verdict`. The server
+  (`jobEngine.ts decideJobVerdict`) persists `page_plan.review`
+  `{reads, final, triggers}` (no SQL: page_plan is jsonb, §78):
+  pass -> `ready_final`; same failing values as the last trigger ->
+  `failed_final` `same_values`; 3 reads -> `read_cap`; else it starts the
+  re-read itself (reads + 1, trigger logged with check + both values).
+- A verdict for an older read or a final job is ignored; the 3-minute
+  auto-resume and the jobs list never start a read (`hasPendingWork` is
+  false for a ready job). Manual "Read again" counts against the cap
+  (`manualReread`, server refuses at 3).
+- The card renders only for `ready_final` (`isReadyToReview`); a
+  `failed_final` job shows COULD NOT READ with the job's check and numbers;
+  a re-read shows "Reading again (2 of 3): <check>". The Send report adds
+  the last 3 triggers. Photos (no job) keep the in-screen re-reads.

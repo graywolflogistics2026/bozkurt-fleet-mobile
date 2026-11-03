@@ -17,12 +17,17 @@ import type { Extraction } from '@/src/import/types';
 // CERTIFY, COULD NOT READ. No page, step, pause or interruption wording,
 // no Verified / Totals match / Unverified label, no "Save anyway".
 
-export function ReadingCard() {
+// RE-READ RULES (owner 2026-11-03): a re-read in progress says which
+// check sent it back, e.g. "Reading again (2 of 3): Variable costs".
+export function ReadingCard({ again }: { again?: { n: number; max: number; check: string } | null } = {}) {
   const { t } = useTranslation();
+  const label = again
+    ? t("importFlow.readingAgain", { n: again.n, max: again.max, check: t(`importFlow.checkName.${again.check}`, { defaultValue: again.check }) })
+    : t("importFlow.reading");
   return (
     <Card>
       <ActivityIndicator color={colors.accent} size="large" />
-      <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{t('importFlow.reading')}</Text>
+      <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{label}</Text>
     </Card>
   );
 }
@@ -140,6 +145,8 @@ export function CouldNotReadCard({
   onUploadAgain,
   onReadAgain,
   details,
+  stopped,
+  triggerLines,
 }: {
   extraction: Extraction | null;
   reason: GateFailReason | 'job_failed' | 'not_finished';
@@ -148,6 +155,10 @@ export function CouldNotReadCard({
   onUploadAgain: () => void;
   // A background job can be read again on the server (never a dead end).
   onReadAgain?: () => void;
+  // RE-READ RULES: why the job stopped reading (same values twice, or the
+  // 3-read cap), and the last re-read triggers for the Send report.
+  stopped?: "same_values" | "read_cap" | null;
+  triggerLines?: string[];
 }) {
   const { t } = useTranslation();
   const { money } = useFormatters();
@@ -165,13 +176,14 @@ export function CouldNotReadCard({
             {line}
           </MutedText>
         ))}
+        {stopped && <MutedText style={{ marginTop: spacing.xs }}>{t(stopped === "same_values" ? "importFlow.stoppedSameValues" : "importFlow.stoppedReadCap")}</MutedText>}
       </View>
       {onReadAgain && <PrimaryButton title={t('importFlow.readAgain')} onPress={onReadAgain} />}
       {onReadAgain ? <SecondaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} /> : <PrimaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} />}
       <SecondaryButton
         title={t('importFlow.sendReport')}
         onPress={() => {
-          void Share.share({ message: couldNotReadReport(extraction, reason, (k, o) => t(k, o) as string, detailLines) });
+          void Share.share({ message: couldNotReadReport(extraction, reason, (k, o) => t(k, o) as string, [...detailLines, ...(triggerLines ?? [])]) });
         }}
       />
     </Card>

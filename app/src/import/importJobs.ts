@@ -63,7 +63,72 @@ export type ImportJob = {
   errorPage?: number | null;
   // Set once the week was saved while attachment pages were still being read.
   documentId?: string | null;
+  // RE-READ RULES (owner 2026-11-03): page_plan.review — reads done, every
+  // re-read trigger and the FINAL verdict. undefined = not selected (older
+  // database without page_plan), null = no verdict yet.
+  review?: JobReviewState | null;
 };
+
+// Mirror of supabase/functions/ai-import/jobEngine.ts JobReview (the app
+// never imports server code at runtime).
+export const MAX_READS_PER_JOB = 3;
+export type JobReviewDetail = { check: string; printed: number | string; read: number | string };
+export type JobReviewTrigger = { at: string; readNo: number; check: string; printed: number | string | null; value: number | string | null; reason: string; pages: number[] | null };
+export type JobReviewState = {
+  reads?: number;
+  final?: { state: 'ready_final' | 'failed_final'; at: string; reason: string; gateReason?: string; failures?: string[]; details?: JobReviewDetail[] } | null;
+  triggers?: JobReviewTrigger[];
+};
+
+export function readsOf(job: Pick<ImportJob, 'review'>): number {
+  const n = job.review?.reads;
+  return typeof n === 'number' && n >= 1 ? n : 1;
+}
+
+// Where a job stands for the import screen. The Check and certify card
+// renders ONLY for 'ready' (a FINAL, passed job); 'could_not_read' is final
+// too. 'checking' = finished reading, verdict not decided yet; 'reading' =
+// still reading (first read or a re-read).
+export type JobReviewStep = 'reading' | 'checking' | 'ready' | 'could_not_read' | 'failed';
+
+// A verdict the app could not post (an ai-import without 'job_verdict'):
+// decided locally for this read only, never a re-read.
+const localFinals = new Map<string, 'ready_final' | 'failed_final'>();
+export function setLocalFinal(jobId: string, readNo: number, state: 'ready_final' | 'failed_final'): void {
+  localFinals.set(`${jobId}:${readNo}`, state);
+}
+
+export function finalStateOf(job: Pick<ImportJob, 'id' | 'review'>): 'ready_final' | 'failed_final' | null {
+  // Older database (page_plan not selected): no verdicts exist; a ready job
+  // is final, as before.
+  if (job.review === undefined) return 'ready_final';
+  const s = job.review?.final?.state;
+  if (s === 'ready_final' || s === 'failed_final') return s;
+  return localFinals.get(`${job.id}:${readsOf(job)}`) ?? null;
+}
+
+export function jobReviewStep(job: Pick<ImportJob, 'id' | 'status' | 'review'> & Partial<Pick<ImportJob, 'completedAt' | 'updatedAt'>>): JobReviewStep {
+  if (job.status === 'failed') return 'failed';
+  if (job.status !== 'ready') return 'reading';
+  const final = finalStateOf(job);
+  if (final === 'ready_final') return 'ready';
+  if (final === 'failed_final') return 'could_not_read';
+  return 'checking';
+}
+
+// A finished reading waiting for its verdict (the app's job layer posts it).
+export function isAwaitingVerdict(job: Pick<ImportJob, 'id' | 'status' | 'review'>): boolean {
+  return job.status === 'ready' && job.review !== undefined && finalStateOf(job) == null;
+}
+
+// "Reading again (2 of 3): <check>" while a re-read is running or waiting
+// for its verdict.
+export function readingAgainOf(job: Pick<ImportJob, 'id' | 'status' | 'review'>): { n: number; max: number; check: string } | null {
+  const triggers = job.review?.triggers ?? [];
+  if (triggers.length === 0 || job.review?.final) return null;
+  if (job.status === 'failed') return null;
+  return { n: readsOf(job), max: MAX_READS_PER_JOB, check: triggers[triggers.length - 1].check };
+}
 
 export function isActiveJob(job: Pick<ImportJob, 'status'>): boolean {
   return job.status === 'queued' || job.status === 'processing' || job.status === 'paused' || job.status === 'waiting_to_retry';
@@ -146,6 +211,9 @@ export function jobProgressView(job: ImportJob, nowIso: string): JobProgressView
     if ((p?.attachmentsQueued ?? 0) > 0 && p?.current.some((c) => c.role === 'attachment')) {
       return { state: 'attachments', done: p.attachmentsDone, queued: p.attachmentsQueued, elapsedSec };
     }
+    // Finished reading, verdict not decided yet: still "reading" for the
+    // owner (RE-READ RULES 2026-11-03), never "ready".
+    if (jobReviewStep(job) === 'checking') return { state: 'between_runs', contentDone: p?.contentDone ?? 0, contentTotal: p?.contentTotal ?? 0, attachmentsQueued: p?.attachmentsQueued ?? 0, elapsedSec };
     return { state: 'ready', attachmentsQueued: p?.attachmentsQueued ?? 0, storedPages: p?.storedPages ?? [], failed: p?.failed ?? [] };
   }
   if (job.status === 'waiting_to_retry') return { state: 'waiting', elapsedSec };
@@ -214,12 +282,23 @@ export function clearRereadRequested(jobId: string): void {
   rereadRequestedAt.delete(jobId);
 }
 
-export type ReadinessInput = Pick<ImportJob, 'status'> & Partial<Pick<ImportJob, 'id' | 'completedAt' | 'updatedAt'>>;
+export type ReadinessInput = Pick<ImportJob, 'status'> & Partial<Pick<ImportJob, 'id' | 'completedAt' | 'updatedAt' | 'review'>>;
 
 export function isReadyToReview(
   job: ReadinessInput,
   opts: { notBefore?: string | null } = {}
 ): boolean {
+  if (job.status !== 'ready') return false;
+  // RE-READ RULES (owner 2026-11-03): only a FINAL, passed job is ready —
+  // never one still waiting for its verdict (that is how the card used to
+  // show and then vanish into a re-read).
+  if (finalStateOf({ id: job.id ?? '', review: job.review }) !== 'ready_final') return false;
+  return isFinishedSinceReread(job, opts);
+}
+
+// A 'ready' row that completed after the last re-read this app requested
+// (a cached row from before it is stale).
+export function isFinishedSinceReread(job: ReadinessInput, opts: { notBefore?: string | null } = {}): boolean {
   if (job.status !== 'ready') return false;
   const notBefore = opts.notBefore ?? (job.id ? rereadRequestedAt.get(job.id) : undefined) ?? null;
   if (!notBefore) return true;
@@ -284,10 +363,12 @@ export function deriveChipSummary(jobs: ImportJob[]): ChipSummary {
   // 'processing' chip kind as 'processing' itself — from the user's own
   // perspective both mean "still working on it," just with a different
   // status label/note shown once they open the jobs list.
-  const processing = jobs.filter((j) => j.status === 'processing' || j.status === 'paused' || j.status === 'waiting_to_retry');
+  // A finished reading waiting for its verdict still counts as working
+  // (RE-READ RULES 2026-11-03); a final failed verdict counts as failed.
+  const processing = jobs.filter((j) => j.status === 'processing' || j.status === 'paused' || j.status === 'waiting_to_retry' || jobReviewStep(j) === 'checking');
   const queued = jobs.filter((j) => j.status === 'queued');
   const ready = jobs.filter((j) => isReadyToReview(j));
-  const failed = jobs.filter((j) => j.status === 'failed');
+  const failed = jobs.filter((j) => j.status === 'failed' || jobReviewStep(j) === 'could_not_read');
   const question = jobs.find((j) => j.status === 'needs_decision');
 
   // Priority: a question waiting for the user > something actively
@@ -450,5 +531,6 @@ export function silentAttachmentStep(job: Pick<ImportJob, 'status' | 'documentId
 export function simpleJobState(job: ReadinessInput): 'reading' | 'ready' | 'failed' {
   if (isReadyToReview(job)) return 'ready';
   if (job.status === 'failed') return 'failed';
+  if (job.status === 'ready' && finalStateOf({ id: job.id ?? '', review: job.review }) === 'failed_final') return 'failed';
   return 'reading';
 }
