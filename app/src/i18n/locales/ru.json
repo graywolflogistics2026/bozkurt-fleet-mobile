@@ -3125,6 +3125,8 @@
     "finishingUp": "Завершение",
     "finishingUpBody": "Завершение: сохраняем проверку этого чтения.",
     "finishingProblem": "Ждём ответа сервера ({{problem}}). Пробуем снова.",
+    "verdictStuck": "Всё ещё ждём проверки этого чтения ({{problem}}). Ваш файл в безопасности.",
+    "checkAgain": "Проверить снова",
     "pageFailed": "Не удалось прочитать страницу {{page}}: {{cause}}",
     "serverAnswerMissing": "Нет ответа сервера: {{field}}",
     "jobErrorStep": "Импорт остановился на шаге: {{step}}",

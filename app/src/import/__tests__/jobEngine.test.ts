@@ -314,6 +314,28 @@ describe('partial save', () => {
     expect((sim.row.progress as { failed: unknown[] }).failed).toContainEqual(expect.objectContaining({ page: 3, type: 'unreadable', detail: 'parse_failed', attempts: 2 }));
   });
 
+  // R5 (owner 2026-11-03): "verdict none" left the app on Finishing up
+  // forever. A statement page that stays unreadable makes the job final on
+  // the server, naming the page, so the app never has to post a verdict.
+  it('an unreadable STATEMENT page: the server writes failed_final page_failed naming the page and cause', async () => {
+    const sim = await simulateImport(goldenDoc(ELEVEN_ATTACHMENTS, { 5: { fail: 'parse_failed' } }));
+    expect(sim.row.status).toBe('ready');
+    const review = (sim.row.plan as { review?: { final?: unknown } }).review;
+    expect(review?.final).toMatchObject({
+      state: 'failed_final',
+      reason: 'page_failed',
+      gateReason: 'page_not_read',
+      failures: ['page_5'],
+      details: [{ check: 'page', printed: 5, read: 'parse_failed' }],
+    });
+  });
+
+  it('an unreadable LINE page alone leaves the verdict to the app gate (a passing statement still saves)', async () => {
+    const sim = await simulateImport(goldenDoc(ELEVEN_ATTACHMENTS, { 3: { fail: 'parse_failed' } }));
+    expect(sim.row.status).toBe('ready');
+    expect((sim.row.plan as { review?: { final?: unknown } }).review?.final ?? null).toBeNull();
+  });
+
   it('every content page failing fails the job with a message naming the page, run and cause', async () => {
     const doc = unknownCarrierDoc(9);
     doc.pages = doc.pages.map((p) => ({ ...p, fail: 'parse_failed' as const }));

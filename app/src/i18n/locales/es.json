@@ -3125,6 +3125,8 @@
     "finishingUp": "Terminando",
     "finishingUpBody": "Terminando: registrando la verificación de esta lectura.",
     "finishingProblem": "Aún esperando al servidor ({{problem}}). Intentando de nuevo.",
+    "verdictStuck": "Todavía esperando la verificación de esta lectura ({{problem}}). Su archivo está seguro.",
+    "checkAgain": "Verificar de nuevo",
     "pageFailed": "No se pudo leer la página {{page}}: {{cause}}",
     "serverAnswerMissing": "Falta la respuesta del servidor: {{field}}",
     "jobErrorStep": "La importación se detuvo en el paso: {{step}}",

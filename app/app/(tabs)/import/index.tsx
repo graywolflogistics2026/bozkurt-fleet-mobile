@@ -67,6 +67,7 @@ import {
   type SettlementGateResult,
 } from '@/src/import/settlementGate';
 import { withTypedStatementLines } from '@/src/import/primeStatementTemplate';
+import { checkVerdictAgain, isVerdictStuck, verdictProblemOf } from '@/src/data/jobVerdictRunner';
 import { SettlementDateQuestion } from '@/src/components/SettlementDateQuestion';
 import { checkSettlementDates, isDateGateSatisfied, rememberedDateFormat, settlementDateInputsOf } from '@/src/import/printedDates';
 import { useSettlements } from '@/src/data/settlements';
@@ -1264,6 +1265,12 @@ export default function Import() {
   }
   // SIMPLE IMPORT FLOW (batch D2): the settlement card's gate result.
   const settlementGate = extraction?.docType === 'settlement' ? settlementGateOf(extraction) : null;
+  // R5 (owner 2026-11-03): the verdict call kept failing -> a waiting state
+  // with [Check again], never a silent "Finishing up".
+  const stuckVerdict =
+    finishingUp && followJobId && isVerdictStuck(followJobId)
+      ? { problem: verdictProblemOf(followJobId) ?? '', onCheckAgain: () => checkVerdictAgain(followJobId, queryClient) }
+      : null;
   // PRIME CODE CLASSES (owner D10/D11 2026-11-03): the review card asks
   // once for the truck's ownership (truck payment) and for each unclassed
   // carrier code; the answers are stored and used by Save.
@@ -1566,7 +1573,7 @@ export default function Import() {
           </Card>
         )}
 
-        {phase === 'reading' && <ReadingCard again={readingAgain} finishing={finishingUp} />}
+        {phase === 'reading' && <ReadingCard again={readingAgain} finishing={finishingUp} stuck={stuckVerdict} />}
 
         {(phase === 'could_not_read' || (phase === 'preview' && settlementGate?.status === 'fail')) && (
           <CouldNotReadCard

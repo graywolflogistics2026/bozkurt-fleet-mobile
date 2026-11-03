@@ -3125,6 +3125,8 @@
     "finishingUp": "Finishing up",
     "finishingUpBody": "Finishing up: recording the check of this reading.",
     "finishingProblem": "Still waiting for the server ({{problem}}). Trying again.",
+    "verdictStuck": "Still waiting for the check of this reading ({{problem}}). Your file is safe.",
+    "checkAgain": "Check again",
     "pageFailed": "Page {{page}} could not be read: {{cause}}",
     "serverAnswerMissing": "Server answer missing: {{field}}",
     "jobErrorStep": "The import stopped at step: {{step}}",

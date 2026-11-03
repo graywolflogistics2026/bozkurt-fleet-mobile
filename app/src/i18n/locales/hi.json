@@ -3125,6 +3125,8 @@
     "finishingUp": "पूरा किया जा रहा है",
     "finishingUpBody": "पूरा किया जा रहा है: इस रीडिंग की जाँच दर्ज हो रही है।",
     "finishingProblem": "अभी भी सर्वर का इंतज़ार ({{problem}})। फिर से कोशिश हो रही है।",
+    "verdictStuck": "इस रीडिंग की जाँच का अभी भी इंतज़ार है ({{problem}})। आपकी फ़ाइल सुरक्षित है।",
+    "checkAgain": "फिर से जाँचें",
     "pageFailed": "पेज {{page}} पढ़ा नहीं जा सका: {{cause}}",
     "serverAnswerMissing": "सर्वर का जवाब नहीं मिला: {{field}}",
     "jobErrorStep": "इम्पोर्ट इस चरण पर रुका: {{step}}",

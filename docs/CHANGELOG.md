@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- NEVER "VERDICT NONE" (R5, owner 2026-11-03): an unreadable STATEMENT page
+  makes the job final on the server at ready time (jobEngine.ts
+  pageFailedReview: failed_final page_failed, one page detail per unreadable
+  content page) -> COULD NOT READ with [Read page N again]. A line page alone
+  stays with the app gate. A verdict call failing 3 times shows a waiting
+  state with [Check again] (jobVerdictRunner.ts isVerdictStuck), on the card
+  and the jobs row. Redeploy ai-import; eas update. No SQL.
 - DIAGNOSTICS JOB DETAIL + SERVER BUILD STAMP (owner 2026-11-03): each of the
   last 5 jobs shows verdict source (server/app/none), final state, failing
   checks and every page error with page, cause and role ("p7 unreadable

@@ -24,7 +24,13 @@ import { numOrNull } from '@/src/lib/number';
 // check sent it back, e.g. "Reading again (2 of 3): Variable costs".
 // "Finishing up" (owner 2026-11-03): the reading is done and its verdict is
 // still being recorded — never shown as a failure.
-export function ReadingCard({ again, finishing }: { again?: { n: number; max: number; check: string } | null; finishing?: boolean } = {}) {
+// stuck: the verdict call kept failing — an explicit waiting state with a
+// button, never a silent spinner (R5).
+export function ReadingCard({
+  again,
+  finishing,
+  stuck,
+}: { again?: { n: number; max: number; check: string } | null; finishing?: boolean; stuck?: { problem: string; onCheckAgain: () => void } | null } = {}) {
   const { t } = useTranslation();
   const label = again
     ? t('importFlow.readingAgain', { n: again.n, max: again.max, check: t(`importFlow.checkName.${again.check}`, { defaultValue: again.check }) })
@@ -35,6 +41,12 @@ export function ReadingCard({ again, finishing }: { again?: { n: number; max: nu
     <Card>
       <ActivityIndicator color={colors.accent} size="large" />
       <Text style={{ color: colors.text, textAlign: 'center', marginTop: spacing.md }}>{label}</Text>
+      {finishing && stuck && (
+        <View style={{ marginTop: spacing.md }}>
+          <MutedText style={{ textAlign: 'center', marginBottom: spacing.sm }}>{t('importFlow.verdictStuck', { problem: stuck.problem })}</MutedText>
+          <SecondaryButton title={t('importFlow.checkAgain')} onPress={stuck.onCheckAgain} />
+        </View>
+      )}
     </Card>
   );
 }

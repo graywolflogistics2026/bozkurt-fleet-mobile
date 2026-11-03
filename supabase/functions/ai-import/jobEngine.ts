@@ -373,6 +373,38 @@ export function decideJobVerdict(
   return { action: 'reread', review, pages, reason };
 }
 
+// Content pages whose reading failed after their own retries, with the
+// exact model outcome (parse_failed, truncated, ...).
+export function unreadableContentPages(
+  plan: Pick<JobPlan, 'pages'>,
+  results: Record<string, PageResult | undefined>,
+): { page: number; kind: PageKind; cause: string }[] {
+  return plan.pages
+    .filter((p) => p.role === 'content' && results[String(p.page)]?.status === 'failed')
+    .map((p) => {
+      const e = results[String(p.page)]?.error;
+      return { page: p.page, kind: p.kind, cause: e?.detail ?? e?.type ?? 'unreadable' };
+    });
+}
+
+// The FINAL failed verdict for a job with unreadable content pages: one
+// 'page' detail per page (printed = the page, read = the cause), the same
+// shape the app's gate uses (settlementGate.ts page_not_read).
+export function pageFailedReview(current: JobReview, pages: { page: number; cause: string }[], nowIso: string): JobReview {
+  return {
+    ...current,
+    triggers: [...current.triggers],
+    final: {
+      state: 'failed_final',
+      at: nowIso,
+      reason: 'page_failed',
+      gateReason: 'page_not_read',
+      failures: pages.map((p) => `page_${p.page}`),
+      details: pages.map((p) => ({ check: 'page', printed: p.page, read: p.cause })),
+    },
+  };
+}
+
 // The owner's own "Read again" on a job: allowed under the cap only, and
 // logged like every other trigger.
 export function manualReread(current: JobReview, nowIso: string, pages: number[] | null): JobReview | null {
@@ -1144,6 +1176,15 @@ export async function runJobStep(d: JobDeps): Promise<StepResult> {
     if (!result) return failJob('No page of this document could be read.', 'unreadable', null);
     plan.readyAt = new Date(d.nowMs()).toISOString();
     if (wholeDocument) plan.phase = 'done';
+    // NEVER "VERDICT NONE" (owner decision 2026-11-03, R5): a STATEMENT page
+    // still unreadable after its own retries makes the job FINAL here, on
+    // the server — failed_final naming every unreadable content page and its
+    // cause — so the app never waits on a verdict it may not be able to
+    // post; the owner gets "Read page N again" (under the read cap). A line
+    // page alone does not: the app's one gate decides that week (a passing
+    // statement saves without its line rows, a failing one is page_not_read).
+    const unreadable = unreadableContentPages(plan, results);
+    if (unreadable.some((p) => p.kind === 'statement') && !plan.review?.final) plan.review = pageFailedReview(reviewOf(plan), unreadable, plan.readyAt);
     await save({ status: 'ready', resultJson: result, completed: true, errorMessage: null, errorStep: null, errorPage: null });
     if (plan.kind === 'import') {
       await d.logUsage('ai_import', true);

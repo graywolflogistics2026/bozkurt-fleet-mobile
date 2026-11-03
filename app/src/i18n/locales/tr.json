@@ -3125,6 +3125,8 @@
     "finishingUp": "Bitiriliyor",
     "finishingUpBody": "Bitiriliyor: bu okumanın kontrolü kaydediliyor.",
     "finishingProblem": "Sunucu bekleniyor ({{problem}}). Tekrar deneniyor.",
+    "verdictStuck": "Bu okumanın kontrolü hâlâ bekleniyor ({{problem}}). Dosyanız güvende.",
+    "checkAgain": "Tekrar kontrol et",
     "pageFailed": "Sayfa {{page}} okunamadı: {{cause}}",
     "serverAnswerMissing": "Sunucu yanıtı eksik: {{field}}",
     "jobErrorStep": "İçe aktarma şu adımda durdu: {{step}}",

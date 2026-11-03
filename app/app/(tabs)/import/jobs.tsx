@@ -7,7 +7,7 @@ import { useImportJobs, useDismissImportJob, useRereadImportJob, IMPORT_JOBS_QUE
 import { MAX_READS_PER_JOB, readsOf, silentAttachmentStep, sortImportJobsForDisplay, type ImportJob } from '@/src/import/importJobs';
 import { failedPagesToReadAgain, jobFailureInfo, jobFailureLines, jobFailureReport, jobRowState } from '@/src/import/jobFailure';
 import { triggerReportLines } from '@/src/import/jobVerdict';
-import { verdictProblemOf } from '@/src/data/jobVerdictRunner';
+import { checkVerdictAgain, isVerdictStuck, verdictProblemOf } from '@/src/data/jobVerdictRunner';
 import { formatBuildInfoLine, getBuildInfo } from '@/src/lib/buildInfo';
 import { scrubBankDigitsInText } from '@/src/import/bankDigits';
 import { useFormatters } from '@/src/i18n/format';
@@ -44,6 +44,8 @@ function JobRow({ job, onReview, onDismiss }: { job: ImportJob; onReview: (job: 
   // A content page that failed after its retries: read only that page again
   // (owner 2026-11-03), under the job's read cap.
   const rereadJob = useRereadImportJob();
+  const queryClient = useQueryClient();
+  const stuck = state === 'finishing' && isVerdictStuck(job.id);
   const readAgainPages =
     state === 'failed' && job.status === 'ready' && job.review?.final?.reason === 'page_failed' && readsOf(job) < MAX_READS_PER_JOB
       ? failedPagesToReadAgain(job.review.final.details, jobFailureInfo(job))
@@ -88,6 +90,7 @@ function JobRow({ job, onReview, onDismiss }: { job: ImportJob; onReview: (job: 
       )}
 
       <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+        {stuck && <SecondaryButton title={t('importFlow.checkAgain')} onPress={() => checkVerdictAgain(job.id, queryClient)} />}
         {state === 'ready' && <PrimaryButton title={t('importFlow.checkAndCertify')} onPress={() => onReview(job)} />}
         {readAgainPages.length > 0 && <PrimaryButton title={t('importFlow.readPagesAgain', { pages: readAgainPages.join(', ') })} onPress={readPagesAgain} />}
         {state === 'failed' && (readAgainPages.length > 0 ? <SecondaryButton title={t('importFlow.uploadAgain')} onPress={() => onDismiss(job)} /> : <PrimaryButton title={t('importFlow.uploadAgain')} onPress={() => onDismiss(job)} />)}

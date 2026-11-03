@@ -58,6 +58,23 @@ export function verdictProblemOf(jobId: string): string | null {
   return problems.get(jobId) ?? null;
 }
 
+// NEVER NOTHING (owner decision 2026-11-03, R5): after this many failed
+// verdict calls for the job's current read, the screen shows an explicit
+// waiting state with a [Check again] button instead of a silent spinner.
+export const VERDICT_STUCK_AFTER = 3;
+export function isVerdictStuck(jobId: string): boolean {
+  let n = 0;
+  for (const [key, count] of attempts) if (key.startsWith(`${jobId}:`)) n = Math.max(n, count);
+  return n >= VERDICT_STUCK_AFTER && problems.has(jobId);
+}
+
+// [Check again]: post this job's verdict now instead of waiting for the
+// next retry.
+export function checkVerdictAgain(jobId: string, queryClient: { invalidateQueries: (f: { queryKey: readonly unknown[]; refetchType: 'all' }) => Promise<void> }): void {
+  for (const key of [...posted]) if (key.startsWith(`${jobId}:`)) posted.delete(key);
+  void queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+}
+
 export function useJobVerdictRunner(): void {
   const { data: jobs } = useImportJobs();
   const codes = useCarrierCodeCategories();
