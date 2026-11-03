@@ -15,9 +15,17 @@
 // (bankDigits.ts scrubBankDigitsInText).
 export type Scrub = (text: string) => string;
 
-// Bumped by hand when ai-import changes in a way the owner should be able
-// to see on the tablet ("is the new server code deployed?").
-export const AI_IMPORT_BUILD_ID = 'ai-import 2026-10-31 step-A';
+// The server build shown in Diagnostics. Since 2026-11-03 it is the git
+// commit written into buildStamp.ts by scripts/deploy-ai-import.ps1 at
+// deploy time (index.ts passes it to assembleDiagnoseReport); this name is
+// only the fallback.
+export const AI_IMPORT_BUILD_ID = 'ai-import not-stamped';
+
+// "ai-import e86e0ca (2026-11-03T14:05:00Z)" from the stamp file's values.
+export function stampedBuildId(gitHash: string, deployedAt: string): string {
+  const hash = /^[0-9a-f]{7,40}(\+dirty)?$/.test(gitHash) ? gitHash : 'not-stamped';
+  return deployedAt ? `ai-import ${hash} (${deployedAt})` : `ai-import ${hash}`;
+}
 
 // ---------------------------------------------------------------------
 // Schema the code needs (PENDING_SQL §77-§83 plus the core job/usage
@@ -314,7 +322,13 @@ export type JobRowForDiagnose = {
   pages_total?: number | null;
   page_results?: unknown;
   progress?: unknown;
+  // Since 2026-11-03: the job id and page_plan.review (verdict).
+  id?: string | null;
+  review?: unknown;
 };
+
+// A page that could not be read: its number, the cause code and its role.
+export type PageErrorLine = { page: number; type: string; role: string | null; kind: string | null };
 
 export type JobLine = {
   status: string;
@@ -326,6 +340,15 @@ export type JobLine = {
   // Names of the checks that failed: page error types such as
   // 'parse_failed', 'timeout', 'refused', 'worker_stopped'.
   failedChecks: string[];
+  // DIAGNOSTICS JOB DETAIL (owner 2026-11-03), all optional for older
+  // reports: first 8 of the job id, where the verdict came from (server =
+  // stored on the job; app = decided on the device; none), the final
+  // state, the failing statement checks and every page error.
+  jobId?: string | null;
+  verdictSource?: 'server' | 'app' | 'none';
+  finalState?: string | null;
+  failingChecks?: string[];
+  pageErrors?: PageErrorLine[];
 };
 
 const CODE_RE = /^[a-z0-9_:-]{1,40}$/i;
@@ -335,26 +358,37 @@ function codeOrNull(v: unknown): string | null {
 
 export function jobLine(row: JobRowForDiagnose): JobLine {
   const failed = new Set<string>();
+  const pageErrors = new Map<number, PageErrorLine>();
   const results = row.page_results && typeof row.page_results === 'object' ? (row.page_results as Record<string, unknown>) : {};
   let done = 0;
   let total = 0;
-  for (const r of Object.values(results)) {
+  for (const [key, r] of Object.entries(results)) {
     if (!r || typeof r !== 'object') continue;
     total++;
-    const pr = r as { status?: unknown; error?: { type?: unknown } };
+    const pr = r as { status?: unknown; error?: { type?: unknown }; role?: unknown; kind?: unknown };
     if (pr.status === 'done') done++;
     if (pr.status === 'failed') {
       const code = codeOrNull(pr.error?.type);
       if (code) failed.add(code);
+      const page = Number(key);
+      if (Number.isInteger(page) && page >= 1) pageErrors.set(page, { page, type: code ?? 'unknown_cause', role: codeOrNull(pr.role), kind: codeOrNull(pr.kind) });
     }
   }
   const progress = row.progress && typeof row.progress === 'object' ? (row.progress as Record<string, unknown>) : {};
   if (Array.isArray(progress.failed)) {
     for (const f of progress.failed) {
-      const code = codeOrNull((f as { type?: unknown } | null)?.type);
+      const pf = (f ?? {}) as { type?: unknown; page?: unknown; kind?: unknown };
+      const code = codeOrNull(pf.type);
       if (code) failed.add(code);
+      const page = Number(pf.page);
+      if (Number.isInteger(page) && page >= 1 && !pageErrors.has(page)) pageErrors.set(page, { page, type: code ?? 'unknown_cause', role: null, kind: codeOrNull(pf.kind) });
     }
   }
+  const review = row.review && typeof row.review === 'object' ? (row.review as { final?: { state?: unknown; failures?: unknown; details?: unknown } | null }) : null;
+  const final = review?.final && typeof review.final === 'object' ? review.final : null;
+  const checks = new Set<string>();
+  if (final && Array.isArray(final.details)) for (const d of final.details) { const c = codeOrNull((d as { check?: unknown } | null)?.check); if (c) checks.add(c); }
+  if (final && Array.isArray(final.failures)) for (const f of final.failures) { const c = codeOrNull(f); if (c) checks.add(c); }
   const pDone = typeof row.pages_done === 'number' ? row.pages_done : null;
   const pTotal = typeof row.pages_total === 'number' ? row.pages_total : null;
   return {
@@ -365,6 +399,11 @@ export function jobLine(row: JobRowForDiagnose): JobLine {
     errorStep: codeOrNull(row.error_step),
     errorPage: typeof row.error_page === 'number' ? row.error_page : null,
     failedChecks: [...failed].sort(),
+    jobId: typeof row.id === 'string' ? row.id.slice(0, 8) : null,
+    verdictSource: final ? 'server' : 'none',
+    finalState: final ? codeOrNull(final.state) : null,
+    failingChecks: [...checks].sort(),
+    pageErrors: [...pageErrors.values()].sort((a, b) => a.page - b.page),
   };
 }
 
@@ -385,7 +424,9 @@ export function summarizeJobs(rows: JobRowForDiagnose[], nowMs: number): JobSumm
     counts[s] = (counts[s] ?? 0) + 1;
   }
   const lines = sorted.map(jobLine);
-  const lastErrors = lines.filter((l) => l.status === 'failed' || l.errorStep !== null || l.failedChecks.length > 0).slice(0, 5);
+  const lastErrors = lines
+    .filter((l) => l.status === 'failed' || l.errorStep !== null || l.failedChecks.length > 0 || l.finalState === 'failed_final')
+    .slice(0, 5);
   return { last24hByStatus: counts, lastErrors, lastJobs: lines.slice(0, 5) };
 }
 
@@ -426,6 +467,11 @@ function deepRedact<T>(value: T, secrets: string[], scrub: Scrub): T {
   return value;
 }
 
-export function assembleDiagnoseReport(parts: Omit<DiagnoseReport, 'serverBuildId'>, secrets: string[], scrub: Scrub): DiagnoseReport {
-  return deepRedact({ serverBuildId: AI_IMPORT_BUILD_ID, ...parts }, secrets, scrub);
+export function assembleDiagnoseReport(
+  parts: Omit<DiagnoseReport, 'serverBuildId'>,
+  secrets: string[],
+  scrub: Scrub,
+  buildId: string = AI_IMPORT_BUILD_ID
+): DiagnoseReport {
+  return deepRedact({ serverBuildId: buildId, ...parts }, secrets, scrub);
 }

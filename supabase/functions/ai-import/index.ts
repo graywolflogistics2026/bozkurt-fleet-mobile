@@ -90,11 +90,13 @@ import {
   REQUIRED_RPCS,
   rpcProbePresent,
   runModelCheck,
+  stampedBuildId,
   summarizeJobs,
   type FetchLike,
   type FunctionsCheckedBy,
   type JobRowForDiagnose,
 } from "./diagnose.ts";
+import { AI_IMPORT_DEPLOYED_AT, AI_IMPORT_GIT_HASH } from "./buildStamp.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -2003,14 +2005,20 @@ async function handleDiagnose(
     storageReachable = false;
   }
 
+  // DIAGNOSTICS JOB DETAIL (owner 2026-11-03): + id and the verdict
+  // (page_plan.review), so each job line names its verdict source, final
+  // state, failing checks and page errors.
   let jobRows: JobRowForDiagnose[] = [];
   const fullCols = "status, created_at, updated_at, error_step, error_page, pages_done, pages_total, page_results, progress";
-  const { data: jobsData, error: jobsErr } = await supabase
+  const withReview = await supabase
     .from("import_jobs")
-    .select(fullCols)
+    .select(`id, ${fullCols}, review:page_plan->review`)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);
+  const { data: jobsData, error: jobsErr } = withReview.error
+    ? await supabase.from("import_jobs").select(fullCols).eq("user_id", userId).order("created_at", { ascending: false }).limit(50)
+    : withReview;
   if (!jobsErr) {
     jobRows = (jobsData ?? []) as JobRowForDiagnose[];
   } else {
@@ -2045,6 +2053,7 @@ async function handleDiagnose(
     },
     secrets,
     scrubBankDigitsInText,
+    stampedBuildId(AI_IMPORT_GIT_HASH, AI_IMPORT_DEPLOYED_AT),
   );
   return new Response(JSON.stringify(report), { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 }

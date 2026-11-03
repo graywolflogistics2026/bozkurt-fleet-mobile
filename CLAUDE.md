@@ -95,10 +95,17 @@ cd "C:\Users\Latitude 5520\Downloads\bozkurt-fleet-mobile-starter\bozkurt-fleet-
 eas channel:view preview
 ```
 
-Deploy an Edge Function (one of the five above):
+Deploy ai-import ALWAYS through the script (2026-11-03): it writes the git
+commit into `supabase/functions/ai-import/buildStamp.ts`, deploys, and
+restores the file, so Diagnostics "Server build" shows the real commit:
 ```powershell
 cd "C:\Users\Latitude 5520\Downloads\bozkurt-fleet-mobile-starter\bozkurt-fleet-mobile"
-supabase functions deploy ai-import --project-ref mbzonnoglreoeqihzfce
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-ai-import.ps1
+```
+Deploy another Edge Function (reset-data, delete-account, ...):
+```powershell
+cd "C:\Users\Latitude 5520\Downloads\bozkurt-fleet-mobile-starter\bozkurt-fleet-mobile"
+supabase functions deploy reset-data --project-ref mbzonnoglreoeqihzfce
 ```
 Secrets, dashboard alternative and JWT notes: `docs/DEPLOY_FUNCTIONS.md`
 (same steps for all five functions).

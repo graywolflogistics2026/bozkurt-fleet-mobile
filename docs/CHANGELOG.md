@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- DIAGNOSTICS JOB DETAIL + SERVER BUILD STAMP (owner 2026-11-03): each of the
+  last 5 jobs shows verdict source (server/app/none), final state, failing
+  checks and every page error with page, cause and role ("p7 unreadable
+  (attachment)"), from page_results + progress + page_plan.review. Server
+  build = git hash written into ai-import/buildStamp.ts by
+  scripts/deploy-ai-import.ps1 at deploy time (restored after), no more
+  "step-A". No SQL; deploy ai-import with the script; eas update.
 - NEVER A GENERIC FAILURE (owner 2026-11-03): ready jobs showed "We couldn't
   read this statement" with only Upload again / Dismiss. Cause: the jobs list
   row (jobs.tsx) printed a fixed line for state failed, and the verdict

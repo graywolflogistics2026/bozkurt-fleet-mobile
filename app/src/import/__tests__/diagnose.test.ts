@@ -177,7 +177,21 @@ describe('job summary', () => {
     const s = summarizeJobs(JOB_ROWS, NOW);
     expect(s.last24hByStatus).toEqual({ failed: 1, ready: 1 });
     expect(s.lastErrors).toEqual([
-      { status: 'failed', createdAt: '2026-10-31T10:00:00Z', pagesDone: 5, pagesTotal: 8, errorStep: 'parse_failed', errorPage: 6, failedChecks: ['unreadable'] },
+      {
+        status: 'failed',
+        createdAt: '2026-10-31T10:00:00Z',
+        pagesDone: 5,
+        pagesTotal: 8,
+        errorStep: 'parse_failed',
+        errorPage: 6,
+        failedChecks: ['unreadable'],
+        jobId: null,
+        verdictSource: 'none',
+        finalState: null,
+        failingChecks: [],
+        // DIAGNOSTICS JOB DETAIL (2026-11-03): which page and why.
+        pageErrors: [{ page: 6, type: 'unreadable', role: null, kind: null }],
+      },
     ]);
     expect(s.lastJobs).toHaveLength(3);
   });
@@ -261,7 +275,7 @@ describe('Share report text', () => {
     expect(text).toContain('🔴 Database: missing: settlements.statement, import_job_saved');
     expect(text).toContain('🟢 claude-opus-5-5: OK · 2.4 s · 40 in / 12 out tokens');
     expect(text).toContain('🔴 claude-fable-5-1: authentication_error (401)');
-    expect(text).toContain('failed · 5/8 pages · parse_failed @ p6 · unreadable');
+    expect(text).toContain('failed · 5/8 pages · parse_failed @ p6 · p6 unreadable');
     expect(text).not.toContain('$');
     expect(text).not.toContain('1,884');
     expect(text).not.toContain('GRWLLG');

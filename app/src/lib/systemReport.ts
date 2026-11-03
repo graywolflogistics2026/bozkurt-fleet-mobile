@@ -12,7 +12,7 @@
 import type { DiagnoseReport, JobLine, ModelCheckResult } from '../../../supabase/functions/ai-import/diagnose';
 import { scrubBankDigitsInText } from '@/src/import/bankDigits';
 import { isEmbeddedBuild, NULL_NAMES, stamp, type BuildInfo } from '@/src/lib/buildInfoFormat';
-import type { ImportJob } from '@/src/import/importJobs';
+import { finalStateOf, type ImportJob } from '@/src/import/importJobs';
 
 export type { DiagnoseReport, JobLine, ModelCheckResult };
 
@@ -77,12 +77,22 @@ export function jobLineText(j: JobLine, t: Translate): string {
     parts.push(t('diagnostics.pagesDone', { done: j.pagesDone ?? 0, total: j.pagesTotal ?? '?' }));
   }
   if (j.errorStep) parts.push(j.errorPage !== null ? `${j.errorStep} @ p${j.errorPage}` : j.errorStep);
-  if (j.failedChecks.length > 0) parts.push(j.failedChecks.join(', '));
+  // DIAGNOSTICS JOB DETAIL (owner 2026-11-03): where the verdict came from,
+  // the final state, the failing checks and each page error with its page.
+  if (j.verdictSource !== undefined && (j.status === 'ready' || j.finalState)) {
+    parts.push(j.finalState ? `verdict ${j.verdictSource} ${j.finalState}` : `verdict ${j.verdictSource}`);
+  }
+  if (j.failingChecks && j.failingChecks.length > 0) parts.push(`checks ${j.failingChecks.join(', ')}`);
+  if (j.pageErrors && j.pageErrors.length > 0) {
+    parts.push(j.pageErrors.map((e) => `p${e.page} ${e.type}${e.role ? ` (${e.role})` : ''}`).join(', '));
+  } else if (j.failedChecks.length > 0) {
+    parts.push(j.failedChecks.join(', '));
+  }
   return parts.join(' · ');
 }
 
 function jobIsBad(j: JobLine): boolean {
-  return j.status === 'failed' || j.errorStep !== null || j.failedChecks.length > 0;
+  return j.status === 'failed' || j.errorStep !== null || j.failedChecks.length > 0 || j.finalState === 'failed_final' || (j.pageErrors?.length ?? 0) > 0;
 }
 
 function dayLabel(iso: string | null): string {
@@ -135,10 +145,17 @@ export function serverSections(r: DiagnoseReport, t: Translate): ReportSection[]
 // has page error types); otherwise from the app's own job list.
 export function clientJobToLine(job: ImportJob): JobLine {
   const failed = new Set<string>();
+  const pageErrors: NonNullable<JobLine['pageErrors']> = [];
   for (const f of job.progress?.failed ?? []) {
     const c = code(f?.type);
     if (c) failed.add(c);
+    if (Number.isInteger(f?.page)) pageErrors.push({ page: f.page, type: c ?? 'unknown_cause', role: null, kind: code(f.kind) });
   }
+  const serverFinal = job.review?.final?.state ?? null;
+  const final = finalStateOf(job);
+  const checks = new Set<string>();
+  for (const d of job.review?.final?.details ?? []) if (code(d.check)) checks.add(d.check);
+  for (const f of job.review?.final?.failures ?? []) if (code(f)) checks.add(f);
   return {
     status: code(job.status) ?? 'unknown',
     createdAt: job.createdAt ?? null,
@@ -147,7 +164,23 @@ export function clientJobToLine(job: ImportJob): JobLine {
     errorStep: code(job.errorStep),
     errorPage: typeof job.errorPage === 'number' ? job.errorPage : null,
     failedChecks: [...failed].sort(),
+    jobId: job.id ? job.id.slice(0, 8) : null,
+    verdictSource: serverFinal ? 'server' : final && job.review !== undefined ? 'app' : 'none',
+    finalState: final,
+    failingChecks: [...checks].sort(),
+    pageErrors: pageErrors.sort((a, b) => a.page - b.page),
   };
+}
+
+// The server's job lines, with a verdict the app decided on this device
+// (an ai-import that could not take it) marked as 'app'.
+export function withAppVerdicts(lines: JobLine[], clientJobs: ImportJob[]): JobLine[] {
+  return lines.map((l) => {
+    if (l.verdictSource !== 'none' || !l.jobId) return l;
+    const job = clientJobs.find((j) => j.id.startsWith(l.jobId!));
+    const local = job ? clientJobToLine(job) : null;
+    return local && local.verdictSource === 'app' ? { ...l, verdictSource: 'app', finalState: local.finalState } : l;
+  });
 }
 
 export function lastJobsSection(lines: JobLine[], t: Translate): ReportSection {
@@ -168,7 +201,7 @@ export function buildReportSections(
 ): ReportSection[] {
   const sections = [clientSection(client, t)];
   if (server) sections.push(...serverSections(server, t));
-  const jobLines = server ? server.jobs.lastJobs : clientJobs.slice(0, 5).map(clientJobToLine);
+  const jobLines = server ? withAppVerdicts(server.jobs.lastJobs, clientJobs) : clientJobs.slice(0, 5).map(clientJobToLine);
   sections.push(lastJobsSection(jobLines, t));
   return sections;
 }
