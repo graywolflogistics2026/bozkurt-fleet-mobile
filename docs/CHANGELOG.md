@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- SETTLEMENT TOTALS FROM TOTAL LABELS ONLY (R3, owner 2026-11-03, Prime
+  only): each page lists its TOTAL-type lines in settlement.settlementTotalLines
+  (TOTAL REV, TOTAL REIMBURSED, TOTAL DEDUCTIONS FROM TRUCK, GROSS/NET AMOUNT
+  DUE UNIT, recap). The merge (chunking.ts withSettlementTotalsFromLabels, also
+  for a single page) fills grossRevenue/reimbursements/totalDeductions/netPay
+  only from the field's own label; a page without it contributes 0 (never
+  beats a printed value). Older readings (no list) unchanged. Redeploy
+  ai-import; eas update. No SQL.
 - DATES AS PRINTED TEXT (R1, owner 2026-11-03): the prompt no longer asks
   for interpreted dates (weekEnding/printDate/operating.weekEnding stay "");
   the statement page copies its WEEK ENDING into operating.weekEndingRaw.

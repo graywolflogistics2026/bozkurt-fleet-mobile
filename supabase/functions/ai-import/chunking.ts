@@ -326,6 +326,46 @@ export function resolveOperatingConflicts(chunks: ChunkExtraction[], merged: Chu
   return out;
 }
 
+// SETTLEMENT SECTION TOTALS FROM TOTAL LABELS ONLY (owner decision
+// 2026-11-03, R3, Prime only — carrier isolation). Device finding: a
+// partial page's "AS 23.50" line was taken as totalDeductions. Each page
+// lists every TOTAL-type line it printed in settlement.settlementTotalLines
+// ({label, amount}: TOTAL REV, TOTAL REIMBURSED, TOTAL DEDUCTIONS FROM
+// TRUCK, GROSS AMOUNT DUE UNIT, NET AMOUNT DUE UNIT and the recap lines).
+// A page that returned that list fills grossRevenue, reimbursements,
+// totalDeductions and netPay ONLY from the line of the field's own label;
+// a page without that TOTAL line contributes no total (its field goes to
+// the 0 default, which never beats another page's printed value). A page
+// read before the list existed (no array) keeps its old fields.
+export type SettlementTotalLine = { label: string; amount: number | string };
+export const SETTLEMENT_TOTAL_LABEL: Record<'grossRevenue' | 'reimbursements' | 'totalDeductions' | 'netPay', RegExp> = {
+  grossRevenue: /^TOTAL REV(ENUE)?\b/,
+  reimbursements: /^TOTAL REIMB/,
+  totalDeductions: /^TOTAL DEDUCTIONS?\b/,
+  netPay: /^NET AMOUNT DUE\b/,
+};
+const isPrimeName = (carrier: unknown) =>
+  typeof carrier === 'string' && carrier.toUpperCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim() === 'PRIME INC';
+
+export function withSettlementTotalsFromLabels(chunks: ChunkExtraction[]): ChunkExtraction[] {
+  const carrier = chunks.map((c) => (c.settlement as Record<string, unknown> | undefined)?.carrier).find((v) => typeof v === 'string' && v.trim());
+  if (!isPrimeName(carrier)) return chunks;
+  return chunks.map((c) => {
+    const s = c.settlement as Record<string, unknown> | undefined;
+    const lines = s?.settlementTotalLines;
+    if (!s || !Array.isArray(lines)) return c;
+    const settlement: Record<string, unknown> = { ...s };
+    const labels: Record<string, unknown> = { ...((s.totalLabels as Record<string, unknown> | undefined) ?? {}) };
+    for (const [field, re] of Object.entries(SETTLEMENT_TOTAL_LABEL)) {
+      const line = (lines as SettlementTotalLine[]).find((l) => l && re.test(normLabel(l.label)) && amountOf(l.amount) != null);
+      settlement[field] = line ? amountOf(line.amount) : 0;
+      labels[field] = line ? String(line.label).trim() : '';
+    }
+    settlement.totalLabels = labels;
+    return { ...c, settlement } as ChunkExtraction;
+  });
+}
+
 // Deterministic merge of per-page extractions (in page order; a base
 // extraction, when re-reading pages of a saved document, goes first) into
 // one Extraction-shaped object. Owner decision 2026-10-13 (17-page stall
@@ -339,8 +379,9 @@ export function resolveOperatingConflicts(chunks: ChunkExtraction[], merged: Chu
 // statement printed across two pages lost its second page under those.
 // `summary` joins every page's summary; `confidence` is always "low" for a
 // multi-page merge (the needs-review machinery sees it before it's saved).
-export function mergeChunkedExtractions(chunks: ChunkExtraction[]): ChunkExtraction {
-  if (chunks.length === 0) throw new Error('mergeChunkedExtractions: no chunks to merge');
+export function mergeChunkedExtractions(input: ChunkExtraction[]): ChunkExtraction {
+  if (input.length === 0) throw new Error('mergeChunkedExtractions: no chunks to merge');
+  const chunks = withSettlementTotalsFromLabels(input);
   if (chunks.length === 1) return chunks[0];
 
   const conflicts: MergeConflict[] = [];
@@ -427,7 +468,7 @@ export function mergeAllPages(outcomes: PageOutcome[]): FullMergeResult | null {
   // in natural page-ascending order, same as before.
   const sorted = [...succeeded].sort((a, b) => a.page - b.page);
   const extractions = sorted.map((o) => o.extraction);
-  const merged = extractions.length === 1 ? { ...extractions[0] } : mergeChunkedExtractions(extractions);
+  const merged = { ...mergeChunkedExtractions(extractions) };
   const missingPages = outcomes.filter((o): o is { page: number; missing: true } => 'missing' in o).map((o) => o.page);
   // A single successfully-processed page (or a full set with zero gaps)
   // is a complete, coherent read (mergeChunkedExtractions' own

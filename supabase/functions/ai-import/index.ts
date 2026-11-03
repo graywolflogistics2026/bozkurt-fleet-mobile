@@ -408,7 +408,7 @@ const OPERATING_SCHEMA_AFTER =
 const REIMBURSEMENT_ITEMS_BEFORE = `"reimbursementItems":[{"desc":"","ref":"","amount":0}]`;
 const REIMBURSEMENT_ITEMS_AFTER = `"reimbursementItems":[{"code":"","desc":"","ref":"","amount":0}]`;
 const DEPOSIT_SCHEMA_BEFORE = `"netPay":0,`;
-const DEPOSIT_SCHEMA_AFTER = `"netPay":0,"depositAmount":0,"payoutMethod":"","totalLabels":{"grossRevenue":"","reimbursements":"","totalDeductions":"","netPay":"","depositAmount":""},`;
+const DEPOSIT_SCHEMA_AFTER = `"netPay":0,"depositAmount":0,"payoutMethod":"","totalLabels":{"grossRevenue":"","reimbursements":"","totalDeductions":"","netPay":"","depositAmount":""},"settlementTotalLines":[{"label":"","amount":0}],`;
 
 const APPROVED_ADDITIONS_SUFFIX = `
 APPROVED ADDITION (fuel/IFTA, owner decision 2026-07-03): for docType "fuel", also extract the US state as a 2-letter code (e.g. "TX", "OK") into fuel.state, read from the station's address on the receipt. If the state genuinely cannot be determined, leave fuel.state as "".
@@ -645,6 +645,10 @@ function buildExtractionPrompt(
   // carrier) — page-by-page merging (chunking.ts) only treats two values as
   // a conflict when they came from the same printed label.
   prompt += `\nAPPROVED ADDITION (printed labels of the settlement totals, owner decision 2026-10-17, every carrier): settlement.totalLabels names the printed label text each settlement total on THIS page was read from, exactly as printed (e.g. {"grossRevenue":"TOTAL REV","netPay":"NET AMOUNT DUE UNIT","depositAmount":"DIRECT DEPOSIT"}); leave a label "" when that total is not on this page.\n`;
+  // SETTLEMENT TOTALS FROM TOTAL LABELS ONLY (owner decision 2026-11-03,
+  // R3): the merge fills the Prime settlement totals only from these lines
+  // (chunking.ts withSettlementTotalsFromLabels).
+  prompt += `\nAPPROVED ADDITION (settlement total lines, owner decision 2026-11-03): settlement.settlementTotalLines = EVERY line on THESE pages of the settlement (not the STATEMENT OF INCOME AND EXPENSE) whose printed label is a section total or a recap amount — for Prime: TOTAL REV, TOTAL REIMBURSED, TOTAL DEDUCTIONS FROM TRUCK, GROSS AMOUNT DUE UNIT, NET AMOUNT DUE UNIT and every line of the recap block — each as {"label","amount"} with the label exactly as printed and the amount WITH ITS PRINTED SIGN (a trailing minus is negative). Never put a regular line of a section (a single deduction such as "AS 23.50", one load, one reimbursement) in it. A page that prints no such line returns []. grossRevenue, reimbursements, totalDeductions and netPay are each filled ONLY from the TOTAL line of their own label on these pages, and stay 0 when that TOTAL line is not on these pages — never from any other line.\n`;
   // LOADED / EMPTY MILES, EVERY CARRIER (owner decision 2026-10-30, master
   // plan batch C item 6): the printed weekly miles totals with their own
   // labels, read by app/src/import/milesSplit.ts. Additive: no existing
@@ -1757,7 +1761,7 @@ function buildJobDeps(
       const sorted = [...pages].sort((a, b) => a.page - b.page).map((p) => tagStatementLinePages(p.extraction, p.page) as ChunkExtraction);
       const all = base ? [base as ChunkExtraction, ...sorted] : sorted;
       if (all.length === 0) return null;
-      return all.length === 1 ? { ...all[0] } : mergeChunkedExtractions(all);
+      return { ...mergeChunkedExtractions(all) };
     },
     scrub: scrubBankDigits,
     isPrimeCarrier: isPrimeCarrierName,

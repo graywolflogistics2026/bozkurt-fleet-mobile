@@ -152,6 +152,9 @@ export type ExtractedSettlement = {
   // AMOUNT DUE UNIT"). Page-by-page merging (ai-import chunking.ts) only
   // calls two values a conflict when they came from the SAME label.
   totalLabels?: Partial<Record<'grossRevenue' | 'reimbursements' | 'totalDeductions' | 'netPay' | 'depositAmount', string>>;
+  // Every TOTAL-type line printed on the settlement pages (R3, 2026-11-03);
+  // the Prime merge fills the four totals only from these.
+  settlementTotalLines?: { label: string; amount: number | string }[];
   totalMiles?: number;
   loadedMiles?: number;
   // Batch C item 6 (2026-10-30, ai-import): every printed WEEKLY miles
