@@ -163,17 +163,20 @@ describe('D8 — interest expense counts (Bank & Merchant Fees); interest income
   });
 });
 
-describe('R1 — PERSONAL PYMNT RCV offsets only up to the PR lines', () => {
-  test('golden case: +1.00 vs PR 1.00 -> a 1.00 offset, nothing excluded', () => {
+// Owner decision 2026-11-03 (replaces the R1 PR offset): every PERSONAL
+// PYMNT RCV is owner money in, never an expense offset, never flagged.
+describe('PERSONAL PYMNT RCV is always owner money in', () => {
+  test('golden 8/21 case: +1.00 with PR 1.00 -> excluded, expenses unchanged, no review', () => {
     const { statement, week } = weekOf(primeWeek([['misc', 'PERSONAL PYMNT RCV', 1]]));
-    expect(week.expenses).toBe(349);
+    expect(week.expenses).toBe(350);
+    expect(week.addBacks.find((a) => a.reason === 'owner_money_in')?.amount).toBe(-1);
     expect(statement.reviewReasons).toEqual([]);
   });
-  test('+5.00 vs PR 1.00 -> 1.00 offset, 4.00 owner money in (excluded) and needs-review', () => {
+  test('+5.00 with PR 1.00 -> the whole 5.00 is owner money in', () => {
     const { statement, week } = weekOf(primeWeek([['misc', 'PERSONAL PYMNT RCV', 5]]));
-    expect(week.expenses).toBe(349);
-    expect(week.addBacks.find((a) => a.reason === 'owner_money_in')?.amount).toBe(-4);
-    expect(statement.reviewReasons.map((r) => r.reason)).toEqual(['personal_payment_unmatched']);
+    expect(week.expenses).toBe(350);
+    expect(week.addBacks.find((a) => a.reason === 'owner_money_in')?.amount).toBe(-5);
+    expect(statement.reviewReasons).toEqual([]);
   });
   test('no PR line at all -> the whole amount is owner money in', () => {
     const { week } = weekOf(primeWeek([['misc', 'PERSONAL PYMNT RCV', 1]], {}, false));

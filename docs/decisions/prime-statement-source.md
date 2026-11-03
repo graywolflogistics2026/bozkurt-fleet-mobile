@@ -30,8 +30,10 @@ CPM adds the truck fixed-cost estimate as before (never in profit) ·
 deposit = the printed deposit · profit = deposit + excluded lines added
 back − interest income.
 
-Golden week: 4,783.75 − 2,249.39 = 2,534.36; fixed 255.77, variable
-1,993.62; 1,884.73 + 550.00 + 100.00 − 0.37 = 2,534.36.
+Golden week (since 2026-11-03, no PR offset): 4,783.75 − 2,250.39 =
+2,533.36; fixed 255.77, variable 1,994.62; 1,884.73 + 550.00 + 100.00 −
+0.37 − 1.00 = 2,533.36. Two golden weeks: expenses 5,176.75, profit
+7,521.10.
 
 BALANCE FORWARD (owner decision 2026-10-17): deposit = TOTAL STATEMENT +
 PRIOR WEEK BALANCE FORWARD (signed as printed; "1,202.92-" = the owner
@@ -60,7 +62,7 @@ enter a section sum (`statementInfoRow()`).
 | Misc + first-appearance review (D7) | OUT OF POCKET COSTS, START UP & EXCESS MILEAGE COST |
 | Fixed | PHYSICAL DAMAGE INS, BT/DH INS (Insurance—Truck); LICENSE AND PERMITS, FEDERAL HWY TAX; STATEMENT PREPARATION; OPERATOR OCCUP ACC (Insurance—Health, fixed bucket — R2) |
 | Excluded | ADVANCES (advance), ACCRUAL PERFORMANCE BOND (escrow), PRIME POINT-OF-SALE (meals, per diem — D4), OPERATOR TRK EXTRAS (truck extras, tracked in Truck Cost Basis — D6), INTEREST INCOME (own bridge line — D8) |
-| R1 | PERSONAL PYMNT RCV — an offset only up to the same settlement's PR reimbursement lines; any remainder is owner money in (excluded, needs-review) |
+| R1 | ~~PERSONAL PYMNT RCV — an offset only up to the same settlement's PR reimbursement lines; any remainder is owner money in (excluded, needs-review)~~ SUPERSEDED 2026-11-03: every PR / PERSONAL PYMNT RCV is owner money in (PERSONAL credit, excluded from profit, never flagged) and becomes an id-linked Owner's money contribution |
 | Unknown label | Misc (revenue-section: revenue), needs-review on first appearance — never dropped, never guessed |
 
 ## Self-check (blocks Save; "Save anyway, flagged needs-review")
@@ -155,11 +157,18 @@ any label (DIRECT DEPOSIT TO BANK, AMOUNT LOADED ON CARD, ...), stored as
 `payoutMethod` bank/card/other. A failed gate names the check with printed
 vs read (`GateFailDetail`); the automatic re-read reads only the pages that
 feed it (`rereadRequestFor`), logged in `plan.rereads` with its reason.
-R1 amendment: a PR line whose text is a personal payment ("PERSONAL
-PAYMNT") is owner money in, never part of the PR offset; WA advances and PR
-personal payments printed in the reimbursement section are saved as credit
-lines with their class (out of profit), never as reimbursements. Golden
-week 3: `goldenPrimeSettlement0717.test.ts` (profit −293.62).
+R1 replaced (owner decision on 5cb1df0, 2026-11-03): NO text-based
+exception — EVERY PR line is a PERSONAL credit (owner money in), never an
+expense offset; the expense it paid for stays an expense. Prime books both
+the 07/17 PR 3,999.00 and the 08/21 PR 1.00 as PERSONAL PYMNT RCV. PR and WA
+advances printed in the reimbursement section are saved as credit lines with
+their class (out of profit), never as reimbursements; the preview's line
+route uses the same rule (`lineRouteProfit`). Each PR credit line becomes an
+id-linked Owner's money contribution (`aiImportSave.ts`, removed with its
+line by `linked_deduction_id on delete cascade`). The statement route
+ignores a stored `prReimbursementTotal`, so weeks saved before this rule
+change too. Golden week 3: `goldenPrimeSettlement0717.test.ts` (profit
+−293.62).
 
 ## Review screen (item 7, `reviewVerdict.ts`, `SettlementReview.tsx`)
 

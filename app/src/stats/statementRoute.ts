@@ -93,7 +93,7 @@ const SECTION_TOTALS = {
 export function statementWeekOf(settlement: StatementSettlement): StatementWeek | null {
   const st = settlement.statement;
   if (!settlement.id || !isStatementBacked(st) || !st?.prime) return null;
-  const { lines, totals, prReimbursementTotal } = st.prime;
+  const { lines, totals } = st.prime;
   const ledger: StatementLedgerEntry[] = [];
   const addBacks: StatementWeek['addBacks'] = [];
   let interestIncome = 0;
@@ -121,21 +121,17 @@ export function statementWeekOf(settlement: StatementSettlement): StatementWeek 
       if (treatment.reason === 'interest_income') interestIncome += line.amount;
       else addBacks.push({ label: line.label, reason: treatment.reason, amount: -line.amount });
     } else {
-      // R1 — PERSONAL PYMNT RCV: an offset only up to this settlement's PR
-      // reimbursement lines; any remainder is owner money in (excluded).
+      // PERSONAL PYMNT RCV (owner decision 2026-11-03, replaces the R1 PR
+      // offset): the whole credit is owner money in — excluded from profit,
+      // never an expense offset; the expense it paid for stays an expense.
+      // Also applies to weeks stored before this rule (their stored
+      // prReimbursementTotal is ignored).
       if (line.amount <= 0) {
         ledger.push({ ...base, status: 'counted', contribution: -line.amount, category: 'Bank & Merchant Fees', costType: 'variable', reason: 'expense' });
         continue;
       }
-      const offset = Math.min(line.amount, Math.max(0, prReimbursementTotal));
-      const remainder = line.amount - offset;
-      if (offset > 0) {
-        ledger.push({ ...base, printed: offset, status: 'offset', contribution: -offset, category: 'Bank & Merchant Fees', costType: 'variable', reason: 'pr_offset' });
-      }
-      if (remainder > 0.005) {
-        ledger.push({ ...base, printed: remainder, status: 'excluded', contribution: 0, category: null, costType: null, reason: 'owner_money_in' });
-        addBacks.push({ label: line.label, reason: 'owner_money_in', amount: -remainder });
-      }
+      ledger.push({ ...base, status: 'excluded', contribution: 0, category: null, costType: null, reason: 'owner_money_in' });
+      addBacks.push({ label: line.label, reason: 'owner_money_in', amount: -line.amount });
     }
   }
 

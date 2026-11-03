@@ -49,17 +49,19 @@ import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
 import { resolveHeroPeriodDateWindow } from '@/src/stats/heroPeriodWindow';
 import { truckHomeProfits } from '@/src/stats/truckHomeProfit';
 import { isSaveBlocked, saveGateFailures } from '@/src/import/reviewVerdict';
+import { golden0814 } from './golden0814Fixture';
 
 // ---------------------------------------------------------------------
 // ANSWER KEY (owner, independently verified)
 // ---------------------------------------------------------------------
 const KEY = {
   revenue: 4783.75, // OWNER REVENUE column
-  reimbursements: 312.8,
+  reimbursements: 311.8, // 312.80 printed − PR 1.00 (owner money in, a PERSONAL credit line — owner 2026-11-03)
+  personalPayment: 1, // PR "WIE14MB LD" = PERSONAL PYMNT RCV 1.00, never an expense offset
   deductionsPrinted: 3212.19,
   nonExpenses: 650, // warranty advance 500 + personal-items advance 50 + performance bond 100
-  expenses: 2249.39,
-  profit: 2534.36,
+  expenses: 2250.39,
+  profit: 2533.36,
   netDue: 1884.36,
   deposit: 1884.73,
   interest: 0.37,
@@ -390,7 +392,7 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
     expect(settlementVerification(rows.settlements[0])).toBe('totals_match');
   });
 
-  test('saved rows: one settlement, 2 loads, 16 fuel rows, 9 reimbursements (312.80)', () => {
+  test('saved rows: one settlement, 2 loads, 16 fuel rows, 8 reimbursements (311.80; PR 1.00 is a PERSONAL credit)', () => {
     expect(rows.settlements).toHaveLength(1);
     expect(rows.settlements[0].gross).toBe(KEY.revenue);
     expect(rows.settlements[0].net).toBe(KEY.netDue);
@@ -479,15 +481,16 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
     expect(r2(calcTrueProfit(rows.settlements, rows.deductions, rows.fuel, [], [], rows.reimbursements))).toBe(KEY.profit);
   });
 
-  test('profit bridge: net due 1,884.36 + advances and escrow 650.00 = profit 2,534.36, nothing unexplained', () => {
+  test('profit bridge: net due 1,884.36 + advances and escrow 650.00 − PR owner money in 1.00 = profit 2,533.36, nothing unexplained', () => {
     const b = weekKpi(rows).bridge;
     expect(r2(b.netPay)).toBe(KEY.netDue);
     expect(b.nonExpenseLines.map((l) => [l.category, l.amount])).toEqual([
       ['Escrow & Deposits', 100],
       ['Advance Repayment', 500],
       ['Advance Repayment', 50],
+      [null, -KEY.personalPayment], // PR = PERSONAL credit (owner 2026-11-03)
     ]);
-    expect(r2(b.nonExpenseLines.reduce((s, l) => s + l.amount, 0))).toBe(KEY.nonExpenses);
+    expect(r2(b.nonExpenseLines.reduce((s, l) => s + l.amount, 0))).toBe(KEY.nonExpenses - KEY.personalPayment);
     expect(b.outOfPocketDeductions).toBe(0);
     expect(b.standaloneFuel).toBe(0);
     expect(b.difference).toBe(0);
@@ -495,7 +498,7 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
     expect(b.fixedCostEstimateInCpm).toBe(0);
     // Line route starts from net due; the deposit is read, never computed.
     expect(settlementDeposit(rows.settlements[0]).deposited).toBe(KEY.deposit);
-    expect(r2(KEY.deposit + KEY.nonExpenses - KEY.interest)).toBe(KEY.profit);
+    expect(r2(KEY.deposit + KEY.nonExpenses - KEY.interest - KEY.personalPayment)).toBe(KEY.profit);
   });
 });
 
@@ -506,7 +509,7 @@ describe('truck fixed-cost estimate — in CPM/PPM only, never in profit (owner 
     rows = await importGolden(goldenExtraction('both'));
   });
 
-  test('no cost basis -> CPM 0.97, profit 2,534.36', () => {
+  test('no cost basis -> CPM 0.97, profit 2,533.36', () => {
     const k = weekKpi(rows, NO_COST_BASIS);
     expect(r2(k.cpm)).toBe(KEY.cpm);
     expect(r2(k.net)).toBe(KEY.profit);
@@ -597,7 +600,7 @@ describe('trap 4 — a reimbursement offsets its own expense', () => {
     expect(r2(washDeducted - washReimbursed)).toBe(0);
   });
 
-  test('without reimbursements the week would understate profit by exactly 312.80', async () => {
+  test('without reimbursements the week would understate profit by exactly 311.80 (PR 1.00 is owner money in, not a reimbursement)', async () => {
     const rows = await importGolden(goldenExtraction('both'));
     const withoutOffset = weekKpi({ ...rows, reimbursements: [] });
     expect(r2(withoutOffset.net)).toBe(r2(KEY.profit - KEY.reimbursements));
@@ -607,14 +610,14 @@ describe('trap 4 — a reimbursement offsets its own expense', () => {
 });
 
 describe('trap 5 — "ADV FOR WEIGHT TICKETS" is a real scale expense', () => {
-  test('16.25 counts; the 500 warranty advance, the 50 personal advance and the 100 bond do not', async () => {
+  test('16.25 counts; the 500 warranty advance, the 50 personal advance, the 100 bond and the PR 1.00 credit do not', async () => {
     const rows = await importGolden(goldenExtraction('both'));
     const weight = rows.deductions.find((d) => d.description === 'ADV FOR WEIGHT TICKETS')!;
     expect(weight.amount).toBe(16.25);
     expect(weight.category).toBe('Tolls & Scales');
     expect(reducesTrueProfit(weight)).toBe(true);
     const excluded = rows.deductions.filter((d) => !reducesTrueProfit(d));
-    expect(excluded.map((d) => d.amount).sort((a, b) => Number(a) - Number(b))).toEqual([50, 100, 500]);
+    expect(excluded.map((d) => d.amount).sort((a, b) => Number(a) - Number(b))).toEqual([-1, 50, 100, 500]);
   });
 });
 
@@ -690,7 +693,7 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('statement route, fuel s
     expect(settlementVerification(rows.settlements[0])).toBe('verified_prime');
   });
 
-  test('computeKpis / Home / trend / Profit Analysis / Per-Truck / calcTrueProfit all give 2,534.36', () => {
+  test('computeKpis / Home / trend / Profit Analysis / Per-Truck / calcTrueProfit all give 2,533.36', () => {
     expectAnswerKey(weekKpi(rows), 'statement');
     expectAnswerKey(weekKpi(rows, NO_COST_BASIS, null), 'statement');
     const home = buildPeriodScopedCpm('thisWeek', [WEEK_ENDING], [NO_COST_BASIS], rows.settlements, rows.loads, rows.deductions, rows.fuel, [], [], rows.reimbursements, TRUCK_ID, null, NOW);
@@ -706,13 +709,13 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('statement route, fuel s
     expect(r2(calcTrueProfit(rows.settlements, rows.deductions, rows.fuel, [], [], rows.reimbursements))).toBe(KEY.profit);
   });
 
-  test('R2: fixed = Prime\'s printed 255.77, variable 1,993.62', () => {
+  test('R2: fixed = Prime\'s printed 255.77, variable 1,994.62', () => {
     const k = weekKpi(rows);
     expect(r2(k.expenses.fixed)).toBe(255.77);
-    expect(r2(k.expenses.variable)).toBe(1993.62);
+    expect(r2(k.expenses.variable)).toBe(1994.62);
   });
 
-  test('no double count: every expense is the statement\'s; the ledger adds up to the same 2,249.39', () => {
+  test('no double count: every expense is the statement\'s; the ledger adds up to the same 2,250.39', () => {
     const k = weekKpi(rows);
     expect(r2(k.statementExpenses)).toBe(KEY.expenses);
     expect(r2(k.reimbursementsTotal)).toBe(0); // linked reimbursements are detail on a statement week
@@ -723,17 +726,19 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('statement route, fuel s
     const excluded = k.ledger.filter((r) => r.status === 'excluded').map((r) => [r.label, r.amount, r.reason]);
     expect(excluded).toEqual([
       ['ADVANCES', 550, 'advance'],
+      ['PERSONAL PYMNT RCV', 1, 'owner_money_in'],
       ['ACCRUAL PERFORMANCE BOND', 100, 'escrow'],
       ['INTEREST INCOME FROM DEPOST', 0.37, 'interest_income'],
     ]);
   });
 
-  test('B2: the bridge starts from the actual deposit — 1,884.73 + 550.00 + 100.00 − 0.37 = 2,534.36', () => {
+  test('B2: the bridge starts from the actual deposit — 1,884.73 + 550.00 + 100.00 − 0.37 − 1.00 = 2,533.36', () => {
     const b = weekKpi(rows).bridge;
     expect(b.depositStart).toBe(KEY.deposit);
     expect(b.netPay).toBe(0);
     expect(b.statementAddBacks.map((a) => [a.label, a.amount])).toEqual([
       ['ADVANCES', 550],
+      ['PERSONAL PYMNT RCV', -1],
       ['ACCRUAL PERFORMANCE BOND', 100],
     ]);
     expect(b.interestIncome).toBe(KEY.interest);
@@ -743,7 +748,7 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('statement route, fuel s
     expect(b.crossChecks).toEqual([]);
   });
 
-  test('B1/B4: Home shows profit 2,534.36 and "Deposited to your bank" 1,884.73', () => {
+  test('B1/B4: Home shows profit 2,533.36 and "Deposited to your bank" 1,884.73', () => {
     const home = buildPeriodScopedCpm('thisWeek', [WEEK_ENDING], [NO_COST_BASIS], rows.settlements, rows.loads, rows.deductions, rows.fuel, [], [], rows.reimbursements, TRUCK_ID, null, NOW);
     expect(r2(home.kpi!.net)).toBe(KEY.profit);
     expect(home.kpi!.deposits).toBe(KEY.deposit);
@@ -759,7 +764,7 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('statement route, fuel s
 });
 
 describe('statement route and line route agree on the golden week', () => {
-  test('both give 2,534.36', async () => {
+  test('both give 2,533.36', async () => {
     const statementRows = await importGolden(statementExtraction());
     const lineRows = await importGolden(goldenExtraction('both'));
     expect(r2(weekKpi(statementRows).net)).toBe(KEY.profit);
@@ -786,7 +791,7 @@ describe('self-check: a misread number never becomes a silently wrong profit', (
 
   // IMPORT GATE FIX 1.1 (owner 2026-11-03): a misread statement LINE is a
   // line detail, never a block. The week saves from the PRINTED totals, its
-  // line rows are not stored, and profit stays 2,534.36 (the block keeps its
+  // line rows are not stored, and profit stays 2,533.36 (the block keeps its
   // printed total).
   test('a misread statement line saves from the printed totals: profit unchanged, line rows not stored', async () => {
     const rows = await importGolden(statementExtraction({ operating: misread() }));
@@ -957,7 +962,7 @@ describe('every save path: same gate, same label, same profit (8/21)', () => {
   // blocks; a printed total that does not tie still does).
   const misread = () => statementExtraction({ operating: { ...STATEMENT, weekTotalOperatingExpenses: -2989.02 } });
 
-  test.each(Object.keys(PATHS) as (keyof typeof PATHS)[])('%s: Verified by Prime statement, profit 2,534.36', async (path) => {
+  test.each(Object.keys(PATHS) as (keyof typeof PATHS)[])('%s: Verified by Prime statement, profit 2,533.36', async (path) => {
     const rows = await importGolden(PATHS[path](statementExtraction()));
     expect(settlementVerification(rows.settlements[0])).toBe('verified_prime');
     expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
@@ -1018,15 +1023,15 @@ describe('profit explainer — golden 8/21 with $100 + $50 of own expenses', () 
       window,
     });
 
-  test('the week: settlements 2,534.36 (Verified), own 150.00 (2 items), profit 2,384.36, nothing unexplained', () => {
+  test('the week: settlements 2,533.36 (Verified), own 150.00 (2 items), profit 2,383.36, nothing unexplained', () => {
     const k = kpiFor({ startIso: WEEK_START, endIso: WEEK_ENDING });
     const e = k.explanation!;
-    expect(e.settlementsProfit).toBe(2534.36);
+    expect(e.settlementsProfit).toBe(2533.36);
     expect(e.settlementsLabel).toBe('verified_prime');
     expect(e.ownExpenses.total).toBe(150);
     expect(e.ownExpenses.count).toBe(2);
-    expect(e.profit).toBe(2384.36);
-    expect(r2(k.net)).toBe(2384.36);
+    expect(e.profit).toBe(2383.36);
+    expect(r2(k.net)).toBe(2383.36);
     expect(e.residual).toBe(0);
     expect(e.case).toBe('ownExpenses');
     expect(e.tone).toBe('info');
@@ -1042,7 +1047,7 @@ describe('profit explainer — golden 8/21 with $100 + $50 of own expenses', () 
     const window = period === 'all' ? null : resolveHeroPeriodDateWindow(period, [WEEK_ENDING], NOW);
     for (const scope of [TRUCK_ID, null]) {
       const e = kpiFor(window, scope).explanation!;
-      expect([e.settlementsProfit, e.ownExpenses.total, e.ownExpenses.count, e.profit, e.residual]).toEqual([2534.36, 150, 2, 2384.36, 0]);
+      expect([e.settlementsProfit, e.ownExpenses.total, e.ownExpenses.count, e.profit, e.residual]).toEqual([2533.36, 150, 2, 2383.36, 0]);
     }
   });
 
@@ -1088,7 +1093,7 @@ describe('profit explainer — golden 8/21 with $100 + $50 of own expenses', () 
 });
 
 describe('Per-Truck Profitability "Profit" = Home for the same truck and period (batch D item 8)', () => {
-  test('golden 8/21 + $150 own: per-truck Profit 2,384.36 = Home (buildPeriodScopedCpm) on every hero period', async () => {
+  test('golden 8/21 + $150 own: per-truck Profit 2,383.36 = Home (buildPeriodScopedCpm) on every hero period', async () => {
     const base = await importGolden(statementExtraction());
     const deductions = [
       ...base.deductions,
@@ -1099,7 +1104,7 @@ describe('Per-Truck Profitability "Profit" = Home for the same truck and period 
     for (const period of ['thisWeek', '1M', '3M', 'yearly'] as const) {
       const home = buildPeriodScopedCpm(period, [WEEK_ENDING], [NO_COST_BASIS], base.settlements, base.loads, deductions, base.fuel, [], [], base.reimbursements, TRUCK_ID, null, NOW);
       const perTruck = truckHomeProfits(inputs, [TRUCK_ID], home.window).get(TRUCK_ID)!;
-      expect(r2(perTruck)).toBe(2384.36);
+      expect(r2(perTruck)).toBe(2383.36);
       expect(perTruck).toBe(home.kpi!.net);
     }
   });
@@ -1111,7 +1116,7 @@ describe('Per-Truck Profitability "Profit" = Home for the same truck and period 
 describe('batch D2 — the one gate on the 8/21 golden week', () => {
   const gateOf = (e: Extraction) => evaluateSettlementGate(e, { importDate: '2026-10-29', carrierCodes: PRIME_CODES as never })!;
 
-  test('with the statement page: revenue 4,783.75, net due 1,884.36, deposited 1,884.73, miles 2,327 (2,081 / 246), profit 2,534.36', () => {
+  test('with the statement page: revenue 4,783.75, net due 1,884.36, deposited 1,884.73, miles 2,327 (2,081 / 246), profit 2,533.36', () => {
     const gate = gateOf(statementExtraction());
     expect(gate).toMatchObject({ status: 'pass', lineDetails: 'match' });
     if (gate.status !== 'pass') return;
@@ -1136,8 +1141,52 @@ describe('batch D2 — the one gate on the 8/21 golden week', () => {
     expect(gate.headline).toMatchObject({ revenue: KEY.revenue, netDue: KEY.netDue, estimatedProfit: KEY.profit, source: 'printed_totals' });
   });
 
-  test('no calculation changed: the saved week still gives profit 2,534.36', async () => {
+  test('no calculation changed: the saved week still gives profit 2,533.36', async () => {
     const rows = await importGolden(statementExtraction());
     expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+  });
+});
+
+// =====================================================================
+// Owner decision 2026-11-03 (on 5cb1df0): every PR is owner money in. The
+// two golden weeks together, saved into one account.
+describe('two golden weeks together (8/14 + 8/21)', () => {
+  test('expenses 2,926.36 + 2,250.39 = 5,176.75; profit 4,987.74 + 2,533.36 = 7,521.10; PR 1.00 is an Owner\'s money contribution', async () => {
+    mockClient = createFakeSupabase({
+      profiles: [{ user_id: USER_ID, business_balance: 0 }],
+      carrier_code_maps: PRIME_CODES,
+    });
+    for (const extraction of [golden0814(), statementExtraction()]) {
+      await saveExtraction({
+        importDate: '2026-10-29',
+        extraction,
+        userId: USER_ID,
+        truckId: TRUCK_ID,
+        driverId: null,
+        driverShareAmount: null,
+        fileUri: null,
+        fileExt: 'pdf',
+        mediaType: 'application/pdf',
+        createContribution: false,
+      });
+    }
+    const store = mockClient.__store as Record<string, unknown[]>;
+    const k = computeKpis({
+      trucks: [NO_COST_BASIS],
+      settlements: (store.settlements ?? []) as Settlement[],
+      loads: (store.loads ?? []) as Load[],
+      deductions: (store.deductions ?? []) as Deduction[],
+      fuelPurchases: (store.fuel_purchases ?? []) as FuelPurchase[],
+      maintenanceRecords: [],
+      tolls: [],
+      reimbursements: (store.reimbursements ?? []) as Reimbursement[],
+      truckScope: TRUCK_ID,
+      window: null,
+    });
+    expect(store.settlements).toHaveLength(2);
+    expect(r2(k.expenses.total)).toBe(5176.75);
+    expect(r2(k.net)).toBe(7521.1);
+    const capital = (store.capital_transactions ?? []) as { tx_type: string; amount: number }[];
+    expect(capital.map((c) => [c.tx_type, c.amount])).toEqual([['contribution', 1]]);
   });
 });

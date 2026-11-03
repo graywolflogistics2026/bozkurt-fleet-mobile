@@ -15,6 +15,7 @@ import { splitPrimeLoads } from './primeLoads';
 import { isPrimeCarrier } from './primeOperatingStatement';
 import { applyCarrierCodeCategories, normalizeCarrierKey, type CarrierCode } from './carrierCodes';
 import { mapSettlement } from './mapExtraction';
+import { nonReimbursementCredits } from './settlementLineClass';
 import { statementWeekOf } from '@/src/stats/statementRoute';
 import { calcTrueProfit } from '@/src/stats/trueProfit';
 
@@ -103,7 +104,15 @@ const PREVIEW_ID = 'preview';
 // applied the same way.
 export function lineRouteProfit(extraction: Extraction, carrierCodes: CarrierCode[] = []): number {
   const mapping = mapSettlement(extraction, PREVIEW_ID, null);
-  const deductions = applyCarrierCodeCategories(mapping.deductions, normalizeCarrierKey(extraction.settlement?.carrier), carrierCodes);
+  const carrierKey = normalizeCarrierKey(extraction.settlement?.carrier);
+  const deductions = applyCarrierCodeCategories(mapping.deductions, carrierKey, carrierCodes);
+  // Same rule as Save (aiImportSave.ts): a PR / advance credit in the
+  // reimbursement section is not a reimbursement and never offsets an
+  // expense. Indexes line up 1:1 with reimbursementItems.
+  const moved = new Set(nonReimbursementCredits(extraction.settlement?.reimbursementItems ?? [], carrierKey, carrierCodes).map((c) => c.index));
+  if (moved.size > 0 && mapping.reimbursements.length === (extraction.settlement?.reimbursementItems ?? []).length) {
+    mapping.reimbursements = mapping.reimbursements.filter((_, i) => !moved.has(i));
+  }
   const link = <R extends object>(rows: R[]) => rows.map((r) => ({ ...r, settlement_id: PREVIEW_ID }));
   return calcTrueProfit(
     [{ id: PREVIEW_ID, gross: mapping.settlement.gross ?? 0, week_ending: mapping.settlement.week_ending, truck_id: null, statement: null }],

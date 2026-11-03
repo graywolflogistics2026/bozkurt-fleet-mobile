@@ -442,18 +442,14 @@ function coreMergeConflicts(extraction: Extraction): { path: string; values: num
   return raw.filter((c) => typeof c?.path === 'string' && Array.isArray(c.values) && c.values.length >= 2 && CORE_CONFLICT_PATH.test(c.path));
 }
 
-// Prime's PR reimbursement lines — the R1 offset limit. IMPORT GATE FIX
-// part 2.4 (owner 2026-11-03): a PR line that IS the owner's own personal
-// payment ("PERSONAL PAYMNT", the owner sending money to Prime) is owner
-// money in (PERSONAL credit), never an offset; any other PR line (e.g. the
-// 8/21 week's "WIE14MB LD" 1.00) keeps the R1 offset.
-export function isPersonalPaymentText(desc: string | null | undefined): boolean {
-  return /\bPERSONAL\s*P(A)?Y?M(N)?(E)?N?T|\bPERS(ONAL)?\s*PMT\b/i.test(desc ?? '');
-}
+// Prime's PR reimbursement lines. Owner decision 2026-11-03 (on 5cb1df0):
+// every PR line is the owner's own money in (PERSONAL credit) — there is no
+// PR offset any more. The total is still stored (statement.prime
+// .prReimbursementTotal) for the audit trail; profit never reads it.
 export function prReimbursementTotal(extraction: Extraction): number {
   const items = extraction.settlement?.reimbursementItems ?? [];
   return sumAmounts(
-    items.filter((r) => ((r.code ?? '').trim().toUpperCase() === 'PR' || (r.ref ?? '').trim().toUpperCase() === 'PR') && !isPersonalPaymentText(r.desc)),
+    items.filter((r) => (r.code ?? '').trim().toUpperCase() === 'PR' || (r.ref ?? '').trim().toUpperCase() === 'PR'),
     (r) => r.amount
   );
 }
@@ -553,10 +549,12 @@ export function settlementDeposit(settlement: { net?: number | null; statement?:
 // Needs-review reasons from a passing statement. D3/D7 lines and unknown
 // labels flag only the FIRST time a non-zero amount appears on this
 // account (`priorLabelsSeen` = normalized labels already seen on earlier
-// statements); an unmatched personal payment (R1) flags every time.
+// statements). A personal payment is never flagged any more: every PR /
+// PERSONAL PYMNT RCV is owner money in by rule (owner 2026-11-03), so
+// 'personal_payment_unmatched' is only kept for weeks stored before it.
 export function statementReviewReasons(
   lines: StatementLine[],
-  prTotal: number,
+  _prTotal: number,
   priorLabelsSeen: Set<string>
 ): SettlementStatement['reviewReasons'] {
   const reasons: SettlementStatement['reviewReasons'] = [];
@@ -566,9 +564,6 @@ export function statementReviewReasons(
     const seen = priorLabelsSeen.has(normalizeStatementLabel(line.label));
     if (unknown && !seen) reasons.push({ reason: 'unknown_line', label: line.label });
     else if (treatment.kind === 'expense' && treatment.reviewOnFirst && !seen) reasons.push({ reason: treatment.reviewOnFirst, label: line.label });
-    else if (treatment.kind === 'personal_payment' && line.amount - Math.min(Math.max(line.amount, 0), prTotal) > 0.005) {
-      reasons.push({ reason: 'personal_payment_unmatched', label: line.label });
-    }
   }
   return reasons;
 }

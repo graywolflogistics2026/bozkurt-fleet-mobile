@@ -780,6 +780,28 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         partial
       );
     }
+    // PR = OWNER MONEY IN (owner decision 2026-11-03): every PR line is the
+    // owner's own payment to Prime (PERSONAL credit, moved out of the
+    // reimbursements above). It flows into Owner's money as an id-linked
+    // contribution — the same owner-paid sync as a personal-payment
+    // purchase (invariant #2): one row per deduction, removed with it
+    // (capital_transactions.linked_deduction_id on delete cascade), so a
+    // re-import replaces it, never duplicates it.
+    for (const dedRow of insertedDeductions) {
+      const code = String((dedRow as { code?: unknown }).code ?? '').trim().toUpperCase();
+      const amount = Number(dedRow.amount ?? 0);
+      if (code !== 'PR' || !(amount < 0)) continue;
+      const { error: contribError } = await supabase.from('capital_transactions').insert({
+        user_id: userId,
+        tx_type: 'contribution',
+        amount: Math.round(Math.abs(amount) * 100) / 100,
+        tx_date: toDateOrNull((dedRow.ded_date as string | null) ?? null) ?? mapping.settlement.week_ending ?? todayDateOnly(),
+        note: `${(dedRow.description as string | null) ?? 'PERSONAL PYMNT RCV'} — owner money in (Prime settlement)`,
+        linked_deduction_id: dedRow.id,
+      });
+      if (contribError) throw new SaveExtractionError('capital-transaction-insert', contribError, partial);
+      contributionTotal += Math.abs(amount);
+    }
     await insertBatchResilient(
       'reimbursements',
       mapping.reimbursements.map((r) => ({ ...r, settlement_id: settlementId })),

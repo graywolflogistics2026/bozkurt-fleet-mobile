@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- PR = OWNER MONEY IN (owner 2026-11-03, on 5cb1df0): every PR line is a
+  PERSONAL credit, no text exception, no PR offset (statementRoute ignores
+  stored prReimbursementTotal; personal_payment_unmatched no longer raised).
+  PR credit rows become id-linked Owner's money contributions (aiImportSave).
+  Preview line route uses the same rule (reviewVerdict lineRouteProfit).
+  Golden 8/21 now: expenses 2,250.39, profit 2,533.36; 8/14 + 8/21 =
+  expenses 5,176.75, profit 7,521.10. No SQL, no redeploy; eas update.
 - IMPORT GATE FIX (owner 2026-11-03): the gate blocks only on PRINTED
   totals; statement line sums (revenueLines, section_*) are LINE_SUM_CHECKS =
   the quiet "line details" note (rows not stored), and a line_residual ledger

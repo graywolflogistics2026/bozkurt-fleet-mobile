@@ -233,7 +233,8 @@ lines, read-only). Tax side: invariant #1. Full:
 settlement-linked fuel/reimbursements follow their settlement's week;
 the truck fixed-cost estimate is in CPM/PPM only, never in profit.
 `app/src/data/__tests__/goldenPrimeSettlement.test.ts` asserts the real
-Prime week (profit 2,534.36) on every profit screen — it must stay green.
+Prime week (profit 2,533.36 since 2026-11-03: every PR is owner money in)
+on every profit screen — it must stay green.
 Second golden week `goldenPrimeSettlement0814.test.ts` (W/E 8/14, profit
 4,987.74, prior week balance forward 1,202.92-) must stay green too.
 Full: `docs/decisions/golden-settlement.md`.

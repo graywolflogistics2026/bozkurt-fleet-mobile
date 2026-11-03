@@ -3,7 +3,7 @@
 // the simulated world of ./jobSimulation.ts, with a simulated model that
 // returns the golden weeks' pages; then the APP side on what the server
 // stored — readiness, the fetch for review, the one gate, and an atomic
-// Certify and add. Both golden weeks: 8/21 (profit 2,534.36) and 8/14
+// Certify and add. Both golden weeks: 8/21 (profit 2,533.36) and 8/14
 // (MILES row in the revenue block, prior week balance forward 1,202.92-).
 let mockClient: ReturnType<typeof import('../../data/__tests__/fakeSupabase').createFakeSupabase>;
 

@@ -14,8 +14,8 @@
 //
 // Every row also gets its DIRECTION as printed (R1).
 import { findCarrierCodeMatch, type CarrierCode } from '@/src/import/carrierCodes';
+import { isPrimeCarrier } from '@/src/import/primeOperatingStatement';
 import { applyLearnedCategories, normalizeKeyword, type LearningRule } from '@/src/import/categoryLearning';
-import { isPersonalPaymentText } from '@/src/import/settlementStatement';
 import {
   asEconomicClass,
   classIsOutOfProfit,
@@ -137,15 +137,23 @@ export function nonReimbursementCredits(
   carrierKey: string | null,
   codes: CarrierCode[]
 ): NonReimbursementCredit[] {
-  if (!carrierKey || !codes.some((c) => c.carrier === carrierKey)) return [];
+  if (!carrierKey) return [];
+  const prime = isPrimeCarrier(carrierKey);
+  const seeded = codes.some((c) => c.carrier === carrierKey);
+  if (!prime && !seeded) return [];
   const out: NonReimbursementCredit[] = [];
   items.forEach((item, index) => {
     const code = (item.code ?? '').trim().toUpperCase() || null;
-    // PR is not in the code map: the owner's personal payment by its text.
-    if (code === 'PR' && isPersonalPaymentText(item.desc)) {
+    // PR is Prime's code and is not in the code map. Owner decision
+    // 2026-11-03 (on 5cb1df0): EVERY PR line is the owner's own money in
+    // (Prime books it as PERSONAL PYMNT RCV), whatever its text — never an
+    // expense offset. Keyed on Prime itself, so it holds even before the
+    // code map has loaded.
+    if (prime && code === 'PR') {
       out.push({ index, economicClass: 'PERSONAL', category: null });
       return;
     }
+    if (!seeded) return;
     const match = findCarrierCodeMatch(carrierKey, item.desc ?? null, codes, code);
     const mapClass = asEconomicClass(match?.economicClass);
     if (!match || !mapClass) return;

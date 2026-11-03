@@ -30,7 +30,7 @@ import { buildWeeklyTrueProfitTrend, calcTrueProfit } from '@/src/stats/trueProf
 import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { buildTruckComparison, type ComparisonTruck } from '@/src/stats/truckComparison';
 import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
-import { buildPrimeStatementCheck, isGateCheck, isPersonalPaymentText, settlementDeposit } from '@/src/import/settlementStatement';
+import { buildPrimeStatementCheck, isGateCheck, settlementDeposit } from '@/src/import/settlementStatement';
 import { nonReimbursementCredits } from '@/src/import/settlementLineClass';
 import { KEY, USER_ID, TRUCK_ID, WEEK_ENDING, STATEMENT, STATEMENT_LINES, REIMBURSEMENT_ITEMS, PAGE_MAP, golden0717 } from './golden0717Fixture';
 
@@ -76,7 +76,7 @@ const CODES = PRIME_CODES.map((c) => ({
   classWhenCharge: null,
 }));
 
-type Rows = { settlements: Settlement[]; loads: Load[]; deductions: Deduction[]; fuel: FuelPurchase[]; reimbursements: Reimbursement[] };
+type Rows = { settlements: Settlement[]; loads: Load[]; deductions: Deduction[]; fuel: FuelPurchase[]; reimbursements: Reimbursement[]; capital: { tx_type: string; amount: number; linked_deduction_id: string | null }[] };
 
 async function importWeek(extraction: Extraction): Promise<Rows> {
   mockClient = createFakeSupabase({
@@ -102,6 +102,7 @@ async function importWeek(extraction: Extraction): Promise<Rows> {
     deductions: (store.deductions ?? []) as Deduction[],
     fuel: (store.fuel_purchases ?? []) as FuelPurchase[],
     reimbursements: (store.reimbursements ?? []) as Reimbursement[],
+    capital: (store.capital_transactions ?? []) as Rows['capital'],
   };
 }
 
@@ -202,7 +203,8 @@ describe('golden week 2026-07-17 — card payout, no cash-flow section, a loss',
   });
 
   test('2.4: only RF 5.34 is saved as a reimbursement; PR personal payment and WA advances are credit lines out of profit', () => {
-    expect(isPersonalPaymentText('PERSONAL PAYMNT')).toBe(true);
+    // Every PR is PERSONAL, whatever its text (owner 2026-11-03).
+    expect(nonReimbursementCredits([{ code: 'PR', desc: 'WIE14MB LD', amount: 1 }], 'PRIME INC', CODES)).toEqual([{ index: 0, economicClass: 'PERSONAL', category: null }]);
     expect(nonReimbursementCredits(REIMBURSEMENT_ITEMS, 'PRIME INC', CODES)).toEqual([
       { index: 0, economicClass: 'PERSONAL', category: null },
       { index: 1, economicClass: 'REPAYMENT', category: 'Advance Repayment' },
@@ -211,6 +213,12 @@ describe('golden week 2026-07-17 — card payout, no cash-flow section, a loss',
     // Carrier isolation: an unseeded carrier keeps every line a reimbursement.
     expect(nonReimbursementCredits(REIMBURSEMENT_ITEMS, 'OTHER CARRIER', CODES)).toEqual([]);
     expect(rows.reimbursements.map((r) => r2(Number(r.amount)))).toEqual([5.34]);
+  });
+
+  test('PR 3,999.00 flows into Owner\'s money as one contribution linked to its credit line', () => {
+    const pr = rows.deductions.find((d) => d.code === 'PR')!;
+    expect(Number(pr.amount)).toBe(-3999);
+    expect(rows.capital).toEqual([expect.objectContaining({ tx_type: 'contribution', amount: 3999, linked_deduction_id: pr.id })]);
   });
 });
 

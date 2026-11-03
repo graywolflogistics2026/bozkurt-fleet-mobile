@@ -10,15 +10,17 @@
 `GRWLLG-OY-PrimeInc6.pdf` — Prime Inc, unit 283940, week ending
 2026-08-21, 8 pages, 2,327 miles. Home showed This Week's Profit ~$4,549
 (earlier $1,936); the correct figure, verified by hand against Prime's
-printed totals and its Statement of Income and Expense, is **$2,534.36**.
+printed totals and its Statement of Income and Expense, is **$2,533.36**
+(was 2,534.36 until owner decision 2026-11-03: every PR line is owner
+money in — PERSONAL PYMNT RCV — never an expense offset).
 
 | Figure | Value |
 |---|---|
 | Owner revenue | 4,783.75 (line haul 3,345.12 + fuel surcharge 1,230.86 + EP OTHER 175.00 + incentives 32.70 + toll .07) |
-| Reimbursements | 312.80 (reefer fuel 216.30 + wash interior 95.50 + PR 1.00) |
+| Reimbursements | 312.80 printed (reefer fuel 216.30 + wash interior 95.50 + PR 1.00); 311.80 offset expenses — PR 1.00 is owner money in (an Owner's money contribution) |
 | Deductions printed | 3,212.19, of which non-expenses 650.00 (warranty advance 500, personal advance 50, performance bond 100) |
-| Real expense | 2,249.39 |
-| Profit | 2,534.36 = net due 1,884.36 + 650.00 |
+| Real expense | 2,250.39 |
+| Profit | 2,533.36 = deposit 1,884.73 + 550.00 + 100.00 − interest 0.37 − PR 1.00 |
 | Deposit | 1,884.73 = net due 1,884.36 + interest .37 |
 | Miles | 2,327 (2,081 loaded + 246 empty); LTD/QTD 10,146 is not the week |
 | Per mile | RPM 2.06, CPM 0.97, PPM 1.09 |
