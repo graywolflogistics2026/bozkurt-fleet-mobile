@@ -1,7 +1,7 @@
 import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { isPrimeCarrier } from './primeOperatingStatement';
-import { parsePrimeSettlementDate, pdfCreationDateIso, type DateFormat } from './printedDates';
+import { parsePrimeSettlementDate, pdfCreationDateIso, statementWeekRawOf, type DateFormat } from './printedDates';
 import { readPrimeEscrow } from './primeEscrow';
 import { splitPrimeLoads } from './primeLoads';
 import { labeledStatementTotals, STATEMENT_TOTAL_FIELDS } from './statementTotalLabels';
@@ -392,8 +392,12 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   add('milesMatch', totals.miles, printedTotal(s.totalMiles), MILES_TOLERANCE);
   // The printed text, parsed YY/MM/DD, when it was read; else the older
   // reading's ISO date.
-  const statementWeek = s.statementWeekEndingRaw?.trim() ? parsePrimeSettlementDate(s.statementWeekEndingRaw) : op.weekEnding;
-  const weekCheck = statementWeekEndingCheck(statementWeek, s.weekEnding);
+  // R1 (2026-11-03): a reading that has the printed settlement date never
+  // uses the model's own ISO dates for this check.
+  const statementRawText = statementWeekRawOf(s);
+  const settlementRawText = s.settlementDateRaw?.trim() || null;
+  const statementWeek = statementRawText ? parsePrimeSettlementDate(statementRawText) : settlementRawText ? null : op.weekEnding;
+  const weekCheck = statementWeekEndingCheck(statementWeek, settlementRawText ? parsePrimeSettlementDate(settlementRawText) : s.weekEnding);
   if (weekCheck) checks.push(weekCheck);
 
   // A week total two pages filled differently: when the TOTAL lines were
@@ -718,7 +722,7 @@ export function statementDatesOf(extraction: Extraction): StatementDates | null 
   if (!s) return null;
   const raw = (v: string | undefined) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   const prime = isPrimeCarrier(s.carrier);
-  const statementRaw = raw(s.statementWeekEndingRaw);
+  const statementRaw = statementWeekRawOf(s);
   const confirmed = s.dateConfirmed && s.dateConfirmed.weekEnding === s.weekEnding ? s.dateConfirmed : null;
   const dates: StatementDates = {
     settlementDateRaw: raw(s.settlementDateRaw),

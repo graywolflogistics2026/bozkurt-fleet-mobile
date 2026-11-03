@@ -349,8 +349,14 @@ describe('a deliberately misread number still blocks Save', () => {
     expect(failedChecks(withStatement({}, { statementWeekEndingRaw: '26/08/21' }))).toEqual(['statementWeekEnding']);
     // An older reading (no printed text) that stored "26/08/14" as
     // 2014-08-26 no longer passes as "the same week".
-    expect(failedChecks(withStatement({ weekEnding: '2014-08-26' }, { statementWeekEndingRaw: undefined }))).toEqual(['statementWeekEnding']);
-    expect(failedChecks(withStatement({ weekEnding: '2026-08-14' }, { statementWeekEndingRaw: undefined }))).toEqual([]);
+    expect(failedChecks(withStatement({ weekEnding: '2014-08-26' }, { statementWeekEndingRaw: undefined, settlementDateRaw: undefined }))).toEqual(['statementWeekEnding']);
+    expect(failedChecks(withStatement({ weekEnding: '2026-08-14' }, { statementWeekEndingRaw: undefined, settlementDateRaw: undefined }))).toEqual([]);
+    // R1 (2026-11-03): once the printed settlement date was read, the
+    // model's own ISO statement date is never used; the statement page's
+    // own printed WEEK ENDING is.
+    expect(failedChecks(withStatement({ weekEnding: '2021-08-26' }, { statementWeekEndingRaw: undefined }))).toEqual([]);
+    expect(failedChecks(withStatement({ weekEndingRaw: '26/08/21' } as never, { statementWeekEndingRaw: '26/08/14' }))).toEqual(['statementWeekEnding']);
+    expect(failedChecks(withStatement({ weekEndingRaw: '26/08/14' } as never, { statementWeekEndingRaw: undefined }))).toEqual([]);
   });
 });
 

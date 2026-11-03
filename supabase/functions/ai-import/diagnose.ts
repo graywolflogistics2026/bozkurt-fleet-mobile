@@ -411,6 +411,12 @@ function pageReadsOf(results: Record<string, unknown>, path: string): NonNullabl
 function weekEndingOf(results: Record<string, unknown>): string | null {
   for (const key of Object.keys(results).sort((a, b) => Number(a) - Number(b))) {
     const extraction = (results[key] as { extraction?: unknown } | null)?.extraction;
+    // R1 (2026-11-03): the printed text first ("26/08/21"), as printed;
+    // the model's own ISO only for readings from before the raw fields.
+    for (const path of ['settlement.settlementDateRaw', 'settlement.statementWeekEndingRaw', 'settlement.operating.weekEndingRaw']) {
+      const v = at(extraction, path);
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
     for (const path of ['settlement.weekEnding', 'settlement.operating.weekEnding']) {
       const v = at(extraction, path);
       if (typeof v === 'string' && ISO_DAY.test(v)) return v;

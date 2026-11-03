@@ -11,6 +11,15 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- DATES AS PRINTED TEXT (R1, owner 2026-11-03): the prompt no longer asks
+  for interpreted dates (weekEnding/printDate/operating.weekEnding stay "");
+  the statement page copies its WEEK ENDING into operating.weekEndingRaw.
+  The page merge compares raw date texts (chunking.ts dateConflicts ->
+  printedDates 'pages_differ', a Prime misread). The gate and the statement
+  check use the parsed printed date, never the model's ISO, once the printed
+  settlement date was read (settlementGate.ts, settlementStatement.ts,
+  dateGuard.ts). Diagnostics shows W/E as printed. Redeploy ai-import; eas
+  update. No SQL.
 - NEVER "VERDICT NONE" (R5, owner 2026-11-03): an unreadable STATEMENT page
   makes the job final on the server at ready time (jobEngine.ts
   pageFailedReview: failed_final page_failed, one page detail per unreadable

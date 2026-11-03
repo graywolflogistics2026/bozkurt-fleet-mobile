@@ -67,7 +67,7 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
     out.push(
       `PRIOR WEEK BALANCE FORWARD ${n(op.priorWeekBalanceForward)} · TOTAL CASH FLOW ${n(op.weekTotalCashFlow)} · SETTLEMENT TO OPERATOR ${n(op.settlementToOperator)} · DIRECT DEPOSIT ${n(op.directDeposit)}`
     );
-    out.push(`weekEnding ${txt(op.weekEnding) || '—'} · MILES ${op.weekMiles ?? '—'}`);
+    out.push(`weekEnding ${txt(op.weekEndingRaw) || txt(op.weekEnding) || '—'} · MILES ${op.weekMiles ?? '—'}`);
   }
 
   const check = inputs.check;

@@ -94,7 +94,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 // Prime date issues that mean two printed dates disagree (a misread):
 // re-read, then fail. Everything else is only unusual and is asked.
-const PRIME_MISREAD_DATE_ISSUES: DateIssue[] = ['unreadable', 'print_gap', 'statement_week_differs', 'pdf_created_far'];
+const PRIME_MISREAD_DATE_ISSUES: DateIssue[] = ['unreadable', 'print_gap', 'statement_week_differs', 'pdf_created_far', 'pages_differ'];
 
 function fail(reason: GateFailReason, failures: string[] = [], details: GateFailDetail[] = []): SettlementGateResult {
   return { status: 'fail', reason, failures: failures.length > 0 ? failures : [reason], ...(details.length > 0 ? { details } : {}) };
@@ -136,7 +136,9 @@ export function evaluateSettlementGate(
   const issues = checkSettlementReconciliation(extraction).issues;
   const issueTypes = issues.map((i) => i.type);
   const dateCheck = checkSettlementDates(settlementDateInputsOf(extraction), options.importDate);
-  const weekEnding = s.weekEnding || dateCheck.weekEnding || null;
+  // R1 (2026-11-03): the date parsed from the printed text wins over the
+  // model's own reading; a date the owner confirmed wins over both.
+  const weekEnding = (s.dateConfirmed ? s.weekEnding : dateCheck.weekEnding || s.weekEnding) || null;
   const dateOk = isDateGateSatisfied(dateCheck, weekEnding, s.dateConfirmed);
 
   const check = prime ? buildPrimeStatementCheck(extraction) : null;

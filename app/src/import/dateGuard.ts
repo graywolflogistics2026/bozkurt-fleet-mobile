@@ -1,6 +1,6 @@
 import type { Extraction } from '@/src/import/types';
 import { isPrimeCarrier } from '@/src/import/primeOperatingStatement';
-import { lineDateFromWeekEnding, parsePrimePrintDate, parsePrimeSettlementDate } from '@/src/import/printedDates';
+import { lineDateFromWeekEnding, parsePrimePrintDate, parsePrimeSettlementDate, readingsOf } from '@/src/import/printedDates';
 
 // DATE HARDENING round 2 (owner decision 2026-07-30): carrier settlement
 // headers commonly print dates as YY/MM/DD (26/07/24 = 2026-07-24), while
@@ -221,13 +221,20 @@ export function sanitizeExtractionDates(extraction: Extraction, now: Date = new 
       compliance: extraction.compliance ? { ...extraction.compliance, issueDate: fix(extraction.compliance.issueDate) } : extraction.compliance,
     };
   }
+  // R1 (2026-11-03): a Prime settlement date printed but unreadable as
+  // YY/MM/DD is never replaced by the model's own date — the gate asks.
+  if (s && isPrimeCarrier(s.carrier) && s.settlementDateRaw?.trim()) {
+    return { ...extraction, settlement: { ...s, weekEnding: '' } };
+  }
+  // Another carrier's printed date that reads one way only is that date.
+  const onlyReading = s?.settlementDateRaw?.trim() ? readingsOf(s.settlementDateRaw) : [];
   const settlement = s
     ? {
         ...s,
         // DATE ANCHOR takes priority over the "now"-based correction below
         // whenever printDate is present — an exact per-document anchor is
         // strictly more reliable than "recent relative to today."
-        weekEnding: resolveWeekEndingWithAnchor(s.printDate, s.weekEnding) ?? fix(s.weekEnding),
+        weekEnding: onlyReading.length === 1 ? onlyReading[0].iso : resolveWeekEndingWithAnchor(s.printDate, s.weekEnding) ?? fix(s.weekEnding),
         loads: s.loads?.map((l) => ({
           ...l,
           pickupDate: fix(l.pickupDate),

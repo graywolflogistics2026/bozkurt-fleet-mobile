@@ -229,8 +229,11 @@ export type ExtractedSettlement = {
     // FLOW = TOTAL STATEMENT + balance forward = SETTLEMENT TO OPERATOR.
     priorWeekBalanceForward?: number | string;
     weekTotalCashFlow?: number | string;
-    // The statement page's own week ending (header printed YY/MM/DD), ISO.
+    // The statement page's own week ending (header printed YY/MM/DD), ISO —
+    // readings from before 2026-11-03 only; R1 reads weekEndingRaw.
     weekEnding?: string;
+    // The statement header's WEEK ENDING exactly as printed ("26/08/21").
+    weekEndingRaw?: string;
     ytdTotalRevenue?: number;
     ytdMiles?: number;
     ytdTotalStatement?: number;
@@ -453,6 +456,8 @@ export type Extraction = {
   // ai-import — a cross-check for the printed dates (printedDates.ts).
   pdfCreationDate?: string;
   mergeConflicts?: { path: string; values: number[] }[];
+  // Two pages printed a different TEXT for the same date (R1, 2026-11-03).
+  dateConflicts?: { path: string; values: string[] }[];
   // AI's best-guess category for an unrecognized-but-clearly-financial
   // document (docType 'other') — never silently guessed into the wrong
   // ledger; shown in the preview and used as the deduction category only

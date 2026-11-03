@@ -114,7 +114,8 @@ export type DateIssue =
   | 'pdf_created_far' // PDF CreationDate more than 3 days from the print date
   | 'future' // later than the import date + 10 days
   | 'too_old' // older than 14 months before the import date (catch-up years are legitimate: asks)
-  | 'ambiguous'; // other carriers: more than one digit order fits
+  | 'ambiguous' // other carriers: more than one digit order fits
+  | 'pages_differ'; // two pages printed a different text for the same date (R1)
 
 export type SettlementDateCheck = {
   rule: 'prime' | 'other';
@@ -135,7 +136,10 @@ export type SettlementDateInputs = {
   printDateRaw?: string | null;
   statementWeekEndingRaw?: string | null;
   pdfCreationDate?: string | null;
+  // Date fields two pages printed differently (merge, raw text compared).
+  dateConflictPaths?: string[] | null;
   // Readings from before the raw fields existed (the model's own ISO).
+  // Ignored once the printed settlement date was read (R1, 2026-11-03).
   weekEnding?: string | null;
   printDate?: string | null;
   statementWeekEnding?: string | null;
@@ -157,9 +161,13 @@ export function checkPrimeSettlementDates(input: SettlementDateInputs, importDat
   const raw = input.settlementDateRaw?.trim() || null;
   const weekEnding = raw ? parsePrimeSettlementDate(raw) : input.weekEnding || null;
   const printDate = input.printDateRaw?.trim() ? parsePrimePrintDate(input.printDateRaw) : input.printDate || null;
+  // DATES AS PRINTED TEXT (R1, 2026-11-03): a reading that has the printed
+  // settlement date never falls back to the model's own statement date.
   const statementWeekEnding = input.statementWeekEndingRaw?.trim()
     ? parsePrimeSettlementDate(input.statementWeekEndingRaw)
-    : input.statementWeekEnding || null;
+    : raw
+      ? null
+      : input.statementWeekEnding || null;
   const pdfCreationDate = pdfCreationDateIso(input.pdfCreationDate);
   const issues: DateIssue[] = [];
   if (!weekEnding) issues.push('unreadable');
@@ -171,9 +179,10 @@ export function checkPrimeSettlementDates(input: SettlementDateInputs, importDat
     }
     if (!isFriday(weekEnding)) issues.push('not_friday');
     // Exact match only: the year/day-swapped tolerance (62c6435) hid the bug.
-    if ((input.statementWeekEndingRaw?.trim() || input.statementWeekEnding) && statementWeekEnding !== weekEnding) {
+    if ((input.statementWeekEndingRaw?.trim() || (!raw && input.statementWeekEnding)) && statementWeekEnding !== weekEnding) {
       issues.push('statement_week_differs');
     }
+    if ((input.dateConflictPaths ?? []).length > 0) issues.push('pages_differ');
     issues.push(...rangeIssues(weekEnding, importDate));
   }
   if (pdfCreationDate && printDate && Math.abs(daysBetween(printDate, pdfCreationDate)) > PDF_CREATED_MAX_DAYS) issues.push('pdf_created_far');
@@ -195,7 +204,10 @@ export function checkPrimeSettlementDates(input: SettlementDateInputs, importDat
 // [print date, print date + 7], else ask.
 export function checkOtherCarrierDates(input: SettlementDateInputs, importDate: string, rememberedFormat?: DateFormat | null): SettlementDateCheck {
   const raw = input.settlementDateRaw?.trim() || null;
-  const printDate = pdfCreationDateIso(input.printDate) ?? null;
+  // The printed print date when it reads one way only; else the older
+  // reading's ISO date.
+  const printReadings = readingsOf(input.printDateRaw);
+  const printDate = printReadings.length === 1 ? printReadings[0].iso : (pdfCreationDateIso(input.printDate) ?? null);
   const pdfCreationDate = pdfCreationDateIso(input.pdfCreationDate);
   const issues: DateIssue[] = [];
   let weekEnding: string | null = null;
@@ -222,7 +234,16 @@ export function checkOtherCarrierDates(input: SettlementDateInputs, importDate: 
   }
   if (!weekEnding) issues.push('unreadable');
   else issues.push(...rangeIssues(weekEnding, importDate));
+  if ((input.dateConflictPaths ?? []).length > 0) issues.push('pages_differ');
   return { rule: 'other', printed: raw, weekEnding, format, printDate, statementWeekEnding: null, pdfCreationDate, issues, passed: issues.length === 0 };
+}
+
+// The statement header's WEEK ENDING as printed: the statement page's own
+// field first (R1, 2026-11-03), else the settlement header copy.
+export function statementWeekRawOf(s: { statementWeekEndingRaw?: string; operating?: { weekEndingRaw?: string } } | null | undefined): string | null {
+  const own = s?.operating?.weekEndingRaw?.trim();
+  if (own) return own;
+  return s?.statementWeekEndingRaw?.trim() || null;
 }
 
 export function settlementDateInputsOf(extraction: {
@@ -234,15 +255,17 @@ export function settlementDateInputsOf(extraction: {
     statementWeekEndingRaw?: string;
     weekEnding?: string;
     printDate?: string;
-    operating?: { weekEnding?: string };
+    operating?: { weekEnding?: string; weekEndingRaw?: string };
   };
+  dateConflicts?: { path: string; values: string[] }[];
 }): SettlementDateInputs {
   const s = extraction.settlement ?? {};
   return {
     carrier: s.carrier ?? null,
     settlementDateRaw: s.settlementDateRaw ?? null,
     printDateRaw: s.printDateRaw ?? null,
-    statementWeekEndingRaw: s.statementWeekEndingRaw ?? null,
+    statementWeekEndingRaw: statementWeekRawOf(s),
+    dateConflictPaths: (extraction.dateConflicts ?? []).map((c) => c.path),
     pdfCreationDate: extraction.pdfCreationDate ?? null,
     weekEnding: s.weekEnding ?? null,
     printDate: s.printDate ?? null,

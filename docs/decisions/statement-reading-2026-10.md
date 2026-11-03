@@ -292,5 +292,5 @@ Root causes and the approved design (working rule 2, approved 2026-11-03):
   - [ ] B4: headline pages first (p1, p3, p4, p5-6); line rows read after
     the card is ready, never gate; only reconciling rows stored.
   - [ ] B5: clean failure screen + progress line text (app, eas update).
-- [ ] 2026-11-03 items: [x] R5  [ ] R1  [ ] R3  [ ] R2  [ ] R4/B3  [ ] B2 (model mix above)  [ ] B4/B5  [ ] PLUS
+- [ ] 2026-11-03 items: [x] R5  [x] R1  [ ] R3  [ ] R2  [ ] R4/B3  [ ] B2 (model mix above)  [ ] B4/B5  [ ] PLUS
 - [ ] Step C: dual read and model profiles (all Opus, per 2026-11-01)

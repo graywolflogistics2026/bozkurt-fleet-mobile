@@ -91,8 +91,17 @@ export function buildChunkPromptAddendum(range: PageRange, totalPages: number): 
 // with the merged extraction so the self-check can refuse to trust it.
 export type MergeConflict = { path: string; values: number[] };
 
+// DATES AS PRINTED TEXT (owner decision 2026-11-03, R1): two pages that
+// printed a DIFFERENT text for the same date field (settlementDateRaw,
+// printDateRaw, statementWeekEndingRaw, operating.weekEndingRaw) are a
+// conflict too, compared as the raw strings (spaces ignored) — never as
+// interpreted dates. The first text is kept; the app's date gate asks.
+export type DateConflict = { path: string; values: string[] };
+const RAW_DATE_PATH = /(^|\.)(settlementDateRaw|printDateRaw|statementWeekEndingRaw|weekEndingRaw)$/;
+const rawDateText = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, '') : '');
+
 // Fields that describe the page split itself, never merged as data.
-const PAGE_META_KEYS = new Set(['pageMap', 'mergeConflicts', 'pagesTotal']);
+const PAGE_META_KEYS = new Set(['pageMap', 'mergeConflicts', 'dateConflicts', 'pagesTotal']);
 
 // Amount-like strings ("1,884.73", "$.37-", "(12.50)") as numbers, for
 // conflict comparison only — the merged value itself is kept as printed.
@@ -117,7 +126,7 @@ function isMeaningful(v: unknown): boolean {
   return typeof v === 'boolean';
 }
 
-function mergeValues(values: unknown[], path: string, conflicts: MergeConflict[]): unknown {
+function mergeValues(values: unknown[], path: string, conflicts: MergeConflict[], dateConflicts: DateConflict[] = []): unknown {
   const defined = values.filter((v) => v !== undefined && v !== null);
   if (defined.length === 0) return values.find((v) => v !== undefined);
   // Line-item lists: every page's lines, in page order.
@@ -132,7 +141,7 @@ function mergeValues(values: unknown[], path: string, conflicts: MergeConflict[]
     for (const v of defined) for (const k of Object.keys(v as Record<string, unknown>)) if (!keys.includes(k)) keys.push(k);
     const out: Record<string, unknown> = {};
     for (const k of keys) {
-      out[k] = mergeValues(defined.map((v) => (v as Record<string, unknown>)[k]), path ? `${path}.${k}` : k, conflicts);
+      out[k] = mergeValues(defined.map((v) => (v as Record<string, unknown>)[k]), path ? `${path}.${k}` : k, conflicts, dateConflicts);
     }
     return out;
   }
@@ -141,6 +150,11 @@ function mergeValues(values: unknown[], path: string, conflicts: MergeConflict[]
   // week's 0 miles) survives because no page printed anything else.
   const meaningful = defined.filter(isMeaningful);
   if (meaningful.length === 0) return defined[0];
+  if (RAW_DATE_PATH.test(path)) {
+    const texts = [...new Set(meaningful.map(rawDateText).filter((t) => t !== ''))];
+    if (texts.length > 1) dateConflicts.push({ path, values: texts });
+    return meaningful[0];
+  }
   const amounts = meaningful.map(amountOf).filter((n): n is number => n != null);
   if (amounts.length === meaningful.length && amounts.length > 1) {
     const distinct = [...new Set(amounts.map((n) => Math.round(n * 100) / 100))];
@@ -330,16 +344,19 @@ export function mergeChunkedExtractions(chunks: ChunkExtraction[]): ChunkExtract
   if (chunks.length === 1) return chunks[0];
 
   const conflicts: MergeConflict[] = [];
+  const dateConflicts: DateConflict[] = [];
   for (const c of chunks) {
     const prior = c.mergeConflicts;
     if (Array.isArray(prior)) conflicts.push(...(prior as MergeConflict[]));
+    const priorDates = (c as { dateConflicts?: unknown }).dateConflicts;
+    if (Array.isArray(priorDates)) dateConflicts.push(...(priorDates as DateConflict[]));
   }
   const data = chunks.map((c) => {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(c)) if (!PAGE_META_KEYS.has(k) && k !== 'summary' && k !== 'confidence') out[k] = v;
     return out;
   });
-  const merged = mergeValues(data, '', conflicts) as ChunkExtraction;
+  const merged = mergeValues(data, '', conflicts, dateConflicts) as ChunkExtraction;
   const resolved = resolveOperatingConflicts(chunks, merged, resolveLabeledTotalConflicts(chunks, merged, conflicts));
   conflicts.length = 0;
   conflicts.push(...resolved);
@@ -354,6 +371,7 @@ export function mergeChunkedExtractions(chunks: ChunkExtraction[]): ChunkExtract
   merged.summary = summary || chunks[0].summary;
   merged.confidence = 'low';
   if (conflicts.length > 0) merged.mergeConflicts = conflicts;
+  if (dateConflicts.length > 0) (merged as { dateConflicts?: DateConflict[] }).dateConflicts = dateConflicts;
   return merged;
 }
 
