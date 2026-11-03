@@ -11,6 +11,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+- PRIME CODE MAP AUDIT (owner 2026-11-03), report only: docs/decisions/
+  prime-code-classes.md. Markdown = seed = migration (213 rows: 205 + 8
+  bridges), no differences; 5 rows to verify; search results; proposed
+  economic_class for all 213 rows, 43 ASK. No SQL, no runtime change yet.
 - STATEMENT READING step B1 (owner 2026-11-01): no whole-document call
   for Prime. jobEngine.ts: every multi-page PDF is classified first; Prime
   (any size) -> one page per call; non-Prime <= 8 pages / 8 MB -> one call
