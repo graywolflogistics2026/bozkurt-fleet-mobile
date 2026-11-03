@@ -4,7 +4,10 @@
 // report" button sends. Green or red per line.
 //
 // PRIVACY: the report holds versions, booleans, names, counts, page
-// numbers and error CODES only — never an amount, a file name, an error
+// numbers and error CODES — plus, since 2026-11-03 at the owner's request,
+// the two values of a failing check, each page's value for a field two
+// pages read differently and the printed label it named, and the week
+// ending. Never a file name, an error
 // message from a job, a secret or bank digits. The server's own report
 // (ai-import mode "diagnose", supabase/functions/ai-import/diagnose.ts) is
 // already built that way; this module only reads the same fields, and
@@ -72,7 +75,7 @@ function modelLine(m: ModelCheckResult, t: Translate): ReportLine {
 }
 
 export function jobLineText(j: JobLine, t: Translate): string {
-  const parts: string[] = [j.status];
+  const parts: string[] = j.weekEnding ? [`W/E ${j.weekEnding}`, j.status] : [j.status];
   if (j.pagesTotal !== null || j.pagesDone !== null) {
     parts.push(t('diagnostics.pagesDone', { done: j.pagesDone ?? 0, total: j.pagesTotal ?? '?' }));
   }
@@ -83,8 +86,22 @@ export function jobLineText(j: JobLine, t: Translate): string {
     parts.push(j.finalState ? `verdict ${j.verdictSource} ${j.finalState}` : `verdict ${j.verdictSource}`);
   }
   if (j.failingChecks && j.failingChecks.length > 0) parts.push(`checks ${j.failingChecks.join(', ')}`);
+  // GATE FAILURE DETAIL (owner 2026-11-03): each failing check or field
+  // with both values, and what each page read there under which label.
+  for (const d of j.failingDetails ?? []) {
+    if (d.check === 'page') continue;
+    const pages = (d.pages ?? []).map((p) => `p${p.page} ${p.value}${p.label ? ` "${p.label}"` : ''}`).join('; ');
+    parts.push(`${d.check}: ${d.printed ?? '—'} / ${d.read ?? '—'}${pages ? ` (${pages})` : ''}`);
+  }
   if (j.pageErrors && j.pageErrors.length > 0) {
-    parts.push(j.pageErrors.map((e) => `p${e.page} ${e.type}${e.role ? ` (${e.role})` : ''}`).join(', '));
+    parts.push(
+      j.pageErrors
+        .map((e) => {
+          const extra = [e.role, e.detail && e.detail !== e.type ? e.detail : null, e.attempts ? `${e.attempts} tries` : null].filter(Boolean).join(', ');
+          return `p${e.page} ${e.type}${extra ? ` (${extra})` : ''}`;
+        })
+        .join(', ')
+    );
   } else if (j.failedChecks.length > 0) {
     parts.push(j.failedChecks.join(', '));
   }
@@ -149,12 +166,16 @@ export function clientJobToLine(job: ImportJob): JobLine {
   for (const f of job.progress?.failed ?? []) {
     const c = code(f?.type);
     if (c) failed.add(c);
-    if (Number.isInteger(f?.page)) pageErrors.push({ page: f.page, type: c ?? 'unknown_cause', role: null, kind: code(f.kind) });
+    if (Number.isInteger(f?.page)) pageErrors.push({ page: f.page, type: c ?? 'unknown_cause', role: null, kind: code(f.kind), detail: code(f.detail), attempts: typeof f.attempts === 'number' ? f.attempts : null });
   }
   const serverFinal = job.review?.final?.state ?? null;
   const final = finalStateOf(job);
   const checks = new Set<string>();
-  for (const d of job.review?.final?.details ?? []) if (code(d.check)) checks.add(d.check);
+  const failingDetails: NonNullable<JobLine['failingDetails']> = [];
+  for (const d of job.review?.final?.details ?? []) {
+    if (code(d.check)) checks.add(d.check);
+    if (typeof d.check === 'string' && /^[a-z0-9_.:-]{1,80}$/i.test(d.check)) failingDetails.push({ check: d.check, printed: d.printed ?? null, read: d.read ?? null });
+  }
   for (const f of job.review?.final?.failures ?? []) if (code(f)) checks.add(f);
   return {
     status: code(job.status) ?? 'unknown',
@@ -169,6 +190,7 @@ export function clientJobToLine(job: ImportJob): JobLine {
     finalState: final,
     failingChecks: [...checks].sort(),
     pageErrors: pageErrors.sort((a, b) => a.page - b.page),
+    failingDetails,
   };
 }
 

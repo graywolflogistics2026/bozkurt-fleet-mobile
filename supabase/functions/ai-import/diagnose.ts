@@ -327,8 +327,16 @@ export type JobRowForDiagnose = {
   review?: unknown;
 };
 
-// A page that could not be read: its number, the cause code and its role.
-export type PageErrorLine = { page: number; type: string; role: string | null; kind: string | null };
+// A page that could not be read: its number, the cause code and its role;
+// detail = the exact model outcome (parse_failed, truncated, ...) and the
+// tries (since 2026-11-03).
+export type PageErrorLine = { page: number; type: string; role: string | null; kind: string | null; detail?: string | null; attempts?: number | null };
+
+// GATE FAILURE DETAIL (owner 2026-11-03): each failing check with both
+// values, and — for a field two pages read differently — what every page
+// read there, with the printed label it named. Amounts and printed labels
+// only (the owner asked for the values); never a file name or message.
+export type FailingDetailLine = { check: string; printed: number | string | null; read: number | string | null; pages?: { page: number; value: number | string; label: string | null }[] };
 
 export type JobLine = {
   status: string;
@@ -349,11 +357,63 @@ export type JobLine = {
   finalState?: string | null;
   failingChecks?: string[];
   pageErrors?: PageErrorLine[];
+  // The week ending the job's pages read (YYYY-MM-DD), and the details.
+  weekEnding?: string | null;
+  failingDetails?: FailingDetailLine[];
 };
 
 const CODE_RE = /^[a-z0-9_:-]{1,40}$/i;
 function codeOrNull(v: unknown): string | null {
   return typeof v === 'string' && CODE_RE.test(v) ? v : null;
+}
+// A check name or a field path ("settlement.operating.directDeposit").
+const PATH_RE = /^[a-z0-9_.:-]{1,80}$/i;
+function pathOrNull(v: unknown): string | null {
+  return typeof v === 'string' && PATH_RE.test(v) ? v : null;
+}
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+function valueOrNull(v: unknown): number | string | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && /^[0-9.,()$ -]{1,20}$/.test(v.trim()) && v.trim()) return v.trim();
+  if (typeof v === 'string' && ISO_DAY.test(v)) return v;
+  return null;
+}
+function printedLabel(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const l = v.toUpperCase().replace(/[^A-Z0-9/&]+/g, ' ').trim().slice(0, 40);
+  return l || null;
+}
+function at(obj: unknown, path: string): unknown {
+  let v: unknown = obj;
+  for (const p of path.split('.')) v = v && typeof v === 'object' ? (v as Record<string, unknown>)[p] : undefined;
+  return v;
+}
+// What each page read into a field, with its printed label (operating
+// fields carry <field>Label, header totals settlement.totalLabels.<field>).
+function pageReadsOf(results: Record<string, unknown>, path: string): NonNullable<FailingDetailLine['pages']> {
+  if (!path.startsWith('settlement.')) return [];
+  const field = path.split('.').pop()!;
+  const parent = path.slice(0, path.length - field.length - 1);
+  const out: NonNullable<FailingDetailLine['pages']> = [];
+  for (const [key, r] of Object.entries(results)) {
+    const extraction = (r as { extraction?: unknown } | null)?.extraction;
+    const value = valueOrNull(at(extraction, path));
+    if (value == null || value === 0 || value === '') continue;
+    const label = printedLabel(at(extraction, `${parent}.${field}Label`)) ?? printedLabel(at(extraction, `settlement.totalLabels.${field}`));
+    const page = Number(key);
+    if (Number.isInteger(page)) out.push({ page, value, label });
+  }
+  return out.sort((a, b) => a.page - b.page);
+}
+function weekEndingOf(results: Record<string, unknown>): string | null {
+  for (const key of Object.keys(results).sort((a, b) => Number(a) - Number(b))) {
+    const extraction = (results[key] as { extraction?: unknown } | null)?.extraction;
+    for (const path of ['settlement.weekEnding', 'settlement.operating.weekEnding']) {
+      const v = at(extraction, path);
+      if (typeof v === 'string' && ISO_DAY.test(v)) return v;
+    }
+  }
+  return null;
 }
 
 export function jobLine(row: JobRowForDiagnose): JobLine {
@@ -365,13 +425,22 @@ export function jobLine(row: JobRowForDiagnose): JobLine {
   for (const [key, r] of Object.entries(results)) {
     if (!r || typeof r !== 'object') continue;
     total++;
-    const pr = r as { status?: unknown; error?: { type?: unknown }; role?: unknown; kind?: unknown };
+    const pr = r as { status?: unknown; error?: { type?: unknown; detail?: unknown }; role?: unknown; kind?: unknown; attempts?: unknown };
     if (pr.status === 'done') done++;
     if (pr.status === 'failed') {
       const code = codeOrNull(pr.error?.type);
       if (code) failed.add(code);
       const page = Number(key);
-      if (Number.isInteger(page) && page >= 1) pageErrors.set(page, { page, type: code ?? 'unknown_cause', role: codeOrNull(pr.role), kind: codeOrNull(pr.kind) });
+      if (Number.isInteger(page) && page >= 1) {
+        pageErrors.set(page, {
+          page,
+          type: code ?? 'unknown_cause',
+          role: codeOrNull(pr.role),
+          kind: codeOrNull(pr.kind),
+          detail: codeOrNull(pr.error?.detail),
+          attempts: typeof pr.attempts === 'number' ? pr.attempts : null,
+        });
+      }
     }
   }
   const progress = row.progress && typeof row.progress === 'object' ? (row.progress as Record<string, unknown>) : {};
@@ -387,7 +456,17 @@ export function jobLine(row: JobRowForDiagnose): JobLine {
   const review = row.review && typeof row.review === 'object' ? (row.review as { final?: { state?: unknown; failures?: unknown; details?: unknown } | null }) : null;
   const final = review?.final && typeof review.final === 'object' ? review.final : null;
   const checks = new Set<string>();
-  if (final && Array.isArray(final.details)) for (const d of final.details) { const c = codeOrNull((d as { check?: unknown } | null)?.check); if (c) checks.add(c); }
+  const failingDetails: FailingDetailLine[] = [];
+  if (final && Array.isArray(final.details)) {
+    for (const d of final.details) {
+      const dd = (d ?? {}) as { check?: unknown; printed?: unknown; read?: unknown };
+      const c = pathOrNull(dd.check);
+      if (!c) continue;
+      if (codeOrNull(c)) checks.add(c);
+      const pages = pageReadsOf(results, c);
+      failingDetails.push({ check: c, printed: valueOrNull(dd.printed), read: valueOrNull(dd.read) ?? codeOrNull(dd.read), ...(pages.length > 0 ? { pages } : {}) });
+    }
+  }
   if (final && Array.isArray(final.failures)) for (const f of final.failures) { const c = codeOrNull(f); if (c) checks.add(c); }
   const pDone = typeof row.pages_done === 'number' ? row.pages_done : null;
   const pTotal = typeof row.pages_total === 'number' ? row.pages_total : null;
@@ -404,6 +483,8 @@ export function jobLine(row: JobRowForDiagnose): JobLine {
     finalState: final ? codeOrNull(final.state) : null,
     failingChecks: [...checks].sort(),
     pageErrors: [...pageErrors.values()].sort((a, b) => a.page - b.page),
+    weekEnding: weekEndingOf(results),
+    failingDetails,
   };
 }
 

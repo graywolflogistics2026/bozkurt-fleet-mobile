@@ -33,7 +33,7 @@ describe('the 10-page "ready 4/10 unreadable" job names its page and cause', () 
   };
   test('page 7, unreadable, attachment; message never copied', () => {
     const l = jobLine(row);
-    expect(l.pageErrors).toEqual([{ page: 7, type: 'unreadable', role: 'attachment', kind: 'delivery_receipt' }]);
+    expect(l.pageErrors).toEqual([{ page: 7, type: 'unreadable', role: 'attachment', kind: 'delivery_receipt', detail: null, attempts: null }]);
     expect(l.verdictSource).toBe('none');
     expect(JSON.stringify(l)).not.toContain('never shown');
     expect(jobLineText(l, enT)).toBe('ready · 4/10 pages · verdict none · p7 unreadable (attachment)');
@@ -51,7 +51,7 @@ describe('verdict source, final state and failing checks per job', () => {
       review: { reads: 2, final: { state: 'failed_final', reason: 'same_values', failures: ['variableCosts'], details: [{ check: 'variableCosts', printed: -592.69, read: -609.87 }] } },
     });
     expect(l).toMatchObject({ jobId: 'f00dbabe', verdictSource: 'server', finalState: 'failed_final', failingChecks: ['variableCosts'] });
-    expect(jobLineText(l, enT)).toBe('ready · 6/8 pages · verdict server failed_final · checks variableCosts');
+    expect(jobLineText(l, enT)).toBe('ready · 6/8 pages · verdict server failed_final · checks variableCosts · variableCosts: -592.69 / -609.87');
     // A failed_final job is listed among the errors although its status is ready.
     const s = summarizeJobs([{ id: 'f00dbabe-1', status: 'ready', created_at: '2026-11-03T09:26:00Z', review: { final: { state: 'failed_final' } } }], Date.parse('2026-11-03T10:00:00Z'));
     expect(s.lastErrors).toHaveLength(1);
@@ -70,6 +70,41 @@ describe('verdict source, final state and failing checks per job', () => {
     expect(clientJobToLine(job)).toMatchObject({ verdictSource: 'app', finalState: 'ready_final' });
     const serverLine = jobLine({ id: job.id, status: 'ready', created_at: job.createdAt, pages_done: 6, pages_total: 9, review: null });
     expect(withAppVerdicts([serverLine], [job])[0]).toMatchObject({ verdictSource: 'app', finalState: 'ready_final' });
+  });
+});
+
+describe('mergeConflict: the field, both values, each page with its label, and the week ending', () => {
+  test('08/21 (8 pages): settlement.operating.directDeposit 1,884.36 (p3 NET AMOUNT DUE UNIT) / 1,884.73 (p4)', () => {
+    const l = jobLine({
+      id: 'abcd1234-08',
+      status: 'ready',
+      created_at: '2026-11-03T11:00:00Z',
+      pages_done: 6,
+      pages_total: 8,
+      page_results: {
+        '1': { status: 'done', role: 'content', kind: 'settlement', extraction: { settlement: { weekEnding: '2026-08-21' } } },
+        '3': { status: 'done', role: 'content', kind: 'settlement', extraction: { settlement: { operating: { directDeposit: 1884.36, directDepositLabel: 'NET AMOUNT DUE UNIT' } } } },
+        '4': { status: 'done', role: 'content', kind: 'statement', extraction: { settlement: { operating: { directDeposit: 1884.73 } } } },
+        '6': { status: 'failed', role: 'content', kind: 'statement', attempts: 2, error: { type: 'unreadable', detail: 'parse_failed', message: 'never shown' } },
+      },
+      review: { reads: 1, final: { state: 'failed_final', reason: 'same_values', failures: ['mergeConflict'], details: [{ check: 'settlement.operating.directDeposit', printed: 1884.36, read: 1884.73 }] } },
+    });
+    expect(l.weekEnding).toBe('2026-08-21');
+    expect(l.failingDetails).toEqual([
+      {
+        check: 'settlement.operating.directDeposit',
+        printed: 1884.36,
+        read: 1884.73,
+        pages: [
+          { page: 3, value: 1884.36, label: 'NET AMOUNT DUE UNIT' },
+          { page: 4, value: 1884.73, label: null },
+        ],
+      },
+    ]);
+    expect(jobLineText(l, enT)).toBe(
+      'W/E 2026-08-21 · ready · 6/8 pages · verdict server failed_final · checks mergeConflict · settlement.operating.directDeposit: 1884.36 / 1884.73 (p3 1884.36 "NET AMOUNT DUE UNIT"; p4 1884.73) · p6 unreadable (content, parse_failed, 2 tries)'
+    );
+    expect(JSON.stringify(l)).not.toContain('never shown');
   });
 });
 
