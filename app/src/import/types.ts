@@ -405,6 +405,9 @@ export type ExtractionPageMapEntry = {
   role: 'content' | 'attachment' | 'stored';
   status: 'read' | 'failed' | 'unread' | 'pending';
   cause?: string;
+  // The exact model outcome (parse_failed, truncated, ...) and the tries.
+  detail?: string;
+  attempts?: number;
 };
 
 export type Extraction = {

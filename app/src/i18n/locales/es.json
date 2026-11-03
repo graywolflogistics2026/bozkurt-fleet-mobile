@@ -3136,7 +3136,13 @@
       "refused": "el servicio de IA rechazó la página",
       "service": "el servicio de IA tuvo un error",
       "worker_stopped": "la lectura se detuvo por el límite de tiempo del servidor",
-      "unknown_cause": "no se registró la causa"
+      "unknown_cause": "no se registró la causa",
+      "parse_failed": "la respuesta de la IA no tenía datos válidos, ni en el segundo intento",
+      "truncated": "la respuesta se cortó (demasiado larga para una sola respuesta)",
+      "model_refusal": "el servicio de IA rechazó la página",
+      "oversized": "el archivo de la página es demasiado grande",
+      "bad_request": "no se pudo enviar la página al servicio de IA",
+      "internal": "el servicio de IA tuvo un error"
     },
     "readingShort": "Leyendo su estado de cuenta…",
     "statusReading": "Leyendo",
@@ -3176,7 +3182,8 @@
       "totalsDiffer": "Los totales impresos no cuadran según nuestra lectura.",
       "linesDiffer": "Las líneas que leímos no suman los totales impresos.",
       "jobFailed": "No se pudo leer el archivo.",
-      "notFinished": "La lectura no terminó. Toque Leer de nuevo para leer el mismo archivo otra vez."
+      "notFinished": "La lectura no terminó. Toque Leer de nuevo para leer el mismo archivo otra vez.",
+      "pageNotRead": "No se pudo leer una página de este estado de cuenta, así que sus totales no se revisaron."
     },
     "certifiedAdded": "Certificado y agregado: semana que termina el {{date}}.",
     "linesNotSaved": "Los detalles de las líneas no se guardaron porque no coincidieron con su estado de cuenta.",
@@ -3203,7 +3210,9 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED"
-    }
+    },
+    "readPagesAgain": "Leer la página {{pages}} de nuevo",
+    "stoppedPageFailed": "Volver a leer todo el archivo fallaría igual. Lea solo esa página de nuevo."
   },
   "certify": {
     "certifiedOn": "Certificado el {{date}}",

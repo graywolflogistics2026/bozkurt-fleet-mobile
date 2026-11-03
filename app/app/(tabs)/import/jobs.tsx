@@ -3,9 +3,9 @@ import { ActivityIndicator, Alert, RefreshControl, ScrollView, Share, Text, View
 import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { useImportJobs, useDismissImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
-import { silentAttachmentStep, sortImportJobsForDisplay, type ImportJob } from '@/src/import/importJobs';
-import { jobFailureInfo, jobFailureLines, jobFailureReport, jobRowState } from '@/src/import/jobFailure';
+import { useImportJobs, useDismissImportJob, useRereadImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
+import { MAX_READS_PER_JOB, readsOf, silentAttachmentStep, sortImportJobsForDisplay, type ImportJob } from '@/src/import/importJobs';
+import { failedPagesToReadAgain, jobFailureInfo, jobFailureLines, jobFailureReport, jobRowState } from '@/src/import/jobFailure';
 import { triggerReportLines } from '@/src/import/jobVerdict';
 import { verdictProblemOf } from '@/src/data/jobVerdictRunner';
 import { formatBuildInfoLine, getBuildInfo } from '@/src/lib/buildInfo';
@@ -41,6 +41,19 @@ function JobRow({ job, onReview, onDismiss }: { job: ImportJob; onReview: (job: 
   const value = (v: number | string) => (typeof v === 'number' ? money(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v);
   const reasonLines = state === 'failed' ? jobFailureLines(jobFailureInfo(job), (k, o) => t(k, o) as string, value, job.errorStep) : [];
   const problem = state === 'finishing' ? verdictProblemOf(job.id) : null;
+  // A content page that failed after its retries: read only that page again
+  // (owner 2026-11-03), under the job's read cap.
+  const rereadJob = useRereadImportJob();
+  const readAgainPages =
+    state === 'failed' && job.status === 'ready' && job.review?.final?.reason === 'page_failed' && readsOf(job) < MAX_READS_PER_JOB
+      ? failedPagesToReadAgain(job.review.final.details, jobFailureInfo(job))
+      : [];
+  function readPagesAgain() {
+    rereadJob.mutate(
+      { jobId: job.id, pages: readAgainPages, reason: 'page_not_read' },
+      { onError: (err) => Alert.alert(t('importFlow.readAgain'), err instanceof Error ? err.message : t('common.tryAgain')) }
+    );
+  }
   function sendReport() {
     const text = jobFailureReport(job, t('importFlow.couldNotReadTitle'), reasonLines, triggerReportLines(job.review?.triggers), formatBuildInfoLine(getBuildInfo()));
     void Share.share({ message: scrubBankDigitsInText(text) }).catch(() => undefined);
@@ -76,7 +89,8 @@ function JobRow({ job, onReview, onDismiss }: { job: ImportJob; onReview: (job: 
 
       <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
         {state === 'ready' && <PrimaryButton title={t('importFlow.checkAndCertify')} onPress={() => onReview(job)} />}
-        {state === 'failed' && <PrimaryButton title={t('importFlow.uploadAgain')} onPress={() => onDismiss(job)} />}
+        {readAgainPages.length > 0 && <PrimaryButton title={t('importFlow.readPagesAgain', { pages: readAgainPages.join(', ') })} onPress={readPagesAgain} />}
+        {state === 'failed' && (readAgainPages.length > 0 ? <SecondaryButton title={t('importFlow.uploadAgain')} onPress={() => onDismiss(job)} /> : <PrimaryButton title={t('importFlow.uploadAgain')} onPress={() => onDismiss(job)} />)}
         {state === 'failed' && <SecondaryButton title={t('importFlow.sendReport')} onPress={sendReport} />}
         {state !== 'reading' && state !== 'finishing' && <SecondaryButton title={t('common.dismiss')} onPress={() => onDismiss(job)} />}
       </View>

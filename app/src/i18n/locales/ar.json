@@ -3136,7 +3136,13 @@
       "refused": "the AI service refused the page",
       "service": "the AI service had an error",
       "worker_stopped": "the reading was stopped by the server time limit",
-      "unknown_cause": "no cause was recorded"
+      "unknown_cause": "no cause was recorded",
+      "parse_failed": "the AI's answer was not valid data, even after a second try",
+      "truncated": "the answer was cut off (too long for one reply)",
+      "model_refusal": "the AI service refused the page",
+      "oversized": "the page file is too large",
+      "bad_request": "the page could not be sent to the AI service",
+      "internal": "the AI service had an error"
     },
     "readingShort": "Reading your statement…",
     "statusReading": "Reading",
@@ -3176,7 +3182,8 @@
       "totalsDiffer": "The printed totals do not add up the way we read them.",
       "linesDiffer": "The lines we read do not add up to the printed totals.",
       "jobFailed": "The file could not be read.",
-      "notFinished": "The reading did not finish. Tap Read again to read the same file once more."
+      "notFinished": "The reading did not finish. Tap Read again to read the same file once more.",
+      "pageNotRead": "A page of this statement could not be read, so its totals were not checked."
     },
     "certifiedAdded": "Certified and added: week ending {{date}}.",
     "linesNotSaved": "Line details were not saved because they did not match your statement.",
@@ -3203,7 +3210,9 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED"
-    }
+    },
+    "readPagesAgain": "Read page {{pages}} again",
+    "stoppedPageFailed": "Reading the whole file again would fail the same way. Read only that page again."
   },
   "certify": {
     "certifiedOn": "Certified on {{date}}",

@@ -39,7 +39,7 @@ export type ImportJobProgress = {
   attachmentsQueued: number;
   attachmentsDone: number;
   storedPages: number[];
-  failed: { page: number; kind: string; type: string; run: number; timeoutMs?: number }[];
+  failed: { page: number; kind: string; type: string; run: number; timeoutMs?: number; detail?: string; attempts?: number }[];
   question: { kind: 'page_cap'; totalPages: number; cap: number } | null;
   startedAt: string;
   readyAt: string | null;

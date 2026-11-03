@@ -42,7 +42,8 @@ export function jobFailureInfo(job: FailureInput | null | undefined): JobFailure
   const details = final?.details ?? [];
   const pageMap = new Map<number, { page: number; kind: string | null; type: string }>();
   for (const f of job.progress?.failed ?? []) {
-    if (Number.isInteger(f.page)) pageMap.set(f.page, { page: f.page, kind: f.kind ?? null, type: f.type || 'unknown_cause' });
+    // The exact model outcome (parse_failed, truncated, ...) when stored.
+    if (Number.isInteger(f.page)) pageMap.set(f.page, { page: f.page, kind: f.kind ?? null, type: f.detail || f.type || 'unknown_cause' });
   }
   if (job.status === 'failed' && typeof job.errorPage === 'number' && !pageMap.has(job.errorPage)) {
     pageMap.set(job.errorPage, { page: job.errorPage, kind: null, type: job.errorStep ?? 'error_step=null' });
@@ -65,7 +66,23 @@ const STOP_KEY: Record<string, string> = {
   same_values: 'importFlow.stoppedSameValues',
   read_cap: 'importFlow.stoppedReadCap',
   not_rereadable: 'importFlow.stoppedNotRereadable',
+  page_failed: 'importFlow.stoppedPageFailed',
 };
+
+// One failing check as a line. A page that could not be read (check
+// 'page', printed = the page, read = the cause code) says so in words.
+export function failDetailLine(d: { check: string; printed: number | string; read: number | string }, t: T, value: (v: number | string) => string = (v) => String(v)): string {
+  if (d.check === 'page') return t('importFlow.pageFailed', { page: d.printed, cause: t(`importFlow.pageCause.${d.read}`, { defaultValue: String(d.read) }) });
+  return t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) });
+}
+
+// The pages a "Read page N again" button reads: the content pages that
+// failed, from the gate details or the job's own failed pages.
+export function failedPagesToReadAgain(details: { check: string; printed: number | string }[] | null | undefined, info: Pick<JobFailureInfo, 'pages'> | null): number[] {
+  const fromDetails = (details ?? []).filter((d) => d.check === 'page' && Number.isInteger(d.printed)).map((d) => d.printed as number);
+  const pages = fromDetails.length > 0 ? fromDetails : (info?.pages ?? []).map((p) => p.page);
+  return [...new Set(pages)].sort((a, b) => a - b);
+}
 
 // A failure card's lines are never empty: with nothing else, the line says
 // which server field was missing.
@@ -103,10 +120,10 @@ export function jobFailureLines(
   if (info.gateReason && info.gateReason in GATE_FAIL_REASON_KEY && info.details.length === 0) {
     lines.push(t(GATE_FAIL_REASON_KEY[info.gateReason as GateFailReason]));
   }
-  for (const d of info.details) {
-    lines.push(t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) }));
-  }
+  for (const d of info.details) lines.push(failDetailLine(d, t, value));
+  const detailPages = new Set(info.details.filter((d) => d.check === 'page').map((d) => d.printed));
   for (const p of info.pages) {
+    if (detailPages.has(p.page)) continue;
     lines.push(t('importFlow.pageFailed', { page: p.page, cause: t(`importFlow.pageCause.${p.type}`, { defaultValue: p.type }) }));
   }
   if (info.stop && STOP_KEY[info.stop]) lines.push(t(STOP_KEY[info.stop]));

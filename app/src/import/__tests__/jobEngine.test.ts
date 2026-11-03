@@ -302,10 +302,16 @@ describe('partial save', () => {
     expect(isStatementBacked(statement)).toBe(true);
     expect(settlementVerification({ statement })).toBe('verified_prime');
     expect(lineItemsIncomplete(statement)).toBe(true);
-    expect(statement.pages!.incomplete).toEqual([{ page: 3, kind: 'settlement', cause: 'timeout' }]);
+    expect(statement.pages!.incomplete).toEqual([{ page: 3, kind: 'settlement', cause: 'timeout', detail: 'timeout' }]);
     expect(statement.reviewReasons).toContainEqual({ reason: 'line_items_incomplete', label: '3' });
     // The failure names the page, the run and the cause.
     expect((sim.row.progress as { failed: unknown[] }).failed).toContainEqual(expect.objectContaining({ page: 3, kind: 'settlement', type: 'timeout' }));
+  });
+
+  it('p3 "unreadable" keeps the exact cause: parse_failed after 2 tries (owner 2026-11-03)', async () => {
+    const sim = await simulateImport(goldenDoc(ELEVEN_ATTACHMENTS, { 3: { fail: 'parse_failed' } }));
+    expect(sim.row.results['3']).toMatchObject({ status: 'failed', attempts: 2, error: { type: 'unreadable', detail: 'parse_failed' } });
+    expect((sim.row.progress as { failed: unknown[] }).failed).toContainEqual(expect.objectContaining({ page: 3, type: 'unreadable', detail: 'parse_failed', attempts: 2 }));
   });
 
   it('every content page failing fails the job with a message naming the page, run and cause', async () => {

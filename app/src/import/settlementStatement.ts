@@ -247,7 +247,7 @@ export type StatementDates = {
 
 export type StatementPages = {
   total: number;
-  incomplete: { page: number; kind: string; cause?: string }[];
+  incomplete: { page: number; kind: string; cause?: string; detail?: string }[];
   unread: { page: number; kind: string }[];
 };
 
@@ -612,7 +612,7 @@ export function statementPagesOf(extraction: Extraction): StatementPages | null 
   if (!Array.isArray(map) || map.length === 0) return null;
   const incomplete = map
     .filter((p) => p.role === 'content' && p.status !== 'read')
-    .map((p) => ({ page: p.page, kind: p.kind, ...(p.cause ? { cause: p.cause } : {}) }));
+    .map((p) => ({ page: p.page, kind: p.kind, ...(p.cause ? { cause: p.cause } : {}), ...(p.detail ? { detail: p.detail } : {}) }));
   const unread = map
     .filter((p) => p.role === 'stored' || (p.role === 'attachment' && p.status !== 'read'))
     .map((p) => ({ page: p.page, kind: p.kind }));

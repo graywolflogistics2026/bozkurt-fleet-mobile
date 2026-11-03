@@ -3136,7 +3136,13 @@
       "refused": "yapay zekâ servisi sayfayı reddetti",
       "service": "yapay zekâ servisinde hata oluştu",
       "worker_stopped": "okuma sunucunun süre sınırı yüzünden durdu",
-      "unknown_cause": "neden kaydedilmedi"
+      "unknown_cause": "neden kaydedilmedi",
+      "parse_failed": "yapay zekânın cevabı geçerli veri değildi, ikinci denemede de",
+      "truncated": "cevap yarıda kesildi (tek cevap için çok uzun)",
+      "model_refusal": "yapay zekâ servisi sayfayı reddetti",
+      "oversized": "sayfa dosyası çok büyük",
+      "bad_request": "sayfa yapay zekâ servisine gönderilemedi",
+      "internal": "yapay zekâ servisinde bir hata oldu"
     },
     "readingShort": "Ekstreniz okunuyor…",
     "statusReading": "Okunuyor",
@@ -3176,7 +3182,8 @@
       "totalsDiffer": "Basılı toplamlar okuduğumuz şekilde tutmuyor.",
       "linesDiffer": "Okuduğumuz satırlar basılı toplamları tutmuyor.",
       "jobFailed": "Dosya okunamadı.",
-      "notFinished": "Okuma tamamlanmadı. Aynı dosyayı bir kez daha okumak için Yeniden oku'ya dokunun."
+      "notFinished": "Okuma tamamlanmadı. Aynı dosyayı bir kez daha okumak için Yeniden oku'ya dokunun.",
+      "pageNotRead": "Bu ekstrenin bir sayfası okunamadı, bu yüzden toplamları kontrol edilmedi."
     },
     "certifiedAdded": "Onaylandı ve eklendi: {{date}} ile biten hafta.",
     "linesNotSaved": "Satır ayrıntıları ekstrenizle uyuşmadığı için kaydedilmedi.",
@@ -3203,7 +3210,9 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED"
-    }
+    },
+    "readPagesAgain": "{{pages}}. sayfayı tekrar oku",
+    "stoppedPageFailed": "Tüm dosyayı tekrar okumak aynı şekilde başarısız olur. Sadece o sayfayı tekrar okuyun."
   },
   "certify": {
     "certifiedOn": "{{date}} tarihinde onaylandı",

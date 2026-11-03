@@ -188,7 +188,11 @@ export type PageResult = {
   attempts: number;
   run: number;
   extraction?: unknown;
-  error?: { type: PageErrorType; message: string; timeoutMs?: number };
+  // detail (owner 2026-11-03, "p3 unreadable"): the exact model outcome
+  // behind the cause — parse_failed (the reply ended normally but held no
+  // valid JSON), oversized, bad_request, truncated (max_tokens),
+  // model_refusal, timeout — so a report names it, never just "unreadable".
+  error?: { type: PageErrorType; message: string; timeoutMs?: number; detail?: ModelErrorType };
   finishedAt?: string;
   // Set while a model call for this page is running. A page still marked
   // in flight when a later run starts was cut off by a stopped worker: that
@@ -316,6 +320,10 @@ export function decideJobVerdict(
     action: 'final',
     review: { ...review, final: { state: 'failed_final', at: opts.nowIso, reason, gateReason: v.reason, failures: v.failures ?? [], details: v.details ?? [] } },
   });
+  // A content page that failed after its own retries (MAX_PAGE_ATTEMPTS):
+  // reading the job again automatically gives the same failure. Final at
+  // once; the owner gets "Read page N again" for that page only.
+  if (v.reason === 'page_not_read') return failed('page_failed');
   const last = review.triggers[review.triggers.length - 1];
   if (last && last.signature === signature) return failed('same_values');
   if (review.reads >= MAX_READS_PER_JOB) return failed('read_cap');
@@ -354,6 +362,8 @@ export type PageMapEntry = {
   role: PageRole;
   status: 'read' | 'failed' | 'unread' | 'pending';
   cause?: PageErrorType;
+  detail?: ModelErrorType;
+  attempts?: number;
 };
 
 export type JobProgress = {
@@ -371,7 +381,7 @@ export type JobProgress = {
   attachmentsQueued: number;
   attachmentsDone: number;
   storedPages: number[];
-  failed: { page: number; kind: PageKind; type: PageErrorType; run: number; timeoutMs?: number }[];
+  failed: { page: number; kind: PageKind; type: PageErrorType; run: number; timeoutMs?: number; detail?: ModelErrorType; attempts?: number }[];
   question: { kind: 'page_cap'; totalPages: number; cap: number } | null;
   startedAt: string;
   readyAt: string | null;
@@ -636,7 +646,9 @@ export function buildPageMap(plan: JobPlan, results: Record<string, PageResult>)
     const r = results[String(p.page)];
     if (p.role === 'stored') return { page: p.page, kind: p.kind, role: p.role, status: 'unread' as const };
     if (r?.status === 'done') return { page: p.page, kind: p.kind, role: p.role, status: 'read' as const };
-    if (r?.status === 'failed') return { page: p.page, kind: p.kind, role: p.role, status: 'failed' as const, cause: r.error?.type };
+    if (r?.status === 'failed') {
+      return { page: p.page, kind: p.kind, role: p.role, status: 'failed' as const, cause: r.error?.type, ...(r.error?.detail ? { detail: r.error.detail } : {}), attempts: r.attempts };
+    }
     return { page: p.page, kind: p.kind, role: p.role, status: 'pending' as const };
   });
 }
@@ -660,7 +672,15 @@ export function buildProgress(
     });
   const failed = plan.pages
     .filter((p) => at(p)?.status === 'failed')
-    .map((p) => ({ page: p.page, kind: p.kind, type: at(p)!.error?.type ?? 'service', run: at(p)!.run, timeoutMs: at(p)!.error?.timeoutMs }));
+    .map((p) => ({
+      page: p.page,
+      kind: p.kind,
+      type: at(p)!.error?.type ?? 'service',
+      run: at(p)!.run,
+      timeoutMs: at(p)!.error?.timeoutMs,
+      ...(at(p)!.error?.detail ? { detail: at(p)!.error!.detail } : {}),
+      attempts: at(p)!.attempts,
+    }));
   return {
     phase: plan.phase,
     run: plan.runs,
@@ -1058,7 +1078,7 @@ export async function runJobStep(d: JobDeps): Promise<StepResult> {
         kind: p.kind,
         attempts,
         run: plan.runs,
-        error: { type: pageErrorType(r.errorType), message: d.scrub(r.message), timeoutMs: r.errorType === 'timeout' ? timeoutMs : undefined },
+        error: { type: pageErrorType(r.errorType), message: d.scrub(r.message), timeoutMs: r.errorType === 'timeout' ? timeoutMs : undefined, detail: r.errorType },
       };
     }
     if (!(await d.store.putPage(d.owner, p.page, next))) throw new LeaseLost();

@@ -10,7 +10,7 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 import { GATE_FAIL_REASON_KEY, type GateFailDetail, type GateFailReason, type GateHeadline, type SettlementGateResult } from '@/src/import/settlementGate';
 import { reviewInputsOf } from '@/src/import/reviewVerdict';
 import { couldNotReadReport } from '@/src/import/importAudit';
-import { ensureReasonLines } from '@/src/import/jobFailure';
+import { ensureReasonLines, failDetailLine } from '@/src/import/jobFailure';
 import type { Extraction } from '@/src/import/types';
 
 // SIMPLE IMPORT FLOW (owner decision 2026-10-31, batch D2 2.1): a
@@ -153,6 +153,7 @@ export function CouldNotReadCard({
   stopped,
   triggerLines,
   reasonLines,
+  readAgainPages,
 }: {
   extraction: Extraction | null;
   reason: GateFailReason | 'job_failed' | 'not_finished';
@@ -161,9 +162,11 @@ export function CouldNotReadCard({
   onUploadAgain: () => void;
   // A background job can be read again on the server (never a dead end).
   onReadAgain?: () => void;
+  // A page that failed after its retries: "Read page N again" reads only it.
+  readAgainPages?: number[];
   // RE-READ RULES: why the job stopped reading (same values twice, or the
   // 3-read cap), and the last re-read triggers for the Send report.
-  stopped?: 'same_values' | 'read_cap' | 'not_rereadable' | null;
+  stopped?: 'same_values' | 'read_cap' | 'not_rereadable' | 'page_failed' | null;
   triggerLines?: string[];
   // NEVER GENERIC (owner 2026-11-03): the job's own reason lines (page +
   // cause, server answer missing, ...) when there is no failing check.
@@ -174,15 +177,22 @@ export function CouldNotReadCard({
   const value = (v: number | string) => (typeof v === 'number' ? money(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v);
   const detailLines = ensureReasonLines(
     [
-      ...(details ?? []).map((d) =>
-        t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) })
-      ),
+      ...(details ?? []).map((d) => failDetailLine(d, (k, o) => t(k, o) as string, value)),
       ...(reasonLines ?? []),
     ],
     (k, o) => t(k, o) as string,
     reason === 'not_finished' ? 'result_json' : 'reason'
   );
-  const stopKey = stopped === 'same_values' ? 'importFlow.stoppedSameValues' : stopped === 'read_cap' ? 'importFlow.stoppedReadCap' : stopped === 'not_rereadable' ? 'importFlow.stoppedNotRereadable' : null;
+  const stopKey =
+    stopped === 'same_values'
+      ? 'importFlow.stoppedSameValues'
+      : stopped === 'read_cap'
+        ? 'importFlow.stoppedReadCap'
+        : stopped === 'not_rereadable'
+          ? 'importFlow.stoppedNotRereadable'
+          : stopped === 'page_failed'
+            ? 'importFlow.stoppedPageFailed'
+            : null;
   return (
     <Card>
       <View style={{ backgroundColor: 'rgba(239,68,68,0.10)', borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
@@ -195,7 +205,12 @@ export function CouldNotReadCard({
         ))}
         {stopKey && <MutedText style={{ marginTop: spacing.xs }}>{t(stopKey)}</MutedText>}
       </View>
-      {onReadAgain && <PrimaryButton title={t('importFlow.readAgain')} onPress={onReadAgain} />}
+      {onReadAgain && (
+        <PrimaryButton
+          title={readAgainPages && readAgainPages.length > 0 ? t('importFlow.readPagesAgain', { pages: readAgainPages.join(', ') }) : t('importFlow.readAgain')}
+          onPress={onReadAgain}
+        />
+      )}
       {onReadAgain ? <SecondaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} /> : <PrimaryButton title={t('importFlow.uploadAgain')} onPress={onUploadAgain} />}
       <SecondaryButton
         title={t('importFlow.sendReport')}

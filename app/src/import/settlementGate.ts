@@ -43,6 +43,9 @@ import { num } from '@/src/lib/number';
 // totals (profit comes from those lines); no printed totals -> fail.
 
 export type GateFailReason =
+  // A content page failed after its retries (owner 2026-11-03, "p3
+  // unreadable"): no statement check runs on a block with a missing page.
+  | 'page_not_read'
   | 'statement_not_read'
   | 'statement_check_failed'
   | 'gross_differs'
@@ -139,8 +142,23 @@ export function evaluateSettlementGate(
   // the settlement page only) is checked like any other carrier: printed
   // totals + line items — but only when no content page went unread
   // (a statement page that failed to read is a re-read, then a fail).
+  // A content page that failed after its retries (owner 2026-11-03, "p3
+  // unreadable"): say which page and why, and do not evaluate a statement
+  // check on a block that is missing a page (variableCosts would report a
+  // false difference). It fails the week when the missing page is a
+  // statement page, when there is no statement to check (the line route
+  // needs every line page), or when the statement check fails anyway. A
+  // settlement-side line page missing next to a statement that passes
+  // still goes to Certify, "line items incomplete" (owner 2026-10-31).
   const pagesRead = statementPagesOf(extraction);
-  if (prime && !check && pagesRead != null && pagesRead.incomplete.length > 0) return fail('statement_not_read');
+  const missingPages = pagesRead?.incomplete ?? [];
+  const pageFail = () =>
+    fail(
+      'page_not_read',
+      missingPages.map((p) => `page_${p.page}`),
+      missingPages.map((p) => ({ check: 'page', printed: p.page, read: p.detail ?? p.cause ?? 'unknown_cause' }))
+    );
+  if (missingPages.length > 0 && (!check || missingPages.some((p) => p.kind === 'statement') || !check.gatePassed)) return pageFail();
   if (check) {
     if (!check.gatePassed) {
       // Only printed-total identities can fail the gate (part 1.1).
@@ -173,9 +191,7 @@ export function evaluateSettlementGate(
     const allDiffs = [...lineSumDiffs, ...(issueDifference != null ? [issueDifference] : [])];
     const difference = allDiffs.length > 0 ? allDiffs.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a)) : null;
     const loads = splitPrimeLoads(extraction);
-    const pages = statementPagesOf(extraction);
-    const mismatch =
-      difference != null || (loads != null && loads.loads.length > 0 && loads.matches === false) || (pages != null && pages.incomplete.length > 0);
+    const mismatch = difference != null || (loads != null && loads.loads.length > 0 && loads.matches === false) || missingPages.length > 0;
     const headline: GateHeadline = {
       weekEnding,
       carrier: s.carrier ?? null,
@@ -229,6 +245,7 @@ export function evaluateSettlementGate(
 
 // The plain one-sentence reason shown on the COULD NOT READ card.
 export const GATE_FAIL_REASON_KEY: Record<GateFailReason, string> = {
+  page_not_read: 'importFlow.reason.pageNotRead',
   statement_not_read: 'importFlow.reason.statementNotRead',
   statement_check_failed: 'importFlow.reason.statementCheckFailed',
   gross_differs: 'importFlow.reason.grossDiffers',
@@ -268,6 +285,7 @@ export function rereadRequestFor(gate: SettlementGateResult | null, extraction: 
   const unread = content.filter((p) => p.status !== 'read').map((p) => p.page);
   let pages: number[];
   let needsStatementPages = true;
+  if (gate.reason === 'page_not_read') return { pages: unread.length > 0 ? unread : null, reason };
   if (gate.reason === 'statement_not_read') pages = unread.length > 0 ? unread : statementPages;
   else if (gate.reason === 'statement_check_failed') {
     pages = gate.failures.every((f) => STATEMENT_ONLY_CHECKS.has(f)) ? statementPages : [...statementPages, ...settlementSide];

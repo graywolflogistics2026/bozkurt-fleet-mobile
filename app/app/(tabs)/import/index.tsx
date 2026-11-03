@@ -33,7 +33,7 @@ import {
 } from '@/src/data/importJobs';
 import { clearRereadRequested, isFinishedSinceReread, isReadyToReview, jobReviewStep, nextBatchReviewStep, readingAgainOf, readsOf, MAX_BATCH_IMPORT_FILES, MAX_READS_PER_JOB, type JobReviewState } from '@/src/import/importJobs';
 import { triggerReportLines } from '@/src/import/jobVerdict';
-import { jobFailureInfo, jobFailureLines, jobRowState } from '@/src/import/jobFailure';
+import { failedPagesToReadAgain, jobFailureInfo, jobFailureLines, jobRowState } from '@/src/import/jobFailure';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -1282,6 +1282,15 @@ export default function Import() {
   // Discard / Upload again: nothing is saved, so the job goes too.
   // "Read again" (import reliability item 1): never a dead end — the same
   // job is read again on the server and followed while READING.
+  // "Read page N again": the content pages that failed after their retries.
+  function currentReadAgainPages(): number[] {
+    const gateDetails = settlementGate?.status === 'fail' ? settlementGate.details : jobReview?.final?.details;
+    const key = readingKeyRef.current;
+    const job = key ? (jobsQuery.data ?? []).find((j) => j.id === key) : undefined;
+    const pageFailure = (settlementGate?.status === 'fail' && settlementGate.reason === 'page_not_read') || jobReview?.final?.reason === 'page_failed';
+    return pageFailure ? failedPagesToReadAgain(gateDetails, job ? jobFailureInfo(job) : null) : [];
+  }
+
   function currentJobReasonLines(): string[] | undefined {
     const key = readingKeyRef.current;
     if (!key || key.startsWith('photo')) return undefined;
@@ -1292,12 +1301,20 @@ export default function Import() {
     return jobFailureLines(info, (k, o) => t(k, o) as string, undefined, job.errorStep);
   }
 
-  async function readJobAgain(jobId: string) {
+  // pages: only these content pages (a page that failed after its retries).
+  async function readJobAgain(jobId: string, pages?: number[]) {
     setCouldNotRead(null);
     setJobReview(null);
     setPhase('reading');
     try {
-      await rereadImportJob.mutateAsync({ jobId, locale: i18n.language, customCategories: customCategoryNames, learningRules, carrierCodeMaps });
+      await rereadImportJob.mutateAsync({
+        jobId,
+        locale: i18n.language,
+        customCategories: customCategoryNames,
+        learningRules,
+        carrierCodeMaps,
+        ...(pages && pages.length > 0 ? { pages, reason: 'page_not_read' } : {}),
+      });
       setExtraction(null);
       setCurrentReviewId(null);
       setFollowJobId(jobId);
@@ -1557,8 +1574,13 @@ export default function Import() {
             reason={couldNotRead ?? (settlementGate?.status === 'fail' ? settlementGate.reason : 'job_failed')}
             onUploadAgain={discardReading}
             // A job read 3 times can only be uploaded again (the server refuses too).
-            onReadAgain={readingKeyRef.current && !readingKeyRef.current.startsWith('photo') && readsOf({ review: jobReview }) < MAX_READS_PER_JOB ? () => void readJobAgain(readingKeyRef.current!) : undefined}
-            stopped={jobReview?.final?.reason === 'same_values' || jobReview?.final?.reason === 'read_cap' || jobReview?.final?.reason === 'not_rereadable' ? jobReview.final.reason : null}
+            onReadAgain={readingKeyRef.current && !readingKeyRef.current.startsWith('photo') && readsOf({ review: jobReview }) < MAX_READS_PER_JOB ? () => void readJobAgain(readingKeyRef.current!, currentReadAgainPages()) : undefined}
+            readAgainPages={currentReadAgainPages()}
+            stopped={
+              jobReview?.final?.reason === 'same_values' || jobReview?.final?.reason === 'read_cap' || jobReview?.final?.reason === 'not_rereadable' || jobReview?.final?.reason === 'page_failed'
+                ? jobReview.final.reason
+                : null
+            }
             triggerLines={triggerReportLines(jobReview?.triggers)}
             // NEVER GENERIC (owner 2026-11-03): with no failing check, the
             // job's own reason — page + cause, or the missing server field.
