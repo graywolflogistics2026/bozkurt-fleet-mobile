@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Round 2 K1/K2/K4: 18 golden weeks, 34 reader notes, out-of-order imports (tests)
+- Fixture settlementReader/__tests__/fixtures/prime18Weeks.ts from the owner workbook prime-haftalik-dogru-rakamlar.xlsx (sheet Detay; weeks 1-13 = PRIME_13_WEEKS unchanged, 10/16-11/13 new; READER_NOTES_34).
+- golden18Weeks.test.ts: one test per week through the reader (every figure the workbook's), totals revenue 88,210.06 / deposited 39,913.01 / profit 46,232.73 / miles 32,607, YTD continuity exact.
+- readerNotes18.test.ts: the 14 new cases (20-33) as named tests; the other 20 are the existing readerNotes.test.ts cases.
+- data/__tests__/golden18Saved.test.ts: all 18 saved through the real save in shuffled order: Home per week = workbook profit, 0 own expenses, all-time 46,232.73; in order = out of order. No app change.
+
 ## 2026-11-13 — Round 2 A: DEPOST interest line on the scanned weeks, prefix match
 - Round 1 (9b08f8f, 95279b8) already had the misspelled-label matcher, the prompt rule, the suggested value and the conflict refusal. Added: canonicalStatementLabel() also takes a label cut short by its column (one known label it starts, 14+ letters, 3+ words), e.g. "INTEREST INCOME FROM DEP".
 - Tests: settlementReader/__tests__/depostWeeks.test.ts: 07/24 (0.07), 08/21 (0.37), 08/28 (0.45), 09/18 (0.67) printed DEPOST read through the reader: the line is read, ready, no card, the workbook profit. Ships: deploy-ai-import.ps1 + eas update.
