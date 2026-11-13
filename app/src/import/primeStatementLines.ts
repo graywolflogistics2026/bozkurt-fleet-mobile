@@ -157,7 +157,15 @@ export function canonicalStatementLabel(label: string): string {
   if (RULE_BY_LABEL.has(n)) return LABEL_ALIASES[n] ?? n;
   if (n.length < 10) return n;
   const near = CANONICAL_LABELS.filter((l) => l.length >= 10 && editDistance(n, l, 2) <= 2);
-  return near.length === 1 ? near[0] : n;
+  if (near.length === 1) return near[0];
+  // A label cut short by its column (round 2 item A: "INTEREST INCOME FROM
+  // DEP"): the ONE known label it is the start of, from 14 letters and 3
+  // words on (never a bare "TRACTOR FUEL", which is its own label).
+  if (n.length >= 14 && n.split(' ').length >= 3) {
+    const prefixOf = CANONICAL_LABELS.filter((l) => l.startsWith(n));
+    if (prefixOf.length === 1) return prefixOf[0];
+  }
+  return n;
 }
 
 export function normalizeStatementLabel(label: string): string {

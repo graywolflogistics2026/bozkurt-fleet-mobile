@@ -356,7 +356,12 @@ function canonicalStatementLabel(label) {
   if (RULE_BY_LABEL.has(n)) return LABEL_ALIASES[n] ?? n;
   if (n.length < 10) return n;
   const near = CANONICAL_LABELS.filter((l) => l.length >= 10 && editDistance(n, l, 2) <= 2);
-  return near.length === 1 ? near[0] : n;
+  if (near.length === 1) return near[0];
+  if (n.length >= 14 && n.split(" ").length >= 3) {
+    const prefixOf = CANONICAL_LABELS.filter((l) => l.startsWith(n));
+    if (prefixOf.length === 1) return prefixOf[0];
+  }
+  return n;
 }
 function normalizeStatementLabel(label) {
   return label.toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
