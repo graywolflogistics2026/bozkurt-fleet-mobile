@@ -7,7 +7,7 @@ import { printedFromExtraction, printedFromWeek } from './fixtures/printedReadin
 import { figuresOf, primeRangeReply } from './fixtures/runReader';
 import { golden0814 } from '@/src/data/__tests__/golden0814Fixture';
 import { MAX_READER_RUNS, runReader, type ModelReply, type ModelRequest, type ReaderIO } from '../driver';
-import { newPhotoProgress, newReaderProgress, type JobStatus, type ReaderProgress } from '../machine';
+import { newReaderProgress, type JobStatus, type ReaderProgress } from '../machine';
 import type { AttachmentReply, ContentReading } from '../schema';
 import type { Extraction } from '@/src/import/types';
 
@@ -144,21 +144,6 @@ describe('runReader', () => {
     expect(lastSaved(f.saved)).toMatchObject({ status: 'ready', final: true });
     expect(lastExtraction(f.saved)).toEqual(receipt);
     expect(f.usageLog).toEqual([{ success: true }]);
-  });
-
-  test('a photo: the general reader only; a settlement photo fails with "upload the PDF" and only {docType: settlement}', async () => {
-    const receipt = { docType: 'fuel' } as unknown as Extraction;
-    const f = fakeIO({ reply: () => ok({}), general: () => ok(receipt) });
-    await runReader({ progress: newPhotoProgress('2026-08-15'), extraction: null }, f.io);
-    expect(f.requests.map((q) => q.model)).toEqual(['general']);
-    expect(lastSaved(f.saved).status).toBe('ready');
-
-    const settlementPhoto = { docType: 'settlement', settlement: { grossRevenue: 100 } } as unknown as Extraction;
-    const g = fakeIO({ reply: () => ok({}), general: () => ok(settlementPhoto) });
-    await runReader({ progress: newPhotoProgress('2026-08-15'), extraction: null }, g.io);
-    expect(lastSaved(g.saved)).toMatchObject({ status: 'failed', progress: { failure: { reason: 'photo_settlement' } } });
-    expect(lastExtraction(g.saved)).toEqual({ docType: 'settlement' });
-    expect(g.usageLog).toEqual([{ success: false, reason: 'photo_settlement' }]);
   });
 
   test('a lost lease stops the run without another write', async () => {

@@ -2467,14 +2467,11 @@ function readerKit(): ReaderKit {
     anthropicKey,
     getCooldownMs: getRateLimitCooldownMs,
     setCooldown: setRateLimitCooldown,
-    async general({ bytes, mediaType, inputs, timeoutMs }): Promise<ModelReply> {
+    async general({ bytes, inputs, timeoutMs }): Promise<ModelReply> {
       const started = performance.now();
       if (!anthropicKey) return { outcome: { ok: false, error: "api_error", detail: "ANTHROPIC_API_KEY not set" }, usage: null, ms: 0 };
       const prompt = buildExtractionPrompt(inputs.docHint, inputs.locale, inputs.customCategories, inputs.learningRules, inputs.carrierCodeMaps);
-      const data = bytesToBase64(bytes);
-      const block = mediaType.startsWith("image/")
-        ? { type: "image", source: { type: "base64", media_type: mediaType, data } }
-        : { type: "document", source: { type: "base64", media_type: "application/pdf", data } };
+      const block = { type: "document", source: { type: "base64", media_type: "application/pdf", data: bytesToBase64(bytes) } };
       const r = await extractOnePass(anthropicKey, block, prompt, timeoutMs, MAX_ANTHROPIC_ATTEMPTS);
       const ms = Math.round(performance.now() - started);
       if ("errorType" in r) {
@@ -2491,8 +2488,7 @@ function readerKit(): ReaderKit {
           : "api_error";
         return { outcome: { ok: false, error, detail: scrubBankDigitsInText(r.message).slice(0, 300) }, usage: null, ms };
       }
-      const created = mediaType.startsWith("image/") ? null : pdfCreationDateOf(bytes);
-      return { outcome: { ok: true, value: withPdfCreationDate(r.extraction, created) }, usage: null, ms };
+      return { outcome: { ok: true, value: withPdfCreationDate(r.extraction, pdfCreationDateOf(bytes)) }, usage: null, ms };
     },
     async logImport(admin, userId, success, reason) {
       await logJobUsage(admin, userId, "ai_import", success, reason);
@@ -2519,12 +2515,13 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 // Mode 'read_start': a new import read by the new reader. Same limits as
-// every import (daily count, allowance, file size, page count); a PDF
-// starts with the range call, a photo goes to the general reader.
+// every import (daily count, allowance, file size, page count). PDFs only:
+// a photo stays on the direct path (one call).
 async function handleReadStart(supabase: ReturnType<typeof createClient>, userId: string, body: ReaderRequestBody, invocationStartedAt: number): Promise<Response> {
   if (!edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
   if (!body.storagePath || !body.mediaType) return errorResponse("bad_request", "storagePath and mediaType are required.", 400);
   if (!body.storagePath.startsWith(`${userId}/`)) return errorResponse("bad_request", "That file could not be found.", 403);
+  if (!body.mediaType.includes("pdf")) return errorResponse("bad_request", "Only a PDF can be read in the background.", 400);
   const admin = getServiceRoleAdminClient();
   if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
   const { data: inserted, error: insertError } = await supabase
@@ -2556,13 +2553,12 @@ async function handleReadStart(supabase: ReturnType<typeof createClient>, userId
   if (!bytes) return failJob("Could not read the uploaded file — your data is safe. Please try again.", "internal", 500);
   const sizeRefusal = checkImportLimits(0, bytes.byteLength);
   if (sizeRefusal) return failJob(sizeRefusal.message, sizeRefusal.code, 413);
-  const isImage = body.mediaType.startsWith("image/");
-  const totalPages = isImage ? 1 : await countPdfPages(bytes);
+  const totalPages = await countPdfPages(bytes);
   if (totalPages == null) return failJob("This PDF could not be opened — it may be damaged or password-protected. Try exporting it again.", "invalid_document", 422);
   const pageRefusal = checkImportLimits(totalPages, bytes.byteLength);
   if (pageRefusal) return failJob(pageRefusal.message, pageRefusal.code, 413);
   const importDate = typeof body.importDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.importDate) ? body.importDate : new Date().toISOString().slice(0, 10);
-  const reader = isImage ? readerCore.newPhotoProgress(importDate) : readerCore.newReaderProgress(totalPages, importDate);
+  const reader = readerCore.newReaderProgress(totalPages, importDate);
   const inputs: ReaderPromptInputs = { docHint: body.docHint, locale: body.locale, customCategories: body.customCategories, learningRules: body.learningRules, carrierCodeMaps: body.carrierCodeMaps };
   const { error: progressError } = await admin
     .from("import_jobs")
@@ -2570,7 +2566,7 @@ async function handleReadStart(supabase: ReturnType<typeof createClient>, userId
     .eq("id", jobId)
     .eq("user_id", userId);
   if (progressError) return failJob("Could not start the import job — your data is safe. Please try again.", "internal", 500);
-  console.log(`[ai-import] reader ${jobId} accepted: ${totalPages} page(s), ${bytes.byteLength} bytes, ${isImage ? "photo" : "pdf"}`);
+  console.log(`[ai-import] reader ${jobId} accepted: ${totalPages} page(s), ${bytes.byteLength} bytes`);
   runInBackground(runReaderJob(admin, jobId, invocationStartedAt, readerKit(), bytes));
   return accepted({ jobId });
 }

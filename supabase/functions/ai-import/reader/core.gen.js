@@ -2716,7 +2716,6 @@ function newReaderProgress(pagesTotal, importDate = "") {
     pagesTotal,
     importDate,
     runs: 0,
-    photo: false,
     readsStarted: 0,
     reads: [],
     range: null,
@@ -2726,14 +2725,6 @@ function newReaderProgress(pagesTotal, importDate = "") {
     attachments: { total: 0, done: [], failed: [], notRead: 0 },
     cost: [],
     lastReadCause: "first"
-  };
-}
-function newPhotoProgress(importDate = "") {
-  return {
-    ...newReaderProgress(1, importDate),
-    photo: true,
-    step: "content",
-    range: { carrier: "", isSettlement: false, lastContentPage: 1, statementFirst: null, cashFlowPrinted: false, attachmentPages: [], attachmentsNotRead: 0 }
   };
 }
 function isReaderProgress(p) {
@@ -2786,9 +2777,7 @@ function afterGeneral(p, outcome) {
   if (!outcome.ok) return readFailed(p, outcome.error);
   const e = outcome.value;
   const reads = [...p.reads, { n: p.readsStarted, signature: "", outcome: e.docType === "settlement" ? "failed" : "ready" }];
-  if (e.docType === "settlement") {
-    return p.photo ? t(failed({ ...p, reads }, { reason: "photo_settlement" }), { docType: "settlement" }) : t(failed({ ...p, reads }, { reason: "range_not_found" }));
-  }
+  if (e.docType === "settlement") return t(failed({ ...p, reads }, { reason: "range_not_found" }));
   return t({ ...p, state: "ready", step: "done", reads, failure: null }, e);
 }
 function readingSignature(extraction) {
@@ -3074,7 +3063,6 @@ export {
   decideReading,
   evaluateSettlementGate,
   isReaderProgress,
-  newPhotoProgress,
   newReaderProgress,
   obj,
   oldReaderFailure,

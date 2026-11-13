@@ -34,9 +34,7 @@ export type ReaderFailureReason =
   | 'model_failed'
   | 'same_result'
   | 'old_reader'
-  | 'too_many_runs'
-  // A photo of a settlement (owner 2026-11-13): "upload the PDF".
-  | 'photo_settlement';
+  | 'too_many_runs';
 export type ReaderFailure = {
   reason: ReaderFailureReason;
   // The model error behind model_failed / range failures.
@@ -61,8 +59,6 @@ export type ReaderProgress = {
   importDate: string;
   // Server runs of this job (a chain that never ends is stopped).
   runs: number;
-  // A photo (image) import: no range call, the general reader only.
-  photo: boolean;
   readsStarted: number;
   reads: ReadRecord[];
   range: ContentRange | null;
@@ -88,7 +84,6 @@ export function newReaderProgress(pagesTotal: number, importDate = ''): ReaderPr
     pagesTotal,
     importDate,
     runs: 0,
-    photo: false,
     readsStarted: 0,
     reads: [],
     range: null,
@@ -98,17 +93,6 @@ export function newReaderProgress(pagesTotal: number, importDate = ''): ReaderPr
     attachments: { total: 0, done: [], failed: [], notRead: 0 },
     cost: [],
     lastReadCause: 'first',
-  };
-}
-
-// A photo: one page, read by the general reader (a settlement photo fails
-// with "upload the PDF").
-export function newPhotoProgress(importDate = ''): ReaderProgress {
-  return {
-    ...newReaderProgress(1, importDate),
-    photo: true,
-    step: 'content',
-    range: { carrier: '', isSettlement: false, lastContentPage: 1, statementFirst: null, cashFlowPrinted: false, attachmentPages: [], attachmentsNotRead: 0 },
   };
 }
 
@@ -186,11 +170,7 @@ export function afterGeneral(p: ReaderProgress, outcome: CallOutcome<Extraction>
   if (!outcome.ok) return readFailed(p, outcome.error);
   const e = outcome.value;
   const reads = [...p.reads, { n: p.readsStarted, signature: '', outcome: e.docType === 'settlement' ? ('failed' as const) : ('ready' as const) }];
-  if (e.docType === 'settlement') {
-    return p.photo
-      ? t(failed({ ...p, reads }, { reason: 'photo_settlement' }), { docType: 'settlement' } as Extraction)
-      : t(failed({ ...p, reads }, { reason: 'range_not_found' }));
-  }
+  if (e.docType === 'settlement') return t(failed({ ...p, reads }, { reason: 'range_not_found' }));
   return t({ ...p, state: 'ready', step: 'done', reads, failure: null }, e);
 }
 

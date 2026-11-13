@@ -38,9 +38,9 @@ export type ReaderKit = {
   anthropicKey: string | undefined;
   getCooldownMs(): Promise<number>;
   setCooldown(seconds: number, reason: string): Promise<void>;
-  // The general (non-settlement / photo) reader: the existing extraction
+  // The general (non-settlement PDF) reader: the existing extraction
   // prompt on the whole file, one call.
-  general(input: { bytes: Uint8Array; mediaType: string; inputs: PromptInputs; timeoutMs: number }): Promise<ModelReply>;
+  general(input: { bytes: Uint8Array; inputs: PromptInputs; timeoutMs: number }): Promise<ModelReply>;
   logImport(admin: Admin, userId: string, success: boolean, reason?: string): Promise<void>;
   startNextRun(jobId: string): Promise<void>;
   download(admin: Admin, storagePath: string): Promise<Uint8Array | null>;
@@ -200,7 +200,7 @@ export async function runReaderJob(admin: Admin, jobId: string, invocationStarte
   try {
     const { data: row, error } = await admin
       .from("import_jobs")
-      .select("id, user_id, status, progress, result_json, storage_path, media_type, document_id")
+      .select("id, user_id, status, progress, result_json, storage_path, document_id")
       .eq("id", jobId)
       .maybeSingle();
     if (error || !row || !isReaderRow(row.progress)) {
@@ -209,7 +209,6 @@ export async function runReaderJob(admin: Admin, jobId: string, invocationStarte
     }
     const userId = row.user_id as string;
     const inputs = (row.progress as ReaderRowProgress).inputs ?? {};
-    const mediaType = row.media_type as string;
     const write = async (fields: Record<string, unknown>, extraction: unknown | undefined): Promise<boolean> => {
       const now = new Date().toISOString();
       const { data, error: e } = await admin
@@ -233,7 +232,7 @@ export async function runReaderJob(admin: Admin, jobId: string, invocationStarte
       await kit.logImport(admin, userId, false, "the stored file could not be read");
       return;
     }
-    const created = mediaType.startsWith("image/") ? null : kit.pdfCreationDate(bytes);
+    const created = kit.pdfCreationDate(bytes);
     const pdf = new PdfPages(bytes);
     const result = await core.runReader(
       { progress: (row.progress as ReaderRowProgress).reader, extraction: (row.result_json ?? null) },
@@ -241,7 +240,7 @@ export async function runReaderJob(admin: Admin, jobId: string, invocationStarte
         limits: kit.limits,
         elapsedMs: () => performance.now() - invocationStartedAt,
         call: (req: ModelRequest) => callModel(kit, pdf, req),
-        general: (timeoutMs: number) => kit.general({ bytes, mediaType, inputs, timeoutMs }),
+        general: (timeoutMs: number) => kit.general({ bytes, inputs, timeoutMs }),
         save: ({ progress, status, extraction, final }: { progress: Record<string, unknown> & { failure?: { reason?: string } | null }; status: string; extraction?: Record<string, unknown> | null; final?: boolean }) => {
           const withDate = extraction && created && extraction.docType === "settlement" ? { ...extraction, pdfCreationDate: created } : extraction;
           return write(
