@@ -3224,10 +3224,10 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED",
-      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
-      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "subtotalPriorWage": "Wage subtotal does not match revenue + reimbursed − truck deductions (SUBTOTAL PRIOR WAGE D)",
+      "deductionsFromSettlements": "Recap deductions do not match truck deductions + wages (TOTAL DEDUCTIONS FROM SETTLEMENTS)",
       "wageLinesMismatch": "TOTAL WAGE EXPENSE",
-      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
+      "wageIdentityMismatch": "Recap deductions or the wage subtotal do not match"
     },
     "readPagesAgain": "Read page {{pages}} again",
     "stoppedPageFailed": "Reading the whole file again would fail the same way. Read only that page again.",

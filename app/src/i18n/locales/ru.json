@@ -3224,10 +3224,10 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED",
-      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
-      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "subtotalPriorWage": "Промежуточный итог до зарплаты не равен доходу + возмещениям − удержаниям по грузовику (SUBTOTAL PRIOR WAGE D)",
+      "deductionsFromSettlements": "Удержания в сводке не равны удержаниям по грузовику + зарплате (TOTAL DEDUCTIONS FROM SETTLEMENTS)",
       "wageLinesMismatch": "TOTAL WAGE EXPENSE",
-      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
+      "wageIdentityMismatch": "Удержания в сводке или промежуточный итог до зарплаты не сходятся"
     },
     "readPagesAgain": "Прочитать страницу {{pages}} снова",
     "stoppedPageFailed": "Повторное чтение всего файла закончится так же. Прочитайте снова только эту страницу.",

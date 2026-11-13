@@ -27,6 +27,13 @@ export const MISSING_LABEL: Record<string, string> = {
   totalDeductions: 'TOTAL DEDUCTIONS FROM TRUCK',
 };
 
+// A failure code whose detail lines already name the failing check (and
+// its printed vs read values): the code adds no second line (device 11/06:
+// "Check failed: SUBTOTAL PRIOR WAGE D" was shown for the recap check).
+export const CODE_DETAIL_CHECKS: Record<string, string[]> = {
+  wageIdentityMismatch: ['subtotalPriorWage', 'deductionsFromSettlements'],
+};
+
 export const DATE_ISSUES = ['unreadable', 'older_reading', 'print_gap', 'not_friday', 'statement_week_differs', 'pdf_created_far', 'future', 'too_old', 'ambiguous', 'pages_differ'];
 
 // "4–5": the pages the statement rows were read from (none read: null).
@@ -53,6 +60,7 @@ export function gateFailureLines(
   }
   for (const code of failure.failures ?? []) {
     if (checks.has(code) || code === failure.reason) continue;
+    if ((CODE_DETAIL_CHECKS[code] ?? []).some((c) => checks.has(c))) continue;
     if (MISSING_LABEL[code]) {
       lines.push(pages ? t('importFlow.notReadOnPages', { label: MISSING_LABEL[code], pages }) : t('importFlow.notRead', { label: MISSING_LABEL[code] }));
     } else if (DATE_ISSUES.includes(code)) {

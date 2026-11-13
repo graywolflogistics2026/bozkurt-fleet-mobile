@@ -32,7 +32,7 @@ export function reconciliationIssueText(issue: ReconciliationIssue, t: TFunction
       return t('importScreen.reconciliationWageLinesMismatch', { stated: money(issue.stated), summed: money(issue.summed) });
     case 'wageIdentityMismatch':
       return t('importScreen.reconciliationWageIdentityMismatch', {
-        label: issue.check === 'subtotalPriorWage' ? 'SUBTOTAL PRIOR WAGE D' : 'TOTAL DEDUCTIONS FROM SETTLEMENTS',
+        label: t(`importFlow.checkName.${issue.check}`),
         stated: money(issue.stated),
         computed: money(issue.computed),
       });

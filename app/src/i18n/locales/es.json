@@ -3224,10 +3224,10 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED",
-      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
-      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "subtotalPriorWage": "El subtotal antes de salarios no coincide con ingresos + reembolsos − deducciones del camión (SUBTOTAL PRIOR WAGE D)",
+      "deductionsFromSettlements": "Las deducciones del resumen no coinciden con deducciones del camión + salarios (TOTAL DEDUCTIONS FROM SETTLEMENTS)",
       "wageLinesMismatch": "TOTAL WAGE EXPENSE",
-      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
+      "wageIdentityMismatch": "Las deducciones del resumen o el subtotal de salarios no coinciden"
     },
     "readPagesAgain": "Leer la página {{pages}} de nuevo",
     "stoppedPageFailed": "Volver a leer todo el archivo fallaría igual. Lea solo esa página de nuevo.",

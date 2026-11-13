@@ -3224,10 +3224,10 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED",
-      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
-      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "subtotalPriorWage": "वेतन से पहले का उप-योग आय + प्रतिपूर्ति − ट्रक कटौतियों से मेल नहीं खाता (SUBTOTAL PRIOR WAGE D)",
+      "deductionsFromSettlements": "सारांश की कटौतियाँ ट्रक कटौतियों + वेतन से मेल नहीं खातीं (TOTAL DEDUCTIONS FROM SETTLEMENTS)",
       "wageLinesMismatch": "TOTAL WAGE EXPENSE",
-      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
+      "wageIdentityMismatch": "सारांश की कटौतियाँ या वेतन से पहले का उप-योग मेल नहीं खाते"
     },
     "readPagesAgain": "पेज {{pages}} फिर से पढ़ें",
     "stoppedPageFailed": "पूरी फ़ाइल फिर से पढ़ने पर भी यही होगा। सिर्फ़ वही पेज फिर से पढ़ें।",

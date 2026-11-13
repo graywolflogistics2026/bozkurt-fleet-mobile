@@ -3224,10 +3224,10 @@
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
       "reimbursementLinesMismatch": "TOTAL REIMBURSED",
-      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
-      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "subtotalPriorWage": "Maaş öncesi ara toplam, gelir + geri ödeme − kamyon kesintileriyle tutmuyor (SUBTOTAL PRIOR WAGE D)",
+      "deductionsFromSettlements": "Özet kesintileri, kamyon kesintileri + maaşlarla tutmuyor (TOTAL DEDUCTIONS FROM SETTLEMENTS)",
       "wageLinesMismatch": "TOTAL WAGE EXPENSE",
-      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
+      "wageIdentityMismatch": "Özet kesintileri veya maaş öncesi ara toplam tutmuyor"
     },
     "readPagesAgain": "{{pages}}. sayfayı tekrar oku",
     "stoppedPageFailed": "Tüm dosyayı tekrar okumak aynı şekilde başarısız olur. Sadece o sayfayı tekrar okuyun.",
