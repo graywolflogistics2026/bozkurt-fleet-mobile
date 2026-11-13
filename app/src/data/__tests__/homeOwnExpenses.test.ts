@@ -92,3 +92,16 @@ test('a settlement-import row that lost its settlement link never counts again; 
   expect(k.explanation?.ownExpenses.count).toBe(0);
   expect(k.explanation?.notCounted.some((r) => r.reason === 'settlement_orphan' && r.amount === 464.98)).toBe(true);
 });
+
+test('a row saved by the same import (the settlement\'s own document) but with no link and another source never counts as own', async () => {
+  await save(golden0717(), '2026-07-18');
+  const settlement = store().settlements[0];
+  settlement.document_id = settlement.document_id ?? 'doc-0717';
+  const fromImport: Row = { id: 'unlinked-1', user_id: USER_ID, truck_id: TRUCK_ID, ded_date: '2026-07-16', amount: 42.5, category: 'Tolls & Scales', description: 'TOLLS', source: 'import', settlement_id: null, document_id: settlement.document_id };
+  const k = home('2026-07-11', '2026-07-17', { deductions: [fromImport] });
+  expect(k.net).toBeCloseTo(-293.62, 2);
+  expect(k.explanation?.ownExpenses.count).toBe(0);
+  // A receipt imported on its own (its own document) is the owner's expense.
+  const receipt: Row = { ...fromImport, id: 'receipt-1', document_id: 'doc-receipt' };
+  expect(home('2026-07-11', '2026-07-17', { deductions: [receipt] }).explanation?.ownExpenses.count).toBe(1);
+});

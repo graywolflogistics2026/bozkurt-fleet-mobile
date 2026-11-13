@@ -117,9 +117,14 @@ type KpiToll = ComparisonToll & KeptFlag & { toll_date?: string | null; settleme
 // settlement (statement or lines) already counts it, so it never enters
 // the own-expense layer and never counts a second time; the explainer
 // lists it under "not counted". The own-expense layer = rows NOT created
-// by a settlement import.
-export function isOrphanSettlementRow(r: { source?: string | null; settlement_id?: string | null }): boolean {
-  return r.source === 'settlement' && !r.settlement_id;
+// by a settlement import. A row is from a settlement import when its
+// source is 'settlement', or when its document is a settlement's own
+// document (the same import saved it, whatever its source says).
+type OriginRow = { source?: string | null; settlement_id?: string | null; document_id?: string | null };
+export function isOrphanSettlementRow(r: OriginRow, settlementDocIds?: ReadonlySet<string>): boolean {
+  if (r.settlement_id) return false;
+  if (r.source === 'settlement') return true;
+  return !!r.document_id && !!settlementDocIds?.has(r.document_id);
 }
 // reimbursements carry no truck_id of their own — a settlement-linked one
 // follows its settlement's truck and week; an unlinked one (a manual
@@ -297,17 +302,21 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
   assertArray(inputs.reimbursements, 'reimbursements');
 
   const { trucks, loads, truckScope, manualMilesOverride, window } = inputs;
+  const settlementDocIds = new Set(
+    inputs.settlements.map((s) => (s as { document_id?: string | null }).document_id).filter((id): id is string => !!id)
+  );
+  const orphan = (r: OriginRow) => isOrphanSettlementRow(r, settlementDocIds);
   const orphanRows: OrphanRow[] = [
-    ...inputs.deductions.filter(isOrphanSettlementRow).map((d) => ({ table: 'deductions' as const, id: d.id ?? null, date: d.ded_date ?? null, label: d.description ?? '', category: d.category ?? null, amount: Number(d.amount ?? 0) })),
-    ...inputs.maintenanceRecords.filter(isOrphanSettlementRow).map((m) => ({ table: 'maintenance_records' as const, id: m.id ?? null, date: m.service_date ?? null, label: m.description ?? m.service_type ?? '', category: null, amount: Number(m.cost ?? 0) })),
-    ...inputs.tolls.filter(isOrphanSettlementRow).map((t) => ({ table: 'tolls' as const, id: t.id ?? null, date: t.toll_date ?? null, label: '', category: null, amount: Number(t.amount ?? 0) })),
+    ...inputs.deductions.filter(orphan).map((d) => ({ table: 'deductions' as const, id: d.id ?? null, date: d.ded_date ?? null, label: d.description ?? '', category: d.category ?? null, amount: Number(d.amount ?? 0) })),
+    ...inputs.maintenanceRecords.filter(orphan).map((m) => ({ table: 'maintenance_records' as const, id: m.id ?? null, date: m.service_date ?? null, label: m.description ?? m.service_type ?? '', category: null, amount: Number(m.cost ?? 0) })),
+    ...inputs.tolls.filter(orphan).map((t) => ({ table: 'tolls' as const, id: t.id ?? null, date: t.toll_date ?? null, label: '', category: null, amount: Number(t.amount ?? 0) })),
   ];
   if (orphanRows.length > 0) {
     inputs = {
       ...inputs,
-      deductions: inputs.deductions.filter((d) => !isOrphanSettlementRow(d)),
-      maintenanceRecords: inputs.maintenanceRecords.filter((m) => !isOrphanSettlementRow(m)),
-      tolls: inputs.tolls.filter((t) => !isOrphanSettlementRow(t)),
+      deductions: inputs.deductions.filter((d) => !orphan(d)),
+      maintenanceRecords: inputs.maintenanceRecords.filter((m) => !orphan(m)),
+      tolls: inputs.tolls.filter((t) => !orphan(t)),
     };
   }
 

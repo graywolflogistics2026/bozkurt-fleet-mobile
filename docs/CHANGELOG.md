@@ -11,6 +11,9 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Round 2 B (part 2): a row saved by a settlement's own import is never an own expense
+- kpi.ts isOrphanSettlementRow(): besides source settlement, a row with no settlement link whose document_id is a settlement's own document (the same import saved it, whatever its source) is out of the own-expense layer and listed as not counted. A receipt imported on its own (its own document) still counts. Test: data/__tests__/homeOwnExpenses.test.ts. Ships: eas update.
+
 ## 2026-11-13 — Round 2 K5: max 3 files per import, oldest first, one at a time
 - import/importJobs.ts MAX_BATCH_IMPORT_FILES 10 -> 3; oldestFirst() (file time, then name); the picker keeps the 3 oldest; data/importJobs.ts BATCH_START_CONCURRENCY 3 -> 1 (jobs START one at a time; the server still reads started jobs side by side). Message batchTooManyMessage, 7 locales.
 - Test: import/__tests__/importJobs.test.ts. Ships: eas update. No SQL.
