@@ -261,6 +261,19 @@ docs/PENDING_SQL.md §53 for the full per-row rationale.
 | STATEMENT PREPARATION |  | Statement Preparation Fee | Bridges OS's "OPER STMT COST" — same real charge, different wording; category matches OS's own | Legal & Professional Services | Yes | chargeback | EXPENSE_FIXED |  |
 | POINT-OF-SALE |  | Point of Sale Purchase (hyphenated) | Bridges PO/PPOS 01's spaced "POINT OF SALE" to this hyphenated real-world form | Meals (per diem covered) | No | chargeback | PERSONAL |  |
 
+### PRIME INC — owner-approved codes (docs/PENDING_SQL.md §86)
+
+Added 2026-11-13 (owner decision K3): printed on real statements, missing
+from the reference sheet. Labels are chosen so they never match another
+line's description; the printed code is what matches.
+
+| Code | Sub-code | Name | Description | Category | Deductible | Type | Class | Notes |
+|---|---|---|---|---|---|---|---|---|
+| 2S |  | WELLNESS BENEFIT | Wellness benefit charged in the WAGE EXPENSE section for the operator's company driver | Wages & Payroll Taxes (W-2) | Yes | chargeback | WAGES | Seen 11/06 1.24, 11/13 3.45. |
+| SF |  | STATE FUEL TAX | State fuel tax; a FUEL TAX ADJUSTMENT credit nets against it in the same group | Fuel & DEF | Yes | chargeback | EXPENSE_VARIABLE |  |
+| CU |  | CAFE PURCHASE | Cafe purchase charged through the statement (e.g. "** CAFE SLC, UT **"), like PO POINT OF SALE | Meals (per diem covered) | No | chargeback | PERSONAL | Seen 11/13 63.06. |
+| NQ |  | NQ COMMUNICATION | Communication charge | ELD & Communications | Yes | chargeback | EXPENSE_VARIABLE |  |
+
 ## Adding a new carrier
 
 1. Add a new `## CARRIER NAME` section above, in the same table format.

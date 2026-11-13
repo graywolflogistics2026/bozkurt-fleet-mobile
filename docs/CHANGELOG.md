@@ -11,6 +11,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — K3: Prime codes 2S, SF, CU, NQ (PENDING_SQL §86)
+- Owner approved K3: 2S WAGES (Wages & Payroll Taxes (W-2)), SF EXPENSE_VARIABLE (Fuel & DEF), CU PERSONAL (Meals (per diem covered), not deductible), NQ EXPENSE_VARIABLE (ELD & Communications).
+- docs/PENDING_SQL.md §86 + pending_86.sql (idempotent insert-if-missing + update, read-only verification); docs/CARRIER_CODES.md new "owner-approved codes" table. No app code, no redeploy, no eas update.
+
 ## 2026-11-13 — Recap sign bug on every week (device, build 664be90)
 - Cause: the recap prints TOTAL DEDUCTIONS FROM SETTLEMENTS "9,232.02-" (trailing minus = charge); the identity in settlementReconciliation.ts compared that signed value with a positive total, so every week failed net_due_differs (07/17, 11/06 seen).
 - 7686aff settlementReader/toExtraction.ts CHARGE_TOTAL_FIELDS: charge totals (truck deductions, wages, recap) are stored as their size; owner-direction figures keep the printed sign. All 18 golden fixtures print the recap and NET CHARGES with a trailing minus; data/__tests__/signRegressions.test.ts replays 07/17, 07/24, 08/28, 11/06, 11/13 (one read, real gate, real save).
