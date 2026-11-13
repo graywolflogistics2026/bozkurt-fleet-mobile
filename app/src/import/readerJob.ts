@@ -160,7 +160,11 @@ export function readerFailureLines(view: Extract<ReaderJobView, { state: 'failed
     // Round 2 item H: the printed figure that explains the difference, then
     // the failing check with printed vs read.
     const rf = f as ReaderFailure;
-    lines.push(t('importFlow.reader.reason.ruleGap', { amount: value(rf.ruleGap!.amount), label: rf.ruleGap!.label }));
+    const gap = rf.ruleGap!;
+    if (gap.kind === 'sign') {
+      const d = rf.details?.[0];
+      lines.push(t('importFlow.reader.reason.ruleGapSign', { label: gap.label, printed: value(d?.printed ?? -gap.amount), read: value(d?.read ?? gap.amount) }));
+    } else lines.push(t('importFlow.reader.reason.ruleGap', { amount: value(gap.amount), label: gap.label }));
     for (const d of rf.details ?? []) lines.push(t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) }));
   } else lines.push(t(READER_REASON_KEY[f.reason] ?? 'importFlow.serverAnswerMissing', { field: 'reason', step: f.reason === 'start_refused' ? (f as StartRefused).step ?? '—' : undefined }));
   if (f.reason !== 'start_refused' && f.reason !== 'rule_gap') {
@@ -193,7 +197,8 @@ export function readerReportLines(job: Pick<ImportJob, 'status' | 'createdAt'> &
   if (r.failure) {
     const f = r.failure;
     lines.push(`Failure: ${f.reason}${f.check ? ` · ${f.check} printed ${f.printed ?? '?'} read ${f.read ?? '?'}` : ''}${f.error ? ` · ${f.error}` : ''}`);
-    if (f.ruleGap) lines.push(`Rule gap: difference ${f.ruleGap.difference} = printed ${f.ruleGap.label} (not counted, no second read)`);
+    if (f.ruleGap?.kind === 'sign') lines.push(`Rule gap: sign · printed ${f.ruleGap.label} ${f.printed ?? '?'} vs read ${f.read ?? '?'}, same size ${f.ruleGap.amount} (not counted, no second read)`);
+    else if (f.ruleGap) lines.push(`Rule gap: difference ${f.ruleGap.difference} = printed ${f.ruleGap.label} (not counted, no second read)`);
   }
   for (const row of costByRole(r.cost)) lines.push(`Cost ${row.role}: ${row.calls} call(s) · ${row.inputTokens} in / ${row.outputTokens} out · ${usd(row.usd)}`);
   if (r.cost.length > 0) lines.push(`Cost total: ${usd(totalCost(r.cost))}`);

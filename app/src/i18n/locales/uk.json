@@ -3239,7 +3239,8 @@
         "oldReader": "This file was read by the old reader. Read it again with the new reader.",
         "tooManyRuns": "Reading took too long and was stopped.",
         "startRefused": "The import could not start ({{step}}).",
-        "ruleGap": "The difference {{amount}} equals the printed {{label}}. Your document is fine: our reading rule missed it. This read was not counted."
+        "ruleGap": "The difference {{amount}} equals the printed {{label}}. Your document is fine: our reading rule missed it. This read was not counted.",
+        "ruleGapSign": "The printed {{label}} {{printed}} and our reading {{read}} differ only by sign. Your document is fine: our sign rule is wrong. This read was not counted and there is no second read."
       },
       "modelError": "AI error: {{error}}",
       "error": {

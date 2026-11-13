@@ -2975,9 +2975,14 @@ function explainMismatch(reading, failure) {
     if (typeof d.printed !== "number" || typeof d.read !== "number") continue;
     const difference = r26(Math.abs(d.printed - d.read));
     if (difference < 0.01) continue;
+    if (Math.abs(d.printed) >= 0.01 && r26(d.printed) === r26(-d.read)) {
+      const size = r26(Math.abs(d.printed));
+      const row = printedFigures.find((x) => r26(x.amount) === r26(d.printed)) ?? printedFigures.find((x) => r26(Math.abs(x.amount)) === size);
+      return { check: d.check, difference, label: row?.label ?? d.check, amount: size, kind: "sign" };
+    }
     const same = (n) => r26(Math.abs(n));
     const hit = printedFigures.find((x) => same(x.amount) === difference && same(x.amount) !== same(d.printed) && same(x.amount) !== same(d.read));
-    if (hit) return { check: d.check, difference, label: hit.label, amount: same(hit.amount) };
+    if (hit) return { check: d.check, difference, label: hit.label, amount: same(hit.amount), kind: "equals" };
   }
   return null;
 }

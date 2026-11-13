@@ -46,7 +46,9 @@ export type ReaderFailureReason =
 // A failing check whose difference is exactly another printed total or
 // line of the same document (11/06: 1,230.97 − 425.47 = 805.50 = TOTAL
 // WAGE EXPENSE): the document is right and our rule is missing that row.
-export type RuleGap = { check: string; difference: number; label: string; amount: number };
+// kind 'sign' (device 07/17, 11/06): the printed and read figures have the
+// same size and opposite signs; our sign rule is wrong, never the read.
+export type RuleGap = { check: string; difference: number; label: string; amount: number; kind?: 'equals' | 'sign' };
 export type ReaderFailure = {
   reason: ReaderFailureReason;
   // The model error behind model_failed / range failures.
@@ -277,10 +279,16 @@ export function explainMismatch(reading: ContentReading, failure: ReaderFailure)
     if (typeof d.printed !== 'number' || typeof d.read !== 'number') continue;
     const difference = r2(Math.abs(d.printed - d.read));
     if (difference < 0.01) continue;
+    // Same size, opposite sign: deterministic, a second read cannot change it.
+    if (Math.abs(d.printed) >= 0.01 && r2(d.printed) === r2(-d.read)) {
+      const size = r2(Math.abs(d.printed));
+      const row = printedFigures.find((x) => r2(x.amount) === r2(d.printed as number)) ?? printedFigures.find((x) => r2(Math.abs(x.amount)) === size);
+      return { check: d.check, difference, label: row?.label ?? d.check, amount: size, kind: 'sign' };
+    }
     // Never one of the two compared figures themselves.
     const same = (n: number) => r2(Math.abs(n));
     const hit = printedFigures.find((x) => same(x.amount) === difference && same(x.amount) !== same(d.printed as number) && same(x.amount) !== same(d.read as number));
-    if (hit) return { check: d.check, difference, label: hit.label, amount: same(hit.amount) };
+    if (hit) return { check: d.check, difference, label: hit.label, amount: same(hit.amount), kind: 'equals' };
   }
   return null;
 }

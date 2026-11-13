@@ -3239,7 +3239,8 @@
         "oldReader": "Este archivo se leyó con el lector anterior. Léalo de nuevo con el lector nuevo.",
         "tooManyRuns": "La lectura tardó demasiado y se detuvo.",
         "startRefused": "La importación no pudo iniciarse ({{step}}).",
-        "ruleGap": "La diferencia {{amount}} es igual al impreso {{label}}. Su documento está bien: nuestra regla de lectura lo omitió. Esta lectura no se contó."
+        "ruleGap": "La diferencia {{amount}} es igual al impreso {{label}}. Su documento está bien: nuestra regla de lectura lo omitió. Esta lectura no se contó.",
+        "ruleGapSign": "El {{label}} impreso {{printed}} y nuestra lectura {{read}} solo difieren en el signo. Su documento está bien: nuestra regla de signos es incorrecta. Esta lectura no se contó y no hay segunda lectura."
       },
       "modelError": "Error de la IA: {{error}}",
       "error": {

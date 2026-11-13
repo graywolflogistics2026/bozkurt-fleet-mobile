@@ -3239,7 +3239,8 @@
         "oldReader": "Bu dosya eski okuyucuyla okundu. Yeni okuyucuyla tekrar okuyun.",
         "tooManyRuns": "Okuma çok uzun sürdü ve durduruldu.",
         "startRefused": "İçe aktarma başlatılamadı ({{step}}).",
-        "ruleGap": "Fark {{amount}}, basılı {{label}} tutarına eşit. Belgeniz doğru: okuma kuralımız bunu atladı. Bu okuma sayılmadı."
+        "ruleGap": "Fark {{amount}}, basılı {{label}} tutarına eşit. Belgeniz doğru: okuma kuralımız bunu atladı. Bu okuma sayılmadı.",
+        "ruleGapSign": "Basılı {{label}} {{printed}} ile okumamız {{read}} yalnızca işaretle farklı. Belgeniz doğru: işaret kuralımız yanlış. Bu okuma sayılmadı ve ikinci okuma yapılmadı."
       },
       "modelError": "Yapay zeka hatası: {{error}}",
       "error": {
