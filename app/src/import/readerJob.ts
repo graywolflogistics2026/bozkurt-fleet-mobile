@@ -146,6 +146,7 @@ export const READER_REASON_KEY: Record<string, string> = {
   old_reader: 'importFlow.reader.reason.oldReader',
   too_many_runs: 'importFlow.reader.reason.tooManyRuns',
   start_refused: 'importFlow.reader.reason.startRefused',
+  rule_gap: 'importFlow.reader.reason.ruleGap',
 };
 
 // The reason lines of a failed job, never empty: the reason, the failing
@@ -155,8 +156,14 @@ export function readerFailureLines(view: Extract<ReaderJobView, { state: 'failed
   const f = view.failure;
   const lines: string[] = [];
   if (f.reason in GATE_FAIL_REASON_KEY) lines.push(t(GATE_FAIL_REASON_KEY[f.reason as GateFailReason]));
-  else lines.push(t(READER_REASON_KEY[f.reason] ?? 'importFlow.serverAnswerMissing', { field: 'reason', step: f.reason === 'start_refused' ? (f as StartRefused).step ?? '—' : undefined }));
-  if (f.reason !== 'start_refused') {
+  else if (f.reason === 'rule_gap' && (f as ReaderFailure).ruleGap) {
+    // Round 2 item H: the printed figure that explains the difference, then
+    // the failing check with printed vs read.
+    const rf = f as ReaderFailure;
+    lines.push(t('importFlow.reader.reason.ruleGap', { amount: value(rf.ruleGap!.amount), label: rf.ruleGap!.label }));
+    for (const d of rf.details ?? []) lines.push(t('importFlow.failDetail', { check: t(`importFlow.checkName.${d.check}`, { defaultValue: d.check }), printed: value(d.printed), read: value(d.read) }));
+  } else lines.push(t(READER_REASON_KEY[f.reason] ?? 'importFlow.serverAnswerMissing', { field: 'reason', step: f.reason === 'start_refused' ? (f as StartRefused).step ?? '—' : undefined }));
+  if (f.reason !== 'start_refused' && f.reason !== 'rule_gap') {
     const rf = f as ReaderFailure;
     if (f.reason in GATE_FAIL_REASON_KEY) {
       // NEVER GENERIC (owner 2026-11-13): every label not read with its
@@ -186,6 +193,7 @@ export function readerReportLines(job: Pick<ImportJob, 'status' | 'createdAt'> &
   if (r.failure) {
     const f = r.failure;
     lines.push(`Failure: ${f.reason}${f.check ? ` · ${f.check} printed ${f.printed ?? '?'} read ${f.read ?? '?'}` : ''}${f.error ? ` · ${f.error}` : ''}`);
+    if (f.ruleGap) lines.push(`Rule gap: difference ${f.ruleGap.difference} = printed ${f.ruleGap.label} (not counted, no second read)`);
   }
   for (const row of costByRole(r.cost)) lines.push(`Cost ${row.role}: ${row.calls} call(s) · ${row.inputTokens} in / ${row.outputTokens} out · ${usd(row.usd)}`);
   if (r.cost.length > 0) lines.push(`Cost total: ${usd(totalCost(r.cost))}`);

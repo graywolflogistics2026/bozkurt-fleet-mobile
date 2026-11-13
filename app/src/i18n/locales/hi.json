@@ -3223,7 +3223,11 @@
       "depositMismatch": "Payout (recap)",
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
-      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED",
+      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
+      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "wageLinesMismatch": "TOTAL WAGE EXPENSE",
+      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
     },
     "readPagesAgain": "पेज {{pages}} फिर से पढ़ें",
     "stoppedPageFailed": "पूरी फ़ाइल फिर से पढ़ने पर भी यही होगा। सिर्फ़ वही पेज फिर से पढ़ें।",
@@ -3234,7 +3238,8 @@
         "sameResult": "फ़ाइल दो बार पढ़ी गई और नतीजा एक जैसा रहा।",
         "oldReader": "यह फ़ाइल पुराने रीडर से पढ़ी गई थी। इसे नए रीडर से फिर पढ़ें।",
         "tooManyRuns": "पढ़ने में बहुत समय लगा, इसलिए इसे रोक दिया गया।",
-        "startRefused": "इम्पोर्ट शुरू नहीं हो सका ({{step}})।"
+        "startRefused": "इम्पोर्ट शुरू नहीं हो सका ({{step}})।",
+        "ruleGap": "अंतर {{amount}} छपे हुए {{label}} के बराबर है। आपका दस्तावेज़ सही है: हमारे पढ़ने के नियम से यह छूट गया। यह पढ़ाई गिनी नहीं गई।"
       },
       "modelError": "AI त्रुटि: {{error}}",
       "error": {

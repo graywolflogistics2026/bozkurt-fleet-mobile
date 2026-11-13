@@ -25,7 +25,7 @@ export const MAX_CONTENT_READS = 2;
 // line not copied, a total not found, an unreadable structured reply) does
 // not count against the owner's 2 reads. A hard cap bounds the cost.
 export const MAX_READS_HARD = 4;
-const OUR_FAILURES = new Set(['statement_not_read', 'missing_fields', 'page_not_read', 'totals_not_printed', 'range_not_found', 'unreadable_reply']);
+const OUR_FAILURES = new Set(['statement_not_read', 'missing_fields', 'page_not_read', 'totals_not_printed', 'range_not_found', 'unreadable_reply', 'rule_gap']);
 
 export type ReaderState = 'reading' | 'ready' | 'needs_input' | 'failed';
 export type ReaderStep = 'range' | 'content' | 'split_settlement' | 'split_statement' | 'done';
@@ -40,7 +40,13 @@ export type ReaderFailureReason =
   | 'model_failed'
   | 'same_result'
   | 'old_reader'
-  | 'too_many_runs';
+  | 'too_many_runs'
+  // The mismatch equals another printed figure (round 2 item H): our rule.
+  | 'rule_gap';
+// A failing check whose difference is exactly another printed total or
+// line of the same document (11/06: 1,230.97 − 425.47 = 805.50 = TOTAL
+// WAGE EXPENSE): the document is right and our rule is missing that row.
+export type RuleGap = { check: string; difference: number; label: string; amount: number };
 export type ReaderFailure = {
   reason: ReaderFailureReason;
   // The model error behind model_failed / range failures.
@@ -54,6 +60,8 @@ export type ReaderFailure = {
   // Every failing check with its printed and read values (the first one is
   // also in check/printed/read).
   details?: { check: string; printed: number | string; read: number | string }[];
+  // rule_gap: the printed figure that explains the difference.
+  ruleGap?: RuleGap;
 };
 
 export type ReadRecord = { n: number; signature: string; outcome: 'ready' | 'needs_input' | 'failed' | 'model_failed'; reason?: string };
@@ -244,6 +252,39 @@ export function verdictOf(extraction: Extraction, ctx: DecideContext): Verdict {
   return questions.length > 0 ? { state: 'needs_input', questions } : { state: 'ready' };
 }
 
+// WASTED READS (owner 2026-11-13, round 2 item H). Before a second read,
+// explain the mismatch from the printed values already read: a difference
+// that equals another printed total or line is our rule problem, never a
+// misread. Then: no second read, not counted against the owner's reads,
+// and a message that names the printed figure.
+const r2 = (n: number) => Math.round(n * 100) / 100;
+export function explainMismatch(reading: ContentReading, failure: ReaderFailure): RuleGap | null {
+  const details =
+    failure.details ?? (failure.check != null && failure.printed != null && failure.read != null ? [{ check: failure.check, printed: failure.printed, read: failure.read }] : []);
+  // Every printed total (settlement summary rows, statement TOTAL /
+  // SUBTOTAL rows); a single line only when it has cents: a whole-dollar
+  // line (the 100.00 bond) is too common to explain a misread by itself.
+  const isTotal = (label: string) => /^(SUB)?TOTAL\b/i.test(label.trim());
+  const hasCents = (n: number | null) => n != null && Math.round(Math.abs(n) * 100) % 100 !== 0;
+  const printedFigures = [
+    ...(reading.summary ?? []).map((r) => ({ label: r.label.trim(), amount: cell(r.amount) })),
+    ...(reading.statement?.rows ?? []).map((r) => ({ label: r.label.trim(), amount: cell(r.weeks), total: isTotal(r.label) })).filter((r) => r.total || hasCents(r.amount)),
+    ...(reading.settlementLines ?? [])
+      .map((l) => ({ label: [l.code, l.description].map((x) => x.trim()).filter(Boolean).join(' '), amount: cell(l.amount) }))
+      .filter((l) => hasCents(l.amount)),
+  ].filter((x): x is { label: string; amount: number; total?: boolean } => x.amount != null && x.amount !== 0);
+  for (const d of details) {
+    if (typeof d.printed !== 'number' || typeof d.read !== 'number') continue;
+    const difference = r2(Math.abs(d.printed - d.read));
+    if (difference < 0.01) continue;
+    // Never one of the two compared figures themselves.
+    const same = (n: number) => r2(Math.abs(n));
+    const hit = printedFigures.find((x) => same(x.amount) === difference && same(x.amount) !== same(d.printed as number) && same(x.amount) !== same(d.read as number));
+    if (hit) return { check: d.check, difference, label: hit.label, amount: same(hit.amount) };
+  }
+  return null;
+}
+
 export function decideReading(p: ReaderProgress, reading: ContentReading, ctx: DecideContext): Transition {
   const range = p.range;
   const extraction = readingToExtraction(reading, {
@@ -259,6 +300,8 @@ export function decideReading(p: ReaderProgress, reading: ContentReading, ctx: D
   if (verdict.state === 'needs_input') {
     return t({ ...p, state: 'needs_input', step: 'done', reads: record('needs_input'), failure: null, questions: verdict.questions }, extraction);
   }
+  const gap = explainMismatch(reading, verdict.failure);
+  if (gap) return t(failed({ ...p, reads: record('failed', 'rule_gap') }, { ...verdict.failure, reason: 'rule_gap', ruleGap: gap }), extraction);
   const reads = record('failed', verdict.failure.reason);
   if (same) return t(failed({ ...p, reads }, { ...verdict.failure, reason: verdict.failure.reason }), extraction);
   if (p.readsStarted < MAX_CONTENT_READS) return t({ ...p, reads, step: 'content', lastReadCause: 'auto' }, extraction);

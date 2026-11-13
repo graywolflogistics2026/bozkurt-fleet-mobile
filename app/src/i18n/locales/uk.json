@@ -3223,7 +3223,11 @@
       "depositMismatch": "Payout (recap)",
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
-      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED",
+      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
+      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "wageLinesMismatch": "TOTAL WAGE EXPENSE",
+      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
     },
     "readPagesAgain": "Read page {{pages}} again",
     "stoppedPageFailed": "Reading the whole file again would fail the same way. Read only that page again.",
@@ -3234,7 +3238,8 @@
         "sameResult": "The file was read twice with the same result.",
         "oldReader": "This file was read by the old reader. Read it again with the new reader.",
         "tooManyRuns": "Reading took too long and was stopped.",
-        "startRefused": "The import could not start ({{step}})."
+        "startRefused": "The import could not start ({{step}}).",
+        "ruleGap": "The difference {{amount}} equals the printed {{label}}. Your document is fine: our reading rule missed it. This read was not counted."
       },
       "modelError": "AI error: {{error}}",
       "error": {

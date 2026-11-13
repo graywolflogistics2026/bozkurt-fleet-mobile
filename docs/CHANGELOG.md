@@ -11,6 +11,11 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Round 2 H: no wasted second read when the gap is a printed figure
+- Device 11/06: both reads were used and billed ($0.4998) for net_due_differs whose difference 805.50 = TOTAL WAGE EXPENSE.
+- settlementReader/machine.ts explainMismatch(): before an automatic second read, a failing check whose difference equals another printed total (summary row, statement TOTAL/SUBTOTAL row) or a line with cents fails at once as rule_gap: not counted against the owner's reads (OUR_FAILURES), no second read, message "The difference $X equals the printed LABEL. Your document is fine: our reading rule missed it." (importFlow.reader.reason.ruleGap, 7 locales; Send report line "Rule gap"). Whole-dollar lines (the 100.00 bond) never explain a gap.
+- Check names for the wage checks (importFlow.checkName). Test: settlementReader/__tests__/ruleGap.test.ts. Ships: deploy-ai-import.ps1 + eas update.
+
 ## 2026-11-13 — Round 2 G: wage identity (W-2 driver weeks 11/06, 11/13)
 - Device 11/06 failed net_due_differs (printed 425.47, read 1,230.97; difference 805.50 = TOTAL WAGE EXPENSE). The reader had no WAGE EXPENSE section.
 - Reader: schema section "wage"; prompt copies WAGE EXPENSE lines, SUBTOTAL PRIOR WAGE D, TOTAL WAGE EXPENSE, recap TOTAL DEDUCTIONS FROM SETTLEMENTS, letter for letter; toExtraction.ts wageItems/totalWageExpense ("NO ENTRY FOR THIS RUN"/".00" = 0); TOTAL DEDUCTIONS never read from the recap.

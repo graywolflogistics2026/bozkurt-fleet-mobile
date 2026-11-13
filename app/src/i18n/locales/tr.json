@@ -3223,7 +3223,11 @@
       "depositMismatch": "Payout (recap)",
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
-      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED",
+      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
+      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "wageLinesMismatch": "TOTAL WAGE EXPENSE",
+      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
     },
     "readPagesAgain": "{{pages}}. sayfayı tekrar oku",
     "stoppedPageFailed": "Tüm dosyayı tekrar okumak aynı şekilde başarısız olur. Sadece o sayfayı tekrar okuyun.",
@@ -3234,7 +3238,8 @@
         "sameResult": "Dosya iki kez okundu, sonuç aynı çıktı.",
         "oldReader": "Bu dosya eski okuyucuyla okundu. Yeni okuyucuyla tekrar okuyun.",
         "tooManyRuns": "Okuma çok uzun sürdü ve durduruldu.",
-        "startRefused": "İçe aktarma başlatılamadı ({{step}})."
+        "startRefused": "İçe aktarma başlatılamadı ({{step}}).",
+        "ruleGap": "Fark {{amount}}, basılı {{label}} tutarına eşit. Belgeniz doğru: okuma kuralımız bunu atladı. Bu okuma sayılmadı."
       },
       "modelError": "Yapay zeka hatası: {{error}}",
       "error": {

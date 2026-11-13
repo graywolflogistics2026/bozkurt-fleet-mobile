@@ -3223,7 +3223,11 @@
       "depositMismatch": "Payout (recap)",
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
-      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED",
+      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
+      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "wageLinesMismatch": "TOTAL WAGE EXPENSE",
+      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
     },
     "readPagesAgain": "Leer la página {{pages}} de nuevo",
     "stoppedPageFailed": "Volver a leer todo el archivo fallaría igual. Lea solo esa página de nuevo.",
@@ -3234,7 +3238,8 @@
         "sameResult": "El archivo se leyó dos veces con el mismo resultado.",
         "oldReader": "Este archivo se leyó con el lector anterior. Léalo de nuevo con el lector nuevo.",
         "tooManyRuns": "La lectura tardó demasiado y se detuvo.",
-        "startRefused": "La importación no pudo iniciarse ({{step}})."
+        "startRefused": "La importación no pudo iniciarse ({{step}}).",
+        "ruleGap": "La diferencia {{amount}} es igual al impreso {{label}}. Su documento está bien: nuestra regla de lectura lo omitió. Esta lectura no se contó."
       },
       "modelError": "Error de la IA: {{error}}",
       "error": {

@@ -3223,7 +3223,11 @@
       "depositMismatch": "Payout (recap)",
       "deductionsMismatch": "TOTAL DEDUCTIONS",
       "revenueLinesMismatch": "TOTAL REVENUE",
-      "reimbursementLinesMismatch": "TOTAL REIMBURSED"
+      "reimbursementLinesMismatch": "TOTAL REIMBURSED",
+      "subtotalPriorWage": "SUBTOTAL PRIOR WAGE D",
+      "deductionsFromSettlements": "TOTAL DEDUCTIONS FROM SETTLEMENTS",
+      "wageLinesMismatch": "TOTAL WAGE EXPENSE",
+      "wageIdentityMismatch": "SUBTOTAL PRIOR WAGE D"
     },
     "readPagesAgain": "Прочитать страницу {{pages}} снова",
     "stoppedPageFailed": "Повторное чтение всего файла закончится так же. Прочитайте снова только эту страницу.",
@@ -3234,7 +3238,8 @@
         "sameResult": "Файл был прочитан дважды с одинаковым результатом.",
         "oldReader": "Этот файл прочитан старым модулем чтения. Прочитайте его снова новым модулем.",
         "tooManyRuns": "Чтение заняло слишком много времени и было остановлено.",
-        "startRefused": "Импорт не удалось начать ({{step}})."
+        "startRefused": "Импорт не удалось начать ({{step}}).",
+        "ruleGap": "Разница {{amount}} равна напечатанной строке {{label}}. Документ в порядке: наше правило чтения её пропустило. Это чтение не засчитано."
       },
       "modelError": "Ошибка ИИ: {{error}}",
       "error": {

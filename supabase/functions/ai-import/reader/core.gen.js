@@ -2837,7 +2837,7 @@ function readingToExtraction(reading, meta) {
 var READER_VERSION = 2;
 var MAX_CONTENT_READS = 2;
 var MAX_READS_HARD = 4;
-var OUR_FAILURES = /* @__PURE__ */ new Set(["statement_not_read", "missing_fields", "page_not_read", "totals_not_printed", "range_not_found", "unreadable_reply"]);
+var OUR_FAILURES = /* @__PURE__ */ new Set(["statement_not_read", "missing_fields", "page_not_read", "totals_not_printed", "range_not_found", "unreadable_reply", "rule_gap"]);
 function isChargedRead(r) {
   if ((r.outcome === "failed" || r.outcome === "model_failed") && r.reason && OUR_FAILURES.has(r.reason)) return false;
   return true;
@@ -2950,6 +2950,26 @@ function verdictOf(extraction, ctx) {
   const questions = profitLinesToAsk(sanitized).map((q) => ({ label: q.label, printed: q.printed }));
   return questions.length > 0 ? { state: "needs_input", questions } : { state: "ready" };
 }
+var r26 = (n) => Math.round(n * 100) / 100;
+function explainMismatch(reading, failure) {
+  const details = failure.details ?? (failure.check != null && failure.printed != null && failure.read != null ? [{ check: failure.check, printed: failure.printed, read: failure.read }] : []);
+  const isTotal = (label) => /^(SUB)?TOTAL\b/i.test(label.trim());
+  const hasCents = (n) => n != null && Math.round(Math.abs(n) * 100) % 100 !== 0;
+  const printedFigures = [
+    ...(reading.summary ?? []).map((r) => ({ label: r.label.trim(), amount: cell(r.amount) })),
+    ...(reading.statement?.rows ?? []).map((r) => ({ label: r.label.trim(), amount: cell(r.weeks), total: isTotal(r.label) })).filter((r) => r.total || hasCents(r.amount)),
+    ...(reading.settlementLines ?? []).map((l) => ({ label: [l.code, l.description].map((x) => x.trim()).filter(Boolean).join(" "), amount: cell(l.amount) })).filter((l) => hasCents(l.amount))
+  ].filter((x) => x.amount != null && x.amount !== 0);
+  for (const d of details) {
+    if (typeof d.printed !== "number" || typeof d.read !== "number") continue;
+    const difference = r26(Math.abs(d.printed - d.read));
+    if (difference < 0.01) continue;
+    const same = (n) => r26(Math.abs(n));
+    const hit = printedFigures.find((x) => same(x.amount) === difference && same(x.amount) !== same(d.printed) && same(x.amount) !== same(d.read));
+    if (hit) return { check: d.check, difference, label: hit.label, amount: same(hit.amount) };
+  }
+  return null;
+}
 function decideReading(p, reading, ctx) {
   const range = p.range;
   const extraction = readingToExtraction(reading, {
@@ -2965,6 +2985,8 @@ function decideReading(p, reading, ctx) {
   if (verdict.state === "needs_input") {
     return t({ ...p, state: "needs_input", step: "done", reads: record("needs_input"), failure: null, questions: verdict.questions }, extraction);
   }
+  const gap = explainMismatch(reading, verdict.failure);
+  if (gap) return t(failed({ ...p, reads: record("failed", "rule_gap") }, { ...verdict.failure, reason: "rule_gap", ruleGap: gap }), extraction);
   const reads = record("failed", verdict.failure.reason);
   if (same) return t(failed({ ...p, reads }, { ...verdict.failure, reason: verdict.failure.reason }), extraction);
   if (p.readsStarted < MAX_CONTENT_READS) return t({ ...p, reads, step: "content", lastReadCause: "auto" }, extraction);
@@ -3204,6 +3226,7 @@ export {
   costOf,
   decideReading,
   evaluateSettlementGate,
+  explainMismatch,
   isChargedRead,
   isReaderProgress,
   newReaderProgress,
