@@ -121,7 +121,8 @@ function detailsOf(issues: ReconciliationIssue[], types: string[]): GateFailDeta
 function milesOf(extraction: Extraction, statementMiles: number | null) {
   const s = extraction.settlement!;
   const split = readMilesSplit({ carrier: s.carrier, loads: s.loads, milesLines: s.milesLines });
-  const read = statementMiles != null && statementMiles > 0 ? statementMiles : num(s.totalMiles) > 0 ? num(s.totalMiles) : (split.total ?? null);
+  // A printed 0 (TOTAL MILES 0/0/0, no load) is 0 miles, never "—".
+  const read = statementMiles != null && statementMiles > 0 ? statementMiles : num(s.totalMiles) > 0 ? num(s.totalMiles) : (split.total ?? (statementMiles === 0 ? 0 : null));
   const perDiem = Number.isFinite(s.perDiemDays as number) ? Math.max(0, Math.min(7, Math.round(s.perDiemDays as number))) : defaultPerDiemDaysForMiles(read ?? 0);
   return { miles: read, loadedMiles: split.loaded, emptyMiles: split.empty, perDiemDays: perDiem };
 }
@@ -391,7 +392,7 @@ export function headlineFromSettlement(
     netDue: s.statement?.printed?.netDue ?? Number(s.net ?? 0),
     deposited: r2(deposit.deposited),
     owedToCarrier: r2(deposit.owedToCarrier),
-    miles: s.miles != null && Number(s.miles) > 0 ? Number(s.miles) : null,
+    miles: s.miles != null && Number(s.miles) > 0 ? Number(s.miles) : s.loaded_miles === 0 && s.empty_miles === 0 ? 0 : null,
     loadedMiles: s.loaded_miles ?? null,
     emptyMiles: s.empty_miles ?? null,
     perDiemDays: Number(s.per_diem_days ?? 0),

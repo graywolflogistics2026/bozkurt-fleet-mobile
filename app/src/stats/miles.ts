@@ -69,6 +69,9 @@ export type CalcMilesResult = {
   duplicateWeeksIgnored: number;
   // Weeks with no loaded/empty split at all (batch C item 6).
   weeksWithoutBreakdown: number;
+  // Every week of the window has a known split and the total is 0 (printed
+  // TOTAL MILES 0): "No loaded miles", never "no miles recorded".
+  noLoadedMiles: boolean;
   weeks: WeekMiles[];
 };
 
@@ -137,6 +140,7 @@ export function calcMiles(settlements: SettlementMilesInput[], loads: LoadMilesI
     deadheadPct: splitTotal > 0 ? emptyMiles / splitTotal : null,
     duplicateWeeksIgnored,
     weeksWithoutBreakdown: weeks.length - withSplit.length,
+    noLoadedMiles: weeks.length > 0 && totalMiles === 0 && withSplit.length === weeks.length,
     weeks: weeks.sort((a, b) => b.weekEnding.localeCompare(a.weekEnding)),
   };
 }

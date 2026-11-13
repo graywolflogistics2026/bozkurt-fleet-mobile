@@ -37,7 +37,8 @@ describe('13 golden weeks through the new reader', () => {
       owedToCarrier: w.owedToCarrier,
       expenses: w.realExpense,
       profit: w.profit,
-      miles: w.miles > 0 ? w.miles : null,
+      // A printed 0 is 0 miles (owner 2026-11-13, 08/28), never null.
+      miles: w.miles,
       bondHeld: w.bondHeld,
       ytdRevenue: w.ytdRevenue,
       ytdPaid: w.ytdPaid,

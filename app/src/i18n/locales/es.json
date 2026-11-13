@@ -314,7 +314,9 @@
       "title": "Por Camión Esta Semana"
     },
     "perMileTrio": {
-      "noDataForPeriod": "No hay Settlements en este período todavía — elige otro período o importa uno."
+      "noDataForPeriod": "No hay Settlements en este período todavía — elige otro período o importa uno.",
+      "noLoadedMiles": "Sin millas cargadas esta semana",
+      "notApplicable": "n/d"
     },
     "profitBridge": {
       "title": "Cómo se calcula esta ganancia",

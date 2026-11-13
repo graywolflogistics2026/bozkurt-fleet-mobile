@@ -78,7 +78,7 @@ describe('Okuyucu notları: the 21 cases', () => {
       const { t, f } = run(iso, iso === '2026-08-28' ? { lines: LINES_0828 } : {});
       expect(week(iso).miles).toBe(0);
       expect(t.progress.state).toBe('ready');
-      expect(f.miles).toBeNull();
+      expect(f.miles).toBe(0);
       expect(t.extraction!.settlement!.milesLines).toContainEqual({ label: 'TOTAL MILES', miles: 0 });
     }
   });

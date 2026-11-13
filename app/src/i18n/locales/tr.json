@@ -314,7 +314,9 @@
       "title": "Bu Hafta Kamyon Başına"
     },
     "perMileTrio": {
-      "noDataForPeriod": "Bu dönemde henüz Settlement yok — başka bir dönem seçin veya bir tane içe aktarın."
+      "noDataForPeriod": "Bu dönemde henüz Settlement yok — başka bir dönem seçin veya bir tane içe aktarın.",
+      "noLoadedMiles": "Bu hafta yüklü mil yok",
+      "notApplicable": "yok"
     },
     "profitBridge": {
       "title": "Bu kâr nasıl oluşuyor",

@@ -158,6 +158,8 @@ export type KpiResult = {
     deadheadPct: number | null;
     // Batch C item 6: the per-week list behind Home's Miles card.
     weeksWithoutBreakdown: number;
+    // calcMiles().noLoadedMiles: miles are known and 0 (RPM/CPM "n/a").
+    noLoadedMiles: boolean;
     weeks: WeekMiles[];
   };
   // null only when there are no miles in this window/scope (avoids a
@@ -420,6 +422,7 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
       empty: milesResult.emptyMiles,
       deadheadPct: milesResult.deadheadPct,
       weeksWithoutBreakdown: milesResult.weeksWithoutBreakdown,
+      noLoadedMiles: milesResult.noLoadedMiles,
       weeks: milesResult.weeks,
     },
     rpm: cpmResult.revenuePerMile,

@@ -11,6 +11,11 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Fix 3/4 (08/28): zero-mile weeks - a printed TOTAL MILES 0 is 0, not unknown
+- milesSplit.ts: a week whose printed weekly miles are all 0 (no load) gets split 0/0 (source statement), Prime and other carriers; the save writes it. settlementGate.ts: card headline Miles 0 (also from a stored 0/0 week).
+- stats/miles.ts calcMiles().noLoadedMiles -> kpi.miles.noLoadedMiles. Home: "No loaded miles this week" instead of "No miles recorded yet"; Revenue/Mile, Cost/Mile, Profit/Mile show n/a; no "weeks without a loaded/empty breakdown" for printed zeros.
+- An already saved 08/28 keeps its old null split until it is re-imported. i18n dashboard.perMileTrio.noLoadedMiles / notApplicable (7 locales). Test: import/__tests__/zeroMilesWeek.test.ts. Ships: deploy script (reader bundle), eas update. No SQL.
+
 ## 2026-11-13 — Fix 2/4 (08/28): a typed statement line the printed block derives is suggested; a contradicting amount is refused
 - primeStatementTemplate.ts profitLineSuggestions()/profitLineConflicts(): the only question in a block whose printed TOTAL was read gets the block gap as its value (08/28: 100.00- bond, TOTAL OTHER 99.55- -> 0.45). The card pre-fills it with the source line, shows a red line and keeps Apply off for a contradicting amount; machine.afterAnswers keeps waiting on a conflict.
 - i18n importFlow.profitLineSuggested / profitLineConflict (7 locales). Test: settlementReader/__tests__/typedLineSuggestion.test.ts. Ships: deploy script, eas update. No SQL.

@@ -314,7 +314,9 @@
       "title": "Per Truck This Week"
     },
     "perMileTrio": {
-      "noDataForPeriod": "No settlements in this period yet — pick another period or import one."
+      "noDataForPeriod": "No settlements in this period yet — pick another period or import one.",
+      "noLoadedMiles": "No loaded miles this week",
+      "notApplicable": "n/a"
     },
     "profitBridge": {
       "title": "How this profit adds up",

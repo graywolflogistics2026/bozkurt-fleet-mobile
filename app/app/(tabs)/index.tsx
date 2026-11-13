@@ -1243,7 +1243,12 @@ export default function Dashboard() {
   // is 0) — both must say so plainly instead of showing a number, but are
   // genuinely different situations worth naming differently.
   const perMileNoWindow = !periodScopedCpm.window;
-  const perMileMilesMissing = !perMileNoWindow && canonicalCpm != null && canonicalCpm.revenuePerMile == null;
+  // ZERO IS A NUMBER (owner 2026-11-13): a week that printed TOTAL MILES 0
+  // has no loaded miles — Revenue/Mile and Cost/Mile are "n/a", and the
+  // "no miles recorded" warning is only for miles that are really unknown.
+  const perMileNoLoadedMiles = !perMileNoWindow && periodScopedCpm.kpi?.miles.noLoadedMiles === true;
+  const perMileMilesMissing = !perMileNoWindow && !perMileNoLoadedMiles && canonicalCpm != null && canonicalCpm.revenuePerMile == null;
+  const perMileValue = (v: number | null | undefined) => (v != null ? money2(v) : perMileNoLoadedMiles ? t('dashboard.perMileTrio.notApplicable') : '—');
   const [cpmWhyOpen, setCpmWhyOpen] = useState(false);
 
   const recentLoads = useMemo(() => {
@@ -1342,17 +1347,17 @@ export default function Dashboard() {
         <View style={styles.compactRow}>
           <CompactStatTile
             label={t('scorecard.revenuePerMile')}
-            value={canonicalCpm?.revenuePerMile != null ? money2(canonicalCpm.revenuePerMile) : '—'}
+            value={perMileValue(canonicalCpm?.revenuePerMile)}
             onPress={() => setCpmWhyOpen(true)}
           />
           <CompactStatTile
             label={t('scorecard.costPerMile')}
-            value={canonicalCpm?.costPerMile != null ? money2(canonicalCpm.costPerMile) : '—'}
+            value={perMileValue(canonicalCpm?.costPerMile)}
             onPress={() => setCpmWhyOpen(true)}
           />
           <CompactStatTile
             label={t('scorecard.whyPpm')}
-            value={canonicalCpm?.profitPerMile != null ? money2(canonicalCpm.profitPerMile) : '—'}
+            value={perMileValue(canonicalCpm?.profitPerMile)}
             valueColor={canonicalCpm?.profitPerMile != null ? (canonicalCpm.profitPerMile >= 0 ? colors.green : colors.red) : undefined}
             onPress={() => setCpmWhyOpen(true)}
           />
@@ -1407,6 +1412,11 @@ export default function Dashboard() {
         {perMileMilesMissing && (
           <MutedText style={{ color: colors.orange, fontWeight: '700', marginTop: -spacing.xs, marginBottom: spacing.sm }} numberOfLines={2}>
             ⚠️ {t('scorecard.milesMissingWarning')}
+          </MutedText>
+        )}
+        {perMileNoLoadedMiles && (
+          <MutedText style={{ marginTop: -spacing.xs, marginBottom: spacing.sm }} numberOfLines={2}>
+            {t('dashboard.perMileTrio.noLoadedMiles')}
           </MutedText>
         )}
         {/* CPM/MILES WARNING (spec: "warn when CPM > $4"), same threshold
@@ -1545,6 +1555,7 @@ export default function Dashboard() {
                 ⚠️ {t('scorecard.milesMissingWarning')}
               </MutedText>
             )}
+            {perMileNoLoadedMiles && <MutedText style={{ marginBottom: spacing.sm }}>{t('dashboard.perMileTrio.noLoadedMiles')}</MutedText>}
             {canonicalCpm.buckets.map((b, i) => (
               <View key={b.category} style={[styles.whyRow, i > 0 && styles.whyRowBorder]}>
                 <MutedText>{b.category}</MutedText>

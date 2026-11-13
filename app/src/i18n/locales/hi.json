@@ -319,7 +319,9 @@
       "title": "इस सप्ताह प्रति ट्रक"
     },
     "perMileTrio": {
-      "noDataForPeriod": "इस अवधि में अभी तक कोई settlement नहीं — कोई अन्य अवधि चुनें या एक आयात करें।"
+      "noDataForPeriod": "इस अवधि में अभी तक कोई settlement नहीं — कोई अन्य अवधि चुनें या एक आयात करें।",
+      "noLoadedMiles": "इस हफ़्ते कोई लोडेड मील नहीं",
+      "notApplicable": "लागू नहीं"
     },
     "profitBridge": {
       "title": "यह लाभ कैसे बनता है",

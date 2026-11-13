@@ -1948,6 +1948,11 @@ function lineRouteProfit(extraction, carrierCodes = []) {
 
 // src/import/milesSplit.ts
 var NO_SPLIT = { loaded: null, empty: null, total: null, source: null, label: null, flag: null };
+var ZERO_SPLIT = { loaded: 0, empty: 0, total: 0, source: "statement", label: null, flag: null };
+function printedZeroWeek(lines) {
+  const weekly = (lines ?? []).filter((l) => classifyMilesLabel(l.label).kind !== "ignored").map((l) => positive(l.miles));
+  return weekly.length > 0 && weekly.every((m) => m === 0);
+}
 var CUMULATIVE = /\b(LTD|YTD|QTD|LIFE|LIFETIME|TO[\s-]*DATE|ODOMETER|ODO)\b/;
 var NEVER_DEADHEAD = /BOBTAIL|OUT[\s-]*OF[\s-]*ROUTE|\bOOR\b/;
 var EMPTY_WORD = /\b(EMPTY|MT|UNLOADED|DEAD[\s-]*HEAD|DH)\b/;
@@ -1982,7 +1987,10 @@ function primeSplit(loads) {
 }
 function readMilesSplit(input) {
   const loads = input.loads ?? [];
-  if (isPrimeCarrier(input.carrier)) return primeSplit(loads);
+  if (isPrimeCarrier(input.carrier)) {
+    const fromLoads2 = primeSplit(loads);
+    return fromLoads2.source ? fromLoads2 : printedZeroWeek(input.milesLines) ? ZERO_SPLIT : NO_SPLIT;
+  }
   let loaded = null;
   let empty = null;
   let total = null;
@@ -2013,6 +2021,7 @@ function readMilesSplit(input) {
   }
   const fromLoads = primeSplit(loads);
   if (fromLoads.source) return { ...fromLoads, label: null, flag };
+  if (printedZeroWeek(input.milesLines)) return { ...ZERO_SPLIT, flag };
   return { ...NO_SPLIT, flag };
 }
 
@@ -2212,7 +2221,7 @@ function detailsOf(issues, types) {
 function milesOf2(extraction, statementMiles) {
   const s = extraction.settlement;
   const split = readMilesSplit({ carrier: s.carrier, loads: s.loads, milesLines: s.milesLines });
-  const read = statementMiles != null && statementMiles > 0 ? statementMiles : num(s.totalMiles) > 0 ? num(s.totalMiles) : split.total ?? null;
+  const read = statementMiles != null && statementMiles > 0 ? statementMiles : num(s.totalMiles) > 0 ? num(s.totalMiles) : split.total ?? (statementMiles === 0 ? 0 : null);
   const perDiem = Number.isFinite(s.perDiemDays) ? Math.max(0, Math.min(7, Math.round(s.perDiemDays))) : defaultPerDiemDaysForMiles(read ?? 0);
   return { miles: read, loadedMiles: split.loaded, emptyMiles: split.empty, perDiemDays: perDiem };
 }

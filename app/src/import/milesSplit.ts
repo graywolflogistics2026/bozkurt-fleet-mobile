@@ -37,6 +37,16 @@ export type MilesSplit = {
 };
 
 const NO_SPLIT: MilesSplit = { loaded: null, empty: null, total: null, source: null, label: null, flag: null };
+// ZERO IS A NUMBER (owner 2026-11-13, 08/28): a week whose statement prints
+// TOTAL MILES 0 (no load) has a known split, 0 loaded and 0 empty — never
+// "no breakdown".
+const ZERO_SPLIT: MilesSplit = { loaded: 0, empty: 0, total: 0, source: 'statement', label: null, flag: null };
+
+// Every weekly miles figure printed is 0 (at least one printed).
+function printedZeroWeek(lines: ExtractedMilesLine[] | null | undefined): boolean {
+  const weekly = (lines ?? []).filter((l) => classifyMilesLabel(l.label).kind !== 'ignored').map((l) => positive(l.miles));
+  return weekly.length > 0 && weekly.every((m) => m === 0);
+}
 
 const CUMULATIVE = /\b(LTD|YTD|QTD|LIFE|LIFETIME|TO[\s-]*DATE|ODOMETER|ODO)\b/;
 const NEVER_DEADHEAD = /BOBTAIL|OUT[\s-]*OF[\s-]*ROUTE|\bOOR\b/;
@@ -82,7 +92,10 @@ export function readMilesSplit(input: {
   milesLines?: ExtractedMilesLine[] | null;
 }): MilesSplit {
   const loads = input.loads ?? [];
-  if (isPrimeCarrier(input.carrier)) return primeSplit(loads);
+  if (isPrimeCarrier(input.carrier)) {
+    const fromLoads = primeSplit(loads);
+    return fromLoads.source ? fromLoads : printedZeroWeek(input.milesLines) ? ZERO_SPLIT : NO_SPLIT;
+  }
 
   let loaded: number | null = null;
   let empty: number | null = null;
@@ -119,6 +132,7 @@ export function readMilesSplit(input: {
   // Nothing printed as a split: the loads' own columns, when they carry any.
   const fromLoads = primeSplit(loads);
   if (fromLoads.source) return { ...fromLoads, label: null, flag };
+  if (printedZeroWeek(input.milesLines)) return { ...ZERO_SPLIT, flag };
   return { ...NO_SPLIT, flag };
 }
 
