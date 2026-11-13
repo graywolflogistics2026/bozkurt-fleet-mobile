@@ -67,6 +67,29 @@ runner). Spec: `settlement-data-contract.md`,
   - persistence;
   - chaining runs inside the plan budget (`limitsForPlan`).
 
+## Server modes (ai-import, commit 4)
+- `read_start` — a new import. Same limits as every import. A PDF starts
+  with the range call. A photo goes straight to the general reader; a
+  settlement photo fails with `photo_settlement` ("upload the PDF") and a
+  result of only `{docType: "settlement"}`.
+- `read_again` — a failed job, only while reads remain (max 2 per job).
+- `read_answer` — the owner's typed profit lines (needs_input). No model
+  call; the gate decides again.
+- `read_resume` — the app's backup restart of a stopped reading job
+  (a stale lease is released). The old `resume_job` sends a reader job here.
+- `continue_job` (service key) — a reader job continues in the reader.
+
+The run loop is `app/src/settlementReader/driver.ts` (pure, tested with
+simulated replies): it saves after every model call, counts a read before
+its call, starts a call only when its minimum timeout still fits the plan
+budget, and continues in the next run otherwise (max 12 runs). Every
+reader call: structured output, adaptive thinking at the role's effort,
+the PDF block cached. A non-settlement PDF goes to the existing general
+extraction prompt, on the whole file, in one call.
+
+The old reader (modes `job`, `reread_job`, `job_verdict`, ...) stays as the
+fallback until the owner confirms the device test (then commit 6).
+
 ## Job row (no SQL)
 | Reader state | `import_jobs.status` |
 |---|---|

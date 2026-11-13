@@ -14,3 +14,4 @@ export * from './range';
 export * from './cost';
 export * from './machine';
 export { readingToExtraction } from './toExtraction';
+export * from './driver';

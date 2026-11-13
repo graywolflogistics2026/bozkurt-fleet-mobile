@@ -2708,12 +2708,15 @@ function readingToExtraction(reading, meta) {
 // src/settlementReader/machine.ts
 var READER_VERSION = 2;
 var MAX_CONTENT_READS = 2;
-function newReaderProgress(pagesTotal) {
+function newReaderProgress(pagesTotal, importDate = "") {
   return {
     v: READER_VERSION,
     state: "reading",
     step: "range",
     pagesTotal,
+    importDate,
+    runs: 0,
+    photo: false,
     readsStarted: 0,
     reads: [],
     range: null,
@@ -2723,6 +2726,14 @@ function newReaderProgress(pagesTotal) {
     attachments: { total: 0, done: [], failed: [], notRead: 0 },
     cost: [],
     lastReadCause: "first"
+  };
+}
+function newPhotoProgress(importDate = "") {
+  return {
+    ...newReaderProgress(1, importDate),
+    photo: true,
+    step: "content",
+    range: { carrier: "", isSettlement: false, lastContentPage: 1, statementFirst: null, cashFlowPrinted: false, attachmentPages: [], attachmentsNotRead: 0 }
   };
 }
 function isReaderProgress(p) {
@@ -2770,6 +2781,15 @@ function afterSplitSettlement(p, outcome) {
 function afterSplitStatement(p, outcome, ctx) {
   if (!outcome.ok || !p.splitSettlement) return readFailed(p, outcome.ok ? "api_error" : outcome.error);
   return decideReading({ ...p, splitSettlement: null }, combineParts(p.splitSettlement, outcome.value), ctx);
+}
+function afterGeneral(p, outcome) {
+  if (!outcome.ok) return readFailed(p, outcome.error);
+  const e = outcome.value;
+  const reads = [...p.reads, { n: p.readsStarted, signature: "", outcome: e.docType === "settlement" ? "failed" : "ready" }];
+  if (e.docType === "settlement") {
+    return p.photo ? t(failed({ ...p, reads }, { reason: "photo_settlement" }), { docType: "settlement" }) : t(failed({ ...p, reads }, { reason: "range_not_found" }));
+  }
+  return t({ ...p, state: "ready", step: "done", reads, failure: null }, e);
 }
 function readingSignature(extraction) {
   const stable = (v) => {
@@ -2873,13 +2893,161 @@ function withAttachment(extraction, page, reply) {
 function oldReaderFailure() {
   return { reason: "old_reader" };
 }
+
+// src/settlementReader/driver.ts
+var CALL_TIMEOUTS = {
+  range: { preferredMs: 6e4, minMs: 3e4, maxTokens: 8e3 },
+  content: { preferredMs: 24e4, minMs: 9e4, maxTokens: 32e3 },
+  split_settlement: { preferredMs: 2e5, minMs: 75e3, maxTokens: 24e3 },
+  split_statement: { preferredMs: 2e5, minMs: 75e3, maxTokens: 24e3 },
+  attachment: { preferredMs: 45e3, minMs: 2e4, maxTokens: 8e3 },
+  general: { preferredMs: 18e4, minMs: 6e4, maxTokens: 16e3 }
+};
+var MAX_READER_RUNS = 12;
+var LeaseLost = class extends Error {
+};
+function timeoutFor(io, role) {
+  const c = CALL_TIMEOUTS[role];
+  const elapsed = io.elapsedMs();
+  if (elapsed >= io.limits.exitByMs) return null;
+  const room = io.limits.callEndLimitMs - io.limits.startMarginMs - elapsed;
+  const timeout = Math.min(c.preferredMs, room);
+  return timeout >= c.minMs ? timeout : null;
+}
+var isFinal = (p) => p.state !== "reading";
+async function runReader(start, io) {
+  let p = { ...start.progress, runs: (start.progress.runs ?? 0) + 1 };
+  let extraction = start.extraction;
+  let calls = 0;
+  const importDate = p.importDate;
+  async function save(next, final = false) {
+    const wasReading = p.state === "reading";
+    p = next.progress;
+    if ("extraction" in next && next.extraction) extraction = next.extraction;
+    const ok = await io.save({ progress: p, status: next.status, ..."extraction" in next && next.extraction ? { extraction: next.extraction } : {}, final });
+    if (!ok) throw new LeaseLost();
+    if (wasReading && (p.state === "ready" || p.state === "needs_input")) await io.logImport(true);
+    if (wasReading && p.state === "failed") await io.logImport(false, `${p.failure?.reason ?? "failed"}${p.failure?.error ? `: ${p.failure.error}` : ""}`);
+  }
+  const status = () => p.state === "reading" ? "processing" : p.state === "ready" ? "ready" : p.state === "needs_input" ? "needs_decision" : "failed";
+  function withCost(role, req, reply, page) {
+    const entry = costEntry(role, req.model, reply.usage, reply.ms, reply.outcome.ok ? "ok" : reply.outcome.error, page);
+    io.log(`COST role=${role} model=${req.model}${page != null ? ` page=${page}` : ""} in=${entry.inputTokens} cacheW=${entry.cacheWriteTokens} cacheR=${entry.cacheReadTokens} out=${entry.outputTokens} usd=${entry.usd} ms=${entry.ms} outcome=${entry.outcome}`);
+    return entry;
+  }
+  async function ask(role, pages, system, userText, schema, timeoutMs, page) {
+    const req = { role, model: ROLE_MODEL[role], effort: ROLE_EFFORT[role], pages, system, userText, schema, timeoutMs, maxTokens: CALL_TIMEOUTS[role].maxTokens };
+    const reply = await io.call(req);
+    calls++;
+    p = { ...p, cost: [...p.cost, withCost(role, req, reply, page)] };
+    return reply.outcome;
+  }
+  async function later() {
+    await save({ progress: p, status: status() });
+    await io.continueInNextRun();
+    return { kind: "continued", calls };
+  }
+  try {
+    if (p.runs > MAX_READER_RUNS && p.state === "reading") {
+      await save(
+        { progress: { ...p, state: "failed", step: "done", failure: { reason: "too_many_runs" } }, status: "failed" },
+        true
+      );
+      return { kind: "final", calls };
+    }
+    if (p.state === "reading") await save({ progress: p, status: "processing" });
+    while (p.state === "reading") {
+      if (p.step === "range") {
+        const timeout = timeoutFor(io, "range");
+        if (timeout == null) return await later();
+        const window = Math.min(p.pagesTotal, RANGE_WINDOW_PAGES);
+        const reply = await ask("range", pagesUpTo(window), RANGE_PROMPT, `This file is pages 1-${window} of a ${p.pagesTotal}-page PDF.`, RANGE_SCHEMA, timeout);
+        const t2 = afterRange(p, reply.ok ? { ok: true, value: contentRange(reply.value, p.pagesTotal) } : reply);
+        await save(t2, isFinal(t2.progress));
+        continue;
+      }
+      if (p.step === "content" && p.range && !p.range.isSettlement) {
+        const timeout = timeoutFor(io, "general");
+        if (timeout == null) return await later();
+        const started = startContentRead(p);
+        if (!started) break;
+        await save({ progress: started, status: "processing" });
+        const reply = await io.general(timeout);
+        calls++;
+        p = { ...p, cost: [...p.cost, withCost("content", { model: "general" }, reply)] };
+        const t2 = afterGeneral(p, reply.outcome);
+        await save(t2, isFinal(t2.progress));
+        continue;
+      }
+      if (p.step === "content") {
+        const timeout = timeoutFor(io, "content");
+        if (timeout == null) return await later();
+        const started = startContentRead(p);
+        if (!started) {
+          await save({ progress: { ...p, state: "failed", step: "done", failure: { reason: "model_failed" } }, status: "failed" }, true);
+          break;
+        }
+        await save({ progress: started, status: "processing" });
+        const last = p.range.lastContentPage;
+        const reply = await ask("content", pagesUpTo(last), CONTENT_PROMPT, `This file is pages 1-${last} of the settlement PDF.`, CONTENT_SCHEMA, timeout);
+        const t2 = afterContent(p, reply, { importDate });
+        await save(t2, isFinal(t2.progress));
+        continue;
+      }
+      if (p.step === "split_settlement") {
+        const timeout = timeoutFor(io, "split_settlement");
+        if (timeout == null) return await later();
+        const last = p.range.statementFirst - 1;
+        const reply = await ask("split_settlement", pagesUpTo(last), SETTLEMENT_PART_PROMPT, `This file is pages 1-${last} of the settlement PDF.`, SETTLEMENT_PART_SCHEMA, timeout);
+        const t2 = afterSplitSettlement(p, reply);
+        await save(t2, isFinal(t2.progress));
+        continue;
+      }
+      if (p.step === "split_statement") {
+        const timeout = timeoutFor(io, "split_statement");
+        if (timeout == null) return await later();
+        const first = p.range.statementFirst;
+        const last = p.range.lastContentPage;
+        const reply = await ask("split_statement", pagesUpTo(last, first), STATEMENT_PART_PROMPT, `This file is pages ${first}-${last} of the settlement PDF.`, STATEMENT_PART_SCHEMA, timeout);
+        const fixed = reply.ok ? { ok: true, value: { statement: { ...reply.value.statement, rows: reply.value.statement.rows.map((r) => ({ ...r, page: r.page + first - 1 })) } } } : reply;
+        const t2 = afterSplitStatement(p, fixed, { importDate });
+        await save(t2, isFinal(t2.progress));
+        continue;
+      }
+      break;
+    }
+    for (const page of pendingAttachments(p)) {
+      if (!extraction) break;
+      const timeout = timeoutFor(io, "attachment");
+      if (timeout == null) return await later();
+      const reply = await ask("attachment", [page], ATTACHMENT_PROMPT, `This file is page ${page} of the settlement PDF.`, ATTACHMENT_SCHEMA, timeout, page);
+      const next = afterAttachment(p, extraction, page, reply);
+      await save({ progress: next.progress, status: status(), extraction: next.extraction });
+    }
+    if (p.state !== "reading") {
+      const total = p.cost.reduce((s, e) => s + e.usd, 0);
+      io.log(`READER final state=${p.state} reads=${p.readsStarted} calls=${p.cost.length} usd=${Math.round(total * 1e4) / 1e4}${p.failure ? ` reason=${p.failure.reason}` : ""}`);
+      await save({ progress: p, status: status() }, true);
+      return { kind: "final", calls };
+    }
+    return { kind: "idle", calls };
+  } catch (err) {
+    if (err instanceof LeaseLost) {
+      io.log("lease lost — another run owns this job now");
+      return { kind: "lease_lost", calls };
+    }
+    throw err;
+  }
+}
 export {
   ATTACHMENT_PROMPT,
   ATTACHMENT_SCHEMA,
+  CALL_TIMEOUTS,
   CONTENT_PROMPT,
   CONTENT_SCHEMA,
   MAX_ATTACHMENT_PAGES,
   MAX_CONTENT_READS,
+  MAX_READER_RUNS,
   RANGE_PROMPT,
   RANGE_SCHEMA,
   RANGE_WINDOW_PAGES,
@@ -2893,6 +3061,7 @@ export {
   afterAnswers,
   afterAttachment,
   afterContent,
+  afterGeneral,
   afterRange,
   afterSplitSettlement,
   afterSplitStatement,
@@ -2905,6 +3074,7 @@ export {
   decideReading,
   evaluateSettlementGate,
   isReaderProgress,
+  newPhotoProgress,
   newReaderProgress,
   obj,
   oldReaderFailure,
@@ -2914,6 +3084,7 @@ export {
   readAgain,
   readingSignature,
   readingToExtraction,
+  runReader,
   sanitizeExtraction,
   startContentRead,
   statusOf,

@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Settlement reader rewrite, commit 4 (server)
+- ai-import: new modes read_start, read_again, read_answer, read_resume; continue_job and resume_job route a reader job (progress.reader) to the reader. reader/server.ts: Anthropic call (json_schema, adaptive thinking, effort, cached PDF block), PDF subset, lease-checked writes, heartbeat.
+- app/src/settlementReader/driver.ts: the run loop (pure, tested with simulated replies); machine.ts: importDate, runs, photo jobs (photo_settlement), afterGeneral. core.gen.js rebuilt.
+- The app does not call the new modes yet (commit 5). Old modes unchanged.
+- Ships: redeploy ai-import (deploy script). No SQL.
+
 ## 2026-11-13 — Settlement reader rewrite, commit 3 (reader modules, pure, tested)
 - app/src/settlementReader/: schema.ts (structured-output schemas, closed), prompt.ts, range.ts (content range: TOTAL CASH FLOW, else TOTAL STATEMENT; max 12 attachments), toExtraction.ts (model copy -> contract Extraction), machine.ts (reading/ready/needs_input/failed, max 2 reads, identical result stops, fallback split), cost.ts (per role).
 - core.ts exports them; core.gen.js rebuilt. Not wired to the server or the app yet (commits 4, 5).

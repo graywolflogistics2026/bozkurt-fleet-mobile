@@ -100,6 +100,8 @@ import {
   type JobRowForDiagnose,
 } from "./diagnose.ts";
 import { AI_IMPORT_DEPLOYED_AT, AI_IMPORT_GIT_HASH } from "./buildStamp.ts";
+import { isReaderRow, runReaderJob, type ModelReply, type PromptInputs as ReaderPromptInputs, type ReaderKit, type ReaderRowProgress } from "./reader/server.ts";
+import * as readerCore from "./reader/core.gen.js";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -2124,6 +2126,11 @@ async function handleJobResume(
     .eq("id", jobId)
     .maybeSingle();
   if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
+  // A reader job (progress.reader) is never handed to the old engine.
+  if (!job.page_plan) {
+    const { data: withProgress } = await supabase.from("import_jobs").select("progress").eq("id", jobId).maybeSingle();
+    if (isReaderRow(withProgress?.progress)) return await handleReadResume(supabase, userId, { jobId }, invocationStartedAt);
+  }
 
   const retryFailed = body.retryFailed !== false;
   let plan = job.page_plan as StoredPlan | null;
@@ -2430,13 +2437,256 @@ async function handleReadPages(
 }
 
 // Mode 'continue_job': the next run of a chain, requested by the previous
-// run with the service key. Never accepted with a user token.
+// run with the service key. Never accepted with a user token. A reader job
+// (progress.reader) continues in the new reader; any other in the old one.
 async function handleJobContinue(body: JobRequestBody, invocationStartedAt: number): Promise<Response> {
   if (!body.jobId) return errorResponse("bad_request", "jobId is required.", 400);
   const admin = getServiceRoleAdminClient();
   if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now.", 500);
-  runInBackground(runJobRun(admin, body.jobId, invocationStartedAt));
+  const { data: row } = await admin.from("import_jobs").select("progress").eq("id", body.jobId).maybeSingle();
+  if (row && isReaderRow(row.progress)) runInBackground(runReaderJob(admin, body.jobId, invocationStartedAt, readerKit()));
+  else runInBackground(runJobRun(admin, body.jobId, invocationStartedAt));
   return accepted({ jobId: body.jobId });
+}
+
+// ============================================================================
+// THE SETTLEMENT READER (owner decision 2026-11-13; reader/server.ts, the
+// decisions in reader/core.gen.js). Modes: read_start (a new import),
+// read_again (a failed job, while reads remain), read_answer (the owner's
+// typed profit lines, no model call), read_resume (the app's backup restart
+// of a reading job whose worker stopped). Job status column: reading ->
+// processing/queued, ready -> ready, needs_input -> needs_decision,
+// failed -> failed; the details are progress.reader. The old reader's modes
+// stay until the owner confirms the device test (commit 6 deletes them).
+// ============================================================================
+
+function readerKit(): ReaderKit {
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  return {
+    limits: JOB_LIMITS,
+    anthropicKey,
+    getCooldownMs: getRateLimitCooldownMs,
+    setCooldown: setRateLimitCooldown,
+    async general({ bytes, mediaType, inputs, timeoutMs }): Promise<ModelReply> {
+      const started = performance.now();
+      if (!anthropicKey) return { outcome: { ok: false, error: "api_error", detail: "ANTHROPIC_API_KEY not set" }, usage: null, ms: 0 };
+      const prompt = buildExtractionPrompt(inputs.docHint, inputs.locale, inputs.customCategories, inputs.learningRules, inputs.carrierCodeMaps);
+      const data = bytesToBase64(bytes);
+      const block = mediaType.startsWith("image/")
+        ? { type: "image", source: { type: "base64", media_type: mediaType, data } }
+        : { type: "document", source: { type: "base64", media_type: "application/pdf", data } };
+      const r = await extractOnePass(anthropicKey, block, prompt, timeoutMs, MAX_ANTHROPIC_ATTEMPTS);
+      const ms = Math.round(performance.now() - started);
+      if ("errorType" in r) {
+        const error = r.errorType === "timeout"
+          ? "timeout"
+          : r.errorType === "truncated"
+          ? "max_tokens"
+          : r.errorType === "model_refusal"
+          ? "refusal"
+          : r.errorType === "parse_failed"
+          ? "unreadable_reply"
+          : r.errorType === "rate_limited"
+          ? "busy"
+          : "api_error";
+        return { outcome: { ok: false, error, detail: scrubBankDigitsInText(r.message).slice(0, 300) }, usage: null, ms };
+      }
+      const created = mediaType.startsWith("image/") ? null : pdfCreationDateOf(bytes);
+      return { outcome: { ok: true, value: withPdfCreationDate(r.extraction, created) }, usage: null, ms };
+    },
+    async logImport(admin, userId, success, reason) {
+      await logJobUsage(admin, userId, "ai_import", success, reason);
+      if (success) await consumeCreditForUserIfOverAllowance(admin, userId);
+    },
+    startNextRun,
+    download: downloadStoredFile,
+    scrub: scrubBankDigits,
+    pdfCreationDate: pdfCreationDateOf,
+  };
+}
+
+type ReaderRequestBody = ReaderPromptInputs & {
+  storagePath?: string;
+  mediaType?: string;
+  fileName?: string;
+  jobId?: string;
+  importDate?: string;
+  answers?: { label?: unknown; amount?: unknown }[];
+};
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+}
+
+// Mode 'read_start': a new import read by the new reader. Same limits as
+// every import (daily count, allowance, file size, page count); a PDF
+// starts with the range call, a photo goes to the general reader.
+async function handleReadStart(supabase: ReturnType<typeof createClient>, userId: string, body: ReaderRequestBody, invocationStartedAt: number): Promise<Response> {
+  if (!edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
+  if (!body.storagePath || !body.mediaType) return errorResponse("bad_request", "storagePath and mediaType are required.", 400);
+  if (!body.storagePath.startsWith(`${userId}/`)) return errorResponse("bad_request", "That file could not be found.", 403);
+  const admin = getServiceRoleAdminClient();
+  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
+  const { data: inserted, error: insertError } = await supabase
+    .from("import_jobs")
+    .insert({ user_id: userId, storage_path: body.storagePath, media_type: body.mediaType, file_name: body.fileName ?? null, status: "queued" })
+    .select("id")
+    .single();
+  if (insertError || !inserted) {
+    console.error(`[ai-import] read_start insert failed: ${insertError?.message ?? "no row returned"}`);
+    return errorResponse("internal", "Could not start the import job — your data is safe. Please try again.", 500);
+  }
+  const jobId = inserted.id as string;
+  const failJob = async (message: string, step: string, status: number): Promise<Response> => {
+    await supabase.from("import_jobs").update({ status: "failed", error_message: message, error_step: step, updated_at: new Date().toISOString() }).eq("id", jobId);
+    return errorResponse(step as ErrorType, message, status);
+  };
+  const startOfDayUtc = new Date();
+  startOfDayUtc.setUTCHours(0, 0, 0, 0);
+  const { count, error: countError } = await supabase.from("documents").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("imported_at", startOfDayUtc.toISOString());
+  if (countError) return failJob("Could not check today's import count — your data is safe. Please try again.", "internal", 500);
+  if ((count ?? 0) >= DAILY_IMPORT_LIMIT) return failJob(`Daily import limit reached (${DAILY_IMPORT_LIMIT}/day). Try again tomorrow.`, "rate_limited", 429);
+  const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
+  if (!usageCheck.allowed) {
+    await logAiUsage(supabase, userId, false, "usage_limit_reached");
+    return failJob(usageCheck.message, "usage_limit_reached", 429);
+  }
+  if (!Deno.env.get("ANTHROPIC_API_KEY")) return failJob("AI reading is temporarily unavailable — your data is safe, and you can still add entries manually.", "internal", 500);
+  const bytes = await downloadStoredFile(admin, body.storagePath);
+  if (!bytes) return failJob("Could not read the uploaded file — your data is safe. Please try again.", "internal", 500);
+  const sizeRefusal = checkImportLimits(0, bytes.byteLength);
+  if (sizeRefusal) return failJob(sizeRefusal.message, sizeRefusal.code, 413);
+  const isImage = body.mediaType.startsWith("image/");
+  const totalPages = isImage ? 1 : await countPdfPages(bytes);
+  if (totalPages == null) return failJob("This PDF could not be opened — it may be damaged or password-protected. Try exporting it again.", "invalid_document", 422);
+  const pageRefusal = checkImportLimits(totalPages, bytes.byteLength);
+  if (pageRefusal) return failJob(pageRefusal.message, pageRefusal.code, 413);
+  const importDate = typeof body.importDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.importDate) ? body.importDate : new Date().toISOString().slice(0, 10);
+  const reader = isImage ? readerCore.newPhotoProgress(importDate) : readerCore.newReaderProgress(totalPages, importDate);
+  const inputs: ReaderPromptInputs = { docHint: body.docHint, locale: body.locale, customCategories: body.customCategories, learningRules: body.learningRules, carrierCodeMaps: body.carrierCodeMaps };
+  const { error: progressError } = await admin
+    .from("import_jobs")
+    .update({ progress: { reader, inputs }, status: "queued", pages_total: totalPages, updated_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .eq("user_id", userId);
+  if (progressError) return failJob("Could not start the import job — your data is safe. Please try again.", "internal", 500);
+  console.log(`[ai-import] reader ${jobId} accepted: ${totalPages} page(s), ${bytes.byteLength} bytes, ${isImage ? "photo" : "pdf"}`);
+  runInBackground(runReaderJob(admin, jobId, invocationStartedAt, readerKit(), bytes));
+  return accepted({ jobId });
+}
+
+type ReaderJobRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  progress: ReaderRowProgress;
+  result_json: unknown;
+  heartbeat_at: string | null;
+  lease_until: string | null;
+};
+
+async function loadReaderJob(supabase: ReturnType<typeof createClient>, userId: string, jobId: string | undefined): Promise<ReaderJobRow | null> {
+  if (!jobId) return null;
+  const { data: job } = await supabase
+    .from("import_jobs")
+    .select("id, user_id, status, progress, result_json, heartbeat_at, lease_until")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (!job || job.user_id !== userId || !isReaderRow(job.progress)) return null;
+  return job as unknown as ReaderJobRow;
+}
+
+// Mode 'read_again': the owner's [Read again] on a failed job. Allowed only
+// while content reads remain (max 2 per job); counts toward that max.
+async function handleReadAgain(supabase: ReturnType<typeof createClient>, userId: string, body: ReaderRequestBody, invocationStartedAt: number): Promise<Response> {
+  const admin = getServiceRoleAdminClient();
+  if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe.", 500);
+  const job = await loadReaderJob(supabase, userId, body.jobId);
+  if (!job) return errorResponse("bad_request", "That import job could not be found.", 404);
+  const next = readerCore.readAgain(job.progress.reader);
+  if (!next) return errorResponse("bad_request", "This file was already read twice. Upload it again to start a new import.", 400);
+  const { data, error } = await admin
+    .from("import_jobs")
+    .update({
+      progress: { ...job.progress, reader: next.progress },
+      status: "queued",
+      error_step: null,
+      error_message: null,
+      completed_at: null,
+      lease_owner: null,
+      lease_until: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", job.id)
+    .eq("user_id", userId)
+    .eq("status", "failed")
+    .select("id");
+  if (error || (data ?? []).length === 0) return errorResponse("internal", "Could not start reading again — your file is safe. Please try again.", 500);
+  console.log(`[ai-import] reader ${job.id}: read again (read ${next.progress.readsStarted + 1} of 2)`);
+  runInBackground(runReaderJob(admin, job.id, invocationStartedAt, readerKit()));
+  return accepted({ jobId: job.id });
+}
+
+// Mode 'read_answer': the owner typed the profit lines the statement did
+// not show (needs_input). No model call; the gate decides again.
+async function handleReadAnswer(supabase: ReturnType<typeof createClient>, userId: string, body: ReaderRequestBody, invocationStartedAt: number): Promise<Response> {
+  const admin = getServiceRoleAdminClient();
+  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
+  const job = await loadReaderJob(supabase, userId, body.jobId);
+  if (!job || !job.result_json) return errorResponse("bad_request", "That import job could not be found.", 404);
+  const answers = (Array.isArray(body.answers) ? body.answers : [])
+    .filter((a) => typeof a?.label === "string" && typeof a?.amount === "number" && Number.isFinite(a.amount))
+    .map((a) => ({ label: String(a.label), amount: a.amount as number }))
+    .slice(0, 20);
+  const p = job.progress.reader;
+  const next = readerCore.afterAnswers(p, job.result_json, answers, { importDate: p.importDate });
+  if (!next) return errorResponse("bad_request", "This import is not waiting for an answer.", 400);
+  const { data, error } = await admin
+    .from("import_jobs")
+    .update({
+      progress: { ...job.progress, reader: next.progress },
+      status: next.status,
+      error_step: next.progress.failure?.reason ?? null,
+      ...(next.extraction ? { result_json: scrubBankDigits(next.extraction) } : {}),
+      ...(next.progress.state !== "needs_input" ? { completed_at: new Date().toISOString() } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", job.id)
+    .eq("user_id", userId)
+    .eq("status", "needs_decision")
+    .select("id");
+  if (error || (data ?? []).length === 0) return errorResponse("internal", "Could not record your answer — your file is safe. Please try again.", 500);
+  console.log(`[ai-import] reader ${job.id}: answers ${answers.map((a) => a.label).join(",") || "none"} -> ${next.progress.state}`);
+  if (readerCore.pendingAttachments(next.progress).length > 0 && edgeRuntimeAvailable()) {
+    runInBackground(runReaderJob(admin, job.id, invocationStartedAt, readerKit()));
+  }
+  return jsonResponse({ jobId: job.id, state: next.progress.state, questions: next.progress.questions });
+}
+
+// Mode 'read_resume': the app's backup restart of a reading job whose
+// worker stopped (no heartbeat for 2 minutes releases its lease), or of a
+// final job with attachments left.
+async function handleReadResume(supabase: ReturnType<typeof createClient>, userId: string, body: ReaderRequestBody, invocationStartedAt: number): Promise<Response> {
+  const admin = getServiceRoleAdminClient();
+  if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe.", 500);
+  const job = await loadReaderJob(supabase, userId, body.jobId);
+  if (!job) return errorResponse("bad_request", "That import job could not be found.", 404);
+  const attachmentsLeft = readerCore.pendingAttachments(job.progress.reader).length > 0;
+  if (job.progress.reader.state !== "reading" && !attachmentsLeft) return accepted({ jobId: job.id });
+  const nowMs = Date.now();
+  const heartbeatMs = job.heartbeat_at ? new Date(job.heartbeat_at).getTime() : NaN;
+  const leaseHeld = job.lease_until != null && new Date(job.lease_until).getTime() > nowMs;
+  if (leaseHeld && leaseIsStale(Number.isFinite(heartbeatMs) ? heartbeatMs : null, nowMs)) {
+    const cutoffIso = new Date(nowMs - STALE_LEASE_AFTER_MS).toISOString();
+    await admin
+      .from("import_jobs")
+      .update({ lease_owner: null, lease_until: null })
+      .eq("id", job.id)
+      .eq("user_id", userId)
+      .or(`heartbeat_at.is.null,heartbeat_at.lt.${cutoffIso}`);
+  }
+  runInBackground(runReaderJob(admin, job.id, invocationStartedAt, readerKit()));
+  return accepted({ jobId: job.id });
 }
 
 Deno.serve(async (req: Request) => {
@@ -2549,7 +2799,7 @@ Deno.serve(async (req: Request) => {
     // job from its first page without a stored result ('retry_job' is the
     // old name, same behavior); 'answer_job' answers the page-cap question;
     // 'read_pages' re-reads chosen pages of a saved document.
-    mode?: "diagnose" | "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job" | "job_verdict";
+    mode?: "diagnose" | "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job" | "job_verdict" | "read_start" | "read_again" | "read_answer" | "read_resume";
     storagePath?: string;
     fileName?: string;
     retryJobId?: string;
@@ -2585,6 +2835,10 @@ Deno.serve(async (req: Request) => {
   if (body.mode === "read_pages") return await handleReadPages(supabase, userId, body, invocationStartedAt);
   if (body.mode === "reread_job") return await handleRereadJob(supabase, userId, body, invocationStartedAt);
   if (body.mode === "job_verdict") return await handleJobVerdict(supabase, userId, body as JobRequestBody, invocationStartedAt);
+  if (body.mode === "read_start") return await handleReadStart(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
+  if (body.mode === "read_again") return await handleReadAgain(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
+  if (body.mode === "read_answer") return await handleReadAnswer(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
+  if (body.mode === "read_resume") return await handleReadResume(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
 
   const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;
   const orderIndex = body.orderIndex ?? 0;
