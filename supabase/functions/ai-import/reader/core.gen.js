@@ -329,11 +329,33 @@ var RULES = [
   { labels: ["START UP EXCESS MILEAGE COST", "START UP AND EXCESS MILEAGE COST"], treatment: expense("Misc", { reviewOnFirst: "start_up_costs" }) }
 ];
 var RULE_BY_LABEL = new Map(RULES.flatMap((r) => r.labels.map((l) => [l, r.treatment])));
+var LABEL_ALIASES = {
+  "INTEREST INCOME FROM DEPOST": "INTEREST INCOME FROM DEPOSIT",
+  "START UP AND EXCESS MILEAGE COST": "START UP EXCESS MILEAGE COST"
+};
+var CANONICAL_LABELS = [...RULE_BY_LABEL.keys()].filter((l) => !(l in LABEL_ALIASES));
+function editDistance(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function canonicalStatementLabel(label) {
+  const n = normalizeStatementLabel(label);
+  if (RULE_BY_LABEL.has(n)) return LABEL_ALIASES[n] ?? n;
+  if (n.length < 10) return n;
+  const near = CANONICAL_LABELS.filter((l) => l.length >= 10 && editDistance(n, l, 2) <= 2);
+  return near.length === 1 ? near[0] : n;
+}
 function normalizeStatementLabel(label) {
   return label.toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
 }
 function classifyStatementLine(line) {
-  const known = RULE_BY_LABEL.get(normalizeStatementLabel(line.label));
+  const known = RULE_BY_LABEL.get(canonicalStatementLabel(line.label));
   if (known) return { treatment: known, unknown: false };
   if (line.section === "revenue") return { treatment: { kind: "revenue" }, unknown: true };
   if (line.section === "out_of_pocket") return { treatment: expense("Misc", { reviewOnFirst: "out_of_pocket_costs" }), unknown: false };
@@ -1041,7 +1063,7 @@ function statementReviewReasons(lines, _prTotal, priorLabelsSeen) {
   for (const line of lines) {
     if (line.amount === 0) continue;
     const { treatment, unknown } = classifyStatementLine(line);
-    const seen = priorLabelsSeen.has(normalizeStatementLabel(line.label));
+    const seen = priorLabelsSeen.has(canonicalStatementLabel(line.label));
     if (unknown && !seen) reasons.push({ reason: "unknown_line", label: line.label });
     else if (treatment.kind === "expense" && treatment.reviewOnFirst && !seen) reasons.push({ reason: treatment.reviewOnFirst, label: line.label });
   }
@@ -2062,7 +2084,7 @@ function diagnosePrimeBlocks(extraction, priorLabelsSeen = /* @__PURE__ */ new S
   const s = extraction?.settlement;
   if (!s || !isPrimeCarrier(s.carrier) || !s.operating) return [];
   const raw = Array.isArray(s.operating.lines) ? s.operating.lines : [];
-  const lines = raw.map((l) => ({ section: String(l.section ?? ""), label: normalizeStatementLabel(String(l.label ?? "")), amount: parseAmount(l.amount), page: Number.isInteger(l.page) ? l.page : null })).filter((l) => l.label && Number.isFinite(l.amount) && !/^TOTAL\b/.test(l.label) && statementInfoRow(l.label) == null);
+  const lines = raw.map((l) => ({ section: String(l.section ?? ""), label: canonicalStatementLabel(String(l.label ?? "")), amount: parseAmount(l.amount), page: Number.isInteger(l.page) ? l.page : null })).filter((l) => l.label && Number.isFinite(l.amount) && !/^TOTAL\b/.test(l.label) && statementInfoRow(l.label) == null);
   const totals = labeledStatementTotals(s.operating, []).values;
   const pagesOf = (section) => [...new Set(lines.filter((l) => l.section === section && l.page != null).map((l) => l.page))];
   const statementPages = [...new Set(lines.filter((l) => l.page != null).map((l) => l.page))].sort((a, b) => a - b);
@@ -2397,7 +2419,7 @@ STATEMENT OF INCOME AND EXPENSE
 - statement.weekEndingRaw: the week-ending date printed on the statement, as printed.
 - statement.rows: EVERY printed row of the statement, in print order, from the first revenue row to the LAST printed row of the statement pages. Do not stop at TOTAL STATEMENT OF INCOME & EXPENSE or at TOTAL CASH FLOW: copy every row printed after them too (PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR, the payout row such as DIRECT DEPOSIT or AMOUNT LOADED ON CARD, the performance bond row). Some statements print no cash-flow section; copy whatever is printed. Include regular rows, every TOTAL row, MILES, WEEKS IN SERVICE. Section headings that carry no amount are not rows.
 - Each row has three columns: weeks (the WEEKS / week total column), ytd (year to date), ltd (life to date). Copy each column from ITS OWN column. When the weeks cell is blank, weeks is "" even if ytd and ltd are printed: never move a value into another column.
-- Copy the label exactly as printed (e.g. "TOTAL FUEL,OIL,TAX", "PRIME POINT-OF-SALE").`;
+- Copy the label exactly as printed, even when it is misspelled (e.g. "TOTAL FUEL,OIL,TAX", "PRIME POINT-OF-SALE", "INTEREST INCOME FROM DEPOST"): never correct a label.`;
 var SETTLEMENT_PART_PROMPT = `${CONTENT_PROMPT}
 
 THIS CALL: the file holds only the settlement pages. Fill every key except the statement.`;
@@ -2566,7 +2588,7 @@ function placeStatementRows(rows) {
       return { ...row, ...values, kind: "total", section: field ? TOTAL_FIELD_SECTION[field] ?? null : null };
     }
     if (statementInfoRow(row.label ?? "") || PAYOUT_LABEL.test(label)) return { ...row, ...values, kind: "info", section: null };
-    return { ...row, ...values, kind: "line", section: TEMPLATE_SECTION.get(label) ?? null };
+    return { ...row, ...values, kind: "line", section: TEMPLATE_SECTION.get(canonicalStatementLabel(label)) ?? null };
   });
   let afterStatement = false;
   for (let i = 0; i < placed.length; i++) {

@@ -11,6 +11,7 @@ import {
   classifyStatementLine,
   isStatementSubtotalLabel,
   normalizeStatementLabel,
+  canonicalStatementLabel,
   statementInfoRow,
   type StatementInfoRow,
   type StatementLine,
@@ -649,7 +650,7 @@ export function statementReviewReasons(
   for (const line of lines) {
     if (line.amount === 0) continue;
     const { treatment, unknown } = classifyStatementLine(line);
-    const seen = priorLabelsSeen.has(normalizeStatementLabel(line.label));
+    const seen = priorLabelsSeen.has(canonicalStatementLabel(line.label));
     if (unknown && !seen) reasons.push({ reason: 'unknown_line', label: line.label });
     else if (treatment.kind === 'expense' && treatment.reviewOnFirst && !seen) reasons.push({ reason: treatment.reviewOnFirst, label: line.label });
   }
@@ -769,7 +770,7 @@ export function lineItemsIncomplete(statement: SettlementStatement | null | unde
 // Normalized labels with a non-zero amount on a stored statement — the
 // "already seen" set for first-appearance review flags.
 export function labelsSeenOn(statement: SettlementStatement | null | undefined): string[] {
-  return (statement?.prime?.lines ?? []).filter((l) => l.amount !== 0).map((l) => normalizeStatementLabel(l.label));
+  return (statement?.prime?.lines ?? []).filter((l) => l.amount !== 0).map((l) => canonicalStatementLabel(l.label));
 }
 
 // ---------------------------------------------------------------------

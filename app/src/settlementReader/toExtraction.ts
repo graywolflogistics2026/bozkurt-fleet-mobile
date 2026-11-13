@@ -14,7 +14,7 @@
 // Pure: no I/O.
 import { parseAmount } from '@/src/import/amount';
 import { PRIME_TEMPLATE } from '@/src/import/primeStatementTemplate';
-import { normalizeStatementLabel, statementInfoRow, type StatementSection } from '@/src/import/primeStatementLines';
+import { canonicalStatementLabel, normalizeStatementLabel, statementInfoRow, type StatementSection } from '@/src/import/primeStatementLines';
 import { totalFieldOfLabel, type StatementTotalField } from '@/src/import/statementTotalLabels';
 import type { Extraction, ExtractedSettlement, ExtractionPageMapEntry } from '@/src/import/types';
 import type { ContentReading, ReadSettlementLine, ReadStatementRow } from './schema';
@@ -92,7 +92,7 @@ export function placeStatementRows(rows: ReadStatementRow[]): PlacedRow[] {
       return { ...row, ...values, kind: 'total', section: field ? (TOTAL_FIELD_SECTION[field] ?? null) : null };
     }
     if (statementInfoRow(row.label ?? '') || PAYOUT_LABEL.test(label)) return { ...row, ...values, kind: 'info', section: null };
-    return { ...row, ...values, kind: 'line', section: TEMPLATE_SECTION.get(label) ?? null };
+    return { ...row, ...values, kind: 'line', section: TEMPLATE_SECTION.get(canonicalStatementLabel(label)) ?? null };
   });
   // An unknown label: the block of the next TOTAL row of a block printed
   // after it, as long as no "grand" total (variable, operating, statement)

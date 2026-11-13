@@ -30,7 +30,7 @@ STATEMENT OF INCOME AND EXPENSE
 - statement.weekEndingRaw: the week-ending date printed on the statement, as printed.
 - statement.rows: EVERY printed row of the statement, in print order, from the first revenue row to the LAST printed row of the statement pages. Do not stop at TOTAL STATEMENT OF INCOME & EXPENSE or at TOTAL CASH FLOW: copy every row printed after them too (PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR, the payout row such as DIRECT DEPOSIT or AMOUNT LOADED ON CARD, the performance bond row). Some statements print no cash-flow section; copy whatever is printed. Include regular rows, every TOTAL row, MILES, WEEKS IN SERVICE. Section headings that carry no amount are not rows.
 - Each row has three columns: weeks (the WEEKS / week total column), ytd (year to date), ltd (life to date). Copy each column from ITS OWN column. When the weeks cell is blank, weeks is "" even if ytd and ltd are printed: never move a value into another column.
-- Copy the label exactly as printed (e.g. "TOTAL FUEL,OIL,TAX", "PRIME POINT-OF-SALE").`;
+- Copy the label exactly as printed, even when it is misspelled (e.g. "TOTAL FUEL,OIL,TAX", "PRIME POINT-OF-SALE", "INTEREST INCOME FROM DEPOST"): never correct a label.`;
 
 export const SETTLEMENT_PART_PROMPT = `${CONTENT_PROMPT}
 

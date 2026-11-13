@@ -7,7 +7,7 @@
 // pages to read again. PRIME-ONLY (carrier isolation): never applied to any
 // other carrier's statement.
 import { labeledStatementTotals } from './statementTotalLabels';
-import { normalizeStatementLabel, statementInfoRow, type StatementSection } from './primeStatementLines';
+import { canonicalStatementLabel, statementInfoRow, type StatementSection } from './primeStatementLines';
 import { parseAmount } from './amount';
 import { isPrimeCarrier } from './primeOperatingStatement';
 import type { Extraction } from './types';
@@ -109,7 +109,7 @@ export function diagnosePrimeBlocks(extraction: Extraction | null | undefined, p
   if (!s || !isPrimeCarrier(s.carrier) || !s.operating) return [];
   const raw: RawLine[] = Array.isArray(s.operating.lines) ? (s.operating.lines as RawLine[]) : [];
   const lines = raw
-    .map((l) => ({ section: String(l.section ?? ''), label: normalizeStatementLabel(String(l.label ?? '')), amount: parseAmount(l.amount), page: Number.isInteger(l.page) ? (l.page as number) : null }))
+    .map((l) => ({ section: String(l.section ?? ''), label: canonicalStatementLabel(String(l.label ?? '')), amount: parseAmount(l.amount), page: Number.isInteger(l.page) ? (l.page as number) : null }))
     .filter((l) => l.label && Number.isFinite(l.amount) && !/^TOTAL\b/.test(l.label) && statementInfoRow(l.label) == null);
   const totals = labeledStatementTotals(s.operating, []).values as Record<string, number | null>;
   const pagesOf = (section: StatementSection) => [...new Set(lines.filter((l) => l.section === section && l.page != null).map((l) => l.page as number))];

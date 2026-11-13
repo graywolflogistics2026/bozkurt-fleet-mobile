@@ -120,6 +120,39 @@ const RULES: Rule[] = [
 
 const RULE_BY_LABEL = new Map<string, LineTreatment>(RULES.flatMap((r) => r.labels.map((l) => [l, r.treatment] as const)));
 
+// Prime's own spellings of a known label (Prime PRINTS "DEPOST").
+const LABEL_ALIASES: Record<string, string> = {
+  'INTEREST INCOME FROM DEPOST': 'INTEREST INCOME FROM DEPOSIT',
+  'START UP AND EXCESS MILEAGE COST': 'START UP EXCESS MILEAGE COST',
+};
+const CANONICAL_LABELS = [...RULE_BY_LABEL.keys()].filter((l) => !(l in LABEL_ALIASES));
+
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+// MISSPELLED PRINTED LABELS (owner 2026-11-13, 08/28 device test): a read
+// label is matched to the known Prime label it names — exact, a known
+// Prime spelling, or ONE known label within 2 letters (labels of 10+
+// letters; the closest two known labels differ by 3+). Every label
+// comparison (classification, the block diagnosis, the profit lines the
+// card asks for, "seen before") goes through this. Anything else stays as
+// read (normalized) — never guessed.
+export function canonicalStatementLabel(label: string): string {
+  const n = normalizeStatementLabel(label);
+  if (RULE_BY_LABEL.has(n)) return LABEL_ALIASES[n] ?? n;
+  if (n.length < 10) return n;
+  const near = CANONICAL_LABELS.filter((l) => l.length >= 10 && editDistance(n, l, 2) <= 2);
+  return near.length === 1 ? near[0] : n;
+}
+
 export function normalizeStatementLabel(label: string): string {
   return label
     .toUpperCase()
@@ -131,7 +164,7 @@ export function normalizeStatementLabel(label: string): string {
 // every other line counts as Misc — both flagged needs-review, never
 // silently dropped or guessed into a category.
 export function classifyStatementLine(line: Pick<StatementLine, 'section' | 'label'>): { treatment: LineTreatment; unknown: boolean } {
-  const known = RULE_BY_LABEL.get(normalizeStatementLabel(line.label));
+  const known = RULE_BY_LABEL.get(canonicalStatementLabel(line.label));
   if (known) return { treatment: known, unknown: false };
   if (line.section === 'revenue') return { treatment: { kind: 'revenue' }, unknown: true };
   if (line.section === 'out_of_pocket') return { treatment: expense('Misc', { reviewOnFirst: 'out_of_pocket_costs' }), unknown: false };

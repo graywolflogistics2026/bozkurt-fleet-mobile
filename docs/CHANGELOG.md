@@ -11,6 +11,11 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Fix 1/4 (08/28 device test): Prime's misspelled label INTEREST INCOME FROM DEPOST
+- Cause: labels were compared letter for letter; when the DEPOST row was read after its block total the mapper could not place it, OTHER INCOME AND EXPENSE did not add up and the card asked the owner to type it (left 0 -> profit 436.49, not 436.04).
+- primeStatementLines.ts canonicalStatementLabel(): exact, a known Prime spelling, or one known label within 2 letters (10+ letters). Used by classification, toExtraction (block of a row), diagnosePrimeBlocks/profitLinesToAsk, seen-before labels. Prompt: copy a misspelled label as printed.
+- Test: settlementReader/__tests__/misspelledLabels.test.ts (08/28: line 0.45, no card, profit 436.04). Ships: deploy script, eas update. No SQL.
+
 ## 2026-11-13 — Fix: 07/17 device test (no cash-flow section) failed generically
 - Cause: the content prompt stopped statement rows at TOTAL STATEMENT, so on a week with no cash-flow section SETTLEMENT TO OPERATOR / AMOUNT LOADED ON CARD were not copied; the gate required SETTLEMENT TO OPERATOR -> statement_not_read [settlementToOperator]; the screen never showed the failures list.
 - prompt.ts: copy every statement row to the last printed row. settlementStatement.ts: SETTLEMENT TO OPERATOR no longer required (the payout row ties instead); statement week also read M/D/YY (printedDates.ts too).
