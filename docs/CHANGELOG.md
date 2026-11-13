@@ -11,6 +11,11 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Settlement reader rewrite, commit 2 (one gate on the server)
+- app/src/settlementReader/core.ts: the gate, sanitize chain and profit-line questions in one entry; esbuild (devDependency) bundles it into supabase/functions/ai-import/reader/core.gen.js (`npm run build:reader`, generated, committed).
+- coreBundle.test.ts: the bundle is fresh, imports nothing, and gives the same 08/14 verdict as the app gate.
+- Nothing imports the bundle yet; nothing to ship.
+
 ## 2026-11-13 — Settlement reader rewrite, commit 1 (docs + golden data)
 - docs/decisions/settlement-data-contract.md: the contract and gate identities written from the code; 9 differences to older docs listed (no code change).
 - docs/decisions/settlement-reader-2026-11.md: the approved design and the owner's 5 answers.
