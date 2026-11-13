@@ -33,7 +33,7 @@ import {
   downloadImportJobFileToLocal,
   type BatchStartResult,
 } from '@/src/data/importJobs';
-import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES, type ImportJob } from '@/src/import/importJobs';
+import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES, oldestFirst, type ImportJob } from '@/src/import/importJobs';
 import { clearReaderReadAgain, readerFailureLines, readerJobView, readerReportLines, MAX_CONTENT_READS } from '@/src/import/readerJob';
 import { gateFailureLines, printedStatementPages } from '@/src/import/gateFailureText';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
@@ -973,7 +973,8 @@ export default function Import() {
     const picked = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true, multiple: true });
     if (picked.canceled || !picked.assets?.length) return;
 
-    let assets = picked.assets;
+    // Oldest first (round 2 item K5); more than 3: the 3 oldest.
+    let assets = oldestFirst(picked.assets);
     if (assets.length > MAX_BATCH_IMPORT_FILES) {
       Alert.alert(t('importJobs.batchTooManyTitle'), t('importJobs.batchTooManyMessage', { max: MAX_BATCH_IMPORT_FILES }));
       assets = assets.slice(0, MAX_BATCH_IMPORT_FILES);

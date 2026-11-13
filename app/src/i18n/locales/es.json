@@ -2467,7 +2467,7 @@
       "attachmentsReadyTitle": "Adjuntos leídos — revisa para añadirlos"
     },
     "batchTooManyTitle": "Demasiados archivos",
-    "batchTooManyMessage": "Puedes importar hasta {{max}} archivos a la vez — solo se seleccionaron los primeros {{max}}.",
+    "batchTooManyMessage": "Puede importar hasta {{max}} archivos a la vez, del más antiguo al más reciente: se seleccionaron los {{max}} más antiguos.",
     "batchSomeFilesTooLarge": "Estos archivos son demasiado grandes y se omitieron: {{names}}",
     "uploadingBatch": "Subiendo {{count}} archivos…",
     "batchLimitTitle": "Límite mensual alcanzado",

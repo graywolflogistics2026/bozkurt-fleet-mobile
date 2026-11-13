@@ -2467,7 +2467,7 @@
       "attachmentsReadyTitle": "تمت قراءة المرفقات — راجعها لإضافتها"
     },
     "batchTooManyTitle": "عدد كبير جدًا من الملفات",
-    "batchTooManyMessage": "يمكنك استيراد حتى {{max}} ملفات دفعة واحدة — تم اختيار أول {{max}} فقط.",
+    "batchTooManyMessage": "You can import up to {{max}} files at once, oldest first — the {{max}} oldest were selected.",
     "batchSomeFilesTooLarge": "هذه الملفات كبيرة جدًا وتم تخطّيها: {{names}}",
     "uploadingBatch": "جارٍ رفع {{count}} ملفات…",
     "batchLimitTitle": "تم بلوغ الحد الشهري",

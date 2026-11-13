@@ -10,6 +10,7 @@ import {
   runBatchWithConcurrency,
   nextBatchReviewStep,
   MAX_BATCH_IMPORT_FILES,
+  oldestFirst,
   sortImportJobsForDisplay,
   sortJobIdsByDocumentDate,
   type ImportJob,
@@ -395,8 +396,8 @@ describe('nextBatchReviewStep (BATCH REVIEW FLOW pass)', () => {
 });
 
 describe('MAX_BATCH_IMPORT_FILES', () => {
-  it('caps a single picker selection at 10', () => {
-    expect(MAX_BATCH_IMPORT_FILES).toBe(10);
+  it('caps a single picker selection at 3 (round 2 item K5, owner 2026-11-13)', () => {
+    expect(MAX_BATCH_IMPORT_FILES).toBe(3);
   });
 });
 
@@ -458,5 +459,18 @@ describe('sortJobIdsByDocumentDate (MULTI-FILE IMPORT ORDER pass)', () => {
 
   it('empty input returns an empty list', () => {
     expect(sortJobIdsByDocumentDate([])).toEqual([]);
+  });
+});
+
+describe('oldestFirst (round 2 item K5)', () => {
+  it('orders by the file time, then the name; a file without a time goes last', () => {
+    const files = [
+      { name: 'settlement.pdf', lastModified: 300 },
+      { name: 'b.pdf', lastModified: null },
+      { name: 'settlement (2).pdf', lastModified: 100 },
+      { name: 'a.pdf' },
+      { name: 'settlement (1).pdf', lastModified: 200 },
+    ];
+    expect(oldestFirst(files).map((f) => f.name)).toEqual(['settlement (2).pdf', 'settlement (1).pdf', 'settlement.pdf', 'a.pdf', 'b.pdf']);
   });
 });

@@ -2467,7 +2467,7 @@
       "attachmentsReadyTitle": "Ekler okundu — eklemek için inceleyin"
     },
     "batchTooManyTitle": "Çok fazla dosya",
-    "batchTooManyMessage": "Bir seferde en fazla {{max}} dosya içe aktarabilirsiniz — yalnızca ilk {{max}} dosya seçildi.",
+    "batchTooManyMessage": "Bir seferde en fazla {{max}} dosya, en eskiden başlayarak içe aktarılabilir — en eski {{max}} dosya seçildi.",
     "batchSomeFilesTooLarge": "Bu dosyalar çok büyük ve atlandı: {{names}}",
     "uploadingBatch": "{{count}} dosya yükleniyor…",
     "batchLimitTitle": "Aylık limite ulaşıldı",

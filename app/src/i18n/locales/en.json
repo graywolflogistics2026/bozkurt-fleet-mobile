@@ -2527,7 +2527,7 @@
       "attachmentsReadyTitle": "Attachments read — review to add them"
     },
     "batchTooManyTitle": "Too many files",
-    "batchTooManyMessage": "You can import up to {{max}} files at once — only the first {{max}} were selected.",
+    "batchTooManyMessage": "You can import up to {{max}} files at once, oldest first — the {{max}} oldest were selected.",
     "batchSomeFilesTooLarge": "These files are too large and were skipped: {{names}}",
     "uploadingBatch": "Uploading {{count}} files…",
     "batchLimitTitle": "Monthly limit reached",

@@ -418,7 +418,25 @@ export async function runOptionalSideEffect(fn: (() => Promise<void>) | null | u
 // how many files a single picker selection may enqueue at once. A single
 // pick (the common case) always keeps using the pre-existing one-job flow
 // unchanged; this only bounds a genuine multi-select.
-export const MAX_BATCH_IMPORT_FILES = 10;
+// ROUND 2 item K5 (owner 2026-11-13): at most 3 files per import, started
+// one at a time, oldest first (was 10, three at a time, in picker order).
+export const MAX_BATCH_IMPORT_FILES = 3;
+
+// Oldest first: the file's own last-modified time (a carrier portal names
+// every week the same), then its name; a file without a time goes last, in
+// picker order. Pure.
+export function oldestFirst<T extends { name: string; lastModified?: number | null }>(files: T[]): T[] {
+  return files
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => {
+      const ta = a.f.lastModified ?? Number.POSITIVE_INFINITY;
+      const tb = b.f.lastModified ?? Number.POSITIVE_INFINITY;
+      if (ta !== tb) return ta - tb;
+      const byName = a.f.name.localeCompare(b.f.name, 'en', { numeric: true });
+      return byName !== 0 ? byName : a.i - b.i;
+    })
+    .map((x) => x.f);
+}
 
 // The generic, order-preserving bounded-concurrency worker pool this app's
 // server side already established for exactly this class of problem

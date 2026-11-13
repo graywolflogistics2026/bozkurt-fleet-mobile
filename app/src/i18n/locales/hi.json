@@ -2467,7 +2467,7 @@
       "attachmentsReadyTitle": "Attachments read — review to add them"
     },
     "batchTooManyTitle": "बहुत सारी फ़ाइलें",
-    "batchTooManyMessage": "आप एक बार में {{max}} तक फ़ाइलें आयात कर सकते हैं — केवल पहली {{max}} चुनी गईं।",
+    "batchTooManyMessage": "एक बार में अधिकतम {{max}} फ़ाइलें, सबसे पुरानी पहले, आयात की जा सकती हैं — सबसे पुरानी {{max}} चुनी गईं।",
     "batchSomeFilesTooLarge": "ये फ़ाइलें बहुत बड़ी हैं और छोड़ दी गईं: {{names}}",
     "uploadingBatch": "{{count}} फ़ाइलें अपलोड हो रही हैं…",
     "batchLimitTitle": "मासिक सीमा पूरी हो गई",

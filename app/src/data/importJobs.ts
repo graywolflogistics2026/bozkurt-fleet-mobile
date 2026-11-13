@@ -344,7 +344,9 @@ export function useStartImportJob() {
 // others" (spec item 5) is what runBatchWithConcurrency's own
 // per-item try/catch guarantees — one file's upload/invoke failure never
 // stops or skips any other file's own attempt.
-const BATCH_START_CONCURRENCY = 3;
+// Round 2 item K5 (owner 2026-11-13): one at a time, in the order given
+// (oldest first, src/import/importJobs.ts oldestFirst()).
+const BATCH_START_CONCURRENCY = 1;
 
 export type BatchStartResult = { fileName: string; jobId?: string; error?: string };
 
