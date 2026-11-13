@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Settlement reader rewrite, commit 3 (reader modules, pure, tested)
+- app/src/settlementReader/: schema.ts (structured-output schemas, closed), prompt.ts, range.ts (content range: TOTAL CASH FLOW, else TOTAL STATEMENT; max 12 attachments), toExtraction.ts (model copy -> contract Extraction), machine.ts (reading/ready/needs_input/failed, max 2 reads, identical result stops, fallback split), cost.ts (per role).
+- core.ts exports them; core.gen.js rebuilt. Not wired to the server or the app yet (commits 4, 5).
+- Tests: goldenWeeks (13 weeks + contract numbers), readerNotes (21 named cases), machine (states, no loops, split, range table, 17-page attachments, schemas, cost).
+- Ships: nothing yet (no SQL, no deploy, no eas update).
+
 ## 2026-11-13 — Fix: owed to carrier on a negative week without a cash-flow section
 - Found by the 13-week golden test: 07/24 (no TOTAL CASH FLOW printed) showed owed 1,155.35 (net due) instead of 1,155.28 (TOTAL STATEMENT, the printed DUE TO CARRIER).
 - settlementStatement.ts buildSettlementStatement(): a negative week's deposit is TOTAL CASH FLOW, else TOTAL STATEMENT + balance forward. Test negativeWeekNoCashFlow.test.ts (failed before the fix).

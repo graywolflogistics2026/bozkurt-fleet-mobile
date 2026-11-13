@@ -734,9 +734,9 @@ function labeledStatementTotals(op, lines) {
   const totalLines = Array.isArray(op?.totalLines) ? op.totalLines : null;
   if (totalLines && totalLines.length > 0) {
     const seen = /* @__PURE__ */ new Map();
-    for (const t of totalLines) {
-      const field = totalFieldOfLabel(t?.label);
-      const amount = printed(t?.amount);
+    for (const t2 of totalLines) {
+      const field = totalFieldOfLabel(t2?.label);
+      const amount = printed(t2?.amount);
       if (!field || amount == null) continue;
       const list = seen.get(field) ?? [];
       if (!list.some((v) => Math.abs(v - amount) < 5e-3)) list.push(r22(amount));
@@ -825,7 +825,7 @@ function buildPrimeStatementCheck(extraction) {
     lines.push({ section, label, amount });
   }
   if (lines.length === 0) return null;
-  const t = (v) => printedTotal(v);
+  const t2 = (v) => printedTotal(v);
   const labeledAll = labeledStatementTotals(op, lines);
   const labeled = labeledAll.values;
   const totals = {
@@ -842,10 +842,10 @@ function buildPrimeStatementCheck(extraction) {
     totalOtherIncomeAndExpense: labeled.weekTotalOtherIncomeAndExpense,
     totalOperatingExpenses: labeled.weekTotalOperatingExpenses,
     totalStatement: labeled.weekTotalStatement,
-    settlementToOperator: t(op.settlementToOperator),
-    directDeposit: t(op.directDeposit),
-    miles: t(op.weekMiles) ?? printedTotal(infoRows.miles),
-    priorWeekBalanceForward: signedBalanceForward(t(op.priorWeekBalanceForward) ?? printedTotal(infoRows.balance_forward), labeled.weekTotalCashFlow, labeled.weekTotalStatement),
+    settlementToOperator: t2(op.settlementToOperator),
+    directDeposit: t2(op.directDeposit),
+    miles: t2(op.weekMiles) ?? printedTotal(infoRows.miles),
+    priorWeekBalanceForward: signedBalanceForward(t2(op.priorWeekBalanceForward) ?? printedTotal(infoRows.balance_forward), labeled.weekTotalCashFlow, labeled.weekTotalStatement),
     totalCashFlow: labeled.weekTotalCashFlow
   };
   if (totals.settlementToOperator == null) totals.settlementToOperator = printedTotal(infoRows.settlement_to_operator);
@@ -1084,8 +1084,8 @@ function buildSettlementStatement(extraction, options) {
       printed2.deposit = prime.totals.settlementToOperator;
       printed2.depositSource = "settlement_to_operator";
     } else if (prime.negativeWeek) {
-      const t = prime.totals;
-      const cashFlow = t.totalCashFlow ?? (t.totalStatement != null ? round23(t.totalStatement + (t.priorWeekBalanceForward ?? 0)) : null);
+      const t2 = prime.totals;
+      const cashFlow = t2.totalCashFlow ?? (t2.totalStatement != null ? round23(t2.totalStatement + (t2.priorWeekBalanceForward ?? 0)) : null);
       if (cashFlow != null) {
         printed2.deposit = cashFlow;
         printed2.depositSource = "settlement_to_operator";
@@ -1316,7 +1316,7 @@ function canonicalExpenseBreakdown(deductions, fuelPurchases, maintenanceRecords
   const deductionsTotal = deductions.filter(reducesTrueProfit).reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
   const fuelTotal = resolveFuelRows(fuelPurchases, deductions).counted.reduce((sum, r) => sum + r.cost, 0);
   const maintenanceTotal = maintenanceRecords.reduce((sum, m) => sum + Number(m.cost ?? 0), 0);
-  const tollsTotal = tolls.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  const tollsTotal = tolls.reduce((sum, t2) => sum + Number(t2.amount ?? 0), 0);
   const reimbursementsTotal = sumReimbursements(reimbursements);
   return {
     deductionsTotal,
@@ -1571,8 +1571,8 @@ function sanitizeExtractionDates(extraction, now = /* @__PURE__ */ new Date()) {
         tractorFuel: s.tractorFuel?.map((f) => ({ ...f, date: line(f.date) })),
         reeferFuel: s.reeferFuel?.map((f) => ({ ...f, date: line(f.date) })),
         tolls: s.tolls ? {
-          ezpass: s.tolls.ezpass ? { ...s.tolls.ezpass, items: s.tolls.ezpass.items?.map((t) => ({ ...t, date: line(t.date) })) } : void 0,
-          drivewyze: s.tolls.drivewyze ? { ...s.tolls.drivewyze, items: s.tolls.drivewyze.items?.map((t) => ({ ...t, date: line(t.date) })) } : void 0
+          ezpass: s.tolls.ezpass ? { ...s.tolls.ezpass, items: s.tolls.ezpass.items?.map((t2) => ({ ...t2, date: line(t2.date) })) } : void 0,
+          drivewyze: s.tolls.drivewyze ? { ...s.tolls.drivewyze, items: s.tolls.drivewyze.items?.map((t2) => ({ ...t2, date: line(t2.date) })) } : void 0
         } : s.tolls
       },
       compliance: extraction.compliance ? { ...extraction.compliance, issueDate: fix(extraction.compliance.issueDate) } : extraction.compliance
@@ -1598,8 +1598,8 @@ function sanitizeExtractionDates(extraction, now = /* @__PURE__ */ new Date()) {
     tractorFuel: s.tractorFuel?.map((f) => ({ ...f, date: fix(f.date) })),
     reeferFuel: s.reeferFuel?.map((f) => ({ ...f, date: fix(f.date) })),
     tolls: s.tolls ? {
-      ezpass: s.tolls.ezpass ? { ...s.tolls.ezpass, items: s.tolls.ezpass.items?.map((t) => ({ ...t, date: fix(t.date) })) } : void 0,
-      drivewyze: s.tolls.drivewyze ? { ...s.tolls.drivewyze, items: s.tolls.drivewyze.items?.map((t) => ({ ...t, date: fix(t.date) })) } : void 0
+      ezpass: s.tolls.ezpass ? { ...s.tolls.ezpass, items: s.tolls.ezpass.items?.map((t2) => ({ ...t2, date: fix(t2.date) })) } : void 0,
+      drivewyze: s.tolls.drivewyze ? { ...s.tolls.drivewyze, items: s.tolls.drivewyze.items?.map((t2) => ({ ...t2, date: fix(t2.date) })) } : void 0
     } : s.tolls
   } : s;
   const compliance = extraction.compliance ? { ...extraction.compliance, issueDate: fix(extraction.compliance.issueDate) } : extraction.compliance;
@@ -1700,7 +1700,7 @@ function toReimbInsert(r, userId, fallbackDate) {
     amount: num2(r.amount)
   };
 }
-function toTollInsert(t, network, userId, fallbackDate, truckId = null) {
+function toTollInsert(t2, network, userId, fallbackDate, truckId = null) {
   return {
     user_id: userId,
     // docs/PENDING_SQL.md §63 (MULTI-TRUCK MODEL, owner decision) — a toll
@@ -1709,9 +1709,9 @@ function toTollInsert(t, network, userId, fallbackDate, truckId = null) {
     // to pre-existing rows.
     truck_id: truckId,
     network,
-    toll_date: toDateOrNull(t.date) ?? fallbackDate ?? null,
-    amount: num2(t.amount),
-    plaza: t.plaza ?? t.location ?? null,
+    toll_date: toDateOrNull(t2.date) ?? fallbackDate ?? null,
+    amount: num2(t2.amount),
+    plaza: t2.plaza ?? t2.location ?? null,
     // Accountant Package ORIGIN RULE (docs/PENDING_SQL.md §43, owner
     // decision 2026-08-05) — a toll extracted from a settlement's own
     // tolls section is settlement-withheld, never out-of-pocket.
@@ -1824,8 +1824,8 @@ function mapSettlement(d, userId, truckId, driverId = null) {
     accountant_category: suggestAccountantCategory(lumperExpenseCategory, "import")
   }));
   const tolls = [
-    ...(s.tolls?.ezpass?.items ?? []).map((t) => toTollInsert(t, "ezpass", userId, settlementFallbackDate, truckId)),
-    ...(s.tolls?.drivewyze?.items ?? []).map((t) => toTollInsert(t, "drivewyze", userId, settlementFallbackDate, truckId))
+    ...(s.tolls?.ezpass?.items ?? []).map((t2) => toTollInsert(t2, "ezpass", userId, settlementFallbackDate, truckId)),
+    ...(s.tolls?.drivewyze?.items ?? []).map((t2) => toTollInsert(t2, "drivewyze", userId, settlementFallbackDate, truckId))
   ];
   const loans = (s.loans ?? []).map((l) => ({
     user_id: userId,
@@ -1919,7 +1919,7 @@ function lineRouteProfit(extraction, carrierCodes = []) {
     link(deductions).map((d) => ({ ...d, tax_deductible: d.tax_deductible ?? null })),
     link(mapping.fuel).map((f) => ({ ...f, amount: f.amount ?? null })),
     link(mapping.maintenance).map((m) => ({ ...m, cost: m.cost ?? null })),
-    link(mapping.tolls).map((t) => ({ ...t, amount: t.amount ?? null })),
+    link(mapping.tolls).map((t2) => ({ ...t2, amount: t2.amount ?? null })),
     link(mapping.reimbursements).map((r) => ({ ...r, amount: r.amount ?? null }))
   );
 }
@@ -2195,10 +2195,10 @@ function evaluateSettlementGate(extraction, options) {
       const failedChecks = check.checks.filter(
         (c) => !c.passed && c.id !== "milesMatch" && c.id !== "grossMatches" && !LINE_SUM_CHECKS.includes(c.id)
       );
-      const failed = failedChecks.map((c) => c.id);
+      const failed2 = failedChecks.map((c) => c.id);
       const details = failedChecks.map(checkDetail);
-      if (failed.includes("statementWeekEnding")) return fail("date_mismatch", failed, details);
-      return failed.length > 0 ? fail("statement_check_failed", failed, details) : fail("statement_not_read", (check.gateMissing ?? []).map(String));
+      if (failed2.includes("statementWeekEnding")) return fail("date_mismatch", failed2, details);
+      return failed2.length > 0 ? fail("statement_check_failed", failed2, details) : fail("statement_not_read", (check.gateMissing ?? []).map(String));
     }
     const grossCheck = check.checks.find((c) => c.id === "grossMatches" && !c.passed);
     if (grossCheck) return fail("gross_differs", ["grossMatches"], [checkDetail(grossCheck)]);
@@ -2246,7 +2246,7 @@ function evaluateSettlementGate(extraction, options) {
     ]);
   }
   if (issueTypes.includes("depositMismatch")) return fail("deposit_differs", ["depositMismatch"], detailsOf(issues, ["depositMismatch"]));
-  const lineIssues = issueTypes.filter((t) => t === "deductionsMismatch" || t === "revenueLinesMismatch" || t === "reimbursementLinesMismatch");
+  const lineIssues = issueTypes.filter((t2) => t2 === "deductionsMismatch" || t2 === "revenueLinesMismatch" || t2 === "reimbursementLinesMismatch");
   if (lineIssues.length > 0) return fail("lines_differ", lineIssues, detailsOf(issues, lineIssues));
   if (dateCheck.issues.includes("unreadable") && !dateOk) return fail("date_unreadable", dateCheck.issues);
   const deposit = settlementDeposit({ statement: { printed: printed2 } });
@@ -2300,9 +2300,625 @@ function sanitizeExtractionMiles(extraction) {
 function sanitizeExtraction(extraction) {
   return applyPrimeOperatingStatementCheck(sanitizeExtractionMiles(sanitizeExtractionDates(extraction)));
 }
+
+// src/settlementReader/schema.ts
+var str = { type: "string" };
+var int = { type: "integer" };
+var bool = { type: "boolean" };
+var enumOf = (values) => ({ type: "string", enum: [...values] });
+function obj(properties) {
+  return { type: "object", properties, required: Object.keys(properties), additionalProperties: false };
+}
+var arr = (items) => ({ type: "array", items });
+var SETTLEMENT_PROPS = {
+  docType: enumOf(["settlement", "other"]),
+  carrier: str,
+  unit: str,
+  driverName: str,
+  settlementDateRaw: str,
+  printDateRaw: str,
+  settlementLines: arr(
+    obj({
+      page: int,
+      section: enumOf(["revenue", "reimbursement", "deduction"]),
+      code: str,
+      description: str,
+      reference: str,
+      amount: str,
+      direction: enumOf(["charge", "credit"])
+    })
+  ),
+  summary: arr(obj({ page: int, label: str, amount: str })),
+  loads: arr(obj({ page: int, order: str, origin: str, destination: str, loadedMiles: str, emptyMiles: str, revenue: str })),
+  milesLines: arr(obj({ label: str, miles: str })),
+  fuelPurchases: arr(
+    obj({ page: int, type: enumOf(["tractor", "reefer"]), date: str, location: str, state: str, gallons: str, amount: str, discount: str })
+  ),
+  accounts: arr(obj({ page: int, account: str, priorBalance: str, thisWeek: str, balance: str, ratePct: str }))
+};
+var STATEMENT_PROPS = {
+  statement: obj({
+    printed: bool,
+    weekEndingRaw: str,
+    rows: arr(obj({ page: int, label: str, weeks: str, ytd: str, ltd: str }))
+  })
+};
+var CONTENT_SCHEMA = obj({ ...SETTLEMENT_PROPS, ...STATEMENT_PROPS });
+var SETTLEMENT_PART_SCHEMA = obj(SETTLEMENT_PROPS);
+var STATEMENT_PART_SCHEMA = obj(STATEMENT_PROPS);
+var RANGE_SCHEMA = obj({
+  carrier: str,
+  isSettlement: bool,
+  pages: arr(
+    obj({
+      page: int,
+      kind: enumOf(["settlement", "accounts", "recap", "statement", "attachment", "other"]),
+      hasTotalCashFlow: bool,
+      hasTotalStatement: bool
+    })
+  )
+});
+var ATTACHMENT_SCHEMA = obj({
+  kind: enumOf(["repair_invoice", "toll_bill", "other"]),
+  repair: obj({ invoice: str, shop: str, unit: str, description: str, odometer: str, total: str }),
+  tolls: obj({ agency: str, total: str, items: arr(obj({ date: str, plaza: str, location: str, amount: str })) })
+});
+function combineParts(settlement, statement) {
+  return { ...settlement, statement: statement.statement };
+}
+
+// src/settlementReader/prompt.ts
+var CONTENT_PROMPT = `You copy a trucking carrier's weekly settlement into JSON. You never calculate, never interpret, never fill in a value that is not printed.
+
+RULES FOR EVERY VALUE
+- Copy every amount exactly as printed, as text: keep commas, the decimal point and a trailing or leading minus ("1,202.92-", "-7.12", "189.00"). A blank cell is "".
+- Copy every date exactly as printed, as text ("26/08/28", "8/27/26"). Never reorder or reformat a date. Never use today's date.
+- "page" is the page number in THIS file, starting at 1.
+- Never add rows that are not printed. Never merge two printed rows into one. A row printed on two pages is two rows.
+
+HEADER
+- carrier: the carrier's name as printed (e.g. "PRIME INC."). unit: the truck/unit number. driverName: the driver or owner name as printed, or "".
+- settlementDateRaw: the text after "SETTLEMENT DATE" (or "SETTLEMENTS DATE", "WEEK ENDING") in the settlement header. printDateRaw: the header print date ("DATE:"). Copy both as printed.
+- docType: "settlement" for a carrier settlement statement, otherwise "other" (and leave every list empty).
+
+SETTLEMENT PAGES
+- settlementLines: every printed line item of the revenue, reimbursement and deduction sections, in print order. section = the section it is printed under. code = the printed code column ("RV", "UF", "PR", "WA", ...) or "". description = the printed description. reference = the printed order/reference number or "". amount = as printed. direction = "credit" when the line pays the owner (revenue, reimbursements, a deduction printed with a minus), "charge" when it takes money from the owner (deductions, a revenue line printed with a minus).
+- summary: every LABELED total or summary row of the settlement pages, with its label as printed: TOTAL REV, TOTAL REIMBURSED, TOTAL DEDUCTIONS FROM TRUCK, NET AMOUNT DUE UNIT, GROSS AMOUNT DUE, OWNER BALANCE FORWARD, interest rows, SETTLEMENT GROSS DUE TO/FROM OWNER, the payout row (DIRECT DEPOSIT, AMOUNT LOADED ON CARD, ...), DUE TO CARRIER. A regular line item is never a summary row. A payout row that is not printed is not listed.
+- loads: one entry per printed load/trip (order number, origin, destination, loaded miles, empty miles, the load's own revenue amount), as printed; [] when none.
+- milesLines: every printed miles figure with its label (TOTAL MILES, LOADED MILES, EMPTY MILES, ...), as printed. A zero is copied as printed.
+- fuelPurchases: every printed fuel purchase (tractor or reefer): date, location, state, gallons, amount, discount, as printed.
+- accounts: every account printed on the accounts page (performance bond / escrow, ...): prior balance, this week, balance, interest rate, as printed ("" when blank).
+
+STATEMENT OF INCOME AND EXPENSE
+- statement.printed: true when the file contains a Statement of Income and Expense.
+- statement.weekEndingRaw: the week-ending date printed on the statement, as printed.
+- statement.rows: EVERY printed row of the statement, in print order, from the first revenue row to the last row (TOTAL STATEMENT OF INCOME & EXPENSE, or TOTAL CASH FLOW and the rows after it): regular rows, every TOTAL row, MILES, WEEKS IN SERVICE, PRIOR WEEK BALANCE FORWARD, SETTLEMENT TO OPERATOR, the payout row, the performance bond row. Section headings that carry no amount are not rows.
+- Each row has three columns: weeks (the WEEKS / week total column), ytd (year to date), ltd (life to date). Copy each column from ITS OWN column. When the weeks cell is blank, weeks is "" even if ytd and ltd are printed: never move a value into another column.
+- Copy the label exactly as printed (e.g. "TOTAL FUEL,OIL,TAX", "PRIME POINT-OF-SALE").`;
+var SETTLEMENT_PART_PROMPT = `${CONTENT_PROMPT}
+
+THIS CALL: the file holds only the settlement pages. Fill every key except the statement.`;
+var STATEMENT_PART_PROMPT = `${CONTENT_PROMPT}
+
+THIS CALL: the file holds only the Statement of Income and Expense pages. Fill only "statement".`;
+var RANGE_PROMPT = `You look at the first pages of a PDF and say what each page is. You never copy amounts.
+- carrier: the carrier's name printed on the settlement header, or "".
+- isSettlement: true when the file is a trucking carrier's weekly settlement statement.
+- pages: one entry per page you were given, page numbers starting at 1. kind: "settlement" (settlement header, revenue, reimbursements, deductions), "accounts" (account balances), "recap" (interest and settlement recap), "statement" (Statement of Income and Expense), "attachment" (a receipt, invoice, toll bill or delivery paper stapled behind), "other".
+- hasTotalCashFlow: the page prints a row labeled TOTAL CASH FLOW.
+- hasTotalStatement: the page prints a row labeled TOTAL STATEMENT OF INCOME & EXPENSE (or TOTAL STATEMENT).`;
+var ATTACHMENT_PROMPT = `You copy one attachment page of a trucking settlement into JSON. Copy amounts and dates exactly as printed, as text; "" when not printed. Never calculate.
+- kind: "repair_invoice" for a repair/maintenance invoice, "toll_bill" for a toll statement, otherwise "other" (leave the rest "" / []).
+- repair: invoice number, shop name, unit, a short description of the work as printed, odometer, invoice total.
+- tolls: agency name, printed total, and every toll item (date, plaza, location, amount).`;
+
+// src/settlementReader/range.ts
+var RANGE_WINDOW_PAGES = 10;
+var MAX_ATTACHMENT_PAGES = 12;
+function contentRange(reply, totalPages) {
+  const window = Math.min(totalPages, RANGE_WINDOW_PAGES);
+  const pages = (reply.pages ?? []).filter((p) => Number.isInteger(p.page) && p.page >= 1 && p.page <= window);
+  const max = (list) => list.length > 0 ? Math.max(...list) : null;
+  const cashFlow = max(pages.filter((p) => p.hasTotalCashFlow).map((p) => p.page));
+  const statementTotal = max(pages.filter((p) => p.hasTotalStatement).map((p) => p.page));
+  const contentKinds = /* @__PURE__ */ new Set(["settlement", "accounts", "recap", "statement"]);
+  const lastContentKind = max(pages.filter((p) => contentKinds.has(p.kind)).map((p) => p.page));
+  if (!reply.isSettlement) {
+    return { ok: true, range: rangeOf(reply, totalPages, window, null, false) };
+  }
+  const last = cashFlow ?? statementTotal ?? lastContentKind;
+  if (last == null) return { ok: false, reason: "range_not_found" };
+  const statementPages = pages.filter((p) => p.kind === "statement" && p.page <= last).map((p) => p.page);
+  const statementFirst = statementPages.length > 0 ? Math.min(...statementPages) : null;
+  return { ok: true, range: rangeOf(reply, totalPages, last, statementFirst != null && statementFirst > 1 ? statementFirst : null, cashFlow != null) };
+}
+function rangeOf(reply, totalPages, last, statementFirst, cashFlowPrinted) {
+  const after = [];
+  for (let p = last + 1; p <= totalPages; p++) after.push(p);
+  return {
+    carrier: (reply.carrier ?? "").trim(),
+    isSettlement: !!reply.isSettlement,
+    lastContentPage: last,
+    statementFirst,
+    cashFlowPrinted,
+    attachmentPages: reply.isSettlement ? after.slice(0, MAX_ATTACHMENT_PAGES) : [],
+    attachmentsNotRead: reply.isSettlement ? Math.max(0, after.length - MAX_ATTACHMENT_PAGES) : 0
+  };
+}
+function pagesUpTo(last, from = 1) {
+  const out = [];
+  for (let p = from; p <= last; p++) out.push(p);
+  return out;
+}
+
+// src/settlementReader/cost.ts
+var ROLE_MODEL = {
+  range: "claude-haiku-5-5",
+  content: "claude-opus-5-5",
+  split_settlement: "claude-opus-5-5",
+  split_statement: "claude-opus-5-5",
+  attachment: "claude-haiku-5-5"
+};
+var ROLE_EFFORT = {
+  range: "low",
+  content: "medium",
+  split_settlement: "medium",
+  split_statement: "medium",
+  attachment: "low"
+};
+var PRICES = {
+  "claude-opus-5-5": { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheWrite: 2.5, cacheRead: 0.2 },
+  "claude-haiku-5-5": (prompt) => prompt <= 1e5 ? { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01 } : { input: 0.5, output: 2.5, cacheWrite: 0.625, cacheRead: 0.05 }
+};
+function costOf(model, usage) {
+  const u = {
+    input: usage?.input_tokens ?? 0,
+    output: usage?.output_tokens ?? 0,
+    write: usage?.cache_creation_input_tokens ?? 0,
+    read: usage?.cache_read_input_tokens ?? 0
+  };
+  const entry = PRICES[model];
+  if (!entry) return 0;
+  const rate = typeof entry === "function" ? entry(u.input + u.write + u.read) : entry;
+  const usd = (u.input * rate.input + u.output * rate.output + u.write * rate.cacheWrite + u.read * rate.cacheRead) / 1e6;
+  return Math.round(usd * 1e4) / 1e4;
+}
+function costEntry(role, model, usage, ms, outcome, page) {
+  return {
+    role,
+    model,
+    ...page != null ? { page } : {},
+    inputTokens: usage?.input_tokens ?? 0,
+    outputTokens: usage?.output_tokens ?? 0,
+    cacheWriteTokens: usage?.cache_creation_input_tokens ?? 0,
+    cacheReadTokens: usage?.cache_read_input_tokens ?? 0,
+    usd: costOf(model, usage),
+    ms,
+    outcome
+  };
+}
+function costByRole(entries) {
+  const out = /* @__PURE__ */ new Map();
+  for (const e of entries) {
+    const row = out.get(e.role) ?? { role: e.role, calls: 0, inputTokens: 0, outputTokens: 0, usd: 0 };
+    row.calls += 1;
+    row.inputTokens += e.inputTokens + e.cacheWriteTokens + e.cacheReadTokens;
+    row.outputTokens += e.outputTokens;
+    row.usd = Math.round((row.usd + e.usd) * 1e4) / 1e4;
+    out.set(e.role, row);
+  }
+  return [...out.values()];
+}
+function totalCost(entries) {
+  return Math.round(entries.reduce((s, e) => s + e.usd, 0) * 1e4) / 1e4;
+}
+
+// src/settlementReader/toExtraction.ts
+var r25 = (n) => Math.round(n * 100) / 100;
+function cell(text) {
+  if (text == null || String(text).trim() === "") return null;
+  const n = parseAmount(String(text));
+  return Number.isFinite(n) ? r25(n) : null;
+}
+var SUMMARY_LABEL = {
+  grossRevenue: /^TOTAL REV(ENUE)?\b/,
+  reimbursements: /^TOTAL REIMB/,
+  totalDeductions: /^TOTAL DEDUCTIONS?\b/,
+  netPay: /^NET AMOUNT DUE\b/
+};
+var PAYOUT_LABEL = /\bDIRECT DEPOSIT\b|\bLOADED ON (A )?CARD\b|^AMOUNT LOADED\b/;
+function signedLineAmount(line) {
+  const v = cell(line.amount);
+  if (v == null) return null;
+  if (v < 0) return v;
+  const negative = line.section === "deduction" ? line.direction === "credit" : line.direction === "charge";
+  return negative ? -v : v;
+}
+function payoutMethodOf(label) {
+  const l = normalizeStatementLabel(label);
+  if (/\bCARD\b/.test(l)) return "card";
+  if (/\bDIRECT DEPOSIT\b|\bBANK\b|\bACH\b/.test(l)) return "bank";
+  return null;
+}
+var TEMPLATE_SECTION = new Map(PRIME_TEMPLATE.flatMap((b) => b.labels.map((l) => [l, b.section])));
+var TOTAL_FIELD_SECTION = {
+  weekTotalFreightRevenue: "revenue",
+  weekTotalOtherRevenue: "revenue",
+  weekTotalRevenue: "revenue",
+  weekTotalFuelOilTax: "fuel_oil_tax",
+  weekTotalRepair: "repair",
+  weekTotalTires: "tires",
+  weekTotalMiscellaneous: "misc",
+  weekTotalOutOfPocket: "out_of_pocket",
+  weekTotalFixedCost: "fixed",
+  weekTotalOtherIncomeAndExpense: "other"
+};
+function placeStatementRows(rows) {
+  const placed = rows.map((row) => {
+    const label = normalizeStatementLabel(row.label ?? "");
+    const values = { weeksValue: cell(row.weeks), ytdValue: cell(row.ytd), ltdValue: cell(row.ltd) };
+    if (/^TOTAL\b/.test(label)) {
+      const field = totalFieldOfLabel(row.label);
+      return { ...row, ...values, kind: "total", section: field ? TOTAL_FIELD_SECTION[field] ?? null : null };
+    }
+    if (statementInfoRow(row.label ?? "") || PAYOUT_LABEL.test(label)) return { ...row, ...values, kind: "info", section: null };
+    return { ...row, ...values, kind: "line", section: TEMPLATE_SECTION.get(label) ?? null };
+  });
+  let afterStatement = false;
+  for (let i = 0; i < placed.length; i++) {
+    const p = placed[i];
+    if (p.kind === "total" && /^TOTAL STATEMENT\b/.test(normalizeStatementLabel(p.label))) afterStatement = true;
+    if (p.kind !== "line" || p.section) continue;
+    if (afterStatement) {
+      p.kind = "info";
+      continue;
+    }
+    for (let j = i + 1; j < placed.length; j++) {
+      const q = placed[j];
+      if (q.kind !== "total") continue;
+      p.section = q.section;
+      break;
+    }
+  }
+  return placed;
+}
+var RECAP = {
+  miles: /^(WEEK(LY)? )?MILES$/,
+  balanceForward: /\bBALANCE FORWARD\b/,
+  settlementToOperator: /^SETTLEMENT TO OPERATOR$/,
+  weeksInService: /^WEEKS IN SERVICE$/,
+  perfBond: /^PERF(ORMANCE)? (BD|BOND)\b/
+};
+function operatingOf(reading, payout) {
+  const placed = placeStatementRows(reading.statement?.rows ?? []);
+  const lines = placed.filter((p) => p.kind === "line" && p.section && p.weeksValue != null).map((p) => ({ section: p.section, label: p.label.trim(), amount: p.weeksValue, weeks: p.weeksValue, ytd: p.ytdValue, ltd: p.ltdValue, page: p.page }));
+  const totalLines = placed.filter((p) => p.kind === "total" && p.weeksValue != null).map((p) => ({ label: p.label.trim(), amount: p.weeksValue, weeks: p.weeksValue, ytd: p.ytdValue, ltd: p.ltdValue }));
+  const recapLines = placed.filter((p) => p.kind === "info").map((p) => ({ label: p.label.trim(), weeks: p.weeksValue, ytd: p.ytdValue, ltd: p.ltdValue, page: p.page }));
+  const find = (re) => placed.find((p) => re.test(normalizeStatementLabel(p.label)));
+  const total = (re) => placed.find((p) => p.kind === "total" && re.test(normalizeStatementLabel(p.label)));
+  const op = { lines, totalLines, recapLines, weekEnding: "", weekEndingRaw: reading.statement?.weekEndingRaw ?? "" };
+  const miles = find(RECAP.miles);
+  if (miles?.weeksValue != null) op.weekMiles = miles.weeksValue;
+  if (miles?.ytdValue != null) op.ytdMiles = miles.ytdValue;
+  const bf = find(RECAP.balanceForward);
+  if (bf?.weeksValue != null) op.priorWeekBalanceForward = bf.weeksValue;
+  const sto = find(RECAP.settlementToOperator);
+  if (sto?.weeksValue != null) op.settlementToOperator = sto.weeksValue;
+  if (sto?.ytdValue != null) op.ytdSettlementToOperator = sto.ytdValue;
+  op.settlementToOperatorLabel = sto ? sto.label.trim() : "";
+  const statementPayout = placed.find((p) => p.kind === "info" && PAYOUT_LABEL.test(normalizeStatementLabel(p.label)) && p.weeksValue != null);
+  const pay = statementPayout ? { label: statementPayout.label.trim(), amount: statementPayout.weeksValue } : payout;
+  if (pay?.amount != null) {
+    op.directDeposit = pay.amount;
+    op.directDepositLabel = pay.label;
+    op.payoutMethod = payoutMethodOf(pay.label) ?? "";
+  }
+  const weeks = find(RECAP.weeksInService);
+  if (weeks) {
+    const v = weeks.weeksValue ?? weeks.ytdValue ?? weeks.ltdValue;
+    if (v != null) op.weeksInService = v;
+  }
+  const bond = find(RECAP.perfBond);
+  if (bond?.ytdValue != null) op.perfBondEmergencyFundYtd = bond.ytdValue;
+  const revenue = total(/^TOTAL REVENUE$/);
+  if (revenue?.ytdValue != null) op.ytdTotalRevenue = revenue.ytdValue;
+  const statement = total(/^TOTAL STATEMENT\b/);
+  if (statement?.ytdValue != null) op.ytdTotalStatement = statement.ytdValue;
+  const escrow = (reading.accounts ?? []).find((a) => /\bPERF|\bBOND\b|\bESCROW\b|\bEMERG|\bEMGCY\b/.test(normalizeStatementLabel(a.account)));
+  if (escrow) {
+    const set = (key, text) => {
+      const v = cell(text);
+      if (v != null) op[key] = v;
+    };
+    set("escrowPriorBalance", escrow.priorBalance);
+    set("escrowThisWeek", escrow.thisWeek);
+    set("escrowBalance", escrow.balance);
+    set("escrowInterestRatePct", escrow.ratePct.replace("%", ""));
+  }
+  return op;
+}
+function readingToExtraction(reading, meta) {
+  const pageMap = [
+    ...meta.contentPages.map((page) => ({ page, kind: "content", role: "content", status: "read" })),
+    ...meta.attachmentPages.map((page) => ({ page, kind: "attachment", role: "attachment", status: "pending" }))
+  ];
+  if (reading.docType !== "settlement") return { docType: "other", confidence: "low", pageMap, pagesTotal: meta.pagesTotal };
+  const summary = reading.summary ?? [];
+  const summaryRow = (re) => summary.find((r) => re.test(normalizeStatementLabel(r.label)) && cell(r.amount) != null);
+  const s = {
+    weekEnding: "",
+    printDate: "",
+    settlementDateRaw: reading.settlementDateRaw ?? "",
+    printDateRaw: reading.printDateRaw ?? "",
+    statementWeekEndingRaw: reading.statement?.weekEndingRaw ?? "",
+    carrier: reading.carrier ?? "",
+    unit: reading.unit ?? "",
+    driverName: reading.driverName ?? "",
+    totalLabels: {}
+  };
+  const totalLabels = s.totalLabels;
+  for (const field of Object.keys(SUMMARY_LABEL)) {
+    const row = summaryRow(SUMMARY_LABEL[field]);
+    if (!row) continue;
+    s[field] = cell(row.amount);
+    totalLabels[field] = row.label.trim();
+  }
+  s.settlementTotalLines = summary.map((r) => ({ label: r.label.trim(), amount: cell(r.amount) ?? r.amount }));
+  const payoutRow = summaryRow(PAYOUT_LABEL);
+  if (payoutRow) {
+    s.depositAmount = cell(payoutRow.amount);
+    totalLabels.depositAmount = payoutRow.label.trim();
+    s.payoutMethod = payoutMethodOf(payoutRow.label) ?? "";
+  }
+  const lines = (reading.settlementLines ?? []).map((l) => ({ l, amount: signedLineAmount(l) })).filter((x) => x.amount != null);
+  s.revenueItems = lines.filter((x) => x.l.section === "revenue").map(({ l, amount }) => ({ code: l.code.trim(), desc: l.description.trim(), order: l.reference.trim(), amount }));
+  s.reimbursementItems = lines.filter((x) => x.l.section === "reimbursement").map(({ l, amount }) => ({ code: l.code.trim(), desc: l.description.trim(), ref: l.reference.trim(), amount }));
+  s.deductions = lines.filter((x) => x.l.section === "deduction").map(({ l, amount }) => ({ code: l.code.trim(), desc: l.description.trim(), amount }));
+  s.loads = (reading.loads ?? []).map((l) => ({
+    order: l.order.trim(),
+    from: l.origin.trim(),
+    to: l.destination.trim(),
+    loadedMiles: cell(l.loadedMiles) ?? 0,
+    emptyMiles: cell(l.emptyMiles) ?? 0,
+    revenue: cell(l.revenue) ?? 0
+  }));
+  s.milesLines = (reading.milesLines ?? []).map((m) => ({ label: m.label.trim(), miles: cell(m.miles) }));
+  const fuel = (type) => (reading.fuelPurchases ?? []).filter((f) => f.type === type).map((f) => ({
+    date: f.date.trim(),
+    location: f.location.trim(),
+    state: f.state.trim(),
+    gallons: cell(f.gallons) ?? 0,
+    amount: cell(f.amount) ?? 0,
+    discount: cell(f.discount) ?? 0
+  }));
+  s.tractorFuel = fuel("tractor");
+  s.reeferFuel = fuel("reefer");
+  if (reading.statement?.printed && (reading.statement.rows ?? []).length > 0) {
+    s.operating = operatingOf(reading, payoutRow ? { label: payoutRow.label.trim(), amount: cell(payoutRow.amount) } : null);
+    if (s.operating.weekMiles != null) s.totalMiles = s.operating.weekMiles;
+  }
+  if (s.totalMiles == null) {
+    const total = s.milesLines.find((m) => /^TOTAL\b/.test(normalizeStatementLabel(m.label ?? "")) && m.miles != null);
+    if (total) s.totalMiles = total.miles;
+  }
+  return { docType: "settlement", confidence: "high", settlement: s, pageMap, pagesTotal: meta.pagesTotal };
+}
+
+// src/settlementReader/machine.ts
+var READER_VERSION = 2;
+var MAX_CONTENT_READS = 2;
+function newReaderProgress(pagesTotal) {
+  return {
+    v: READER_VERSION,
+    state: "reading",
+    step: "range",
+    pagesTotal,
+    readsStarted: 0,
+    reads: [],
+    range: null,
+    splitSettlement: null,
+    failure: null,
+    questions: [],
+    attachments: { total: 0, done: [], failed: [], notRead: 0 },
+    cost: [],
+    lastReadCause: "first"
+  };
+}
+function isReaderProgress(p) {
+  return !!p && typeof p === "object" && p.v === READER_VERSION;
+}
+function statusOf(state) {
+  return state === "reading" ? "processing" : state === "ready" ? "ready" : state === "needs_input" ? "needs_decision" : "failed";
+}
+var t = (progress, extraction) => ({ progress, status: statusOf(progress.state), ...extraction ? { extraction } : {} });
+function failed(p, failure) {
+  return { ...p, state: "failed", step: "done", failure, splitSettlement: null };
+}
+function afterRange(p, outcome) {
+  if (!outcome.ok) return t(failed(p, { reason: "range_not_found", error: outcome.error }));
+  if (!outcome.value.ok) return t(failed(p, { reason: "range_not_found" }));
+  const range = outcome.value.range;
+  return t({
+    ...p,
+    range,
+    step: "content",
+    attachments: { total: range.attachmentPages.length, done: [], failed: [], notRead: range.attachmentsNotRead }
+  });
+}
+function startContentRead(p) {
+  if (p.state !== "reading" || p.step !== "content") return null;
+  if (p.readsStarted >= MAX_CONTENT_READS) return null;
+  return { ...p, readsStarted: p.readsStarted + 1 };
+}
+function readFailed(p, error) {
+  const reads = [...p.reads, { n: p.readsStarted, signature: "", outcome: "model_failed", reason: error }];
+  if (p.readsStarted < MAX_CONTENT_READS) return t({ ...p, reads, step: "content", splitSettlement: null, lastReadCause: "auto" });
+  return t(failed({ ...p, reads }, { reason: "model_failed", error }));
+}
+function afterContent(p, outcome, ctx) {
+  if (outcome.ok) return decideReading(p, outcome.value, ctx);
+  if ((outcome.error === "timeout" || outcome.error === "max_tokens") && p.range?.statementFirst != null) {
+    return t({ ...p, step: "split_settlement", splitSettlement: null });
+  }
+  return readFailed(p, outcome.error);
+}
+function afterSplitSettlement(p, outcome) {
+  if (!outcome.ok) return readFailed(p, outcome.error);
+  return t({ ...p, step: "split_statement", splitSettlement: outcome.value });
+}
+function afterSplitStatement(p, outcome, ctx) {
+  if (!outcome.ok || !p.splitSettlement) return readFailed(p, outcome.ok ? "api_error" : outcome.error);
+  return decideReading({ ...p, splitSettlement: null }, combineParts(p.splitSettlement, outcome.value), ctx);
+}
+function readingSignature(extraction) {
+  const stable = (v) => {
+    if (Array.isArray(v)) return v.map(stable);
+    if (v && typeof v === "object") {
+      return Object.fromEntries(
+        Object.keys(v).sort().map((k) => [k, stable(v[k])])
+      );
+    }
+    return v;
+  };
+  const text = JSON.stringify(stable(extraction.settlement ?? extraction));
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+function verdictOf(extraction, ctx) {
+  if (extraction.docType !== "settlement" || !extraction.settlement) return { state: "ready" };
+  const sanitized = sanitizeExtraction(extraction);
+  const gate = evaluateSettlementGate(sanitized, { importDate: ctx.importDate });
+  if (!gate) return { state: "ready" };
+  if (gate.status === "fail") {
+    const d = gate.details?.[0];
+    return {
+      state: "failed",
+      failure: { reason: gate.reason, failures: gate.failures, ...d ? { check: d.check, printed: d.printed, read: d.read } : {} }
+    };
+  }
+  const questions = profitLinesToAsk(sanitized).map((q) => ({ label: q.label, printed: q.printed }));
+  return questions.length > 0 ? { state: "needs_input", questions } : { state: "ready" };
+}
+function decideReading(p, reading, ctx) {
+  const range = p.range;
+  const extraction = readingToExtraction(reading, {
+    pagesTotal: p.pagesTotal,
+    contentPages: range ? Array.from({ length: range.lastContentPage }, (_, i) => i + 1) : [],
+    attachmentPages: range?.attachmentPages ?? []
+  });
+  const signature = readingSignature(extraction);
+  const same = p.reads.some((r) => r.signature === signature);
+  const verdict = verdictOf(extraction, ctx);
+  const record = (outcome, reason) => [...p.reads, { n: p.readsStarted, signature, outcome, ...reason ? { reason } : {} }];
+  if (verdict.state === "ready") return t({ ...p, state: "ready", step: "done", reads: record("ready"), failure: null, questions: [] }, extraction);
+  if (verdict.state === "needs_input") {
+    return t({ ...p, state: "needs_input", step: "done", reads: record("needs_input"), failure: null, questions: verdict.questions }, extraction);
+  }
+  const reads = record("failed", verdict.failure.reason);
+  if (same) return t(failed({ ...p, reads }, { ...verdict.failure, reason: verdict.failure.reason }), extraction);
+  if (p.readsStarted < MAX_CONTENT_READS) return t({ ...p, reads, step: "content", lastReadCause: "auto" }, extraction);
+  return t(failed({ ...p, reads }, verdict.failure), extraction);
+}
+function afterAnswers(p, extraction, answers, ctx) {
+  if (p.state !== "needs_input") return null;
+  const typed = withTypedStatementLines(extraction, answers);
+  const verdict = verdictOf(typed, ctx);
+  if (verdict.state === "ready") return t({ ...p, state: "ready", questions: [], failure: null }, typed);
+  if (verdict.state === "needs_input") return t({ ...p, questions: verdict.questions }, typed);
+  return t(failed(p, verdict.failure), typed);
+}
+function canReadAgain(p) {
+  return p.state === "failed" && p.range != null && p.readsStarted < MAX_CONTENT_READS;
+}
+function readAgain(p) {
+  if (!canReadAgain(p)) return null;
+  return t({ ...p, state: "reading", step: "content", failure: null, lastReadCause: "read_again" });
+}
+function pendingAttachments(p) {
+  if (p.state !== "ready" && p.state !== "needs_input") return [];
+  const done = /* @__PURE__ */ new Set([...p.attachments.done, ...p.attachments.failed]);
+  return (p.range?.attachmentPages ?? []).filter((page) => !done.has(page));
+}
+function afterAttachment(p, extraction, page, outcome) {
+  const attachments = outcome.ok ? { ...p.attachments, done: [...p.attachments.done, page] } : { ...p.attachments, failed: [...p.attachments.failed, page] };
+  const next = withAttachment(extraction, page, outcome.ok ? outcome.value : null);
+  return { progress: { ...p, attachments }, extraction: next };
+}
+var cellText = (v) => (v ?? "").trim();
+var money = (v) => cell(v) ?? void 0;
+function withAttachment(extraction, page, reply) {
+  const pageMap = (extraction.pageMap ?? []).map((m) => m.page === page ? { ...m, status: reply ? "read" : "failed", kind: reply?.kind ?? m.kind } : m);
+  const s = extraction.settlement;
+  if (!s || !reply || reply.kind === "other") return { ...extraction, pageMap };
+  if (reply.kind === "repair_invoice") {
+    const r = reply.repair;
+    const item = { invoice: cellText(r.invoice), unit: cellText(r.unit), desc: [cellText(r.shop), cellText(r.description)].filter(Boolean).join(" — "), odometer: money(r.odometer), total: money(r.total) };
+    return { ...extraction, pageMap, settlement: { ...s, maintenance: [...s.maintenance ?? [], item] } };
+  }
+  const key = /DRIVEWYZE/i.test(reply.tolls.agency) ? "drivewyze" : "ezpass";
+  const prev = s.tolls?.[key] ?? {};
+  const items = reply.tolls.items.map((i) => ({ date: cellText(i.date), plaza: cellText(i.plaza), location: cellText(i.location), amount: money(i.amount) }));
+  const total = money(reply.tolls.total);
+  return {
+    ...extraction,
+    pageMap,
+    settlement: { ...s, tolls: { ...s.tolls ?? {}, [key]: { total: (prev.total ?? 0) + (total ?? 0), items: [...prev.items ?? [], ...items] } } }
+  };
+}
+function oldReaderFailure() {
+  return { reason: "old_reader" };
+}
 export {
+  ATTACHMENT_PROMPT,
+  ATTACHMENT_SCHEMA,
+  CONTENT_PROMPT,
+  CONTENT_SCHEMA,
+  MAX_ATTACHMENT_PAGES,
+  MAX_CONTENT_READS,
+  RANGE_PROMPT,
+  RANGE_SCHEMA,
+  RANGE_WINDOW_PAGES,
+  READER_VERSION,
+  ROLE_EFFORT,
+  ROLE_MODEL,
+  SETTLEMENT_PART_PROMPT,
+  SETTLEMENT_PART_SCHEMA,
+  STATEMENT_PART_PROMPT,
+  STATEMENT_PART_SCHEMA,
+  afterAnswers,
+  afterAttachment,
+  afterContent,
+  afterRange,
+  afterSplitSettlement,
+  afterSplitStatement,
+  canReadAgain,
+  combineParts,
+  contentRange,
+  costByRole,
+  costEntry,
+  costOf,
+  decideReading,
   evaluateSettlementGate,
+  isReaderProgress,
+  newReaderProgress,
+  obj,
+  oldReaderFailure,
+  pagesUpTo,
+  pendingAttachments,
   profitLinesToAsk,
+  readAgain,
+  readingSignature,
+  readingToExtraction,
   sanitizeExtraction,
+  startContentRead,
+  statusOf,
+  totalCost,
+  verdictOf,
+  withAttachment,
   withTypedStatementLines
 };
