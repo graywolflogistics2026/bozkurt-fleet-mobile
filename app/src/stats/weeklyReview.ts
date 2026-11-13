@@ -154,6 +154,13 @@ export function looksLikeExpectedScript(text: string, locale: string): boolean {
   return false;
 }
 
+// The cost per mile the weekly review cites: only for a week that has miles
+// (its own rate per mile exists), never for a 0-mile week (owner
+// 2026-11-13).
+export function weeklyReviewCpm(weekRpm: number | null, cpm: number | null): number | null {
+  return weekRpm != null && Number.isFinite(weekRpm) && cpm != null && Number.isFinite(cpm) ? cpm : null;
+}
+
 export type WeeklyReviewInputs = {
   weekEnding: string;
   gross: number;

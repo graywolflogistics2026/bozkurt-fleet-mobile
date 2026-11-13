@@ -11,6 +11,11 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Fix 4/4 (08/28): AI Coach - no cost per mile for a 0-mile week; a weekly goal only when the owner sets one
+- stats/weeklyReview.ts weeklyReviewCpm(): the review cites the account CPM only when the reviewed week has its own rate per mile (proactiveCoach.ts). Before, a 0-mile week printed the all-time CPM (19.77/mi on a near-empty account).
+- Settings: the 4-week average was PREFILLED into the weekly-goal field, so saving the business profile saved it as a goal; it is now only the placeholder + note. An already saved goal stays until the owner clears the field and saves.
+- Test: stats/__tests__/coachNoMiles.test.ts. Ships: eas update only. No SQL.
+
 ## 2026-11-13 — Fix 3/4 (08/28): zero-mile weeks - a printed TOTAL MILES 0 is 0, not unknown
 - milesSplit.ts: a week whose printed weekly miles are all 0 (no load) gets split 0/0 (source statement), Prime and other carriers; the save writes it. settlementGate.ts: card headline Miles 0 (also from a stored 0/0 week).
 - stats/miles.ts calcMiles().noLoadedMiles -> kpi.miles.noLoadedMiles. Home: "No loaded miles this week" instead of "No miles recorded yet"; Revenue/Mile, Cost/Mile, Profit/Mile show n/a; no "weeks without a loaded/empty breakdown" for printed zeros.

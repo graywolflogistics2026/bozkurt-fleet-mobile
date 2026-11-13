@@ -24,6 +24,7 @@ import {
   isCachedReviewUsable,
   looksLikeExpectedScript,
   type WeeklyReviewInputs,
+  weeklyReviewCpm,
 } from '@/src/stats/weeklyReview';
 import { useFormatters } from '@/src/i18n/format';
 import { useTranslation } from 'react-i18next';
@@ -365,7 +366,11 @@ export function useProactiveCoach() {
       // for `latestKpi`/`latestCpm` above (Scorecard/Home's own per-mile
       // trio), never a second CPM formula — this is what actually makes
       // "cost per mile" one of the numbers the weekly review cites.
-      cpm: latestCpm,
+      // NO MILES, NO PER-MILE FIGURE (owner 2026-11-13, 08/28 device test:
+      // "Cost per mile $19.77/mi" for a week with 0 miles). The reviewed
+      // week's own rate exists only when it has miles; without it the
+      // review cites no cost per mile either.
+      cpm: weeklyReviewCpm(latestRpm, latestCpm),
       deadheadPct: latestDeadheadPct,
       fuelPctOfRevenue: latestFuelPct,
       biggestChargebacks,

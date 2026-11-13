@@ -179,15 +179,11 @@ export default function Settings() {
     setBusinessHydrated(true);
   }, [businessHydrated, profileQuery.data, taxConfigQuery.data]);
 
-  // Prefill (never overwrite an in-progress edit or an already-saved goal)
-  // once the trailing average is available — same guarded pattern as
-  // ceo-mode.tsx's own prefill effect.
-  useEffect(() => {
-    if (businessHydrated && profileQuery.data?.weekly_goal == null && weeklyGoalInput === '' && suggestedWeeklyGoal != null && suggestedWeeklyGoal > 0) {
-      setWeeklyGoalInput(String(Math.round(suggestedWeeklyGoal)));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessHydrated, suggestedWeeklyGoal]);
+  // A GOAL ONLY WHEN THE OWNER SETS ONE (owner 2026-11-13, 08/28 device
+  // test): the trailing average used to be PREFILLED into this field, so
+  // saving the business profile for any other field silently saved it as
+  // the weekly goal. It is now only the field's placeholder and the note
+  // below; an empty field saves no goal.
 
   async function pickLocale(locale: SupportedLocale) {
     if (!userId || savingLocale) return;
@@ -517,7 +513,12 @@ export default function Settings() {
           )}
 
           <MutedText>{t('settings.weeklyGoalLabel')}</MutedText>
-          <Field value={weeklyGoalInput} onChangeText={setWeeklyGoalInput} keyboardType="numeric" placeholder="0.00" />
+          <Field
+            value={weeklyGoalInput}
+            onChangeText={setWeeklyGoalInput}
+            keyboardType="numeric"
+            placeholder={suggestedWeeklyGoal != null && suggestedWeeklyGoal > 0 ? String(Math.round(suggestedWeeklyGoal)) : '0.00'}
+          />
           {profileQuery.data?.weekly_goal == null && suggestedWeeklyGoal != null && suggestedWeeklyGoal > 0 && (
             <MutedText style={{ marginTop: 2 }}>
               {t('settings.weeklyGoalSuggestedNote', { amount: moneyRounded(suggestedWeeklyGoal) })}
