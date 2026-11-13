@@ -2654,6 +2654,8 @@ var WAGE_LABEL = {
   subtotalPriorWage: /^SUBTOTAL PRIOR WAGE\b/,
   totalDeductionsFromSettlements: /^TOTAL DEDUCTIONS? FROM SETTLEMENT/
 };
+var CHARGE_TOTAL_FIELDS = /* @__PURE__ */ new Set(["totalDeductions", "totalWageExpense", "totalDeductionsFromSettlements"]);
+var inConvention = (field, v) => CHARGE_TOTAL_FIELDS.has(field) ? Math.abs(v) : v;
 var NO_ENTRY = /\bNO ENTRY\b/i;
 var PAYOUT_LABEL = /\bDIRECT DEPOSIT\b|\bLOADED ON (A )?CARD\b|^AMOUNT LOADED\b/;
 function signedLineAmount(line) {
@@ -2789,7 +2791,7 @@ function readingToExtraction(reading, meta) {
   for (const field of Object.keys(SUMMARY_LABEL)) {
     const row = summaryRow(SUMMARY_LABEL[field]);
     if (!row) continue;
-    s[field] = cell(row.amount);
+    s[field] = inConvention(field, cell(row.amount));
     totalLabels[field] = row.label.trim();
   }
   s.settlementTotalLines = summary.map((r) => ({ label: r.label.trim(), amount: cell(r.amount) ?? r.amount }));
@@ -2797,7 +2799,7 @@ function readingToExtraction(reading, meta) {
     const row = summary.find((r) => WAGE_LABEL[field].test(normalizeStatementLabel(r.label)));
     if (!row) continue;
     const v = cell(row.amount);
-    if (v != null) s[field] = v;
+    if (v != null) s[field] = inConvention(field, v);
     else if (field === "totalWageExpense" && NO_ENTRY.test(row.amount ?? "")) s[field] = 0;
   }
   const payoutRow = summaryRow(PAYOUT_LABEL);

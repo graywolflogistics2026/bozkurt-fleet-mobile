@@ -44,6 +44,22 @@ export const WAGE_LABEL = {
   subtotalPriorWage: /^SUBTOTAL PRIOR WAGE\b/,
   totalDeductionsFromSettlements: /^TOTAL DEDUCTIONS? FROM SETTLEMENT/,
 } as const;
+// PRINTED SIGN CONVENTION (owner 2026-11-13, device 07/17 and 11/06: the
+// recap prints "TOTAL DEDUCTIONS FROM SETTLEMENTS 9,232.02-", a trailing
+// minus that means CHARGE, while the settlement page prints "TOTAL
+// DEDUCTIONS FROM TRUCK" with no sign). Every check compares ONE internal
+// convention, never signed against unsigned:
+//   - a CHARGE TOTAL (truck deductions, wages, recap deductions) is its
+//     size, positive, whatever sign the page prints;
+//   - an OWNER-DIRECTION figure (TOTAL REV, TOTAL REIMBURSED, NET AMOUNT
+//     DUE UNIT, SUBTOTAL PRIOR WAGE D, the payout) keeps the printed sign:
+//     a minus means the owner owes;
+//   - the balance forward is matched by size against the cash-flow lines
+//     (settlementStatement.ts signedBalanceForward()), never by its sign.
+// NET CHARGES FROM SETTLEMENTS, SETTLEMENT GROSS DUE, OWNER BALANCE FORWARD
+// (accounts page) and NET PRIOR WEEK BALANCE FORWARD/INTEREST feed no check.
+export const CHARGE_TOTAL_FIELDS: ReadonlySet<string> = new Set(['totalDeductions', 'totalWageExpense', 'totalDeductionsFromSettlements']);
+const inConvention = (field: string, v: number) => (CHARGE_TOTAL_FIELDS.has(field) ? Math.abs(v) : v);
 // A printed total that says there is nothing ("NO ENTRY FOR THIS RUN").
 const NO_ENTRY = /\bNO ENTRY\b/i;
 export const PAYOUT_LABEL = /\bDIRECT DEPOSIT\b|\bLOADED ON (A )?CARD\b|^AMOUNT LOADED\b/;
@@ -216,7 +232,7 @@ export function readingToExtraction(reading: ContentReading, meta: ReadMeta): Ex
   for (const field of Object.keys(SUMMARY_LABEL) as (keyof typeof SUMMARY_LABEL)[]) {
     const row = summaryRow(SUMMARY_LABEL[field]);
     if (!row) continue;
-    s[field] = cell(row.amount) as number;
+    s[field] = inConvention(field, cell(row.amount) as number);
     totalLabels[field] = row.label.trim();
   }
   s.settlementTotalLines = summary.map((r) => ({ label: r.label.trim(), amount: cell(r.amount) ?? r.amount }));
@@ -224,7 +240,7 @@ export function readingToExtraction(reading: ContentReading, meta: ReadMeta): Ex
     const row = summary.find((r) => WAGE_LABEL[field].test(normalizeStatementLabel(r.label)));
     if (!row) continue;
     const v = cell(row.amount);
-    if (v != null) s[field] = v;
+    if (v != null) s[field] = inConvention(field, v);
     else if (field === 'totalWageExpense' && NO_ENTRY.test(row.amount ?? '')) s[field] = 0;
   }
   const payoutRow = summaryRow(PAYOUT_LABEL);

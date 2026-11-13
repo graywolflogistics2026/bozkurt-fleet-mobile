@@ -202,7 +202,12 @@ export function printedFromWeek(
     summary.push({ page: p, label: 'TOTAL WAGE EXPENSE', amount: printed(wages) });
   }
   summary.push({ page: 4, label: 'NET AMOUNT DUE UNIT', amount: printed(w.netDue) });
-  if (opts.wage) summary.push({ page: 4, label: 'TOTAL DEDUCTIONS FROM SETTLEMENTS', amount: printed(w.deductions) });
+  // The recap prints its charge totals with a trailing minus on EVERY week
+  // (device 07/17 "9,232.02-", 11/06 "2,174.54-"), wages or not:
+  // TOTAL DEDUCTIONS FROM SETTLEMENTS = truck deductions + wages, NET
+  // CHARGES FROM SETTLEMENTS = that minus TOTAL REIMBURSED.
+  summary.push({ page: 4, label: 'TOTAL DEDUCTIONS FROM SETTLEMENTS', amount: printed(-w.deductions) });
+  summary.push({ page: 4, label: 'NET CHARGES FROM SETTLEMENTS', amount: printed(-r2(w.deductions - w.reimbursed)) });
   if (w.balanceForward !== 0) summary.push({ page: 4, label: 'OWNER BALANCE FORWARD', amount: printed(Math.abs(w.balanceForward)) });
   if (w.interestIncome !== 0) summary.push({ page: 4, label: 'INTEREST ON DEPOSIT', amount: printed(w.interestIncome) });
   summary.push({ page: 4, label: 'SETTLEMENT GROSS DUE TO/FROM OWNER', amount: printed(w.grossDue) });
@@ -258,6 +263,12 @@ export function printedFromExtraction(e: Extraction, opts: { cashFlow: boolean; 
   const num = (v: unknown) => (v == null || v === '' ? null : Number(v));
   const summary: ReadSummaryRow[] = SUMMARY_FROM.filter(([k]) => num(s[k]) != null).map(([k, label]) => ({ page: 2, label, amount: printed(num(s[k])) }));
   if (num(s.depositAmount) != null) summary.push({ page: 3, label: s.totalLabels?.depositAmount ?? 'DIRECT DEPOSIT', amount: printed(num(s.depositAmount)) });
+  // The recap, printed as Prime prints it: charge totals with a trailing minus.
+  const ded = num(s.totalDeductions);
+  if (ded != null) {
+    summary.push({ page: 3, label: 'TOTAL DEDUCTIONS FROM SETTLEMENTS', amount: printed(-ded) });
+    summary.push({ page: 3, label: 'NET CHARGES FROM SETTLEMENTS', amount: printed(-r2(ded - (num(s.reimbursements) ?? 0))) });
+  }
   const settlementLines: ReadSettlementLine[] = [
     ...(s.revenueItems ?? []).map((r) => ({ page: 1, section: 'revenue' as const, code: (r as { code?: string }).code ?? '', description: r.desc ?? '', reference: r.order ?? '', amount: printed(r.amount), direction: (r.amount ?? 0) < 0 ? ('charge' as const) : ('credit' as const) })),
     ...(s.reimbursementItems ?? []).map((r) => ({ page: 1, section: 'reimbursement' as const, code: r.code ?? '', description: r.desc ?? '', reference: r.ref ?? '', amount: printed(r.amount), direction: 'credit' as const })),
