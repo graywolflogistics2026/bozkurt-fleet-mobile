@@ -11,6 +11,11 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Round 2 C: ED DEF DISCOUNT is a built-in Prime code (REIMBURSEMENT, like UD/RD), never asked
+- Device 08/21 asked "What is this line? ED — DEF DISCOUNT": the live carrier_code_maps has no ED row, so settlementLineClass.ts asked the unknown-code question. Profit math already treated ED like UD/RD (trueProfit.ts, primeLineGroups.ts def_discount).
+- carrierCodes.ts BUILTIN_CARRIER_CODES + withBuiltinCarrierCodes(): appended to the loaded map (aiImportSave.ts fetchCarrierCodeMaps, carrierCodeMaps.ts useCarrierCodeCategories) only when the carrier map is loaded and has no ED row. No SQL.
+- docs/CARRIER_CODES.md ED row. Test: import/__tests__/builtinEdCode.test.ts. Ships: eas update.
+
 ## 2026-11-13 — Round 2 B: Home own-expense banner counts only rows not created by a settlement import
 - Device: 07/17 showed "$464.98 of your own expenses (11 items)", Home -758.60 instead of -293.62 (08/28: 79.47 instead of 436.04).
 - Trace: the real save path links every settlement row (settlement_id); saved through saveExtraction() 07/17 = -293.62 and 08/28 = 436.04 with 0 own items. The device rows have no settlement link in the live DB (source unknown here; read-only SQL in the round-2 report).

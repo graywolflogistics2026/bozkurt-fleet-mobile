@@ -23,7 +23,7 @@ import type { Extraction } from '@/src/import/types';
 import { getPrimaryExtractionDate, toDateOrNull } from '@/src/import/dateGuard';
 import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf } from '@/src/import/printedDates';
 import { matchLearnedCategory, type LearningRule } from '@/src/import/categoryLearning';
-import { normalizeCarrierKey, type CarrierCode } from '@/src/import/carrierCodes';
+import { normalizeCarrierKey, withBuiltinCarrierCodes, type CarrierCode } from '@/src/import/carrierCodes';
 import { classifySettlementLines, nonReimbursementCredits } from '@/src/import/settlementLineClass';
 import { asTruckOwnership, type TruckOwnership } from '@/src/import/lineClass';
 import { missingColumnIn } from '@/src/data/fleetEdit';
@@ -119,7 +119,7 @@ async function fetchCarrierCodeMaps(): Promise<CarrierCode[]> {
     if (res.error) res = await supabase.from('carrier_code_maps').select(CODE_MAP_COLUMNS);
     const { data, error } = res;
     if (error || !data) return [];
-    return data.map((r) => ({
+    return withBuiltinCarrierCodes(data.map((r) => ({
       carrier: r.carrier as string,
       code: r.code as string,
       subCode: (r.sub_code as string | null) ?? null,
@@ -131,7 +131,7 @@ async function fetchCarrierCodeMaps(): Promise<CarrierCode[]> {
       notes: (r.notes as string | null) ?? null,
       economicClass: ((r as { economic_class?: string | null }).economic_class as string | null) ?? null,
       classWhenCharge: ((r as { class_when_charge?: string | null }).class_when_charge as string | null) ?? null,
-    }));
+    })));
   } catch {
     return [];
   }

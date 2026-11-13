@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/src/lib/supabase';
-import type { CarrierCode } from '@/src/import/carrierCodes';
+import { withBuiltinCarrierCodes, type CarrierCode } from '@/src/import/carrierCodes';
 
 // CARRIER-SCOPED PAYROLL/SETTLEMENT CODES pass (owner decision,
 // docs/PENDING_SQL.md §52) — a small, global, admin-maintained reference
@@ -53,7 +53,7 @@ export function useCarrierCodeCategories() {
       if (res.error) res = await supabase.from('carrier_code_maps').select(base);
       const { data, error } = res;
       if (error) throw error;
-      return (data ?? []).map((r) => ({
+      return withBuiltinCarrierCodes((data ?? []).map((r) => ({
         economicClass: ((r as { economic_class?: string | null }).economic_class as string | null) ?? null,
         classWhenCharge: ((r as { class_when_charge?: string | null }).class_when_charge as string | null) ?? null,
         carrier: r.carrier as string,
@@ -65,7 +65,7 @@ export function useCarrierCodeCategories() {
         isDeductible: (r.is_deductible as boolean | null) ?? null,
         incomeOrChargeback: (r.income_or_chargeback as 'income' | 'chargeback' | null) ?? null,
         notes: (r.notes as string | null) ?? null,
-      }));
+      })));
     },
     staleTime: 1000 * 60 * 60,
   });

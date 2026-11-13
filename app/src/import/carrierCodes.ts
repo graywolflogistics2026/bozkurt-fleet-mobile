@@ -68,6 +68,38 @@ function wordBoundaryRegex(fragment: string): RegExp {
 // other carrier keeps the description-only matching below unchanged.
 const PRIME_CARRIER_KEY = 'PRIME INC';
 
+// BUILT-IN CODES (owner 2026-11-13, round 2 item C). Codes the owner
+// approved that the seeded server map (carrier_code_maps) does not carry
+// yet. Added in code so no SQL is needed: a server row for the same
+// carrier + code always wins (the built-in is only appended when the map
+// has no row for it). Prime only, carrier isolation unchanged.
+// ED "DEF DISCOUNT": the DEF discount at the pump, a bridge row offsetting
+// fuel exactly like UD (tractor fuel) and RD (reefer fuel); never asked.
+export const BUILTIN_CARRIER_CODES: CarrierCode[] = [
+  {
+    carrier: PRIME_CARRIER_KEY,
+    code: 'ED',
+    subCode: null,
+    label: 'DEF DISCOUNT',
+    description: 'DEF discount at pump',
+    category: null,
+    isDeductible: null,
+    incomeOrChargeback: 'income',
+    notes: 'Built in (app code), owner approval 2026-11-13; same class as UD/RD.',
+    economicClass: 'REIMBURSEMENT',
+    classWhenCharge: null,
+  },
+];
+
+export function withBuiltinCarrierCodes(codes: CarrierCode[]): CarrierCode[] {
+  // Only for a carrier whose map is loaded (no map = nothing seeded, keep
+  // today's behaviour), and only where the map has no row for the code.
+  const extra = BUILTIN_CARRIER_CODES.filter(
+    (b) => codes.some((c) => c.carrier === b.carrier) && !codes.some((c) => c.carrier === b.carrier && c.code.toUpperCase() === b.code)
+  );
+  return extra.length > 0 ? [...codes, ...extra] : codes;
+}
+
 export function findCarrierCodeMatch(
   carrierKey: string | null,
   description: string | null | undefined,

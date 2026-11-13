@@ -82,6 +82,7 @@ classifier)` and flagged for verification rather than guessed.
 | DY | DRYC 01 | DRY CLEANING | Dry cleaning at Prime | Misc | No | chargeback | PERSONAL | Personal expense. |
 | EA |  | BAD APPT | Truck detained by an appt error | _(leave to generic classifier)_ | — | income | REVENUE |  |
 | EB |  | OTHER LAYOVER | Truck detained due to mechanical issues/weather | _(leave to generic classifier)_ | — | income | REVENUE |  |
+| ED |  | DEF DISCOUNT | DEF discount at pump (bridge row offsetting fuel, like UD/RD) | _(leave to generic classifier)_ | — | income | REIMBURSEMENT | BUILT IN (app/src/import/carrierCodes.ts BUILTIN_CARRIER_CODES, owner 2026-11-13); not in carrier_code_maps — a server row would win. |
 | EF |  | EMERGENCY FUND | Used to contribute or deduct from emergency fund | Escrow & Deposits | No | chargeback | REFUNDABLE_FUND |  |
 | EM |  | EMPTY MILES | For company drivers in the Walmart Ded division | _(leave to generic classifier)_ | — | income | REVENUE |  |
 | EP | XPAY | EXTRA PAY | Work not related to load hauled by the mile or percentage of revenue billed | _(leave to generic classifier)_ | — | income | REVENUE |  |
