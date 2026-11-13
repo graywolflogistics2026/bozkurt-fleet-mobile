@@ -294,3 +294,4 @@ Root causes and the approved design (working rule 2, approved 2026-11-03):
   - [ ] B5: clean failure screen + progress line text (app, eas update).
 - [ ] 2026-11-03 items: [x] R5  [x] R1  [x] R3  [x] R2  [x] R4/B3  [ ] B2 (model mix above)  [ ] B4/B5  [ ] PLUS
 - [ ] Step C: dual read and model profiles (all Opus, per 2026-11-01)
+- SUPERSEDED 2026-11-13: B2, B4/B5, PLUS and step C are replaced by the reader rewrite, docs/decisions/settlement-reader-2026-11.md.

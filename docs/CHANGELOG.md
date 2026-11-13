@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Settlement reader rewrite, commit 1 (docs + golden data)
+- docs/decisions/settlement-data-contract.md: the contract and gate identities written from the code; 9 differences to older docs listed (no code change).
+- docs/decisions/settlement-reader-2026-11.md: the approved design and the owner's 5 answers.
+- app/src/settlementReader/__tests__/fixtures/prime13Weeks.ts: the owner's 13-week workbook (sheet Detay + Okuyucu notlari), generated, plus the range table.
+- No SQL, no redeploy, nothing to ship.
+
 - STRUCTURED OUTPUT ON EVERY CALL (R4/B3, owner 2026-11-03): every model call
   sends output_config.format json_schema, derived from the prompt's own JSON
   templates (outputSchema.ts; settlement shape for every job page, the
