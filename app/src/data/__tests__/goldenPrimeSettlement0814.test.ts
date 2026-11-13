@@ -437,7 +437,7 @@ describe('continuity with the 8/21 golden week', () => {
 // ITEM 5 — per-group checks (warnings only)
 // =====================================================================
 describe('per-group checks: settlement lines vs the statement (item 5)', () => {
-  test('every group ties on the real week; the total differs only by the 0.59 interest', () => {
+  test('every group ties on the real week; the total ties too (the 0.59 interest is taken out, round 2 2026-11-13)', () => {
     const groups = buildPrimeGroupChecks(golden0814())!;
     expect(groups.map((g) => [g.group, g.settlement, g.statement, g.passed])).toEqual([
       ['tractor_fuel', 2089.58, 2089.58, true],
@@ -451,9 +451,9 @@ describe('per-group checks: settlement lines vs the statement (item 5)', () => {
       ['advances', 550, 550, true], // weight-ticket advances left out
       ['meals', 62.25, 62.25, true],
       ['performance_bond', 100, 100, true],
-      ['total', 3638.02, 3638.61, true], // 4,100.66 − 462.64 vs TOTAL OPERATING EXPENSES
+      ['total', 3638.61, 3638.61, true], // 4,100.66 − 462.64 + 0.59 interest expense vs TOTAL OPERATING EXPENSES
     ]);
-    expect(groups.find((g) => g.group === 'total')!.difference).toBe(-0.59);
+    expect(groups.find((g) => g.group === 'total')!.difference).toBe(0);
   });
 
   test('a misread tractor fuel line names its group and the difference (constructed: +332.54 on one UF line)', () => {
@@ -461,7 +461,7 @@ describe('per-group checks: settlement lines vs the statement (item 5)', () => {
     const groups = buildPrimeGroupChecks(golden0814({ deductions }))!;
     expect(groups.filter((g) => !g.passed).map((g) => [g.group, g.difference])).toEqual([
       ['tractor_fuel', 332.54],
-      ['total', 331.95],
+      ['total', 332.54],
     ]);
   });
 });

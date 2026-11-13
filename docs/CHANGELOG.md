@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Round 2 G: wage identity (W-2 driver weeks 11/06, 11/13)
+- Device 11/06 failed net_due_differs (printed 425.47, read 1,230.97; difference 805.50 = TOTAL WAGE EXPENSE). The reader had no WAGE EXPENSE section.
+- Reader: schema section "wage"; prompt copies WAGE EXPENSE lines, SUBTOTAL PRIOR WAGE D, TOTAL WAGE EXPENSE, recap TOTAL DEDUCTIONS FROM SETTLEMENTS, letter for letter; toExtraction.ts wageItems/totalWageExpense ("NO ENTRY FOR THIS RUN"/".00" = 0); TOTAL DEDUCTIONS never read from the recap.
+- Checks: net due = rev + reimb − truck deductions − wages (settlementReconciliation.ts, printedTotalsMatch); SUBTOTAL and recap identities fail the gate by name; wage lines vs TOTAL WAGE EXPENSE is a line check.
+- Save: wage lines are deductions of class WAGES, category Wages & Payroll Taxes (W-2), never a code question. Statement labels DRIVER WAGE / FICA WG/DP / UNEMPLOYMENT TAX / PAYROLL FEE (variable), DRIVER WORK COMP. (fixed) = real expenses.
+- primeLineGroups total check takes the printed interest lines out (11/06 1.14, 11/13 1.40, 10/30 1.23 were above $1 and dropped the line rows).
+- Profit 11/06 580.73, 11/13 4,260.65. Tests: data/__tests__/wageWeeks.test.ts; fixture prime18Weeks.ts. Ships: deploy-ai-import.ps1 + eas update. No SQL.
+
 ## 2026-11-13 — Round 2 C: ED DEF DISCOUNT is a built-in Prime code (REIMBURSEMENT, like UD/RD), never asked
 - Device 08/21 asked "What is this line? ED — DEF DISCOUNT": the live carrier_code_maps has no ED row, so settlementLineClass.ts asked the unknown-code question. Profit math already treated ED like UD/RD (trueProfit.ts, primeLineGroups.ts def_discount).
 - carrierCodes.ts BUILTIN_CARRIER_CODES + withBuiltinCarrierCodes(): appended to the loaded map (aiImportSave.ts fetchCarrierCodeMaps, carrierCodeMaps.ts useCarrierCodeCategories) only when the carrier map is loaded and has no ED row. No SQL.

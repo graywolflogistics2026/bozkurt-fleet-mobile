@@ -560,6 +560,8 @@
     "reconciliationTitle": "🚫 Can't save — numbers don't add up",
     "reconciliationDeductionsMismatch": "The deduction lines add up to {{summed}}, but the statement's total deductions are {{stated}}.",
     "reconciliationZeroNet": "Net pay shows {{zero}} even though gross revenue is {{gross}} — this settlement doesn't look complete.",
+    "reconciliationWageLinesMismatch": "Wage lines add up to {{summed}}, the statement prints TOTAL WAGE EXPENSE {{stated}}.",
+    "reconciliationWageIdentityMismatch": "{{label}}: printed {{stated}}, the totals give {{computed}}.",
     "reconciliationRevenueLinesMismatch": "The revenue lines add up to {{summed}}, but the statement's total revenue is {{stated}}. A line may be missing or read from the wrong column.",
     "reconciliationReimbursementLinesMismatch": "The reimbursement lines add up to {{summed}}, but the statement's total reimbursed is {{stated}}.",
     "reconciliationNetDueMismatch": "Revenue + reimbursements − deductions comes to {{computed}}, but the statement's net amount due is {{stated}}. A credit may have lost its minus sign, or a line is missing.",

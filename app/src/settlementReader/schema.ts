@@ -9,7 +9,10 @@
 // apply. The TypeScript types and the schemas are written side by side;
 // schema.test.ts checks they name the same keys.
 
-export type SettlementLineSection = 'revenue' | 'reimbursement' | 'deduction';
+// 'wage' (owner 2026-11-13, round 2 item G): a line printed under the WAGE
+// EXPENSE header (DF, DU, WC, WD, 2S): a charge of the settlement that is
+// not a TOTAL DEDUCTIONS FROM TRUCK line.
+export type SettlementLineSection = 'revenue' | 'reimbursement' | 'deduction' | 'wage';
 export type Direction = 'charge' | 'credit';
 
 // One printed line item of the settlement pages (revenue, reimbursement or
@@ -95,7 +98,7 @@ const SETTLEMENT_PROPS: Record<string, JsonSchema> = {
   settlementLines: arr(
     obj({
       page: int,
-      section: enumOf(['revenue', 'reimbursement', 'deduction']),
+      section: enumOf(['revenue', 'reimbursement', 'deduction', 'wage']),
       code: str,
       description: str,
       reference: str,

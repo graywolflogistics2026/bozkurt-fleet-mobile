@@ -207,6 +207,10 @@ export type PrintedTotals = {
   // = deposit. Optional: statements stored before this pass lack them.
   balanceForward?: number;
   interestNet?: number;
+  // WAGE IDENTITY (round 2 item G): TOTAL WAGE EXPENSE (else the wage
+  // lines); 0 when no WAGE EXPENSE section is printed. Optional: absent on
+  // statements stored before it (= 0).
+  wages?: number;
 };
 
 export type SettlementStatement = {
@@ -604,6 +608,14 @@ export function printedInterestNetOf(extraction: Extraction): number {
   );
 }
 
+// The week's wages: the printed TOTAL WAGE EXPENSE, else the wage lines,
+// else 0 (no WAGE EXPENSE section = no wages).
+export function settlementWagesOf(s: NonNullable<Extraction['settlement']>): number {
+  const printed = printedTotal(s.totalWageExpense);
+  if (printed != null) return printed;
+  return (s.wageItems ?? []).length > 0 ? sumAmounts(s.wageItems, (w) => w.amount) : 0;
+}
+
 export function printedTotalsOf(extraction: Extraction): PrintedTotals {
   const s = extraction.settlement ?? {};
   return {
@@ -612,6 +624,7 @@ export function printedTotalsOf(extraction: Extraction): PrintedTotals {
     reimbursementLines: round2(sumAmounts(s.reimbursementItems, (r) => r.amount)),
     totalDeductions: printedTotal(s.totalDeductions),
     netDue: printedTotal(s.netPay),
+    wages: round2(settlementWagesOf(s)),
     ...printedDepositOf(extraction),
     payoutMethod: printedPayoutMethodOf(extraction),
     interestIncome: printedInterestIncomeOf(extraction),
@@ -798,7 +811,7 @@ export function isStatementBacked(statement: SettlementStatement | null | undefi
 export function printedTotalsMatch(printed: PrintedTotals | null | undefined): boolean {
   if (!printed || printed.grossRevenue == null || printed.totalDeductions == null || printed.netDue == null) return false;
   const reimbursements = printed.reimbursements ?? printed.reimbursementLines ?? 0;
-  return Math.abs(printed.grossRevenue + reimbursements - printed.totalDeductions - printed.netDue) <= DOLLAR_TOLERANCE;
+  return Math.abs(printed.grossRevenue + reimbursements - printed.totalDeductions - (printed.wages ?? 0) - printed.netDue) <= DOLLAR_TOLERANCE;
 }
 
 export function settlementVerification(settlement: { statement?: SettlementStatement | null }): SettlementVerification {

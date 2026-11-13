@@ -65,9 +65,11 @@ function issueDifference(issue: ReconciliationIssue): number | null {
     case 'deductionsMismatch':
     case 'revenueLinesMismatch':
     case 'reimbursementLinesMismatch':
+    case 'wageLinesMismatch':
       return issue.summed - issue.stated;
     case 'netDueMismatch':
     case 'depositMismatch':
+    case 'wageIdentityMismatch':
       return issue.computed - issue.stated;
     default:
       return null;

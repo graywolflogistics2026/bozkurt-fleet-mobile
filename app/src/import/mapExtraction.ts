@@ -260,6 +260,25 @@ export function mapSettlement(
     source: 'settlement',
     tax_deductible: false,
   }));
+  // WAGE EXPENSE lines (round 2 item G): withheld charges of class WAGES
+  // (a real expense), by their printed section, never by a code question.
+  for (const x of s.wageItems ?? []) {
+    deductions.push({
+      user_id: userId,
+      truck_id: truckId,
+      settlement_id: null,
+      driver_id: driverId,
+      ded_date: settlementFallbackDate ?? null,
+      code: x.code ?? null,
+      description: x.desc ?? null,
+      amount: num(x.amount),
+      category: 'Wages & Payroll Taxes (W-2)',
+      payment_method: 'Settlement Withheld',
+      source: 'settlement',
+      tax_deductible: false,
+      economic_class: 'WAGES',
+    });
+  }
 
   const maintenance: MaintenanceRecordInsert[] = (s.maintenance ?? []).map((m) => ({
     user_id: userId,

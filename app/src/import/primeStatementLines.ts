@@ -109,6 +109,13 @@ const RULES: Rule[] = [
   { labels: ['LICENSE AND PERMITS', 'FEDERAL HWY TAX'], treatment: expense('Permits, Licenses & Road Taxes') },
   { labels: ['STATEMENT PREPARATION'], treatment: expense('Legal & Professional Services') },
   { labels: ['OPERATOR OCCUP ACC'], treatment: expense('Insurance—Health') },
+  // ---- W-2 driver wages (owner 2026-11-13, round 2 item G): real expenses.
+  // DRIVER WAGE, FICA and UNEMPLOYMENT print in the variable costs, WORK
+  // COMP in the fixed cost; PAYROLL FEE (settlement code PF).
+  {
+    labels: ['DRIVER WAGE', 'DRIVER FICA WG DP', 'DRIVER UNEMPLOYMENT TAX', 'DRIVER WORK COMP', 'PAYROLL FEE'],
+    treatment: expense('Wages & Payroll Taxes (W-2)'),
+  },
   // ---- other income and expense
   { labels: ['ACCRUAL PERFORMANCE BOND'], treatment: { kind: 'exclude', reason: 'escrow' } },
   // D8 (interest income stays excluded and gets its own bridge line)

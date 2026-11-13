@@ -560,6 +560,8 @@
     "reconciliationTitle": "🚫 Невозможно сохранить — суммы не сходятся",
     "reconciliationDeductionsMismatch": "Строки удержаний дают {{summed}}, а итог удержаний в выписке — {{stated}}.",
     "reconciliationZeroNet": "Чистая выплата {{zero}}, хотя валовой доход {{gross}}, — этот settlement выглядит неполным.",
+    "reconciliationWageLinesMismatch": "Строки зарплаты дают {{summed}}, в выписке TOTAL WAGE EXPENSE {{stated}}.",
+    "reconciliationWageIdentityMismatch": "{{label}}: напечатано {{stated}}, по итогам {{computed}}.",
     "reconciliationRevenueLinesMismatch": "Строки дохода в сумме дают {{summed}}, но общий доход в выписке — {{stated}}. Возможно, строка пропущена или прочитана не из той колонки.",
     "reconciliationReimbursementLinesMismatch": "Строки возмещений в сумме дают {{summed}}, но общая сумма возмещений в выписке — {{stated}}.",
     "reconciliationNetDueMismatch": "Доход + возмещения − удержания = {{computed}}, но чистая сумма к выплате в выписке — {{stated}}. Возможно, у кредита потерялся знак минус или пропущена строка.",

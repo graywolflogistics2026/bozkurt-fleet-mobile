@@ -102,15 +102,21 @@ export function statementRows(input: StatementInput): ReadStatementRow[] {
 const PAYOUT_LABEL: Record<string, string> = { Banka: 'DIRECT DEPOSIT', 'Karta yükleme': 'AMOUNT LOADED ON CARD' };
 
 // The statement lines of a workbook week, one line per economic class.
-export function classLines(w: GoldenWeek): PrintedLine[] {
-  const realVariable = r2(w.variableTotal - w.advancesNet - w.personalNet - w.capitalPurchase);
+// `extra`: real printed expense lines (wage weeks) taken out of the one
+// TRACTOR FUEL / PHYSICAL DAMAGE line of their part (variable / fixed).
+export function classLines(w: GoldenWeek, extra: PrintedLine[] = []): PrintedLine[] {
+  const extraVariable = extra.filter((l) => l.section !== 'fixed').reduce((a, l) => a - l.amount, 0);
+  const extraFixed = extra.filter((l) => l.section === 'fixed').reduce((a, l) => a - l.amount, 0);
+  const realVariable = r2(w.variableTotal - w.advancesNet - w.personalNet - w.capitalPurchase - extraVariable);
   const lines: PrintedLine[] = [{ section: 'revenue', label: 'REVENUE FROM PRIME INC.', amount: w.revenue }];
   if (realVariable !== 0) lines.push({ section: 'fuel_oil_tax', label: 'TRACTOR FUEL', amount: -realVariable });
+  lines.push(...extra.filter((l) => l.section !== 'fixed'));
   if (w.advancesNet !== 0) lines.push({ section: 'misc', label: 'ADVANCES', amount: -w.advancesNet });
   if (w.personalNet > 0) lines.push({ section: 'misc', label: 'PRIME POINT-OF-SALE', amount: -w.personalNet });
   if (w.personalNet < 0) lines.push({ section: 'misc', label: 'PERSONAL PYMNT RCV', amount: -w.personalNet });
   if (w.capitalPurchase !== 0) lines.push({ section: 'misc', label: 'OPERATOR TRK EXTRAS', amount: -w.capitalPurchase });
-  if (w.fixedTotal !== 0) lines.push({ section: 'fixed', label: 'PHYSICAL DAMAGE INSURANCE', amount: -w.fixedTotal });
+  if (r2(w.fixedTotal - extraFixed) !== 0) lines.push({ section: 'fixed', label: 'PHYSICAL DAMAGE INSURANCE', amount: -r2(w.fixedTotal - extraFixed) });
+  lines.push(...extra.filter((l) => l.section === 'fixed'));
   if (w.bond !== 0) lines.push({ section: 'other', label: 'ACCRUAL PERFORMANCE BOND', amount: -w.bond });
   if (w.interestIncome !== 0) lines.push({ section: 'other', label: 'INTEREST INCOME FROM DEPOSIT', amount: w.interestIncome });
   if (w.interestExpense !== 0) lines.push({ section: 'other', label: 'INTEREST EXPENSE ON OVER DRAW', amount: -w.interestExpense });
@@ -133,14 +139,70 @@ export const LINES_0828: PrintedLine[] = [
   { section: 'other', label: 'INTEREST INCOME FROM DEPOSIT', amount: 0.45 },
 ];
 
-export function printedFromWeek(w: GoldenWeek, opts: { lines?: PrintedLine[]; statementOverride?: (rows: ReadStatementRow[]) => ReadStatementRow[] } = {}): ContentReading {
-  const lines = opts.lines ?? classLines(w);
+// A W-2 wage week (round 2 item G): the WAGE EXPENSE section as printed.
+export type WageWeek = { page: number; lines: { code: string; description: string; amount: number }[]; statement: PrintedLine[] };
+// 11/06 (owner, Okuyucu notlari rows 22-25): settlement codes DF 54.99,
+// DU 4.31 + 1.43, WC 79.66, WD 663.87, 2S 1.24 = 805.50 on page 2; the
+// statement prints DRIVER WAGE 665.11, DRIVER FICA WG/DP 54.99, DRIVER
+// UNEMPLOYMENT TAX 5.74 (variable), DRIVER WORK COMP. 79.66 (fixed), and
+// PAYROLL FEE 10.00 (PF).
+export const WAGES_1106: WageWeek = {
+  page: 2,
+  lines: [
+    { code: 'DF', description: 'FICA', amount: 54.99 },
+    { code: 'DU', description: 'FUTA', amount: 4.31 },
+    { code: 'DU', description: 'SUTA', amount: 1.43 },
+    { code: 'WC', description: 'WORK COMP', amount: 79.66 },
+    { code: 'WD', description: 'DRIVER WAGES', amount: 663.87 },
+    { code: '2S', description: 'BENEFIT', amount: 1.24 },
+  ],
+  statement: [
+    { section: 'misc', label: 'DRIVER WAGE', amount: -665.11 },
+    { section: 'misc', label: 'DRIVER FICA WG/DP', amount: -54.99 },
+    { section: 'misc', label: 'DRIVER UNEMPLOYMENT TAX', amount: -5.74 },
+    { section: 'misc', label: 'PAYROLL FEE', amount: -10.0 },
+    { section: 'fixed', label: 'DRIVER WORK COMP.', amount: -79.66 },
+  ],
+};
+// 11/13 (row 31): DF 69.59, DU 5.45 + 1.81, WC 109.15, WD 909.61, 2S 3.45
+// = 1,099.06 on page 3.
+export const WAGES_1113: WageWeek = {
+  page: 3,
+  lines: [
+    { code: 'DF', description: 'FICA', amount: 69.59 },
+    { code: 'DU', description: 'FUTA', amount: 5.45 },
+    { code: 'DU', description: 'SUTA', amount: 1.81 },
+    { code: 'WC', description: 'WORK COMP', amount: 109.15 },
+    { code: 'WD', description: 'DRIVER WAGES', amount: 909.61 },
+    { code: '2S', description: 'BENEFIT', amount: 3.45 },
+  ],
+  statement: [
+    { section: 'misc', label: 'DRIVER WAGE', amount: -913.06 },
+    { section: 'misc', label: 'DRIVER FICA WG/DP', amount: -69.59 },
+    { section: 'misc', label: 'DRIVER UNEMPLOYMENT TAX', amount: -7.26 },
+    { section: 'fixed', label: 'DRIVER WORK COMP.', amount: -109.15 },
+  ],
+};
+
+export function printedFromWeek(
+  w: GoldenWeek & { wages?: number },
+  opts: { lines?: PrintedLine[]; wage?: WageWeek; statementOverride?: (rows: ReadStatementRow[]) => ReadStatementRow[] } = {}
+): ContentReading {
+  const lines = opts.lines ?? classLines(w, opts.wage?.statement ?? []);
+  const wages = w.wages ?? 0;
+  // The workbook's deductions = truck deductions + wages (the recap).
   const summary: ReadSummaryRow[] = [
     { page: 1, label: 'TOTAL REV', amount: printed(w.revenue) },
     { page: 2, label: 'TOTAL REIMBURSED', amount: printed(w.reimbursed) },
-    { page: 2, label: 'TOTAL DEDUCTIONS FROM TRUCK', amount: printed(w.deductions) },
-    { page: 4, label: 'NET AMOUNT DUE UNIT', amount: printed(w.netDue) },
+    { page: 2, label: 'TOTAL DEDUCTIONS FROM TRUCK', amount: printed(r2(w.deductions - wages)) },
   ];
+  if (opts.wage) {
+    const p = opts.wage.page;
+    summary.push({ page: p, label: 'SUBTOTAL PRIOR WAGE D', amount: printed(r2(w.revenue + w.reimbursed - (w.deductions - wages))) });
+    summary.push({ page: p, label: 'TOTAL WAGE EXPENSE', amount: printed(wages) });
+  }
+  summary.push({ page: 4, label: 'NET AMOUNT DUE UNIT', amount: printed(w.netDue) });
+  if (opts.wage) summary.push({ page: 4, label: 'TOTAL DEDUCTIONS FROM SETTLEMENTS', amount: printed(w.deductions) });
   if (w.balanceForward !== 0) summary.push({ page: 4, label: 'OWNER BALANCE FORWARD', amount: printed(Math.abs(w.balanceForward)) });
   if (w.interestIncome !== 0) summary.push({ page: 4, label: 'INTEREST ON DEPOSIT', amount: printed(w.interestIncome) });
   summary.push({ page: 4, label: 'SETTLEMENT GROSS DUE TO/FROM OWNER', amount: printed(w.grossDue) });
@@ -167,7 +229,7 @@ export function printedFromWeek(w: GoldenWeek, opts: { lines?: PrintedLine[]; st
     driverName: '',
     settlementDateRaw: yymmdd(iso),
     printDateRaw: printDateOf(iso),
-    settlementLines: [],
+    settlementLines: (opts.wage?.lines ?? []).map((l) => ({ page: opts.wage!.page, section: 'wage' as const, code: l.code, description: l.description, reference: '', amount: printed(l.amount), direction: 'charge' as const })),
     summary,
     loads: w.miles > 0 ? [{ page: 1, order: '4700001', origin: '', destination: '', loadedMiles: printed(w.loadedMiles), emptyMiles: printed(w.emptyMiles), revenue: printed(freight) }] : [],
     milesLines: [

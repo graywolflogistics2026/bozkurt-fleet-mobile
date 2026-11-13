@@ -1,7 +1,8 @@
 import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { resolveFuelRows } from '@/src/stats/trueProfit';
-import { printedBalanceForwardOf, printedDepositOf, printedInterestNetOf } from './settlementStatement';
+import { printedBalanceForwardOf, printedDepositOf, printedInterestNetOf, settlementWagesOf } from './settlementStatement';
+export { settlementWagesOf };
 
 // SETTLEMENT RECONCILIATION HARD GUARD (owner decision 2026-08-03,
 // device evidence: an 11-page settlement's continuation import correctly
@@ -35,7 +36,11 @@ export type ReconciliationIssue =
   // printed deposit is checked, never replaced — net due + prior week
   // balance forward + interest must equal it within $1.
   | { type: 'depositMismatch'; stated: number; computed: number }
-  | { type: 'zeroNetNonzeroGross'; grossRevenue: number };
+  | { type: 'zeroNetNonzeroGross'; grossRevenue: number }
+  // WAGE IDENTITY (round 2 item G): wage lines vs TOTAL WAGE EXPENSE, and
+  // the two printed wage subtotals vs the identity.
+  | { type: 'wageLinesMismatch'; stated: number; summed: number }
+  | { type: 'wageIdentityMismatch'; check: 'subtotalPriorWage' | 'deductionsFromSettlements'; stated: number; computed: number };
 
 export type ReconciliationResult = { ok: boolean; issues: ReconciliationIssue[] };
 
@@ -107,8 +112,25 @@ export function checkSettlementReconciliation(extraction: Extraction | null | un
   // when the statement has none at all.
   if (gross != null && statedDeductions != null && netDue != null) {
     const reimbursements = statedReimbursements ?? sumAmounts(s.reimbursementItems, (r) => r.amount);
-    const computed = gross + reimbursements - statedDeductions;
+    const computed = gross + reimbursements - statedDeductions - settlementWagesOf(s);
     if (differs(netDue, computed)) issues.push({ type: 'netDueMismatch', stated: netDue, computed });
+  }
+
+  // WAGE IDENTITY (round 2 item G). Each check only on totals printed.
+  const statedWages = printedTotal(s.totalWageExpense);
+  if (statedWages != null && (s.wageItems ?? []).length > 0) {
+    const summed = sumAmounts(s.wageItems, (w) => w.amount);
+    if (differs(statedWages, summed)) issues.push({ type: 'wageLinesMismatch', stated: statedWages, summed });
+  }
+  const subtotal = printedTotal(s.subtotalPriorWage);
+  if (subtotal != null && gross != null && statedDeductions != null) {
+    const computed = gross + (statedReimbursements ?? sumAmounts(s.reimbursementItems, (r) => r.amount)) - statedDeductions;
+    if (differs(subtotal, computed)) issues.push({ type: 'wageIdentityMismatch', check: 'subtotalPriorWage', stated: subtotal, computed });
+  }
+  const recap = printedTotal(s.totalDeductionsFromSettlements);
+  if (recap != null && statedDeductions != null) {
+    const computed = statedDeductions + settlementWagesOf(s);
+    if (differs(recap, computed)) issues.push({ type: 'wageIdentityMismatch', check: 'deductionsFromSettlements', stated: recap, computed });
   }
 
   // BALANCE FORWARD (owner decision 2026-10-17): net due + PRIOR WEEK

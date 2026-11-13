@@ -2,7 +2,8 @@ import type { Extraction, ExtractedSettlementDeduction } from './types';
 import { parseAmount } from './amount';
 import { isPrimeCarrier } from './primeOperatingStatement';
 import { normalizeStatementLabel } from './primeStatementLines';
-import { summedSettlementDeductions } from './settlementReconciliation';
+import { settlementWagesOf, summedSettlementDeductions } from './settlementReconciliation';
+import { printedInterestNetOf } from './settlementStatement';
 
 // PER-GROUP CHECKS (owner decision 2026-10-17, item 5). PRIME ONLY. The
 // settlement's own deduction lines (pages 1-2), grouped by their printed
@@ -106,11 +107,16 @@ export function buildPrimeGroupChecks(extraction: Extraction | null | undefined)
   // Everything else at total level: all deduction lines (plus fuel-list
   // rows no line covers, as the profit engine counts them) − all
   // reimbursements vs TOTAL OPERATING EXPENSES. Interest (income or
-  // expense) exists only on the statement and stays inside the tolerance
-  // on a normal week (8/14: 0.59; 8/21: 0.37).
+  // expense) exists only on the statement: its printed lines are taken out
+  // of the comparison (round 2, 2026-11-13: 11/06 1.14, 11/13 1.40 and
+  // 10/30 1.23 were above the $1 tolerance and showed a false line-details
+  // difference, so the week saved without its line rows).
   const opex = s.operating?.weekTotalOperatingExpenses;
   if (deductions.length > 0 && opex != null && opex !== '' && amountOf(opex) !== 0) {
-    const settlement = round2(summedSettlementDeductions(s) - reimbursements.reduce((sum, r) => sum + amountOf(r.amount), 0));
+    // Wage lines (round 2 item G) are charges the statement books too.
+    const settlement = round2(
+      summedSettlementDeductions(s) + settlementWagesOf(s) - reimbursements.reduce((sum, r) => sum + amountOf(r.amount), 0) - printedInterestNetOf(extraction!)
+    );
     const statementSide = round2(-amountOf(opex));
     const difference = round2(settlement - statementSide);
     checks.push({ group: 'total', settlement, statement: statementSide, difference, passed: Math.abs(difference) <= TOLERANCE });

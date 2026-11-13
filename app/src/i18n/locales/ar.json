@@ -560,6 +560,8 @@
     "reconciliationTitle": "🚫 يتعذر الحفظ — الأرقام غير متطابقة",
     "reconciliationDeductionsMismatch": "مجموع بنود الاستقطاعات {{summed}}، لكن إجمالي الاستقطاعات في الكشف {{stated}}.",
     "reconciliationZeroNet": "صافي الدفع {{zero}} رغم أن الإيراد الإجمالي {{gross}} — يبدو أن هذا settlement غير مكتمل.",
+    "reconciliationWageLinesMismatch": "Wage lines add up to {{summed}}, the statement prints TOTAL WAGE EXPENSE {{stated}}.",
+    "reconciliationWageIdentityMismatch": "{{label}}: printed {{stated}}, the totals give {{computed}}.",
     "reconciliationRevenueLinesMismatch": "مجموع بنود الإيراد {{summed}}، لكن إجمالي الإيراد في الكشف هو {{stated}}. قد يكون هناك بند ناقص أو قُرئ من العمود الخطأ.",
     "reconciliationReimbursementLinesMismatch": "مجموع بنود التعويض {{summed}}، لكن إجمالي التعويضات في الكشف هو {{stated}}.",
     "reconciliationNetDueMismatch": "الإيراد + التعويضات − الخصومات = {{computed}}، لكن صافي المبلغ المستحق في الكشف هو {{stated}}. ربما فقد رصيد دائن علامة السالب أو هناك بند ناقص.",

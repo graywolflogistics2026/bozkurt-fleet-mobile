@@ -908,10 +908,10 @@ describe('SOURCE LABELS (Part 2) — other carriers', () => {
 
 // PER-GROUP CHECKS (owner decision 2026-10-17, item 5) — warnings only.
 describe('per-group checks on the 8/21 golden week', () => {
-  test('every group ties; the total differs only by the 0.37 interest income', () => {
+  test('every group ties; the total ties too (the 0.37 interest income is taken out, round 2 2026-11-13)', () => {
     const groups = buildPrimeGroupChecks(statementExtraction())!;
     expect(groups.filter((g) => !g.passed)).toEqual([]);
-    expect(groups.find((g) => g.group === 'total')!.difference).toBe(0.37);
+    expect(groups.find((g) => g.group === 'total')!.difference).toBe(0);
     expect(groups.find((g) => g.group === 'advances')).toMatchObject({ settlement: 550, statement: 550 });
   });
 });

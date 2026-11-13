@@ -155,6 +155,19 @@ export type ExtractedSettlement = {
   // Every TOTAL-type line printed on the settlement pages (R3, 2026-11-03);
   // the Prime merge fills the four totals only from these.
   settlementTotalLines?: { label: string; amount: number | string }[];
+  // WAGE IDENTITY (owner 2026-11-13, round 2 item G): a week with a W-2
+  // driver prints a WAGE EXPENSE section between TOTAL DEDUCTIONS FROM
+  // TRUCK and NET AMOUNT DUE UNIT:
+  //   NET AMOUNT DUE UNIT = TOTAL REV + TOTAL REIMBURSED
+  //                         − TOTAL DEDUCTIONS FROM TRUCK − TOTAL WAGE EXPENSE
+  //   SUBTOTAL PRIOR WAGE D = TOTAL REV + TOTAL REIMBURSED − TRUCK DEDUCTIONS
+  //   TOTAL DEDUCTIONS FROM SETTLEMENTS (recap) = TRUCK DEDUCTIONS + WAGES.
+  // ".00" / "NO ENTRY FOR THIS RUN" = 0. Wage lines (class WAGES, charges)
+  // are kept apart from `deductions` so the truck-deduction check holds.
+  wageItems?: ExtractedSettlementDeduction[];
+  totalWageExpense?: number;
+  subtotalPriorWage?: number;
+  totalDeductionsFromSettlements?: number;
   totalMiles?: number;
   loadedMiles?: number;
   // Batch C item 6 (2026-10-30, ai-import): every printed WEEKLY miles

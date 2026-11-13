@@ -560,6 +560,8 @@
     "reconciliationTitle": "🚫 No se puede guardar — las cifras no coinciden",
     "reconciliationDeductionsMismatch": "Las líneas de deducciones suman {{summed}}, pero el total de deducciones del estado de cuenta es {{stated}}.",
     "reconciliationZeroNet": "El pago neto muestra {{zero}} aunque los ingresos brutos son {{gross}}: este settlement no parece completo.",
+    "reconciliationWageLinesMismatch": "Las líneas de salario suman {{summed}}; el estado imprime TOTAL WAGE EXPENSE {{stated}}.",
+    "reconciliationWageIdentityMismatch": "{{label}}: impreso {{stated}}, los totales dan {{computed}}.",
     "reconciliationRevenueLinesMismatch": "Las líneas de ingresos suman {{summed}}, pero el total de ingresos del estado de cuenta es {{stated}}. Puede faltar una línea o haberse leído la columna equivocada.",
     "reconciliationReimbursementLinesMismatch": "Las líneas de reembolso suman {{summed}}, pero el total reembolsado del estado de cuenta es {{stated}}.",
     "reconciliationNetDueMismatch": "Ingresos + reembolsos − deducciones da {{computed}}, pero el monto neto a pagar del estado de cuenta es {{stated}}. Puede que un crédito haya perdido su signo menos o que falte una línea.",

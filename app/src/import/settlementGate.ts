@@ -107,6 +107,7 @@ function checkDetail(c: StatementCheck): GateFailDetail {
 
 function issueDetail(i: ReconciliationIssue): GateFailDetail | null {
   if (i.type === 'netDueMismatch' || i.type === 'depositMismatch') return { check: i.type, printed: r2(i.stated), read: r2(i.computed) };
+  if (i.type === 'wageIdentityMismatch') return { check: i.check, printed: r2(i.stated), read: r2(i.computed) };
   if (i.type === 'zeroNetNonzeroGross') return null;
   return { check: i.type, printed: r2(i.stated), read: r2(i.summed) };
 }
@@ -178,6 +179,8 @@ export function evaluateSettlementGate(
     const grossCheck = check.checks.find((c) => c.id === 'grossMatches' && !c.passed);
     if (grossCheck) return fail('gross_differs', ['grossMatches'], [checkDetail(grossCheck)]);
     if (issueTypes.includes('netDueMismatch')) return fail('net_due_differs', ['netDueMismatch'], detailsOf(issues, ['netDueMismatch']));
+    // The printed wage subtotals are printed-total identities too.
+    if (issueTypes.includes('wageIdentityMismatch')) return fail('net_due_differs', ['wageIdentityMismatch'], detailsOf(issues, ['wageIdentityMismatch']));
     if (issueTypes.includes('depositMismatch')) return fail('deposit_differs', ['depositMismatch'], detailsOf(issues, ['depositMismatch']));
     if (issueTypes.includes('zeroNetNonzeroGross')) return fail('missing_fields', ['netDue']);
     if (!dateOk && dateCheck.issues.some((i) => PRIME_MISREAD_DATE_ISSUES.includes(i))) {
@@ -227,17 +230,17 @@ export function evaluateSettlementGate(
     return fail('missing_fields', notPrinted.length > 0 ? notPrinted.filter((k) => k !== 'totalDeductions') : ['netDue']);
   }
   if (printed.totalDeductions == null) return fail('totals_not_printed', ['totalDeductions']);
-  if (!printedTotalsMatch(printed) || issueTypes.includes('netDueMismatch')) {
+  if (!printedTotalsMatch(printed) || issueTypes.includes('netDueMismatch') || issueTypes.includes('wageIdentityMismatch')) {
     const reimbursements = printed.reimbursements ?? printed.reimbursementLines ?? 0;
     return fail('totals_differ', issueTypes, [
-      { check: 'netDue', printed: printed.netDue, read: r2(printed.grossRevenue + reimbursements - printed.totalDeductions) },
+      { check: 'netDue', printed: printed.netDue, read: r2(printed.grossRevenue + reimbursements - printed.totalDeductions - (printed.wages ?? 0)) },
     ]);
   }
   if (issueTypes.includes('depositMismatch')) return fail('deposit_differs', ['depositMismatch'], detailsOf(issues, ['depositMismatch']));
   // Other carriers (and a Prime week read without its statement page):
   // profit comes from these line items (the line route), so they must add
   // up here. The Prime statement gate above never blocks on summed lines.
-  const lineIssues = issueTypes.filter((t) => t === 'deductionsMismatch' || t === 'revenueLinesMismatch' || t === 'reimbursementLinesMismatch');
+  const lineIssues = issueTypes.filter((t) => t === 'deductionsMismatch' || t === 'revenueLinesMismatch' || t === 'reimbursementLinesMismatch' || t === 'wageLinesMismatch');
   if (lineIssues.length > 0) return fail('lines_differ', lineIssues, detailsOf(issues, lineIssues));
   if (dateCheck.issues.includes('unreadable') && !dateOk) return fail('date_unreadable', dateCheck.issues);
 

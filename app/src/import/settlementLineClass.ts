@@ -58,6 +58,8 @@ export function classifySettlementLines<T extends Row>(
   const questions: LineClassQuestion[] = [];
   const out = rows.map((row): ClassifiedRow<T> => {
     const direction = directionOfAmount(row.amount);
+    // A WAGE EXPENSE line (round 2 item G): class by its printed section.
+    if ((row as { economic_class?: string | null }).economic_class === 'WAGES') return { ...row, economic_class: 'WAGES', direction };
     const match = carrierKey && codes.length > 0 ? findCarrierCodeMatch(carrierKey, row.description, codes, row.code) : null;
     const mapClass = asEconomicClass(match?.economicClass);
     if (match && mapClass) {

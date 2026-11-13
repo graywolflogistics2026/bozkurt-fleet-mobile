@@ -565,6 +565,8 @@
     "reconciliationTitle": "🚫 सहेजा नहीं जा सकता — संख्याएं मेल नहीं खातीं",
     "reconciliationDeductionsMismatch": "कटौती लाइनों का योग {{summed}} है, लेकिन स्टेटमेंट की कुल कटौती {{stated}} है।",
     "reconciliationZeroNet": "सकल राजस्व {{gross}} होने पर भी शुद्ध भुगतान {{zero}} दिखता है — यह settlement पूरा नहीं लगता।",
+    "reconciliationWageLinesMismatch": "वेतन लाइनों का जोड़ {{summed}} है, स्टेटमेंट में TOTAL WAGE EXPENSE {{stated}} छपा है।",
+    "reconciliationWageIdentityMismatch": "{{label}}: छपा {{stated}}, कुल योग से {{computed}}।",
     "reconciliationRevenueLinesMismatch": "राजस्व पंक्तियों का योग {{summed}} है, लेकिन स्टेटमेंट का कुल राजस्व {{stated}} है। कोई पंक्ति छूट गई हो सकती है या गलत कॉलम से पढ़ी गई हो सकती है।",
     "reconciliationReimbursementLinesMismatch": "प्रतिपूर्ति पंक्तियों का योग {{summed}} है, लेकिन स्टेटमेंट की कुल प्रतिपूर्ति {{stated}} है।",
     "reconciliationNetDueMismatch": "राजस्व + प्रतिपूर्ति − कटौतियाँ = {{computed}}, लेकिन स्टेटमेंट की शुद्ध देय राशि {{stated}} है। किसी क्रेडिट का माइनस चिह्न छूट गया हो सकता है या कोई पंक्ति गायब है।",

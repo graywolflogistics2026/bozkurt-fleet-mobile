@@ -11,6 +11,7 @@ RULES FOR EVERY VALUE
 - Copy every date exactly as printed, as text ("26/08/28", "8/27/26"). Never reorder or reformat a date. Never use today's date.
 - "page" is the page number in THIS file, starting at 1.
 - Never add rows that are not printed. Never merge two printed rows into one. A row printed on two pages is two rows.
+- Copy every label, code and description letter for letter as printed: "TRIP XPRESS CHG" stays "TRIP XPRESS CHG" (never "TRIP PRESS CHG"), a misspelled label stays misspelled.
 
 HEADER
 - carrier: the carrier's name as printed (e.g. "PRIME INC."). unit: the truck/unit number. driverName: the driver or owner name as printed, or "".
@@ -18,8 +19,8 @@ HEADER
 - docType: "settlement" for a carrier settlement statement, otherwise "other" (and leave every list empty).
 
 SETTLEMENT PAGES
-- settlementLines: every printed line item of the revenue, reimbursement and deduction sections, in print order. section = the section it is printed under. code = the printed code column ("RV", "UF", "PR", "WA", ...) or "". description = the printed description. reference = the printed order/reference number or "". amount = as printed. direction = "credit" when the line pays the owner (revenue, reimbursements, a deduction printed with a minus), "charge" when it takes money from the owner (deductions, a revenue line printed with a minus).
-- summary: every LABELED total or summary row of the settlement pages, with its label as printed: TOTAL REV, TOTAL REIMBURSED, TOTAL DEDUCTIONS FROM TRUCK, NET AMOUNT DUE UNIT, GROSS AMOUNT DUE, OWNER BALANCE FORWARD, interest rows, SETTLEMENT GROSS DUE TO/FROM OWNER, the payout row (DIRECT DEPOSIT, AMOUNT LOADED ON CARD, ...), DUE TO CARRIER. A regular line item is never a summary row. A payout row that is not printed is not listed.
+- settlementLines: every printed line item of the revenue, reimbursement, deduction and WAGE EXPENSE sections, in print order. section = the section it is printed under ("wage" for every line under a WAGE EXPENSE heading, wherever that heading is printed; it can be on page 2 or 3). code = the printed code column ("RV", "UF", "PR", "WA", ...) or "". description = the printed description. reference = the printed order/reference number or "". amount = as printed. direction = "credit" when the line pays the owner (revenue, reimbursements, a deduction printed with a minus), "charge" when it takes money from the owner (deductions, a revenue line printed with a minus).
+- summary: every LABELED total or summary row of the settlement pages, with its label as printed: TOTAL REV, TOTAL REIMBURSED, TOTAL DEDUCTIONS FROM TRUCK, SUBTOTAL PRIOR WAGE D..., TOTAL WAGE EXPENSE, NET AMOUNT DUE UNIT, TOTAL DEDUCTIONS FROM SETTLEMENTS (recap), GROSS AMOUNT DUE, OWNER BALANCE FORWARD, interest rows, SETTLEMENT GROSS DUE TO/FROM OWNER, the payout row (DIRECT DEPOSIT, AMOUNT LOADED ON CARD, ...), DUE TO CARRIER. A regular line item is never a summary row. A payout row that is not printed is not listed. A total printed as words ("NO ENTRY FOR THIS RUN") or ".00" is copied as printed.
 - loads: one entry per printed load/trip (order number, origin, destination, loaded miles, empty miles, the load's own revenue amount), as printed; [] when none.
 - milesLines: every printed miles figure with its label (TOTAL MILES, LOADED MILES, EMPTY MILES, ...), as printed. A zero is copied as printed.
 - fuelPurchases: every printed fuel purchase (tractor or reefer): date, location, state, gallons, amount, discount, as printed.

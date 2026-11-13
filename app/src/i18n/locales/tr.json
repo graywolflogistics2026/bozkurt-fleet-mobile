@@ -560,6 +560,8 @@
     "reconciliationTitle": "🚫 Kaydedilemiyor — rakamlar tutmuyor",
     "reconciliationDeductionsMismatch": "Kesinti satırları {{summed}} ediyor, ancak ekstredeki toplam kesinti {{stated}}.",
     "reconciliationZeroNet": "Brüt gelir {{gross}} olduğu halde net ödeme {{zero}} görünüyor — bu settlement eksik görünüyor.",
+    "reconciliationWageLinesMismatch": "Maaş satırlarının toplamı {{summed}}, belgede TOTAL WAGE EXPENSE {{stated}} yazıyor.",
+    "reconciliationWageIdentityMismatch": "{{label}}: basılı {{stated}}, toplamlardan çıkan {{computed}}.",
     "reconciliationRevenueLinesMismatch": "Gelir satırlarının toplamı {{summed}}, ancak ekstredeki toplam gelir {{stated}}. Bir satır eksik olabilir veya yanlış sütundan okunmuş olabilir.",
     "reconciliationReimbursementLinesMismatch": "Geri ödeme satırlarının toplamı {{summed}}, ancak ekstredeki toplam geri ödeme {{stated}}.",
     "reconciliationNetDueMismatch": "Gelir + geri ödemeler − kesintiler = {{computed}}, ancak ekstredeki net ödenecek tutar {{stated}}. Bir alacak eksi işaretini kaybetmiş veya bir satır eksik olabilir.",

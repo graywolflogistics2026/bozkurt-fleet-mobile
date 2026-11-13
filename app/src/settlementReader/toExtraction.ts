@@ -34,9 +34,18 @@ export function cell(text: string | null | undefined): number | null {
 export const SUMMARY_LABEL = {
   grossRevenue: /^TOTAL REV(ENUE)?\b/,
   reimbursements: /^TOTAL REIMB/,
-  totalDeductions: /^TOTAL DEDUCTIONS?\b/,
+  // Never the recap's TOTAL DEDUCTIONS FROM SETTLEMENTS (truck + wages).
+  totalDeductions: /^TOTAL DEDUCTIONS?\b(?! FROM SETTLEMENT)/,
   netPay: /^NET AMOUNT DUE\b/,
 } as const;
+// Wage identity rows (round 2 item G).
+export const WAGE_LABEL = {
+  totalWageExpense: /^TOTAL WAGE\b/,
+  subtotalPriorWage: /^SUBTOTAL PRIOR WAGE\b/,
+  totalDeductionsFromSettlements: /^TOTAL DEDUCTIONS? FROM SETTLEMENT/,
+} as const;
+// A printed total that says there is nothing ("NO ENTRY FOR THIS RUN").
+const NO_ENTRY = /\bNO ENTRY\b/i;
 export const PAYOUT_LABEL = /\bDIRECT DEPOSIT\b|\bLOADED ON (A )?CARD\b|^AMOUNT LOADED\b/;
 
 // The signed amount of a settlement line. The printed sign wins; an
@@ -46,7 +55,7 @@ export function signedLineAmount(line: Pick<ReadSettlementLine, 'section' | 'amo
   const v = cell(line.amount);
   if (v == null) return null;
   if (v < 0) return v;
-  const negative = line.section === 'deduction' ? line.direction === 'credit' : line.direction === 'charge';
+  const negative = line.section === 'deduction' || line.section === 'wage' ? line.direction === 'credit' : line.direction === 'charge';
   return negative ? -v : v;
 }
 
@@ -211,6 +220,13 @@ export function readingToExtraction(reading: ContentReading, meta: ReadMeta): Ex
     totalLabels[field] = row.label.trim();
   }
   s.settlementTotalLines = summary.map((r) => ({ label: r.label.trim(), amount: cell(r.amount) ?? r.amount }));
+  for (const field of Object.keys(WAGE_LABEL) as (keyof typeof WAGE_LABEL)[]) {
+    const row = summary.find((r) => WAGE_LABEL[field].test(normalizeStatementLabel(r.label)));
+    if (!row) continue;
+    const v = cell(row.amount);
+    if (v != null) s[field] = v;
+    else if (field === 'totalWageExpense' && NO_ENTRY.test(row.amount ?? '')) s[field] = 0;
+  }
   const payoutRow = summaryRow(PAYOUT_LABEL);
   if (payoutRow) {
     s.depositAmount = cell(payoutRow.amount) as number;
@@ -226,6 +242,8 @@ export function readingToExtraction(reading: ContentReading, meta: ReadMeta): Ex
     .filter((x) => x.l.section === 'reimbursement')
     .map(({ l, amount }) => ({ code: l.code.trim(), desc: l.description.trim(), ref: l.reference.trim(), amount: amount as number }));
   s.deductions = lines.filter((x) => x.l.section === 'deduction').map(({ l, amount }) => ({ code: l.code.trim(), desc: l.description.trim(), amount: amount as number }));
+  const wages = lines.filter((x) => x.l.section === 'wage').map(({ l, amount }) => ({ code: l.code.trim(), desc: l.description.trim(), amount: amount as number }));
+  if (wages.length > 0) s.wageItems = wages;
 
   s.loads = (reading.loads ?? []).map((l) => ({
     order: l.order.trim(),

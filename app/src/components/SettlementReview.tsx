@@ -27,6 +27,14 @@ export function reconciliationIssueText(issue: ReconciliationIssue, t: TFunction
       return t('importScreen.reconciliationDepositMismatch', { stated: money(issue.stated), computed: money(issue.computed) });
     case 'zeroNetNonzeroGross':
       return t('importScreen.reconciliationZeroNet', { zero: money(0), gross: money(issue.grossRevenue) });
+    case 'wageLinesMismatch':
+      return t('importScreen.reconciliationWageLinesMismatch', { stated: money(issue.stated), summed: money(issue.summed) });
+    case 'wageIdentityMismatch':
+      return t('importScreen.reconciliationWageIdentityMismatch', {
+        label: issue.check === 'subtotalPriorWage' ? 'SUBTOTAL PRIOR WAGE D' : 'TOTAL DEDUCTIONS FROM SETTLEMENTS',
+        stated: money(issue.stated),
+        computed: money(issue.computed),
+      });
   }
 }
 
