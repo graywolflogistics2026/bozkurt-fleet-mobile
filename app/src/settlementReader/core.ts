@@ -7,7 +7,7 @@
 // Pure: nothing here may import React Native, Expo, i18n or Supabase.
 export { evaluateSettlementGate } from '@/src/import/settlementGate';
 export { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
-export { profitLinesToAsk, withTypedStatementLines } from '@/src/import/primeStatementTemplate';
+export { profitLineConflicts, profitLineSuggestions, profitLinesToAsk, withTypedStatementLines } from '@/src/import/primeStatementTemplate';
 export * from './schema';
 export * from './prompt';
 export * from './range';

@@ -3168,6 +3168,8 @@
     "profitLinesTitle": "Eksik ekstre satırlarını yazın",
     "profitLinesBody": "Okuma bu satırları yakalayamadı. Her WEEKS TOTAL tutarını ekstrenizde basılı olduğu gibi yazın; satır bu hafta basılı değilse 0 yazın.",
     "profitLinesApply": "Bu tutarları kullan",
+    "profitLineSuggested": "Basılı {{total}} ({{printed}}) satırına göre: {{amount}}",
+    "profitLineConflict": "{{label}}: {{typed}}, basılı {{total}} ({{printed}}) ile uyuşmuyor. Ekstreye göre bu satır {{amount}} olmalı.",
     "certifyAndAdd": "Onayla ve defterime ekle",
     "certifyLine": "Bu rakamları ekstremle karşılaştırdım. Yapay zekâ tarafından üretilmiş tahminlerdir, vergi tavsiyesi değildir.",
     "showDetails": "Ayrıntıları göster",

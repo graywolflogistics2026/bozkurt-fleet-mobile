@@ -11,7 +11,7 @@
 // Pure: every function takes the progress and returns the next one.
 import { evaluateSettlementGate, type SettlementGateResult } from '@/src/import/settlementGate';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
-import { profitLinesToAsk, withTypedStatementLines } from '@/src/import/primeStatementTemplate';
+import { profitLineConflicts, profitLinesToAsk, withTypedStatementLines } from '@/src/import/primeStatementTemplate';
 import type { Extraction } from '@/src/import/types';
 import type { CostEntry } from './cost';
 import type { ContentRange, RangeResult } from './range';
@@ -269,6 +269,9 @@ export function decideReading(p: ReaderProgress, reading: ContentReading, ctx: D
 
 export function afterAnswers(p: ReaderProgress, extraction: Extraction, answers: { label: string; amount: number }[], ctx: DecideContext): Transition | null {
   if (p.state !== 'needs_input') return null;
+  // An amount that contradicts its printed block is not taken: the job
+  // keeps waiting with the same questions (the card shows why).
+  if (profitLineConflicts(sanitizeExtraction(extraction), answers).length > 0) return t({ ...p }, extraction);
   const typed = withTypedStatementLines(extraction, answers);
   const verdict = verdictOf(typed, ctx);
   if (verdict.state === 'ready') return t({ ...p, state: 'ready', questions: [], failure: null }, typed);

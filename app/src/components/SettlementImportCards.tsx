@@ -12,7 +12,7 @@ import { reviewInputsOf } from '@/src/import/reviewVerdict';
 import { couldNotReadReport } from '@/src/import/importAudit';
 import { ensureReasonLines, failDetailLine } from '@/src/import/jobFailure';
 import type { Extraction } from '@/src/import/types';
-import { profitLinesToAsk, type ProfitLineQuestion } from '@/src/import/primeStatementTemplate';
+import { profitLineConflicts, profitLineSuggestions, profitLinesToAsk, type ProfitLineQuestion } from '@/src/import/primeStatementTemplate';
 import { numOrNull } from '@/src/lib/number';
 
 // SIMPLE IMPORT FLOW (owner decision 2026-10-31, batch D2 2.1): a
@@ -155,7 +155,7 @@ export function CertifyCard({
         </View>
       )}
 
-      {profitQuestions.length > 0 && onTypeProfitLines && <ProfitLineQuestions questions={profitQuestions} onApply={onTypeProfitLines} />}
+      {profitQuestions.length > 0 && onTypeProfitLines && <ProfitLineQuestions extraction={extraction} questions={profitQuestions} onApply={onTypeProfitLines} />}
 
       {children}
 
@@ -176,31 +176,55 @@ export function CertifyCard({
 // PROFIT FROM TOTALS NEEDS ONLY A FEW LINES (owner decision 2026-11-03):
 // a profit line the reading missed is typed here — one field per line,
 // the printed label shown; 0 = not printed this week. Certify waits for it.
-function ProfitLineQuestions({ questions, onApply }: { questions: ProfitLineQuestion[]; onApply: (answers: { label: string; amount: number }[]) => void }) {
+function ProfitLineQuestions({
+  extraction,
+  questions,
+  onApply,
+}: {
+  extraction: Extraction;
+  questions: ProfitLineQuestion[];
+  onApply: (answers: { label: string; amount: number }[]) => void;
+}) {
   const { t } = useTranslation();
-  const [values, setValues] = useState<Record<string, string>>({});
+  const { number } = useFormatters();
+  const two = (n: number) => number(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // The value the printed block derives is filled in as the suggestion.
+  const suggestions = profitLineSuggestions(extraction, questions);
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(suggestions.map((s) => [s.label, s.amount.toFixed(2)])));
   const parsed = questions.map((q) => ({ label: q.label, amount: numOrNull(values[q.label] ?? '') }));
   const complete = parsed.every((a) => a.amount != null);
+  const conflicts = complete ? profitLineConflicts(extraction, parsed.map((a) => ({ label: a.label, amount: a.amount ?? 0 }))) : [];
   return (
     <View style={{ marginTop: spacing.sm, padding: spacing.sm, borderRadius: radii.md, borderWidth: 1, borderColor: colors.orange }}>
       <Text style={{ color: colors.text, fontWeight: '700', marginBottom: spacing.xs }}>{t('importFlow.profitLinesTitle')}</Text>
       <MutedText style={{ marginBottom: spacing.sm }}>{t('importFlow.profitLinesBody')}</MutedText>
-      {questions.map((q) => (
-        <View key={q.label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
-          <Text style={{ color: colors.text, flex: 1, marginEnd: spacing.sm }}>{q.printed}</Text>
-          <Field
-            keyboardType="decimal-pad"
-            value={values[q.label] ?? ''}
-            onChangeText={(v) => setValues((prev) => ({ ...prev, [q.label]: v }))}
-            placeholder="0.00"
-            style={{ width: 110, textAlign: 'right', marginBottom: 0 }}
-          />
-        </View>
+      {questions.map((q) => {
+        const s = suggestions.find((x) => x.label === q.label);
+        return (
+          <View key={q.label} style={{ paddingVertical: 4 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: colors.text, flex: 1, marginEnd: spacing.sm }}>{q.printed}</Text>
+              <Field
+                keyboardType="decimal-pad"
+                value={values[q.label] ?? ''}
+                onChangeText={(v) => setValues((prev) => ({ ...prev, [q.label]: v }))}
+                placeholder="0.00"
+                style={{ width: 110, textAlign: 'right', marginBottom: 0 }}
+              />
+            </View>
+            {s && <MutedText>{t('importFlow.profitLineSuggested', { amount: two(s.amount), total: s.total, printed: two(s.printedTotal) })}</MutedText>}
+          </View>
+        );
+      })}
+      {conflicts.map((c) => (
+        <Text key={c.label} style={{ color: colors.red, marginTop: spacing.xs }}>
+          {t('importFlow.profitLineConflict', { label: questions.find((q) => q.label === c.label)?.printed ?? c.label, typed: two(c.typed), total: c.total, printed: two(c.printedTotal), amount: two(c.amount) })}
+        </Text>
       ))}
       <View style={{ marginTop: spacing.sm }}>
         <SecondaryButton
           title={t('importFlow.profitLinesApply')}
-          disabled={!complete}
+          disabled={!complete || conflicts.length > 0}
           onPress={() => onApply(parsed.map((a) => ({ label: a.label, amount: a.amount ?? 0 })))}
         />
       </View>

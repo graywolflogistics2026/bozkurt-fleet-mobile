@@ -3168,6 +3168,8 @@
     "profitLinesTitle": "Type the missing statement lines",
     "profitLinesBody": "The reading did not catch these lines. Type each WEEKS TOTAL amount as printed on your statement; type 0 if the line is not printed this week.",
     "profitLinesApply": "Use these amounts",
+    "profitLineSuggested": "From the printed {{total}} ({{printed}}): {{amount}}",
+    "profitLineConflict": "{{label}}: {{typed}} does not match the printed {{total}} ({{printed}}). The statement leaves {{amount}} for this line.",
     "certifyAndAdd": "Certify and add to my books",
     "certifyLine": "I checked these numbers against my statement. AI-generated estimates, not tax advice.",
     "showDetails": "Show details",

@@ -2142,6 +2142,28 @@ function profitLinesToAsk(extraction, priorLabelsSeen = /* @__PURE__ */ new Set(
   const answered = new Set(extraction?.settlement?.operating?.typedNotPrinted ?? []);
   return PROFIT_LINES.filter((p) => !answered.has(p.label) && blocks.some((b) => b.missing.includes(p.label)));
 }
+function profitLineSuggestions(extraction, questions = profitLinesToAsk(extraction)) {
+  const blocks = diagnosePrimeBlocks(extraction);
+  const out = [];
+  for (const q of questions) {
+    if (questions.filter((o) => o.section === q.section).length !== 1) continue;
+    const b = blocks.find((x) => x.section === q.section && !x.wholeBlockMissing && x.printed != null && x.missing.includes(q.label));
+    if (!b || b.printed == null || Math.abs(b.difference) < 5e-3 || Math.sign(b.difference) !== q.sign) continue;
+    const total = PRIME_TEMPLATE.find((x) => x.section === q.section)?.total ?? q.section;
+    out.push({ label: q.label, amount: r23(Math.abs(b.difference)), total, printedTotal: b.printed });
+  }
+  return out;
+}
+function profitLineConflicts(extraction, answers) {
+  const suggestions = profitLineSuggestions(extraction);
+  const out = [];
+  for (const a of answers) {
+    const s = suggestions.find((x) => x.label === a.label);
+    if (!s || !Number.isFinite(a.amount)) continue;
+    if (Math.abs(Math.abs(a.amount) - s.amount) >= 5e-3) out.push({ ...s, typed: r23(Math.abs(a.amount)) });
+  }
+  return out;
+}
 function withTypedStatementLines(extraction, answers) {
   const s = extraction.settlement;
   if (!s?.operating) return extraction;
@@ -2869,6 +2891,7 @@ function decideReading(p, reading, ctx) {
 }
 function afterAnswers(p, extraction, answers, ctx) {
   if (p.state !== "needs_input") return null;
+  if (profitLineConflicts(sanitizeExtraction(extraction), answers).length > 0) return t({ ...p }, extraction);
   const typed = withTypedStatementLines(extraction, answers);
   const verdict = verdictOf(typed, ctx);
   if (verdict.state === "ready") return t({ ...p, state: "ready", questions: [], failure: null }, typed);
@@ -3107,6 +3130,8 @@ export {
   oldReaderFailure,
   pagesUpTo,
   pendingAttachments,
+  profitLineConflicts,
+  profitLineSuggestions,
   profitLinesToAsk,
   readAgain,
   readingSignature,

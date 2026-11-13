@@ -201,6 +201,43 @@ export function profitLinesToAsk(extraction: Extraction | null | undefined, prio
   return PROFIT_LINES.filter((p) => !answered.has(p.label) && blocks.some((b) => b.missing.includes(p.label)));
 }
 
+// THE PRINTED BLOCK DERIVES A TYPED VALUE (owner 2026-11-13, 08/28: ACCRUAL
+// PERFORMANCE BOND 100.00- and TOTAL OTHER INCOME AND EXPENSE 99.55- leave
+// 0.45 for INTEREST INCOME FROM DEPOSIT). When a question is the only one
+// asked in a block whose printed TOTAL was read, the block's gap (printed −
+// read) is that line, if its sign is the line's usual sign. The card shows
+// it as the suggested value and refuses a typed amount that contradicts it.
+export type ProfitLineSuggestion = { label: string; amount: number; total: string; printedTotal: number };
+
+export function profitLineSuggestions(extraction: Extraction | null | undefined, questions: ProfitLineQuestion[] = profitLinesToAsk(extraction)): ProfitLineSuggestion[] {
+  const blocks = diagnosePrimeBlocks(extraction);
+  const out: ProfitLineSuggestion[] = [];
+  for (const q of questions) {
+    if (questions.filter((o) => o.section === q.section).length !== 1) continue;
+    const b = blocks.find((x) => x.section === q.section && !x.wholeBlockMissing && x.printed != null && x.missing.includes(q.label));
+    if (!b || b.printed == null || Math.abs(b.difference) < 0.005 || Math.sign(b.difference) !== q.sign) continue;
+    const total = PRIME_TEMPLATE.find((x) => x.section === q.section)?.total ?? q.section;
+    out.push({ label: q.label, amount: r2(Math.abs(b.difference)), total, printedTotal: b.printed });
+  }
+  return out;
+}
+
+export type ProfitLineConflict = ProfitLineSuggestion & { typed: number };
+
+// Typed amounts that contradict their printed block (never accepted
+// silently: the card shows the line and keeps Apply off; the server keeps
+// waiting). A line without a derivable value is never a conflict.
+export function profitLineConflicts(extraction: Extraction | null | undefined, answers: { label: string; amount: number }[]): ProfitLineConflict[] {
+  const suggestions = profitLineSuggestions(extraction);
+  const out: ProfitLineConflict[] = [];
+  for (const a of answers) {
+    const s = suggestions.find((x) => x.label === a.label);
+    if (!s || !Number.isFinite(a.amount)) continue;
+    if (Math.abs(Math.abs(a.amount) - s.amount) >= 0.005) out.push({ ...s, typed: r2(Math.abs(a.amount)) });
+  }
+  return out;
+}
+
 // The owner's typed amounts become statement lines of their block (signed
 // as Prime prints them, flagged typed). 0 = "not printed this week": no
 // line (never a $0 row), the label is remembered so it is not asked again.

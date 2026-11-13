@@ -3168,6 +3168,8 @@
     "profitLinesTitle": "Escriba las líneas que faltan del estado de cuenta",
     "profitLinesBody": "La lectura no captó estas líneas. Escriba cada importe WEEKS TOTAL tal como aparece impreso en su estado de cuenta; escriba 0 si la línea no aparece esta semana.",
     "profitLinesApply": "Usar estos importes",
+    "profitLineSuggested": "Según el {{total}} impreso ({{printed}}): {{amount}}",
+    "profitLineConflict": "{{label}}: {{typed}} no coincide con el {{total}} impreso ({{printed}}). El estado de cuenta deja {{amount}} para esta línea.",
     "certifyAndAdd": "Certificar y agregar a mis libros",
     "certifyLine": "Revisé estas cifras contra mi estado de cuenta. Estimaciones generadas por IA, no son asesoría fiscal.",
     "showDetails": "Mostrar detalles",

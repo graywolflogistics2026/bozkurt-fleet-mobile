@@ -11,6 +11,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Fix 2/4 (08/28): a typed statement line the printed block derives is suggested; a contradicting amount is refused
+- primeStatementTemplate.ts profitLineSuggestions()/profitLineConflicts(): the only question in a block whose printed TOTAL was read gets the block gap as its value (08/28: 100.00- bond, TOTAL OTHER 99.55- -> 0.45). The card pre-fills it with the source line, shows a red line and keeps Apply off for a contradicting amount; machine.afterAnswers keeps waiting on a conflict.
+- i18n importFlow.profitLineSuggested / profitLineConflict (7 locales). Test: settlementReader/__tests__/typedLineSuggestion.test.ts. Ships: deploy script, eas update. No SQL.
+
 ## 2026-11-13 — Fix 1/4 (08/28 device test): Prime's misspelled label INTEREST INCOME FROM DEPOST
 - Cause: labels were compared letter for letter; when the DEPOST row was read after its block total the mapper could not place it, OTHER INCOME AND EXPENSE did not add up and the card asked the owner to type it (left 0 -> profit 436.49, not 436.04).
 - primeStatementLines.ts canonicalStatementLabel(): exact, a known Prime spelling, or one known label within 2 letters (10+ letters). Used by classification, toExtraction (block of a row), diagnosePrimeBlocks/profitLinesToAsk, seen-before labels. Prompt: copy a misspelled label as printed.
