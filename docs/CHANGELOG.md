@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Recap sign bug on every week (device, build 664be90)
+- Cause: the recap prints TOTAL DEDUCTIONS FROM SETTLEMENTS "9,232.02-" (trailing minus = charge); the identity in settlementReconciliation.ts compared that signed value with a positive total, so every week failed net_due_differs (07/17, 11/06 seen).
+- 7686aff settlementReader/toExtraction.ts CHARGE_TOTAL_FIELDS: charge totals (truck deductions, wages, recap) are stored as their size; owner-direction figures keep the printed sign. All 18 golden fixtures print the recap and NET CHARGES with a trailing minus; data/__tests__/signRegressions.test.ts replays 07/17, 07/24, 08/28, 11/06, 11/13 (one read, real gate, real save).
+- 4a9830e the failure names the identity ("Recap deductions do not match truck deductions + wages"); gateFailureText.ts CODE_DETAIL_CHECKS drops the duplicate SUBTOTAL PRIOR WAGE D line. 7 locales.
+- 823a973 machine.ts explainMismatch(): same size, opposite sign = rule gap kind 'sign' (failed after read 1, not counted, message ruleGapSign, 7 locales).
+- Ships: ai-import redeploy (reader bundle) + eas update. No SQL.
+
 ## 2026-11-13 — Round 2 B (part 2): a row saved by a settlement's own import is never an own expense
 - kpi.ts isOrphanSettlementRow(): besides source settlement, a row with no settlement link whose document_id is a settlement's own document (the same import saved it, whatever its source) is out of the own-expense layer and listed as not counted. A receipt imported on its own (its own document) still counts. Test: data/__tests__/homeOwnExpenses.test.ts. Ships: eas update.
 
