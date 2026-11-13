@@ -8,6 +8,7 @@ import { buildImportAuditText } from '@/src/import/importAudit';
 import type { ReconciliationIssue } from '@/src/import/settlementReconciliation';
 import type { ReviewInputs } from '@/src/import/reviewVerdict';
 import type { Extraction } from '@/src/import/types';
+import { checkMark, type CheckTone } from '@/src/import/checkMark';
 
 // The details under "Show details" on the CHECK AND CERTIFY card (batch
 // D2): every check result, per-group difference and statement line the AI
@@ -38,6 +39,8 @@ export function reconciliationIssueText(issue: ReconciliationIssue, t: TFunction
   }
 }
 
+const toneColor = (tone: CheckTone) => (tone === 'fail' ? colors.red : tone === 'warn' ? colors.orange : undefined);
+
 export function ReviewDetails({ extraction, inputs, money }: { extraction: Extraction; inputs: ReviewInputs; money: (n: number) => string }) {
   const { t, i18n } = useTranslation();
   const { check, issues, groups } = inputs;
@@ -47,15 +50,18 @@ export function ReviewDetails({ extraction, inputs, money }: { extraction: Extra
   return (
     <View style={{ borderColor: colors.border, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginTop: spacing.xs }}>
       {heading('importScreen.verdict.detailsChecks')}
-      {check?.checks.map((c, i) => (
-        <MutedText key={`c-${i}`} style={!c.passed ? { color: colors.red } : undefined}>
-          {c.passed ? '✓' : '✗'} {t(`importScreen.primeCheck.${c.id}`)} —{' '}
-          {t('importScreen.primeCheckNumbers', {
-            printed: c.expectedText ?? (c.id === 'milesMatch' ? formatNumber(c.expected, i18n.language) : money(c.expected)),
-            read: c.actualText ?? (c.id === 'milesMatch' ? formatNumber(c.actual, i18n.language) : money(c.actual)),
-          })}
-        </MutedText>
-      ))}
+      {check?.checks.map((c, i) => {
+        const m = checkMark(c.passed, c.expected, c.actual);
+        return (
+          <MutedText key={`c-${i}`} style={toneColor(m.tone) ? { color: toneColor(m.tone) } : undefined}>
+            {m.mark} {t(`importScreen.primeCheck.${c.id}`)} —{' '}
+            {t('importScreen.primeCheckNumbers', {
+              printed: c.expectedText ?? (c.id === 'milesMatch' ? formatNumber(c.expected, i18n.language) : money(c.expected)),
+              read: c.actualText ?? (c.id === 'milesMatch' ? formatNumber(c.actual, i18n.language) : money(c.actual)),
+            })}
+          </MutedText>
+        );
+      })}
       {(check?.gateMissing?.length ?? 0) > 0 && (
         <MutedText style={{ color: colors.red }}>
           ✗ {t('importScreen.verdict.reason.statementNotRead', { checks: check!.gateMissing!.map((m) => t(`importScreen.gateMissing.${m}`)).join(', ') })}
@@ -72,8 +78,8 @@ export function ReviewDetails({ extraction, inputs, money }: { extraction: Extra
         <>
           {heading('importScreen.verdict.detailsGroups')}
           {groups.map((g) => (
-            <MutedText key={g.group} style={!g.passed ? { color: colors.orange } : undefined}>
-              {g.passed ? '✓' : '✗'}{' '}
+            <MutedText key={g.group} style={checkMark(g.passed, g.settlement, g.statement).tone !== 'ok' ? { color: colors.orange } : undefined}>
+              {checkMark(g.passed, g.settlement, g.statement).mark}{' '}
               {t('importScreen.groupLine', {
                 group: t(`importScreen.group.${g.group}`),
                 settlement: money(g.settlement),

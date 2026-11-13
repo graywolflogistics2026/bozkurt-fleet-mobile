@@ -45,6 +45,10 @@ type GroupDef = {
   // by description).
   reimbursement?: { codes: string[]; desc: RegExp };
   statementLabels: string[];
+  // Compared by size (round 2 item I(c), 2026-11-13): the performance bond
+  // is always withheld; a scan can drop the statement row's trailing minus
+  // and showed "lines $100.00, statement -$100.00". Both sides as a charge.
+  bySize?: boolean;
 };
 
 const GROUPS: GroupDef[] = [
@@ -61,7 +65,7 @@ const GROUPS: GroupDef[] = [
   // weekly repayment (550.00 − 4,459.59 = +3,909.59 credit).
   { group: 'advances', codes: ['WA'], excludeDesc: /\bWEIGHT\s+TICKETS?\b/i, reimbursement: { codes: ['WA'], desc: /\bADVANCE\b/i }, statementLabels: ['ADVANCES'] },
   { group: 'meals', codes: ['PO'], statementLabels: ['PRIME POINT OF SALE'] },
-  { group: 'performance_bond', codes: ['PB'], statementLabels: ['ACCRUAL PERFORMANCE BOND'] },
+  { group: 'performance_bond', codes: ['PB'], statementLabels: ['ACCRUAL PERFORMANCE BOND'], bySize: true },
 ];
 
 const TOLERANCE = 1.0;
@@ -98,8 +102,12 @@ export function buildPrimeGroupChecks(extraction: Extraction | null | undefined)
           })
           .reduce((sum, r) => sum + amountOf(r.amount), 0)
       : 0;
-    const settlement = round2(lines.reduce((sum, d) => sum + amountOf(d.amount), 0) - reimbursed);
-    const statementSide = round2(-statement.reduce((sum, l) => sum + amountOf(l.amount), 0));
+    let settlement = round2(lines.reduce((sum, d) => sum + amountOf(d.amount), 0) - reimbursed);
+    let statementSide = round2(-statement.reduce((sum, l) => sum + amountOf(l.amount), 0));
+    if (def.bySize) {
+      settlement = Math.abs(settlement);
+      statementSide = Math.abs(statementSide);
+    }
     const difference = round2(settlement - statementSide);
     checks.push({ group: def.group, settlement, statement: statementSide, difference, passed: Math.abs(difference) <= TOLERANCE });
   }

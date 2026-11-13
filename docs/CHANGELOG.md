@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Round 2 I: labels copied exactly, a warning when printed and read differ, bond signs
+- (a) Prompt: every label, code and description letter for letter ("TRIP XPRESS CHG", never "TRIP PRESS CHG"; added in the G commit); canonicalStatementLabel already maps the dropped letter to the known label (tested).
+- (b) import/checkMark.ts: a check that passed within $1 but whose figures differ by a cent or more shows ⚠ (orange), never ✓ (SettlementReview.tsx checks and groups). Device: "Other income and expense lines: printed -99.93, read -100.00" showed ✓.
+- (c) primeLineGroups.ts: the performance bond group is compared by size on both sides (always withheld; a scan dropped the statement minus and showed "lines $100.00, statement -$100.00").
+- Test: import/__tests__/displayLabels.test.ts. Ships: deploy-ai-import.ps1 + eas update.
+
 ## 2026-11-13 — Round 2 H: no wasted second read when the gap is a printed figure
 - Device 11/06: both reads were used and billed ($0.4998) for net_due_differs whose difference 805.50 = TOTAL WAGE EXPENSE.
 - settlementReader/machine.ts explainMismatch(): before an automatic second read, a failing check whose difference equals another printed total (summary row, statement TOTAL/SUBTOTAL row) or a line with cents fails at once as rule_gap: not counted against the owner's reads (OUR_FAILURES), no second read, message "The difference $X equals the printed LABEL. Your document is fine: our reading rule missed it." (importFlow.reader.reason.ruleGap, 7 locales; Send report line "Rule gap"). Whole-dollar lines (the 100.00 bond) never explain a gap.

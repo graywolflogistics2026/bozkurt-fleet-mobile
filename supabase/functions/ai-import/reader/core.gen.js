@@ -1488,7 +1488,7 @@ var GROUPS = [
   // weekly repayment (550.00 − 4,459.59 = +3,909.59 credit).
   { group: "advances", codes: ["WA"], excludeDesc: /\bWEIGHT\s+TICKETS?\b/i, reimbursement: { codes: ["WA"], desc: /\bADVANCE\b/i }, statementLabels: ["ADVANCES"] },
   { group: "meals", codes: ["PO"], statementLabels: ["PRIME POINT OF SALE"] },
-  { group: "performance_bond", codes: ["PB"], statementLabels: ["ACCRUAL PERFORMANCE BOND"] }
+  { group: "performance_bond", codes: ["PB"], statementLabels: ["ACCRUAL PERFORMANCE BOND"], bySize: true }
 ];
 var TOLERANCE4 = 1;
 var round24 = (n) => Math.round(n * 100) / 100;
@@ -1514,8 +1514,12 @@ function buildPrimeGroupChecks(extraction) {
       const code = (r.code ?? "").trim().toUpperCase();
       return code ? def.reimbursement.codes.includes(code) : def.reimbursement.desc.test(r.desc ?? "");
     }).reduce((sum, r) => sum + amountOf2(r.amount), 0) : 0;
-    const settlement = round24(lines.reduce((sum, d) => sum + amountOf2(d.amount), 0) - reimbursed);
-    const statementSide = round24(-statement.reduce((sum, l) => sum + amountOf2(l.amount), 0));
+    let settlement = round24(lines.reduce((sum, d) => sum + amountOf2(d.amount), 0) - reimbursed);
+    let statementSide = round24(-statement.reduce((sum, l) => sum + amountOf2(l.amount), 0));
+    if (def.bySize) {
+      settlement = Math.abs(settlement);
+      statementSide = Math.abs(statementSide);
+    }
     const difference = round24(settlement - statementSide);
     checks.push({ group: def.group, settlement, statement: statementSide, difference, passed: Math.abs(difference) <= TOLERANCE4 });
   }
