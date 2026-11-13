@@ -1083,9 +1083,13 @@ function buildSettlementStatement(extraction, options) {
     if (prime.totals.settlementToOperator != null) {
       printed2.deposit = prime.totals.settlementToOperator;
       printed2.depositSource = "settlement_to_operator";
-    } else if (prime.negativeWeek && prime.totals.totalCashFlow != null) {
-      printed2.deposit = prime.totals.totalCashFlow;
-      printed2.depositSource = "settlement_to_operator";
+    } else if (prime.negativeWeek) {
+      const t = prime.totals;
+      const cashFlow = t.totalCashFlow ?? (t.totalStatement != null ? round23(t.totalStatement + (t.priorWeekBalanceForward ?? 0)) : null);
+      if (cashFlow != null) {
+        printed2.deposit = cashFlow;
+        printed2.depositSource = "settlement_to_operator";
+      }
     }
   }
   return {

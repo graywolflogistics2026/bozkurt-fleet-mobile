@@ -699,11 +699,18 @@ export function buildSettlementStatement(
     if (prime.totals.settlementToOperator != null) {
       printed.deposit = prime.totals.settlementToOperator;
       printed.depositSource = 'settlement_to_operator';
-    } else if (prime.negativeWeek && prime.totals.totalCashFlow != null) {
+    } else if (prime.negativeWeek) {
       // Negative week: the deposit is TOTAL CASH FLOW (< 0), which
-      // settlementDeposit() turns into owed to carrier, deposited 0.
-      printed.deposit = prime.totals.totalCashFlow;
-      printed.depositSource = 'settlement_to_operator';
+      // settlementDeposit() turns into owed to carrier, deposited 0. A
+      // statement with no cash-flow section (07/24, owner workbook
+      // 2026-11-13: owed 1,155.28, not net due 1,155.35) ends at TOTAL
+      // STATEMENT: the cash flow is TOTAL STATEMENT + balance forward.
+      const t = prime.totals;
+      const cashFlow = t.totalCashFlow ?? (t.totalStatement != null ? round2(t.totalStatement + (t.priorWeekBalanceForward ?? 0)) : null);
+      if (cashFlow != null) {
+        printed.deposit = cashFlow;
+        printed.depositSource = 'settlement_to_operator';
+      }
     }
   }
   return {
