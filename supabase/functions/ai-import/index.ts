@@ -3029,6 +3029,13 @@ Deno.serve(async (req: Request) => {
 
   if (isImage) {
     result = await extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
+    // SETTLEMENT READER (owner answer 2026-11-13): a photographed settlement
+    // is never a full week. Only its docType goes back; the app says
+    // "This photo is not a full settlement. Upload the PDF."
+    if (!("errorType" in result) && (result.extraction as { docType?: unknown } | null)?.docType === "settlement") {
+      console.log("[ai-import] photo settlement: returning docType only (upload the PDF)");
+      result = { extraction: { docType: "settlement" } };
+    }
   } else if (!isFirstCall) {
     // Already mid-continuation from an earlier response on this same
     // document — go straight to the next batch of pages.

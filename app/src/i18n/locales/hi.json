@@ -3218,7 +3218,30 @@
       "reimbursementLinesMismatch": "TOTAL REIMBURSED"
     },
     "readPagesAgain": "पेज {{pages}} फिर से पढ़ें",
-    "stoppedPageFailed": "पूरी फ़ाइल फिर से पढ़ने पर भी यही होगा। सिर्फ़ वही पेज फिर से पढ़ें।"
+    "stoppedPageFailed": "पूरी फ़ाइल फिर से पढ़ने पर भी यही होगा। सिर्फ़ वही पेज फिर से पढ़ें।",
+    "reader": {
+      "reason": {
+        "rangeNotFound": "इस फ़ाइल में settlement के पेज नहीं मिले।",
+        "modelFailed": "AI इस फ़ाइल को नहीं पढ़ सका।",
+        "sameResult": "फ़ाइल दो बार पढ़ी गई और नतीजा एक जैसा रहा।",
+        "oldReader": "यह फ़ाइल पुराने रीडर से पढ़ी गई थी। इसे नए रीडर से फिर पढ़ें।",
+        "tooManyRuns": "पढ़ने में बहुत समय लगा, इसलिए इसे रोक दिया गया।",
+        "startRefused": "इम्पोर्ट शुरू नहीं हो सका ({{step}})।"
+      },
+      "modelError": "AI त्रुटि: {{error}}",
+      "error": {
+        "timeout": "बहुत समय लगा",
+        "max_tokens": "जवाब बीच में कट गया",
+        "refusal": "AI ने पढ़ने से मना कर दिया",
+        "unreadable_reply": "जवाब पढ़ा नहीं जा सका",
+        "busy": "AI सेवा व्यस्त है",
+        "api_error": "AI सेवा ने त्रुटि लौटाई"
+      },
+      "stoppedSame": "दूसरी बार पढ़ने पर बिल्कुल वही नतीजा आया, इसलिए पढ़ना रोक दिया गया।",
+      "readsUsed": "यह फ़ाइल पहले ही {{max}} बार पढ़ी जा चुकी है। नया इम्पोर्ट शुरू करने के लिए इसे फिर अपलोड करें।",
+      "readingAgain": "फिर से पढ़ रहे हैं ({{n}} / {{max}})…",
+      "photoSettlement": "यह फ़ोटो पूरा settlement नहीं है। PDF अपलोड करें।"
+    }
   },
   "certify": {
     "certifiedOn": "{{date}} को प्रमाणित",
@@ -3269,7 +3292,9 @@
     "ytdWeeks": "तुलना किए गए सप्ताह",
     "ytdTies": "मेल खाता है (पिछला YTD + इस सप्ताह का WEEKS)",
     "ytdDiffers": "मेल नहीं खाता",
-    "ytdNone": "YTD कॉलम वाले दो सहेजे गए सप्ताह अभी नहीं हैं।"
+    "ytdNone": "YTD कॉलम वाले दो सहेजे गए सप्ताह अभी नहीं हैं।",
+    "readerTitle": "Settlement रीडर (पिछले 5)",
+    "readerNone": "अभी कोई रीडर जॉब नहीं"
   },
   "truckOwnership": {
     "label": "ट्रक का स्वामित्व",

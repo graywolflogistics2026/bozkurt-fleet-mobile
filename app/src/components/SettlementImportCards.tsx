@@ -30,9 +30,18 @@ export function ReadingCard({
   again,
   finishing,
   stuck,
-}: { again?: { n: number; max: number; check: string } | null; finishing?: boolean; stuck?: { problem: string; onCheckAgain: () => void } | null } = {}) {
+  label: labelOverride,
+}: {
+  again?: { n: number; max: number; check: string } | null;
+  finishing?: boolean;
+  stuck?: { problem: string; onCheckAgain: () => void } | null;
+  // SETTLEMENT READER (2026-11-13): "Reading again (2 of 2)".
+  label?: string;
+} = {}) {
   const { t } = useTranslation();
-  const label = again
+  const label = labelOverride
+    ? labelOverride
+    : again
     ? t('importFlow.readingAgain', { n: again.n, max: again.max, check: t(`importFlow.checkName.${again.check}`, { defaultValue: again.check }) })
     : finishing
       ? t('importFlow.finishingUpBody')
@@ -209,9 +218,13 @@ export function CouldNotReadCard({
   triggerLines,
   reasonLines,
   readAgainPages,
+  reasonText,
 }: {
   extraction: Extraction | null;
-  reason: GateFailReason | 'job_failed' | 'not_finished';
+  reason: GateFailReason | 'job_failed' | 'not_finished' | 'photo_settlement';
+  // SETTLEMENT READER (2026-11-13): the server's reason line, translated;
+  // replaces the generic reason.
+  reasonText?: string;
   // IMPORT GATE FIX 1.2: the failing check and its two numbers.
   details?: GateFailDetail[];
   onUploadAgain: () => void;
@@ -238,6 +251,8 @@ export function CouldNotReadCard({
     (k, o) => t(k, o) as string,
     reason === 'not_finished' ? 'result_json' : 'reason'
   );
+  // A photographed settlement has nothing more to say (upload the PDF).
+  const lines = reason === 'photo_settlement' ? [] : detailLines;
   const stopKey =
     stopped === 'same_values'
       ? 'importFlow.stoppedSameValues'
@@ -252,8 +267,19 @@ export function CouldNotReadCard({
     <Card>
       <View style={{ backgroundColor: 'rgba(239,68,68,0.10)', borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
         <Text style={{ color: colors.text, fontWeight: '700', fontSize: typography.size.md }}>{t('importFlow.couldNotReadTitle')}</Text>
-        <MutedText style={{ marginTop: spacing.xs }}>{t(reason === 'job_failed' ? 'importFlow.reason.jobFailed' : reason === 'not_finished' ? 'importFlow.reason.notFinished' : GATE_FAIL_REASON_KEY[reason])}</MutedText>
-        {detailLines.map((line) => (
+        <MutedText style={{ marginTop: spacing.xs }}>
+          {reasonText ??
+            t(
+              reason === 'job_failed'
+                ? 'importFlow.reason.jobFailed'
+                : reason === 'not_finished'
+                  ? 'importFlow.reason.notFinished'
+                  : reason === 'photo_settlement'
+                    ? 'importFlow.reader.photoSettlement'
+                    : GATE_FAIL_REASON_KEY[reason]
+            )}
+        </MutedText>
+        {lines.map((line) => (
           <MutedText key={line} style={{ marginTop: spacing.xs, color: colors.text }}>
             {line}
           </MutedText>
@@ -270,7 +296,7 @@ export function CouldNotReadCard({
       <SecondaryButton
         title={t('importFlow.sendReport')}
         onPress={() => {
-          void Share.share({ message: couldNotReadReport(extraction, reason, (k, o) => t(k, o) as string, [...detailLines, ...(triggerLines ?? [])]) });
+          void Share.share({ message: couldNotReadReport(extraction, reason, (k, o) => t(k, o) as string, [...lines, ...(triggerLines ?? [])], reasonText) });
         }}
       />
     </Card>

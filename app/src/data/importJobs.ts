@@ -4,7 +4,10 @@ import { supabase } from '@/src/lib/supabase';
 import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
-import { hasPendingWork, isAwaitingVerdict, jobReviewStep, markRereadRequested, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus, type JobReviewState } from '@/src/import/importJobs';
+import { jobReviewStep, markRereadRequested, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus, type JobReviewState } from '@/src/import/importJobs';
+import { hasReaderWork, markReaderReadAgain, readerJobView } from '@/src/import/readerJob';
+import { isReaderProgress, type ReaderProgress } from '@/src/settlementReader/machine';
+import { todayDateOnly } from '@/src/lib/dateOnly';
 import type { Extraction } from '@/src/import/types';
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
@@ -23,7 +26,10 @@ type ImportJobRow = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
-  progress?: ImportJobProgress | null;
+  // An old job: the page engine's progress. A reader job (2026-11-13):
+  // { reader, inputs }.
+  progress?: ImportJobProgress | { reader?: unknown } | null;
+  storage_path?: string | null;
   heartbeat_at?: string | null;
   error_page?: number | null;
   document_id?: string | null;
@@ -32,7 +38,7 @@ type ImportJobRow = {
 };
 
 const IMPORT_JOB_BASE_COLUMNS =
-  'id, status, pages_done, pages_total, file_name, media_type, error_message, error_step, created_at, updated_at, completed_at';
+  'id, status, pages_done, pages_total, file_name, media_type, storage_path, error_message, error_step, created_at, updated_at, completed_at';
 // RESUMABLE IMPORT JOBS (docs/PENDING_SQL.md §78). Before §78 runs these
 // columns don't exist: the select falls back to the base columns.
 const IMPORT_JOB_COLUMNS = `${IMPORT_JOB_BASE_COLUMNS}, progress, heartbeat_at, error_page, document_id, review:page_plan->review`;
@@ -42,7 +48,13 @@ function isUndefinedColumn(error: { code?: string; message?: string } | null): b
   return !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''));
 }
 
+function readerOf(progress: ImportJobRow['progress']): ReaderProgress | null {
+  const reader = progress && typeof progress === 'object' ? (progress as { reader?: unknown }).reader : null;
+  return isReaderProgress(reader) ? reader : null;
+}
+
 function mapRow(row: ImportJobRow): ImportJob {
+  const reader = readerOf(row.progress);
   return {
     id: row.id,
     status: row.status,
@@ -55,7 +67,10 @@ function mapRow(row: ImportJobRow): ImportJob {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
-    progress: row.progress ?? null,
+    // A reader job's progress is the reader's, never the page engine's.
+    progress: reader ? null : ((row.progress as ImportJobProgress | null | undefined) ?? null),
+    reader,
+    storagePath: row.storage_path ?? null,
     heartbeatAt: row.heartbeat_at ?? null,
     errorPage: row.error_page ?? null,
     documentId: row.document_id ?? null,
@@ -102,7 +117,7 @@ export function useImportJobs() {
     enabled: !!userId,
     refetchInterval: (query) => {
       const jobs = query.state.data as ImportJob[] | undefined;
-      return (jobs ?? []).some((j) => hasPendingWork(j) || isAwaitingVerdict(j)) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+      return (jobs ?? []).some((j) => hasReaderWork(j)) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
     },
     // Keep polling even while the query "looks" fresh — the whole point
     // is picking up server-side progress the client had no hand in.
@@ -272,7 +287,11 @@ async function startOneImportJob(userId: string, params: StartImportJobParams): 
   const storagePath = await uploadFileForJob(userId, params.fileUri, params.mediaType, params.fileName);
   const { data, error } = await supabase.functions.invoke('ai-import', {
     body: {
-      mode: 'job',
+      // SETTLEMENT READER (owner decision 2026-11-13): every new import is
+      // read by the new reader; importDate is the owner's local day (the
+      // date gate's "today").
+      mode: 'read_start',
+      importDate: todayDateOnly(),
       storagePath,
       mediaType: params.mediaType,
       fileName: params.fileName,
@@ -444,6 +463,78 @@ export function useReadDocumentPages() {
       queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
     },
   });
+}
+
+// ---- SETTLEMENT READER (owner decision 2026-11-13) ----------------------
+
+export type ReaderInputs = {
+  locale?: string;
+  customCategories?: string[];
+  learningRules?: { keyword: string; category: string }[];
+  carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
+};
+
+// [Read again] on a failed reader job: the server reads the content range
+// again on the same job, only while reads remain (max 2, counted there).
+export async function readAgainReaderJob(jobId: string): Promise<{ jobId: string }> {
+  markReaderReadAgain(jobId);
+  return invokeJobMode({ mode: 'read_again', jobId }, 'Could not start reading again.');
+}
+
+// [Read again] on a job read by the old reader: a NEW reader job from the
+// same stored file (no upload); the old row goes.
+export async function restartWithReader(job: Pick<ImportJob, 'id' | 'storagePath' | 'mediaType' | 'fileName'>, inputs: ReaderInputs): Promise<{ jobId: string }> {
+  if (!job.storagePath) throw new Error('The file of this import is no longer stored. Upload it again.');
+  const started = await invokeJobMode(
+    { mode: 'read_start', importDate: todayDateOnly(), storagePath: job.storagePath, mediaType: job.mediaType, fileName: job.fileName ?? undefined, ...inputs },
+    'Could not start reading again.'
+  );
+  await supabase.from('import_jobs').delete().eq('id', job.id);
+  return started;
+}
+
+// The profit lines the owner typed on the card (needs_input): the server's
+// gate decides again (no model call).
+export async function answerReaderJob(jobId: string, answers: { label: string; amount: number }[]): Promise<{ state: string }> {
+  const { data, error } = await supabase.functions.invoke('ai-import', { body: { mode: 'read_answer', jobId, answers } });
+  if (error) {
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx instanceof Response) {
+      const parsed = await ctx.json().catch(() => null);
+      if (parsed?.error?.message) throw new Error(parsed.error.message as string);
+    }
+    throw new Error('Could not send your answer.');
+  }
+  return data as { state: string };
+}
+
+// The app's backup restart of a reader job whose worker stopped.
+export async function resumeReaderJob(jobId: string): Promise<{ jobId: string }> {
+  return invokeJobMode({ mode: 'read_resume', jobId }, 'Could not resume the import.');
+}
+
+export type ReaderReviewLoad =
+  | { state: 'ready'; extraction: Extraction; fileName: string | undefined; storagePath: string; mediaType: string; job: ImportJob }
+  | { state: 'reading'; job: ImportJob }
+  | { state: 'failed'; job: ImportJob }
+  | { state: 'missing' };
+
+// Check and certify opens ONLY a job the server decided is ready (or
+// waiting for the profit lines); a failed job (or an old-reader job) shows
+// COULD NOT READ with its reasons; a job still reading is followed.
+export async function loadReaderJobForReview(jobId: string): Promise<ReaderReviewLoad> {
+  const { data, error } = await supabase.from('import_jobs').select(`${IMPORT_JOB_COLUMNS}, result_json`).eq('id', jobId).maybeSingle();
+  if (error) throw error;
+  if (!data) return { state: 'missing' };
+  const row = data as unknown as ImportJobRow & { result_json?: unknown };
+  const job = mapRow(row);
+  const view = readerJobView(job, new Date().toISOString());
+  if (view.state === 'reading') return { state: 'reading', job };
+  if (view.state === 'failed') return { state: 'failed', job };
+  const raw = row.result_json as Extraction | null | undefined;
+  // Ready without its stored reading: never a loop back to reading.
+  if (!raw || typeof raw !== 'object' || !raw.docType || !row.storage_path) return { state: 'missing' };
+  return { state: 'ready', extraction: sanitizeExtraction(raw), fileName: row.file_name ?? undefined, storagePath: row.storage_path, mediaType: row.media_type, job };
 }
 
 // After Save (privacy, amendment 4): the job's stored extraction is deleted.

@@ -13,6 +13,8 @@
 // without a live Supabase project — this module is what carries the real
 // test coverage for job lifecycle/queueing/retry logic.
 
+import type { ReaderProgress } from '@/src/settlementReader/machine';
+
 // 'waiting_to_retry' (owner decision 2026-08-24, BATCH BACK-PRESSURE pass)
 // — a job that hit a real Anthropic rate limit and is automatically
 // backing off before its next attempt (server-side, ai-import's
@@ -67,6 +69,10 @@ export type ImportJob = {
   // re-read trigger and the FINAL verdict. undefined = not selected (older
   // database without page_plan), null = no verdict yet.
   review?: JobReviewState | null;
+  // SETTLEMENT READER (owner decision 2026-11-13): progress.reader of a job
+  // read by the new reader (src/import/readerJob.ts); null for an old job.
+  reader?: ReaderProgress | null;
+  storagePath?: string | null;
 };
 
 // Mirror of supabase/functions/ai-import/jobEngine.ts JobReview (the app

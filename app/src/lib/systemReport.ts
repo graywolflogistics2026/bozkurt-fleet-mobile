@@ -17,6 +17,7 @@ import { scrubBankDigitsInText } from '@/src/import/bankDigits';
 import type { latestYtdContinuity } from '@/src/import/ytdContinuity';
 import { isEmbeddedBuild, NULL_NAMES, stamp, type BuildInfo } from '@/src/lib/buildInfoFormat';
 import { finalStateOf, type ImportJob } from '@/src/import/importJobs';
+import { readerReportLines } from '@/src/import/readerJob';
 
 export type { DiagnoseReport, JobLine, ModelCheckResult };
 
@@ -232,6 +233,24 @@ export function ytdContinuitySection(c: YtdContinuityResult | null, t: Translate
   };
 }
 
+// SETTLEMENT READER (owner decision 2026-11-13): the last 5 reader jobs,
+// from the app's own job list — state, reads n/2, reason, cost per role
+// and attachments (src/import/readerJob.ts readerReportLines; codes and
+// numbers only).
+export function readerSection(clientJobs: ImportJob[], t: Translate): ReportSection {
+  const title = t('diagnostics.readerTitle');
+  const jobs = clientJobs.filter((j) => j.reader).slice(0, 5);
+  if (jobs.length === 0) return { title, lines: [{ ok: null, label: title, value: t('diagnostics.readerNone') }] };
+  return {
+    title,
+    lines: jobs.map((j) => ({
+      ok: j.reader!.state === 'failed' ? false : j.reader!.state === 'reading' ? null : true,
+      label: dayLabel(j.createdAt),
+      value: readerReportLines(j).join(' | '),
+    })),
+  };
+}
+
 export function buildReportSections(
   client: ClientInfo,
   server: DiagnoseReport | null,
@@ -243,6 +262,7 @@ export function buildReportSections(
   if (server) sections.push(...serverSections(server, t));
   const jobLines = server ? withAppVerdicts(server.jobs.lastJobs, clientJobs) : clientJobs.slice(0, 5).map(clientJobToLine);
   sections.push(ytdContinuitySection(ytd, t));
+  sections.push(readerSection(clientJobs, t));
   sections.push(lastJobsSection(jobLines, t));
   return sections;
 }

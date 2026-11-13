@@ -26,6 +26,16 @@ describe('ai-import wiring of the settlement reader', () => {
     expect(index).toMatch(/isReaderRow\(withProgress\?\.progress\)\) return await handleReadResume/);
   });
 
+  test('a photographed settlement returns its docType only (owner answer 2026-11-13)', () => {
+    expect(index).toContain('result = { extraction: { docType: "settlement" } };');
+  });
+
+  test('the app starts every background import with the new reader', () => {
+    const data = fs.readFileSync(path.join(__dirname, '../../data/importJobs.ts'), 'utf8');
+    expect(data).toContain("mode: 'read_start',");
+    expect(data).not.toContain("mode: 'job',");
+  });
+
   test('models come from ROLE_MODEL only; no Fable anywhere in the reader', () => {
     expect(server).not.toMatch(/claude-[a-z]+-\d/);
     expect(server).not.toMatch(/fable/i);

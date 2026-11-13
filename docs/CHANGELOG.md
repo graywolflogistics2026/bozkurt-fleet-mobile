@@ -11,9 +11,19 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Settlement reader rewrite, commit 5 (app)
+- Every background import starts with mode read_start (+ importDate). src/import/readerJob.ts (pure, tested): the server's state -> Reading / Ready to check (ready and needs_input) / Could not read with reasons, [Read again] while reads < 2, [Send report]; old-reader jobs show failed with [Read again] = a new job from the stored file.
+- ImportJob gains reader + storagePath (src/data/importJobs.ts mapRow); new readAgainReaderJob, restartWithReader, answerReaderJob (needs_input profit lines go to the server), resumeReaderJob, loadReaderJobForReview.
+- ImportJobsChip: the app verdict runner is no longer mounted; chip, auto-resume and notifications use the reader state. Jobs list and the import screen likewise.
+- Photo of a settlement: ai-import returns docType only; the app says "This photo is not a full settlement. Upload the PDF." No auto re-read.
+- Settlement detail: the "read line details again" and attachments "Read" links are removed (both started old-reader jobs); the notes stay.
+- Diagnostics: a "Settlement reader (last 5)" section (state, reads, reason, cost per role). i18n: importFlow.reader.*, diagnostics.reader* in all 7 locales.
+- Known: attachments read after Certify are not kept (import_job_saved deletes the reader row).
+- Ships: redeploy ai-import (deploy script), then eas update. No SQL. Old reader code stays until the device test (commit 6).
+
 ## 2026-11-13 — Settlement reader rewrite, commit 4 (server)
 - ai-import: new modes read_start, read_again, read_answer, read_resume; continue_job and resume_job route a reader job (progress.reader) to the reader. reader/server.ts: Anthropic call (json_schema, adaptive thinking, effort, cached PDF block), PDF subset, lease-checked writes, heartbeat.
-- app/src/settlementReader/driver.ts: the run loop (pure, tested with simulated replies); machine.ts: importDate, runs, photo jobs (photo_settlement), afterGeneral. core.gen.js rebuilt.
+- app/src/settlementReader/driver.ts: the run loop (pure, tested with simulated replies); machine.ts: importDate, runs, afterGeneral (the photo jobs added here were removed again in commit 4b before shipping: photos stay on the direct path). core.gen.js rebuilt.
 - The app does not call the new modes yet (commit 5). Old modes unchanged.
 - Ships: redeploy ai-import (deploy script). No SQL.
 

@@ -25,15 +25,16 @@ import {
   useRereadImportJob,
   useImportJobs,
   useDismissImportJob,
-  resumeImportJob,
   IMPORT_JOBS_QUERY_KEY,
-  loadJobForReview,
+  loadReaderJobForReview,
+  readAgainReaderJob,
+  restartWithReader,
+  answerReaderJob,
   downloadImportJobFileToLocal,
   type BatchStartResult,
 } from '@/src/data/importJobs';
-import { clearRereadRequested, isFinishedSinceReread, isReadyToReview, jobReviewStep, nextBatchReviewStep, readingAgainOf, readsOf, MAX_BATCH_IMPORT_FILES, MAX_READS_PER_JOB, type JobReviewState } from '@/src/import/importJobs';
-import { triggerReportLines } from '@/src/import/jobVerdict';
-import { failedPagesToReadAgain, jobFailureInfo, jobFailureLines, jobRowState } from '@/src/import/jobFailure';
+import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES, type ImportJob } from '@/src/import/importJobs';
+import { clearReaderReadAgain, readerFailureLines, readerJobView, readerReportLines, MAX_CONTENT_READS } from '@/src/import/readerJob';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -67,7 +68,6 @@ import {
   type SettlementGateResult,
 } from '@/src/import/settlementGate';
 import { withTypedStatementLines } from '@/src/import/primeStatementTemplate';
-import { checkVerdictAgain, isVerdictStuck, verdictProblemOf } from '@/src/data/jobVerdictRunner';
 import { SettlementDateQuestion } from '@/src/components/SettlementDateQuestion';
 import { checkSettlementDates, isDateGateSatisfied, rememberedDateFormat, settlementDateInputsOf } from '@/src/import/printedDates';
 import { useSettlements } from '@/src/data/settlements';
@@ -100,8 +100,6 @@ const autoRereads = new Map<string, number>();
 // READY TO REVIEW (import reliability item 1): a ready job whose stored
 // reading is not there yet is FINISHING — retried up to 3 times (2 s, 4 s,
 // 8 s), then the owner gets Read again. Never a dead end.
-const FINISHING_RETRY_DELAYS_MS = [2_000, 4_000, 8_000];
-const finishingTries = new Map<string, number>();
 const bestReadings = new Map<string, { reading: Extraction; gate: SettlementGateResult | null }>();
 
 // PDF/FILE SIZE GUARD (pre-launch hardening, owner decision 2026-08-02):
@@ -317,13 +315,12 @@ export default function Import() {
   const [followJobId, setFollowJobId] = useState<string | null>(null);
   // RE-READ RULES (owner 2026-11-03): the current job's read count, final
   // verdict and re-read triggers (for COULD NOT READ and its Send report).
-  const [jobReview, setJobReview] = useState<JobReviewState | null>(null);
-  const [readingAgain, setReadingAgain] = useState<{ n: number; max: number; check: string } | null>(null);
-  // "Finishing up": the followed job finished reading, verdict not recorded yet.
-  const [finishingUp, setFinishingUp] = useState(false);
-  const [couldNotRead, setCouldNotRead] = useState<GateFailReason | 'job_failed' | 'not_finished' | null>(null);
-  // Bumped to run the review load again (a finishing retry).
-  const [reviewLoadTick, setReviewLoadTick] = useState(0);
+  // SETTLEMENT READER (owner decision 2026-11-13): the followed job's
+  // second read ("Reading again (2 of 2)"), and the failed job COULD NOT
+  // READ shows (its reasons, [Read again] while reads remain).
+  const [readingAgainNo, setReadingAgainNo] = useState<number | null>(null);
+  const [failedJob, setFailedJob] = useState<ImportJob | null>(null);
+  const [couldNotRead, setCouldNotRead] = useState<GateFailReason | 'job_failed' | 'not_finished' | 'photo_settlement' | null>(null);
   const readingKeyRef = useRef<string | null>(null);
   const lastPhotoRef = useRef<{ uri: string; prepared: boolean } | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -503,60 +500,30 @@ export default function Import() {
     (async () => {
       setPhase('reading');
       try {
-        const loaded = await loadJobForReview(currentReviewId);
+        // SETTLEMENT READER (owner decision 2026-11-13): the server decided.
+        // Still reading -> follow it; failed (or read by the old reader) ->
+        // COULD NOT READ with its reasons; ready / needs_input -> the card.
+        const loaded = await loadReaderJobForReview(currentReviewId);
         if (cancelled) return;
-        if (loaded.state === 'finishing') {
-          const tries = finishingTries.get(currentReviewId) ?? 0;
-          if (tries < FINISHING_RETRY_DELAYS_MS.length) {
-            finishingTries.set(currentReviewId, tries + 1);
-            setTimeout(() => {
-              if (!cancelled) setReviewLoadTick((n) => n + 1);
-            }, FINISHING_RETRY_DELAYS_MS[tries]);
-            return;
-          }
-          finishingTries.delete(currentReviewId);
-          readingKeyRef.current = currentReviewId;
-          setCouldNotRead('not_finished');
-          setPhase('could_not_read');
-          return;
-        }
-        // RE-READ RULES (owner 2026-11-03): the job decides. A finished
-        // reading without its verdict yet is still READING (followed); a
-        // final failure shows COULD NOT READ with the job's own check.
-        if (loaded.state === 'checking') {
-          finishingTries.delete(currentReviewId);
+        if (loaded.state === 'reading') {
           readingKeyRef.current = currentReviewId;
           setExtraction(null);
           setFollowJobId(currentReviewId);
           setCurrentReviewId(null);
           return;
         }
-        if (loaded.state === 'could_not_read') {
-          finishingTries.delete(currentReviewId);
-          readingKeyRef.current = currentReviewId;
-          setExtraction(loaded.extraction);
-          setJobReview(loaded.review);
-          const gateReason = loaded.review.final?.gateReason;
-          setCouldNotRead(gateReason && gateReason in GATE_FAIL_REASON_KEY ? (gateReason as GateFailReason) : 'job_failed');
-          setPhase('could_not_read');
-          return;
-        }
         if (loaded.state !== 'ready') {
-          finishingTries.delete(currentReviewId);
           readingKeyRef.current = currentReviewId;
+          setExtraction(null);
+          setFailedJob(loaded.state === 'failed' ? loaded.job : null);
           setCouldNotRead('job_failed');
           setPhase('could_not_read');
           return;
         }
-        finishingTries.delete(currentReviewId);
+        setFailedJob(null);
         const job = loaded;
-        // CRITICAL: handleSave() requires fileMeta to be set (it's how
-        // Save knows what to re-upload to the final storage path) — the
-        // ORIGINAL local file from whatever session started this job may
-        // be long gone by now, so this downloads the job's own already-
-        // uploaded copy back into a fresh local temp file. Without this,
-        // Save would silently no-op on a job-sourced review (fileMeta
-        // would stay null forever).
+        // CRITICAL: handleSave() requires fileMeta to be set (the original
+        // local file may be gone): download the job's stored copy.
         const ext = job.mediaType.startsWith('image/') ? 'jpg' : 'pdf';
         const localUri = await downloadImportJobFileToLocal(job.storagePath, job.fileName);
         if (cancelled) return;
@@ -581,7 +548,7 @@ export default function Import() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentReviewId, userId, reviewLoadTick]);
+  }, [currentReviewId, userId]);
 
   function reset() {
     // Batch E: a scan's temp files go once the import is done or dropped.
@@ -592,6 +559,8 @@ export default function Import() {
     setFileMeta(null);
     setFollowJobId(null);
     setCouldNotRead(null);
+    setFailedJob(null);
+    setReadingAgainNo(null);
     setTruckId(null);
     setNeedsTruckPicker(false);
     setDriverId(null);
@@ -845,36 +814,19 @@ export default function Import() {
     if (!followJobId) return;
     const job = (jobsQuery.data ?? []).find((j) => j.id === followJobId);
     if (!job) return;
-    // The one rule (src/import/importJobs.ts isReadyToReview, via
-    // jobReviewStep): only a FINAL job opens — the card when it passed,
-    // COULD NOT READ when the job stopped. A job still checking its
-    // reading or reading again stays on READING ("Reading again (2 of 3)").
-    const step = jobReviewStep(job);
-    setReadingAgain(readingAgainOf(job));
-    setFinishingUp(jobRowState(job) === 'finishing');
-    setJobReview(job.review ?? null);
-    // isReadyToReview also drops a stale cached row from before a re-read.
-    if (isReadyToReview(job) || (step === 'could_not_read' && isFinishedSinceReread(job))) {
-      setFollowJobId(null);
-      setReadingAgain(null);
-      clearRereadRequested(job.id);
-      setCurrentReviewId(job.id);
+    // SETTLEMENT READER (owner decision 2026-11-13): the SERVER decides
+    // (progress.reader). Reading -> keep reading ("Reading again (2 of 2)"
+    // on the second read); ready, needs_input or failed -> the review load
+    // opens the card or COULD NOT READ. Nothing is re-read from here.
+    const view = readerJobView(job, new Date().toISOString());
+    if (view.state === 'reading') {
+      setReadingAgainNo(view.again ? view.readNo : null);
       return;
     }
-    // A failed WORKER run (not a failed check) resumes its failed pages.
-    if (job.status === 'failed') {
-      const done = autoRereads.get(job.id) ?? 0;
-      if (done < MAX_AUTO_REREADS) {
-        autoRereads.set(job.id, done + 1);
-        resumeImportJob(job.id, true)
-          .then(() => queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' }))
-          .catch(() => showBestOrFail(job.id, 'job_failed'));
-      } else {
-        setFollowJobId(null);
-        readingKeyRef.current = job.id;
-        showBestOrFail(job.id, 'job_failed');
-      }
-    }
+    setFollowJobId(null);
+    setReadingAgainNo(null);
+    clearReaderReadAgain(job.id);
+    setCurrentReviewId(job.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followJobId, jobsQuery.data]);
 
@@ -920,6 +872,15 @@ export default function Import() {
       );
       clearStillWorkingTimer();
       if (error) return handleAiError(error);
+      // SETTLEMENT READER (owner answer 2026-11-13): a photographed
+      // settlement is never read as a week — upload the PDF.
+      if (data?.docType === 'settlement') {
+        setExtraction(null);
+        setFailedJob(null);
+        setCouldNotRead('photo_settlement');
+        setPhase('could_not_read');
+        return;
+      }
       if (data) await afterExtraction(data, undefined, pagesProcessed);
     } catch (err) {
       clearStillWorkingTimer();
@@ -1265,12 +1226,6 @@ export default function Import() {
   }
   // SIMPLE IMPORT FLOW (batch D2): the settlement card's gate result.
   const settlementGate = extraction?.docType === 'settlement' ? settlementGateOf(extraction) : null;
-  // R5 (owner 2026-11-03): the verdict call kept failing -> a waiting state
-  // with [Check again], never a silent "Finishing up".
-  const stuckVerdict =
-    finishingUp && followJobId && isVerdictStuck(followJobId)
-      ? { problem: verdictProblemOf(followJobId) ?? '', onCheckAgain: () => checkVerdictAgain(followJobId, queryClient) }
-      : null;
   // PRIME CODE CLASSES (owner D10/D11 2026-11-03): the review card asks
   // once for the truck's ownership (truck payment) and for each unclassed
   // carrier code; the answers are stored and used by Save.
@@ -1288,48 +1243,56 @@ export default function Import() {
         ).filter((q) => q.kind !== 'truck_ownership' || lineTruck != null)
       : [];
   // Discard / Upload again: nothing is saved, so the job goes too.
-  // "Read again" (import reliability item 1): never a dead end — the same
-  // job is read again on the server and followed while READING.
-  // "Read page N again": the content pages that failed after their retries.
-  function currentReadAgainPages(): number[] {
-    const gateDetails = settlementGate?.status === 'fail' ? settlementGate.details : jobReview?.final?.details;
-    const key = readingKeyRef.current;
-    const job = key ? (jobsQuery.data ?? []).find((j) => j.id === key) : undefined;
-    const pageFailure = (settlementGate?.status === 'fail' && settlementGate.reason === 'page_not_read') || jobReview?.final?.reason === 'page_failed';
-    return pageFailure ? failedPagesToReadAgain(gateDetails, job ? jobFailureInfo(job) : null) : [];
-  }
+  // SETTLEMENT READER (owner decision 2026-11-13): [Read again] reads the
+  // content range again on the same job while reads remain (max 2, counted
+  // by the server); a job read by the old reader starts a new job from the
+  // same stored file.
+  const failedView = failedJob ? readerJobView(failedJob, new Date().toISOString()) : null;
+  const failedReaderView = failedView?.state === 'failed' ? failedView : null;
+  const moneyValue = (v: number | string) => (typeof v === 'number' ? formatMoney(v, i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v);
+  const failedLines = failedReaderView ? readerFailureLines(failedReaderView, (k, o) => t(k, o) as string, moneyValue) : null;
 
-  function currentJobReasonLines(): string[] | undefined {
-    const key = readingKeyRef.current;
-    if (!key || key.startsWith('photo')) return undefined;
-    const job = (jobsQuery.data ?? []).find((j) => j.id === key);
-    if (!job) return [t('importFlow.serverAnswerMissing', { field: 'import_jobs row' })];
-    const info = jobFailureInfo(job);
-    if (couldNotRead === 'not_finished' && info.pages.length === 0) return [t('importFlow.serverAnswerMissing', { field: 'result_json' })];
-    return jobFailureLines(info, (k, o) => t(k, o) as string, undefined, job.errorStep);
-  }
-
-  // pages: only these content pages (a page that failed after its retries).
-  async function readJobAgain(jobId: string, pages?: number[]) {
+  async function readJobAgain() {
+    const job = failedJob;
+    if (!job || !failedReaderView?.readAgain) return;
     setCouldNotRead(null);
-    setJobReview(null);
     setPhase('reading');
     try {
-      await rereadImportJob.mutateAsync({
-        jobId,
-        locale: i18n.language,
-        customCategories: customCategoryNames,
-        learningRules,
-        carrierCodeMaps,
-        ...(pages && pages.length > 0 ? { pages, reason: 'page_not_read' } : {}),
-      });
+      const next =
+        failedReaderView.readAgain === 'same_job'
+          ? await readAgainReaderJob(job.id)
+          : await restartWithReader(job, { locale: i18n.language, customCategories: customCategoryNames, learningRules, carrierCodeMaps: carrierCodeMaps ?? undefined });
+      await queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+      setFailedJob(null);
       setExtraction(null);
       setCurrentReviewId(null);
-      setFollowJobId(jobId);
-    } catch {
+      readingKeyRef.current = next.jobId;
+      setFollowJobId(next.jobId);
+    } catch (err) {
+      Alert.alert(t('importFlow.readAgain'), err instanceof Error ? err.message : t('common.tryAgain'));
       setCouldNotRead('job_failed');
       setPhase('could_not_read');
     }
+  }
+
+  // The profit lines typed on the card (needs_input): a reader job sends
+  // them to the server, whose gate decides again; the card applies the
+  // same function locally.
+  async function typeProfitLines(answers: { label: string; amount: number }[]) {
+    if (!extraction) return;
+    const jobId = currentReviewId;
+    // Only while the server waits for them (a second edit after the job is
+    // ready stays on the card; the save gate checks it as before).
+    if (jobId && (jobsQuery.data ?? []).find((j) => j.id === jobId)?.reader?.state === 'needs_input') {
+      try {
+        await answerReaderJob(jobId, answers);
+      } catch (err) {
+        Alert.alert(t('importFlow.couldNotReadTitle'), err instanceof Error ? err.message : t('common.tryAgain'));
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
+    }
+    setExtraction(withTypedStatementLines(extraction, answers));
   }
 
   function discardReading() {
@@ -1347,8 +1310,6 @@ export default function Import() {
     readingKeyRef.current = null;
     lastPhotoRef.current = null;
     setCurrentReviewId(null);
-    setJobReview(null);
-    setReadingAgain(null);
     reset();
   }
   const meta = extraction ? docTypeMeta(extraction.docType) : null;
@@ -1573,26 +1534,20 @@ export default function Import() {
           </Card>
         )}
 
-        {phase === 'reading' && <ReadingCard again={readingAgain} finishing={finishingUp} stuck={stuckVerdict} />}
+        {phase === 'reading' && <ReadingCard label={readingAgainNo ? t('importFlow.reader.readingAgain', { n: readingAgainNo, max: MAX_CONTENT_READS }) : undefined} />}
 
         {(phase === 'could_not_read' || (phase === 'preview' && settlementGate?.status === 'fail')) && (
           <CouldNotReadCard
             extraction={extraction}
-            details={settlementGate?.status === 'fail' ? settlementGate.details : (jobReview?.final?.details ?? undefined)}
+            details={settlementGate?.status === 'fail' ? settlementGate.details : undefined}
             reason={couldNotRead ?? (settlementGate?.status === 'fail' ? settlementGate.reason : 'job_failed')}
             onUploadAgain={discardReading}
-            // A job read 3 times can only be uploaded again (the server refuses too).
-            onReadAgain={readingKeyRef.current && !readingKeyRef.current.startsWith('photo') && readsOf({ review: jobReview }) < MAX_READS_PER_JOB ? () => void readJobAgain(readingKeyRef.current!, currentReadAgainPages()) : undefined}
-            readAgainPages={currentReadAgainPages()}
-            stopped={
-              jobReview?.final?.reason === 'same_values' || jobReview?.final?.reason === 'read_cap' || jobReview?.final?.reason === 'not_rereadable' || jobReview?.final?.reason === 'page_failed'
-                ? jobReview.final.reason
-                : null
-            }
-            triggerLines={triggerReportLines(jobReview?.triggers)}
-            // NEVER GENERIC (owner 2026-11-03): with no failing check, the
-            // job's own reason — page + cause, or the missing server field.
-            reasonLines={settlementGate?.status === 'fail' || (jobReview?.final?.details?.length ?? 0) > 0 ? undefined : currentJobReasonLines()}
+            onReadAgain={phase === 'could_not_read' && failedReaderView?.readAgain ? () => void readJobAgain() : undefined}
+            // NEVER GENERIC: the server's reason, its check with the printed
+            // and read values, the model's error.
+            reasonText={phase === 'could_not_read' && failedLines ? failedLines[0] : undefined}
+            reasonLines={phase === 'could_not_read' && couldNotRead === 'job_failed' ? (failedLines ? failedLines.slice(1) : [t('importFlow.serverAnswerMissing', { field: 'import_jobs row' })]) : undefined}
+            triggerLines={phase === 'could_not_read' && failedJob ? readerReportLines(failedJob) : undefined}
           />
         )}
 
@@ -1606,7 +1561,7 @@ export default function Import() {
             onCertify={() => void handleSave()}
             onDiscard={discardReading}
             certifyDisabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId)}
-            onTypeProfitLines={(answers) => setExtraction(withTypedStatementLines(extraction, answers))}
+            onTypeProfitLines={(answers) => void typeProfitLines(answers)}
           >
             {renderPickers()}
             <LineClassQuestions

@@ -3,9 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { useImportJobs, fetchImportJobResult, resumeImportJob, answerImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
-import { useJobVerdictRunner } from '@/src/data/jobVerdictRunner';
-import { deriveChipSummary, isReadyToReview, runOptionalSideEffect, shouldAutoResume, silentAttachmentStep } from '@/src/import/importJobs';
+import { useImportJobs, fetchImportJobResult, resumeImportJob, resumeReaderJob, answerImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
+import { runOptionalSideEffect, shouldAutoResume, silentAttachmentStep } from '@/src/import/importJobs';
+import { readerChipSummary, readerJobView, readerShouldResume } from '@/src/import/readerJob';
 import { supabase } from '@/src/lib/supabase';
 import { notifyImportJobDone, hasNotifiedJob } from '@/src/notifications/importJobNotifications';
 import { useFormatters } from '@/src/i18n/format';
@@ -35,12 +35,11 @@ export function ImportJobsChip() {
   const { money } = useFormatters();
   const queryClient = useQueryClient();
   const { data: allJobs } = useImportJobs();
-  // RE-READ RULES (owner 2026-11-03): the job layer decides every finished
-  // reading's verdict here — never the review card.
-  useJobVerdictRunner();
-  // Post-save attachment jobs are handled silently below — never shown.
-  const jobs = useMemo(() => (allJobs ?? []).filter((j) => silentAttachmentStep(j) == null), [allJobs]);
-  const summary = deriveChipSummary(jobs);
+  // SETTLEMENT READER (owner decision 2026-11-13): the SERVER decides every
+  // job's state (progress.reader); the app's verdict runner is no longer
+  // mounted. Old post-save attachment jobs are handled silently below.
+  const jobs = useMemo(() => (allJobs ?? []).filter((j) => j.reader || silentAttachmentStep(j) == null), [allJobs]);
+  const summary = readerChipSummary(jobs, new Date().toISOString());
 
   // SIMPLE IMPORT FLOW (batch D2 2.1/2.4): nothing waits on the owner.
   // A page-cap question is answered "read the first pages"; a week's
@@ -49,6 +48,8 @@ export function ImportJobsChip() {
   useEffect(() => {
     for (const job of allJobs ?? []) {
       if (handledSilently.has(job.id)) continue;
+      // A reader job's needs_input is the owner's (the card asks it).
+      if (job.reader) continue;
       if (job.status === 'needs_decision') {
         handledSilently.add(job.id);
         answerImportJob(job.id, 'read_first').catch(() => handledSilently.delete(job.id));
@@ -98,11 +99,11 @@ export function ImportJobsChip() {
   useEffect(() => {
     const now = new Date().toISOString();
     for (const job of jobs ?? []) {
-      if (!shouldAutoResume(job, now)) continue;
+      if (job.reader ? !readerShouldResume(job, now) : !shouldAutoResume(job, now)) continue;
       const seen = job.heartbeatAt ?? job.updatedAt;
       if (autoResumed.get(job.id) === seen) continue;
       autoResumed.set(job.id, seen);
-      resumeImportJob(job.id, false).catch(() => {
+      (job.reader ? resumeReaderJob(job.id) : resumeImportJob(job.id, false)).catch(() => {
         // The row keeps saying "Interrupted at page N" with a Resume button.
       });
     }
@@ -111,13 +112,17 @@ export function ImportJobsChip() {
   useEffect(() => {
     let cancelled = false;
     async function checkAndNotify() {
+      const now = new Date().toISOString();
       for (const job of jobs ?? []) {
-        if (!isReadyToReview(job) && job.status !== 'failed') continue;
+        // Reader jobs only: an old job shown failed after the update is not news.
+        if (!job.reader) continue;
+        const state = readerJobView(job, now).state;
+        if (state !== 'ready' && state !== 'failed') continue;
         const notifyId = job.id;
         const alreadyNotified = await hasNotifiedJob(notifyId).catch(() => false);
         if (alreadyNotified) continue;
         if (cancelled) return;
-        if (isReadyToReview(job)) {
+        if (state === 'ready') {
           const result = await fetchImportJobResult(job.id).catch(() => null);
           const s = result?.settlement;
           const body =
@@ -157,7 +162,7 @@ export function ImportJobsChip() {
   const { icon, label, tint } = (() => {
     // Batch D2 2.1: one reading line — no page, step, pause or
     // interruption wording (a question is answered automatically).
-    if (summary.kind === 'question' || summary.kind === 'processing') {
+    if (summary.kind === 'processing') {
       return { icon: '⏳', label: t('importFlow.readingShort'), tint: colors.accent };
     }
     if (summary.kind === 'ready') {

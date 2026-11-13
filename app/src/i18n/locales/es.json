@@ -3218,7 +3218,30 @@
       "reimbursementLinesMismatch": "TOTAL REIMBURSED"
     },
     "readPagesAgain": "Leer la página {{pages}} de nuevo",
-    "stoppedPageFailed": "Volver a leer todo el archivo fallaría igual. Lea solo esa página de nuevo."
+    "stoppedPageFailed": "Volver a leer todo el archivo fallaría igual. Lea solo esa página de nuevo.",
+    "reader": {
+      "reason": {
+        "rangeNotFound": "No se encontraron las páginas del settlement en este archivo.",
+        "modelFailed": "La IA no pudo leer este archivo.",
+        "sameResult": "El archivo se leyó dos veces con el mismo resultado.",
+        "oldReader": "Este archivo se leyó con el lector anterior. Léalo de nuevo con el lector nuevo.",
+        "tooManyRuns": "La lectura tardó demasiado y se detuvo.",
+        "startRefused": "La importación no pudo iniciarse ({{step}})."
+      },
+      "modelError": "Error de la IA: {{error}}",
+      "error": {
+        "timeout": "tardó demasiado",
+        "max_tokens": "la respuesta se cortó",
+        "refusal": "la IA se negó a leerlo",
+        "unreadable_reply": "la respuesta no se pudo leer",
+        "busy": "el servicio de IA está ocupado",
+        "api_error": "el servicio de IA devolvió un error"
+      },
+      "stoppedSame": "La segunda lectura dio exactamente el mismo resultado, así que la lectura se detuvo.",
+      "readsUsed": "Este archivo ya se leyó {{max}} veces. Súbalo de nuevo para iniciar una importación nueva.",
+      "readingAgain": "Leyendo de nuevo ({{n}} de {{max}})…",
+      "photoSettlement": "Esta foto no es un settlement completo. Suba el PDF."
+    }
   },
   "certify": {
     "certifiedOn": "Certificado el {{date}}",
@@ -3269,7 +3292,9 @@
     "ytdWeeks": "Semanas comparadas",
     "ytdTies": "cuadra (YTD anterior + WEEKS de esta semana)",
     "ytdDiffers": "no cuadra",
-    "ytdNone": "Aún no hay dos semanas guardadas con columnas YTD."
+    "ytdNone": "Aún no hay dos semanas guardadas con columnas YTD.",
+    "readerTitle": "Lector de settlements (últimos 5)",
+    "readerNone": "Aún no hay trabajos del lector"
   },
   "truckOwnership": {
     "label": "Propiedad del camión",

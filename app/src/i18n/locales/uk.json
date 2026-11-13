@@ -3218,7 +3218,30 @@
       "reimbursementLinesMismatch": "TOTAL REIMBURSED"
     },
     "readPagesAgain": "Read page {{pages}} again",
-    "stoppedPageFailed": "Reading the whole file again would fail the same way. Read only that page again."
+    "stoppedPageFailed": "Reading the whole file again would fail the same way. Read only that page again.",
+    "reader": {
+      "reason": {
+        "rangeNotFound": "The settlement pages could not be found in this file.",
+        "modelFailed": "The AI could not read this file.",
+        "sameResult": "The file was read twice with the same result.",
+        "oldReader": "This file was read by the old reader. Read it again with the new reader.",
+        "tooManyRuns": "Reading took too long and was stopped.",
+        "startRefused": "The import could not start ({{step}})."
+      },
+      "modelError": "AI error: {{error}}",
+      "error": {
+        "timeout": "it took too long",
+        "max_tokens": "the answer was cut off",
+        "refusal": "the AI declined to read it",
+        "unreadable_reply": "the answer could not be read",
+        "busy": "the AI service is busy",
+        "api_error": "the AI service returned an error"
+      },
+      "stoppedSame": "The second read gave exactly the same result, so reading stopped.",
+      "readsUsed": "This file was already read {{max}} times. Upload it again to start a new import.",
+      "readingAgain": "Reading again ({{n}} of {{max}})…",
+      "photoSettlement": "This photo is not a full settlement. Upload the PDF."
+    }
   },
   "certify": {
     "certifiedOn": "Certified on {{date}}",
@@ -3269,7 +3292,9 @@
     "ytdWeeks": "Weeks compared",
     "ytdTies": "ties (last YTD + this WEEKS)",
     "ytdDiffers": "differs",
-    "ytdNone": "No two saved weeks with YTD columns yet."
+    "ytdNone": "No two saved weeks with YTD columns yet.",
+    "readerTitle": "Settlement reader (last 5)",
+    "readerNone": "No reader jobs yet"
   },
   "truckOwnership": {
     "label": "Truck ownership",

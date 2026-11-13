@@ -68,10 +68,11 @@ runner). Spec: `settlement-data-contract.md`,
   - chaining runs inside the plan budget (`limitsForPlan`).
 
 ## Server modes (ai-import, commit 4)
-- `read_start` — a new import. Same limits as every import. A PDF starts
-  with the range call. A photo goes straight to the general reader; a
-  settlement photo fails with `photo_settlement` ("upload the PDF") and a
-  result of only `{docType: "settlement"}`.
+- `read_start` — a new import. Same limits as every import. PDFs only;
+  it starts with the range call. A photo stays on the direct path (one
+  call); when that call says settlement, the reply is only
+  `{docType: "settlement"}` and the app says "This photo is not a full
+  settlement. Upload the PDF." (commit 5).
 - `read_again` — a failed job, only while reads remain (max 2 per job).
 - `read_answer` — the owner's typed profit lines (needs_input). No model
   call; the gate decides again.
@@ -89,6 +90,27 @@ extraction prompt, on the whole file, in one call.
 
 The old reader (modes `job`, `reread_job`, `job_verdict`, ...) stays as the
 fallback until the owner confirms the device test (then commit 6).
+
+## The app (commit 5)
+- `app/src/import/readerJob.ts` (pure, tested) turns the row into what the
+  owner sees: Reading ("Reading again (2 of 2)" on the second read) /
+  Ready to check (ready AND needs_input) / Could not read.
+- Could not read lists the reason, the failing check with its printed and
+  read values, the model's error, and "read twice with the same result"
+  when that stopped it. [Read again] only while reads < 2; [Send report]
+  carries the reader lines (state, reads, reason, cost per role).
+- needs_input: the card asks the profit lines; they go to the server
+  (`read_answer`), whose gate decides again.
+- The chip, jobs list, notifications and auto-resume (`read_resume` after
+  3 minutes without a heartbeat) read the same state. The app's verdict
+  runner is not mounted any more.
+- Old-reader jobs: failed with [Read again], which starts a new reader job
+  from the stored file (PDFs) and removes the old row.
+- Settlement detail keeps only the notes ("read line details again" and
+  the attachments "Read" link started old-reader jobs; removed).
+- Known difference: attachment pages still being read when the owner
+  certifies are not kept (`import_job_saved` deletes the reader row).
+- Diagnostics: "Settlement reader (last 5)".
 
 ## Job row (no SQL)
 | Reader state | `import_jobs.status` |

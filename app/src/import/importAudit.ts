@@ -119,14 +119,23 @@ export function buildImportAuditText(extraction: Extraction, inputs: ReviewInput
 // reading at all: the reason line only.
 export function couldNotReadReport(
   extraction: Extraction | null,
-  reason: import('./settlementGate').GateFailReason | 'job_failed' | 'not_finished',
+  reason: import('./settlementGate').GateFailReason | 'job_failed' | 'not_finished' | 'photo_settlement',
   t: T,
   // IMPORT GATE FIX 1.2: the failing check with its two numbers, already
   // formatted by the caller (amounts or dates only, never bank digits).
-  detailLines: string[] = []
+  detailLines: string[] = [],
+  // SETTLEMENT READER (2026-11-13): the server's reason, already translated.
+  reasonText?: string
 ): string {
-  const reasonKey = reason === 'job_failed' ? 'importFlow.reason.jobFailed' : reason === 'not_finished' ? 'importFlow.reason.notFinished' : GATE_FAIL_REASON_KEY[reason];
-  const head = [t('importFlow.couldNotReadTitle'), t(reasonKey), ...detailLines].join('\n');
+  const reasonKey =
+    reason === 'job_failed'
+      ? 'importFlow.reason.jobFailed'
+      : reason === 'not_finished'
+        ? 'importFlow.reason.notFinished'
+        : reason === 'photo_settlement'
+          ? 'importFlow.reader.photoSettlement'
+          : GATE_FAIL_REASON_KEY[reason];
+  const head = [t('importFlow.couldNotReadTitle'), reasonText ?? t(reasonKey), ...detailLines].join('\n');
   if (!extraction || extraction.docType !== 'settlement') return scrubBankDigitsInText(head);
   return scrubBankDigitsInText(`${head}
 

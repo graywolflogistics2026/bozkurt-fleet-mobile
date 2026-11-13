@@ -3218,7 +3218,30 @@
       "reimbursementLinesMismatch": "TOTAL REIMBURSED"
     },
     "readPagesAgain": "{{pages}}. sayfayı tekrar oku",
-    "stoppedPageFailed": "Tüm dosyayı tekrar okumak aynı şekilde başarısız olur. Sadece o sayfayı tekrar okuyun."
+    "stoppedPageFailed": "Tüm dosyayı tekrar okumak aynı şekilde başarısız olur. Sadece o sayfayı tekrar okuyun.",
+    "reader": {
+      "reason": {
+        "rangeNotFound": "Bu dosyada settlement sayfaları bulunamadı.",
+        "modelFailed": "Yapay zeka bu dosyayı okuyamadı.",
+        "sameResult": "Dosya iki kez okundu, sonuç aynı çıktı.",
+        "oldReader": "Bu dosya eski okuyucuyla okundu. Yeni okuyucuyla tekrar okuyun.",
+        "tooManyRuns": "Okuma çok uzun sürdü ve durduruldu.",
+        "startRefused": "İçe aktarma başlatılamadı ({{step}})."
+      },
+      "modelError": "Yapay zeka hatası: {{error}}",
+      "error": {
+        "timeout": "çok uzun sürdü",
+        "max_tokens": "cevap yarıda kesildi",
+        "refusal": "yapay zeka okumayı reddetti",
+        "unreadable_reply": "cevap okunamadı",
+        "busy": "yapay zeka servisi meşgul",
+        "api_error": "yapay zeka servisi hata döndürdü"
+      },
+      "stoppedSame": "İkinci okuma tamamen aynı sonucu verdi, bu yüzden okuma durdu.",
+      "readsUsed": "Bu dosya zaten {{max}} kez okundu. Yeni bir içe aktarma için dosyayı tekrar yükleyin.",
+      "readingAgain": "Tekrar okunuyor ({{n}} / {{max}})…",
+      "photoSettlement": "Bu fotoğraf tam bir settlement değil. PDF dosyasını yükleyin."
+    }
   },
   "certify": {
     "certifiedOn": "{{date}} tarihinde onaylandı",
@@ -3269,7 +3292,9 @@
     "ytdWeeks": "Karşılaştırılan haftalar",
     "ytdTies": "tutuyor (önceki YTD + bu haftanın WEEKS değeri)",
     "ytdDiffers": "tutmuyor",
-    "ytdNone": "YTD sütunlu iki kayıtlı hafta henüz yok."
+    "ytdNone": "YTD sütunlu iki kayıtlı hafta henüz yok.",
+    "readerTitle": "Settlement okuyucu (son 5)",
+    "readerNone": "Henüz okuyucu işi yok"
   },
   "truckOwnership": {
     "label": "Kamyon sahipliği",
