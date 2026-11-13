@@ -3240,7 +3240,23 @@
       "stoppedSame": "दूसरी बार पढ़ने पर बिल्कुल वही नतीजा आया, इसलिए पढ़ना रोक दिया गया।",
       "readsUsed": "यह फ़ाइल पहले ही {{max}} बार पढ़ी जा चुकी है। नया इम्पोर्ट शुरू करने के लिए इसे फिर अपलोड करें।",
       "readingAgain": "फिर से पढ़ रहे हैं ({{n}} / {{max}})…",
-      "photoSettlement": "यह फ़ोटो पूरा settlement नहीं है। PDF अपलोड करें।"
+      "photoSettlement": "यह फ़ोटो पूरा settlement नहीं है। PDF अपलोड करें।",
+      "rangeLine": "पेज {{pages}} में से किसी पर TOTAL CASH FLOW या TOTAL STATEMENT OF INCOME & EXPENSE नहीं छपा है।"
+    },
+    "notRead": "नहीं पढ़ा गया: {{label}}।",
+    "notReadOnPages": "नहीं पढ़ा गया: {{label}} (पेज {{pages}} पर खोजा गया)।",
+    "failedCheck": "जाँच विफल: {{check}}।",
+    "dateIssue": {
+      "unreadable": "settlement की तारीख नहीं पढ़ी जा सकी।",
+      "older_reading": "इस रीडिंग में छपी हुई settlement तारीख नहीं है।",
+      "print_gap": "settlement की तारीख प्रिंट तारीख के 0-7 दिन बाद नहीं है।",
+      "not_friday": "सप्ताह का अंत शुक्रवार नहीं है।",
+      "statement_week_differs": "स्टेटमेंट का WEEK ENDING settlement की तारीख से अलग है।",
+      "pdf_created_far": "PDF प्रिंट तारीख से बहुत अलग दिन बना है।",
+      "future": "settlement की तारीख भविष्य में है।",
+      "too_old": "settlement की तारीख 14 महीने से पुरानी है।",
+      "ambiguous": "तारीख को एक से ज़्यादा क्रम में पढ़ा जा सकता है।",
+      "pages_differ": "दो पेज एक ही फ़ील्ड के लिए अलग तारीख छापते हैं।"
     }
   },
   "certify": {

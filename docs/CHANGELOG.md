@@ -11,6 +11,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Fix: 07/17 device test (no cash-flow section) failed generically
+- Cause: the content prompt stopped statement rows at TOTAL STATEMENT, so on a week with no cash-flow section SETTLEMENT TO OPERATOR / AMOUNT LOADED ON CARD were not copied; the gate required SETTLEMENT TO OPERATOR -> statement_not_read [settlementToOperator]; the screen never showed the failures list.
+- prompt.ts: copy every statement row to the last printed row. settlementStatement.ts: SETTLEMENT TO OPERATOR no longer required (the payout row ties instead); statement week also read M/D/YY (printedDates.ts too).
+- Never generic: new src/import/gateFailureText.ts names the label not read + pages, failing check printed vs read, date problem; used by readerJob.ts and the import card. settlementGate.ts names missing totals.
+- machine.ts: reads that failed for our own reason (statement_not_read, missing_fields, totals_not_printed, range_not_found, ...) do not count against the 2 reads (chargedReads); hard cap 4. Range failure -> Read again on the same job.
+- Tests: settlementReader/__tests__/noCashFlowWeeks.test.ts runs 07/17 and 07/24 through the real range, machine and gate. i18n: importFlow.notRead/notReadOnPages/failedCheck/dateIssue.*, reader.rangeLine in all 7 locales.
+- Ships: redeploy ai-import (deploy script), then eas update. No SQL.
+
 ## 2026-11-13 — Settlement reader rewrite, commit 5 (app)
 - Every background import starts with mode read_start (+ importDate). src/import/readerJob.ts (pure, tested): the server's state -> Reading / Ready to check (ready and needs_input) / Could not read with reasons, [Read again] while reads < 2, [Send report]; old-reader jobs show failed with [Read again] = a new job from the stored file.
 - ImportJob gains reader + storagePath (src/data/importJobs.ts mapRow); new readAgainReaderJob, restartWithReader, answerReaderJob (needs_input profit lines go to the server), resumeReaderJob, loadReaderJobForReview.

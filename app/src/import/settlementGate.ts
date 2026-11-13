@@ -185,7 +185,9 @@ export function evaluateSettlementGate(
 
     const statement = buildSettlementStatement(extraction, { savedFlagged: false, priorLabelsSeen: new Set() });
     const week = statementWeekOf({ id: PREVIEW_ID, statement });
-    if (!week) return fail('statement_not_read');
+    // Named, never generic (owner 2026-11-13): the week could not be built
+    // from the statement's TOTAL REVENUE / TOTAL STATEMENT.
+    if (!week) return fail('statement_not_read', ['statementWeek']);
     const deposit = settlementDeposit({ statement });
     const groups = buildPrimeGroupChecks(extraction);
     // Statement lines that do not add up to their PRINTED block total are
@@ -217,9 +219,13 @@ export function evaluateSettlementGate(
 
   // Other carriers.
   const printed = printedTotalsOf(extraction);
-  if (printed.grossRevenue == null && printed.totalDeductions == null && printed.netDue == null) return fail('totals_not_printed');
-  if (printed.grossRevenue == null || printed.netDue == null || issueTypes.includes('zeroNetNonzeroGross')) return fail('missing_fields');
-  if (printed.totalDeductions == null) return fail('totals_not_printed');
+  // Named, never generic (owner 2026-11-13): which printed total is missing.
+  const notPrinted = (['grossRevenue', 'netDue', 'totalDeductions'] as const).filter((k) => printed[k] == null);
+  if (printed.grossRevenue == null && printed.totalDeductions == null && printed.netDue == null) return fail('totals_not_printed', [...notPrinted]);
+  if (printed.grossRevenue == null || printed.netDue == null || issueTypes.includes('zeroNetNonzeroGross')) {
+    return fail('missing_fields', notPrinted.length > 0 ? notPrinted.filter((k) => k !== 'totalDeductions') : ['netDue']);
+  }
+  if (printed.totalDeductions == null) return fail('totals_not_printed', ['totalDeductions']);
   if (!printedTotalsMatch(printed) || issueTypes.includes('netDueMismatch')) {
     const reimbursements = printed.reimbursements ?? printed.reimbursementLines ?? 0;
     return fail('totals_differ', issueTypes, [

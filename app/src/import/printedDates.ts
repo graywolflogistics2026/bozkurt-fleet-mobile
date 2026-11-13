@@ -163,8 +163,10 @@ export function checkPrimeSettlementDates(input: SettlementDateInputs, importDat
   const printDate = input.printDateRaw?.trim() ? parsePrimePrintDate(input.printDateRaw) : input.printDate || null;
   // DATES AS PRINTED TEXT (R1, 2026-11-03): a reading that has the printed
   // settlement date never falls back to the model's own statement date.
+  // The statement header normally prints YY/MM/DD; one printed M/D/YY
+  // (07/17/26) is read in that order (owner 2026-11-13).
   const statementWeekEnding = input.statementWeekEndingRaw?.trim()
-    ? parsePrimeSettlementDate(input.statementWeekEndingRaw)
+    ? (parsePrimeSettlementDate(input.statementWeekEndingRaw) ?? parseInFormat(input.statementWeekEndingRaw, 'MDY'))
     : raw
       ? null
       : input.statementWeekEnding || null;

@@ -444,7 +444,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     if (!gate || gate.status === 'fail') {
       throw new SaveExtractionError(
         'validation',
-        new Error(`This settlement did not pass its checks (${gate?.status === 'fail' ? gate.failures.join(', ') : 'not a settlement'}). Nothing was saved.`),
+        new Error(`This settlement did not pass its checks (${gate?.status === 'fail' ? gate.failures.join(', ') : 'not a settlement'}). Nothing was saved.${gate?.status === 'fail' && !gate.failures.includes(gate.reason) ? ` [${gate.reason}]` : ''}`),
         partial
       );
     }

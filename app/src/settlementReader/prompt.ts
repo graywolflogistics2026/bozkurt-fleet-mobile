@@ -28,7 +28,7 @@ SETTLEMENT PAGES
 STATEMENT OF INCOME AND EXPENSE
 - statement.printed: true when the file contains a Statement of Income and Expense.
 - statement.weekEndingRaw: the week-ending date printed on the statement, as printed.
-- statement.rows: EVERY printed row of the statement, in print order, from the first revenue row to the last row (TOTAL STATEMENT OF INCOME & EXPENSE, or TOTAL CASH FLOW and the rows after it): regular rows, every TOTAL row, MILES, WEEKS IN SERVICE, PRIOR WEEK BALANCE FORWARD, SETTLEMENT TO OPERATOR, the payout row, the performance bond row. Section headings that carry no amount are not rows.
+- statement.rows: EVERY printed row of the statement, in print order, from the first revenue row to the LAST printed row of the statement pages. Do not stop at TOTAL STATEMENT OF INCOME & EXPENSE or at TOTAL CASH FLOW: copy every row printed after them too (PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR, the payout row such as DIRECT DEPOSIT or AMOUNT LOADED ON CARD, the performance bond row). Some statements print no cash-flow section; copy whatever is printed. Include regular rows, every TOTAL row, MILES, WEEKS IN SERVICE. Section headings that carry no amount are not rows.
 - Each row has three columns: weeks (the WEEKS / week total column), ytd (year to date), ltd (life to date). Copy each column from ITS OWN column. When the weeks cell is blank, weeks is "" even if ytd and ltd are printed: never move a value into another column.
 - Copy the label exactly as printed (e.g. "TOTAL FUEL,OIL,TAX", "PRIME POINT-OF-SALE").`;
 

@@ -35,6 +35,7 @@ import {
 } from '@/src/data/importJobs';
 import { nextBatchReviewStep, MAX_BATCH_IMPORT_FILES, type ImportJob } from '@/src/import/importJobs';
 import { clearReaderReadAgain, readerFailureLines, readerJobView, readerReportLines, MAX_CONTENT_READS } from '@/src/import/readerJob';
+import { gateFailureLines, printedStatementPages } from '@/src/import/gateFailureText';
 import { classifyAiImportFailureCategory } from '@/src/import/friendlyAiFailure';
 import { useAiFailureTracker } from '@/src/data/serviceStatus';
 import { ServiceStatusBanner } from '@/src/components/ServiceStatusBanner';
@@ -1539,14 +1540,24 @@ export default function Import() {
         {(phase === 'could_not_read' || (phase === 'preview' && settlementGate?.status === 'fail')) && (
           <CouldNotReadCard
             extraction={extraction}
-            details={settlementGate?.status === 'fail' ? settlementGate.details : undefined}
+            // The app's own gate (a ready job or a photo): its lines come
+            // from gateFailureLines below, never the bare reason.
+            details={undefined}
             reason={couldNotRead ?? (settlementGate?.status === 'fail' ? settlementGate.reason : 'job_failed')}
             onUploadAgain={discardReading}
             onReadAgain={phase === 'could_not_read' && failedReaderView?.readAgain ? () => void readJobAgain() : undefined}
             // NEVER GENERIC: the server's reason, its check with the printed
             // and read values, the model's error.
             reasonText={phase === 'could_not_read' && failedLines ? failedLines[0] : undefined}
-            reasonLines={phase === 'could_not_read' && couldNotRead === 'job_failed' ? (failedLines ? failedLines.slice(1) : [t('importFlow.serverAnswerMissing', { field: 'import_jobs row' })]) : undefined}
+            reasonLines={
+              phase === 'could_not_read' && couldNotRead === 'job_failed'
+                ? failedLines
+                  ? failedLines.slice(1)
+                  : [t('importFlow.serverAnswerMissing', { field: 'import_jobs row' })]
+                : settlementGate?.status === 'fail'
+                  ? gateFailureLines(settlementGate, (k, o) => t(k, o) as string, moneyValue, printedStatementPages(extraction))
+                  : undefined
+            }
             triggerLines={phase === 'could_not_read' && failedJob ? readerReportLines(failedJob) : undefined}
           />
         )}

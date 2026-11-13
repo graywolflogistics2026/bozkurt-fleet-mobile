@@ -3240,7 +3240,23 @@
       "stoppedSame": "La segunda lectura dio exactamente el mismo resultado, así que la lectura se detuvo.",
       "readsUsed": "Este archivo ya se leyó {{max}} veces. Súbalo de nuevo para iniciar una importación nueva.",
       "readingAgain": "Leyendo de nuevo ({{n}} de {{max}})…",
-      "photoSettlement": "Esta foto no es un settlement completo. Suba el PDF."
+      "photoSettlement": "Esta foto no es un settlement completo. Suba el PDF.",
+      "rangeLine": "Ninguna de las páginas {{pages}} imprime TOTAL CASH FLOW ni TOTAL STATEMENT OF INCOME & EXPENSE."
+    },
+    "notRead": "No leído: {{label}}.",
+    "notReadOnPages": "No leído: {{label}} (buscado en las páginas {{pages}}).",
+    "failedCheck": "Verificación fallida: {{check}}.",
+    "dateIssue": {
+      "unreadable": "No se pudo leer la fecha del settlement.",
+      "older_reading": "Esta lectura no tiene la fecha impresa del settlement.",
+      "print_gap": "La fecha del settlement no está entre 0 y 7 días después de la fecha de impresión.",
+      "not_friday": "El fin de semana no es viernes.",
+      "statement_week_differs": "El WEEK ENDING del estado no es la fecha del settlement.",
+      "pdf_created_far": "El PDF se creó lejos de la fecha de impresión.",
+      "future": "La fecha del settlement está en el futuro.",
+      "too_old": "La fecha del settlement tiene más de 14 meses.",
+      "ambiguous": "La fecha se puede leer en más de un orden.",
+      "pages_differ": "Dos páginas imprimen una fecha distinta para el mismo campo."
     }
   },
   "certify": {

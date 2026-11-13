@@ -136,7 +136,12 @@ describe('states', () => {
     const t = afterRange(newReaderProgress(8), { ok: true, value: contentRange(reply, 8) });
     expect([t.progress.state, t.progress.failure?.reason]).toEqual(['failed', 'range_not_found']);
     expect(startContentRead(t.progress)).toBeNull();
-    expect(canReadAgain(t.progress)).toBe(false);
+    // A range failure is ours (owner 2026-11-13): Read again re-runs the
+    // range call (no content read was counted), at most 3 range calls.
+    expect(canReadAgain(t.progress)).toBe(true);
+    expect(readAgain(t.progress)?.progress.step).toBe('range');
+    const range = { role: 'range' as const, model: 'm', inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, usd: 0, ms: 0, outcome: 'ok' };
+    expect(canReadAgain({ ...t.progress, cost: [range, range, range] })).toBe(false);
     const err = afterRange(newReaderProgress(8), { ok: false, error: 'busy' });
     expect(err.progress.failure).toEqual({ reason: 'range_not_found', error: 'busy' });
   });

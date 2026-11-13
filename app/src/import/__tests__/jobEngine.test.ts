@@ -372,7 +372,7 @@ describe('core self-checks cannot be skipped (amendment 1)', () => {
     const statement = buildSettlementStatement(missing, { savedFlagged: false, priorLabelsSeen: new Set() });
     expect(isStatementBacked(statement)).toBe(false);
     expect(settlementVerification({ statement })).toBe('unverified');
-    expect(statement.reviewReasons).toContainEqual({ reason: 'statement_core_missing', label: 'totalStatement, settlementToOperator' });
+    expect(statement.reviewReasons).toContainEqual({ reason: 'statement_core_missing', label: 'totalStatement' });
   });
 
   it('gross not read, or the fixed block not read, are core misses too; miles may be skipped', () => {
@@ -404,7 +404,7 @@ describe('core self-checks cannot be skipped (amendment 1)', () => {
     // Stored before coreMissing AND before the gate (2026-10-17) existed.
     const legacy = { ...statement, prime: { ...statement.prime!, coreMissing: undefined as unknown as [], gatePassed: undefined, gateMissing: undefined, warnings: undefined } };
     expect(isStatementBacked(legacy)).toBe(true);
-    const legacyMissing = { ...legacy, prime: { ...legacy.prime, totals: { ...legacy.prime.totals, settlementToOperator: null } } };
+    const legacyMissing = { ...legacy, prime: { ...legacy.prime, totals: { ...legacy.prime.totals, settlementToOperator: null, directDeposit: null } } };
     expect(isStatementBacked(legacyMissing)).toBe(false);
   });
 });

@@ -3240,7 +3240,23 @@
       "stoppedSame": "İkinci okuma tamamen aynı sonucu verdi, bu yüzden okuma durdu.",
       "readsUsed": "Bu dosya zaten {{max}} kez okundu. Yeni bir içe aktarma için dosyayı tekrar yükleyin.",
       "readingAgain": "Tekrar okunuyor ({{n}} / {{max}})…",
-      "photoSettlement": "Bu fotoğraf tam bir settlement değil. PDF dosyasını yükleyin."
+      "photoSettlement": "Bu fotoğraf tam bir settlement değil. PDF dosyasını yükleyin.",
+      "rangeLine": "{{pages}}. sayfaların hiçbirinde TOTAL CASH FLOW veya TOTAL STATEMENT OF INCOME & EXPENSE yok."
+    },
+    "notRead": "Okunamadı: {{label}}.",
+    "notReadOnPages": "Okunamadı: {{label}} ({{pages}}. sayfalarda arandı).",
+    "failedCheck": "Kontrol tutmadı: {{check}}.",
+    "dateIssue": {
+      "unreadable": "Settlement tarihi okunamadı.",
+      "older_reading": "Bu okumada basılı settlement tarihi yok.",
+      "print_gap": "Settlement tarihi, baskı tarihinden 0-7 gün sonra değil.",
+      "not_friday": "Hafta sonu tarihi cuma değil.",
+      "statement_week_differs": "Statement'taki WEEK ENDING, settlement tarihiyle aynı değil.",
+      "pdf_created_far": "PDF, baskı tarihinden çok farklı bir günde oluşturulmuş.",
+      "future": "Settlement tarihi gelecekte.",
+      "too_old": "Settlement tarihi 14 aydan eski.",
+      "ambiguous": "Tarih birden fazla sırada okunabiliyor.",
+      "pages_differ": "İki sayfa aynı alan için farklı tarih basıyor."
     }
   },
   "certify": {

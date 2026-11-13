@@ -11,10 +11,12 @@
 //     shown failed ("read with the old reader") with [Read again], which
 //     starts a NEW job from the same stored file.
 // Pure: no network, react-query or i18n (the caller passes t()).
-import { MAX_CONTENT_READS, canReadAgain, pendingAttachments, type ReaderFailure, type ReaderProgress } from '@/src/settlementReader/machine';
+import { MAX_CONTENT_READS, canReadAgain, chargedReads, pendingAttachments, type ReaderFailure, type ReaderProgress } from '@/src/settlementReader/machine';
+import { RANGE_WINDOW_PAGES } from '@/src/settlementReader/range';
+import { gateFailureLines } from './gateFailureText';
 import { costByRole, totalCost } from '@/src/settlementReader/cost';
 import { GATE_FAIL_REASON_KEY, type GateFailReason } from './settlementGate';
-import type { ImportJob } from './importJobs';
+import { formatPageList, type ImportJob } from './importJobs';
 
 export { MAX_CONTENT_READS };
 
@@ -26,7 +28,9 @@ export type ReaderJobFailure = ReaderFailure | StartRefused;
 export type ReaderJobView =
   | { state: 'reading'; again: boolean; readNo: number }
   | { state: 'ready'; needsInput: boolean }
-  | { state: 'failed'; failure: ReaderJobFailure; reads: number; readAgain: 'same_job' | 'new_job' | null; sameResult: boolean };
+  // reads = the reads that count against the owner's 2 (failures that are
+  // ours do not); pages = where the statement was looked for ("4–5").
+  | { state: 'failed'; failure: ReaderJobFailure; reads: number; readAgain: 'same_job' | 'new_job' | null; sameResult: boolean; pages?: string | null; rangePages?: string | null };
 
 type JobInput = Pick<ImportJob, 'id' | 'status' | 'updatedAt'> &
   Partial<Pick<ImportJob, 'reader' | 'storagePath' | 'mediaType' | 'completedAt' | 'heartbeatAt' | 'progress' | 'errorStep'>>;
@@ -90,10 +94,14 @@ export function readerJobView(job: JobInput, nowIso: string, opts: { notBefore?:
     return { state: 'reading', again: r.readsStarted >= 2, readNo: Math.max(1, r.readsStarted) };
   }
   if (r.state === 'ready' || r.state === 'needs_input') return { state: 'ready', needsInput: r.state === 'needs_input' };
+  const range = r.range;
+  const statementPages = range ? formatPageList(Array.from({ length: range.lastContentPage - (range.statementFirst ?? 1) + 1 }, (_, i) => (range.statementFirst ?? 1) + i)) : null;
   return {
     state: 'failed',
     failure: r.failure ?? { reason: 'model_failed' },
-    reads: r.readsStarted,
+    reads: chargedReads(r),
+    pages: statementPages,
+    rangePages: formatPageList(Array.from({ length: Math.max(1, Math.min(r.pagesTotal, RANGE_WINDOW_PAGES)) }, (_, i) => i + 1)),
     readAgain: canReadAgain(r) ? 'same_job' : null,
     sameResult: stoppedOnSameResult(r),
   };
@@ -150,8 +158,13 @@ export function readerFailureLines(view: Extract<ReaderJobView, { state: 'failed
   else lines.push(t(READER_REASON_KEY[f.reason] ?? 'importFlow.serverAnswerMissing', { field: 'reason', step: f.reason === 'start_refused' ? (f as StartRefused).step ?? '—' : undefined }));
   if (f.reason !== 'start_refused') {
     const rf = f as ReaderFailure;
-    if (rf.check && rf.printed != null && rf.read != null) {
-      lines.push(t('importFlow.failDetail', { check: t(`importFlow.checkName.${rf.check}`, { defaultValue: rf.check }), printed: value(rf.printed), read: value(rf.read) }));
+    if (f.reason in GATE_FAIL_REASON_KEY) {
+      // NEVER GENERIC (owner 2026-11-13): every label not read with its
+      // pages, every failing check with printed vs read, every date problem.
+      const details = rf.details ?? (rf.check && rf.printed != null && rf.read != null ? [{ check: rf.check, printed: rf.printed, read: rf.read }] : []);
+      lines.push(...gateFailureLines({ reason: f.reason, failures: rf.failures, details }, t, value, view.pages ?? null));
+    } else if (f.reason === 'range_not_found') {
+      lines.push(t('importFlow.reader.rangeLine', { pages: view.rangePages ?? '1' }));
     }
     if (rf.error) lines.push(t('importFlow.reader.modelError', { error: t(`importFlow.reader.error.${rf.error}`, { defaultValue: rf.error }) }));
   }

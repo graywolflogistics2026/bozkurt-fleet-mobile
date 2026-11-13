@@ -502,7 +502,7 @@ function checkPrimeSettlementDates(input, importDate) {
   const raw = input.settlementDateRaw?.trim() || null;
   const weekEnding = raw ? parsePrimeSettlementDate(raw) : input.weekEnding || null;
   const printDate = input.printDateRaw?.trim() ? parsePrimePrintDate(input.printDateRaw) : input.printDate || null;
-  const statementWeekEnding = input.statementWeekEndingRaw?.trim() ? parsePrimeSettlementDate(input.statementWeekEndingRaw) : raw ? null : input.statementWeekEnding || null;
+  const statementWeekEnding = input.statementWeekEndingRaw?.trim() ? parsePrimeSettlementDate(input.statementWeekEndingRaw) ?? parseInFormat(input.statementWeekEndingRaw, "MDY") : raw ? null : input.statementWeekEnding || null;
   const pdfCreationDate = pdfCreationDateIso(input.pdfCreationDate);
   const issues = [];
   if (!weekEnding) issues.push("unreadable");
@@ -890,8 +890,9 @@ function buildPrimeStatementCheck(extraction) {
   add("milesMatch", totals.miles, printedTotal(s.totalMiles), MILES_TOLERANCE);
   const statementRawText = statementWeekRawOf(s);
   const settlementRawText = s.settlementDateRaw?.trim() || null;
-  const statementWeek = statementRawText ? parsePrimeSettlementDate(statementRawText) : settlementRawText ? null : op.weekEnding;
-  const weekCheck = statementWeekEndingCheck(statementWeek, settlementRawText ? parsePrimeSettlementDate(settlementRawText) : s.weekEnding);
+  const statementWeek = statementRawText ? parsePrimeSettlementDate(statementRawText) ?? parseInFormat(statementRawText, "MDY") : settlementRawText ? null : op.weekEnding;
+  const settlementWeek = settlementRawText ? parsePrimeSettlementDate(settlementRawText) : s.weekEnding;
+  const weekCheck = statementWeekEndingCheck(statementWeek, settlementWeek);
   if (weekCheck) checks.push(weekCheck);
   const byLabelPaths = new Set(labeledAll.byLabel ? STATEMENT_TOTAL_FIELDS.map((f) => `settlement.operating.${f}`) : []);
   for (const conflict of coreMergeConflicts(extraction)) {
@@ -904,7 +905,7 @@ function buildPrimeStatementCheck(extraction) {
   const coreMissing = primeCoreMissing(totals, lines, printedTotal(s.grossRevenue), negativeWeek);
   const ran = (id) => checks.find((c) => c.id === id);
   const chainFailed = ["statementTotal", "totalCashFlow", "settlementToOperator", "directDeposit"].some((id) => ran(id) && !ran(id).passed);
-  const printedTotalsTie = !!ran("statementTotal")?.passed && !!(ran("totalCashFlow")?.passed || ran("settlementToOperator")?.passed) && !chainFailed;
+  const printedTotalsTie = !!ran("statementTotal")?.passed && !!(ran("totalCashFlow")?.passed || ran("settlementToOperator")?.passed || ran("directDeposit")?.passed) && !chainFailed;
   const blocking = (c) => isGateCheck(c) && !(printedTotalsTie && SUBTOTAL_CHECKS.includes(c.id));
   const gateMissing = primeGateMissing(totals, lines, weekCheck != null, negativeWeek).filter((m) => !(printedTotalsTie && (m === "variableCosts" || m === "fixedCost")));
   const gatePassed = gateMissing.length === 0 && checks.filter(blocking).every((c) => c.passed);
@@ -933,7 +934,6 @@ function primeGateMissing(totals, lines, weekEndingRead, negativeWeek = false) {
   if (totals.totalRevenue == null) missing.push("totalRevenue");
   if (totals.totalOperatingExpenses == null) missing.push("totalOperatingExpenses");
   if (totals.totalStatement == null) missing.push("totalStatement");
-  if (totals.settlementToOperator == null && !negativeWeek) missing.push("settlementToOperator");
   if (totals.totalVariableCosts == null && !["fuel_oil_tax", "repair", "tires", "misc"].some(has)) missing.push("variableCosts");
   if (totals.totalFixedCost == null && !has("fixed")) missing.push("fixedCost");
   if (!weekEndingRead) missing.push("statementWeekEnding");
@@ -955,7 +955,7 @@ function primeCoreMissing(totals, lines, gross, negativeWeek = false) {
   const missing = [];
   if (totals.totalRevenue == null || gross == null) missing.push("grossMatches");
   if (totals.totalOperatingExpenses == null || !variableRead || !fixedRead) missing.push("operatingExpenses");
-  if (totals.settlementToOperator == null && !negativeWeek || totals.totalRevenue == null || totals.totalOperatingExpenses == null) missing.push("settlementToOperator");
+  if (totals.settlementToOperator == null && totals.directDeposit == null && !negativeWeek || totals.totalRevenue == null || totals.totalOperatingExpenses == null) missing.push("settlementToOperator");
   return missing;
 }
 var CORE_CONFLICT_PATH = /^settlement\.(grossRevenue|netPay|totalDeductions|depositAmount|reimbursements|operating\.(week[A-Za-z]+|settlementToOperator|directDeposit))$/;
@@ -2210,7 +2210,7 @@ function evaluateSettlementGate(extraction, options) {
     }
     const statement = buildSettlementStatement(extraction, { savedFlagged: false, priorLabelsSeen: /* @__PURE__ */ new Set() });
     const week = statementWeekOf({ id: PREVIEW_ID2, statement });
-    if (!week) return fail("statement_not_read");
+    if (!week) return fail("statement_not_read", ["statementWeek"]);
     const deposit2 = settlementDeposit({ statement });
     const groups = buildPrimeGroupChecks(extraction);
     const softFailed = (id) => LINE_SUM_CHECKS.includes(id) || !!check.printedTotalsTie && SUBTOTAL_CHECKS.includes(id);
@@ -2236,9 +2236,12 @@ function evaluateSettlementGate(extraction, options) {
     return { status: "pass", headline: headline2, lineDetails, lineDifference: difference };
   }
   const printed2 = printedTotalsOf(extraction);
-  if (printed2.grossRevenue == null && printed2.totalDeductions == null && printed2.netDue == null) return fail("totals_not_printed");
-  if (printed2.grossRevenue == null || printed2.netDue == null || issueTypes.includes("zeroNetNonzeroGross")) return fail("missing_fields");
-  if (printed2.totalDeductions == null) return fail("totals_not_printed");
+  const notPrinted = ["grossRevenue", "netDue", "totalDeductions"].filter((k) => printed2[k] == null);
+  if (printed2.grossRevenue == null && printed2.totalDeductions == null && printed2.netDue == null) return fail("totals_not_printed", [...notPrinted]);
+  if (printed2.grossRevenue == null || printed2.netDue == null || issueTypes.includes("zeroNetNonzeroGross")) {
+    return fail("missing_fields", notPrinted.length > 0 ? notPrinted.filter((k) => k !== "totalDeductions") : ["netDue"]);
+  }
+  if (printed2.totalDeductions == null) return fail("totals_not_printed", ["totalDeductions"]);
   if (!printedTotalsMatch(printed2) || issueTypes.includes("netDueMismatch")) {
     const reimbursements = printed2.reimbursements ?? printed2.reimbursementLines ?? 0;
     return fail("totals_differ", issueTypes, [
@@ -2392,7 +2395,7 @@ SETTLEMENT PAGES
 STATEMENT OF INCOME AND EXPENSE
 - statement.printed: true when the file contains a Statement of Income and Expense.
 - statement.weekEndingRaw: the week-ending date printed on the statement, as printed.
-- statement.rows: EVERY printed row of the statement, in print order, from the first revenue row to the last row (TOTAL STATEMENT OF INCOME & EXPENSE, or TOTAL CASH FLOW and the rows after it): regular rows, every TOTAL row, MILES, WEEKS IN SERVICE, PRIOR WEEK BALANCE FORWARD, SETTLEMENT TO OPERATOR, the payout row, the performance bond row. Section headings that carry no amount are not rows.
+- statement.rows: EVERY printed row of the statement, in print order, from the first revenue row to the LAST printed row of the statement pages. Do not stop at TOTAL STATEMENT OF INCOME & EXPENSE or at TOTAL CASH FLOW: copy every row printed after them too (PRIOR WEEK BALANCE FORWARD, TOTAL CASH FLOW, SETTLEMENT TO OPERATOR, the payout row such as DIRECT DEPOSIT or AMOUNT LOADED ON CARD, the performance bond row). Some statements print no cash-flow section; copy whatever is printed. Include regular rows, every TOTAL row, MILES, WEEKS IN SERVICE. Section headings that carry no amount are not rows.
 - Each row has three columns: weeks (the WEEKS / week total column), ytd (year to date), ltd (life to date). Copy each column from ITS OWN column. When the weeks cell is blank, weeks is "" even if ytd and ltd are printed: never move a value into another column.
 - Copy the label exactly as printed (e.g. "TOTAL FUEL,OIL,TAX", "PRIME POINT-OF-SALE").`;
 var SETTLEMENT_PART_PROMPT = `${CONTENT_PROMPT}
@@ -2708,6 +2711,15 @@ function readingToExtraction(reading, meta) {
 // src/settlementReader/machine.ts
 var READER_VERSION = 2;
 var MAX_CONTENT_READS = 2;
+var MAX_READS_HARD = 4;
+var OUR_FAILURES = /* @__PURE__ */ new Set(["statement_not_read", "missing_fields", "page_not_read", "totals_not_printed", "range_not_found", "unreadable_reply"]);
+function isChargedRead(r) {
+  if ((r.outcome === "failed" || r.outcome === "model_failed") && r.reason && OUR_FAILURES.has(r.reason)) return false;
+  return true;
+}
+function chargedReads(p) {
+  return p.readsStarted - p.reads.filter((r) => !isChargedRead(r)).length;
+}
 function newReaderProgress(pagesTotal, importDate = "") {
   return {
     v: READER_VERSION,
@@ -2750,7 +2762,7 @@ function afterRange(p, outcome) {
 }
 function startContentRead(p) {
   if (p.state !== "reading" || p.step !== "content") return null;
-  if (p.readsStarted >= MAX_CONTENT_READS) return null;
+  if (chargedReads(p) >= MAX_CONTENT_READS || p.readsStarted >= MAX_READS_HARD) return null;
   return { ...p, readsStarted: p.readsStarted + 1 };
 }
 function readFailed(p, error) {
@@ -2807,7 +2819,7 @@ function verdictOf(extraction, ctx) {
     const d = gate.details?.[0];
     return {
       state: "failed",
-      failure: { reason: gate.reason, failures: gate.failures, ...d ? { check: d.check, printed: d.printed, read: d.read } : {} }
+      failure: { reason: gate.reason, failures: gate.failures, ...d ? { check: d.check, printed: d.printed, read: d.read, details: gate.details } : {} }
     };
   }
   const questions = profitLinesToAsk(sanitized).map((q) => ({ label: q.label, printed: q.printed }));
@@ -2842,11 +2854,13 @@ function afterAnswers(p, extraction, answers, ctx) {
   return t(failed(p, verdict.failure), typed);
 }
 function canReadAgain(p) {
-  return p.state === "failed" && p.range != null && p.readsStarted < MAX_CONTENT_READS;
+  if (p.state !== "failed" || p.readsStarted >= MAX_READS_HARD) return false;
+  if (p.range == null) return p.failure?.reason === "range_not_found" && p.cost.filter((c) => c.role === "range").length < 3;
+  return chargedReads(p) < MAX_CONTENT_READS;
 }
 function readAgain(p) {
   if (!canReadAgain(p)) return null;
-  return t({ ...p, state: "reading", step: "content", failure: null, lastReadCause: "read_again" });
+  return t({ ...p, state: "reading", step: p.range == null ? "range" : "content", failure: null, runs: 0, lastReadCause: "read_again" });
 }
 function pendingAttachments(p) {
   if (p.state !== "ready" && p.state !== "needs_input") return [];
@@ -3037,6 +3051,7 @@ export {
   MAX_ATTACHMENT_PAGES,
   MAX_CONTENT_READS,
   MAX_READER_RUNS,
+  MAX_READS_HARD,
   RANGE_PROMPT,
   RANGE_SCHEMA,
   RANGE_WINDOW_PAGES,
@@ -3055,6 +3070,7 @@ export {
   afterSplitSettlement,
   afterSplitStatement,
   canReadAgain,
+  chargedReads,
   combineParts,
   contentRange,
   costByRole,
@@ -3062,6 +3078,7 @@ export {
   costOf,
   decideReading,
   evaluateSettlementGate,
+  isChargedRead,
   isReaderProgress,
   newReaderProgress,
   obj,

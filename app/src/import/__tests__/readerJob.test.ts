@@ -66,9 +66,9 @@ describe('readerJobView: the server decides, the app renders', () => {
     expect(twice).toMatchObject({ state: 'failed', readAgain: null, reads: 2 });
   });
 
-  test('a range failure (no range) cannot be read again on the same job', () => {
+  test('a range failure is ours: Read again on the same job (the range call again)', () => {
     const v = readerJobView(job({ status: 'failed', reader: reader({ state: 'failed', range: null, failure: { reason: 'range_not_found', error: 'timeout' } }) }), NOW);
-    expect(v).toMatchObject({ state: 'failed', readAgain: null });
+    expect(v).toMatchObject({ state: 'failed', readAgain: 'same_job' });
   });
 
   test('identical reads are reported', () => {

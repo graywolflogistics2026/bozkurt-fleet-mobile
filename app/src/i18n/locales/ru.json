@@ -3240,7 +3240,23 @@
       "stoppedSame": "Второе чтение дало точно такой же результат, поэтому чтение остановлено.",
       "readsUsed": "Этот файл уже прочитан {{max}} раза. Загрузите его снова, чтобы начать новый импорт.",
       "readingAgain": "Читаем снова ({{n}} из {{max}})…",
-      "photoSettlement": "Это фото — не полный settlement. Загрузите PDF."
+      "photoSettlement": "Это фото — не полный settlement. Загрузите PDF.",
+      "rangeLine": "Ни на одной из страниц {{pages}} нет TOTAL CASH FLOW или TOTAL STATEMENT OF INCOME & EXPENSE."
+    },
+    "notRead": "Не прочитано: {{label}}.",
+    "notReadOnPages": "Не прочитано: {{label}} (искали на страницах {{pages}}).",
+    "failedCheck": "Проверка не прошла: {{check}}.",
+    "dateIssue": {
+      "unreadable": "Не удалось прочитать дату settlement.",
+      "older_reading": "В этом чтении нет напечатанной даты settlement.",
+      "print_gap": "Дата settlement не в пределах 0–7 дней после даты печати.",
+      "not_friday": "Конец недели — не пятница.",
+      "statement_week_differs": "WEEK ENDING в отчёте не совпадает с датой settlement.",
+      "pdf_created_far": "PDF создан далеко от даты печати.",
+      "future": "Дата settlement в будущем.",
+      "too_old": "Дата settlement старше 14 месяцев.",
+      "ambiguous": "Дату можно прочитать в разном порядке.",
+      "pages_differ": "Две страницы печатают разную дату для одного поля."
     }
   },
   "certify": {

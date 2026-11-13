@@ -2,7 +2,7 @@ import type { Extraction } from './types';
 import { parseAmount, printedTotal, sumAmounts } from './amount';
 import { isPrimeCarrier } from './primeOperatingStatement';
 import { statementYtdRows } from './ytdContinuity';
-import { parsePrimeSettlementDate, pdfCreationDateIso, statementWeekRawOf, type DateFormat } from './printedDates';
+import { parseInFormat, parsePrimeSettlementDate, pdfCreationDateIso, statementWeekRawOf, type DateFormat } from './printedDates';
 import { readPrimeEscrow } from './primeEscrow';
 import { splitPrimeLoads } from './primeLoads';
 import { labeledStatementTotals, STATEMENT_TOTAL_FIELDS } from './statementTotalLabels';
@@ -400,8 +400,15 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   // uses the model's own ISO dates for this check.
   const statementRawText = statementWeekRawOf(s);
   const settlementRawText = s.settlementDateRaw?.trim() || null;
-  const statementWeek = statementRawText ? parsePrimeSettlementDate(statementRawText) : settlementRawText ? null : op.weekEnding;
-  const weekCheck = statementWeekEndingCheck(statementWeek, settlementRawText ? parsePrimeSettlementDate(settlementRawText) : s.weekEnding);
+  // The statement header prints YY/MM/DD; a statement that prints M/D/YY
+  // (07/17/26) is read in that order rather than called unreadable.
+  const statementWeek = statementRawText
+    ? (parsePrimeSettlementDate(statementRawText) ?? parseInFormat(statementRawText, 'MDY'))
+    : settlementRawText
+      ? null
+      : op.weekEnding;
+  const settlementWeek = settlementRawText ? parsePrimeSettlementDate(settlementRawText) : s.weekEnding;
+  const weekCheck = statementWeekEndingCheck(statementWeek, settlementWeek);
   if (weekCheck) checks.push(weekCheck);
 
   // A week total two pages filled differently: when the TOTAL lines were
@@ -435,7 +442,10 @@ export function buildPrimeStatementCheck(extraction: Extraction | null | undefin
   // tie.
   const ran = (id: StatementCheckId) => checks.find((c) => c.id === id);
   const chainFailed = (['statementTotal', 'totalCashFlow', 'settlementToOperator', 'directDeposit'] as StatementCheckId[]).some((id) => ran(id) && !ran(id)!.passed);
-  const printedTotalsTie = !!ran('statementTotal')?.passed && !!(ran('totalCashFlow')?.passed || ran('settlementToOperator')?.passed) && !chainFailed;
+  // The cash link is TOTAL CASH FLOW, SETTLEMENT TO OPERATOR or the payout
+  // line (07/17 prints only AMOUNT LOADED ON CARD after TOTAL STATEMENT).
+  const printedTotalsTie =
+    !!ran('statementTotal')?.passed && !!(ran('totalCashFlow')?.passed || ran('settlementToOperator')?.passed || ran('directDeposit')?.passed) && !chainFailed;
   const blocking = (c: StatementCheck) => isGateCheck(c) && !(printedTotalsTie && SUBTOTAL_CHECKS.includes(c.id));
   const gateMissing = primeGateMissing(totals, lines, weekCheck != null, negativeWeek).filter((m) => !(printedTotalsTie && (m === 'variableCosts' || m === 'fixedCost')));
   const gatePassed = gateMissing.length === 0 && checks.filter(blocking).every((c) => c.passed);
@@ -471,8 +481,11 @@ export function primeGateMissing(totals: PrimeStatementTotals, lines: StatementL
   if (totals.totalRevenue == null) missing.push('totalRevenue');
   if (totals.totalOperatingExpenses == null) missing.push('totalOperatingExpenses');
   if (totals.totalStatement == null) missing.push('totalStatement');
-  // A negative week prints no SETTLEMENT TO OPERATOR: TOTAL CASH FLOW ends the chain.
-  if (totals.settlementToOperator == null && !negativeWeek) missing.push('settlementToOperator');
+  // SETTLEMENT TO OPERATOR is not required (owner 2026-11-13): a missing
+  // printed line skips its check, never fails it. The payout line (DIRECT
+  // DEPOSIT, AMOUNT LOADED ON CARD) is then checked against TOTAL STATEMENT
+  // + balance forward. (negativeWeek kept for callers.)
+  void negativeWeek;
   if (totals.totalVariableCosts == null && !(['fuel_oil_tax', 'repair', 'tires', 'misc'] as StatementSection[]).some(has)) missing.push('variableCosts');
   if (totals.totalFixedCost == null && !has('fixed')) missing.push('fixedCost');
   if (!weekEndingRead) missing.push('statementWeekEnding');
@@ -504,7 +517,7 @@ export function primeCoreMissing(totals: PrimeStatementTotals, lines: StatementL
   const missing: CoreStatementCheck[] = [];
   if (totals.totalRevenue == null || gross == null) missing.push('grossMatches');
   if (totals.totalOperatingExpenses == null || !variableRead || !fixedRead) missing.push('operatingExpenses');
-  if ((totals.settlementToOperator == null && !negativeWeek) || totals.totalRevenue == null || totals.totalOperatingExpenses == null) missing.push('settlementToOperator');
+  if ((totals.settlementToOperator == null && totals.directDeposit == null && !negativeWeek) || totals.totalRevenue == null || totals.totalOperatingExpenses == null) missing.push('settlementToOperator');
   return missing;
 }
 

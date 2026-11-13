@@ -20,6 +20,12 @@ import { cell, readingToExtraction } from './toExtraction';
 
 export const READER_VERSION = 2;
 export const MAX_CONTENT_READS = 2;
+// FAILED READS THAT ARE OURS (owner 2026-11-13, 07/17 device test): a read
+// that failed because of our own range, prompt or schema logic (a printed
+// line not copied, a total not found, an unreadable structured reply) does
+// not count against the owner's 2 reads. A hard cap bounds the cost.
+export const MAX_READS_HARD = 4;
+const OUR_FAILURES = new Set(['statement_not_read', 'missing_fields', 'page_not_read', 'totals_not_printed', 'range_not_found', 'unreadable_reply']);
 
 export type ReaderState = 'reading' | 'ready' | 'needs_input' | 'failed';
 export type ReaderStep = 'range' | 'content' | 'split_settlement' | 'split_statement' | 'done';
@@ -45,9 +51,26 @@ export type ReaderFailure = {
   printed?: number | string;
   read?: number | string;
   failures?: string[];
+  // Every failing check with its printed and read values (the first one is
+  // also in check/printed/read).
+  details?: { check: string; printed: number | string; read: number | string }[];
 };
 
 export type ReadRecord = { n: number; signature: string; outcome: 'ready' | 'needs_input' | 'failed' | 'model_failed'; reason?: string };
+
+// A finished read counts against the owner's 2 unless it failed for one of
+// our own reasons (derived from the stored reason, so jobs read before this
+// rule are judged the same way).
+export function isChargedRead(r: Pick<ReadRecord, 'outcome' | 'reason'>): boolean {
+  if ((r.outcome === 'failed' || r.outcome === 'model_failed') && r.reason && OUR_FAILURES.has(r.reason)) return false;
+  return true;
+}
+
+// Reads that count: every started read minus the finished ones that failed
+// for our own reasons (a read still running counts).
+export function chargedReads(p: Pick<ReaderProgress, 'readsStarted' | 'reads'>): number {
+  return p.readsStarted - p.reads.filter((r) => !isChargedRead(r)).length;
+}
 export type Question = { label: string; printed: string };
 
 export type ReaderProgress = {
@@ -130,7 +153,7 @@ export function afterRange(p: ReaderProgress, outcome: CallOutcome<RangeResult>)
 // the worker dies during the call. null = no read left.
 export function startContentRead(p: ReaderProgress): ReaderProgress | null {
   if (p.state !== 'reading' || p.step !== 'content') return null;
-  if (p.readsStarted >= MAX_CONTENT_READS) return null;
+  if (chargedReads(p) >= MAX_CONTENT_READS || p.readsStarted >= MAX_READS_HARD) return null;
   return { ...p, readsStarted: p.readsStarted + 1 };
 }
 
@@ -214,7 +237,7 @@ export function verdictOf(extraction: Extraction, ctx: DecideContext): Verdict {
     const d = gate.details?.[0];
     return {
       state: 'failed',
-      failure: { reason: gate.reason, failures: gate.failures, ...(d ? { check: d.check, printed: d.printed, read: d.read } : {}) },
+      failure: { reason: gate.reason, failures: gate.failures, ...(d ? { check: d.check, printed: d.printed, read: d.read, details: gate.details } : {}) },
     };
   }
   const questions = profitLinesToAsk(sanitized).map((q) => ({ label: q.label, printed: q.printed }));
@@ -255,13 +278,17 @@ export function afterAnswers(p: ReaderProgress, extraction: Extraction, answers:
 
 // ---- Read again (failed only, counts toward the max) ----------------------
 
+// While the owner's reads remain (failures that are ours do not count) and
+// under the hard cap. A failed range call is read again from the range.
 export function canReadAgain(p: ReaderProgress): boolean {
-  return p.state === 'failed' && p.range != null && p.readsStarted < MAX_CONTENT_READS;
+  if (p.state !== 'failed' || p.readsStarted >= MAX_READS_HARD) return false;
+  if (p.range == null) return p.failure?.reason === 'range_not_found' && p.cost.filter((c) => c.role === 'range').length < 3;
+  return chargedReads(p) < MAX_CONTENT_READS;
 }
 
 export function readAgain(p: ReaderProgress): Transition | null {
   if (!canReadAgain(p)) return null;
-  return t({ ...p, state: 'reading', step: 'content', failure: null, lastReadCause: 'read_again' });
+  return t({ ...p, state: 'reading', step: p.range == null ? 'range' : 'content', failure: null, runs: 0, lastReadCause: 'read_again' });
 }
 
 // ---- attachments (P5: after the card, best effort, never gating) ----------

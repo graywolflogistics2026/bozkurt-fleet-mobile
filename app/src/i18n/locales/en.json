@@ -3240,7 +3240,23 @@
       "stoppedSame": "The second read gave exactly the same result, so reading stopped.",
       "readsUsed": "This file was already read {{max}} times. Upload it again to start a new import.",
       "readingAgain": "Reading again ({{n}} of {{max}})…",
-      "photoSettlement": "This photo is not a full settlement. Upload the PDF."
+      "photoSettlement": "This photo is not a full settlement. Upload the PDF.",
+      "rangeLine": "No page among pages {{pages}} printed TOTAL CASH FLOW or TOTAL STATEMENT OF INCOME & EXPENSE."
+    },
+    "notRead": "Not read: {{label}}.",
+    "notReadOnPages": "Not read: {{label}} (looked for on pages {{pages}}).",
+    "failedCheck": "Check failed: {{check}}.",
+    "dateIssue": {
+      "unreadable": "The settlement date could not be read.",
+      "older_reading": "This reading has no printed settlement date.",
+      "print_gap": "The settlement date is not 0-7 days after the print date.",
+      "not_friday": "The week ending is not a Friday.",
+      "statement_week_differs": "The statement's WEEK ENDING is not the settlement date.",
+      "pdf_created_far": "The PDF was created far from the print date.",
+      "future": "The settlement date is in the future.",
+      "too_old": "The settlement date is more than 14 months old.",
+      "ambiguous": "The date can be read in more than one order.",
+      "pages_differ": "Two pages print a different date for the same field."
     }
   },
   "certify": {
