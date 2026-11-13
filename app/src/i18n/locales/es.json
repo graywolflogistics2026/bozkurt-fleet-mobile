@@ -2816,7 +2816,8 @@
       "truck_extras": "Extras del camión — registrados en el Costo Base del Camión",
       "owner_money_in": "Dinero del dueño — no es ingreso ni gasto",
       "interest_income": "Ingresos por intereses — no es ganancia del negocio",
-      "line_residual": "Total del estado no explicado por las líneas leídas — contado como impreso"
+      "line_residual": "Total del estado no explicado por las líneas leídas — contado como impreso",
+      "settlement_orphan": "Línea de settlement ya no vinculada a su settlement — ya contada allí"
     },
     "empty": "No hay filas en este período.",
     "showEveryRow": "Mostrar todas las filas",
@@ -3046,8 +3047,8 @@
   },
   "profitExplainer": {
     "title": "De dónde sale tu ganancia",
-    "sentence_one": "Según tus settlements, tu ganancia es {{settlements}}. Agregaste {{own}} de gastos propios (1 partida) {{when}}, así que tu ganancia es {{profit}}.",
-    "sentence_other": "Según tus settlements, tu ganancia es {{settlements}}. Agregaste {{own}} de gastos propios ({{count}} partidas) {{when}}, así que tu ganancia es {{profit}}.",
+    "sentence_one": "Incluye {{own}} de sus propios gastos (1 partida).",
+    "sentence_other": "Incluye {{own}} de sus propios gastos ({{count}} partidas).",
     "when": {
       "thisWeek": "esta semana",
       "lastWeek": "la semana pasada",
@@ -3078,7 +3079,8 @@
       "advance": "devolución de anticipo",
       "escrow": "escrow, tu dinero retenido",
       "non_deductible": "no deducible",
-      "duplicate_fuel": "ya está en un settlement"
+      "duplicate_fuel": "ya está en un settlement",
+      "settlement_orphan": "ya contada en su settlement"
     },
     "duplicateTitle": "Posible duplicado",
     "duplicateBody": "{{amount}} el {{date}} parece una línea que tu transportista ya retuvo ({{label}}). ¿Lo conservas o lo eliminas?",

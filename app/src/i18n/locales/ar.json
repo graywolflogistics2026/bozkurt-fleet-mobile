@@ -2816,7 +2816,8 @@
       "truck_extras": "إضافات الشاحنة — تُتابع في أساس تكلفة الشاحنة",
       "owner_money_in": "أموال المالك — ليست دخلًا ولا مصروفًا",
       "interest_income": "دخل الفائدة — ليس ربحًا تجاريًا",
-      "line_residual": "Statement total not explained by the lines read — counted as printed"
+      "line_residual": "Statement total not explained by the lines read — counted as printed",
+      "settlement_orphan": "Settlement line no longer linked to its settlement — already counted there"
     },
     "empty": "لا توجد بنود في هذه الفترة.",
     "showEveryRow": "عرض كل البنود",
@@ -3046,8 +3047,8 @@
   },
   "profitExplainer": {
     "title": "Where your profit comes from",
-    "sentence_one": "Your settlements show {{settlements}} profit. You added {{own}} of your own expenses (1 item) {{when}}, so your profit is {{profit}}.",
-    "sentence_other": "Your settlements show {{settlements}} profit. You added {{own}} of your own expenses ({{count}} items) {{when}}, so your profit is {{profit}}.",
+    "sentence_one": "Includes {{own}} of your own expenses (1 item).",
+    "sentence_other": "Includes {{own}} of your own expenses ({{count}} items).",
     "when": {
       "thisWeek": "this week",
       "lastWeek": "last week",
@@ -3078,7 +3079,8 @@
       "advance": "advance repayment",
       "escrow": "escrow, your money held",
       "non_deductible": "not deductible",
-      "duplicate_fuel": "already on a settlement"
+      "duplicate_fuel": "already on a settlement",
+      "settlement_orphan": "already counted on its settlement"
     },
     "duplicateTitle": "Possible duplicate",
     "duplicateBody": "{{amount}} on {{date}} looks like a line your carrier already withheld ({{label}}). Keep it or remove it?",

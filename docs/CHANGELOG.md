@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Round 2 B: Home own-expense banner counts only rows not created by a settlement import
+- Device: 07/17 showed "$464.98 of your own expenses (11 items)", Home -758.60 instead of -293.62 (08/28: 79.47 instead of 436.04).
+- Trace: the real save path links every settlement row (settlement_id); saved through saveExtraction() 07/17 = -293.62 and 08/28 = 436.04 with 0 own items. The device rows have no settlement link in the live DB (source unknown here; read-only SQL in the round-2 report).
+- kpi.ts isOrphanSettlementRow(): a deduction/maintenance/toll row with source settlement and no settlement_id never counts again (its settlement counts it); the explainer lists it under not counted (reason settlement_orphan, 7 locales).
+- Banner text: "Includes $Y of your own expenses (N items)." only when N > 0 (profitExplainer.sentence, 7 locales).
+- Tests: data/__tests__/homeOwnExpenses.test.ts. Ships: eas update. No SQL.
+
 ## 2026-11-13 — Fix 4/4 (08/28): AI Coach - no cost per mile for a 0-mile week; a weekly goal only when the owner sets one
 - stats/weeklyReview.ts weeklyReviewCpm(): the review cites the account CPM only when the reviewed week has its own rate per mile (proactiveCoach.ts). Before, a 0-mile week printed the all-time CPM (19.77/mi on a near-empty account).
 - Settings: the 4-week average was PREFILLED into the weekly-goal field, so saving the business profile saved it as a goal; it is now only the placeholder + note. An already saved goal stays until the owner clears the field and saves.

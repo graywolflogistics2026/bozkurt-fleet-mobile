@@ -2816,7 +2816,8 @@
       "truck_extras": "ट्रक एक्स्ट्रा — ट्रक लागत आधार में ट्रैक किए जाते हैं",
       "owner_money_in": "मालिक का पैसा — न आय न खर्च",
       "interest_income": "ब्याज आय — व्यावसायिक लाभ नहीं",
-      "line_residual": "पढ़ी गई लाइनों से न समझाया गया स्टेटमेंट टोटल — छपे अनुसार गिना गया"
+      "line_residual": "पढ़ी गई लाइनों से न समझाया गया स्टेटमेंट टोटल — छपे अनुसार गिना गया",
+      "settlement_orphan": "Settlement लाइन अब अपने settlement से जुड़ी नहीं — वहाँ पहले ही गिनी गई"
     },
     "empty": "इस अवधि में कोई पंक्ति नहीं।",
     "showEveryRow": "हर पंक्ति दिखाएँ",
@@ -3046,8 +3047,8 @@
   },
   "profitExplainer": {
     "title": "आपका लाभ कहाँ से आता है",
-    "sentence_one": "आपके settlements के अनुसार लाभ {{settlements}} है। आपने {{when}} अपने {{own}} के खर्च जोड़े (1 मद), इसलिए आपका लाभ {{profit}} है।",
-    "sentence_other": "आपके settlements के अनुसार लाभ {{settlements}} है। आपने {{when}} अपने {{own}} के खर्च जोड़े ({{count}} मद), इसलिए आपका लाभ {{profit}} है।",
+    "sentence_one": "आपके अपने खर्चों के {{own}} शामिल (1 आइटम)।",
+    "sentence_other": "आपके अपने खर्चों के {{own}} शामिल ({{count}} आइटम)।",
     "when": {
       "thisWeek": "इस सप्ताह",
       "lastWeek": "पिछले सप्ताह",
@@ -3078,7 +3079,8 @@
       "advance": "अग्रिम की वापसी",
       "escrow": "escrow, आपका रोका गया पैसा",
       "non_deductible": "कटौती योग्य नहीं",
-      "duplicate_fuel": "पहले से एक settlement में है"
+      "duplicate_fuel": "पहले से एक settlement में है",
+      "settlement_orphan": "अपने settlement पर पहले ही गिनी गई"
     },
     "duplicateTitle": "संभावित दोहराव",
     "duplicateBody": "{{date}} को {{amount}} उस पंक्ति जैसा दिखता है जिसे आपका कैरियर पहले ही काट चुका है ({{label}})। रखें या हटाएँ?",

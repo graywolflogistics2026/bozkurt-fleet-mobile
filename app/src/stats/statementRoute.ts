@@ -28,6 +28,9 @@ export type LedgerReason =
   // IMPORT GATE FIX 1.1: the part of a block's PRINTED total its read
   // lines do not explain — counted, so profit ties to the printed totals.
   | 'line_residual'
+  // A settlement-import row that lost its settlement link (kpi.ts
+  // isOrphanSettlementRow): its settlement already counts it.
+  | 'settlement_orphan'
   | StatementExcludeReason;
 
 export type StatementLedgerEntry = {

@@ -107,8 +107,20 @@ type KpiSettlement = ComparisonSettlement & { per_diem_days?: number | null; sta
 type KeptFlag = { id?: string; duplicate_kept_at?: string | null };
 type KpiDeduction = ComparisonDeduction & KeptFlag & { ded_date?: string | null; settlement_id?: string | null };
 type KpiFuel = ComparisonFuel & KeptFlag & { purchase_date?: string | null; fuel_type?: string | null; location?: string | null };
-type KpiMaintenance = ComparisonMaintenance & KeptFlag & { service_date?: string | null; settlement_id?: string | null };
-type KpiToll = ComparisonToll & KeptFlag & { toll_date?: string | null; settlement_id?: string | null };
+type KpiMaintenance = ComparisonMaintenance & KeptFlag & { service_date?: string | null; settlement_id?: string | null; source?: string | null };
+type KpiToll = ComparisonToll & KeptFlag & { toll_date?: string | null; settlement_id?: string | null; source?: string | null };
+
+// ORIGIN RULE, OWN-EXPENSE LAYER (owner 2026-11-13, device: Home counted
+// settlement-withheld lines as "your own expenses"). A row a settlement
+// import created (source 'settlement') belongs to that settlement. One
+// that has lost its settlement link is an orphan of an import: its
+// settlement (statement or lines) already counts it, so it never enters
+// the own-expense layer and never counts a second time; the explainer
+// lists it under "not counted". The own-expense layer = rows NOT created
+// by a settlement import.
+export function isOrphanSettlementRow(r: { source?: string | null; settlement_id?: string | null }): boolean {
+  return r.source === 'settlement' && !r.settlement_id;
+}
 // reimbursements carry no truck_id of their own — a settlement-linked one
 // follows its settlement's truck and week; an unlinked one (a manual
 // warranty credit) is a fleet-level row, matched by date only.
@@ -285,6 +297,19 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
   assertArray(inputs.reimbursements, 'reimbursements');
 
   const { trucks, loads, truckScope, manualMilesOverride, window } = inputs;
+  const orphanRows: OrphanRow[] = [
+    ...inputs.deductions.filter(isOrphanSettlementRow).map((d) => ({ table: 'deductions' as const, id: d.id ?? null, date: d.ded_date ?? null, label: d.description ?? '', category: d.category ?? null, amount: Number(d.amount ?? 0) })),
+    ...inputs.maintenanceRecords.filter(isOrphanSettlementRow).map((m) => ({ table: 'maintenance_records' as const, id: m.id ?? null, date: m.service_date ?? null, label: m.description ?? m.service_type ?? '', category: null, amount: Number(m.cost ?? 0) })),
+    ...inputs.tolls.filter(isOrphanSettlementRow).map((t) => ({ table: 'tolls' as const, id: t.id ?? null, date: t.toll_date ?? null, label: '', category: null, amount: Number(t.amount ?? 0) })),
+  ];
+  if (orphanRows.length > 0) {
+    inputs = {
+      ...inputs,
+      deductions: inputs.deductions.filter((d) => !isOrphanSettlementRow(d)),
+      maintenanceRecords: inputs.maintenanceRecords.filter((m) => !isOrphanSettlementRow(m)),
+      tolls: inputs.tolls.filter((t) => !isOrphanSettlementRow(t)),
+    };
+  }
 
   // filterRowsByDateWindow returns [] for a null window (it's meant for
   // "no rows match" callers, not "pass everything through") — this
@@ -408,7 +433,7 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
     fixedCostEstimateInCpm: fixedCostBasisTotal,
   });
 
-  const explanation = options.explain === false ? null : explainProfit(inputs, settlements, net, ledger, bridge.crossChecks.length);
+  const explanation = options.explain === false ? null : explainProfit(inputs, settlements, net, ledger, bridge.crossChecks.length, orphanRows, window);
 
   return {
     window,
@@ -445,7 +470,17 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
 
 // Layer A is computed independently — computeKpis() over the settlement-
 // linked rows only — so A − B − C = 0 is a real check, not a tautology.
-function explainProfit(inputs: KpiInputs, settlements: KpiSettlement[], profit: number, ledger: LedgerRow[], mismatchWeeks: number): ProfitExplanation {
+type OrphanRow = { table: 'deductions' | 'maintenance_records' | 'tolls'; id: string | null; date: string | null; label: string; category: string | null; amount: number };
+
+function explainProfit(
+  inputs: KpiInputs,
+  settlements: KpiSettlement[],
+  profit: number,
+  ledger: LedgerRow[],
+  mismatchWeeks: number,
+  orphanRows: OrphanRow[] = [],
+  window: KpiInputs['window'] = null
+): ProfitExplanation {
   const linked = <R extends { settlement_id?: string | null }>(rows: R[]) => rows.filter((r) => !!r.settlement_id);
   const settlementsOnly = computeKpis(
     {
@@ -492,7 +527,7 @@ function explainProfit(inputs: KpiInputs, settlements: KpiSettlement[], profit: 
   addKept('fuel_purchases', inputs.fuelPurchases);
   addKept('maintenance_records', inputs.maintenanceRecords);
   addKept('tolls', inputs.tolls);
-  return buildProfitExplanation({
+  const explanation = buildProfitExplanation({
     settlementsProfit: settlementsOnly.net,
     labels: settlements.map((s) => settlementVerification(s)),
     ledger,
@@ -501,6 +536,11 @@ function explainProfit(inputs: KpiInputs, settlements: KpiSettlement[], profit: 
     withheld,
     keptKeys,
   });
+  const inWindow = (d: string | null) => !window || (d != null && d >= window.startIso && d <= window.endIso);
+  const orphansShown = orphanRows
+    .filter((o) => inWindow(o.date))
+    .map((o, i) => ({ key: `orphan-${o.table}-${o.id ?? i}`, table: o.table, rowId: o.id, date: o.date, label: o.label, category: o.category, amount: Math.abs(o.amount), reason: 'settlement_orphan' as const }));
+  return orphansShown.length > 0 ? { ...explanation, notCounted: [...explanation.notCounted, ...orphansShown] } : explanation;
 }
 
 function buildProfitBridge(args: {

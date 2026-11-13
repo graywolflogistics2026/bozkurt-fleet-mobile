@@ -2816,7 +2816,8 @@
       "truck_extras": "Kamyon ekstraları — Kamyon Maliyet Tabanında izlenir",
       "owner_money_in": "Sahibin koyduğu para — gelir veya gider değil",
       "interest_income": "Faiz geliri — işletme kârı değil",
-      "line_residual": "Okunan satırların açıklamadığı tablo toplamı — basıldığı gibi sayıldı"
+      "line_residual": "Okunan satırların açıklamadığı tablo toplamı — basıldığı gibi sayıldı",
+      "settlement_orphan": "Settlement satırı artık kendi settlement kaydına bağlı değil — orada zaten sayıldı"
     },
     "empty": "Bu dönemde satır yok.",
     "showEveryRow": "Tüm satırları göster",
@@ -3046,8 +3047,8 @@
   },
   "profitExplainer": {
     "title": "Kârın nereden geliyor",
-    "sentence_one": "Settlement'larına göre kârın {{settlements}}. {{when}} kendi eklediğin {{own}} gider var (1 kalem), o yüzden kârın {{profit}}.",
-    "sentence_other": "Settlement'larına göre kârın {{settlements}}. {{when}} kendi eklediğin {{own}} gider var ({{count}} kalem), o yüzden kârın {{profit}}.",
+    "sentence_one": "Kendi giderlerinizden {{own}} dahil (1 kalem).",
+    "sentence_other": "Kendi giderlerinizden {{own}} dahil ({{count}} kalem).",
     "when": {
       "thisWeek": "Bu hafta",
       "lastWeek": "Geçen hafta",
@@ -3078,7 +3079,8 @@
       "advance": "avans geri ödemesi",
       "escrow": "escrow, tutulan kendi paran",
       "non_deductible": "indirilemez",
-      "duplicate_fuel": "zaten bir settlement'ta var"
+      "duplicate_fuel": "zaten bir settlement'ta var",
+      "settlement_orphan": "kendi settlement kaydında zaten sayıldı"
     },
     "duplicateTitle": "Olası mükerrer kayıt",
     "duplicateBody": "{{date}} tarihli {{amount}}, taşıyıcının zaten kestiği bir satıra benziyor ({{label}}). Tutulsun mu, silinsin mi?",

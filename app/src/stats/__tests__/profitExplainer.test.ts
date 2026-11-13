@@ -38,13 +38,13 @@ describe('buildProfitExplanation', () => {
   const ownLedger = [ledgerRow({ key: 'a', rowId: 'a', amount: 100 }), ledgerRow({ key: 'b', rowId: 'b', amount: 50 })];
   const base = { labels: ['verified_prime' as const], mismatchWeeks: 0, withheld: [], keptKeys: new Set<string>() };
 
-  it('the owner sentence, word for word (EN and TR)', () => {
+  it('the owner banner, one line, max 12 words (EN and TR; round 2 item B)', () => {
     const e = buildProfitExplanation({ ...base, settlementsProfit: 2534.36, ledger: ownLedger, profit: 2384.36 });
     expect(explanationSentence(e, translator(en), money, 'thisWeek')).toBe(
-      'Your settlements show $2,534.36 profit. You added $150.00 of your own expenses (2 items) this week, so your profit is $2,384.36.'
+      'Includes $150.00 of your own expenses (2 items).'
     );
     expect(explanationSentence(e, translator(tr), money, 'thisWeek')).toBe(
-      "Settlement'larına göre kârın $2,534.36. Bu hafta kendi eklediğin $150.00 gider var (2 kalem), o yüzden kârın $2,384.36."
+      'Kendi giderlerinizden $150.00 dahil (2 kalem).'
     );
   });
 
