@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Home period Cost/Mile (device: Yearly 1.52 / Profit/Mile 1.18 vs 1.29 / 1.42)
+- Cause: computeKpis() Cost/Mile = real expenses + the truck cost-basis estimate (trucks.cost_basis_*: loan payment, paid-price spread, warranty spread) × settlement weeks; the estimate was the only Cost/Mile term not in profit. Revenue, expenses and profit were right; only Cost/Mile and Profit/Mile (= RPM − CPM) were off. Rejected: capital/personal lines (excluded by class, replay CPM 1.29 with them present), per diem (never in computeKpis).
+- 65345d5 stats/kpi.ts: Cost/Mile = real expenses ÷ miles; bridge field fixedCostEstimateInCpm, Home cost-basis nudge (D6) and Scorecard "fixed spread" section removed. Per-Truck Profitability (truckComparison.ts) still uses the estimate. docs/decisions/golden-settlement.md #8 superseded.
+- 6c62448 data/__tests__/homePeriodTotals18.test.ts: 18 golden weeks through the real save; every Home period = the same weeks' settlement sums; Yearly/All 88,210.06 / 41,977.33 / 46,232.73 / 39,913.01 / 32,607 mi / 2.71 / 1.29 / 1.42 with a cost basis entered; Home = Settlements = Profit = Accountant Package note = bridge; own expense 10.00 moves expenses and profit by 10.00. Old kpi.ts fails 8 of its 10 tests.
+- No SQL, no Edge Function. eas update only.
+
 ## 2026-11-13 — K3: Prime codes 2S, SF, CU, NQ (PENDING_SQL §86)
 - Owner approved K3: 2S WAGES (Wages & Payroll Taxes (W-2)), SF EXPENSE_VARIABLE (Fuel & DEF), CU PERSONAL (Meals (per diem covered), not deductible), NQ EXPENSE_VARIABLE (ELD & Communications).
 - docs/PENDING_SQL.md §86 + pending_86.sql (idempotent insert-if-missing + update, read-only verification); docs/CARRIER_CODES.md new "owner-approved codes" table. No app code, no redeploy, no eas update.
