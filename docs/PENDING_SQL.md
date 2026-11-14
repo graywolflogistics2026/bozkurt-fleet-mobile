@@ -5617,7 +5617,7 @@ Mirror file: `pending_85.sql` (repo root).
 
 - [ ] 85 run
 
-## 86. PRIME CODES 2S, SF, CU, NQ (owner decision 2026-11-13, K3 approved) — NOT YET APPLIED
+## 86. PRIME CODES 2S, SF, CU, NQ (owner decision 2026-11-13, K3 approved) — ✅ APPLIED 2026-11-13
 
 Four Prime codes printed on real statements had no row in
 `carrier_code_maps`. The owner approved their classes (K3, 2026-11-13):
@@ -5676,9 +5676,9 @@ where carrier = 'PRIME INC' and code in ('2S', 'SF', 'CU', 'NQ') and sub_code is
 order by code;
 ```
 
-Mirror file: `pending_86.sql` (repo root).
+Mirror file `pending_86.sql` removed after the owner confirmed it was run (2026-11-13). Owner verify: 2S WAGES, SF EXPENSE_VARIABLE, CU PERSONAL, NQ EXPENSE_VARIABLE.
 
-- [ ] 86 run
+- [x] 86 run
 
 ## 87. PR OWNER MONEY IN BACKFILL, 07/17 ONLY (owner decision 2026-11-13) — ✅ APPLIED 2026-11-13
 
