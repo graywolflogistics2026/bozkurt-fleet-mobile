@@ -5754,7 +5754,7 @@ Mirror file `pending_87.sql` removed after the owner confirmed it was run (2026-
 
 - [x] 87 run
 
-## 88. CARRIER PAYROLL DRIVERS + BACKFILL 11/06, 11/13 (owner decision 2026-11-13) — NOT YET APPLIED
+## 88. CARRIER PAYROLL DRIVERS + BACKFILL 11/06, 11/13 (owner decision 2026-11-13) — ✅ APPLIED 2026-11-13
 
 Driver auto-link (driver-design.md + the owner's 9 points, 2026-11-13). A
 Prime week with a WAGE EXPENSE section (DF, DU, WC, WD, 2S lines "... FOR
@@ -5781,8 +5781,16 @@ driver step is a separate non-fatal write (the week saves; no driver).
 Order: run this, redeploy ai-import (the payroll recap read; the reader
 bundle changed), then `eas update`.
 
-Mirror file: `pending_88.sql` (repo root); the owner's copy is
-`driver-88.sql` on the Desktop (same text).
+Mirror file `pending_88.sql` removed after the owner confirmed it was run
+(2026-11-13); the SQL is inlined below.
+
+Owner verified (2026-11-13): BOZKME (PRIME INC, w2_employee,
+paid_via_carrier_payroll) with 2 payments, source 'settlement': 11/06
+665.11 / 60.73 / 79.66 / 805.50 and 11/13 913.06 / 76.85 / 109.15 /
+1,099.06; paid_weeks 2, ytd_total 1,904.56. FOLLOW-UP: the saved
+extractions had no "+ TEAM" on their revenue lines, so PART 2 set
+team_week false; the PDFs print "+ TEAM" on both weeks, and the owner set
+team_week = true on 11/06 and 11/13 with a separate update.
 
 ```sql
 -- §88 CARRIER PAYROLL DRIVERS (owner decision 2026-11-13). Safe to run twice.
@@ -6052,9 +6060,10 @@ from driver_payments
 where source = 'settlement' and date >= '2026-01-01';
 ```
 
-- [ ] 88 PART 1 preview checked
-- [ ] 88 PART 2 run
-- [ ] 88 PART 3 verified
+- [x] 88 PART 1 preview checked
+- [x] 88 PART 2 run
+- [x] 88 PART 3 verified
+- [x] 88 follow-up: team_week = true on 11/06 and 11/13 (owner)
 
 ## Also still open (not part of any pass above)
 

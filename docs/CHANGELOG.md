@@ -11,6 +11,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — §88 applied (owner verified)
+- BOZKME (PRIME INC, w2_employee, paid_via_carrier_payroll); 2 payments, source settlement: 11/06 665.11 / 60.73 / 79.66 / 805.50, 11/13 913.06 / 76.85 / 109.15 / 1,099.06; paid_weeks 2, ytd 1,904.56. pending_88.sql removed, SQL inlined in §88.
+- team_week follow-up: the saved extractions had no "+ TEAM" on their revenue lines (PART 2 set false); the PDFs print it on both weeks, so the owner set team_week = true on 11/06 and 11/13 by a separate update. Live reads of "+ TEAM" still unconfirmed for new imports.
+
 ## 2026-11-13 — Carrier payroll drivers (§88, driver auto-link approved)
 - A Prime week with a WAGE EXPENSE section creates/updates the driver by (carrier, code from the WD line) and one driver_payments row per week (wages WD+2S, taxes DF+DU, work comp WC, total = TOTAL WAGE EXPENSE; source 'settlement'). Never from fuel lines or driverName. New: import/carrierPayroll.ts, data/carrierPayrollSave.ts (non-fatal write in saveExtraction).
 - Name from the DRIVERS PAYROLL RECAP page via the existing attachment read (new kind payroll_recap; no extra call). Missing name -> driver named by its code, Drivers screen asks "Who is <code>?".

@@ -1123,9 +1123,6 @@ under each is unchanged original wording.
   - §85 Diagnostics functions from pg_proc — NOT YET APPLIED,
     `pending_85.sql` at the repo root. Until it runs, Diagnostics uses the
     old probe and says "(probe)".
-  - §88 carrier payroll drivers — NOT YET APPLIED, `pending_88.sql`
-    (Desktop `driver-88.sql`). Until it runs, an import saves the week
-    without the driver (non-fatal). `docs/decisions/driver-carrier-payroll.md`.
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
     applied and ai-import redeployed — owner confirmed 2026-10-17, their
@@ -1136,7 +1133,9 @@ under each is unchanged original wording.
     here. §84 applied — owner verified 2026-11-03, `pending_84.sql`
     removed, SQL inlined. §86 (Prime codes 2S, SF, CU, NQ) and §87 (PR
     backfill 07/17) applied — owner verified 2026-11-13, `pending_86.sql`
-    and `pending_87.sql` removed, SQL inlined.)
+    and `pending_87.sql` removed, SQL inlined. §88 (carrier payroll
+    drivers + backfill 11/06, 11/13) applied — owner verified 2026-11-13,
+    `pending_88.sql` removed, SQL inlined.)
 - **Native build**: batch E (document scanner, version 1.1.0) needs
   `eas build --profile preview --platform android`; OTA updates published
   after it only reach 1.1.0 builds. Earlier: the owner's device reported "embedded build (no OTA
