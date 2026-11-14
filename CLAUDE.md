@@ -1124,8 +1124,6 @@ under each is unchanged original wording.
     old probe and says "(probe)".
   - §86 Prime codes 2S, SF, CU, NQ (K3) — NOT YET APPLIED,
     `pending_86.sql` at the repo root. Reference data only.
-  - §87 PR owner money in backfill, 07/17 only — NOT YET APPLIED,
-    `pending_87.sql` at the repo root (code fix 100e768).
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
     applied and ai-import redeployed — owner confirmed 2026-10-17, their
@@ -1134,7 +1132,8 @@ under each is unchanged original wording.
     applied — owner confirmed 2026-10-31, mirror files removed, SQL
     inlined; the batch C ai-import redeploy (milesLines) is not tracked
     here. §84 applied — owner verified 2026-11-03, `pending_84.sql`
-    removed, SQL inlined.)
+    removed, SQL inlined. §87 (PR backfill 07/17) applied — owner
+    verified 2026-11-13, `pending_87.sql` removed, SQL inlined.)
 - **Native build**: batch E (document scanner, version 1.1.0) needs
   `eas build --profile preview --platform android`; OTA updates published
   after it only reach 1.1.0 builds. Earlier: the owner's device reported "embedded build (no OTA

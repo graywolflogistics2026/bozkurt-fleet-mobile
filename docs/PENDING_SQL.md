@@ -5680,7 +5680,7 @@ Mirror file: `pending_86.sql` (repo root).
 
 - [ ] 86 run
 
-## 87. PR OWNER MONEY IN BACKFILL, 07/17 ONLY (owner decision 2026-11-13) — NOT YET APPLIED
+## 87. PR OWNER MONEY IN BACKFILL, 07/17 ONLY (owner decision 2026-11-13) — ✅ APPLIED 2026-11-13
 
 Device (SQL A, 2026-11-13): 07/17 lines_not_saved = true, statement PR total
 3,999.00, no PR row, no contribution; 08/21 already has its PR row and its
@@ -5750,9 +5750,9 @@ where c.note like '%owner money in%'
 order by c.tx_date;
 ```
 
-Mirror file: `pending_87.sql` (repo root).
+Mirror file `pending_87.sql` removed after the owner confirmed it was run (2026-11-13). Owner verify: 07/17 3,999.00 and 08/21 1.00 (contribution), deduction_amount -3,999.00 and -1.00.
 
-- [ ] 87 run
+- [x] 87 run
 
 ## Also still open (not part of any pass above)
 
