@@ -130,36 +130,19 @@ describe('buildPeriodScopedCpm — a dataset spanning several months, each perio
   });
 });
 
-describe('buildPeriodScopedCpm — fixed cost pro-ration', () => {
+// Owner 2026-11-13 (Home Yearly Cost/Mile 1.52 vs 1.29): the truck cost
+// basis (paid / loan / warranty) is never part of Cost/Mile, in any window.
+describe('buildPeriodScopedCpm — truck cost basis is never in Cost/Mile', () => {
   const truckWithCostBasis: ComparisonTruck = {
     ...truckA,
     cost_basis_ownership_mode: 'paid',
     purchase_price: 52000,
-    cost_basis_paid_spread_months: 52, // -> $1000/month -> ~$230.769/week
+    cost_basis_paid_spread_months: 52,
   };
-  const weeklyFixed = ((52000 / 52) * 12) / 52;
 
-  it('"This Week" (1 settlement) charges exactly ONE week of fixed cost — never a multi-week lump sum', () => {
-    const result = buildPeriodScopedCpm(
-      'thisWeek',
-      weekEndings,
-      [truckWithCostBasis],
-      settlements,
-      [],
-      [],
-      [],
-      [],
-      [],
-      [], 'ta',
-      undefined,
-      now
-    );
-    expect(result.cpm!.costPerMile).toBeCloseTo(weeklyFixed / 500, 4);
-  });
-
-  it('"1M" (4 settlements) charges exactly FOUR weeks of fixed cost — pro-rated to the window, not a flat one-week charge', () => {
-    const result = buildPeriodScopedCpm('1M', weekEndings, [truckWithCostBasis], settlements, [], [], [], [], [], [], 'ta', undefined, now);
-    const miles = 500 * 4;
-    expect(result.cpm!.costPerMile).toBeCloseTo((weeklyFixed * 4) / miles, 4);
+  it.each(['thisWeek', '1M'] as const)('%s: no expenses -> Cost/Mile 0 although a cost basis is entered', (period) => {
+    const result = buildPeriodScopedCpm(period, weekEndings, [truckWithCostBasis], settlements, [], [], [], [], [], [], 'ta', undefined, now);
+    expect(result.cpm!.costPerMile).toBe(0);
+    expect(result.cpm!.profitPerMile).toBeCloseTo(result.cpm!.revenuePerMile!, 10);
   });
 });

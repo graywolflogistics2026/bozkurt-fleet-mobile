@@ -243,7 +243,8 @@ lines, read-only). Tax side: invariant #1. Full:
 **Golden settlement (profit oracle).** Reimbursements OFFSET expenses
 (never revenue, every carrier); the duplicate-fuel guard is per row;
 settlement-linked fuel/reimbursements follow their settlement's week;
-the truck fixed-cost estimate is in CPM/PPM only, never in profit.
+the truck cost-basis estimate is in neither profit nor Home/Scorecard
+CPM (2026-11-13; only Per-Truck Profitability uses it).
 `app/src/data/__tests__/goldenPrimeSettlement.test.ts` asserts the real
 Prime week (profit 2,533.36 since 2026-11-03: every PR is owner money in)
 on every profit screen — it must stay green.

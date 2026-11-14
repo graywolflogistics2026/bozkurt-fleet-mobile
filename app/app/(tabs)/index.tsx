@@ -28,7 +28,7 @@ import { buildWeeklyTrueProfitTrend, filterSettlementLinkedRowsToWindow } from '
 import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { buildPeriodScopedCpm } from '@/src/stats/periodScopedCpm';
 import { matchesTruckScope } from '@/src/stats/kpi';
-import { LedgerList, ProfitBridgeView, hasExcludedTruckExtras } from '@/src/components/ProfitAudit';
+import { LedgerList, ProfitBridgeView } from '@/src/components/ProfitAudit';
 import { ProfitExplainerCard, ProfitExplainerLine } from '@/src/components/ProfitExplainer';
 import { buildExpenseTotalExplainer } from '@/src/stats/expenseTotalExplainer';
 import { resolveHeroPeriodDateWindow, filterRowsByDateWindow } from '@/src/stats/heroPeriodWindow';
@@ -1102,11 +1102,6 @@ export default function Dashboard() {
     const ids = new Set(periodScopedCpm.kpi?.bridge.weeks.map((w) => w.settlementId) ?? []);
     return (settlementsQuery.data ?? []).filter((s) => ids.has(s.id));
   }, [periodScopedCpm, settlementsQuery.data]);
-  // D6: OPERATOR TRK EXTRAS excluded in this window, and no cost basis /
-  // warranty entered on the truck(s) in scope — show the unlock nudge.
-  const truckExtrasNeedCostBasis =
-    hasExcludedTruckExtras(periodScopedCpm.kpi) &&
-    (activeTruck ? [activeTruck] : trucks).some((tr) => !tr.cost_basis_ownership_mode && !tr.cost_basis_warranty_cost);
   // Both truck-scoped (scopedFuel/scopedDeductions, from the earlier
   // MULTI-TRUCK MODEL pass) AND period-scoped (via heroWindow) — the SAME
   // two-axis filtering the per-mile trio's own buildPeriodScopedCpm()
@@ -1489,7 +1484,7 @@ export default function Dashboard() {
               when={heroPeriod === 'thisWeek' ? 'thisWeek' : heroPeriod === 'lastWeek' ? 'lastWeek' : 'period'}
               onNavigate={() => setProfitBridgeOpen(false)}
             />
-            <ProfitBridgeView kpi={periodScopedCpm.kpi} settlements={heroWindowSettlements} truckExtrasNeedCostBasis={truckExtrasNeedCostBasis} />
+            <ProfitBridgeView kpi={periodScopedCpm.kpi} settlements={heroWindowSettlements} />
           </>
         ) : (
           <MutedText>{t('dashboard.profitBridge.empty')}</MutedText>

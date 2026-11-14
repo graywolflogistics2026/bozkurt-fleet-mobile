@@ -68,11 +68,15 @@ money in — PERSONAL PYMNT RCV — never an expense offset).
    Any unexplained difference is shown, never hidden. No deposit columns
    (owner decision: older weeks have none, so the bridge would start from
    different figures on different weeks).
-8. **Truck fixed-cost estimate**: in CPM/PPM only. This Week's Profit
-   (`computeKpis().net`) does NOT include it; the bridge states it as a
-   note. RPM − CPM = PPM holds everywhere. Exception kept as-is and
-   asserted by the test: Per-Truck Profitability's own `netProfit`
-   (`buildTruckComparison()`) DOES subtract it.
+8. **Truck fixed-cost estimate** (`trucks.cost_basis_*`): SUPERSEDED
+   2026-11-13 (owner, device: Home Yearly Cost/Mile 1.52 vs 1.29). It is
+   in neither profit nor Cost/Mile: `computeKpis()` Cost/Mile = the
+   window's real expenses (statement weeks + own receipts) ÷ miles, the
+   same expenses as profit, so Profit/Mile = profit ÷ miles. The bridge
+   note, Home's cost-basis nudge and Scorecard's "fixed spread" section
+   are gone. Exception kept, asserted by the test: Per-Truck
+   Profitability (`buildTruckComparison()`) still uses it. Test:
+   `app/src/data/__tests__/homePeriodTotals18.test.ts`.
 
 ## The eight traps (each has its own test)
 

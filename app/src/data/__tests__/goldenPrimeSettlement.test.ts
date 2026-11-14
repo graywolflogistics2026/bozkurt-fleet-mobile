@@ -495,7 +495,6 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
     expect(b.standaloneFuel).toBe(0);
     expect(b.difference).toBe(0);
     expect(r2(b.profit)).toBe(KEY.profit);
-    expect(b.fixedCostEstimateInCpm).toBe(0);
     // Line route starts from net due; the deposit is read, never computed.
     expect(settlementDeposit(rows.settlements[0]).deposited).toBe(KEY.deposit);
     expect(r2(KEY.deposit + KEY.nonExpenses - KEY.interest - KEY.personalPayment)).toBe(KEY.profit);
@@ -503,7 +502,7 @@ describe.each<Shape>(['both', 'fuelListOnly', 'mixed'])('golden settlement, fuel
 });
 
 // =====================================================================
-describe('truck fixed-cost estimate — in CPM/PPM only, never in profit (owner decision 2026-10-13)', () => {
+describe('truck fixed-cost estimate — in neither profit nor Cost/Mile (owner 2026-11-13, supersedes 2026-10-13)', () => {
   let rows: Rows;
   beforeAll(async () => {
     rows = await importGolden(goldenExtraction('both'));
@@ -515,13 +514,11 @@ describe('truck fixed-cost estimate — in CPM/PPM only, never in profit (owner 
     expect(r2(k.net)).toBe(KEY.profit);
   });
 
-  test('cost basis entered -> CPM = 0.97 + weekly estimate / 2,327; This Week\'s Profit unchanged; RPM − CPM = PPM', () => {
+  test('cost basis entered -> CPM stays 0.97 (real expenses / miles); profit unchanged; RPM − CPM = PPM', () => {
     const k = weekKpi(rows, WITH_COST_BASIS);
-    expect(k.cpm!).toBeCloseTo(KEY.expenses / KEY.miles + WEEKLY_ESTIMATE / KEY.miles, 10);
+    expect(k.cpm!).toBeCloseTo(KEY.expenses / KEY.miles, 10);
     expect(r2(k.net)).toBe(KEY.profit);
     expect(k.ppm!).toBeCloseTo(k.rpm! - k.cpm!, 10);
-    // Shown as its own note on the bridge, never a hidden subtraction.
-    expect(k.bridge.fixedCostEstimateInCpm).toBeCloseTo(WEEKLY_ESTIMATE, 6);
     expect(k.bridge.difference).toBe(0);
     expect(r2(k.bridge.profit)).toBe(KEY.profit);
 

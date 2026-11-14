@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Pressable, Share, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { MutedText, SecondaryButton } from '@/src/components/ui';
 import { useFormatters } from '@/src/i18n/format';
@@ -95,16 +94,11 @@ export function ShareAuditButton({ kpi, settlements }: { kpi: KpiResult; settlem
 export function ProfitBridgeView({
   kpi,
   settlements,
-  truckExtrasNeedCostBasis,
 }: {
   kpi: KpiResult;
   settlements: AuditSettlement[];
-  // D6: OPERATOR TRK EXTRAS was excluded and the truck has no cost basis
-  // or warranty entered — show the existing unlock nudge.
-  truckExtrasNeedCostBasis: boolean;
 }) {
   const { t } = useTranslation();
-  const router = useRouter();
   const { money: moneyFmt, date } = useFormatters();
   const money = (n: number) => moneyFmt(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [showRows, setShowRows] = useState(false);
@@ -204,16 +198,6 @@ export function ProfitBridgeView({
         </MutedText>
       ))}
       <MutedText style={{ marginTop: spacing.sm, fontSize: typography.size.xs }}>{t('dashboard.profitBridge.reimbursementNote')}</MutedText>
-      {bridge.fixedCostEstimateInCpm > 0 && (
-        <MutedText style={{ marginTop: spacing.xs, fontSize: typography.size.xs }}>
-          {t('dashboard.profitBridge.fixedCostNote', { amount: money(bridge.fixedCostEstimateInCpm) })}
-        </MutedText>
-      )}
-      {truckExtrasNeedCostBasis && (
-        <Pressable onPress={() => router.push('/(tabs)/more/trucks')}>
-          <MutedText style={{ marginTop: spacing.xs, color: colors.accent }}>{t('scorecard.whyFixedSpreadNotSet')}</MutedText>
-        </Pressable>
-      )}
       <SecondaryButton title={showRows ? t('audit.hideRows') : t('audit.showEveryRow')} onPress={() => setShowRows((v) => !v)} />
       {showRows && (
         <View>
@@ -230,9 +214,4 @@ export function ProfitBridgeView({
       <ShareAuditButton kpi={kpi} settlements={settlements} />
     </View>
   );
-}
-
-// D6 helper: was OPERATOR TRK EXTRAS excluded in this period?
-export function hasExcludedTruckExtras(kpi: KpiResult | null | undefined): boolean {
-  return !!kpi?.ledger.some((r) => r.reason === 'truck_extras' && r.amount > 0);
 }

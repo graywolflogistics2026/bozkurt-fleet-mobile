@@ -27,8 +27,8 @@
 //      per-mile operating-cost view (src/stats/cpm.ts's
 //      calcCanonicalCpm()): EXCLUDES a major one-off repair/vehicle
 //      purchase (so a single big bill doesn't spike a per-mile ratio to
-//      something meaningless) but INCLUDES the truck's own fixed
-//      cost-basis estimate. `ppm` is always exactly `rpm − cpm`.
+//      something meaningless). Since 2026-11-13 it never includes the
+//      truck cost-basis estimate (see computeKpis). `ppm` = `rpm − cpm`.
 //
 // NULL-TRUCK EXCLUSION FIX (owner decision, device report: "the new KPI
 // engine is dropping most of my data" — expenses reading $0, Scorecard
@@ -72,8 +72,7 @@
 // truck" can never diverge in how they treat a null-truck row.
 import { calcMiles, resolveMilesTotal, type LoadMilesInput, type WeekMiles } from '@/src/stats/miles';
 import { onePerStatementWeek } from '@/src/stats/heldByCarrier';
-import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CpmBucket, type CpmExcludedOneOff } from '@/src/stats/cpm';
-import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
+import { calcCanonicalCpm, type CpmBucket, type CpmExcludedOneOff } from '@/src/stats/cpm';
 import {
   canonicalExpenseBreakdown,
   filterSettlementLinkedRowsToWindow,
@@ -163,8 +162,8 @@ export type KpiResult = {
   net: number;
   // `total` is the TRUE-PROFIT expense total (gross - net, one-offs
   // INCLUDED). `fixed`/`variable` are the NARROWER per-mile-CPM
-  // breakdown (one-offs EXCLUDED, the truck's own fixed cost basis
-  // INCLUDED) — `fixed + variable` will NOT generally equal `total`, by
+  // breakdown (one-offs EXCLUDED; never the truck cost-basis estimate,
+  // owner 2026-11-13) — `fixed + variable` will NOT generally equal `total`, by
   // design; see this module's header comment for why both are real,
   // legitimately different figures.
   expenses: { total: number; fixed: number; variable: number };
@@ -216,8 +215,7 @@ export type KpiResult = {
 // filtered rows computeKpis() uses, so it always lands on `net`.
 // `difference` is whatever the saved rows do not explain (e.g. a
 // settlement saved with lines missing) — shown, never hidden. The truck
-// fixed-cost estimate is NOT part of profit (it feeds CPM/PPM only), so
-// it is reported separately as information, never as a bridge line.
+// cost-basis estimate is in neither profit nor Cost/Mile (2026-11-13).
 export type ProfitBridgeLine = { description: string; category: string | null; amount: number };
 export type ProfitBridge = {
   // Net due of every week that is NOT statement-backed.
@@ -242,7 +240,6 @@ export type ProfitBridge = {
   reimbursementsNotOnSettlement: number;
   difference: number;
   profit: number;
-  fixedCostEstimateInCpm: number;
   // Item 6: weeks whose line items differ from Prime's statement by > $1.
   crossChecks: { settlementId: string; weekEnding: string | null; lineExpenses: number; statementExpenses: number; difference: number }[];
   // Part 2: every week's source label.
@@ -301,7 +298,7 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
   assertArray(inputs.tolls, 'tolls');
   assertArray(inputs.reimbursements, 'reimbursements');
 
-  const { trucks, loads, truckScope, manualMilesOverride, window } = inputs;
+  const { loads, truckScope, manualMilesOverride, window } = inputs;
   const settlementDocIds = new Set(
     inputs.settlements.map((s) => (s as { document_id?: string | null }).document_id).filter((id): id is string => !!id)
   );
@@ -383,26 +380,15 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
   const trueExpenses = lineBreakdown.total + statementExpenses;
   const net = grossRevenue - trueExpenses;
 
-  // Fixed cost basis: a scoped truck charges only ITS OWN weekly cost ×
-  // its own (null-inclusive) settlement count; "All Trucks" sums every
-  // real truck's own cost basis × its own settlement count (a null-truck
-  // settlement contributes no truck payment to anyone — there's no truck
-  // to charge it against).
-  const carrierWithholdsLoan = carrierWithholdsLoanPayment(deductions);
-  let fixedCostBasisTotal = 0;
-  if (truckScope) {
-    const truck = trucks.find((t) => t.id === truckScope);
-    if (truck) {
-      const truckOwnSettlementCount = windowedSettlements.filter((s) => s.truck_id === truckScope).length;
-      fixedCostBasisTotal = calcTruckCostBasisWeekly(truck, carrierWithholdsLoan).weeklyFixedTotal * truckOwnSettlementCount;
-    }
-  } else {
-    fixedCostBasisTotal = trucks.reduce((sum, tr) => {
-      const count = windowedSettlements.filter((s) => s.truck_id === tr.id).length;
-      return sum + calcTruckCostBasisWeekly(tr, carrierWithholdsLoan).weeklyFixedTotal * count;
-    }, 0);
-  }
-
+  // PERIOD TOTALS = SETTLEMENT FIGURES (owner 2026-11-13, device: Home
+  // Yearly Cost/Mile 1.52 vs 1.29 on the 18 golden weeks). Cost/Mile is the
+  // window's REAL expenses (statement-backed weeks + own receipts, the
+  // same figure as profit) per mile, never the truck cost-basis estimate
+  // (trucks.cost_basis_*: a loan payment, a purchase price or a warranty
+  // spread over weeks). That estimate is capital, not a business expense:
+  // it was the only term in Cost/Mile that was not in profit, so Home's
+  // Profit/Mile disagreed with profit ÷ miles. Per-Truck Profitability
+  // (truckComparison.ts) still shows it, as its own documented exception.
   const milesResult = calcMiles(settlements, filteredLoads);
   const milesSource = resolveMilesTotal({ totalMiles: milesResult.totalMiles }, truckScope ? manualMilesOverride : undefined);
 
@@ -414,8 +400,7 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
     layers.maintenanceRecords,
     layers.tolls,
     layers.reimbursements,
-    layers.statementWeeks,
-    fixedCostBasisTotal
+    layers.statementWeeks
   );
 
   // DEPOSITED (owner decision 2026-10-13) — a sum of each week's PRINTED
@@ -439,7 +424,6 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
     layers,
     allLinked: { deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements },
     profit: net,
-    fixedCostEstimateInCpm: fixedCostBasisTotal,
   });
 
   const explanation = options.explain === false ? null : explainProfit(inputs, settlements, net, ledger, bridge.crossChecks.length, orphanRows, window);
@@ -563,9 +547,8 @@ function buildProfitBridge(args: {
     reimbursements: KpiReimbursement[];
   };
   profit: number;
-  fixedCostEstimateInCpm: number;
 }): ProfitBridge {
-  const { settlements, layers, allLinked, profit, fixedCostEstimateInCpm } = args;
+  const { settlements, layers, allLinked, profit } = args;
   const { deductions, fuelPurchases, maintenanceRecords, tolls, reimbursements } = layers;
   const backed = layers.backedSettlementIds;
 
@@ -638,7 +621,6 @@ function buildProfitBridge(args: {
     reimbursementsNotOnSettlement,
     difference: difference === 0 ? 0 : difference,
     profit,
-    fixedCostEstimateInCpm,
     crossChecks,
     weeks,
     estimateFromLineItems: weeks.some((w) => w.verification === 'unverified'),

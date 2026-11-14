@@ -16,8 +16,6 @@ import { useUpdateTruck, useTrucksList } from '@/src/data/trucks';
 import { useLoads } from '@/src/data/loads';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { calcScorecard, type ScorecardGrade } from '@/src/stats/scorecard';
-import { carrierWithholdsLoanPayment } from '@/src/stats/cpm';
-import { calcTruckCostBasisWeekly } from '@/src/stats/truckCostBasis';
 import { computeKpis, matchesTruckScope } from '@/src/stats/kpi';
 import { buildWeeklyTrueProfitTrend } from '@/src/stats/trueProfit';
 import { buildTruckComparison } from '@/src/stats/truckComparison';
@@ -231,18 +229,8 @@ export default function Scorecard() {
     return calcScorecard(statsQuery.data.grossRevenue, statsQuery.data.totalDeductions, statsQuery.data.totalMiles, fuelCost);
   }, [statsQuery.data, fuelCost]);
 
-  // TRUCK COST BASIS (owner decision 2026-08-05, FULL PARITY follow-up
-  // item C.1-2) — the active truck's OWN declared ownership cost
-  // (paid/loan/lease + extended warranty), NEVER a synthetic estimate
-  // summed from every Loan Center row on the account (the approach that
-  // produced $8.48/mi on web). See src/stats/truckCostBasis.ts for the
-  // full rule set.
-  const carrierWithholdsLoan = useMemo(() => carrierWithholdsLoanPayment(dedQuery.data ?? []), [dedQuery.data]);
-
-  const truckCostBasis = useMemo(() => {
-    if (!activeTruck) return null;
-    return calcTruckCostBasisWeekly(activeTruck, carrierWithholdsLoan);
-  }, [activeTruck, carrierWithholdsLoan]);
+  // The truck cost basis is no longer part of Cost/Mile (owner 2026-11-13,
+  // src/stats/kpi.ts): the "Why?" sheet no longer shows its weekly spread.
 
   // KPI CONSISTENCY (owner decision, device report: "Weekly Net Trend rows
   // are offset by one... same week, three different nets"). Root cause:
@@ -616,34 +604,6 @@ export default function Scorecard() {
           <MutedText style={{ fontWeight: '700' }}>{t('scorecard.whyVariableTotal')}</MutedText>
           <Text style={{ color: colors.text, fontWeight: '700' }}>{money(kpi.expenses.variable)}</Text>
         </View>
-
-        {truckCostBasis && (
-          <>
-            <Text style={styles.whySectionTitle}>{t('scorecard.whyFixedSpreadTitle')}</Text>
-            {!truckCostBasis.isConfigured ? (
-              <MutedText>{t('scorecard.whyFixedSpreadNotSet')}</MutedText>
-            ) : (
-              <>
-                <View style={styles.row}>
-                  <MutedText>{t('scorecard.whyOwnershipMode')}</MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>
-                    {t(`scorecard.ownershipMode.${activeTruck?.cost_basis_ownership_mode ?? 'paid'}`)}
-                  </Text>
-                </View>
-                <View style={[styles.row, styles.rowBorder]}>
-                  <MutedText>{t('scorecard.whyWeeklyTruckPayment')}</MutedText>
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyTruckPayment)}</Text>
-                </View>
-                {truckCostBasis.weeklyWarranty > 0 && (
-                  <View style={[styles.row, styles.rowBorder]}>
-                    <MutedText>{t('scorecard.whyWeeklyWarranty')}</MutedText>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>{money(truckCostBasis.weeklyWarranty)}</Text>
-                  </View>
-                )}
-              </>
-            )}
-          </>
-        )}
 
         {kpi.excludedOneOffs.length > 0 && (
           <>
