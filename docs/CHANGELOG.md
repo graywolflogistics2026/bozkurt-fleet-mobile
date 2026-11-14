@@ -11,6 +11,15 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-14 — Toll double counts: Cash Flow spend and Profit Audit cross-check
+
+Both now use the Tolls & Fees rule through `tollRuleByIndex()` (`app/src/stats/tollsSummary.ts`, a thin index-keyed wrapper over `buildTollsSummary()`).
+- `buildSpendEvents()` (`cashFlowForecast.ts`): a `tolls` row covered by a toll/fee line of its own settlement is no spend event; settlement toll rows dated by week ending. Also feeds the Cash Flow monthly history (`cash-flow.tsx`).
+- Profit Audit cross-check (`kpi.ts` `countedTollsOf()`): a week's itemized tolls rows no longer count on top of its toll line (09/18: the +66.72 is gone). `ProfitAudit.tsx` unchanged.
+- Fixture: Tolls & Scales 12-week spend 893.94 -> 826.97 (-66.97 = itemized rows in the window).
+- Profit, Home, KPI headlines, Capital, import, Tolls & Fees and Accountant Package unchanged. Tests: `tollsDoubleCount.test.ts`.
+- Ship: no SQL, no redeploy, `eas update`.
+
 ## 2026-11-14 — Accountant Package tolls: the Tolls & Fees rule, no double count
 
 `buildLineItems()` (`app/src/stats/accountantPackage.ts`) now calls `buildTollsSummary()` (`tollsSummary.ts`, f62b115) instead of adding every `tolls` row on top of the toll deductions.

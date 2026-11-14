@@ -498,7 +498,8 @@ export default function CashFlow() {
         fuelQuery.data ?? [],
         maintenanceQuery.data ?? [],
         tollsQuery.data ?? [],
-        MONTHLY_ALL_TIME_START_ISO
+        MONTHLY_ALL_TIME_START_ISO,
+        settlementsQuery.data ?? []
       ),
       allSettlements: settlementsQuery.data ?? [],
       periodicItems: buildPeriodicItemsInRange(

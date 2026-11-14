@@ -162,3 +162,64 @@ export function buildTollsSummary(input: {
   const scales = r2(entries.filter((e) => e.kind === 'scales').reduce((s, e) => s + e.amount, 0));
   return { entries, tolls, scales, total: r2(tolls + scales) };
 }
+
+// THE SAME RULE FOR ROWS WITHOUT IDS (owner 2026-11-14): Cash Flow's spend
+// events and the Profit Audit cross-check hold rows that may carry no id.
+// This runs buildTollsSummary() over them keyed by array index and answers:
+// - deductionDate: index -> date for each "Tolls & Scales" deduction (its
+//   settlement's week ending, else its own date);
+// - countedTolls: index -> date for each tolls row that counts (not
+//   covered by a toll/fee line of its own settlement). A tolls row absent
+//   from this map is a breakdown row and is never added again.
+export type TollRuleDeduction = {
+  category?: string | null;
+  description?: string | null;
+  code?: string | null;
+  amount?: number | null;
+  ded_date?: string | null;
+  settlement_id?: string | null;
+  source?: string | null;
+};
+export type TollRuleToll = {
+  plaza?: string | null;
+  network?: string | null;
+  amount?: number | null;
+  toll_date?: string | null;
+  settlement_id?: string | null;
+  source?: string | null;
+};
+export type TollRuleSettlement = { id?: string | null; week_ending?: string | null; carrier?: string | null };
+
+export function tollRuleByIndex(
+  deductions: ReadonlyArray<TollRuleDeduction>,
+  tolls: ReadonlyArray<TollRuleToll>,
+  settlements: ReadonlyArray<TollRuleSettlement> = []
+): { deductionDate: Map<number, string | null>; countedTolls: Map<number, string | null> } {
+  const summary = buildTollsSummary({
+    deductions: deductions.map((d, i) => ({
+      id: String(i),
+      category: d.category ?? null,
+      description: d.description ?? null,
+      code: d.code ?? null,
+      amount: d.amount ?? null,
+      ded_date: d.ded_date ?? null,
+      settlement_id: d.settlement_id ?? null,
+      source: d.source ?? null,
+    })),
+    tolls: tolls.map((t, i) => ({
+      id: String(i),
+      plaza: t.plaza ?? null,
+      network: t.network ?? null,
+      amount: t.amount ?? null,
+      toll_date: t.toll_date ?? null,
+      settlement_id: t.settlement_id ?? null,
+      source: t.source ?? null,
+    })),
+    settlements: settlements.filter((s): s is TollRuleSettlement & { id: string } => !!s.id).map((s) => ({ id: s.id, week_ending: s.week_ending ?? null, carrier: s.carrier ?? null })),
+    period: 'all',
+  });
+  const deductionDate = new Map<number, string | null>();
+  const countedTolls = new Map<number, string | null>();
+  for (const e of summary.entries) (e.table === 'deductions' ? deductionDate : countedTolls).set(Number(e.id), e.date);
+  return { deductionDate, countedTolls };
+}

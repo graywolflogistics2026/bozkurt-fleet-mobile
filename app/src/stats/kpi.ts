@@ -91,6 +91,18 @@ import { filterRowsByDateWindow, type DateWindow } from '@/src/stats/heroPeriodW
 import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { isOrphanSettlementRow, settlementDocumentIds, type OriginRow } from '@/src/stats/ownExpenseOrigin';
 import { buildProfitExplanation, type ProfitExplanation, type WithheldLine } from '@/src/stats/profitExplainer';
+import { tollRuleByIndex } from '@/src/stats/tollsSummary';
+
+// CROSS-CHECK TOLLS (owner 2026-11-14): the Tolls & Fees rule
+// (tollsSummary.ts) — a week's itemized tolls rows under its own toll/fee
+// line are that line's breakdown, never counted on top of it.
+function countedTollsOf<T extends { settlement_id?: string | null }>(
+  deductions: ReadonlyArray<Parameters<typeof tollRuleByIndex>[0][number]>,
+  tolls: T[]
+): T[] {
+  const { countedTolls } = tollRuleByIndex(deductions, tolls as ReadonlyArray<Parameters<typeof tollRuleByIndex>[1][number]>);
+  return tolls.filter((_, i) => countedTolls.has(i));
+}
 
 export type { DateWindow };
 
@@ -586,7 +598,7 @@ function buildProfitBridge(args: {
         linked(allLinked.deductions),
         linked(allLinked.fuelPurchases),
         linked(allLinked.maintenanceRecords),
-        linked(allLinked.tolls),
+        countedTollsOf(linked(allLinked.deductions), linked(allLinked.tolls)),
         linked(allLinked.reimbursements)
       ).total;
       return { settlementId: w.settlementId, weekEnding: w.weekEnding, lineExpenses, statementExpenses: w.expenses, difference: Math.round((lineExpenses - w.expenses) * 100) / 100 };

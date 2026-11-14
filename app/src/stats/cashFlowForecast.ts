@@ -1,4 +1,5 @@
 import { settlementDeposit, type SettlementStatement } from '@/src/import/settlementStatement';
+import { tollRuleByIndex, type TollRuleSettlement } from '@/src/stats/tollsSummary';
 // CASH FLOW 30-DAY FORECAST — BUILT FROM THE USER'S OWN DATA (owner
 // decision, binding — replaces the earlier manual-budget-entry design in
 // full). The forecast used to require the user to type 5 weekly budget
@@ -63,11 +64,14 @@ type DeductionLike = {
   description: string | null;
   source?: string | null;
   tax_deductible: boolean | null;
+  code?: string | null;
+  settlement_id?: string | null;
 };
 type FuelLike = { purchase_date: string | null; amount: number | null; discount: number | null; location?: string | null; settlement_id?: string | null };
 type MaintenanceLike = { service_date: string | null; cost: number | null; description?: string | null; service_type?: string | null };
-type TollLike = { toll_date: string | null; amount: number | null; plaza?: string | null };
+type TollLike = { toll_date: string | null; amount: number | null; plaza?: string | null; network?: string | null; settlement_id?: string | null; source?: string | null };
 type SettlementLike = {
+  id?: string;
   week_ending: string | null;
   gross: number | null;
   net: number | null;
@@ -90,16 +94,24 @@ export function buildSpendEvents(
   fuelPurchases: FuelLike[],
   maintenanceRecords: MaintenanceLike[],
   tolls: TollLike[],
-  windowStartIso: string
+  windowStartIso: string,
+  // Week ending lookup for settlement toll rows (optional).
+  settlements: ReadonlyArray<TollRuleSettlement> = []
 ): SpendEvent[] {
   const events: SpendEvent[] = [];
+  // TOLLS (owner 2026-11-14): the Tolls & Fees rule (tollsSummary.ts). A
+  // tolls row covered by a toll/fee line of its own settlement is that
+  // line's breakdown, never a second spend event; settlement toll rows are
+  // dated by their week ending, own rows by their own date.
+  const tollRule = tollRuleByIndex(deductions, tolls, settlements);
 
-  for (const d of deductions) {
-    if (!d.ded_date || d.ded_date < windowStartIso) continue;
+  deductions.forEach((d, i) => {
+    const date = tollRule.deductionDate.has(i) ? tollRule.deductionDate.get(i)! : d.ded_date;
+    if (!date || date < windowStartIso) return;
     const amount = Number(d.amount ?? 0);
-    if (!amount || !reducesTrueProfit(d)) continue;
-    events.push({ category: d.category ?? 'Misc', description: d.description || d.category || 'Deduction', amount, date: d.ded_date });
-  }
+    if (!amount || !reducesTrueProfit(d)) return;
+    events.push({ category: d.category ?? 'Misc', description: d.description || d.category || 'Deduction', amount, date });
+  });
   for (const f of fuelPurchases) {
     if (f.settlement_id) continue;
     if (!f.purchase_date || f.purchase_date < windowStartIso) continue;
@@ -113,12 +125,14 @@ export function buildSpendEvents(
     if (!amount) continue;
     events.push({ category: 'Maintenance & Repairs', description: m.description || m.service_type || 'Maintenance', amount, date: m.service_date });
   }
-  for (const t of tolls) {
-    if (!t.toll_date || t.toll_date < windowStartIso) continue;
+  tolls.forEach((t, i) => {
+    if (!tollRule.countedTolls.has(i)) return;
+    const date = tollRule.countedTolls.get(i)!;
+    if (!date || date < windowStartIso) return;
     const amount = Number(t.amount ?? 0);
-    if (!amount) continue;
-    events.push({ category: 'Tolls & Scales', description: t.plaza || 'Toll', amount, date: t.toll_date });
-  }
+    if (!amount) return;
+    events.push({ category: 'Tolls & Scales', description: t.plaza || 'Toll', amount, date });
+  });
   return events;
 }
 
@@ -351,7 +365,7 @@ export function buildCashFlowForecastFromData(input: {
   const today = input.today ?? new Date();
   const windowStartIso = addDaysDateOnly(todayDateOnly(today), -CLASSIFICATION_WINDOW_WEEKS * 7);
 
-  const events = buildSpendEvents(input.deductions, input.fuelPurchases, input.maintenanceRecords, input.tolls, windowStartIso);
+  const events = buildSpendEvents(input.deductions, input.fuelPurchases, input.maintenanceRecords, input.tolls, windowStartIso, input.settlements);
   const windowedSettlements = input.settlements.filter((s) => (s.week_ending ?? '') >= windowStartIso);
   const classificationWindowMiles = trailingWeeklyMilesAverage(windowedSettlements, CLASSIFICATION_WINDOW_WEEKS);
   const classification = classifyCashFlowSpending(events, classificationWindowMiles.total);
