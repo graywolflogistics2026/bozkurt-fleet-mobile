@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — For Prime Inc Drivers: only lumpers from settlements (device: withheld rows in the sheet, Lumpers empty)
+- Cause: the sheet's own-row rule was `source !== 'settlement'` only (primeDriverExpenses.ts eligibleDeductionRowsForReport, categoryMapping.ts findRowsNeedingAccountantCategory), not Home's rule (kpi.ts isOrphanSettlementRow: settlement_id, settlement document). Lumpers were per-row 'prime_settlement' withheld rows; the new reader saves no line rows when line details differ (aiImportSave.ts gate) and never saves LM revenue items, so nothing reached Lumpers.
+- 880f1ac: one own-expense rule `src/stats/ownExpenseOrigin.ts` (computeKpis + sheet + needs-category). New `src/stats/settlementLumpers.ts`: per Prime settlement, received (statement OUTSIDE LUMPER 1099 PAY) +, deducted (statement LUMPERS, else WA/LM withheld rows) −, difference; by week-ending month; outside every subtotal/total. Sheet screen + export; 7 locales.
+- 4352218: Accountant Package shows the same block; its own Lumper Fees table lists own rows only (no lumper twice).
+- Tests: primeSheetSettlementLumpers.test.ts (golden 07/17 215/215/0; month grouping with the owner's month amounts on synthetic weeks — repo has no real lumper weeks; 18 weeks: own 7,664.09 unchanged, no settlement row, re-import changes nothing).
+- No SQL, no Edge Function. eas update only.
+
 ## 2026-11-13 — Home period Cost/Mile (device: Yearly 1.52 / Profit/Mile 1.18 vs 1.29 / 1.42)
 - Cause: computeKpis() Cost/Mile = real expenses + the truck cost-basis estimate (trucks.cost_basis_*: loan payment, paid-price spread, warranty spread) × settlement weeks; the estimate was the only Cost/Mile term not in profit. Revenue, expenses and profit were right; only Cost/Mile and Profit/Mile (= RPM − CPM) were off. Rejected: capital/personal lines (excluded by class, replay CPM 1.29 with them present), per diem (never in computeKpis).
 - 65345d5 stats/kpi.ts: Cost/Mile = real expenses ÷ miles; bridge field fixedCostEstimateInCpm, Home cost-basis nudge (D6) and Scorecard "fixed spread" section removed. Per-Truck Profitability (truckComparison.ts) still uses the estimate. docs/decisions/golden-settlement.md #8 superseded.
