@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -250,7 +250,10 @@ export default function Import() {
   // own `.eq('is_active', true)` fetch for trucks, which never had this
   // bug in the first place.
   const { data: driversData } = useDrivers({ active: true });
-  const drivers = driversData ?? [];
+  // A carrier-payroll driver (§88, paid through Prime's WAGE EXPENSE
+  // section) is never a payroll-routing target: the settlement is the
+  // owner's truck, not the driver's (owner 2026-11-13, point 6).
+  const drivers = useMemo(() => (driversData ?? []).filter((d) => !d.paid_via_carrier_payroll), [driversData]);
   // Custom categories (owner decision 2026-07-10, PRODUCT DECISION): the
   // user's own active category names, forwarded to ai-import so
   // classification can suggest one of these too, not just the canonical

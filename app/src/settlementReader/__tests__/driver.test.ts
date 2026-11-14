@@ -15,7 +15,7 @@ const week = (iso: string) => PRIME_13_WEEKS.find((w) => w.weekEnding === iso)!;
 const usage = { input_tokens: 10_000, output_tokens: 2_000 };
 const ok = (value: unknown): ModelReply => ({ outcome: { ok: true, value }, usage, ms: 1000 });
 const err = (error: 'timeout' | 'refusal' | 'busy'): ModelReply => ({ outcome: { ok: false, error }, usage: null, ms: 1000 });
-const otherPage: AttachmentReply = { kind: 'other', repair: { invoice: '', shop: '', unit: '', description: '', odometer: '', total: '' }, tolls: { agency: '', total: '', items: [] } };
+const otherPage: AttachmentReply = { kind: 'other', repair: { invoice: '', shop: '', unit: '', description: '', odometer: '', total: '' }, tolls: { agency: '', total: '', items: [] }, payroll: { employees: [] } };
 
 type Saved = { progress: ReaderProgress; status: JobStatus; extraction?: Extraction | null; final?: boolean };
 

@@ -1189,7 +1189,24 @@
     "deleteConfirmTitle": "{{name}} kalıcı olarak silinsin mi?",
     "deleteConfirmBody": "Bu sürücünün hiç kaydı yok. Sürücü silinir — geri alınamaz.",
     "hasHistoryTitle": "Bu sürücünün geçmişi var",
-    "hasHistoryBody": "{{count}} kayıtta bu sürücünün adı geçiyor (settlement, yük, yakıt, kesinti, ödeme veya uyumluluk). Bunun yerine Kaldır'ı kullanın — her kaydı korur."
+    "hasHistoryBody": "{{count}} kayıtta bu sürücünün adı geçiyor (settlement, yük, yakıt, kesinti, ödeme veya uyumluluk). Bunun yerine Kaldır'ı kullanın — her kaydı korur.",
+    "carrierPayroll": {
+      "code": "Kod {{code}}",
+      "viaCarrier": "{{carrier}} üzerinden W-2",
+      "team": "Takım",
+      "solo": "Tek",
+      "whoIs": "{{code}} kim?",
+      "whoIsBody": "Ekstrede sadece {{code}} kodu yazıyor. Sürücünün tam adını yazın.",
+      "namePlaceholder": "Ad soyad",
+      "latestWeek": "Hafta sonu {{date}}",
+      "ytd": "Yıl başından beri",
+      "wages": "Ücret",
+      "employerTaxes": "İşveren vergileri",
+      "workComp": "İş kazası sigortası",
+      "total": "Toplam",
+      "paidWeeks": "Bu yıl ödenen hafta: {{count}}",
+      "note": "Taşıyıcının bordrosundan settlement üzerinde ödendi. Zaten giderlerinizde; burada sadece kime ödendiğini göstermek için var."
+    }
   },
   "docTypes": {
     "settlement": {

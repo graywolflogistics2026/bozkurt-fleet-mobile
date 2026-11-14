@@ -134,6 +134,11 @@ export type Driver = {
   compensation_type: CompensationType;
   pay_type: 'per_mile' | 'percent' | 'flat' | null;
   pay_rate: number | null;
+  // §88 (owner 2026-11-13): a driver paid through a carrier's payroll
+  // (Prime's WAGE EXPENSE section). Optional: absent until §88 runs.
+  carrier?: string | null;
+  carrier_driver_code?: string | null;
+  paid_via_carrier_payroll?: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -155,6 +160,11 @@ export type DriverPayment = {
   date: string;
   gross_pay: number;
   employer_taxes: number;
+  // §88: carrier payroll rows (source 'settlement') carry work comp and the
+  // printed total; attribution only (isCarrierPayrollPayment()).
+  work_comp?: number | null;
+  total_cost?: number | null;
+  source?: 'manual' | 'settlement' | null;
   notes: string | null;
   tags: string | null; // docs/PENDING_SQL.md §22 (flexible fields, owner decision 2026-07-10)
   created_at: string;
@@ -233,6 +243,8 @@ export type Settlement = {
   certified_at?: string | null;
   certification_text_version?: string | null;
   certification_app_version?: string | null;
+  // §88: "+ TEAM" printed on a revenue line (a label only).
+  team_week?: boolean | null;
   created_at: string;
   updated_at: string;
 };

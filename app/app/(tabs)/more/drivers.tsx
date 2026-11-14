@@ -20,9 +20,11 @@ import { calcTrueCostOfEmployee, calcW2EmployerTaxes } from '@/src/tax/driverPay
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
-import type { CompensationType, Driver } from '@/src/types/db';
+import type { CompensationType, Driver, DriverPayment } from '@/src/types/db';
 import { compareDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 import { numOrNull } from '@/src/lib/number';
+import { useSettlements } from '@/src/data/settlements';
+import { carrierDisplayName, carrierPayrollSummary, needsDriverName, type PayrollTotals } from '@/src/import/carrierPayroll';
 
 const COMPENSATION_TYPES: CompensationType[] = ['w2_employee', '1099_contractor', 'team_split', 'trainee'];
 const PAY_TYPES = ['per_mile', 'percent', 'flat'] as const;
@@ -162,6 +164,78 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
   );
 }
 
+// CARRIER PAYROLL DRIVER (owner 2026-11-13, §88): a driver Prime pays
+// through its payroll (the WAGE EXPENSE section of the settlement). Made
+// automatically by the import; this card is attribution only — the wages
+// are already in the week's expenses. No manual payments, no app FICA.
+function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Driver; payments: DriverPayment[]; teamBySettlement: Map<string, boolean> }) {
+  const { t } = useTranslation();
+  const { money, date: fmtDate } = useFormatters();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const summary = useMemo(() => carrierPayrollSummary(payments, driver.id, todayDateOnly()), [payments, driver.id]);
+  const team = summary.latest?.settlementId ? teamBySettlement.get(summary.latest.settlementId) === true : false;
+  const askName = needsDriverName(driver);
+
+  async function saveName() {
+    if (!name.trim()) {
+      Alert.alert(t('drivers.enterNameTitle'));
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateRowTolerant('drivers', driver.id, { name: name.trim() });
+      await invalidateFinancialData(queryClient, { entities: ['drivers'] });
+      setName('');
+    } catch (err) {
+      Alert.alert(t('drivers.saveFailedTitle'), err instanceof Error ? err.message : t('deductions.genericRetry'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const row = (label: string, value: number) => (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <MutedText>{label}</MutedText>
+      <Text style={{ color: colors.text }}>{money(value)}</Text>
+    </View>
+  );
+  const block = (title: string, totals: PayrollTotals) => (
+    <View style={{ marginTop: spacing.xs }}>
+      <Text style={{ color: colors.text, fontWeight: '600' }}>{title}</Text>
+      {row(t('drivers.carrierPayroll.wages'), totals.wages)}
+      {row(t('drivers.carrierPayroll.employerTaxes'), totals.employerTaxes)}
+      {row(t('drivers.carrierPayroll.workComp'), totals.workComp)}
+      {row(t('drivers.carrierPayroll.total'), totals.total)}
+    </View>
+  );
+
+  return (
+    <View>
+      <MutedText>
+        {[
+          t('drivers.carrierPayroll.code', { code: driver.carrier_driver_code ?? '' }),
+          t('drivers.carrierPayroll.viaCarrier', { carrier: carrierDisplayName(driver.carrier) }),
+          team ? t('drivers.carrierPayroll.team') : t('drivers.carrierPayroll.solo'),
+        ].join(' · ')}
+      </MutedText>
+      {askName && (
+        <View style={{ marginTop: spacing.xs }}>
+          <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('drivers.carrierPayroll.whoIs', { code: driver.carrier_driver_code ?? '' })}</Text>
+          <MutedText>{t('drivers.carrierPayroll.whoIsBody', { code: driver.carrier_driver_code ?? '' })}</MutedText>
+          <Field value={name} onChangeText={setName} placeholder={t('drivers.carrierPayroll.namePlaceholder')} />
+          <PrimaryButton title={t('common.save')} onPress={saveName} loading={saving} />
+        </View>
+      )}
+      {summary.latest && block(t('drivers.carrierPayroll.latestWeek', { date: fmtDate(summary.latest.date) }), summary.latest)}
+      {block(t('drivers.carrierPayroll.ytd'), summary.ytd)}
+      <MutedText style={{ marginTop: spacing.xs }}>{t('drivers.carrierPayroll.paidWeeks', { count: summary.paidWeeks })}</MutedText>
+      <MutedText>{t('drivers.carrierPayroll.note')}</MutedText>
+    </View>
+  );
+}
+
 export default function Drivers() {
   const { t } = useTranslation();
   const { session } = useAuth();
@@ -169,6 +243,12 @@ export default function Drivers() {
   const queryClient = useQueryClient();
   const { trucks } = useActiveTruck();
   const driversQuery = useDrivers();
+  const allPaymentsQuery = useDriverPayments();
+  const settlementsQuery = useSettlements();
+  const teamBySettlement = useMemo(
+    () => new Map((settlementsQuery.data ?? []).map((s) => [s.id, s.team_week === true])),
+    [settlementsQuery.data]
+  );
   const insertDriver = useInsertDriver();
   const taxYearDataQuery = useTaxYearData();
   const employerFicaRate = taxYearDataQuery.data?.data.se_tax.employer_fica;
@@ -304,7 +384,7 @@ export default function Drivers() {
     }
   }
 
-  function renderForm(form: FormState, setForm: (f: FormState) => void) {
+  function renderForm(form: FormState, setForm: (f: FormState) => void, carrierPayroll = false) {
     return (
       <>
         <MutedText>{t('drivers.nameLabel')}</MutedText>
@@ -314,6 +394,8 @@ export default function Drivers() {
         <MutedText>{t('drivers.licenseLabel')}</MutedText>
         <Field value={form.license} onChangeText={(v) => setForm({ ...form, license: v })} />
 
+        {!carrierPayroll && (
+          <>
         <MutedText>{t('drivers.compensationTypeLabel')}</MutedText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {COMPENSATION_TYPES.map((ct) => (
@@ -329,6 +411,8 @@ export default function Drivers() {
         </View>
         <MutedText>{t('drivers.payRateLabel')}</MutedText>
         <Field keyboardType="numeric" value={form.pay_rate} onChangeText={(v) => setForm({ ...form, pay_rate: v })} placeholder="0.00" />
+          </>
+        )}
 
         {trucks.length > 0 && (
           <>
@@ -371,10 +455,11 @@ export default function Drivers() {
                     {d.name}
                     {!d.active ? ` ${t('drivers.formerTag')}` : ''}
                   </Text>
-                  <MutedText>{t(`drivers.compensationTypes.${d.compensation_type}`)}</MutedText>
+                  {!d.paid_via_carrier_payroll && <MutedText>{t(`drivers.compensationTypes.${d.compensation_type}`)}</MutedText>}
                 </Pressable>
+                {d.paid_via_carrier_payroll && <CarrierPayrollCard driver={d} payments={allPaymentsQuery.data ?? []} teamBySettlement={teamBySettlement} />}
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
-                  <SecondaryButton title={t('drivers.payments')} onPress={() => setPaymentsFor(d)} />
+                  {!d.paid_via_carrier_payroll && <SecondaryButton title={t('drivers.payments')} onPress={() => setPaymentsFor(d)} />}
                   <SecondaryButton title={t('drivers.edit')} onPress={() => openEdit(d)} />
                   <SecondaryButton
                     title={d.active ? t('drivers.remove') : t('drivers.restore')}
@@ -402,7 +487,7 @@ export default function Drivers() {
 
       <ModalSheet visible={!!editing} onClose={() => setEditing(null)}>
         <SheetTitle>{t('drivers.editDriver')}</SheetTitle>
-        {renderForm(editForm, setEditForm)}
+        {renderForm(editForm, setEditForm, !!editing?.paid_via_carrier_payroll)}
         <PrimaryButton title={t('common.save')} onPress={handleSaveEdit} loading={saving} />
         <SecondaryButton title={t('common.cancel')} onPress={() => setEditing(null)} />
         {editing && (

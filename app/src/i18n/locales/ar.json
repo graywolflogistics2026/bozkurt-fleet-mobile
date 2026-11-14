@@ -1189,7 +1189,24 @@
     "deleteConfirmTitle": "حذف {{name}} نهائياً؟",
     "deleteConfirmBody": "لا توجد سجلات لهذا السائق. سيُمحى ولا يمكن التراجع.",
     "hasHistoryTitle": "لهذا السائق سجل",
-    "hasHistoryBody": "{{count}} سجل(ات) تذكر هذا السائق (settlements أو شحنات أو وقود أو خصومات أو مدفوعات أو امتثال). استخدم «إزالة» بدلاً من ذلك — يحتفظ بكل السجلات."
+    "hasHistoryBody": "{{count}} سجل(ات) تذكر هذا السائق (settlements أو شحنات أو وقود أو خصومات أو مدفوعات أو امتثال). استخدم «إزالة» بدلاً من ذلك — يحتفظ بكل السجلات.",
+    "carrierPayroll": {
+      "code": "Code {{code}}",
+      "viaCarrier": "W-2 via {{carrier}}",
+      "team": "Team",
+      "solo": "Solo",
+      "whoIs": "Who is {{code}}?",
+      "whoIsBody": "The statement prints only the code {{code}}. Type the driver's full name.",
+      "namePlaceholder": "Full name",
+      "latestWeek": "Week ending {{date}}",
+      "ytd": "Year to date",
+      "wages": "Wages",
+      "employerTaxes": "Employer taxes",
+      "workComp": "Work comp",
+      "total": "Total",
+      "paidWeeks": "Paid weeks this year: {{count}}",
+      "note": "Paid through the carrier's payroll on your settlement. Already in your expenses; shown here only to say who was paid."
+    }
   },
   "docTypes": {
     "settlement": {

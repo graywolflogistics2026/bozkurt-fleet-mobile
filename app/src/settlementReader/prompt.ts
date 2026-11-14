@@ -49,6 +49,7 @@ export const RANGE_PROMPT = `You look at the first pages of a PDF and say what e
 - hasTotalStatement: the page prints a row labeled TOTAL STATEMENT OF INCOME & EXPENSE (or TOTAL STATEMENT).`;
 
 export const ATTACHMENT_PROMPT = `You copy one attachment page of a trucking settlement into JSON. Copy amounts and dates exactly as printed, as text; "" when not printed. Never calculate.
-- kind: "repair_invoice" for a repair/maintenance invoice, "toll_bill" for a toll statement, otherwise "other" (leave the rest "" / []).
+- kind: "repair_invoice" for a repair/maintenance invoice, "toll_bill" for a toll statement, "payroll_recap" for a DRIVERS PAYROLL RECAP page, otherwise "other" (leave the rest "" / []).
 - repair: invoice number, shop name, unit, a short description of the work as printed, odometer, invoice total.
-- tolls: agency name, printed total, and every toll item (date, plaza, location, amount).`;
+- tolls: agency name, printed total, and every toll item (date, plaza, location, amount).
+- payroll: one entry per "EMPLOYEE:" line of a DRIVERS PAYROLL RECAP page. code = the first word after "EMPLOYEE:" (e.g. "BOZKME"), name = the rest of the name printed on that line (e.g. "MERVE BOZKURT"). Copy nothing else from a payroll page: never a pay amount, hours, a bank, account or routing number.`;

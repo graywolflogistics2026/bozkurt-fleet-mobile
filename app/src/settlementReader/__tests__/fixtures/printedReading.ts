@@ -155,7 +155,9 @@ export const LINES_0828: PrintedLine[] = [
   { section: 'other', label: 'INTEREST INCOME FROM DEPOSIT', amount: 0.45 },
 ];
 
-// A W-2 wage week (round 2 item G): the WAGE EXPENSE section as printed.
+// A W-2 wage week (round 2 item G): the WAGE EXPENSE section as printed
+// (descriptions as on the real 11/06 and 11/13 PDFs, the driver code
+// BOZKME at the end — §88).
 export type WageWeek = { page: number; lines: { code: string; description: string; amount: number }[]; statement: PrintedLine[] };
 // 11/06 (owner, Okuyucu notlari rows 22-25): settlement codes DF 54.99,
 // DU 4.31 + 1.43, WC 79.66, WD 663.87, 2S 1.24 = 805.50 on page 2; the
@@ -165,12 +167,12 @@ export type WageWeek = { page: number; lines: { code: string; description: strin
 export const WAGES_1106: WageWeek = {
   page: 2,
   lines: [
-    { code: 'DF', description: 'FICA', amount: 54.99 },
-    { code: 'DU', description: 'FUTA', amount: 4.31 },
-    { code: 'DU', description: 'SUTA', amount: 1.43 },
-    { code: 'WC', description: 'WORK COMP', amount: 79.66 },
-    { code: 'WD', description: 'DRIVER WAGES', amount: 663.87 },
-    { code: '2S', description: 'BENEFIT', amount: 1.24 },
+    { code: 'DF', description: 'F.I.C.A. FOR            BOZKME', amount: 54.99 },
+    { code: 'DU', description: 'F.U.T.A. FOR            BOZKME', amount: 4.31 },
+    { code: 'DU', description: 'S.U.T.A. FOR            BOZKME', amount: 1.43 },
+    { code: 'WC', description: 'WORK COMP COST          BOZKME', amount: 79.66 },
+    { code: 'WD', description: 'WAGES PAID FOR          BOZKME', amount: 663.87 },
+    { code: '2S', description: 'Emp Driver Wellness Bnf BOZKME', amount: 1.24 },
   ],
   statement: [
     { section: 'misc', label: 'DRIVER WAGE', amount: -665.11 },
@@ -185,12 +187,12 @@ export const WAGES_1106: WageWeek = {
 export const WAGES_1113: WageWeek = {
   page: 3,
   lines: [
-    { code: 'DF', description: 'FICA', amount: 69.59 },
-    { code: 'DU', description: 'FUTA', amount: 5.45 },
-    { code: 'DU', description: 'SUTA', amount: 1.81 },
-    { code: 'WC', description: 'WORK COMP', amount: 109.15 },
-    { code: 'WD', description: 'DRIVER WAGES', amount: 909.61 },
-    { code: '2S', description: 'BENEFIT', amount: 3.45 },
+    { code: 'DF', description: 'F.I.C.A. FOR            BOZKME', amount: 69.59 },
+    { code: 'DU', description: 'F.U.T.A. FOR            BOZKME', amount: 5.45 },
+    { code: 'DU', description: 'S.U.T.A. FOR            BOZKME', amount: 1.81 },
+    { code: 'WC', description: 'WORK COMP COST          BOZKME', amount: 109.15 },
+    { code: 'WD', description: 'WAGES PAID FOR          BOZKME', amount: 909.61 },
+    { code: '2S', description: 'Emp Driver Wellness Bnf BOZKME', amount: 3.45 },
   ],
   statement: [
     { section: 'misc', label: 'DRIVER WAGE', amount: -913.06 },

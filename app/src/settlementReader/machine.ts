@@ -370,6 +370,21 @@ export function withAttachment(extraction: Extraction, page: number, reply: Atta
   const pageMap = (extraction.pageMap ?? []).map((m) => (m.page === page ? { ...m, status: reply ? ('read' as const) : ('failed' as const), kind: reply?.kind ?? m.kind } : m));
   const s = extraction.settlement;
   if (!s || !reply || reply.kind === 'other') return { ...extraction, pageMap };
+  if (reply.kind === 'payroll_recap') {
+    // The name for a WAGE EXPENSE code (§88). The recap prints the same
+    // EMPLOYEE line on each of its pages: one entry per code, the first
+    // name read wins, an empty name never replaces a read one.
+    const employees = [...(s.payrollEmployees ?? [])];
+    for (const e of reply.payroll?.employees ?? []) {
+      const code = cellText(e.code).toUpperCase();
+      const name = cellText(e.name).replace(/\s+/g, ' ');
+      if (!code) continue;
+      const i = employees.findIndex((x) => x.code === code);
+      if (i < 0) employees.push({ code, name });
+      else if (!employees[i].name && name) employees[i] = { code, name };
+    }
+    return { ...extraction, pageMap, settlement: { ...s, payrollEmployees: employees } };
+  }
   if (reply.kind === 'repair_invoice') {
     const r = reply.repair;
     const item = { invoice: cellText(r.invoice), unit: cellText(r.unit), desc: [cellText(r.shop), cellText(r.description)].filter(Boolean).join(' — '), odometer: money(r.odometer), total: money(r.total) };

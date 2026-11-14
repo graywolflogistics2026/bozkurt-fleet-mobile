@@ -1,4 +1,5 @@
 import type { Driver, DriverPayment, TaxYearData } from '@/src/types/db';
+import { isCarrierPayrollPayment } from '@/src/import/carrierPayroll';
 
 // 1099-NEC filing threshold — a hardcoded fallback ONLY until
 // docs/PENDING_SQL.md §17 has been run (same graceful-degradation pattern as
@@ -32,6 +33,9 @@ export function calcContractLaborYtd(
   for (const p of payments) {
     const driver = driverById.get(p.driver_id);
     if (!driver || driver.compensation_type !== '1099_contractor') continue;
+    // A carrier-payroll row (§88) is a W-2 wage paid by the carrier: never
+    // a 1099 amount.
+    if (isCarrierPayrollPayment(p) || driver.paid_via_carrier_payroll) continue;
     if (!p.date.startsWith(String(taxYear))) continue;
     totals.set(p.driver_id, (totals.get(p.driver_id) ?? 0) + Number(p.gross_pay ?? 0));
   }
@@ -51,8 +55,12 @@ export function calcContractLaborYtd(
 // money that went to someone else. employer_taxes defaults to 0 for every
 // compensation_type except w2_employee, which is what lets this stay a
 // single uniform formula with no type-specific branch.
+//
+// A carrier-payroll row (§88, source 'settlement') is skipped: those wages
+// are withheld on the settlement and already out of its net pay, so
+// counting the row again would double-count them (attribution only).
 export function sumDeductibleDriverPayroll(payments: DriverPayment[]): number {
-  return payments.reduce((sum, p) => sum + Number(p.gross_pay ?? 0) + Number(p.employer_taxes ?? 0), 0);
+  return payments.filter((p) => !isCarrierPayrollPayment(p)).reduce((sum, p) => sum + Number(p.gross_pay ?? 0) + Number(p.employer_taxes ?? 0), 0);
 }
 
 // "True cost of employee" — W-2 wages plus the employer-side payroll taxes

@@ -1189,7 +1189,24 @@
     "deleteConfirmTitle": "¿Eliminar a {{name}} permanentemente?",
     "deleteConfirmBody": "Este conductor no tiene registros. Se borrará y no se puede deshacer.",
     "hasHistoryTitle": "Este conductor tiene historial",
-    "hasHistoryBody": "{{count}} registro(s) nombran a este conductor (settlements, cargas, combustible, deducciones, pagos o cumplimiento). Usa Quitar: conserva todos los registros."
+    "hasHistoryBody": "{{count}} registro(s) nombran a este conductor (settlements, cargas, combustible, deducciones, pagos o cumplimiento). Usa Quitar: conserva todos los registros.",
+    "carrierPayroll": {
+      "code": "Código {{code}}",
+      "viaCarrier": "W-2 vía {{carrier}}",
+      "team": "Equipo",
+      "solo": "Solo",
+      "whoIs": "¿Quién es {{code}}?",
+      "whoIsBody": "El estado de cuenta solo imprime el código {{code}}. Escriba el nombre completo del conductor.",
+      "namePlaceholder": "Nombre completo",
+      "latestWeek": "Semana que termina el {{date}}",
+      "ytd": "En lo que va del año",
+      "wages": "Salarios",
+      "employerTaxes": "Impuestos del empleador",
+      "workComp": "Seguro de accidentes laborales",
+      "total": "Total",
+      "paidWeeks": "Semanas pagadas este año: {{count}}",
+      "note": "Pagado por la nómina del transportista en su settlement. Ya está en sus gastos; se muestra aquí solo para indicar a quién se pagó."
+    }
   },
   "docTypes": {
     "settlement": {

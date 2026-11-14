@@ -2479,9 +2479,10 @@ var RANGE_SCHEMA = obj({
   )
 });
 var ATTACHMENT_SCHEMA = obj({
-  kind: enumOf(["repair_invoice", "toll_bill", "other"]),
+  kind: enumOf(["repair_invoice", "toll_bill", "payroll_recap", "other"]),
   repair: obj({ invoice: str, shop: str, unit: str, description: str, odometer: str, total: str }),
-  tolls: obj({ agency: str, total: str, items: arr(obj({ date: str, plaza: str, location: str, amount: str })) })
+  tolls: obj({ agency: str, total: str, items: arr(obj({ date: str, plaza: str, location: str, amount: str })) }),
+  payroll: obj({ employees: arr(obj({ code: str, name: str })) })
 });
 function combineParts(settlement, statement) {
   return { ...settlement, statement: statement.statement };
@@ -2529,9 +2530,10 @@ var RANGE_PROMPT = `You look at the first pages of a PDF and say what each page 
 - hasTotalCashFlow: the page prints a row labeled TOTAL CASH FLOW.
 - hasTotalStatement: the page prints a row labeled TOTAL STATEMENT OF INCOME & EXPENSE (or TOTAL STATEMENT).`;
 var ATTACHMENT_PROMPT = `You copy one attachment page of a trucking settlement into JSON. Copy amounts and dates exactly as printed, as text; "" when not printed. Never calculate.
-- kind: "repair_invoice" for a repair/maintenance invoice, "toll_bill" for a toll statement, otherwise "other" (leave the rest "" / []).
+- kind: "repair_invoice" for a repair/maintenance invoice, "toll_bill" for a toll statement, "payroll_recap" for a DRIVERS PAYROLL RECAP page, otherwise "other" (leave the rest "" / []).
 - repair: invoice number, shop name, unit, a short description of the work as printed, odometer, invoice total.
-- tolls: agency name, printed total, and every toll item (date, plaza, location, amount).`;
+- tolls: agency name, printed total, and every toll item (date, plaza, location, amount).
+- payroll: one entry per "EMPLOYEE:" line of a DRIVERS PAYROLL RECAP page. code = the first word after "EMPLOYEE:" (e.g. "BOZKME"), name = the rest of the name printed on that line (e.g. "MERVE BOZKURT"). Copy nothing else from a payroll page: never a pay amount, hours, a bank, account or routing number.`;
 
 // src/settlementReader/range.ts
 var RANGE_WINDOW_PAGES = 10;
@@ -3042,6 +3044,18 @@ function withAttachment(extraction, page, reply) {
   const pageMap = (extraction.pageMap ?? []).map((m) => m.page === page ? { ...m, status: reply ? "read" : "failed", kind: reply?.kind ?? m.kind } : m);
   const s = extraction.settlement;
   if (!s || !reply || reply.kind === "other") return { ...extraction, pageMap };
+  if (reply.kind === "payroll_recap") {
+    const employees = [...s.payrollEmployees ?? []];
+    for (const e of reply.payroll?.employees ?? []) {
+      const code = cellText(e.code).toUpperCase();
+      const name = cellText(e.name).replace(/\s+/g, " ");
+      if (!code) continue;
+      const i = employees.findIndex((x) => x.code === code);
+      if (i < 0) employees.push({ code, name });
+      else if (!employees[i].name && name) employees[i] = { code, name };
+    }
+    return { ...extraction, pageMap, settlement: { ...s, payrollEmployees: employees } };
+  }
   if (reply.kind === "repair_invoice") {
     const r = reply.repair;
     const item = { invoice: cellText(r.invoice), unit: cellText(r.unit), desc: [cellText(r.shop), cellText(r.description)].filter(Boolean).join(" — "), odometer: money(r.odometer), total: money(r.total) };

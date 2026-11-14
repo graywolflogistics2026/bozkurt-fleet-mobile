@@ -8,6 +8,7 @@
 // (src/stats/cpm.ts), calcTruckCostBasisWeekly() (src/stats/
 // truckCostBasis.ts) — never a second CPM/miles formula.
 import { calcMiles, type LoadMilesInput } from '@/src/stats/miles';
+import { isCarrierPayrollPayment } from '@/src/import/carrierPayroll';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CanonicalCpmResult } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly, type TruckCostBasisInput } from '@/src/stats/truckCostBasis';
 import { allocateByMiles } from '@/src/stats/costAllocation';
@@ -86,7 +87,7 @@ export type ComparisonMaintenance = {
   service_type?: string | null;
 };
 export type ComparisonToll = { amount: number | null; truck_id?: string | null };
-export type ComparisonDriverPayment = { driver_id: string; settlement_id: string | null; gross_pay: number | null; employer_taxes: number | null };
+export type ComparisonDriverPayment = { driver_id: string; settlement_id: string | null; gross_pay: number | null; employer_taxes: number | null; source?: string | null };
 export type ComparisonDriver = { id: string; default_truck_id: string | null; name: string };
 export type ComparisonTruck = TruckCostBasisInput & { id: string; unit_number: string | null };
 
@@ -194,6 +195,8 @@ export function buildTruckComparison(
   const driversById = new Map(drivers.map((d) => [d.id, d]));
   const driverPayByTruck = new Map<string, number>();
   for (const p of driverPayments) {
+    // Carrier payroll (§88): already a WAGES line of the week, attribution only.
+    if (isCarrierPayrollPayment(p)) continue;
     const truckId = resolveDriverPaymentTruckId(p, settlementsById, driversById);
     if (!truckId) continue;
     driverPayByTruck.set(truckId, (driverPayByTruck.get(truckId) ?? 0) + Number(p.gross_pay ?? 0) + Number(p.employer_taxes ?? 0));

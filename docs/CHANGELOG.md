@@ -11,6 +11,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Carrier payroll drivers (§88, driver auto-link approved)
+- A Prime week with a WAGE EXPENSE section creates/updates the driver by (carrier, code from the WD line) and one driver_payments row per week (wages WD+2S, taxes DF+DU, work comp WC, total = TOTAL WAGE EXPENSE; source 'settlement'). Never from fuel lines or driverName. New: import/carrierPayroll.ts, data/carrierPayrollSave.ts (non-fatal write in saveExtraction).
+- Name from the DRIVERS PAYROLL RECAP page via the existing attachment read (new kind payroll_recap; no extra call). Missing name -> driver named by its code, Drivers screen asks "Who is <code>?".
+- Attribution only: carrier-payroll rows skipped by the tax estimate, 1099 list and Per-Truck; no manual payments/app FICA; excluded from import driver routing. "+ TEAM" -> settlements.team_week. Drivers screen card, 7 locales.
+- Tests: carrierPayroll.test.ts; driverCarrierPayroll18.test.ts (only 11/06, 11/13; Home 88,210.06 / 41,977.33 / 46,232.73 / 39,913.01; all other tables identical). Fixture wage descriptions now as printed ("... FOR BOZKME").
+- PENDING_SQL §88 (pending_88.sql, Desktop driver-88.sql): columns + backfill of 11/06, 11/13 from documents.parsed_json. Ship: SQL, then ai-import redeploy (reader bundle), then eas update. Decision: docs/decisions/driver-carrier-payroll.md.
+
 ## 2026-11-13 — Commit 6: the old settlement reader deleted (device test passed: 18 weeks, Capital Account and Home Yearly match)
 - Server (ai-import): chunking.ts deleted (statement-columns normalizer kept as statementColumns.ts); jobEngine.ts trimmed to limitsForPlan / leaseIsStale / checkImportLimits; index.ts 3,138 -> 1,815 lines: old modes, page classifier, per-page runs, direct-path page continuation removed. Old modes answer 410 "This file was read by the old reader. Read it again with the new reader."; resume_job on a reader job still resumes in the reader; continue_job never runs an old row.
 - App: old mode calls (data/importJobs.ts), jobVerdictRunner.ts, jobVerdict.ts, the import screen's own re-read flow, the chip's old resume/answer removed. Old import_jobs rows: failed + [Read again] (unchanged).

@@ -257,11 +257,13 @@ describe('attachments (P5: after ready, never gating)', () => {
     kind: 'repair_invoice',
     repair: { invoice: 'R-1001', shop: 'TA TRUCK SERVICE', unit: '1234', description: 'OIL CHANGE', odometer: '512,300', total: '412.50' },
     tolls: { agency: '', total: '', items: [] },
+    payroll: { employees: [] },
   };
   const tolls: AttachmentReply = {
     kind: 'toll_bill',
     repair: { invoice: '', shop: '', unit: '', description: '', odometer: '', total: '' },
     tolls: { agency: 'E-ZPASS', total: '23.50', items: [{ date: '08/10/26', plaza: 'P1', location: 'NJ', amount: '23.50' }] },
+    payroll: { employees: [] },
   };
 
   test('17-page document: 6 content pages, 11 attachments read one by one; totals never change', () => {

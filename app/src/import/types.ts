@@ -165,6 +165,10 @@ export type ExtractedSettlement = {
   // ".00" / "NO ENTRY FOR THIS RUN" = 0. Wage lines (class WAGES, charges)
   // are kept apart from `deductions` so the truck-deduction check holds.
   wageItems?: ExtractedSettlementDeduction[];
+  // DRIVERS PAYROLL RECAP (§88, owner 2026-11-13): "EMPLOYEE: BOZKME MERVE
+  // BOZKURT" read from the payroll page (attachment read, best effort):
+  // the name for the code printed on the wage lines.
+  payrollEmployees?: { code: string; name: string }[];
   totalWageExpense?: number;
   subtotalPriorWage?: number;
   totalDeductionsFromSettlements?: number;

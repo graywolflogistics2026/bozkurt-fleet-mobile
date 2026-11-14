@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { isCarrierPayrollPayment } from '@/src/import/carrierPayroll';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -224,7 +225,7 @@ export default function TruckComparison() {
     [result, trucksQuery.data, settlementsQuery.data, loadsQuery.data, dedQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, reimbursementsQuery.data, period]
   );
 
-  const hasDriverData = (driverPaymentsQuery.data ?? []).length > 0;
+  const hasDriverData = (driverPaymentsQuery.data ?? []).some((p) => !isCarrierPayrollPayment(p));
   const isLoading = trucksQuery.isLoading || settlementsQuery.isLoading;
 
   return (

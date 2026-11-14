@@ -54,6 +54,8 @@ import {
 import { todayDateOnly } from '@/src/lib/dateOnly';
 import { milesSplitUpdate, readMilesSplit, type StoredMilesSplit } from '@/src/import/milesSplit';
 import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
+import { carrierPayrollOf } from '@/src/import/carrierPayroll';
+import { saveCarrierPayroll } from '@/src/data/carrierPayrollSave';
 
 // CATEGORY LEARNING LAYER (owner decision 2026-08-05, FULL PARITY
 // follow-up item G) — best-effort read, never blocks a save. Returns []
@@ -918,6 +920,19 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
         notes: 'Settlement split (entered at import)',
       });
       if (payErr) throw new SaveExtractionError('driver-payment-insert', payErr, partial);
+    }
+    // CARRIER PAYROLL DRIVERS (owner 2026-11-13, §88): the WAGE EXPENSE
+    // section's driver, one driver_payments row per driver — attribution
+    // only, read from the extraction (so it holds even when the line rows
+    // were not saved). A SEPARATE, NON-FATAL write: before §88 runs, or on
+    // any error, the week still saves without it.
+    const carrierPayroll = carrierPayrollOf(d);
+    if (carrierPayroll) {
+      try {
+        await saveCarrierPayroll({ userId, settlementId, weekEnding: mapping.settlement.week_ending, week: carrierPayroll });
+      } catch (err) {
+        console.warn('[saveExtraction] carrier payroll not saved:', err instanceof Error ? err.message : err);
+      }
     }
     partial.childRowsSaved = true;
 

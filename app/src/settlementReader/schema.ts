@@ -72,9 +72,13 @@ export type RangeReply = {
 // stapled behind the statement; anything else is "other" and is kept as a
 // stored page only.
 export type AttachmentReply = {
-  kind: 'repair_invoice' | 'toll_bill' | 'other';
+  kind: 'repair_invoice' | 'toll_bill' | 'payroll_recap' | 'other';
   repair: { invoice: string; shop: string; unit: string; description: string; odometer: string; total: string };
   tolls: { agency: string; total: string; items: { date: string; plaza: string; location: string; amount: string }[] };
+  // DRIVERS PAYROLL RECAP (owner 2026-11-13, §88): the printed
+  // "EMPLOYEE: <code> <name>" line only — the driver's name for the code
+  // on the WAGE EXPENSE lines. Never a pay figure or a bank number.
+  payroll: { employees: { code: string; name: string }[] };
 };
 
 export type JsonSchema = Record<string, unknown>;
@@ -141,9 +145,10 @@ export const RANGE_SCHEMA: JsonSchema = obj({
 });
 
 export const ATTACHMENT_SCHEMA: JsonSchema = obj({
-  kind: enumOf(['repair_invoice', 'toll_bill', 'other']),
+  kind: enumOf(['repair_invoice', 'toll_bill', 'payroll_recap', 'other']),
   repair: obj({ invoice: str, shop: str, unit: str, description: str, odometer: str, total: str }),
   tolls: obj({ agency: str, total: str, items: arr(obj({ date: str, plaza: str, location: str, amount: str })) }),
+  payroll: obj({ employees: arr(obj({ code: str, name: str })) }),
 });
 
 // The two halves of a fallback split, combined by key: the settlement part

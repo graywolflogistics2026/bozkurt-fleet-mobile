@@ -1189,7 +1189,24 @@
     "deleteConfirmTitle": "Delete {{name}} permanently?",
     "deleteConfirmBody": "This driver has no records. The driver is erased — there is no undo.",
     "hasHistoryTitle": "This driver has history",
-    "hasHistoryBody": "{{count}} record(s) name this driver (settlements, loads, fuel, deductions, payments or compliance items). Use Remove instead — it keeps every record."
+    "hasHistoryBody": "{{count}} record(s) name this driver (settlements, loads, fuel, deductions, payments or compliance items). Use Remove instead — it keeps every record.",
+    "carrierPayroll": {
+      "code": "Code {{code}}",
+      "viaCarrier": "W-2 via {{carrier}}",
+      "team": "Team",
+      "solo": "Solo",
+      "whoIs": "Who is {{code}}?",
+      "whoIsBody": "The statement prints only the code {{code}}. Type the driver's full name.",
+      "namePlaceholder": "Full name",
+      "latestWeek": "Week ending {{date}}",
+      "ytd": "Year to date",
+      "wages": "Wages",
+      "employerTaxes": "Employer taxes",
+      "workComp": "Work comp",
+      "total": "Total",
+      "paidWeeks": "Paid weeks this year: {{count}}",
+      "note": "Paid through the carrier's payroll on your settlement. Already in your expenses; shown here only to say who was paid."
+    }
   },
   "loads": {
     "title": "Loads",

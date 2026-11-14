@@ -1113,7 +1113,7 @@ under each is unchanged original wording.
   batch D (profit explainer, estimates-
   only notice + acknowledgment gate), pushed. Ships via `eas update --branch preview`. Plan progress:
   `docs/decisions/master-plan-2026-10.md`.
-- **Database** (`docs/PENDING_SQL.md`, 87 sections): everything is applied
+- **Database** (`docs/PENDING_SQL.md`, 88 sections): everything is applied
   except:
   - §71 usage analytics — NOT applied, on purpose (analytics deferred).
     `pending_71.sql` kept.
@@ -1123,6 +1123,9 @@ under each is unchanged original wording.
   - §85 Diagnostics functions from pg_proc — NOT YET APPLIED,
     `pending_85.sql` at the repo root. Until it runs, Diagnostics uses the
     old probe and says "(probe)".
+  - §88 carrier payroll drivers — NOT YET APPLIED, `pending_88.sql`
+    (Desktop `driver-88.sql`). Until it runs, an import saves the week
+    without the driver (non-fatal). `docs/decisions/driver-carrier-payroll.md`.
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
     applied and ai-import redeployed — owner confirmed 2026-10-17, their
@@ -1174,6 +1177,7 @@ under each is unchanged original wording.
 - `docs/decisions/usage-analytics.md` — privacy-safe analytics (§71).
 - `docs/decisions/settlement-import-chunking.md` — multi-page extraction,
   resumable page-by-page import jobs.
+- `docs/decisions/driver-carrier-payroll.md` — Prime WAGE EXPENSE drivers (§88).
 - `docs/decisions/printed-dates-and-held.md` — printed dates, date gate,
   held by carrier, one deposit per statement.
 - `docs/decisions/eas-update-delivery.md` — OTA delivery diagnosis.
