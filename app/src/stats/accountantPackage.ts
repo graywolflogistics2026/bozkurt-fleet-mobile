@@ -16,6 +16,7 @@ import type { ExtractedRevenueItem } from '@/src/import/types';
 import type { TaxYearData } from '@/src/types/db';
 import { classIsOutOfProfit } from '@/src/import/lineClass';
 import { capitalTreatmentLabel, isOpenCapitalItem, type CapitalTreatmentLabel } from '@/src/tax/vehiclePurchase';
+import { buildTollsSummary, type TollEntry, type TollKind, type TollsSettlementIn } from '@/src/stats/tollsSummary';
 
 export type CategoryTotal = { category: string; amount: number };
 
@@ -235,6 +236,9 @@ export type LineItem = {
   // DETAILED export's own line-item rows.
   vendor: string | null;
   reference: string | null;
+  // Tolls & Scales rows only: the Tolls & Fees screen's subtotal
+  // (src/stats/tollsSummary.ts tollKindOf()).
+  tollKind?: TollKind;
 };
 
 // TOO MUCH NOISE IN THE OUT-OF-POCKET SCOPE (owner decision, device
@@ -268,14 +272,26 @@ export function buildLineItems(
   tolls: Toll[],
   year: number,
   month: number | null,
-  scope: AccountantScope
+  scope: AccountantScope,
+  // Week ending lookup for settlement toll rows (optional: without it a
+  // settlement toll row keeps its own date).
+  settlements: TollsSettlementIn[] = []
 ): LineItem[] {
   const items: LineItem[] = [];
+  // TOLLS (owner 2026-11-14): the Tolls & Fees screen's rule, shared — a
+  // tolls row covered by a toll/fee line of its own settlement is that
+  // line's breakdown and is never listed or summed here; settlement toll
+  // rows are dated by their week ending, own rows by their own date.
+  const tollEntryByKey = new Map<string, TollEntry>(
+    buildTollsSummary({ deductions, tolls, settlements, period: 'all' }).entries.map((e) => [e.key, e])
+  );
 
   for (const d of deductions) {
     const amount = Number(d.amount ?? 0);
     if (!amount) continue;
-    if (!inAccountantPeriod(d.ded_date, year, month)) continue;
+    const tollEntry = tollEntryByKey.get(`d:${d.id}`);
+    const date = tollEntry ? tollEntry.date : d.ded_date;
+    if (!inAccountantPeriod(date, year, month)) continue;
     const origin: LineItemOrigin = (d.source as LineItemOrigin) ?? 'manual';
     if (!matchesAccountantScope(origin, scope)) continue;
     // TOO MUCH NOISE (see this function's own header comment above) —
@@ -290,7 +306,7 @@ export function buildLineItems(
     items.push({
       id: d.id,
       kind: 'deduction',
-      date: d.ded_date,
+      date,
       description: d.description || d.category || 'Deduction',
       category: d.category ?? 'Misc',
       amount,
@@ -302,6 +318,7 @@ export function buildLineItems(
       paymentMethod: d.payment_method ?? null,
       vendor: d.store ?? null,
       reference: null,
+      ...(tollEntry ? { tollKind: tollEntry.kind } : {}),
     });
   }
 
@@ -352,13 +369,16 @@ export function buildLineItems(
   for (const t of tolls) {
     const amount = Number(t.amount ?? 0);
     if (!amount) continue;
-    if (!inAccountantPeriod(t.toll_date, year, month)) continue;
+    // Absent = covered by its settlement's toll line (already included).
+    const tollEntry = tollEntryByKey.get(`t:${t.id}`);
+    if (!tollEntry) continue;
+    if (!inAccountantPeriod(tollEntry.date, year, month)) continue;
     const origin: LineItemOrigin = t.source ?? 'import';
     if (!matchesAccountantScope(origin, scope)) continue;
     items.push({
       id: t.id,
       kind: 'toll',
-      date: t.toll_date,
+      date: tollEntry.date,
       description: t.plaza || 'Toll',
       category: 'Tolls & Scales',
       amount,
@@ -368,6 +388,7 @@ export function buildLineItems(
       paymentMethod: null,
       vendor: null,
       reference: null,
+      tollKind: tollEntry.kind,
     });
   }
 
@@ -402,17 +423,22 @@ export function buildScheduleCTotals(lineItems: LineItem[], userCategories: User
 // list while still counting toward the bucket's total if grouped by the
 // raw `category` string instead (a real bug caught during the original
 // Accountant Package rework, see this file's own history).
-export type GroupedScheduleCCategory = ScheduleCLineTotal & { items: LineItem[] };
+// tollsSplit: present on the bucket holding Tolls & Scales rows — the
+// Tolls & Fees screen's two subtotals (tolls & fees / scales).
+export type GroupedScheduleCCategory = ScheduleCLineTotal & { items: LineItem[]; tollsSplit?: { tolls: number; scales: number } };
 
 export function groupLineItemsByScheduleCBucket(
   lineItems: LineItem[],
   totals: ScheduleCLineTotal[],
   userCategories: UserCategory[]
 ): GroupedScheduleCCategory[] {
-  return totals.map((total) => ({
-    ...total,
-    items: lineItems.filter((li) => li.deductible && resolveScheduleCBucket(li.category, userCategories) === total.category),
-  }));
+  return totals.map((total) => {
+    const items = lineItems.filter((li) => li.deductible && resolveScheduleCBucket(li.category, userCategories) === total.category);
+    const tollItems = items.filter((li) => li.tollKind);
+    if (tollItems.length === 0) return { ...total, items };
+    const sum = (k: TollKind) => Math.round(tollItems.filter((li) => li.tollKind === k).reduce((acc, li) => acc + li.amount, 0) * 100) / 100;
+    return { ...total, items, tollsSplit: { tolls: sum('tolls'), scales: sum('scales') } };
+  });
 }
 
 // Rows the withheld/combined scopes list for reference but never count

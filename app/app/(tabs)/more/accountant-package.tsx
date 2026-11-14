@@ -255,9 +255,10 @@ export default function AccountantPackage() {
         tollsQuery.data ?? [],
         year,
         month,
-        scope
+        scope,
+        settlementsQuery.data ?? []
       ),
-    [deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, year, month, scope]
+    [deductionsQuery.data, fuelQuery.data, maintenanceQuery.data, tollsQuery.data, year, month, scope, settlementsQuery.data]
   );
 
   const scheduleCTotals = useMemo(
@@ -488,6 +489,8 @@ export default function AccountantPackage() {
   function buildBaseReportStrings(): Omit<AccountantReportStrings, 'reimbursementsSubline' | 'implausibleDateWarning' | 'miscConcentrationWarning' | 'notDeductibleReference'> {
     return {
       grossIncome: t('accountantPackage.grossIncome'),
+      tollsSplitTolls: t('tolls.tollsAndFees'),
+      tollsSplitScales: t('tolls.scales'),
       deductibleExpenses: t('accountantPackage.deductibleExpenses'),
       reconcilingCaption: t('accountantPackage.reconcilingCaption'),
       perDiemTitle: t('accountantPackage.perDiemTitle'),
@@ -570,7 +573,7 @@ export default function AccountantPackage() {
     const items =
       scopeMonth === month && scopeYear === year
         ? lineItems
-        : buildLineItems(deductionsQuery.data ?? [], fuelQuery.data ?? [], maintenanceQuery.data ?? [], tollsQuery.data ?? [], scopeYear, scopeMonth, scope);
+        : buildLineItems(deductionsQuery.data ?? [], fuelQuery.data ?? [], maintenanceQuery.data ?? [], tollsQuery.data ?? [], scopeYear, scopeMonth, scope, settlementsQuery.data ?? []);
     const totals = buildScheduleCTotals(items, userCategoriesQuery.data ?? []);
     const total = totals.reduce((sum, c) => sum + c.amount, 0);
     const miscWarningForExport = checkMiscConcentration(totals);
@@ -939,6 +942,12 @@ export default function AccountantPackage() {
                         </View>
                         <Text style={styles.categoryHeaderAmount}>{money(cat.amount)}</Text>
                       </View>
+                      {cat.tollsSplit && (
+                        <View style={{ paddingStart: spacing.md, paddingVertical: spacing.xs }}>
+                          <Row label={t('tolls.tollsAndFees')} value={money(cat.tollsSplit.tolls)} />
+                          <Row label={t('tolls.scales')} value={money(cat.tollsSplit.scales)} />
+                        </View>
+                      )}
                       {cat.items.map((item, i) => (
                         <LineItemRow key={item.id} item={item} isFirst={i === 0} onEdit={() => openEdit(item)} onDelete={() => handleDeleteItem(item)} money={money} />
                       ))}

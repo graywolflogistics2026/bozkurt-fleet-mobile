@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-14 — Accountant Package tolls: the Tolls & Fees rule, no double count
+
+`buildLineItems()` (`app/src/stats/accountantPackage.ts`) now calls `buildTollsSummary()` (`tollsSummary.ts`, f62b115) instead of adding every `tolls` row on top of the toll deductions.
+- A `tolls` row covered by a toll/fee line of its own settlement is never listed or summed. Settlement toll rows are dated by week ending; own rows by their own date. Other deductions keep their own date.
+- The Tolls & Scales category shows tolls & fees / scales sub-lines (screen, PDF, Excel).
+- Owner data: Withheld 796.97 (was 864.44), Out of pocket 30.50, Combined 827.47 (was 894.94) = 709.47 + 118.00.
+- Profit, Home, KPI, Capital, import and the Tolls & Fees screen unchanged. Tests: `accountantPackageTolls.test.ts`, shared fixture `src/stats/__tests__/fixtures/ownerTolls.ts`.
+- Reported, not changed: Cash Flow forecast spend events (`cashFlowForecast.ts:97-122`) and the Profit Audit cross-check (`kpi.ts:584-596`) still add a toll line and its itemized rows.
+- Ship: no SQL, no redeploy, `eas update`.
+
 ## 2026-11-13 — Tolls & Fees screen: every toll row, no double count, period tabs
 
 Screen only (`app/app/(tabs)/more/tolls.tsx`, new `app/src/stats/tollsSummary.ts`). It showed only the `tolls` table (67.47, every period).

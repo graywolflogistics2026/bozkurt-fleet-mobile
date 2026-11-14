@@ -35,6 +35,9 @@ export type ReportFormat = 'summary' | 'detailed';
 
 export type AccountantReportStrings = {
   grossIncome: string;
+  // The Tolls & Scales bucket's two subtotals (src/stats/tollsSummary.ts).
+  tollsSplitTolls?: string;
+  tollsSplitScales?: string;
   // Already interpolated with the real amount by the caller (or undefined
   // when there are no reimbursements this period — the sub-line is
   // omitted entirely, never shown as "+ $0").
@@ -251,6 +254,12 @@ export function buildAccountantReportHtml(
           <td colspan="2" class="cat-name">${esc(cat.category)}${scheduleCChip(cat.scheduleCLine, strings)}</td>
           <td class="amt cat-amt">${fmt.money(cat.amount)}</td>
         </tr>
+        ${
+          cat.tollsSplit
+            ? `<tr><td colspan="2" style="padding-left:24px">${esc(strings.tollsSplitTolls ?? 'Tolls & fees')}</td><td class="amt">${fmt.money(cat.tollsSplit.tolls)}</td></tr>
+        <tr><td colspan="2" style="padding-left:24px">${esc(strings.tollsSplitScales ?? 'Scales / weight tickets')}</td><td class="amt">${fmt.money(cat.tollsSplit.scales)}</td></tr>`
+            : ''
+        }
         ${detailed ? cat.items.map((item) => lineItemRow(item, strings, fmt)).join('') : ''}
       `
     )
