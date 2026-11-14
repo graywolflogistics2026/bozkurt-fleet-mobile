@@ -1422,6 +1422,18 @@
     "add": "إضافة",
     "addTitle": "➕ إضافة رسم",
     "total": "الإجمالي",
+    "tollsAndFees": "Tolls & fees",
+    "scales": "Scales / weight tickets",
+    "withheldBy": "Withheld by {{carrier}}",
+    "withheldBySettlement": "Withheld from a settlement",
+    "paidByMe": "Paid by me",
+    "breakdownTitle": "Itemized (already in this line, not added again):",
+    "period": {
+      "thisMonth": "هذا الشهر",
+      "3M": "3 أشهر",
+      "ytd": "منذ بداية السنة",
+      "all": "الكل"
+    },
     "empty": "لا توجد رسوم بعد.",
     "networkLabel": "الشبكة",
     "plazaLabel": "نقطة الرسم",

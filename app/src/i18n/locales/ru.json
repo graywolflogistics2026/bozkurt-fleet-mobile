@@ -1422,6 +1422,18 @@
     "add": "Добавить",
     "addTitle": "➕ Добавить Платёж",
     "total": "Всего",
+    "tollsAndFees": "Платные дороги и сборы",
+    "scales": "Весы / весовые талоны",
+    "withheldBy": "Удержано {{carrier}}",
+    "withheldBySettlement": "Удержано из settlement",
+    "paidByMe": "Оплачено мной",
+    "breakdownTitle": "Детализация (уже в этой строке, повторно не добавляется):",
+    "period": {
+      "thisMonth": "Этот месяц",
+      "3M": "3М",
+      "ytd": "С начала года",
+      "all": "Всё"
+    },
     "empty": "Пока нет платежей.",
     "networkLabel": "Сеть",
     "plazaLabel": "Пункт Оплаты",

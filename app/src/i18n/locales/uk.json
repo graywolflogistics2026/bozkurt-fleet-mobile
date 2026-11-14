@@ -1422,6 +1422,18 @@
     "add": "Add",
     "addTitle": "➕ Add Toll",
     "total": "Total",
+    "tollsAndFees": "Tolls & fees",
+    "scales": "Scales / weight tickets",
+    "withheldBy": "Withheld by {{carrier}}",
+    "withheldBySettlement": "Withheld from a settlement",
+    "paidByMe": "Paid by me",
+    "breakdownTitle": "Itemized (already in this line, not added again):",
+    "period": {
+      "thisMonth": "This Month",
+      "3M": "3M",
+      "ytd": "YTD",
+      "all": "All"
+    },
     "empty": "No tolls yet.",
     "networkLabel": "Network",
     "plazaLabel": "Plaza",

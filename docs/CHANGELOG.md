@@ -11,6 +11,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Tolls & Fees screen: every toll row, no double count, period tabs
+
+Screen only (`app/app/(tabs)/more/tolls.tsx`, new `app/src/stats/tollsSummary.ts`). It showed only the `tolls` table (67.47, every period).
+- Rows: deductions in "Tolls & Scales" (withheld + own) + `tolls` rows not covered by a toll/fee line of their own settlement. Covered rows show as that line's breakdown, never in the total.
+- Subtotals: scales = /weight ticket(s)|cat scale|scale(s)/ in the description, everything else tolls & fees. Each row: "Withheld by <carrier>" / "Paid by me".
+- Shared period tabs (`periodFilter.ts`): settlement rows by week ending, own rows by own date. Owner data, All: 709.47 + 118.00 = 827.47.
+- Profit, Home, KPIs, Capital and import unchanged. "+ Add" still writes `tolls`. 7 locales. Tests: `tollsSummary.test.ts`.
+- Not changed (reported): the Accountant Package withheld/combined view lists both a toll deduction and its own itemized `tolls` rows (double count there).
+- Ship: no SQL, no redeploy, `eas update`.
+
 ## 2026-11-13 — §88 applied (owner verified)
 - BOZKME (PRIME INC, w2_employee, paid_via_carrier_payroll); 2 payments, source settlement: 11/06 665.11 / 60.73 / 79.66 / 805.50, 11/13 913.06 / 76.85 / 109.15 / 1,099.06; paid_weeks 2, ytd 1,904.56. pending_88.sql removed, SQL inlined in §88.
 - team_week follow-up: the saved extractions had no "+ TEAM" on their revenue lines (PART 2 set false); the PDFs print it on both weeks, so the owner set team_week = true on 11/06 and 11/13 by a separate update. Live reads of "+ TEAM" still unconfirmed for new imports.

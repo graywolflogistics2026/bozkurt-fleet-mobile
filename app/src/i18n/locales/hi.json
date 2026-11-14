@@ -1427,6 +1427,18 @@
     "add": "जोड़ें",
     "addTitle": "➕ टोल जोड़ें",
     "total": "कुल",
+    "tollsAndFees": "टोल और शुल्क",
+    "scales": "स्केल / वज़न टिकट",
+    "withheldBy": "{{carrier}} द्वारा काटा गया",
+    "withheldBySettlement": "settlement से काटा गया",
+    "paidByMe": "मेरे द्वारा भुगतान",
+    "breakdownTitle": "विवरण (इसी पंक्ति में शामिल, दोबारा नहीं जोड़ा गया):",
+    "period": {
+      "thisMonth": "इस महीने",
+      "3M": "3M",
+      "ytd": "YTD",
+      "all": "सभी"
+    },
     "empty": "अभी तक कोई टोल नहीं।",
     "networkLabel": "नेटवर्क",
     "plazaLabel": "प्लाजा",

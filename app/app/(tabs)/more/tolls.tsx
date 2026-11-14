@@ -4,6 +4,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
 import { useTolls, useInsertToll, useDeleteToll } from '@/src/data/tolls';
+import { useDeductions } from '@/src/data/deductions';
+import { useSettlements } from '@/src/data/settlements';
+import { buildTollsSummary, type TollEntry } from '@/src/stats/tollsSummary';
+import { PERIOD_OPTIONS, type PeriodOption } from '@/src/stats/periodFilter';
+import { carrierDisplayName } from '@/src/import/carrierPayroll';
+import { useSessionState } from '@/src/lib/useSessionState';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -12,7 +18,6 @@ import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
-import type { Toll } from '@/src/types/db';
 import { todayDateOnly } from '@/src/lib/dateOnly';
 import { numOrNull } from '@/src/lib/number';
 
@@ -39,23 +44,41 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
   );
 }
 
-function TollRow({ x, networkLabel, onDelete }: { x: Toll; networkLabel: string; onDelete: () => void }) {
+function TollEntryRow({ x, onDelete }: { x: TollEntry; onDelete: (() => void) | null }) {
+  const { t } = useTranslation();
   const { money, date } = useFormatters();
+  const origin = x.withheld
+    ? x.carrier
+      ? t('tolls.withheldBy', { carrier: carrierDisplayName(x.carrier) })
+      : t('tolls.withheldBySettlement')
+    : t('tolls.paidByMe');
   return (
     <View style={styles.row}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.desc} numberOfLines={1}>
-          {x.plaza ?? networkLabel}
+        <Text style={styles.desc} numberOfLines={2}>
+          {x.description}
         </Text>
         <MutedText>
-          {x.toll_date ? date(x.toll_date) : '—'} · {networkLabel}
+          {x.date ? date(x.date) : '—'} · {x.kind === 'scales' ? t('tolls.scales') : t('tolls.tollsAndFees')} · {origin}
         </MutedText>
+        {x.breakdown.length > 0 && (
+          <View style={{ marginTop: spacing.xs, paddingStart: spacing.sm, borderStartWidth: 2, borderStartColor: colors.border }}>
+            <MutedText>{t('tolls.breakdownTitle')}</MutedText>
+            {x.breakdown.map((b) => (
+              <MutedText key={b.id}>
+                {b.date ? date(b.date) : '—'} · {b.label} · {money(b.amount)}
+              </MutedText>
+            ))}
+          </View>
+        )}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.amount}>{money(x.amount ?? 0)}</Text>
-        <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: spacing.xs }}>
-          <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
-        </Pressable>
+        <Text style={styles.amount}>{money(x.amount)}</Text>
+        {onDelete && (
+          <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: spacing.xs }}>
+            <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -70,6 +93,10 @@ export default function Tolls() {
   // the selector."
   const { activeTruckId } = useActiveTruck();
   const tollsQuery = useTolls({ truck_id: truckIdFilterFor(activeTruckId) });
+  const deductionsQuery = useDeductions({ truck_id: truckIdFilterFor(activeTruckId) });
+  // Week ending + carrier lookup only (never a filter).
+  const settlementsQuery = useSettlements();
+  const [period, setPeriod] = useSessionState<PeriodOption>('tolls-period', 'all');
   const insertToll = useInsertToll();
   const deleteToll = useDeleteToll();
   const queryClient = useQueryClient();
@@ -81,28 +108,27 @@ export default function Tolls() {
   const [amount, setAmount] = useState('');
   const [tollDate, setTollDate] = useState('');
 
-  const networkLabel = useCallback((n: string | null) => t(`tolls.networks.${n ?? 'other'}`), [t]);
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await invalidateFinancialData(queryClient, { entities: ['tolls'] });
+      await invalidateFinancialData(queryClient, { entities: ['tolls', 'deductions', 'settlements'] });
     } finally {
       setRefreshing(false);
     }
   }, [queryClient]);
 
-  const rows = useMemo(() => {
-    const list = tollsQuery.data ?? [];
-    return [...list].sort((a, b) => (b.toll_date ?? '').localeCompare(a.toll_date ?? ''));
-  }, [tollsQuery.data]);
-
-  const stats = useMemo(() => {
-    const ezpass = rows.filter((x) => x.network === 'ezpass').reduce((sum, x) => sum + Number(x.amount ?? 0), 0);
-    const drivewyze = rows.filter((x) => x.network === 'drivewyze').reduce((sum, x) => sum + Number(x.amount ?? 0), 0);
-    const total = rows.reduce((sum, x) => sum + Number(x.amount ?? 0), 0);
-    return { ezpass, drivewyze, total };
-  }, [rows]);
+  // TOLLS & FEES (owner 2026-11-13): src/stats/tollsSummary.ts decides
+  // the rows, the two subtotals and the period. Screen-only.
+  const summary = useMemo(
+    () =>
+      buildTollsSummary({
+        deductions: deductionsQuery.data ?? [],
+        tolls: tollsQuery.data ?? [],
+        settlements: settlementsQuery.data ?? [],
+        period,
+      }),
+    [deductionsQuery.data, tollsQuery.data, settlementsQuery.data, period]
+  );
 
   function openAdd() {
     setNetwork('ezpass');
@@ -137,7 +163,7 @@ export default function Tolls() {
     }
   }
 
-  function handleDelete(x: Toll) {
+  function handleDelete(x: TollEntry) {
     Alert.alert(t('tolls.deleteConfirmTitle'), undefined, [
       { text: t('common.cancel'), style: 'cancel' },
       {
@@ -171,36 +197,43 @@ export default function Tolls() {
         </View>
         <FleetScopeLabel />
 
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm }}>
+          {PERIOD_OPTIONS.map((p) => (
+            <Pill key={p} label={t(`tolls.period.${p}`)} selected={period === p} onPress={() => setPeriod(p)} />
+          ))}
+        </View>
+
         <Card>
           <View style={styles.statRow}>
             <View style={styles.statCell}>
-              <MutedText>{t('tolls.networks.ezpass')}</MutedText>
-              <Text style={styles.statValue}>{money(stats.ezpass)}</Text>
+              <MutedText>{t('tolls.tollsAndFees')}</MutedText>
+              <Text style={styles.statValue}>{money(summary.tolls)}</Text>
             </View>
             <View style={styles.statCell}>
-              <MutedText>{t('tolls.networks.drivewyze')}</MutedText>
-              <Text style={styles.statValue}>{money(stats.drivewyze)}</Text>
+              <MutedText>{t('tolls.scales')}</MutedText>
+              <Text style={styles.statValue}>{money(summary.scales)}</Text>
             </View>
             <View style={styles.statCell}>
               <MutedText>{t('tolls.total')}</MutedText>
-              <Text style={styles.statValue}>{money(stats.total)}</Text>
+              <Text style={styles.statValue}>{money(summary.total)}</Text>
             </View>
           </View>
         </Card>
 
         <MonthGroupedList
           screenKey="tolls"
-          rows={rows}
-          getDate={(x) => x.toll_date}
-          getAmount={(x) => x.amount ?? 0}
-          loading={tollsQuery.isLoading}
+          rows={summary.entries}
+          getDate={(x) => x.date}
+          getAmount={(x) => x.amount}
+          loading={tollsQuery.isLoading || deductionsQuery.isLoading}
           loadingLabel={t('common.loading')}
           emptyLabel={t('tolls.empty')}
           renderRows={(monthRows) => (
             <Card>
               {monthRows.map((x, i) => (
-                <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                  <TollRow x={x} networkLabel={networkLabel(x.network)} onDelete={() => handleDelete(x)} />
+                <View key={x.key} style={i > 0 ? styles.rowBorder : undefined}>
+                  {/* Deduction lines are edited on Deductions; only tolls-table rows delete here. */}
+                  <TollEntryRow x={x} onDelete={x.table === 'tolls' ? () => handleDelete(x) : null} />
                 </View>
               ))}
             </Card>

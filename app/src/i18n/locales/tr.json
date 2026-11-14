@@ -1422,6 +1422,18 @@
     "add": "Ekle",
     "addTitle": "➕ Geçiş Ücreti Ekle",
     "total": "Toplam",
+    "tollsAndFees": "Geçiş ücretleri ve masraflar",
+    "scales": "Kantar / tartı fişleri",
+    "withheldBy": "{{carrier}} tarafından kesildi",
+    "withheldBySettlement": "Settlement'tan kesildi",
+    "paidByMe": "Benim ödediğim",
+    "breakdownTitle": "Döküm (bu satırın içinde, tekrar eklenmez):",
+    "period": {
+      "thisMonth": "Bu Ay",
+      "3M": "3A",
+      "ytd": "YTD",
+      "all": "Tümü"
+    },
     "empty": "Henüz geçiş ücreti yok.",
     "networkLabel": "Ağ",
     "plazaLabel": "Gişe",

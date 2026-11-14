@@ -1422,6 +1422,18 @@
     "add": "Agregar",
     "addTitle": "➕ Agregar Peaje",
     "total": "Total",
+    "tollsAndFees": "Peajes y cargos",
+    "scales": "Básculas / tickets de peso",
+    "withheldBy": "Retenido por {{carrier}}",
+    "withheldBySettlement": "Retenido en un settlement",
+    "paidByMe": "Pagado por mí",
+    "breakdownTitle": "Detalle (ya incluido en esta línea, no se suma otra vez):",
+    "period": {
+      "thisMonth": "Este Mes",
+      "3M": "3M",
+      "ytd": "YTD",
+      "all": "Todo"
+    },
     "empty": "Aún no hay peajes.",
     "networkLabel": "Red",
     "plazaLabel": "Plaza",
