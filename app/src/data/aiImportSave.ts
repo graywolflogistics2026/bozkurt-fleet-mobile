@@ -377,6 +377,8 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
   // Statement of Income and Expense — saved to settlements.statement (§77).
   let settlementStatement: SettlementStatement | null = null;
   let linesNotSaved = false;
+  // The reimbursement rows before a line-details mismatch emptied them (PR only is put back).
+  let reimbursementsBeforeGate: ReturnType<typeof mapSettlement>['reimbursements'] | null = null;
   if (d.docType === 'settlement' && d.settlement) {
     settlementStatement = buildSettlementStatement(d, {
       // Batch D2: no override path any more — a week is saved only when
@@ -455,6 +457,10 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // its headline numbers (profit stays the statement's) but never the
     // mismatching line rows — no wrong deduction, fuel or load rows.
     if (gate.lineDetails === 'mismatch') {
+      // PR = OWNER MONEY IN survives (owner 2026-11-13, device: 07/17 PR
+      // 3,999.00 never reached Capital Account). Kept aside here; only the
+      // PR credits are put back below, out of profit, never an expense.
+      reimbursementsBeforeGate = settlementMapping.reimbursements;
       settlementMapping.loads = [];
       settlementMapping.fuel = [];
       settlementMapping.deductions = [];
@@ -568,11 +574,17 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // taken) is not a reimbursement: it is kept as a credit line with its
     // class, so it never offsets an expense. mapSettlement() maps
     // reimbursementItems 1:1 in order, so the indexes line up.
-    const credits = nonReimbursementCredits(d.settlement.reimbursementItems ?? [], carrierKey, carrierCodeMaps);
-    if (credits.length > 0 && mapping.reimbursements.length === (d.settlement.reimbursementItems ?? []).length) {
+    // Line details mismatch: every line row was dropped, except the PR
+    // credits (owner money in), rebuilt here from the rows before the gate.
+    const allCredits = nonReimbursementCredits(d.settlement.reimbursementItems ?? [], carrierKey, carrierCodeMaps);
+    const reimbSource = reimbursementsBeforeGate ?? mapping.reimbursements;
+    const credits = reimbursementsBeforeGate
+      ? allCredits.filter((c) => ((d.settlement!.reimbursementItems ?? [])[c.index]?.code ?? '').trim().toUpperCase() === 'PR')
+      : allCredits;
+    if (credits.length > 0 && reimbSource.length === (d.settlement.reimbursementItems ?? []).length) {
       const moved = new Set(credits.map((c) => c.index));
       for (const c of credits) {
-        const r = mapping.reimbursements[c.index];
+        const r = reimbSource[c.index];
         const item = (d.settlement.reimbursementItems ?? [])[c.index];
         mapping.deductions.push({
           user_id: userId,

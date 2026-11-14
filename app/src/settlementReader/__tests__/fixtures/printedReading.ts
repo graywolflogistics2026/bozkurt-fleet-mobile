@@ -101,6 +101,16 @@ export function statementRows(input: StatementInput): ReadStatementRow[] {
 
 const PAYOUT_LABEL: Record<string, string> = { Banka: 'DIRECT DEPOSIT', 'Karta yükleme': 'AMOUNT LOADED ON CARD' };
 
+// PR / POS AS PRINTED (owner 2026-11-13): the weeks whose personal line the
+// workbook nets into one number carry their real separate lines — the PR
+// reimbursement (owner money in) and the POS charge — on the settlement page
+// and on the statement. 07/17: PR 3,999.00 and POS 177.55 (net 3,821.45);
+// 08/21: PR 1.00.
+export const PERSONAL_SPLIT: Record<string, { pr: number; pos: number }> = {
+  '2026-07-17': { pr: 3999.0, pos: 177.55 },
+  '2026-08-21': { pr: 1.0, pos: 0 },
+};
+
 // The statement lines of a workbook week, one line per economic class.
 // `extra`: real printed expense lines (wage weeks) taken out of the one
 // TRACTOR FUEL / PHYSICAL DAMAGE line of their part (variable / fixed).
@@ -112,8 +122,14 @@ export function classLines(w: GoldenWeek, extra: PrintedLine[] = []): PrintedLin
   if (realVariable !== 0) lines.push({ section: 'fuel_oil_tax', label: 'TRACTOR FUEL', amount: -realVariable });
   lines.push(...extra.filter((l) => l.section !== 'fixed'));
   if (w.advancesNet !== 0) lines.push({ section: 'misc', label: 'ADVANCES', amount: -w.advancesNet });
-  if (w.personalNet > 0) lines.push({ section: 'misc', label: 'PRIME POINT-OF-SALE', amount: -w.personalNet });
-  if (w.personalNet < 0) lines.push({ section: 'misc', label: 'PERSONAL PYMNT RCV', amount: -w.personalNet });
+  const split = PERSONAL_SPLIT[w.weekEnding];
+  if (split && r2(split.pos - split.pr) === r2(w.personalNet)) {
+    if (split.pos !== 0) lines.push({ section: 'misc', label: 'PRIME POINT-OF-SALE', amount: -split.pos });
+    lines.push({ section: 'misc', label: 'PERSONAL PYMNT RCV', amount: split.pr });
+  } else {
+    if (w.personalNet > 0) lines.push({ section: 'misc', label: 'PRIME POINT-OF-SALE', amount: -w.personalNet });
+    if (w.personalNet < 0) lines.push({ section: 'misc', label: 'PERSONAL PYMNT RCV', amount: -w.personalNet });
+  }
   if (w.capitalPurchase !== 0) lines.push({ section: 'misc', label: 'OPERATOR TRK EXTRAS', amount: -w.capitalPurchase });
   if (r2(w.fixedTotal - extraFixed) !== 0) lines.push({ section: 'fixed', label: 'PHYSICAL DAMAGE INSURANCE', amount: -r2(w.fixedTotal - extraFixed) });
   lines.push(...extra.filter((l) => l.section === 'fixed'));
@@ -184,6 +200,20 @@ export const WAGES_1113: WageWeek = {
   ],
 };
 
+function personalSettlementLines(w: GoldenWeek): ReadSettlementLine[] {
+  const split = opts0(w);
+  if (!split) return [];
+  const out: ReadSettlementLine[] = [
+    { page: 1, section: 'reimbursement', code: 'PR', description: 'PERSONAL PYMNT RCV', reference: '', amount: printed(split.pr), direction: 'credit' },
+  ];
+  if (split.pos !== 0) out.push({ page: 2, section: 'deduction', code: 'PO', description: 'PRIME POINT OF SALE', reference: '', amount: printed(split.pos), direction: 'charge' });
+  return out;
+}
+function opts0(w: GoldenWeek) {
+  const split = PERSONAL_SPLIT[w.weekEnding];
+  return split && r2(split.pos - split.pr) === r2(w.personalNet) ? split : null;
+}
+
 export function printedFromWeek(
   w: GoldenWeek & { wages?: number },
   opts: { lines?: PrintedLine[]; wage?: WageWeek; statementOverride?: (rows: ReadStatementRow[]) => ReadStatementRow[] } = {}
@@ -234,7 +264,10 @@ export function printedFromWeek(
     driverName: '',
     settlementDateRaw: yymmdd(iso),
     printDateRaw: printDateOf(iso),
-    settlementLines: (opts.wage?.lines ?? []).map((l) => ({ page: opts.wage!.page, section: 'wage' as const, code: l.code, description: l.description, reference: '', amount: printed(l.amount), direction: 'charge' as const })),
+    settlementLines: [
+      ...(opts.wage?.lines ?? []).map((l) => ({ page: opts.wage!.page, section: 'wage' as const, code: l.code, description: l.description, reference: '', amount: printed(l.amount), direction: 'charge' as const })),
+      ...personalSettlementLines(w),
+    ],
     summary,
     loads: w.miles > 0 ? [{ page: 1, order: '4700001', origin: '', destination: '', loadedMiles: printed(w.loadedMiles), emptyMiles: printed(w.emptyMiles), revenue: printed(freight) }] : [],
     milesLines: [

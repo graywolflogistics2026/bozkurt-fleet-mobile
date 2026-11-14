@@ -794,7 +794,12 @@ describe('self-check: a misread number never becomes a silently wrong profit', (
     const rows = await importGolden(statementExtraction({ operating: misread() }));
     expect(rows.settlements).toHaveLength(1);
     expect(rows.settlements[0].statement?.linesNotSaved).toBe(true);
-    expect(rows.deductions).toEqual([]);
+    // Only the PR credit (owner money in, out of profit) is kept, so its
+    // Capital Account contribution is written (owner 2026-11-13).
+    expect(rows.deductions.map((d) => [d.code, d.amount, d.economic_class, d.direction])).toEqual([['PR', -1, 'PERSONAL', 'credit']]);
+    expect(rows.loads).toEqual([]);
+    expect(rows.fuel).toEqual([]);
+    expect(rows.reimbursements).toEqual([]);
     expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
     expect(settlementDeposit(rows.settlements[0]).deposited).toBe(KEY.deposit);
   });
