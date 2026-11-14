@@ -1,4 +1,5 @@
 import { CANONICAL_CATEGORIES, isLumperFee, isVehiclePurchaseOneOff } from '@/src/import/category';
+import { isOwnExpenseRow } from '@/src/stats/ownExpenseOrigin';
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
 
 // MAP EXISTING OUT-OF-POCKET DEDUCTIONS INTO THE 16 ACCOUNTANT CATEGORIES
@@ -196,13 +197,18 @@ export type NeedsCategoryRow = {
   category: string | null;
   source: string | null;
   accountant_category: string | null;
+  settlement_id?: string | null;
+  document_id?: string | null;
 };
 
-export function findRowsNeedingAccountantCategory<T extends NeedsCategoryRow>(rows: T[]): T[] {
+// Same own-expense rule as the sheet and Home (isOwnExpenseRow, owner
+// 2026-11-13): a settlement's row never asks for a category here.
+export function findRowsNeedingAccountantCategory<T extends NeedsCategoryRow>(rows: T[], settlementDocIds: ReadonlySet<string> = new Set()): T[] {
   return rows
     .filter(
       (r) =>
         isEligibleForAccountantReport(r.source) &&
+        isOwnExpenseRow(r, settlementDocIds) &&
         !r.accountant_category &&
         !!r.category &&
         r.category in AMBIGUOUS_ACCOUNTANT_CATEGORIES &&

@@ -9,6 +9,7 @@ import {
   type PrimeDriverExpenseRow,
   type EligibleDeductionSource,
 } from '@/src/stats/primeDriverExpenses';
+import { buildSettlementLumperLines, settlementLumpersFor } from '@/src/stats/settlementLumpers';
 import { buildPerDiemBlock, buildLineItems, matchesAccountantScope } from '@/src/stats/accountantPackage';
 import { calcTrueProfit, isDeductibleExpense } from '@/src/stats/trueProfit';
 import type { Deduction } from '@/src/types/db';
@@ -323,9 +324,10 @@ describe('CANONICAL ISOLATION — item 6, the hard requirement', () => {
   });
 });
 
-// PRIME LUMPER EXCEPTION (owner decision 2026-09-23) — BOTH HALVES IN ONE
-// TEST, so this can never drift back to either extreme:
-//   (A) an "ADV FOR OUTSIDE LUMPER" row IS in this screen's Lumpers total;
+// PRIME LUMPER EXCEPTION (owner decision 2026-09-23, reshaped 2026-11-13) —
+// BOTH HALVES IN ONE TEST, so this can never drift back to either extreme:
+//   (A) an "ADV FOR OUTSIDE LUMPER" row is in this screen's "Lumpers —
+//       through settlement" block (never a sheet row, never in a subtotal);
 //   (B) every canonical engine treats it EXACTLY like any other
 //       settlement-withheld, non-deductible row — the lumper wording has
 //       zero effect anywhere outside this report.
@@ -385,22 +387,18 @@ describe('PRIME LUMPER EXCEPTION — on this report, invisible everywhere else',
     };
   }
 
-  it('(A) the ADV FOR OUTSIDE LUMPER row is in this screen’s Lumpers total, and (B) every canonical engine is unaffected', () => {
+  it('(A) the ADV FOR OUTSIDE LUMPER row is in this screen’s through-settlement block, and (B) every canonical engine is unaffected', () => {
     const before = JSON.stringify(canonical(realRows));
 
     // ---- (A) THIS SCREEN ----
-    const reportRows = eligibleDeductionRowsForReport(realRows, nonPrimeSettlementIds(settlements));
+    const reportRows = eligibleDeductionRowsForReport(realRows);
+    // No settlement row is a sheet row, in any category.
+    expect(reportRows).toEqual([]);
     const july = buildPrimeDriverExpenseMonth(reportRows, settlements, 2026, 7);
-    const lumpers = july.sections.find((sec) => sec.category === 'Lumpers')!;
-    expect(lumpers.subtotal).toBe(217.55);
-    expect(lumpers.rows).toEqual([
-      { id: 'adv', exp_date: '2026-07-17', amount: 217.55, category: 'Lumpers', note: 'ADV FOR OUTSIDE LUMPER', origin: 'prime_settlement' },
-    ]);
-    // Item 3: every other category keeps the strict origin rule — the
-    // withheld wash and toll lines on the same settlement stay off.
-    expect(july.sections.find((sec) => sec.category === 'Truck & Trailer Wash')!.subtotal).toBe(0);
-    expect(july.sections.find((sec) => sec.category === 'Cash Tolls/Parking Fees')!.subtotal).toBe(0);
-    expect(july.grandTotal).toBe(217.55);
+    expect(july.grandTotal).toBe(0);
+    const block = settlementLumpersFor(buildSettlementLumperLines(settlements, realRows), 2026, 7);
+    expect(block.lines).toEqual([{ settlementId: 's0717', weekEnding: '2026-07-17', received: null, deducted: 217.55, difference: null }]);
+    expect(block.deducted).toBe(217.55);
     // The deduction row itself is untouched: still withheld, still no accountant_category.
     expect(realRows[0].source).toBe('settlement');
     expect(realRows[0].accountant_category).toBeNull();
@@ -418,12 +416,12 @@ describe('PRIME LUMPER EXCEPTION — on this report, invisible everywhere else',
   });
 
   it('a lumper advance on a settlement from a known NON-Prime carrier stays off this report', () => {
-    const werner = [{ id: 's0717', carrier: 'WERNER ENTERPRISES' }];
-    expect(eligibleDeductionRowsForReport(realRows, nonPrimeSettlementIds(werner))).toEqual([]);
+    const werner = [{ id: 's0717', week_ending: '2026-07-17', carrier: 'WERNER ENTERPRISES' }];
+    expect(buildSettlementLumperLines(werner, realRows)).toEqual([]);
   });
 
   it('a settlement with no recorded carrier is treated as Prime (this screen is Prime-only)', () => {
-    const unknown = [{ id: 's0717', carrier: null }];
-    expect(eligibleDeductionRowsForReport(realRows, nonPrimeSettlementIds(unknown)).map((r) => r.id)).toEqual(['adv']);
+    const unknown = [{ id: 's0717', week_ending: '2026-07-17', carrier: null }];
+    expect(buildSettlementLumperLines(unknown, realRows).map((l) => l.settlementId)).toEqual(['s0717']);
   });
 });

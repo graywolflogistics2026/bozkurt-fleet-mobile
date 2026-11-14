@@ -2280,6 +2280,14 @@
     "personalSettlementNote": "May be deductible on your personal return - your tax professional decides."
   },
   "primeDriverExpenses": {
+    "settlementLumpers": {
+      "title": "Lumpers — through settlement",
+      "note": "Paid in and taken back by Prime on the settlement. Not in the totals.",
+      "received": "Lumper pay received",
+      "deducted": "Lumper advance deducted",
+      "difference": "Difference (wire fee)",
+      "monthTotal": "Month total"
+    },
     "title": "For Prime Inc Drivers",
     "subtitle": "A monthly out-of-pocket expense log matching your accountant's own report format — separate from Deductions.",
     "disclaimer": "This tool is provided to help organize your own records. It does not verify, audit, or guarantee the accuracy of any entry — you're solely responsible for what you enter here and for how it's used in your tax filings. This is not accounting, tax, or legal advice — consult a qualified CPA or tax professional.",

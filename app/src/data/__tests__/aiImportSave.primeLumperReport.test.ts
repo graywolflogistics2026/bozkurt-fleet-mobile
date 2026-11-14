@@ -8,6 +8,10 @@
 //   2. NEW / BACK-DATED IMPORTS — show up in their own month, no extra step
 //   3. COUNTED ONCE — re-import, truck/no-truck double import, and a
 //      reimbursement + advance on one settlement
+// Since 2026-11-13 a settlement lumper is no longer a row of the sheet: it is
+// the read-only "Lumpers — through settlement" block (settlementLumpers.ts),
+// outside every subtotal. lumpersTotal() = own Lumpers subtotal + the block's
+// deducted total, so every guarantee below still holds.
 import type { Extraction } from '@/src/import/types';
 import type { Deduction, Settlement } from '@/src/types/db';
 
@@ -30,7 +34,9 @@ jest.mock('expo-file-system', () => ({
 
 import { createFakeSupabase } from './fakeSupabase';
 import { saveExtraction } from '@/src/data/aiImportSave';
-import { buildPrimeDriverExpenseMonth, eligibleDeductionRowsForReport, nonPrimeSettlementIds } from '@/src/stats/primeDriverExpenses';
+import { buildPrimeDriverExpenseMonth, eligibleDeductionRowsForReport } from '@/src/stats/primeDriverExpenses';
+import { settlementDocumentIds } from '@/src/stats/ownExpenseOrigin';
+import { buildSettlementLumperLines, settlementLumpersFor } from '@/src/stats/settlementLumpers';
 
 const USER_ID = 'user-1';
 
@@ -77,14 +83,13 @@ async function importSettlement(extraction: Extraction, truckId: string | null =
 function lumpersTotal(year: number, month: number): number {
   const deductions = (mockClient.__store.deductions ?? []) as Deduction[];
   const settlements = (mockClient.__store.settlements ?? []) as Settlement[];
-  const rows = eligibleDeductionRowsForReport(
-    deductions,
-    nonPrimeSettlementIds(settlements),
-    new Map(settlements.map((s) => [s.id, s.truck_id ?? null] as const))
-  );
+  const rows = eligibleDeductionRowsForReport(deductions, settlementDocumentIds(settlements));
+  // No settlement row is ever a row of the sheet.
+  expect(rows.filter((r) => deductions.find((d) => d.id === r.id)?.settlement_id)).toEqual([]);
   const monthData = buildPrimeDriverExpenseMonth(rows, settlements, year, month);
-  const total = monthData.sections.find((s) => s.category === 'Lumpers')!.subtotal;
-  return Math.round(total * 100) / 100;
+  const own = monthData.sections.find((s) => s.category === 'Lumpers')!.subtotal;
+  const throughSettlement = settlementLumpersFor(buildSettlementLumperLines(settlements, deductions), year, month).deducted;
+  return Math.round((own + throughSettlement) * 100) / 100;
 }
 
 beforeEach(() => {

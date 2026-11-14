@@ -41,6 +41,8 @@ import {
   daysOverrideKey,
   type PrimeDriverExpenseRow,
 } from '@/src/stats/primeDriverExpenses';
+import { settlementDocumentIds } from '@/src/stats/ownExpenseOrigin';
+import { buildSettlementLumperLines, settlementLumpersFor, signedLumperAmounts, type SettlementLumperStrings } from '@/src/stats/settlementLumpers';
 import { buildPrimeDriverExpenseReportHtml, buildPrimeDriverExpenseReportFilename } from '@/src/stats/primeDriverExpenseReport';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { useFormatters } from '@/src/i18n/format';
@@ -169,17 +171,17 @@ export default function PrimeDriverExpensesScreen() {
     () => (expensesQuery.data ?? []).map((r) => ({ ...r, origin: 'direct' as const })),
     [expensesQuery.data]
   );
-  // PRIME LUMPER EXCEPTION (owner decision 2026-09-23) — see
-  // eligibleDeductionRowsForReport(). Only lumpers from a settlement whose
-  // recorded carrier is a known non-Prime carrier are left out.
+  // ORIGIN RULE (owner 2026-11-13): the same own-expense rule as Home
+  // (isOwnExpenseRow). Settlement lumpers are a separate read-only block.
   const nonPrimeIds = useMemo(() => nonPrimeSettlementIds(settlementsQuery.data ?? []), [settlementsQuery.data]);
-  const settlementTruckIds = useMemo(
-    () => new Map((settlementsQuery.data ?? []).map((s) => [s.id, s.truck_id ?? null] as const)),
-    [settlementsQuery.data]
-  );
+  const settlementDocIds = useMemo(() => settlementDocumentIds(settlementsQuery.data ?? []), [settlementsQuery.data]);
   const deductionRows = useMemo(
-    () => eligibleDeductionRowsForReport(deductionsQuery.data ?? [], nonPrimeIds, settlementTruckIds),
-    [deductionsQuery.data, nonPrimeIds, settlementTruckIds]
+    () => eligibleDeductionRowsForReport(deductionsQuery.data ?? [], settlementDocIds),
+    [deductionsQuery.data, settlementDocIds]
+  );
+  const settlementLumperLines = useMemo(
+    () => buildSettlementLumperLines(settlementsQuery.data ?? [], deductionsQuery.data ?? []),
+    [settlementsQuery.data, deductionsQuery.data]
   );
   const rows: PrimeDriverExpenseRow[] = useMemo(() => mergePrimeDriverExpenseRows(directRows, deductionRows), [directRows, deductionRows]);
   const settlements = settlementsQuery.data ?? [];
@@ -200,8 +202,21 @@ export default function PrimeDriverExpensesScreen() {
     [rows, settlements, year, month, currentDaysOverride]
   );
 
+  const monthLumpers = useMemo(() => settlementLumpersFor(settlementLumperLines, year, month), [settlementLumperLines, year, month]);
+  function lumperStrings(): SettlementLumperStrings {
+    return {
+      title: t('primeDriverExpenses.settlementLumpers.title'),
+      note: t('primeDriverExpenses.settlementLumpers.note'),
+      received: t('primeDriverExpenses.settlementLumpers.received'),
+      deducted: t('primeDriverExpenses.settlementLumpers.deducted'),
+      difference: t('primeDriverExpenses.settlementLumpers.difference'),
+      monthTotal: t('primeDriverExpenses.settlementLumpers.monthTotal'),
+    };
+  }
+
   const availableYears = useMemo(() => {
     const years = new Set<number>([now.getFullYear()]);
+    for (const l of settlementLumperLines) years.add(Number(l.weekEnding.slice(0, 4)));
     for (const r of rows) {
       const y = Number((r.exp_date ?? '').slice(0, 4));
       if (Number.isFinite(y) && y > 0) years.add(y);
@@ -293,7 +308,7 @@ export default function PrimeDriverExpensesScreen() {
     await invalidateFinancialData(queryClient, { entities: ['deductions'] });
   }
 
-  const needsCategoryRows = useMemo(() => findRowsNeedingAccountantCategory(deductionsQuery.data ?? []), [deductionsQuery.data]);
+  const needsCategoryRows = useMemo(() => findRowsNeedingAccountantCategory(deductionsQuery.data ?? [], settlementDocIds), [deductionsQuery.data, settlementDocIds]);
   const [assigningRow, setAssigningRow] = useState<(typeof needsCategoryRows)[number] | null>(null);
   const [assignSaving, setAssignSaving] = useState(false);
   async function handleAssignCategory(category: PrimeDriverExpenseCategory) {
@@ -550,7 +565,7 @@ export default function PrimeDriverExpensesScreen() {
   // `deductions.ded_date` Deductions shows, never a report-only copy, so
   // both screens always agree on which month the row belongs to.
   async function handleSaveEdit() {
-    if (!editingRow || !editCategory || editingRow.origin === 'prime_settlement') return;
+    if (!editingRow || !editCategory) return;
     setEditSaving(true);
     try {
       const newDate = editDate || todayIso();
@@ -590,9 +605,6 @@ export default function PrimeDriverExpensesScreen() {
   // prime_driver_expenses-only row uses that table's own existing
   // delete and only ever affects this report.
   function handleDelete(row: PrimeDriverExpenseRow) {
-    // A Prime settlement lumper is the real withheld deduction — deleting
-    // it here would change true profit/tax everywhere. Never deletable here.
-    if (row.origin === 'prime_settlement') return;
     Alert.alert(t('deductions.deleteConfirmTitle'), t('deductions.deleteConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
@@ -642,7 +654,7 @@ export default function PrimeDriverExpensesScreen() {
   async function handleExportPdf() {
     setExporting('pdf');
     try {
-      const html = buildPrimeDriverExpenseReportHtml(headerLine, monthData, reportStrings(), { money, date });
+      const html = buildPrimeDriverExpenseReportHtml(headerLine, monthData, reportStrings(), { money, date }, { month: monthLumpers, strings: lumperStrings() });
       const { uri } = await Print.printToFileAsync({ html });
       const available = await Sharing.isAvailableAsync();
       if (!available) {
@@ -664,7 +676,7 @@ export default function PrimeDriverExpensesScreen() {
   async function handleExportExcel() {
     setExporting('excel');
     try {
-      const html = buildPrimeDriverExpenseReportHtml(headerLine, monthData, reportStrings(), { money, date });
+      const html = buildPrimeDriverExpenseReportHtml(headerLine, monthData, reportStrings(), { money, date }, { month: monthLumpers, strings: lumperStrings() });
       const filename = buildPrimeDriverExpenseReportFilename(year, month, 'xls');
       const file = new File(Paths.cache, filename);
       if (file.exists) file.delete();
@@ -856,15 +868,58 @@ export default function PrimeDriverExpensesScreen() {
                             {t('primeDriverExpenses.fromDeductions', { date: r.exp_date ? date(r.exp_date) : '' })}
                           </MutedText>
                         )}
-                        {r.origin === 'prime_settlement' && (
-                          <MutedText style={{ color: colors.accent, fontSize: typography.size.xs }}>
-                            {t('primeDriverExpenses.fromPrimeSettlement', { date: r.exp_date ? date(r.exp_date) : '' })}
-                          </MutedText>
-                        )}
                       </View>
                       <Text style={{ color: colors.text, fontWeight: '600' }}>{money(Number(r.amount ?? 0))}</Text>
                     </Pressable>
                   ))
+                )}
+                {/* LUMPERS THROUGH SETTLEMENT (owner 2026-11-13): read-only,
+                    outside the subtotal and the grand total. */}
+                {section.category === 'Lumpers' && monthLumpers.lines.length > 0 && (
+                  <View style={{ marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm }}>
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>{t('primeDriverExpenses.settlementLumpers.title')}</Text>
+                    <MutedText style={{ fontSize: typography.size.xs }}>{t('primeDriverExpenses.settlementLumpers.note')}</MutedText>
+                    {monthLumpers.lines.map((l) => {
+                      const a = signedLumperAmounts(l, money);
+                      return (
+                        <View key={l.settlementId} style={{ marginTop: spacing.xs }}>
+                          <MutedText>{date(l.weekEnding)}</MutedText>
+                          <View style={styles.row}>
+                            <MutedText>{t('primeDriverExpenses.settlementLumpers.received')}</MutedText>
+                            <Text style={{ color: colors.green }}>{a.received}</Text>
+                          </View>
+                          <View style={styles.row}>
+                            <MutedText>{t('primeDriverExpenses.settlementLumpers.deducted')}</MutedText>
+                            <Text style={{ color: colors.red }}>{a.deducted}</Text>
+                          </View>
+                          <View style={styles.row}>
+                            <MutedText>{t('primeDriverExpenses.settlementLumpers.difference')}</MutedText>
+                            <Text style={{ color: colors.text }}>{a.difference}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                    {(() => {
+                      const a = signedLumperAmounts(monthLumpers, money);
+                      return (
+                        <View style={{ marginTop: spacing.xs }}>
+                          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('primeDriverExpenses.settlementLumpers.monthTotal')}</Text>
+                          <View style={styles.row}>
+                            <MutedText>{t('primeDriverExpenses.settlementLumpers.received')}</MutedText>
+                            <Text style={{ color: colors.green, fontWeight: '700' }}>{a.received}</Text>
+                          </View>
+                          <View style={styles.row}>
+                            <MutedText>{t('primeDriverExpenses.settlementLumpers.deducted')}</MutedText>
+                            <Text style={{ color: colors.red, fontWeight: '700' }}>{a.deducted}</Text>
+                          </View>
+                          <View style={styles.row}>
+                            <MutedText>{t('primeDriverExpenses.settlementLumpers.difference')}</MutedText>
+                            <Text style={{ color: colors.text, fontWeight: '700' }}>{a.difference}</Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
+                  </View>
                 )}
               </Card>
             ))}
@@ -969,18 +1024,7 @@ export default function PrimeDriverExpensesScreen() {
 
       <ModalSheet visible={!!editingRow} onClose={() => setEditingRow(null)}>
         <SheetTitle>{t('primeDriverExpenses.editExpense')}</SheetTitle>
-        {editingRow?.origin === 'prime_settlement' ? (
-          // PRIME LUMPER EXCEPTION — read-only: this is the real withheld
-          // settlement line, shown here only for the accountant. Changing
-          // or deleting it would change true profit/tax elsewhere.
-          <>
-            <Text style={{ color: colors.text, fontWeight: '700' }}>
-              {editingRow.exp_date ? date(editingRow.exp_date) : ''} · {money(Number(editingRow.amount ?? 0))}
-            </Text>
-            {editingRow.note ? <MutedText>{editingRow.note}</MutedText> : null}
-            <MutedText style={{ marginTop: spacing.sm }}>{t('primeDriverExpenses.primeSettlementLumperNote')}</MutedText>
-          </>
-        ) : (
+        {editingRow ? (
           <>
             {editingRow?.origin === 'deduction' ? (
               // ITEM 7 — a deduction-sourced row's editor here is the 16-value
@@ -1016,7 +1060,7 @@ export default function PrimeDriverExpensesScreen() {
               <Text style={{ color: colors.red, fontWeight: '700', fontSize: typography.size.sm }}>{t('common.delete')}</Text>
             </Pressable>
           </>
-        )}
+        ) : null}
       </ModalSheet>
       <ModalSheet visible={!!assigningRow} onClose={() => setAssigningRow(null)}>
         <SheetTitle>{t('primeDriverExpenses.needsCategory.pickTitle')}</SheetTitle>

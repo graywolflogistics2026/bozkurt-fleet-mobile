@@ -2280,6 +2280,14 @@
     "personalSettlementNote": "May be deductible on your personal return - your tax professional decides."
   },
   "primeDriverExpenses": {
+    "settlementLumpers": {
+      "title": "Lumpers — through settlement",
+      "note": "Paid in and taken back by Prime on the settlement. Not in the totals.",
+      "received": "Lumper pay received",
+      "deducted": "Lumper advance deducted",
+      "difference": "Difference (wire fee)",
+      "monthTotal": "Month total"
+    },
     "title": "لسائقي Prime Inc",
     "subtitle": "سجل شهري للمصاريف الشخصية يطابق تنسيق تقرير محاسبك الخاص — منفصل عن الخصومات.",
     "disclaimer": "يتم توفير هذه الأداة لمساعدتك على تنظيم سجلاتك الخاصة. لا يتحقق التطبيق من دقة أي إدخال أو يدققه أو يضمنه — أنت وحدك المسؤول عن دقة ما تدخله هنا وعن كيفية استخدامه في إقراراتك الضريبية. هذا ليس استشارة محاسبية أو ضريبية أو قانونية — استشر محاسبًا قانونيًا مؤهلاً أو أخصائي ضرائب.",

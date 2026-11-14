@@ -2280,6 +2280,14 @@
     "personalSettlementNote": "Puede ser deducible en su declaración personal - lo decide su profesional de impuestos."
   },
   "primeDriverExpenses": {
+    "settlementLumpers": {
+      "title": "Lumpers — por settlement",
+      "note": "Prime lo pagó y lo descontó en el settlement. No está en los totales.",
+      "received": "Pago de lumper recibido",
+      "deducted": "Adelanto de lumper descontado",
+      "difference": "Diferencia (cargo de transferencia)",
+      "monthTotal": "Total del mes"
+    },
     "title": "Para Conductores de Prime Inc",
     "subtitle": "Un registro mensual de gastos de bolsillo que coincide con el formato del informe de tu contador — independiente de Deducciones.",
     "disclaimer": "Esta herramienta se proporciona para ayudarte a organizar tus propios registros. No verifica, audita ni garantiza la exactitud de ninguna entrada — eres el único responsable de lo que ingreses aquí y de cómo se use en tus declaraciones de impuestos. Esto no es asesoría contable, fiscal ni legal — consulta a un contador público certificado o profesional fiscal calificado.",

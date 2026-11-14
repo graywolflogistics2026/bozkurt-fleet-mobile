@@ -1,5 +1,6 @@
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
-import { isEligibleForAccountantReport, isInAccountantReportScope, isWithheldLumperAdvance } from '@/src/primeDriverExpenses/categoryMapping';
+import { isEligibleForAccountantReport, isInAccountantReportScope } from '@/src/primeDriverExpenses/categoryMapping';
+import { isOwnExpenseRow } from '@/src/stats/ownExpenseOrigin';
 import { calcPerDiemDays, type SettlementWeek } from '@/src/tax/perDiem';
 
 // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER (owner decision
@@ -39,12 +40,7 @@ export type PrimeDriverExpenseRow = {
   // read of a real `deductions` row (never copied/duplicated) — editing
   // or deleting one of these must go through the SAME code path
   // Deductions' own screen uses, never a parallel write path.
-  // 'prime_settlement' = a settlement-withheld Prime lumper line shown
-  // under Lumpers by this report's Prime-only exception (see
-  // eligibleDeductionRowsForReport()). READ-ONLY here: it is the real
-  // withheld deductions row, so editing or deleting it from this screen
-  // would change true profit/tax elsewhere.
-  origin: 'direct' | 'deduction' | 'prime_settlement';
+  origin: 'direct' | 'deduction';
 };
 
 // The shape this module needs from a real `deductions` row — deliberately
@@ -60,102 +56,39 @@ export type EligibleDeductionSource = {
   description: string | null;
   category?: string | null;
   settlement_id?: string | null;
+  document_id?: string | null;
 };
 
-// THE ORIGIN RULE, applied here too (item 2's own explicit requirement:
-// "only out-of-pocket rows may ever appear on the report... origin is
-// checked, not just category name"). A settlement-withheld row is
-// excluded here EVEN IF it somehow carries a non-null accountant_category
-// (which should never happen given every write path already checks this —
-// see categoryMapping.ts — but this is the report's own last line of
-// defense, not the only one).
+// THE ORIGIN RULE (owner 2026-11-13, device: settlement-withheld rows
+// appeared in this sheet and the Lumpers section was empty). The sheet now
+// uses EXACTLY Home's own-expense rule (src/stats/ownExpenseOrigin.ts
+// isOwnExpenseRow, the same function computeKpis() uses): a row linked to a
+// settlement, or created by a settlement import (source 'settlement', or its
+// document is a settlement's document), is never an own row here — whatever
+// its accountant_category says. Before, this sheet checked only
+// source !== 'settlement', so a settlement-linked 'import' row or a row
+// saved from a settlement's own document slipped in.
 //
-// PRIME LUMPER EXCEPTION (owner decision 2026-09-23) — the ONE exception
-// to the origin rule, scoped to THIS report, the Lumpers category, and
-// Prime settlements only. This screen exists to translate Prime's format
-// for the owner's accountant, whose system can't read Prime's lumper
-// structure (an "OUTSIDE LUMPER" revenue line paired with a withheld
-// "ADV FOR OUTSIDE LUMPER" advance). So every settlement-withheld lumper
-// line is shown here under Lumpers, read live, never copied, and never
-// given an accountant_category. Nothing outside this function sees the
-// exception: the deduction row keeps source='settlement' and
-// tax_deductible=false, so Deductions, KPIs, true profit, CPM, tax and
-// the Accountant Package treat it exactly as before (proven by
-// primeDriverExpenses.test.ts's "PRIME LUMPER EXCEPTION" test).
-// `nonPrimeSettlementIds` = settlements whose carrier is known and is not
-// Prime; lumpers from those stay excluded. A settlement with no recorded
-// carrier is treated as Prime, since this screen is Prime-only.
-// Every other category keeps the strict origin rule.
+// Settlement lumpers are NOT rows of this list any more (the 2026-09-23
+// per-row exception is replaced): they are their own read-only block,
+// 'Lumpers through settlement' (src/stats/settlementLumpers.ts), outside
+// every subtotal and the grand total, so nothing counts twice.
 //
-// NOT MONTH-SPECIFIC: this reads every row it's given (the screen passes
-// the account's full, unfiltered deductions list) and only
-// buildPrimeDriverExpenseMonth() later picks a month, by each row's own
-// ded_date (a settlement line's ded_date = that settlement's week ending).
-//
-// COUNTED ONCE (owner decision 2026-09-23):
-//  - Re-importing the same week + truck REPLACES that settlement's rows
-//    (saveExtraction()), so nothing to do here.
-//  - Same document imported once WITH a truck and once "not truck-specific"
-//    is missed by that week+truck match. `settlementTruckIds` (settlement
-//    id -> truck_id) lets this drop a null-truck settlement's lumper line
-//    one-for-one against an identical line (same date, description, cents)
-//    on a truck-assigned settlement. Two different trucks' identical lines
-//    are both kept — that's a real fleet, not a duplicate.
-//  - A reimbursement-derived "companion" Lumper Fees row (source 'import',
-//    settlement_id set — only mapSettlement() creates those) on a
-//    settlement that also withholds a lumper line is the same lumper seen
-//    twice; only the withheld line is shown. Import now refuses to create
-//    such companions; this also covers ones saved before that fix.
+// NOT MONTH-SPECIFIC: this reads every row it's given; only
+// buildPrimeDriverExpenseMonth() later picks a month, by ded_date.
 export function eligibleDeductionRowsForReport(
   deductions: EligibleDeductionSource[],
-  nonPrimeSettlementIds: ReadonlySet<string> = new Set(),
-  settlementTruckIds: ReadonlyMap<string, string | null> = new Map()
+  settlementDocIds: ReadonlySet<string> = new Set()
 ): PrimeDriverExpenseRow[] {
-  const primeLumpers = deductions.filter(
-    (d) =>
-      !isEligibleForAccountantReport(d.source) &&
-      !(d.settlement_id && nonPrimeSettlementIds.has(d.settlement_id)) &&
-      isWithheldLumperAdvance({ category: d.category ?? null, description: d.description, source: d.source })
-  );
-  const settlementsWithWithheldLumper = new Set(primeLumpers.map((d) => d.settlement_id).filter((id): id is string => !!id));
-
-  const lineKey = (d: EligibleDeductionSource) => `${d.ded_date ?? ''}|${(d.description ?? '').trim().toUpperCase()}|${Math.round(Number(d.amount ?? 0) * 100)}`;
-  const isNullTruckSettlement = (d: EligibleDeductionSource) =>
-    !!d.settlement_id && settlementTruckIds.has(d.settlement_id) && settlementTruckIds.get(d.settlement_id) == null;
-  const truckAssignedCount = new Map<string, number>();
-  for (const d of primeLumpers) {
-    if (d.settlement_id && settlementTruckIds.get(d.settlement_id) != null) {
-      truckAssignedCount.set(lineKey(d), (truckAssignedCount.get(lineKey(d)) ?? 0) + 1);
-    }
-  }
-
   const rows: PrimeDriverExpenseRow[] = [];
-  for (const d of primeLumpers) {
-    if (isNullTruckSettlement(d)) {
-      const remaining = truckAssignedCount.get(lineKey(d)) ?? 0;
-      if (remaining > 0) {
-        truckAssignedCount.set(lineKey(d), remaining - 1);
-        continue;
-      }
-    }
-    rows.push({ id: d.id, exp_date: d.ded_date, amount: d.amount, category: 'Lumpers', note: d.description, origin: 'prime_settlement' });
-  }
-
   for (const d of deductions) {
     if (!isEligibleForAccountantReport(d.source)) continue;
+    if (!isOwnExpenseRow(d, settlementDocIds)) continue;
     if (!d.accountant_category) continue;
     // SCREEN SCOPE (owner decision 2026-09-23): only categories with an
     // automatic mapping or on the ambiguous allowlist, never a vehicle
     // purchase/registration — even if an accountant_category is already set.
     if (!isInAccountantReportScope(d.category, d.description)) continue;
-    if (
-      d.accountant_category === 'Lumpers' &&
-      d.source === 'import' &&
-      d.settlement_id &&
-      settlementsWithWithheldLumper.has(d.settlement_id)
-    ) {
-      continue;
-    }
     rows.push({
       id: d.id,
       exp_date: d.ded_date,

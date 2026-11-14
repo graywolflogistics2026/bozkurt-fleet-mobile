@@ -1,4 +1,5 @@
 import type { PrimeDriverExpenseMonth } from '@/src/stats/primeDriverExpenses';
+import { settlementLumperRowsHtml, type SettlementLumperMonth, type SettlementLumperStrings } from '@/src/stats/settlementLumpers';
 import { ESTIMATE_NOTICE_CSS, estimateBannerHtml, estimateFooterHtml, type EstimateNoticeStrings } from '@/src/legal/estimateNotice';
 
 // "FOR PRIME INC DRIVERS" OUT-OF-POCKET EXPENSE TRACKER — EXPORT (owner
@@ -51,7 +52,10 @@ export function buildPrimeDriverExpenseReportHtml(
   headerLine: string,
   monthData: PrimeDriverExpenseMonth,
   strings: PrimeDriverExpenseReportStrings,
-  fmt: PrimeDriverExpenseReportFormatters
+  fmt: PrimeDriverExpenseReportFormatters,
+  // LUMPERS THROUGH SETTLEMENT (owner 2026-11-13): printed under Lumpers,
+  // outside every subtotal and the grand total.
+  settlementLumpers?: { month: SettlementLumperMonth; strings: SettlementLumperStrings }
 ): string {
   const sectionsHtml = monthData.sections
     .map((section) => {
@@ -66,6 +70,7 @@ export function buildPrimeDriverExpenseReportHtml(
       return `
         <tr class="subtotal"><td colspan="2" class="cat-name">${esc(section.category)}</td><td class="amt cat-amt">${fmt.money(section.subtotal)}</td></tr>
         ${rowsHtml}
+        ${section.category === 'Lumpers' && settlementLumpers ? settlementLumperRowsHtml(settlementLumpers.month, settlementLumpers.strings, fmt) : ''}
       `;
     })
     .join('');

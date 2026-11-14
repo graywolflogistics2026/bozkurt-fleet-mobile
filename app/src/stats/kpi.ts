@@ -89,6 +89,7 @@ import { settlementDeposit, settlementVerification, type SettlementStatement, ty
 import type { ComparisonTruck, ComparisonSettlement, ComparisonDeduction, ComparisonFuel, ComparisonMaintenance, ComparisonToll } from '@/src/stats/truckComparison';
 import { filterRowsByDateWindow, type DateWindow } from '@/src/stats/heroPeriodWindow';
 import { calcPerDiemDays } from '@/src/tax/perDiem';
+import { isOrphanSettlementRow, settlementDocumentIds, type OriginRow } from '@/src/stats/ownExpenseOrigin';
 import { buildProfitExplanation, type ProfitExplanation, type WithheldLine } from '@/src/stats/profitExplainer';
 
 export type { DateWindow };
@@ -109,22 +110,9 @@ type KpiFuel = ComparisonFuel & KeptFlag & { purchase_date?: string | null; fuel
 type KpiMaintenance = ComparisonMaintenance & KeptFlag & { service_date?: string | null; settlement_id?: string | null; source?: string | null };
 type KpiToll = ComparisonToll & KeptFlag & { toll_date?: string | null; settlement_id?: string | null; source?: string | null };
 
-// ORIGIN RULE, OWN-EXPENSE LAYER (owner 2026-11-13, device: Home counted
-// settlement-withheld lines as "your own expenses"). A row a settlement
-// import created (source 'settlement') belongs to that settlement. One
-// that has lost its settlement link is an orphan of an import: its
-// settlement (statement or lines) already counts it, so it never enters
-// the own-expense layer and never counts a second time; the explainer
-// lists it under "not counted". The own-expense layer = rows NOT created
-// by a settlement import. A row is from a settlement import when its
-// source is 'settlement', or when its document is a settlement's own
-// document (the same import saved it, whatever its source says).
-type OriginRow = { source?: string | null; settlement_id?: string | null; document_id?: string | null };
-export function isOrphanSettlementRow(r: OriginRow, settlementDocIds?: ReadonlySet<string>): boolean {
-  if (r.settlement_id) return false;
-  if (r.source === 'settlement') return true;
-  return !!r.document_id && !!settlementDocIds?.has(r.document_id);
-}
+// ORIGIN RULE, OWN-EXPENSE LAYER (owner 2026-11-13): one definition in
+// ownExpenseOrigin.ts, shared with the For Prime Inc Drivers sheet.
+export { isOrphanSettlementRow };
 // reimbursements carry no truck_id of their own — a settlement-linked one
 // follows its settlement's truck and week; an unlinked one (a manual
 // warranty credit) is a fleet-level row, matched by date only.

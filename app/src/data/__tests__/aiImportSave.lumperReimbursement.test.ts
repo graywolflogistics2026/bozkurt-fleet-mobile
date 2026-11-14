@@ -43,6 +43,7 @@ jest.mock('expo-file-system', () => ({
 
 import { createFakeSupabase } from './fakeSupabase';
 import { saveExtraction } from '@/src/data/aiImportSave';
+import { buildSettlementLumperLines } from '@/src/stats/settlementLumpers';
 import { eligibleDeductionRowsForReport } from '@/src/stats/primeDriverExpenses';
 
 const USER_ID = 'user-1';
@@ -115,9 +116,14 @@ describe('lumper reimbursement companion expense (owner decision 2026-09-19)', (
         settlement_id: d.settlement_id,
       }))
     );
-    const lumperReportRows = reportRows.filter((r) => r.category === 'Lumpers');
-    expect(lumperReportRows.map((r) => r.amount).sort()).toEqual([217.55, 50]);
-    expect(lumperReportRows.every((r) => r.origin === 'prime_settlement')).toBe(true);
+    // Since 2026-11-13 the withheld lumpers are not sheet rows: they are the
+    // "Lumpers — through settlement" block, outside every subtotal.
+    expect(reportRows.filter((r) => r.category === 'Lumpers')).toEqual([]);
+    const settlements = (mockClient.__store.settlements ?? []) as { id: string; week_ending: string | null }[];
+    const block = buildSettlementLumperLines(settlements, deductions);
+    expect(block).toHaveLength(1);
+    expect(block[0].deducted).toBe(267.55);
+    expect(block[0].received).toBeNull();
   });
 
   test('a lumper reimbursement with NO carrier advance (driver paid cash) creates one out-of-pocket expense on the report', async () => {

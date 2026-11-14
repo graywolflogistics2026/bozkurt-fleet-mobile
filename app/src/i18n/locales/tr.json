@@ -2280,6 +2280,14 @@
     "personalSettlementNote": "Kişisel beyannamenizde indirilebilir olabilir - kararı vergi uzmanınız verir."
   },
   "primeDriverExpenses": {
+    "settlementLumpers": {
+      "title": "Lumpers — settlement üzerinden",
+      "note": "Prime settlement'ta ödedi ve geri kesti. Toplamlara dahil değil.",
+      "received": "Alınan lumper ödemesi",
+      "deducted": "Kesilen lumper avansı",
+      "difference": "Fark (havale ücreti)",
+      "monthTotal": "Ay toplamı"
+    },
     "title": "Prime Inc Sürücüleri İçin",
     "subtitle": "Muhasebecinizin kendi rapor biçimiyle eşleşen aylık cepten harcama kaydı — Kesintilerden ayrı.",
     "disclaimer": "Bu araç, kendi kayıtlarınızı düzenlemenize yardımcı olmak için sağlanmıştır. Hiçbir girişin doğruluğunu doğrulamaz, denetlemez veya garanti etmez — buraya girdiğiniz bilgilerden ve bunların vergi beyannamelerinizde nasıl kullanıldığından yalnızca siz sorumlusunuz. Bu muhasebe, vergi veya hukuki danışmanlık değildir — nitelikli bir mali müşavire veya vergi uzmanına danışın.",
