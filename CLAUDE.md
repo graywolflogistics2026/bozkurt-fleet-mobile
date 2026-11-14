@@ -260,14 +260,16 @@ only. The bank deposit and the amount owed to the carrier are READ from
 the statement, never computed, and never labeled profit.
 Full: `docs/decisions/prime-statement-source.md`.
 
-**Ready to review: one rule (2026-10-31).** `isReadyToReview()`
-(`app/src/import/importJobs.ts`) decides for the chip, notification, jobs
-button, follow effect and fetch; a re-read job is ready only after it
-completes again. `loadJobForReview()` never dead-ends (finishing -> 3
-retries -> Read again). Line details never trigger a re-read.
-Since 2026-11-03 the JOB decides re-reads (ai-import `job_verdict`, max 3
-reads, same values twice = stop); the card renders only for a final job.
-Full: `docs/decisions/settlement-import-chunking.md` ("Re-read rules").
+**Settlement reader (2026-11-13).** Every PDF import is a reader job
+(ai-import `read_start`/`read_again`/`read_answer`/`read_resume`,
+`supabase/functions/ai-import/reader/`, decisions bundled from
+`app/src/settlementReader/` — `npm run build:reader` after a change). The
+SERVER decides every re-read (max 2 reads); the card shows only a final
+job; a photo is one direct call. The old reader (modes `job`,
+`resume_job`, `reread_job`, `job_verdict`, ..., `chunking.ts`, the job
+engine) was deleted 2026-11-13: its modes answer 410 and its old job rows
+show failed with [Read again] (a new reader job from the stored file).
+Full: `docs/decisions/settlement-reader-2026-11.md`.
 
 **Simple import flow (batch D2, 2026-10-31).** A settlement shows only
 READING / CHECK AND CERTIFY / COULD NOT READ. ONE pass/fail gate
@@ -293,10 +295,9 @@ sum of escrow deductions; deposits count one per statement. Full:
 **Import jobs: plan-aware budget, resumable.** Never assume more than the
 documented limit minus the margin: Free by default (150 s, exit by 130 s);
 only `AI_IMPORT_SUPABASE_PLAN=pro` allows exit by 300 s of 400 s
-(`limitsForPlan()`). Background PDF imports are chains of
-short runs that store each page as it finishes and resume at the first
-unfinished page (`supabase/functions/ai-import/jobEngine.ts`, §78). Full:
-`docs/decisions/settlement-import-chunking.md` ("Resumable jobs").
+(`limitsForPlan()`, `supabase/functions/ai-import/jobEngine.ts`, which
+now holds only these limits). A reader job is a chain of short runs that
+continues in the next run when its budget is used.
 
 **Carrier isolation.** A carrier payroll/settlement code ("DH", "BT",
 "AP") means something only at the carrier that issued the statement. Code

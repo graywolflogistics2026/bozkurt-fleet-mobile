@@ -7,11 +7,10 @@ import {
   extractionOutputSchema,
   isSchemaRejection,
   jsonObjectsStartingWith,
-  replyOutputSchema,
   schemaOfTemplate,
   type JsonSchema,
 } from '../../../../supabase/functions/ai-import/outputSchema';
-import { indexSource, rebuiltExtractionPrompt } from './promptSource';
+import { rebuiltExtractionPrompt } from './promptSource';
 
 const prompt = rebuiltExtractionPrompt();
 
@@ -86,15 +85,6 @@ describe('R4: structured output schema from the prompt templates', () => {
       });
     }
     expect((extractionOutputSchema(prompt, null)!.anyOf as unknown[]).length).toBeGreaterThan(3);
-  });
-
-  test('the classification reply has its own schema', () => {
-    const src = indexSource();
-    const classify = src.slice(src.indexOf('function buildClassifyPrompt('), src.indexOf('function parseClassification('));
-    const text = classify.replace(/\$\{start\}/g, '1');
-    const schema = replyOutputSchema(text, '{"carrier":')!;
-    expect(schema).toMatchObject({ type: 'object', required: ['carrier', 'pages'] });
-    expect(hasPath(schema, ['pages', 'hasTotalCashFlow'])).toBe(true);
   });
 
   test('template parsing: braces inside strings, nulls, empty arrays', () => {

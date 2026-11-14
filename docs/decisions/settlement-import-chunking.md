@@ -3,9 +3,12 @@
 > Multi-page settlement extraction: chunking rounds 1-5 (owner decisions 2026-08-02 to 2026-08-04).
 > Ended with single call as the default, based on measured evidence.
 > Read before touching multi-page import or page caps.
-> **Superseded for background (PDF) imports by "Resumable jobs" at the end
-> of this file (owner decision 2026-10-13).** The rounds below remain the
-> history and still describe the synchronous photo path.
+> **HISTORY ONLY (2026-11-13).** Everything in this file — chunking,
+> resumable page-by-page jobs, re-read rules, `chunking.ts`, the job engine,
+> `job_verdict` — was deleted with the old reader (commit 6). PDF imports
+> are settlement-reader jobs: `docs/decisions/settlement-reader-2026-11.md`.
+> A photo is one direct call. Only the plan-aware limits survive
+> (`jobEngine.ts`).
 
 Moved verbatim from CLAUDE.md on 2026-10-13 (original file order).
 

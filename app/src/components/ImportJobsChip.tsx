@@ -3,8 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { useImportJobs, fetchImportJobResult, resumeImportJob, resumeReaderJob, answerImportJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
-import { runOptionalSideEffect, shouldAutoResume, silentAttachmentStep } from '@/src/import/importJobs';
+import { useImportJobs, fetchImportJobResult, resumeReaderJob, IMPORT_JOBS_QUERY_KEY } from '@/src/data/importJobs';
+import { runOptionalSideEffect, silentAttachmentStep } from '@/src/import/importJobs';
 import { readerChipSummary, readerJobView, readerShouldResume } from '@/src/import/readerJob';
 import { supabase } from '@/src/lib/supabase';
 import { notifyImportJobDone, hasNotifiedJob } from '@/src/notifications/importJobNotifications';
@@ -50,11 +50,6 @@ export function ImportJobsChip() {
       if (handledSilently.has(job.id)) continue;
       // A reader job's needs_input is the owner's (the card asks it).
       if (job.reader) continue;
-      if (job.status === 'needs_decision') {
-        handledSilently.add(job.id);
-        answerImportJob(job.id, 'read_first').catch(() => handledSilently.delete(job.id));
-        continue;
-      }
       const step = silentAttachmentStep(job);
       if (step !== 'store' && step !== 'drop') continue;
       handledSilently.add(job.id);
@@ -99,11 +94,12 @@ export function ImportJobsChip() {
   useEffect(() => {
     const now = new Date().toISOString();
     for (const job of jobs ?? []) {
-      if (job.reader ? !readerShouldResume(job, now) : !shouldAutoResume(job, now)) continue;
+      // Only a reader job is resumed; an old reader's job shows failed.
+      if (!job.reader || !readerShouldResume(job, now)) continue;
       const seen = job.heartbeatAt ?? job.updatedAt;
       if (autoResumed.get(job.id) === seen) continue;
       autoResumed.set(job.id, seen);
-      (job.reader ? resumeReaderJob(job.id) : resumeImportJob(job.id, false)).catch(() => {
+      resumeReaderJob(job.id).catch(() => {
         // The row keeps saying "Interrupted at page N" with a Resume button.
       });
     }

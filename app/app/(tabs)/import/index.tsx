@@ -22,7 +22,6 @@ import {
   useStartImportJob,
   useStartImportJobsBatch,
   markImportJobSaved,
-  useRereadImportJob,
   useImportJobs,
   useDismissImportJob,
   IMPORT_JOBS_QUERY_KEY,
@@ -59,11 +58,8 @@ import { rememberLineClass, saveTruckOwnership, useTruckOwnership } from '@/src/
 import { appVersionLabel } from '@/src/components/WeekReviewCard';
 import {
   evaluateSettlementGate,
-  nextImportStep,
-  rereadRequestFor,
   pickBetterReading,
   withGateAudit,
-  MAX_AUTO_REREADS,
   GATE_FAIL_REASON_KEY,
   type GateFailReason,
   type SettlementGateResult,
@@ -93,14 +89,9 @@ import { num, numOrNull } from '@/src/lib/number';
 
 type Phase = 'pick' | 'working' | 'reading' | 'preview' | 'could_not_read' | 'saving' | 'done' | 'error';
 
-// SIMPLE IMPORT FLOW (batch D2 2.1): automatic re-reads per reading (a
-// background job's id, or 'photo:<uri>'), and the best reading so far — a
-// re-read that comes back worse never replaces a better one. In memory:
-// an app restart allows at most 2 more re-reads, never an endless loop.
-const autoRereads = new Map<string, number>();
-// READY TO REVIEW (import reliability item 1): a ready job whose stored
-// reading is not there yet is FINISHING — retried up to 3 times (2 s, 4 s,
-// 8 s), then the owner gets Read again. Never a dead end.
+// SIMPLE IMPORT FLOW (batch D2 2.1): the best reading so far per reading
+// key (a background job's id, or 'photo:<uri>'). The server decides every
+// re-read (settlement reader); nothing is re-read from this screen.
 const bestReadings = new Map<string, { reading: Extraction; gate: SettlementGateResult | null }>();
 
 // PDF/FILE SIZE GUARD (pre-launch hardening, owner decision 2026-08-02):
@@ -278,8 +269,6 @@ export default function Import() {
   // buildExtractionPrompt() in supabase/functions/ai-import/index.ts).
   const { data: carrierCodeMaps } = useCarrierCodeMaps();
   const { data: carrierCodeCategories } = useCarrierCodeCategories();
-  // READ AGAIN (owner decision 2026-10-17, item 7).
-  const rereadImportJob = useRereadImportJob();
   const dismissImportJob = useDismissImportJob();
   const jobsQuery = useImportJobs();
   const insertTruck = useInsertTruck();
@@ -323,7 +312,6 @@ export default function Import() {
   const [failedJob, setFailedJob] = useState<ImportJob | null>(null);
   const [couldNotRead, setCouldNotRead] = useState<GateFailReason | 'job_failed' | 'not_finished' | 'photo_settlement' | null>(null);
   const readingKeyRef = useRef<string | null>(null);
-  const lastPhotoRef = useRef<{ uri: string; prepared: boolean } | null>(null);
   const [truckId, setTruckId] = useState<string | null>(null);
   const [needsTruckPicker, setNeedsTruckPicker] = useState(false);
   const [driverId, setDriverId] = useState<string | null>(null);
@@ -734,16 +722,10 @@ export default function Import() {
       if (gate && gate.status !== 'fail' && gate.headline.miles && num(reading.settlement?.totalMiles) <= 0 && (reading.settlement?.perDiemDays ?? 0) === defaultPerDiemDaysForMiles(0)) {
         reading = withPerDiemDays(reading, defaultPerDiemDaysForMiles(gate.headline.miles));
       }
-      // RE-READ RULES (owner 2026-11-03): a background job's re-reads are
-      // decided inside the job (src/data/jobVerdictRunner.ts), never here —
-      // this card only ever sees a FINAL job. Only a photo re-reads here.
-      const isJobSource = !!currentReviewId && key === currentReviewId;
-      const step = isJobSource ? (gate?.status === 'fail' ? 'could_not_read' : 'certify') : nextImportStep(gate, autoRereads.get(key) ?? 0);
-      if (step === 'reread') {
-        autoRereads.set(key, (autoRereads.get(key) ?? 0) + 1);
-        await autoReread(key, rereadRequestFor(gate, reading));
-        return;
-      }
+      // SETTLEMENT READER (owner decision 2026-11-13): the server decided
+      // every re-read; the card shows a FINAL reading. A failed gate is
+      // COULD NOT READ, never a re-read from here.
+      const step = gate?.status === 'fail' ? 'could_not_read' : 'certify';
       setExtraction(reading);
       if (step === 'could_not_read' && gate?.status === 'fail') {
         setCouldNotRead(gate.reason);
@@ -759,52 +741,6 @@ export default function Import() {
 
   function settlementGateOf(e: Extraction): SettlementGateResult | null {
     return evaluateSettlementGate(e, { importDate: todayDateOnly(), carrierCodes: carrierCodeCategories ?? [] });
-  }
-
-  // An automatic re-read (never shown as a step): a background job is read
-  // again on the server (content pages only) and followed while READING;
-  // a photo is read again here.
-  async function autoReread(key: string, request: { pages: number[] | null; reason: string } | null = null) {
-    if (currentReviewId && key === currentReviewId) {
-      const jobId = currentReviewId;
-      setPhase('reading');
-      try {
-        await rereadImportJob.mutateAsync({
-          jobId,
-          locale: i18n.language,
-          customCategories: customCategoryNames,
-          learningRules,
-          carrierCodeMaps,
-          pages: request?.pages ?? null,
-          reason: request?.reason,
-        });
-        setExtraction(null);
-        setCurrentReviewId(null);
-        setFollowJobId(jobId);
-      } catch {
-        showBestOrFail(key, 'job_failed');
-      }
-      return;
-    }
-    const photo = lastPhotoRef.current;
-    if (photo) {
-      await processImage(photo.uri, photo.prepared, true);
-      return;
-    }
-    showBestOrFail(key, 'job_failed');
-  }
-
-  // After the re-reads: the best reading's card, else COULD NOT READ.
-  function showBestOrFail(key: string, fallback: GateFailReason | 'job_failed') {
-    const best = bestReadings.get(key);
-    if (best && best.gate && best.gate.status !== 'fail') {
-      setExtraction(best.reading);
-      setPhase('preview');
-      return;
-    }
-    setExtraction(best?.reading ?? null);
-    setCouldNotRead(best?.gate?.status === 'fail' ? best.gate.reason : fallback);
-    setPhase('could_not_read');
   }
 
   // READING (batch D2 2.1): follow the background job until it is ready —
@@ -833,12 +769,9 @@ export default function Import() {
 
   // `prepared` = already a scanner JPEG (85%, long edge <= 2,200 px, batch
   // E) — not re-compressed a second time.
-  async function processImage(uri: string, prepared = false, isReread = false) {
-    if (!isReread) {
-      readingKeyRef.current = `photo:${uri}`;
-      lastPhotoRef.current = { uri, prepared };
-    }
-    setPhase(isReread ? 'reading' : 'working');
+  async function processImage(uri: string, prepared = false) {
+    readingKeyRef.current = `photo:${uri}`;
+    setPhase('working');
     setWorkingLabel(t('importScreen.compressingPhoto'));
     try {
       const compressed = prepared
@@ -1302,15 +1235,12 @@ export default function Import() {
     const jobId = currentReviewId ?? followJobId ?? keyJob;
     if (jobId) {
       dismissImportJob.mutate(jobId);
-      autoRereads.delete(jobId);
       bestReadings.delete(jobId);
     }
     if (readingKeyRef.current) {
-      autoRereads.delete(readingKeyRef.current);
       bestReadings.delete(readingKeyRef.current);
     }
     readingKeyRef.current = null;
-    lastPhotoRef.current = null;
     setCurrentReviewId(null);
     reset();
   }

@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — Commit 6: the old settlement reader deleted (device test passed: 18 weeks, Capital Account and Home Yearly match)
+- Server (ai-import): chunking.ts deleted (statement-columns normalizer kept as statementColumns.ts); jobEngine.ts trimmed to limitsForPlan / leaseIsStale / checkImportLimits; index.ts 3,138 -> 1,815 lines: old modes, page classifier, per-page runs, direct-path page continuation removed. Old modes answer 410 "This file was read by the old reader. Read it again with the new reader."; resume_job on a reader job still resumes in the reader; continue_job never runs an old row.
+- App: old mode calls (data/importJobs.ts), jobVerdictRunner.ts, jobVerdict.ts, the import screen's own re-read flow, the chip's old resume/answer removed. Old import_jobs rows: failed + [Read again] (unchanged).
+- Tests: old-reader-only suites deleted (chunking, jobEngine*, jobSimulation, jobVerdict, lineDetailsReread, settlementTotalLines, importEndToEnd); mixed suites trimmed; renamed importLimits / rereadRequest / importAudit. Every new-reader fixture and golden test kept. tsc clean, jest 208 suites / 5,078 tests green.
+- No SQL. Redeploy ai-import (script). eas update. No i18n key removed (none was used only by deleted code).
+
 ## 2026-11-13 — PR owner money in lost on a line-details mismatch (device: 07/17 PR 3,999.00 missing from Capital Account)
 - Cause: aiImportSave.ts gate `lineDetails === 'mismatch'` emptied deductions and reimbursements, so the PR reimbursement never became its PERSONAL credit row (nonReimbursementCredits) and the id-linked contribution (PR block) was never written. Device SQL: 07/17 lines_not_saved, pr_total 3,999.00, no row; 08/21 already had its row.
 - 100e768: only the PR credits are rebuilt from the rows before the gate; every other line row is still dropped. Out of profit: Home/Settlements unchanged (18 weeks 88,210.06 / 41,977.33 / 46,232.73 / 39,913.01). Fixtures carry 07/17 PR 3,999.00 + POS 177.55 and 08/21 PR 1.00 as printed. New prOwnerMoneyInMismatch.test.ts (old code fails 3 of 6); golden mismatch test now expects the one PR credit row.

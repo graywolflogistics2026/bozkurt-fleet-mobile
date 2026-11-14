@@ -4,7 +4,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ensureReasonLines, jobFailureInfo, jobFailureLines, jobFailureReport, jobRowState } from '../jobFailure';
-import { parseVerdictResponse, VerdictAnswerError, verdictRetryDelay } from '../jobVerdict';
 import type { ImportJob, JobReviewState } from '../importJobs';
 import en from '@/src/i18n/locales/en.json';
 
@@ -52,14 +51,6 @@ describe('a ready job with no verdict is Finishing up, never "could not read"', 
   test('ready + review without a final = finishing', () => {
     expect(jobRowState(job({ review: { reads: 1, final: null, triggers: [] } }))).toBe('finishing');
     expect(jobRowState(job({ review: null }))).toBe('finishing');
-  });
-  test('the verdict call is retried with backoff', () => {
-    expect([0, 1, 2, 3, 9].map(verdictRetryDelay)).toEqual([5000, 15000, 30000, 60000, 60000]);
-  });
-  test('an answer without `action` names the missing field (old ai-import)', () => {
-    expect(() => parseVerdictResponse({ error: { type: 'bad_request' } })).toThrow(new VerdictAnswerError('action'));
-    expect(() => parseVerdictResponse(null)).toThrow('server answer missing: body');
-    expect(parseVerdictResponse({ jobId: 'j', action: 'final' }).action).toBe('final');
   });
 });
 
@@ -120,9 +111,5 @@ describe('Send report is present on every failure screen', () => {
     const card = src.slice(src.indexOf('export function CouldNotReadCard'));
     expect(card).toContain("t('importFlow.sendReport')");
     expect(card).toContain('ensureReasonLines(');
-  });
-  test('the verdict runner never decides a failure on its own', () => {
-    const src = read('src/data/jobVerdictRunner.ts');
-    expect(src).not.toMatch(/setLocalFinal\([^)]*'failed_final'/);
   });
 });

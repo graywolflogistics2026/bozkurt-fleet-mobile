@@ -105,13 +105,6 @@ export function extractionOutputSchema(prompt: string, docType: string | null): 
   return { anyOf: all.map((t) => schemaOfTemplate(t)) };
 }
 
-// The schema of a reply whose template is the first JSON object starting
-// with `startToken` (the classification reply: '{"carrier":').
-export function replyOutputSchema(prompt: string, startToken: string): JsonSchema | null {
-  const t = jsonObjectsStartingWith(prompt, startToken)[0];
-  return t ? schemaOfTemplate(t) : null;
-}
-
 // A 400 that means the API refused the schema itself (too complex, an
 // unsupported keyword): the call is retried once without it, so a schema
 // problem can never stop an import.

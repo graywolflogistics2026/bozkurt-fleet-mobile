@@ -1,43 +1,7 @@
-// READ AGAIN + SHARE AUDIT ON THE IMPORT PREVIEW (owner decision
-// 2026-10-17, items 5 and 7).
-import { newRereadPlan, type JobPlan } from '../../../../supabase/functions/ai-import/jobEngine';
+// SHARE AUDIT ON THE IMPORT PREVIEW (owner decision 2026-10-17, item 5).
 import { buildImportAuditText } from '@/src/import/importAudit';
 import { reviewInputsOf } from '@/src/import/reviewVerdict';
 import type { Extraction } from '@/src/import/types';
-
-describe('Read again — content pages only, with the current prompt', () => {
-  const old: Pick<JobPlan, 'mediaType' | 'totalPages' | 'fileBytes' | 'pages' | 'layout'> = {
-    mediaType: 'application/pdf',
-    totalPages: 17,
-    fileBytes: 900_000,
-    layout: 'prime_statement',
-    pages: Array.from({ length: 17 }, (_, i) => ({
-      page: i + 1,
-      kind: i < 4 ? 'settlement' : i < 6 ? 'statement' : 'attachment',
-      role: i < 6 ? 'content' : 'attachment',
-    })) as JobPlan['pages'],
-  };
-
-  test('settlement + statement pages are read again; the 11 attachment pages are kept, not read', () => {
-    const plan = newRereadPlan(old);
-    expect(plan.kind).toBe('read_pages');
-    expect(plan.baseDocumentId).toBeNull();
-    expect(plan.phase).toBe('pages');
-    expect(plan.runs).toBe(0);
-    expect(plan.pages.filter((p) => p.role === 'content').map((p) => p.page)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(plan.pages.filter((p) => p.role === 'stored')).toHaveLength(11);
-    expect(plan.pages.some((p) => p.role === 'attachment')).toBe(false);
-  });
-
-  test('a job read as one whole document never classified its pages: every page is read again', () => {
-    const plan = newRereadPlan({ ...old, totalPages: 3, pages: [] });
-    expect(plan.pages.map((p) => [p.page, p.role])).toEqual([
-      [1, 'content'],
-      [2, 'content'],
-      [3, 'content'],
-    ]);
-  });
-});
 
 describe('Share audit on the import preview', () => {
   const extraction: Extraction = {

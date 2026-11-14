@@ -2,7 +2,9 @@
 // settlement + operating statement printed across pages 5 and 6, moved
 // verbatim from jobEngine.test.ts so the import end-to-end test uses the
 // same pages. Not a test file itself.
-import type { ChunkExtraction } from '../../../../supabase/functions/ai-import/chunking';
+// One page's reply (the old server's page-merge type, kept local: the
+// merge went with the old reader, 2026-11-13).
+export type ChunkExtraction = { docType?: string; summary?: string; confidence?: string; settlement?: Record<string, unknown>; [key: string]: unknown };
 
 export const LINES_PAGE_5 = [
   ['revenue', 'REVENUE FROM PRIME INC.', 3345.12],

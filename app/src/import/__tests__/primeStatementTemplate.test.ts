@@ -3,7 +3,6 @@
 import { STATEMENT, STATEMENT_LINES, withStatement } from '@/src/data/__tests__/golden0814Fixture';
 import { blockDiagnosisLine, diagnosePrimeBlocks, PRIME_TEMPLATE } from '@/src/import/primeStatementTemplate';
 import { evaluateSettlementGate, rereadRequestFor } from '@/src/import/settlementGate';
-import { mergeChunkedExtractions, tagStatementLinePages, type ChunkExtraction } from '../../../../supabase/functions/ai-import/chunking';
 import { classifyStatementLine, normalizeStatementLabel } from '@/src/import/primeStatementLines';
 
 // The 08/14 statement split over pages 5 (revenue .. misc) and 6 (fixed,
@@ -63,17 +62,5 @@ describe('a block that does not add up', () => {
     const request = rereadRequestFor(gate, { ...e, pageMap: [5, 6].map((page) => ({ page, kind: 'statement', role: 'content' as const, status: 'read' as const })) });
     expect(request?.pages).toEqual([5]);
     expect(request?.reason).toContain('REPAIR or TIRES block (gap -652.53): no line and no TOTAL line read; UNIT REPAIR EXPENSE, RO PARTS REPAIR, TIRES missing · page 5');
-  });
-});
-
-describe('the server keeps each line page', () => {
-  test('lines and TOTAL lines are tagged with the page they were read from, then merged in page order', () => {
-    const p5 = tagStatementLinePages({ docType: 'settlement', settlement: { operating: { lines: [{ section: 'misc', label: 'TOLLS', amount: -10.46 }], totalLines: [] } } }, 5);
-    const p6 = tagStatementLinePages({ docType: 'settlement', settlement: { operating: { lines: [{ section: 'fixed', label: 'BT/DH INSURANCE', amount: -5.98 }], totalLines: [{ label: 'TOTAL FIXED COST', amount: -145.77 }] } } }, 6);
-    const merged = mergeChunkedExtractions([p5 as ChunkExtraction, p6 as ChunkExtraction]);
-    const op = (merged.settlement as { operating: { lines: { page: number }[]; totalLines: { page: number }[] } }).operating;
-    expect(op.lines.map((l) => l.page)).toEqual([5, 6]);
-    expect(op.totalLines.map((l) => l.page)).toEqual([6]);
-    expect(STATEMENT.lines).toBe(STATEMENT_LINES);
   });
 });

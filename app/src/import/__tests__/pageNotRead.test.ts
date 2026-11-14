@@ -4,7 +4,6 @@
 // statement check on a block that is missing a page.
 import { withStatement } from '@/src/data/__tests__/golden0814Fixture';
 import { evaluateSettlementGate, rereadRequestFor } from '@/src/import/settlementGate';
-import { decideJobVerdict, reviewOf } from '../../../../supabase/functions/ai-import/jobEngine';
 import { failDetailLine, failedPagesToReadAgain, jobFailureInfo, jobFailureLines } from '@/src/import/jobFailure';
 import type { Extraction } from '@/src/import/types';
 import en from '@/src/i18n/locales/en.json';
@@ -46,13 +45,6 @@ describe('a content page that could not be read', () => {
     const e = withPageMap(missingLines, { page: 3, kind: 'statement', detail: 'parse_failed' });
     const gate = evaluateSettlementGate(e, { importDate: '2026-08-15' });
     expect(rereadRequestFor(gate, e)).toEqual({ pages: [3], reason: 'page_not_read: page_3' });
-  });
-
-  test('the job verdict is final at once (the page already had its retries): page_failed, never an automatic re-read', () => {
-    const d = decideJobVerdict(reviewOf(null), { readNo: 1, status: 'fail', reason: 'page_not_read', failures: ['page_3'], details: [{ check: 'page', printed: 3, read: 'parse_failed' }] }, { nowIso: '2026-11-03T10:00:00Z', rereadable: true });
-    expect(d.action).toBe('final');
-    expect(d.review.final).toMatchObject({ state: 'failed_final', reason: 'page_failed' });
-    expect(d.review.reads).toBe(1);
   });
 
   test('the card and the jobs row say which page and why, and offer that page again', () => {

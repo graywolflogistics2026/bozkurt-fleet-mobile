@@ -10,7 +10,7 @@
 // the redaction once more over the whole report as a last guard.
 //
 // This module does not change how imports read anything. It has no
-// imports (same convention as chunking.ts/jobEngine.ts) so Jest loads it
+// imports (same convention as jobEngine.ts) so Jest loads it
 // directly; index.ts passes in the plan limits and the bank-digit scrubber
 // (bankDigits.ts scrubBankDigitsInText).
 export type Scrub = (text: string) => string;

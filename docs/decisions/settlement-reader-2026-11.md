@@ -88,8 +88,10 @@ reader call: structured output, adaptive thinking at the role's effort,
 the PDF block cached. A non-settlement PDF goes to the existing general
 extraction prompt, on the whole file, in one call.
 
-The old reader (modes `job`, `reread_job`, `job_verdict`, ...) stays as the
-fallback until the owner confirms the device test (then commit 6).
+The old reader (modes `job`, `reread_job`, `job_verdict`, ...) stayed as the
+fallback until the owner confirmed the device test (2026-11-13: 18 weeks
+imported with the new reader; Settlements 18, Capital Account and Home
+Yearly match). Commit 6 then deleted it — see "Commit 6" below.
 
 ## The app (commit 5)
 - `app/src/import/readerJob.ts` (pure, tested) turns the row into what the
@@ -140,3 +142,24 @@ Logged per call in `progress.reader.cost` and the function log:
   estimate from the price table in `cost.ts`.
 
 `ai_usage_log` keeps one row per import, as before.
+
+## Commit 6: the old reader deleted (2026-11-13)
+- Server: `chunking.ts` deleted (its one live function, the statement
+  columns normalizer used by `extractOnePass()`, moved to
+  `statementColumns.ts`); `jobEngine.ts` keeps only the plan-aware limits,
+  the stale-lease rule and `checkImportLimits()`; `index.ts` lost the old
+  modes, the page classifier, the per-page runs and the direct-path
+  page-by-page continuation (a PDF sent without a job is one call).
+- Old modes (`job`, `retry_job`, `resume_job`, `answer_job`, `read_pages`,
+  `reread_job`, `job_verdict`) answer 410 with "This file was read by the
+  old reader. Read it again with the new reader." A reader job resumed
+  through `resume_job` still resumes in the reader. `continue_job` never
+  runs an old row again.
+- App: the old mode calls, `jobVerdictRunner.ts`, `jobVerdict.ts` and the
+  import screen's own re-read flow are gone. Old `import_jobs` rows still
+  show failed with [Read again] (`readerJob.ts` `old_reader`,
+  `restartWithReader()`); the chip never resumes or answers them.
+- Kept on purpose: `src/import/importJobs.ts` row helpers (old rows are
+  still listed and counted), Diagnostics' old-row lines, and the client
+  continuation loop in `aiImportCall.ts` (the server no longer sends
+  `nextOrderIndex`, so it ends after one call).

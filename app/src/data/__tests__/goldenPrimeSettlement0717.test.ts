@@ -34,7 +34,6 @@ import { buildPrimeStatementCheck, isGateCheck, settlementDeposit } from '@/src/
 import { nonReimbursementCredits } from '@/src/import/settlementLineClass';
 import { labeledStatementTotals, totalFieldOfLabel } from '@/src/import/statementTotalLabels';
 import type { StatementLine } from '@/src/import/primeStatementLines';
-import { mergeChunkedExtractions, type ChunkExtraction } from '../../../../supabase/functions/ai-import/chunking';
 import { KEY, USER_ID, TRUCK_ID, WEEK_ENDING, STATEMENT, STATEMENT_LINES, REIMBURSEMENT_ITEMS, PAGE_MAP, golden0717 } from './golden0717Fixture';
 
 const WEEK_START = '2026-07-11';
@@ -263,6 +262,10 @@ describe('template variations pass; a misread printed total still blocks', () =>
 // MISCELLANEOUS 10.68" is on page 5. The model put -6.50 into
 // weekTotalMiscellaneous and -609.87 into weekTotalVariableCosts; the page
 // merge kept page 4's values. Totals now come only from TOTAL lines.
+// joinPages() rebuilds what that page merge returned (the merge itself went
+// with the old reader, 2026-11-13): lines and TOTAL lines of both pages in
+// page order; a field page 4 printed keeps page 4's value, a field it left
+// at its default (0, "") takes page 5's.
 const TOTALS_P4 = [
   { label: 'TOTAL FREIGHT REVENUE', amount: 696.96 },
   { label: 'TOTAL OTHER REVENUE', amount: 388.55 },
@@ -279,6 +282,18 @@ const TOTALS_P5 = [
   { label: 'TOTAL STATEMENT OF INCOME & EXPENSE', amount: 317.42 },
 ];
 const MISC_SPLIT = STATEMENT_LINES.findIndex((l) => l.label === 'MISCELLANEOUS') + 1;
+
+type PageReply = { settlement: Record<string, unknown> & { operating?: Record<string, unknown> } } & Record<string, unknown>;
+function joinPages(first: PageReply, second: PageReply): Record<string, unknown> {
+  const a = first.settlement.operating ?? {};
+  const b = second.settlement.operating ?? {};
+  const printed = (v: unknown) => v != null && v !== 0 && v !== '';
+  const operating: Record<string, unknown> = { ...a };
+  for (const [k, v] of Object.entries(b)) if (!printed(operating[k])) operating[k] = v;
+  operating.lines = [...((a.lines as unknown[]) ?? []), ...((b.lines as unknown[]) ?? [])];
+  operating.totalLines = [...((a.totalLines as unknown[]) ?? []), ...((b.totalLines as unknown[]) ?? [])];
+  return { ...first, settlement: { ...first.settlement, operating } };
+}
 
 function twoPageReading(totalsP5 = TOTALS_P5): Extraction {
   const base = golden0717();
@@ -316,7 +331,7 @@ function twoPageReading(totalsP5 = TOTALS_P5): Extraction {
       },
     },
   };
-  const merged = mergeChunkedExtractions([page4 as unknown as ChunkExtraction, page5 as unknown as ChunkExtraction]);
+  const merged = joinPages(page4, page5);
   return { ...(merged as unknown as Extraction), pageMap: PAGE_MAP.map((p) => ({ ...p })), pagesTotal: 8 } as Extraction;
 }
 

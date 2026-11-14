@@ -4,80 +4,32 @@
 // the Anthropic API. ANTHROPIC_API_KEY lives only in this function's
 // environment secrets; the mobile app never holds it (CLAUDE.md).
 //
-// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], learningRules?: { keyword: string, category: string }[], carrierCodeMaps?: { carrier: string, code: string, subCode: string | null, label: string, description: string | null }[], orderIndex?: number, pageOrder?: number[], priorPageExtractions?: { page: number, extraction: unknown }[], priorMissingPages?: number[] }
+// POST body: { fileBase64: string, mediaType: string, docHint?: string, locale?: string, customCategories?: string[], learningRules?: { keyword: string, category: string }[], carrierCodeMaps?: { carrier: string, code: string, subCode: string | null, label: string, description: string | null }[] } (the direct path: one call, a photo).
+// Every PDF import is a settlement-reader job: mode read_start with a
+// storagePath (reader/server.ts). The old reader modes return 410.
 // learningRules (owner decision 2026-08-05, FULL PARITY follow-up item
 // G, app/src/import/categoryLearning.ts) — the user's own learned
 // keyword->category corrections, appended to the prompt as plain-text
 // "USER CORRECTIONS" hints. PROMPT-CONTEXT ONLY: never used to fine-tune
 // or retrain the model — the same one-shot-per-request behavior as every
 // other prompt input here.
-// orderIndex/pageOrder/priorPageExtractions/priorMissingPages (owner
-// decision 2026-08-03, renamed/extended 2026-08-24 SPEED PASS) are set by
-// the CLIENT on every call after the first one for a long multi-page PDF
-// — see the TIMEOUT/PAGE-BUDGET comment below for the full reasoning. A
-// response may include `nextOrderIndex` + `pageOrder` +
-// `rawPageExtractions` + `rawMissingPages`, meaning: call again with
-// those four values to keep going. `orderIndex` is a position INTO
-// `pageOrder` (SMART PAGE TRIAGE's financially-meaningful-first
-// ordering), not a raw page number — `pageOrder` is computed once (the
-// first time a document enters the continuation path) and echoed back by
-// the client on every later round so the server never needs to
-// re-triage the same document twice.
 // Auth: Supabase JWT in the Authorization header (required).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import {
-  buildChunkPromptAddendum,
-  mergeAllPages,
-  mergeChunkedExtractions,
-  tagStatementLinePages,
   normalizeStatementColumns,
-  runWithConcurrencyLimit,
-  triagePageOrder,
-  type ChunkExtraction,
-  type PageByteSize,
-  type PageOutcome,
-  type PageRange,
-} from "./chunking.ts";
+} from "./statementColumns.ts";
 import { scrubBankDigits, scrubBankDigitsInText } from "./bankDigits.ts";
-import { extractionOutputSchema, FAILED_REPLY_MAX_CHARS, isSchemaRejection, replyOutputSchema, type JsonSchema } from "./outputSchema.ts";
+import { extractionOutputSchema, FAILED_REPLY_MAX_CHARS, isSchemaRejection, type JsonSchema } from "./outputSchema.ts";
 import { pdfCreationDateOf } from "./pdfInfo.ts";
 import {
-  CLASSIFY_WINDOW_MAX_BYTES,
-  FREE_PLAN_WALL_CLOCK_MS,
-  HEARTBEAT_EVERY_MS,
-  MAX_RUNS_PER_JOB,
   PLAN_SECRET_NAME,
   STALE_LEASE_AFTER_MS,
-  UNKNOWN_LAYOUT_PAGE_CAP,
   checkImportLimits,
   leaseIsStale,
-  limitsFor,
   limitsForPlan,
   planTierFrom,
-  newImportPlan,
-  newReadPagesPlan,
-  newRereadPlan,
-  rereadKeptResults,
-  decideJobVerdict,
-  manualReread,
-  reviewOf,
-  MAX_READS_PER_JOB,
-  type JobReview,
-  type JobVerdictInput,
-  resetFailedPages,
-  runJobStep,
-  type ClassifiedPage,
-  type JobDeps,
-  type JobModel,
-  type JobPlan,
-  type JobStore,
-  type ModelFailure,
-  type ModelOutcome,
-  type PageKind,
-  type PageMapEntry,
-  type PageResult,
   type UsageCallType,
 } from "./jobEngine.ts";
 
@@ -126,120 +78,13 @@ const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 // 16000 is comfortably more headroom per call than before, not less.
 const ANTHROPIC_MAX_TOKENS = 16000;
 
-// TIMEOUT/PAGE-BUDGET, ROUND 5 — MEASURED EVIDENCE (owner decision
-// 2026-08-03). Real per-page Anthropic call durations from Supabase's
-// own `ai-import` function logs (the round-4 `console.log` per attempt):
-//   23866ms, status 200        — one page, succeeded
-//   40003ms, TIMED OUT         — one page, killed at round 3's 40s cap
-//   39121ms, status 200        — one page, barely made it under 40s
-// Conclusion (owner's own diagnosis, confirmed by these numbers): this
-// was a BUDGET problem, not an architecture problem. A single page can
-// legitimately need up to (and apparently sometimes just past) 40
-// seconds — our own 40s AbortController was killing legitimate, still-
-// working calls. THAT is why round 3's device test showed "Imported
-// pages 1-1 of 11": page 2 didn't fail because of a real error, it
-// failed because WE gave up on it too early, and round 3's design then
-// stopped the entire continuation at that first failure.
-//
-// Three changes, precisely targeted at this evidence:
-//  1. PAGE_TIMEOUT_MS raised 40s -> 110s (per-page, first attempt) —
-//     comfortable margin over the ~40s worst case actually observed,
-//     while still leaving real headroom under Supabase's VERIFIED 150s
-//     wall-clock ceiling for one invocation
-//     (https://supabase.com/docs/guides/functions/limits — the "400s"
-//     figure is for `EdgeRuntime.waitUntil()` background work, which
-//     this function never uses).
-//  2. PAGES_PER_BATCH reduced 3 -> 2 — fewer pages attempted per
-//     invocation keeps the common-case invocation short, and combined
-//     with the dynamic per-invocation time-budget tracking below (NOT
-//     just a fixed page count), the SAME code stays safe even if a page
-//     takes far longer than the 24-40s typically measured.
-//  3. A single-page timeout is NO LONGER FATAL to the whole document.
-//     `runPageWithRetry()` gives a page ONE extra attempt at a shorter
-//     PAGE_RETRY_TIMEOUT_MS budget; if that ALSO fails, the page is
-//     recorded MISSING (chunking.ts's `mergeAllPages`, gap-tolerant —
-//     replaces round 3's stop-at-first-failure `mergeSequentialPageResults`)
-//     and the loop moves on to every remaining page regardless — "the
-//     loop must always attempt every page" (owner decision). A
-//     genuinely incomplete result (any missing page) still can't be
-//     saved: the settlement reconciliation hard guard
-//     (settlementReconciliation.ts) independently catches the resulting
-//     mismatched totals and blocks Save, same as before.
-//
-// DYNAMIC TIME-BUDGET TRACKING (why a fixed "2 pages always fits" isn't
-// safe on its own): the measured evidence shows single-page duration is
-// NOT constant (23.9s to >40s within the same document) — a fixed
-// assumption that 2 pages always completes in some bounded time is
-// exactly the same class of guess that caused this bug. Instead,
-// `remainingInvocationBudgetMs()` tracks real elapsed wall-clock time
-// since THIS invocation started and every page attempt's own timeout is
-// capped at `min(PAGE_TIMEOUT_MS, remaining budget - safety margin)` —
-// if there isn't enough budget left to safely attempt (or retry)
-// another page, the loop stops THERE (not mid-attempt) and hands off to
-// a fresh invocation via `nextOrderIndex`, which gets its own full 150s
-// budget. This guarantees the platform's hard ceiling is never at risk
-// regardless of how slow any individual page turns out to be — "more
-// round trips is fine — they are cheap" (owner decision).
+// DIRECT PATH BUDGET: a photo (or a PDF sent without a job) is read in ONE
+// model call that must end inside the 150 s Free-plan worker. Every PDF
+// import goes through the settlement reader's background job instead
+// (read_start). The old page-by-page continuation was removed with the old
+// reader (owner decision 2026-11-13, commit 6).
 const IMAGE_TIMEOUT_MS = 90_000;
-// 17-PAGE STALL REDESIGN (owner decision 2026-10-13): every model call
-// must end by 140 s of a 150 s Free-plan worker (jobEngine.ts limitsFor()),
-// so no single call may be given more than 100 s any more.
 const SINGLE_CALL_TIMEOUT_MS = 100_000;
-const PAGE_TIMEOUT_MS = 100_000;
-// Shorter than PAGE_TIMEOUT_MS on purpose — this is a page's SECOND,
-// last-chance attempt after already timing out once; burning another
-// full 110s risks the platform's own 150s ceiling more than it's worth,
-// especially within a batch that still has a 2nd page to get to.
-const PAGE_RETRY_TIMEOUT_MS = 30_000;
-const PAGES_PER_BATCH = 2;
-
-// CONTROLLED CONCURRENCY (owner decision 2026-08-24, SPEED PASS — device
-// report: a strictly-sequential, one-page-at-a-time continuation made an
-// 11-page settlement take 3-5 minutes wall-clock). An EARLIER attempt at
-// speeding this up fired a whole batch via uncontrolled `Promise.all` and
-// caused real Anthropic rate-limit/contention failures — which is
-// precisely why processing went fully sequential in the first place (see
-// this file's own "ROUND 5 — MEASURED EVIDENCE" comment above). This is
-// the middle ground: at most `BATCH_CONCURRENCY` pages run at once
-// (chunking.ts's `runWithConcurrencyLimit`), never the whole batch at
-// once and never strictly one at a time. PAGES_PER_BATCH is deliberately
-// left at 2 this pass (not increased) — with concurrency also 2, this
-// means each invocation's (up to) 2 pages fire TOGETHER as one wave
-// instead of sequentially, which is the direct fix for the reported
-// slowness without adding the multi-wave-per-invocation complexity a
-// larger batch size would need. Configurable server-side via the
-// AI_IMPORT_BATCH_CONCURRENCY environment variable (falls back to the
-// default below on anything missing/invalid) so this can be tuned without
-// a code change/redeploy if real-world timing suggests a different value.
-const DEFAULT_BATCH_CONCURRENCY = 2;
-function readBatchConcurrency(): number {
-  const raw = Deno.env.get("AI_IMPORT_BATCH_CONCURRENCY");
-  const parsed = raw ? parseInt(raw, 10) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BATCH_CONCURRENCY;
-}
-const BATCH_CONCURRENCY = readBatchConcurrency();
-// Below this much remaining invocation budget, don't even start another
-// page attempt (first try OR retry) — hand off to a fresh invocation
-// instead, which gets a full new 150s budget. Sized so a page that DOES
-// get attempted always has at least a fighting chance to complete before
-// the platform would kill the whole invocation regardless of our own
-// AbortController.
-const MIN_USEFUL_BUDGET_MS = 20_000;
-// The worker exits by 130 s of the documented 150 s Free-plan wall clock
-// (jobEngine.ts limitsFor(); 17-page stall redesign, owner decision
-// 2026-10-13) — the remaining 20 s cover auth, pdf-lib, merging and the
-// response on top of whatever Anthropic call time was used.
-// PLAN-AWARE BUDGET (owner decision 2026-10-31): this DIRECT path stays on
-// the Free budget even on a paid plan — the app waits for its reply
-// synchronously and gives up after 240 s (app/src/data/aiImportCall.ts
-// PDF_CLIENT_TIMEOUT_MS). Only background jobs (JOB_LIMITS below) use the
-// plan setting.
-const HARD_INVOCATION_BUDGET_MS = limitsFor(FREE_PLAN_WALL_CLOCK_MS).exitByMs;
-// Defensive ceiling only — real settlements are nowhere near this long;
-// stops a pathological/corrupt PDF (that still passed the 10MB size
-// guard) from driving an unbounded number of client-side continuation
-// round-trips.
-const MAX_TOTAL_PAGES = 60;
 
 // Retry ONLY for a genuine TRANSIENT failure (a real network-level throw,
 // or a 5xx/529-overloaded response from Anthropic) — never for a 4xx
@@ -722,8 +567,7 @@ type ErrorType =
   // FIVE ADDITIONS pass, PART 5) — the monthly ai-import allowance (60 per
   // active truck, docs/PENDING_SQL.md's ai_usage_config) plus any owner-
   // granted credit packs are both exhausted. Returned BEFORE any Anthropic
-  // call is made (checked only on isFirstCall — an in-progress multi-page
-  // continuation is never cut off mid-document).
+  // call is made.
   | "usage_limit_reached";
 
 // RATE-LIMIT COOLDOWN — GLOBAL BACK-PRESSURE (owner decision 2026-08-24,
@@ -1059,12 +903,9 @@ async function extractOnePass(
   return { extraction: normalizeStatementColumns(parsed) };
 }
 
-// PDF PAGE COUNT + SPLITTING (owner decision 2026-08-02, chunking pass) —
-// the Deno-only half of chunking (chunking.ts holds the pure, Deno-free
-// half: page-range arithmetic and JSON merging). base64<->bytes uses the
-// Web-standard atob/btoa (both available as Deno globals) — bytesToBase64
-// chunks the String.fromCharCode(...) spread in 0x8000-byte batches to
-// avoid a call-stack overflow on a large PDF's byte array.
+// base64<->bytes uses the Web-standard atob/btoa (both Deno globals) —
+// bytesToBase64 chunks the String.fromCharCode(...) spread in 0x8000-byte
+// batches to avoid a call-stack overflow on a large PDF's byte array.
 function base64ToBytes(b64: string): Uint8Array {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
@@ -1079,183 +920,6 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
   }
   return btoa(binary);
-}
-
-// Returns null (never throws) when the PDF can't be parsed for a page
-// count — the caller falls back to the plain, non-chunked path in that
-// case, exactly as if this feature didn't exist. Chunking is purely
-// additive; it must never become a NEW way for an otherwise-fine import
-// to fail.
-async function getPdfPageCount(fileBase64: string): Promise<number | null> {
-  try {
-    const doc = await PDFDocument.load(base64ToBytes(fileBase64), { ignoreEncryption: true });
-    return doc.getPageCount();
-  } catch {
-    return null;
-  }
-}
-
-async function splitPdfIntoChunks(fileBase64: string, ranges: PageRange[]): Promise<string[]> {
-  const srcDoc = await PDFDocument.load(base64ToBytes(fileBase64), { ignoreEncryption: true });
-  const chunks: string[] = [];
-  for (const range of ranges) {
-    const chunkDoc = await PDFDocument.create();
-    const indices: number[] = [];
-    for (let p = range.start; p <= range.end; p++) indices.push(p - 1); // pdf-lib is 0-indexed
-    const copiedPages = await chunkDoc.copyPages(srcDoc, indices);
-    copiedPages.forEach((page) => chunkDoc.addPage(page));
-    chunks.push(bytesToBase64(await chunkDoc.save()));
-  }
-  return chunks;
-}
-
-// ONE PAGE, WITH ONE NON-FATAL RETRY (owner decision 2026-08-03, round 5
-// — MEASURED EVIDENCE fix). A timeout is NOT immediately fatal to this
-// page: one extra attempt is made at a shorter PAGE_RETRY_TIMEOUT_MS
-// budget before giving up. A non-timeout failure (4xx/parse-failure/
-// refusal) is never retried — that's not what a retry can fix — and
-// marks the page missing immediately. `remainingBudgetMs` is a live
-// callback (not a snapshot) so this always sees the CURRENT invocation
-// budget, including whatever the first attempt itself just consumed —
-// under CONTROLLED CONCURRENCY (SPEED PASS, owner decision 2026-08-24)
-// this is now called for up to BATCH_CONCURRENCY pages at once, so the
-// budget it reads may reflect a SIBLING page's own in-flight consumption
-// too, not just this page's — that's fine, it's still a real, live
-// remaining-budget number either way, just shared across the wave.
-// INSTRUMENTATION (SPEED PASS item 5): every attempt logs its own page
-// number, payload byte size (SHRINK THE PAYLOAD's one measurable,
-// already-real reduction — a single-page PDF excludes every other page's
-// fonts/images/objects via pdf-lib's copyPages(), unlike sending the
-// whole original file), duration, and outcome status, so a real device
-// import's exact timing is visible in `supabase functions logs ai-import`
-// without guessing. `cachedPageBase64` (optional): SMART PAGE TRIAGE
-// already had to split every page once up front to measure its size for
-// ordering — reusing those bytes here (instead of re-splitting the same
-// page a second time) is a small, real, free efficiency win for whichever
-// pages happen to be processed in the SAME invocation that computed
-// triage; a page processed in a LATER invocation (after hand-off) has no
-// cached bytes available and is split fresh, same as before.
-async function runPageWithRetry(
-  anthropicKey: string,
-  fileBase64: string,
-  totalPages: number,
-  page: number,
-  basePrompt: string,
-  remainingBudgetMs: () => number,
-  cachedPageBase64?: string,
-): Promise<PageOutcome> {
-  const range: PageRange = { start: page, end: page };
-  const chunkPrompt = basePrompt + buildChunkPromptAddendum(range, totalPages);
-
-  async function attempt(timeoutMs: number): Promise<ExtractOneResult> {
-    const chunkB64 = cachedPageBase64 ?? (await splitPdfIntoChunks(fileBase64, [range]))[0];
-    const contentBlock = { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunkB64 } };
-    const attemptStartedAt = performance.now();
-    const outcome = await extractOnePass(anthropicKey, contentBlock, chunkPrompt, timeoutMs, MAX_ANTHROPIC_ATTEMPTS);
-    const durationMs = Math.round(performance.now() - attemptStartedAt);
-    const status = "errorType" in outcome ? outcome.errorType : "success";
-    console.log(`[ai-import] INSTRUMENT page=${page} bytes=${chunkB64.length} durationMs=${durationMs} status=${status}`);
-    return outcome;
-  }
-
-  const firstBudget = remainingBudgetMs();
-  if (firstBudget < MIN_USEFUL_BUDGET_MS) {
-    console.log(`[ai-import] page ${page}: skipping this invocation — only ${Math.round(firstBudget)}ms of budget left`);
-    return { page, missing: true };
-  }
-  const firstTimeout = Math.min(PAGE_TIMEOUT_MS, firstBudget - 5_000);
-  console.log(`[ai-import] page ${page}: attempt 1, timeout=${firstTimeout}ms (budget remaining ${Math.round(firstBudget)}ms)`);
-  const first = await attempt(firstTimeout);
-  if (!("errorType" in first)) {
-    console.log(`[ai-import] page ${page}: succeeded on attempt 1`);
-    return { page, extraction: first.extraction as ChunkExtraction };
-  }
-  // A rate limit is retryable too (owner decision 2026-08-24, BATCH
-  // BACK-PRESSURE) — unlike a timeout, it needs an actual wait (the
-  // GLOBAL cooldown gate at the top of extractOnePass would otherwise
-  // just immediately re-reject an instant retry) before trying again,
-  // sourced from Anthropic's own Retry-After when present.
-  const isRateLimited = first.errorType === "rate_limited";
-  if (first.errorType !== "timeout" && !isRateLimited) {
-    console.log(`[ai-import] page ${page}: failed with "${first.errorType}" (not retryable) — marking missing`);
-    return { page, missing: true };
-  }
-
-  const retryBudget = remainingBudgetMs();
-  const rateLimitWaitMs = isRateLimited
-    ? Math.max(1000, ((first.extra?.retryAfterSeconds as number | undefined) ?? DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS) * 1000)
-    : 0;
-  if (retryBudget < MIN_USEFUL_BUDGET_MS + rateLimitWaitMs) {
-    console.log(`[ai-import] page ${page}: ${isRateLimited ? "rate-limited" : "timed out"}, no budget left for the retry (${Math.round(retryBudget)}ms) — marking missing`);
-    return { page, missing: true };
-  }
-  if (isRateLimited) {
-    console.log(`[ai-import] page ${page}: rate-limited — waiting ${rateLimitWaitMs}ms before retrying`);
-    await new Promise((r) => setTimeout(r, rateLimitWaitMs));
-  }
-  const retryTimeout = Math.min(PAGE_RETRY_TIMEOUT_MS, remainingBudgetMs() - 5_000);
-  console.log(`[ai-import] page ${page}: attempt 1 ${isRateLimited ? "was rate-limited" : "timed out"} — retrying once, timeout=${retryTimeout}ms`);
-  const retry = await attempt(retryTimeout);
-  if (!("errorType" in retry)) {
-    console.log(`[ai-import] page ${page}: succeeded on retry`);
-    return { page, extraction: retry.extraction as ChunkExtraction };
-  }
-  console.log(`[ai-import] page ${page}: retry also failed ("${retry.errorType}") — marking missing, moving on to the next page`);
-  return { page, missing: true };
-}
-
-type PageBatchResult = { outcomes: PageOutcome[]; attemptedCount: number };
-
-// CONTROLLED CONCURRENCY, ONE INVOCATION'S WORTH OF PAGES (owner decision
-// 2026-08-24, SPEED PASS — see this file's own CONTROLLED CONCURRENCY
-// comment near the top for the full "not all at once, not one at a time"
-// reasoning). Processes up to `batchSize` pages FROM `pageOrder` (SMART
-// PAGE TRIAGE's financially-meaningful-first ordering — NOT necessarily
-// raw ascending page numbers), starting at index `startIndex`, with at
-// most `concurrency` running at once (chunking.ts's
-// `runWithConcurrencyLimit`) — but UNLIKE the old fully-sequential
-// design, a page that fails (even after its own retry) still does NOT
-// stop the wave: "the loop must always attempt every page" (owner
-// decision, unchanged). Bails out BEFORE starting the wave at all
-// (attempting nothing) whenever `remainingBudgetMs()` is already too low,
-// handing every page in this batch off to a fresh invocation instead —
-// the SAME dynamic time-budget hand-off guarantee as before, just checked
-// once per WAVE instead of once per PAGE (with PAGES_PER_BATCH=2 and
-// BATCH_CONCURRENCY=2 there is normally only ever one wave per
-// invocation, so this is not a meaningfully weaker guarantee in practice
-// today). Every chunk pdf-lib produces really is cropped to just that one
-// page (confirmed by reading splitPdfIntoChunks — this was never sending
-// the whole document per call, in any pass).
-async function extractPagesForInvocation(
-  anthropicKey: string,
-  fileBase64: string,
-  totalPages: number,
-  pageOrder: number[],
-  startIndex: number,
-  batchSize: number,
-  concurrency: number,
-  basePrompt: string,
-  remainingBudgetMs: () => number,
-  pageBytesCache: Map<number, string>,
-): Promise<PageBatchResult> {
-  const endIndex = Math.min(startIndex + batchSize, pageOrder.length);
-  const pagesToAttempt = pageOrder.slice(startIndex, endIndex);
-  if (pagesToAttempt.length === 0) return { outcomes: [], attemptedCount: 0 };
-
-  if (remainingBudgetMs() < MIN_USEFUL_BUDGET_MS) {
-    console.log(`[ai-import] stopping this invocation before pages [${pagesToAttempt.join(",")}] — insufficient budget remaining, handing off`);
-    return { outcomes: [], attemptedCount: 0 };
-  }
-
-  const waveStartedAt = performance.now();
-  const outcomes = await runWithConcurrencyLimit(pagesToAttempt, concurrency, (page) =>
-    runPageWithRetry(anthropicKey, fileBase64, totalPages, page, basePrompt, remainingBudgetMs, pageBytesCache.get(page))
-  );
-  console.log(
-    `[ai-import] INSTRUMENT wave pages=[${pagesToAttempt.join(",")}] concurrency=${concurrency} waveDurationMs=${Math.round(performance.now() - waveStartedAt)} budgetRemainingMs=${Math.round(remainingBudgetMs())}`
-  );
-
-  return { outcomes, attemptedCount: pagesToAttempt.length };
 }
 
 function errorResponse(type: ErrorType, message: string, status: number, extra?: Record<string, unknown>) {
@@ -1435,30 +1099,10 @@ async function logAiUsage(
 }
 
 // ============================================================================
-// BACKGROUND IMPORT JOBS — RESUMABLE, PAGE BY PAGE (owner decision
-// 2026-10-13, "17-page stall" redesign A-H + amendments + "scale to any
-// page count" add-on; docs/decisions/settlement-import-chunking.md,
-// docs/PENDING_SQL.md §78). Replaces the 2026-08-24 single background run
-// (runJobInBackground, JOB_HARD_BUDGET_MS = 240 s, never verified): that
-// run spent 120 s on a doomed whole-document call, then read pages in the
-// leftover seconds until Supabase stopped the worker at its 150 s Free-plan
-// wall clock, leaving the job at "Page 2 of 17" with no error, and every
-// retry started over from page 1.
-//
-// Now a job is a chain of short invocations ("runs"). The decision logic
-// lives in jobEngine.ts (pure, Jest-tested against a simulated 150 s
-// world); this section gives it the real dependencies:
-//   - a lease on the import_jobs row (import_job_claim RPC) so only one run
-//     at a time owns the job;
-//   - per-page results written atomically (import_job_put_page RPC), bank
-//     digits removed first;
-//   - pdf-lib, loaded once per run from the stored file — the whole file is
-//     base64-encoded only for a whole-document call (at most 8 pages and
-//     8 MB); otherwise one window (classification, at most 20 pages / 8 MB)
-//     or one page at a time;
-//   - the next run is started by calling this function again with mode
-//     'continue_job' and the service key; if that call never arrives, the
-//     app resumes the job once its heartbeat is 3 minutes old.
+// BACKGROUND IMPORT JOBS: shared server pieces of the settlement reader's
+// jobs (reader/server.ts): the plan-aware budget, usage logging, credits,
+// the stored file and the next-run request. The old page-by-page reader
+// (jobEngine.ts runJobStep) was removed 2026-11-13 (commit 6).
 // ============================================================================
 
 // PLAN-AWARE BUDGET (owner decision 2026-10-31): Free limits (exit by
@@ -1471,29 +1115,6 @@ const JOB_LIMITS = limitsForPlan(JOB_PLAN_TIER);
 console.log(`[ai-import] job budget: plan=${JOB_PLAN_TIER} exitBy=${JOB_LIMITS.exitByMs}ms callEnd=${JOB_LIMITS.callEndLimitMs}ms documentedWallClock=${JOB_LIMITS.wallClockMs}ms`);
 if (Deno.env.get("AI_IMPORT_WALL_CLOCK_MS")) {
   console.warn(`[ai-import] AI_IMPORT_WALL_CLOCK_MS is set but ignored — use ${PLAN_SECRET_NAME}=pro instead, and unset it.`);
-}
-
-// The cheap page classifier (decision C). Advisory only: if this model is
-// unavailable the job falls back to physical page order.
-const CLASSIFY_MODEL = Deno.env.get("AI_IMPORT_CLASSIFY_MODEL") || "claude-haiku-5-5";
-const CLASSIFY_MAX_TOKENS = 2000;
-
-type PromptInputs = {
-  docHint?: string;
-  locale?: string;
-  customCategories?: string[];
-  learningRules?: { keyword: string; category: string }[];
-  carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
-};
-
-type StoredPlan = JobPlan & { promptInputs?: PromptInputs };
-
-// Same rule as the app's isPrimeCarrier() (normalizeCarrierKey):
-// uppercase, drop "." and ",", collapse spaces. Null/unknown never matches.
-function isPrimeCarrierName(carrier: string | null | undefined): boolean {
-  if (!carrier) return false;
-  const key = carrier.toUpperCase().replace(/[.,]/g, "").replace(/\s+/g, " ").trim();
-  return key === "PRIME INC";
 }
 
 async function logJobUsage(
@@ -1547,33 +1168,6 @@ async function consumeCreditForUserIfOverAllowance(admin: ReturnType<typeof crea
   }
 }
 
-// One run's view of the stored file: downloaded once, parsed by pdf-lib at
-// most once, and cut into one page or one window at a time. The whole
-// file is base64-encoded only for a whole-document call.
-class StoredPdf {
-  private doc: PDFDocument | null = null;
-  constructor(readonly bytes: Uint8Array, readonly mediaType: string) {}
-
-  private async load(): Promise<PDFDocument> {
-    if (!this.doc) this.doc = await PDFDocument.load(this.bytes, { ignoreEncryption: true });
-    return this.doc;
-  }
-
-  async rangeBase64(start: number, end: number): Promise<string> {
-    const src = await this.load();
-    const out = await PDFDocument.create();
-    const indices: number[] = [];
-    for (let p = start; p <= end; p++) indices.push(p - 1);
-    const copied = await out.copyPages(src, indices);
-    copied.forEach((page) => out.addPage(page));
-    return bytesToBase64(await out.save());
-  }
-
-  wholeBase64(): string {
-    return bytesToBase64(this.bytes);
-  }
-}
-
 // The PDF's CreationDate rides along with the extraction (printed-date
 // cross-check in the app, owner decision 2026-10-29).
 function withPdfCreationDate<T>(extraction: T, created: string | null): T {
@@ -1594,231 +1188,6 @@ async function countPdfPages(bytes: Uint8Array): Promise<number | null> {
   } catch {
     return null;
   }
-}
-
-const VALID_KINDS = new Set<string>(["settlement", "statement", "toll_bill", "repair_invoice", "delivery_receipt", "fuel_receipt", "other"]);
-
-function buildClassifyPrompt(start: number, end: number, total: number): string {
-  return `This file contains pages ${start}-${end} of a ${total}-page PDF (its first page is page ${start} of the document). Classify every page. Return ONLY raw JSON, no markdown:
-{"carrier":"","pages":[{"page":${start},"kind":"settlement","hasTotalCashFlow":false,"hasStatementTotal":false}]}
-Rules:
-- "page": the page number in the ORIGINAL ${total}-page document (${start} to ${end}).
-- "carrier": the trucking carrier that issued the settlement, exactly as printed (for example "Prime Inc."), or "" if no settlement page is in these pages.
-- "kind": "settlement" = a carrier settlement page (header, revenue, loads, deductions, fuel or reimbursement detail); "statement" = the carrier's operating statement / Statement of Income and Expense (revenue and expense blocks with weekly and year-to-date columns); "toll_bill" = an E-ZPass or other toll bill; "repair_invoice" = a shop repair or parts invoice; "delivery_receipt" = a bill of lading, delivery receipt or proof of delivery; "fuel_receipt" = a fuel receipt; "other" = anything else.
-- "hasTotalCashFlow": true only if the words TOTAL CASH FLOW are printed on that page.
-- "hasStatementTotal": true only if the words TOTAL STATEMENT OF INCOME & EXPENSE (or TOTAL STATEMENT OF INCOME AND EXPENSE) are printed on that page.
-Return exactly one entry per page, in page order.`;
-}
-
-function parseClassification(raw: unknown, start: number, end: number): { pages: ClassifiedPage[]; carrier: string | null } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const obj = raw as { carrier?: unknown; pages?: unknown };
-  if (!Array.isArray(obj.pages)) return null;
-  const entries = obj.pages
-    .map((p) => p as { page?: unknown; kind?: unknown; hasTotalCashFlow?: unknown; hasStatementTotal?: unknown })
-    .filter((p) => typeof p.page === "number" && Number.isFinite(p.page as number));
-  // Some replies number the window's pages 1..k instead of start..end.
-  const k = end - start + 1;
-  const relative = start > 1 && entries.length > 0 && entries.every((p) => (p.page as number) >= 1 && (p.page as number) <= k) &&
-    !entries.some((p) => (p.page as number) >= start && (p.page as number) <= end && (p.page as number) > k);
-  const pages: ClassifiedPage[] = entries.map((p) => ({
-    page: relative ? (p.page as number) + start - 1 : (p.page as number),
-    kind: (typeof p.kind === "string" && VALID_KINDS.has(p.kind) ? p.kind : "other") as PageKind,
-    hasTotalCashFlow: p.hasTotalCashFlow === true,
-    hasStatementTotal: p.hasStatementTotal === true,
-  }));
-  const carrier = typeof obj.carrier === "string" && obj.carrier.trim() ? obj.carrier.trim() : null;
-  return { pages: pages.filter((p) => p.page >= start && p.page <= end), carrier };
-}
-
-function attachmentHint(kind: PageKind): string {
-  if (kind === "toll_bill" || kind === "repair_invoice") {
-    return `\n\nThis page is an attachment (${kind === "toll_bill" ? "a toll bill" : "a repair invoice"}) stapled to the settlement. Extract only what it shows (a repair invoice into settlement.maintenance, a toll bill into settlement.tolls). Leave every settlement total and the operating statement at their defaults.`;
-  }
-  return "";
-}
-
-type JobRow = {
-  id: string;
-  user_id: string;
-  storage_path: string;
-  media_type: string;
-  page_plan: StoredPlan | null;
-  page_results: Record<string, PageResult> | null;
-  document_id: string | null;
-  created_at: string;
-};
-
-// The real JobDeps for one run of `jobId`. `invocationStartedAt` is when
-// THIS invocation (HTTP request) began — the platform's wall clock counts
-// from there, not from when the step starts.
-function buildJobDeps(
-  admin: ReturnType<typeof createClient>,
-  row: JobRow,
-  pdf: StoredPdf,
-  anthropicKey: string,
-  invocationStartedAt: number,
-): JobDeps {
-  const owner = crypto.randomUUID();
-  const jobId = row.id;
-  const userId = row.user_id;
-  const plan = row.page_plan as StoredPlan;
-  const prompt = buildExtractionPrompt(
-    plan.promptInputs?.docHint,
-    plan.promptInputs?.locale,
-    plan.promptInputs?.customCategories,
-    plan.promptInputs?.learningRules,
-    plan.promptInputs?.carrierCodeMaps,
-  );
-  const isImage = row.media_type.startsWith("image/");
-
-  const store: JobStore = {
-    async claim(o, leaseMs) {
-      const { data, error } = await admin.rpc("import_job_claim", { p_job_id: jobId, p_owner: o, p_lease_seconds: Math.ceil(leaseMs / 1000) });
-      if (error) console.error(`[ai-import] job ${jobId}: claim failed: ${error.message}`);
-      return data === true;
-    },
-    async load() {
-      const { data, error } = await admin.from("import_jobs").select("page_plan, page_results, document_id, created_at").eq("id", jobId).eq("user_id", userId).single();
-      if (error || !data) throw new Error(`could not load job ${jobId}: ${error?.message ?? "no row"}`);
-      return {
-        plan: data.page_plan as StoredPlan,
-        results: (data.page_results ?? {}) as Record<string, PageResult>,
-        documentId: (data.document_id as string | null) ?? null,
-        startedAt: data.created_at as string,
-      };
-    },
-    async savePlan(o, p, fields) {
-      const now = new Date().toISOString();
-      const update: Record<string, unknown> = { page_plan: p, heartbeat_at: now, updated_at: now };
-      if (fields.progress) update.progress = fields.progress;
-      if (fields.status) update.status = fields.status;
-      if (fields.errorMessage !== undefined) update.error_message = fields.errorMessage == null ? null : scrubBankDigits(fields.errorMessage);
-      if (fields.errorStep !== undefined) update.error_step = fields.errorStep;
-      if (fields.errorPage !== undefined) update.error_page = fields.errorPage;
-      if (fields.pagesTotal !== undefined) update.pages_total = fields.pagesTotal;
-      if (fields.completed) update.completed_at = now;
-      if (fields.resultJson !== undefined && !fields.resultOnlyIfUnsaved) update.result_json = fields.resultJson == null ? null : scrubBankDigits(fields.resultJson);
-      const { data, error } = await admin.from("import_jobs").update(update).eq("id", jobId).eq("user_id", userId).eq("lease_owner", o).select("id");
-      if (error) {
-        console.error(`[ai-import] job ${jobId}: save failed: ${error.message}`);
-        return false;
-      }
-      if (fields.resultJson !== undefined && fields.resultOnlyIfUnsaved) {
-        await admin
-          .from("import_jobs")
-          .update({ result_json: fields.resultJson == null ? null : scrubBankDigits(fields.resultJson) })
-          .eq("id", jobId)
-          .eq("user_id", userId)
-          .eq("lease_owner", o)
-          .is("document_id", null);
-      }
-      return (data ?? []).length > 0;
-    },
-    async putPage(o, page, result) {
-      const { data, error } = await admin.rpc("import_job_put_page", { p_job_id: jobId, p_owner: o, p_page: page, p_result: scrubBankDigits(result) });
-      if (error) console.error(`[ai-import] job ${jobId}: put page ${page} failed: ${error.message}`);
-      return data === true;
-    },
-    async release(o) {
-      const { error } = await admin.rpc("import_job_release", { p_job_id: jobId, p_owner: o });
-      if (error) console.error(`[ai-import] job ${jobId}: release failed: ${error.message}`);
-    },
-    async loadBaseDocument(documentId) {
-      const { data } = await admin.from("documents").select("parsed_json").eq("id", documentId).eq("user_id", userId).maybeSingle();
-      return (data?.parsed_json as unknown) ?? null;
-    },
-  };
-
-  async function call(
-    contentBlock: Record<string, unknown>,
-    text: string,
-    timeoutMs: number,
-    model?: { model: string; maxTokens: number },
-    schema?: JsonSchema | null,
-  ): Promise<ModelOutcome> {
-    const started = performance.now();
-    const r = await extractOnePass(anthropicKey, contentBlock, text, timeoutMs, MAX_ANTHROPIC_ATTEMPTS, model, schema);
-    console.log(`[ai-import] INSTRUMENT job=${jobId} model=${model?.model ?? ANTHROPIC_MODEL} durationMs=${Math.round(performance.now() - started)} status=${"errorType" in r ? r.errorType : "success"}`);
-    if ("errorType" in r) {
-      const rawReply = typeof r.extra?.raw === "string" && r.extra.raw ? (r.extra.raw as string) : undefined;
-      return { errorType: r.errorType as ModelFailure["errorType"], message: r.message, retryAfterSeconds: r.extra?.retryAfterSeconds as number | undefined, ...(rawReply ? { rawReply } : {}) };
-    }
-    return { extraction: r.extraction };
-  }
-
-  const model: JobModel = {
-    wholeDocument(timeoutMs) {
-      const block = isImage
-        ? { type: "image", source: { type: "base64", media_type: row.media_type, data: pdf.wholeBase64() } }
-        : { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.wholeBase64() } };
-      return call(block, prompt, timeoutMs);
-    },
-    async classifyWindow(start, maxEnd, timeoutMs) {
-      // Never more than CLASSIFY_WINDOW_MAX_BYTES in one call: halve the
-      // window until it fits.
-      let end = maxEnd;
-      let data = await pdf.rangeBase64(start, end);
-      while (Math.floor((data.length * 3) / 4) > CLASSIFY_WINDOW_MAX_BYTES && end > start) {
-        end = start + Math.floor((end - start + 1) / 2) - 1;
-        data = await pdf.rangeBase64(start, end);
-      }
-      if (Math.floor((data.length * 3) / 4) > CLASSIFY_WINDOW_MAX_BYTES) {
-        return { errorType: "oversized", message: `Page ${start} alone is larger than ${CLASSIFY_WINDOW_MAX_BYTES / (1024 * 1024)} MB.` };
-      }
-      const classifyText = buildClassifyPrompt(start, end, plan.totalPages);
-      const r = await call(
-        { type: "document", source: { type: "base64", media_type: "application/pdf", data } },
-        classifyText,
-        timeoutMs,
-        { model: CLASSIFY_MODEL, maxTokens: CLASSIFY_MAX_TOKENS },
-        replyOutputSchema(classifyText, '{"carrier":'),
-      );
-      if ("errorType" in r) return r;
-      const parsed = parseClassification(r.extraction, start, end);
-      if (!parsed) return { errorType: "parse_failed", message: "The page classification reply could not be read." };
-      return { ...parsed, windowEnd: end };
-    },
-    async readPage(page, kind, timeoutMs) {
-      const data = await pdf.rangeBase64(page, page);
-      const text = prompt + buildChunkPromptAddendum({ start: page, end: page }, plan.totalPages) + attachmentHint(kind);
-      // Every page of a settlement PDF (content or stapled attachment) is
-      // read into the settlement shape.
-      return call({ type: "document", source: { type: "base64", media_type: "application/pdf", data } }, text, timeoutMs, undefined, extractionOutputSchema(text, "settlement"));
-    },
-  };
-
-  return {
-    owner,
-    limits: JOB_LIMITS,
-    elapsedMs: () => performance.now() - invocationStartedAt,
-    nowMs: () => Date.now(),
-    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-    store,
-    model,
-    merge(pages, base) {
-      // Each statement line keeps the page it was printed on (owner
-      // 2026-11-03): a block that does not add up names the page to read
-      // again (app/src/import/primeStatementTemplate.ts).
-      const sorted = [...pages].sort((a, b) => a.page - b.page).map((p) => tagStatementLinePages(p.extraction, p.page) as ChunkExtraction);
-      const all = base ? [base as ChunkExtraction, ...sorted] : sorted;
-      if (all.length === 0) return null;
-      return { ...mergeChunkedExtractions(all) };
-    },
-    scrub: scrubBankDigits,
-    isPrimeCarrier: isPrimeCarrierName,
-    pdfCreationDate: pdf.mediaType.startsWith("image/") ? null : pdfCreationDateOf(pdf.bytes),
-    logUsage: (callType, success, reason) => logJobUsage(admin, userId, callType, success, reason),
-    consumeCreditIfOverAllowance: () => consumeCreditForUserIfOverAllowance(admin, userId),
-    continueInNewInvocation: () => startNextRun(jobId),
-    startHeartbeat() {
-      const id = setInterval(() => {
-        admin.from("import_jobs").update({ heartbeat_at: new Date().toISOString() }).eq("id", jobId).eq("lease_owner", owner).then(() => {}, () => {});
-      }, HEARTBEAT_EVERY_MS);
-      return () => clearInterval(id);
-    },
-    log: (message) => console.log(`[ai-import] job ${jobId}: ${message}`),
-  };
 }
 
 // Starts the next run of a job: this same function, mode 'continue_job',
@@ -1845,41 +1214,6 @@ async function startNextRun(jobId: string): Promise<void> {
   }
 }
 
-// Runs one step of `jobId` in the background of THIS invocation.
-async function runJobRun(admin: ReturnType<typeof createClient>, jobId: string, invocationStartedAt: number, preloaded?: Uint8Array): Promise<void> {
-  try {
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    const { data: row, error } = await admin
-      .from("import_jobs")
-      .select("id, user_id, storage_path, media_type, page_plan, page_results, document_id, created_at")
-      .eq("id", jobId)
-      .maybeSingle();
-    if (error || !row) {
-      console.error(`[ai-import] job ${jobId}: not found for a run: ${error?.message ?? "no row"}`);
-      return;
-    }
-    if (!row.page_plan || !anthropicKey) {
-      console.error(`[ai-import] job ${jobId}: no plan or no ANTHROPIC_API_KEY — nothing to run`);
-      return;
-    }
-    const bytes = preloaded ?? (await downloadStoredFile(admin, row.storage_path as string));
-    if (!bytes) {
-      await admin.from("import_jobs").update({
-        status: "failed",
-        error_message: "Could not read the uploaded file — your file is safe. Resume to try again.",
-        error_step: "internal",
-        updated_at: new Date().toISOString(),
-      }).eq("id", jobId);
-      return;
-    }
-    const deps = buildJobDeps(admin, row as unknown as JobRow, new StoredPdf(bytes, row.media_type as string), anthropicKey, invocationStartedAt);
-    const result = await runJobStep(deps);
-    console.log(`[ai-import] job ${jobId}: run ended (${result.kind}, ${result.modelCalls} model call(s), ${Math.round(performance.now() - invocationStartedAt)}ms since the invocation started)`);
-  } catch (err) {
-    console.error(`[ai-import] job ${jobId}: run threw: ${(err as Error).message}`);
-  }
-}
-
 function edgeRuntimeAvailable(): boolean {
   // deno-lint-ignore no-explicit-any
   return typeof (globalThis as any).EdgeRuntime?.waitUntil === "function";
@@ -1894,120 +1228,6 @@ function accepted(body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), { status: 202, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 }
 
-type JobRequestBody = PromptInputs & {
-  mode?: string;
-  storagePath?: string;
-  mediaType?: string;
-  fileName?: string;
-  retryJobId?: string;
-  jobId?: string;
-  answer?: "read_first" | "cancel";
-  retryFailed?: boolean;
-  documentId?: string;
-  pages?: number[];
-  // reread_job (IMPORT GATE FIX 1.3): why the app reads again (logged).
-  reason?: string;
-  // job_verdict (RE-READ RULES 2026-11-03): the one gate's result on read N.
-  verdict?: {
-    readNo?: number;
-    status?: string;
-    reason?: string;
-    failures?: unknown[];
-    details?: { check?: unknown; printed?: unknown; read?: unknown }[];
-    pages?: number[];
-    lineReread?: { pages?: unknown; reason?: unknown } | null;
-  };
-};
-
-// Mode 'job': create the import_jobs row, check the limits, plan, start
-// run 1. Hard input limits (stated, friendly): MAX_IMPORT_FILE_BYTES and
-// MAX_IMPORT_PAGES.
-async function handleJobStart(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: JobRequestBody,
-  invocationStartedAt: number,
-): Promise<Response> {
-  if (!edgeRuntimeAvailable()) {
-    console.error("[ai-import] EdgeRuntime.waitUntil is not available in this runtime — background import cannot start.");
-    return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
-  }
-  if (!body.storagePath || !body.mediaType) return errorResponse("bad_request", "storagePath and mediaType are required.", 400);
-  const admin = getServiceRoleAdminClient();
-  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
-
-  const { data: inserted, error: insertError } = await supabase
-    .from("import_jobs")
-    .insert({ user_id: userId, storage_path: body.storagePath, media_type: body.mediaType, file_name: body.fileName ?? null, status: "queued" })
-    .select("id")
-    .single();
-  if (insertError || !inserted) {
-    console.error(`[ai-import] import_jobs insert failed: ${insertError?.message ?? "no row returned"}`);
-    return errorResponse("internal", "Could not start the import job — your data is safe. Please try again.", 500);
-  }
-  const jobId = inserted.id as string;
-  async function failJob(message: string, step: string, status: number): Promise<Response> {
-    await supabase.from("import_jobs").update({ status: "failed", error_message: message, error_step: step, updated_at: new Date().toISOString() }).eq("id", jobId);
-    return errorResponse(step as ErrorType, message, status);
-  }
-
-  const startOfDayUtc = new Date();
-  startOfDayUtc.setUTCHours(0, 0, 0, 0);
-  const { count, error: countError } = await supabase
-    .from("documents")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("imported_at", startOfDayUtc.toISOString());
-  if (countError) return failJob("Could not check today's import count — your data is safe. Please try again.", "internal", 500);
-  if ((count ?? 0) >= DAILY_IMPORT_LIMIT) return failJob(`Daily import limit reached (${DAILY_IMPORT_LIMIT}/day). Try again tomorrow.`, "rate_limited", 429);
-
-  // One import counts once against the allowance, whatever its page count;
-  // the count happens only when the job becomes ready (failures never count).
-  const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
-  if (!usageCheck.allowed) {
-    await logAiUsage(supabase, userId, false, "usage_limit_reached");
-    return failJob(usageCheck.message, "usage_limit_reached", 429);
-  }
-  if (!Deno.env.get("ANTHROPIC_API_KEY")) {
-    console.error("[ai-import] ANTHROPIC_API_KEY not set");
-    return failJob("AI reading is temporarily unavailable — your data is safe, and you can still add entries manually.", "internal", 500);
-  }
-
-  const bytes = await downloadStoredFile(admin, body.storagePath);
-  if (!bytes) return failJob("Could not read the uploaded file — your data is safe. Please try again.", "internal", 500);
-  // Size first: a file over the limit is never parsed at all.
-  const sizeRefusal = checkImportLimits(0, bytes.byteLength);
-  if (sizeRefusal) return failJob(sizeRefusal.message, sizeRefusal.code, 413);
-  const isImage = body.mediaType.startsWith("image/");
-  const totalPages = isImage ? 1 : await countPdfPages(bytes);
-  if (totalPages == null) return failJob("This PDF could not be opened — it may be damaged or password-protected. Try exporting it again.", "invalid_document", 422);
-  const pageRefusal = checkImportLimits(totalPages, bytes.byteLength);
-  if (pageRefusal) return failJob(pageRefusal.message, pageRefusal.code, 413);
-
-  const plan: StoredPlan = {
-    ...newImportPlan(body.mediaType, totalPages, bytes.byteLength),
-    promptInputs: { docHint: body.docHint, locale: body.locale, customCategories: body.customCategories, learningRules: body.learningRules, carrierCodeMaps: body.carrierCodeMaps },
-  };
-  const { error: planError } = await admin
-    .from("import_jobs")
-    .update({ page_plan: plan, page_results: {}, pages_total: totalPages, updated_at: new Date().toISOString() })
-    .eq("id", jobId)
-    .eq("user_id", userId);
-  if (planError) {
-    console.error(`[ai-import] job ${jobId}: plan write failed (is PENDING_SQL §78 applied?): ${planError.message}`);
-    return failJob("The import service is being updated — your file is safe. Please try again in a few minutes.", "internal", 500);
-  }
-
-  console.log(`[ai-import] job ${jobId} accepted: ${totalPages} page(s), ${bytes.byteLength} bytes, mediaType=${body.mediaType}`);
-  runInBackground(runJobRun(admin, jobId, invocationStartedAt, bytes));
-  return accepted({ jobId });
-}
-
-// Mode 'resume_job' (and the old 'retry_job'): continue the SAME job from
-// the first page without a stored result — finished pages are never read
-// again and pages_done is never reset. `retryFailed` (the user's own
-// "Resume from page N" tap) gives failed pages fresh attempts; the app's
-// automatic restart of an interrupted job leaves them as they are.
 // SYSTEM CHECK (statement reading plan step A, owner 2026-10-31): mode
 // "diagnose". Booleans, names and counts only — never a secret value, an
 // amount, a file name or bank digits (diagnose.ts). Reads nothing from any
@@ -2109,343 +1329,18 @@ async function handleDiagnose(
   return new Response(JSON.stringify(report), { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 }
 
-async function handleJobResume(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: JobRequestBody,
-  invocationStartedAt: number,
-): Promise<Response> {
-  const jobId = body.jobId ?? body.retryJobId;
-  if (!jobId) return errorResponse("bad_request", "jobId is required.", 400);
-  if (!edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
-  const admin = getServiceRoleAdminClient();
-  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
-  const { data: job, error } = await supabase
-    .from("import_jobs")
-    .select("id, user_id, status, page_plan, page_results, storage_path, media_type, file_name, heartbeat_at, lease_until")
-    .eq("id", jobId)
-    .maybeSingle();
-  if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
-  // A reader job (progress.reader) is never handed to the old engine.
-  if (!job.page_plan) {
-    const { data: withProgress } = await supabase.from("import_jobs").select("progress").eq("id", jobId).maybeSingle();
-    if (isReaderRow(withProgress?.progress)) return await handleReadResume(supabase, userId, { jobId }, invocationStartedAt);
-  }
-
-  const retryFailed = body.retryFailed !== false;
-  let plan = job.page_plan as StoredPlan | null;
-  let results = (job.page_results ?? {}) as Record<string, PageResult>;
-  if (!plan) {
-    // A job started before §78 has no plan: start it as a new import.
-    return handleJobStart(supabase, userId, { ...body, storagePath: job.storage_path as string, mediaType: job.media_type as string, fileName: (job.file_name as string | null) ?? undefined }, invocationStartedAt);
-  }
-  plan = { ...plan };
-  if (retryFailed) {
-    results = resetFailedPages(results);
-    if (plan.phase === "failed") plan.phase = plan.pages.length > 0 ? "pages" : "start";
-    // A user's Resume gets a fresh allowance of runs (the guard is for runaway loops).
-    plan.runs = Math.min(plan.runs, MAX_RUNS_PER_JOB - 10);
-  }
-  const update: Record<string, unknown> = { page_plan: plan, updated_at: new Date().toISOString() };
-  if (retryFailed) {
-    update.page_results = results;
-    update.error_message = null;
-    update.error_step = null;
-    update.error_page = null;
-    if (job.status === "failed") update.status = "queued";
-  }
-  const { error: updateError } = await admin.from("import_jobs").update(update).eq("id", jobId).eq("user_id", userId);
-  if (updateError) return errorResponse("internal", "Could not resume the import — your file is safe. Please try again.", 500);
-  // STALE LEASE (jobEngine.ts leaseIsStale): on a paid plan a stopped
-  // worker's lease (405 s) outlives the app's 3-minute backup restart, so a
-  // resume would otherwise do nothing. No heartbeat for 2 minutes = that
-  // worker is gone: release its lease. The write itself re-checks the
-  // heartbeat age, so a worker that just wrote one keeps its lease.
-  const nowMs = Date.now();
-  const heartbeatMs = job.heartbeat_at ? new Date(job.heartbeat_at as string).getTime() : NaN;
-  const leaseHeld = job.lease_until != null && new Date(job.lease_until as string).getTime() > nowMs;
-  if (leaseHeld && leaseIsStale(Number.isFinite(heartbeatMs) ? heartbeatMs : null, nowMs)) {
-    const cutoffIso = new Date(nowMs - STALE_LEASE_AFTER_MS).toISOString();
-    const { error: releaseError } = await admin
-      .from("import_jobs")
-      .update({ lease_owner: null, lease_until: null })
-      .eq("id", jobId)
-      .eq("user_id", userId)
-      .or(`heartbeat_at.is.null,heartbeat_at.lt.${cutoffIso}`);
-    if (releaseError) console.error(`[ai-import] job ${jobId}: stale lease release failed: ${releaseError.message}`);
-    else console.log(`[ai-import] job ${jobId}: released a stale lease on resume (last heartbeat ${job.heartbeat_at ?? "never"})`);
-  }
-  runInBackground(runJobRun(admin, jobId, invocationStartedAt));
-  return accepted({ jobId });
-}
-
-// Mode 'reread_job' (owner decision 2026-10-17, item 7 "Read again"): an
-// unsaved, ready job's CONTENT pages (settlement + statement) are read
-// again with the current prompt, on the SAME job row; attachments are kept
-// in the file, not read (jobEngine.ts newRereadPlan). The stored reading
-// and every page result are cleared first, and the lease is released so a
-// run still reading attachments stops at its next save. Prompt inputs are
-// the caller's current ones (falling back to the job's own).
-async function handleRereadJob(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: JobRequestBody,
-  invocationStartedAt: number,
-): Promise<Response> {
-  if (!body.jobId) return errorResponse("bad_request", "jobId is required.", 400);
-  if (!edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe. Please try again in a moment.", 500);
-  const admin = getServiceRoleAdminClient();
-  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
-  const { data: job, error } = await supabase
-    .from("import_jobs")
-    .select("id, user_id, status, page_plan, page_results, media_type")
-    .eq("id", body.jobId)
-    .maybeSingle();
-  if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
-  const old = job.page_plan as StoredPlan | null;
-  if (job.status !== "ready" || !old || !String(job.media_type ?? "").includes("pdf")) {
-    return errorResponse("bad_request", "Only a finished PDF import that has not been saved can be read again.", 400);
-  }
-  // RE-READ RULES (owner 2026-11-03): the owner's own Read again is capped
-  // like every automatic one (MAX_READS_PER_JOB reads per job).
-  const targetPages = Array.isArray(body.pages) ? body.pages.filter((p) => Number.isInteger(p) && p >= 1 && p <= old.totalPages) : null;
-  const review = manualReread(reviewOf(old), new Date().toISOString(), targetPages && targetPages.length > 0 ? targetPages : null);
-  if (!review) {
-    return errorResponse("bad_request", `This file was already read ${MAX_READS_PER_JOB} times. Upload it again to start a new import.`, 400);
-  }
-  const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 200) : "read_again";
-  return await startJobReread(admin, userId, body, job, old, targetPages, reason, review, invocationStartedAt);
-}
-
-// Starts a re-read of a ready job: only the listed content pages (IMPORT
-// GATE FIX 1.3; none = every content page), the others keep their finished
-// results. The review (read count + triggers) goes on the row with it.
-async function startJobReread(
-  admin: NonNullable<ReturnType<typeof getServiceRoleAdminClient>>,
-  userId: string,
-  body: JobRequestBody,
-  job: { id: unknown; page_results: unknown; result_json?: unknown },
-  old: StoredPlan,
-  targetPages: number[] | null,
-  reason: string,
-  review: JobReview,
-  invocationStartedAt: number,
-  // LINE-DETAILS RE-READ: keep the saveable reading to restore it.
-  keepForRollback = false,
-): Promise<Response> {
-  const jobId = job.id as string;
-  const rereadPlan = newRereadPlan(old);
-  const keptResults = rereadKeptResults(rereadPlan, job.page_results as Record<string, PageResult> | null, targetPages);
-  const readPages = targetPages && targetPages.length > 0 ? targetPages : null;
-  const trigger = review.triggers[review.triggers.length - 1];
-  console.log(
-    `[ai-import] reread ${jobId}: read ${review.reads} of ${MAX_READS_PER_JOB}; reason=${reason}; check=${trigger?.check ?? "-"} printed=${trigger?.printed ?? "-"} read=${trigger?.value ?? "-"}; pages=${readPages ? readPages.join(",") : "all content"} kept=${Object.keys(keptResults).join(",") || "none"}`,
-  );
-  const plan: StoredPlan = {
-    ...rereadPlan,
-    review,
-    rereads: [...(old.rereads ?? []), { at: new Date().toISOString(), reason, pages: readPages }],
-    rollback: keepForRollback ? { readNo: review.reads - 1, resultJson: job.result_json ?? null, pageResults: job.page_results ?? null } : null,
-    promptInputs: {
-      docHint: body.docHint ?? old.promptInputs?.docHint,
-      locale: body.locale ?? old.promptInputs?.locale,
-      customCategories: body.customCategories ?? old.promptInputs?.customCategories,
-      learningRules: body.learningRules ?? old.promptInputs?.learningRules,
-      carrierCodeMaps: body.carrierCodeMaps ?? old.promptInputs?.carrierCodeMaps,
-    },
-  };
-  const now = new Date().toISOString();
-  const { error: updateError } = await admin
-    .from("import_jobs")
-    .update({
-      page_plan: plan,
-      page_results: keptResults,
-      result_json: null,
-      progress: null,
-      status: "queued",
-      completed_at: null,
-      error_message: null,
-      error_step: null,
-      error_page: null,
-      lease_owner: null,
-      lease_until: null,
-      updated_at: now,
-    })
-    .eq("id", jobId)
-    .eq("user_id", userId)
-    .eq("status", "ready");
-  if (updateError) return errorResponse("internal", "Could not start reading again — your file is safe. Please try again.", 500);
-  runInBackground(runJobRun(admin, jobId, invocationStartedAt));
-  return new Response(JSON.stringify({ jobId, action: "reread", review }), { status: 202, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
-}
-
-// Mode 'job_verdict' (RE-READ RULES, owner 2026-11-03): the app ran the one
-// gate on this job's finished reading (read number `readNo`) and posts the
-// result. The job decides here, before it is final: pass -> ready_final;
-// fail -> a re-read of the failing pages, unless the cap is reached, the
-// values are the same as the read before, or the file cannot be read again
-// -> failed_final. A verdict for an older read or a final job is ignored.
-async function handleJobVerdict(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: JobRequestBody,
-  invocationStartedAt: number,
-): Promise<Response> {
-  if (!body.jobId || !body.verdict) return errorResponse("bad_request", "jobId and verdict are required.", 400);
-  const admin = getServiceRoleAdminClient();
-  if (!admin) return errorResponse("internal", "Background import isn't configured on the server — your data is safe.", 500);
-  const { data: job, error } = await supabase
-    .from("import_jobs")
-    .select("id, user_id, status, page_plan, page_results, media_type, result_json")
-    .eq("id", body.jobId)
-    .maybeSingle();
-  if (error || !job || job.user_id !== userId) return errorResponse("bad_request", "That import job could not be found.", 404);
-  const old = job.page_plan as StoredPlan | null;
-  const json = (payload: unknown, status = 200) => new Response(JSON.stringify(payload), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
-  if (job.status !== "ready" || !old) return json({ jobId: job.id, action: "ignored", review: reviewOf(old) });
-  const v = body.verdict;
-  const verdict: JobVerdictInput = {
-    readNo: Number(v.readNo),
-    status: v.status === "pass" ? "pass" : "fail",
-    reason: typeof v.reason === "string" ? v.reason.slice(0, 80) : undefined,
-    failures: Array.isArray(v.failures) ? v.failures.filter((f): f is string => typeof f === "string").slice(0, 20) : [],
-    details: Array.isArray(v.details)
-      ? v.details
-          .filter((d) => d && typeof d.check === "string")
-          .slice(0, 10)
-          .map((d) => ({ check: String(d.check), printed: typeof d.printed === "number" ? d.printed : String(d.printed ?? ""), read: typeof d.read === "number" ? d.read : String(d.read ?? "") }))
-      : [],
-    pages: Array.isArray(v.pages) ? v.pages.filter((p) => Number.isInteger(p) && p >= 1 && p <= old.totalPages) : null,
-    lineReread:
-      v.lineReread && Array.isArray(v.lineReread.pages)
-        ? {
-            pages: (v.lineReread.pages as unknown[]).filter((p): p is number => Number.isInteger(p) && (p as number) >= 1 && (p as number) <= old.totalPages),
-            reason: typeof v.lineReread.reason === "string" ? v.lineReread.reason.slice(0, 200) : "line_details",
-          }
-        : null,
-  };
-  const rereadable = !!edgeRuntimeAvailable() && String(job.media_type ?? "").includes("pdf");
-  const decision = decideJobVerdict(reviewOf(old), verdict, { nowIso: new Date().toISOString(), rereadable });
-  const last = decision.review.triggers[decision.review.triggers.length - 1];
-  console.log(
-    `[ai-import] job_verdict ${job.id}: read ${verdict.readNo} ${verdict.status} -> ${decision.action}${decision.action === "final" ? ` (${decision.review.final?.state}: ${decision.review.final?.reason})` : ""}${decision.action === "reread" ? `; check=${last?.check} printed=${last?.printed} read=${last?.value}` : ""}`,
-  );
-  if (decision.action === "ignored") return json({ jobId: job.id, action: "ignored", review: decision.review });
-  if (decision.action === "reread") {
-    return await startJobReread(admin, userId, body, job, old, decision.pages, decision.reason, decision.review, invocationStartedAt, !!decision.keepForRollback);
-  }
-  if (decision.action === "rollback") {
-    // The line-details re-read came back worse: restore the saveable
-    // reading kept before it (its result and its page results).
-    const kept = old.rollback;
-    if (!kept || !kept.resultJson) {
-      const failedReview = { ...decision.review, final: { ...decision.review.final!, state: "failed_final" as const, reason: "line_reread_lost" } };
-      await admin.from("import_jobs").update({ page_plan: { ...old, review: failedReview }, updated_at: new Date().toISOString() }).eq("id", job.id).eq("user_id", userId).eq("status", "ready");
-      return json({ jobId: job.id, action: "final", review: failedReview });
-    }
-    const { error: rollbackError } = await admin
-      .from("import_jobs")
-      .update({ page_plan: { ...old, review: decision.review, rollback: null }, result_json: kept.resultJson, page_results: kept.pageResults, updated_at: new Date().toISOString() })
-      .eq("id", job.id)
-      .eq("user_id", userId)
-      .eq("status", "ready");
-    if (rollbackError) return errorResponse("internal", "Could not record the check — your file is safe. Please try again.", 500);
-    return json({ jobId: job.id, action: "final", review: decision.review });
-  }
-  const { error: updateError } = await admin
-    .from("import_jobs")
-    .update({ page_plan: { ...old, review: decision.review }, updated_at: new Date().toISOString() })
-    .eq("id", job.id)
-    .eq("user_id", userId)
-    .eq("status", "ready");
-  if (updateError) return errorResponse("internal", "Could not record the check — your file is safe. Please try again.", 500);
-  return json({ jobId: job.id, action: "final", review: decision.review });
-}
-
-// Mode 'answer_job': the user's answer to "This file has N pages. Read the
-// first 40 now?" — never read silently past the cap.
-async function handleJobAnswer(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: JobRequestBody,
-  invocationStartedAt: number,
-): Promise<Response> {
-  if (!body.jobId) return errorResponse("bad_request", "jobId is required.", 400);
-  const admin = getServiceRoleAdminClient();
-  if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe.", 500);
-  const { data: job } = await supabase.from("import_jobs").select("id, user_id, page_plan").eq("id", body.jobId).maybeSingle();
-  if (!job || job.user_id !== userId || !job.page_plan) return errorResponse("bad_request", "That import job could not be found.", 404);
-  const plan = { ...(job.page_plan as StoredPlan) };
-  if (plan.phase !== "awaiting_decision") return accepted({ jobId: job.id });
-  if (body.answer === "cancel") {
-    plan.phase = "failed";
-    await admin.from("import_jobs").update({
-      page_plan: plan,
-      status: "failed",
-      error_step: "cancelled",
-      error_message: `Not read — you chose not to read this ${plan.totalPages}-page file.`,
-      updated_at: new Date().toISOString(),
-    }).eq("id", job.id).eq("user_id", userId);
-    return accepted({ jobId: job.id });
-  }
-  plan.pageCap = { cap: plan.pageCap?.cap ?? 40, answer: "read_first" };
-  plan.phase = "pages";
-  await admin.from("import_jobs").update({ page_plan: plan, status: "queued", updated_at: new Date().toISOString() }).eq("id", job.id).eq("user_id", userId);
-  runInBackground(runJobRun(admin, job.id as string, invocationStartedAt));
-  return accepted({ jobId: job.id });
-}
-
-// Mode 'read_pages': read chosen pages of an already-saved document ("Read
-// the missing pages", "Read this page"). The result is the saved week plus
-// those pages, reviewed and saved like any import (Save replaces the
-// week). Part of the original import: never counts against the allowance
-// again (logged as 'ai_import_pages').
-async function handleReadPages(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  body: JobRequestBody,
-  invocationStartedAt: number,
-): Promise<Response> {
-  if (!body.documentId || !Array.isArray(body.pages) || body.pages.length === 0) return errorResponse("bad_request", "documentId and pages are required.", 400);
-  const admin = getServiceRoleAdminClient();
-  if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now — your data is safe.", 500);
-  const { data: doc } = await supabase.from("documents").select("id, storage_path, filename, parsed_json").eq("id", body.documentId).maybeSingle();
-  if (!doc || !doc.storage_path) return errorResponse("bad_request", "That document's file could not be found.", 404);
-  const bytes = await downloadStoredFile(admin, doc.storage_path as string);
-  if (!bytes) return errorResponse("internal", "Could not read the stored file — your data is safe. Please try again.", 500);
-  const totalPages = await countPdfPages(bytes);
-  if (totalPages == null) return errorResponse("invalid_document", "The stored PDF could not be opened.", 422);
-  const pageMap = ((doc.parsed_json as { pageMap?: PageMapEntry[] } | null)?.pageMap ?? []) as PageMapEntry[];
-  const kindOf = new Map(pageMap.map((p) => [p.page, p.kind]));
-  const requested = body.pages.slice(0, UNKNOWN_LAYOUT_PAGE_CAP).map((page) => ({ page, kind: (kindOf.get(page) ?? "unknown") as PageKind }));
-  const plan: StoredPlan = {
-    ...newReadPagesPlan(totalPages, bytes.byteLength, requested, doc.id as string),
-    promptInputs: { docHint: body.docHint, locale: body.locale, customCategories: body.customCategories, learningRules: body.learningRules, carrierCodeMaps: body.carrierCodeMaps },
-  };
-  if (plan.pages.length === 0) return errorResponse("bad_request", "None of those pages exist in this document.", 400);
-  const { data: inserted, error } = await supabase
-    .from("import_jobs")
-    .insert({ user_id: userId, storage_path: doc.storage_path, media_type: "application/pdf", file_name: doc.filename ?? null, status: "queued", page_plan: plan, page_results: {}, pages_total: totalPages })
-    .select("id")
-    .single();
-  if (error || !inserted) {
-    console.error(`[ai-import] read_pages job insert failed: ${error?.message ?? "no row"}`);
-    return errorResponse("internal", "Could not start reading those pages — your data is safe. Please try again.", 500);
-  }
-  runInBackground(runJobRun(admin, inserted.id as string, invocationStartedAt));
-  return accepted({ jobId: inserted.id });
-}
-
 // Mode 'continue_job': the next run of a chain, requested by the previous
-// run with the service key. Never accepted with a user token. A reader job
-// (progress.reader) continues in the new reader; any other in the old one.
-async function handleJobContinue(body: JobRequestBody, invocationStartedAt: number): Promise<Response> {
+// run with the service key. Never accepted with a user token. Only a
+// reader job (progress.reader) runs; a job of the old reader (removed
+// 2026-11-13) is left as it is: the app shows it as failed with [Read
+// again], which starts a new reader job from the same stored file.
+async function handleJobContinue(body: { jobId?: string }, invocationStartedAt: number): Promise<Response> {
   if (!body.jobId) return errorResponse("bad_request", "jobId is required.", 400);
   const admin = getServiceRoleAdminClient();
   if (!admin || !edgeRuntimeAvailable()) return errorResponse("internal", "Background import isn't available right now.", 500);
   const { data: row } = await admin.from("import_jobs").select("progress").eq("id", body.jobId).maybeSingle();
   if (row && isReaderRow(row.progress)) runInBackground(runReaderJob(admin, body.jobId, invocationStartedAt, readerKit()));
-  else runInBackground(runJobRun(admin, body.jobId, invocationStartedAt));
+  else console.log(`[ai-import] job ${body.jobId}: old reader job, not continued (read it again with the new reader)`);
   return accepted({ jobId: body.jobId });
 }
 
@@ -2457,7 +1352,8 @@ async function handleJobContinue(body: JobRequestBody, invocationStartedAt: numb
 // of a reading job whose worker stopped). Job status column: reading ->
 // processing/queued, ready -> ready, needs_input -> needs_decision,
 // failed -> failed; the details are progress.reader. The old reader's modes
-// stay until the owner confirms the device test (commit 6 deletes them).
+// were removed 2026-11-13 (commit 6, after the 18-week device test); a
+// request for one gets OLD_READER_MESSAGE.
 // ============================================================================
 
 function readerKit(): ReaderKit {
@@ -2500,6 +1396,11 @@ function readerKit(): ReaderKit {
     pdfCreationDate: pdfCreationDateOf,
   };
 }
+
+// The old reader's request modes (removed 2026-11-13) and the words the
+// app shows for a job it read (importFlow.reader.reason.oldReader).
+const OLD_READER_MODES = new Set(["job", "retry_job", "resume_job", "answer_job", "read_pages", "reread_job", "job_verdict"]);
+const OLD_READER_MESSAGE = "This file was read by the old reader. Read it again with the new reader.";
 
 type ReaderRequestBody = ReaderPromptInputs & {
   storagePath?: string;
@@ -2686,15 +1587,9 @@ async function handleReadResume(supabase: ReturnType<typeof createClient>, userI
 }
 
 Deno.serve(async (req: Request) => {
-  // DYNAMIC TIME-BUDGET TRACKING (owner decision 2026-08-03, round 5) —
-  // computed HERE, inside the handler, not at module scope: Deno keeps
-  // this module loaded across many invocations, so a module-level
-  // constant would only ever reflect the FIRST invocation's start time.
-  // See the PAGE-BUDGET comment block near the top of this file.
+  // Computed inside the handler (the module stays loaded across
+  // invocations): a background job run measures its budget from here.
   const invocationStartedAt = performance.now();
-  function remainingInvocationBudgetMs(): number {
-    return HARD_INVOCATION_BUDGET_MS - (performance.now() - invocationStartedAt);
-  }
 
   // TOP-LEVEL TRY/CATCH (owner decision 2026-08-24, "Edge Function
   // returned a non-2xx status code" bug fix pass) — THE actual fix for
@@ -2764,46 +1659,14 @@ Deno.serve(async (req: Request) => {
     // server-side, keeping every request self-contained and avoiding an
     // extra round trip inside the tight per-invocation time budget).
     carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
-    // CONTINUATION PROTOCOL (owner decision 2026-08-03, renamed/extended
-    // 2026-08-24 SPEED PASS): set by the client on every call AFTER the
-    // first one for a long PDF — see the PAGE-BUDGET comment block near
-    // the top of this file. `orderIndex` is a position INTO `pageOrder`
-    // (SMART PAGE TRIAGE's financially-meaningful-first ordering of page
-    // NUMBERS), not a raw page number — absent/0 on the initial call.
-    // `pageOrder` is computed once, the first time a document enters the
-    // continuation path, and returned to the client so every LATER round
-    // echoes it back instead of the server re-triaging the same document
-    // twice; absent on the initial call, since it doesn't exist yet.
-    orderIndex?: number;
-    pageOrder?: number[];
-    // Every page gathered from EARLIER invocations, tagged with its own
-    // page number (gaps are possible — a missing page doesn't block a
-    // LATER page from having succeeded) — this function never persists
-    // state between invocations itself, so the client hands it back
-    // every time. priorMissingPages is the parallel list of page numbers
-    // that failed even after this function's own one retry.
-    priorPageExtractions?: { page: number; extraction: unknown }[];
-    priorMissingPages?: number[];
-    // BACKGROUND IMPORT (owner decision 2026-08-24) — mode 'job' starts a
-    // new server-tracked import_jobs row and returns {jobId} immediately
-    // (202 Accepted), continuing to process in the background via
-    // EdgeRuntime.waitUntil() — see handleJobStart()/runJobRun() above.
-    // No job mode sends fileBase64 — the file is read from Storage
-    // server-side via storagePath (a new upload, for 'job') or the job's
-    // own stored path.
-    // RESUMABLE JOBS (owner decision 2026-10-13): 'resume_job' continues a
-    // job from its first page without a stored result ('retry_job' is the
-    // old name, same behavior); 'answer_job' answers the page-cap question;
-    // 'read_pages' re-reads chosen pages of a saved document.
-    mode?: "diagnose" | "job" | "retry_job" | "resume_job" | "answer_job" | "read_pages" | "reread_job" | "job_verdict" | "read_start" | "read_again" | "read_answer" | "read_resume";
+    // SETTLEMENT READER (owner decision 2026-11-13): every PDF import is a
+    // reader job (read_start / read_again / read_answer / read_resume, the
+    // file read from Storage via storagePath). A request without a mode is
+    // the direct path: one model call over fileBase64 (a photo).
+    mode?: string;
     storagePath?: string;
     fileName?: string;
-    retryJobId?: string;
     jobId?: string;
-    answer?: "read_first" | "cancel";
-    retryFailed?: boolean;
-    documentId?: string;
-    pages?: number[];
   };
   try {
     body = JSON.parse(rawBody);
@@ -2812,33 +1675,23 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.mode === "diagnose") return await handleDiagnose(supabase, userId);
-  if (body.mode === "job") {
-    // UNAWAITED handleJobStart (P1 fix, FULL SYSTEM AUDIT) — `return
-    // handleJobStart(...)` (no `await`) let a REJECTION of that promise
-    // escape this try block's own `catch` entirely: a bare `return
-    // somePromise` inside an async function hands the promise straight to
-    // the caller without re-entering this function's synchronous frame,
-    // so a later rejection never has a chance to be caught HERE — it
-    // would surface as a raw, unstructured error, exactly the class of
-    // bug the top-level try/catch above exists to prevent. `await` makes
-    // any rejection resolve INSIDE this try block, where the catch below
-    // can turn it into the same safe, structured "internal" response
-    // every other failure path in this function already returns.
-    return await handleJobStart(supabase, userId, body, invocationStartedAt);
+  // The old reader's modes (removed 2026-11-13, commit 6). An app that still
+  // sends one gets the same words the app shows for an old job.
+  if (OLD_READER_MODES.has(body.mode ?? "")) {
+    // A reader job resumed through the old mode name still resumes in the
+    // reader (an app bundle from before read_resume existed).
+    if ((body.mode === "resume_job" || body.mode === "retry_job") && body.jobId) {
+      const { data: withProgress } = await supabase.from("import_jobs").select("progress").eq("id", body.jobId).maybeSingle();
+      if (isReaderRow(withProgress?.progress)) return await handleReadResume(supabase, userId, { jobId: body.jobId }, invocationStartedAt);
+    }
+    return errorResponse("bad_request", OLD_READER_MESSAGE, 410);
   }
-  if (body.mode === "resume_job" || body.mode === "retry_job") return await handleJobResume(supabase, userId, body, invocationStartedAt);
-  if (body.mode === "answer_job") return await handleJobAnswer(supabase, userId, body, invocationStartedAt);
-  if (body.mode === "read_pages") return await handleReadPages(supabase, userId, body, invocationStartedAt);
-  if (body.mode === "reread_job") return await handleRereadJob(supabase, userId, body, invocationStartedAt);
-  if (body.mode === "job_verdict") return await handleJobVerdict(supabase, userId, body as JobRequestBody, invocationStartedAt);
   if (body.mode === "read_start") return await handleReadStart(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
   if (body.mode === "read_again") return await handleReadAgain(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
   if (body.mode === "read_answer") return await handleReadAnswer(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
   if (body.mode === "read_resume") return await handleReadResume(supabase, userId, body as ReaderRequestBody, invocationStartedAt);
 
-  const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps, priorPageExtractions, priorMissingPages } = body;
-  const orderIndex = body.orderIndex ?? 0;
-  const requestPageOrder = body.pageOrder;
+  const { fileBase64, mediaType, docHint, locale, customCategories, learningRules, carrierCodeMaps } = body;
   if (!fileBase64 || !mediaType) {
     return errorResponse("bad_request", "fileBase64 and mediaType are required.", 400);
   }
@@ -2880,18 +1733,13 @@ Deno.serve(async (req: Request) => {
   }
 
   // USAGE LIMITS BY FLEET SIZE + CREDIT PACKS (owner decision 2026-08-24,
-  // FIVE ADDITIONS pass, PART 5) — checked ONLY on a fresh top-level
-  // request (never on an in-progress multi-page continuation round, which
-  // must always be allowed to finish once started). A soft limit (80%) is
-  // a CLIENT-side quiet notice only (app/src/usage/aiUsage.ts) — this
-  // server gate is the hard 100% stop.
-  const isFreshRequestForUsageGate = orderIndex === 0 && (!priorPageExtractions || priorPageExtractions.length === 0) && (!priorMissingPages || priorMissingPages.length === 0);
-  if (isFreshRequestForUsageGate) {
-    const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
-    if (!usageCheck.allowed) {
-      await logAiUsage(supabase, userId, false, "usage_limit_reached");
-      return errorResponse("usage_limit_reached", usageCheck.message, 429, { used: usageCheck.used, allowance: usageCheck.allowance });
-    }
+  // FIVE ADDITIONS pass, PART 5). A soft limit (80%) is a CLIENT-side quiet
+  // notice only (app/src/usage/aiUsage.ts) — this server gate is the hard
+  // 100% stop.
+  const usageCheck = await checkAiImportUsageAllowed(supabase, userId);
+  if (!usageCheck.allowed) {
+    await logAiUsage(supabase, userId, false, "usage_limit_reached");
+    return errorResponse("usage_limit_reached", usageCheck.message, 429, { used: usageCheck.used, allowance: usageCheck.allowance });
   }
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -2907,126 +1755,8 @@ Deno.serve(async (req: Request) => {
 
   const prompt = buildExtractionPrompt(docHint, locale, customCategories, learningRules, carrierCodeMaps);
 
-  // SINGLE CALL IS THE DEFAULT (owner decision 2026-08-03 — see the
-  // budget comment block near the top of this file). `isFirstCall`
-  // distinguishes a fresh request (try the whole document in one call)
-  // from a client that's already mid-fallback-continuation from an
-  // EARLIER response on this same document (go straight to the next
-  // batch, never re-attempt the single-call path partway through).
-  const isFirstCall = orderIndex === 0 && (!priorPageExtractions || priorPageExtractions.length === 0) && (!priorMissingPages || priorMissingPages.length === 0);
-  console.log(
-    `[ai-import] request: mediaType=${mediaType} isImage=${isImage} isFirstCall=${isFirstCall} orderIndex=${orderIndex} priorCovered=${priorPageExtractions?.length ?? 0} priorMissing=${priorMissingPages?.length ?? 0}`
-  );
-
-  let pagesProcessed: { total: number; missingPages: number[] } | null = null;
-  // null = no continuation (this response is terminal). Deliberately
-  // compared with `!== null` everywhere below, NEVER truthiness — 0 is a
-  // legitimate "continue, but zero pages were attempted this invocation"
-  // value (e.g. an invocation that hit its budget ceiling before starting
-  // even one page), which `!nextOrderIndex` would have wrongly treated as
-  // "terminal" (the old page-number-based `nextPageStart` never had this
-  // hazard, since real page numbers start at 1 and are always truthy).
-  let nextOrderIndex: number | null = null;
-  let responsePageOrder: number[] | null = null;
-  let rawPageExtractions: { page: number; extraction: unknown }[] | null = null;
-  let rawMissingPages: number[] | null = null;
-  // PROGRESSIVE UI (owner decision 2026-08-24, SPEED PASS item 4): the
-  // merged-so-far extraction on every ONGOING (non-terminal) response, so
-  // the client can show a running settlement header/totals preview while
-  // later pages are still processing — the terminal response's own `data`
-  // field already IS the final merged extraction, so this is only ever
-  // set alongside `nextOrderIndex`.
-  let partialData: ChunkExtraction | null = null;
+  console.log(`[ai-import] request: mediaType=${mediaType} isImage=${isImage}`);
   let result: ExtractOneResult;
-
-  // FALLBACK, NOT DEFAULT (owner decision 2026-08-03): the client-driven
-  // continuation protocol — this invocation attempts up to
-  // PAGES_PER_BATCH pages from `pageOrder` (SMART PAGE TRIAGE order,
-  // CONTROLLED CONCURRENCY within the batch — see this file's own
-  // comments near the top); a page's own failure — even after its one
-  // retry — never stops a LATER page from still being attempted,
-  // chunking.ts's gap-tolerant `mergeAllPages`. Every decision is logged
-  // so a real device test's function logs show exactly which page
-  // succeeded/failed/retried and why. Assigns to the outer `result`/
-  // `pagesProcessed`/`nextOrderIndex`/`rawPageExtractions`/
-  // `rawMissingPages`/`partialData` directly rather than returning a
-  // value, since all six are needed by the shared response-building code
-  // below regardless of which path produced them.
-  async function runContinuation(rawPageCount: number): Promise<void> {
-    // MAX_TOTAL_PAGES is a defensive-only ceiling (see its own comment
-    // above) — the user-facing `total` in the response always reports
-    // the REAL page count, even on the rare document long enough to hit it.
-    const clampedTotal = Math.min(rawPageCount, MAX_TOTAL_PAGES);
-    console.log(`[ai-import] continuation: orderIndex=${orderIndex} rawPageCount=${rawPageCount} clampedTotal=${clampedTotal}`);
-
-    // SMART PAGE TRIAGE (owner decision 2026-08-24, SPEED PASS item 2) —
-    // computed ONCE per document: if the client already has a pageOrder
-    // (echoed back from an earlier response), reuse it verbatim rather
-    // than re-triaging; otherwise this is the FIRST invocation to enter
-    // the continuation path for this document, so split every page once
-    // (to measure its own byte size — SHRINK THE PAYLOAD item 3's
-    // measurement), triage, and cache the split bytes for whichever pages
-    // THIS SAME invocation is about to process (avoids re-splitting them
-    // a second time inside runPageWithRetry).
-    const pageBytesCache = new Map<number, string>();
-    let pageOrder = requestPageOrder;
-    if (!pageOrder || pageOrder.length === 0) {
-      const triageStartedAt = performance.now();
-      const allRanges: PageRange[] = Array.from({ length: clampedTotal }, (_, i) => ({ start: i + 1, end: i + 1 }));
-      const pageChunks = await splitPdfIntoChunks(fileBase64, allRanges);
-      const byteSizes: PageByteSize[] = pageChunks.map((b64, i) => ({ page: i + 1, byteSize: b64.length }));
-      pageChunks.forEach((b64, i) => pageBytesCache.set(i + 1, b64));
-      pageOrder = triagePageOrder(byteSizes);
-      const totalBytes = byteSizes.reduce((sum, p) => sum + p.byteSize, 0);
-      const avgBytes = byteSizes.length > 0 ? Math.round(totalBytes / byteSizes.length) : 0;
-      console.log(
-        `[ai-import] INSTRUMENT triage pages=${byteSizes.length} avgPageBytes=${avgBytes} order=[${pageOrder.join(",")}] triageDurationMs=${Math.round(performance.now() - triageStartedAt)}`
-      );
-    }
-
-    const batch = await extractPagesForInvocation(
-      anthropicKey, fileBase64, clampedTotal, pageOrder, orderIndex, PAGES_PER_BATCH, BATCH_CONCURRENCY, prompt, remainingInvocationBudgetMs, pageBytesCache
-    );
-    console.log(
-      `[ai-import] this invocation attempted ${batch.attemptedCount} page(s), budgetRemaining=${Math.round(remainingInvocationBudgetMs())}ms`
-    );
-
-    const priorOutcomes: PageOutcome[] = [
-      ...(priorPageExtractions ?? []).map((p): PageOutcome => ({ page: p.page, extraction: p.extraction as ChunkExtraction })),
-      ...(priorMissingPages ?? []).map((page): PageOutcome => ({ page, missing: true })),
-    ];
-    const allOutcomes = [...priorOutcomes, ...batch.outcomes];
-
-    const merged = mergeAllPages(allOutcomes);
-    if (!merged) {
-      result = { errorType: "internal", message: `Could not process this document — the AI service was unavailable or timed out even after a retry.` };
-      console.log(`[ai-import] continuation: nothing succeeded at all — total failure`);
-      return;
-    }
-    result = { extraction: merged.extraction };
-
-    const attemptedSoFar = orderIndex + batch.attemptedCount;
-    if (attemptedSoFar >= pageOrder.length) {
-      // Every page in the triage order has now been attempted,
-      // successfully or not — this is a terminal result.
-      if (merged.missingPages.length > 0 || clampedTotal < rawPageCount) {
-        pagesProcessed = { total: rawPageCount, missingPages: merged.missingPages };
-      }
-      console.log(`[ai-import] continuation complete: covered=${merged.coveredPages.length}/${rawPageCount}, missing=${JSON.stringify(merged.missingPages)}`);
-    } else {
-      // More pages remain — tell the client to keep going, carrying
-      // forward every page gathered so far (covered AND missing), the
-      // SAME pageOrder (so the next invocation never re-triages), and a
-      // partial preview of what's been merged so far.
-      nextOrderIndex = attemptedSoFar;
-      responsePageOrder = pageOrder;
-      rawPageExtractions = allOutcomes.filter((o): o is { page: number; extraction: ChunkExtraction } => 'extraction' in o).map((o) => ({ page: o.page, extraction: o.extraction }));
-      rawMissingPages = merged.missingPages;
-      partialData = merged.extraction;
-      console.log(`[ai-import] continuation ongoing: nextOrderIndex=${nextOrderIndex}/${pageOrder.length}, covered so far=${merged.coveredPages.length}, missing so far=${merged.missingPages.length}`);
-    }
-  }
-
   if (isImage) {
     result = await extractOnePass(anthropicKey, contentBlock, prompt, IMAGE_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
     // SETTLEMENT READER (owner answer 2026-11-13): a photographed settlement
@@ -3036,39 +1766,10 @@ Deno.serve(async (req: Request) => {
       console.log("[ai-import] photo settlement: returning docType only (upload the PDF)");
       result = { extraction: { docType: "settlement" } };
     }
-  } else if (!isFirstCall) {
-    // Already mid-continuation from an earlier response on this same
-    // document — go straight to the next batch of pages.
-    const rawPageCount = await getPdfPageCount(fileBase64);
-    if (rawPageCount === null) {
-      // Shouldn't happen in practice (pdf-lib already parsed this same
-      // file once, to have gotten here) but fail clearly rather than throw.
-      result = { errorType: "internal", message: "Could not continue processing this document." };
-    } else {
-      await runContinuation(rawPageCount);
-    }
   } else {
-    // DEFAULT PATH: ONE call over the WHOLE document, exactly like this
-    // function's original, previously-working implementation before any
-    // chunking pass — no pdf-lib cropping, no page-count check needed
-    // up front at all.
+    // A PDF sent without a job: ONE call over the whole document.
     result = await extractOnePass(anthropicKey, contentBlock, prompt, SINGLE_CALL_TIMEOUT_MS, MAX_ANTHROPIC_ATTEMPTS);
     console.log(`[ai-import] single-call result: ${"errorType" in result ? result.errorType : "success"}`);
-
-    // FALLBACK: only a genuine "too much content for one call" signal
-    // (timeout or a token-ceiling truncation) enters the continuation
-    // path — a clean 4xx/parse-failure/refusal is not something
-    // splitting into pages can fix.
-    if (!isImage && "errorType" in result && (result.errorType === "timeout" || result.errorType === "truncated")) {
-      const rawPageCount = await getPdfPageCount(fileBase64);
-      if (rawPageCount !== null && rawPageCount > 1) {
-        console.log(`[ai-import] single-call failed (${result.errorType}) — falling back to page-by-page processing, totalPages=${rawPageCount}`);
-        await runContinuation(rawPageCount);
-      }
-      // else: genuinely can't chunk (single-page document, or pdf-lib
-      // couldn't determine a page count) — keep the original single-call
-      // error as the final result.
-    }
   }
 
   if ("errorType" in result) {
@@ -3090,36 +1791,12 @@ Deno.serve(async (req: Request) => {
   }
 
   // USAGE LIMITS + LOGGING (owner decision 2026-08-24, FIVE ADDITIONS
-  // pass, PARTS 4+5) — only a genuinely TERMINAL response (nextOrderIndex
-  // still null — the multi-page continuation protocol, if any, is fully
-  // done) counts against the monthly allowance/credits, mirroring
-  // app/src/usage/aiUsage.ts's shouldCountAiImportUsage(hasNextPageStart,
-  // hadError) exactly: a multi-page settlement is billed exactly once, on
-  // its own final round; an in-progress continuation round is logged as a
-  // success but never counted twice for the same document. `!== null`,
-  // never truthiness — see nextOrderIndex's own declaration comment above
-  // for why (0 is a legitimate "keep going" value).
-  const isTerminal = nextOrderIndex === null;
-  if (isTerminal) {
-    await logAiUsage(supabase, userId, true, null);
-    await consumeOneCreditIfOverAllowance(supabase, userId);
-  }
+  // pass, PARTS 4+5): a successful reading counts once.
+  await logAiUsage(supabase, userId, true, null);
+  await consumeOneCreditIfOverAllowance(supabase, userId);
 
   return new Response(
-    JSON.stringify({
-      data: withPdfCreationDate(result.extraction, isImage ? null : pdfCreationDateOf(base64ToBytes(fileBase64))),
-      ...(pagesProcessed ? { pagesProcessed } : {}),
-      ...(nextOrderIndex !== null
-        ? {
-            nextOrderIndex,
-            pageOrder: responsePageOrder,
-            rawPageExtractions,
-            rawMissingPages: rawMissingPages ?? [],
-            partialData,
-            progress: { through: nextOrderIndex, total: responsePageOrder?.length ?? nextOrderIndex },
-          }
-        : {}),
-    }),
+    JSON.stringify({ data: withPdfCreationDate(result.extraction, isImage ? null : pdfCreationDateOf(base64ToBytes(fileBase64))) }),
     { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
   );
   } catch (err) {

@@ -4,7 +4,7 @@ import { supabase } from '@/src/lib/supabase';
 import { getSignedDocumentUrl } from '@/src/data/documentViewer';
 import { useAuth } from '@/src/context/AuthContext';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
-import { jobReviewStep, markRereadRequested, runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus, type JobReviewState } from '@/src/import/importJobs';
+import { runBatchWithConcurrency, type ImportJob, type ImportJobProgress, type ImportJobStatus, type JobReviewState } from '@/src/import/importJobs';
 import { hasReaderWork, markReaderReadAgain, readerJobView } from '@/src/import/readerJob';
 import { isReaderProgress, type ReaderProgress } from '@/src/settlementReader/machine';
 import { todayDateOnly } from '@/src/lib/dateOnly';
@@ -125,26 +125,6 @@ export function useImportJobs() {
   });
 }
 
-// One job, for the review screen (app/(tabs)/import?reviewJobId=...) —
-// a plain one-shot fetch, not polled (a 'ready' job's result_json never
-// changes again once terminal).
-export function useImportJob(jobId: string | null) {
-  return useQuery<ImportJob | null>({
-    queryKey: ['import_job', jobId],
-    queryFn: async () => {
-      if (!jobId) return null;
-      const { data, error } = await supabase
-        .from('import_jobs')
-        .select(resumableColumnsMissing ? IMPORT_JOB_BASE_COLUMNS : IMPORT_JOB_COLUMNS)
-        .eq('id', jobId)
-        .maybeSingle();
-      if (error) throw error;
-      return data ? mapRow(data as unknown as ImportJobRow) : null;
-    },
-    enabled: !!jobId,
-  });
-}
-
 // Fetches the raw result_json for a 'ready' job and sanitizes it exactly
 // like a live extraction (dates, miles AND the Prime statement check —
 // src/import/sanitizeExtraction.ts; the statement check was missing here
@@ -157,60 +137,6 @@ export async function fetchImportJobResult(jobId: string): Promise<Extraction | 
   const raw = data?.result_json as Extraction | undefined;
   if (!raw) return null;
   return sanitizeExtraction(raw);
-}
-
-// "Review now" (owner decision 2026-08-24, item 3) — same sanitized
-// extraction as fetchImportJobResult() above, plus the file name the
-// preview screen's existing duplicate-check/save flow already expects as
-// a second argument (afterExtraction(data, fileName, ...)), plus
-// storagePath/mediaType for downloadImportJobFileToLocal() below (Save
-// itself still needs a LOCAL file to re-upload to its own final,
-// category-organized storage path).
-// READY TO REVIEW — the fetch side of the one rule (owner decision
-// 2026-10-31, import reliability item 1). Never a dead end: a row that is
-// not finished yet, or 'ready' without its stored reading (or with an older
-// reading shape that has no docType), is FINISHING — the screen keeps the
-// reading card, retries up to 3 times, then offers Read again. It used to
-// return null here and the screen showed "This import isn't ready to
-// review yet" with nothing to tap.
-export type JobReviewLoad =
-  | { state: 'ready'; extraction: Extraction; fileName: string | undefined; storagePath: string; mediaType: string }
-  | { state: 'finishing' }
-  | { state: 'failed'; message: string | null }
-  | { state: 'missing' }
-  // RE-READ RULES (owner 2026-11-03): finished but its verdict is not
-  // decided yet (the job layer decides; the card waits), or FINAL failed.
-  | { state: 'checking'; review: JobReviewState | null }
-  | { state: 'could_not_read'; extraction: Extraction | null; review: JobReviewState };
-
-export async function loadJobForReview(jobId: string): Promise<JobReviewLoad> {
-  const base = 'result_json, file_name, status, storage_path, media_type, error_message';
-  let res = await supabase.from('import_jobs').select(`${base}, review:page_plan->review`).eq('id', jobId).maybeSingle();
-  if (res.error && isUndefinedColumn(res.error)) res = (await supabase.from('import_jobs').select(base).eq('id', jobId).maybeSingle()) as typeof res;
-  const { data, error } = res;
-  if (error) throw error;
-  if (!data) return { state: 'missing' };
-  if (data.status === 'failed') return { state: 'failed', message: (data.error_message as string | null) ?? null };
-  const raw = data.result_json as Extraction | null;
-  if (data.status !== 'ready' || !raw || typeof raw !== 'object' || !raw.docType) return { state: 'finishing' };
-  const review = 'review' in data ? ((data as { review?: JobReviewState | null }).review ?? null) : undefined;
-  const step = jobReviewStep({ id: jobId, status: 'ready', review });
-  if (step === 'checking') return { state: 'checking', review: review ?? null };
-  if (step === 'could_not_read') return { state: 'could_not_read', extraction: sanitizeExtraction(raw), review: review ?? {} };
-  return {
-    state: 'ready',
-    extraction: sanitizeExtraction(raw),
-    fileName: (data.file_name as string | null) ?? undefined,
-    storagePath: data.storage_path as string,
-    mediaType: data.media_type as string,
-  };
-}
-
-export async function fetchImportJobForReview(
-  jobId: string
-): Promise<{ extraction: Extraction; fileName: string | undefined; storagePath: string; mediaType: string } | null> {
-  const r = await loadJobForReview(jobId);
-  return r.state === 'ready' ? { extraction: r.extraction, fileName: r.fileName, storagePath: r.storagePath, mediaType: r.mediaType } : null;
 }
 
 // CRITICAL for "Review now" to actually be able to Save: saveExtraction()
@@ -383,89 +309,10 @@ async function invokeJobMode(body: Record<string, unknown>, fallbackMessage: str
   return data as { jobId: string };
 }
 
-// RESUME (owner decision 2026-10-13, replaces 2026-08-24's retry): the SAME
-// job continues from its first page without a stored result — finished
-// pages are never read again and the progress never goes back to 0.
-// `retryFailed` (the user's own "Resume from page N") gives failed pages
-// fresh attempts; the app's automatic restart of an interrupted job passes
-// false. The file is never re-picked or re-uploaded.
-export async function resumeImportJob(jobId: string, retryFailed: boolean): Promise<{ jobId: string }> {
-  return invokeJobMode({ mode: 'resume_job', jobId, retryFailed }, 'Could not resume the import.');
-}
-
-export function useRetryImportJob() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (params: { jobId: string }) => resumeImportJob(params.jobId, true),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
-    },
-  });
-}
-
-// READ AGAIN (owner decision 2026-10-17, item 7): an unsaved, ready job's
-// settlement + statement pages are read again with the current prompt, on
-// the same job; attachments are kept in the file, not read.
-export function useRereadImportJob() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (params: {
-      jobId: string;
-      locale?: string;
-      customCategories?: string[];
-      learningRules?: { keyword: string; category: string }[];
-      carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
-      // IMPORT GATE FIX 1.3: only these content pages are read again (null
-      // or absent = every content page), and why (logged on the server).
-      pages?: number[] | null;
-      reason?: string;
-    }) => {
-      // The one readiness rule ignores this job's cached 'ready' row until it
-      // completes again (src/import/importJobs.ts isReadyToReview).
-      markRereadRequested(params.jobId);
-      return invokeJobMode({ mode: 'reread_job', ...params }, 'Could not start reading again.');
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
-    },
-  });
-}
-
-// "This file has N pages. Read the first 40 now?" — never read silently.
-export async function answerImportJob(jobId: string, answer: 'read_first' | 'cancel'): Promise<{ jobId: string }> {
-  return invokeJobMode({ mode: 'answer_job', jobId, answer }, 'Could not send your answer.');
-}
-
-export function useAnswerImportJob() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (params: { jobId: string; answer: 'read_first' | 'cancel' }) =>
-      invokeJobMode({ mode: 'answer_job', jobId: params.jobId, answer: params.answer }, 'Could not send your answer.'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
-    },
-  });
-}
-
-// "Read the missing pages" / "Read this page" on a saved week: a new job
-// that reads only those pages of the stored PDF; when ready, the week is
-// reviewed and saved again (Save replaces it).
-export function useReadDocumentPages() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (params: {
-      documentId: string;
-      pages: number[];
-      locale?: string;
-      customCategories?: string[];
-      learningRules?: { keyword: string; category: string }[];
-      carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[];
-    }) => invokeJobMode({ mode: 'read_pages', ...params }, 'Could not start reading those pages.'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: IMPORT_JOBS_QUERY_KEY, refetchType: 'all' });
-    },
-  });
-}
+// The old reader's request modes (job, resume_job, answer_job, reread_job,
+// read_pages, job_verdict) and its review load were removed 2026-11-13
+// (commit 6). A job it read shows as failed with [Read again]
+// (restartWithReader below).
 
 // ---- SETTLEMENT READER (owner decision 2026-11-13) ----------------------
 

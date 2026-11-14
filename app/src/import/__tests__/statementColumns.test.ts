@@ -2,7 +2,7 @@
 // 2026-11-03, device finding: figures slipped from WEEKS TOTAL into the
 // YTD/LTD columns). The app counts the WEEKS column only; a null WEEKS is
 // not counted; the weekTotal* / payout scalars come only from labeled rows.
-import { normalizeStatementColumns } from '../../../../supabase/functions/ai-import/chunking';
+import { normalizeStatementColumns } from '../../../../supabase/functions/ai-import/statementColumns';
 import { golden0814 } from '@/src/data/__tests__/golden0814Fixture';
 import { buildPrimeStatementCheck } from '@/src/import/settlementStatement';
 import { latestYtdContinuity, statementYtdRows, ytdContinuity } from '@/src/import/ytdContinuity';
