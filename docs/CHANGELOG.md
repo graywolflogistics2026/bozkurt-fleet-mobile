@@ -11,6 +11,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-13 — PR owner money in lost on a line-details mismatch (device: 07/17 PR 3,999.00 missing from Capital Account)
+- Cause: aiImportSave.ts gate `lineDetails === 'mismatch'` emptied deductions and reimbursements, so the PR reimbursement never became its PERSONAL credit row (nonReimbursementCredits) and the id-linked contribution (PR block) was never written. Device SQL: 07/17 lines_not_saved, pr_total 3,999.00, no row; 08/21 already had its row.
+- 100e768: only the PR credits are rebuilt from the rows before the gate; every other line row is still dropped. Out of profit: Home/Settlements unchanged (18 weeks 88,210.06 / 41,977.33 / 46,232.73 / 39,913.01). Fixtures carry 07/17 PR 3,999.00 + POS 177.55 and 08/21 PR 1.00 as printed. New prOwnerMoneyInMismatch.test.ts (old code fails 3 of 6); golden mismatch test now expects the one PR credit row.
+- 3a11bcd: PENDING_SQL §87 (`pending_87.sql`) backfills 07/17 only, without re-import. Driver design moves to §88.
+- Expected after §87: Contributed 64,874.50, Net position 29,583.50. No Edge Function. eas update.
+
 ## 2026-11-13 — For Prime Inc Drivers: only lumpers from settlements (device: withheld rows in the sheet, Lumpers empty)
 - Cause: the sheet's own-row rule was `source !== 'settlement'` only (primeDriverExpenses.ts eligibleDeductionRowsForReport, categoryMapping.ts findRowsNeedingAccountantCategory), not Home's rule (kpi.ts isOrphanSettlementRow: settlement_id, settlement document). Lumpers were per-row 'prime_settlement' withheld rows; the new reader saves no line rows when line details differ (aiImportSave.ts gate) and never saves LM revenue items, so nothing reached Lumpers.
 - 880f1ac: one own-expense rule `src/stats/ownExpenseOrigin.ts` (computeKpis + sheet + needs-category). New `src/stats/settlementLumpers.ts`: per Prime settlement, received (statement OUTSIDE LUMPER 1099 PAY) +, deducted (statement LUMPERS, else WA/LM withheld rows) −, difference; by week-ending month; outside every subtotal/total. Sheet screen + export; 7 locales.
