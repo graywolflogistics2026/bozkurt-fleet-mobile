@@ -11,6 +11,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
 
+## 2026-11-14 — §85 applied (owner verified)
+
+`diagnose_missing_functions` is live: owner's read-only check returned status 'applied', authenticated_can_run true. Diagnostics now checks functions from pg_proc. `pending_85.sql` removed (SQL inlined in §85). No code change.
+
 ## 2026-11-14 — Toll double counts: Cash Flow spend and Profit Audit cross-check
 
 Both now use the Tolls & Fees rule through `tollRuleByIndex()` (`app/src/stats/tollsSummary.ts`, a thin index-keyed wrapper over `buildTollsSummary()`).

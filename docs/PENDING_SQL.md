@@ -5561,7 +5561,7 @@ from information_schema.columns where table_schema = 'public';
 
 Mirror file `pending_84.sql` removed after the owner confirmed it was run (2026-11-03).
 
-## 85. DIAGNOSTICS: DATABASE FUNCTIONS FROM pg_proc (owner decision 2026-11-03) — NOT YET APPLIED
+## 85. DIAGNOSTICS: DATABASE FUNCTIONS FROM pg_proc (owner decision 2026-11-03) — ✅ APPLIED 2026-11-14
 
 Settings > Diagnostics listed 8 database functions as "missing" that exist:
 the old check probed each through PostgREST and read its hint text, and
@@ -5613,9 +5613,9 @@ select public.diagnose_missing_functions(array[
 ]);
 ```
 
-Mirror file: `pending_85.sql` (repo root).
+Mirror file `pending_85.sql` removed after the owner confirmed it was run (2026-11-14). Owner verified with a read-only check: status 'applied', authenticated_can_run true.
 
-- [ ] 85 run
+- [x] 85 run
 
 ## 86. PRIME CODES 2S, SF, CU, NQ (owner decision 2026-11-13, K3 approved) — ✅ APPLIED 2026-11-13
 

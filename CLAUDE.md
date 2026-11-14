@@ -1120,9 +1120,6 @@ under each is unchanged original wording.
   - §72 remove business-balance tracking — status UNCONFIRMED.
     `pending_72.sql` kept; a read-only check query is in §72. The client
     is safe either way.
-  - §85 Diagnostics functions from pg_proc — NOT YET APPLIED,
-    `pending_85.sql` at the repo root. Until it runs, Diagnostics uses the
-    old probe and says "(probe)".
   - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
     applied and ai-import redeployed — owner confirmed 2026-10-17, their
@@ -1135,7 +1132,9 @@ under each is unchanged original wording.
     backfill 07/17) applied — owner verified 2026-11-13, `pending_86.sql`
     and `pending_87.sql` removed, SQL inlined. §88 (carrier payroll
     drivers + backfill 11/06, 11/13) applied — owner verified 2026-11-13,
-    `pending_88.sql` removed, SQL inlined.)
+    `pending_88.sql` removed, SQL inlined. §85 (Diagnostics functions
+    from pg_proc) applied — owner verified 2026-11-14, `pending_85.sql`
+    removed, SQL inlined.)
 - **Native build**: batch E (document scanner, version 1.1.0) needs
   `eas build --profile preview --platform android`; OTA updates published
   after it only reach 1.1.0 builds. Earlier: the owner's device reported "embedded build (no OTA
