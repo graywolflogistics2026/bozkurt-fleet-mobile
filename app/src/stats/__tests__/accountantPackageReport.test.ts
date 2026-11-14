@@ -242,6 +242,26 @@ describe('buildAccountantReportHtml — colour coding for totals/income/capital 
     expect(html).toContain(`background:${ACCOUNTANT_EXPORT_COLORS.subtotalRowBg}`);
   });
 
+  it('LUMPERS THROUGH SETTLEMENT (owner 2026-11-13): the same block as the For Prime Inc Drivers sheet, outside every total', () => {
+    const month = {
+      lines: [{ settlementId: 's1', weekEnding: '2026-10-23', received: 1759, deducted: 1761.55, difference: -2.55 }],
+      received: 1759,
+      deducted: 1761.55,
+      difference: -2.55,
+    };
+    const strings = { title: 'Lumpers — through settlement', note: 'Not in the totals.', received: 'Lumper pay received', deducted: 'Lumper advance deducted', difference: 'Difference (wire fee)', monthTotal: 'Month total' };
+    const without = buildAccountantReportHtml(baseInput(), baseStrings, fmt);
+    const html = buildAccountantReportHtml(baseInput({ settlementLumpers: { month, strings } }), baseStrings, fmt);
+    expect(without).not.toContain('Lumpers — through settlement');
+    expect(html).toContain('Lumpers — through settlement');
+    expect(html).toContain('Lumper pay received');
+    expect(html).toContain('Lumper advance deducted');
+    expect(html).toContain('Difference (wire fee)');
+    // Totals are untouched by the block.
+    const strip = (h: string) => h.replace(/<table><tr class="subtotal"><td colspan="3" class="cat-name">Lumpers — through settlement[\s\S]*?<\/table>/, '');
+    expect(strip(html)).toBe(without);
+  });
+
   it('a Schedule C line reference renders as a chip', () => {
     const grouped: GroupedScheduleCCategory[] = [{ category: 'Fuel & DEF', amount: 200, scheduleCLine: '9', items: [] }];
     const html = buildAccountantReportHtml(baseInput({ groupedCategories: grouped }), baseStrings, fmt);

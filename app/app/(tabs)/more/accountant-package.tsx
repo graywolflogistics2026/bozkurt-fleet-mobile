@@ -1,3 +1,4 @@
+import { buildSettlementLumperLines, settlementLumpersFor, signedLumperAmounts, type SettlementLumperStrings } from '@/src/stats/settlementLumpers';
 import { ensureDescription } from '@/src/lib/descriptionText';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
@@ -268,6 +269,23 @@ export default function AccountantPackage() {
   // follow-up item H.1) — informational only, never blocks anything.
   const miscWarning = useMemo(() => checkMiscConcentration(scheduleCTotals), [scheduleCTotals]);
   const lumperFees = useMemo(() => buildLumperFees(lineItems), [lineItems]);
+  // LUMPERS THROUGH SETTLEMENT (owner 2026-11-13): the same block as the
+  // For Prime Inc Drivers sheet, read-only, outside every total.
+  const settlementLumperLines = useMemo(
+    () => buildSettlementLumperLines(settlementsQuery.data ?? [], deductionsQuery.data ?? []),
+    [settlementsQuery.data, deductionsQuery.data]
+  );
+  const periodLumpers = useMemo(() => settlementLumpersFor(settlementLumperLines, year, month), [settlementLumperLines, year, month]);
+  function lumperStrings(): SettlementLumperStrings {
+    return {
+      title: t('primeDriverExpenses.settlementLumpers.title'),
+      note: t('primeDriverExpenses.settlementLumpers.note'),
+      received: t('primeDriverExpenses.settlementLumpers.received'),
+      deducted: t('primeDriverExpenses.settlementLumpers.deducted'),
+      difference: t('primeDriverExpenses.settlementLumpers.difference'),
+      monthTotal: t('primeDriverExpenses.settlementLumpers.monthTotal'),
+    };
+  }
   const notDeductible = useMemo(() => buildNotDeductibleReference(lineItems), [lineItems]);
   // R4 (owner 2026-11-03): personal items withheld on a settlement, own section.
   const personalItems = useMemo(() => buildPersonalSettlementItems(deductionsQuery.data ?? [], year, month), [deductionsQuery.data, year, month]);
@@ -613,6 +631,7 @@ export default function AccountantPackage() {
       miscWarning: miscWarningForExport,
       lumperFees: lumpers,
       lumperTotal: lumperTotalForExport,
+      settlementLumpers: { month: settlementLumpersFor(settlementLumperLines, scopeYear, scopeMonth), strings: lumperStrings() },
       groupedCategories: grouped,
       capitalAssets,
       ownersEquity,
@@ -840,6 +859,51 @@ export default function AccountantPackage() {
                   ⚠️ {t('accountantPackage.miscConcentrationWarning', { pct: Math.round(miscWarning.miscPct * 100) })}
                 </MutedText>
               </Card>
+            )}
+
+            {periodLumpers.lines.length > 0 && (
+              <>
+                <View style={[styles.sectionHeaderTint, { backgroundColor: ACCOUNTANT_SCREEN_COLORS.lumperHeaderBg }]}>
+                  <Text style={styles.sectionTitleOnTint}>{t('primeDriverExpenses.settlementLumpers.title')}</Text>
+                </View>
+                <Card>
+                  <MutedText>{t('primeDriverExpenses.settlementLumpers.note')}</MutedText>
+                  {periodLumpers.lines.map((l) => {
+                    const a = signedLumperAmounts(l, money);
+                    return (
+                      <View key={l.settlementId} style={{ marginTop: spacing.sm }}>
+                        <MutedText>{date(l.weekEnding)}</MutedText>
+                    <View style={styles.rowBorder}>
+                      <Row label={t('primeDriverExpenses.settlementLumpers.received')} value={a.received} />
+                    </View>
+                    <View style={styles.rowBorder}>
+                      <Row label={t('primeDriverExpenses.settlementLumpers.deducted')} value={a.deducted} />
+                    </View>
+                    <View style={styles.rowBorder}>
+                      <Row label={t('primeDriverExpenses.settlementLumpers.difference')} value={a.difference} />
+                    </View>
+                      </View>
+                    );
+                  })}
+                  {(() => {
+                    const a = signedLumperAmounts(periodLumpers, money);
+                    return (
+                      <View style={{ marginTop: spacing.sm }}>
+                        <MutedText>{t('primeDriverExpenses.settlementLumpers.monthTotal')}</MutedText>
+                    <View style={styles.rowBorder}>
+                      <Row label={t('primeDriverExpenses.settlementLumpers.received')} value={a.received} bold />
+                    </View>
+                    <View style={styles.rowBorder}>
+                      <Row label={t('primeDriverExpenses.settlementLumpers.deducted')} value={a.deducted} bold />
+                    </View>
+                    <View style={styles.rowBorder}>
+                      <Row label={t('primeDriverExpenses.settlementLumpers.difference')} value={a.difference} bold />
+                    </View>
+                      </View>
+                    );
+                  })()}
+                </Card>
+              </>
             )}
 
             {lumperFees.length > 0 && (

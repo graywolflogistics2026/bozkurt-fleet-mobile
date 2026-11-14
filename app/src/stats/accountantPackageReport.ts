@@ -2,6 +2,7 @@ import { ACCOUNTANT_EXPORT_COLORS } from '@/src/stats/accountantPackageColors';
 import { ESTIMATE_NOTICE_CSS, estimateBannerHtml, estimateFooterHtml, type EstimateNoticeStrings } from '@/src/legal/estimateNotice';
 import type { LineItem, PerDiemBlock, MiscConcentrationWarning, CapitalAssetRow, OwnersEquitySummary, GroupedScheduleCCategory, AccountantScope } from '@/src/stats/accountantPackage';
 import type { CapitalTreatmentLabel } from '@/src/tax/vehiclePurchase';
+import { settlementLumperRowsHtml, type SettlementLumperMonth, type SettlementLumperStrings } from '@/src/stats/settlementLumpers';
 import type { CapitalFlowRow, CapitalFlowType } from '@/src/stats/capitalAccount';
 
 // FULL VISUAL PARITY WITH WEB (owner decision, v2026.08.05-W chase) — the
@@ -117,6 +118,9 @@ export type AccountantReportInput = {
   miscWarning: MiscConcentrationWarning | null;
   lumperFees: LineItem[];
   lumperTotal: number;
+  // LUMPERS THROUGH SETTLEMENT (owner 2026-11-13): the same block as the
+  // For Prime Inc Drivers sheet, outside every total.
+  settlementLumpers?: { month: SettlementLumperMonth; strings: SettlementLumperStrings };
   groupedCategories: GroupedScheduleCCategory[];
   capitalAssets: CapitalAssetRow[];
   ownersEquity: OwnersEquitySummary;
@@ -330,6 +334,12 @@ export function buildAccountantReportHtml(
         }
 
         ${miscWarning && strings.miscConcentrationWarning ? `<h2 class="warn">${esc(strings.miscConcentrationWarning)}</h2>` : ''}
+
+        ${
+          input.settlementLumpers && input.settlementLumpers.month.lines.length > 0
+            ? `<table>${settlementLumperRowsHtml(input.settlementLumpers.month, input.settlementLumpers.strings, fmt)}</table>`
+            : ''
+        }
 
         ${
           lumperFees.length > 0

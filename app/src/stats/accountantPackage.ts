@@ -473,8 +473,12 @@ export function checkMiscConcentration(totals: ScheduleCLineTotal[]): MiscConcen
 // buried at the bottom): every line-item already categorized "Lumper
 // Fees" by classifySettlementLine()/guessCategory() (owner decision
 // 2026-08-05, FULL PARITY part A).
+//
+// Own lumper rows only (owner 2026-11-13): a settlement-withheld lumper line
+// is shown in the "Lumpers — through settlement" block
+// (src/stats/settlementLumpers.ts) instead, so no lumper is listed twice.
 export function buildLumperFees(lineItems: LineItem[]): LineItem[] {
-  return lineItems.filter((li) => li.category === 'Lumper Fees');
+  return lineItems.filter((li) => li.category === 'Lumper Fees' && li.origin !== 'settlement');
 }
 
 // PER DIEM BLOCK (spec item B.2) — days + dollars for the selected MONTH
