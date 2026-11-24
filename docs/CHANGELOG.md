@@ -10,6 +10,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-23 — Flat menu, stage 1 commit 1 (owner)
+
+Phone Menu sheet and the wide sidebar are ONE flat list, no headings, in the owner's order, Settings last (`navRegistry.ts` `MENU_ORDER`, `menuItems()`, `sidebarItems()`). The groups stay internal, so Reports is unchanged.
+- Phone menu: no Home row, no Scorecard row (Scorecard still on Reports). Rows are bigger (min height 52, 16 pt). A ⚙️ gear next to the X opens Settings. Bottom padding = safe-area inset, read outside the Modal, + 48.
+- Wide sidebar (768px+): Home on top, then the same rows. Transactions is a row (no tab bar there).
+- Future merge children and the three future Settings tools stay as rows for now. `menuReachability.test.ts`: every route is a menu row, a tab, a parent card, a Settings button, on Reports, or flag-hidden.
+- i18n `nav.openSettings`, `nav.closeMenu` (7 locales). No number changed. Ships via `eas update`.
+
 ## 2026-11-24 — Toll rule in the profit core (no double count without a statement)
 
 A `tolls` row under its settlement's toll line counts once (`withoutCoveredTolls()`, `tollsSummary.ts`). It is applied to the full lists in `computeKpis`, `buildWeeklyTrueProfitTrend`, `buildProfitAnalysis`, `buildPeriodScopedCpm` and `buildTruckComparison`. In profit a line covers only when it reduces profit (owner T6(b)); the Tolls & Fees screen keeps its rule.

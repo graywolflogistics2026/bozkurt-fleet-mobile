@@ -25,6 +25,8 @@
     "truckHealth": "Estado del Camión",
     "more": "Más",
     "menu": "Menú",
+    "openSettings": "Abrir ajustes",
+    "closeMenu": "Cerrar menú",
     "transactions": "Transacciones",
     "reports": "Informes",
     "capitalAccount": "Cuenta de Capital",

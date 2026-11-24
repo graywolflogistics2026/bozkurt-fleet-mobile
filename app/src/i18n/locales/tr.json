@@ -25,6 +25,8 @@
     "truckHealth": "Kamyon Durumu",
     "more": "Diğer",
     "menu": "Menü",
+    "openSettings": "Ayarları aç",
+    "closeMenu": "Menüyü kapat",
     "transactions": "İşlemler",
     "reports": "Raporlar",
     "capitalAccount": "Sermaye Hesabı",

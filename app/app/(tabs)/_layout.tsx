@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions, type ColorValue } from 'react-native';
 import { Tabs, useRouter, type Href } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { TruckSwitcher } from '@/src/components/TruckSwitcher';
 import { CenterImportButton } from '@/src/components/CenterImportButton';
@@ -173,6 +174,9 @@ export default function TabsLayout() {
   const isWide = width >= WIDE_BREAKPOINT;
   const [menuOpen, setMenuOpen] = useState(false);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  // Read here, OUTSIDE MenuSheet's Modal: inside an Android Modal the
+  // safe-area inset can read 0 (flat menu, owner 2026-11-23).
+  const insets = useSafeAreaInsets();
 
   const tabs = (
     <Tabs
@@ -263,7 +267,7 @@ export default function TabsLayout() {
   const withMenuSheet = (
     <>
       {tabs}
-      <MenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} />
+      <MenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} bottomInset={insets.bottom} />
       <ImportActionSheet
         visible={actionSheetOpen}
         onClose={() => setActionSheetOpen(false)}

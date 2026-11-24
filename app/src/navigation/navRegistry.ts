@@ -180,6 +180,88 @@ export function flattenNavItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
   return groups.flatMap((g) => g.items);
 }
 
+// FLAT MENU (owner decision 2026-11-23, docs/decisions/
+// menu-simplification-proposal.md). The phone Menu sheet and the wide
+// sidebar show ONE list with no headings, most-used first, Settings last.
+// The groups above stay: Reports (app/(tabs)/reports.tsx) and the
+// daily-tip coverage map still read them, and every route stays in them.
+// Stage 1: the screens that will later sit inside a parent (Reimbursements,
+// For Prime Inc Drivers, Truck Comparison, Equipment, Documents &
+// Renewals) and the three future Settings tools are still rows, right
+// after their future parent / before Settings.
+export const MENU_ORDER: readonly string[] = [
+  '/(tabs)/import',
+  '/(tabs)/more/loads',
+  '/(tabs)/more/settlements',
+  '/(tabs)/more/other-income',
+  '/(tabs)/more/reimbursements',
+  '/(tabs)/more/fuel',
+  '/(tabs)/more/maintenance',
+  '/(tabs)/more/tolls',
+  '/(tabs)/deductions',
+  '/(tabs)/more/accountant-package',
+  '/(tabs)/more/prime-driver-expenses',
+  '/(tabs)/more/tax-estimator',
+  '/(tabs)/more/trucks',
+  '/(tabs)/more/truck-comparison',
+  '/(tabs)/more/drivers',
+  '/(tabs)/more/asset-register',
+  '/(tabs)/more/equipment',
+  '/(tabs)/more/capital-account',
+  '/(tabs)/more/loans',
+  '/(tabs)/more/operating-pnl',
+  '/(tabs)/more/cash-flow',
+  '/(tabs)/more/profit-analysis',
+  '/(tabs)/truck-health',
+  '/(tabs)/more/ceo-mode',
+  '/(tabs)/more/documents',
+  '/(tabs)/more/compliance',
+  // A row from stage 1 on: the wide sidebar has no tab bar, and on
+  // phones it leaves the tab bar in stage 1's second commit.
+  '/(tabs)/transactions',
+  '/(tabs)/more/category-learning',
+  '/(tabs)/more/referral',
+  '/(tabs)/more/data-cleanup',
+  '/(tabs)/more/settings',
+];
+
+// How every registry route that is NOT a menu row is still reached.
+// src/navigation/__tests__/menuReachability.test.ts checks that every
+// route is either in MENU_ORDER or here, and that each reason holds.
+export type MenuReach =
+  // A bottom-tab button (phones) / the sidebar's Home row (wide screens).
+  | { kind: 'tab' }
+  // A card on a parent screen that is itself a menu row.
+  | { kind: 'parent'; parent: string }
+  // A button in Settings.
+  | { kind: 'settings' }
+  // Hidden from the menu on purpose; still listed on the Reports tab.
+  | { kind: 'reports' }
+  // Hidden by a FEATURE_FLAGS key that is off (route kept).
+  | { kind: 'featureFlag' };
+
+export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
+  '/(tabs)': { kind: 'tab' },
+  // Owner 2026-11-23: Scorecard hidden from the menu only.
+  '/(tabs)/more/scorecard': { kind: 'reports' },
+  '/(tabs)/more/credit-cards': { kind: 'featureFlag' },
+  '/(tabs)/more/bank-statements': { kind: 'featureFlag' },
+};
+
+const byHref = (groups: NavGroup[]) => new Map(flattenNavItems(groups).map((i) => [i.href as string, i]));
+
+// The phone Menu sheet's rows, in MENU_ORDER (flag-hidden routes drop out).
+export function menuItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
+  const items = byHref(groups);
+  return MENU_ORDER.map((href) => items.get(href)).filter((i): i is NavItem => !!i);
+}
+
+// The wide sidebar (768px+, no tab bar): Home on top, then the menu rows.
+export function sidebarItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
+  const home = byHref(groups).get('/(tabs)');
+  return [...(home ? [home] : []), ...menuItems(groups)];
+}
+
 export function moreTabItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
   return flattenNavItems(groups).filter((item) => !TAB_BAR_HREFS.includes(item.href));
 }

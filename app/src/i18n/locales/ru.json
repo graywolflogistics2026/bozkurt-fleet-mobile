@@ -25,6 +25,8 @@
     "truckHealth": "Состояние Грузовика",
     "more": "Ещё",
     "menu": "Меню",
+    "openSettings": "Открыть настройки",
+    "closeMenu": "Закрыть меню",
     "transactions": "Транзакции",
     "reports": "Отчёты",
     "capitalAccount": "Капитальный Счёт",
