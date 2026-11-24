@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Drivers list shows only names (owner, tester feedback)
+
+- Drivers: each row is just the name (18 pt bold, "›"); compensation, carrier payroll summary and Payments/Edit/Remove moved into the read-only detail sheet (same handlers, Remove keeps its confirmation). A driver still named by payroll code keeps the blue "Who is CODE?" button in the row. No data logic change; ships via `eas update`.
+
 ## 2026-11-24 — Follow-up: estimates banner order, driver detail, delete X everywhere (owner)
 
 - Accountant Package: title, featured For Prime Inc Drivers card, EstimateBanner, FleetScopeLabel, Year/Month/Scope/Format, Export, then subtitle and report.
