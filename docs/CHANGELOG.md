@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Transactions: a card on Operating P&L, no longer a menu row (owner)
+
+Menu is 19 rows (Overview = Operating P&L, Truck Health, AI Coach). Operating P&L's fourth card opens the unchanged hidden tab route `/(tabs)/transactions` with `from=operating-pnl`; `transactions.tsx` `useBackToParent()` then sends hardware back and a header arrow to Operating P&L, and clears the param on blur, so other opens (Home's daily tip) keep the Home fallback. `RelatedScreenCard` gained optional `params`. Key `operatingPnl.transactionsCard` (7 locales). No number changed. Ships via `eas update`.
+
 ## 2026-11-24 — "Documents & Renewals" renamed "Renewals & Expiry Dates" (owner)
 
 The compliance screen's label (menu row, sidebar, Reports, screen header, Alerts section, import "saved to" route labels, daily tips) is now "Renewals & Expiry Dates" in all 7 locales (`nav.compliance`, `compliance.title`, `alerts.complianceSection`, `docTypes.*.route`, `dailyTips.tipDocumentsRenewals.v0/v1`); the Documents card uses `nav.compliance` and `documentsArchive.renewalsCardTitle` is removed. Route `/(tabs)/more/compliance` and behaviour unchanged. Ships via `eas update`.

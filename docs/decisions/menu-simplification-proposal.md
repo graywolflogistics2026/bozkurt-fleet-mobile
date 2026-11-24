@@ -12,6 +12,12 @@ Follow-up (owner 2026-11-23, after Stage 2), CURRENT state:
   Business = Trucks, Drivers, Assets & Equipment, Capital Account,
   Documents, Renewals & Expiry Dates. (Older text below that says
   "Documents & Renewals" means this same screen.)
+- Transactions (owner 2026-11-24) is no longer a menu row: it is the fourth
+  card on Operating P&L (after Cash Flow, Profit Analysis, Scorecard). Its
+  route stays a hidden tab; opened from the card, back returns to
+  Operating P&L (`?from=operating-pnl`), otherwise back goes Home as
+  before. Final menu: 19 rows; Overview = Operating P&L, Truck Health, AI
+  Coach.
 - Scorecard is a third card on Operating P&L (after Cash Flow and Profit
   Analysis). Still hidden from the phone menu, still on the Reports tab,
   still linked from Truck Comparison. The wide-sidebar-only Scorecard row

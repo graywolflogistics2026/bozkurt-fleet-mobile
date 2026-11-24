@@ -200,7 +200,7 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
   },
   {
     titleKey: 'sidebar.sections.overview',
-    hrefs: ['/(tabs)/transactions', '/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode'],
+    hrefs: ['/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode'],
   },
   {
     titleKey: 'sidebar.sections.business',
@@ -248,6 +248,9 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   // P&L (its way in on wide screens too), and still on the Reports tab and
   // linked from Truck Comparison.
   '/(tabs)/more/scorecard': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
+  // Owner 2026-11-24: Transactions (hidden tab route) is a card on Operating
+  // P&L; back from it returns there (transactions.tsx useBackToParent).
+  '/(tabs)/transactions': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
   // Owner 2026-11-23: a card on Other Income (reimbursements reduce expenses, never income).
   '/(tabs)/more/reimbursements': { kind: 'parent', parent: '/(tabs)/more/other-income' },
   // Owner 2026-11-23: a card on Tax Estimator.

@@ -97,6 +97,16 @@ export default function OperatingPnl() {
           title={t('nav.scorecard')}
           description={t('operatingPnl.scorecardCard')}
         />
+        {/* Transactions left the Menu (owner 2026-11-24). It is a hidden
+            TAB route, so it gets from=operating-pnl: its back button and
+            header arrow then return here instead of Home. */}
+        <RelatedScreenCard
+          href='/(tabs)/transactions'
+          params={{ from: 'operating-pnl' }}
+          emoji='💳'
+          title={t('nav.transactions')}
+          description={t('operatingPnl.transactionsCard')}
+        />
 
         {loading ? (
           <Card>

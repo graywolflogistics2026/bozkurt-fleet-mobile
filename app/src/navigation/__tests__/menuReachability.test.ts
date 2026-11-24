@@ -92,7 +92,7 @@ describe('the menu (owner decisions 2026-11-23)', () => {
     expect(menu).not.toContain('/(tabs)/more/scorecard');
     expect(menu[menu.length - 1]).toBe('/(tabs)/more/settings');
     expect(menu.slice(0, 3)).toEqual(['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements']);
-    expect(menu).toContain('/(tabs)/transactions');
+    expect(menu).not.toContain('/(tabs)/transactions');
   });
 
   test('Asset Register row reads "Assets & Equipment" in the menu and sidebar only; its screen title is unchanged', () => {
@@ -104,16 +104,16 @@ describe('the menu (owner decisions 2026-11-23)', () => {
     expect(read('app/(tabs)/more/_layout.tsx')).toContain("name=\"asset-register\" options={{ title: t('nav.assetRegister') }}");
   });
 
-  test('final menu (owner 2026-11-23): 20 rows in 6 sections, exactly', () => {
+  test('final menu (owner 2026-11-24): 19 rows in 6 sections, exactly', () => {
     expect(menuSections().map((s) => [s.titleKey, s.items.map((i) => i.href as string)])).toEqual([
       ['sidebar.sections.revenue', ['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements']],
       ['sidebar.sections.expenses', ['/(tabs)/more/fuel', '/(tabs)/more/maintenance', '/(tabs)/more/tolls', '/(tabs)/deductions']],
-      ['sidebar.sections.overview', ['/(tabs)/transactions', '/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode']],
+      ['sidebar.sections.overview', ['/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode']],
       ['sidebar.sections.business', ['/(tabs)/more/trucks', '/(tabs)/more/drivers', '/(tabs)/more/asset-register', '/(tabs)/more/capital-account', '/(tabs)/more/documents', '/(tabs)/more/compliance']],
       ['sidebar.sections.taxAccounting', ['/(tabs)/more/accountant-package', '/(tabs)/more/tax-estimator']],
       ['sidebar.sections.system', ['/(tabs)/more/settings']],
     ]);
-    expect(menuItems()).toHaveLength(20);
+    expect(menuItems()).toHaveLength(19);
     // Renewals & Expiry Dates (compliance) is a row AND still a card on Documents (owner 2026-11-23/24).
     expect(linksTo(read(screenFile('/(tabs)/more/documents')), '/(tabs)/more/compliance')).toBe(true);
   });
@@ -129,6 +129,7 @@ describe('the menu (owner decisions 2026-11-23)', () => {
       '/(tabs)/more/cash-flow': '/(tabs)/more/operating-pnl',
       '/(tabs)/more/profit-analysis': '/(tabs)/more/operating-pnl',
       '/(tabs)/more/scorecard': '/(tabs)/more/operating-pnl',
+      '/(tabs)/transactions': '/(tabs)/more/operating-pnl',
       '/(tabs)/more/data-cleanup': '/(tabs)/more/category-learning',
       '/(tabs)/more/category-learning': 'settings',
       '/(tabs)/more/referral': 'settings',
@@ -185,7 +186,15 @@ describe('tab bar (owner decision 2026-11-23)', () => {
     expect(screens.filter((s) => s.hidden).map((s) => s.name).sort()).toEqual(['deductions', 'transactions', 'truck-health']);
   });
 
-  test('every hidden tab route is a menu row', () => {
-    for (const name of ['transactions', 'deductions', 'truck-health']) expect(MENU_ORDER).toContain(`/(tabs)/${name}`);
+  test('hidden tab routes: Deductions and Truck Health are menu rows; Transactions is the Operating P&L card (owner 2026-11-24)', () => {
+    for (const name of ['deductions', 'truck-health']) expect(MENU_ORDER).toContain(`/(tabs)/${name}`);
+    expect(MENU_ORDER).not.toContain('/(tabs)/transactions');
+    const pnl = read('app/(tabs)/more/operating-pnl.tsx');
+    expect(linksTo(pnl, '/(tabs)/transactions')).toBe(true);
+    // The card tells Transactions where back goes; Transactions maps it to Operating P&L.
+    expect(pnl).toContain("params={{ from: 'operating-pnl' }}");
+    const tx = read('app/(tabs)/transactions.tsx');
+    expect(tx).toContain("'operating-pnl': '/(tabs)/more/operating-pnl'");
+    expect(tx).toContain('hardwareBackPress');
   });
 });

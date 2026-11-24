@@ -6,6 +6,9 @@
 // changes the parent's content. Same look as every other tappable card
 // (TappableCard: card + chevron).
 //
+// `params` (optional) are passed to the child route, e.g. so a hidden
+// tab screen (Transactions) knows which parent to go back to.
+//
 // The caller passes the child's route as a string literal, so
 // src/navigation/__tests__/menuReachability.test.ts can verify that the
 // parent screen file really links to it.
@@ -19,15 +22,17 @@ export function RelatedScreenCard({
   emoji,
   title,
   description,
+  params,
 }: {
   href: string;
   emoji: string;
   title: string;
   description: string;
+  params?: Record<string, string>;
 }) {
   const router = useRouter();
   return (
-    <TappableCard onPress={() => router.push(href as Href)}>
+    <TappableCard onPress={() => router.push((params ? { pathname: href, params } : href) as Href)}>
       <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '700' }}>
         {emoji} {title}
       </Text>
