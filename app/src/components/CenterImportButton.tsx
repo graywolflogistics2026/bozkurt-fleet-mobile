@@ -35,6 +35,8 @@ export function CenterImportButton({ onOpenActionSheet, accessibilityState }: Bo
 }
 
 const SIZE = 56;
+// Where bottom-tabs 7.18 places a below-icon label: padding 5 + icon slot 28.
+const LABEL_TOP = 33;
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -65,12 +67,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: -2,
   },
-  // Import is 2nd of 4 tabs (owner 2026-11-23), so it is not centred: the
-  // raised accent button plus an accent, bold label keep it the stand-out tab.
+  // Import is 2nd of 4 tabs (owner 2026-11-23): accent + bold label.
+  // TAB LABEL BASELINE FIX (owner device report 2026-11-23, Android 3-button
+  // nav): the label sat lower than Home/Reports/Menu and touched the system
+  // nav bar. Cause: it flowed under the circle (top 36) and d56e1e8 raised
+  // it to 11 pt, so it ran past the 49 px bar into the bottom inset. Now it
+  // sits where @react-navigation/bottom-tabs 7.18 puts every other label:
+  // 5 px tab padding + 28 px icon slot = top 33, at the library's 10 pt
+  // (BottomTabItem.tsx styles.tabVerticalUiKit / labelBeneath,
+  // TabBarIcon.tsx ICON_SIZE_TALL). The circle is unchanged (56 px, top -22).
   label: {
+    position: 'absolute',
+    top: LABEL_TOP,
     color: colors.accent,
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 10,
     fontWeight: '700',
   },
 });
