@@ -62,8 +62,14 @@ export const CANONICAL_TO_ACCOUNTANT_CATEGORY: Record<string, PrimeDriverExpense
   'Meals (per diem covered)': null,
   'Advance Repayment': null,
   'Escrow & Deposits': null,
-  Misc: 'Misc',
-  Other: 'Misc',
+  // MANUAL LINE CHOICE (owner decision 2026-11-24, option (a),
+  // docs/decisions/prime-sheet-manual-lines-proposal.md): Misc and Other
+  // have no real sheet line, so they are never put on the Misc line
+  // automatically any more — a NEW row waits in "Needs your choice"
+  // (NEEDS_LINE_CATEGORIES below). Rows that already carry a line keep it.
+  // Misc stays a line the user can pick deliberately.
+  Misc: null,
+  Other: null,
 };
 
 // "Scales" and "Laundry/Showers" — 2 of the 16 accountant categories —
@@ -159,6 +165,19 @@ export const AMBIGUOUS_ACCOUNTANT_CATEGORIES: Record<string, PrimeDriverExpenseC
   'Warranty & Service Contracts': 'Repairs',
 };
 
+// MANUAL LINE CHOICE (owner decision 2026-11-24): app categories with no
+// real sheet line. In scope like the ambiguous ones (same "needs your
+// choice" list, same NULL = not counted yet), but with NO suggestion —
+// the user picks any of the 16 lines, Misc included.
+export const NEEDS_LINE_CATEGORIES: readonly string[] = ['Misc', 'Other'];
+
+// A category whose rows wait for the user's pick while accountant_category
+// is NULL (ambiguous allowlist + no-line categories).
+export function needsManualLine(category: string | null | undefined): boolean {
+  if (!category) return false;
+  return category in AMBIGUOUS_ACCOUNTANT_CATEGORIES || NEEDS_LINE_CATEGORIES.includes(category);
+}
+
 // Vehicle purchase/sale, registration, title and plate fees are capital/
 // asset items (Asset Register), never this report — excluded by
 // description too, since such a row can be filed under Misc/Other.
@@ -169,8 +188,9 @@ export function isVehicleAssetOrRegistration(description: string | null | undefi
   return isVehiclePurchaseOneOff(description ?? undefined) || VEHICLE_REGISTRATION_RE.test(description ?? '');
 }
 
-// IN SCOPE = a canonical category with an automatic mapping, or one on the
-// ambiguous allowlist — AND not a vehicle purchase/registration. Everything
+// IN SCOPE = a canonical category with an automatic mapping, or one waiting
+// for a manual line (needsManualLine: the ambiguous allowlist, Misc, Other)
+// — AND not a vehicle purchase/registration. Everything
 // else (Insurance, Permits, Software, Dispatch, Legal, Contract Labor,
 // Wages, Training, Association Dues, Lease, Meals, Advance Repayment,
 // Escrow, Truck/Trailer Payments, custom or missing categories) is never
@@ -181,7 +201,7 @@ export function isVehicleAssetOrRegistration(description: string | null | undefi
 export function isInAccountantReportScope(category: string | null | undefined, description: string | null | undefined): boolean {
   if (!category) return false;
   const mapped = CANONICAL_TO_ACCOUNTANT_CATEGORY[category] ?? null;
-  if (!mapped && !(category in AMBIGUOUS_ACCOUNTANT_CATEGORIES)) return false;
+  if (!mapped && !needsManualLine(category)) return false;
   return !isVehicleAssetOrRegistration(description);
 }
 
@@ -210,8 +230,7 @@ export function findRowsNeedingAccountantCategory<T extends NeedsCategoryRow>(ro
         isEligibleForAccountantReport(r.source) &&
         isOwnExpenseRow(r, settlementDocIds) &&
         !r.accountant_category &&
-        !!r.category &&
-        r.category in AMBIGUOUS_ACCOUNTANT_CATEGORIES &&
+        needsManualLine(r.category) &&
         isInAccountantReportScope(r.category, r.description)
     )
     .sort((a, b) => (b.ded_date ?? '').localeCompare(a.ded_date ?? ''));

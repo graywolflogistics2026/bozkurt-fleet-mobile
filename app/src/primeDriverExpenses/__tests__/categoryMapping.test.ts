@@ -17,6 +17,7 @@ import {
   type LumperReimbursementRow,
   type ExistingLumperDeductionRow,
   type LumperDeductionRow,
+  NEEDS_LINE_CATEGORIES,
 } from '@/src/primeDriverExpenses/categoryMapping';
 import { eligibleDeductionRowsForReport } from '@/src/stats/primeDriverExpenses';
 
@@ -111,8 +112,9 @@ describe('CANONICAL_TO_ACCOUNTANT_CATEGORY — the owner-approved mapping table,
       'Meals (per diem covered)': null,
       'Advance Repayment': null,
       'Escrow & Deposits': null,
-      Misc: 'Misc',
-      Other: 'Misc',
+      // MANUAL LINE CHOICE (owner decision 2026-11-24): no automatic Misc.
+      Misc: null,
+      Other: null,
     };
     expect(CANONICAL_TO_ACCOUNTANT_CATEGORY).toEqual(expected);
   });
@@ -469,10 +471,53 @@ describe('screen scope — ambiguous allowlist and permanently out-of-scope cate
         .filter(([, v]) => v !== null)
         .map(([k]) => k),
       ...Object.keys(AMBIGUOUS_ACCOUNTANT_CATEGORIES),
+      ...NEEDS_LINE_CATEGORIES,
     ]
       .filter((c) => (CANONICAL_CATEGORIES as readonly string[]).includes(c))
       .sort();
     expect(inScope).toEqual(expected);
+  });
+
+  // MANUAL LINE CHOICE (owner decision 2026-11-24, option (a)).
+  describe('Misc / Other: manual line choice, never automatic Misc', () => {
+    it('a NEW Misc or Other out-of-pocket row gets no line (null), from every write path', () => {
+      for (const c of ['Misc', 'Other']) {
+        expect(suggestAccountantCategory(c, 'import')).toBeNull();
+        expect(suggestAccountantCategory(c, 'manual')).toBeNull();
+      }
+      expect(NEEDS_LINE_CATEGORIES).toEqual(['Misc', 'Other']);
+    });
+    it('it waits in the needs list (no suggestion) and is not on the sheet until picked', () => {
+      const misc = row('m', 'Misc', 'import');
+      const other = row('o', 'Other', 'manual');
+      expect(findRowsNeedingAccountantCategory([misc, other]).map((r) => r.id).sort()).toEqual(['m', 'o']);
+      expect(AMBIGUOUS_ACCOUNTANT_CATEGORIES.Misc).toBeUndefined();
+      expect(eligibleDeductionRowsForReport([misc, other])).toEqual([]);
+    });
+    it('a picked line is used, Misc included as a deliberate choice', () => {
+      const picked = row('p', 'Misc', 'import', 'Office Supplies');
+      const keptMisc = row('k', 'Other', 'manual', 'Misc');
+      expect(findRowsNeedingAccountantCategory([picked, keptMisc])).toEqual([]);
+      expect(eligibleDeductionRowsForReport([picked, keptMisc]).map((r) => [r.id, r.category])).toEqual([
+        ['p', 'Office Supplies'],
+        ['k', 'Misc'],
+      ]);
+    });
+    it('an OLD row already on the Misc line keeps it (no backfill, no needs list)', () => {
+      const old = row('old', 'Misc', 'manual', 'Misc');
+      expect(findAccountantCategoryBackfillCandidates([old])).toEqual([]);
+      expect(findRowsNeedingAccountantCategory([old])).toEqual([]);
+      expect(eligibleDeductionRowsForReport([old]).map((r) => r.category)).toEqual(['Misc']);
+    });
+    it('Auto-fill never proposes Misc for a blank Misc/Other row', () => {
+      expect(findAccountantCategoryBackfillCandidates([row('b1', 'Misc'), row('b2', 'Other')])).toEqual([]);
+    });
+    it('settlement rows and settlement-document rows never appear in the needs list (origin rule)', () => {
+      const withheld = row('w', 'Misc', 'settlement');
+      const linked = { ...row('l', 'Misc', 'import'), settlement_id: 's1' };
+      const fromSettlementDoc = { ...row('d', 'Other', 'import'), document_id: 'doc-s' };
+      expect(findRowsNeedingAccountantCategory([withheld, linked, fromSettlementDoc], new Set(['doc-s']))).toEqual([]);
+    });
   });
 
   it('a settlement-withheld Tires row is never in the needs list (origin rule first)', () => {

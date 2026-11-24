@@ -1722,8 +1722,14 @@ var CANONICAL_TO_ACCOUNTANT_CATEGORY = {
   "Meals (per diem covered)": null,
   "Advance Repayment": null,
   "Escrow & Deposits": null,
-  Misc: "Misc",
-  Other: "Misc"
+  // MANUAL LINE CHOICE (owner decision 2026-11-24, option (a),
+  // docs/decisions/prime-sheet-manual-lines-proposal.md): Misc and Other
+  // have no real sheet line, so they are never put on the Misc line
+  // automatically any more — a NEW row waits in "Needs your choice"
+  // (NEEDS_LINE_CATEGORIES below). Rows that already carry a line keep it.
+  // Misc stays a line the user can pick deliberately.
+  Misc: null,
+  Other: null
 };
 function isEligibleForAccountantReport(source) {
   return source !== "settlement";
