@@ -15,12 +15,24 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { createContext, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
+// TAB BAR OWNS THE BOTTOM INSET (owner device report 2026-11-23, Android
+// 3-button nav): the phone tab bar already reserves the system nav-bar
+// inset below itself (bottom-tabs getTabBarHeight = 49 + insets.bottom).
+// Screens above it also asked SafeAreaView for the bottom edge, so a
+// second ~48 dp band (+ the 16 dp padding) of background sat between the
+// scroll content and the tab bar. (tabs)/_layout.tsx sets this to true
+// while the phone tab bar is shown; screens outside the tabs (sign-in,
+// ToS, onboarding, ...) and the wide layout (no tab bar) keep the edge.
+export const TabBarOwnsBottomInset = createContext(false);
+
 export function Screen({ children }: { children: React.ReactNode }) {
+  const tabBarOwnsBottom = useContext(TabBarOwnsBottomInset);
   return (
-    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.screen} edges={tabBarOwnsBottom ? ['top'] : ['top', 'bottom']}>
       <View style={styles.screenInner}>{children}</View>
     </SafeAreaView>
   );

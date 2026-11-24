@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { TruckSwitcher } from '@/src/components/TruckSwitcher';
 import { CenterImportButton } from '@/src/components/CenterImportButton';
+import { TabBarOwnsBottomInset } from '@/src/components/ui';
 import { ImportActionSheet } from '@/src/components/ImportActionSheet';
 import { MenuTabButton } from '@/src/components/MenuTabButton';
 import { MenuSheet } from '@/src/components/MenuSheet';
@@ -271,7 +272,9 @@ export default function TabsLayout() {
 
   const withMenuSheet = (
     <>
-      {tabs}
+      {/* Phone only: the tab bar reserves the bottom system inset, so
+          Screen must not add it again (ui.tsx TabBarOwnsBottomInset). */}
+      <TabBarOwnsBottomInset.Provider value={true}>{tabs}</TabBarOwnsBottomInset.Provider>
       <MenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} bottomInset={insets.bottom} />
       <ImportActionSheet
         visible={actionSheetOpen}
