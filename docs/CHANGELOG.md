@@ -10,6 +10,16 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Phone-testing fixes: cards, colours, Loads X, Export on top, menu 18 rows (owner)
+
+- `RelatedScreenCard`: one shared look (accent border, 8% accent tint, 22% pressed, 16 pt bold title, accent arrow); Settings > Tools uses it too. `FeaturedScreenCard` stays bigger.
+- Settlements list: negative week red (border, amount, existing label); others net green, "Gross $X" orange.
+- Loads: the delete X sits top-right of each load, 44 dp target, same confirmation. Other lists with the old X placement unchanged.
+- Accountant Package: Year/Month/Scope/Format pickers and Export moved to the top under the featured card; banner, fleet label, subtitle follow.
+- Documents: "Renewals & Expiry Dates" card removed (menu row only); key `documentsArchive.renewalsCard` removed.
+- Assets & Equipment (Asset Register) leaves the menu: a card on Capital Account next to Loans (`nav.assetsEquipment`, new `capitalAccount.assetsCard`); `MENU_LABEL_OVERRIDES` removed. Menu 18 rows.
+- Drivers: not changed (no detail view exists; options reported to the owner). No number or route changed. Ships via `eas update`.
+
 ## 2026-11-24 — Accountant Package: featured "For Prime Inc Drivers" card (owner)
 
 The card now sits first under the title, as `FeaturedScreenCard` (`RelatedScreenCard.tsx`): ~2x height (min 140), 20 pt bold title, "Prime Inc" badge, accent border on an accent-tinted background, "Open →". Description rewritten from what the screen does (monthly out-of-pocket log in the accountant's format, PDF/Excel export); keys `accountantPackage.primeDriversCard` (changed), `primeDriversBadge`, `primeDriversOpen` (new), 7 locales. Same route; other cards unchanged; style/text only. Ships via `eas update`.

@@ -18,6 +18,14 @@ Follow-up (owner 2026-11-23, after Stage 2), CURRENT state:
   Operating P&L (`?from=operating-pnl`), otherwise back goes Home as
   before. Final menu: 19 rows; Overview = Operating P&L, Truck Health, AI
   Coach.
+- 2026-11-24 (owner, after phone testing): Assets & Equipment (the Asset
+  Register screen) is no longer a menu row: a card on Capital Account next
+  to Loans, titled `nav.assetsEquipment` (`MENU_LABEL_OVERRIDES`
+  removed); its Equipment card stays. The "Renewals & Expiry Dates" card on
+  Documents is removed (that screen is only a menu row now). Every parent
+  card shares one accent look (`RelatedScreenCard`). CURRENT final menu:
+  18 rows; Business = Trucks, Drivers, Capital Account, Documents, Renewals
+  & Expiry Dates.
 - Scorecard is a third card on Operating P&L (after Cash Flow and Profit
   Analysis). Still hidden from the phone menu, still on the Reports tab,
   still linked from Truck Comparison. The wide-sidebar-only Scorecard row
