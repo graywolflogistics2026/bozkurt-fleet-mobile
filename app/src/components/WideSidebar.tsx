@@ -36,7 +36,7 @@ import { ScrollView, Text, View, Pressable } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
-import { NAV_GROUPS, isActiveRoute, sidebarItems, type NavItem, type NavGroup } from '@/src/navigation/navRegistry';
+import { NAV_GROUPS, isActiveRoute, sidebarSections, type NavItem, type NavGroup } from '@/src/navigation/navRegistry';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { BRAND_NAME } from '@/src/brand';
 import { BrandWordmark } from '@/src/components/BrandWordmark';
@@ -64,6 +64,38 @@ export function WideSidebar() {
   const personLabel = profile?.owner_name?.trim() || session?.user?.email || '';
   const initial = (personLabel || companyLabel).trim().charAt(0).toUpperCase() || '?';
 
+  const sidebar = sidebarSections();
+  const renderRow = (item: NavItem) => {
+    const active = isActiveRoute(pathname, item.href as string);
+    return (
+      <Pressable
+        key={item.href as string}
+        onPress={() => router.push(item.href)}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.sm,
+          backgroundColor: active ? colors.card2 : pressed ? colors.card : 'transparent',
+          borderStartWidth: 3,
+          borderStartColor: active ? colors.accent : 'transparent',
+        })}
+      >
+        <Text style={{ fontSize: 15, marginEnd: spacing.sm }}>{item.emoji}</Text>
+        <Text
+          style={{
+            color: active ? colors.text : colors.muted,
+            fontSize: typography.size.sm,
+            fontWeight: active ? '700' : '500',
+          }}
+          numberOfLines={1}
+        >
+          {t(item.labelKey)}
+        </Text>
+      </Pressable>
+    );
+  };
+
   return (
     <View
       style={{
@@ -83,38 +115,29 @@ export function WideSidebar() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingVertical: spacing.sm }} showsVerticalScrollIndicator={false}>
-        {/* FLAT MENU (owner 2026-11-23): Home on top, then the phone
-            menu's rows in the same order, no headings. */}
-        {sidebarItems().map((item) => {
-          const active = isActiveRoute(pathname, item.href as string);
-          return (
-            <Pressable
-              key={item.href as string}
-              onPress={() => router.push(item.href)}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
+        {/* MENU SECTIONS (owner 2026-11-23, Stage 2): Home on top without
+            a heading, then the phone menu's sections with their headings
+            (plus the sidebar-only rows, e.g. Scorecard). */}
+        {sidebar.home && renderRow(sidebar.home)}
+        {sidebar.sections.map((section) => (
+          <View key={section.titleKey} style={{ marginBottom: spacing.sm }}>
+            <Text
+              style={{
+                color: colors.muted,
+                fontSize: typography.size.xs,
+                fontWeight: '700',
+                letterSpacing: 0.5,
                 paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.sm,
-                backgroundColor: active ? colors.card2 : pressed ? colors.card : 'transparent',
-                borderStartWidth: 3,
-                borderStartColor: active ? colors.accent : 'transparent',
-              })}
+                paddingTop: spacing.md,
+                paddingBottom: spacing.xs,
+                textTransform: 'uppercase',
+              }}
             >
-              <Text style={{ fontSize: 15, marginEnd: spacing.sm }}>{item.emoji}</Text>
-              <Text
-                style={{
-                  color: active ? colors.text : colors.muted,
-                  fontSize: typography.size.sm,
-                  fontWeight: active ? '700' : '500',
-                }}
-                numberOfLines={1}
-              >
-                {t(item.labelKey)}
-              </Text>
-            </Pressable>
-          );
-        })}
+              {t(section.titleKey)}
+            </Text>
+            {section.items.map((item) => renderRow(item))}
+          </View>
+        ))}
       </ScrollView>
 
       <View

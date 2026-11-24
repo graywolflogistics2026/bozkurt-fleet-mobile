@@ -5,9 +5,9 @@
 // here is reached the same way it always was, just through a different
 // front door.
 //
-// FLAT MENU (owner decision 2026-11-23, docs/decisions/
-// menu-simplification-proposal.md): one list, no headings, bigger rows,
-// most-used first, Settings last (navRegistry.ts menuItems()). A gear next
+// MENU (owner decisions 2026-11-23, docs/decisions/
+// menu-simplification-proposal.md): section headings (Stage 2 brought them
+// back), bigger rows, Settings last (navRegistry.ts menuSections()). A gear next
 // to the X opens Settings too. The bottom padding is the safe-area bottom
 // inset, read by the caller OUTSIDE this Modal (inside an Android Modal the
 // inset can read 0), plus a fixed extra, so the last row never sits near or
@@ -15,7 +15,7 @@
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { isActiveRoute, menuItems } from '@/src/navigation/navRegistry';
+import { isActiveRoute, menuSections } from '@/src/navigation/navRegistry';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 // Extra space below the last row, on top of the safe-area inset.
@@ -61,22 +61,27 @@ export function MenuSheet({ visible, onClose, bottomInset = 0 }: { visible: bool
         </View>
 
         <ScrollView contentContainerStyle={{ paddingBottom: bottomInset + BOTTOM_EXTRA }} showsVerticalScrollIndicator={false}>
-          {menuItems().map((item) => {
-            const active = isActiveRoute(pathname, item.href as string);
-            return (
-              <Pressable
-                key={item.href as string}
-                onPress={() => {
-                  onClose();
-                  router.push(item.href);
-                }}
-                style={({ pressed }) => [styles.row, active && styles.rowActive, pressed && styles.rowPressed]}
-              >
-                <Text style={styles.rowEmoji}>{item.emoji}</Text>
-                <Text style={[styles.rowLabel, active && styles.rowLabelActive]}>{t(item.labelKey)}</Text>
-              </Pressable>
-            );
-          })}
+          {menuSections().map((section) => (
+            <View key={section.titleKey}>
+              <Text style={styles.sectionLabel}>{t(section.titleKey)}</Text>
+              {section.items.map((item) => {
+                const active = isActiveRoute(pathname, item.href as string);
+                return (
+                  <Pressable
+                    key={item.href as string}
+                    onPress={() => {
+                      onClose();
+                      router.push(item.href);
+                    }}
+                    style={({ pressed }) => [styles.row, active && styles.rowActive, pressed && styles.rowPressed]}
+                  >
+                    <Text style={styles.rowEmoji}>{item.emoji}</Text>
+                    <Text style={[styles.rowLabel, active && styles.rowLabelActive]}>{t(item.labelKey)}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
         </ScrollView>
       </View>
     </Modal>
@@ -139,6 +144,16 @@ const styles = {
   closeGlyph: {
     color: colors.muted,
     fontSize: 22,
+  },
+  sectionLabel: {
+    color: colors.muted,
+    fontSize: typography.size.xs,
+    fontWeight: '700' as const,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
   // Bigger rows (owner 2026-11-23): at least 52 tall, 16 pt label.
   row: {
