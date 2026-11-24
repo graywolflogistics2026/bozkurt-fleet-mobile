@@ -587,6 +587,17 @@ export default function Settings() {
           <SecondaryButton title={t('settings.importLegacyButton')} onPress={() => router.push('/(tabs)/more/import-legacy')} />
         </Card>
 
+        {/* TOOLS (owner 2026-11-23, menu Stage 2): Category Learning and
+            Invite & Earn left the Menu and open from here. Navigation only
+            (router.push to their unchanged routes; back returns here). */}
+        <Card>
+          <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>{t('settings.toolsTitle')}</Text>
+          <MutedText>{t('settings.categoryLearningNote')}</MutedText>
+          <SecondaryButton title={`🧠 ${t('nav.categoryLearning')}`} onPress={() => router.push('/(tabs)/more/category-learning' as Href)} />
+          <MutedText style={{ marginTop: spacing.sm }}>{t('settings.referralNote')}</MutedText>
+          <SecondaryButton title={`🎁 ${t('nav.referral')}`} onPress={() => router.push('/(tabs)/more/referral' as Href)} />
+        </Card>
+
         {/* USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) —
             "a plain setting the user can turn off." */}
         <Card>

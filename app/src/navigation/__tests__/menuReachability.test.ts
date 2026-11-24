@@ -111,6 +111,35 @@ describe('the menu (owner decisions 2026-11-23)', () => {
     expect(read('app/(tabs)/more/_layout.tsx')).toContain("name=\"asset-register\" options={{ title: t('nav.assetRegister') }}");
   });
 
+  test('final menu (owner 2026-11-23): 19 rows in 6 sections, exactly', () => {
+    expect(menuSections().map((s) => [s.titleKey, s.items.map((i) => i.href as string)])).toEqual([
+      ['sidebar.sections.revenue', ['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements']],
+      ['sidebar.sections.expenses', ['/(tabs)/more/fuel', '/(tabs)/more/maintenance', '/(tabs)/more/tolls', '/(tabs)/deductions']],
+      ['sidebar.sections.overview', ['/(tabs)/transactions', '/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode']],
+      ['sidebar.sections.business', ['/(tabs)/more/trucks', '/(tabs)/more/drivers', '/(tabs)/more/asset-register', '/(tabs)/more/capital-account', '/(tabs)/more/documents']],
+      ['sidebar.sections.taxAccounting', ['/(tabs)/more/accountant-package', '/(tabs)/more/tax-estimator']],
+      ['sidebar.sections.system', ['/(tabs)/more/settings']],
+    ]);
+    expect(menuItems()).toHaveLength(19);
+  });
+
+  test('every screen that left the menu opens from its parent card or Settings', () => {
+    expect(Object.fromEntries(Object.entries(MENU_REACHED_FROM).filter(([, r]) => r.kind === 'parent' || r.kind === 'settings').map(([h, r]) => [h, r.kind === 'parent' ? r.parent : 'settings']))).toEqual({
+      '/(tabs)/more/reimbursements': '/(tabs)/more/other-income',
+      '/(tabs)/more/other-income': '/(tabs)/more/tax-estimator',
+      '/(tabs)/more/prime-driver-expenses': '/(tabs)/more/accountant-package',
+      '/(tabs)/more/truck-comparison': '/(tabs)/more/trucks',
+      '/(tabs)/more/equipment': '/(tabs)/more/asset-register',
+      '/(tabs)/more/compliance': '/(tabs)/more/documents',
+      '/(tabs)/more/loans': '/(tabs)/more/capital-account',
+      '/(tabs)/more/cash-flow': '/(tabs)/more/operating-pnl',
+      '/(tabs)/more/profit-analysis': '/(tabs)/more/operating-pnl',
+      '/(tabs)/more/data-cleanup': '/(tabs)/more/category-learning',
+      '/(tabs)/more/category-learning': 'settings',
+      '/(tabs)/more/referral': 'settings',
+    });
+  });
+
   test('the daily screens are separate rows', () => {
     for (const h of ['/(tabs)/more/loads', '/(tabs)/more/settlements', '/(tabs)/more/fuel', '/(tabs)/more/maintenance', '/(tabs)/more/tolls', '/(tabs)/deductions']) {
       expect(menu).toContain(h);
