@@ -6065,6 +6065,82 @@ where source = 'settlement' and date >= '2026-01-01';
 - [x] 88 PART 3 verified
 - [x] 88 follow-up: team_week = true on 11/06 and 11/13 (owner)
 
+## 89. AI CONSENT ON PROFILES (owner decision 2026-11-23, App Store 5.1.2(i)) — NOT YET APPLIED
+
+The owner approved `docs/decisions/ai-consent-proposal.md`: one consent for all AI features, asked once before any user data goes to Anthropic. Two nullable `profiles` columns hold the choice:
+
+- `ai_consent_at timestamptz`:
+  - set to the time of "Allow";
+  - null means no consent: never asked, "Not now", or withdrawn in Settings > Privacy.
+- `ai_consent_version text`: the version of the consent text the user last answered, whether they chose Allow or Not now.
+  - The app asks again when it is not the app's current version (`AI_CONSENT_VERSION`, `app/src/ai/aiConsent.ts`).
+  - Null means never asked, which covers every existing user, so each existing user sees the screen once.
+
+Consent is granted only when `ai_consent_at` is set AND `ai_consent_version` is the current version.
+
+**Reset All Data:** both columns are **KEPT** (invariant #24 bucket, same as `tos_accepted_at`/`tos_version`). `reset-data` names its CLEARED fields explicitly, so an unlisted column is kept and no Edge Function change is needed.
+
+**Delete Account:** both columns are removed with the `profiles` row.
+
+**Ship order** (see the CHANGELOG entry):
+
+1. Run this SQL.
+2. Publish the app with `eas update` and wait until phones run it.
+3. Redeploy `ai-advisor` and `ai-import`. Their new consent check reads `ai_consent_at`, so a server deployed before this SQL refuses every AI call.
+
+**Before the SQL runs, the app degrades gracefully:**
+
+- `app/src/context/AuthContext.tsx` reads these two columns in their own small select.
+- A missing-column error means "consent not available yet": no gate and AI works as before.
+- That is safe only because the server check is not deployed yet.
+
+Mirrored in `pending_89.sql`.
+
+PART 1 — PREVIEW (read-only). Expected: no rows (the columns do not exist yet).
+
+```sql
+select column_name, data_type
+from information_schema.columns
+where table_schema = 'public' and table_name = 'profiles'
+  and column_name in ('ai_consent_at', 'ai_consent_version');
+```
+
+PART 2 — APPLY (idempotent; adds two nullable columns, changes no existing value):
+
+```sql
+alter table public.profiles add column if not exists ai_consent_at timestamptz;
+alter table public.profiles add column if not exists ai_consent_version text;
+
+comment on column public.profiles.ai_consent_at is
+  'AI consent (App Store 5.1.2(i), §89): when the user allowed sending data to Anthropic; null = not allowed (never asked, Not now, or withdrawn).';
+comment on column public.profiles.ai_consent_version is
+  'AI consent (§89): version of the consent text the user last answered (Allow or Not now); a different app version asks again.';
+```
+
+PART 3 — VERIFY (read-only). Expected:
+
+- 2 rows: `ai_consent_at` timestamp with time zone, `ai_consent_version` text.
+- `asked = 0` and `allowed = 0` until users answer in the app.
+
+```sql
+select column_name, data_type
+from information_schema.columns
+where table_schema = 'public' and table_name = 'profiles'
+  and column_name in ('ai_consent_at', 'ai_consent_version')
+order by column_name;
+
+select count(*) filter (where ai_consent_version is not null) as asked,
+       count(*) filter (where ai_consent_at is not null) as allowed
+from public.profiles;
+```
+
+- [ ] 89 PART 1 preview checked
+- [ ] 89 PART 2 run
+- [ ] 89 PART 3 verified
+- [ ] 89 eas update published and on the phones
+- [ ] 89 ai-advisor redeployed (consent check + no owner/company name)
+- [ ] 89 ai-import redeployed (consent check; through `scripts/deploy-ai-import.ps1`)
+
 ## Also still open (not part of any pass above)
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —
