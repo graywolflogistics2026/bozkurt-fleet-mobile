@@ -605,7 +605,7 @@ export default function Settlements() {
           renderRows={(monthRows) =>
             monthRows.map((x) => {
               return (
-                <TappableCard key={x.id} onPress={() => setSelected(x)}>
+                <TappableCard key={x.id} onPress={() => setSelected(x)} style={x.net < 0 ? { borderColor: colors.red } : undefined}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <View>
                       <Text style={styles.desc}>{t('settlementsScreen.weekOf', { date: date(x.week_ending) })}</Text>
@@ -633,11 +633,16 @@ export default function Settlements() {
                           BACK to the carrier — shown in red with an
                           explicit label rather than looking like an
                           ordinary (smaller) payout. */}
-                      <Text style={[styles.amount, x.net < 0 && { color: colors.red }]}>{money(x.net)}</Text>
+                      {/* LIST COLOURS (owner 2026-11-24): a negative week is
+                          red (border, amount, label); every other week shows
+                          net in green and the "Gross $X" line in orange.
+                          Labels and signs are unchanged, so colour is never
+                          the only cue. */}
+                      <Text style={[styles.amount, { color: x.net < 0 ? colors.red : colors.green }]}>{money(x.net)}</Text>
                       {x.net < 0 ? (
                         <MutedText style={{ color: colors.red }}>{t('settlementsScreen.oweCarrier')}</MutedText>
                       ) : (
-                        <MutedText>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
+                        <MutedText style={{ color: colors.orange }}>{t('settlementsScreen.grossLabel', { amount: money(x.gross) })}</MutedText>
                       )}
                     </View>
                   </View>
