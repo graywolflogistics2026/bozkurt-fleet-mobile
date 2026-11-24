@@ -8,6 +8,7 @@ import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { RowDeleteButton } from '@/src/components/RowDeleteButton';
 import { colors, spacing, typography } from '@/src/theme';
 import type { Reimbursement } from '@/src/types/db';
 import { todayDateOnly } from '@/src/lib/dateOnly';
@@ -41,10 +42,9 @@ function ReimbRow({ x, onDelete }: { x: Reimbursement; onDelete: () => void }) {
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.amount ?? 0)}</Text>
-        <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: spacing.xs }}>
-          <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
-        </Pressable>
       </View>
+      {/* Delete mark: top-right corner, 44 dp (owner 2026-11-24). */}
+      <RowDeleteButton onPress={onDelete} />
     </View>
   );
 }
