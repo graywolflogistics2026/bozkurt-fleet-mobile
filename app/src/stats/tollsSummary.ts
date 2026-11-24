@@ -122,11 +122,14 @@ export function buildTollsSummary(input: {
     });
 
   // The toll/fee line of each settlement that has one (the largest when
-  // there are several): its tolls rows are its breakdown.
+  // there are several): its tolls rows are its breakdown. Which
+  // settlements have one is the shared rule (tollLineSettlementIds), the
+  // same one the profit core uses.
+  const covered = tollLineSettlementIds(input.deductions);
   const coveringLine = new Map<string, TollEntry>();
   for (const e of dedEntries) {
     const sid = e.settlementId;
-    if (!sid || e.kind !== 'tolls') continue;
+    if (!sid || !covered.has(sid) || e.kind !== 'tolls') continue;
     const prev = coveringLine.get(sid);
     if (!prev || e.amount > prev.amount) coveringLine.set(sid, e);
   }
@@ -189,6 +192,45 @@ export type TollRuleToll = {
   source?: string | null;
 };
 export type TollRuleSettlement = { id?: string | null; week_ending?: string | null; carrier?: string | null };
+
+// THE SHARED COVERAGE RULE (owner 2026-11-24, docs/decisions/
+// toll-rule-profit-core-proposal.md). A deduction is a TOLL LINE when it is
+// in "Tolls & Scales", belongs to a settlement, and is of the toll/fee kind
+// (not a scale ticket). Its settlement's tolls rows are that line's
+// itemized breakdown and are never counted on top of it.
+// Coverage is a fact about the SETTLEMENT, never about a date: build it
+// from the FULL deductions list, before any date window or truck scope (a
+// line dated on its week ending covers plazas dated days earlier).
+// `covers` narrows which lines may cover (the profit core passes
+// reducesTrueProfit, owner decision T6(b)); the Tolls & Fees screen uses
+// every toll line.
+export function isTollLine(d: TollRuleDeduction): boolean {
+  if (!d.settlement_id || !isTollsScalesCategory(d.category)) return false;
+  const description = (d.description ?? '').trim() || TOLLS_SCALES_CATEGORY;
+  return tollKindOf(`${d.code ?? ''} ${description}`) === 'tolls';
+}
+
+export function tollLineSettlementIds<D extends TollRuleDeduction>(
+  deductions: ReadonlyArray<D>,
+  covers: (d: D) => boolean = () => true
+): Set<string> {
+  const ids = new Set<string>();
+  for (const d of deductions) if (isTollLine(d) && covers(d)) ids.add(d.settlement_id as string);
+  return ids;
+}
+
+// The tolls rows that count: every row except the breakdown rows of a
+// settlement with a toll line. Safe to run twice, or again on a filtered
+// subset: a row left after a pass over the full list has no covering line
+// anywhere, so no subset can cover it.
+export function withoutCoveredTolls<T extends { settlement_id?: string | null }, D extends TollRuleDeduction>(
+  tolls: ReadonlyArray<T>,
+  deductions: ReadonlyArray<D>,
+  covers?: (d: D) => boolean
+): T[] {
+  const covered = tollLineSettlementIds(deductions, covers);
+  return tolls.filter((t) => !t.settlement_id || !covered.has(t.settlement_id));
+}
 
 export function tollRuleByIndex(
   deductions: ReadonlyArray<TollRuleDeduction>,

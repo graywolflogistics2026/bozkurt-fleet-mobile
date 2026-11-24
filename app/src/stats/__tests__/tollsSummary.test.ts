@@ -1,7 +1,7 @@
 // TOLLS & FEES SCREEN (owner 2026-11-13): the owner's real rows give
 // tolls & fees 709.47, scales 118.00, total 827.47 in every period that
 // holds them; the itemized tolls rows never count on top of their line.
-import { buildTollsSummary, tollKindOf } from '@/src/stats/tollsSummary';
+import { buildTollsSummary, isTollLine, tollKindOf, tollLineSettlementIds, withoutCoveredTolls } from '@/src/stats/tollsSummary';
 import { NOW, PRIME, ded, deductions, settlements, toll, tolls } from './fixtures/ownerTolls';
 
 const build = (over: Partial<Parameters<typeof buildTollsSummary>[0]> = {}) =>
@@ -87,3 +87,20 @@ test('the scales rule', () => {
 function r(x: number) {
   return Math.round(x * 100) / 100;
 }
+
+describe('shared coverage rule (owner 2026-11-24, toll-rule-profit-core-proposal.md)', () => {
+  test('withoutCoveredTolls keeps exactly the tolls rows the screen lists (owner data: none)', () => {
+    const s = buildTollsSummary({ deductions, tolls, settlements, period: 'all', now: NOW });
+    const listed = new Set(s.entries.filter((e) => e.table === 'tolls').map((e) => e.id));
+    expect(withoutCoveredTolls(tolls, deductions).map((t) => t.id)).toEqual(tolls.filter((t) => listed.has(t.id)).map((t) => t.id));
+    expect(withoutCoveredTolls(tolls, deductions)).toEqual([]);
+    expect([...tollLineSettlementIds(deductions)].sort()).toEqual(['s0807', 's0821', 's0904', 's0918', 's1002', 's1016']);
+  });
+
+  test('a scales-only line and a line without a settlement never cover', () => {
+    expect(isTollLine({ category: 'Tolls & Scales', description: 'WA ADV FOR WEIGHT TICKETS', settlement_id: 's1' })).toBe(false);
+    expect(isTollLine({ category: 'Tolls & Scales', description: 'EZ FAST LN', settlement_id: null })).toBe(false);
+    expect(isTollLine({ category: 'Other', description: 'EZ PASS REFILL', settlement_id: 's1' })).toBe(false);
+    expect(isTollLine({ category: 'Tolls & Scales', description: 'PW DRVWYZE WGH STN', settlement_id: 's1' })).toBe(true);
+  });
+});
