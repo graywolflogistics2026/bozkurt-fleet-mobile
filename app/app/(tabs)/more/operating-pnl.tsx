@@ -11,6 +11,7 @@ import { buildProfitLoss } from '@/src/stats/profitLoss';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { colors, spacing, typography } from '@/src/theme';
 
 type CarrierYtd = { carrier?: string; ytdRevenue?: number; ytdExpenses?: number; ytdNet?: number; weeksInService?: number };
@@ -73,6 +74,21 @@ export default function OperatingPnl() {
       >
         <ScreenTitle>{t('operatingPnl.title')}</ScreenTitle>
         <FleetScopeLabel variant="fleetOnly" />
+
+        {/* Cash Flow and Profit Analysis left the Menu (owner 2026-11-23):
+            opened from here. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/cash-flow'
+          emoji='🏦'
+          title={t('nav.cashFlow')}
+          description={t('operatingPnl.cashFlowCard')}
+        />
+        <RelatedScreenCard
+          href='/(tabs)/more/profit-analysis'
+          emoji='📈'
+          title={t('nav.profitAnalysis')}
+          description={t('operatingPnl.profitAnalysisCard')}
+        />
 
         {loading ? (
           <Card>

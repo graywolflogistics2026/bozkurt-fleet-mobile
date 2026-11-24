@@ -200,7 +200,7 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
   },
   {
     titleKey: 'sidebar.sections.overview',
-    hrefs: ['/(tabs)/transactions', '/(tabs)/more/operating-pnl', '/(tabs)/more/cash-flow', '/(tabs)/more/profit-analysis', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode'],
+    hrefs: ['/(tabs)/transactions', '/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode'],
   },
   {
     titleKey: 'sidebar.sections.business',
@@ -262,6 +262,10 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/compliance': { kind: 'parent', parent: '/(tabs)/more/documents' },
   // Owner 2026-11-23: a card on Capital Account.
   '/(tabs)/more/loans': { kind: 'parent', parent: '/(tabs)/more/capital-account' },
+  // Owner 2026-11-23: a card on Operating P&L.
+  '/(tabs)/more/cash-flow': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
+  // Owner 2026-11-23: a card on Operating P&L.
+  '/(tabs)/more/profit-analysis': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
   '/(tabs)/more/credit-cards': { kind: 'featureFlag' },
   '/(tabs)/more/bank-statements': { kind: 'featureFlag' },
 };
@@ -299,7 +303,9 @@ export function menuItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
 // (owner 2026-11-23: 768px+ has no Reports tab, so Scorecard is a sidebar
 // row; it stays hidden in the phone menu).
 export const SIDEBAR_ONLY_AFTER: Readonly<Record<string, string>> = {
-  '/(tabs)/more/scorecard': '/(tabs)/more/profit-analysis',
+  // Anchor moved from Profit Analysis to Operating P&L when Profit Analysis
+  // became a card there (owner 2026-11-23, Stage 2).
+  '/(tabs)/more/scorecard': '/(tabs)/more/operating-pnl',
 };
 
 // The wide sidebar (768px+, no tab bar): Home on top (no heading), then

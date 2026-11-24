@@ -1589,6 +1589,8 @@
   },
   "operatingPnl": {
     "title": "الأرباح والخسائر التشغيلية",
+    "cashFlowCard": "Money in and out by week, and a 30-day forecast.",
+    "profitAnalysisCard": "Where your profit comes from and which costs weigh most.",
     "revenue": "الإيرادات",
     "expenses": "المصروفات",
     "netIncome": "صافي الدخل",

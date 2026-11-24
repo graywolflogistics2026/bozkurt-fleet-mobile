@@ -1487,6 +1487,8 @@
   },
   "operatingPnl": {
     "title": "Operating P&L",
+    "cashFlowCard": "Money in and out by week, and a 30-day forecast.",
+    "profitAnalysisCard": "Where your profit comes from and which costs weigh most.",
     "revenue": "Revenue",
     "expenses": "Expenses",
     "netIncome": "Net Income",

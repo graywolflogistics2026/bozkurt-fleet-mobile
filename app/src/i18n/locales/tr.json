@@ -1589,6 +1589,8 @@
   },
   "operatingPnl": {
     "title": "İşletme P&L",
+    "cashFlowCard": "Haftalık giren ve çıkan para, ve 30 günlük tahmin.",
+    "profitAnalysisCard": "Kârınızın nereden geldiği ve en çok hangi giderlerin ağır bastığı.",
     "revenue": "Gelir",
     "expenses": "Giderler",
     "netIncome": "Net Gelir",
