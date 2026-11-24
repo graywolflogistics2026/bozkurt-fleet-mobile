@@ -2235,7 +2235,9 @@
   "accountantPackage": {
     "title": "Accountant Package",
     "subtitle": "Out-of-pocket expenses, ready to hand to your CPA — pick a year, month, and scope below.",
-    "primeDriversCard": "Monthly out-of-pocket expense sheet for Prime Inc drivers.",
+    "primeDriversCard": "Monthly out-of-pocket expenses in your accountant's format. Export to PDF or Excel.",
+    "primeDriversBadge": "Prime Inc",
+    "primeDriversOpen": "Open",
     "scheduleCTitle": "Schedule C Rollup",
     "noExpenses": "No expenses recorded yet.",
     "totalExpenses": "Total",

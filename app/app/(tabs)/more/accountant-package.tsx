@@ -71,7 +71,7 @@ import {
   SheetTitle,
 } from '@/src/components/ui';
 import { EstimateBanner } from '@/src/components/EstimateBanner';
-import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
+import { FeaturedScreenCard } from '@/src/components/RelatedScreenCard';
 import { estimateNoticeStrings } from '@/src/legal/estimateNotice';
 import { BRAND_NAME } from '@/src/brand';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -737,18 +737,21 @@ export default function AccountantPackage() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         <ScreenTitle>{headerLine}</ScreenTitle>
-        <EstimateBanner />
-        <FleetScopeLabel variant="fleetOnly" />
-        <MutedText>{t('accountantPackage.subtitle')}</MutedText>
-
-        {/* For Prime Inc Drivers left the Menu (owner 2026-11-23): opened
-            from here; shown to every user, as the menu row was. */}
-        <RelatedScreenCard
+        {/* For Prime Inc Drivers (owner 2026-11-23 card, FEATURED 2026-11-24):
+            the very first thing on the screen so a Prime Inc driver sees it
+            without scrolling; shown to every user, as the menu row was.
+            Navigation only (router.push; back returns here). */}
+        <FeaturedScreenCard
           href='/(tabs)/more/prime-driver-expenses'
           emoji='🧳'
           title={t('nav.primeDriverExpenses')}
           description={t('accountantPackage.primeDriversCard')}
+          badge={t('accountantPackage.primeDriversBadge')}
+          openLabel={t('accountantPackage.primeDriversOpen')}
         />
+        <EstimateBanner />
+        <FleetScopeLabel variant="fleetOnly" />
+        <MutedText>{t('accountantPackage.subtitle')}</MutedText>
 
         <Text style={styles.sectionTitle}>{t('accountantPackage.yearLabel')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>

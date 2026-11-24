@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Accountant Package: featured "For Prime Inc Drivers" card (owner)
+
+The card now sits first under the title, as `FeaturedScreenCard` (`RelatedScreenCard.tsx`): ~2x height (min 140), 20 pt bold title, "Prime Inc" badge, accent border on an accent-tinted background, "Open →". Description rewritten from what the screen does (monthly out-of-pocket log in the accountant's format, PDF/Excel export); keys `accountantPackage.primeDriversCard` (changed), `primeDriversBadge`, `primeDriversOpen` (new), 7 locales. Same route; other cards unchanged; style/text only. Ships via `eas update`.
+
 ## 2026-11-24 — Transactions: a card on Operating P&L, no longer a menu row (owner)
 
 Menu is 19 rows (Overview = Operating P&L, Truck Health, AI Coach). Operating P&L's fourth card opens the unchanged hidden tab route `/(tabs)/transactions` with `from=operating-pnl`; `transactions.tsx` `useBackToParent()` then sends hardware back and a header arrow to Operating P&L, and clears the param on blur, so other opens (Home's daily tip) keep the Home fallback. `RelatedScreenCard` gained optional `params`. Key `operatingPnl.transactionsCard` (7 locales). No number changed. Ships via `eas update`.

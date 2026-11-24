@@ -2235,7 +2235,9 @@
   "accountantPackage": {
     "title": "Пакет для бухгалтера",
     "subtitle": "Расходы из своего кармана, готовые для передачи вашему CPA — выберите год, месяц и область ниже.",
-    "primeDriversCard": "Ежемесячный лист личных расходов для водителей Prime Inc.",
+    "primeDriversCard": "Личные расходы за месяц в формате бухгалтера. Выгрузка в PDF или Excel.",
+    "primeDriversBadge": "Prime Inc",
+    "primeDriversOpen": "Открыть",
     "scheduleCTitle": "Разбивка Schedule C",
     "noExpenses": "Расходы ещё не записаны.",
     "totalExpenses": "Итого",
