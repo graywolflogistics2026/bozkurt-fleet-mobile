@@ -2186,6 +2186,7 @@
   "categoryLearning": {
     "title": "تعلّم الفئات",
     "subtitle": "قواعد مستفادة من تصحيحاتك اليدوية للفئات.",
+    "dataCleanupCard": "Review leftover rows from old imports. Nothing changes until you confirm there.",
     "notTrainedNote": "هذا يُعدّل فقط التلميحات المُرسلة مع عمليات الاستيراد المستقبلية الخاصة بك — نموذج الذكاء الاصطناعي نفسه لا يتم تدريبه أو ضبطه أبدًا على بياناتك.",
     "empty": "لا توجد قواعد مُتعلَّمة بعد — تصحيح فئة أحد الخصومات يُعلّم قاعدة تلقائيًا.",
     "hitCount": "تم التصحيح {{count}} مرة (مرات)",

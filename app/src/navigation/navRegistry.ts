@@ -218,7 +218,7 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
   },
   {
     titleKey: 'sidebar.sections.system',
-    hrefs: ['/(tabs)/more/category-learning', '/(tabs)/more/data-cleanup', '/(tabs)/more/referral', '/(tabs)/more/settings'],
+    hrefs: ['/(tabs)/more/category-learning', '/(tabs)/more/referral', '/(tabs)/more/settings'],
   },
 ];
 
@@ -266,6 +266,8 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/cash-flow': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
   // Owner 2026-11-23: a card on Operating P&L.
   '/(tabs)/more/profit-analysis': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
+  // Owner 2026-11-23: a card on Category Learning (navigation only).
+  '/(tabs)/more/data-cleanup': { kind: 'parent', parent: '/(tabs)/more/category-learning' },
   '/(tabs)/more/credit-cards': { kind: 'featureFlag' },
   '/(tabs)/more/bank-statements': { kind: 'featureFlag' },
 };

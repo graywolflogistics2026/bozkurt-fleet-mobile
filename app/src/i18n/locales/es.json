@@ -2186,6 +2186,7 @@
   "categoryLearning": {
     "title": "Aprendizaje de Categorías",
     "subtitle": "Reglas aprendidas de sus propias correcciones manuales de categoría.",
+    "dataCleanupCard": "Revisa filas sobrantes de importaciones antiguas. Nada cambia hasta que lo confirmes allí.",
     "notTrainedNote": "Esto solo ajusta las sugerencias enviadas junto con sus futuras importaciones — el modelo de IA en sí nunca se entrena ni se ajusta con sus datos.",
     "empty": "Aún no hay reglas aprendidas — corregir la categoría de una deducción enseña una automáticamente.",
     "hitCount": "Corregido {{count}} vez/veces",

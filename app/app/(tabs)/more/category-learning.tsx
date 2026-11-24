@@ -8,6 +8,7 @@ import {
 } from '@/src/data/categoryLearningRules';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { Screen, ScreenTitle, Card, MutedText, SecondaryButton } from '@/src/components/ui';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { colors, spacing, typography } from '@/src/theme';
 
 // CATEGORY LEARNING LAYER viewer (owner decision 2026-08-05, FULL PARITY
@@ -93,6 +94,16 @@ export default function CategoryLearning() {
         <Card>
           <MutedText>{t('categoryLearning.notTrainedNote')}</MutedText>
         </Card>
+
+        {/* Data Cleanup left the Menu (owner 2026-11-23): opened from here.
+            NAVIGATION ONLY — the card never runs a cleanup; every delete
+            on that screen stays behind its own button and confirmation. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/data-cleanup'
+          emoji='🧹'
+          title={t('nav.dataCleanup')}
+          description={t('categoryLearning.dataCleanupCard')}
+        />
 
         {rulesQuery.isLoading ? (
           <Card>

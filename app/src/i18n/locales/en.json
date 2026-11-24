@@ -2246,6 +2246,7 @@
   "categoryLearning": {
     "title": "Category Learning",
     "subtitle": "Rules learned from your own manual category corrections.",
+    "dataCleanupCard": "Review leftover rows from old imports. Nothing changes until you confirm there.",
     "notTrainedNote": "This only adjusts the hints sent along with your own future imports — the AI model itself is never trained or fine-tuned on your data.",
     "empty": "No learned rules yet — correcting a category on a deduction teaches one automatically.",
     "hitCount": "Corrected {{count}} time(s)",
