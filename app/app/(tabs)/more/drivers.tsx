@@ -168,15 +168,17 @@ function DriverPaymentsSheet({ driver, employerFicaRate, onClose }: { driver: Dr
 // through its payroll (the WAGE EXPENSE section of the settlement). Made
 // automatically by the import; this card is attribution only — the wages
 // are already in the week's expenses. No manual payments, no app FICA.
-function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Driver; payments: DriverPayment[]; teamBySettlement: Map<string, boolean> }) {
+// WHO IS CODE? (owner 2026-11-24): the stored name is still the payroll
+// code, so a clearly visible accent button opens the name form (same
+// saveName as before, no data logic change). Lives in the driver's LIST
+// row (the only thing besides the name kept there); renders nothing once
+// the driver has a real name.
+function WhoIsCodeButton({ driver }: { driver: Driver }) {
   const { t } = useTranslation();
-  const { money, date: fmtDate } = useFormatters();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [nameFormOpen, setNameFormOpen] = useState(false);
-  const summary = useMemo(() => carrierPayrollSummary(payments, driver.id, todayDateOnly()), [payments, driver.id]);
-  const team = summary.latest?.settlementId ? teamBySettlement.get(summary.latest.settlementId) === true : false;
   const askName = needsDriverName(driver);
 
   async function saveName() {
@@ -195,6 +197,47 @@ function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Dr
       setSaving(false);
     }
   }
+
+  if (!askName) return null;
+  return (
+    <View>
+      {!nameFormOpen && (
+        <Pressable
+          onPress={() => setNameFormOpen(true)}
+          accessibilityRole="button"
+          style={({ pressed }) => ({
+            marginTop: spacing.sm,
+            minHeight: 44,
+            justifyContent: 'center',
+            paddingHorizontal: spacing.md,
+            borderRadius: radii.md,
+            backgroundColor: colors.accent,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '700' }}>✍️ {t('drivers.carrierPayroll.whoIs', { code: driver.carrier_driver_code ?? '' })}</Text>
+        </Pressable>
+      )}
+      {nameFormOpen && (
+        <View style={{ marginTop: spacing.xs }}>
+          <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('drivers.carrierPayroll.whoIs', { code: driver.carrier_driver_code ?? '' })}</Text>
+          <MutedText>{t('drivers.carrierPayroll.whoIsBody', { code: driver.carrier_driver_code ?? '' })}</MutedText>
+          <Field value={name} onChangeText={setName} placeholder={t('drivers.carrierPayroll.namePlaceholder')} />
+          <PrimaryButton title={t('common.save')} onPress={saveName} loading={saving} />
+          <SecondaryButton title={t('common.cancel')} onPress={() => setNameFormOpen(false)} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+// CARRIER PAYROLL DRIVER (owner 2026-11-13, §88): read-only summary, shown
+// in the driver detail sheet (owner 2026-11-24).
+function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Driver; payments: DriverPayment[]; teamBySettlement: Map<string, boolean> }) {
+  const { t } = useTranslation();
+  const { money, date: fmtDate } = useFormatters();
+  const summary = useMemo(() => carrierPayrollSummary(payments, driver.id, todayDateOnly()), [payments, driver.id]);
+  const team = summary.latest?.settlementId ? teamBySettlement.get(summary.latest.settlementId) === true : false;
 
   const row = (label: string, value: number) => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -221,35 +264,6 @@ function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Dr
           team ? t('drivers.carrierPayroll.team') : t('drivers.carrierPayroll.solo'),
         ].join(' · ')}
       </MutedText>
-      {/* WHO IS CODE? (owner 2026-11-24): the stored name is still the
-          payroll code, so a clearly visible accent button opens the same
-          name form as before (same saveName, no data logic change). */}
-      {askName && !nameFormOpen && (
-        <Pressable
-          onPress={() => setNameFormOpen(true)}
-          accessibilityRole="button"
-          style={({ pressed }) => ({
-            marginTop: spacing.sm,
-            minHeight: 44,
-            justifyContent: 'center',
-            paddingHorizontal: spacing.md,
-            borderRadius: radii.md,
-            backgroundColor: colors.accent,
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Text style={{ color: '#ffffff', fontWeight: '700' }}>✍️ {t('drivers.carrierPayroll.whoIs', { code: driver.carrier_driver_code ?? '' })}</Text>
-        </Pressable>
-      )}
-      {askName && nameFormOpen && (
-        <View style={{ marginTop: spacing.xs }}>
-          <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('drivers.carrierPayroll.whoIs', { code: driver.carrier_driver_code ?? '' })}</Text>
-          <MutedText>{t('drivers.carrierPayroll.whoIsBody', { code: driver.carrier_driver_code ?? '' })}</MutedText>
-          <Field value={name} onChangeText={setName} placeholder={t('drivers.carrierPayroll.namePlaceholder')} />
-          <PrimaryButton title={t('common.save')} onPress={saveName} loading={saving} />
-          <SecondaryButton title={t('common.cancel')} onPress={() => setNameFormOpen(false)} />
-        </View>
-      )}
       {summary.latest && block(t('drivers.carrierPayroll.latestWeek', { date: fmtDate(summary.latest.date) }), summary.latest)}
       {block(t('drivers.carrierPayroll.ytd'), summary.ytd)}
       <MutedText style={{ marginTop: spacing.xs }}>{t('drivers.carrierPayroll.paidWeeks', { count: summary.paidWeeks })}</MutedText>
@@ -270,6 +284,8 @@ function DriverDetailSheet({
   truckLabel,
   teamBySettlement,
   onEdit,
+  onPayments,
+  onRemoveOrRestore,
   onClose,
 }: {
   driver: Driver;
@@ -277,6 +293,8 @@ function DriverDetailSheet({
   truckLabel: string | null;
   teamBySettlement: Map<string, boolean>;
   onEdit: () => void;
+  onPayments: () => void;
+  onRemoveOrRestore: () => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -318,7 +336,10 @@ function DriverDetailSheet({
           )}
         </View>
       )}
+      {/* Row buttons moved here (owner 2026-11-24): same handlers. */}
+      {!driver.paid_via_carrier_payroll && <SecondaryButton title={t('drivers.payments')} onPress={onPayments} />}
       <PrimaryButton title={t('drivers.edit')} onPress={onEdit} />
+      <SecondaryButton title={driver.active ? t('drivers.remove') : t('drivers.restore')} onPress={onRemoveOrRestore} />
       <SecondaryButton title={t('common.close')} onPress={onClose} />
     </ModalSheet>
   );
@@ -545,17 +566,11 @@ export default function Drivers() {
                     {!d.active ? ` ${t('drivers.formerTag')}` : ''}
                     <Text style={{ color: colors.accent }}> ›</Text>
                   </Text>
-                  {!d.paid_via_carrier_payroll && <MutedText>{t(`drivers.compensationTypes.${d.compensation_type}`)}</MutedText>}
                 </Pressable>
-                {d.paid_via_carrier_payroll && <CarrierPayrollCard driver={d} payments={allPaymentsQuery.data ?? []} teamBySettlement={teamBySettlement} />}
-                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
-                  {!d.paid_via_carrier_payroll && <SecondaryButton title={t('drivers.payments')} onPress={() => setPaymentsFor(d)} />}
-                  <SecondaryButton title={t('drivers.edit')} onPress={() => openEdit(d)} />
-                  <SecondaryButton
-                    title={d.active ? t('drivers.remove') : t('drivers.restore')}
-                    onPress={() => (d.active ? handleRemove(d) : handleRestore(d))}
-                  />
-                </View>
+                {/* LIST = NAME ONLY (owner 2026-11-24, tester feedback):
+                    everything else is in the detail sheet. Exception: a
+                    driver still named by payroll code keeps "Who is CODE?". */}
+                {d.paid_via_carrier_payroll && <WhoIsCodeButton driver={d} />}
               </View>
             ))}
           </Card>
@@ -607,6 +622,19 @@ export default function Drivers() {
             const d = detailFor;
             setDetailFor(null);
             openEdit(d);
+          }}
+          onPayments={() => {
+            const d = detailFor;
+            setDetailFor(null);
+            setPaymentsFor(d);
+          }}
+          onRemoveOrRestore={() => {
+            // Close first: the same handleRemove/handleRestore (and the
+            // existing confirmation) then run exactly as from the row.
+            const d = detailFor;
+            setDetailFor(null);
+            if (d.active) handleRemove(d);
+            else handleRestore(d);
           }}
           onClose={() => setDetailFor(null)}
         />
