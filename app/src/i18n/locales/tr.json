@@ -428,6 +428,7 @@
   "capitalAccount": {
     "title": "Sermaye Hesabı",
     "loansCard": "Kamyon, dorse ve ekipman kredileri: bakiye, ödemeler, faiz.",
+    "assetsCard": "İşletme alımları ve sahip olduğunuz ya da finanse ettiğiniz diğer ekipman: jeneratörler, reefer üniteleri, aletler.",
     "contributed": "Katkı Payı",
     "draws": "Çekimler",
     "distributions": "Dağıtımlar",

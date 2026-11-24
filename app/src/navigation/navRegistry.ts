@@ -207,7 +207,6 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
     hrefs: [
       '/(tabs)/more/trucks',
       '/(tabs)/more/drivers',
-      '/(tabs)/more/asset-register',
       '/(tabs)/more/capital-account',
       '/(tabs)/more/documents',
       // Back as a row (owner 2026-11-23); the Documents card stays too.
@@ -261,6 +260,8 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/truck-comparison': { kind: 'parent', parent: '/(tabs)/more/trucks' },
   // Owner 2026-11-23: a card on Asset Register (menu row "Assets & Equipment").
   '/(tabs)/more/equipment': { kind: 'parent', parent: '/(tabs)/more/asset-register' },
+  // Owner 2026-11-24: Assets & Equipment (Asset Register) is a card on Capital Account, next to Loans.
+  '/(tabs)/more/asset-register': { kind: 'parent', parent: '/(tabs)/more/capital-account' },
   // Owner 2026-11-23: a card on Capital Account.
   '/(tabs)/more/loans': { kind: 'parent', parent: '/(tabs)/more/capital-account' },
   // Owner 2026-11-23: a card on Operating P&L.
@@ -281,23 +282,13 @@ const byHref = (groups: NavGroup[]) => new Map(flattenNavItems(groups).map((i) =
 
 export type MenuSectionItems = { titleKey: string; items: NavItem[] };
 
-// Menu-only row labels (owner 2026-11-23): the Asset Register row reads
-// "Assets & Equipment" because Equipment opens from a card there. Screen
-// titles (more/_layout.tsx), Reports and the groups keep their own keys.
-export const MENU_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
-  '/(tabs)/more/asset-register': 'nav.assetsEquipment',
-};
-
 // The phone Menu sheet: sections with headings (flag-hidden routes drop
 // out; a section left empty is dropped).
 export function menuSections(groups: NavGroup[] = NAV_GROUPS): MenuSectionItems[] {
   const items = byHref(groups);
   return MENU_SECTIONS.map((section) => ({
     titleKey: section.titleKey,
-    items: section.hrefs
-      .map((href) => items.get(href))
-      .filter((i): i is NavItem => !!i)
-      .map((i) => (MENU_LABEL_OVERRIDES[i.href as string] ? { ...i, labelKey: MENU_LABEL_OVERRIDES[i.href as string] } : i)),
+    items: section.hrefs.map((href) => items.get(href)).filter((i): i is NavItem => !!i),
   })).filter((section) => section.items.length > 0);
 }
 

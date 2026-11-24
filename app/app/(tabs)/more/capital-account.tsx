@@ -416,6 +416,15 @@ export default function CapitalAccount() {
           title={t('nav.loans')}
           description={t('capitalAccount.loansCard')}
         />
+        {/* Assets & Equipment (the Asset Register screen) left the Menu
+            (owner 2026-11-24): opened from here, next to Loans. Its own
+            Equipment card stays on that screen. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/asset-register'
+          emoji='🗄️'
+          title={t('nav.assetsEquipment')}
+          description={t('capitalAccount.assetsCard')}
+        />
 
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

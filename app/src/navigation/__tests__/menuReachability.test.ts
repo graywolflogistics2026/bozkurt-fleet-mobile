@@ -6,7 +6,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
-  MENU_LABEL_OVERRIDES,
   MENU_ORDER,
   MENU_REACHED_FROM,
   MENU_SECTIONS,
@@ -95,25 +94,25 @@ describe('the menu (owner decisions 2026-11-23)', () => {
     expect(menu).not.toContain('/(tabs)/transactions');
   });
 
-  test('Asset Register row reads "Assets & Equipment" in the menu and sidebar only; its screen title is unchanged', () => {
-    const label = (list: { href: unknown; labelKey: string }[]) => list.find((i) => i.href === '/(tabs)/more/asset-register')?.labelKey;
-    expect(MENU_LABEL_OVERRIDES['/(tabs)/more/asset-register']).toBe('nav.assetsEquipment');
-    expect(label(menuItems())).toBe('nav.assetsEquipment');
-    expect(label(sidebarItems())).toBe('nav.assetsEquipment');
-    expect(label(flattenNavItems(NAV_GROUPS))).toBe('nav.assetRegister');
+  test('Assets & Equipment (owner 2026-11-24): a card on Capital Account titled nav.assetsEquipment; screen title unchanged; Equipment card stays', () => {
+    const capital = read(screenFile('/(tabs)/more/capital-account'));
+    expect(linksTo(capital, '/(tabs)/more/asset-register')).toBe(true);
+    expect(capital).toContain("title={t('nav.assetsEquipment')}");
+    expect(menuItems().map((i) => i.href as string)).not.toContain('/(tabs)/more/asset-register');
+    expect(linksTo(read(screenFile('/(tabs)/more/asset-register')), '/(tabs)/more/equipment')).toBe(true);
     expect(read('app/(tabs)/more/_layout.tsx')).toContain("name=\"asset-register\" options={{ title: t('nav.assetRegister') }}");
   });
 
-  test('final menu (owner 2026-11-24): 19 rows in 6 sections, exactly', () => {
+  test('final menu (owner 2026-11-24): 18 rows in 6 sections, exactly', () => {
     expect(menuSections().map((s) => [s.titleKey, s.items.map((i) => i.href as string)])).toEqual([
       ['sidebar.sections.revenue', ['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements']],
       ['sidebar.sections.expenses', ['/(tabs)/more/fuel', '/(tabs)/more/maintenance', '/(tabs)/more/tolls', '/(tabs)/deductions']],
       ['sidebar.sections.overview', ['/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode']],
-      ['sidebar.sections.business', ['/(tabs)/more/trucks', '/(tabs)/more/drivers', '/(tabs)/more/asset-register', '/(tabs)/more/capital-account', '/(tabs)/more/documents', '/(tabs)/more/compliance']],
+      ['sidebar.sections.business', ['/(tabs)/more/trucks', '/(tabs)/more/drivers', '/(tabs)/more/capital-account', '/(tabs)/more/documents', '/(tabs)/more/compliance']],
       ['sidebar.sections.taxAccounting', ['/(tabs)/more/accountant-package', '/(tabs)/more/tax-estimator']],
       ['sidebar.sections.system', ['/(tabs)/more/settings']],
     ]);
-    expect(menuItems()).toHaveLength(19);
+    expect(menuItems()).toHaveLength(18);
     // Renewals & Expiry Dates (compliance) is only a menu row now; its Documents card was removed (owner 2026-11-24).
     expect(read(screenFile('/(tabs)/more/documents'))).not.toContain('<RelatedScreenCard');
   });
@@ -125,6 +124,7 @@ describe('the menu (owner decisions 2026-11-23)', () => {
       '/(tabs)/more/prime-driver-expenses': '/(tabs)/more/accountant-package',
       '/(tabs)/more/truck-comparison': '/(tabs)/more/trucks',
       '/(tabs)/more/equipment': '/(tabs)/more/asset-register',
+      '/(tabs)/more/asset-register': '/(tabs)/more/capital-account',
       '/(tabs)/more/loans': '/(tabs)/more/capital-account',
       '/(tabs)/more/cash-flow': '/(tabs)/more/operating-pnl',
       '/(tabs)/more/profit-analysis': '/(tabs)/more/operating-pnl',

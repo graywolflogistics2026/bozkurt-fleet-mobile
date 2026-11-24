@@ -428,6 +428,7 @@
   "capitalAccount": {
     "title": "Cuenta de Capital",
     "loansCard": "Préstamos de camión, remolque y equipo: saldo, pagos, intereses.",
+    "assetsCard": "Compras del negocio y otro equipo propio o financiado: generadores, unidades reefer, herramientas.",
     "contributed": "Aportado",
     "draws": "Retiros",
     "distributions": "Distribuciones",

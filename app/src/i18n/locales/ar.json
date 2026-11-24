@@ -428,6 +428,7 @@
   "capitalAccount": {
     "title": "حساب رأس المال",
     "loansCard": "Truck, trailer and equipment loans: balance, payments, interest.",
+    "assetsCard": "Business purchases and other gear you own or finance: generators, reefer units, tools.",
     "contributed": "المساهم به",
     "draws": "السحوبات",
     "distributions": "التوزيعات",
