@@ -17,6 +17,7 @@ import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList'
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { RowDeleteButton } from '@/src/components/RowDeleteButton';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { todayDateOnly } from '@/src/lib/dateOnly';
 import { numOrNull } from '@/src/lib/number';
@@ -74,12 +75,9 @@ function TollEntryRow({ x, onDelete }: { x: TollEntry; onDelete: (() => void) | 
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.amount)}</Text>
-        {onDelete && (
-          <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: spacing.xs }}>
-            <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
-          </Pressable>
-        )}
       </View>
+      {/* Delete mark: top-right corner, 44 dp (owner 2026-11-24). */}
+      {onDelete && <RowDeleteButton onPress={onDelete} />}
     </View>
   );
 }
