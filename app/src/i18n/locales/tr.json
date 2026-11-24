@@ -427,6 +427,7 @@
   },
   "capitalAccount": {
     "title": "Sermaye Hesabı",
+    "loansCard": "Kamyon, dorse ve ekipman kredileri: bakiye, ödemeler, faiz.",
     "contributed": "Katkı Payı",
     "draws": "Çekimler",
     "distributions": "Dağıtımlar",

@@ -427,6 +427,7 @@
   },
   "capitalAccount": {
     "title": "Capital Account",
+    "loansCard": "Truck, trailer and equipment loans: balance, payments, interest.",
     "contributed": "Contributed",
     "draws": "Draws",
     "distributions": "Distributions",

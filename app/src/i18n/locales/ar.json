@@ -427,6 +427,7 @@
   },
   "capitalAccount": {
     "title": "حساب رأس المال",
+    "loansCard": "Truck, trailer and equipment loans: balance, payments, interest.",
     "contributed": "المساهم به",
     "draws": "السحوبات",
     "distributions": "التوزيعات",

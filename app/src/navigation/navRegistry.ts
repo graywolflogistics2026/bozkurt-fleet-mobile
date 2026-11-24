@@ -209,7 +209,6 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
       '/(tabs)/more/drivers',
       '/(tabs)/more/asset-register',
       '/(tabs)/more/capital-account',
-      '/(tabs)/more/loans',
       '/(tabs)/more/documents',
     ],
   },
@@ -261,6 +260,8 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/equipment': { kind: 'parent', parent: '/(tabs)/more/asset-register' },
   // Owner 2026-11-23: a card on Documents ("Renewals & expiry dates").
   '/(tabs)/more/compliance': { kind: 'parent', parent: '/(tabs)/more/documents' },
+  // Owner 2026-11-23: a card on Capital Account.
+  '/(tabs)/more/loans': { kind: 'parent', parent: '/(tabs)/more/capital-account' },
   '/(tabs)/more/credit-cards': { kind: 'featureFlag' },
   '/(tabs)/more/bank-statements': { kind: 'featureFlag' },
 };

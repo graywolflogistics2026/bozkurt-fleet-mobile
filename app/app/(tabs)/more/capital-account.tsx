@@ -14,6 +14,7 @@ import {
 } from '@/src/data/capitalTransactions';
 import { useTaxConfig } from '@/src/data/taxConfig';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import {
   findDuplicateTransactionIds,
@@ -407,6 +408,14 @@ export default function CapitalAccount() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScreenTitle>{t('capitalAccount.title')}</ScreenTitle>
         <FleetScopeLabel variant="fleetOnly" />
+
+        {/* Loans left the Menu (owner 2026-11-23): opened from here. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/loans'
+          emoji='📄'
+          title={t('nav.loans')}
+          description={t('capitalAccount.loansCard')}
+        />
 
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

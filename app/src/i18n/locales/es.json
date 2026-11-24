@@ -427,6 +427,7 @@
   },
   "capitalAccount": {
     "title": "Cuenta de Capital",
+    "loansCard": "Préstamos de camión, remolque y equipo: saldo, pagos, intereses.",
     "contributed": "Aportado",
     "draws": "Retiros",
     "distributions": "Distribuciones",

@@ -432,6 +432,7 @@
   },
   "capitalAccount": {
     "title": "कैपिटल अकाउंट",
+    "loansCard": "ट्रक, ट्रेलर और उपकरण के ऋण: बकाया, भुगतान, ब्याज।",
     "contributed": "योगदान किया गया",
     "draws": "निकासी",
     "distributions": "वितरण",
