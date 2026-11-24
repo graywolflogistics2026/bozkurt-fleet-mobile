@@ -28,7 +28,27 @@ const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 const ANTHROPIC_MAX_TOKENS = 400; // matches legacy sendAI()
 const HISTORY_WINDOW = 6; // matches legacy aiHist.slice(-6)
 
-type ErrorType = "unauthenticated" | "bad_request" | "anthropic_error";
+// ai_consent_required: owner decision 2026-11-23 (§89), see hasAiConsent().
+type ErrorType = "unauthenticated" | "bad_request" | "anthropic_error" | "ai_consent_required";
+
+// AI CONSENT — SERVER CHECK (owner decision 2026-11-23, App Store 5.1.2(i);
+// docs/PENDING_SQL.md §89, docs/decisions/ai-consent-proposal.md). The app
+// asks before every AI call; this is the backstop for an old app bundle or a
+// direct request. Granted = profiles.ai_consent_at is set (the client also
+// checks the consent version; the server only needs "allowed at all").
+// Fails CLOSED: a read error, a missing row or a missing column (§89 not
+// run) refuses. Deploy order: §89 SQL -> eas update -> redeploy this.
+// Copy kept in sync with the same function in supabase/functions/ai-import/index.ts.
+async function hasAiConsent(supabase: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const { data, error } = await supabase.from("profiles").select("ai_consent_at").eq("user_id", userId).maybeSingle();
+  if (error) {
+    console.error(`[ai-consent] read failed: ${error.message}`);
+    return false;
+  }
+  return !!(data as { ai_consent_at?: string | null } | null)?.ai_consent_at;
+}
+
+const AI_CONSENT_REQUIRED_MESSAGE = "AI features are off for this account. Turn them on in Settings > Privacy.";
 
 // Matches app/src/i18n's SUPPORTED_LOCALES (see ai-import's identical map
 // and comment for why a language NAME, not a bare locale code, is used).
@@ -123,6 +143,8 @@ Deno.serve(async (req: Request) => {
     return errorResponse("unauthenticated", "Invalid or expired session.", 401);
   }
   const userId = userData.user.id;
+
+  if (!(await hasAiConsent(supabase, userId))) return errorResponse("ai_consent_required", AI_CONSENT_REQUIRED_MESSAGE, 403);
 
   let body: { messages?: { role: string; content: string }[]; locale?: string };
   try {

@@ -652,7 +652,10 @@ export default function Import() {
   function handleAiError(err: AiImportError) {
     // A usage-limit block isn't a service failure — never counts toward
     // the automatic "the AI service seems to be down" fallback banner.
-    if (err.type !== 'usage_limit_reached') aiFailureTracker.recordFailure();
+    // AI CONSENT (owner decision 2026-11-23): a missing consent (declined
+    // here, or the server's ai_consent_required) is not a service failure
+    // either.
+    if (err.type !== 'usage_limit_reached' && err.type !== 'consent_declined' && err.type !== 'ai_consent_required') aiFailureTracker.recordFailure();
     // COST CONTROL & GRACEFUL DEGRADATION (owner decision 2026-08-24, FIVE
     // ADDITIONS pass, PART 4 item 2) — billing/auth, rate-limit, timeout/
     // overload, and offline all get ONE shared, friendly, localized

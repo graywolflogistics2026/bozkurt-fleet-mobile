@@ -568,7 +568,30 @@ type ErrorType =
   // active truck, docs/PENDING_SQL.md's ai_usage_config) plus any owner-
   // granted credit packs are both exhausted. Returned BEFORE any Anthropic
   // call is made.
-  | "usage_limit_reached";
+  | "usage_limit_reached"
+  // AI CONSENT (owner decision 2026-11-23): the user has not allowed AI
+  // features (profiles.ai_consent_at, §89). Returned BEFORE any file is
+  // read or any Anthropic call is made.
+  | "ai_consent_required";
+
+// AI CONSENT — SERVER CHECK (owner decision 2026-11-23, App Store 5.1.2(i);
+// docs/PENDING_SQL.md §89, docs/decisions/ai-consent-proposal.md). The app
+// asks before every AI call; this is the backstop for an old app bundle or a
+// direct request. Granted = profiles.ai_consent_at is set (the client also
+// checks the consent version; the server only needs "allowed at all").
+// Fails CLOSED: a read error, a missing row or a missing column (§89 not
+// run) refuses. Deploy order: §89 SQL -> eas update -> redeploy this.
+// Copy kept in sync with the same function in supabase/functions/ai-advisor/index.ts.
+async function hasAiConsent(supabase: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const { data, error } = await supabase.from("profiles").select("ai_consent_at").eq("user_id", userId).maybeSingle();
+  if (error) {
+    console.error(`[ai-consent] read failed: ${error.message}`);
+    return false;
+  }
+  return !!(data as { ai_consent_at?: string | null } | null)?.ai_consent_at;
+}
+
+const AI_CONSENT_REQUIRED_MESSAGE = "AI features are off for this account. Turn them on in Settings > Privacy.";
 
 // RATE-LIMIT COOLDOWN — GLOBAL BACK-PRESSURE (owner decision 2026-08-24,
 // same pass). Every user of this app shares ONE Anthropic API key
@@ -1675,6 +1698,11 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.mode === "diagnose") return await handleDiagnose(supabase, userId);
+  // Every other user request can send a document to Anthropic (read_answer
+  // too: it can start the remaining reads). diagnose above stays allowed;
+  // the service-key continue_job above only continues a job that passed
+  // this check when it started.
+  if (!(await hasAiConsent(supabase, userId))) return errorResponse("ai_consent_required", AI_CONSENT_REQUIRED_MESSAGE, 403);
   // The old reader's modes (removed 2026-11-13, commit 6). An app that still
   // sends one gets the same words the app shows for an old job.
   if (OLD_READER_MODES.has(body.mode ?? "")) {
