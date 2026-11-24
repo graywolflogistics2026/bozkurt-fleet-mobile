@@ -18,6 +18,7 @@ import { useUserCategories } from '@/src/data/userCategories';
 import { useCategoryLearningRules } from '@/src/data/categoryLearningRules';
 import { useCarrierCodeCategories, useCarrierCodeMaps } from '@/src/data/carrierCodeMaps';
 import { callAiImport, friendlyAiImportError, buildAiImportErrorReport, type AiImportError } from '@/src/data/aiImportCall';
+import { requestAiConsent } from '@/src/ai/aiConsentGate';
 import {
   useStartImportJob,
   useStartImportJobsBatch,
@@ -830,7 +831,12 @@ export default function Import() {
     }
   }
 
+  // AI CONSENT (owner decision 2026-11-23): every way into an AI import asks
+  // BEFORE the camera/scanner/picker opens, so a "Cancel" simply stays here
+  // (nothing picked, nothing sent). The data layer asks again as a backstop
+  // (src/data/aiImportCall.ts, importJobs.ts) — already granted, no sheet.
   async function pickFromGallery() {
+    if (!(await requestAiConsent())) return;
     const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     if (picked.canceled || !picked.assets?.[0]) return;
     await processImage(picked.assets[0].uri);
@@ -882,6 +888,7 @@ export default function Import() {
   // import. Scanner unavailable (old build, no Google Play services,
   // denied, failed) -> the existing camera screen. Cancel -> nothing.
   async function handleScan() {
+    if (!(await requestAiConsent())) return;
     const result = await captureDocument({ fallback: 'none', baseName: 'import' });
     if (result.status === 'unavailable') {
       router.push('/(tabs)/import/camera');
@@ -906,6 +913,7 @@ export default function Import() {
   // case) keeps using the exact pre-existing one-job flow below,
   // unchanged — multi-select only branches once 2+ files come back.
   async function pickPdf() {
+    if (!(await requestAiConsent())) return;
     const picked = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true, multiple: true });
     if (picked.canceled || !picked.assets?.length) return;
 
@@ -1018,6 +1026,7 @@ export default function Import() {
   }
 
   async function handleRetryImport() {
+    if (!(await requestAiConsent())) return;
     if (!fileMeta) {
       reset();
       return;
@@ -1449,7 +1458,12 @@ export default function Import() {
           <Card>
             <MutedText>{t('importScreen.pickPrompt')}</MutedText>
             <PrimaryButton title={`📄 ${t('scan.scanDocument')}`} onPress={handleScan} />
-            <SecondaryButton title={`📷 ${t('scan.plainPhoto')}`} onPress={() => router.push('/(tabs)/import/camera')} />
+            <SecondaryButton
+              title={`📷 ${t('scan.plainPhoto')}`}
+              onPress={async () => {
+                if (await requestAiConsent()) router.push('/(tabs)/import/camera');
+              }}
+            />
             <SecondaryButton title={t('importScreen.chooseFromGallery')} onPress={pickFromGallery} />
             <SecondaryButton title={t('importScreen.choosePdf')} onPress={pickPdf} />
             {/* FIRST-RUN TUTORIAL replay (owner decision 2026-08-05, FULL

@@ -11,6 +11,7 @@ import { useTrucksList } from '@/src/data/trucks';
 import { useProfile, useUpdateProfile } from '@/src/data/profile';
 import { useTaxEstimate } from '@/src/data/taxEstimate';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
+import { hasAiConsent } from '@/src/ai/aiConsent';
 import i18n from '@/src/i18n';
 import { calcMiles } from '@/src/stats/miles';
 import { computeKpis } from '@/src/stats/kpi';
@@ -51,7 +52,11 @@ import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
 // total AI usage at the spec's own explicit "one call per week" ceiling
 // rather than doubling it.
 export function useProactiveCoach() {
-  const { session } = useAuth();
+  const { session, aiConsent } = useAuth();
+  // AI CONSENT (owner decision 2026-11-23): the weekly review runs by itself,
+  // so it never asks — without consent nothing is sent and Home shows the
+  // non-AI template (proactive.weeklyReviewFallback).
+  const aiConsentGranted = hasAiConsent(aiConsent);
   const { t } = useTranslation();
   const { money, number } = useFormatters();
   const pct = (n: number) => number(n, { style: 'percent', maximumFractionDigits: 1 });
@@ -431,6 +436,7 @@ export function useProactiveCoach() {
   const generatingKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!needsWeeklyReview || !latestSettlement || !weeklyReviewInputs || generating) return;
+    if (!aiConsentGranted) return;
     // Key includes the locale AND the data fingerprint — a language
     // switch, or any change to the underlying figures (a settlement/
     // deduction/fuel/maintenance/toll edit that doesn't change
@@ -451,7 +457,7 @@ export function useProactiveCoach() {
     const requestedFingerprint = currentFingerprint;
 
     setGenerating(true);
-    callAiAdvisor([{ role: 'user', content: prompt }], requestedLocale)
+    callAiAdvisor([{ role: 'user', content: prompt }], requestedLocale, { interactive: false })
       .then((result) => {
         // NUDGE/WEEKLY-REVIEW WRITES ARE FIRE-AND-FORGET (P1 fix, FULL
         // SYSTEM AUDIT) — `generatingKeyRef` was set BEFORE this call even
@@ -497,7 +503,7 @@ export function useProactiveCoach() {
       })
       .finally(() => setGenerating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsWeeklyReview, latestSettlement, weeklyReviewInputs, i18n.language, currentFingerprint]);
+  }, [needsWeeklyReview, latestSettlement, weeklyReviewInputs, i18n.language, currentFingerprint, aiConsentGranted]);
 
   return {
     isLoading,

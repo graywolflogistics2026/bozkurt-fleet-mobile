@@ -9,6 +9,20 @@ import { hasReaderWork, markReaderReadAgain, readerJobView } from '@/src/import/
 import { isReaderProgress, type ReaderProgress } from '@/src/settlementReader/machine';
 import { todayDateOnly } from '@/src/lib/dateOnly';
 import type { Extraction } from '@/src/import/types';
+import i18n from '@/src/i18n';
+import { isAiConsentRequiredError } from '@/src/ai/aiConsent';
+import { AiConsentDeclinedError, isAiConsentGranted, requireAiConsent } from '@/src/ai/aiConsentGate';
+
+// AI CONSENT (owner decision 2026-11-23, App Store 5.1.2(i)): every reader
+// request below can send the stored document to Anthropic, so each asks the
+// consent gate first (src/ai/aiConsentGate.ts). Interactive calls open the
+// just-in-time sheet; the automatic resume only checks silently. A server
+// refusal (ai_consent_required) shows the app's own words.
+const declinedMessage = () => i18n.t('aiConsent.declined');
+function serverErrorMessage(err: { type?: string; message?: string } | undefined): string | undefined {
+  if (!err) return undefined;
+  return isAiConsentRequiredError(err) ? i18n.t('aiConsent.serverRequired') : err.message;
+}
 
 // BACKGROUND IMPORT (owner decision 2026-08-24, docs/PENDING_SQL.md §54)
 // — the network/storage half; app/src/import/importJobs.ts holds the
@@ -233,7 +247,8 @@ async function startOneImportJob(userId: string, params: StartImportJobParams): 
     if (ctx instanceof Response) {
       try {
         const body = await ctx.json();
-        if (body?.error?.message) throw new Error(body.error.message as string);
+        const message = serverErrorMessage(body?.error);
+        if (message) throw new Error(message);
       } catch {
         // fall through to the generic message below
       }
@@ -250,6 +265,7 @@ export function useStartImportJob() {
     mutationFn: async (params: StartImportJobParams) => {
       const userId = session?.user.id;
       if (!userId) throw new Error('Not signed in.');
+      await requireAiConsent(declinedMessage());
       return startOneImportJob(userId, params);
     },
     onSuccess: () => {
@@ -283,6 +299,8 @@ export function useStartImportJobsBatch() {
     mutationFn: async (paramsList: StartImportJobParams[]): Promise<BatchStartResult[]> => {
       const userId = session?.user.id;
       if (!userId) throw new Error('Not signed in.');
+      // Asked once for the whole batch, before any upload.
+      await requireAiConsent(declinedMessage());
       const outcomes = await runBatchWithConcurrency(paramsList, BATCH_START_CONCURRENCY, (params) => startOneImportJob(userId, params));
       return outcomes.map((o) => ({
         fileName: o.item.fileName,
@@ -302,7 +320,8 @@ async function invokeJobMode(body: Record<string, unknown>, fallbackMessage: str
     const ctx = (error as { context?: unknown }).context;
     if (ctx instanceof Response) {
       const parsed = await ctx.json().catch(() => null);
-      if (parsed?.error?.message) throw new Error(parsed.error.message as string);
+      const message = serverErrorMessage(parsed?.error);
+      if (message) throw new Error(message);
     }
     throw new Error(fallbackMessage);
   }
@@ -326,6 +345,7 @@ export type ReaderInputs = {
 // [Read again] on a failed reader job: the server reads the content range
 // again on the same job, only while reads remain (max 2, counted there).
 export async function readAgainReaderJob(jobId: string): Promise<{ jobId: string }> {
+  await requireAiConsent(declinedMessage());
   markReaderReadAgain(jobId);
   return invokeJobMode({ mode: 'read_again', jobId }, 'Could not start reading again.');
 }
@@ -334,6 +354,7 @@ export async function readAgainReaderJob(jobId: string): Promise<{ jobId: string
 // same stored file (no upload); the old row goes.
 export async function restartWithReader(job: Pick<ImportJob, 'id' | 'storagePath' | 'mediaType' | 'fileName'>, inputs: ReaderInputs): Promise<{ jobId: string }> {
   if (!job.storagePath) throw new Error('The file of this import is no longer stored. Upload it again.');
+  await requireAiConsent(declinedMessage());
   const started = await invokeJobMode(
     { mode: 'read_start', importDate: todayDateOnly(), storagePath: job.storagePath, mediaType: job.mediaType, fileName: job.fileName ?? undefined, ...inputs },
     'Could not start reading again.'
@@ -344,13 +365,16 @@ export async function restartWithReader(job: Pick<ImportJob, 'id' | 'storagePath
 
 // The profit lines the owner typed on the card (needs_input): the server's
 // gate decides again (no model call).
+// Gated too: an answer can let the server read the remaining attachments.
 export async function answerReaderJob(jobId: string, answers: { label: string; amount: number }[]): Promise<{ state: string }> {
+  await requireAiConsent(declinedMessage());
   const { data, error } = await supabase.functions.invoke('ai-import', { body: { mode: 'read_answer', jobId, answers } });
   if (error) {
     const ctx = (error as { context?: unknown }).context;
     if (ctx instanceof Response) {
       const parsed = await ctx.json().catch(() => null);
-      if (parsed?.error?.message) throw new Error(parsed.error.message as string);
+      const message = serverErrorMessage(parsed?.error);
+      if (message) throw new Error(message);
     }
     throw new Error('Could not send your answer.');
   }
@@ -358,7 +382,10 @@ export async function answerReaderJob(jobId: string, answers: { label: string; a
 }
 
 // The app's backup restart of a reader job whose worker stopped.
+// Automatic (ImportJobsChip): never opens the sheet; without consent the
+// job keeps showing its Resume button.
 export async function resumeReaderJob(jobId: string): Promise<{ jobId: string }> {
+  if (!isAiConsentGranted()) throw new AiConsentDeclinedError(declinedMessage());
   return invokeJobMode({ mode: 'read_resume', jobId }, 'Could not resume the import.');
 }
 

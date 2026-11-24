@@ -18,7 +18,13 @@ jest.mock('@/src/lib/supabase', () => ({
   supabase: { functions: { invoke: invokeMock } },
 }));
 
-import { callAiImport } from '@/src/data/aiImportCall';
+// AI CONSENT (owner decision 2026-11-23): callAiImport asks the consent gate
+// first; these loop tests run with consent granted (i18n mocked: the real
+// module loads expo-localization, which jest does not transform).
+jest.mock('@/src/i18n', () => ({ __esModule: true, default: { t: (key: string) => key } }));
+
+import { callAiImport, friendlyAiImportError } from '@/src/data/aiImportCall';
+import { __resetAiConsentGateForTests, registerAiConsentGate } from '@/src/ai/aiConsentGate';
 
 function settlementPage(overrides: Partial<NonNullable<Extraction['settlement']>>): Extraction {
   return { docType: 'settlement', confidence: 'high', settlement: { ...overrides } };
@@ -27,6 +33,8 @@ function settlementPage(overrides: Partial<NonNullable<Extraction['settlement']>
 const PAGE_ORDER_11 = Array.from({ length: 11 }, (_, i) => i + 1);
 
 beforeEach(() => {
+  __resetAiConsentGateForTests();
+  registerAiConsentGate({ isGranted: () => true, prompt: async () => true });
   invokeMock.mockReset();
 });
 
@@ -268,5 +276,29 @@ describe('invokeAiImportOnce — never leaks the raw SDK error string', () => {
 
     expect(result.error?.type).toBe('timeout');
     expect(result.error?.message).not.toContain(RAW_SDK_MESSAGE);
+  });
+});
+
+describe('AI consent (owner decision 2026-11-23)', () => {
+  test('declined: nothing is sent, a friendly consent error comes back', async () => {
+    __resetAiConsentGateForTests();
+    const prompt = jest.fn(async () => false);
+    registerAiConsentGate({ isGranted: () => false, prompt });
+    const result = await callAiImport('base64', 'image/jpeg');
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(result.error?.type).toBe('consent_declined');
+    expect(friendlyAiImportError(result.error!)).toBe('aiConsent.declined');
+  });
+
+  test('no gate registered: fails closed, nothing is sent', async () => {
+    __resetAiConsentGateForTests();
+    const result = await callAiImport('base64', 'image/jpeg');
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(result.error?.type).toBe('consent_declined');
+  });
+
+  test('server ai_consent_required maps to the app text', () => {
+    expect(friendlyAiImportError({ type: 'ai_consent_required', message: 'x' })).toBe('aiConsent.serverRequired');
   });
 });

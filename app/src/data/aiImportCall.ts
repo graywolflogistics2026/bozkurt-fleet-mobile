@@ -1,6 +1,9 @@
 import { supabase } from '@/src/lib/supabase';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
 import type { Extraction } from '@/src/import/types';
+import i18n from '@/src/i18n';
+import { AI_CONSENT_REQUIRED } from '@/src/ai/aiConsent';
+import { requestAiConsent } from '@/src/ai/aiConsentGate';
 
 // Every guard (dates, miles, Prime statement check) — the one shared
 // composition in src/import/sanitizeExtraction.ts, also used for
@@ -201,6 +204,10 @@ export async function callAiImport(
   carrierCodeMaps?: { carrier: string; code: string; subCode: string | null; label: string; description: string | null }[],
   onProgress?: (progress: { through: number; total: number; partialData?: Extraction }) => void
 ): Promise<AiImportCallResult> {
+  // AI CONSENT (owner decision 2026-11-23): nothing is sent without it; the
+  // just-in-time sheet asks when it is missing.
+  if (!(await requestAiConsent())) return { error: { type: 'consent_declined', message: i18n.t('aiConsent.declined') } };
+
   let orderIndex: number | undefined;
   let pageOrder: number[] | undefined;
   let priorPageExtractions: { page: number; extraction: unknown }[] | undefined;
@@ -305,6 +312,12 @@ export function friendlyAiImportError(err: AiImportError): string {
       return 'The import service had a problem. Try again in a moment.';
     case 'network_error':
       return err.message;
+    // AI CONSENT (owner decision 2026-11-23): declined here, or refused by
+    // the server (turned off on another device).
+    case 'consent_declined':
+      return i18n.t('aiConsent.declined');
+    case AI_CONSENT_REQUIRED:
+      return i18n.t('aiConsent.serverRequired');
     default:
       return err.message || 'Import failed.';
   }
