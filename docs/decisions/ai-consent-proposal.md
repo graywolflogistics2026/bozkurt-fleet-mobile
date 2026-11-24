@@ -1,5 +1,27 @@
 # AI consent screen: proposal + owner decisions (2026-11-23)
 
+**Status: IMPLEMENTED and SHIPPED 2026-11-23.** The steps:
+
+- §89 SQL applied.
+- OTA update published.
+- ai-advisor and ai-import redeployed. ai-import is at commit fe85b4b, deployed 2026-11-24T02:16Z.
+- Live tests passed: briefing, photo read, and consent Off/On.
+
+## FINAL OWNER DECISIONS (as shipped)
+
+- **When it is asked:** at first launch, as a gate after ToS, and also just in time when consent is missing.
+- **One consent:** a single consent covers every AI feature.
+- **No names:** the owner's name and the company name are no longer sent to the AI.
+- **Server check:** enforced in ai-import and ai-advisor (`ai_consent_required`). The diagnose check stays allowed.
+- **No unconfirmed claims:** no "does not train" claim and no retention claim, in the consent text or the policies, until the attorney confirms Anthropic's terms.
+
+**Open items:**
+
+- The attorney or the owner must confirm Anthropic's retention and no-training wording before it is added to the consent text and the Privacy Policy.
+- Apple's App Privacy label and Google Play's Data Safety form must match the AI data list in section 1. That list covers imported photos and PDFs, business numbers and charge descriptions, and AI Coach questions, all sent to Anthropic.
+
+Both items are also listed in `docs/PENDING_SQL.md` under "Also still open".
+
 ## OWNER DECISIONS (2026-11-23, binding; supersede the proposal text below where they differ)
 
 1. Consent is asked at first launch: a gate after ToS and before the tutorial (`app/app/ai-consent.tsx`). A just-in-time sheet (`app/src/components/AiConsentProvider.tsx`) appears when consent is missing. Existing users see the gate once at their next open.
@@ -23,7 +45,7 @@ Rules and storage: `app/src/ai/aiConsent.ts`. Call gate: `app/src/ai/aiConsentGa
 - who it is sent to,
 - the user's explicit "yes".
 
-**Status.** This file is a findings report plus a design table for the owner to approve. No code, SQL or text changed. Nothing below is built.
+**Status (original, superseded).** This file was a findings report plus a design table for the owner to approve. See the shipped status at the top.
 
 ## 1. Every place user data goes to the AI
 

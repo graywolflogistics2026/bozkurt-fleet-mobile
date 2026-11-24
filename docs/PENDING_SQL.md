@@ -6065,7 +6065,7 @@ where source = 'settlement' and date >= '2026-01-01';
 - [x] 88 PART 3 verified
 - [x] 88 follow-up: team_week = true on 11/06 and 11/13 (owner)
 
-## 89. AI CONSENT ON PROFILES (owner decision 2026-11-23, App Store 5.1.2(i)) — NOT YET APPLIED
+## 89. AI CONSENT ON PROFILES (owner decision 2026-11-23, App Store 5.1.2(i)) — ✅ APPLIED 2026-11-23
 
 The owner approved `docs/decisions/ai-consent-proposal.md`: one consent for all AI features, asked once before any user data goes to Anthropic. Two nullable `profiles` columns hold the choice:
 
@@ -6094,7 +6094,7 @@ Consent is granted only when `ai_consent_at` is set AND `ai_consent_version` is 
 - A missing-column error means "consent not available yet": no gate and AI works as before.
 - That is safe only because the server check is not deployed yet.
 
-Mirrored in `pending_89.sql`.
+Mirror file `pending_89.sql` removed after the owner confirmed it was run (2026-11-23). The full SQL is below.
 
 PART 1 — PREVIEW (read-only). Expected: no rows (the columns do not exist yet).
 
@@ -6134,14 +6134,17 @@ select count(*) filter (where ai_consent_version is not null) as asked,
 from public.profiles;
 ```
 
-- [ ] 89 PART 1 preview checked
-- [ ] 89 PART 2 run
-- [ ] 89 PART 3 verified
-- [ ] 89 eas update published and on the phones
-- [ ] 89 ai-advisor redeployed (consent check + no owner/company name)
-- [ ] 89 ai-import redeployed (consent check; through `scripts/deploy-ai-import.ps1`)
+- [x] 89 PART 1 preview checked
+- [x] 89 PART 2 run (owner, 2026-11-23)
+- [x] 89 PART 3 verified: asked 0 / allowed 0 right after the run. Later the owner's own profile showed `ai_consent_at` and `ai_consent_version` filled.
+- [x] 89 eas update published and on the phones
+- [x] 89 ai-advisor redeployed (consent check + no owner/company name)
+- [x] 89 ai-import redeployed (consent check; through `scripts/deploy-ai-import.ps1`; commit fe85b4b, 2026-11-24T02:16Z)
 
 ## Also still open (not part of any pass above)
+
+- AI consent wording (§89, 2026-11-23): the attorney or the owner must confirm Anthropic's retention and no-training terms. Until then, neither claim goes into the consent text (`aiConsent.*` in all 7 locales) or the Privacy Policy (`app/src/config/privacyPolicy.ts`, `docs/PRIVACY_POLICY_DRAFT.md`).
+- Store privacy forms (§89, 2026-11-23): Apple's App Privacy label and Google Play's Data Safety form must match the AI data list in `docs/decisions/ai-consent-proposal.md`. That list covers imported photos and PDFs, business numbers and charge descriptions, and AI Coach questions, all sent to Anthropic for processing and not sold.
 
 - `supabase gen types` needs to be re-run against `app/src/types/db.ts` —
   this requires the project's own Supabase credentials/project ref, which

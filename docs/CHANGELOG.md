@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — AI consent shipped (owner)
+
+§89 applied: right after the run, the verify showed asked 0 / allowed 0; later the owner's own profile showed both columns filled. `pending_89.sql` removed. OTA update published. ai-advisor and ai-import redeployed; ai-import is at commit fe85b4b, deployed 2026-11-24T02:16Z. Live tests passed: AI Coach briefing, photo read, and consent Off/On in Settings > Privacy. Still open: attorney wording for retention and no-training, and the Apple / Google privacy forms (PENDING_SQL "Also still open"). No code change.
+
 ## 2026-11-23 — AI consent (App Store 5.1.2(i)), owner decisions
 
 One consent for every AI feature: a gate after ToS (`app/app/ai-consent.tsx`) that existing users see once; a just-in-time sheet; Settings > Privacy switch. Rules in `app/src/ai/aiConsent.ts`; every AI call asks `aiConsentGate.ts` (import A1-A4, advisor B1-B5; the Home weekly review is silent and uses the non-AI template). Server check `ai_consent_required` in ai-import and ai-advisor (diagnose allowed). ai-advisor no longer sends owner/company names. Privacy §5 and ToS §3 name Anthropic, no training/retention claim; PRIVACY_VERSION and TOS_VERSION bumped (ToS gate shows once again). Daily Tips use no AI, so they are not gated. NOT shipped: §89 SQL -> eas update -> wait for phones -> redeploy ai-advisor and ai-import. Full: `docs/decisions/ai-consent-proposal.md`.

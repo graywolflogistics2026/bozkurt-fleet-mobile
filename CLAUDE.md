@@ -1120,10 +1120,9 @@ under each is unchanged original wording.
   - §72 remove business-balance tracking — status UNCONFIRMED.
     `pending_72.sql` kept; a read-only check query is in §72. The client
     is safe either way.
-  - §89 AI consent columns on profiles — NOT applied yet (2026-11-23).
-    `pending_89.sql` kept. Order: SQL -> eas update -> redeploy
-    ai-advisor and ai-import (their consent check needs the columns).
-  - (§2 needed no SQL. §67 was applied — owner confirmed 2026-10-13,
+  - (§2 needed no SQL. §89 (AI consent columns) applied — owner
+    confirmed 2026-11-23, `pending_89.sql` removed, SQL inlined;
+    ai-advisor and ai-import redeployed with the consent check. §67 was applied — owner confirmed 2026-10-13,
     `pending_67.sql` removed, its SQL inlined in §67. §77 and §78 were
     applied and ai-import redeployed — owner confirmed 2026-10-17, their
     mirror files removed, SQL inlined. §79, §80, §81 applied — owner
