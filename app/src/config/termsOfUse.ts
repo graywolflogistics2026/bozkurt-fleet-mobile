@@ -6,7 +6,9 @@ import { BRAND_NAME, SUPPORT_EMAIL } from '@/src/brand';
 
 // draft-2026-10-31: added "Before you start - estimates only" (batch D item
 // 10); bumping this re-shows the acknowledgment gate to every user.
-export const TOS_VERSION = 'draft-2026-10-31';
+// draft-2026-11-23: §3 names Anthropic and the AI consent (owner decision
+// 2026-11-23); this bump re-shows the ToS gate to every user once.
+export const TOS_VERSION = 'draft-2026-11-23';
 
 export const TOS_TITLE = 'Terms of Use';
 
@@ -22,7 +24,7 @@ This app calculates ESTIMATES of tax liability, quarterly payments, per diem ded
 Using this app does not create an accountant-client, attorney-client, advisory, or fiduciary relationship with us.
 
 3. AI-assisted document extraction
-This app uses a third-party AI service to extract data from uploaded documents. Extraction may contain errors or omissions. You must review every extracted field before saving it, and you are responsible for the accuracy of any data you confirm.
+With your permission, this app uses a third-party AI service, Anthropic, to extract data from uploaded documents and to answer AI Coach questions. You can turn AI features off in Settings > Privacy. Extraction may contain errors or omissions. You must review every extracted field before saving it, and you are responsible for the accuracy of any data you confirm.
 
 4. Your responsibilities
 Review all imported and calculated figures before relying on them; independently verify tax and payroll obligations with qualified professionals; keep your own copies of source documents; use the app only for lawful purposes.

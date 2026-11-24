@@ -47,9 +47,11 @@ a software provider, not your accountant, attorney, or financial advisor.
 
 ### 3. AI-assisted document extraction
 
-The App uses a third-party AI service (Anthropic) to extract data from
-documents you upload (settlement statements, receipts, fuel purchases,
-W-2s, and similar records). **AI extraction may contain errors, omissions,
+With your permission (the AI consent, added 2026-11-23; you can turn it
+off in Settings > Privacy), the App uses a third-party AI service
+(Anthropic) to extract data from documents you upload (settlement
+statements, receipts, fuel purchases, W-2s, and similar records) and to
+answer AI Coach questions. **AI extraction may contain errors, omissions,
 or misreadings.** You must review every extracted field before saving it,
 and you are solely responsible for the accuracy of any data you confirm,
 save, or act upon, regardless of whether it originated from AI extraction

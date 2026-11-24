@@ -55,12 +55,20 @@ explanation needed, and nothing else about the app changes when you do.
 
 **On-device document scanning (added 2026-10-31, draft):** On-device document scanning (Google ML Kit Document Scanner on Android, Apple VisionKit on iOS); images stay on the device until you import. See docs/decisions/document-scanner.md.
 
-Documents you photograph or upload are sent to Anthropic's API for
-AI-assisted data extraction (reading amounts, dates, categories, etc. off
-the document). Anthropic processes this content to return the extracted
-data to the app; it is not used to train Anthropic's models per Anthropic's
-own API data-use terms at the time of writing. We do not sell your data to
-anyone.
+**AI features (updated 2026-11-23, draft; owner decision, AI consent):**
+AI features use Anthropic (the maker of the Claude AI). Only after you
+allow AI features (a consent screen at first launch, and again before an AI
+feature if you said "Not now"), the app sends through our server: the
+photos and PDFs you import (to read amounts, dates, categories, etc. off
+the document), your business numbers and charge descriptions (for AI Coach
+and the AI insights), and the questions you type to AI Coach. Your name and
+company name are not sent. Anthropic processes it to answer each request.
+You can turn AI features off at any time in Settings > Privacy; manual
+entry and all reports keep working. We do not sell your data to anyone.
+
+(ATTORNEY: the earlier sentence about Anthropic not training on this data
+was removed on purpose, and no retention period for Anthropic is stated,
+until Anthropic's current terms are confirmed — owner decision 2026-11-23.)
 
 ## 6. Data retention & deletion
 

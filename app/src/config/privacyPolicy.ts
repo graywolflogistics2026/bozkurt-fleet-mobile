@@ -5,7 +5,11 @@
 // on that screen, not for any gating logic.
 import { SUPPORT_EMAIL, BRAND_NAME } from '@/src/brand';
 
-export const PRIVACY_VERSION = 'draft-2026-08-27';
+// draft-2026-11-23: §5 rewritten for the AI consent (owner decision
+// 2026-11-23): names what is sent to Anthropic and the Settings > Privacy
+// switch. No "not used to train" and no retention claim until the attorney
+// confirms Anthropic's terms (owner decision 5).
+export const PRIVACY_VERSION = 'draft-2026-11-23';
 
 export const PRIVACY_TITLE = 'Privacy Policy';
 
@@ -24,7 +28,7 @@ Your financial data is yours — we don't access it without your permission. The
 To understand which parts of the app are actually used (so we know what to build and simplify), we record which screens you open and which actions you take — the screen or action name and a timestamp, tied to your account. This NEVER includes any financial value, description, document content, or anything else about what you entered — only the bare fact that a screen was opened or an action was started/completed. This data is not readable by any user, including you, through the app itself; only backend administrative access can read it, for product-decision purposes only. You can turn this off entirely at any time in Settings > Data > Usage Analytics — no explanation needed, and nothing else about the app changes when you do.
 
 5. Third-party processing
-Documents you photograph or upload are sent to Anthropic's API for AI-assisted data extraction. We do not sell your data to anyone.
+AI features use Anthropic (the maker of the Claude AI). Only after you allow AI features, the app sends through our server: the photos and PDFs you import (to read them), your business numbers and charge descriptions (for AI Coach and the AI insights), and the questions you type to AI Coach. Your name and company name are not sent. Anthropic processes it to answer each request. You can turn AI features off at any time in Settings > Privacy; manual entry and all reports keep working. We do not sell your data to anyone.
 
 6. Data retention & deletion
 You may delete your account and all associated data at any time from Settings > Delete Account & Data. This permanently removes your database records, uploaded documents/files, and your login — this action cannot be undone.
