@@ -423,7 +423,8 @@
       "useSuggestion": "“{{text}}” kullan",
       "placeholder": "Bir açıklama yazın"
     },
-    "accountantChip": "Muhasebeci: {{category}}"
+    "accountantChip": "Muhasebeci: {{category}}",
+    "primeNeedsLineChip": "Prime sayfası: satır seçilmeli"
   },
   "capitalAccount": {
     "title": "Sermaye Hesabı",
@@ -2249,6 +2250,8 @@
     "subtitle": "Cebinizden ödenen giderler, CPA'nıza vermeye hazır — aşağıdan yıl, ay ve kapsam seçin.",
     "primeDriversCard": "Aylık cepten masraflar, muhasebecinizin formatında. PDF veya Excel olarak aktarın.",
     "primeDriversBadge": "Prime Inc",
+    "primeDriversNeedsBadge_one": "{{count}} seçiminizi bekliyor",
+    "primeDriversNeedsBadge_other": "{{count}} seçiminizi bekliyor",
     "primeDriversOpen": "Aç",
     "scheduleCTitle": "Schedule C Dökümü",
     "noExpenses": "Henüz gider kaydedilmedi.",

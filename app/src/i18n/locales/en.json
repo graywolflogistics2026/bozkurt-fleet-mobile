@@ -423,7 +423,8 @@
       "useSuggestion": "Use “{{text}}”",
       "placeholder": "Type a description"
     },
-    "accountantChip": "Accountant: {{category}}"
+    "accountantChip": "Accountant: {{category}}",
+    "primeNeedsLineChip": "Prime sheet: needs a line"
   },
   "capitalAccount": {
     "title": "Capital Account",
@@ -2309,6 +2310,8 @@
     "subtitle": "Out-of-pocket expenses, ready to hand to your CPA — pick a year, month, and scope below.",
     "primeDriversCard": "Monthly out-of-pocket expenses in your accountant's format. Export to PDF or Excel.",
     "primeDriversBadge": "Prime Inc",
+    "primeDriversNeedsBadge_one": "{{count}} needs your choice",
+    "primeDriversNeedsBadge_other": "{{count}} need your choice",
     "primeDriversOpen": "Open",
     "scheduleCTitle": "Schedule C Rollup",
     "noExpenses": "No expenses recorded yet.",

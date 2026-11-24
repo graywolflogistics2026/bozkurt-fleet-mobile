@@ -164,3 +164,15 @@ describe('stage 2: unassigned rows on the sheet and in the export', () => {
     expect(fullMonth(OLD_ROWS).sections.find((s) => s.category === 'Laundry/Showers')!.rows.map((r) => r.id)).toEqual(['direct']);
   });
 });
+
+// STAGE 3: notices use the very same list (and so the same origin rule).
+import { readFileSync } from 'fs';
+import { join } from 'path';
+describe('stage 3: notices read the same needs list', () => {
+  const src = (p: string) => readFileSync(join(__dirname, '../../..', p), 'utf8');
+  test.each(['app/(tabs)/deductions.tsx', 'app/(tabs)/more/accountant-package.tsx'])('%s builds its notice from findRowsNeedingAccountantCategory + settlementDocumentIds', (p) => {
+    const s = src(p);
+    expect(s).toContain('findRowsNeedingAccountantCategory(');
+    expect(s).toContain('settlementDocumentIds(');
+  });
+});

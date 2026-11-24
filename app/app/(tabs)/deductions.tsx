@@ -22,7 +22,9 @@ import {
   syncLinkedEquipment,
 } from '@/src/data/deductionMutations';
 import { fetchReimbursementStatus, useReimburseMyself } from '@/src/data/capitalTransactions';
-import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
+import { findRowsNeedingAccountantCategory, suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
+import { useSettlements } from '@/src/data/settlements';
+import { settlementDocumentIds } from '@/src/stats/ownExpenseOrigin';
 import type { ReimbursementStatus } from '@/src/stats/capitalAccount';
 import { useLearnCategoryCorrection, fetchCarrierForDeduction } from '@/src/data/categoryLearningRules';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -138,16 +140,19 @@ function DedRow({
   onDelete,
   onMarkReviewed,
   markReviewedPending,
+  needsPrimeLine,
 }: {
   x: Deduction;
   onPress: () => void;
   onDelete: () => void;
   onMarkReviewed: () => void;
   markReviewedPending: boolean;
+  needsPrimeLine: boolean;
 }) {
   const { t } = useTranslation();
   const { money } = useFormatters();
   const descriptionFormat = useDescriptionFormat();
+  const router = useRouter();
   const personal = isPersonalPayment(x.payment_method);
   const needsReview = isDeductionNeedsReview(x);
   return (
@@ -174,6 +179,15 @@ function DedRow({
             {t('deductions.accountantChip', { category: x.accountant_category })}
           </Text>
         )}
+        {/* MANUAL LINE CHOICE (owner decision 2026-11-24): this row waits in
+            the For Prime Inc Drivers "Needs your choice" list. */}
+        {needsPrimeLine && (
+          <Pressable onPress={() => router.push('/(tabs)/more/prime-driver-expenses' as Href)} hitSlop={8}>
+            <Text style={{ color: colors.orange, fontSize: typography.size.xs, marginTop: 2, fontWeight: '700' }}>
+              {t('deductions.primeNeedsLineChip')}
+            </Text>
+          </Pressable>
+        )}
         {needsReview && <NeedsReviewChip />}
         {needsReview && <MarkReviewedButton onPress={onMarkReviewed} isPending={markReviewedPending} />}
       </View>
@@ -198,6 +212,7 @@ function DedSection({
   onMarkReviewed,
   reviewingId,
   markReviewedPending,
+  primeNeedsIds,
 }: {
   screenKey: string;
   title: string;
@@ -210,6 +225,7 @@ function DedSection({
   onMarkReviewed: (x: Deduction) => void;
   reviewingId: string | null;
   markReviewedPending: boolean;
+  primeNeedsIds: ReadonlySet<string>;
 }) {
   const { t } = useTranslation();
   const { money } = useFormatters();
@@ -242,6 +258,7 @@ function DedSection({
                   onDelete={() => onDelete(x)}
                   onMarkReviewed={() => onMarkReviewed(x)}
                   markReviewedPending={markReviewedPending && reviewingId === x.id}
+                  needsPrimeLine={primeNeedsIds.has(x.id)}
                 />
               </View>
             ))}
@@ -283,6 +300,13 @@ export default function Deductions() {
   // the selector."
   const { activeTruckId } = useActiveTruck();
   const dedQuery = useDeductions({ truck_id: truckIdFilterFor(activeTruckId) });
+  // Rows waiting for a For Prime Inc Drivers line — same list and origin
+  // rule as that screen's "Needs your choice" (owner decision 2026-11-24).
+  const settlementsForOrigin = useSettlements();
+  const primeNeedsIds = useMemo(() => {
+    const docIds = settlementDocumentIds(settlementsForOrigin.data ?? []);
+    return new Set(findRowsNeedingAccountantCategory(dedQuery.data ?? [], docIds).map((r) => r.id));
+  }, [dedQuery.data, settlementsForOrigin.data]);
   const trucksQuery = useTrucksList();
   const updateDeduction = useUpdateDeduction();
   // "NEEDS A DESCRIPTION" review (owner decision 2026-09-24, item 5) — a
@@ -969,6 +993,7 @@ export default function Deductions() {
                 onMarkReviewed={handleMarkReviewed}
                 reviewingId={reviewingId}
                 markReviewedPending={markReviewed.isPending}
+                primeNeedsIds={primeNeedsIds}
               />
             )}
             {originFilter !== 'outOfPocket' && (
@@ -984,6 +1009,7 @@ export default function Deductions() {
                 onMarkReviewed={handleMarkReviewed}
                 reviewingId={reviewingId}
                 markReviewedPending={markReviewed.isPending}
+                primeNeedsIds={primeNeedsIds}
               />
             )}
           </>

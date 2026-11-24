@@ -423,7 +423,8 @@
       "useSuggestion": "Использовать «{{text}}»",
       "placeholder": "Введите описание"
     },
-    "accountantChip": "Бухгалтер: {{category}}"
+    "accountantChip": "Бухгалтер: {{category}}",
+    "primeNeedsLineChip": "Лист Prime: нужна строка"
   },
   "capitalAccount": {
     "title": "Капитальный Счёт",
@@ -2249,6 +2250,8 @@
     "subtitle": "Расходы из своего кармана, готовые для передачи вашему CPA — выберите год, месяц и область ниже.",
     "primeDriversCard": "Личные расходы за месяц в формате бухгалтера. Выгрузка в PDF или Excel.",
     "primeDriversBadge": "Prime Inc",
+    "primeDriversNeedsBadge_one": "{{count}} ждёт вашего выбора",
+    "primeDriversNeedsBadge_other": "{{count}} ждут вашего выбора",
     "primeDriversOpen": "Открыть",
     "scheduleCTitle": "Разбивка Schedule C",
     "noExpenses": "Расходы ещё не записаны.",

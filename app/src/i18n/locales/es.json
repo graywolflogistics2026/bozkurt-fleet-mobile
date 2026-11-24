@@ -423,7 +423,8 @@
       "useSuggestion": "Usar “{{text}}”",
       "placeholder": "Escribe una descripción"
     },
-    "accountantChip": "Contador: {{category}}"
+    "accountantChip": "Contador: {{category}}",
+    "primeNeedsLineChip": "Hoja Prime: necesita una línea"
   },
   "capitalAccount": {
     "title": "Cuenta de Capital",
@@ -2249,6 +2250,8 @@
     "subtitle": "Gastos pagados de su bolsillo, listos para entregar a su CPA — elija un año, mes y alcance abajo.",
     "primeDriversCard": "Gastos de bolsillo del mes en el formato de tu contador. Exporta a PDF o Excel.",
     "primeDriversBadge": "Prime Inc",
+    "primeDriversNeedsBadge_one": "{{count}} necesita su elección",
+    "primeDriversNeedsBadge_other": "{{count}} necesitan su elección",
     "primeDriversOpen": "Abrir",
     "scheduleCTitle": "Desglose de Schedule C",
     "noExpenses": "Aún no hay gastos registrados.",

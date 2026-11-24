@@ -84,6 +84,7 @@ export function FeaturedScreenCard({
   description,
   badge,
   openLabel,
+  badgeTone = 'accent',
 }: {
   href: string;
   emoji: string;
@@ -91,6 +92,8 @@ export function FeaturedScreenCard({
   description: string;
   badge: string;
   openLabel: string;
+  // 'warn' = orange, for a count of items waiting for the user.
+  badgeTone?: 'accent' | 'warn';
 }) {
   const router = useRouter();
   return (
@@ -111,7 +114,7 @@ export function FeaturedScreenCard({
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
-        <View style={{ backgroundColor: colors.accent, borderRadius: radii.sm, paddingHorizontal: spacing.sm, paddingVertical: 2 }}>
+        <View style={{ backgroundColor: badgeTone === 'warn' ? colors.orange : colors.accent, borderRadius: radii.sm, paddingHorizontal: spacing.sm, paddingVertical: 2 }}>
           <Text style={{ color: '#ffffff', fontSize: typography.size.xs, fontWeight: '700' }}>{badge}</Text>
         </View>
       </View>

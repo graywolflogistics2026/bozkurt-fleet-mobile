@@ -423,7 +423,8 @@
       "useSuggestion": "استخدم “{{text}}”",
       "placeholder": "اكتب وصفًا"
     },
-    "accountantChip": "المحاسب: {{category}}"
+    "accountantChip": "المحاسب: {{category}}",
+    "primeNeedsLineChip": "Prime sheet: needs a line"
   },
   "capitalAccount": {
     "title": "حساب رأس المال",
@@ -2249,6 +2250,8 @@
     "subtitle": "المصروفات المدفوعة من جيبك الخاص، جاهزة لتسليمها إلى محاسبك — اختر السنة والشهر والنطاق أدناه.",
     "primeDriversCard": "Monthly out-of-pocket expenses in your accountant's format. Export to PDF or Excel.",
     "primeDriversBadge": "Prime Inc",
+    "primeDriversNeedsBadge_one": "{{count}} needs your choice",
+    "primeDriversNeedsBadge_other": "{{count}} need your choice",
     "primeDriversOpen": "Open",
     "scheduleCTitle": "تفصيل Schedule C",
     "noExpenses": "لا توجد مصروفات مسجلة بعد.",

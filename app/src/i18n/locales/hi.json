@@ -428,7 +428,8 @@
       "useSuggestion": "“{{text}}” इस्तेमाल करें",
       "placeholder": "विवरण लिखें"
     },
-    "accountantChip": "अकाउंटेंट: {{category}}"
+    "accountantChip": "अकाउंटेंट: {{category}}",
+    "primeNeedsLineChip": "Prime शीट: एक लाइन चाहिए"
   },
   "capitalAccount": {
     "title": "कैपिटल अकाउंट",
@@ -2249,6 +2250,8 @@
     "subtitle": "स्वयं-भुगतान किए गए खर्च, आपके CPA को सौंपने के लिए तैयार — नीचे एक वर्ष, महीना, और स्कोप चुनें।",
     "primeDriversCard": "महीने के जेब-ख़र्च आपके अकाउंटेंट के फ़ॉर्मेट में। PDF या Excel में निकालें।",
     "primeDriversBadge": "Prime Inc",
+    "primeDriversNeedsBadge_one": "{{count}} को आपका चुनाव चाहिए",
+    "primeDriversNeedsBadge_other": "{{count}} को आपका चुनाव चाहिए",
     "primeDriversOpen": "खोलें",
     "scheduleCTitle": "Schedule C रोलअप",
     "noExpenses": "अभी तक कोई व्यय दर्ज नहीं किया गया।",

@@ -72,6 +72,8 @@ import {
 } from '@/src/components/ui';
 import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { FeaturedScreenCard } from '@/src/components/RelatedScreenCard';
+import { findRowsNeedingAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
+import { settlementDocumentIds } from '@/src/stats/ownExpenseOrigin';
 import { estimateNoticeStrings } from '@/src/legal/estimateNotice';
 import { BRAND_NAME } from '@/src/brand';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -173,6 +175,12 @@ export default function AccountantPackage() {
 
   const settlementsQuery = useSettlements();
   const deductionsQuery = useDeductions();
+  // Featured-card count: rows waiting for a For Prime Inc Drivers line (same
+  // list and origin rule as that screen; owner decision 2026-11-24).
+  const primeNeedsCount = useMemo(
+    () => findRowsNeedingAccountantCategory(deductionsQuery.data ?? [], settlementDocumentIds(settlementsQuery.data ?? [])).length,
+    [deductionsQuery.data, settlementsQuery.data]
+  );
   const fuelQuery = useFuelPurchases();
   const maintenanceQuery = useMaintenanceRecords();
   const tollsQuery = useTolls();
@@ -746,7 +754,8 @@ export default function AccountantPackage() {
           emoji='🧳'
           title={t('nav.primeDriverExpenses')}
           description={t('accountantPackage.primeDriversCard')}
-          badge={t('accountantPackage.primeDriversBadge')}
+          badge={primeNeedsCount > 0 ? t('accountantPackage.primeDriversNeedsBadge', { count: primeNeedsCount }) : t('accountantPackage.primeDriversBadge')}
+          badgeTone={primeNeedsCount > 0 ? 'warn' : 'accent'}
           openLabel={t('accountantPackage.primeDriversOpen')}
         />
         {/* Estimates notice before the pickers and Export (owner 2026-11-24). */}
