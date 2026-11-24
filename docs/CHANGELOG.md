@@ -10,6 +10,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — For Prime Inc Drivers: custom categories wait for a line too (owner)
+
+- A user-created category (non-empty, not in `CANONICAL_CATEGORIES`, `isCustomCategory()`) is now in `needsManualLine()`: in scope with no line and no suggestion, so it shows in "Needs your choice", "Not in the grand total", the PDF/Excel Unassigned block, the badge and the chip (same function, same origin rule). Before, such rows never reached the sheet.
+- Canonical no-line categories (Insurance, Permits, Meals, ...), empty categories and vehicle registration text stay out. A row that already has a line and is moved to a custom category now stays under that line (intended).
+- Live data: one row enters the list ("Truck Parking", $19.08); no existing number changes. Reader bundle rebuilt, unchanged. No SQL, no Edge Function. Ships via `eas update`.
+
 ## 2026-11-24 — Import Yes card: category list opens as a pop-up (owner, phone test)
 
 - Yes on a single item (or on one item of several) opens `CategoryPickerSheet` (`src/components/CategoryPicker.tsx`) at once: every canonical + custom category in one big list, app order, current category selected, search, "+ Create a category" (the same `user_categories` form as Deductions, now shared). Tap = pick and close; closing keeps the current category. "Yes to all" opens nothing; each item has a large "Category: X · Change" row. No rows unchanged (212e7bc).
