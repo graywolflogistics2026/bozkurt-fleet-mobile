@@ -52,6 +52,7 @@ import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { CategorySyncCard } from '@/src/components/CategorySyncCard';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { RowDeleteButton } from '@/src/components/RowDeleteButton';
 import { captureDocument, explainCapture, takePlainPhoto } from '@/src/scan/scanDocument';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { Deduction } from '@/src/types/db';
@@ -178,10 +179,9 @@ function DedRow({
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.amount)}</Text>
-        <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: spacing.xs }}>
-          <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
-        </Pressable>
       </View>
+      {/* Delete mark: top-right corner, 44 dp (owner 2026-11-24). */}
+      <RowDeleteButton onPress={onDelete} />
     </Pressable>
   );
 }
