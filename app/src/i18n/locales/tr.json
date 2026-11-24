@@ -1403,7 +1403,8 @@
     "primeYtdDepositsInfo": "Prime'ın yılbaşından beri toplamı {{prime}}; içe aktardığınız haftaların toplamı {{ours}}",
     "primeYtdDepositsEarlier": "({{amount}} içe aktarılmamış önceki haftalar)",
     "primeYtdDepositsMatch": "(eşleşiyor)",
-    "primeYtdDepositsMore": "(Prime'ın yılbaşından beri toplamından {{amount}} fazla; bir hafta iki kez içe aktarılmış olabilir)"
+    "primeYtdDepositsMore": "(Prime'ın yılbaşından beri toplamından {{amount}} fazla; bir hafta iki kez içe aktarılmış olabilir)",
+    "statementLoadsNote": "Bu haftanın satır ayrıntıları kaydedilmedi, bu yüzden bu yükler ekstreden geliyor. Kayıt değiller ve sayılmazlar."
   },
   "reimbursements": {
     "title": "Geri Ödemeler",

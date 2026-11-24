@@ -1403,7 +1403,8 @@
     "primeYtdDepositsInfo": "إجمالي Prime منذ بداية السنة {{prime}}؛ مجموع أسابيعك المستوردة {{ours}}",
     "primeYtdDepositsEarlier": "({{amount}} أسابيع سابقة لم تُستورد)",
     "primeYtdDepositsMatch": "(متطابقان)",
-    "primeYtdDepositsMore": "({{amount}} أكثر من إجمالي Prime منذ بداية السنة؛ ربما استُورد أسبوع مرتين)"
+    "primeYtdDepositsMore": "({{amount}} أكثر من إجمالي Prime منذ بداية السنة؛ ربما استُورد أسبوع مرتين)",
+    "statementLoadsNote": "Line details were not saved for this week, so these loads come from the statement. They are not records and are not counted."
   },
   "reimbursements": {
     "title": "المبالغ المستردة",

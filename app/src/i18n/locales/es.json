@@ -1403,7 +1403,8 @@
     "primeYtdDepositsInfo": "El acumulado del año de Prime dice {{prime}}; tus semanas importadas suman {{ours}}",
     "primeYtdDepositsEarlier": "({{amount}} son semanas anteriores no importadas)",
     "primeYtdDepositsMatch": "(coinciden)",
-    "primeYtdDepositsMore": "({{amount}} más que el acumulado de Prime; puede que una semana esté importada dos veces)"
+    "primeYtdDepositsMore": "({{amount}} más que el acumulado de Prime; puede que una semana esté importada dos veces)",
+    "statementLoadsNote": "Los detalles de esta semana no se guardaron, así que estas cargas vienen del estado de cuenta. No son registros y no se cuentan."
   },
   "reimbursements": {
     "title": "Reembolsos",

@@ -1408,7 +1408,8 @@
     "primeYtdDepositsInfo": "Prime के अनुसार इस साल अब तक {{prime}}; आपके आयात किए गए हफ़्तों का जोड़ {{ours}}",
     "primeYtdDepositsEarlier": "({{amount}} पहले के वे हफ़्ते हैं जो आयात नहीं हुए)",
     "primeYtdDepositsMatch": "(दोनों मेल खाते हैं)",
-    "primeYtdDepositsMore": "(Prime के इस साल के आंकड़े से {{amount}} ज़्यादा; शायद कोई हफ़्ता दो बार आयात हुआ है)"
+    "primeYtdDepositsMore": "(Prime के इस साल के आंकड़े से {{amount}} ज़्यादा; शायद कोई हफ़्ता दो बार आयात हुआ है)",
+    "statementLoadsNote": "इस सप्ताह का विवरण सेव नहीं हुआ, इसलिए ये लोड स्टेटमेंट से हैं। ये रिकॉर्ड नहीं हैं और गिने नहीं जाते।"
   },
   "reimbursements": {
     "title": "प्रतिपूर्तियां",

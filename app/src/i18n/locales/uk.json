@@ -1403,7 +1403,8 @@
     "primeYtdDepositsInfo": "Prime's YTD says {{prime}}; your imported weeks add up to {{ours}}",
     "primeYtdDepositsEarlier": "({{amount}} is earlier weeks not imported)",
     "primeYtdDepositsMatch": "(they match)",
-    "primeYtdDepositsMore": "({{amount}} more than Prime's YTD; a week may be imported twice)"
+    "primeYtdDepositsMore": "({{amount}} more than Prime's YTD; a week may be imported twice)",
+    "statementLoadsNote": "Line details were not saved for this week, so these loads come from the statement. They are not records and are not counted."
   },
   "reimbursements": {
     "title": "Reimbursements",

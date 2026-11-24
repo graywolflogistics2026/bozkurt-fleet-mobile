@@ -1403,7 +1403,8 @@
     "primeYtdDepositsInfo": "По данным Prime с начала года {{prime}}; ваши импортированные недели дают {{ours}}",
     "primeYtdDepositsEarlier": "({{amount}} — более ранние недели, которые не импортированы)",
     "primeYtdDepositsMatch": "(совпадает)",
-    "primeYtdDepositsMore": "(на {{amount}} больше, чем у Prime с начала года; возможно, неделя импортирована дважды)"
+    "primeYtdDepositsMore": "(на {{amount}} больше, чем у Prime с начала года; возможно, неделя импортирована дважды)",
+    "statementLoadsNote": "Детали этой недели не сохранены, поэтому эти грузы взяты из выписки. Это не записи, и они не учитываются."
   },
   "reimbursements": {
     "title": "Возмещения",

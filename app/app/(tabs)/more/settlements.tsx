@@ -18,6 +18,9 @@ import { useFuelPurchases } from '@/src/data/fuelPurchases';
 import { useMaintenanceRecords } from '@/src/data/maintenanceRecords';
 import { useTolls } from '@/src/data/tolls';
 import { useDocuments } from '@/src/data/documents';
+// VIEW ONLY (owner 2026-11-24): a week saved without line details shows the
+// loads printed on its statement. Never records, never counted.
+import { statementOnlyLoadWeeks } from '@/src/stats/statementLoads';
 import { useTrucksList } from '@/src/data/trucks';
 import { heldByCarrier } from '@/src/stats/heldByCarrier';
 import { HeldByCarrierCard } from '@/src/components/HeldByCarrierCard';
@@ -294,6 +297,13 @@ export default function Settlements() {
     if (!selected) return [];
     return (loadsQuery.data ?? []).filter((l) => l.settlement_id === selected.id);
   }, [loadsQuery.data, selected]);
+
+  // Loads printed on the statement of a week saved without line details
+  // (no loads rows). Display only.
+  const statementLoads = useMemo(() => {
+    if (!selected) return [];
+    return statementOnlyLoadWeeks([selected], documentsQuery.data ?? [], loadsQuery.data ?? [])[0]?.loads ?? [];
+  }, [selected, documentsQuery.data, loadsQuery.data]);
 
   const revenueItems = useMemo(() => {
     if (!selected?.document_id) return [];
@@ -819,6 +829,28 @@ export default function Settlements() {
                         <MutedText>{number(l.loaded_miles ?? 0)} mi</MutedText>
                       </View>
                       <Text style={styles.detailDesc}>{money(l.revenue ?? 0)}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {settlementLoads.length === 0 && statementLoads.length > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>{t('settlementsScreen.loadsCount', { count: statementLoads.length })}</Text>
+                  <MutedText style={{ color: colors.orange, marginBottom: spacing.xs }}>{t('settlementsScreen.statementLoadsNote')}</MutedText>
+                  {statementLoads.map((l) => (
+                    <View key={l.key} style={styles.detailRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.detailDesc, { color: colors.muted }]}>
+                          {l.origin ?? '—'} → {l.destination ?? '—'}
+                        </Text>
+                        <MutedText>
+                          {l.order ? '#' + l.order + ' · ' : ''}
+                          {t('loads.statementMiles', { loaded: number(l.loadedMiles), empty: number(l.emptyMiles) })}
+                        </MutedText>
+                        <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('loads.fromStatement')}</Text>
+                      </View>
+                      {l.revenueAsPrinted != null && <MutedText>{t('loads.asPrinted', { amount: money(l.revenueAsPrinted) })}</MutedText>}
                     </View>
                   ))}
                 </>
