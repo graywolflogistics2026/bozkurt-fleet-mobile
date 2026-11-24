@@ -931,6 +931,7 @@
   "placeholders": {},
   "truckHealth": {
     "title": "Kamyon Durumu",
+    "maintenanceCard": "Tüm bakım ve onarım kayıtları: ekleyin, düzenleyin ve geçmişi görün.",
     "noTrucks": "Henüz kamyon yok. Bakım takibine başlamak için bir tane ekleyin.",
     "addTruck": "Kamyon Ekle",
     "noIntervals": "Bu kamyon için henüz bakım kategorisi yapılandırılmadı.",

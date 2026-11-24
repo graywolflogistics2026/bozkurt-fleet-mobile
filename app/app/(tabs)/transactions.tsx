@@ -1,8 +1,9 @@
 import { useDescriptionFormat } from '@/src/lib/useDescriptionFormat';
 import { describeDeduction } from '@/src/lib/descriptionText';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, type Href } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useBackToParent } from '@/src/navigation/useBackToParent';
 import { useTranslation } from 'react-i18next';
 import { useSettlements } from '@/src/data/settlements';
 import { useDeductions } from '@/src/data/deductions';
@@ -42,53 +43,9 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 // settlements/deductions data the Deductions and Settlements screens
 // already manage; tapping a row goes to the screen that owns it (this
 // screen doesn't duplicate their add/edit/delete flows).
-// BACK TO THE CARD'S PARENT (owner 2026-11-24): Transactions is a hidden
-// tab route, so by default back goes Home (backBehavior 'initialRoute').
-// Opened from the Operating P&L card (?from=operating-pnl), the hardware
-// back button and a header arrow return to Operating P&L instead. The
-// param is cleared when the screen loses focus, so any later open without
-// it (Home's daily tip) keeps the Home fallback unchanged.
-const BACK_TARGETS: Record<string, string> = {
-  'operating-pnl': '/(tabs)/more/operating-pnl',
-};
-
-function useBackToParent() {
-  const router = useRouter();
-  const navigation = useNavigation();
-  const { from } = useLocalSearchParams<{ from?: string }>();
-  const target = from ? BACK_TARGETS[from] : undefined;
-
-  const goBack = useCallback(() => {
-    if (target) router.navigate(target as Href);
-  }, [router, target]);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerLeft: target
-        ? () => (
-            <Pressable onPress={goBack} hitSlop={12} accessibilityRole="button" style={{ paddingHorizontal: spacing.md }}>
-              <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
-            </Pressable>
-          )
-        : undefined,
-    });
-  }, [navigation, target, goBack]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!target) return undefined;
-      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-        goBack();
-        return true;
-      });
-      return () => {
-        sub.remove();
-        navigation.setParams({ from: undefined } as never);
-      };
-    }, [target, goBack, navigation])
-  );
-}
-
+// BACK TO THE CARD'S PARENT (owner 2026-11-24): opened from the Operating
+// P&L card (?from=operating-pnl), back returns there; otherwise Home as
+// before. Shared hook: src/navigation/useBackToParent.tsx.
 export default function Transactions() {
   useBackToParent();
   const { t } = useTranslation();

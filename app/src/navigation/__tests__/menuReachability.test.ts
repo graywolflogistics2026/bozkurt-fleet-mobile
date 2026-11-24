@@ -103,16 +103,16 @@ describe('the menu (owner decisions 2026-11-23)', () => {
     expect(read('app/(tabs)/more/_layout.tsx')).toContain("name=\"asset-register\" options={{ title: t('nav.assetRegister') }}");
   });
 
-  test('final menu (owner 2026-11-24): 18 rows in 6 sections, exactly', () => {
+  test('final menu (owner 2026-11-24): 17 rows in 6 sections, exactly', () => {
     expect(menuSections().map((s) => [s.titleKey, s.items.map((i) => i.href as string)])).toEqual([
       ['sidebar.sections.revenue', ['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements']],
-      ['sidebar.sections.expenses', ['/(tabs)/more/fuel', '/(tabs)/more/maintenance', '/(tabs)/more/tolls', '/(tabs)/deductions']],
+      ['sidebar.sections.expenses', ['/(tabs)/more/fuel', '/(tabs)/more/tolls', '/(tabs)/deductions']],
       ['sidebar.sections.overview', ['/(tabs)/more/operating-pnl', '/(tabs)/truck-health', '/(tabs)/more/ceo-mode']],
       ['sidebar.sections.business', ['/(tabs)/more/trucks', '/(tabs)/more/drivers', '/(tabs)/more/capital-account', '/(tabs)/more/documents', '/(tabs)/more/compliance']],
       ['sidebar.sections.taxAccounting', ['/(tabs)/more/accountant-package', '/(tabs)/more/tax-estimator']],
       ['sidebar.sections.system', ['/(tabs)/more/settings']],
     ]);
-    expect(menuItems()).toHaveLength(18);
+    expect(menuItems()).toHaveLength(17);
     // Renewals & Expiry Dates (compliance) is only a menu row now; its Documents card was removed (owner 2026-11-24).
     expect(read(screenFile('/(tabs)/more/documents'))).not.toContain('<RelatedScreenCard');
   });
@@ -130,6 +130,7 @@ describe('the menu (owner decisions 2026-11-23)', () => {
       '/(tabs)/more/profit-analysis': '/(tabs)/more/operating-pnl',
       '/(tabs)/more/scorecard': '/(tabs)/more/operating-pnl',
       '/(tabs)/transactions': '/(tabs)/more/operating-pnl',
+      '/(tabs)/more/maintenance': '/(tabs)/truck-health',
       '/(tabs)/more/data-cleanup': '/(tabs)/more/category-learning',
       '/(tabs)/more/category-learning': 'settings',
       '/(tabs)/more/referral': 'settings',
@@ -137,9 +138,28 @@ describe('the menu (owner decisions 2026-11-23)', () => {
   });
 
   test('the daily screens are separate rows', () => {
-    for (const h of ['/(tabs)/more/loads', '/(tabs)/more/settlements', '/(tabs)/more/fuel', '/(tabs)/more/maintenance', '/(tabs)/more/tolls', '/(tabs)/deductions']) {
+    for (const h of ['/(tabs)/more/loads', '/(tabs)/more/settlements', '/(tabs)/more/fuel', '/(tabs)/more/tolls', '/(tabs)/deductions']) {
       expect(menu).toContain(h);
     }
+  });
+
+  test('Maintenance (owner 2026-11-24): not a menu/sidebar row; a card on Truck Health with from=truck-health; back maps there; other ways in kept', () => {
+    const m = '/(tabs)/more/maintenance';
+    expect(menu).not.toContain(m);
+    expect(sidebarItems().map((i) => i.href as string)).not.toContain(m);
+    expect(MENU_REACHED_FROM[m]).toEqual({ kind: 'parent', parent: '/(tabs)/truck-health' });
+    const health = read('app/(tabs)/truck-health.tsx');
+    expect(linksTo(health, m)).toBe(true);
+    expect(health).toContain("params={{ from: 'truck-health' }}");
+    expect(read('app/(tabs)/more/maintenance.tsx')).toContain('useBackToParent()');
+    expect(read('src/navigation/useBackToParent.tsx')).toContain("'truck-health': '/(tabs)/truck-health'");
+    // Screen and route unchanged; still in the internal registry (Reports, daily tips).
+    expect(read('app/(tabs)/more/_layout.tsx')).toContain("name=\"maintenance\" options={{ title: t('nav.maintenance') }}");
+    expect(rawHrefs).toContain(m);
+    // The other links into Maintenance stay.
+    expect(read('src/navigation/linkedRecordRoute.ts')).toContain(`'${m}'`);
+    expect(read('src/components/ProfitExplainer.tsx')).toContain(`'${m}'`);
+    expect(read('src/alerts/dailyTips.ts')).toContain(`'${m}'`);
   });
 
   test('wide sidebar: Home on top (no heading), then exactly the menu rows', () => {
@@ -193,8 +213,9 @@ describe('tab bar (owner decision 2026-11-23)', () => {
     expect(linksTo(pnl, '/(tabs)/transactions')).toBe(true);
     // The card tells Transactions where back goes; Transactions maps it to Operating P&L.
     expect(pnl).toContain("params={{ from: 'operating-pnl' }}");
-    const tx = read('app/(tabs)/transactions.tsx');
-    expect(tx).toContain("'operating-pnl': '/(tabs)/more/operating-pnl'");
-    expect(tx).toContain('hardwareBackPress');
+    expect(read('app/(tabs)/transactions.tsx')).toContain('useBackToParent()');
+    const hook = read('src/navigation/useBackToParent.tsx');
+    expect(hook).toContain("'operating-pnl': '/(tabs)/more/operating-pnl'");
+    expect(hook).toContain('hardwareBackPress');
   });
 });

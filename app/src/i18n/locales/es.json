@@ -931,6 +931,7 @@
   "placeholders": {},
   "truckHealth": {
     "title": "Estado del Camión",
+    "maintenanceCard": "Cada registro de servicio y reparación: agregar, editar y ver el historial.",
     "noTrucks": "Aún no hay camiones. Agregue uno para empezar a rastrear el mantenimiento.",
     "addTruck": "Agregar Camión",
     "noIntervals": "Este camión aún no tiene categorías de mantenimiento configuradas.",

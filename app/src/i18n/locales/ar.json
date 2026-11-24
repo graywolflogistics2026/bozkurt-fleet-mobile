@@ -931,6 +931,7 @@
   "placeholders": {},
   "truckHealth": {
     "title": "حالة الشاحنة",
+    "maintenanceCard": "Every service and repair record: add, edit and see the history.",
     "noTrucks": "لا توجد شاحنات بعد. أضف واحدة لبدء تتبع الصيانة.",
     "addTruck": "إضافة شاحنة",
     "noIntervals": "لم يتم تكوين فئات صيانة لهذه الشاحنة بعد.",

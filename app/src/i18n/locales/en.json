@@ -931,6 +931,7 @@
   "placeholders": {},
   "truckHealth": {
     "title": "Truck Health",
+    "maintenanceCard": "Every service and repair record: add, edit and see the history.",
     "whichTruckTitle": "Which truck do you want to view?",
     "changeTruck": "Change truck (viewing Unit {{unit}})",
     "noTrucks": "No trucks yet. Add one to start tracking maintenance.",

@@ -15,6 +15,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { MAINTENANCE_TYPES, MAINTENANCE_TYPE_ICON, type MaintenanceType } from '@/src/truck/categories';
 import { callAiAdvisor } from '@/src/data/aiAdvisorCall';
 import { findRowToAutoOpen } from '@/src/navigation/autoOpenParam';
+import { useBackToParent } from '@/src/navigation/useBackToParent';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
@@ -74,6 +75,9 @@ function emptyForm(): FormState {
 }
 
 export default function Maintenance() {
+  // Opened from the Truck Health card (?from=truck-health, owner
+  // 2026-11-24): back returns to Truck Health. Any other way in: unchanged.
+  useBackToParent();
   const { t } = useTranslation();
   const { money, date, number } = useFormatters();
   const { session } = useAuth();

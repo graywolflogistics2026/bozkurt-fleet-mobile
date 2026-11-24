@@ -21,6 +21,7 @@ import {
   type NotificationPermissionStatus,
 } from '@/src/notifications/truckHealthNotifications';
 import { useFormatters } from '@/src/i18n/format';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { MaintenanceInterval } from '@/src/types/db';
@@ -352,6 +353,16 @@ export default function TruckHealth() {
             </Pressable>
           )}
         </View>
+
+        {/* Maintenance left the Menu (owner 2026-11-24): opened from here.
+            from=truck-health makes its back button return here. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/maintenance'
+          params={{ from: 'truck-health' }}
+          emoji='🔧'
+          title={t('nav.maintenance')}
+          description={t('truckHealth.maintenanceCard')}
+        />
 
         {isLoading ? (
           <Card>

@@ -196,7 +196,8 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
   },
   {
     titleKey: 'sidebar.sections.expenses',
-    hrefs: ['/(tabs)/more/fuel', '/(tabs)/more/maintenance', '/(tabs)/more/tolls', '/(tabs)/deductions'],
+    // Maintenance left the menu (owner 2026-11-24): a card on Truck Health.
+    hrefs: ['/(tabs)/more/fuel', '/(tabs)/more/tolls', '/(tabs)/deductions'],
   },
   {
     titleKey: 'sidebar.sections.overview',
@@ -250,6 +251,9 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   // Owner 2026-11-24: Transactions (hidden tab route) is a card on Operating
   // P&L; back from it returns there (transactions.tsx useBackToParent).
   '/(tabs)/transactions': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
+  // Owner 2026-11-24: a card on Truck Health; back from it returns there
+  // (maintenance.tsx useBackToParent, from=truck-health).
+  '/(tabs)/more/maintenance': { kind: 'parent', parent: '/(tabs)/truck-health' },
   // Owner 2026-11-23: a card on Other Income (reimbursements reduce expenses, never income).
   '/(tabs)/more/reimbursements': { kind: 'parent', parent: '/(tabs)/more/other-income' },
   // Owner 2026-11-23: a card on Tax Estimator.
