@@ -114,7 +114,7 @@ describe('the menu (owner decisions 2026-11-23)', () => {
       ['sidebar.sections.system', ['/(tabs)/more/settings']],
     ]);
     expect(menuItems()).toHaveLength(20);
-    // Documents & Renewals is a row AND still a card on Documents (owner 2026-11-23).
+    // Renewals & Expiry Dates (compliance) is a row AND still a card on Documents (owner 2026-11-23/24).
     expect(linksTo(read(screenFile('/(tabs)/more/documents')), '/(tabs)/more/compliance')).toBe(true);
   });
 

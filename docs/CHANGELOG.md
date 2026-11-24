@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — "Documents & Renewals" renamed "Renewals & Expiry Dates" (owner)
+
+The compliance screen's label (menu row, sidebar, Reports, screen header, Alerts section, import "saved to" route labels, daily tips) is now "Renewals & Expiry Dates" in all 7 locales (`nav.compliance`, `compliance.title`, `alerts.complianceSection`, `docTypes.*.route`, `dailyTips.tipDocumentsRenewals.v0/v1`); the Documents card uses `nav.compliance` and `documentsArchive.renewalsCardTitle` is removed. Route `/(tabs)/more/compliance` and behaviour unchanged. Ships via `eas update`.
+
 ## 2026-11-23 — Menu: Documents & Renewals row back; Scorecard card on Operating P&L (owner)
 
 - Documents & Renewals (compliance) is a menu row again, in Business right after Documents (existing label); the "Renewals & expiry dates" card on Documents stays. Menu: 20 rows, 6 sections (Business 6).

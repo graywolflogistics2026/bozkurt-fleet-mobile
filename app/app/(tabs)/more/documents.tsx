@@ -356,13 +356,13 @@ export default function DocumentsArchive() {
             screen already is. */}
         <FleetScopeLabel variant="fleetOnly" />
 
-        {/* Documents & Renewals (compliance) left the Menu (owner
-            2026-11-23): opened from here as "Renewals & expiry dates". Its
-            screen title, alerts, tips and AI links are unchanged. */}
+        {/* Renewals & Expiry Dates (the compliance screen; renamed from
+            "Documents & Renewals", owner 2026-11-24): a menu row AND this
+            card, both with the same label key as the menu and screen title. */}
         <RelatedScreenCard
           href='/(tabs)/more/compliance'
           emoji='🪪'
-          title={t('documentsArchive.renewalsCardTitle')}
+          title={t('nav.compliance')}
           description={t('documentsArchive.renewalsCard')}
         />
         <MutedText style={{ marginBottom: spacing.sm }}>{t('documentsArchive.subtitle')}</MutedText>

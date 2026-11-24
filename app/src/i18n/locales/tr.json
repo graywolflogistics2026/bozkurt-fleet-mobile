@@ -57,7 +57,7 @@
     "profitAnalysis": "Kâr Analizi",
     "scorecard": "Karne",
     "ceoMode": "Yapay Zeka Koçu",
-    "compliance": "Belgeler ve Yenilemeler",
+    "compliance": "Yenilemeler ve Son Tarihler",
     "documents": "Belgeler",
     "categoryLearning": "Kategori Öğrenimi",
     "referral": "Davet Et ve Kazan",
@@ -1275,23 +1275,23 @@
     },
     "medical_card": {
       "label": "DOT Sağlık Kartı",
-      "route": "Belgeler ve Yenilemeler"
+      "route": "Yenilemeler ve Son Tarihler"
     },
     "inspection_report": {
       "label": "DOT Muayene Raporu",
-      "route": "Belgeler ve Yenilemeler"
+      "route": "Yenilemeler ve Son Tarihler"
     },
     "registration_cab_card": {
       "label": "IRP Tescili/Kabin Kartı",
-      "route": "Belgeler ve Yenilemeler"
+      "route": "Yenilemeler ve Son Tarihler"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (Form 2290) Ek 1",
-      "route": "Belgeler ve Yenilemeler"
+      "route": "Yenilemeler ve Son Tarihler"
     },
     "insurance_policy": {
       "label": "Sigorta Poliçesi",
-      "route": "Belgeler ve Yenilemeler"
+      "route": "Yenilemeler ve Son Tarihler"
     },
     "loan_agreement": {
       "label": "Kredi/Finansman Sözleşmesi",
@@ -1926,7 +1926,7 @@
     "title": "Uyarılar",
     "empty": "Her şey yolunda — şu anda dikkat gerektiren bakım veya yenileme öğesi yok.",
     "maintenanceSection": "Kamyon Sağlığı",
-    "complianceSection": "Belgeler ve Yenilemeler",
+    "complianceSection": "Yenilemeler ve Son Tarihler",
     "nudgesSection": "Uygulamadan daha fazlasını al",
     "silence": "Bunu bir daha gösterme",
     "unsilence": "Tekrar göster",
@@ -2010,7 +2010,7 @@
     "slide3Body": "Yapay zeka, settlement, fiş ve faturaları otomatik olarak doğru yere sıralar."
   },
   "compliance": {
-    "title": "Belgeler ve Yenilemeler",
+    "title": "Yenilemeler ve Son Tarihler",
     "subtitle": "DOT, IRP, HVUT 2290, IFTA, sigorta, CDL, uyuşturucu konsorsiyumu — ve takip etmek istediğiniz başka her şey. Yenilemeler ve son tarihler tek yerde.",
     "add": "Öğe Ekle",
     "addTitle": "Öğe Ekle",
@@ -2080,7 +2080,6 @@
   "documentsArchive": {
     "title": "Belgeler",
     "subtitle": "Bugüne kadar içe aktardığınız her fiş ve PDF, tek bir yerde.",
-    "renewalsCardTitle": "Yenilemeler ve son tarihler",
     "renewalsCard": "Sağlık kartı, muayene, kayıt, HVUT/2290, sigorta ve diğer son tarihler.",
     "searchPlaceholder": "Dosya adı, tür veya tutara göre ara",
     "allTypes": "Tümü",
@@ -2715,8 +2714,8 @@
       "v2": "Per diem günleri, üç aylık son tarihler ve — kâr yeterli olduğunda — bir S-Corp karşılaştırması hepsi tek ekranda, hepsi tahmin, asla dosyalanmış bir beyanname değil."
     },
     "tipDocumentsRenewals": {
-      "v0": "Belgeler & Yenilemeler son kullanma tarihlerini takip eder — HVUT 2290, IRP, sağlık kartı, CDL, muayene — ve süresi dolmadan sizi uyarır.",
-      "v1": "Sağlık kartınızın veya IRP yenilemenizin tam olarak ne zaman geldiğini biliyor musunuz? Belgeler & Yenilemeler bunu takip eder, siz hatırlamak zorunda kalmazsınız.",
+      "v0": "Yenilemeler ve Son Tarihler, son kullanma tarihlerini takip eder — HVUT 2290, IRP, sağlık kartı, CDL, muayene — ve süresi dolmadan sizi uyarır.",
+      "v1": "Sağlık kartınızın veya IRP yenilemenizin tam olarak ne zaman geldiğini biliyor musunuz? Yenilemeler ve Son Tarihler bunu takip eder, siz hatırlamak zorunda kalmazsınız.",
       "v2": "Burada henüz hiçbir şey takip edilmiyor — ilk yenileme tarihinizi eklemek bu ekranı boş bir sayfadan erken uyarı sistemine dönüştürür."
     },
     "tipDocuments": {

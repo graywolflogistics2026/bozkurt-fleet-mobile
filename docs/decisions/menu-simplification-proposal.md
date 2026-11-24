@@ -5,10 +5,13 @@ below. Stage 2's owner decisions (below) REPLACE the Stage 2 plan in §2-§3
 of this proposal and Stage 1's "no headings" decision.
 
 Follow-up (owner 2026-11-23, after Stage 2), CURRENT state:
-- Documents & Renewals (compliance) is a menu row again, in Business right
-  after Documents (existing label). The "Renewals & expiry dates" card on
-  Documents stays. Final menu: 20 rows; Business = Trucks, Drivers, Assets
-  & Equipment, Capital Account, Documents, Documents & Renewals.
+- The compliance screen is a menu row again, in Business right after
+  Documents. Renamed 2026-11-24 from "Documents & Renewals" to "Renewals &
+  Expiry Dates" (key `nav.compliance`, also the screen title and the
+  Documents card title). The card on Documents stays. Final menu: 20 rows;
+  Business = Trucks, Drivers, Assets & Equipment, Capital Account,
+  Documents, Renewals & Expiry Dates. (Older text below that says
+  "Documents & Renewals" means this same screen.)
 - Scorecard is a third card on Operating P&L (after Cash Flow and Profit
   Analysis). Still hidden from the phone menu, still on the Reports tab,
   still linked from Truck Comparison. The wide-sidebar-only Scorecard row

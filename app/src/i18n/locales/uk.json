@@ -57,7 +57,7 @@
     "profitAnalysis": "Profit Analysis",
     "scorecard": "Scorecard",
     "ceoMode": "AI Coach",
-    "compliance": "Documents & Renewals",
+    "compliance": "Поновлення та терміни дії",
     "documents": "Documents",
     "categoryLearning": "Category Learning",
     "referral": "Invite & Earn",
@@ -1275,23 +1275,23 @@
     },
     "medical_card": {
       "label": "DOT Medical Card",
-      "route": "Documents & Renewals"
+      "route": "Поновлення та терміни дії"
     },
     "inspection_report": {
       "label": "DOT Inspection Report",
-      "route": "Documents & Renewals"
+      "route": "Поновлення та терміни дії"
     },
     "registration_cab_card": {
       "label": "IRP Registration/Cab Card",
-      "route": "Documents & Renewals"
+      "route": "Поновлення та терміни дії"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (Form 2290) Schedule 1",
-      "route": "Documents & Renewals"
+      "route": "Поновлення та терміни дії"
     },
     "insurance_policy": {
       "label": "Insurance Policy",
-      "route": "Documents & Renewals"
+      "route": "Поновлення та терміни дії"
     },
     "loan_agreement": {
       "label": "Loan/Financing Agreement",
@@ -1926,7 +1926,7 @@
     "title": "Alerts",
     "empty": "You're all caught up — no maintenance or renewal items need attention right now.",
     "maintenanceSection": "Truck Health",
-    "complianceSection": "Documents & Renewals",
+    "complianceSection": "Поновлення та терміни дії",
     "nudgesSection": "Get more out of the app",
     "silence": "Don't show this again",
     "unsilence": "Show again",
@@ -2010,7 +2010,7 @@
     "slide3Body": "AI sorts settlements, receipts, and invoices into the right place automatically."
   },
   "compliance": {
-    "title": "Documents & Renewals",
+    "title": "Поновлення та терміни дії",
     "subtitle": "DOT, IRP, HVUT 2290, IFTA, insurance, CDL, drug consortium — plus anything else you want to track. Renewals and deadlines in one place.",
     "add": "Add Item",
     "addTitle": "Add Item",
@@ -2080,7 +2080,6 @@
   "documentsArchive": {
     "title": "Documents",
     "subtitle": "Every receipt and PDF you've ever imported, in one place.",
-    "renewalsCardTitle": "Renewals & expiry dates",
     "renewalsCard": "Medical card, inspection, registration, HVUT/2290, insurance and other due dates.",
     "searchPlaceholder": "Search filename, type, or amount",
     "allTypes": "All",
@@ -2715,8 +2714,8 @@
       "v2": "Per diem days, quarterly deadlines and — once profit justifies it — an S-Corp comparison all live on one screen, all estimates, never a filed return."
     },
     "tipDocumentsRenewals": {
-      "v0": "Documents & Renewals tracks expiry dates — HVUT 2290, IRP, medical card, CDL, inspection — and warns you before any of them lapse.",
-      "v1": "Know exactly when your medical card or IRP renewal is due? Documents & Renewals tracks it so you don't have to remember.",
+      "v0": "Renewals & Expiry Dates tracks your deadlines — HVUT 2290, IRP, medical card, CDL, inspection — and warns you before any of them lapse.",
+      "v1": "Know exactly when your medical card or IRP renewal is due? Renewals & Expiry Dates tracks it so you don't have to remember.",
       "v2": "Nothing's being tracked here yet — adding your first renewal date turns this into an early-warning system instead of an empty screen."
     },
     "tipDocuments": {

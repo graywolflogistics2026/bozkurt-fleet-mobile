@@ -57,7 +57,7 @@
     "profitAnalysis": "Análisis de Ganancias",
     "scorecard": "Calificación",
     "ceoMode": "Coach de IA",
-    "compliance": "Documentos y Renovaciones",
+    "compliance": "Renovaciones y Vencimientos",
     "documents": "Documentos",
     "categoryLearning": "Aprendizaje de Categorías",
     "referral": "Invitar y Ganar",
@@ -1275,23 +1275,23 @@
     },
     "medical_card": {
       "label": "Tarjeta Médica DOT",
-      "route": "Documentos y Renovaciones"
+      "route": "Renovaciones y Vencimientos"
     },
     "inspection_report": {
       "label": "Informe de Inspección DOT",
-      "route": "Documentos y Renovaciones"
+      "route": "Renovaciones y Vencimientos"
     },
     "registration_cab_card": {
       "label": "Registro IRP/Tarjeta de Cabina",
-      "route": "Documentos y Renovaciones"
+      "route": "Renovaciones y Vencimientos"
     },
     "irs_2290_schedule1": {
       "label": "HVUT (Formulario 2290) Anexo 1",
-      "route": "Documentos y Renovaciones"
+      "route": "Renovaciones y Vencimientos"
     },
     "insurance_policy": {
       "label": "Póliza de Seguro",
-      "route": "Documentos y Renovaciones"
+      "route": "Renovaciones y Vencimientos"
     },
     "loan_agreement": {
       "label": "Contrato de Financiamiento/Préstamo",
@@ -1926,7 +1926,7 @@
     "title": "Alertas",
     "empty": "Ya estás al día — no hay elementos de mantenimiento o renovación que requieran atención en este momento.",
     "maintenanceSection": "Salud del Camión",
-    "complianceSection": "Documentos y Renovaciones",
+    "complianceSection": "Renovaciones y Vencimientos",
     "nudgesSection": "Aprovecha más la app",
     "silence": "No mostrar esto de nuevo",
     "unsilence": "Mostrar de nuevo",
@@ -2010,7 +2010,7 @@
     "slide3Body": "La IA clasifica settlements, recibos y facturas automáticamente en el lugar correcto."
   },
   "compliance": {
-    "title": "Documentos y Renovaciones",
+    "title": "Renovaciones y Vencimientos",
     "subtitle": "DOT, IRP, HVUT 2290, IFTA, seguro, CDL, consorcio antidrogas — y cualquier otra cosa que quieras rastrear. Renovaciones y fechas límite en un solo lugar.",
     "add": "Agregar Elemento",
     "addTitle": "Agregar Elemento",
@@ -2080,7 +2080,6 @@
   "documentsArchive": {
     "title": "Documentos",
     "subtitle": "Todos los recibos y PDF que has importado, en un solo lugar.",
-    "renewalsCardTitle": "Renovaciones y vencimientos",
     "renewalsCard": "Tarjeta médica, inspección, registro, HVUT/2290, seguro y otras fechas de vencimiento.",
     "searchPlaceholder": "Buscar por archivo, tipo o monto",
     "allTypes": "Todos",
@@ -2715,8 +2714,8 @@
       "v2": "Los días de per diem, las fechas trimestrales y — una vez que la ganancia lo justifique — una comparación de S-Corp viven todos en una sola pantalla, todo estimado, nunca una declaración presentada."
     },
     "tipDocumentsRenewals": {
-      "v0": "Documentos y Renovaciones rastrea fechas de vencimiento — HVUT 2290, IRP, tarjeta médica, CDL, inspección — y te avisa antes de que alguna venza.",
-      "v1": "¿Sabes exactamente cuándo vence tu tarjeta médica o tu renovación de IRP? Documentos y Renovaciones lo rastrea para que no tengas que recordarlo.",
+      "v0": "Renovaciones y Vencimientos rastrea tus plazos — HVUT 2290, IRP, tarjeta médica, CDL, inspección — y te avisa antes de que alguno venza.",
+      "v1": "¿Sabes exactamente cuándo vence tu tarjeta médica o tu renovación de IRP? Renovaciones y Vencimientos lo rastrea para que no tengas que recordarlo.",
       "v2": "Todavía no se está rastreando nada aquí — agregar tu primera fecha de renovación convierte esto en un sistema de alerta temprana en lugar de una pantalla vacía."
     },
     "tipDocuments": {
