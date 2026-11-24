@@ -21,7 +21,8 @@ function rpm(load: Load): number | null {
   return Number(load.revenue ?? 0) / miles;
 }
 
-function LoadRow({ x, onDelete }: { x: Load; onDelete: () => void }) {
+function LoadRow({ x, weekEnding, onDelete }: { x: Load; weekEnding: string | null; onDelete: () => void }) {
+  const { t } = useTranslation();
   const { money, number, date } = useFormatters();
   const r = rpm(x);
   return (
@@ -35,6 +36,8 @@ function LoadRow({ x, onDelete }: { x: Load; onDelete: () => void }) {
           {x.order_number ? ` · #${x.order_number}` : ''} · {number(x.loaded_miles ?? 0)}
           {x.empty_miles ? ` (+${number(x.empty_miles)} empty)` : ''}
         </MutedText>
+        {/* The settlement week this load was paid in (owner 2026-11-24). */}
+        {weekEnding ? <MutedText>{t('loads.weekEnding', { date: date(weekEnding) })}</MutedText> : null}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.amount}>{money(x.revenue ?? 0)}</Text>
@@ -72,6 +75,11 @@ export default function Loads() {
     const scoped = filterLoadsByTruckScope(loadsQuery.data ?? [], settlementsQuery.data ?? [], activeTruckId);
     return [...scoped].sort((a, b) => (b.load_date ?? '').localeCompare(a.load_date ?? ''));
   }, [loadsQuery.data, settlementsQuery.data, activeTruckId]);
+
+  const weekEndingBySettlement = useMemo(
+    () => new Map((settlementsQuery.data ?? []).map((s) => [s.id, s.week_ending] as const)),
+    [settlementsQuery.data]
+  );
 
   const stats = useMemo(() => {
     const totalLoads = rows.length;
@@ -140,7 +148,11 @@ export default function Loads() {
             <Card>
               {monthRows.map((x, i) => (
                 <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                  <LoadRow x={x} onDelete={() => handleDelete(x)} />
+                  <LoadRow
+                    x={x}
+                    weekEnding={x.settlement_id ? (weekEndingBySettlement.get(x.settlement_id) ?? null) : null}
+                    onDelete={() => handleDelete(x)}
+                  />
                 </View>
               ))}
             </Card>

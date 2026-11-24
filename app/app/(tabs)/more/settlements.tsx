@@ -762,7 +762,8 @@ export default function Settlements() {
 
               {revenueItems.length > 0 && (
                 <>
-                  <Text style={styles.sectionTitle}>{t('settlementsScreen.incomeLines')}</Text>
+                  {/* Two different lists (owner 2026-11-24): every printed income line vs the saved load records. */}
+                  <Text style={styles.sectionTitle}>{t('settlementsScreen.incomeLinesCount', { count: revenueItems.length })}</Text>
                   {revenueItems.map((item, i) => (
                     <View key={i} style={styles.detailRow}>
                       <View style={{ flex: 1 }}>
@@ -808,7 +809,7 @@ export default function Settlements() {
 
               {settlementLoads.length > 0 && (
                 <>
-                  <Text style={styles.sectionTitle}>{t('settlementsScreen.loads')}</Text>
+                  <Text style={styles.sectionTitle}>{t('settlementsScreen.loadsCount', { count: settlementLoads.length })}</Text>
                   {settlementLoads.map((l) => (
                     <View key={l.id} style={styles.detailRow}>
                       <View style={{ flex: 1 }}>
