@@ -123,9 +123,9 @@ Abbreviations:
 
 - **No tax on wages or self-employment income (9):** AK, FL, NV, NH, SD, TN, TX, WA, WY.
   - The live `no_tax` list already matches these 9.
-- **Flat rate, or flat above a zero band (14):** AZ, CO, GA, ID, IL, IN, IA, KY, LA, MA, MI, MS, NC, OH, PA, UT.
+- **Flat rate, or flat above a zero band (16):** AZ, CO, GA, ID, IL, IN, IA, KY, LA, MA, MI, MS, NC, OH, PA, UT.
   - MS and OH are effectively flat above an exempt band. ID is flat above a zero bracket.
-- **Graduated brackets (28):** AL, AR, CA, CT, DE, DC, HI, KS, ME, MD, MN, MO, MT, NE, NJ, NM, NY, ND, OK, OR, RI, SC, VT, VA, WV, WI.
+- **Graduated brackets (26):** AL, AR, CA, CT, DE, DC, HI, KS, ME, MD, MN, MO, MT, NE, NJ, NM, NY, ND, OK, OR, RI, SC, VT, VA, WV, WI.
 
 ### Per state
 
