@@ -94,3 +94,73 @@ describe('a NEW Misc/Other row', () => {
     expect(eligibleDeductionRowsForReport([reg])).toEqual([]);
   });
 });
+
+// STAGE 2: totals + export (the Unassigned block is never optional).
+import { unassignedDeductionRowsForReport } from '@/src/stats/primeDriverExpenses';
+import { buildPrimeDriverExpenseReportHtml } from '@/src/stats/primeDriverExpenseReport';
+import { localeNotice } from '@/src/legal/__tests__/localeNotice';
+
+function fullMonth(deductions: Row[], docIds: ReadonlySet<string> = new Set()) {
+  const rows = mergePrimeDriverExpenseRows(DIRECT, eligibleDeductionRowsForReport(deductions, docIds));
+  return buildPrimeDriverExpenseMonth(rows, [], 2026, 10, null, unassignedDeductionRowsForReport(deductions, docIds));
+}
+const STRINGS = {
+  categoryTableTitle: 'Categories',
+  daysAwayFromHomeLabel: 'Days',
+  grandTotalLabel: 'Grand Total',
+  noEntriesLabel: 'No entries',
+  disclaimer: 'Disclaimer',
+  unassignedTitle: 'Unassigned — needs your choice',
+  unassignedNote: 'Not in the grand total',
+  estimateNotice: localeNotice(undefined, 'note'),
+};
+const FMT = { money: (n: number) => `$${n.toFixed(2)}`, date: (iso: string) => iso };
+
+describe('stage 2: unassigned rows on the sheet and in the export', () => {
+  const newMisc = ded('new-misc', 'Misc', 88.4, null);
+  const newOtherNov = ded('new-other-nov', 'Other', 10, null, { ded_date: '2026-11-03' });
+
+  test('day one (old rows only): no unassigned rows, numbers identical, no Unassigned block', () => {
+    const m = fullMonth(OLD_ROWS);
+    expect(m.unassigned).toEqual({ rows: [], total: 0 });
+    expect(m.grandTotal).toBe(month(OLD_ROWS).grandTotal);
+    expect(subtotals(m)).toEqual(subtotals(month(OLD_ROWS)));
+    expect(buildPrimeDriverExpenseReportHtml('H', m, STRINGS, FMT)).not.toContain(STRINGS.unassignedTitle);
+  });
+
+  test('a waiting row of this month is listed as unassigned, outside the grand total; other months stay out', () => {
+    const m = fullMonth([...OLD_ROWS, newMisc, newOtherNov]);
+    expect(m.unassigned.rows.map((r) => r.id)).toEqual(['new-misc']);
+    expect(m.unassigned.total).toBeCloseTo(88.4, 2);
+    expect(m.grandTotal).toBe(month(OLD_ROWS).grandTotal);
+  });
+
+  test('the export HTML has the Unassigned block, after the grand-total-bearing table rows and not summed into it', () => {
+    const m = fullMonth([...OLD_ROWS, newMisc]);
+    const html = buildPrimeDriverExpenseReportHtml('H', m, STRINGS, FMT);
+    expect(html).toContain(STRINGS.unassignedTitle);
+    expect(html).toContain('new-misc purchase');
+    expect(html).toContain('$88.40');
+    expect(html).toContain(STRINGS.unassignedNote);
+    // grand total printed unchanged (old rows only)
+    expect(html).toContain(`$${m.grandTotal.toFixed(2)}`);
+    expect(m.grandTotal).toBeCloseTo(2657.49, 2);
+  });
+
+  test('origin rule: settlement rows and settlement-document rows are never unassigned', () => {
+    const withheld = ded('w', 'Misc', 50, null, { source: 'settlement' });
+    const linked = ded('l', 'Other', 60, null, { settlement_id: 's9' });
+    const fromDoc = ded('d', 'Misc', 70, null, { document_id: 'doc-s' });
+    const m = fullMonth([...OLD_ROWS, withheld, linked, fromDoc], new Set(['doc-s']));
+    expect(m.unassigned.rows).toEqual([]);
+  });
+
+  test('vehicle registration rows stay excluded from the Unassigned block', () => {
+    const reg = ded('reg', 'Misc', 300, null, { description: 'Truck registration and license plate renewal' });
+    expect(fullMonth([...OLD_ROWS, reg]).unassigned.rows).toEqual([]);
+  });
+
+  test('direct sheet entries are never unassigned', () => {
+    expect(fullMonth(OLD_ROWS).sections.find((s) => s.category === 'Laundry/Showers')!.rows.map((r) => r.id)).toEqual(['direct']);
+  });
+});

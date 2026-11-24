@@ -8,6 +8,8 @@ const strings = {
   grandTotalLabel: 'Grand Total',
   noEntriesLabel: 'No entries this month.',
   disclaimer: 'This tool is provided to help organize your own records. Not tax advice — consult a qualified CPA.',
+  unassignedTitle: 'Unassigned — needs your choice',
+  unassignedNote: 'Not in the grand total: $0.00 waiting for a line (items: 0)',
   estimateNotice: localeNotice(undefined, 'Record-keeping aid. Not an accounting or tax document.'),
 };
 const fmt = { money: (n: number) => `$${n.toFixed(2)}`, date: (iso: string) => iso };

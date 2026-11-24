@@ -1,5 +1,5 @@
 import { PRIME_DRIVER_EXPENSE_CATEGORIES, type PrimeDriverExpenseCategory } from '@/src/primeDriverExpenses/categories';
-import { isEligibleForAccountantReport, isInAccountantReportScope } from '@/src/primeDriverExpenses/categoryMapping';
+import { findRowsNeedingAccountantCategory, isEligibleForAccountantReport, isInAccountantReportScope } from '@/src/primeDriverExpenses/categoryMapping';
 import { isOwnExpenseRow } from '@/src/stats/ownExpenseOrigin';
 import { calcPerDiemDays, type SettlementWeek } from '@/src/tax/perDiem';
 
@@ -101,6 +101,23 @@ export function eligibleDeductionRowsForReport(
   return rows;
 }
 
+// UNASSIGNED (owner decision 2026-11-24, manual line choice): the rows
+// waiting in "Needs your choice" (Misc/Other with no line, Tires/Warranty
+// with no line). Built by the SAME findRowsNeedingAccountantCategory() the
+// list uses, so the origin rule is identical: settlement rows and rows saved
+// from a settlement's document never appear. Never counted in any section or
+// the grand total; shown separately on screen and in the PDF/Excel so
+// nothing disappears silently. Direct sheet entries are never unassigned.
+export function unassignedDeductionRowsForReport(
+  deductions: EligibleDeductionSource[],
+  settlementDocIds: ReadonlySet<string> = new Set()
+): PrimeDriverExpenseRow[] {
+  return findRowsNeedingAccountantCategory(
+    deductions.map((d) => ({ ...d, category: d.category ?? null })),
+    settlementDocIds
+  ).map((d) => ({ id: d.id, exp_date: d.ded_date, amount: d.amount, category: null, note: d.description, origin: 'deduction' as const }));
+}
+
 export type PrimeDriverExpenseCategorySection = {
   category: PrimeDriverExpenseCategory;
   rows: PrimeDriverExpenseRow[];
@@ -119,6 +136,9 @@ export type PrimeDriverExpenseMonth = {
   // reflects it (the override wins) — this flag exists purely so the UI
   // can show a "manually set" indicator and a reset action.
   daysAwayFromHomeIsOverridden: boolean;
+  // Rows of this month still waiting for a line — OUTSIDE every subtotal
+  // and grandTotal (see unassignedDeductionRowsForReport()).
+  unassigned: { rows: PrimeDriverExpenseRow[]; total: number };
 };
 
 // A row genuinely belongs to a month/year purely by its own `exp_date` —
@@ -153,7 +173,8 @@ export function buildPrimeDriverExpenseMonth(
   settlements: SettlementWeek[],
   year: number,
   month: number,
-  daysAwayFromHomeOverride?: number | null
+  daysAwayFromHomeOverride?: number | null,
+  unassignedRows: PrimeDriverExpenseRow[] = []
 ): PrimeDriverExpenseMonth {
   const monthRows = rowsInMonth(rows, year, month);
   const sections: PrimeDriverExpenseCategorySection[] = PRIME_DRIVER_EXPENSE_CATEGORIES.map((category) => {
@@ -184,7 +205,10 @@ export function buildPrimeDriverExpenseMonth(
   const hasOverride = daysAwayFromHomeOverride != null;
   const daysAwayFromHome = hasOverride ? (daysAwayFromHomeOverride as number) : calculatedDays;
 
-  return { year, month, sections, grandTotal, daysAwayFromHome, daysAwayFromHomeIsOverridden: hasOverride };
+  const monthUnassigned = rowsInMonth(unassignedRows, year, month);
+  const unassigned = { rows: monthUnassigned, total: monthUnassigned.reduce((sum, r) => sum + Number(r.amount ?? 0), 0) };
+
+  return { year, month, sections, grandTotal, daysAwayFromHome, daysAwayFromHomeIsOverridden: hasOverride, unassigned };
 }
 
 // Pure key builder for the override jsonb map (profiles.

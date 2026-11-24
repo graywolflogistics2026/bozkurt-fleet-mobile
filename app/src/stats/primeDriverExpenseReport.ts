@@ -20,6 +20,11 @@ export type PrimeDriverExpenseReportStrings = {
   grandTotalLabel: string;
   noEntriesLabel: string;
   disclaimer: string;
+  // MANUAL LINE CHOICE (owner decision 2026-11-24): required, so no export
+  // can be built without the Unassigned block. unassignedNote is already
+  // resolved by the caller (count + amount).
+  unassignedTitle: string;
+  unassignedNote: string;
   // Batch D item 10: full banner on page 1, one-line footer on every page.
   estimateNotice: EstimateNoticeStrings;
 };
@@ -75,6 +80,21 @@ export function buildPrimeDriverExpenseReportHtml(
     })
     .join('');
 
+  // UNASSIGNED — printed after the 16 lines, OUTSIDE the grand total, so a
+  // row waiting for a line never disappears from the file silently.
+  const unassignedHtml = monthData.unassigned.rows.length
+    ? `<h2 class="unassigned">${esc(strings.unassignedTitle)}</h2>
+        <table class="unassigned">
+          ${monthData.unassigned.rows
+            .map(
+              (r) =>
+                `<tr><td>${r.exp_date ? esc(fmt.date(r.exp_date)) : ''}</td><td>${esc(r.note ?? '')}</td><td class="amt">${fmt.money(Number(r.amount ?? 0))}</td></tr>`
+            )
+            .join('')}
+        </table>
+        <p class="unassigned-note">${esc(strings.unassignedNote)}</p>`
+    : '';
+
   return `
     <html>
       <head><meta charset="utf-8" />
@@ -90,6 +110,9 @@ export function buildPrimeDriverExpenseReportHtml(
           td.cat-name { font-size: 14px; }
           .total-row td { font-weight: 700; font-size: 15px; border-top: 2px solid #333; }
           .muted { color: #666; font-size: 11px; margin-top: 16px; }
+          h2.unassigned { color: #b45309; border-bottom-color: #f59e0b; }
+          table.unassigned td { background: #fffbeb; }
+          .unassigned-note { color: #b45309; font-size: 12px; font-weight: 700; margin-top: 4px; }
           ${ESTIMATE_NOTICE_CSS}
         </style>
       </head>
@@ -98,6 +121,7 @@ export function buildPrimeDriverExpenseReportHtml(
         <h1>${esc(headerLine)}</h1>
         <h2>${esc(strings.categoryTableTitle)}</h2>
         <table>${sectionsHtml}</table>
+        ${unassignedHtml}
         <table>
           <tr><td>${esc(strings.daysAwayFromHomeLabel)}</td><td class="amt">${monthData.daysAwayFromHome}</td></tr>
           <tr class="total-row"><td>${esc(strings.grandTotalLabel)}</td><td class="amt">${fmt.money(monthData.grandTotal)}</td></tr>

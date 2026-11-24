@@ -2410,6 +2410,14 @@
       "tapToPick": "Toca para elegir una categoría contable",
       "pickTitle": "Elige una categoría contable",
       "suggested": "Sugerido: {{category}}"
+    },
+    "unassigned": {
+      "totalNote": "No incluido en el total general: {{amount}} esperando una línea (partidas: {{count}})",
+      "exportTitle": "Sin asignar — necesita su elección",
+      "exportWarnTitle": "Algunos gastos aún necesitan una línea",
+      "exportWarnBody": "{{amount}} de este mes (partidas: {{count}}) aún no tiene línea. La exportación lo muestra como Sin asignar, fuera del total general.",
+      "chooseNow": "Elegir ahora",
+      "exportAnyway": "Exportar de todos modos"
     }
   },
   "scorecard": {

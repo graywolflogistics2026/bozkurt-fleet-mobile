@@ -2410,6 +2410,14 @@
       "tapToPick": "Muhasebe kategorisi seçmek için dokunun",
       "pickTitle": "Muhasebe kategorisi seçin",
       "suggested": "Önerilen: {{category}}"
+    },
+    "unassigned": {
+      "totalNote": "Genel toplama dahil değil: {{amount}} bir satır bekliyor (kalem: {{count}})",
+      "exportTitle": "Atanmamış — seçiminiz gerekiyor",
+      "exportWarnTitle": "Bazı giderlerin hâlâ bir satıra ihtiyacı var",
+      "exportWarnBody": "Bu ayki {{amount}} (kalem: {{count}}) henüz bir satıra atanmadı. Dışa aktarımda genel toplamın dışında, Atanmamış olarak listelenir.",
+      "chooseNow": "Şimdi seç",
+      "exportAnyway": "Yine de dışa aktar"
     }
   },
   "scorecard": {

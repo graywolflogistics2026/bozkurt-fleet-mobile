@@ -83,7 +83,7 @@ describe('golden 07/17 (real lumper week): one through-settlement line, no sheet
 
   test('the sheet export prints the block under Lumpers, outside the totals (Accountant Package: accountantPackageReport.test.ts)', () => {
     const s = sheet(store, 2026, 7);
-    const html = buildPrimeDriverExpenseReportHtml('H', s.month, { categoryTableTitle: 'C', daysAwayFromHomeLabel: 'D', grandTotalLabel: 'G', noEntriesLabel: '-', disclaimer: 'x', estimateNotice: NOTICE }, FMT, { month: s.lumpers, strings: STRINGS });
+    const html = buildPrimeDriverExpenseReportHtml('H', s.month, { categoryTableTitle: 'C', daysAwayFromHomeLabel: 'D', grandTotalLabel: 'G', noEntriesLabel: '-', disclaimer: 'x', unassignedTitle: 'U', unassignedNote: 'N', estimateNotice: NOTICE }, FMT, { month: s.lumpers, strings: STRINGS });
     expect(html).toContain('Lumpers — through settlement');
     expect(html).toContain('+215.00');
     expect(html).toContain('−215.00');

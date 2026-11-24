@@ -39,6 +39,7 @@ import {
   mergePrimeDriverExpenseRows,
   nonPrimeSettlementIds,
   daysOverrideKey,
+  unassignedDeductionRowsForReport,
   type PrimeDriverExpenseRow,
 } from '@/src/stats/primeDriverExpenses';
 import { settlementDocumentIds } from '@/src/stats/ownExpenseOrigin';
@@ -197,10 +198,22 @@ export default function PrimeDriverExpensesScreen() {
   const daysOverrideMap = profileQuery.data?.prime_driver_days_override ?? {};
   const currentDaysOverride = daysOverrideMap[daysOverrideKey(year, month)] ?? null;
 
-  const monthData = useMemo(
-    () => buildPrimeDriverExpenseMonth(rows, settlements, year, month, currentDaysOverride),
-    [rows, settlements, year, month, currentDaysOverride]
+  // MANUAL LINE CHOICE (owner decision 2026-11-24): rows waiting for a
+  // line — same list and origin rule as "Needs your choice", kept OUTSIDE
+  // every subtotal and the grand total, shown under the total and printed
+  // as "Unassigned" in the PDF/Excel.
+  const unassignedRows = useMemo(
+    () => unassignedDeductionRowsForReport(deductionsQuery.data ?? [], settlementDocIds),
+    [deductionsQuery.data, settlementDocIds]
   );
+  const monthData = useMemo(
+    () => buildPrimeDriverExpenseMonth(rows, settlements, year, month, currentDaysOverride, unassignedRows),
+    [rows, settlements, year, month, currentDaysOverride, unassignedRows]
+  );
+  const unassignedNote = t('primeDriverExpenses.unassigned.totalNote', {
+    amount: money(monthData.unassigned.total),
+    count: monthData.unassigned.rows.length,
+  });
 
   const monthLumpers = useMemo(() => settlementLumpersFor(settlementLumperLines, year, month), [settlementLumperLines, year, month]);
   function lumperStrings(): SettlementLumperStrings {
@@ -647,8 +660,27 @@ export default function PrimeDriverExpensesScreen() {
       grandTotalLabel: t('primeDriverExpenses.grandTotal'),
       noEntriesLabel: t('primeDriverExpenses.noEntries'),
       disclaimer: t('primeDriverExpenses.disclaimer'),
+      unassignedTitle: t('primeDriverExpenses.unassigned.exportTitle'),
+      unassignedNote,
       estimateNotice: estimateNoticeStrings((k, o) => t(k, o) as string, BRAND_NAME, t('estimate.primeNote')),
     };
+  }
+
+  // While this month has rows waiting for a line, ask once before exporting;
+  // the file lists them as Unassigned either way.
+  function confirmExport(run: () => Promise<void>) {
+    if (monthData.unassigned.rows.length === 0) {
+      void run();
+      return;
+    }
+    Alert.alert(
+      t('primeDriverExpenses.unassigned.exportWarnTitle'),
+      t('primeDriverExpenses.unassigned.exportWarnBody', { amount: money(monthData.unassigned.total), count: monthData.unassigned.rows.length }),
+      [
+        { text: t('primeDriverExpenses.unassigned.chooseNow'), style: 'cancel' },
+        { text: t('primeDriverExpenses.unassigned.exportAnyway'), onPress: () => void run() },
+      ]
+    );
   }
 
   async function handleExportPdf() {
@@ -967,12 +999,15 @@ export default function PrimeDriverExpensesScreen() {
                 <Text style={styles.categoryTitle}>{t('primeDriverExpenses.grandTotal')}</Text>
                 <Text style={styles.grandTotal}>{money(monthData.grandTotal)}</Text>
               </View>
+              {monthData.unassigned.rows.length > 0 && (
+                <MutedText style={{ color: colors.orange, fontWeight: '700', marginTop: spacing.xs }}>{unassignedNote}</MutedText>
+              )}
             </Card>
 
             <Card style={{ marginTop: spacing.md }}>
               <Text style={styles.categoryTitle}>{t('primeDriverExpenses.exportTitle')}</Text>
-              <PrimaryButton title={`📄 ${t('primeDriverExpenses.exportPdf')}`} onPress={handleExportPdf} loading={exporting === 'pdf'} />
-              <SecondaryButton title={`📊 ${t('primeDriverExpenses.exportExcel')}`} onPress={handleExportExcel} loading={exporting === 'excel'} />
+              <PrimaryButton title={`📄 ${t('primeDriverExpenses.exportPdf')}`} onPress={() => confirmExport(handleExportPdf)} loading={exporting === 'pdf'} />
+              <SecondaryButton title={`📊 ${t('primeDriverExpenses.exportExcel')}`} onPress={() => confirmExport(handleExportExcel)} loading={exporting === 'excel'} />
             </Card>
           </>
         )}

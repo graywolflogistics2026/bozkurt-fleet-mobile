@@ -2410,6 +2410,14 @@
       "tapToPick": "اضغط لاختيار فئة المحاسب",
       "pickTitle": "اختر فئة المحاسب",
       "suggested": "المقترح: {{category}}"
+    },
+    "unassigned": {
+      "totalNote": "Not in the grand total: {{amount}} waiting for a line (items: {{count}})",
+      "exportTitle": "Unassigned — needs your choice",
+      "exportWarnTitle": "Some expenses still need a line",
+      "exportWarnBody": "{{amount}} this month (items: {{count}}) has no line yet. The export lists it as Unassigned, outside the grand total.",
+      "chooseNow": "Choose now",
+      "exportAnyway": "Export anyway"
     }
   },
   "scorecard": {

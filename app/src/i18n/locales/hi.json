@@ -2410,6 +2410,14 @@
       "tapToPick": "accountant श्रेणी चुनने के लिए टैप करें",
       "pickTitle": "accountant श्रेणी चुनें",
       "suggested": "सुझाव: {{category}}"
+    },
+    "unassigned": {
+      "totalNote": "कुल योग में शामिल नहीं: {{amount}} एक लाइन का इंतज़ार कर रहा है (आइटम: {{count}})",
+      "exportTitle": "अनिर्दिष्ट — आपका चुनाव चाहिए",
+      "exportWarnTitle": "कुछ खर्चों को अभी भी एक लाइन चाहिए",
+      "exportWarnBody": "इस महीने के {{amount}} (आइटम: {{count}}) की अभी कोई लाइन नहीं है। एक्सपोर्ट में यह कुल योग से बाहर, अनिर्दिष्ट के रूप में दिखेगा।",
+      "chooseNow": "अभी चुनें",
+      "exportAnyway": "फिर भी एक्सपोर्ट करें"
     }
   },
   "scorecard": {
