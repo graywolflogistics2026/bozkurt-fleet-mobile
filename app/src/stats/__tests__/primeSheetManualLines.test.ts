@@ -176,3 +176,66 @@ describe('stage 3: notices read the same needs list', () => {
     expect(s).toContain('settlementDocumentIds(');
   });
 });
+
+// CUSTOM CATEGORIES (owner decision 2026-11-24): a user-created category
+// waits for a pick like Misc/Other instead of staying off the sheet.
+import { isCustomCategory, isInAccountantReportScope, needsManualLine } from '@/src/primeDriverExpenses/categoryMapping';
+describe('custom (user-created) categories wait for a line', () => {
+  // The one live row (2026-11-24): "Truck Parking", $19.08, no line.
+  const parking = ded('parking', 'Truck Parking', 19.08, suggestAccountantCategory('Truck Parking', 'manual'), { source: 'manual' });
+
+  test('no suggestion, in the needs list, outside every subtotal and the grand total', () => {
+    expect(parking.accountant_category).toBeNull();
+    expect(isCustomCategory('Truck Parking')).toBe(true);
+    expect(findRowsNeedingAccountantCategory([...OLD_ROWS, parking]).map((r) => r.id)).toEqual(['parking']);
+    const m = fullMonth([...OLD_ROWS, parking]);
+    expect(subtotals(m)).toEqual(subtotals(month(OLD_ROWS)));
+    expect(m.grandTotal).toBeCloseTo(2657.49, 2);
+    expect(m.unassigned.rows.map((r) => r.id)).toEqual(['parking']);
+    expect(m.unassigned.total).toBeCloseTo(19.08, 2);
+  });
+
+  test('after a pick it counts in the picked line', () => {
+    const picked = { ...parking, accountant_category: 'Cash Tolls/Parking Fees' };
+    const m = fullMonth([...OLD_ROWS, picked]);
+    expect(subtotals(m)['Cash Tolls/Parking Fees']).toBeCloseTo(19.08, 2);
+    expect(m.grandTotal).toBeCloseTo(2657.49 + 19.08, 2);
+    expect(m.unassigned.rows).toEqual([]);
+  });
+
+  test('a row with a line whose category is changed to a custom one stays on the sheet under its line', () => {
+    const moved = ded('moved', 'My Own Category', 40, 'Office Supplies');
+    expect(subtotals(fullMonth([...OLD_ROWS, moved]))['Office Supplies']).toBe(40);
+    expect(findRowsNeedingAccountantCategory([moved])).toEqual([]);
+  });
+
+  test('canonical categories with no sheet line stay out (owner scope decision 2026-09-23)', () => {
+    for (const c of ['Insurance—Truck', 'Insurance—Health', 'Permits, Licenses & Road Taxes', 'Software & Subscriptions', 'Dispatch & Factoring Fees', 'Legal & Professional Services', 'Contract Labor (1099)', 'Wages & Payroll Taxes (W-2)', 'Training & Education', 'Association Dues', 'Lease & Rent', 'Meals (per diem covered)', 'Advance Repayment', 'Escrow & Deposits', 'Truck/Trailer Payments']) {
+      expect(isCustomCategory(c)).toBe(false);
+      expect(needsManualLine(c)).toBe(false);
+      expect(isInAccountantReportScope(c, 'x')).toBe(false);
+      expect(fullMonth([ded('c', c, 10, null)]).unassigned.rows).toEqual([]);
+    }
+  });
+
+  test('empty or missing category stays out', () => {
+    for (const c of [null, undefined, '']) {
+      expect(needsManualLine(c)).toBe(false);
+      expect(isInAccountantReportScope(c, 'x')).toBe(false);
+    }
+  });
+
+  test('vehicle registration text stays out under a custom category', () => {
+    const reg = ded('reg', 'Truck Paperwork', 120, null, { description: 'TX vehicle registration fee' });
+    expect(findRowsNeedingAccountantCategory([reg])).toEqual([]);
+    expect(fullMonth([reg]).unassigned.rows).toEqual([]);
+  });
+
+  test('settlement rows and settlement-document rows never appear', () => {
+    const withheld = ded('w', 'Truck Parking', 5, null, { source: 'settlement' });
+    const linked = ded('l', 'Truck Parking', 6, null, { settlement_id: 's1' });
+    const fromDoc = ded('d', 'Truck Parking', 7, null, { document_id: 'doc-s' });
+    expect(findRowsNeedingAccountantCategory([withheld, linked, fromDoc], new Set(['doc-s']))).toEqual([]);
+    expect(fullMonth([withheld, linked, fromDoc], new Set(['doc-s'])).unassigned.rows).toEqual([]);
+  });
+});

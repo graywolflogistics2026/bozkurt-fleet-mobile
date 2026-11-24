@@ -435,7 +435,7 @@ describe('screen scope — ambiguous allowlist and permanently out-of-scope cate
     expect(eligibleDeductionRowsForReport([row('fw', 'Truck Parts', 'manual', 'Repairs', 'Fifth wheel plate grease')])).toHaveLength(1);
   });
 
-  it('every permanently out-of-scope category (plus custom and missing categories) is never listed and never reported', () => {
+  it('every permanently out-of-scope category (plus missing or empty categories; custom categories are in scope since 2026-11-24) is never listed and never reported', () => {
     const outOfScope = [
       'Insurance—Truck',
       'Insurance—Health',
@@ -452,8 +452,8 @@ describe('screen scope — ambiguous allowlist and permanently out-of-scope cate
       'Advance Repayment',
       'Escrow & Deposits',
       'Truck/Trailer Payments',
-      'My Own Custom Category',
       null,
+      '',
     ];
     for (const category of outOfScope) {
       expect(isInAccountantReportScope(category, 'x')).toBe(false);
@@ -472,6 +472,7 @@ describe('screen scope — ambiguous allowlist and permanently out-of-scope cate
         .map(([k]) => k),
       ...Object.keys(AMBIGUOUS_ACCOUNTANT_CATEGORIES),
       ...NEEDS_LINE_CATEGORIES,
+      // custom categories are never in CANONICAL_CATEGORIES, so none here
     ]
       .filter((c) => (CANONICAL_CATEGORIES as readonly string[]).includes(c))
       .sort();

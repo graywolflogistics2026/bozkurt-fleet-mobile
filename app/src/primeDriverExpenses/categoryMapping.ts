@@ -171,11 +171,20 @@ export const AMBIGUOUS_ACCOUNTANT_CATEGORIES: Record<string, PrimeDriverExpenseC
 // the user picks any of the 16 lines, Misc included.
 export const NEEDS_LINE_CATEGORIES: readonly string[] = ['Misc', 'Other'];
 
+// A custom (user-created) category: non-empty and not one of the app's
+// canonical categories (owner decision 2026-11-24). It never maps to a line
+// on its own; its rows wait for the user's pick, like Misc/Other.
+export function isCustomCategory(category: string | null | undefined): boolean {
+  return !!category && !(CANONICAL_CATEGORIES as readonly string[]).includes(category);
+}
+
 // A category whose rows wait for the user's pick while accountant_category
-// is NULL (ambiguous allowlist + no-line categories).
+// is NULL (ambiguous allowlist, Misc/Other, custom categories). Canonical
+// categories with no sheet line (Insurance, Permits, Meals, ...) are NOT
+// here and stay out of scope (owner scope decision 2026-09-23).
 export function needsManualLine(category: string | null | undefined): boolean {
   if (!category) return false;
-  return category in AMBIGUOUS_ACCOUNTANT_CATEGORIES || NEEDS_LINE_CATEGORIES.includes(category);
+  return category in AMBIGUOUS_ACCOUNTANT_CATEGORIES || NEEDS_LINE_CATEGORIES.includes(category) || isCustomCategory(category);
 }
 
 // Vehicle purchase/sale, registration, title and plate fees are capital/
@@ -189,11 +198,11 @@ export function isVehicleAssetOrRegistration(description: string | null | undefi
 }
 
 // IN SCOPE = a canonical category with an automatic mapping, or one waiting
-// for a manual line (needsManualLine: the ambiguous allowlist, Misc, Other)
-// — AND not a vehicle purchase/registration. Everything
+// for a manual line (needsManualLine: the ambiguous allowlist, Misc, Other,
+// custom categories) — AND not a vehicle purchase/registration. Everything
 // else (Insurance, Permits, Software, Dispatch, Legal, Contract Labor,
 // Wages, Training, Association Dues, Lease, Meals, Advance Repayment,
-// Escrow, Truck/Trailer Payments, custom or missing categories) is never
+// Escrow, Truck/Trailer Payments, missing categories) is never
 // shown on this screen — not in the report, not in the needs list — even
 // if it somehow already carries an accountant_category. Direct
 // prime_driver_expenses rows (the screen's own Add Expense) are not
