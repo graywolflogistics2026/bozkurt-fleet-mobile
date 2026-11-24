@@ -89,6 +89,14 @@ export default function OperatingPnl() {
           title={t('nav.profitAnalysis')}
           description={t('operatingPnl.profitAnalysisCard')}
         />
+        {/* Scorecard (owner 2026-11-23): hidden from the phone menu, on the
+            Reports tab; this card is also its way in on wide screens. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/scorecard'
+          emoji='🏆'
+          title={t('nav.scorecard')}
+          description={t('operatingPnl.scorecardCard')}
+        />
 
         {loading ? (
           <Card>

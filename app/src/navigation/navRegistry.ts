@@ -239,17 +239,15 @@ export type MenuReach =
   | { kind: 'parent'; parent: string }
   // A button in Settings.
   | { kind: 'settings' }
-  // Hidden from the PHONE menu on purpose; on phones it is on the Reports
-  // tab. The wide sidebar has no Reports tab, so there it is a row
-  // (SIDEBAR_ONLY_AFTER below).
-  | { kind: 'reports' }
   // Hidden by a FEATURE_FLAGS key that is off (route kept).
   | { kind: 'featureFlag' };
 
 export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)': { kind: 'tab' },
-  // Owner 2026-11-23: Scorecard hidden from the menu only.
-  '/(tabs)/more/scorecard': { kind: 'reports' },
+  // Owner 2026-11-23: Scorecard is hidden from the menu; a card on Operating
+  // P&L (its way in on wide screens too), and still on the Reports tab and
+  // linked from Truck Comparison.
+  '/(tabs)/more/scorecard': { kind: 'parent', parent: '/(tabs)/more/operating-pnl' },
   // Owner 2026-11-23: a card on Other Income (reimbursements reduce expenses, never income).
   '/(tabs)/more/reimbursements': { kind: 'parent', parent: '/(tabs)/more/other-income' },
   // Owner 2026-11-23: a card on Tax Estimator.
@@ -305,30 +303,11 @@ export function menuItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
   return menuSections(groups).flatMap((section) => section.items);
 }
 
-// Rows only the wide sidebar shows, each placed right after a menu row
-// (owner 2026-11-23: 768px+ has no Reports tab, so Scorecard is a sidebar
-// row; it stays hidden in the phone menu).
-export const SIDEBAR_ONLY_AFTER: Readonly<Record<string, string>> = {
-  // Anchor moved from Profit Analysis to Operating P&L when Profit Analysis
-  // became a card there (owner 2026-11-23, Stage 2).
-  '/(tabs)/more/scorecard': '/(tabs)/more/operating-pnl',
-};
-
 // The wide sidebar (768px+, no tab bar): Home on top (no heading), then
-// the menu sections with their headings plus the sidebar-only rows.
+// the same menu sections with their headings (owner 2026-11-23: no
+// sidebar-only rows; Scorecard opens from its Operating P&L card).
 export function sidebarSections(groups: NavGroup[] = NAV_GROUPS): { home: NavItem | null; sections: MenuSectionItems[] } {
-  const items = byHref(groups);
-  const sections = menuSections(groups).map((section) => ({
-    titleKey: section.titleKey,
-    items: section.items.flatMap((row) => {
-      const extra = Object.entries(SIDEBAR_ONLY_AFTER)
-        .filter(([, after]) => after === (row.href as string))
-        .map(([href]) => items.get(href))
-        .filter((i): i is NavItem => !!i);
-      return [row, ...extra];
-    }),
-  }));
-  return { home: items.get('/(tabs)') ?? null, sections };
+  return { home: byHref(groups).get('/(tabs)') ?? null, sections: menuSections(groups) };
 }
 
 // The wide sidebar's rows, flattened in order (Home first).

@@ -1594,6 +1594,7 @@
     "title": "P&L Operativo",
     "cashFlowCard": "Dinero que entra y sale por semana, y un pronóstico de 30 días.",
     "profitAnalysisCard": "De dónde viene tu ganancia y qué costos pesan más.",
+    "scorecardCard": "Tu puntuación de salud del negocio sobre 100, con los KPI que la forman.",
     "revenue": "Ingresos",
     "expenses": "Gastos",
     "netIncome": "Ingreso Neto",

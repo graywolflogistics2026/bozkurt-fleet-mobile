@@ -18,7 +18,6 @@ import {
   menuSections,
   sidebarItems,
   sidebarSections,
-  SIDEBAR_ONLY_AFTER,
 } from '@/src/navigation/navRegistry';
 import { FEATURE_FLAGS, type FeatureFlagKey } from '@/src/config/featureFlags';
 
@@ -75,12 +74,6 @@ describe('every route is reachable', () => {
         expect([href, linksTo(read(screenFile(reach.parent)), href)]).toEqual([href, true]);
       } else if (reach.kind === 'settings') {
         expect([href, linksTo(settings, href)]).toEqual([href, true]);
-      } else if (reach.kind === 'reports') {
-        // Phones: on the Reports tab (a tab bar exists only below 768px).
-        const inReports = NAV_GROUPS.filter((g) => REPORTS_SECTIONS.includes(g.titleKey)).some((g) => g.items.some((i) => (i.href as string) === href));
-        expect(inReports).toBe(true);
-        // Wide screens have no Reports tab: it must be a sidebar row.
-        expect(sidebarItems().map((i) => i.href as string)).toContain(href);
       } else {
         // Hidden only while its flag is off; on, it is back in the registry output.
         const allOn = Object.fromEntries(Object.keys(FEATURE_FLAGS).map((k) => [k, true])) as Record<FeatureFlagKey, boolean>;
@@ -135,6 +128,7 @@ describe('the menu (owner decisions 2026-11-23)', () => {
       '/(tabs)/more/loans': '/(tabs)/more/capital-account',
       '/(tabs)/more/cash-flow': '/(tabs)/more/operating-pnl',
       '/(tabs)/more/profit-analysis': '/(tabs)/more/operating-pnl',
+      '/(tabs)/more/scorecard': '/(tabs)/more/operating-pnl',
       '/(tabs)/more/data-cleanup': '/(tabs)/more/category-learning',
       '/(tabs)/more/category-learning': 'settings',
       '/(tabs)/more/referral': 'settings',
@@ -147,18 +141,19 @@ describe('the menu (owner decisions 2026-11-23)', () => {
     }
   });
 
-  test('wide sidebar: Home on top (no heading), then the menu rows, plus Scorecard after its anchor row', () => {
-    const side = sidebarItems().map((i) => i.href as string);
-    const expected = ['/(tabs)', ...menu];
-    for (const [href, after] of Object.entries(SIDEBAR_ONLY_AFTER)) {
-      expect(menu).toContain(after); // the anchor is a real menu row
-      expected.splice(expected.indexOf(after) + 1, 0, href);
-    }
-    expect(side).toEqual(expected);
-    expect(Object.keys(SIDEBAR_ONLY_AFTER)).toContain('/(tabs)/more/scorecard');
-    // Sidebar-only rows are never phone menu rows.
-    for (const href of Object.keys(SIDEBAR_ONLY_AFTER)) expect(menu).not.toContain(href);
+  test('wide sidebar: Home on top (no heading), then exactly the menu rows', () => {
+    expect(sidebarItems().map((i) => i.href as string)).toEqual(['/(tabs)', ...menu]);
     expect(sidebarSections().home?.href).toBe('/(tabs)');
+  });
+
+  test('Scorecard (owner 2026-11-23): card on Operating P&L, still on Reports and linked from Truck Comparison, never a menu/sidebar row', () => {
+    const sc = '/(tabs)/more/scorecard';
+    expect(MENU_REACHED_FROM[sc]).toEqual({ kind: 'parent', parent: '/(tabs)/more/operating-pnl' });
+    expect(linksTo(read(screenFile('/(tabs)/more/operating-pnl')), sc)).toBe(true);
+    const inReports = NAV_GROUPS.filter((g) => REPORTS_SECTIONS.includes(g.titleKey)).some((g) => g.items.some((i) => (i.href as string) === sc));
+    expect(inReports).toBe(true);
+    expect(linksTo(read(screenFile('/(tabs)/more/truck-comparison')), sc)).toBe(true);
+    expect(sidebarItems().map((i) => i.href as string)).not.toContain(sc);
   });
 
   test('phone sheet and wide sidebar show the same section headings, in order', () => {

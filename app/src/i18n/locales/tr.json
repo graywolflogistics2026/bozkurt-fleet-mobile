@@ -1594,6 +1594,7 @@
     "title": "İşletme P&L",
     "cashFlowCard": "Haftalık giren ve çıkan para, ve 30 günlük tahmin.",
     "profitAnalysisCard": "Kârınızın nereden geldiği ve en çok hangi giderlerin ağır bastığı.",
+    "scorecardCard": "100 üzerinden işletme sağlığı puanınız ve onu oluşturan KPI'lar.",
     "revenue": "Gelir",
     "expenses": "Giderler",
     "netIncome": "Net Gelir",

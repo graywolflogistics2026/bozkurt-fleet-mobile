@@ -1594,6 +1594,7 @@
     "title": "الأرباح والخسائر التشغيلية",
     "cashFlowCard": "Money in and out by week, and a 30-day forecast.",
     "profitAnalysisCard": "Where your profit comes from and which costs weigh most.",
+    "scorecardCard": "Your business-health score out of 100, with the KPIs behind it.",
     "revenue": "الإيرادات",
     "expenses": "المصروفات",
     "netIncome": "صافي الدخل",
