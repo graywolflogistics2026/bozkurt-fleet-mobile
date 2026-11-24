@@ -2222,6 +2222,7 @@
   "accountantPackage": {
     "title": "Muhasebeci Paketi",
     "subtitle": "Cebinizden ödenen giderler, CPA'nıza vermeye hazır — aşağıdan yıl, ay ve kapsam seçin.",
+    "primeDriversCard": "Prime Inc sürücüleri için aylık cepten ödenen gider tablosu.",
     "scheduleCTitle": "Schedule C Dökümü",
     "noExpenses": "Henüz gider kaydedilmedi.",
     "totalExpenses": "Toplam",

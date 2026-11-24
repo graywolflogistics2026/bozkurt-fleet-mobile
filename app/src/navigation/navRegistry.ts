@@ -218,7 +218,7 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
   },
   {
     titleKey: 'sidebar.sections.taxAccounting',
-    hrefs: ['/(tabs)/more/accountant-package', '/(tabs)/more/prime-driver-expenses', '/(tabs)/more/tax-estimator'],
+    hrefs: ['/(tabs)/more/accountant-package', '/(tabs)/more/tax-estimator'],
   },
   {
     titleKey: 'sidebar.sections.system',
@@ -256,6 +256,8 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/reimbursements': { kind: 'parent', parent: '/(tabs)/more/other-income' },
   // Owner 2026-11-23: a card on Tax Estimator.
   '/(tabs)/more/other-income': { kind: 'parent', parent: '/(tabs)/more/tax-estimator' },
+  // Owner 2026-11-23: a card on Accountant Package (visible to every user, as before).
+  '/(tabs)/more/prime-driver-expenses': { kind: 'parent', parent: '/(tabs)/more/accountant-package' },
   '/(tabs)/more/credit-cards': { kind: 'featureFlag' },
   '/(tabs)/more/bank-statements': { kind: 'featureFlag' },
 };

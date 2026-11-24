@@ -2222,6 +2222,7 @@
   "accountantPackage": {
     "title": "حزمة المحاسب",
     "subtitle": "المصروفات المدفوعة من جيبك الخاص، جاهزة لتسليمها إلى محاسبك — اختر السنة والشهر والنطاق أدناه.",
+    "primeDriversCard": "Monthly out-of-pocket expense sheet for Prime Inc drivers.",
     "scheduleCTitle": "تفصيل Schedule C",
     "noExpenses": "لا توجد مصروفات مسجلة بعد.",
     "totalExpenses": "الإجمالي",

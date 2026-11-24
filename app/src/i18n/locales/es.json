@@ -2222,6 +2222,7 @@
   "accountantPackage": {
     "title": "Paquete para el Contador",
     "subtitle": "Gastos pagados de su bolsillo, listos para entregar a su CPA — elija un año, mes y alcance abajo.",
+    "primeDriversCard": "Hoja mensual de gastos de bolsillo para conductores de Prime Inc.",
     "scheduleCTitle": "Desglose de Schedule C",
     "noExpenses": "Aún no hay gastos registrados.",
     "totalExpenses": "Total",

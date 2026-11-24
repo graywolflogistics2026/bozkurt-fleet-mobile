@@ -71,6 +71,7 @@ import {
   SheetTitle,
 } from '@/src/components/ui';
 import { EstimateBanner } from '@/src/components/EstimateBanner';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { estimateNoticeStrings } from '@/src/legal/estimateNotice';
 import { BRAND_NAME } from '@/src/brand';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -739,6 +740,15 @@ export default function AccountantPackage() {
         <EstimateBanner />
         <FleetScopeLabel variant="fleetOnly" />
         <MutedText>{t('accountantPackage.subtitle')}</MutedText>
+
+        {/* For Prime Inc Drivers left the Menu (owner 2026-11-23): opened
+            from here; shown to every user, as the menu row was. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/prime-driver-expenses'
+          emoji='🧳'
+          title={t('nav.primeDriverExpenses')}
+          description={t('accountantPackage.primeDriversCard')}
+        />
 
         <Text style={styles.sectionTitle}>{t('accountantPackage.yearLabel')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
