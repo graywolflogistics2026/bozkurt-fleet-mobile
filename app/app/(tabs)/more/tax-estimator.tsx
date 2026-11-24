@@ -26,6 +26,7 @@ import {
 } from '@/src/components/ui';
 import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
+import { RowDeleteButton } from '@/src/components/RowDeleteButton';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { HouseholdIncome, HouseholdMember } from '@/src/types/db';
 import { numOrNull } from '@/src/lib/number';
@@ -395,10 +396,9 @@ export default function TaxEstimator() {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={{ color: colors.text, fontWeight: '700' }}>{money(entry.row.annual_amount)}</Text>
-                      <Pressable onPress={() => handleDeleteIncome(entry)} hitSlop={8} style={{ marginTop: spacing.xs }}>
-                        <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
-                      </Pressable>
                     </View>
+                    {/* Delete mark: top-right corner, 44 dp (owner 2026-11-24). */}
+                    <RowDeleteButton onPress={() => handleDeleteIncome(entry)} />
                   </View>
                 ))
               )}
