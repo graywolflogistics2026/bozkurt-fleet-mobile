@@ -1216,7 +1216,7 @@ redeploying too since their source changed).
 
 - [x] 36a run (trucks purchase/financing columns + new equipment table + RLS)
 - [ ] 36b redeploy reset-data (TABLES_IN_DELETION_ORDER gained "equipment")
-- [ ] 36c redeploy delete-account (TABLES_IN_DELETION_ORDER gained "equipment")
+- [x] 36c redeploy delete-account (TABLES_IN_DELETION_ORDER gained "equipment") — done 2026-11-23 (index.ts as of commit 0a94876; tested live end-to-end on a test account, see docs/CHANGELOG.md)
 
 ---
 

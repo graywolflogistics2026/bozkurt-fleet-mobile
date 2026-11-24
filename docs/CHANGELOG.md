@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-23 — delete-account redeployed and tested live (owner)
+
+delete-account redeployed (index.ts as of commit 0a94876) and tested live end-to-end on a test account: before = 134 rows in 15 tables + 15 storage files + 1 auth user; after = 0 / 0 / 0. FK cascade verified on drivers, import_jobs, prime_driver_expenses, ai_usage_log, ai_credit_purchases. PENDING_SQL §36c marked done. No code change.
+
 
 ## 2026-11-14 — §85 applied (owner verified)
 
