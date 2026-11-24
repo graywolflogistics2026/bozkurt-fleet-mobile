@@ -3,8 +3,15 @@
 // is opened from a card on its parent screen. The card only NAVIGATES:
 // router.push to the child's own, unchanged route, so the back button
 // returns to the parent. It never runs an action and never hides or
-// changes the parent's content. Same look as every other tappable card
-// (TappableCard: card + chevron).
+// changes the parent's content.
+//
+// LOOK (owner 2026-11-24, after phone testing: the plain cards were easy
+// to miss): ONE shared style for every such card — accent border on an
+// accent-tinted background, 16 pt bold title, an accent "→" on the right,
+// dimmed while pressed. FeaturedScreenCard below stays bigger (2 px
+// border, stronger tint, 20 pt title, badge). Text is never truncated.
+// Contrast on the tinted dark background: title #f0f0f5 and description
+// #8a8a99 both stay above 4.5:1.
 //
 // `params` (optional) are passed to the child route, e.g. so a hidden
 // tab screen (Transactions) knows which parent to go back to.
@@ -14,7 +21,7 @@
 // parent screen file really links to it.
 import { I18nManager, Pressable, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import { MutedText, TappableCard } from '@/src/components/ui';
+import { MutedText } from '@/src/components/ui';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
 export function RelatedScreenCard({
@@ -32,14 +39,37 @@ export function RelatedScreenCard({
 }) {
   const router = useRouter();
   return (
-    <TappableCard onPress={() => router.push((params ? { pathname: href, params } : href) as Href)}>
-      <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '700' }}>
-        {emoji} {title}
+    <Pressable
+      onPress={() => router.push((params ? { pathname: href, params } : href) as Href)}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${description}`}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.accent,
+        backgroundColor: pressed ? ACCENT_TINT_PRESSED : ACCENT_TINT_LIGHT,
+        borderRadius: radii.md,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+      })}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: colors.text, fontSize: typography.size.lg, fontWeight: '700', marginBottom: 2 }}>
+          {emoji} {title}
+        </Text>
+        <MutedText>{description}</MutedText>
+      </View>
+      <Text style={{ color: colors.accent, fontSize: typography.size.xl, fontWeight: '700', marginStart: spacing.sm }}>
+        {I18nManager.isRTL ? '←' : '→'}
       </Text>
-      <MutedText>{description}</MutedText>
-    </TappableCard>
+    </Pressable>
   );
 }
+
+// colors.accent (#2563eb) tints: normal card 8%, pressed 22%.
+const ACCENT_TINT_LIGHT = 'rgba(37, 99, 235, 0.08)';
+const ACCENT_TINT_PRESSED = 'rgba(37, 99, 235, 0.22)';
 
 // FEATURED variant (owner 2026-11-24): one card a specific group of users
 // must notice at once (For Prime Inc Drivers on Accountant Package). About

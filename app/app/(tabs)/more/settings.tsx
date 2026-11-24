@@ -21,6 +21,7 @@ import { fetchAllUserData } from '@/src/data/exportAllData';
 import { invalidateFinancialData, removeFinancialDataFromCache } from '@/src/data/queryInvalidation';
 import type { EntityType } from '@/src/tax/types';
 import { Screen, ScreenTitle, Card, MutedText, Field, PrimaryButton, SecondaryButton, ModalSheet, SheetTitle } from '@/src/components/ui';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { EstimateAcknowledgmentText } from '@/src/components/EstimateBanner';
 import { DiagnosticsSection } from '@/src/components/DiagnosticsSection';
 import { colors, radii, spacing, typography } from '@/src/theme';
@@ -592,10 +593,19 @@ export default function Settings() {
             (router.push to their unchanged routes; back returns here). */}
         <Card>
           <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>{t('settings.toolsTitle')}</Text>
-          <MutedText>{t('settings.categoryLearningNote')}</MutedText>
-          <SecondaryButton title={`🧠 ${t('nav.categoryLearning')}`} onPress={() => router.push('/(tabs)/more/category-learning' as Href)} />
-          <MutedText style={{ marginTop: spacing.sm }}>{t('settings.referralNote')}</MutedText>
-          <SecondaryButton title={`🎁 ${t('nav.referral')}`} onPress={() => router.push('/(tabs)/more/referral' as Href)} />
+          {/* Same shared card look as every parent-screen card (owner 2026-11-24). */}
+          <RelatedScreenCard
+            href='/(tabs)/more/category-learning'
+            emoji='🧠'
+            title={t('nav.categoryLearning')}
+            description={t('settings.categoryLearningNote')}
+          />
+          <RelatedScreenCard
+            href='/(tabs)/more/referral'
+            emoji='🎁'
+            title={t('nav.referral')}
+            description={t('settings.referralNote')}
+          />
         </Card>
 
         {/* USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) —
