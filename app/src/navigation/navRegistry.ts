@@ -210,6 +210,8 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
       '/(tabs)/more/asset-register',
       '/(tabs)/more/capital-account',
       '/(tabs)/more/documents',
+      // Back as a row (owner 2026-11-23); the Documents card stays too.
+      '/(tabs)/more/compliance',
     ],
   },
   {
@@ -258,8 +260,6 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/truck-comparison': { kind: 'parent', parent: '/(tabs)/more/trucks' },
   // Owner 2026-11-23: a card on Asset Register (menu row "Assets & Equipment").
   '/(tabs)/more/equipment': { kind: 'parent', parent: '/(tabs)/more/asset-register' },
-  // Owner 2026-11-23: a card on Documents ("Renewals & expiry dates").
-  '/(tabs)/more/compliance': { kind: 'parent', parent: '/(tabs)/more/documents' },
   // Owner 2026-11-23: a card on Capital Account.
   '/(tabs)/more/loans': { kind: 'parent', parent: '/(tabs)/more/capital-account' },
   // Owner 2026-11-23: a card on Operating P&L.
