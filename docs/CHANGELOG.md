@@ -10,6 +10,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — The user decides tax deductibility at import, not the AI (owner)
+
+- Receipts/expense documents (store/amazon, insurance/lease/factoring/utility, other, loan statement) show a required, empty Yes/No on the import card ("apply to all items" + per-item override; editable category for Yes rows). Save stays off until answered (`src/components/ExpenseDeductibleChoice.tsx`, `src/import/expenseDecision.ts`).
+- Yes = exactly today's deductible row (pinned against pre-change output). No = no deduction, equipment link or owner contribution; the document and file stay in Documents and the Saved card says so (`saveExtraction()` `expenseDecision`, `expenseRowsNotRecorded`).
+- The AI's `taxDeductible` is ignored; the forced "whole restaurant receipt = Meals" rule is gone (keyword Meals category stays). Settlements, fuel, maintenance, tolls, manual entry and all existing rows unchanged.
+- ai-import prompt: `taxDeductible`/`bizPct` fields and their "set false" sentences removed — committed, NOT deployed (PENDING_SQL "Also still open").
+- No SQL. Ships via `eas update`; then ai-import with the deploy script.
+
 ## 2026-11-24 — Drivers list shows only names (owner, tester feedback)
 
 - Drivers: each row is just the name (18 pt bold, "›"); compensation, carrier payroll summary and Payments/Edit/Remove moved into the read-only detail sheet (same handlers, Remove keeps its confirmation). A driver still named by payroll code keeps the blue "Who is CODE?" button in the row. No data logic change; ships via `eas update`.

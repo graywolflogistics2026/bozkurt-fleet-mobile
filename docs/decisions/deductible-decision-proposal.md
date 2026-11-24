@@ -1,6 +1,23 @@
 # Tax deductible is the user's decision, not the AI's — proposal (2026-11-24)
 
-Status: PROPOSAL. Read-only: no code, SQL or deploy was changed.
+Status: SUPERSEDED BY THE OWNER'S DECISION, IMPLEMENTED 2026-11-24. The owner
+chose "decide at import" instead of option B below: the import card asks a
+required Yes/No (empty by default, apply-to-all + per-item override); Yes
+saves today's deductible row, No writes no expense row at all (the file and
+documents row stay in Documents). No pending state, no new column, no SQL.
+Commits: e2a6efa (data layer + tests), 4bf1c01 (import card + i18n),
+57a4fb2 (ai-import prompt, NOT deployed). Out of scope and unchanged:
+settlement-derived rows, manual entry, fuel/maintenance/tolls, all existing
+rows. Option B (pending state), B+ (remembered choices) and the
+"For Prime Inc Drivers" change (Part B) remain designs only.
+Deploy order for the prompt: code -> `eas update` -> phones updated (Settings
+shows the update) -> ai-import via `scripts/deploy-ai-import.ps1`. Reason: an
+older build shows its read-only "Deductible:" line as "No" when the field
+is missing (cosmetic; its saved rows are unchanged).
+
+Original proposal text follows.
+
+Status (original): PROPOSAL. Read-only: no code, SQL or deploy was changed.
 
 ## Owner request (verbatim, summarized only where marked)
 
