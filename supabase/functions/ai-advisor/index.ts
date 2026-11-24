@@ -162,8 +162,10 @@ Deno.serve(async (req: Request) => {
   // System prompt: ported from legacy aiCtx() — figures pulled live from
   // this user's own data (settlements + deductions), not the fixed
   // Graywolf/Unit-830157 sample copy baked into the legacy single-user app.
-  const [{ data: profile }, { data: settlements }, { data: deductions }] = await Promise.all([
-    supabase.from("profiles").select("company_name, owner_name").eq("user_id", userId).maybeSingle(),
+  // NO NAMES TO THE AI (owner decision 2026-11-23, AI consent decision 3):
+  // the owner's and the company's names are never read here or sent to
+  // Anthropic; the prompt says "the owner-operator".
+  const [{ data: settlements }, { data: deductions }] = await Promise.all([
     supabase.from("settlements").select("gross, miles").eq("user_id", userId),
     supabase.from("deductions").select("amount").eq("user_id", userId),
   ]);
@@ -172,8 +174,6 @@ Deno.serve(async (req: Request) => {
   const ded = (deductions ?? []).reduce((a, x) => a + (x.amount ?? 0), 0);
   const miles = (settlements ?? []).reduce((a, x) => a + (x.miles ?? 0), 0);
   const settlementCount = (settlements ?? []).length;
-  const ownerLabel = profile?.owner_name || "the owner-operator";
-  const companyLabel = profile?.company_name || "this fleet";
 
   const languageName = locale ? LOCALE_LANGUAGE_NAME[locale] : undefined;
   const languageInstruction = languageName
@@ -183,7 +183,7 @@ Deno.serve(async (req: Request) => {
     : "";
 
   const systemPrompt =
-    `You are the AI business advisor for ${ownerLabel}, owner-operator of ${companyLabel}.\n` +
+    `You are the AI business advisor for the owner-operator.\n` +
     `Revenue: $${rev.toFixed(2)} | Deductions: $${ded.toFixed(2)} | Net: $${(rev - ded).toFixed(2)}\n` +
     `Miles: ${miles.toLocaleString()} | Settlements: ${settlementCount}\n` +
     `Give specific, actionable trucking advice. Max 150 words.${languageInstruction}`;
