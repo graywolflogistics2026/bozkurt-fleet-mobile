@@ -92,3 +92,20 @@ describe('the flat menu (owner decisions 2026-11-23)', () => {
     for (const src of [sheet, sidebar]) expect(src).not.toMatch(/titleKey|sidebar\.sections/);
   });
 });
+
+describe('tab bar (owner decision 2026-11-23)', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+  const screens = [...layout.matchAll(/<Tabs\.Screen\s+name="([^"]+)"([\s\S]*?)\/>/g)].map((m) => ({ name: m[1], hidden: /href: null/.test(m[2]) }));
+
+  test('visible tabs, in order: Home | Import | Reports | Menu', () => {
+    expect(screens.filter((s) => !s.hidden).map((s) => s.name)).toEqual(['index', 'import', 'reports', 'more']);
+  });
+
+  test('Transactions, Deductions and Truck Health keep their routes (hidden from the bar only)', () => {
+    expect(screens.filter((s) => s.hidden).map((s) => s.name).sort()).toEqual(['deductions', 'transactions', 'truck-health']);
+  });
+
+  test('every hidden tab route is a menu row', () => {
+    for (const name of ['transactions', 'deductions', 'truck-health']) expect(MENU_ORDER).toContain(`/(tabs)/${name}`);
+  });
+});

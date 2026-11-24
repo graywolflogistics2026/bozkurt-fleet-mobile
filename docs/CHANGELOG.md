@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-23 — Tab bar Home | Import | Reports | Menu, stage 1 commit 2 (owner)
+
+Transactions leaves the phone tab bar (`href: null`, route kept, like Deductions and Truck Health). It is a menu row (since commit 1), and back from it still goes Home. Import stays the raised accent "+" button in slot 2; its label is now accent-coloured and bold. `TAB_BAR_HREFS` is now Home + Import (it still listed Deductions and Truck Health). No number changed. Ships via `eas update`.
+
 ## 2026-11-23 — Flat menu, stage 1 commit 1 (owner)
 
 Phone Menu sheet and the wide sidebar are ONE flat list, no headings, in the owner's order, Settings last (`navRegistry.ts` `MENU_ORDER`, `menuItems()`, `sidebarItems()`). The groups stay internal, so Reports is unchanged.

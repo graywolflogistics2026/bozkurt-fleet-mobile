@@ -152,7 +152,12 @@ function DashboardBell() {
   );
 }
 
-// Tab order (Session 9e-B8 restructure, owner decision — supersedes the
+// TAB BAR (owner decision 2026-11-23, docs/decisions/
+// menu-simplification-proposal.md) — SUPERSEDES the order described
+// below: Home · [+ Import] (2nd of 4, the raised accent button) · Reports ·
+// Menu. Transactions is a Menu row (`href: null` below keeps its route).
+//
+// Earlier tab order (Session 9e-B8 restructure, owner decision — supersedes the
 // 2026-07-04 Dashboard/Deductions/[+]/Truck Health/More order): Home ·
 // Transactions · [+ Import] (raised center button — importing is the most
 // frequent action) · Reports · Menu. Deductions and Truck Health are no
@@ -221,10 +226,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="transactions"
-        options={{ title: t('nav.transactions'), tabBarIcon: ({ color }) => <TabIcon emoji="💳" color={color} /> }}
-      />
-      <Tabs.Screen
         name="import"
         options={{
           title: t('nav.import'),
@@ -259,6 +260,10 @@ export default function TabsLayout() {
           route navigable (Transactions' expense rows, Menu's Expenses
           group, the Reports hub, Home's Truck Status card) without a
           bottom-tab icon of their own. */}
+      {/* Transactions left the tab bar (owner 2026-11-23, flat menu):
+          a Menu row now; the route, its back-to-Home rule and every
+          link to it are unchanged. */}
+      <Tabs.Screen name="transactions" options={{ title: t('nav.transactions'), href: null }} />
       <Tabs.Screen name="deductions" options={{ title: t('nav.deductions'), href: null }} />
       <Tabs.Screen name="truck-health" options={{ title: t('nav.truckHealth'), href: null }} />
     </Tabs>

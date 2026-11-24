@@ -65,10 +65,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: -2,
   },
+  // Import is 2nd of 4 tabs (owner 2026-11-23), so it is not centred: the
+  // raised accent button plus an accent, bold label keep it the stand-out tab.
   label: {
-    color: colors.muted,
-    fontSize: 10,
+    color: colors.accent,
+    fontSize: 11,
     marginTop: 2,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

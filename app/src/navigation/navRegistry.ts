@@ -168,13 +168,11 @@ export const NAV_GROUPS: NavGroup[] = filterNavGroupsByFlags(RAW_NAV_GROUPS, FEA
 // they're already one tap away; WideSidebar/MenuSheet (which replace or
 // supplement the tab bar) still include everything. Named explicitly here
 // rather than left as implicit filtering logic at each call site.
-export const TAB_BAR_HREFS: readonly Href[] = [
-  '/(tabs)',
-  '/(tabs)/transactions' as Href,
-  '/(tabs)/import',
-  '/(tabs)/deductions',
-  '/(tabs)/truck-health',
-];
+// TAB BAR (owner decision 2026-11-23): Home | Import | Reports | Menu.
+// Reports and Menu are not registry routes. Transactions left the tab bar;
+// Deductions and Truck Health had already left it (Session 9e-B8) but were
+// still listed here, so the More index hid them.
+export const TAB_BAR_HREFS: readonly Href[] = ['/(tabs)', '/(tabs)/import'];
 
 export function flattenNavItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
   return groups.flatMap((g) => g.items);
@@ -217,7 +215,7 @@ export const MENU_ORDER: readonly string[] = [
   '/(tabs)/more/documents',
   '/(tabs)/more/compliance',
   // A row from stage 1 on: the wide sidebar has no tab bar, and on
-  // phones it leaves the tab bar in stage 1's second commit.
+  // phones it left the tab bar (owner 2026-11-23).
   '/(tabs)/transactions',
   '/(tabs)/more/category-learning',
   '/(tabs)/more/referral',
