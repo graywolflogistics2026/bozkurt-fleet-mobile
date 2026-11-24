@@ -77,3 +77,19 @@ describe('currentMonthKey', () => {
     expect(currentMonthKey()).toMatch(/^\d{4}-\d{2}$/);
   });
 });
+
+describe('groupByMonth isCounted (Loads statement weeks, owner 2026-11-24)', () => {
+  const rows: Row[] = [
+    { id: 'load', date: '2026-11-13', amount: 1500 },
+    { id: 'statement-week', date: '2026-11-20', amount: 0 },
+  ];
+  it('a row that is not counted is still listed, but leaves count and total unchanged', () => {
+    const [nov] = groupByMonth(rows, (r) => r.date, (r) => r.amount, (r) => r.id !== 'statement-week');
+    expect(nov.rows.map((r) => r.id)).toEqual(['load', 'statement-week']);
+    expect(nov.count).toBe(1);
+    expect(nov.total).toBe(1500);
+  });
+  it('default: every row counts, as before', () => {
+    expect(groupByMonth(rows, (r) => r.date, (r) => r.amount)[0].count).toBe(2);
+  });
+});

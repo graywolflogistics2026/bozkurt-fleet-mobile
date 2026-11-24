@@ -1346,7 +1346,14 @@
     "weekEnding": "सप्ताह समाप्त {{date}}",
     "empty": "अभी तक कोई लोड नहीं — एक settlement PDF आयात करें।",
     "deleteConfirmTitle": "इस लोड को हटाएं?",
-    "deleteFailedTitle": "हटाना विफल"
+    "deleteFailedTitle": "हटाना विफल",
+    "statementWeekHeader_one": "सप्ताह समाप्त {{date}} · स्टेटमेंट पर {{count}} लोड · विवरण सेव नहीं हुआ",
+    "statementWeekHeader_other": "सप्ताह समाप्त {{date}} · स्टेटमेंट पर {{count}} लोड · विवरण सेव नहीं हुआ",
+    "fromStatement": "स्टेटमेंट से",
+    "asPrinted": "{{amount}} छपे अनुसार",
+    "statementMiles": "{{loaded}} मील लोडेड · {{empty}} खाली",
+    "notCountedLine_one": "+ स्टेटमेंट पर {{count}} लोड, यहाँ गिने नहीं गए",
+    "notCountedLine_other": "+ स्टेटमेंट पर {{count}} लोड, यहाँ गिने नहीं गए"
   },
   "settlementsScreen": {
     "title": "Settlements",

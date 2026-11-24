@@ -1341,7 +1341,14 @@
     "weekEnding": "Hafta sonu {{date}}",
     "empty": "Henüz yük yok — bir settlement PDF'i içe aktarın.",
     "deleteConfirmTitle": "Bu yük silinsin mi?",
-    "deleteFailedTitle": "Silme başarısız"
+    "deleteFailedTitle": "Silme başarısız",
+    "statementWeekHeader_one": "Hafta sonu {{date}} · ekstrede {{count}} yük · ayrıntılar kaydedilmedi",
+    "statementWeekHeader_other": "Hafta sonu {{date}} · ekstrede {{count}} yük · ayrıntılar kaydedilmedi",
+    "fromStatement": "Ekstreden",
+    "asPrinted": "basılı tutar {{amount}}",
+    "statementMiles": "{{loaded}} mil yüklü · {{empty}} boş",
+    "notCountedLine_one": "+ ekstrelerde {{count}} yük, burada sayılmadı",
+    "notCountedLine_other": "+ ekstrelerde {{count}} yük, burada sayılmadı"
   },
   "settlementsScreen": {
     "title": "Settlements",

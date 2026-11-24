@@ -34,6 +34,7 @@ export function MonthGroupedList<T>({
   loading,
   loadingLabel,
   emptyLabel,
+  isCounted,
 }: {
   // Distinguishes one screen's collapse memory from another's — pass the
   // screen name (e.g. 'settlements', 'deductions').
@@ -45,10 +46,12 @@ export function MonthGroupedList<T>({
   loading?: boolean;
   loadingLabel: string;
   emptyLabel: string;
+  // Rows shown but not counted in the month header (default: all counted).
+  isCounted?: (row: T) => boolean;
 }) {
   const { t } = useTranslation();
   const { money, date } = useFormatters();
-  const groups = groupByMonth(rows, getDate, getAmount);
+  const groups = groupByMonth(rows, getDate, getAmount, isCounted);
   const thisMonth = currentMonthKey();
   // CRITICAL BUG FIX (device feedback 2026-07-31): a row with no parseable
   // date lands in the 'unknown' bucket (monthGroups.ts never drops rows),

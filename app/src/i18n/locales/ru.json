@@ -1341,7 +1341,14 @@
     "weekEnding": "Неделя по {{date}}",
     "empty": "Пока нет грузов — импортируйте PDF settlement.",
     "deleteConfirmTitle": "Удалить этот груз?",
-    "deleteFailedTitle": "Не удалось удалить"
+    "deleteFailedTitle": "Не удалось удалить",
+    "statementWeekHeader_one": "Неделя по {{date}} · грузов в выписке: {{count}} · детали не сохранены",
+    "statementWeekHeader_other": "Неделя по {{date}} · грузов в выписке: {{count}} · детали не сохранены",
+    "fromStatement": "Из выписки",
+    "asPrinted": "{{amount}} как напечатано",
+    "statementMiles": "{{loaded}} миль с грузом · {{empty}} порожних",
+    "notCountedLine_one": "+ грузов в выписках: {{count}}, здесь не учтены",
+    "notCountedLine_other": "+ грузов в выписках: {{count}}, здесь не учтены"
   },
   "settlementsScreen": {
     "title": "Settlements",

@@ -1239,7 +1239,14 @@
     "weekEnding": "Week ending {{date}}",
     "empty": "No loads yet — import a settlement PDF.",
     "deleteConfirmTitle": "Delete this load?",
-    "deleteFailedTitle": "Delete failed"
+    "deleteFailedTitle": "Delete failed",
+    "statementWeekHeader_one": "Week ending {{date}} · {{count}} load on the statement · details not saved",
+    "statementWeekHeader_other": "Week ending {{date}} · {{count}} loads on the statement · details not saved",
+    "fromStatement": "From statement",
+    "asPrinted": "{{amount}} as printed",
+    "statementMiles": "{{loaded}} mi loaded · {{empty}} empty",
+    "notCountedLine_one": "+ {{count}} load on statements, not counted here",
+    "notCountedLine_other": "+ {{count}} loads on statements, not counted here"
   },
   "settlementsScreen": {
     "title": "Settlements",

@@ -31,7 +31,11 @@ function monthKeyFor(dateStr: string | null | undefined): string {
 export function groupByMonth<T>(
   rows: T[],
   getDate: (row: T) => string | null | undefined,
-  getAmount: (row: T) => number
+  getAmount: (row: T) => number,
+  // A row that is shown in the month but is not an item of it (the Loads
+  // screen's view-only statement weeks, owner 2026-11-24) is left out of
+  // the month's count. Default: every row counts, as before.
+  isCounted: (row: T) => boolean = () => true
 ): MonthGroup<T>[] {
   const byMonth = new Map<string, MonthGroup<T>>();
   for (const row of rows) {
@@ -41,7 +45,7 @@ export function groupByMonth<T>(
       group = { monthKey, count: 0, total: 0, rows: [] };
       byMonth.set(monthKey, group);
     }
-    group.count += 1;
+    if (isCounted(row)) group.count += 1;
     group.total += Number(getAmount(row) ?? 0);
     group.rows.push(row);
   }

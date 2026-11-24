@@ -1,9 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useLoads, useDeleteLoad } from '@/src/data/loads';
 import { useSettlements } from '@/src/data/settlements';
+import { useDocuments } from '@/src/data/documents';
+// VIEW ONLY (owner 2026-11-24): statement loads of weeks saved without line
+// details. Never records, never counted (see src/stats/statementLoads.ts).
+import { statementLoadCount, statementOnlyLoadWeeks, type StatementLoadWeek } from '@/src/stats/statementLoads';
 import { useActiveTruck } from '@/src/context/ActiveTruckContext';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
@@ -49,6 +54,43 @@ function LoadRow({ x, weekEnding, onDelete }: { x: Load; weekEnding: string | nu
   );
 }
 
+// A week saved without line details: header + its printed loads, read
+// only, tagged "From statement". Tapping opens that settlement week.
+function StatementWeekBlock({ week, onOpen }: { week: StatementLoadWeek; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const { money, number, date } = useFormatters();
+  return (
+    <View style={styles.row}>
+      <View style={{ flex: 1 }}>
+        <Pressable onPress={onOpen} accessibilityRole="button" hitSlop={4}>
+          <Text style={{ color: colors.orange, fontWeight: '700', fontSize: typography.size.sm }}>
+            {t('loads.statementWeekHeader', { date: date(week.weekEnding), count: week.loads.length })}
+          </Text>
+        </Pressable>
+        {week.loads.map((l) => (
+          <Pressable key={l.key} onPress={onOpen} accessibilityRole="button" style={styles.statementItem}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.desc, { color: colors.muted }]} numberOfLines={1}>
+                {l.origin ?? '—'} → {l.destination ?? '—'}
+              </Text>
+              <MutedText>
+                {date(week.weekEnding)}
+                {l.order ? ' · #' + l.order : ''} · {t('loads.statementMiles', { loaded: number(l.loadedMiles), empty: number(l.emptyMiles) })}
+              </MutedText>
+              <Text style={styles.fromStatementTag}>{t('loads.fromStatement')}</Text>
+            </View>
+            {l.revenueAsPrinted != null && (
+              <MutedText style={{ marginStart: spacing.sm }}>{t('loads.asPrinted', { amount: money(l.revenueAsPrinted) })}</MutedText>
+            )}
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+type LoadListRow = { kind: 'load'; load: Load } | { kind: 'statement'; week: StatementLoadWeek };
+
 export default function Loads() {
   const { t } = useTranslation();
   const { money, number } = useFormatters();
@@ -57,6 +99,8 @@ export default function Loads() {
   // the selector" for a table with no truck_id of its own (see
   // src/stats/loadsScope.ts's own header comment).
   const settlementsQuery = useSettlements();
+  const documentsQuery = useDocuments();
+  const router = useRouter();
   const { activeTruckId } = useActiveTruck();
   const deleteLoad = useDeleteLoad();
   const queryClient = useQueryClient();
@@ -75,6 +119,28 @@ export default function Loads() {
     const scoped = filterLoadsByTruckScope(loadsQuery.data ?? [], settlementsQuery.data ?? [], activeTruckId);
     return [...scoped].sort((a, b) => (b.load_date ?? '').localeCompare(a.load_date ?? ''));
   }, [loadsQuery.data, settlementsQuery.data, activeTruckId]);
+
+  // Statement loads of weeks saved without line details (same truck rule
+  // as real loads). Display only: never in the stats below.
+  const statementWeeks = useMemo(
+    () =>
+      filterLoadsByTruckScope(
+        statementOnlyLoadWeeks(settlementsQuery.data ?? [], documentsQuery.data ?? [], loadsQuery.data ?? []),
+        settlementsQuery.data ?? [],
+        activeTruckId
+      ),
+    [settlementsQuery.data, documentsQuery.data, loadsQuery.data, activeTruckId]
+  );
+  const listRows = useMemo(() => {
+    const all: LoadListRow[] = [
+      ...rows.map((load) => ({ kind: 'load' as const, load })),
+      ...statementWeeks.map((week) => ({ kind: 'statement' as const, week })),
+    ];
+    const dateOf = (r: LoadListRow) => (r.kind === 'load' ? r.load.load_date : r.week.weekEnding) ?? '';
+    return all.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+  }, [rows, statementWeeks]);
+  const openWeek = (settlementId: string) =>
+    router.push({ pathname: '/(tabs)/more/settlements', params: { openId: settlementId } } as unknown as Href);
 
   const weekEndingBySettlement = useMemo(
     () => new Map((settlementsQuery.data ?? []).map((s) => [s.id, s.week_ending] as const)),
@@ -134,27 +200,37 @@ export default function Loads() {
               <Text style={styles.statValue}>{money(stats.revenuePerMile, { maximumFractionDigits: 2 })}</Text>
             </View>
           </View>
+          {statementWeeks.length > 0 && (
+            <MutedText style={{ marginTop: spacing.xs }}>{t('loads.notCountedLine', { count: statementLoadCount(statementWeeks) })}</MutedText>
+          )}
         </Card>
 
         <MonthGroupedList
           screenKey="loads"
-          rows={rows}
-          getDate={(x) => x.load_date}
-          getAmount={(x) => x.revenue ?? 0}
+          rows={listRows}
+          getDate={(r) => (r.kind === 'load' ? r.load.load_date : r.week.weekEnding)}
+          getAmount={(r) => (r.kind === 'load' ? (r.load.revenue ?? 0) : 0)}
+          isCounted={(r) => r.kind === 'load'}
           loading={loadsQuery.isLoading}
           loadingLabel={t('common.loading')}
           emptyLabel={t('loads.empty')}
           renderRows={(monthRows) => (
             <Card>
-              {monthRows.map((x, i) => (
-                <View key={x.id} style={i > 0 ? styles.rowBorder : undefined}>
-                  <LoadRow
-                    x={x}
-                    weekEnding={x.settlement_id ? (weekEndingBySettlement.get(x.settlement_id) ?? null) : null}
-                    onDelete={() => handleDelete(x)}
-                  />
-                </View>
-              ))}
+              {monthRows.map((r, i) =>
+                r.kind === 'load' ? (
+                  <View key={r.load.id} style={i > 0 ? styles.rowBorder : undefined}>
+                    <LoadRow
+                      x={r.load}
+                      weekEnding={r.load.settlement_id ? (weekEndingBySettlement.get(r.load.settlement_id) ?? null) : null}
+                      onDelete={() => handleDelete(r.load)}
+                    />
+                  </View>
+                ) : (
+                  <View key={'statement-' + r.week.settlementId} style={i > 0 ? styles.rowBorder : undefined}>
+                    <StatementWeekBlock week={r.week} onOpen={() => openWeek(r.week.settlementId)} />
+                  </View>
+                )
+              )}
             </Card>
           )}
         />
@@ -191,6 +267,26 @@ const styles = {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: '600' as const,
+  },
+  statementItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.xs,
+    paddingStart: spacing.sm,
+    borderStartWidth: 2,
+    borderStartColor: colors.border,
+  },
+  fromStatementTag: {
+    alignSelf: 'flex-start' as const,
+    color: colors.orange,
+    fontSize: typography.size.xs,
+    fontWeight: '700' as const,
+    borderWidth: 1,
+    borderColor: colors.orange,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    marginTop: 2,
   },
   amount: {
     color: colors.text,

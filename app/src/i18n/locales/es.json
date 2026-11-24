@@ -1341,7 +1341,14 @@
     "weekEnding": "Semana que termina el {{date}}",
     "empty": "Aún no hay cargas — importe un PDF de settlement.",
     "deleteConfirmTitle": "¿Eliminar esta carga?",
-    "deleteFailedTitle": "Fallo al eliminar"
+    "deleteFailedTitle": "Fallo al eliminar",
+    "statementWeekHeader_one": "Semana que termina el {{date}} · cargas en el estado de cuenta: {{count}} · detalles no guardados",
+    "statementWeekHeader_other": "Semana que termina el {{date}} · cargas en el estado de cuenta: {{count}} · detalles no guardados",
+    "fromStatement": "Del estado de cuenta",
+    "asPrinted": "{{amount}} según lo impreso",
+    "statementMiles": "{{loaded}} mi cargadas · {{empty}} vacías",
+    "notCountedLine_one": "+ {{count}} carga en estados de cuenta, no contada aquí",
+    "notCountedLine_other": "+ {{count}} cargas en estados de cuenta, no contadas aquí"
   },
   "settlementsScreen": {
     "title": "Settlements",

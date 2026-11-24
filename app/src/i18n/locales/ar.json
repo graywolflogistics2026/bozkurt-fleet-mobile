@@ -1341,7 +1341,14 @@
     "weekEnding": "Week ending {{date}}",
     "empty": "لا توجد حمولات بعد — استورد ملف PDF لـ Settlement.",
     "deleteConfirmTitle": "حذف هذه الحمولة؟",
-    "deleteFailedTitle": "فشل الحذف"
+    "deleteFailedTitle": "فشل الحذف",
+    "statementWeekHeader_one": "Week ending {{date}} · {{count}} load on the statement · details not saved",
+    "statementWeekHeader_other": "Week ending {{date}} · {{count}} loads on the statement · details not saved",
+    "fromStatement": "From statement",
+    "asPrinted": "{{amount}} as printed",
+    "statementMiles": "{{loaded}} mi loaded · {{empty}} empty",
+    "notCountedLine_one": "+ {{count}} load on statements, not counted here",
+    "notCountedLine_other": "+ {{count}} loads on statements, not counted here"
   },
   "settlementsScreen": {
     "title": "Settlements",
