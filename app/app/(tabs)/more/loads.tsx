@@ -11,6 +11,7 @@ import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList'
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText } from '@/src/components/ui';
+import { RowDeleteButton } from '@/src/components/RowDeleteButton';
 import { colors, spacing, typography } from '@/src/theme';
 import type { Load } from '@/src/types/db';
 
@@ -21,7 +22,6 @@ function rpm(load: Load): number | null {
 }
 
 function LoadRow({ x, onDelete }: { x: Load; onDelete: () => void }) {
-  const { t } = useTranslation();
   const { money, number, date } = useFormatters();
   const r = rpm(x);
   return (
@@ -40,16 +40,8 @@ function LoadRow({ x, onDelete }: { x: Load; onDelete: () => void }) {
         <Text style={styles.amount}>{money(x.revenue ?? 0)}</Text>
         <MutedText>{r !== null ? `${money(r, { maximumFractionDigits: 2 })}/mi` : '—'}</MutedText>
       </View>
-      {/* DELETE MARK (owner 2026-11-24): top-right corner of each load,
-          a 44 dp touch target; same handleDelete confirmation as before. */}
-      <Pressable
-        onPress={onDelete}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.delete')}
-        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: -spacing.sm, marginEnd: -spacing.sm, marginStart: spacing.xs }}
-      >
-        <Text style={{ color: colors.red, fontSize: typography.size.lg, fontWeight: '700' }}>✕</Text>
-      </Pressable>
+      {/* DELETE MARK (owner 2026-11-24): top-right corner, shared component. */}
+      <RowDeleteButton onPress={onDelete} />
     </View>
   );
 }
