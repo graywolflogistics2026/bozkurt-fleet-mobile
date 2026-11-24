@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/context/AuthContext';
@@ -150,8 +150,10 @@ export function CategoryPicker({
 const SEARCH_MIN_OPTIONS = 10;
 
 // Pop-up version of the same picker (owner 2026-11-24, import Yes/No card):
-// every category (canonical + the user's own) in one big scrollable list,
-// the suggested one first and marked, a search field for long lists and
+// every category (canonical + the user's own) in one big scrollable list in
+// the app's normal order, nothing suggested or moved (owner 2026-11-24: the
+// person chooses freely), the current one shown selected, a search field
+// for long lists and
 // "+ Create a category" at the bottom (same NewCategoryForm, shown inside
 // this sheet so no modal opens on top of another). Tapping a row selects it
 // and closes; closing without a tap changes nothing.
@@ -159,7 +161,6 @@ export function CategoryPickerSheet({
   visible,
   kind,
   value,
-  suggested,
   title,
   onSelect,
   onClose,
@@ -167,7 +168,6 @@ export function CategoryPickerSheet({
   visible: boolean;
   kind: 'income' | 'expense';
   value: string;
-  suggested: string | null;
   title: string;
   onSelect: (category: string) => void;
   onClose: () => void;
@@ -177,12 +177,8 @@ export function CategoryPickerSheet({
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const ordered = useMemo(() => {
-    const rest = options.filter((c) => c !== suggested);
-    return suggested ? [suggested, ...rest] : rest;
-  }, [options, suggested]);
   const q = search.trim().toLowerCase();
-  const shown = q ? ordered.filter((c) => c.toLowerCase().includes(q)) : ordered;
+  const shown = q ? options.filter((c) => c.toLowerCase().includes(q)) : options;
 
   function close() {
     setSearch('');
@@ -202,7 +198,7 @@ export function CategoryPickerSheet({
       ) : (
         <>
           <SheetTitle>{title}</SheetTitle>
-          {ordered.length >= SEARCH_MIN_OPTIONS && (
+          {options.length >= SEARCH_MIN_OPTIONS && (
             <Field value={search} onChangeText={setSearch} placeholder={t('categoryPicker.searchPlaceholder')} />
           )}
           {shown.map((c) => {
@@ -228,11 +224,6 @@ export function CategoryPickerSheet({
                 })}
               >
                 <Text style={{ flex: 1, color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>{c}</Text>
-                {c === suggested && (
-                  <Text style={{ color: selected ? colors.text : colors.accent, fontSize: typography.size.xs, fontWeight: '700', marginStart: spacing.sm }}>
-                    {t('categoryPicker.suggested')}
-                  </Text>
-                )}
               </Pressable>
             );
           })}

@@ -1758,7 +1758,6 @@
     "bucketLabel": "Categoría de Schedule C",
     "bucketNote": "Requerido para que esta categoría siempre cuente en tu estimado de impuestos.",
     "saveFailedTitle": "Error al guardar",
-    "suggested": "Sugerida",
     "searchPlaceholder": "Buscar categorías",
     "createCategory": "+ Crear una categoría"
   },

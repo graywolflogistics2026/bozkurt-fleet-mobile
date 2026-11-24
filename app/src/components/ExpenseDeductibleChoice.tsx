@@ -15,10 +15,10 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 // override, and an editable category for every Yes row. The AI's own
 // taxDeductible value is never shown or used.
 // CATEGORY POP-UP (owner 2026-11-24, after the phone test): Yes on one item
-// opens the full category list right away (CategoryPickerSheet), suggested
-// category first. "Yes to all" opens nothing; each item shows a big
+// opens the full category list right away (CategoryPickerSheet), in the
+// app's normal order with nothing suggested. "Yes to all" opens nothing; each item shows a big
 // "Category: X · Change" row that opens the same pop-up. Closing the pop-up
-// keeps the suggestion. Saving is unchanged.
+// keeps the item's current category. Saving is unchanged.
 
 type Row = { label: string; amount: number; category: string };
 
@@ -86,8 +86,6 @@ export function ExpenseDeductibleChoice({
 }) {
   const { t, i18n } = useTranslation();
   const rows = useMemo(() => choiceRows(extraction, userId, categoryOverride), [extraction, userId, categoryOverride]);
-  // The mapped (AI-suggested) category of each row, before any user change.
-  const suggestedRows = useMemo(() => choiceRows(extraction, userId, ''), [extraction, userId]);
   const [sheetFor, setSheetFor] = useState<number | null>(null);
   if (rows.length === 0) return null;
   const multi = rows.length > 1;
@@ -192,7 +190,6 @@ export function ExpenseDeductibleChoice({
         visible={sheetFor !== null && answered[sheetFor] === true}
         kind="expense"
         value={sheetFor !== null ? categoryOf(sheetFor) : ''}
-        suggested={sheetFor !== null ? suggestedRows[sheetFor]?.category || null : null}
         title={t('importScreen.deductChoice.pickTitle')}
         onSelect={(c) => sheetFor !== null && setCategory(sheetFor, c)}
         onClose={() => setSheetFor(null)}

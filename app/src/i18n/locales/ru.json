@@ -1758,7 +1758,6 @@
     "bucketLabel": "Категория Schedule C",
     "bucketNote": "Обязательно, чтобы эта категория всегда учитывалась в вашей налоговой оценке.",
     "saveFailedTitle": "Не удалось сохранить",
-    "suggested": "Предложено",
     "searchPlaceholder": "Поиск категорий",
     "createCategory": "+ Создать категорию"
   },
