@@ -2848,6 +2848,7 @@
       "reimbursement": "Geri ödeme — karşıladığı masrafı mahsup eder",
       "pr_offset": "Kişisel ödeme — PR geri ödemesini mahsup eder",
       "duplicate_fuel": "Bir settlement satırıyla aynı yakıt — bir kez sayıldı",
+      "toll_breakdown": "Bir settlement geçiş ücreti satırının parçası — bir kez sayıldı",
       "non_deductible": "İndirilebilir bir gider değil",
       "advance": "Avans geri ödemesi — gider değil",
       "escrow": "Escrow veya teminat — hâlâ sizin paranız",
@@ -3119,6 +3120,7 @@
       "escrow": "escrow, tutulan kendi paran",
       "non_deductible": "indirilemez",
       "duplicate_fuel": "zaten bir settlement'ta var",
+      "toll_breakdown": "bir settlement geçiş ücreti satırının parçası",
       "settlement_orphan": "kendi settlement kaydında zaten sayıldı"
     },
     "duplicateTitle": "Olası mükerrer kayıt",

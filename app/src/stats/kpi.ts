@@ -303,7 +303,9 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
   // toll line is that line's breakdown and never counts on top of it.
   // Decided on the FULL lists, before any window or scope; in profit a line
   // covers only when it reduces profit itself (owner decision T6(b)).
-  inputs = { ...inputs, tolls: withoutCoveredTolls(inputs.tolls, inputs.deductions, reducesTrueProfit) };
+  const countedTolls = new Set(withoutCoveredTolls(inputs.tolls, inputs.deductions, reducesTrueProfit));
+  const coveredTolls = inputs.tolls.filter((t) => !countedTolls.has(t));
+  inputs = { ...inputs, tolls: inputs.tolls.filter((t) => countedTolls.has(t)) };
 
   const { loads, truckScope, manualMilesOverride, window } = inputs;
   const settlementDocIds = new Set(
@@ -384,6 +386,7 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
     layers.reimbursements
   );
   const statementExpenses = layers.statementWeeks.reduce((sum, w) => sum + w.expenses, 0);
+  const statementWeekIds = new Set(layers.statementWeeks.map((w) => w.settlementId));
   const trueExpenses = lineBreakdown.total + statementExpenses;
   const net = grossRevenue - trueExpenses;
 
@@ -423,7 +426,11 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
     layers.fuelPurchases,
     layers.maintenanceRecords,
     layers.tolls,
-    layers.reimbursements
+    layers.reimbursements,
+    // Covered tolls rows appear as "toll_breakdown" with their line's
+    // settlement (in this window and scope), except on a statement-backed
+    // week, whose linked rows are statement detail (never in the ledger).
+    coveredTolls.filter((t) => !!t.settlement_id && settlementIds.has(t.settlement_id) && !statementWeekIds.has(t.settlement_id))
   );
 
   const bridge = buildProfitBridge({

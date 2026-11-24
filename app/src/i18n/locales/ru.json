@@ -2848,6 +2848,7 @@
       "reimbursement": "Возмещение — зачитывает возмещаемый расход",
       "pr_offset": "Личный платёж — зачитывает возмещение PR",
       "duplicate_fuel": "То же топливо, что и строка settlement, — учтено один раз",
+      "toll_breakdown": "Часть строки платных дорог в settlement — учтено один раз",
       "non_deductible": "Не вычитаемый расход",
       "advance": "Погашение аванса — не расход",
       "escrow": "Escrow или залог — это всё ещё ваши деньги",
@@ -3119,6 +3120,7 @@
       "escrow": "escrow, ваши удержанные деньги",
       "non_deductible": "не вычитается",
       "duplicate_fuel": "уже есть в settlement",
+      "toll_breakdown": "часть строки платных дорог в settlement",
       "settlement_orphan": "уже учтена в своём settlement"
     },
     "duplicateTitle": "Возможный дубликат",

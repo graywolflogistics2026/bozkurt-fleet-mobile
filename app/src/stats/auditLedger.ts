@@ -53,7 +53,9 @@ export function buildAuditLedger(
   fuelPurchases: LedgerFuel[],
   maintenanceRecords: LedgerMaintenance[],
   tolls: LedgerToll[],
-  reimbursements: LedgerReimbursement[]
+  reimbursements: LedgerReimbursement[],
+  // Tolls rows covered by their settlement's toll line: shown, never counted.
+  coveredTolls: LedgerToll[] = []
 ): LedgerRow[] {
   const rows: LedgerRow[] = [];
 
@@ -159,6 +161,22 @@ export function buildAuditLedger(
       status: 'counted',
       amount: Number(t.amount ?? 0),
       reason: 'expense',
+    })
+  );
+  coveredTolls.forEach((t, i) =>
+    rows.push({
+      key: `toll-covered-${t.id ?? i}`,
+      table: 'tolls',
+      rowId: t.id ?? null,
+      source: sourceOf(t.settlement_id),
+      settlementId: t.settlement_id ?? null,
+      deductionId: null,
+      date: t.toll_date ?? null,
+      label: t.plaza ?? '',
+      category: 'Tolls & Scales',
+      status: 'excluded',
+      amount: Number(t.amount ?? 0),
+      reason: 'toll_breakdown',
     })
   );
   reimbursements.forEach((r, i) =>

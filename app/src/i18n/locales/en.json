@@ -2848,6 +2848,7 @@
       "reimbursement": "Reimbursement — offsets the cost it repays",
       "pr_offset": "Personal payment — offsets the PR reimbursement",
       "duplicate_fuel": "Same fuel as a settlement line — counted once",
+      "toll_breakdown": "Part of a settlement toll line — counted once",
       "non_deductible": "Not a deductible expense",
       "advance": "Advance repayment — not an expense",
       "escrow": "Escrow or bond — still your money",
@@ -3119,6 +3120,7 @@
       "escrow": "escrow, your money held",
       "non_deductible": "not deductible",
       "duplicate_fuel": "already on a settlement",
+      "toll_breakdown": "part of a settlement toll line",
       "settlement_orphan": "already counted on its settlement"
     },
     "duplicateTitle": "Possible duplicate",

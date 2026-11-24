@@ -2848,6 +2848,7 @@
       "reimbursement": "प्रतिपूर्ति — जिस लागत को लौटाती है उसे समायोजित करती है",
       "pr_offset": "व्यक्तिगत भुगतान — PR प्रतिपूर्ति को समायोजित करता है",
       "duplicate_fuel": "settlement पंक्ति जैसा ही ईंधन — एक बार गिना गया",
+      "toll_breakdown": "settlement की टोल पंक्ति का हिस्सा — एक बार गिना गया",
       "non_deductible": "कटौती योग्य खर्च नहीं",
       "advance": "अग्रिम का भुगतान — खर्च नहीं",
       "escrow": "escrow या बॉन्ड — अब भी आपका पैसा",
@@ -3119,6 +3120,7 @@
       "escrow": "escrow, आपका रोका गया पैसा",
       "non_deductible": "कटौती योग्य नहीं",
       "duplicate_fuel": "पहले से एक settlement में है",
+      "toll_breakdown": "settlement की टोल पंक्ति का हिस्सा",
       "settlement_orphan": "अपने settlement पर पहले ही गिनी गई"
     },
     "duplicateTitle": "संभावित दोहराव",

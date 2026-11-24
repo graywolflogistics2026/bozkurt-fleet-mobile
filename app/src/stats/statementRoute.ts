@@ -31,6 +31,9 @@ export type LedgerReason =
   // A settlement-import row that lost its settlement link (kpi.ts
   // isOrphanSettlementRow): its settlement already counts it.
   | 'settlement_orphan'
+  // A tolls row under its settlement's toll line (tollsSummary.ts
+  // withoutCoveredTolls()): the line counts it (owner 2026-11-24).
+  | 'toll_breakdown'
   | StatementExcludeReason;
 
 export type StatementLedgerEntry = {

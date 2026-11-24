@@ -2848,6 +2848,7 @@
       "reimbursement": "Reembolso — compensa el costo que devuelve",
       "pr_offset": "Pago personal — compensa el reembolso PR",
       "duplicate_fuel": "El mismo combustible que una línea del settlement — contado una vez",
+      "toll_breakdown": "Parte de una línea de peajes del settlement — contado una vez",
       "non_deductible": "No es un gasto deducible",
       "advance": "Pago de un adelanto — no es un gasto",
       "escrow": "Escrow o fianza — sigue siendo su dinero",
@@ -3119,6 +3120,7 @@
       "escrow": "escrow, tu dinero retenido",
       "non_deductible": "no deducible",
       "duplicate_fuel": "ya está en un settlement",
+      "toll_breakdown": "parte de una línea de peajes del settlement",
       "settlement_orphan": "ya contada en su settlement"
     },
     "duplicateTitle": "Posible duplicado",

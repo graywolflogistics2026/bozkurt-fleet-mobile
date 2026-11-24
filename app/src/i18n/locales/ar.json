@@ -2848,6 +2848,7 @@
       "reimbursement": "تعويض — يقابل التكلفة التي يسددها",
       "pr_offset": "دفعة شخصية — تقابل تعويض PR",
       "duplicate_fuel": "نفس الوقود في بند settlement — حُسب مرة واحدة",
+      "toll_breakdown": "Part of a settlement toll line — counted once",
       "non_deductible": "ليس مصروفًا قابلًا للخصم",
       "advance": "سداد سلفة — ليس مصروفًا",
       "escrow": "escrow أو كفالة — ما زالت أموالك",
@@ -3119,6 +3120,7 @@
       "escrow": "escrow, your money held",
       "non_deductible": "not deductible",
       "duplicate_fuel": "already on a settlement",
+      "toll_breakdown": "part of a settlement toll line",
       "settlement_orphan": "already counted on its settlement"
     },
     "duplicateTitle": "Possible duplicate",

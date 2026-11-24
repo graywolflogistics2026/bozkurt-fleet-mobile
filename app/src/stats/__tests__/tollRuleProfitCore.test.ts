@@ -130,3 +130,16 @@ test('T10: NULL-truck rule — a fleet-level own toll still counts in a single-t
   expect([r2(k.expenses.total), r2(k.net)]).toEqual([AFTER.expenses, AFTER.profit]);
   expect(k.ledger.some((l) => l.table === 'tolls' && l.rowId === 't-own' && l.status === 'counted')).toBe(true);
 });
+
+test('Audit ledger: the 3 covered plazas show as excluded "toll_breakdown" (40.00), never counted; a statement-backed week shows none', () => {
+  const k = kpi();
+  const covered = k.ledger.filter((l) => l.reason === 'toll_breakdown');
+  expect(covered.map((l) => [l.rowId, l.status, l.amount])).toEqual([
+    ['t1', 'excluded', 15],
+    ['t2', 'excluded', 15],
+    ['t3', 'excluded', 10],
+  ]);
+  // Scoped to a window without the line's week: not shown.
+  const other = computeKpis({ trucks: [], settlements: [settlement] as never, loads: [], deductions: deductions as never, fuelPurchases: [], maintenanceRecords: [], tolls: tolls as never, reimbursements: [], truckScope: null, window: { startIso: '2026-10-01', endIso: '2026-10-10' } });
+  expect(other.ledger.some((l) => l.reason === 'toll_breakdown')).toBe(false);
+});
