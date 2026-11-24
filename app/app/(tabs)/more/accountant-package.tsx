@@ -749,9 +749,6 @@ export default function AccountantPackage() {
           badge={t('accountantPackage.primeDriversBadge')}
           openLabel={t('accountantPackage.primeDriversOpen')}
         />
-        <EstimateBanner />
-        <FleetScopeLabel variant="fleetOnly" />
-        <MutedText>{t('accountantPackage.subtitle')}</MutedText>
 
         <Text style={styles.sectionTitle}>{t('accountantPackage.yearLabel')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -786,6 +783,26 @@ export default function AccountantPackage() {
           <Pill label={t('accountantPackage.formatDetailed')} selected={reportFormat === 'detailed'} onPress={() => chooseReportFormat('detailed')} />
         </View>
         <MutedText>{reportFormat === 'summary' ? t('accountantPackage.formatSummaryNote') : t('accountantPackage.formatDetailedNote')}</MutedText>
+
+        {/* EXPORT AT THE TOP (owner 2026-11-24): right after its own period
+            pickers (Year, Month, Scope, Format above — the export uses all
+            four), directly under the featured For Prime Inc Drivers card.
+            Shown once the data has loaded, as before. */}
+        {!loading && (
+          <>
+            <Text style={styles.sectionTitle}>{t('accountantPackage.exportTitle')}</Text>
+            <Card>
+              <PrimaryButton title={`📄 ${t('accountantPackage.exportPdfMonth')}`} onPress={() => handleExportPdf(month)} loading={exporting === 'pdfMonth'} />
+              <SecondaryButton title={`📄 ${t('accountantPackage.exportPdfYear')}`} onPress={() => handleExportPdf(null)} loading={exporting === 'pdfYear'} />
+              <SecondaryButton title={`📊 ${t('accountantPackage.exportExcelMonth')}`} onPress={() => handleExportExcel(month)} loading={exporting === 'excelMonth'} />
+              <SecondaryButton title={`📊 ${t('accountantPackage.exportExcelYear')}`} onPress={() => handleExportExcel(null)} loading={exporting === 'excelYear'} />
+            </Card>
+          </>
+        )}
+
+        <EstimateBanner />
+        <FleetScopeLabel variant="fleetOnly" />
+        <MutedText>{t('accountantPackage.subtitle')}</MutedText>
 
         {loading ? (
           <Card>
@@ -1077,13 +1094,6 @@ export default function AccountantPackage() {
             <MutedText>{t('accountantPackage.footerNonDeductibleNote')}</MutedText>
             <MutedText>{t('accountantPackage.footerOwnerPaidNote')}</MutedText>
 
-            <Text style={styles.sectionTitle}>{t('accountantPackage.exportTitle')}</Text>
-            <Card>
-              <PrimaryButton title={`📄 ${t('accountantPackage.exportPdfMonth')}`} onPress={() => handleExportPdf(month)} loading={exporting === 'pdfMonth'} />
-              <SecondaryButton title={`📄 ${t('accountantPackage.exportPdfYear')}`} onPress={() => handleExportPdf(null)} loading={exporting === 'pdfYear'} />
-              <SecondaryButton title={`📊 ${t('accountantPackage.exportExcelMonth')}`} onPress={() => handleExportExcel(month)} loading={exporting === 'excelMonth'} />
-              <SecondaryButton title={`📊 ${t('accountantPackage.exportExcelYear')}`} onPress={() => handleExportExcel(null)} loading={exporting === 'excelYear'} />
-            </Card>
             <LegalFootnote />
           </>
         )}
