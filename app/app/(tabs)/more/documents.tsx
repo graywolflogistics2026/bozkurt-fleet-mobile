@@ -39,7 +39,6 @@ import { buildLinkedRecordHref } from '@/src/navigation/linkedRecordRoute';
 import { DOC_TYPE_ICON, useDocTypeMeta } from '@/src/import/docTypes';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, TappableCard, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
-import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { DocType } from '@/src/import/types';
@@ -356,15 +355,8 @@ export default function DocumentsArchive() {
             screen already is. */}
         <FleetScopeLabel variant="fleetOnly" />
 
-        {/* Renewals & Expiry Dates (the compliance screen; renamed from
-            "Documents & Renewals", owner 2026-11-24): a menu row AND this
-            card, both with the same label key as the menu and screen title. */}
-        <RelatedScreenCard
-          href='/(tabs)/more/compliance'
-          emoji='🪪'
-          title={t('nav.compliance')}
-          description={t('documentsArchive.renewalsCard')}
-        />
+        {/* The "Renewals & Expiry Dates" card was removed (owner 2026-11-24):
+            that screen is a menu row, right after Documents. */}
         <MutedText style={{ marginBottom: spacing.sm }}>{t('documentsArchive.subtitle')}</MutedText>
 
         {/* NEEDS A TITLE (owner decision 2026-09-23) — a manual,

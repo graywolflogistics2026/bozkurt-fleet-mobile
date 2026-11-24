@@ -2141,7 +2141,6 @@
   "documentsArchive": {
     "title": "Documents",
     "subtitle": "Every receipt and PDF you've ever imported, in one place.",
-    "renewalsCard": "Medical card, inspection, registration, HVUT/2290, insurance and other due dates.",
     "searchPlaceholder": "Search filename, type, or amount",
     "allTypes": "All",
     "dateFromLabel": "From",

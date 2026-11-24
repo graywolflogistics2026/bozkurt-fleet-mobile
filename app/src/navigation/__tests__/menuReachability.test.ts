@@ -114,8 +114,8 @@ describe('the menu (owner decisions 2026-11-23)', () => {
       ['sidebar.sections.system', ['/(tabs)/more/settings']],
     ]);
     expect(menuItems()).toHaveLength(19);
-    // Renewals & Expiry Dates (compliance) is a row AND still a card on Documents (owner 2026-11-23/24).
-    expect(linksTo(read(screenFile('/(tabs)/more/documents')), '/(tabs)/more/compliance')).toBe(true);
+    // Renewals & Expiry Dates (compliance) is only a menu row now; its Documents card was removed (owner 2026-11-24).
+    expect(read(screenFile('/(tabs)/more/documents'))).not.toContain('<RelatedScreenCard');
   });
 
   test('every screen that left the menu opens from its parent card or Settings', () => {
