@@ -2073,6 +2073,8 @@
   "documentsArchive": {
     "title": "Documentos",
     "subtitle": "Todos los recibos y PDF que has importado, en un solo lugar.",
+    "renewalsCardTitle": "Renovaciones y vencimientos",
+    "renewalsCard": "Tarjeta médica, inspección, registro, HVUT/2290, seguro y otras fechas de vencimiento.",
     "searchPlaceholder": "Buscar por archivo, tipo o monto",
     "allTypes": "Todos",
     "dateFromLabel": "Desde",

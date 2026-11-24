@@ -2073,6 +2073,8 @@
   "documentsArchive": {
     "title": "Belgeler",
     "subtitle": "Bugüne kadar içe aktardığınız her fiş ve PDF, tek bir yerde.",
+    "renewalsCardTitle": "Yenilemeler ve son tarihler",
+    "renewalsCard": "Sağlık kartı, muayene, kayıt, HVUT/2290, sigorta ve diğer son tarihler.",
     "searchPlaceholder": "Dosya adı, tür veya tutara göre ara",
     "allTypes": "Tümü",
     "dateFromLabel": "Başlangıç",

@@ -39,6 +39,7 @@ import { buildLinkedRecordHref } from '@/src/navigation/linkedRecordRoute';
 import { DOC_TYPE_ICON, useDocTypeMeta } from '@/src/import/docTypes';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, TappableCard, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { DocType } from '@/src/import/types';
@@ -354,6 +355,16 @@ export default function DocumentsArchive() {
             fleet-wide category every other whole-account archive/report
             screen already is. */}
         <FleetScopeLabel variant="fleetOnly" />
+
+        {/* Documents & Renewals (compliance) left the Menu (owner
+            2026-11-23): opened from here as "Renewals & expiry dates". Its
+            screen title, alerts, tips and AI links are unchanged. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/compliance'
+          emoji='🪪'
+          title={t('documentsArchive.renewalsCardTitle')}
+          description={t('documentsArchive.renewalsCard')}
+        />
         <MutedText style={{ marginBottom: spacing.sm }}>{t('documentsArchive.subtitle')}</MutedText>
 
         {/* NEEDS A TITLE (owner decision 2026-09-23) — a manual,

@@ -2073,6 +2073,8 @@
   "documentsArchive": {
     "title": "المستندات",
     "subtitle": "كل إيصال وملف PDF قمت باستيراده على الإطلاق، في مكان واحد.",
+    "renewalsCardTitle": "Renewals & expiry dates",
+    "renewalsCard": "Medical card, inspection, registration, HVUT/2290, insurance and other due dates.",
     "searchPlaceholder": "ابحث باسم الملف أو النوع أو المبلغ",
     "allTypes": "الكل",
     "dateFromLabel": "من",
