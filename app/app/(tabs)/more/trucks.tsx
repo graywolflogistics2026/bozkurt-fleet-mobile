@@ -28,6 +28,7 @@ import { fetchTruckExportData } from '@/src/data/truckExport';
 import { AssetFinancingFields, emptyAssetFinancing, type AssetFinancingValue } from '@/src/components/AssetFinancingFields';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { EstimateBanner } from '@/src/components/EstimateBanner';
 import { colors, spacing, typography } from '@/src/theme';
 import type { LoanInsert, Truck } from '@/src/types/db';
@@ -764,6 +765,14 @@ export default function Trucks() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScreenTitle>{t('trucks.title')}</ScreenTitle>
+
+        {/* Truck Comparison left the Menu (owner 2026-11-23): opened from here. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/truck-comparison'
+          emoji='📊'
+          title={t('nav.truckComparison')}
+          description={t('trucks.comparisonCard')}
+        />
 
         {trucksQuery.isLoading ? (
           <Card>

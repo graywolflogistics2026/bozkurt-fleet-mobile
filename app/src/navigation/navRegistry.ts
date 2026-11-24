@@ -206,7 +206,6 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
     titleKey: 'sidebar.sections.business',
     hrefs: [
       '/(tabs)/more/trucks',
-      '/(tabs)/more/truck-comparison',
       '/(tabs)/more/drivers',
       '/(tabs)/more/asset-register',
       '/(tabs)/more/equipment',
@@ -258,6 +257,8 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/other-income': { kind: 'parent', parent: '/(tabs)/more/tax-estimator' },
   // Owner 2026-11-23: a card on Accountant Package (visible to every user, as before).
   '/(tabs)/more/prime-driver-expenses': { kind: 'parent', parent: '/(tabs)/more/accountant-package' },
+  // Owner 2026-11-23: a card on Trucks.
+  '/(tabs)/more/truck-comparison': { kind: 'parent', parent: '/(tabs)/more/trucks' },
   '/(tabs)/more/credit-cards': { kind: 'featureFlag' },
   '/(tabs)/more/bank-statements': { kind: 'featureFlag' },
 };
