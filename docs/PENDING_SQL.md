@@ -6143,7 +6143,7 @@ from public.profiles;
 
 ## Also still open (not part of any pass above)
 
-- ai-import redeploy (2026-11-24, commit 57a4fb2, no SQL): the prompt no longer asks for `taxDeductible`/`bizPct`. Deploy ONLY after the matching app code is on the phones: `eas update` -> close/reopen twice, Settings shows the update -> then `powershell -ExecutionPolicy Bypass -File .scriptsdeploy-ai-import.ps1` from the repo root. Older builds keep saving correctly; their read-only "Deductible:" line would just read "No". Mark this line done when deployed.
+- ai-import redeploy (2026-11-24, commits 57a4fb2 + the OTR-sentence removal, no SQL): the prompt no longer asks for `taxDeductible`/`bizPct` and no longer says "ALL items 100% deductible, only groceries/medicine personal". One deploy covers both. Deploy ONLY after the matching app code is on the phones: `eas update` -> close/reopen twice, Settings shows the update -> then `powershell -ExecutionPolicy Bypass -File .scriptsdeploy-ai-import.ps1` from the repo root. Older builds keep saving correctly; their read-only "Deductible:" line would just read "No". Mark this line done when deployed.
 
 - AI consent wording (§89, 2026-11-23): the attorney or the owner must confirm Anthropic's retention and no-training terms. Until then, neither claim goes into the consent text (`aiConsent.*` in all 7 locales) or the Privacy Policy (`app/src/config/privacyPolicy.ts`, `docs/PRIVACY_POLICY_DRAFT.md`).
 - Store privacy forms (§89, 2026-11-23): Apple's App Privacy label and Google Play's Data Safety form must match the AI data list in `docs/decisions/ai-consent-proposal.md`. That list covers imported photos and PDFs, business numbers and charge descriptions, and AI Coach questions, all sent to Anthropic for processing and not sold.

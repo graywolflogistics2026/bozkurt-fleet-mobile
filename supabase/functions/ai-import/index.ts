@@ -123,7 +123,7 @@ CRITICAL QUANTITY & TOTALS RULES: "price" is the PER-UNIT price; "qty" is the qu
 
 For Zelle/Venmo/Cash App/PayPal payment confirmation screenshots (peer-to-peer payment sent from a PERSONAL account, e.g. "Your payment is sent", a "To:" recipient name, a "Message" field describing what was bought) — ALSO use docType "amazon" with the same schema. Map fields: vendor = the recipient's name (the "To" field), purchase.items[0].name = the "Message" field content (what was purchased) or "Private party purchase" if no message, purchase.total/totalAmount = the "Amount" field, date = the transaction date shown. Set purchase.paymentMethod to whichever app was used: "Zelle Personal", "Venmo Personal", "Cash App Personal", or "PayPal Personal" — this signals the purchase was paid from personal (not business) funds.
 
-IMPORTANT - Ali Bozkurt is OTR truck driver, sleeper cab is his home+office. ALL items 100% deductible: tools, TV, PlayStation, cooking appliances, electronics, bedding. Only groceries/medicine are personal.\n\nIn settlement deductions: any line item related to bookkeeping, accounting, tax prep, Abacus, or a registered agent/legal filing fee MUST be tagged \"Legal & Accounting Fees\"; any ELD, e-log, GPS, maps, load-board, or software service fee MUST be tagged \"Software & Subscriptions\" (not left blank or generic) so it can be tracked consistently across weekly settlements.
+In settlement deductions: any line item related to bookkeeping, accounting, tax prep, Abacus, or a registered agent/legal filing fee MUST be tagged \"Legal & Accounting Fees\"; any ELD, e-log, GPS, maps, load-board, or software service fee MUST be tagged \"Software & Subscriptions\" (not left blank or generic) so it can be tracked consistently across weekly settlements.
 
 `;
 
@@ -164,18 +164,16 @@ const PURCHASE_SCHEMA_AFTER =
 
 // ---- Approved addition (owner decision 2026-07-09, PRODUCT DECISION —
 // this is a clean product for OTHER users, not just the original owner):
-// the identity line and the OTR-deductibility rule named a specific person,
-// company, and truck unit. Both must be generic — they apply the same way
-// to every user's own documents/trucks, not one owner's identity. ----
+// the identity line named a specific person, company, and truck unit. It
+// must be generic — it applies the same way
+// to every user's own documents/trucks, not one owner's identity. The OTR
+// "ALL items 100% deductible / only groceries+medicine personal" sentence
+// that sat next to it was removed outright (owner decision 2026-11-24): the
+// user decides deductibility on the import card, never the model. ----
 const IDENTITY_LINE_BEFORE =
   `Parse this document for Graywolf Logistics LLC (Ali Bozkurt, Prime Inc. owner-operator, Unit 830157). Return ONLY raw JSON starting with { ending with }. No markdown.`;
 const IDENTITY_LINE_AFTER =
   `Parse this document for an owner-operator trucking business. Return ONLY raw JSON starting with { ending with }. No markdown.`;
-
-const OTR_RULE_BEFORE =
-  `IMPORTANT - Ali Bozkurt is OTR truck driver, sleeper cab is his home+office. ALL items 100% deductible: tools, TV, PlayStation, cooking appliances, electronics, bedding. Only groceries/medicine are personal.`;
-const OTR_RULE_AFTER =
-  `IMPORTANT - the user is an OTR truck driver whose sleeper cab is their home+office. ALL items 100% deductible: tools, TV, PlayStation, cooking appliances, electronics, bedding. Only groceries/medicine are personal.`;
 
 // ---- Approved addition (owner decision 2026-07-09, PRODUCT DECISION —
 // multi-truck fleet + drivers + payroll auto-routing): settlement gains
@@ -378,7 +376,6 @@ function buildExtractionPrompt(
     .replace(LOADS_SCHEMA_BEFORE, LOADS_SCHEMA_AFTER)
     .replace(PURCHASE_SCHEMA_BEFORE, PURCHASE_SCHEMA_AFTER)
     .replace(IDENTITY_LINE_BEFORE, IDENTITY_LINE_AFTER)
-    .replace(OTR_RULE_BEFORE, OTR_RULE_AFTER)
     .replace(SETTLEMENT_SCHEMA_BEFORE, SETTLEMENT_SCHEMA_AFTER)
     .replace(PRINTDATE_SCHEMA_BEFORE, PRINTDATE_SCHEMA_AFTER)
     .replace(CONFIDENCE_SETTLEMENT_BEFORE, CONFIDENCE_SETTLEMENT_AFTER)
