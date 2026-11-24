@@ -10,6 +10,19 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Import Yes card: category list opens as a pop-up (owner, phone test)
+
+- Yes on a single item (or on one item of several) opens `CategoryPickerSheet` (`src/components/CategoryPicker.tsx`) at once: every canonical + custom category in one big list, app order, current category selected, search, "+ Create a category" (the same `user_categories` form as Deductions, now shared). Tap = pick and close; closing keeps the current category. "Yes to all" opens nothing; each item has a large "Category: X · Change" row. No rows unchanged (212e7bc).
+- Owner decision: nothing is suggested — no "Suggested" label, no move-to-top (e4988fa). Open/close rules are the pure `src/import/expenseCategorySheet.ts`, tested (196e234).
+- Saving unchanged. No SQL, no Edge Function. Ships via `eas update`.
+
+## 2026-11-24 — For Prime Inc Drivers: Misc/Other wait for the user's line (owner, option (a))
+
+- `suggestAccountantCategory()` returns null for Misc and Other: a NEW out-of-pocket row goes to "Needs your choice" (no suggestion; any of the 16 lines, Misc included). Old rows keep their stored line; Auto-fill never proposes Misc (e847494). Golden month test pins every subtotal and the grand total.
+- Waiting rows are outside every subtotal and the grand total: "Not in the grand total: $X" under the total and an "Unassigned — needs your choice" block in the PDF/Excel (required report string); export asks Choose now / Export anyway (4d88709). Stages 1 and 2 ship together.
+- Featured card badge "N need your choice" (orange) and a Deductions "Prime sheet: needs a line" chip; same list and origin rule (2003baf). No import-card note: no per-user Prime signal exists.
+- Design: `docs/decisions/prime-sheet-manual-lines-proposal.md`. No SQL, no Edge Function (reader bundle rebuilt, no server effect). Ships via `eas update`.
+
 ## 2026-11-24 — The user decides tax deductibility at import, not the AI (owner)
 
 - Receipts/expense documents (store/amazon, insurance/lease/factoring/utility, other, loan statement) show a required, empty Yes/No on the import card ("apply to all items" + per-item override; editable category for Yes rows). Save stays off until answered (`src/components/ExpenseDeductibleChoice.tsx`, `src/import/expenseDecision.ts`).
