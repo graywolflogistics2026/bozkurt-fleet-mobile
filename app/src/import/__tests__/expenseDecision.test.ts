@@ -53,3 +53,23 @@ describe('card state -> decision', () => {
     expect(expenseRowCount({ docType: 'toll' }, 'u')).toBe(0);
   });
 });
+
+// Source checks (owner decision 2026-11-24): the AI is never asked for a
+// deductibility value, and no import mapping reads one.
+describe('source checks', () => {
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+  const root = path.resolve(__dirname, '../../../..');
+  test('the ai-import prompt has no taxDeductible / bizPct field and no "set ... false" rule', () => {
+    const src = fs.readFileSync(path.join(root, 'supabase', 'functions', 'ai-import', 'index.ts'), 'utf8');
+    expect(src).not.toMatch(/"taxDeductible"\s*:/);
+    expect(src).not.toMatch(/"bizPct"\s*:/);
+    expect(src).not.toMatch(/taxDeductible (to|MUST be|is always) (false|true)/);
+  });
+  test('the import mapping never reads extraction.taxDeductible', () => {
+    for (const file of ['src/import/mapExtraction.ts', 'src/data/aiImportSave.ts', 'src/import/expenseDecision.ts']) {
+      const src = fs.readFileSync(path.join(root, 'app', file), 'utf8');
+      expect(src).not.toMatch(/\bd\.taxDeductible|extraction\.taxDeductible/);
+    }
+  });
+});
