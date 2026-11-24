@@ -77,7 +77,8 @@ import { isPersonalPayment, normalizePaymentMethod, withPaymentMethod, PAYMENT_M
 import { confirmOwnerContribution } from '@/src/lib/confirmOwnerContribution';
 import { useDocTypeMeta } from '@/src/import/docTypes';
 import { SIMPLE_DOC_TYPES, docTypeToSimpleDocType, remapExtractionToSimpleType, type SimpleDocType } from '@/src/import/typeOverride';
-import { CategoryPicker } from '@/src/components/CategoryPicker';
+import { ExpenseDeductibleChoice } from '@/src/components/ExpenseDeductibleChoice';
+import { buildExpenseDecision, deductibleRowCount, emptyExpenseChoice, expenseDecisionPath, expenseRowCount, type ExpenseChoiceState } from '@/src/import/expenseDecision';
 import { consumePendingCapture } from '@/src/import/pendingCapture';
 import type { Extraction } from '@/src/import/types';
 import { Screen, ScreenTitle, Card, MutedText, PrimaryButton, SecondaryButton, ErrorText, Field } from '@/src/components/ui';
@@ -328,6 +329,9 @@ export default function Import() {
   const [creatingDriver, setCreatingDriver] = useState(false);
   const [driverShareAmount, setDriverShareAmount] = useState('');
   const [categoryOverride, setCategoryOverride] = useState('');
+  // USER DECIDES DEDUCTIBILITY (owner decision 2026-11-24): the required
+  // Yes/No for a receipt/expense document, empty until the user answers.
+  const [expenseChoice, setExpenseChoice] = useState<ExpenseChoiceState>(emptyExpenseChoice());
   // PAGES-PROCESSED NOTE (owner decision 2026-08-03): set whenever
   // ai-import didn't cover every page of the original document — see
   // aiImportCall.ts's AiImportCallResult.pagesProcessed for the full
@@ -564,6 +568,7 @@ export default function Import() {
     setNewDriverName('');
     setDriverShareAmount('');
     setCategoryOverride('');
+    setExpenseChoice(emptyExpenseChoice());
     setPagesProcessedNote(null);
     setErrorMessage(null);
     setErrorStepGroup(null);
@@ -711,6 +716,7 @@ export default function Import() {
     setNeedsDriverPicker(driverMatch.needsPicker || (d.docType === 'driver_payment' && !driverMatch.driverId));
 
     setCategoryOverride(d.docType === 'other' ? d.suggestedCategory || 'Other' : '');
+    setExpenseChoice(emptyExpenseChoice());
     // PER DIEM INTELLIGENCE (owner decision 2026-07-30): smart-default
     // per_diem_days from miles (0 miles -> 0 days "home week", else 7)
     // BEFORE the preview ever renders — editable from there on, same
@@ -1055,6 +1061,10 @@ export default function Import() {
     const gate = isSettlement ? settlementGateOf(extraction) : null;
     if (isSettlement && gate?.status !== 'pass') return;
     const extractionToSave = gate ? withGateAudit(extraction, gate) : extraction;
+    // USER DECIDES DEDUCTIBILITY: no save until every expense row has a Yes/No.
+    const expenseRows = expenseRowCount(extraction, userId);
+    const expenseDecision = expenseRows > 0 ? buildExpenseDecision(expenseChoice, expenseRows) : null;
+    if (expenseRows > 0 && !expenseDecision) return;
     savingRef.current = true;
     // USAGE ANALYTICS (owner decision, docs/PENDING_SQL.md §71) — the
     // single most decision-relevant started/completed pair in the app:
@@ -1071,7 +1081,10 @@ export default function Import() {
       // below) — Save always reads whatever's currently on `extraction`,
       // which withPaymentMethod() keeps in sync with the user's own edits.
       const payMethod = normalizePaymentMethod(extraction.purchase?.paymentMethod);
-      const hasPersonalPurchase = isPurchase && isPersonalPayment(payMethod);
+      // A receipt the user answered "No" for writes no row, so no owner
+      // contribution question either.
+      const anyRecorded = !expenseDecision || deductibleRowCount(expenseDecision, expenseRows) > 0;
+      const hasPersonalPurchase = isPurchase && anyRecorded && isPersonalPayment(payMethod);
       const createContribution = hasPersonalPurchase ? await confirmOwnerContribution(payMethod) : false;
 
       setPhase('saving');
@@ -1086,6 +1099,7 @@ export default function Import() {
         mediaType: fileMeta.mediaType,
         createContribution,
         categoryOverride: extraction.docType === 'other' ? categoryOverride : null,
+        expenseDecision,
         titleContext,
         // CERTIFY AND ADD (batch D2 2.4): one atomic step for a settlement.
         certify: isSettlement ? { appVersion: appVersionLabel() } : null,
@@ -1156,6 +1170,8 @@ export default function Import() {
   }
 
   const settlementWeekEndingMissing = extraction ? isSettlementWeekEndingMissing(extraction) : false;
+  const expenseRowsOnCard = extraction && userId ? expenseRowCount(extraction, userId) : 0;
+  const expenseChoiceMissing = expenseRowsOnCard > 0 && !buildExpenseDecision(expenseChoice, expenseRowsOnCard);
   // PRINTED DATES (owner decision 2026-10-29): the app's own reading of the
   // printed settlement date, through the plausibility gate. Any failure
   // blocks Save until the owner answers the one-line question.
@@ -1600,13 +1616,6 @@ export default function Import() {
               </View>
             )}
 
-            {(extraction.docType === 'store' || extraction.docType === 'amazon') && extraction.taxDeductible === false && (
-              <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
-                <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.mealsNoteTitle')}</Text>
-                <MutedText>{t('importScreen.mealsNoteBody')}</MutedText>
-              </View>
-            )}
-
             {isOlderThanMonths(getPrimaryExtractionDate(extraction), 6) && (
               <View style={{ backgroundColor: 'rgba(245,158,11,0.12)', borderColor: colors.orange, borderWidth: 1, borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm }}>
                 <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('importScreen.dateConfirmTitle')}</Text>
@@ -1640,11 +1649,6 @@ export default function Import() {
               )}
               <MutedText>{t('importScreen.vendorLabel', { vendor: extraction.vendor ?? '—' })}</MutedText>
               <MutedText>{t('importScreen.amountLabel', { amount: money(extraction.totalAmount, i18n.language) })}</MutedText>
-              <MutedText>
-                {t('importScreen.deductibleLabel', {
-                  value: extraction.taxDeductible ? t('importScreen.deductibleYes') : t('importScreen.deductibleNo'),
-                })}
-              </MutedText>
               {extraction.summary ? <MutedText>{extraction.summary}</MutedText> : null}
             </View>
 
@@ -1676,12 +1680,16 @@ export default function Import() {
               </View>
             )}
 
-            {extraction.docType === 'other' && (
+            {userId && expenseDecisionPath(extraction) !== null && (
               <View style={{ marginTop: spacing.sm }}>
-                <MutedText>{t('importScreen.previewLabels.suggestedCategory')}</MutedText>
-                <View style={{ marginTop: spacing.xs }}>
-                  <CategoryPicker kind="expense" value={categoryOverride} onChange={setCategoryOverride} />
-                </View>
+                <ExpenseDeductibleChoice
+                  extraction={extraction}
+                  userId={userId}
+                  value={expenseChoice}
+                  onChange={setExpenseChoice}
+                  categoryOverride={categoryOverride}
+                  onCategoryOverride={setCategoryOverride}
+                />
               </View>
             )}
 
@@ -1690,7 +1698,7 @@ export default function Import() {
             <PrimaryButton
               title={t('importScreen.save')}
               onPress={() => void handleSave()}
-              disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked}
+              disabled={(needsTruckPicker && !truckId) || (needsDriverPicker && !driverId) || settlementDateBlocked || expenseChoiceMissing}
             />
             <SecondaryButton
               title={batchTotal > 0 ? t('importJobs.skipDocument') : t('importScreen.discard')}
@@ -1730,6 +1738,13 @@ export default function Import() {
               </MutedText>
             )}
             {result.linesNotSaved && <MutedText>{t('importFlow.linesNotSaved')}</MutedText>}
+            {result.expenseRowsNotRecorded > 0 && (
+              <MutedText style={{ color: colors.orange }}>
+                {expenseRowsOnCard > 0 && result.expenseRowsNotRecorded >= expenseRowsOnCard
+                  ? t('importScreen.deductChoice.notRecordedAll')
+                  : t('importScreen.deductChoice.notRecordedSome', { count: result.expenseRowsNotRecorded })}
+              </MutedText>
+            )}
             {result.contributionTotal > 0 && (
               <MutedText>
                 {t('importScreen.contributionAdded', { amount: money(result.contributionTotal, i18n.language) })}
