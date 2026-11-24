@@ -1,8 +1,21 @@
 # Menu and tab bar simplification — proposal
 
-Status: IMPLEMENTED (2026-11-23), Stage 1 and Stage 2. Stage 2's owner
-decisions (below) REPLACE the Stage 2 plan in §2-§3 of this proposal and
-Stage 1's "no headings" decision.
+Status: IMPLEMENTED (2026-11-23), Stage 1, Stage 2 and the follow-up
+below. Stage 2's owner decisions (below) REPLACE the Stage 2 plan in §2-§3
+of this proposal and Stage 1's "no headings" decision.
+
+Follow-up (owner 2026-11-23, after Stage 2), CURRENT state:
+- Documents & Renewals (compliance) is a menu row again, in Business right
+  after Documents (existing label). The "Renewals & expiry dates" card on
+  Documents stays. Final menu: 20 rows; Business = Trucks, Drivers, Assets
+  & Equipment, Capital Account, Documents, Documents & Renewals.
+- Scorecard is a third card on Operating P&L (after Cash Flow and Profit
+  Analysis). Still hidden from the phone menu, still on the Reports tab,
+  still linked from Truck Comparison. The wide-sidebar-only Scorecard row
+  and `SIDEBAR_ONLY_AFTER` are removed; the sidebar is Home + the menu
+  rows. The two Stage 2 bullets below about the 19-row menu, the
+  compliance card as its only way in, and the sidebar Scorecard row are
+  superseded by this follow-up.
 
 Stage 2 owner decisions (2026-11-23), as built:
 - Section headings back in the phone Menu and the wide sidebar (Home on top

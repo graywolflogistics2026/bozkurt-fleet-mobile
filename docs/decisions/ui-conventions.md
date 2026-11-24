@@ -3,7 +3,7 @@
 > UI conventions that used to sit in CLAUDE.md: one chart primitive, one nav registry, feature flags, build-info visibility.
 > Charts: `app/src/stats/chartHelpers.ts` thin polyline (+ optional fill) only. Nav: `app/src/navigation/navRegistry.ts` is the ONLY route list.
 > Build info: `app/src/lib/buildInfo.ts` / `buildInfoFormat.ts` feed Settings footer and the error screen.
-> Menu (owner 2026-11-23): the phone Menu and wide sidebar render `MENU_SECTIONS` (headings, 19 rows); a screen that is not a row has a reason in `MENU_REACHED_FROM` (tab, parent card via `RelatedScreenCard`, Settings, Reports, feature flag), checked by `menuReachability.test.ts`. Adding a screen = add it to `RAW_NAV_GROUPS` AND either `MENU_SECTIONS` or `MENU_REACHED_FROM`. Full: `docs/decisions/menu-simplification-proposal.md`.
+> Menu (owner 2026-11-23): the phone Menu and wide sidebar render `MENU_SECTIONS` (headings, 20 rows; the sidebar adds only Home on top); a screen that is not a row has a reason in `MENU_REACHED_FROM` (tab, parent card via `RelatedScreenCard`, Settings, feature flag), checked by `menuReachability.test.ts`. Adding a screen = add it to `RAW_NAV_GROUPS` AND either `MENU_SECTIONS` or `MENU_REACHED_FROM`. Full: `docs/decisions/menu-simplification-proposal.md`.
 
 Moved verbatim from CLAUDE.md on 2026-10-13 (original file order).
 

@@ -10,6 +10,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-23 — Menu: Documents & Renewals row back; Scorecard card on Operating P&L (owner)
+
+- Documents & Renewals (compliance) is a menu row again, in Business right after Documents (existing label); the "Renewals & expiry dates" card on Documents stays. Menu: 20 rows, 6 sections (Business 6).
+- Scorecard: third card on Operating P&L (after Cash Flow, Profit Analysis; key `operatingPnl.scorecardCard`, 7 locales). Still hidden from the phone menu, still on Reports, Truck Comparison's link unchanged. The wide-sidebar-only Scorecard row is gone (`SIDEBAR_ONLY_AFTER` removed); sidebar = Home + the menu rows.
+- Files: `navRegistry.ts`, `operating-pnl.tsx`, `menuReachability.test.ts`, locales. No route moved, no number changed. Ships via `eas update`.
+
 ## 2026-11-23 — Menu Stage 2: sections back, 19 rows, cards on parent screens (owner)
 
 Phone Menu and wide sidebar have section headings again (`MENU_SECTIONS`, `navRegistry.ts`): Revenue, Expenses, Overview, Business, Tax & Accounting, System; 19 rows, Settings last. Stage 1's big rows, gear and bottom padding kept; sidebar keeps Home on top. Reports is unchanged.
