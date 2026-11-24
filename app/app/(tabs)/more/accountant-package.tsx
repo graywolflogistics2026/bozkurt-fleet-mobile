@@ -749,6 +749,9 @@ export default function AccountantPackage() {
           badge={t('accountantPackage.primeDriversBadge')}
           openLabel={t('accountantPackage.primeDriversOpen')}
         />
+        {/* Estimates notice before the pickers and Export (owner 2026-11-24). */}
+        <EstimateBanner />
+        <FleetScopeLabel variant="fleetOnly" />
 
         <Text style={styles.sectionTitle}>{t('accountantPackage.yearLabel')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -800,8 +803,6 @@ export default function AccountantPackage() {
           </>
         )}
 
-        <EstimateBanner />
-        <FleetScopeLabel variant="fleetOnly" />
         <MutedText>{t('accountantPackage.subtitle')}</MutedText>
 
         {loading ? (
