@@ -6,6 +6,7 @@ import { MutedText } from '@/src/components/ui';
 import { formatMoney } from '@/src/i18n/format';
 import { effectiveDeductible, expenseDecisionPath, type ExpenseChoiceState } from '@/src/import/expenseDecision';
 import { mapFinancialDocDeduction, mapGenericDeduction, mapPurchase } from '@/src/import/mapExtraction';
+import { applySheetPick, sheetAfterAnswer } from '@/src/import/expenseCategorySheet';
 import type { Extraction } from '@/src/import/types';
 import { colors, radii, spacing, typography } from '@/src/theme';
 
@@ -94,12 +95,13 @@ export function ExpenseDeductibleChoice({
   function setAll(deductible: boolean) {
     onChange({ ...value, all: deductible, perRow: {} });
     // One item: Yes opens the category pop-up at once. "Yes to all" on
-    // several items opens nothing (each keeps its suggested category).
-    if (deductible && rows.length === 1) setSheetFor(0);
+    // several items opens nothing (each keeps its category).
+    setSheetFor(sheetAfterAnswer(rows.length, { scope: 'all' }, deductible));
   }
   function setRow(i: number, deductible: boolean) {
     onChange({ ...value, perRow: { ...value.perRow, [i]: deductible } });
-    if (deductible) setSheetFor(i);
+    const open = sheetAfterAnswer(rows.length, { scope: 'row', index: i }, deductible);
+    if (open !== null) setSheetFor(open);
   }
   function categoryOf(i: number): string {
     if (usesOverride) return categoryOverride || rows[i].category;
@@ -107,7 +109,7 @@ export function ExpenseDeductibleChoice({
   }
   function setCategory(i: number, category: string) {
     if (usesOverride) onCategoryOverride(category);
-    else onChange({ ...value, categories: { ...value.categories, [i]: category } });
+    else onChange(applySheetPick(value, i, category));
     setSheetFor(null);
   }
 
