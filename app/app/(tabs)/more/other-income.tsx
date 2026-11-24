@@ -6,6 +6,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useMiscIncome, useInsertMiscIncome, useDeleteMiscIncome } from '@/src/data/miscIncome';
 import { invalidateFinancialData } from '@/src/data/queryInvalidation';
 import { MonthGroupedList } from '@/src/components/monthGroups/MonthGroupedList';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
 import { colors, spacing, typography } from '@/src/theme';
@@ -129,6 +130,14 @@ export default function OtherIncome() {
           </Pressable>
         </View>
         <MutedText>{t('otherIncome.subtitle')}</MutedText>
+
+        {/* Reimbursements left the Menu (owner 2026-11-23): opened from here. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/reimbursements'
+          emoji='↩️'
+          title={t('nav.reimbursements')}
+          description={t('otherIncome.reimbursementsCard')}
+        />
 
         <Card>
           <MutedText>{t('otherIncome.totalOtherIncome')}</MutedText>

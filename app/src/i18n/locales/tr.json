@@ -1453,6 +1453,7 @@
   },
   "otherIncome": {
     "title": "Diğer Gelirler",
+    "reimbursementsCard": "Size geri ödenen para. Geri ödemeler gelir DEĞİLDİR: giderlerinizi azaltır.",
     "subtitle": "Henüz kendine ait bir deftere sahip olmayan işletme geliri — eyalet iadeleri, settlement dışında ödenen detention ücreti vb.",
     "add": "Ekle",
     "addTitle": "➕ Gelir Ekle",

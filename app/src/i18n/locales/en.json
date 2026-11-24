@@ -1351,6 +1351,7 @@
   },
   "otherIncome": {
     "title": "Other Income",
+    "reimbursementsCard": "Money paid back to you. Reimbursements are NOT income: they reduce your expenses.",
     "subtitle": "Business income with no dedicated ledger yet — state refunds, detention pay outside a settlement, etc.",
     "add": "Add",
     "addTitle": "➕ Add Income",

@@ -1453,6 +1453,7 @@
   },
   "otherIncome": {
     "title": "دخل آخر",
+    "reimbursementsCard": "Money paid back to you. Reimbursements are NOT income: they reduce your expenses.",
     "subtitle": "دخل تجاري ليس له سجل مخصص بعد — مبالغ مستردة من الولاية، أجرة detention خارج settlement، إلخ.",
     "add": "إضافة",
     "addTitle": "➕ إضافة دخل",

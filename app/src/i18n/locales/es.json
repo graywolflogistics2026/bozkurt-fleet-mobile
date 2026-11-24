@@ -1453,6 +1453,7 @@
   },
   "otherIncome": {
     "title": "Otros Ingresos",
+    "reimbursementsCard": "Dinero que te devuelven. Los reembolsos NO son ingresos: reducen tus gastos.",
     "subtitle": "Ingresos del negocio que aún no tienen un libro contable dedicado — reembolsos estatales, pago de detention fuera de un settlement, etc.",
     "add": "Agregar",
     "addTitle": "➕ Agregar Ingreso",
