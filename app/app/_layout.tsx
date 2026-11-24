@@ -14,6 +14,7 @@ import { queryClient, asyncStoragePersister } from '@/src/lib/queryClient';
 import { useUsageTracking } from '@/src/data/usageTracking';
 import { checkShouldShowLaunchIntro } from '@/src/launch/launchIntro';
 import { LaunchIntroOverlay } from '@/src/components/LaunchIntroOverlay';
+import { AiConsentProvider } from '@/src/components/AiConsentProvider';
 import { colors } from '@/src/theme';
 import { initI18n } from '@/src/i18n';
 import { resolveRootRedirect } from '@/src/navigation/rootRedirect';
@@ -52,7 +53,12 @@ export default function RootLayout() {
               <LanguageGateProvider>
                 <IntroProvider>
                   <StatusBar style="light" />
-                  <RootLayoutNav />
+                  {/* AI CONSENT (owner decision 2026-11-23): registers the
+                      consent gate every AI call asks, and owns the
+                      just-in-time sheet. */}
+                  <AiConsentProvider>
+                    <RootLayoutNav />
+                  </AiConsentProvider>
                 </IntroProvider>
               </LanguageGateProvider>
             </ActiveTruckProvider>
@@ -72,7 +78,7 @@ function LoadingScreen() {
 }
 
 function RootLayoutNav() {
-  const { session, loading, needsEmailConfirmation, needsTos, needsTutorial, needsOnboarding } = useAuth();
+  const { session, loading, needsEmailConfirmation, needsTos, needsAiConsent, needsTutorial, needsOnboarding } = useAuth();
   const { introSeen } = useIntro();
   const { languageScreenSeen } = useLanguageGate();
   const segments = useSegments();
@@ -135,6 +141,7 @@ function RootLayoutNav() {
       languageScreenSeen,
       needsEmailConfirmation,
       needsTos,
+      needsAiConsent,
       needsTutorial,
       needsOnboarding,
       introSeen,
@@ -145,7 +152,7 @@ function RootLayoutNav() {
     // regen lag as _layout.tsx (tabs)'s ALERTS_ROUTE, hence the Href cast
     // rather than a general-purpose `any`.
     if (target) router.replace(target as Href);
-  }, [session, loading, languageScreenSeen, needsEmailConfirmation, needsTos, needsTutorial, needsOnboarding, introSeen, segments, router]);
+  }, [session, loading, languageScreenSeen, needsEmailConfirmation, needsTos, needsAiConsent, needsTutorial, needsOnboarding, introSeen, segments, router]);
 
   if (loading || introSeen === null || languageScreenSeen === null || launchIntroDecision === 'pending') return <LoadingScreen />;
 
@@ -158,6 +165,7 @@ function RootLayoutNav() {
         <Stack.Screen name="confirm-email" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="tos" />
+        <Stack.Screen name="ai-consent" />
         <Stack.Screen name="tutorial" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />

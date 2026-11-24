@@ -3383,5 +3383,30 @@
       "REFUNDABLE_FUND": "Depozito veya fon (iade edilir)",
       "REIMBURSEMENT": "İndirim veya geri ödeme"
     }
+  },
+  "aiConsent": {
+    "title": "Yapay zekâ özelliklerine izin veriyor musunuz?",
+    "intro": "Belgelerinizi okumak ve size koçluk yapmak için uygulama, sunucumuz üzerinden Anthropic'e (Claude yapay zekâsının yapımcısı) veri gönderir:",
+    "bulletDocs": "içe aktardığınız fotoğraf ve PDF'ler",
+    "bulletNumbers": "işletme rakamlarınız ve kesinti açıklamaları",
+    "bulletQuestions": "AI Coach'a yazdığınız sorular",
+    "processing": "Anthropic bu veriyi bu isteği yanıtlamak için işler. Ayrıntılar Gizlilik Politikası'nda.",
+    "noSale": "Verilerinizi asla satmayız.",
+    "withdraw": "Bunu istediğiniz zaman Ayarlar > Gizlilik bölümünden kapatabilirsiniz.",
+    "allow": "İzin ver",
+    "notNow": "Şimdi değil",
+    "readPrivacy": "Gizlilik Politikası'nı oku",
+    "hidePrivacy": "Gizlilik Politikası'nı gizle",
+    "sheetLead": "Bu özellik yapay zekâ kullanır. Devam etmek için izin veriyor musunuz?",
+    "declined": "Yapay zekâ özellikleri kapalı. Ayarlar > Gizlilik bölümünden açabilir veya kayıtları elle ekleyebilirsiniz.",
+    "serverRequired": "Bu hesapta yapay zekâ özellikleri kapalı. Ayarlar > Gizlilik bölümünden açın.",
+    "saveFailed": "Seçiminiz kaydedilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+    "settingsSectionTitle": "Gizlilik",
+    "settingsRowTitle": "Yapay zekâ özellikleri (Anthropic)",
+    "settingsRowOn": "Açık: içe aktarmalar ve AI Coach, Anthropic'e veri gönderir.",
+    "settingsRowOff": "Kapalı: yapay zekâya hiçbir şey gönderilmez. Elle giriş ve tüm raporlar çalışmaya devam eder.",
+    "turnOffTitle": "Yapay zekâ özellikleri kapatılsın mı?",
+    "turnOffBody": "Belge okuma ve AI Coach durur. Kayıtlı verileriniz kalır.",
+    "turnOff": "Kapat"
   }
 }

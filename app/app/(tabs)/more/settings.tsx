@@ -35,6 +35,8 @@ import { SUPPORT_EMAIL } from '@/src/brand';
 import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { formatDate } from '@/src/i18n/format';
 import { numOrNull } from '@/src/lib/number';
+import { hasAiConsent } from '@/src/ai/aiConsent';
+import { requestAiConsent } from '@/src/ai/aiConsentGate';
 
 const ENTITY_TYPES: EntityType[] = ['sole_prop', 'smllc', 'multi_member_llc', 'scorp'];
 const DELETE_CONFIRM_WORD = 'DELETE';
@@ -64,7 +66,9 @@ export default function Settings() {
   const { t, i18n } = useTranslation();
   const { money } = useFormatters();
   const moneyRounded = (n: number) => money(n, { maximumFractionDigits: 0 });
-  const { session, profile, signOut, refreshProfile } = useAuth();
+  const { session, profile, signOut, refreshProfile, aiConsent, saveAiConsent } = useAuth();
+  const [savingAiConsent, setSavingAiConsent] = useState(false);
+  const aiConsentOn = hasAiConsent(aiConsent);
   const router = useRouter();
   const queryClient = useQueryClient();
   const userId = session?.user.id;
@@ -287,6 +291,30 @@ export default function Settings() {
     } finally {
       setSavingUsageAnalytics(false);
     }
+  }
+
+  // AI CONSENT (owner decision 2026-11-23, §89): Settings > Privacy. Off asks
+  // once, then clears the consent (saved data stays). On opens the same
+  // consent text (the just-in-time sheet) and saves only on Allow.
+  async function handleToggleAiConsent(nextEnabled: boolean) {
+    if (savingAiConsent) return;
+    if (nextEnabled) {
+      await requestAiConsent();
+      return;
+    }
+    Alert.alert(t('aiConsent.turnOffTitle'), t('aiConsent.turnOffBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('aiConsent.turnOff'),
+        style: 'destructive',
+        onPress: async () => {
+          setSavingAiConsent(true);
+          const { error } = await saveAiConsent(false);
+          setSavingAiConsent(false);
+          if (error) Alert.alert(t('settings.saveFailedTitle'), t('aiConsent.saveFailed'));
+        },
+      },
+    ]);
   }
 
   function handleDeletePress() {
@@ -576,6 +604,29 @@ export default function Settings() {
           </View>
           <MutedText style={{ marginTop: spacing.xs }}>{t('settings.usageAnalyticsNote')}</MutedText>
         </Card>
+
+        {/* AI CONSENT (owner decision 2026-11-23, §89) — hidden until §89
+            has run (the consent cannot be stored before then). */}
+        {aiConsent.kind !== 'unavailable' && (
+          <>
+            <Text style={styles.sectionTitle}>{t('aiConsent.settingsSectionTitle')}</Text>
+            <Card>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.text, fontSize: typography.size.md, fontWeight: '600', flex: 1, marginEnd: spacing.sm }}>
+                  {t('aiConsent.settingsRowTitle')}
+                </Text>
+                <Switch
+                  value={aiConsentOn}
+                  onValueChange={handleToggleAiConsent}
+                  disabled={savingAiConsent}
+                  trackColor={{ true: colors.accent, false: colors.border }}
+                  thumbColor={colors.text}
+                />
+              </View>
+              <MutedText style={{ marginTop: spacing.xs }}>{aiConsentOn ? t('aiConsent.settingsRowOn') : t('aiConsent.settingsRowOff')}</MutedText>
+            </Card>
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>{t('settings.legalTitle')}</Text>
         <Card>

@@ -666,6 +666,10 @@ export type Profile = {
   settings: Record<string, unknown>;
   tos_accepted_at: string | null;
   tos_version: string | null;
+  // docs/PENDING_SQL.md §89 (AI consent, owner decision 2026-11-23) — optional
+  // until §89 runs; read only by AuthContext's own select (src/ai/aiConsent.ts).
+  ai_consent_at?: string | null;
+  ai_consent_version?: string | null;
   // docs/PENDING_SQL.md §19 (customizable dashboard) — unenforced shape documented there; null until Session 9a ships.
   dashboard_layout: Record<string, unknown> | null;
   // docs/PENDING_SQL.md §32 (Dashboard sections addition) — Record<SectionId, boolean>, true = collapsed; null/missing = expanded.

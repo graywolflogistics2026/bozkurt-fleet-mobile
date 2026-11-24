@@ -3383,5 +3383,30 @@
       "REFUNDABLE_FUND": "Depósito o fondo (reembolsable)",
       "REIMBURSEMENT": "Descuento o reembolso"
     }
+  },
+  "aiConsent": {
+    "title": "¿Permitir funciones de IA?",
+    "intro": "Para leer sus documentos y darle consejos, esta app envía datos a Anthropic (el creador de la IA Claude) a través de nuestro servidor:",
+    "bulletDocs": "las fotos y los PDF que importa",
+    "bulletNumbers": "las cifras de su negocio y las descripciones de cargos",
+    "bulletQuestions": "las preguntas que escribe a AI Coach",
+    "processing": "Anthropic los procesa para responder a esta solicitud. Detalles en la Política de privacidad.",
+    "noSale": "Nunca vendemos sus datos.",
+    "withdraw": "Puede desactivarlo en cualquier momento en Configuración > Privacidad.",
+    "allow": "Permitir",
+    "notNow": "Ahora no",
+    "readPrivacy": "Leer la Política de privacidad",
+    "hidePrivacy": "Ocultar la Política de privacidad",
+    "sheetLead": "Esta función usa IA. ¿La permite para continuar?",
+    "declined": "Las funciones de IA están desactivadas. Actívelas en Configuración > Privacidad o agregue los registros a mano.",
+    "serverRequired": "Las funciones de IA están desactivadas en esta cuenta. Actívelas en Configuración > Privacidad.",
+    "saveFailed": "No se pudo guardar su elección. Revise su conexión e inténtelo de nuevo.",
+    "settingsSectionTitle": "Privacidad",
+    "settingsRowTitle": "Funciones de IA (Anthropic)",
+    "settingsRowOn": "Activadas: las importaciones y AI Coach envían datos a Anthropic.",
+    "settingsRowOff": "Desactivadas: no se envía nada a la IA. La entrada manual y todos los informes siguen funcionando.",
+    "turnOffTitle": "¿Desactivar las funciones de IA?",
+    "turnOffBody": "La lectura de documentos y AI Coach se detendrán. Sus datos guardados se conservan.",
+    "turnOff": "Desactivar"
   }
 }

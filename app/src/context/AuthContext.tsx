@@ -10,6 +10,13 @@ import { applyLocaleDirection } from '@/src/i18n/rtl';
 import { resolveSignUpOutcome, type SignUpOutcome } from '@/src/auth/signUpFlow';
 import { resolveNeedsEmailConfirmation, resolveNeedsTos, resolveNeedsTutorial, resolveNeedsOnboarding } from '@/src/auth/profileGates';
 import { buildAuthRedirectUrl } from '@/src/auth/deepLinkRedirect';
+import {
+  consentStateFromFetch,
+  consentWrite,
+  isMissingConsentColumnError,
+  resolveNeedsAiConsent,
+  type AiConsentState,
+} from '@/src/ai/aiConsent';
 
 // A network/runtime failure that never reaches Supabase's own {error}
 // contract (e.g. the device is offline) throws instead of resolving —
@@ -51,6 +58,11 @@ type AuthContextValue = {
   loading: boolean;
   needsEmailConfirmation: boolean;
   needsTos: boolean;
+  // AI CONSENT (owner decision 2026-11-23, §89): the one consent for every
+  // AI feature, and the first-launch gate after ToS (src/ai/aiConsent.ts).
+  aiConsent: AiConsentState;
+  needsAiConsent: boolean;
+  saveAiConsent: (allow: boolean) => Promise<{ error: string | null }>;
   needsTutorial: boolean;
   needsOnboarding: boolean;
   signUp: (email: string, password: string, referralCode?: string) => Promise<SignUpOutcome>;
@@ -69,6 +81,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [aiConsent, setAiConsent] = useState<AiConsentState>({ kind: 'unknown' });
+
+  // AI CONSENT (§89): its own small select, never part of PROFILE_COLUMNS —
+  // before §89 runs the columns are missing, and a missing column must not
+  // fail the main profile fetch (ToS/onboarding gates). A missing column
+  // reads as 'unavailable' (no gate, AI as before; the server check is only
+  // deployed after §89).
+  async function fetchAiConsent(userId: string) {
+    const result = await withTimeout(
+      supabase.from('profiles').select('ai_consent_at, ai_consent_version').eq('user_id', userId).maybeSingle(),
+      STARTUP_TIMEOUT_MS,
+      'fetchAiConsent'
+    );
+    setAiConsent(consentStateFromFetch(result));
+  }
 
   async function fetchProfile(userId: string) {
     const result = await withTimeout(
@@ -97,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileData = fallback?.data ? { ...fallback.data, tutorial_seen_at: null } : null;
     }
     setProfile(profileData);
+    await fetchAiConsent(userId);
     // Cross-device sync (owner decision 2026-07-09): a manual language choice
     // in Settings is written to profiles.locale, and always wins over this
     // device's own cache/OS language on every subsequent sign-in.
@@ -127,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await fetchProfile(newSession.user.id);
       } else {
         setProfile(null);
+        setAiConsent({ kind: 'unknown' });
       }
     });
 
@@ -260,6 +289,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // AI CONSENT (§89): Allow (true) or Not now / Settings off (false). Upsert
+  // for the same sign-up race as acceptTos(). State updates only after the
+  // write landed, so the gate never lets the user through on a failed save.
+  async function saveAiConsent(allow: boolean) {
+    if (!session) return { error: 'Not signed in.' };
+    try {
+      const write = consentWrite(allow, new Date().toISOString());
+      const { error } = await supabase.from('profiles').upsert({ user_id: session.user.id, ...write }, { onConflict: 'user_id' });
+      if (error) {
+        if (isMissingConsentColumnError(error)) {
+          setAiConsent({ kind: 'unavailable' });
+          return { error: null };
+        }
+        return { error: error.message };
+      }
+      setAiConsent({ kind: 'loaded', record: { at: write.ai_consent_at, version: write.ai_consent_version } });
+      return { error: null };
+    } catch (err) {
+      return { error: messageFromUnknownError(err) };
+    }
+  }
+
   async function refreshProfile() {
     if (session) await fetchProfile(session.user.id);
   }
@@ -292,9 +343,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // (spec's own explicit ordering), so this only ever evaluates true once
   // needsTos is already false, and needsOnboarding below additionally
   // waits for this to clear too.
+  // AI CONSENT GATE (owner decision 2026-11-23): after ToS, before the
+  // tutorial. The tutorial and onboarding wait for it (passed to them as
+  // part of "needsTos" — both only need "an earlier gate is still open").
+  const needsAiConsent = useMemo(
+    () => resolveNeedsAiConsent({ hasSession: !!session, needsTos, state: aiConsent }),
+    [session, needsTos, aiConsent]
+  );
+  const earlierGateOpen = needsTos || needsAiConsent;
+
   const needsTutorial = useMemo(
-    () => resolveNeedsTutorial({ hasSession: !!session, needsTos, profileLoaded: !!profile, tutorialSeenAt: profile?.tutorial_seen_at }),
-    [session, needsTos, profile]
+    () => resolveNeedsTutorial({ hasSession: !!session, needsTos: earlierGateOpen, profileLoaded: !!profile, tutorialSeenAt: profile?.tutorial_seen_at }),
+    [session, earlierGateOpen, profile]
   );
 
   // Runs AFTER ToS acceptance AND the first-run tutorial (PROMPTS.md
@@ -304,12 +364,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () =>
       resolveNeedsOnboarding({
         hasSession: !!session,
-        needsTos,
+        needsTos: earlierGateOpen,
         needsTutorial,
         profileLoaded: !!profile,
         onboardingCompletedAt: profile?.onboarding_completed_at,
       }),
-    [session, needsTos, needsTutorial, profile]
+    [session, earlierGateOpen, needsTutorial, profile]
   );
 
   const value: AuthContextValue = {
@@ -318,6 +378,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     needsEmailConfirmation,
     needsTos,
+    aiConsent,
+    needsAiConsent,
+    saveAiConsent,
     needsTutorial,
     needsOnboarding,
     signUp,

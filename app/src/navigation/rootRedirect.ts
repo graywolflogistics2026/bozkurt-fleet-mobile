@@ -20,6 +20,9 @@ export type RootRedirectInputs = {
   // tutorial gate itself used against onboarding.
   needsEmailConfirmation: boolean;
   needsTos: boolean;
+  // AI CONSENT (owner decision 2026-11-23, App Store 5.1.2(i), §89) —
+  // slotted between ToS and the tutorial. Optional: absent = false.
+  needsAiConsent?: boolean;
   // FIRST-RUN TUTORIAL (owner decision 2026-08-05, FULL PARITY follow-up
   // item I) — slotted between ToS and the onboarding wizard, per the
   // spec's own "after signup+ToS and before setup wizard" ordering.
@@ -34,6 +37,7 @@ export function resolveRootRedirect({
   languageScreenSeen,
   needsEmailConfirmation,
   needsTos,
+  needsAiConsent = false,
   needsTutorial,
   needsOnboarding,
   introSeen,
@@ -41,6 +45,7 @@ export function resolveRootRedirect({
 }: RootRedirectInputs): string | null {
   const inAuthGroup = segment === '(auth)';
   const onTosScreen = segment === 'tos';
+  const onAiConsentScreen = segment === 'ai-consent';
   const onTutorialScreen = segment === 'tutorial';
   const onOnboardingScreen = segment === 'onboarding';
   const onIntroScreen = segment === 'intro';
@@ -68,15 +73,17 @@ export function resolveRootRedirect({
   if (!hasSession && !inAuthGroup && !onIntroScreen && !onResetPasswordScreen && !onConfirmEmailScreen) return '/(auth)/sign-in';
   if (hasSession && needsEmailConfirmation && !onConfirmEmailScreen) return '/confirm-email';
   if (hasSession && !needsEmailConfirmation && needsTos && !onTosScreen) return '/tos';
-  if (hasSession && !needsEmailConfirmation && !needsTos && needsTutorial && !onTutorialScreen) return '/tutorial';
-  if (hasSession && !needsEmailConfirmation && !needsTos && !needsTutorial && needsOnboarding && !onOnboardingScreen) return '/onboarding';
+  if (hasSession && !needsEmailConfirmation && !needsTos && needsAiConsent && !onAiConsentScreen) return '/ai-consent';
+  if (hasSession && !needsEmailConfirmation && !needsTos && !needsAiConsent && needsTutorial && !onTutorialScreen) return '/tutorial';
+  if (hasSession && !needsEmailConfirmation && !needsTos && !needsAiConsent && !needsTutorial && needsOnboarding && !onOnboardingScreen) return '/onboarding';
   if (
     hasSession &&
     !needsEmailConfirmation &&
     !needsTos &&
+    !needsAiConsent &&
     !needsTutorial &&
     !needsOnboarding &&
-    (inAuthGroup || onTosScreen || onTutorialScreen || onOnboardingScreen || onIntroScreen || onConfirmEmailScreen || onLanguageScreen)
+    (inAuthGroup || onTosScreen || onAiConsentScreen || onTutorialScreen || onOnboardingScreen || onIntroScreen || onConfirmEmailScreen || onLanguageScreen)
   ) {
     return '/(tabs)';
   }

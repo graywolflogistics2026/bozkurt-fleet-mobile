@@ -197,3 +197,28 @@ describe('resolveRootRedirect — FIRST-RUN LANGUAGE SCREEN (owner decision, LAN
     );
   });
 });
+
+describe('resolveRootRedirect — AI CONSENT gate (owner decision 2026-11-23, §89)', () => {
+  const signedIn = { hasSession: true, introSeen: true } as const;
+
+  it('after ToS, an unanswered consent goes to /ai-consent before the tutorial and onboarding', () => {
+    expect(resolveRootRedirect(inputs({ ...signedIn, needsAiConsent: true, needsTutorial: true, needsOnboarding: true, segment: '(tabs)' }))).toBe('/ai-consent');
+  });
+
+  it('ToS still comes first', () => {
+    expect(resolveRootRedirect(inputs({ ...signedIn, needsTos: true, needsAiConsent: true, segment: '(tabs)' }))).toBe('/tos');
+  });
+
+  it('already on /ai-consent: no redirect', () => {
+    expect(resolveRootRedirect(inputs({ ...signedIn, needsAiConsent: true, segment: 'ai-consent' }))).toBeNull();
+  });
+
+  it('once answered: the tutorial follows, and a cleared user leaves /ai-consent for the tabs', () => {
+    expect(resolveRootRedirect(inputs({ ...signedIn, needsTutorial: true, segment: 'ai-consent' }))).toBe('/tutorial');
+    expect(resolveRootRedirect(inputs({ ...signedIn, segment: 'ai-consent' }))).toBe('/(tabs)');
+  });
+
+  it('absent needsAiConsent behaves as before (false)', () => {
+    expect(resolveRootRedirect(inputs({ ...signedIn, needsTutorial: true, segment: '(tabs)' }))).toBe('/tutorial');
+  });
+});

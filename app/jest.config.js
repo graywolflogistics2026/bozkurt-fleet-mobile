@@ -33,6 +33,7 @@ module.exports = {
     '<rootDir>/src/deductions/**/*.test.ts',
     '<rootDir>/src/primeDriverExpenses/**/*.test.ts',
     '<rootDir>/src/settlementReader/**/*.test.ts',
+    '<rootDir>/src/ai/**/*.test.ts',
   ],
   // Mirrors tsconfig.json's "@/*" path alias — ts-jest doesn't read tsconfig
   // paths for module resolution on its own.

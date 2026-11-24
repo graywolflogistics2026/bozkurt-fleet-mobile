@@ -3383,5 +3383,30 @@
       "REFUNDABLE_FUND": "Deposit or fund (refundable)",
       "REIMBURSEMENT": "Discount or reimbursement"
     }
+  },
+  "aiConsent": {
+    "title": "Allow AI features?",
+    "intro": "To read your documents and give coaching, this app sends data to Anthropic (the maker of the Claude AI) through our server:",
+    "bulletDocs": "the photos and PDFs you import",
+    "bulletNumbers": "your business numbers and charge descriptions",
+    "bulletQuestions": "questions you type to AI Coach",
+    "processing": "Anthropic processes it to answer this request. Details in the Privacy Policy.",
+    "noSale": "We never sell your data.",
+    "withdraw": "You can turn this off anytime in Settings > Privacy.",
+    "allow": "Allow",
+    "notNow": "Not now",
+    "readPrivacy": "Read the Privacy Policy",
+    "hidePrivacy": "Hide the Privacy Policy",
+    "sheetLead": "This feature uses AI. Allow it to continue?",
+    "declined": "AI features are off. Turn them on in Settings > Privacy, or add entries by hand.",
+    "serverRequired": "AI features are off for this account. Turn them on in Settings > Privacy.",
+    "saveFailed": "Could not save your choice. Check your connection and try again.",
+    "settingsSectionTitle": "Privacy",
+    "settingsRowTitle": "AI features (Anthropic)",
+    "settingsRowOn": "On: imports and AI Coach send data to Anthropic.",
+    "settingsRowOff": "Off: nothing is sent to the AI. Manual entry and all reports still work.",
+    "turnOffTitle": "Turn off AI features?",
+    "turnOffBody": "Document reading and AI Coach will stop. Your saved data stays.",
+    "turnOff": "Turn off"
   }
 }
