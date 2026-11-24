@@ -21,6 +21,7 @@ import {
 import { useFormatters } from '@/src/i18n/format';
 import { CategoryPicker } from '@/src/components/CategoryPicker';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import { todayDateOnly } from '@/src/lib/dateOnly';
 import { numOrNull } from '@/src/lib/number';
@@ -362,6 +363,17 @@ export default function AssetRegister() {
             </Text>
           </Pressable>
         </View>
+
+        {/* Equipment left the Menu (owner 2026-11-23): opened from here. The
+            menu row for this screen reads "Assets & Equipment"; the two
+            screens keep their own data (asset purchases = deductions,
+            equipment = the equipment table) and logic. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/equipment'
+          emoji='🛠️'
+          title={t('nav.equipment')}
+          description={t('assetRegister.equipmentCard')}
+        />
 
         <Card>
           <View style={styles.statRow}>

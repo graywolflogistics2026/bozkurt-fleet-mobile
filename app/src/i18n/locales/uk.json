@@ -52,6 +52,7 @@
     "bankStatements": "Bank Statement",
     "otherIncome": "Other Income",
     "assetRegister": "Asset Register",
+    "assetsEquipment": "Assets & Equipment",
     "operatingPnl": "Operating P&L",
     "profitAnalysis": "Profit Analysis",
     "scorecard": "Scorecard",
@@ -1551,6 +1552,7 @@
   },
   "assetRegister": {
     "title": "Asset Register",
+    "equipmentCard": "Other gear you own or finance: generators, reefer units, tools.",
     "totalAssets": "Total Assets",
     "totalValue": "Total Value",
     "thisMonth": "This Month",

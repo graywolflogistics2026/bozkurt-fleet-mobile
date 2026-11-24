@@ -52,6 +52,7 @@
     "bankStatements": "Estado de Cuenta Bancario",
     "otherIncome": "Otros Ingresos",
     "assetRegister": "Registro de Activos",
+    "assetsEquipment": "Activos y equipos",
     "operatingPnl": "P&L Operativo",
     "profitAnalysis": "Análisis de Ganancias",
     "scorecard": "Calificación",
@@ -1551,6 +1552,7 @@
   },
   "assetRegister": {
     "title": "Registro de Activos",
+    "equipmentCard": "Otro equipo propio o financiado: generadores, unidades reefer, herramientas.",
     "totalAssets": "Total de Activos",
     "totalValue": "Valor Total",
     "thisMonth": "Este Mes",

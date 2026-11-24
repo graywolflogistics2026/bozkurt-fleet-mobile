@@ -57,6 +57,7 @@
     "bankStatements": "बैंक स्टेटमेंट",
     "otherIncome": "अन्य आय",
     "assetRegister": "एसेट रजिस्टर",
+    "assetsEquipment": "संपत्ति और उपकरण",
     "operatingPnl": "ऑपरेटिंग P&L",
     "profitAnalysis": "लाभ विश्लेषण",
     "scorecard": "स्कोरकार्ड",
@@ -1556,6 +1557,7 @@
   },
   "assetRegister": {
     "title": "एसेट रजिस्टर",
+    "equipmentCard": "आपके या फ़ाइनेंस किए गए अन्य उपकरण: जनरेटर, reefer यूनिट, औज़ार।",
     "totalAssets": "कुल संपत्ति",
     "totalValue": "कुल मूल्य",
     "thisMonth": "इस महीने",

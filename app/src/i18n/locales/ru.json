@@ -52,6 +52,7 @@
     "bankStatements": "Банковская выписка",
     "otherIncome": "Прочие доходы",
     "assetRegister": "Реестр активов",
+    "assetsEquipment": "Активы и оборудование",
     "operatingPnl": "Операционный P&L",
     "profitAnalysis": "Анализ прибыли",
     "scorecard": "Оценка эффективности",
@@ -1551,6 +1552,7 @@
   },
   "assetRegister": {
     "title": "Реестр активов",
+    "equipmentCard": "Другое ваше или купленное в кредит оборудование: генераторы, reefer-установки, инструменты.",
     "totalAssets": "Всего активов",
     "totalValue": "Общая стоимость",
     "thisMonth": "В этом месяце",

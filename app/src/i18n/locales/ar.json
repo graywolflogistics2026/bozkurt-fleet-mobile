@@ -52,6 +52,7 @@
     "bankStatements": "كشف الحساب البنكي",
     "otherIncome": "دخل آخر",
     "assetRegister": "سجل الأصول",
+    "assetsEquipment": "Assets & Equipment",
     "operatingPnl": "الأرباح والخسائر التشغيلية",
     "profitAnalysis": "تحليل الأرباح",
     "scorecard": "بطاقة الأداء",
@@ -1551,6 +1552,7 @@
   },
   "assetRegister": {
     "title": "سجل الأصول",
+    "equipmentCard": "Other gear you own or finance: generators, reefer units, tools.",
     "totalAssets": "إجمالي الأصول",
     "totalValue": "القيمة الإجمالية",
     "thisMonth": "هذا الشهر",

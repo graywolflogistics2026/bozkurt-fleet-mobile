@@ -6,6 +6,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
+  MENU_LABEL_OVERRIDES,
   MENU_ORDER,
   MENU_REACHED_FROM,
   MENU_SECTIONS,
@@ -99,6 +100,15 @@ describe('the menu (owner decisions 2026-11-23)', () => {
     expect(menu[menu.length - 1]).toBe('/(tabs)/more/settings');
     expect(menu.slice(0, 3)).toEqual(['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements']);
     expect(menu).toContain('/(tabs)/transactions');
+  });
+
+  test('Asset Register row reads "Assets & Equipment" in the menu and sidebar only; its screen title is unchanged', () => {
+    const label = (list: { href: unknown; labelKey: string }[]) => list.find((i) => i.href === '/(tabs)/more/asset-register')?.labelKey;
+    expect(MENU_LABEL_OVERRIDES['/(tabs)/more/asset-register']).toBe('nav.assetsEquipment');
+    expect(label(menuItems())).toBe('nav.assetsEquipment');
+    expect(label(sidebarItems())).toBe('nav.assetsEquipment');
+    expect(label(flattenNavItems(NAV_GROUPS))).toBe('nav.assetRegister');
+    expect(read('app/(tabs)/more/_layout.tsx')).toContain("name=\"asset-register\" options={{ title: t('nav.assetRegister') }}");
   });
 
   test('the daily screens are separate rows', () => {
