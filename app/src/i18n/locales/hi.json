@@ -1774,6 +1774,7 @@
   },
   "taxEstimator": {
     "title": "कर अनुमानक",
+    "otherIncomeCard": "वह आय जो किसी settlement में नहीं है, जैसे ब्याज या अतिरिक्त काम।",
     "savedTitle": "✅ सहेजा गया",
     "saveFailedTitle": "सहेजना विफल",
     "deleteFailedTitle": "हटाना विफल",

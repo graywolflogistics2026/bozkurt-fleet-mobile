@@ -192,7 +192,7 @@ export type MenuSection = { titleKey: string; hrefs: readonly string[] };
 export const MENU_SECTIONS: readonly MenuSection[] = [
   {
     titleKey: 'sidebar.sections.revenue',
-    hrefs: ['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements', '/(tabs)/more/other-income'],
+    hrefs: ['/(tabs)/import', '/(tabs)/more/loads', '/(tabs)/more/settlements'],
   },
   {
     titleKey: 'sidebar.sections.expenses',
@@ -254,6 +254,8 @@ export const MENU_REACHED_FROM: Readonly<Record<string, MenuReach>> = {
   '/(tabs)/more/scorecard': { kind: 'reports' },
   // Owner 2026-11-23: a card on Other Income (reimbursements reduce expenses, never income).
   '/(tabs)/more/reimbursements': { kind: 'parent', parent: '/(tabs)/more/other-income' },
+  // Owner 2026-11-23: a card on Tax Estimator.
+  '/(tabs)/more/other-income': { kind: 'parent', parent: '/(tabs)/more/tax-estimator' },
   '/(tabs)/more/credit-cards': { kind: 'featureFlag' },
   '/(tabs)/more/bank-statements': { kind: 'featureFlag' },
 };

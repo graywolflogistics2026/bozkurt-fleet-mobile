@@ -25,6 +25,7 @@ import {
   SecondaryButton,
 } from '@/src/components/ui';
 import { EstimateBanner } from '@/src/components/EstimateBanner';
+import { RelatedScreenCard } from '@/src/components/RelatedScreenCard';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { HouseholdIncome, HouseholdMember } from '@/src/types/db';
 import { numOrNull } from '@/src/lib/number';
@@ -255,6 +256,14 @@ export default function TaxEstimator() {
         <ScreenTitle>{t('taxEstimator.title')}</ScreenTitle>
         <EstimateBanner />
         <FleetScopeLabel variant="fleetOnly" />
+
+        {/* Other Income left the Menu (owner 2026-11-23): opened from here. */}
+        <RelatedScreenCard
+          href='/(tabs)/more/other-income'
+          emoji='💵'
+          title={t('nav.otherIncome')}
+          description={t('taxEstimator.otherIncomeCard')}
+        />
 
         {loading ? (
           <Card>

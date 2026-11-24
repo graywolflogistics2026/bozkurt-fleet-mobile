@@ -1769,6 +1769,7 @@
   },
   "taxEstimator": {
     "title": "Estimador de Impuestos",
+    "otherIncomeCard": "Ingresos que no vienen en un settlement, como intereses o trabajos extra.",
     "savedTitle": "✅ Guardado",
     "saveFailedTitle": "Error al guardar",
     "deleteFailedTitle": "Error al eliminar",

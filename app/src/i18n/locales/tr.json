@@ -1769,6 +1769,7 @@
   },
   "taxEstimator": {
     "title": "Vergi Hesaplayıcı",
+    "otherIncomeCard": "Bir settlement üzerinde olmayan gelir, örneğin faiz veya ek işler.",
     "savedTitle": "✅ Kaydedildi",
     "saveFailedTitle": "Kaydetme başarısız",
     "deleteFailedTitle": "Silme başarısız",

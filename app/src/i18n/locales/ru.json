@@ -1769,6 +1769,7 @@
   },
   "taxEstimator": {
     "title": "Калькулятор налогов",
+    "otherIncomeCard": "Доход не из settlement, например проценты или подработка.",
     "savedTitle": "✅ Сохранено",
     "saveFailedTitle": "Не удалось сохранить",
     "deleteFailedTitle": "Не удалось удалить",

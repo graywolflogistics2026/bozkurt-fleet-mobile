@@ -1769,6 +1769,7 @@
   },
   "taxEstimator": {
     "title": "مقدّر الضرائب",
+    "otherIncomeCard": "Income that is not on a settlement, such as interest or side work.",
     "savedTitle": "✅ تم الحفظ",
     "saveFailedTitle": "فشل الحفظ",
     "deleteFailedTitle": "فشل الحذف",

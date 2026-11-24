@@ -1769,6 +1769,7 @@
   },
   "taxEstimator": {
     "title": "Tax Estimator",
+    "otherIncomeCard": "Income that is not on a settlement, such as interest or side work.",
     "savedTitle": "✅ Saved",
     "saveFailedTitle": "Save failed",
     "deleteFailedTitle": "Delete failed",
