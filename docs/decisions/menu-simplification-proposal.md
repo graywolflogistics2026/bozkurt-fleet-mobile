@@ -26,6 +26,10 @@ Follow-up (owner 2026-11-23, after Stage 2), CURRENT state:
   card shares one accent look (`RelatedScreenCard`). CURRENT final menu:
   18 rows; Business = Trucks, Drivers, Capital Account, Documents, Renewals
   & Expiry Dates.
+- 2026-11-24 follow-up: no menu change (still 18 rows). Screen-level work
+  only: Accountant Package order (estimates banner before Export), a
+  read-only driver detail sheet on Drivers, and the shared top-right
+  delete mark (`RowDeleteButton`) on the list screens.
 - Scorecard is a third card on Operating P&L (after Cash Flow and Profit
   Analysis). Still hidden from the phone menu, still on the Reports tab,
   still linked from Truck Comparison. The wide-sidebar-only Scorecard row

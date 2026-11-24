@@ -10,6 +10,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Follow-up: estimates banner order, driver detail, delete X everywhere (owner)
+
+- Accountant Package: title, featured For Prime Inc Drivers card, EstimateBanner, FleetScopeLabel, Year/Month/Scope/Format, Export, then subtitle and report.
+- Drivers: the name (18 pt bold, "›") opens a read-only `DriverDetailSheet` (compensation, pay type/rate, default truck, payment count + newest payment, or the carrier payroll summary) with an Edit button; screen data only. "Who is CODE?" is an accent button opening the same name form. Keys `drivers.detailNoTruck/detailPaymentsCount/detailLastPayment`.
+- `RowDeleteButton` (`src/components/RowDeleteButton.tsx`): the Loads top-right 44 dp delete mark, now also on Deductions, Fuel, Loans, Other Income, Reimbursements, Tolls, Maintenance and the Tax Estimator income list (one commit each). Same confirmations. Accountant Package items, Cash Flow recurring payments and Credit Cards unchanged.
+- No number, route or data logic changed. Ships via `eas update`.
+
 ## 2026-11-24 — Phone-testing fixes: cards, colours, Loads X, Export on top, menu 18 rows (owner)
 
 - `RelatedScreenCard`: one shared look (accent border, 8% accent tint, 22% pressed, 16 pt bold title, accent arrow); Settings > Tools uses it too. `FeaturedScreenCard` stays bigger.
