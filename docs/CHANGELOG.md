@@ -10,6 +10,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Loads: statement loads shown view-only for weeks saved without line details (owner)
+
+- Design: `docs/decisions/settlement-loads-view-fix-proposal.md` (view-only option). No load rows created; the import rule is unchanged (mismatching line rows are never saved).
+- Settlement detail: "Settlement income lines (N)" and "Loads (N)"; a not-saved week shows its statement loads with a note (175ae2c). Loads screen: each load shows its settlement week (a165ed4); per not-saved week a header "Week ending <date> · N loads on the statement · details not saved" and read-only items tagged "From statement", revenue "as printed", tap opens the week; top stats real rows only + "+ N loads on statements, not counted here" (e438ec8).
+- `src/stats/statementLoads.ts` (3b2b7e4): Prime loads without miles hidden; isolation test allows only the two screens to import it. `groupByMonth`/`MonthGroupedList` gained an optional `isCounted` so month counts/totals stay real loads only.
+- No number changes. No SQL, no Edge Function. Ships via `eas update`.
+
 ## 2026-11-24 — Maintenance moves from the menu to a Truck Health card (owner)
 
 - `MENU_SECTIONS` Expenses = Fuel, Tolls & Fees, Deductions; menu and wide sidebar 18 -> 17 rows; tab bar unchanged. `MENU_REACHED_FROM`: Maintenance -> Truck Health (`menuReachability.test.ts`).
