@@ -20,6 +20,7 @@ import { FleetScopeLabel } from '@/src/components/FleetScopeLabel';
 import { truckIdFilterFor } from '@/src/stats/fleetScope';
 import { useFormatters } from '@/src/i18n/format';
 import { Screen, ScreenTitle, Card, MutedText, ModalSheet, SheetTitle, Field, PrimaryButton, SecondaryButton } from '@/src/components/ui';
+import { RowDeleteButton } from '@/src/components/RowDeleteButton';
 import { colors, radii, spacing, typography } from '@/src/theme';
 import type { MaintenanceRecord } from '@/src/types/db';
 import i18n from '@/src/i18n';
@@ -434,7 +435,7 @@ export default function Maintenance() {
                   onPress={() => openEdit(rec)}
                   style={[{ paddingVertical: spacing.sm }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}
                 >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.text, fontWeight: '600' }}>
                         {MAINTENANCE_TYPE_ICON[(rec.service_type as MaintenanceType) ?? 'general']} {t(`maintenance.types.${rec.service_type ?? 'general'}`)}
@@ -447,10 +448,9 @@ export default function Maintenance() {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={{ color: colors.text, fontWeight: '700' }}>{money(rec.cost ?? 0)}</Text>
-                      <Pressable onPress={() => handleDelete(rec)} hitSlop={8} style={{ marginTop: spacing.xs }}>
-                        <Text style={{ color: colors.red, fontSize: typography.size.sm, fontWeight: '700' }}>✕</Text>
-                      </Pressable>
                     </View>
+                    {/* Delete mark: top-right corner, 44 dp (owner 2026-11-24). */}
+                    <RowDeleteButton onPress={() => handleDelete(rec)} />
                   </View>
                 </Pressable>
               ))}
