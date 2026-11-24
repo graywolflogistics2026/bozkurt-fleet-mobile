@@ -10,6 +10,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-23 — Menu Stage 2: sections back, 19 rows, cards on parent screens (owner)
+
+Phone Menu and wide sidebar have section headings again (`MENU_SECTIONS`, `navRegistry.ts`): Revenue, Expenses, Overview, Business, Tax & Accounting, System; 19 rows, Settings last. Stage 1's big rows, gear and bottom padding kept; sidebar keeps Home on top. Reports is unchanged.
+- Cards (`RelatedScreenCard`, router.push to the unchanged route, back returns): Reimbursements on Other Income (says they reduce expenses, not income); Other Income on Tax Estimator; For Prime Inc Drivers on Accountant Package; Truck Comparison on Trucks; Equipment on Asset Register (menu row "Assets & Equipment"); Renewals & expiry dates (compliance) on Documents; Loans on Capital Account; Cash Flow + Profit Analysis on Operating P&L; Data Cleanup on Category Learning. Settings > Tools: Category Learning, Invite & Earn.
+- Sidebar Scorecard row now after Operating P&L. Import tab label moved to the library's label line (top 33, 10 pt). No route moved; no number changed; `menuReachability.test.ts` checks every parent links to its child. Ships via `eas update`.
+
 ## 2026-11-23 — Wide sidebar: Scorecard row (owner)
 
 The wide sidebar (768px+) has no Reports tab, so Scorecard is a sidebar row after Profit Analysis (`SIDEBAR_ONLY_AFTER`, `navRegistry.ts`). It stays hidden in the phone menu. `menuReachability.test.ts` checks the Reports reason on phones and the sidebar row on wide screens. Same day: `nav.openSettings`/`nav.closeMenu` translated in ar and uk (owner text).

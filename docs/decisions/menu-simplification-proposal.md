@@ -1,8 +1,33 @@
 # Menu and tab bar simplification — proposal
 
-Status: STAGE 1 IN PROGRESS (2026-11-23). Commit 1 (flat menu) and commit 2
-(tab bar) implement §3 commits 1-2. Merges (3a-3e) and Settings tools (4)
-are not done yet.
+Status: IMPLEMENTED (2026-11-23), Stage 1 and Stage 2. Stage 2's owner
+decisions (below) REPLACE the Stage 2 plan in §2-§3 of this proposal and
+Stage 1's "no headings" decision.
+
+Stage 2 owner decisions (2026-11-23), as built:
+- Section headings back in the phone Menu and the wide sidebar (Home on top
+  of the sidebar only). Stage 1's big rows, gear and bottom padding kept.
+  Reports unchanged; groups stay internal.
+- Final menu, 19 rows: Revenue (Import, Loads, Settlements); Expenses (Fuel,
+  Maintenance, Tolls & Fees, Deductions); Overview (Transactions, Operating
+  P&L, Truck Health, AI Coach); Business (Trucks, Drivers, Assets &
+  Equipment, Capital Account, Documents); Tax & Accounting (Accountant
+  Package, Tax Estimator); System (Settings).
+- Cards on parent screens (router.push to the child's unchanged route; no
+  route moved, no screen merged): Reimbursements -> Other Income; Other
+  Income -> Tax Estimator; For Prime Inc Drivers -> Accountant Package;
+  Truck Comparison -> Trucks; Equipment -> Asset Register (menu label
+  "Assets & Equipment"); Documents & Renewals -> Documents ("Renewals &
+  expiry dates"); Loans -> Capital Account; Cash Flow + Profit Analysis ->
+  Operating P&L; Data Cleanup -> Category Learning. Category Learning and
+  Invite & Earn -> buttons in Settings > Tools.
+- Scorecard hidden from the phone menu (on Reports); a wide-sidebar row,
+  now after Operating P&L (its earlier anchor, Profit Analysis, became a
+  card).
+- Code: `navRegistry.ts` (MENU_SECTIONS, MENU_REACHED_FROM,
+  MENU_LABEL_OVERRIDES, SIDEBAR_ONLY_AFTER), `RelatedScreenCard.tsx`,
+  `menuReachability.test.ts` (every route reachable; each parent file
+  links to its child).
 
 Owner answers for stage 1 (2026-11-23): (a) Reports stays exactly as
 today; the menu groups stay internal, only the visible list is flat.

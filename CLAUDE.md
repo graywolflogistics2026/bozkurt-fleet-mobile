@@ -27,8 +27,10 @@ Update (expo-updates); Jest 29 + ts-jest for pure modules.
 ## Folder map
 
 - `app/` — the Expo app; run `npx`/`eas` commands here.
-  - `app/app/` — expo-router screens: `(tabs)/` (Home, Transactions,
-    Import, Deductions, Truck Health) and `(tabs)/more/*` (everything else).
+  - `app/app/` — expo-router screens: `(tabs)/` (tabs Home | Import |
+    Reports | Menu; Transactions, Deductions, Truck Health are hidden tab
+    routes) and `(tabs)/more/*` (everything else). Menu rows/sections:
+    `navRegistry.ts` `MENU_SECTIONS` (docs/decisions/ui-conventions.md).
   - `app/src/stats/` — KPI engine (`kpi.ts` `computeKpis()`), CPM, true
     profit, Cash Flow forecast/monthly, profit analysis.
   - `app/src/tax/` — tax estimate, per diem, driver payroll, depreciation.
