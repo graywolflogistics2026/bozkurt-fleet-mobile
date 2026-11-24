@@ -174,6 +174,7 @@ function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Dr
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [nameFormOpen, setNameFormOpen] = useState(false);
   const summary = useMemo(() => carrierPayrollSummary(payments, driver.id, todayDateOnly()), [payments, driver.id]);
   const team = summary.latest?.settlementId ? teamBySettlement.get(summary.latest.settlementId) === true : false;
   const askName = needsDriverName(driver);
@@ -220,12 +221,33 @@ function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Dr
           team ? t('drivers.carrierPayroll.team') : t('drivers.carrierPayroll.solo'),
         ].join(' · ')}
       </MutedText>
-      {askName && (
+      {/* WHO IS CODE? (owner 2026-11-24): the stored name is still the
+          payroll code, so a clearly visible accent button opens the same
+          name form as before (same saveName, no data logic change). */}
+      {askName && !nameFormOpen && (
+        <Pressable
+          onPress={() => setNameFormOpen(true)}
+          accessibilityRole="button"
+          style={({ pressed }) => ({
+            marginTop: spacing.sm,
+            minHeight: 44,
+            justifyContent: 'center',
+            paddingHorizontal: spacing.md,
+            borderRadius: radii.md,
+            backgroundColor: colors.accent,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '700' }}>✍️ {t('drivers.carrierPayroll.whoIs', { code: driver.carrier_driver_code ?? '' })}</Text>
+        </Pressable>
+      )}
+      {askName && nameFormOpen && (
         <View style={{ marginTop: spacing.xs }}>
           <Text style={{ color: colors.orange, fontWeight: '700' }}>{t('drivers.carrierPayroll.whoIs', { code: driver.carrier_driver_code ?? '' })}</Text>
           <MutedText>{t('drivers.carrierPayroll.whoIsBody', { code: driver.carrier_driver_code ?? '' })}</MutedText>
           <Field value={name} onChangeText={setName} placeholder={t('drivers.carrierPayroll.namePlaceholder')} />
           <PrimaryButton title={t('common.save')} onPress={saveName} loading={saving} />
+          <SecondaryButton title={t('common.cancel')} onPress={() => setNameFormOpen(false)} />
         </View>
       )}
       {summary.latest && block(t('drivers.carrierPayroll.latestWeek', { date: fmtDate(summary.latest.date) }), summary.latest)}
@@ -233,6 +255,72 @@ function CarrierPayrollCard({ driver, payments, teamBySettlement }: { driver: Dr
       <MutedText style={{ marginTop: spacing.xs }}>{t('drivers.carrierPayroll.paidWeeks', { count: summary.paidWeeks })}</MutedText>
       <MutedText>{t('drivers.carrierPayroll.note')}</MutedText>
     </View>
+  );
+}
+
+// DRIVER DETAIL (owner 2026-11-24, option a): READ-ONLY sheet opened by
+// tapping a driver's name. Uses only data this screen already loads (the
+// driver row, every driver_payments row, the trucks list, settlements for
+// the team flag). No new query, no calculation: the payments line is the
+// count and the newest row as stored; carrier-payroll drivers reuse the
+// existing CarrierPayrollCard summary. Editing stays on the Edit button.
+function DriverDetailSheet({
+  driver,
+  payments,
+  truckLabel,
+  teamBySettlement,
+  onEdit,
+  onClose,
+}: {
+  driver: Driver;
+  payments: DriverPayment[];
+  truckLabel: string | null;
+  teamBySettlement: Map<string, boolean>;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { money, number, date: fmtDate } = useFormatters();
+  const own = useMemo(
+    () => payments.filter((p) => p.driver_id === driver.id).sort((a, b) => compareDateOnly(b.date, a.date)),
+    [payments, driver.id]
+  );
+  const line = (label: string, value: string) => (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+      <MutedText style={{ flex: 1, marginEnd: spacing.sm }}>{label}</MutedText>
+      <Text style={{ color: colors.text, fontWeight: '600', flexShrink: 1, textAlign: 'right' }}>{value}</Text>
+    </View>
+  );
+  return (
+    <ModalSheet visible onClose={onClose}>
+      <SheetTitle>
+        {driver.name}
+        {!driver.active ? ` ${t('drivers.formerTag')}` : ''}
+      </SheetTitle>
+      {line(t('drivers.compensationTypeLabel'), t(`drivers.compensationTypes.${driver.compensation_type}`))}
+      {!driver.paid_via_carrier_payroll && line(t('drivers.payTypeLabel'), driver.pay_type ? t(`drivers.payTypes.${driver.pay_type}`) : '—')}
+      {!driver.paid_via_carrier_payroll && line(t('drivers.payRateLabel'), driver.pay_rate != null ? number(driver.pay_rate) : '—')}
+      {line(t('drivers.defaultTruckLabel'), truckLabel ?? t('drivers.detailNoTruck'))}
+      {driver.paid_via_carrier_payroll ? (
+        <View style={{ marginTop: spacing.sm }}>
+          <CarrierPayrollCard driver={driver} payments={payments} teamBySettlement={teamBySettlement} />
+        </View>
+      ) : (
+        <View style={{ marginTop: spacing.sm }}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('drivers.payments')}</Text>
+          {own.length === 0 ? (
+            <MutedText>{t('drivers.paymentsEmpty')}</MutedText>
+          ) : (
+            <>
+              <MutedText>{t('drivers.detailPaymentsCount', { count: own.length })}</MutedText>
+              <MutedText>{t('drivers.detailLastPayment', { date: fmtDate(own[0].date), amount: money(own[0].gross_pay) })}</MutedText>
+            </>
+          )}
+        </View>
+      )}
+      <PrimaryButton title={t('drivers.edit')} onPress={onEdit} />
+      <SecondaryButton title={t('common.close')} onPress={onClose} />
+    </ModalSheet>
   );
 }
 
@@ -259,6 +347,7 @@ export default function Drivers() {
   const [editing, setEditing] = useState<Driver | null>(null);
   const [editForm, setEditForm] = useState<FormState>(emptyForm());
   const [paymentsFor, setPaymentsFor] = useState<Driver | null>(null);
+  const [detailFor, setDetailFor] = useState<Driver | null>(null);
   const [saving, setSaving] = useState(false);
 
   const drivers = driversQuery.data ?? [];
@@ -450,10 +539,11 @@ export default function Drivers() {
           <Card>
             {visible.map((d, i) => (
               <View key={d.id} style={[{ paddingVertical: spacing.sm }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
-                <Pressable onPress={() => openEdit(d)}>
-                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                <Pressable onPress={() => setDetailFor(d)} accessibilityRole="button" hitSlop={4}>
+                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 18 }}>
                     {d.name}
                     {!d.active ? ` ${t('drivers.formerTag')}` : ''}
+                    <Text style={{ color: colors.accent }}> ›</Text>
                   </Text>
                   {!d.paid_via_carrier_payroll && <MutedText>{t(`drivers.compensationTypes.${d.compensation_type}`)}</MutedText>}
                 </Pressable>
@@ -503,6 +593,24 @@ export default function Drivers() {
         )}
       </ModalSheet>
 
+      {detailFor && (
+        <DriverDetailSheet
+          driver={detailFor}
+          payments={allPaymentsQuery.data ?? []}
+          truckLabel={
+            detailFor.default_truck_id
+              ? t('common.unit', { unit: trucks.find((tr) => tr.id === detailFor.default_truck_id)?.unit_number ?? detailFor.default_truck_id })
+              : null
+          }
+          teamBySettlement={teamBySettlement}
+          onEdit={() => {
+            const d = detailFor;
+            setDetailFor(null);
+            openEdit(d);
+          }}
+          onClose={() => setDetailFor(null)}
+        />
+      )}
       {paymentsFor && <DriverPaymentsSheet driver={paymentsFor} employerFicaRate={employerFicaRate} onClose={() => setPaymentsFor(null)} />}
     </Screen>
   );
