@@ -561,7 +561,7 @@
       "no": "नहीं",
       "categoryLabel": "श्रेणी: {{category}}",
       "changeCategory": "बदलें",
-      "closeCategory": "हो गया",
+      "pickTitle": "यह खर्च कहाँ जाए?",
       "required": "सेव करने के लिए हाँ या नहीं चुनें।",
       "noHint": "खर्च के रूप में कुछ भी दर्ज नहीं होगा। फ़ाइल दस्तावेज़ में रहेगी।",
       "notRecordedAll": "खर्च के रूप में कुछ भी दर्ज नहीं हुआ। फ़ाइल दस्तावेज़ में सेव है।",
@@ -1762,7 +1762,10 @@
     "namePlaceholder": "जैसे Truck Wash",
     "bucketLabel": "Schedule C बकेट",
     "bucketNote": "आवश्यक ताकि यह श्रेणी हमेशा आपके कर अनुमान में गिनी जाए।",
-    "saveFailedTitle": "सहेजना विफल"
+    "saveFailedTitle": "सहेजना विफल",
+    "suggested": "सुझाया गया",
+    "searchPlaceholder": "श्रेणियाँ खोजें",
+    "createCategory": "+ एक श्रेणी बनाएँ"
   },
   "tutorial": {
     "skip": "छोड़ें",

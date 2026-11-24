@@ -556,7 +556,7 @@
       "no": "No",
       "categoryLabel": "Category: {{category}}",
       "changeCategory": "Change",
-      "closeCategory": "Done",
+      "pickTitle": "Where does this expense go?",
       "required": "Choose Yes or No to save.",
       "noHint": "Nothing will be recorded as an expense. The file stays in Documents.",
       "notRecordedAll": "Nothing was recorded as an expense. The file is saved in Documents.",
@@ -1757,7 +1757,10 @@
     "namePlaceholder": "مثال: غسيل الشاحنة",
     "bucketLabel": "فئة Schedule C",
     "bucketNote": "مطلوب حتى تُحتسب هذه الفئة دائمًا ضمن تقدير ضرائبك.",
-    "saveFailedTitle": "فشل الحفظ"
+    "saveFailedTitle": "فشل الحفظ",
+    "suggested": "Suggested",
+    "searchPlaceholder": "Search categories",
+    "createCategory": "+ Create a category"
   },
   "tutorial": {
     "skip": "تخطي",

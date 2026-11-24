@@ -556,7 +556,7 @@
       "no": "Hayır",
       "categoryLabel": "Kategori: {{category}}",
       "changeCategory": "Değiştir",
-      "closeCategory": "Tamam",
+      "pickTitle": "Bu gider nereye gitsin?",
       "required": "Kaydetmek için Evet veya Hayır seçin.",
       "noHint": "Gider olarak hiçbir şey kaydedilmeyecek. Dosya Belgeler'de kalır.",
       "notRecordedAll": "Gider olarak hiçbir şey kaydedilmedi. Dosya Belgeler'de kayıtlı.",
@@ -1757,7 +1757,10 @@
     "namePlaceholder": "örn. Kamyon Yıkama",
     "bucketLabel": "Schedule C Kategorisi",
     "bucketNote": "Bu kategorinin vergi tahmininize her zaman dahil olması için gereklidir.",
-    "saveFailedTitle": "Kaydetme başarısız"
+    "saveFailedTitle": "Kaydetme başarısız",
+    "suggested": "Önerilen",
+    "searchPlaceholder": "Kategori ara",
+    "createCategory": "+ Kategori oluştur"
   },
   "tutorial": {
     "skip": "Atla",

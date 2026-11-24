@@ -556,7 +556,7 @@
       "no": "No",
       "categoryLabel": "Categoría: {{category}}",
       "changeCategory": "Cambiar",
-      "closeCategory": "Listo",
+      "pickTitle": "¿A dónde va este gasto?",
       "required": "Elija Sí o No para guardar.",
       "noHint": "No se registrará nada como gasto. El archivo queda en Documentos.",
       "notRecordedAll": "No se registró nada como gasto. El archivo está guardado en Documentos.",
@@ -1757,7 +1757,10 @@
     "namePlaceholder": "ej. Lavado de Camión",
     "bucketLabel": "Categoría de Schedule C",
     "bucketNote": "Requerido para que esta categoría siempre cuente en tu estimado de impuestos.",
-    "saveFailedTitle": "Error al guardar"
+    "saveFailedTitle": "Error al guardar",
+    "suggested": "Sugerida",
+    "searchPlaceholder": "Buscar categorías",
+    "createCategory": "+ Crear una categoría"
   },
   "tutorial": {
     "skip": "Omitir",

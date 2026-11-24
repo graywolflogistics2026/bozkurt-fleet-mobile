@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { CategoryPicker } from '@/src/components/CategoryPicker';
+import { CategoryPickerSheet } from '@/src/components/CategoryPicker';
 import { MutedText } from '@/src/components/ui';
 import { formatMoney } from '@/src/i18n/format';
 import { effectiveDeductible, expenseDecisionPath, type ExpenseChoiceState } from '@/src/import/expenseDecision';
@@ -14,6 +14,11 @@ import { colors, radii, spacing, typography } from '@/src/theme';
 // one answer for the whole document ("apply to all items") plus a per-item
 // override, and an editable category for every Yes row. The AI's own
 // taxDeductible value is never shown or used.
+// CATEGORY POP-UP (owner 2026-11-24, after the phone test): Yes on one item
+// opens the full category list right away (CategoryPickerSheet), suggested
+// category first. "Yes to all" opens nothing; each item shows a big
+// "Category: X · Change" row that opens the same pop-up. Closing the pop-up
+// keeps the suggestion. Saving is unchanged.
 
 type Row = { label: string; amount: number; category: string };
 
@@ -81,16 +86,22 @@ export function ExpenseDeductibleChoice({
 }) {
   const { t, i18n } = useTranslation();
   const rows = useMemo(() => choiceRows(extraction, userId, categoryOverride), [extraction, userId, categoryOverride]);
-  const [openPicker, setOpenPicker] = useState<number | null>(null);
+  // The mapped (AI-suggested) category of each row, before any user change.
+  const suggestedRows = useMemo(() => choiceRows(extraction, userId, ''), [extraction, userId]);
+  const [sheetFor, setSheetFor] = useState<number | null>(null);
   if (rows.length === 0) return null;
   const multi = rows.length > 1;
   const usesOverride = extraction.docType === 'other';
 
   function setAll(deductible: boolean) {
     onChange({ ...value, all: deductible, perRow: {} });
+    // One item: Yes opens the category pop-up at once. "Yes to all" on
+    // several items opens nothing (each keeps its suggested category).
+    if (deductible && rows.length === 1) setSheetFor(0);
   }
   function setRow(i: number, deductible: boolean) {
     onChange({ ...value, perRow: { ...value.perRow, [i]: deductible } });
+    if (deductible) setSheetFor(i);
   }
   function categoryOf(i: number): string {
     if (usesOverride) return categoryOverride || rows[i].category;
@@ -99,26 +110,35 @@ export function ExpenseDeductibleChoice({
   function setCategory(i: number, category: string) {
     if (usesOverride) onCategoryOverride(category);
     else onChange({ ...value, categories: { ...value.categories, [i]: category } });
-    setOpenPicker(null);
+    setSheetFor(null);
   }
 
   function categoryLine(i: number) {
     return (
-      <View style={{ marginTop: spacing.xs }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-          <MutedText>{t('importScreen.deductChoice.categoryLabel', { category: categoryOf(i) })}</MutedText>
-          <Pressable onPress={() => setOpenPicker(openPicker === i ? null : i)} hitSlop={8} style={{ marginStart: spacing.sm }}>
-            <Text style={{ color: colors.accent, fontWeight: '700' }}>
-              {openPicker === i ? t('importScreen.deductChoice.closeCategory') : t('importScreen.deductChoice.changeCategory')}
-            </Text>
-          </Pressable>
-        </View>
-        {openPicker === i && (
-          <View style={{ marginTop: spacing.xs }}>
-            <CategoryPicker kind="expense" value={categoryOf(i)} onChange={(c) => setCategory(i, c)} />
-          </View>
-        )}
-      </View>
+      <Pressable
+        onPress={() => setSheetFor(i)}
+        accessibilityRole="button"
+        style={({ pressed }) => ({
+          minHeight: 48,
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginTop: spacing.xs,
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.md,
+          borderRadius: radii.sm,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card2,
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Text style={{ flex: 1, color: colors.text, fontSize: typography.size.md, fontWeight: '600' }}>
+          {t('importScreen.deductChoice.categoryLabel', { category: categoryOf(i) })}
+        </Text>
+        <Text style={{ color: colors.accent, fontSize: typography.size.md, fontWeight: '700', marginStart: spacing.sm }}>
+          {t('importScreen.deductChoice.changeCategory')}
+        </Text>
+      </Pressable>
     );
   }
 
@@ -167,6 +187,16 @@ export function ExpenseDeductibleChoice({
       ) : allNo ? (
         <MutedText style={{ marginTop: spacing.xs }}>{t('importScreen.deductChoice.noHint')}</MutedText>
       ) : null}
+
+      <CategoryPickerSheet
+        visible={sheetFor !== null && answered[sheetFor] === true}
+        kind="expense"
+        value={sheetFor !== null ? categoryOf(sheetFor) : ''}
+        suggested={sheetFor !== null ? suggestedRows[sheetFor]?.category || null : null}
+        title={t('importScreen.deductChoice.pickTitle')}
+        onSelect={(c) => sheetFor !== null && setCategory(sheetFor, c)}
+        onClose={() => setSheetFor(null)}
+      />
     </View>
   );
 }

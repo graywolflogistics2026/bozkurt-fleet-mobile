@@ -556,7 +556,7 @@
       "no": "No",
       "categoryLabel": "Category: {{category}}",
       "changeCategory": "Change",
-      "closeCategory": "Done",
+      "pickTitle": "Where does this expense go?",
       "required": "Choose Yes or No to save.",
       "noHint": "Nothing will be recorded as an expense. The file stays in Documents.",
       "notRecordedAll": "Nothing was recorded as an expense. The file is saved in Documents.",
@@ -1757,7 +1757,10 @@
     "namePlaceholder": "e.g. Truck Wash",
     "bucketLabel": "Schedule C Bucket",
     "bucketNote": "Required so this category always counts toward your tax estimate.",
-    "saveFailedTitle": "Save failed"
+    "saveFailedTitle": "Save failed",
+    "suggested": "Suggested",
+    "searchPlaceholder": "Search categories",
+    "createCategory": "+ Create a category"
   },
   "tutorial": {
     "skip": "Skip",
