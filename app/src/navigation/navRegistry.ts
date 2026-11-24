@@ -233,7 +233,9 @@ export type MenuReach =
   | { kind: 'parent'; parent: string }
   // A button in Settings.
   | { kind: 'settings' }
-  // Hidden from the menu on purpose; still listed on the Reports tab.
+  // Hidden from the PHONE menu on purpose; on phones it is on the Reports
+  // tab. The wide sidebar has no Reports tab, so there it is a row
+  // (SIDEBAR_ONLY_AFTER below).
   | { kind: 'reports' }
   // Hidden by a FEATURE_FLAGS key that is off (route kept).
   | { kind: 'featureFlag' };
@@ -255,9 +257,24 @@ export function menuItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
 }
 
 // The wide sidebar (768px+, no tab bar): Home on top, then the menu rows.
+// Rows only the wide sidebar shows, each placed right after a menu row
+// (owner 2026-11-23: 768px+ has no Reports tab, so Scorecard is a sidebar
+// row after Profit Analysis; it stays hidden in the phone menu).
+export const SIDEBAR_ONLY_AFTER: Readonly<Record<string, string>> = {
+  '/(tabs)/more/scorecard': '/(tabs)/more/profit-analysis',
+};
+
 export function sidebarItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {
-  const home = byHref(groups).get('/(tabs)');
-  return [...(home ? [home] : []), ...menuItems(groups)];
+  const items = byHref(groups);
+  const home = items.get('/(tabs)');
+  const rows = menuItems(groups).flatMap((row) => {
+    const extra = Object.entries(SIDEBAR_ONLY_AFTER)
+      .filter(([, after]) => after === (row.href as string))
+      .map(([href]) => items.get(href))
+      .filter((i): i is NavItem => !!i);
+    return [row, ...extra];
+  });
+  return [...(home ? [home] : []), ...rows];
 }
 
 export function moreTabItems(groups: NavGroup[] = NAV_GROUPS): NavItem[] {

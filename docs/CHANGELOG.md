@@ -10,6 +10,10 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-23 — Wide sidebar: Scorecard row (owner)
+
+The wide sidebar (768px+) has no Reports tab, so Scorecard is a sidebar row after Profit Analysis (`SIDEBAR_ONLY_AFTER`, `navRegistry.ts`). It stays hidden in the phone menu. `menuReachability.test.ts` checks the Reports reason on phones and the sidebar row on wide screens. Same day: `nav.openSettings`/`nav.closeMenu` translated in ar and uk (owner text).
+
 ## 2026-11-23 — Tab bar Home | Import | Reports | Menu, stage 1 commit 2 (owner)
 
 Transactions leaves the phone tab bar (`href: null`, route kept, like Deductions and Truck Health). It is a menu row (since commit 1), and back from it still goes Home. Import stays the raised accent "+" button in slot 2; its label is now accent-coloured and bold. `TAB_BAR_HREFS` is now Home + Import (it still listed Deductions and Truck Health). No number changed. Ships via `eas update`.

@@ -13,6 +13,7 @@ import {
   flattenNavItems,
   menuItems,
   sidebarItems,
+  SIDEBAR_ONLY_AFTER,
 } from '@/src/navigation/navRegistry';
 import { FEATURE_FLAGS, type FeatureFlagKey } from '@/src/config/featureFlags';
 
@@ -50,8 +51,11 @@ describe('every route is reachable', () => {
       } else if (reach.kind === 'settings') {
         expect(settings).toContain(href);
       } else if (reach.kind === 'reports') {
+        // Phones: on the Reports tab (a tab bar exists only below 768px).
         const inReports = NAV_GROUPS.filter((g) => REPORTS_SECTIONS.includes(g.titleKey)).some((g) => g.items.some((i) => (i.href as string) === href));
         expect(inReports).toBe(true);
+        // Wide screens have no Reports tab: it must be a sidebar row.
+        expect(sidebarItems().map((i) => i.href as string)).toContain(href);
       } else {
         // Hidden only while its flag is off; on, it is back in the registry output.
         const allOn = Object.fromEntries(Object.keys(FEATURE_FLAGS).map((k) => [k, true])) as Record<FeatureFlagKey, boolean>;
@@ -79,9 +83,13 @@ describe('the flat menu (owner decisions 2026-11-23)', () => {
     }
   });
 
-  test('wide sidebar: Home on top, then exactly the menu rows', () => {
+  test('wide sidebar: Home on top, then the menu rows, plus Scorecard right after Profit Analysis', () => {
     const side = sidebarItems().map((i) => i.href as string);
-    expect(side).toEqual(['/(tabs)', ...menu]);
+    const expected = ['/(tabs)', ...menu];
+    expected.splice(expected.indexOf('/(tabs)/more/profit-analysis') + 1, 0, '/(tabs)/more/scorecard');
+    expect(side).toEqual(expected);
+    // Sidebar-only rows are never phone menu rows.
+    for (const href of Object.keys(SIDEBAR_ONLY_AFTER)) expect(menu).not.toContain(href);
   });
 
   test('MenuSheet and WideSidebar render the flat lists, with no section headings', () => {
