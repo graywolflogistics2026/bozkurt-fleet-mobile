@@ -23,13 +23,19 @@ Follow-up (owner 2026-11-23, after Stage 2), CURRENT state:
   to Loans, titled `nav.assetsEquipment` (`MENU_LABEL_OVERRIDES`
   removed); its Equipment card stays. The "Renewals & Expiry Dates" card on
   Documents is removed (that screen is only a menu row now). Every parent
-  card shares one accent look (`RelatedScreenCard`). CURRENT final menu:
+  card shares one accent look (`RelatedScreenCard`). Final menu then:
   18 rows; Business = Trucks, Drivers, Capital Account, Documents, Renewals
   & Expiry Dates.
 - 2026-11-24 follow-up: no menu change (still 18 rows). Screen-level work
   only: Accountant Package order (estimates banner before Export), a
   read-only driver detail sheet on Drivers, and the shared top-right
   delete mark (`RowDeleteButton`) on the list screens.
+- 2026-11-24 (owner): Maintenance is no longer a menu row: a card on Truck
+  Health (`?from=truck-health`, so back returns to Truck Health; the
+  back-to-parent hook is shared, `src/navigation/useBackToParent.tsx`).
+  Screen, route and data unchanged; Documents/Settlements linked records,
+  the Profit Explainer, the daily tip and Reports still open it. CURRENT
+  final menu: 17 rows; Expenses = Fuel, Tolls & Fees, Deductions.
 - Scorecard is a third card on Operating P&L (after Cash Flow and Profit
   Analysis). Still hidden from the phone menu, still on the Reports tab,
   still linked from Truck Comparison. The wide-sidebar-only Scorecard row

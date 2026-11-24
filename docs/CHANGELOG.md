@@ -10,6 +10,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Maintenance moves from the menu to a Truck Health card (owner)
+
+- `MENU_SECTIONS` Expenses = Fuel, Tolls & Fees, Deductions; menu and wide sidebar 18 -> 17 rows; tab bar unchanged. `MENU_REACHED_FROM`: Maintenance -> Truck Health (`menuReachability.test.ts`).
+- Truck Health: `RelatedScreenCard` to Maintenance with `from=truck-health`; back returns to Truck Health. Transactions' back-to-parent hook moved to `src/navigation/useBackToParent.tsx` (shared, same behaviour). Key `truckHealth.maintenanceCard` (7 locales).
+- Screen, route, data and numbers unchanged; Documents/Settlements links, Profit Explainer, daily tip and Reports still open Maintenance. No SQL, no Edge Function. Ships via `eas update`.
+
 ## 2026-11-24 — For Prime Inc Drivers: custom categories wait for a line too (owner)
 
 - A user-created category (non-empty, not in `CANONICAL_CATEGORIES`, `isCustomCategory()`) is now in `needsManualLine()`: in scope with no line and no suggestion, so it shows in "Needs your choice", "Not in the grand total", the PDF/Excel Unassigned block, the badge and the chip (same function, same origin rule). Before, such rows never reached the sheet.
