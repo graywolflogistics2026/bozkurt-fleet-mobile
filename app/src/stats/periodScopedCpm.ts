@@ -13,7 +13,8 @@
 // changes — the only thing that moved is WHERE the math actually happens.
 import { buildTruckComparison, type ComparisonTruck, type ComparisonSettlement, type ComparisonDeduction, type ComparisonFuel, type ComparisonMaintenance, type ComparisonToll, type TruckComparisonResult, type TruckComparisonRow } from '@/src/stats/truckComparison';
 import { computeKpis, type KpiReimbursement, type KpiResult } from '@/src/stats/kpi';
-import { filterSettlementLinkedRowsToWindow } from '@/src/stats/trueProfit';
+import { filterSettlementLinkedRowsToWindow, reducesTrueProfit } from '@/src/stats/trueProfit';
+import { withoutCoveredTolls } from '@/src/stats/tollsSummary';
 import type { CanonicalCpmResult } from '@/src/stats/cpm';
 import {
   resolveHeroPeriodDateWindow,
@@ -94,7 +95,13 @@ export function buildPeriodScopedCpm(
   const fFuel = filterSettlementLinkedRowsToWindow(fuelPurchases, (f) => f.purchase_date, fSettlementIds, inWindow);
   const fReimbursements = filterSettlementLinkedRowsToWindow(reimbursements, (r) => r.reimb_date, fSettlementIds, inWindow);
   const fMaintenance = filterRowsByDateWindow(maintenanceRecords, (m) => m.service_date, window);
-  const fTolls = filterRowsByDateWindow(tolls, (t) => t.toll_date, window);
+  // TOLL RULE IN THE PROFIT CORE (owner 2026-11-24, docs/decisions/
+  // toll-rule-profit-core-proposal.md): a tolls row under its settlement's
+  // toll line is that line's breakdown and never counts on top of it.
+  // Decided on the FULL lists, before any window or scope; in profit a line
+  // covers only when it reduces profit itself (owner decision T6(b)).
+  // computeKpis() below applies the same rule to the unfiltered lists itself.
+  const fTolls = filterRowsByDateWindow(withoutCoveredTolls(tolls, deductions, reducesTrueProfit), (t) => t.toll_date, window);
 
   const comparison = buildTruckComparison(trucks, fSettlements, fLoads, fDeductions, fFuel, fMaintenance, fTolls, fReimbursements);
   const scopedRow = activeTruckId ? (comparison.rows.find((r) => r.truckId === activeTruckId) ?? null) : null;

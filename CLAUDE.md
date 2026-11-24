@@ -233,8 +233,10 @@ use nullable `settlement_id`; carrier lives on `settlements.carrier` and
 is inherited via `settlement_id`. Layer 2 (general ledger): grand totals
 (`computeKpis`, `sumCanonicalExpenses`, `calcTrueProfit`,
 `buildProfitAnalysis`) never filter by source — every expense counts once;
-the only exclusion is the double-count guard for settlement-linked fuel.
-Origin rule: out-of-pocket vs settlement-withheld is checked FIRST, alone,
+the only exclusions are the double-count guards: settlement-linked fuel,
+and `tolls` rows under their settlement's toll line (2026-11-24,
+`withoutCoveredTolls()`, applied to full lists before any window;
+`docs/decisions/toll-rule-profit-core-proposal.md`). Origin rule: out-of-pocket vs settlement-withheld is checked FIRST, alone,
 on every row; only out-of-pocket rows can get an `accountant_category` or
 appear on "For Prime Inc Drivers" (sole exception: Prime withheld lumper
 lines, read-only). Tax side: invariant #1. Full:

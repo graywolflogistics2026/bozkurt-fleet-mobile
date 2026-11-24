@@ -12,7 +12,8 @@ import { isCarrierPayrollPayment } from '@/src/import/carrierPayroll';
 import { calcCanonicalCpm, carrierWithholdsLoanPayment, type CanonicalCpmResult } from '@/src/stats/cpm';
 import { calcTruckCostBasisWeekly, type TruckCostBasisInput } from '@/src/stats/truckCostBasis';
 import { allocateByMiles } from '@/src/stats/costAllocation';
-import { layeredGross, splitSettlementLayers } from '@/src/stats/trueProfit';
+import { layeredGross, reducesTrueProfit, splitSettlementLayers } from '@/src/stats/trueProfit';
+import { withoutCoveredTolls } from '@/src/stats/tollsSummary';
 import type { SettlementStatement } from '@/src/import/settlementStatement';
 
 // SELF-TEST FIX (owner decision, MULTI-TRUCK MODEL re-audit) — Home and
@@ -169,6 +170,14 @@ export function buildTruckComparison(
   drivers: ComparisonDriver[] = []
 ): TruckComparisonResult {
   const carrierWithholdsLoan = carrierWithholdsLoanPayment(allDeductions);
+  // TOLL RULE IN THE PROFIT CORE (owner 2026-11-24, docs/decisions/
+  // toll-rule-profit-core-proposal.md): a tolls row under its settlement's
+  // toll line is that line's breakdown and never counts on top of it.
+  // Decided on the FULL lists, before any window or scope; in profit a line
+  // covers only when it reduces profit itself (owner decision T6(b)).
+  // Safe on lists a caller already filtered by date (periodScopedCpm): a
+  // second pass removes nothing more.
+  allTolls = withoutCoveredTolls(allTolls, allDeductions, reducesTrueProfit);
   // TWO SETTLEMENT LAYERS (owner decision 2026-10-13): statement-backed
   // Prime weeks count from Prime's statement; their linked rows are
   // removed here so nothing is counted twice.

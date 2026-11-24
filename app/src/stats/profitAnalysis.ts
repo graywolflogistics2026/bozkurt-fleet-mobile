@@ -1,5 +1,6 @@
 import type { Benchmark } from '@/src/types/db';
-import { filterSettlementLinkedRowsToWindow, layeredExpenseBreakdown, layeredGross } from '@/src/stats/trueProfit';
+import { filterSettlementLinkedRowsToWindow, layeredExpenseBreakdown, layeredGross, reducesTrueProfit } from '@/src/stats/trueProfit';
+import { withoutCoveredTolls } from '@/src/stats/tollsSummary';
 import type { SettlementStatement } from '@/src/import/settlementStatement';
 import { addDaysDateOnly, todayDateOnly } from '@/src/lib/dateOnly';
 
@@ -162,7 +163,12 @@ export function buildProfitAnalysis(
   const windowFuel = filterSettlementLinkedRowsToWindow(fuelPurchases, (f) => f.purchase_date, inWindowIds, inRange);
   const windowReimbursements = filterSettlementLinkedRowsToWindow(reimbursements, (r) => r.reimb_date, inWindowIds, inRange);
   const windowMaintenance = maintenanceRecords.filter((m) => inRange(m.service_date));
-  const windowTolls = tolls.filter((t) => inRange(t.toll_date));
+  // TOLL RULE IN THE PROFIT CORE (owner 2026-11-24, docs/decisions/
+  // toll-rule-profit-core-proposal.md): a tolls row under its settlement's
+  // toll line is that line's breakdown and never counts on top of it.
+  // Decided on the FULL lists, before any window or scope; in profit a line
+  // covers only when it reduces profit itself (owner decision T6(b)).
+  const windowTolls = withoutCoveredTolls(tolls, deductions, reducesTrueProfit).filter((t) => inRange(t.toll_date));
 
   const breakdown = layeredExpenseBreakdown(inWindow, windowDeductions, windowFuel, windowMaintenance, windowTolls, windowReimbursements);
   const netIncome = revenue - breakdown.total;

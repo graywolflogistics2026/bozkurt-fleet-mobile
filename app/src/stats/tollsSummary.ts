@@ -223,13 +223,18 @@ export function tollLineSettlementIds<D extends TollRuleDeduction>(
 // settlement with a toll line. Safe to run twice, or again on a filtered
 // subset: a row left after a pass over the full list has no covering line
 // anywhere, so no subset can cover it.
-export function withoutCoveredTolls<T extends { settlement_id?: string | null }, D extends TollRuleDeduction>(
+// (Some row types, e.g. truckComparison's ComparisonToll, do not declare
+// settlement_id; the database rows always carry it.)
+export function withoutCoveredTolls<T extends object, D extends TollRuleDeduction>(
   tolls: ReadonlyArray<T>,
   deductions: ReadonlyArray<D>,
   covers?: (d: D) => boolean
 ): T[] {
   const covered = tollLineSettlementIds(deductions, covers);
-  return tolls.filter((t) => !t.settlement_id || !covered.has(t.settlement_id));
+  return tolls.filter((t) => {
+    const sid = (t as { settlement_id?: string | null }).settlement_id;
+    return !sid || !covered.has(sid);
+  });
 }
 
 export function tollRuleByIndex(

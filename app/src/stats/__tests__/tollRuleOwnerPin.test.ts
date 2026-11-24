@@ -12,6 +12,7 @@ import { HERO_PERIODS } from '@/src/stats/heroPeriod';
 import { buildTruckComparison } from '@/src/stats/truckComparison';
 import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { buildWeeklyTrueProfitTrend, calcTrueProfit } from '@/src/stats/trueProfit';
+import { computeSettlementWeekKpi } from '@/src/stats/settlementWeek';
 import { NOW, PRIME, deductions as ownerDeductions, settlements as ownerSettlements, tolls as ownerTolls } from './fixtures/ownerTolls';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -361,6 +362,29 @@ const BEFORE = {
   "trueProfit": 11073.53
 };
 
-test('T1: owner toll data on statement-backed weeks — every profit figure as recorded before the change', () => {
-  expect(ownerSnapshot()).toEqual(BEFORE);
+// The ONE figure the toll rule changes, accepted by the owner 2026-11-24:
+// the weekly trend's week ending 09/04 was 1,967.75 because four of the
+// 09/18 week's own plazas (HCTRA/NJTP 8.00 x 4, dated 09/01-09/04, already
+// inside 09/18's toll line 356.69) fell into its 7-day window. Now
+// 1,999.75 (+32.00, the double count removed). Every other figure is the
+// recorded one.
+const AFTER = {
+  ...BEFORE,
+  weekly: BEFORE.weekly.map((w) => (w[0] === '2026-09-04' ? ['2026-09-04', 2000, 1999.75] : w)),
+};
+
+test('T1: owner toll data on statement-backed weeks — every profit figure as recorded before the change, except week 09/04 (+32.00, accepted)', () => {
+  expect(BEFORE.weekly.find((w) => w[0] === '2026-09-04')).toEqual(['2026-09-04', 2000, 1967.75]);
+  expect(ownerSnapshot()).toEqual(AFTER);
+});
+
+// Week 09/04 on the Settlements screen (the settlement-week header,
+// computeSettlementWeekKpi: this settlement's own rows + own rows dated that
+// week) vs the weekly trend. The header never took 09/18's plazas, so it
+// was already 1,999.75; the trend was 1,967.75 and now agrees.
+test('week 09/04: Settlements header = weekly trend = 1,999.75', () => {
+  const s0904 = settlements.find((s) => s.id === 's0904')!;
+  const header = computeSettlementWeekKpi(s0904 as never, { trucks: trucks as never, loads: [], deductions: deductions as never, fuelPurchases: [], maintenanceRecords: [], tolls: tolls as never, reimbursements: [] });
+  const trend = buildWeeklyTrueProfitTrend(settlements as never, deductions as never, [], [], tolls as never, []).find((w) => w.weekEnding === '2026-09-04')!;
+  expect([r2(header.net), r2(trend.net)]).toEqual([1999.75, 1999.75]);
 });

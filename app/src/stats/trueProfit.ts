@@ -1,6 +1,7 @@
 import { classIsOutOfProfit } from '@/src/import/lineClass';
 import type { Deduction, Settlement } from '@/src/types/db';
 import { weekStartFromEnding } from '@/src/stats/cashFlowTrend';
+import { withoutCoveredTolls } from '@/src/stats/tollsSummary';
 import { statementWeekOf, type StatementSettlement, type StatementWeek } from '@/src/stats/statementRoute';
 
 // TRUE-PROFIT CONSISTENCY (owner decision 2026-07-31, follow-up to the
@@ -401,6 +402,12 @@ export function buildWeeklyTrueProfitTrend(
   tolls: Array<CanonicalToll & Linked & { toll_date?: string | null }>,
   reimbursements: Array<CanonicalReimbursement & { settlement_id?: string | null; reimb_date?: string | null }>
 ): TrueProfitWeeklyPoint[] {
+  // TOLL RULE IN THE PROFIT CORE (owner 2026-11-24, docs/decisions/
+  // toll-rule-profit-core-proposal.md): a tolls row under its settlement's
+  // toll line is that line's breakdown and never counts on top of it.
+  // Decided on the FULL lists, before any window or scope; in profit a line
+  // covers only when it reduces profit itself (owner decision T6(b)).
+  tolls = withoutCoveredTolls(tolls, deductions, reducesTrueProfit);
   const weekEndings = [...new Set(settlements.filter((s) => s.week_ending).map((s) => s.week_ending as string))].sort();
 
   return weekEndings.map((weekEnding) => {

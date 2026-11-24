@@ -10,6 +10,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-24 — Toll rule in the profit core (no double count without a statement)
+
+A `tolls` row under its settlement's toll line counts once (`withoutCoveredTolls()`, `tollsSummary.ts`). It is applied to the full lists in `computeKpis`, `buildWeeklyTrueProfitTrend`, `buildProfitAnalysis`, `buildPeriodScopedCpm` and `buildTruckComparison`. In profit a line covers only when it reduces profit (owner T6(b)); the Tolls & Fees screen keeps its rule.
+- Owner data (T1): every figure unchanged except the weekly trend's week 09/04, 1,967.75 → 1,999.75 (+32.00, accepted). Four of 09/18's own plazas dated 09/01–09/04 no longer count in 09/04; the trend now matches the 09/04 Settlements header (1,999.75 before and after).
+- Other carrier, no statement (fixture): expenses 292.40 → 252.40, profit 2,707.60 → 2,747.60, bridge difference −40.00 → 0.
+- Not changed (reported): `lineRouteProfit()` (import card estimate, `reviewVerdict.ts`) still adds plazas on top. Tests: `tollRuleOwnerPin`, `tollRuleProfitCore`.
+
 ## 2026-11-24 — AI consent shipped (owner)
 
 §89 applied: right after the run, the verify showed asked 0 / allowed 0; later the owner's own profile showed both columns filled. `pending_89.sql` removed. OTA update published. ai-advisor and ai-import redeployed; ai-import is at commit fe85b4b, deployed 2026-11-24T02:16Z. Live tests passed: AI Coach briefing, photo read, and consent Off/On in Settings > Privacy. Still open: attorney wording for retention and no-training, and the Apple / Google privacy forms (PENDING_SQL "Also still open"). No code change.

@@ -91,7 +91,7 @@ import { filterRowsByDateWindow, type DateWindow } from '@/src/stats/heroPeriodW
 import { calcPerDiemDays } from '@/src/tax/perDiem';
 import { isOrphanSettlementRow, settlementDocumentIds, type OriginRow } from '@/src/stats/ownExpenseOrigin';
 import { buildProfitExplanation, type ProfitExplanation, type WithheldLine } from '@/src/stats/profitExplainer';
-import { tollRuleByIndex } from '@/src/stats/tollsSummary';
+import { tollRuleByIndex, withoutCoveredTolls } from '@/src/stats/tollsSummary';
 
 // CROSS-CHECK TOLLS (owner 2026-11-14): the Tolls & Fees rule
 // (tollsSummary.ts) — a week's itemized tolls rows under its own toll/fee
@@ -297,6 +297,13 @@ export function computeKpis(inputs: KpiInputs, options: { explain?: boolean } = 
   assertArray(inputs.maintenanceRecords, 'maintenanceRecords');
   assertArray(inputs.tolls, 'tolls');
   assertArray(inputs.reimbursements, 'reimbursements');
+
+  // TOLL RULE IN THE PROFIT CORE (owner 2026-11-24, docs/decisions/
+  // toll-rule-profit-core-proposal.md): a tolls row under its settlement's
+  // toll line is that line's breakdown and never counts on top of it.
+  // Decided on the FULL lists, before any window or scope; in profit a line
+  // covers only when it reduces profit itself (owner decision T6(b)).
+  inputs = { ...inputs, tolls: withoutCoveredTolls(inputs.tolls, inputs.deductions, reducesTrueProfit) };
 
   const { loads, truckScope, manualMilesOverride, window } = inputs;
   const settlementDocIds = new Set(
