@@ -555,19 +555,20 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
       payment_method: payMethod,
       source: 'import',
       warranty_years: warrantyYears,
-      tax_deductible: defaultTaxDeductible(category),
+      // USER DECIDES DEDUCTIBILITY (owner decision 2026-11-24): this row is
+      // only ever written after the user chose "Yes, deductible" on the
+      // import card (a "No" writes no row at all, aiImportSave.ts), so it
+      // is saved deductible whatever its category. The AI never decides.
+      tax_deductible: true,
     },
     isPersonalPayment: personal,
   });
 
-  // Meals & advance repayments (owner decision 2026-07-17): the AI's
-  // document-level taxDeductible flag (already extracted for every docType,
-  // app/src/import/types.ts Extraction.taxDeductible) is the fallback signal
-  // for a standalone restaurant receipt whose store/item names don't match
-  // isRestaurantPurchase()'s keyword list (e.g. an independent diner with no
-  // recognizable chain name) — when the AI has flagged the whole document
-  // non-deductible, every real item on it is a meal, not a guessed category.
-  const wholeReceiptIsMeal = d.taxDeductible === false;
+  // USER DECIDES DEDUCTIBILITY (owner decision 2026-11-24): the AI's
+  // document-level taxDeductible flag is ignored completely. It used to
+  // force every item of an AI-flagged restaurant receipt into Meals; the
+  // keyword-based Meals category (guessCategory) still applies, and the
+  // user can pick any category on the import card.
 
   // Receipt with ONLY service/fee lines — nothing to fold into. Keep them
   // as their own row(s), flagged for manual review (CLAUDE.md invariant #3).
@@ -617,11 +618,7 @@ export function mapPurchase(d: Extraction, userId: string): PurchaseDeductionMap
     // dollar amount, only available here (guessCategory()'s own signature
     // has no amount param), so this override is applied at this call site
     // rather than inside guessCategory() itself.
-    const cat = wholeReceiptIsMeal
-      ? 'Meals (per diem covered)'
-      : isMajorRepairOverhaul(item.name, finalCost)
-        ? 'Major Repairs & Overhauls'
-        : guessCategory(item.name, storeName);
+    const cat = isMajorRepairOverhaul(item.name, finalCost) ? 'Major Repairs & Overhauls' : guessCategory(item.name, storeName);
     const note = getCatNote(cat);
     const qtyLabel = item.qty > 1 ? `${item.qty}× ` : '';
     const foldSuffix = item.extra > 0.009 ? ` (incl. ${money(item.extra)} tax/fees/services)` : '';
@@ -663,6 +660,12 @@ export function mapDriverPayment(d: Extraction, userId: string, driverId: string
 // row for it entirely, same treatment as 'w2', rather than mis-booking
 // income as a deduction.
 export const FINANCIAL_DOC_TYPES = ['insurance', 'lease_rent', 'factoring_statement', 'utility_subscription'] as const;
+
+// USER DECIDES DEDUCTIBILITY (owner decision 2026-11-24): docTypes that can
+// reach the generic deduction fallback but stay OUT of scope of the
+// user's Yes/No choice (tolls, fuel, maintenance, settlements keep today's
+// behaviour). See src/import/expenseDecision.ts.
+export const GENERIC_DECISION_OUT_OF_SCOPE: readonly string[] = ['toll', 'fuel', 'maintenance', 'settlement'];
 
 // docs/INDUSTRY_TAXONOMY.md §B canonical categories (renamed 2026-07-10,
 // industry knowledge base — was 'Insurance'/'Factoring Fees').
@@ -795,10 +798,10 @@ export function mapGenericDeduction(d: Extraction, userId: string, categoryOverr
     amount: num(d.totalAmount),
     category,
     source: 'import',
-    // Meals & advance repayments (owner decision 2026-07-17): a smart
-    // default from whatever category this row actually lands on (user's
-    // categoryOverride wins over the AI's suggestedCategory) — never a lock,
-    // still editable per row on the Deductions screen.
-    tax_deductible: defaultTaxDeductible(category),
+    // USER DECIDES DEDUCTIBILITY (owner decision 2026-11-24): an in-scope
+    // document is only written after the user chose "Yes, deductible", so
+    // it is saved deductible. Out-of-scope docTypes (toll, ...) keep the
+    // category smart default (meals & advance repayments, 2026-07-17).
+    tax_deductible: GENERIC_DECISION_OUT_OF_SCOPE.includes(d.docType) ? defaultTaxDeductible(category) : true,
   };
 }

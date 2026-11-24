@@ -36,6 +36,7 @@ import { scrubBankDigits } from '@/src/import/bankDigits';
 import { suggestAccountantCategory } from '@/src/primeDriverExpenses/categoryMapping';
 import { buildTitleFromExtraction, cleanTitle, type TitleContext } from '@/src/data/documentTitle';
 import { ensureDescription } from '@/src/lib/descriptionText';
+import { expenseDecisionPath, resolveExpenseRow, type ExpenseDecision } from '@/src/import/expenseDecision';
 
 // SHARED DESCRIPTION RULE (owner decision 2026-09-24): the last step before
 // any deduction row is inserted — after carrier-code and learned categories
@@ -211,6 +212,14 @@ export type SaveExtractionParams = {
   // preview line — null/undefined falls back to mapGenericDeduction()'s own
   // suggestedCategory/'Other' default, unchanged from before this existed.
   categoryOverride?: string | null;
+  // USER DECIDES DEDUCTIBILITY (owner decision 2026-11-24,
+  // src/import/expenseDecision.ts): the user's Yes/No per expense row of a
+  // receipt/expense document. A "No" row writes NOTHING (no deduction, no
+  // equipment link, no capital contribution); a "Yes" row is saved exactly
+  // as a deductible import, with the user's category if they changed it.
+  // The import card always passes it for an in-scope document; omitted =
+  // every row Yes (the shape older callers and tests use).
+  expenseDecision?: ExpenseDecision | null;
 };
 
 export type SaveExtractionResult = {
@@ -237,6 +246,9 @@ export type SaveExtractionResult = {
   linesNotSaved: boolean;
   // Batch D2 2.4: the certification write succeeded.
   certified: boolean;
+  // USER DECIDES DEDUCTIBILITY: expense rows the user answered "No" to
+  // (nothing written for them). The document and its file are still saved.
+  expenseRowsNotRecorded: number;
 };
 
 // RICH IMPORT ERROR REPORTING (owner decision 2026-08-02, device feedback:
@@ -354,9 +366,13 @@ async function maybeLinkEquipment(
 // Supabase writes.
 export async function saveExtraction(params: SaveExtractionParams): Promise<SaveExtractionResult> {
   const { userId, truckId, driverId, driverShareAmount, fileUri, fileExt, mediaType, createContribution, categoryOverride } = params;
+  let expenseRowsNotRecorded = 0;
   // Never store bank digits (routing/account) the model may have copied
   // into a free-text field — the deposit is read as an amount only.
   let d = scrubBankDigits(params.extraction);
+  // Out-of-scope documents (settlement, fuel, maintenance, tolls, ...)
+  // never take a Yes/No: today's behaviour whatever the caller passed.
+  const expenseDecision: ExpenseDecision = (expenseDecisionPath(d) !== null && params.expenseDecision) || { all: true };
 
   const partial: SaveExtractionPartialState = emptyPartialState();
   // IMPORT SAVE BUG FIX (owner decision 2026-08-05) — rows that failed
@@ -988,6 +1004,8 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // insurance/lease_rent/factoring_statement/utility_subscription — real
     // out-of-pocket business expenses, routed like any other deduction.
     const row = mapFinancialDocDeduction(d, userId);
+    const choice = resolveExpenseRow(expenseDecision, 0);
+    if (choice?.category) row.category = choice.category;
     // "FOR PRIME INC DRIVERS" AUTO-SUGGEST (owner decision 2026-09-17) —
     // this path always produces an out-of-pocket row (source defaults to
     // 'manual'/'import', never 'settlement'), so suggestAccountantCategory()'s
@@ -995,9 +1013,13 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // one shared function rather than assuming eligibility here, so a
     // future change to how this mapper stamps `source` can't silently
     // violate the origin rule.
-    const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
-    const { error } = await supabase.from('deductions').insert(withSafeDescription({ ...row, document_id: documentId, accountant_category: accountantCategory }));
-    if (error) throw new SaveExtractionError('financial-doc-insert', error, partial);
+    if (choice?.deductible === false) {
+      expenseRowsNotRecorded += 1;
+    } else {
+      const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
+      const { error } = await supabase.from('deductions').insert(withSafeDescription({ ...row, document_id: documentId, accountant_category: accountantCategory }));
+      if (error) throw new SaveExtractionError('financial-doc-insert', error, partial);
+    }
   } else if ((COMPLIANCE_DOC_TYPES as readonly string[]).includes(d.docType)) {
     // AI feature package (owner decision 2026-07-10) — find-or-update by
     // (user_id, type): a re-scanned renewal replaces the old due date on
@@ -1038,11 +1060,22 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       if (reimbError) throw new SaveExtractionError('maintenance-warranty-reimbursement-insert', reimbError, partial);
     }
   } else if ((d.docType === 'amazon' || d.docType === 'store') && d.purchase) {
-    const lines = mapPurchase(d, userId);
-    for (const line of lines) {
+    const mapped = mapPurchase(d, userId);
+    for (const line of mapped) {
       const learned = matchLearnedCategory(line.insert.description, learningRules);
       if (learned) line.insert = { ...line.insert, category: learned };
     }
+    // USER DECIDES DEDUCTIBILITY: drop every "No" line before any write; a
+    // category the user picked on the card wins over the learned one.
+    const lines: typeof mapped = [];
+    mapped.forEach((line, i) => {
+      const lineChoice = resolveExpenseRow(expenseDecision, i);
+      if (lineChoice?.deductible === false) {
+        expenseRowsNotRecorded += 1;
+        return;
+      }
+      lines.push(lineChoice?.category ? { ...line, insert: { ...line.insert, category: lineChoice.category } } : line);
+    });
     for (const line of lines) {
       // "FOR PRIME INC DRIVERS" AUTO-SUGGEST (owner decision 2026-09-17) —
       // a standalone purchase line is always out-of-pocket by construction
@@ -1161,31 +1194,37 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     // genuinely relies on suggestAccountantCategory()'s own origin check
     // (not just a defensive formality) to keep a settlement-withheld
     // fallback row from ever receiving an accountant_category.
-    const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
-    const { data: genericDedRow, error } = await supabase
-      .from('deductions')
-      .insert(withSafeDescription({ ...row, document_id: documentId, accountant_category: accountantCategory }))
-      .select('id')
-      .single();
-    if (error) throw new SaveExtractionError('generic-deduction-insert', error, partial);
-    // EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION PASS, item
-    // 7) — the generic fallback can still land in a durable-goods category
-    // (guessCategory()'s own classification, or a user-confirmed
-    // categoryOverride from the NEEDS-REVIEW flow), so it gets the same
-    // treatment as every other deduction-insert call site.
-    if (genericDedRow) {
-      await maybeLinkEquipment(
-        {
-          id: genericDedRow.id as string,
-          category: (row.category as string | null) ?? null,
-          description: (row.description as string | null) ?? null,
-          amount: Number(row.amount ?? 0),
-          ded_date: (row.ded_date as string | null) ?? null,
-          store: (row as { store?: string | null }).store ?? null,
-        },
-        userId,
-        partial
-      );
+    const genericChoice = resolveExpenseRow(expenseDecision, 0);
+    if (genericChoice?.category) row.category = genericChoice.category;
+    if (genericChoice?.deductible === false) {
+      expenseRowsNotRecorded += 1;
+    } else {
+      const accountantCategory = suggestAccountantCategory(row.category as string | null, (row.source as string | null) ?? 'manual');
+      const { data: genericDedRow, error } = await supabase
+        .from('deductions')
+        .insert(withSafeDescription({ ...row, document_id: documentId, accountant_category: accountantCategory }))
+        .select('id')
+        .single();
+      if (error) throw new SaveExtractionError('generic-deduction-insert', error, partial);
+      // EQUIPMENT AUTO-POPULATE (owner decision, SIMPLIFICATION PASS, item
+      // 7) — the generic fallback can still land in a durable-goods category
+      // (guessCategory()'s own classification, or a user-confirmed
+      // categoryOverride from the NEEDS-REVIEW flow), so it gets the same
+      // treatment as every other deduction-insert call site.
+      if (genericDedRow) {
+        await maybeLinkEquipment(
+          {
+            id: genericDedRow.id as string,
+            category: (row.category as string | null) ?? null,
+            description: (row.description as string | null) ?? null,
+            amount: Number(row.amount ?? 0),
+            ded_date: (row.ded_date as string | null) ?? null,
+            store: (row as { store?: string | null }).store ?? null,
+          },
+          userId,
+          partial
+        );
+      }
     }
   }
   // d.docType === 'w2' / 'government_or_misc_income': document saved above,
@@ -1218,5 +1257,6 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
     skippedRows,
     linesNotSaved,
     certified,
+    expenseRowsNotRecorded,
   };
 }

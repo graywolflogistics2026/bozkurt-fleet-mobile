@@ -495,7 +495,10 @@ describe('mapPurchase', () => {
     expect(line.insert.tax_deductible).toBe(true);
   });
 
-  it('a restaurant store name gets category Meals (per diem covered) and tax_deductible:false (meals & advance repayments, owner decision 2026-07-17)', () => {
+  // USER DECIDES DEDUCTIBILITY (owner decision 2026-11-24, owner-approved
+  // test change): the Meals category stays; a purchase row is only written
+  // after the user chose Yes, so it is saved deductible.
+  it('a restaurant store name gets category Meals (per diem covered); the row is tax_deductible:true (the user chose Yes)', () => {
     const d: Extraction = {
       docType: 'amazon',
       date: '2026-06-28',
@@ -504,20 +507,19 @@ describe('mapPurchase', () => {
     };
     const [line] = mapPurchase(d, 'user-1');
     expect(line.insert.category).toBe('Meals (per diem covered)');
-    expect(line.insert.tax_deductible).toBe(false);
+    expect(line.insert.tax_deductible).toBe(true);
   });
 
-  it('the AI-flagged whole-receipt taxDeductible:false forces every item to Meals (per diem covered), even with an unrecognized restaurant name', () => {
-    const d: Extraction = {
+  it('the AI taxDeductible:false is ignored completely (no forced Meals category, same rows as without it)', () => {
+    const base: Extraction = {
       docType: 'amazon',
       date: '2026-06-28',
       vendor: "Joe's Kitchen",
-      taxDeductible: false,
       purchase: { items: [{ name: 'Lunch special', qty: 1, price: 15 }], total: 15 },
     };
-    const [line] = mapPurchase(d, 'user-1');
-    expect(line.insert.category).toBe('Meals (per diem covered)');
-    expect(line.insert.tax_deductible).toBe(false);
+    const flagged = mapPurchase({ ...base, taxDeductible: false }, 'user-1');
+    expect(flagged).toEqual(mapPurchase(base, 'user-1'));
+    expect(flagged[0].insert.tax_deductible).toBe(true);
   });
 });
 
@@ -551,6 +553,11 @@ describe('mapGenericDeduction', () => {
   it('is tax_deductible:false when the resolved category is Advance Repayment (meals & advance repayments, owner decision 2026-07-17)', () => {
     const d: Extraction = { docType: 'toll', date: '2026-06-10', totalAmount: 42, summary: 'Weekly repayment' };
     expect(mapGenericDeduction(d, 'user-1', 'Advance Repayment').tax_deductible).toBe(false);
+  });
+
+  it('an in-scope "other" document is tax_deductible:true even in Advance Repayment (only written after the user chose Yes, 2026-11-24)', () => {
+    const d: Extraction = { docType: 'other', date: '2026-06-10', totalAmount: 42, summary: 'Weekly repayment' };
+    expect(mapGenericDeduction(d, 'user-1', 'Advance Repayment').tax_deductible).toBe(true);
   });
 
   it('is tax_deductible:true for a normal category', () => {
