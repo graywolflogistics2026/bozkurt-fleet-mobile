@@ -850,7 +850,7 @@ export default function Settlements() {
                         </MutedText>
                         <Text style={{ color: colors.orange, fontSize: typography.size.xs, fontWeight: '700' }}>{t('loads.fromStatement')}</Text>
                       </View>
-                      {l.revenueAsPrinted != null && <MutedText>{t('loads.asPrinted', { amount: money(l.revenueAsPrinted) })}</MutedText>}
+                      {l.revenueFromLines != null && <MutedText>{t('loads.fromRevenueLines', { amount: money(l.revenueFromLines) })}</MutedText>}
                     </View>
                   ))}
                 </>

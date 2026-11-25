@@ -1345,7 +1345,7 @@
     "statementWeekHeader_one": "Week ending {{date}} · {{count}} load on the statement · details not saved",
     "statementWeekHeader_other": "Week ending {{date}} · {{count}} loads on the statement · details not saved",
     "fromStatement": "From statement",
-    "asPrinted": "{{amount}} as printed",
+    "fromRevenueLines": "{{amount}} from this week's revenue lines",
     "statementMiles": "{{loaded}} mi loaded · {{empty}} empty",
     "notCountedLine_one": "+ {{count}} load on statements, not counted here",
     "notCountedLine_other": "+ {{count}} loads on statements, not counted here"

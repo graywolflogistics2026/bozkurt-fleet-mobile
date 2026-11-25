@@ -79,8 +79,8 @@ function StatementWeekBlock({ week, onOpen }: { week: StatementLoadWeek; onOpen:
               </MutedText>
               <Text style={styles.fromStatementTag}>{t('loads.fromStatement')}</Text>
             </View>
-            {l.revenueAsPrinted != null && (
-              <MutedText style={{ marginStart: spacing.sm }}>{t('loads.asPrinted', { amount: money(l.revenueAsPrinted) })}</MutedText>
+            {l.revenueFromLines != null && (
+              <MutedText style={{ marginStart: spacing.sm }}>{t('loads.fromRevenueLines', { amount: money(l.revenueFromLines) })}</MutedText>
             )}
           </Pressable>
         ))}

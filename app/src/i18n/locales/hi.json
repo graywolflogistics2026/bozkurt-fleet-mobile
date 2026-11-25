@@ -1350,7 +1350,7 @@
     "statementWeekHeader_one": "सप्ताह समाप्त {{date}} · स्टेटमेंट पर {{count}} लोड · विवरण सेव नहीं हुआ",
     "statementWeekHeader_other": "सप्ताह समाप्त {{date}} · स्टेटमेंट पर {{count}} लोड · विवरण सेव नहीं हुआ",
     "fromStatement": "स्टेटमेंट से",
-    "asPrinted": "{{amount}} छपे अनुसार",
+    "fromRevenueLines": "{{amount}} इस सप्ताह की आय पंक्तियों से",
     "statementMiles": "{{loaded}} मील लोडेड · {{empty}} खाली",
     "notCountedLine_one": "+ स्टेटमेंट पर {{count}} लोड, यहाँ गिने नहीं गए",
     "notCountedLine_other": "+ स्टेटमेंट पर {{count}} लोड, यहाँ गिने नहीं गए"

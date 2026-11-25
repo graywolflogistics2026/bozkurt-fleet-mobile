@@ -1,6 +1,6 @@
 import { isPrimeCarrier } from '@/src/import/primeOperatingStatement';
-import { isMilelessLoad } from '@/src/import/primeLoads';
-import type { ExtractedLoad } from '@/src/import/types';
+import { isMilelessLoad, LOAD_REVENUE_DESC } from '@/src/import/primeLoads';
+import type { ExtractedLoad, ExtractedRevenueItem } from '@/src/import/types';
 import { num, numOrNull } from '@/src/lib/number';
 
 // STATEMENT LOADS, VIEW ONLY (owner decision 2026-11-24,
@@ -31,9 +31,15 @@ export type StatementLoad = {
   destination: string | null;
   loadedMiles: number;
   emptyMiles: number;
-  // The load's revenue exactly as printed on the statement: shown labelled
-  // "as printed", never counted.
-  revenueAsPrinted: number | null;
+  // The load's revenue from the week's own revenue lines (owner 2026-11-25,
+  // docs/decisions/line-details-gate-proposal.md stage 1): the Prime load
+  // revenue lines (LOAD_REVENUE_DESC, the same rule as the loads check) of
+  // this order number, summed. Those are the owner's amounts that tie to
+  // the printed gross. The reader's per-load figure is never used here:
+  // in some weeks it is the TRIP column at 100%. Null when no line matches
+  // (and for other carriers, where that rule does not apply). Shown only,
+  // never counted.
+  revenueFromLines: number | null;
 };
 
 export type StatementLoadWeek = {
@@ -48,12 +54,29 @@ export type StatementLoadWeek = {
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-function readLoads(parsedJson: Record<string, unknown> | null): { carrier: string | null; loads: ExtractedLoad[] } {
+type Reading = { carrier: string | null; loads: ExtractedLoad[]; revenueItems: ExtractedRevenueItem[] };
+
+function objects<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v.filter((x) => !!x && typeof x === 'object') as T[]) : [];
+}
+
+function readLoads(parsedJson: Record<string, unknown> | null): Reading {
   const settlement = parsedJson?.settlement;
-  if (!settlement || typeof settlement !== 'object') return { carrier: null, loads: [] };
+  if (!settlement || typeof settlement !== 'object') return { carrier: null, loads: [], revenueItems: [] };
   const s = settlement as Record<string, unknown>;
-  const loads = Array.isArray(s.loads) ? (s.loads.filter((l) => !!l && typeof l === 'object') as ExtractedLoad[]) : [];
-  return { carrier: text(s.carrier), loads };
+  return { carrier: text(s.carrier), loads: objects<ExtractedLoad>(s.loads), revenueItems: objects<ExtractedRevenueItem>(s.revenueItems) };
+}
+
+// Order number -> sum of that order's load revenue lines (Prime only).
+function loadRevenueByOrder(revenueItems: ExtractedRevenueItem[]): Map<string, number> {
+  const byOrder = new Map<string, number>();
+  for (const r of revenueItems) {
+    const order = text(r.order);
+    const amount = numOrNull(r.amount);
+    if (!order || amount == null || !LOAD_REVENUE_DESC.test(r.desc ?? '')) continue;
+    byOrder.set(order, Math.round(((byOrder.get(order) ?? 0) + amount) * 100) / 100);
+  }
+  return byOrder;
 }
 
 // Newest week first. Only weeks saved without line details AND with no
@@ -73,17 +96,21 @@ export function statementOnlyLoadWeeks(
     if (!doc) continue;
     const read = readLoads(doc.parsed_json);
     const prime = isPrimeCarrier(s.carrier ?? read.carrier);
+    const lineRevenue = prime ? loadRevenueByOrder(read.revenueItems) : new Map<string, number>();
     const loads = read.loads
       .filter((l) => !prime || !isMilelessLoad(l))
-      .map((l, i) => ({
-        key: `${s.id}:${i}`,
-        order: text(l.order),
-        origin: text(l.from),
-        destination: text(l.to),
-        loadedMiles: num(l.loadedMiles),
-        emptyMiles: num(l.emptyMiles),
-        revenueAsPrinted: numOrNull(l.revenue),
-      }));
+      .map((l, i) => {
+        const order = text(l.order);
+        return {
+          key: `${s.id}:${i}`,
+          order,
+          origin: text(l.from),
+          destination: text(l.to),
+          loadedMiles: num(l.loadedMiles),
+          emptyMiles: num(l.emptyMiles),
+          revenueFromLines: order ? (lineRevenue.get(order) ?? null) : null,
+        };
+      });
     if (loads.length === 0) continue;
     weeks.push({ settlementId: s.id, settlement_id: s.id, weekEnding: s.week_ending, truckId: s.truck_id, loads });
   }

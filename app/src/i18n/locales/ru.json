@@ -1345,7 +1345,7 @@
     "statementWeekHeader_one": "Неделя по {{date}} · грузов в выписке: {{count}} · детали не сохранены",
     "statementWeekHeader_other": "Неделя по {{date}} · грузов в выписке: {{count}} · детали не сохранены",
     "fromStatement": "Из выписки",
-    "asPrinted": "{{amount}} как напечатано",
+    "fromRevenueLines": "{{amount}} по строкам дохода этой недели",
     "statementMiles": "{{loaded}} миль с грузом · {{empty}} порожних",
     "notCountedLine_one": "+ грузов в выписках: {{count}}, здесь не учтены",
     "notCountedLine_other": "+ грузов в выписках: {{count}}, здесь не учтены"

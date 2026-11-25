@@ -2,6 +2,8 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative, sep } from 'path';
 import { statementLoadCount, statementOnlyLoadWeeks, type StatementLoadDocument, type StatementLoadSettlement } from '@/src/stats/statementLoads';
 import { filterLoadsByTruckScope } from '@/src/stats/loadsScope';
+import { mapSettlement } from '@/src/import/mapExtraction';
+import type { Extraction } from '@/src/import/types';
 
 // The owner's live shape (read-only SELECT, 2026-11-24), 15 latest weeks:
 // 8 saved with "line details not saved" (25 printed loads, 0 rows), 6 saved
@@ -62,7 +64,7 @@ describe('statementOnlyLoadWeeks (view-only statement loads)', () => {
     expect(aug14?.loads.map((l) => l.order)).toEqual(['O0', 'O1', 'O2']);
   });
 
-  test('fields: order, origin, destination, miles and revenue as printed', () => {
+  test('fields: order, origin, destination, miles; no revenue line for the order means no amount', () => {
     const { settlements, documents, loadRows } = fixture();
     expect(statementOnlyLoadWeeks(settlements, documents, loadRows)[0].loads[0]).toEqual({
       key: 's-2026-11-20:0',
@@ -71,7 +73,7 @@ describe('statementOnlyLoadWeeks (view-only statement loads)', () => {
       destination: 'City 0',
       loadedMiles: 500,
       emptyMiles: 40,
-      revenueAsPrinted: 1000,
+      revenueFromLines: null,
     });
   });
 
@@ -111,6 +113,104 @@ describe('statementOnlyLoadWeeks (view-only statement loads)', () => {
     const weeks = statementOnlyLoadWeeks(settlements, documents, []);
     expect(filterLoadsByTruckScope(weeks, settlements, 't1').map((w) => w.settlementId)).toEqual(['a', 'c']);
     expect(filterLoadsByTruckScope(weeks, settlements, null)).toHaveLength(3);
+  });
+});
+
+// REVENUE FROM THE WEEK'S REVENUE LINES (owner 2026-11-25, line-details
+// gate proposal stage 1). The reader's per-load figure is never shown.
+describe('statement load revenue from the revenue lines', () => {
+  const notSaved = (id: string, we: string): StatementLoadSettlement => ({
+    id,
+    week_ending: we,
+    truck_id: 't1',
+    carrier: 'Prime Inc',
+    document_id: 'd-' + id,
+    statement: { linesNotSaved: true },
+  });
+
+  // Week ending 2026-10-02 (owner's stored reading): the reader's loads list
+  // is the TRIP column (sums to 3,410.09 = 2,455.26 / 0.72); the TRIP
+  // REVENUE lines are the owner's amounts and sum to REVENUE FROM PRIME INC.
+  const oct02Settlement = {
+    carrier: 'PRIME INC.',
+    loads: [
+      { order: '5150001', from: 'Joplin, MO', to: 'Dallas, TX', loadedMiles: 380, emptyMiles: 20, revenue: 2156.01 },
+      { order: '5150002', from: 'Dallas, TX', to: 'Tulsa, OK', loadedMiles: 260, emptyMiles: 15, revenue: 879.26 },
+      { order: '5150003', from: 'Tulsa, OK', to: 'Springfield, MO', loadedMiles: 180, emptyMiles: 10, revenue: 374.82 },
+    ],
+    revenueItems: [
+      { code: 'RV', desc: 'TRIP REVENUE', order: '5150001', amount: 1552.33 },
+      { code: 'RV', desc: 'FUEL SURCHARGE', order: '5150001', amount: 210.5 },
+      { code: 'RV', desc: 'TRIP REVENUE', order: '5150002', amount: 633.07 },
+      { code: 'RV', desc: 'TRIP REVENUE', order: '5150003', amount: '269.86' },
+    ],
+  };
+
+  test('10-02: amounts are the TRIP REVENUE lines (2,455.26), not the reader loads list (3,410.09)', () => {
+    const weeks = statementOnlyLoadWeeks([notSaved('oct02', '2026-10-02')], [{ id: 'd-oct02', parsed_json: { settlement: oct02Settlement } }], []);
+    const loads = weeks[0].loads;
+    expect(oct02Settlement.loads.reduce((sum, l) => sum + l.revenue, 0)).toBeCloseTo(3410.09, 2);
+    expect(loads.map((l) => l.revenueFromLines)).toEqual([1552.33, 633.07, 269.86]);
+    expect(loads.reduce((sum, l) => sum + (l.revenueFromLines ?? 0), 0)).toBeCloseTo(2455.26, 2);
+  });
+
+  test('several load revenue lines of one order are summed; a load with no line shows no amount', () => {
+    const settlement = {
+      carrier: 'Prime Inc',
+      loads: [
+        { order: 'A1', loadedMiles: 500, emptyMiles: 0, revenue: 9999 },
+        { order: 'B2', loadedMiles: 300, emptyMiles: 0, revenue: 8888 },
+        { order: '', loadedMiles: 100, emptyMiles: 0, revenue: 7777 },
+      ],
+      revenueItems: [
+        { desc: 'TRIP REVENUE', order: 'A1', amount: 1000 },
+        { desc: 'LINEHAUL', order: 'A1', amount: -47.34 },
+        { desc: 'STOP OFF PAY', order: 'B2', amount: 50 },
+      ],
+    };
+    const loads = statementOnlyLoadWeeks([notSaved('x', '2026-10-09')], [{ id: 'd-x', parsed_json: { settlement } }], [])[0].loads;
+    expect(loads.map((l) => l.revenueFromLines)).toEqual([952.66, null, null]);
+  });
+
+  test('another carrier: the Prime line rule does not apply, so no amount is shown', () => {
+    const settlement = {
+      carrier: 'Acme Freight',
+      loads: [{ order: 'A1', loadedMiles: 500, emptyMiles: 0, revenue: 1200 }],
+      revenueItems: [{ desc: 'TRIP REVENUE', order: 'A1', amount: 1200 }],
+    };
+    const s = { ...notSaved('acme', '2026-10-09'), carrier: 'Acme Freight' };
+    expect(statementOnlyLoadWeeks([s], [{ id: 'd-acme', parsed_json: { settlement } }], [])[0].loads[0].revenueFromLines).toBeNull();
+  });
+
+  // Week ending 2026-11-13 (owner's saved, passing week): the loads check
+  // passed, so the save stores each load's reader figure. Those figures and
+  // the TRIP REVENUE lines are the same amounts, order by order: the view
+  // shows what a real load row carries.
+  test('11-13: the amount per order equals what the save stores on the real load row', () => {
+    const nov13 = {
+      carrier: 'PRIME INC.',
+      weekEnding: '2026-11-13',
+      loads: [
+        { order: '5247312', from: 'Springfield, MO', to: 'Laredo, TX', loadedMiles: 900, emptyMiles: 40, revenue: 1884.74 },
+        { order: '5248723', from: 'Laredo, TX', to: 'Memphis, TN', loadedMiles: 780, emptyMiles: 30, revenue: 1589.11 },
+        { order: '5256356', from: 'Memphis, TN', to: 'Fontana, CA', loadedMiles: 1800, emptyMiles: 60, revenue: 3614.23 },
+      ],
+      revenueItems: [
+        { code: 'RV', desc: 'TRIP REVENUE', order: '5247312', amount: 1884.74 },
+        { code: 'RV', desc: 'TRIP REVENUE', order: '5248723', amount: 1589.11 },
+        { code: 'RV', desc: 'TRIP REVENUE', order: '5256356', amount: 3614.23 },
+      ],
+      operating: { lines: [{ section: 'revenue', label: 'REVENUE FROM PRIME INC.', amount: 7088.08 }] },
+    };
+    const saved = mapSettlement({ docType: 'settlement', settlement: nov13 } as unknown as Extraction, 'user', 't1').loads;
+    const shown = statementOnlyLoadWeeks([notSaved('nov13', '2026-11-13')], [{ id: 'd-nov13', parsed_json: { settlement: nov13 } }], [])[0].loads;
+    expect(saved.map((l) => [l.order_number, l.revenue])).toEqual([
+      ['5247312', 1884.74],
+      ['5248723', 1589.11],
+      ['5256356', 3614.23],
+    ]);
+    expect(shown.map((l) => [l.order, l.revenueFromLines])).toEqual(saved.map((l) => [l.order_number, l.revenue]));
+    expect(shown.reduce((sum, l) => sum + (l.revenueFromLines ?? 0), 0)).toBeCloseTo(7088.08, 2);
   });
 });
 

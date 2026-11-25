@@ -46,7 +46,9 @@ export function isMilelessLoad(load: ExtractedLoad): boolean {
 
 // A revenue line that is load revenue for an order (linehaul / trip /
 // load / owner revenue), as opposed to fuel surcharge, incentives, stops.
-const LOAD_REVENUE_DESC = /\bLINE\s*HAUL\b|\bTRIP\s+REV|\bLOAD\s+REV|\bOWNER\s+REV/i;
+// Exported for the view-only statement loads (src/stats/statementLoads.ts),
+// so they pick load revenue lines by the same rule.
+export const LOAD_REVENUE_DESC = /\bLINE\s*HAUL\b|\bTRIP\s+REV|\bLOAD\s+REV|\bOWNER\s+REV/i;
 
 export function splitPrimeLoads(extraction: Extraction | null | undefined): PrimeLoadSplit | null {
   const s = extraction?.settlement;

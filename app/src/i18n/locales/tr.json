@@ -1345,7 +1345,7 @@
     "statementWeekHeader_one": "Hafta sonu {{date}} · ekstrede {{count}} yük · ayrıntılar kaydedilmedi",
     "statementWeekHeader_other": "Hafta sonu {{date}} · ekstrede {{count}} yük · ayrıntılar kaydedilmedi",
     "fromStatement": "Ekstreden",
-    "asPrinted": "basılı tutar {{amount}}",
+    "fromRevenueLines": "bu haftanın gelir satırlarına göre {{amount}}",
     "statementMiles": "{{loaded}} mil yüklü · {{empty}} boş",
     "notCountedLine_one": "+ ekstrelerde {{count}} yük, burada sayılmadı",
     "notCountedLine_other": "+ ekstrelerde {{count}} yük, burada sayılmadı"

@@ -1345,7 +1345,7 @@
     "statementWeekHeader_one": "Semana que termina el {{date}} · cargas en el estado de cuenta: {{count}} · detalles no guardados",
     "statementWeekHeader_other": "Semana que termina el {{date}} · cargas en el estado de cuenta: {{count}} · detalles no guardados",
     "fromStatement": "Del estado de cuenta",
-    "asPrinted": "{{amount}} según lo impreso",
+    "fromRevenueLines": "{{amount}} según las líneas de ingreso de esta semana",
     "statementMiles": "{{loaded}} mi cargadas · {{empty}} vacías",
     "notCountedLine_one": "+ {{count}} carga en estados de cuenta, no contada aquí",
     "notCountedLine_other": "+ {{count}} cargas en estados de cuenta, no contadas aquí"
