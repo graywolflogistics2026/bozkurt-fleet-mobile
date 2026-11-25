@@ -10,6 +10,12 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-25 — View-only statement loads: revenue from the week's revenue lines (owner)
+
+- Stage 1 of `docs/decisions/line-details-gate-proposal.md` (03f28de). Each "From statement" load shows the sum of the week's Prime load revenue lines for its order (`revenueItems`, `LOAD_REVENUE_DESC`), labelled "from this week's revenue lines". The reader's per-load figure (TRIP column at 100% in 10-02, 10-16, 11-20) is never shown; no matching line or another carrier = no amount.
+- The save path stores `loads.revenue` = the reader's per-load figure only when the loads check passed, else 0 (`mapExtraction.ts:190-210`); in a passing week (11-13) that equals the revenue line per order, so the view and real rows agree.
+- No number changes. No SQL, no Edge Function (reader bundle unchanged). Ships via `eas update`.
+
 ## 2026-11-24 — Loads: statement loads shown view-only for weeks saved without line details (owner)
 
 - Design: `docs/decisions/settlement-loads-view-fix-proposal.md` (view-only option). No load rows created; the import rule is unchanged (mismatching line rows are never saved).
