@@ -246,7 +246,19 @@ export type SettlementStatement = {
   // SIMPLE IMPORT FLOW (batch D2 2.2): the statement passed the gate but
   // its line details did not reconcile, so no line rows were stored.
   linesNotSaved?: boolean;
+  // Every reason the line details did not reconcile (stage 3a, owner
+  // 2026-11-25), not only the largest difference: set with linesNotSaved.
+  lineDetailsCauses?: LineDetailsCause[] | null;
 };
+
+// One reason a week's line details did not reconcile with its passed
+// statement (settlementGate.ts lineCauses). jsonb only, no column.
+export type LineDetailsCause =
+  | { kind: 'group'; group: string; difference: number; reasons?: string[] }
+  | { kind: 'issue'; type: string; difference: number }
+  | { kind: 'statement_line_sum'; check: string; difference: number }
+  | { kind: 'loads'; difference: number | null }
+  | { kind: 'page_not_read'; page: number };
 
 export type StatementDates = {
   settlementDateRaw: string | null;

@@ -214,7 +214,25 @@ describe('golden week 2026-07-17 — card payout, no cash-flow section, a loss',
     ]);
     // Carrier isolation: an unseeded carrier keeps every line a reimbursement.
     expect(nonReimbursementCredits(REIMBURSEMENT_ITEMS, 'OTHER CARRIER', CODES)).toEqual([]);
-    expect(rows.reimbursements.map((r) => r2(Number(r.amount)))).toEqual([5.34]);
+  });
+
+  // STAGE 3a (owner 2026-11-25, option 1): the advance family check does
+  // not tie on this July-layout reading, so the week saves WITHOUT its line
+  // rows (before stage 3a only RF 5.34 was saved as a reimbursement row).
+  // Profit, deposit and PR above are unchanged. Evidence kept for a later
+  // D6 revision: "WKLY PYMT OF ADV" 550 would tie as PLAIN with fee 0.00
+  // (550 − WA advances taken 3,999.00 − 460.59 = ADVANCES +3,909.59).
+  // The LUMPER 215 and WIRE CHARGE 2.55 lines were transcribed without
+  // codes, so LUMPERS has no lumper line.
+  test('stage 3a: saved without line rows; the advance family names its causes', () => {
+    const gate = gateOf(golden0717());
+    expect(gate).toMatchObject({ status: 'pass', lineDetails: 'mismatch' });
+    const reasons = ['advance_unrecognized', 'advance_fee_out_of_range:lumper', 'advance_fee_out_of_range:plain', 'fees_differ'];
+    expect(rows.settlements[0].statement).toMatchObject({
+      linesNotSaved: true,
+      lineDetailsCauses: [{ kind: 'group', group: 'advance_family', difference: -217.55, reasons }],
+    });
+    expect(rows.reimbursements).toEqual([]);
   });
 
   test('PR 3,999.00 flows into Owner\'s money as one contribution linked to its credit line', () => {

@@ -762,6 +762,7 @@
       "state_fuel_tax": "Eyalet yakıt vergisi (geri ödemesi düşülmüş)",
       "repair": "Onarım",
       "advances": "Avanslar",
+      "advance_family": "Avanslar ve havale ücretleri",
       "meals": "Yemekler",
       "performance_bond": "Teminat",
       "total": "Tüm satırlar (toplam)"

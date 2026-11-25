@@ -762,6 +762,7 @@
       "state_fuel_tax": "ضريبة الوقود الولائية (بعد خصم تعويضها)",
       "repair": "الإصلاح",
       "advances": "السُّلف",
+      "advance_family": "Advances and wire fees",
       "meals": "الوجبات",
       "performance_bond": "ضمان الأداء",
       "total": "جميع البنود (الإجمالي)"

@@ -10,6 +10,13 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-25 — Prime advance family check (stage 3a, owner)
+
+- `docs/decisions/advance-family-rule-proposal.md` (owner decisions 2026-11-25). `primeLineGroups.ts`: `advance_family` replaces the `advances` group. WA lines are classed by printed description (WEIGHT, LUMPER, FUEL with the UF-/RF- principal parsed, LATE paired with LE "LATE FEE", PLAIN), plus LM/WT/FC lines. Derived fees must equal WIRE CHARGE − FC to the cent; each class's fee must be 0.00 to 2.55 × lines. Named reasons: advance_unrecognized, advance_fuel_unparsable, late_fee_not_reimbursed, advance_fee_out_of_range:<class>, fees_differ.
+- `tractor_fuel` / `reefer_fuel` add the parsed advance principals. `resolveFuelRows()`, the loads check and every other tolerance are unchanged.
+- Gate `lineCauses` (every failed group, reason and line-total issue) is saved as `settlements.statement.lineDetailsCauses` (jsonb, no SQL) when a week saves without line rows.
+- 17 real weeks (`app/src/import/__tests__/fixtures/primeWeeks2026.json`): the 8 weeks saved with rows are unchanged; 09-11, 10-09 and 10-23 now match; 07-31, 09-25, 10-02, 10-16 and 11-20 need stage 2; 08-14 needs stage 4. Golden 07-17 (July layout) now saves without line rows (owner option 1); profit is unchanged.
+- New key `importScreen.group.advance_family` in 7 locales. Ship: `npm run build:reader` (done), ai-import redeploy, then `eas update`.
 ## 2026-11-25 — View-only statement loads: revenue from the week's revenue lines (owner)
 
 - Stage 1 of `docs/decisions/line-details-gate-proposal.md` (03f28de). Each "From statement" load shows the sum of the week's Prime load revenue lines for its order (`revenueItems`, `LOAD_REVENUE_DESC`), labelled "from this week's revenue lines". The reader's per-load figure (TRIP column at 100% in 10-02, 10-16, 11-20) is never shown; no matching line or another carrier = no amount.

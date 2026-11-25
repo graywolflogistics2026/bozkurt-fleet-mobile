@@ -762,6 +762,7 @@
       "state_fuel_tax": "Impuesto estatal al combustible (neto de su reembolso)",
       "repair": "Reparaciones",
       "advances": "Anticipos",
+      "advance_family": "Anticipos y cargos por transferencia",
       "meals": "Comidas",
       "performance_bond": "Fianza de cumplimiento",
       "total": "Todas las líneas (total)"

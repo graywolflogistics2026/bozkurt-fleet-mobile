@@ -14,12 +14,12 @@ import { buildPrimeGroupChecks } from './primeLineGroups';
 import { splitPrimeLoads } from './primeLoads';
 import { isPrimeCarrier } from './primeOperatingStatement';
 import { checkSettlementDates, isDateGateSatisfied, settlementDateInputsOf, type DateIssue, type SettlementDateCheck } from './printedDates';
-import { lineDetailsDifference, lineRouteProfit } from './reviewVerdict';
+import { issueDifference as issueDifferenceOf, lineDetailsDifference, lineRouteProfit } from './reviewVerdict';
 import { readMilesSplit } from './milesSplit';
 import { blockDiagnosisLine, diagnosePrimeBlocks } from './primeStatementTemplate';
 import type { CarrierCode } from './carrierCodes';
 import type { ReconciliationIssue } from './settlementReconciliation';
-import type { StatementCheck } from './settlementStatement';
+import type { LineDetailsCause, StatementCheck } from './settlementStatement';
 import { statementWeekOf } from '@/src/stats/statementRoute';
 import { defaultPerDiemDaysForMiles } from '@/src/tax/perDiem';
 import { num } from '@/src/lib/number';
@@ -84,10 +84,20 @@ export type GateHeadline = {
 // any bank digits.
 export type GateFailDetail = { check: string; printed: number | string; read: number | string };
 
+// lineCauses: only when lineDetails is 'mismatch' — every failed group,
+// named reason and line-total issue, not only the largest (stage 3a,
+// owner 2026-11-25). Saved as settlements.statement.lineDetailsCauses.
 export type SettlementGateResult =
-  | { status: 'pass'; headline: GateHeadline; lineDetails: 'match' | 'mismatch'; lineDifference: number | null }
+  | { status: 'pass'; headline: GateHeadline; lineDetails: 'match' | 'mismatch'; lineDifference: number | null; lineCauses?: LineDetailsCause[] }
   | { status: 'fail'; reason: GateFailReason; failures: string[]; details?: GateFailDetail[] }
-  | { status: 'needs_date'; headline: GateHeadline; lineDetails: 'match' | 'mismatch'; lineDifference: number | null; dateCheck: SettlementDateCheck };
+  | {
+      status: 'needs_date';
+      headline: GateHeadline;
+      lineDetails: 'match' | 'mismatch';
+      lineDifference: number | null;
+      lineCauses?: LineDetailsCause[];
+      dateCheck: SettlementDateCheck;
+    };
 
 const PREVIEW_ID = 'gate-preview';
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -217,8 +227,28 @@ export function evaluateSettlementGate(
       source: 'prime_statement',
     };
     const lineDetails = mismatch ? 'mismatch' : 'match';
-    if (!dateOk) return { status: 'needs_date', headline, lineDetails, lineDifference: difference, dateCheck };
-    return { status: 'pass', headline, lineDetails, lineDifference: difference };
+    const causes = mismatch
+      ? {
+          lineCauses: [
+            ...check.checks
+              .filter((c) => softFailed(c.id) && !c.passed)
+              .map((c): LineDetailsCause => ({ kind: 'statement_line_sum', check: c.id, difference: r2(c.expected - c.actual) })),
+            ...issues.flatMap((i): LineDetailsCause[] => {
+              const d = issueDifferenceOf(i);
+              return d == null ? [] : [{ kind: 'issue', type: i.type, difference: r2(d) }];
+            }),
+            ...(groups ?? [])
+              .filter((g) => !g.passed)
+              .map((g): LineDetailsCause => ({ kind: 'group', group: g.group, difference: g.difference, ...(g.reasons?.length ? { reasons: [...g.reasons] } : {}) })),
+            ...(loads != null && loads.loads.length > 0 && loads.matches === false
+              ? [{ kind: 'loads', difference: loads.statementRevenue != null ? r2(loads.loadRevenue + loads.adjustmentTotal - loads.statementRevenue) : null } as LineDetailsCause]
+              : []),
+            ...missingPages.map((p): LineDetailsCause => ({ kind: 'page_not_read', page: p.page })),
+          ],
+        }
+      : {};
+    if (!dateOk) return { status: 'needs_date', headline, lineDetails, lineDifference: difference, ...causes, dateCheck };
+    return { status: 'pass', headline, lineDetails, lineDifference: difference, ...causes };
   }
 
   // Other carriers.
@@ -367,7 +397,7 @@ export function withGateAudit(extraction: Extraction, gate: SettlementGateResult
   const audit =
     gate.status === 'fail'
       ? { status: gate.status, reason: gate.reason, failures: gate.failures, ...(gate.details ? { details: gate.details } : {}) }
-      : { status: gate.status, lineDetails: gate.lineDetails, lineDifference: gate.lineDifference };
+      : { status: gate.status, lineDetails: gate.lineDetails, lineDifference: gate.lineDifference, ...(gate.lineCauses ? { lineCauses: gate.lineCauses } : {}) };
   return { ...extraction, settlementGate: audit };
 }
 

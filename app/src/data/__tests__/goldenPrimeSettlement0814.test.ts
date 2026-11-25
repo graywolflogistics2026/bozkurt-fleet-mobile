@@ -448,7 +448,7 @@ describe('per-group checks: settlement lines vs the statement (item 5)', () => {
       ['def_discount', -32.68, -32.68, true],
       ['state_fuel_tax', -126.8, -126.8, true], // 66.32 − reimbursement 193.12
       ['repair', 652.53, 652.53, true],
-      ['advances', 550, 550, true], // weight-ticket advances left out
+      ['advance_family', 4, 4, true], // stage 3a: fees (weight 45.00 − 41.00) = WIRE CHARGE 5.00 − FC 1.00
       ['meals', 62.25, 62.25, true],
       ['performance_bond', 100, 100, true],
       ['total', 3638.61, 3638.61, true], // 4,100.66 − 462.64 + 0.59 interest expense vs TOTAL OPERATING EXPENSES

@@ -44,7 +44,7 @@ import { buildProfitAnalysis } from '@/src/stats/profitAnalysis';
 import { buildTruckComparison, type ComparisonTruck } from '@/src/stats/truckComparison';
 import { checkSettlementReconciliation } from '@/src/import/settlementReconciliation';
 import { buildPrimeStatementCheck, settlementDeposit, settlementVerification } from '@/src/import/settlementStatement';
-import { buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
+import { buildAdvanceFamily, buildPrimeGroupChecks } from '@/src/import/primeLineGroups';
 import { sanitizeExtraction } from '@/src/import/sanitizeExtraction';
 import { resolveHeroPeriodDateWindow } from '@/src/stats/heroPeriodWindow';
 import { truckHomeProfits } from '@/src/stats/truckHomeProfit';
@@ -914,7 +914,12 @@ describe('per-group checks on the 8/21 golden week', () => {
     const groups = buildPrimeGroupChecks(statementExtraction())!;
     expect(groups.filter((g) => !g.passed)).toEqual([]);
     expect(groups.find((g) => g.group === 'total')!.difference).toBe(0);
-    expect(groups.find((g) => g.group === 'advances')).toMatchObject({ settlement: 550, statement: 550 });
+    // Stage 3a (2026-11-25): the advance family replaced the 'advances'
+    // group. ADVANCE 500 + 50 = ADVANCES 550 (fee 0); ADV FOR WEIGHT
+    // TICKETS 16.25 = WEIGHT TICKETS 15.25 + fee 1.00; fees 1.00 = WIRE
+    // CHARGE 2.00 − FC 1.00, exact.
+    expect(groups.find((g) => g.group === 'advance_family')).toMatchObject({ settlement: 1, statement: 1, difference: 0, passed: true, reasons: [] });
+    expect(buildAdvanceFamily(statementExtraction())!.fees).toEqual({ weight: 1, plain: 0 });
   });
 });
 

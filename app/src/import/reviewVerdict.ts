@@ -60,7 +60,7 @@ export function reviewInputsOf(extraction: Extraction): ReviewInputs {
 }
 
 // The difference of one line-item total from what the statement printed.
-function issueDifference(issue: ReconciliationIssue): number | null {
+export function issueDifference(issue: ReconciliationIssue): number | null {
   switch (issue.type) {
     case 'deductionsMismatch':
     case 'revenueLinesMismatch':

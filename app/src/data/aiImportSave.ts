@@ -485,7 +485,7 @@ export async function saveExtraction(params: SaveExtractionParams): Promise<Save
       settlementMapping.maintenance = [];
       settlementMapping.reimbursements = [];
       settlementMapping.tolls = [];
-      settlementStatement = { ...settlementStatement, linesNotSaved: true };
+      settlementStatement = { ...settlementStatement, linesNotSaved: true, lineDetailsCauses: gate.lineCauses ?? [] };
       linesNotSaved = true;
     }
   }

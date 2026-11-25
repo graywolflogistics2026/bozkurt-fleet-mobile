@@ -762,6 +762,7 @@
       "state_fuel_tax": "State fuel tax (net of its reimbursement)",
       "repair": "Repair",
       "advances": "Advances",
+      "advance_family": "Advances and wire fees",
       "meals": "Meals",
       "performance_bond": "Performance bond",
       "total": "All lines (total)"

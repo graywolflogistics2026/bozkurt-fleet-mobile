@@ -1480,18 +1480,23 @@ function checkSettlementReconciliation(extraction) {
 
 // src/import/primeLineGroups.ts
 var GROUPS = [
-  { group: "tractor_fuel", codes: ["UF"], statementLabels: ["TRACTOR FUEL"] },
+  { group: "tractor_fuel", codes: ["UF"], statementLabels: ["TRACTOR FUEL"], advancePrincipal: "uf" },
   { group: "tractor_def", codes: ["UE"], statementLabels: ["TRACTOR DEF"] },
-  { group: "reefer_fuel", codes: ["RF"], reimbursement: { codes: ["RF"], desc: /\bREEFER FUEL\b/i }, statementLabels: ["REEFER FUEL"] },
+  {
+    group: "reefer_fuel",
+    codes: ["RF"],
+    reimbursement: { codes: ["RF"], desc: /\bREEFER FUEL\b/i },
+    statementLabels: ["REEFER FUEL"],
+    advancePrincipal: "rf"
+  },
   { group: "tractor_fuel_discount", codes: ["UD"], statementLabels: ["TRACTOR FUEL DISCOUNT"] },
   { group: "reefer_fuel_discount", codes: ["RD"], statementLabels: ["REEFER FUEL DISCOUNT"] },
   { group: "def_discount", codes: ["ED"], statementLabels: ["DEF DISCOUNT"] },
   { group: "state_fuel_tax", codes: ["SF"], reimbursement: { codes: ["SF"], desc: /\bFUEL TAX\b/i }, statementLabels: ["STATE FUEL TAX"] },
   { group: "repair", codes: ["UR", "SH"], statementLabels: ["UNIT REPAIR EXPENSE", "RO PARTS REPAIR"] },
-  // WA advances TAKEN are printed in the reimbursement section (07/17:
-  // 3,999.00 + 460.59); the statement's ADVANCES nets them against the
-  // weekly repayment (550.00 − 4,459.59 = +3,909.59 credit).
-  { group: "advances", codes: ["WA"], excludeDesc: /\bWEIGHT\s+TICKETS?\b/i, reimbursement: { codes: ["WA"], desc: /\bADVANCE\b/i }, statementLabels: ["ADVANCES"] },
+  // WA lines: the advance_family check below (stage 3a, 2026-11-25). It
+  // replaced the 'advances' group (WA lines without weight tickets vs
+  // ADVANCES, $1 tolerance).
   { group: "meals", codes: ["PO"], statementLabels: ["PRIME POINT OF SALE"] },
   { group: "performance_bond", codes: ["PB"], statementLabels: ["ACCRUAL PERFORMANCE BOND"], bySize: true }
 ];
@@ -1502,6 +1507,99 @@ var amountOf2 = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 var codeOf = (d) => (d.code ?? "").trim().toUpperCase();
+var MAX_FEE_PER_ADVANCE_LINE = 2.55;
+var CENT = 5e-3;
+var WEIGHT_DESC = /^ADV FOR WEIGHT TICKETS?$/;
+var LUMPER_DESC = /^ADV FOR OUTSIDE LUMPER$/;
+var LATE_DESC = /^ADV FOR LATE FEE$/;
+var PLAIN_DESC = /^ADVANCE\b/;
+var FUEL_START = /^ADV FOR (UF|RF)\b/;
+var FUEL_REST = /^(?:(?:UF|RF)-\s*[0-9][0-9,]*\.[0-9]{2}\s*)+$/;
+var FUEL_PAIR = /(UF|RF)-\s*([0-9][0-9,]*\.[0-9]{2})/g;
+var LATE_FEE_REIMBURSEMENT = /\bLATE FEE\b/;
+var normDesc = (desc) => (desc ?? "").toUpperCase().replace(/\s+/g, " ").trim();
+function buildAdvanceFamily(extraction) {
+  const s = extraction?.settlement;
+  if (!s || extraction?.docType !== "settlement" || !isPrimeCarrier(s.carrier)) return null;
+  const deductions = s.deductions ?? [];
+  const wa = deductions.filter((d) => codeOf(d) === "WA");
+  if (wa.length === 0) return null;
+  const statementLines = (s.operating?.lines ?? []).filter((l) => !!l.label && l.section !== "revenue");
+  const row = (label) => round24(-statementLines.filter((l) => normalizeStatementLabel(l.label ?? "") === label).reduce((sum, l) => sum + amountOf2(l.amount), 0));
+  const reimbursements = s.reimbursementItems ?? [];
+  const sums = { weight: 0, lumper: 0, fuel: 0, late: 0, plain: 0 };
+  const lineCount = { weight: 0, lumper: 0, fuel: 0, late: 0, plain: 0 };
+  const principal = { uf: 0, rf: 0 };
+  let fuelPrincipal = 0;
+  let unexplained = 0;
+  const reasons = /* @__PURE__ */ new Set();
+  const add = (cls, amount) => {
+    sums[cls] += amount;
+    lineCount[cls] += 1;
+  };
+  for (const d of wa) {
+    const desc = normDesc(d.desc);
+    const amount = amountOf2(d.amount);
+    if (WEIGHT_DESC.test(desc)) add("weight", amount);
+    else if (LUMPER_DESC.test(desc)) add("lumper", amount);
+    else if (LATE_DESC.test(desc)) add("late", amount);
+    else if (FUEL_START.test(desc)) {
+      const rest = desc.replace(/^ADV FOR /, "");
+      const pairs = FUEL_REST.test(rest) ? [...rest.matchAll(FUEL_PAIR)] : [];
+      const parsed = pairs.map((m) => ({ type: m[1], amount: parseAmount(m[2]) }));
+      if (parsed.length === 0 || parsed.some((p) => !Number.isFinite(p.amount))) {
+        reasons.add("advance_fuel_unparsable");
+        unexplained += amount;
+        continue;
+      }
+      for (const p of parsed) {
+        if (p.type === "UF") principal.uf += p.amount;
+        else principal.rf += p.amount;
+        fuelPrincipal += p.amount;
+      }
+      add("fuel", amount);
+    } else if (PLAIN_DESC.test(desc)) add("plain", amount);
+    else {
+      reasons.add("advance_unrecognized");
+      unexplained += amount;
+    }
+  }
+  for (const d of deductions) {
+    const code = codeOf(d);
+    if (code === "LM") add("lumper", amountOf2(d.amount));
+    else if (code === "WT") add("weight", amountOf2(d.amount));
+  }
+  const fc = deductions.filter((d) => codeOf(d) === "FC").reduce((sum, d) => sum + amountOf2(d.amount), 0);
+  const advancesTaken = reimbursements.filter((r) => codeOf(r) ? codeOf(r) === "WA" : /\bADVANCE\b/i.test(r.desc ?? "")).reduce((sum, r) => sum + amountOf2(r.amount), 0);
+  const lateFeeReimbursements = reimbursements.filter((r) => codeOf(r) === "LE" && LATE_FEE_REIMBURSEMENT.test(normDesc(r.desc)));
+  if (lineCount.late > 0 && lateFeeReimbursements.length === 0) reasons.add("late_fee_not_reimbursed");
+  const lateReimbursed = lateFeeReimbursements.reduce((sum, r) => sum + amountOf2(r.amount), 0);
+  const rows = { weight: row("WEIGHT TICKETS"), lumper: row("LUMPERS"), plain: row("ADVANCES") };
+  const fees = {};
+  if (lineCount.weight > 0 || rows.weight !== 0) fees.weight = round24(sums.weight - rows.weight);
+  if (lineCount.lumper > 0 || rows.lumper !== 0) fees.lumper = round24(sums.lumper - rows.lumper);
+  if (lineCount.fuel > 0) fees.fuel = round24(sums.fuel - fuelPrincipal);
+  if (lineCount.late > 0) fees.late = round24(sums.late - lateReimbursed);
+  if (lineCount.plain > 0 || rows.plain !== 0 || advancesTaken !== 0) fees.plain = round24(sums.plain - advancesTaken - rows.plain);
+  for (const cls of Object.keys(fees)) {
+    const fee = fees[cls];
+    if (fee < -CENT || fee > MAX_FEE_PER_ADVANCE_LINE * lineCount[cls] + CENT) reasons.add(`advance_fee_out_of_range:${cls}`);
+  }
+  const feesTotal = round24(Object.values(fees).reduce((sum, f) => sum + (f ?? 0), 0));
+  const wireFees = round24(row("WIRE CHARGE") - fc);
+  if (Math.abs(feesTotal + unexplained - wireFees) >= CENT) reasons.add("fees_differ");
+  const list = [...reasons];
+  return {
+    fees,
+    lineCount,
+    principal: { uf: round24(principal.uf), rf: round24(principal.rf) },
+    unexplained: round24(unexplained),
+    feesTotal,
+    wireFees,
+    reasons: list,
+    passed: list.length === 0
+  };
+}
 function buildPrimeGroupChecks(extraction) {
   const s = extraction?.settlement;
   if (!s || extraction?.docType !== "settlement" || !isPrimeCarrier(s.carrier)) return null;
@@ -1510,16 +1608,31 @@ function buildPrimeGroupChecks(extraction) {
   const deductions = s.deductions ?? [];
   const reimbursements = s.reimbursementItems ?? [];
   const byLabel = (labels) => statementLines.filter((l) => labels.includes(normalizeStatementLabel(l.label ?? "")));
+  const family = buildAdvanceFamily(extraction);
   const checks = [];
+  const pushFamily = () => {
+    if (!family) return;
+    const settlement = round24(family.feesTotal + family.unexplained);
+    checks.push({
+      group: "advance_family",
+      settlement,
+      statement: family.wireFees,
+      difference: round24(settlement - family.wireFees),
+      passed: family.passed,
+      reasons: family.reasons
+    });
+  };
   for (const def of GROUPS) {
-    const lines = deductions.filter((d) => def.codes.includes(codeOf(d)) && !(def.excludeDesc && def.excludeDesc.test(d.desc ?? "")));
+    if (def.group === "meals") pushFamily();
+    const lines = deductions.filter((d) => def.codes.includes(codeOf(d)));
     const statement = byLabel(def.statementLabels);
-    if (lines.length === 0) continue;
+    const principal = def.advancePrincipal && family ? family.principal[def.advancePrincipal] : 0;
+    if (lines.length === 0 && principal === 0) continue;
     const reimbursed = def.reimbursement ? reimbursements.filter((r) => {
       const code = (r.code ?? "").trim().toUpperCase();
       return code ? def.reimbursement.codes.includes(code) : def.reimbursement.desc.test(r.desc ?? "");
     }).reduce((sum, r) => sum + amountOf2(r.amount), 0) : 0;
-    let settlement = round24(lines.reduce((sum, d) => sum + amountOf2(d.amount), 0) - reimbursed);
+    let settlement = round24(lines.reduce((sum, d) => sum + amountOf2(d.amount), 0) - reimbursed + principal);
     let statementSide = round24(-statement.reduce((sum, l) => sum + amountOf2(l.amount), 0));
     if (def.bySize) {
       settlement = Math.abs(settlement);
@@ -2355,8 +2468,20 @@ function evaluateSettlementGate(extraction, options) {
       source: "prime_statement"
     };
     const lineDetails = mismatch ? "mismatch" : "match";
-    if (!dateOk) return { status: "needs_date", headline: headline2, lineDetails, lineDifference: difference, dateCheck };
-    return { status: "pass", headline: headline2, lineDetails, lineDifference: difference };
+    const causes = mismatch ? {
+      lineCauses: [
+        ...check.checks.filter((c) => softFailed(c.id) && !c.passed).map((c) => ({ kind: "statement_line_sum", check: c.id, difference: r24(c.expected - c.actual) })),
+        ...issues.flatMap((i) => {
+          const d = issueDifference(i);
+          return d == null ? [] : [{ kind: "issue", type: i.type, difference: r24(d) }];
+        }),
+        ...(groups ?? []).filter((g) => !g.passed).map((g) => ({ kind: "group", group: g.group, difference: g.difference, ...g.reasons?.length ? { reasons: [...g.reasons] } : {} })),
+        ...loads != null && loads.loads.length > 0 && loads.matches === false ? [{ kind: "loads", difference: loads.statementRevenue != null ? r24(loads.loadRevenue + loads.adjustmentTotal - loads.statementRevenue) : null }] : [],
+        ...missingPages.map((p) => ({ kind: "page_not_read", page: p.page }))
+      ]
+    } : {};
+    if (!dateOk) return { status: "needs_date", headline: headline2, lineDetails, lineDifference: difference, ...causes, dateCheck };
+    return { status: "pass", headline: headline2, lineDetails, lineDifference: difference, ...causes };
   }
   const printed2 = printedTotalsOf(extraction);
   const notPrinted = ["grossRevenue", "netDue", "totalDeductions"].filter((k) => printed2[k] == null);
