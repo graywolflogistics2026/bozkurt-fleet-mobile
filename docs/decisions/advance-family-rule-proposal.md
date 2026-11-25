@@ -814,3 +814,23 @@ in tests, and the stage 3a report lists any difference.
 
 Revised stage order: 3a (advance family) → 2 (loads from revenue lines) →
 4 (08-14 sign) → D5 (LE as REPAYMENT) → Read again, one week at a time.
+
+
+## Golden 07-17 under stage 3a (owner 2026-11-25, option 1)
+
+Stage 3a keeps the rule as designed. A re-read of the golden 07-17 week
+would now save the week WITHOUT its line rows. Its profit (−293.62),
+deposit and PR personal payment are unchanged. The golden test
+(`goldenPrimeSettlement0717.test.ts`) now expects this, with the named
+causes: advance_unrecognized, advance_fee_out_of_range:lumper,
+advance_fee_out_of_range:plain and fees_differ.
+
+Recorded for later:
+1. Evidence for a later D6 revision: in the 07-17 golden, "WKLY PYMT OF
+   ADV" 550 ties exactly as PLAIN with fee 0.00. The arithmetic is 550 −
+   the WA reimbursement lines 3,999.00 and 460.59 = −3,909.59, against
+   ADVANCES +3,909.59. D6 is NOT widened now.
+2. In this golden, the July layout has the LUMPER (215) and WIRE CHARGE
+   (2.55) lines without codes. July-era weeks may therefore not be
+   re-readable with their rows under the new rule.
+3. 07-17 is not in the export, and its stored data is unchanged.
