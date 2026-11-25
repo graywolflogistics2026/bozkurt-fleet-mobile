@@ -740,3 +740,77 @@ What gets looser, and why it is safe:
   "Read again" for these 8 weeks? It is cheaper. It would replace a week
   from `parsed_json`, and only stages 2/3 need it; stage 4 needs a real
   re-read anyway.
+
+
+## Owner decisions 2026-11-25
+
+- D1: keep today's behaviour. A loads failure alone still drops every
+  line row.
+- D2: YES. Deduction lines with code LM go to LUMPER, WT to WEIGHT and FC
+  to WIRE.
+- D3: the cap is 2.55 per advance line. For each class:
+  0.00 <= fee <= 2.55 × line count.
+- D4: NO wire-fee row split.
+- D5: YES, but as its own LATER stage: the LE late-fee reimbursement will
+  be saved as REPAYMENT when it is paired. In stage 3a the LE line is
+  used only to derive the late-fee fee; saving is unchanged.
+- D6: unrecognized WA descriptions stay unrecognized.
+- D7: NO new re-check action; the owner uses "Read again".
+- Also YES: store `statement.lineDetailsCauses` (jsonb only) with stage
+  3a.
+
+
+## Export results 2026-11-25
+
+Source: the owner's read-only export of 17 real Prime weeks (2026-07-31 ..
+2026-11-20), now the test fixture
+`app/src/import/__tests__/fixtures/primeWeeks2026.json`.
+
+These are the owner's independent calculations. Stage 3a re-checks them
+in tests, and the stage 3a report lists any difference.
+
+- `advance_family` as designed passes in all 17 weeks. That includes the
+  weeks that save normally today: 08-07, 08-21, 08-28, 09-04, 09-18 and
+  11-13. 10-30 and 11-06 have no WA lines, so the group does not run.
+- Fees per week (each sum = WIRE CHARGE minus FC lines, exact):
+  - 07-31: LATE 2.55 + LUMPER 2.00 = 4.55.
+  - 08-07: WEIGHT 2.00.
+  - 08-14: WEIGHT 4.00.
+  - 08-21: WEIGHT 1.00.
+  - 08-28, 09-04, 09-18: 0.
+  - 09-11: FUEL 2.00 + WEIGHT 3.00 + LUMPER 2.00 = 7.00 (UF principal
+    1,272.31, RF 66.85).
+  - 09-25: WEIGHT 2.00 + LUMPER 3.55 = 5.55.
+  - 10-02: LATE 2.55 + WEIGHT 2.00 + LUMPER 1.00 = 5.55.
+  - 10-09: WEIGHT 2.00 + LUMPER 2.55 = 4.55.
+  - 10-16: FUEL 2.00 + WEIGHT 1.00 + LUMPER 2.00 = 5.00 (UF principal
+    986.84, RF 12.16).
+  - 10-23: WEIGHT 1.00 + LUMPER 1.00 = 2.00.
+  - 11-13: WEIGHT 3.00.
+  - 11-20: PLAIN 2.55.
+- No unrecognized WA description in 17 weeks. Seen: ADVANCE, ADVANCE
+  DEBEFL, ADV FOR WEIGHT TICKETS, ADV FOR OUTSIDE LUMPER, ADV FOR UF- x
+  [RF- y], ADV FOR LATE FEE. No LM- or WT-coded deduction lines occur.
+- Fuel and totals:
+  - With the UF/RF principals added, the UF and RF groups tie in all
+    weeks.
+  - The TOTAL group ties in all 17 weeks, and so do deduction lines plus
+    uncovered fuel vs the printed TOTAL DEDUCTIONS.
+  - There are ZERO uncovered fuel-list rows in all 17 weeks, so nothing
+    is counted twice. Stage 3b (the fuel-list covered-row rule) is NOT
+    needed and is dropped.
+- Stage 2 check: per order, the revenue lines matching LOAD_REVENUE_DESC
+  (plus lines whose order has no load with miles) equal the statement row
+  REVENUE FROM PRIME INC. to the cent in 16 of 17 weeks.
+  - Only 08-14 differs, by 94.68: the Linehaul 47.34- adjustment is
+    stored as +47.34.
+  - The reader's own per-load revenue differs in 07-31, 08-14, 09-25,
+    10-02, 10-16 and 11-20.
+- 07-31 is also saved with linesNotSaved, so 9 weeks, not 8.
+- Expected after stage 3a alone:
+  - 09-11, 10-09 and 10-23 can save their rows.
+  - 07-31, 09-25, 10-02, 10-16 and 11-20 still need stage 2 (loads).
+  - 08-14 needs stage 4 (sign).
+
+Revised stage order: 3a (advance family) → 2 (loads from revenue lines) →
+4 (08-14 sign) → D5 (LE as REPAYMENT) → Read again, one week at a time.
