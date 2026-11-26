@@ -688,6 +688,16 @@ function isMilelessLoad(load) {
   return milesOf(load.loadedMiles) === 0 && milesOf(load.emptyMiles) === 0;
 }
 var LOAD_REVENUE_DESC = /\bLINE\s*HAUL\b|\bTRIP\s+REV|\bLOAD\s+REV|\bOWNER\s+REV/i;
+function loadRevenueByOrder(revenueItems) {
+  const byOrder = /* @__PURE__ */ new Map();
+  for (const r of revenueItems ?? []) {
+    const order = orderOf(r.order);
+    const amount = numOrNull(r.amount);
+    if (!order || amount == null || !LOAD_REVENUE_DESC.test(r.desc ?? "")) continue;
+    byOrder.set(order, round22((byOrder.get(order) ?? 0) + amount));
+  }
+  return byOrder;
+}
 function splitPrimeLoads(extraction) {
   const s = extraction?.settlement;
   if (!s || !isPrimeCarrier(s.carrier)) return null;
@@ -707,10 +717,25 @@ function splitPrimeLoads(extraction) {
     (l) => l.section === "revenue" && !!l.label && !statementInfoRow(l.label) && normalizeStatementLabel(l.label) === "REVENUE FROM PRIME INC"
   );
   const statementRevenue = statementLines.length > 0 ? round22(statementLines.reduce((sum, l) => sum + amountOf(l.amount), 0)) : null;
-  const loadRevenue = round22(loads.reduce((sum, l) => sum + amountOf(l.revenue), 0));
+  const byOrder = loadRevenueByOrder(s.revenueItems);
+  const failures = [];
+  const counted = /* @__PURE__ */ new Set();
+  const lineRevenue = loads.map((l) => {
+    const order = orderOf(l.order);
+    const sum = order ? byOrder.get(order) : void 0;
+    if (!order || sum == null) {
+      failures.push({ reason: "load_without_revenue_line", order });
+      return null;
+    }
+    if (counted.has(order)) return 0;
+    counted.add(order);
+    return sum;
+  });
+  const loadRevenue = round22(lineRevenue.reduce((sum, r) => sum + (r ?? 0), 0));
+  const readerLoadRevenue = round22(loads.reduce((sum, l) => sum + amountOf(l.revenue), 0));
   const adjustmentTotal = round22(adjustments.reduce((sum, a) => sum + a.amount, 0));
-  const matches = statementRevenue == null || loads.length === 0 ? null : Math.abs(loadRevenue + adjustmentTotal - statementRevenue) <= TOLERANCE2;
-  return { loads, adjustments, loadRevenue, adjustmentTotal, statementRevenue, matches };
+  const matches = loads.length === 0 ? null : failures.length > 0 ? false : statementRevenue == null ? null : Math.abs(loadRevenue + adjustmentTotal - statementRevenue) <= TOLERANCE2;
+  return { loads, lineRevenue, failures, adjustments, loadRevenue, readerLoadRevenue, adjustmentTotal, statementRevenue, matches };
 }
 
 // src/import/statementTotalLabels.ts
@@ -1114,7 +1139,9 @@ function buildSettlementStatement(extraction, options) {
   if (loads && loads.matches !== true && (loads.matches === false || gatePassed) && loads.loads.length > 0) {
     reviewReasons.push({
       reason: "loads_revenue_mismatch",
-      label: `${round23(loads.loadRevenue + loads.adjustmentTotal)} vs REVENUE FROM PRIME INC. ${loads.statementRevenue ?? "—"}`
+      // Stage 2: a named failure is shown by name with its orders, never as
+      // a partial sum.
+      label: loads.failures.length > 0 ? `load_without_revenue_line: ${loads.failures.map((f) => f.order ?? "no order number").join(", ")}` : `${round23(loads.loadRevenue + loads.adjustmentTotal)} vs REVENUE FROM PRIME INC. ${loads.statementRevenue ?? "—"}`
     });
   }
   const printed2 = printedTotalsOf(extraction);
@@ -1928,7 +1955,8 @@ function mapSettlement(d, userId, truckId, driverId = null) {
   const primeLoads = splitPrimeLoads(d);
   const statementGatePassed = !!primeLoads && !!buildPrimeStatementCheck(d)?.gatePassed;
   const loadRevenueTrusted = statementGatePassed ? primeLoads?.matches === true : primeLoads?.matches !== false;
-  const loads = (primeLoads ? primeLoads.loads : s.loads ?? []).map((l) => {
+  const loadRevenueOf = (l, i) => primeLoads ? primeLoads.lineRevenue[i] ?? 0 : num2(l.revenue);
+  const loads = (primeLoads ? primeLoads.loads : s.loads ?? []).map((l, i) => {
     const pickupDate = toDateOrNull(l.pickupDate) ?? toDateOrNull(l.date) ?? settlementFallbackDate ?? null;
     const deliveryDate = toDateOrNull(l.deliveryDate) ?? toDateOrNull(l.dropDate) ?? pickupDate;
     return {
@@ -1943,7 +1971,7 @@ function mapSettlement(d, userId, truckId, driverId = null) {
       destination: l.to ?? null,
       loaded_miles: num2(l.loadedMiles),
       empty_miles: num2(l.emptyMiles),
-      revenue: loadRevenueTrusted ? num2(l.revenue) : 0
+      revenue: loadRevenueTrusted ? loadRevenueOf(l, i) : 0
     };
   });
   const fuel = [
@@ -2476,7 +2504,17 @@ function evaluateSettlementGate(extraction, options) {
           return d == null ? [] : [{ kind: "issue", type: i.type, difference: r24(d) }];
         }),
         ...(groups ?? []).filter((g) => !g.passed).map((g) => ({ kind: "group", group: g.group, difference: g.difference, ...g.reasons?.length ? { reasons: [...g.reasons] } : {} })),
-        ...loads != null && loads.loads.length > 0 && loads.matches === false ? [{ kind: "loads", difference: loads.statementRevenue != null ? r24(loads.loadRevenue + loads.adjustmentTotal - loads.statementRevenue) : null }] : [],
+        ...loads != null && loads.loads.length > 0 && loads.matches === false ? [
+          loads.failures.length > 0 ? {
+            kind: "loads",
+            difference: null,
+            reasons: [...new Set(loads.failures.map((f) => f.reason))],
+            orders: loads.failures.map((f) => f.order)
+          } : {
+            kind: "loads",
+            difference: loads.statementRevenue != null ? r24(loads.loadRevenue + loads.adjustmentTotal - loads.statementRevenue) : null
+          }
+        ] : [],
         ...missingPages.map((p) => ({ kind: "page_not_read", page: p.page }))
       ]
     } : {};

@@ -241,7 +241,19 @@ export function evaluateSettlementGate(
               .filter((g) => !g.passed)
               .map((g): LineDetailsCause => ({ kind: 'group', group: g.group, difference: g.difference, ...(g.reasons?.length ? { reasons: [...g.reasons] } : {}) })),
             ...(loads != null && loads.loads.length > 0 && loads.matches === false
-              ? [{ kind: 'loads', difference: loads.statementRevenue != null ? r2(loads.loadRevenue + loads.adjustmentTotal - loads.statementRevenue) : null } as LineDetailsCause]
+              ? [
+                  (loads.failures.length > 0
+                    ? {
+                        kind: 'loads',
+                        difference: null,
+                        reasons: [...new Set(loads.failures.map((f) => f.reason))],
+                        orders: loads.failures.map((f) => f.order),
+                      }
+                    : {
+                        kind: 'loads',
+                        difference: loads.statementRevenue != null ? r2(loads.loadRevenue + loads.adjustmentTotal - loads.statementRevenue) : null,
+                      }) as LineDetailsCause,
+                ]
               : []),
             ...missingPages.map((p): LineDetailsCause => ({ kind: 'page_not_read', page: p.page })),
           ],

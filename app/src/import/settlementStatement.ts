@@ -257,7 +257,9 @@ export type LineDetailsCause =
   | { kind: 'group'; group: string; difference: number; reasons?: string[] }
   | { kind: 'issue'; type: string; difference: number }
   | { kind: 'statement_line_sum'; check: string; difference: number }
-  | { kind: 'loads'; difference: number | null }
+  // Stage 2: the loads check's difference, or its named failures (with the
+  // order numbers kept; null = a load with no order number).
+  | { kind: 'loads'; difference: number | null; reasons?: string[]; orders?: (string | null)[] }
   | { kind: 'page_not_read'; page: number };
 
 export type StatementDates = {
@@ -726,7 +728,12 @@ export function buildSettlementStatement(
   if (loads && loads.matches !== true && (loads.matches === false || gatePassed) && loads.loads.length > 0) {
     reviewReasons.push({
       reason: 'loads_revenue_mismatch',
-      label: `${round2(loads.loadRevenue + loads.adjustmentTotal)} vs REVENUE FROM PRIME INC. ${loads.statementRevenue ?? '—'}`,
+      // Stage 2: a named failure is shown by name with its orders, never as
+      // a partial sum.
+      label:
+        loads.failures.length > 0
+          ? `load_without_revenue_line: ${loads.failures.map((f) => f.order ?? 'no order number').join(', ')}`
+          : `${round2(loads.loadRevenue + loads.adjustmentTotal)} vs REVENUE FROM PRIME INC. ${loads.statementRevenue ?? '—'}`,
     });
   }
   // Item 6 (b): with the gate passed, the week's gross is TOTAL REVENUE

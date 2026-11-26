@@ -192,7 +192,11 @@ export function mapSettlement(
   // if the loads check passed; otherwise only a failed check removes it.
   const statementGatePassed = !!primeLoads && !!buildPrimeStatementCheck(d)?.gatePassed;
   const loadRevenueTrusted = statementGatePassed ? primeLoads?.matches === true : primeLoads?.matches !== false;
-  const loads: LoadInsert[] = (primeLoads ? primeLoads.loads : (s.loads ?? [])).map((l) => {
+  // Stage 2 (owner 2026-11-25): a Prime load's revenue is its order's
+  // revenue line sum (primeLoads.lineRevenue), never the reader's figure.
+  const loadRevenueOf = (l: NonNullable<typeof s.loads>[number], i: number) =>
+    primeLoads ? (primeLoads.lineRevenue[i] ?? 0) : num(l.revenue);
+  const loads: LoadInsert[] = (primeLoads ? primeLoads.loads : (s.loads ?? [])).map((l, i) => {
     const pickupDate = toDateOrNull(l.pickupDate) ?? toDateOrNull(l.date) ?? settlementFallbackDate ?? null;
     const deliveryDate = toDateOrNull(l.deliveryDate) ?? toDateOrNull(l.dropDate) ?? pickupDate;
     return {
@@ -207,7 +211,7 @@ export function mapSettlement(
       destination: l.to ?? null,
       loaded_miles: num(l.loadedMiles),
       empty_miles: num(l.emptyMiles),
-      revenue: loadRevenueTrusted ? num(l.revenue) : 0,
+      revenue: loadRevenueTrusted ? loadRevenueOf(l, i) : 0,
     };
   });
 

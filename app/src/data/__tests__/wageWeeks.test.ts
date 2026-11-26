@@ -70,8 +70,13 @@ describe('11/06, the first wage week', () => {
     reading.settlementLines.push(
       { page: 2, section: 'deduction', code: '', description: 'TRUCK DEDUCTIONS', reference: '', amount: '1,369.04', direction: 'charge' },
       { page: 1, section: 'reimbursement', code: 'PC', description: 'PETTY CASH REIM', reference: '', amount: '39.50', direction: 'credit' },
-      { page: 1, section: 'reimbursement', code: 'SF', description: 'FUEL TAX ADJUSTMENT', reference: '', amount: '25.83', direction: 'credit' }
+      { page: 1, section: 'reimbursement', code: 'SF', description: 'FUEL TAX ADJUSTMENT', reference: '', amount: '25.83', direction: 'credit' },
+      // Stage 2 (2026-11-25): a load's revenue comes from its own revenue
+      // line, so the load's revenue line is read too (one line here, like
+      // the fixture's one load: REVENUE FROM PRIME INC. = TOTAL REV).
+      { page: 1, section: 'revenue', code: 'RV', description: 'TRIP REVENUE', reference: '4700001', amount: '2,534.68', direction: 'credit' }
     );
+    expect(reading.loads.map((l) => [l.order, l.revenue])).toEqual([['4700001', '2,534.68']]);
     const t = read('2026-11-06', reading);
     expect(evaluateSettlementGate(sanitizeExtraction(t.extraction!), { importDate: '2026-11-07' })).toMatchObject({ status: 'pass', lineDetails: 'match' });
     await saveExtraction({ importDate: '2026-11-07', extraction: sanitizeExtraction(t.extraction!) as Extraction, userId: USER_ID, truckId: TRUCK_ID, driverId: null, driverShareAmount: null, fileUri: null, fileExt: 'pdf', mediaType: 'application/pdf', createContribution: false });

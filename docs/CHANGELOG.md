@@ -10,6 +10,14 @@ oldest-first order, i.e. read "above" as "further down this file".
 
 NEW ENTRIES: add at the top, max ~10 lines each — what changed, files,
 PENDING_SQL §, redeploys, eas update vs native build. Never in CLAUDE.md.
+## 2026-11-25 — Prime loads check from the week's own revenue lines (stage 2, owner)
+
+- `docs/decisions/advance-family-rule-proposal.md` section 5 and "Stage 2 evidence 2026-11-25". `primeLoads.ts` `splitPrimeLoads()`: each load with miles takes its revenue from the sum of its order's revenue lines (LOAD_REVENUE_DESC, new shared `loadRevenueByOrder()`), never the reader's per-load figure (kept only as `readerLoadRevenue`). Adjustments, the $1.00 tolerance and non-Prime carriers are unchanged.
+- New named failure `load_without_revenue_line` (a load with miles whose order has no line, or with no order number): the check fails, and the gate's `lineCauses` loads cause carries `reasons` and `orders`. The review label names it.
+- `mapExtraction.ts`: a Prime load's `loads.revenue` = the same per-order line sum when the check passes (else 0). In the 8 weeks that save rows today it equals the reader's figure on every order. `statementLoads.ts` uses the same helper (view output unchanged).
+- 17 real weeks: 07-31, 09-25, 10-02, 10-16 and 11-20 now match. 08-14 still differs by 94.68 (sign, stage 4). The other 11 are unchanged. D1 unchanged: a loads failure alone still drops every line row.
+- Tests changed: golden 08-14 (TRIP figures under loads are now ignored; a named-failure case added) and wageWeeks 11/06 (its synthetic load got its revenue line). No profit changed.
+- Ship: `npm run build:reader` (done), ai-import redeploy, then `eas update`. No SQL.
 ## 2026-11-25 — Prime advance family check (stage 3a, owner)
 
 - `docs/decisions/advance-family-rule-proposal.md` (owner decisions 2026-11-25). `primeLineGroups.ts`: `advance_family` replaces the `advances` group. WA lines are classed by printed description (WEIGHT, LUMPER, FUEL with the UF-/RF- principal parsed, LATE paired with LE "LATE FEE", PLAIN), plus LM/WT/FC lines. Derived fees must equal WIRE CHARGE − FC to the cent; each class's fee must be 0.00 to 2.55 × lines. Named reasons: advance_unrecognized, advance_fuel_unparsable, late_fee_not_reimbursed, advance_fee_out_of_range:<class>, fees_differ.

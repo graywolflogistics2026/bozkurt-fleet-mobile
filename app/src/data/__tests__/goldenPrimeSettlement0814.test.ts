@@ -402,10 +402,23 @@ describe('revenue column and loads (items 3-4)', () => {
     expect(split.matches).toBe(true);
   });
 
-  test('loads that do not add up to REVENUE FROM PRIME INC. are flagged and keep no revenue; profit stays the statement\'s', async () => {
+  test('stage 2: the reader\'s TRIP column under loads is never used; the loads take their OWNER REVENUE lines', async () => {
     const tripRevenueLoads = LOADS.map((l) => ({ ...l, revenue: TRIP_REVENUE[l.order] }));
     const e = golden0814({ loads: tripRevenueLoads });
-    expect(splitPrimeLoads(e)!.matches).toBe(false);
+    const split = splitPrimeLoads(e)!;
+    expect(split.readerLoadRevenue).toBe(8493.12);
+    expect(split.lineRevenue).toEqual([2900.4, 1763.24, 1451.4]);
+    expect(split.matches).toBe(true);
+    const rows = await importWeek(e);
+    expect(rows.loads.map((l) => l.revenue)).toEqual([2900.4, 1763.24, 1451.4]);
+    expect(r2(weekKpi(rows).net)).toBe(KEY.profit);
+  });
+
+  test('a load with no revenue line of its order is a named failure (load_without_revenue_line) and keeps no rows; profit stays the statement\'s', async () => {
+    // Order 4902636's revenue line read under another description (not load
+    // revenue): every line total still ties; only the load has no line.
+    const e = golden0814({ revenueItems: REVENUE_ITEMS.map((r) => (r.desc === 'OWNER REVENUE' && r.order === '4902636' ? { ...r, desc: 'MISC PAY' } : r)) });
+    expect(splitPrimeLoads(e)!).toMatchObject({ matches: false, failures: [{ reason: 'load_without_revenue_line', order: '4902636' }] });
     const rows = await importWeek(e);
     // D2 2.2: line details that do not reconcile are not stored at all.
     expect(rows.loads).toEqual([]);
@@ -498,9 +511,13 @@ describe('the gate (item 6): statement checks + week ending decide; line items o
   test('(d) loads keep revenue only if the loads check passes', async () => {
     const owner = await importWeek(golden0814());
     expect(owner.loads.map((l) => l.revenue)).toEqual([2900.4, 1763.24, 1451.4]);
+    // Stage 2: the reader's TRIP figures under loads are not used; the
+    // loads still take their OWNER REVENUE lines.
     const trip = await importWeek(golden0814({ loads: LOADS.map((l) => ({ ...l, revenue: TRIP_REVENUE[l.order] })) }));
+    expect(trip.loads.map((l) => l.revenue)).toEqual([2900.4, 1763.24, 1451.4]);
     // D2 2.2: a loads mismatch means the line rows are not stored.
-    expect(trip.loads).toEqual([]);
+    const noLine = await importWeek(golden0814({ revenueItems: REVENUE_ITEMS.map((r) => (r.desc === 'OWNER REVENUE' && r.order === '4928163' ? { ...r, desc: 'MISC PAY' } : r)) }));
+    expect(noLine.loads).toEqual([]);
   });
 
   test('the difference is the largest line-item or group difference', () => {
