@@ -834,3 +834,42 @@ Recorded for later:
    (2.55) lines without codes. July-era weeks may therefore not be
    re-readable with their rows under the new rule.
 3. 07-17 is not in the export, and its stored data is unchanged.
+
+
+## Stage 2 evidence 2026-11-25
+
+Owner findings on the export (the 17 real Prime weeks,
+`app/src/import/__tests__/fixtures/primeWeeks2026.json`). Stage 2 tests
+check each one. A difference goes into the stage 2 report; the code is
+not changed to match.
+
+- In 16 of the 17 weeks, the revenue lines that match
+  `LOAD_REVENUE_DESC` (LINEHAUL / TRIP REV / LOAD REV / OWNER REV) add up
+  to the statement row REVENUE FROM PRIME INC. to the cent. The sum is:
+  each load-with-miles order's lines, plus the matching lines whose order
+  has no load with miles (adjustments).
+- Only 2026-08-14 differs, by 94.68. The Linehaul 47.34- adjustment is
+  stored as +47.34 (the sign bug, stage 4). It must STILL fail after
+  stage 2, with the cause named.
+- The reader's own per-load revenue sum differs from the lines in five
+  weeks, because it read the TRIP column:
+  - 07-31: 8,150.34 vs 5,868.24
+  - 09-25: 5,196.86 vs 3,192.73
+  - 10-02: 3,410.09 vs 2,455.26
+  - 10-16: 9,065.27 vs 6,526.99
+  - 11-20: 9,705.48 vs 6,987.94
+  Today those 5 weeks fail the loads check only.
+- In the 17 weeks, every load with miles has a revenue line. Week 08-28
+  has no load with miles. Its only revenue line is a mileless 2.33, which
+  equals REVENUE FROM PRIME INC.
+- Expected per-order amounts for 10-02: 5051626 = 1,552.33,
+  5069068 = 633.07, 5110361 = 269.86.
+- Expected after stage 2 (with stage 3a):
+  - 07-31, 09-25, 10-02, 10-16 and 11-20 become 'match';
+  - 08-14 stays mismatch (sign);
+  - the 8 weeks saved with rows, and 09-11, 10-09 and 10-23, are
+    unchanged.
+
+Decision D1 for stage 2 (owner 2026-11-25): D1 stays as it is. A loads
+failure alone still drops every line row. The 2026-10-17 rule (drop only
+the load revenue) is NOT adopted now.
